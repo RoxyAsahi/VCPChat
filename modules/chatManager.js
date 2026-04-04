@@ -37,7 +37,7 @@ window.chatManager = (() => {
 
 
     /**
-     * 应用单个正则规则到文本
+     * 应用单个正则规则到文�?
      * @param {string} text - 输入文本
      * @param {Object} rule - 正则规则对象
      * @returns {string} 处理后的文本
@@ -53,7 +53,7 @@ window.chatManager = (() => {
             if (window.uiHelperFunctions && window.uiHelperFunctions.regexFromString) {
                 regex = window.uiHelperFunctions.regexFromString(rule.findPattern);
             } else {
-                // 后备方案：手动解析
+                // 后备方案：手动解�?
                 const regexMatch = rule.findPattern.match(/^\/(.+?)\/([gimuy]*)$/);
                 if (regexMatch) {
                     regex = new RegExp(regexMatch[1], regexMatch[2]);
@@ -63,25 +63,25 @@ window.chatManager = (() => {
             }
             
             if (!regex) {
-                console.error('无法解析正则表达式:', rule.findPattern);
+                console.error('无法解析正则表达�?', rule.findPattern);
                 return text;
             }
             
-            // 应用替换（如果没有替换内容，则默认替换为空字符串）
+            // 应用替换（如果没有替换内容，则默认替换为空字符串�?
             return text.replace(regex, rule.replaceWith || '');
         } catch (error) {
-            console.error('应用正则规则时出错:', rule.findPattern, error);
+            console.error('应用正则规则时出�?', rule.findPattern, error);
             return text;
         }
     }
 
     /**
-     * 应用所有匹配的正则规则到文本
+     * 应用所有匹配的正则规则到文�?
      * @param {string} text - 输入文本
      * @param {Array} rules - 正则规则数组
-     * @param {string} scope - 作用域 ('frontend' 或 'context')
-     * @param {string} role - 消息角色 ('user' 或 'assistant')
-     * @param {number} depth - 消息深度（0 = 最新消息）
+     * @param {string} scope - 作用�?('frontend' �?'context')
+     * @param {string} role - 消息角色 ('user' �?'assistant')
+     * @param {number} depth - 消息深度�? = 最新消息）
      * @returns {string} 处理后的文本
      */
     function applyRegexRules(text, rules, scope, role, depth = 0) {
@@ -101,7 +101,7 @@ window.chatManager = (() => {
             
             if (!shouldApplyToScope) return;
             
-            // 2. 检查角色
+            // 2. 检查角�?
             const shouldApplyToRole = rule.applyToRoles && rule.applyToRoles.includes(role);
             if (!shouldApplyToRole) return;
             
@@ -201,6 +201,21 @@ window.chatManager = (() => {
             console.warn('[ChatManager] Failed to suspend assistant listener before topic load:', error);
         });
     }
+
+    function normalizeTopicTitle(topicTitle) {
+        if (typeof topicTitle !== 'string') return topicTitle;
+
+        const trimmedTitle = topicTitle.trim();
+        if (!trimmedTitle) return trimmedTitle;
+        if (trimmedTitle.includes('新话题')) return trimmedTitle;
+
+        const timeMatch = trimmedTitle.match(/(\d{1,2}:\d{2}:\d{2})/);
+        if (trimmedTitle.includes('新话') && timeMatch) {
+            return `新话题 ${timeMatch[1]}`;
+        }
+
+        return trimmedTitle;
+    }
  
     // --- Functions moved from renderer.js ---
  
@@ -208,7 +223,7 @@ window.chatManager = (() => {
         const { currentChatNameH3, chatMessagesDiv, currentItemActionBtn, messageInput, sendMessageBtn, attachFileBtn } = elements;
         const voiceChatBtn = document.getElementById('voiceChatBtn');
         currentChatNameH3.textContent = '选择一个 Agent 或群组开始聊天';
-        chatMessagesDiv.innerHTML = `<div class="message-item system welcome-bubble"><p>欢迎！请从左侧选择AI助手/群组，或创建新的开始对话。</p></div>`;
+        chatMessagesDiv.innerHTML = `<div class="message-item system welcome-bubble"><p>欢迎，请从左侧选择 AI 助手或群组，或创建新的对话。</p></div>`;
         currentItemActionBtn.style.display = 'none';
         if (voiceChatBtn) voiceChatBtn.style.display = 'none';
         messageInput.disabled = true;
@@ -224,7 +239,7 @@ window.chatManager = (() => {
         // 心流锁激活时，不允许切换Agent
         if (window.flowlockManager && window.flowlockManager.getState && window.flowlockManager.getState().isActive) {
             if (uiHelper && uiHelper.showToastNotification) {
-                uiHelper.showToastNotification('心流锁运行中，无法切换Agent。请先停止心流锁。', 'warning');
+                uiHelper.showToastNotification('心流锁运行中，无法切换 Agent。请先停止心流锁。', 'warning');
             }
             console.log('[ChatManager] Blocked agent switch due to active Flowlock');
             return;
@@ -270,7 +285,8 @@ window.chatManager = (() => {
      
         const voiceChatBtn = document.getElementById('voiceChatBtn');
 
-        currentChatNameH3.textContent = `与 ${itemName} ${itemType === 'group' ? '(群组)' : ''} 聊天中`;
+        const itemTypeLabel = itemType === 'group' ? ' (群组)' : '';
+        currentChatNameH3.textContent = `与 ${itemName}${itemTypeLabel} 聊天中`;
         setCurrentItemActionButtonText(currentItemActionBtn, itemType === 'group' ? '新建群聊话题' : '新建聊天话题');
         currentItemActionBtn.title = `为 ${itemName} 新建${itemType === 'group' ? '群聊话题' : '聊天话题'}`;
         currentItemActionBtn.style.display = 'inline-flex';
@@ -300,13 +316,13 @@ window.chatManager = (() => {
                 if (messageRenderer) messageRenderer.setCurrentTopicId(topicToLoadId);
                 await loadChatHistory(itemId, itemType, topicToLoadId);
             } else if (topics && topics.error) {
-                console.error(`加载 ${itemType} ${itemId} 的话题列表失败:`, topics.error);
+                console.error(`加载 ${itemType} ${itemId} 的话题列表失�?`, topics.error);
                 if (messageRenderer) messageRenderer.renderMessage({ role: 'system', content: `加载话题列表失败: ${topics.error}`, timestamp: Date.now() });
                 await loadChatHistory(itemId, itemType, null);
             } else {
                 if (itemType === 'agent') {
                     const agentConfig = await electronAPI.getAgentConfig(itemId);
-                    // ⚠️ 检查是否返回错误对象
+                    // ⚠️ 检查是否返回错误对�?
                     if (agentConfig && agentConfig.error) {
                         console.error(`[ChatManager] Failed to get agent config for ${itemId}:`, agentConfig.error);
                         if (messageRenderer) messageRenderer.renderMessage({ role: 'system', content: `加载助手配置失败: ${agentConfig.error}`, timestamp: Date.now() });
@@ -453,7 +469,7 @@ window.chatManager = (() => {
             return;
         }
     
-        // 核心修改：使用 await 确保加载消息被渲染
+        // 核心修改：使�?await 确保加载消息被渲�?
         if (messageRenderer) {
             await messageRenderer.renderMessage({ role: 'system', name: '系统', content: '加载聊天记录中...', timestamp: Date.now(), isThinking: true, id: 'loading_history' });
         }
@@ -481,11 +497,11 @@ window.chatManager = (() => {
         } else if (historyResult && historyResult.length > 0) {
             currentChatHistoryRef.set(historyResult);
             if (messageRenderer) {
-                // 使用优化的分批渲染策略
+                // 使用优化的分批渲染策�?
                 const renderOptions = {
-                    initialBatch: 5,    // 首先显示最新的5条消息
-                    batchSize: 10,      // 后续每批10条消息
-                    batchDelay: 80      // 批次间延迟80ms，平衡性能和用户体验
+                    initialBatch: 5,    // 首先显示最新的5条消�?
+                    batchSize: 10,      // 后续每批10条消�?
+                    batchDelay: 80      // 批次间延�?0ms，平衡性能和用户体�?
                 };
                 
                 console.log(`[ChatManager] 开始加载话题历史，共 ${historyResult.length} 条消息`);
@@ -549,7 +565,7 @@ window.chatManager = (() => {
                 if (currentTopicObj && currentTopicObj.createdAt) {
                     const date = new Date(currentTopicObj.createdAt);
                     const formattedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-                    timestampBubble.textContent = `话题创建于: ${formattedDate}`;
+                    timestampBubble.textContent = `话题创建于 ${formattedDate}`;
                     timestampBubble.style.display = 'block';
                 } else {
                     console.warn(`[displayTopicTimestampBubble] Topic ${topicId} not found or has no createdAt for ${itemType} ${itemId}.`);
@@ -573,13 +589,13 @@ window.chatManager = (() => {
         if (currentSelectedItem.type !== 'agent' || currentChatHistory.length < 4 || !currentTopicId) return;
 
         try {
-            // 强制从文件系统重新加载最新的配置，确保标题检查的准确性
+            // 强制从文件系统重新加载最新的配置，确保标题检查的准确�?
             const agentConfigForSummary = await electronAPI.getAgentConfig(currentSelectedItem.id);
             if (!agentConfigForSummary || agentConfigForSummary.error) {
                 console.error('[TopicSummary] Failed to get fresh agent config for summarization:', agentConfigForSummary?.error);
                 return;
             }
-            // 使用最新的配置更新内存中的状态，以保持同步
+            // 使用最新的配置更新内存中的状态，以保持同�?
             if (currentSelectedItem.config) {
                 currentSelectedItem.config = agentConfigForSummary;
             } else {
@@ -628,11 +644,11 @@ window.chatManager = (() => {
 
         if (!content && attachedFiles.length === 0) return;
         if (!currentSelectedItem.id || !currentTopicId) {
-            uiHelper.showToastNotification('请先选择一个项目和话题！', 'error');
+            uiHelper.showToastNotification('请先选择一个项目和话题。', 'error');
             return;
         }
         if (!globalSettings.vcpServerUrl) {
-            uiHelper.showToastNotification('请先在全局设置中配置VCP服务器URL！', 'error');
+            uiHelper.showToastNotification('请先在全局设置中配置 VCP 服务器 URL。', 'error');
             uiHelper.openModal('globalSettingsModal');
             return;
         }
@@ -659,7 +675,7 @@ window.chatManager = (() => {
         // --- Standard Agent Message Sending ---
         // The 'content' variable still holds the user's raw input, including the placeholder.
         // We will resolve the placeholder later, only for the final message sent to VCP.
-        let combinedTextContent = content; // 用于发送给VCP的组合文本内容
+        let combinedTextContent = content; // 用于发送给VCP的组合文本内�?
  
         const uiAttachments = [];
         if (attachedFiles.length > 0) {
@@ -677,7 +693,7 @@ window.chatManager = (() => {
                 const filePathForContext = af.localPath || af.originalName;
 
                 if (af.file.type.startsWith('image/')) {
-                    // 对于图片，我们只附加路径，因为内容将作为多模态部分发送
+                    // 对于图片，我们只附加路径，因为内容将作为多模态部分发�?
                     combinedTextContent += `\n\n[附加图片: ${filePathForContext}]`;
                 } else if (fileManagerData.extractedText) {
                     // 对于有提取文本的文件，同时附加路径和文本
@@ -725,12 +741,12 @@ window.chatManager = (() => {
             messageInput.value = CANVAS_PLACEHOLDER;
         }
         uiHelper.autoResizeTextarea(messageInput);
-        // messageInput.focus(); // 核心修正：注释掉此行。这是导致AI流式输出时，即使向上滚动也会被强制拉回底部的根源。
+        // messageInput.focus(); // 核心修正：注释掉此行。这是导致AI流式输出时，即使向上滚动也会被强制拉回底部的根源�?
 
         const thinkingMessageId = `msg_${Date.now()}_assistant_${Math.random().toString(36).substring(2, 9)}`;
         const thinkingMessage = {
             role: 'assistant',
-            name: currentSelectedItem.name || currentSelectedItem.id || 'AI', // 修复：使用 ID 作为更可靠的回退
+            name: currentSelectedItem.name || currentSelectedItem.id || 'AI', // 修复：使�?ID 作为更可靠的回退
             content: '思考中',
             timestamp: Date.now(),
             id: thinkingMessageId,
@@ -759,20 +775,20 @@ window.chatManager = (() => {
                 let vcpVideoAttachmentsPayload = [];
                 let currentMessageTextContent = msg.content;
 
-                // --- 应用正则规则（后端/上下文）---
+                // --- 应用正则规则（后�?上下文）---
                 if (agentConfig?.stripRegexes && Array.isArray(agentConfig.stripRegexes) && agentConfig.stripRegexes.length > 0) {
-                    // --- 按“对话轮次”计算深度 ---
+                    // --- 按“对话轮次”计算深�?---
                     const turns = [];
                     for (let i = historySnapshotForVCP.length - 1; i >= 0; i--) {
                         if (historySnapshotForVCP[i].role === 'assistant') {
                             const turn = { assistant: historySnapshotForVCP[i], user: null };
                             if (i > 0 && historySnapshotForVCP[i - 1].role === 'user') {
                                 turn.user = historySnapshotForVCP[i - 1];
-                                i--; // 跳过用户消息，因为已经配对
+                                i--; // 跳过用户消息，因为已经配�?
                             }
                             turns.unshift(turn);
                         } else if (historySnapshotForVCP[i].role === 'user') {
-                            // 处理末尾的单个用户消息
+                            // 处理末尾的单个用户消�?
                             turns.unshift({ assistant: null, user: historySnapshotForVCP[i] });
                         }
                     }
@@ -782,7 +798,7 @@ window.chatManager = (() => {
                     const depth = turnIndex !== -1 ? (turns.length - 1 - turnIndex) : -1;
 
                     if (depth !== -1) {
-                        // 应用规则到消息内容
+                        // 应用规则到消息内�?
                         currentMessageTextContent = applyRegexRules(
                             currentMessageTextContent,
                             agentConfig.stripRegexes,
@@ -791,7 +807,7 @@ window.chatManager = (() => {
                             depth
                         );
                     }
-                    // --- 深度计算和应用结束 ---
+                    // --- 深度计算和应用结�?---
                 }
                 // --- 正则规则应用结束 ---
 
@@ -822,15 +838,15 @@ window.chatManager = (() => {
                     for (const att of msg.attachments) {
                         const fileManagerData = att._fileManagerData || {};
                         // 优先使用 att.src，因为它代表前端的本地可访问路径
-                        // 后备到 internalPath（来自 fileManager），最后才是文件名
+                        // 后备�?internalPath（来�?fileManager），最后才是文件名
                         const filePathForContext = att.src || (fileManagerData.internalPath ? fileManagerData.internalPath.replace('file://', '') : (att.name || '未知文件'));
 
                         if (fileManagerData.imageFrames && fileManagerData.imageFrames.length > 0) {
-                             historicalAppendedText += `\n\n[附加文件: ${filePathForContext} (扫描版PDF，已转换为图片)]`;
+                             historicalAppendedText += `\n\n[附加文件: ${filePathForContext} (扫描版PDF，已转换为图�?]`;
                         } else if (fileManagerData.extractedText) {
                             historicalAppendedText += `\n\n[附加文件: ${filePathForContext}]\n${fileManagerData.extractedText}\n[/附加文件结束: ${att.name || '未知文件'}]`;
                         } else {
-                            // 对于没有提取文本的文件（如音视频），只附加路径
+                            // 对于没有提取文本的文件（如音视频），只附加路�?
                             historicalAppendedText += `\n\n[附加文件: ${filePathForContext}]`;
                         }
                     }
@@ -950,9 +966,9 @@ window.chatManager = (() => {
                 const prependedContent = [];
 
                 // 任务2: 注入聊天记录文件路径
-                // 假设 agentConfig 对象中包含一个 agentDataPath 属性，该属性由主进程在加载代理配置时提供。
+                // 假设 agentConfig 对象中包含一�?agentDataPath 属性，该属性由主进程在加载代理配置时提供�?
                 if (agentConfig.agentDataPath && currentTopicId) {
-                    // 修正：currentTopicId 本身就包含 "topic_" 前缀，无需重复添加
+                    // 修正：currentTopicId 本身就包�?"topic_" 前缀，无需重复添加
                     const historyPath = `${agentConfig.agentDataPath}\\topics\\${currentTopicId}\\history.json`;
                     prependedContent.push(`当前聊天记录文件路径: ${historyPath}`);
                 }
@@ -963,7 +979,7 @@ window.chatManager = (() => {
                     if (currentTopicObj && currentTopicObj.createdAt) {
                         const date = new Date(currentTopicObj.createdAt);
                         const formattedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-                        prependedContent.push(`当前话题创建于: ${formattedDate}`);
+                        prependedContent.push(`当前话题创建于 ${formattedDate}`);
                     }
                 }
 
@@ -995,7 +1011,7 @@ window.chatManager = (() => {
 
             const context = {
                 agentId: currentSelectedItem.id,
-                agentName: currentSelectedItem.name || currentSelectedItem.id, // 修复：为单聊上下文添加 agentName，并使用 ID 作为回退
+                agentName: currentSelectedItem.name || currentSelectedItem.id, // 修复：为单聊上下文添�?agentName，并使用 ID 作为回退
                 topicId: currentTopicId,
                 isGroupMessage: false
             };
@@ -1011,16 +1027,21 @@ window.chatManager = (() => {
             );
 
             if (!useStreaming) {
-                const { response, context } = vcpResponse;
+                const response = vcpResponse?.response ?? vcpResponse;
+                const responseContext = vcpResponse?.context ?? context;
                 const currentSelectedItem = currentSelectedItemRef.get();
                 const currentTopicId = currentTopicIdRef.get();
 
                 // Determine if the response is for the currently active chat
-                const isForActiveChat = context && context.agentId === currentSelectedItem.id && context.topicId === currentTopicId;
+                const isForActiveChat = responseContext && responseContext.agentId === currentSelectedItem.id && responseContext.topicId === currentTopicId;
 
                 if (isForActiveChat) {
                     // If it's for the active chat, update the UI as usual
                     if (messageRenderer) messageRenderer.removeMessageById(thinkingMessage.id);
+                }
+
+                if (!response) {
+                    throw new Error('VCP returned an empty response.');
                 }
 
                 if (response.error) {
@@ -1032,7 +1053,7 @@ window.chatManager = (() => {
                     const assistantMessageContent = response.choices[0].message.content;
                     const assistantMessage = {
                         role: 'assistant',
-                        name: context.agentName || context.agentId || 'AI', // 修复：使用 context 中的 agentName 或 agentId 作为回退
+                        name: responseContext?.agentName || responseContext?.agentId || 'AI', // 修复：使�?context 中的 agentName �?agentId 作为回退
                         avatarUrl: currentSelectedItem.avatarUrl, // This might be incorrect if user switched, but it's a minor UI detail for background saves.
                         avatarColor: (currentSelectedItem.config || currentSelectedItem)?.avatarCalculatedColor,
                         content: assistantMessageContent,
@@ -1041,14 +1062,14 @@ window.chatManager = (() => {
                     };
 
                     // Fetch the correct history from the file, update it, and save it back.
-                    const historyForSave = await electronAPI.getChatHistory(context.agentId, context.topicId);
+                    const historyForSave = await electronAPI.getChatHistory(responseContext.agentId, responseContext.topicId);
                     if (historyForSave && !historyForSave.error) {
                         // Remove any lingering 'thinking' message and add the new one
                         const finalHistory = historyForSave.filter(msg => msg.id !== thinkingMessage.id && !msg.isThinking);
                         finalHistory.push(assistantMessage);
                         
                         // Save the final, complete history to the correct file
-                        await electronAPI.saveChatHistory(context.agentId, context.topicId, finalHistory);
+                        await electronAPI.saveChatHistory(responseContext.agentId, responseContext.topicId, finalHistory);
 
                         if (isForActiveChat) {
                             // If it's the active chat, also update the UI and in-memory state
@@ -1056,14 +1077,14 @@ window.chatManager = (() => {
                             if (messageRenderer) messageRenderer.renderMessage(assistantMessage);
                             await attemptTopicSummarizationIfNeeded();
                         } else {
-                            console.log(`[ChatManager] Saved non-streaming response for background chat: Agent ${context.agentId}, Topic ${context.topicId}`);
+                            console.log(`[ChatManager] Saved non-streaming response for background chat: Agent ${responseContext.agentId}, Topic ${responseContext.topicId}`);
                         }
                     } else {
                          console.error(`[ChatManager] Failed to get history for background save:`, historyForSave.error);
                     }
                 } else {
                     if (isForActiveChat && messageRenderer) {
-                        messageRenderer.renderMessage({ role: 'system', content: 'VCP返回了未知格式的响应。', timestamp: Date.now() });
+                        messageRenderer.renderMessage({ role: 'system', content: 'VCP 返回了未知格式的响应。', timestamp: Date.now() });
                     }
                 }
             } else {
@@ -1077,7 +1098,7 @@ window.chatManager = (() => {
                 }
             }
         } catch (error) {
-            console.error('发送消息或处理VCP响应时出错:', error);
+            console.error('发送消息或处理VCP响应时出错', error);
             if (messageRenderer) messageRenderer.removeMessageById(thinkingMessage.id);
             if (messageRenderer) messageRenderer.renderMessage({ role: 'system', content: `错误: ${error.message}`, timestamp: Date.now() });
             if(currentSelectedItem.id && currentTopicId) {
@@ -1146,7 +1167,7 @@ window.chatManager = (() => {
         const itemType = currentSelectedItem.type;
 
         if ((itemType !== 'agent' && itemType !== 'group') || !currentSelectedItem.id || !currentTopicId || !selectedMessage) {
-            uiHelper.showToastNotification("无法创建分支：当前非Agent/群组聊天或缺少必要信息。", 'error');
+            uiHelper.showToastNotification("无法创建分支：当前非 Agent/群组聊天或缺少必要信息。", 'error');
             return;
         }
 
@@ -1175,12 +1196,12 @@ window.chatManager = (() => {
             }
 
             if (!itemConfig || itemConfig.error) {
-                uiHelper.showToastNotification(`创建分支失败：无法获取${itemType === 'agent' ? '助手' : '群组'}配置。 ${itemConfig?.error || ''}`, 'error');
+                uiHelper.showToastNotification(`创建分支失败：无法获取${itemType === 'agent' ? '助手' : '群组'}配置。${itemConfig?.error || ''}`, 'error');
                 return;
             }
 
             originalTopic = itemConfig.topics.find(t => t.id === currentTopicId);
-            const originalTopicName = originalTopic ? originalTopic.name : "未命名话题";
+            const originalTopicName = normalizeTopicTitle(originalTopic ? originalTopic.name : "未命名话题");
             const newBranchTopicName = `${originalTopicName} (分支)`;
 
             if (itemType === 'agent') {
@@ -1306,7 +1327,7 @@ window.chatManager = (() => {
     async function syncHistoryFromFile(itemId, itemType, topicId) {
         if (!messageRenderer) return;
 
-        // 🔧 检查是否有正在进行的编辑操作
+        // 🔧 检查是否有正在进行的编辑操�?
         const isEditing = document.querySelector('.message-item-editing');
         if (isEditing) {
             console.log('[Sync] Aborting sync because a message is currently being edited.');
@@ -1412,3 +1433,4 @@ window.chatManager = (() => {
         syncHistoryFromFile, // Expose the new function
     };
 })();
+
