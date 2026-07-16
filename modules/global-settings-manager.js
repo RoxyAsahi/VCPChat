@@ -58,6 +58,7 @@ export async function handleSaveGlobalSettings(e, deps) {
         notificationsSidebarWidth: refs.globalSettings.get().notificationsSidebarWidth,
         enableAgentBubbleTheme: document.getElementById('enableAgentBubbleTheme').checked,
         enableSmoothStreaming: document.getElementById('enableSmoothStreaming').checked,
+        uiMode: document.getElementById('enableNextUi')?.checked ? 'next' : 'classic',
         chatFontPreset: document.getElementById('chatFontPreset')?.value || currentSettings.chatFontPreset || 'system',
         chatFontCustom: document.getElementById('chatFontCustom')?.value.trim() || '',
         chatCodeFontPreset: document.getElementById('chatCodeFontPreset')?.value || currentSettings.chatCodeFontPreset || 'consolas',
@@ -221,6 +222,7 @@ export async function handleSaveGlobalSettings(e, deps) {
         }
 
         Object.assign(refs.globalSettings.get(), newSettings);
+        window.uiModeManager?.apply(newSettings.uiMode);
         if (typeof window.applyChatBubbleLayoutSettings === 'function') {
             window.applyChatBubbleLayoutSettings(refs.globalSettings.get());
         }

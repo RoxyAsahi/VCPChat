@@ -1,0 +1,352 @@
+/*
+ * New UI styles belong under this root selector. Keeping the scope here lets
+ * the classic interface remain unchanged while the redesign evolves.
+ */
+html[data-ui-mode="next"] {
+    --ui-mode: next;
+    --next-shell-bg: #f3f4f6;
+    --next-surface: #ffffff;
+    --next-hover: #e9eaed;
+    --next-text: #202124;
+    --next-muted: #666a73;
+    --next-border: rgba(27, 31, 38, 0.1);
+    --next-shadow: 0 7px 18px rgba(20, 23, 31, 0.12);
+}
+
+html[data-ui-mode="next"] body.dark-theme {
+    --next-shell-bg: #17191d;
+    --next-surface: #22252b;
+    --next-hover: #30343b;
+    --next-text: #f2f3f5;
+    --next-muted: #a8adb7;
+    --next-border: rgba(255, 255, 255, 0.1);
+    --next-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+}
+
+.next-ui-topbar,
+.next-ui-launchpad {
+    display: none;
+}
+
+html[data-ui-mode="next"] body {
+    background: var(--next-shell-bg);
+}
+
+html[data-ui-mode="next"] .title-bar,
+html[data-ui-mode="next"] #title-bar-seam-fixer {
+    display: none;
+}
+
+html[data-ui-mode="next"] .next-ui-topbar {
+    position: fixed;
+    inset: 0 0 auto 0;
+    z-index: 1100;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 0 10px 0 18px;
+    box-sizing: border-box;
+    color: var(--next-text);
+    background: var(--next-shell-bg);
+    -webkit-app-region: drag;
+}
+
+.next-ui-tab-strip,
+.next-ui-dynamic-tabs,
+.next-ui-topbar-actions {
+    display: flex;
+    align-items: center;
+}
+
+.next-ui-tab-strip {
+    min-width: 0;
+    gap: 6px;
+    overflow: hidden;
+}
+
+.next-ui-dynamic-tabs {
+    gap: 6px;
+}
+
+.next-ui-tab,
+.next-ui-add-tab,
+.next-ui-icon-button,
+.next-ui-window-button {
+    -webkit-app-region: no-drag;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+}
+
+.next-ui-tab {
+    height: 28px;
+    min-width: 112px;
+    max-width: 180px;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    border-radius: 8px;
+    color: var(--next-muted);
+    font-size: 15px;
+    white-space: nowrap;
+}
+
+.next-ui-brand-avatar {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 22px;
+    overflow: hidden;
+    border-radius: 50%;
+    background: var(--next-hover);
+}
+
+.next-ui-brand-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scale(1.35);
+    transform-origin: 56% 32%;
+}
+
+#nextUiHomeTab > span:last-child {
+    font-weight: 650;
+}
+
+.next-ui-tab.active,
+.next-ui-tab:hover,
+.next-ui-add-tab.active,
+.next-ui-add-tab:hover,
+.next-ui-icon-button:hover,
+.next-ui-window-button:hover {
+    color: var(--next-text);
+    background: var(--next-surface);
+}
+
+.next-ui-tab > svg,
+.next-ui-add-tab > svg,
+.next-ui-icon-button > svg,
+.next-ui-window-button > svg,
+.next-ui-app-icon svg {
+    width: 19px;
+    height: 19px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    flex: 0 0 auto;
+}
+
+.next-ui-tab-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.next-ui-tab-close {
+    width: 20px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    color: var(--next-muted);
+    background: transparent;
+    cursor: pointer;
+}
+
+.next-ui-tab-close:hover {
+    color: var(--next-text);
+    background: var(--next-hover);
+}
+
+.next-ui-tab-close svg {
+    width: 13px;
+    height: 13px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+}
+
+.next-ui-add-tab,
+.next-ui-icon-button,
+.next-ui-window-button {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    flex: 0 0 auto;
+}
+
+.next-ui-topbar-actions {
+    margin-left: auto;
+    gap: 3px;
+    flex: 0 0 auto;
+}
+
+.next-ui-close-button:hover {
+    color: #ffffff;
+    background: #d92d3a;
+}
+
+html[data-ui-mode="next"] .container {
+    height: calc(100vh - 50px);
+    margin: 44px 6px 6px;
+    width: calc(100% - 12px);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--next-shell-bg);
+}
+
+html[data-ui-mode="next"] .sidebar,
+html[data-ui-mode="next"] #resizerLeft {
+    background: var(--next-shell-bg);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+html[data-ui-mode="next"] .main-content {
+    overflow: hidden;
+    border-radius: 14px 0 0 14px;
+    clip-path: inset(0 round 14px 0 0 14px);
+    background: var(--next-surface);
+}
+
+html[data-ui-mode="next"] .notifications-sidebar,
+html[data-ui-mode="next"] #resizerRight {
+    background: var(--next-surface);
+}
+
+html[data-ui-mode="next"] body.next-ui-launchpad-open .container {
+    display: none;
+}
+
+html[data-ui-mode="next"] .next-ui-launchpad {
+    position: fixed;
+    inset: 44px 6px 6px;
+    z-index: 1000;
+    overflow: auto;
+    border: 1px solid var(--next-border);
+    border-radius: 8px;
+    color: var(--next-text);
+    background: var(--next-surface);
+}
+
+html[data-ui-mode="next"] body.next-ui-launchpad-open .next-ui-launchpad {
+    display: block;
+}
+
+.next-ui-launchpad-inner {
+    width: min(1120px, calc(100% - 72px));
+    margin: 0 auto;
+    padding: 72px 0 56px;
+}
+
+.next-ui-launchpad h1 {
+    margin: 0 0 32px;
+    font-size: 22px;
+    line-height: 1.2;
+    font-weight: 650;
+    letter-spacing: 0;
+}
+
+.next-ui-app-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(110px, 1fr));
+    gap: 38px 34px;
+}
+
+.next-ui-app-item {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 11px;
+    padding: 0;
+    border: 0;
+    color: var(--next-text);
+    background: transparent;
+    font: inherit;
+    font-size: 15px;
+    cursor: pointer;
+}
+
+.next-ui-app-icon {
+    width: 76px;
+    height: 76px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    color: #ffffff;
+    background: #4f5cf0;
+    box-shadow: var(--next-shadow);
+    transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.next-ui-app-icon svg {
+    width: 34px;
+    height: 34px;
+    stroke-width: 1.8;
+}
+
+.next-ui-app-item:hover .next-ui-app-icon {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 24px rgba(20, 23, 31, 0.18);
+}
+
+.next-ui-app-item:focus-visible,
+.next-ui-tab:focus-visible,
+.next-ui-add-tab:focus-visible,
+.next-ui-icon-button:focus-visible,
+.next-ui-window-button:focus-visible {
+    outline: 2px solid #3f70ff;
+    outline-offset: 2px;
+}
+
+.next-ui-app-icon[data-tone="green"] { background: #16b982; }
+.next-ui-app-icon[data-tone="pink"] { background: #e6499a; }
+.next-ui-app-icon[data-tone="cyan"] { background: #0ea5c6; }
+.next-ui-app-icon[data-tone="amber"] { background: #f59e0b; }
+.next-ui-app-icon[data-tone="red"] { background: #df3038; }
+.next-ui-app-icon[data-tone="orange"] { background: #f97316; }
+.next-ui-app-icon[data-tone="charcoal"] { background: #273244; }
+.next-ui-app-icon[data-tone="purple"] { background: #8b4ff0; }
+
+html[data-ui-mode="next"] #vchatAppTray,
+html[data-ui-mode="next"] #vchatAppTray + * {
+    display: none;
+}
+
+@media (max-width: 980px) {
+    .next-ui-app-grid {
+        grid-template-columns: repeat(4, minmax(100px, 1fr));
+    }
+
+    .next-ui-launchpad-inner {
+        width: calc(100% - 48px);
+    }
+}
+
+@media (max-width: 720px) {
+    .next-ui-tab {
+        min-width: 92px;
+    }
+
+    .next-ui-topbar-actions .next-ui-icon-button {
+        display: none;
+    }
+
+    .next-ui-app-grid {
+        grid-template-columns: repeat(3, minmax(86px, 1fr));
+        gap: 30px 18px;
+    }
+}

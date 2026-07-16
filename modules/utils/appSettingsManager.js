@@ -90,6 +90,7 @@ class SettingsManager extends EventEmitter {
             toolAutoApprovalRules: [],
             enableAgentBubbleTheme: false,
             enableSmoothStreaming: false,
+            uiMode: 'classic',
             enableWideChatLayout: false,
             chatBubbleMaxWidthDefault: 82,
             chatBubbleMaxWidthNotifications: 90,

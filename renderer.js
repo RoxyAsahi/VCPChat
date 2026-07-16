@@ -1,6 +1,7 @@
 // --- Globals ---
 let globalSettings = {
     sidebarWidth: 260,
+    uiMode: 'classic',
     enableMiddleClickQuickAction: false,
     middleClickQuickAction: '',
     enableMiddleClickAdvanced: false,
@@ -319,6 +320,12 @@ import { setupEventListeners } from './modules/event-listeners.js';
         window.trayManager.init();
     } else {
         console.error('[RENDERER_INIT] trayManager module not found!');
+    }
+
+    if (window.topTabManager) {
+        window.topTabManager.init();
+    } else {
+        console.error('[RENDERER_INIT] topTabManager module not found!');
     }
 
     // 确保在GroupRenderer初始化之前，其容器已准备好
@@ -1544,6 +1551,7 @@ async function loadAndApplyGlobalSettings() {
     if (settings && !settings.error) {
         globalSettings = { ...globalSettings, ...settings }; // Merge with defaults
         window.globalSettings = globalSettings;
+        window.uiModeManager?.apply(globalSettings.uiMode);
         applyChatBubbleLayoutSettings(globalSettings);
         
         // 🟢 优化：仅更新始终存在的 UI 元素
@@ -1909,6 +1917,7 @@ async function syncGlobalSettingsToUI() {
 
     safeCheck('enableAgentBubbleTheme', globalSettings.enableAgentBubbleTheme !== false);
     safeCheck('enableSmoothStreaming', globalSettings.enableSmoothStreaming === true);
+    safeCheck('enableNextUi', globalSettings.uiMode === 'next');
     safeSet('chatFontPreset', globalSettings.chatFontPreset || 'system');
     safeSet('chatFontCustom', globalSettings.chatFontCustom || '');
     safeSet('chatCodeFontPreset', globalSettings.chatCodeFontPreset || 'consolas');
