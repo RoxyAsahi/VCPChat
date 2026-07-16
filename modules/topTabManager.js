@@ -105,6 +105,9 @@
 
         document.getElementById('nextUiHomeTab')?.addEventListener('click', () => setView('home'));
         document.getElementById('nextUiAddTabBtn')?.addEventListener('click', openLaunchpad);
+        document.getElementById('nextUiThemeStoreBtn')?.addEventListener('click', () => {
+            (window.chatAPI || window.electronAPI)?.openThemesWindow?.();
+        });
         document.getElementById('nextUiThemeBtn')?.addEventListener('click', () => proxyClick('themeToggleBtn'));
         document.getElementById('nextUiSettingsBtn')?.addEventListener('click', () => {
             window.uiHelperFunctions?.openModal?.('globalSettingsModal');
