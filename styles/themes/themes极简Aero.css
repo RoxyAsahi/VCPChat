@@ -59,6 +59,8 @@
     --next-theme-backdrop-filter: none;
     --next-theme-surface-backdrop-filter: none;
     --next-theme-header-bg: transparent;
+    --next-theme-material-sheen: none;
+    --next-theme-material-sheen-dark: none;
 }
 
 body {

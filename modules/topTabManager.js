@@ -2,6 +2,21 @@
     const APP_TONES = ['purple', 'green', 'pink', 'cyan', 'amber', 'charcoal', 'red', 'orange'];
     let initialized = false;
     let launchpadTab = null;
+    let sidebarResizeObserver = null;
+
+    function observeSidebarWidth() {
+        const sidebar = document.querySelector('.sidebar');
+        if (!sidebar || typeof ResizeObserver === 'undefined') return;
+
+        const syncWidth = () => {
+            const width = Math.max(0, sidebar.getBoundingClientRect().width);
+            document.documentElement.style.setProperty('--next-sidebar-width', `${width}px`);
+        };
+
+        syncWidth();
+        sidebarResizeObserver = new ResizeObserver(syncWidth);
+        sidebarResizeObserver.observe(sidebar);
+    }
 
     function setView(view) {
         const isLaunchpad = view === 'launchpad';
@@ -102,6 +117,7 @@
         initialized = true;
 
         renderApps();
+        observeSidebarWidth();
 
         document.getElementById('nextUiHomeTab')?.addEventListener('click', () => setView('home'));
         document.getElementById('nextUiAddTabBtn')?.addEventListener('click', openLaunchpad);
