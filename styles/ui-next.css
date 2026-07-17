@@ -17,6 +17,8 @@ html[data-ui-mode="next"] body {
     --next-muted: var(--next-theme-muted, var(--secondary-text, #666a73));
     --next-border: var(--next-theme-border, var(--border-color, rgba(27, 31, 38, 0.1)));
     --next-shadow: var(--next-theme-shadow, 0 7px 18px rgba(20, 23, 31, 0.12));
+    --next-panel-edge: var(--next-border);
+    --next-panel-shadow: rgba(20, 28, 36, 0.035);
     --next-backdrop-filter: var(--next-theme-backdrop-filter, blur(18px) saturate(1.28) brightness(1.03));
     --next-surface-backdrop-filter: var(--next-theme-surface-backdrop-filter, none);
     background-color: var(--primary-bg, var(--next-shell-bg));
@@ -35,11 +37,14 @@ html[data-ui-mode="next"] body.dark-theme {
     --next-muted: var(--next-theme-muted-dark, var(--secondary-text, #a8adb7));
     --next-border: var(--next-theme-border-dark, var(--border-color, rgba(255, 255, 255, 0.1)));
     --next-shadow: var(--next-theme-shadow-dark, 0 8px 20px rgba(0, 0, 0, 0.28));
+    --next-panel-edge: var(--next-border);
+    --next-panel-shadow: rgba(0, 0, 0, 0.1);
 }
 
 .next-ui-topbar,
 .next-ui-launchpad,
-.next-ui-navigation-material {
+.next-ui-navigation-material,
+.next-ui-panel-elevation {
     display: none;
 }
 
@@ -68,6 +73,22 @@ html[data-ui-mode="next"] .next-ui-navigation-material {
     );
 }
 
+html[data-ui-mode="next"] .next-ui-panel-elevation {
+    position: fixed;
+    top: 44px;
+    right: 0;
+    bottom: 0;
+    left: var(--next-sidebar-width, 260px);
+    z-index: 2;
+    display: block;
+    pointer-events: none;
+    border-top: 1px solid var(--next-panel-edge);
+    border-left: 1px solid var(--next-panel-edge);
+    border-radius: 14px 0 0 0;
+    box-shadow: -4px -3px 12px var(--next-panel-shadow);
+    box-sizing: border-box;
+}
+
 html[data-ui-mode="next"] .next-ui-topbar {
     position: fixed;
     inset: 0 0 auto 0;
@@ -76,7 +97,7 @@ html[data-ui-mode="next"] .next-ui-topbar {
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 0 10px 0 18px;
+    padding: 0 10px 0 9px;
     box-sizing: border-box;
     color: var(--next-text);
     background: transparent;
@@ -232,10 +253,10 @@ html[data-ui-mode="next"] .next-ui-topbar {
 }
 
 html[data-ui-mode="next"] .container {
-    height: calc(100vh - 50px);
-    margin: 44px 6px 6px 0;
-    width: calc(100% - 6px);
-    border-radius: 0 8px 8px 0;
+    height: calc(100vh - 44px);
+    margin: 44px 0 0;
+    width: 100%;
+    border-radius: 0;
     overflow: hidden;
     position: relative;
     z-index: 1;
@@ -262,8 +283,8 @@ html[data-ui-mode="next"] #resizerRight {
 
 html[data-ui-mode="next"] .main-content {
     overflow: hidden;
-    border-radius: 14px 0 0 14px;
-    clip-path: inset(0 round 14px 0 0 14px);
+    border-radius: 14px 0 0 0;
+    clip-path: inset(0 round 14px 0 0 0);
     background-color: var(--primary-bg, var(--next-surface));
     background-image:
         linear-gradient(var(--next-surface), var(--next-surface)),
@@ -319,17 +340,23 @@ html[data-ui-mode="next"] .notifications-sidebar {
     -webkit-backdrop-filter: var(--next-surface-backdrop-filter);
 }
 
+html[data-ui-mode="next"] .notifications-sidebar.active {
+    border-left: 1px solid var(--next-panel-edge);
+    box-shadow: -4px 0 12px var(--next-panel-shadow);
+    box-sizing: border-box;
+}
+
 html[data-ui-mode="next"] body.next-ui-launchpad-open .container {
     display: none;
 }
 
 html[data-ui-mode="next"] .next-ui-launchpad {
     position: fixed;
-    inset: 44px 6px 6px 0;
+    inset: 44px 0 0;
     z-index: 1000;
     overflow: auto;
     border: 1px solid var(--next-border);
-    border-radius: 0 8px 8px 0;
+    border-radius: 0;
     color: var(--next-text);
     background: var(--next-surface);
 }
