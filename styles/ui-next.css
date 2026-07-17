@@ -113,6 +113,30 @@ html[data-ui-mode="next"] .next-ui-topbar {
     align-items: center;
 }
 
+.next-ui-presentation-switcher {
+    position: relative;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    -webkit-app-region: no-drag;
+}
+
+html[data-ui-mode="next"] .next-ui-chat-presentation-switcher {
+    top: calc(100% + 6px);
+    right: 0;
+    left: auto;
+    transform: translateY(-5px) scale(0.97);
+    transform-origin: right top;
+}
+
+html[data-ui-mode="next"] .next-ui-presentation-switcher:hover .next-ui-chat-presentation-switcher,
+html[data-ui-mode="next"] .next-ui-presentation-switcher:focus-within .next-ui-chat-presentation-switcher {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+}
+
 .next-ui-tab-strip {
     min-width: 0;
     gap: 6px;
