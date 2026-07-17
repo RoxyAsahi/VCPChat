@@ -2,6 +2,12 @@
  * New UI styles belong under this root selector. Keeping the scope here lets
  * the classic interface remain unchanged while the redesign evolves.
  */
+@font-face {
+    font-family: "VCP Orbitron";
+    src: url("../assets/font/Orbitron.ttf") format("truetype");
+    font-display: swap;
+}
+
 html[data-ui-mode="next"] {
     --ui-mode: next;
 }
@@ -328,6 +334,135 @@ html[data-ui-mode="next"] .chat-header {
     -webkit-backdrop-filter: none;
 }
 
+html[data-ui-mode="next"] .chat-messages-container {
+    position: relative;
+}
+
+.next-ui-empty-state {
+    display: none;
+}
+
+html[data-ui-mode="next"] .main-content.next-ui-empty-state-active .next-ui-empty-state {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+html[data-ui-mode="next"] .main-content.next-ui-empty-state-active #chatMessages .welcome-bubble {
+    display: none;
+}
+
+html[data-ui-mode="next"] .main-content.next-ui-empty-state-active #currentChatAgentName {
+    opacity: 0;
+}
+
+.next-ui-empty-state-content {
+    position: relative;
+    z-index: 1;
+    width: min(760px, calc(100% - 72px));
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    transform: translateY(-5%);
+    text-align: center;
+}
+
+.next-ui-empty-brand {
+    width: 100%;
+    filter: drop-shadow(0 18px 34px rgba(0, 0, 0, 0.12));
+    animation: next-ui-empty-brand-breathe 5.5s ease-in-out infinite;
+}
+
+.next-ui-empty-brand-svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+}
+
+.next-ui-empty-brand-text {
+    font-family: "VCP Orbitron", "Maven Pro", system-ui, sans-serif;
+    font-size: 112px;
+    font-weight: 900;
+    letter-spacing: 4px;
+}
+
+.next-ui-empty-brand-base {
+    fill: color-mix(in srgb, var(--primary-bg) 82%, #050508);
+    stroke: color-mix(in srgb, var(--next-text) 24%, #1a1a2e);
+    stroke-width: 2.6px;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    paint-order: stroke fill;
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.24));
+}
+
+.next-ui-empty-brand-flow {
+    fill: transparent;
+    stroke-width: 4px;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 150 400;
+    animation: next-ui-empty-brand-flow 6.5s linear infinite;
+}
+
+.next-ui-empty-brand-cyan {
+    stroke: #00f3ff;
+    filter:
+        drop-shadow(0 0 7px rgba(0, 243, 255, 0.88))
+        drop-shadow(0 0 16px rgba(0, 243, 255, 0.42));
+}
+
+.next-ui-empty-brand-pink {
+    stroke: #ff00ea;
+    filter:
+        drop-shadow(0 0 7px rgba(255, 0, 234, 0.84))
+        drop-shadow(0 0 16px rgba(255, 0, 234, 0.38));
+    animation-delay: -3.25s;
+}
+
+.next-ui-empty-tagline {
+    margin: -6px 0 0;
+    color: color-mix(in srgb, var(--next-text) 80%, var(--next-muted));
+    font-size: 15px;
+    font-weight: 550;
+    line-height: 1.5;
+    letter-spacing: 0;
+    text-shadow: 0 1px 8px color-mix(in srgb, var(--primary-bg) 72%, transparent);
+}
+
+html[data-ui-mode="next"] body.light-theme .next-ui-empty-brand-base {
+    fill: color-mix(in srgb, #ffffff 78%, var(--primary-bg));
+    stroke: color-mix(in srgb, #94a3b8 50%, var(--next-border));
+    filter: drop-shadow(0 2px 8px rgba(71, 85, 105, 0.1));
+}
+
+html[data-ui-mode="next"] body.light-theme .next-ui-empty-brand-flow {
+    stroke-width: 3px;
+}
+
+html[data-ui-mode="next"] body.light-theme .next-ui-empty-brand-cyan {
+    filter: drop-shadow(0 0 6px rgba(0, 231, 242, 0.56));
+}
+
+html[data-ui-mode="next"] body.light-theme .next-ui-empty-brand-pink {
+    filter: drop-shadow(0 0 6px rgba(255, 79, 216, 0.52));
+}
+
+@keyframes next-ui-empty-brand-flow {
+    from { stroke-dashoffset: 562; }
+    to { stroke-dashoffset: 0; }
+}
+
+@keyframes next-ui-empty-brand-breathe {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+}
+
 html[data-ui-mode="next"] .chat-actions {
     gap: 2px;
 }
@@ -492,5 +627,39 @@ html[data-ui-mode="next"] #vchatAppTray + * {
     .next-ui-app-grid {
         grid-template-columns: repeat(3, minmax(86px, 1fr));
         gap: 30px 18px;
+    }
+
+    .next-ui-empty-state-content {
+        width: calc(100% - 36px);
+        gap: 2px;
+    }
+
+    .next-ui-empty-tagline {
+        font-size: 13px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .next-ui-empty-brand {
+        animation: none;
+    }
+
+    .next-ui-empty-brand-flow {
+        opacity: 0;
+        animation: none;
+    }
+
+    .next-ui-empty-brand-base {
+        stroke: url("#nextUiEmptyStaticStroke");
+        stroke-width: 4px;
+        filter:
+            drop-shadow(0 0 6px rgba(0, 243, 255, 0.58))
+            drop-shadow(0 0 6px rgba(255, 0, 234, 0.52));
+    }
+
+    html[data-ui-mode="next"] body.light-theme .next-ui-empty-brand-base {
+        filter:
+            drop-shadow(0 0 4px rgba(0, 243, 255, 0.28))
+            drop-shadow(0 0 4px rgba(255, 0, 234, 0.24));
     }
 }

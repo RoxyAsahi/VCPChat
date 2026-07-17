@@ -702,6 +702,35 @@
                 </div>
             </header>
             <div class="chat-messages-container">
+                <section id="nextUiEmptyState" class="next-ui-empty-state" aria-hidden="true">
+                    <div class="next-ui-empty-state-content">
+                        <div class="next-ui-empty-brand" role="img" aria-label="VCPChat">
+                            <svg class="next-ui-empty-brand-svg" viewBox="0 0 900 190" aria-hidden="true">
+                                <defs>
+                                    <linearGradient id="nextUiEmptyStaticStroke" x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <stop offset="0%" stop-color="#00f3ff"></stop>
+                                        <stop offset="50%" stop-color="#00f3ff"></stop>
+                                        <stop offset="50%" stop-color="#ff00ea"></stop>
+                                        <stop offset="100%" stop-color="#ff00ea"></stop>
+                                    </linearGradient>
+                                    <filter id="nextUiEmptyLogoGlow" x="-20%" y="-40%" width="140%" height="180%">
+                                        <feGaussianBlur stdDeviation="4" result="blur"></feGaussianBlur>
+                                        <feComposite in="SourceGraphic" in2="blur" operator="over"></feComposite>
+                                    </filter>
+                                </defs>
+                                <text x="50%" y="52%" text-anchor="middle" dominant-baseline="middle"
+                                    class="next-ui-empty-brand-text next-ui-empty-brand-base">VCPCHAT</text>
+                                <text x="50%" y="52%" text-anchor="middle" dominant-baseline="middle"
+                                    class="next-ui-empty-brand-text next-ui-empty-brand-flow next-ui-empty-brand-cyan"
+                                    filter="url(#nextUiEmptyLogoGlow)">VCPCHAT</text>
+                                <text x="50%" y="52%" text-anchor="middle" dominant-baseline="middle"
+                                    class="next-ui-empty-brand-text next-ui-empty-brand-flow next-ui-empty-brand-pink"
+                                    filter="url(#nextUiEmptyLogoGlow)">VCPCHAT</text>
+                            </svg>
+                        </div>
+                        <p class="next-ui-empty-tagline">让每一次对话，都成为新的连接</p>
+                    </div>
+                </section>
                 <div class="chat-messages" id="chatMessages">
                 </div>
             </div>

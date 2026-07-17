@@ -332,7 +332,15 @@ window.chatManager = (() => {
     }
  
     // --- Functions moved from renderer.js ---
- 
+
+    function setNextUiEmptyStateActive(isActive) {
+        const mainContent = document.querySelector('.main-content');
+        const emptyState = document.getElementById('nextUiEmptyState');
+
+        mainContent?.classList.toggle('next-ui-empty-state-active', isActive);
+        emptyState?.setAttribute('aria-hidden', String(!isActive));
+    }
+
     function displayNoItemSelected() {
         const { currentChatNameH3, chatMessagesDiv, currentItemActionBtn, messageInput, sendMessageBtn, attachFileBtn } = elements;
         const voiceChatBtn = document.getElementById('voiceChatBtn');
@@ -343,6 +351,7 @@ window.chatManager = (() => {
         messageInput.disabled = true;
         sendMessageBtn.disabled = true;
         attachFileBtn.disabled = true;
+        setNextUiEmptyStateActive(true);
         if (mainRendererFunctions.displaySettingsForItem) {
             mainRendererFunctions.displaySettingsForItem(); 
         }
@@ -358,6 +367,7 @@ window.chatManager = (() => {
         }
 
         const { currentChatNameH3, currentItemActionBtn, messageInput, sendMessageBtn, attachFileBtn } = elements;
+        setNextUiEmptyStateActive(false);
         let currentSelectedItem = currentSelectedItemRef.get();
         let currentTopicId = currentTopicIdRef.get();
 
