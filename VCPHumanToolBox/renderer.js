@@ -625,6 +625,32 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 });
             }
+        } else if (param.type === 'checkbox_group') {
+            input = document.createElement('div');
+            input.className = 'checkbox-group checkbox-options-group';
+            input.style.cssText = 'display:flex; flex-wrap:wrap; gap:8px 16px; padding:8px 0;';
+            const defaultValues = Array.isArray(param.default) ? param.default : [];
+
+            param.options.forEach(opt => {
+                const checkboxLabel = document.createElement('label');
+                checkboxLabel.className = 'checkbox-label';
+                checkboxLabel.style.cssText = 'display:flex; align-items:center; gap:6px; cursor:pointer; margin:0;';
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.name = `${param.name}__${opt}`;
+                checkbox.value = opt;
+                checkbox.dataset.checkboxGroup = param.name;
+                checkbox.checked = defaultValues.includes(opt);
+                checkbox.defaultChecked = checkbox.checked;
+
+                const checkboxText = document.createElement('span');
+                checkboxText.textContent = param.optionLabels?.[opt] || opt;
+
+                checkboxLabel.appendChild(checkbox);
+                checkboxLabel.appendChild(checkboxText);
+                input.appendChild(checkboxLabel);
+            });
         } else {
             input = document.createElement('input');
             input.type = param.type || 'text';
@@ -643,7 +669,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (param.name === 'maid' && !input.value) input.value = USER_NAME;
             }
             if (param.required) input.required = true;
-        } else {
+        } else if (param.type !== 'checkbox_group') {
             const hiddenInput = document.createElement('input');
             hiddenInput.type = 'hidden';
             hiddenInput.name = param.name;
@@ -1043,31 +1069,51 @@ document.addEventListener('DOMContentLoaded', async () => {
         const args = {};
         let finalToolName = toolName;
 
+        toolForm.querySelectorAll('input[type="checkbox"][data-checkbox-group]:checked').forEach(input => {
+            const groupName = input.dataset.checkboxGroup;
+            if (!args[groupName]) args[groupName] = [];
+            args[groupName].push(input.value);
+        });
+
         for (let [key, value] of formData.entries()) {
             const inputElement = toolForm.querySelector(`[name="${key}"]`);
-            if (inputElement && inputElement.type === 'checkbox') {
+            if (inputElement?.dataset.checkboxGroup) {
+                continue;
+            } else if (inputElement && inputElement.type === 'checkbox') {
                 args[key] = inputElement.checked;
             } else if (value) {
                 args[key] = value;
             }
         }
 
+        const lightMemoExplicitScopeCommands = new Set([
+            'tagmemo_ab',
+            'tagmemo_v10',
+            'tagmemo_v10_ab'
+        ]);
+        const requiresExplicitScope = toolName === 'LightMemo'
+            && lightMemoExplicitScopeCommands.has(args.command);
+
         if (
-            toolName === 'LightMemo'
-            && args.command === 'tagmemo_ab'
+            requiresExplicitScope
             && !String(args.maid || '').trim()
             && !String(args.folder || '').trim()
             && args.search_all_knowledge_bases !== true
         ) {
+            const commandLabels = {
+                tagmemo_ab: 'TagMemo V9.1 对照测试',
+                tagmemo_v10: 'TagMemo V10 Alpha 实验',
+                tagmemo_v10_ab: 'TagMemo 统一寻址具名 A/B 评审'
+            };
             renderResult({
                 status: 'error',
-                error: 'TagMemoAB 必须选择作用域：填写 folder、填写 maid，或启用全库测试。'
+                error: `${commandLabels[args.command]}必须选择作用域：填写 folder、填写 maid，或启用全库搜索。`
             }, toolName);
             return;
         }
 
-        // maid 兜底：其他工具未填写时使用默认值。TagMemoAB 保留显式作用域语义。
-        if (!args.maid && !(toolName === 'LightMemo' && args.command === 'tagmemo_ab')) {
+        // maid 兜底：普通工具未填写时使用默认值；TagMemo 实验命令保留显式作用域语义。
+        if (!args.maid && !requiresExplicitScope) {
             args.maid = USER_NAME;
         }
         // 计时器

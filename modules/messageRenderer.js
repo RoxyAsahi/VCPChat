@@ -12,7 +12,7 @@ const toolResultFullContentMap = new Map(); // placeholderId -> { raw: string, f
 let toolResultContentIdCounter = 0;
 
 // 🟢 完整 Markdown → HTML 渲染缓存：只缓存 raw HTML 字符串，不缓存 DOM / 后处理结果 / message 对象。
-const RENDER_PIPELINE_VERSION = '2026-06-11-render-cache-v1';
+const RENDER_PIPELINE_VERSION = '2026-07-24-dollar-guard-v2';
 const RENDER_HTML_CACHE_MAX_BYTES = 20 * 1024 * 1024;
 const RENDER_HTML_CACHE_MAX_ENTRIES = 500;
 const RENDER_HTML_CACHE_MAX_SINGLE_BYTES = 1024 * 1024;
@@ -94,7 +94,7 @@ function protectLatexBlocks(text) {
         return hasExplicitMathSignal || isSimpleNumericMath;
     };
 
-    const protectInlineDollarMath = (source) => {
+    const protectInlineDollarMathInText = (source) => {
         let result = '';
         let index = 0;
 
@@ -156,6 +156,26 @@ function protectLatexBlocks(text) {
             index = closeIndex + 1;
         }
 
+        return result;
+    };
+
+    const protectInlineDollarMath = (source) => {
+        // HTML 标签是硬边界：美元定界符只能在同一个纯文本片段内闭合。
+        // 这既避免读取 style/data 属性中的 `$`，也避免把
+        // `<strong>$35.50</strong> ... <span>$12.25</span>` 跨元素配成公式。
+        // 仅识别形似真实标签的片段，数学表达式中的比较运算符 `<`、`>` 仍留在文本中。
+        const htmlTagRegex = /<!--[\s\S]*?-->|<\/?[A-Za-z][A-Za-z0-9:-]*(?:\s+(?:"[^"]*"|'[^']*'|[^'"<>])*)?\s*\/?>/g;
+        let result = '';
+        let cursor = 0;
+        let tagMatch;
+
+        while ((tagMatch = htmlTagRegex.exec(source)) !== null) {
+            result += protectInlineDollarMathInText(source.slice(cursor, tagMatch.index));
+            result += tagMatch[0];
+            cursor = tagMatch.index + tagMatch[0].length;
+        }
+
+        result += protectInlineDollarMathInText(source.slice(cursor));
         return result;
     };
 
@@ -295,8 +315,8 @@ const HTML_FENCE_CHECK_REGEX = /```\w*\n<!DOCTYPE html>/i;
 const MERMAID_CODE_REGEX = /<code.*?>\s*(flowchart|graph|mermaid)\s+([\s\S]*?)<\/code>/gi;
 const MERMAID_FENCE_REGEX = /```(mermaid|flowchart|graph)[^\S\n]*\n([\s\S]*?)```/g;
 const CODE_FENCE_REGEX = /```[^\n]*([\s\S]*?)```/g;
-const THOUGHT_CHAIN_REGEX = /\[--- VCP元思考链(?::\s*"([^"]*)")?\s*---\]([\s\S]*?)\[--- 元思考链结束 ---\]/gs;
-const CONVENTIONAL_THOUGHT_REGEX = /<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi;
+const THOUGHT_CHAIN_REGEX = /^[ \t]*\[--- VCP元思考链(?::\s*"([^"]*)")?\s*---\][ \t]*\r?\n([\s\S]*?)^[ \t]*\[--- 元思考链结束 ---\][ \t]*(?:\r?\n|$)/gm;
+const CONVENTIONAL_THOUGHT_REGEX = /^[ \t]*<think(?:ing)?>[ \t]*\r?\n([\s\S]*?)^[ \t]*<\/think(?:ing)?>[ \t]*(?:\r?\n|$)/gim;
 const ROLE_DIVIDER_REGEX = /<<<\[(END_)?ROLE_DIVIDE_(SYSTEM|ASSISTANT|USER)\]>>>/g;
 const DESKTOP_PUSH_REGEX = /(?<!`)<<<\[DESKTOP_PUSH\]>>>([\s\S]*?)<<<\[DESKTOP_PUSH_END\]>>>(?!`)/gs;
 const DESKTOP_PUSH_PARTIAL_REGEX = /(?<!`)<<<\[DESKTOP_PUSH\]>>>([\s\S]*)$/s; // 流式传输中未闭合的情况
