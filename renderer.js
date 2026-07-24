@@ -136,10 +136,7 @@ const tabContentSettings = document.getElementById('tabContentSettings');
 const topicSearchInput = document.getElementById('topicSearchInput'); // Should be in tabContentTopics
 const DEFAULT_SEND_BUTTON_HTML = sendMessageBtn?.innerHTML || '';
 const INTERRUPT_SEND_BUTTON_HTML = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
-        fill="none" stroke="none" aria-hidden="true">
-        <rect x="4" y="4" width="16" height="16" rx="3" fill="currentColor"></rect>
-    </svg>
+    <span class="material-symbols-outlined vcp-ui-icon" aria-hidden="true">stop</span>
 `;
 
 function isContextForCurrentChat(context) {
@@ -196,6 +193,7 @@ function updateSendButtonState() {
     sendMessageBtn.classList.toggle('interrupt-mode', nextMode === 'interrupt');
     sendMessageBtn.innerHTML = nextMode === 'interrupt' ? INTERRUPT_SEND_BUTTON_HTML : DEFAULT_SEND_BUTTON_HTML;
     sendMessageBtn.title = nextMode === 'interrupt' ? '中止回复' : '发送消息/右键高级回复';
+    sendMessageBtn.setAttribute('aria-label', nextMode === 'interrupt' ? '中止回复' : '发送消息');
 }
 
 async function interruptActiveResponseFromSendButton() {
@@ -281,6 +279,7 @@ let inviteAgentButtonsContainerElement; // 新增：邀请发言按钮容器的�
 
 // Assistant settings elements
 const toggleAssistantBtn = document.getElementById('toggleAssistantBtn'); // New button
+const toggleSidebarModeBtn = document.getElementById('toggleSidebarModeBtn');
 // 模态框内部元素延迟加载
 let assistantAgentContainer = null;
 let assistantAgentSelect = null;
@@ -1004,7 +1003,7 @@ import { setupEventListeners } from './modules/event-listeners.js';
             openNotesBtn: document.getElementById('openNotesBtn'),
             openMusicBtn: document.getElementById('openMusicBtn'),
             openCanvasBtn: document.getElementById('openCanvasBtn'),
-            toggleAssistantBtn,
+            toggleAssistantBtn, toggleSidebarModeBtn,
             voiceChatBtn: document.getElementById('voiceChatBtn'),
             enableContextSanitizerCheckbox: document.getElementById('enableContextSanitizer'),
             contextSanitizerDepthContainer: document.getElementById('contextSanitizerDepthContainer'),
@@ -1553,6 +1552,9 @@ async function loadAndApplyGlobalSettings() {
     if (settings && !settings.error) {
         globalSettings = { ...globalSettings, ...settings }; // Merge with defaults
         window.globalSettings = globalSettings;
+        window.dispatchEvent(new CustomEvent('global-settings-updated', {
+            detail: { settings: globalSettings }
+        }));
         window.uiModeManager?.apply(globalSettings.uiMode);
         applyChatBubbleLayoutSettings(globalSettings);
         
@@ -1583,6 +1585,11 @@ async function loadAndApplyGlobalSettings() {
         // Set the initial state of the new toggle button in the main UI
         if (toggleAssistantBtn) {
             toggleAssistantBtn.classList.toggle('active', !!globalSettings.assistantEnabled);
+        }
+        if (toggleSidebarModeBtn) {
+            const avatarOnly = globalSettings.sidebarActive !== false && globalSettings.sidebarAvatarOnly === true;
+            toggleSidebarModeBtn.classList.toggle('active', avatarOnly);
+            toggleSidebarModeBtn.setAttribute('aria-pressed', String(avatarOnly));
         }
         // Selection listener startup moved to post-renderer-ready stage.
 

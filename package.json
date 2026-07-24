@@ -7,6 +7,10 @@
     "start": "electron .",
     "start:desktop": "electron . --desktop-only",
     "start:rag-observer": "electron . --rag-observer-only",
+    "lint:ui-system": "stylelint \"styles/ui-system/**/*.css\" --config stylelint.ui-system.config.cjs",
+    "guard:ui-system": "node scripts/check-ui-system.mjs",
+    "test:ui-system": "node scripts/test-ui-system.mjs",
+    "check:ui-system": "node --check modules/ui-system/component-manifest.js && node --check modules/ui-system/vcp-ui.js && node --check modules/ui-system/next-ui-apps.js && node --check modules/ui-system/component-showcase.js && node --check modules/topTabManager.js && npm run lint:ui-system && npm run guard:ui-system && npm run test:ui-system",
     "pack": "electron-builder --dir",
     "dist": "electron-builder"
   },
@@ -51,6 +55,7 @@
     "html2canvas": "^1.4.1",
     "iconv-lite": "^0.6.3",
     "jsdom": "^27.0.1",
+    "lucide": "^1.25.0",
     "mammoth": "^1.9.1",
     "marked": "^12.0.0",
     "minimatch": "^9.0.0",

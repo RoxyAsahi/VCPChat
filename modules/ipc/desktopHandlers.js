@@ -748,6 +748,47 @@ function resolveAppActionToAppId(appAction) {
     }
 }
 
+async function launchVchatApp(appAction) {
+    try {
+        console.log(`[DesktopHandlers] Launching VChat app via WindowService: ${appAction}`);
+
+        const appId = resolveAppActionToAppId(appAction);
+        if (appId) {
+            await windowService.open(appId);
+            return { success: true, appId };
+        }
+
+        if (appAction === 'launch-human-toolbox') {
+            return await launchStandaloneElectronApp('VCPHumanToolBox', 'Human Toolbox');
+        }
+
+        if (appAction === 'launch-vchat-manager') {
+            return await launchStandaloneElectronApp('VchatManager', 'VchatManager');
+        }
+
+        if (appAction === 'open-powershell-executor-terminal') {
+            const powerShellExecutor = require(path.join(PROJECT_ROOT, 'VCPDistributedServer', 'Plugin', 'PowerShellExecutor', 'PowerShellExecutor.js'));
+            if (typeof powerShellExecutor.openGuiTerminal !== 'function') {
+                return { success: false, error: 'PowerShellExecutor GUI entry is not available.' };
+            }
+
+            powerShellExecutor.openGuiTerminal();
+            return { success: true };
+        }
+
+        if (appAction && appAction.startsWith('open-system-tool:')) {
+            const cmd = appAction.substring('open-system-tool:'.length);
+            return await launchSystemTool(cmd);
+        }
+
+        console.warn(`[DesktopHandlers] Unknown VChat app action: ${appAction}`);
+        return { success: false, error: `Unknown app action: ${appAction}` };
+    } catch (err) {
+        console.error(`[DesktopHandlers] VChat app launch error (${appAction}):`, err);
+        return { success: false, error: err.message };
+    }
+}
+
 /**
  * 启动 Windows 系统工具
  * 支持的命令格式：
@@ -1327,46 +1368,7 @@ function initialize(params) {
     });
 
     ipcMain.removeHandler('desktop-launch-vchat-app');
-    ipcMain.handle('desktop-launch-vchat-app', async (event, appAction) => {
-        try {
-            console.log(`[DesktopHandlers] Launching VChat app via WindowService: ${appAction}`);
-
-            const appId = resolveAppActionToAppId(appAction);
-            if (appId) {
-                await windowService.open(appId);
-                return { success: true, appId };
-            }
-
-            if (appAction === 'launch-human-toolbox') {
-                return await launchStandaloneElectronApp('VCPHumanToolBox', 'Human Toolbox');
-            }
-
-            if (appAction === 'launch-vchat-manager') {
-                return await launchStandaloneElectronApp('VchatManager', 'VchatManager');
-            }
-
-            if (appAction === 'open-powershell-executor-terminal') {
-                const powerShellExecutor = require(path.join(PROJECT_ROOT, 'VCPDistributedServer', 'Plugin', 'PowerShellExecutor', 'PowerShellExecutor.js'));
-                if (typeof powerShellExecutor.openGuiTerminal !== 'function') {
-                    return { success: false, error: 'PowerShellExecutor GUI entry is not available.' };
-                }
-
-                powerShellExecutor.openGuiTerminal();
-                return { success: true };
-            }
-
-            if (appAction && appAction.startsWith('open-system-tool:')) {
-                const cmd = appAction.substring('open-system-tool:'.length);
-                return await launchSystemTool(cmd);
-            }
-
-            console.warn(`[DesktopHandlers] Unknown VChat app action: ${appAction}`);
-            return { success: false, error: `Unknown app action: ${appAction}` };
-        } catch (err) {
-            console.error(`[DesktopHandlers] VChat app launch error (${appAction}):`, err);
-            return { success: false, error: err.message };
-        }
-    });
+    ipcMain.handle('desktop-launch-vchat-app', (_event, appAction) => launchVchatApp(appAction));
 
     // ============================================================
     // --- IPC: 快捷方式解析 & 启动 ---
@@ -2574,4 +2576,5 @@ module.exports = {
     getDesktopWindow,
     generateCatalog,
     cleanupStandaloneAppProcesses,
+    launchVchatApp,
 };

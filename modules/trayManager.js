@@ -37,6 +37,17 @@ const trayManager = (function () {
         { id: 'vchat-app-terminal', name: '终端', icon: 'terminal', action: 'open-powershell-executor-terminal' },
         { id: 'vchat-app-desktop', name: '桌面', icon: 'desktop', action: 'open-desktop-window' }
     ];
+    const EMBEDDABLE_ACTIONS = new Set([
+        'open-notes-window',
+        'open-note-mini-window',
+        'open-translator-window',
+        'open-memo-window',
+        'open-forum-window',
+        'open-log-window',
+        'open-themes-window',
+        'open-task-window',
+        'open-plugin-manager-window'
+    ]);
 
     // SVG 图标定义 (Lucide 风格)
     const SVG_ICONS = {
@@ -310,7 +321,7 @@ const trayManager = (function () {
 
     return {
         init: init,
-        getApps: () => VCHAT_APPS.map(app => ({ ...app })),
+        getApps: () => VCHAT_APPS.map(app => ({ ...app, embed: EMBEDDABLE_ACTIONS.has(app.action) })),
         getIcon: (iconName) => SVG_ICONS[iconName] || '',
         launchApp: launchApp
     };

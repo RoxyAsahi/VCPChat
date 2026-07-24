@@ -1,0 +1,1293 @@
+import { COMPONENT_MANIFEST } from './component-manifest.js';
+
+const COMPONENTS = new Map();
+const ENHANCERS = new Map();
+const VALID_SIZES = new Set(['sm', 'md', 'lg', 'xl']);
+const controllerByElement = new WeakMap();
+
+function devWarn(message) {
+    console.warn(`[VCPUI] ${message}`);
+}
+
+function icon(name, className = '') {
+    const span = document.createElement('span');
+    span.className = `vcp-ui-icon ${className}`.trim();
+    span.setAttribute('aria-hidden', 'true');
+    span.textContent = name;
+    return span;
+}
+
+function appendContent(target, content) {
+    target.replaceChildren();
+    if (content instanceof Node) target.appendChild(content);
+    else if (content !== undefined && content !== null) target.textContent = String(content);
+}
+
+function emit(element, type) {
+    element.dispatchEvent(new Event(type, { bubbles: true }));
+}
+
+function listen(records, target, type, handler, options) {
+    target.addEventListener(type, handler, options);
+    records.push(() => target.removeEventListener(type, handler, options));
+}
+
+function makeController(element, state, render, cleanup = () => {}, { removeOnDestroy = true } = {}) {
+    const records = [];
+    const controller = {
+        element,
+        update(patch = {}) {
+            Object.assign(state, patch);
+            render(state, records);
+            return controller;
+        },
+        focus() {
+            const target = element.matches('button, input, textarea, select, [tabindex]')
+                ? element
+                : element.querySelector('button, input, textarea, select, [tabindex]');
+            target?.focus();
+            return controller;
+        },
+        destroy() {
+            records.splice(0).forEach(dispose => dispose());
+            cleanup();
+            controllerByElement.delete(element);
+            if (removeOnDestroy) element.remove();
+        },
+        _listen(target, type, handler, options) {
+            listen(records, target, type, handler, options);
+        }
+    };
+    controllerByElement.set(element, controller);
+    render(state, records);
+    return controller;
+}
+
+function rangeEnhancer(element, options = {}, { removeOnDestroy = false } = {}) {
+    if (!element?.matches?.('input[type="range"]')) {
+        throw new TypeError('VCPUI Range enhancement requires an input[type="range"].');
+    }
+
+    const originallyEnhanced = element.classList.contains('vcp-ui-range');
+    const originalSize = element.getAttribute('data-size');
+    const originalAriaLabel = element.getAttribute('aria-label');
+    const state = {
+        size: 'md',
+        label: originalAriaLabel || '',
+        ...options
+    };
+
+    const controller = makeController(element, state, current => {
+        element.classList.add('vcp-ui-range');
+        element.dataset.size = normalize(current.size, ['sm', 'md', 'lg'], 'md', 'size');
+        if (current.label) element.setAttribute('aria-label', current.label);
+        if (current.min !== undefined) element.min = String(current.min);
+        if (current.max !== undefined) element.max = String(current.max);
+        if (current.step !== undefined) element.step = String(current.step);
+        if (current.value !== undefined && element.value !== String(current.value)) element.value = String(current.value);
+        if (current.disabled !== undefined) element.disabled = Boolean(current.disabled);
+    }, () => {
+        if (!originallyEnhanced) element.classList.remove('vcp-ui-range');
+        if (originalSize === null) element.removeAttribute('data-size');
+        else element.setAttribute('data-size', originalSize);
+        if (originalAriaLabel === null) element.removeAttribute('aria-label');
+        else element.setAttribute('aria-label', originalAriaLabel);
+    }, { removeOnDestroy });
+
+    controller._listen(element, 'input', () => {
+        state.value = element.value;
+        state.onInput?.(Number(element.value), element);
+    });
+    controller._listen(element, 'change', () => {
+        state.value = element.value;
+        state.onChange?.(Number(element.value), element);
+    });
+    return controller;
+}
+
+function rangeFactory(options = {}) {
+    const element = document.createElement('input');
+    element.type = 'range';
+    return rangeEnhancer(element, options, { removeOnDestroy: true });
+}
+
+function nativeControlEnhancer(element, kind, options = {}) {
+    const selectors = {
+        input: 'input:is(:not([type]), [type="text"], [type="url"], [type="password"], [type="number"], [type="email"], [type="search"], [type="tel"])',
+        textarea: 'textarea',
+        select: 'select'
+    };
+    if (!element?.matches?.(selectors[kind])) {
+        throw new TypeError(`VCPUI ${kind} enhancement received an incompatible element.`);
+    }
+
+    const className = `vcp-ui-native-${kind}`;
+    const originallyEnhanced = element.classList.contains(className);
+    const originalSize = element.getAttribute('data-size');
+    const originalInvalid = element.getAttribute('aria-invalid');
+    const originalAriaLabel = element.getAttribute('aria-label');
+    const state = { size: 'md', ...options };
+
+    return makeController(element, state, current => {
+        element.classList.add(className);
+        element.dataset.size = normalize(current.size, ['sm', 'md', 'lg'], 'md', 'size');
+        if (current.label) element.setAttribute('aria-label', current.label);
+        if (current.invalid !== undefined) element.setAttribute('aria-invalid', String(Boolean(current.invalid)));
+        if (current.disabled !== undefined) element.disabled = Boolean(current.disabled);
+        if (current.readonly !== undefined && 'readOnly' in element) element.readOnly = Boolean(current.readonly);
+    }, () => {
+        if (!originallyEnhanced) element.classList.remove(className);
+        if (originalSize === null) element.removeAttribute('data-size');
+        else element.setAttribute('data-size', originalSize);
+        if (originalInvalid === null) element.removeAttribute('aria-invalid');
+        else element.setAttribute('aria-invalid', originalInvalid);
+        if (originalAriaLabel === null) element.removeAttribute('aria-label');
+        else element.setAttribute('aria-label', originalAriaLabel);
+    }, { removeOnDestroy: false });
+}
+
+function nativeSwitchEnhancer(element, options = {}) {
+    if (!element?.matches?.('label.switch')) {
+        throw new TypeError('VCPUI Switch enhancement requires a label.switch element.');
+    }
+    const input = element.querySelector('input[type="checkbox"]');
+    if (!input) throw new TypeError('VCPUI Switch enhancement requires a checkbox input.');
+
+    const originallyEnhanced = element.classList.contains('vcp-ui-native-switch');
+    const originalSize = element.getAttribute('data-size');
+    const originalState = element.getAttribute('data-state');
+    const state = { size: 'md', ...options };
+    let controller;
+    const sync = () => {
+        element.dataset.state = input.checked ? 'on' : 'off';
+        element.classList.toggle('is-disabled', input.disabled);
+    };
+
+    controller = makeController(element, state, current => {
+        element.classList.add('vcp-ui-native-switch');
+        element.dataset.size = normalize(current.size, ['sm', 'md'], 'md', 'size');
+        if (current.checked !== undefined) input.checked = Boolean(current.checked);
+        if (current.disabled !== undefined) input.disabled = Boolean(current.disabled);
+        sync();
+    }, () => {
+        if (!originallyEnhanced) element.classList.remove('vcp-ui-native-switch', 'is-disabled');
+        if (originalSize === null) element.removeAttribute('data-size');
+        else element.setAttribute('data-size', originalSize);
+        if (originalState === null) element.removeAttribute('data-state');
+        else element.setAttribute('data-state', originalState);
+    }, { removeOnDestroy: false });
+    controller._listen(input, 'change', sync);
+    return controller;
+}
+
+function settingsSectionEnhancer(element, options = {}, { removeOnDestroy = false } = {}) {
+    if (!element?.matches?.('.agent-settings-section, .group-settings-section, .vcp-ui-settings-section')) {
+        throw new TypeError('VCPUI SettingsSection enhancement received an incompatible element.');
+    }
+
+    const header = options.header || element.querySelector(options.headerSelector || '.agent-settings-section-header, .group-settings-section-header, .vcp-ui-settings-section-header');
+    const toggle = options.toggle || element.querySelector(options.toggleSelector || '.agent-settings-toggle-btn, .group-settings-toggle-btn, .vcp-ui-settings-section-toggle');
+    const content = options.content || element.querySelector(options.contentSelector || '.agent-settings-section-content, .group-settings-section-content, .vcp-ui-settings-section-content');
+    if (!header || !toggle || !content) throw new TypeError('VCPUI SettingsSection requires header, toggle, and content elements.');
+
+    const originallyEnhanced = element.classList.contains('vcp-ui-settings-section');
+    const originalState = element.getAttribute('data-state');
+    const originalExpanded = toggle.getAttribute('aria-expanded');
+    const originalControls = toggle.getAttribute('aria-controls');
+    const generatedContentId = !content.id;
+    if (generatedContentId) content.id = `vcp-ui-settings-section-${crypto.randomUUID()}`;
+    const state = { collapsed: undefined, manageToggle: false, ...options };
+    let observer;
+    let controller;
+
+    const sync = () => {
+        const collapsed = element.classList.contains('collapsed');
+        element.dataset.state = collapsed ? 'collapsed' : 'expanded';
+        toggle.setAttribute('aria-expanded', String(!collapsed));
+        toggle.setAttribute('aria-controls', content.id);
+    };
+
+    controller = makeController(element, state, current => {
+        element.classList.add('vcp-ui-settings-section');
+        if (current.collapsed !== undefined) element.classList.toggle('collapsed', Boolean(current.collapsed));
+        sync();
+    }, () => {
+        observer?.disconnect();
+        if (!originallyEnhanced) element.classList.remove('vcp-ui-settings-section');
+        if (originalState === null) element.removeAttribute('data-state');
+        else element.setAttribute('data-state', originalState);
+        if (originalExpanded === null) toggle.removeAttribute('aria-expanded');
+        else toggle.setAttribute('aria-expanded', originalExpanded);
+        if (originalControls === null) toggle.removeAttribute('aria-controls');
+        else toggle.setAttribute('aria-controls', originalControls);
+        if (generatedContentId) content.removeAttribute('id');
+    }, { removeOnDestroy });
+
+    observer = new window.MutationObserver(sync);
+    observer.observe(element, { attributes: true, attributeFilter: ['class'] });
+    if (state.manageToggle) {
+        controller._listen(header, 'click', event => {
+            if (event.target.closest('button') && event.target !== toggle && !toggle.contains(event.target)) return;
+            element.classList.toggle('collapsed');
+            sync();
+            emit(element, 'change');
+        });
+    }
+    return controller;
+}
+
+function settingsSectionFactory(options = {}) {
+    const element = document.createElement('section');
+    element.className = 'vcp-ui-settings-section';
+    const header = document.createElement('header');
+    header.className = 'vcp-ui-settings-section-header';
+    const title = document.createElement('strong');
+    title.textContent = options.title || '设置分区';
+    const summary = document.createElement('span');
+    summary.className = 'vcp-ui-settings-section-summary';
+    summary.textContent = options.summary || '';
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'vcp-ui-settings-section-toggle';
+    toggle.setAttribute('aria-label', '展开或收起设置分区');
+    toggle.append(icon('chevron_down'));
+    const content = document.createElement('div');
+    content.className = 'vcp-ui-settings-section-content';
+    appendContent(content, options.content || '');
+    header.append(title, summary, toggle);
+    element.append(header, content);
+    return settingsSectionEnhancer(element, { ...options, header, toggle, content, manageToggle: true }, { removeOnDestroy: true });
+}
+
+function fieldEnhancer(element, options = {}) {
+    if (!element?.matches?.('.group-settings-field-shell, .style-control-item, .agent-name-wrapper, .group-name-wrapper, .vcp-ui-settings-field, .vcp-ui-field')) {
+        throw new TypeError('VCPUI Field enhancement received an incompatible element.');
+    }
+    const control = options.control || element.querySelector('input:not([type="hidden"]), select, textarea');
+    if (!control) throw new TypeError('VCPUI Field enhancement requires a form control.');
+
+    const label = options.labelElement
+        || (control.id ? element.querySelector(`label[for="${control.id}"]`) : null)
+        || element.querySelector('label');
+    const helper = options.helperElement || element.querySelector('.group-settings-helper-text, small, .form-hint');
+    const originallyEnhanced = element.classList.contains('vcp-ui-settings-field');
+    const originalState = element.getAttribute('data-state');
+    const originalInvalid = control.getAttribute('aria-invalid');
+    const originalDescribedBy = control.getAttribute('aria-describedby');
+    const originalHelperText = helper?.textContent || '';
+    const generatedHelperId = Boolean(helper && !helper.id);
+    if (generatedHelperId) helper.id = `vcp-ui-field-help-${crypto.randomUUID()}`;
+    const state = { invalid: undefined, error: '', ...options };
+    let controller;
+
+    const syncValidity = () => {
+        const invalid = state.invalid !== undefined ? Boolean(state.invalid) : !control.checkValidity();
+        element.dataset.state = invalid || state.error ? 'error' : 'default';
+        control.setAttribute('aria-invalid', String(Boolean(invalid || state.error)));
+        if (helper?.id) control.setAttribute('aria-describedby', helper.id);
+        if (label && control.id) label.htmlFor = control.id;
+    };
+
+    controller = makeController(element, state, current => {
+        element.classList.add('vcp-ui-settings-field');
+        if (helper) helper.textContent = current.error || originalHelperText;
+        syncValidity();
+    }, () => {
+        if (!originallyEnhanced) element.classList.remove('vcp-ui-settings-field');
+        if (originalState === null) element.removeAttribute('data-state');
+        else element.setAttribute('data-state', originalState);
+        if (originalInvalid === null) control.removeAttribute('aria-invalid');
+        else control.setAttribute('aria-invalid', originalInvalid);
+        if (originalDescribedBy === null) control.removeAttribute('aria-describedby');
+        else control.setAttribute('aria-describedby', originalDescribedBy);
+        if (helper) helper.textContent = originalHelperText;
+        if (generatedHelperId) helper.removeAttribute('id');
+    }, { removeOnDestroy: false });
+    controller._listen(control, 'invalid', () => {
+        state.invalid = true;
+        syncValidity();
+    });
+    controller._listen(control, 'input', () => {
+        state.invalid = undefined;
+        state.error = '';
+        syncValidity();
+    });
+    controller._listen(control, 'change', syncValidity);
+    return controller;
+}
+
+function settingsActionBarEnhancer(element, options = {}, { removeOnDestroy = false } = {}) {
+    if (!element?.matches?.('.form-actions, .vcp-ui-settings-action-bar')) {
+        throw new TypeError('VCPUI SettingsActionBar enhancement received an incompatible element.');
+    }
+    const form = options.form || element.closest('form');
+    const submit = options.submit || element.querySelector('button[type="submit"]');
+    const danger = options.danger || element.querySelector('.danger-button, [data-variant="danger"]');
+    if (!form || !submit) throw new TypeError('VCPUI SettingsActionBar requires a form and submit button.');
+
+    const originallyEnhanced = element.classList.contains('vcp-ui-settings-action-bar');
+    const originalState = element.getAttribute('data-state');
+    const originalBusy = submit.getAttribute('aria-busy');
+    const originalDangerBusy = danger?.getAttribute('aria-busy') ?? null;
+    const state = { dirty: false, saving: false, deleting: false, error: false, ...options };
+    let fallbackTimer = null;
+    let controller;
+
+    const renderState = () => {
+        element.dataset.state = state.deleting ? 'deleting' : state.saving ? 'saving' : state.error ? 'error' : state.dirty ? 'dirty' : 'clean';
+        submit.setAttribute('aria-busy', String(Boolean(state.saving)));
+        danger?.setAttribute('aria-busy', String(Boolean(state.deleting)));
+    };
+
+    controller = makeController(element, state, () => {
+        element.classList.add('vcp-ui-settings-action-bar');
+        renderState();
+    }, () => {
+        if (fallbackTimer) clearTimeout(fallbackTimer);
+        if (!originallyEnhanced) element.classList.remove('vcp-ui-settings-action-bar');
+        if (originalState === null) element.removeAttribute('data-state');
+        else element.setAttribute('data-state', originalState);
+        if (originalBusy === null) submit.removeAttribute('aria-busy');
+        else submit.setAttribute('aria-busy', originalBusy);
+        if (danger) {
+            if (originalDangerBusy === null) danger.removeAttribute('aria-busy');
+            else danger.setAttribute('aria-busy', originalDangerBusy);
+        }
+    }, { removeOnDestroy });
+
+    const markDirty = event => {
+        if (event.target.matches('button, input[type="hidden"]')) return;
+        state.dirty = true;
+        state.error = false;
+        renderState();
+    };
+    controller._listen(form, 'input', markDirty);
+    controller._listen(form, 'change', markDirty);
+    controller._listen(form, 'submit', () => {
+        state.saving = true;
+        state.deleting = false;
+        state.error = false;
+        renderState();
+        if (fallbackTimer) clearTimeout(fallbackTimer);
+        fallbackTimer = setTimeout(() => {
+            if (!state.saving) return;
+            state.saving = false;
+            state.error = true;
+            renderState();
+        }, 15000);
+    });
+    controller._listen(form, 'vcp-settings-save-result', event => {
+        if (fallbackTimer) clearTimeout(fallbackTimer);
+        fallbackTimer = null;
+        state.saving = false;
+        state.deleting = false;
+        state.error = !event.detail?.success;
+        state.dirty = !event.detail?.success;
+        renderState();
+    });
+    if (danger) {
+        controller._listen(danger, 'click', () => {
+            state.deleting = true;
+            state.saving = false;
+            state.error = false;
+            renderState();
+            if (fallbackTimer) clearTimeout(fallbackTimer);
+            fallbackTimer = setTimeout(() => {
+                if (!state.deleting) return;
+                state.deleting = false;
+                state.error = true;
+                renderState();
+            }, 15000);
+        });
+    }
+    controller._listen(form, 'vcp-settings-delete-result', event => {
+        if (fallbackTimer) clearTimeout(fallbackTimer);
+        fallbackTimer = null;
+        state.saving = false;
+        state.deleting = false;
+        state.error = !event.detail?.success && !event.detail?.cancelled;
+        if (event.detail?.success) state.dirty = false;
+        renderState();
+    });
+    controller.markSaved = () => controller.update({ saving: false, deleting: false, error: false, dirty: false });
+    controller.markError = () => controller.update({ saving: false, deleting: false, error: true, dirty: true });
+    return controller;
+}
+
+function settingsActionBarFactory(options = {}) {
+    const form = options.form || document.createElement('form');
+    const element = document.createElement('footer');
+    element.className = 'vcp-ui-settings-action-bar';
+    const submit = buttonFactory({ label: options.saveLabel || '保存设置', type: 'submit', variant: 'primary' });
+    const danger = options.dangerLabel ? buttonFactory({ label: options.dangerLabel, variant: 'danger' }) : null;
+    element.append(submit.element);
+    if (danger) element.append(danger.element);
+    if (!options.form) form.append(element);
+    const controller = settingsActionBarEnhancer(element, { ...options, form, submit: submit.element, danger: danger?.element }, { removeOnDestroy: true });
+    const destroy = controller.destroy.bind(controller);
+    controller.destroy = () => {
+        submit.destroy();
+        danger?.destroy();
+        destroy();
+    };
+    controller.form = form;
+    return controller;
+}
+
+function normalize(value, allowed, fallback, property) {
+    if (!value) return fallback;
+    if (allowed.includes(value)) return value;
+    devWarn(`Unknown ${property} "${value}"; using "${fallback}".`);
+    return fallback;
+}
+
+function setCommon(element, state, variants, sizes = ['sm', 'md', 'lg']) {
+    element.dataset.variant = normalize(state.variant, variants, variants[0], 'variant');
+    element.dataset.size = normalize(state.size, sizes, sizes.includes('md') ? 'md' : sizes[0], 'size');
+    element.dataset.state = state.loading ? 'loading' : state.invalid ? 'invalid' : state.active ? 'active' : 'default';
+    element.classList.toggle('is-block', Boolean(state.block));
+    element.classList.toggle('is-disabled', Boolean(state.disabled));
+}
+
+function buttonFactory(options = {}) {
+    const element = document.createElement('button');
+    element.type = options.type || 'button';
+    element.className = 'vcp-ui-button';
+    const state = { label: 'Button', variant: 'primary', size: 'md', ...options };
+    return makeController(element, state, current => {
+        setCommon(element, current, ['primary', 'secondary', 'outline', 'ghost', 'danger', 'link'], ['sm', 'md', 'lg', 'xl']);
+        element.disabled = Boolean(current.disabled || current.loading);
+        element.setAttribute('aria-busy', String(Boolean(current.loading)));
+        element.replaceChildren();
+        if (current.loading) element.append(icon('progress_activity', 'vcp-ui-spinner'));
+        else if (current.icon) element.append(icon(current.icon));
+        const label = document.createElement('span');
+        label.textContent = current.label;
+        element.append(label);
+    });
+}
+
+function iconButtonFactory(options = {}) {
+    const element = document.createElement('button');
+    element.type = 'button';
+    element.className = 'vcp-ui-icon-button';
+    const state = { icon: 'more_horiz', label: '', variant: 'ghost', size: 'md', ...options };
+    return makeController(element, state, current => {
+        if (!current.label) devWarn('IconButton requires a non-empty aria-label.');
+        setCommon(element, current, ['ghost', 'secondary', 'outline', 'danger'], ['sm', 'md']);
+        element.disabled = Boolean(current.disabled);
+        element.classList.toggle('is-active', Boolean(current.active));
+        element.setAttribute('aria-label', current.label || 'Icon button');
+        element.title = current.title || current.label || '';
+        element.replaceChildren(icon(current.icon));
+    });
+}
+
+function textControlFactory(kind, options = {}) {
+    const wrapper = document.createElement('span');
+    wrapper.className = `vcp-ui-${kind}-wrap`;
+    const control = document.createElement(kind === 'textarea' ? 'textarea' : 'input');
+    control.className = `vcp-ui-${kind}`;
+    wrapper.appendChild(control);
+    const state = { size: 'md', value: '', ...options };
+    return makeController(wrapper, state, current => {
+        setCommon(wrapper, current, ['default'], ['sm', 'md', 'lg']);
+        control.disabled = Boolean(current.disabled);
+        control.readOnly = Boolean(current.readonly);
+        control.required = Boolean(current.required);
+        control.placeholder = current.placeholder || '';
+        control.setAttribute('aria-invalid', String(Boolean(current.invalid)));
+        if (kind === 'input') control.type = current.type || 'text';
+        if (kind === 'textarea') {
+            control.rows = current.rows || 4;
+            wrapper.dataset.resize = current.resize || 'vertical';
+        }
+        if (control.value !== String(current.value ?? '')) control.value = String(current.value ?? '');
+        wrapper.querySelectorAll('.vcp-ui-control-icon').forEach(node => node.remove());
+        if (current.leadingIcon) wrapper.prepend(icon(current.leadingIcon, 'vcp-ui-control-icon is-leading'));
+        if (current.trailingIcon) wrapper.append(icon(current.trailingIcon, 'vcp-ui-control-icon is-trailing'));
+    });
+}
+
+function selectFactory(options = {}) {
+    const element = document.createElement('select');
+    element.className = 'vcp-ui-select';
+    const state = { size: 'md', options: [], value: '', placeholder: '', ...options };
+    return makeController(element, state, current => {
+        setCommon(element, current, ['default'], ['sm', 'md', 'lg']);
+        element.disabled = Boolean(current.disabled);
+        element.setAttribute('aria-invalid', String(Boolean(current.invalid)));
+        element.replaceChildren();
+        if (current.placeholder) {
+            const placeholder = new Option(current.placeholder, '');
+            placeholder.disabled = true;
+            element.add(placeholder);
+        }
+        current.options.forEach(item => {
+            const normalized = typeof item === 'string' ? { label: item, value: item } : item;
+            const option = new Option(normalized.label, normalized.value);
+            option.disabled = Boolean(normalized.disabled);
+            element.add(option);
+        });
+        element.value = String(current.value ?? '');
+    });
+}
+
+function checkboxFactory(options = {}) {
+    const element = document.createElement('label');
+    element.className = 'vcp-ui-checkbox';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    const visual = document.createElement('span');
+    visual.className = 'vcp-ui-checkbox-box';
+    visual.append(icon('check'));
+    const label = document.createElement('span');
+    element.append(input, visual, label);
+    const state = { label: 'Checkbox', checked: false, indeterminate: false, ...options };
+    const controller = makeController(element, state, current => {
+        input.checked = Boolean(current.checked);
+        input.indeterminate = Boolean(current.indeterminate);
+        input.disabled = Boolean(current.disabled);
+        element.classList.toggle('is-disabled', input.disabled);
+        element.dataset.state = current.indeterminate ? 'indeterminate' : input.checked ? 'checked' : 'unchecked';
+        visual.firstChild.textContent = current.indeterminate ? 'remove' : 'check';
+        label.textContent = current.label;
+    });
+    controller._listen(input, 'change', () => {
+        state.checked = input.checked;
+        state.indeterminate = false;
+        controller.update();
+    });
+    return controller;
+}
+
+function switchFactory(options = {}) {
+    const element = document.createElement('button');
+    element.type = 'button';
+    element.className = 'vcp-ui-switch';
+    element.setAttribute('role', 'switch');
+    const track = document.createElement('span');
+    track.className = 'vcp-ui-switch-track';
+    track.appendChild(document.createElement('span')).className = 'vcp-ui-switch-thumb';
+    const label = document.createElement('span');
+    label.className = 'vcp-ui-switch-label';
+    element.append(track, label);
+    const state = { label: 'Switch', checked: false, size: 'md', ...options };
+    const controller = makeController(element, state, current => {
+        element.dataset.size = normalize(current.size, ['sm', 'md'], 'md', 'size');
+        element.dataset.state = current.checked ? 'on' : 'off';
+        element.disabled = Boolean(current.disabled);
+        element.setAttribute('aria-checked', String(Boolean(current.checked)));
+        label.textContent = current.label;
+    });
+    controller._listen(element, 'click', () => {
+        state.checked = !state.checked;
+        controller.update();
+        emit(element, 'input');
+        emit(element, 'change');
+    });
+    return controller;
+}
+
+function fieldFactory(options = {}) {
+    const element = document.createElement('div');
+    element.className = 'vcp-ui-field';
+    const header = document.createElement('div');
+    header.className = 'vcp-ui-field-header';
+    const label = document.createElement('label');
+    const required = document.createElement('span');
+    required.className = 'vcp-ui-required';
+    required.textContent = '*';
+    header.append(label, required);
+    const controlHost = document.createElement('div');
+    controlHost.className = 'vcp-ui-field-control';
+    const message = document.createElement('div');
+    message.className = 'vcp-ui-field-message';
+    element.append(header, controlHost, message);
+    const state = { label: 'Field', helper: '', error: '', required: false, ...options };
+    return makeController(element, state, current => {
+        label.textContent = current.label;
+        required.hidden = !current.required;
+        element.dataset.state = current.error ? 'error' : 'default';
+        message.textContent = current.error || current.helper || '';
+        if (current.control) {
+            const control = current.control.element || current.control;
+            if (controlHost.firstChild !== control) controlHost.replaceChildren(control);
+            const native = control.matches?.('input, textarea, select') ? control : control.querySelector?.('input, textarea, select');
+            if (native) {
+                if (!native.id) native.id = `vcp-ui-field-${crypto.randomUUID()}`;
+                label.htmlFor = native.id;
+                native.required = Boolean(current.required);
+                native.setAttribute('aria-invalid', String(Boolean(current.error)));
+            }
+        }
+    });
+}
+
+function badgeFactory(options = {}) {
+    const element = document.createElement('span');
+    element.className = 'vcp-ui-badge';
+    const state = { label: 'Badge', variant: 'neutral', ...options };
+    return makeController(element, state, current => {
+        element.dataset.variant = normalize(current.variant, ['neutral', 'accent', 'success', 'warning', 'danger'], 'neutral', 'variant');
+        element.textContent = current.label;
+    });
+}
+
+function alertFactory(options = {}) {
+    const element = document.createElement('div');
+    element.className = 'vcp-ui-alert';
+    element.setAttribute('role', 'status');
+    const state = { title: '', message: '', variant: 'info', dismissible: false, ...options };
+    let controller;
+    controller = makeController(element, state, current => {
+        const variants = ['info', 'success', 'warning', 'danger'];
+        element.dataset.variant = normalize(current.variant, variants, 'info', 'variant');
+        element.replaceChildren(icon({ info: 'info', success: 'check_circle', warning: 'warning', danger: 'error' }[element.dataset.variant]));
+        const body = document.createElement('div');
+        body.className = 'vcp-ui-alert-body';
+        if (current.title) {
+            const title = document.createElement('strong');
+            title.textContent = current.title;
+            body.append(title);
+        }
+        const message = document.createElement('span');
+        message.textContent = current.message;
+        body.append(message);
+        element.append(body);
+        if (current.dismissible) {
+            const close = iconButtonFactory({ icon: 'close', label: '关闭提示', size: 'sm' });
+            close.element.addEventListener('click', () => controller.destroy(), { once: true });
+            element.append(close.element);
+        }
+    });
+    return controller;
+}
+
+function cardFactory(options = {}) {
+    const element = document.createElement(options.interactive ? 'button' : 'section');
+    if (element instanceof HTMLButtonElement) element.type = 'button';
+    element.className = 'vcp-ui-card';
+    const state = { title: '', description: '', variant: options.interactive ? 'interactive' : 'default', ...options };
+    return makeController(element, state, current => {
+        element.dataset.variant = normalize(current.variant, ['default', 'outlined', 'interactive', 'selected'], 'default', 'variant');
+        element.setAttribute('aria-pressed', String(element.dataset.variant === 'selected'));
+        element.replaceChildren();
+        const title = document.createElement('strong');
+        title.textContent = current.title;
+        const description = document.createElement('span');
+        description.textContent = current.description;
+        element.append(title, description);
+        if (current.content) appendContent(element, current.content);
+    });
+}
+
+function tabsFactory(options = {}) {
+    const element = document.createElement('div');
+    element.className = 'vcp-ui-tabs';
+    element.setAttribute('role', 'tablist');
+    const state = { items: [], value: '', ...options };
+    let controller;
+    controller = makeController(element, state, current => {
+        element.replaceChildren();
+        if (!current.value && current.items[0]) current.value = current.items[0].value;
+        current.items.forEach(item => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'vcp-ui-tab';
+            button.setAttribute('role', 'tab');
+            button.dataset.value = item.value;
+            button.disabled = Boolean(item.disabled);
+            button.setAttribute('aria-selected', String(item.value === current.value));
+            button.tabIndex = item.value === current.value ? 0 : -1;
+            button.textContent = item.label;
+            button.addEventListener('click', () => {
+                state.value = item.value;
+                controller.update();
+                emit(element, 'change');
+            });
+            element.append(button);
+        });
+    });
+    controller._listen(element, 'keydown', event => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        const tabs = [...element.querySelectorAll('[role="tab"]:not(:disabled)')];
+        const current = tabs.indexOf(document.activeElement);
+        if (current < 0) return;
+        event.preventDefault();
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1
+            : (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+        tabs[next].click();
+        tabs[next].focus();
+    });
+    return controller;
+}
+
+function toolbarFactory(options = {}) {
+    const element = document.createElement('div');
+    element.className = 'vcp-ui-toolbar';
+    element.setAttribute('role', 'toolbar');
+    const state = { start: [], end: [], label: '工具栏', ...options };
+    return makeController(element, state, current => {
+        element.setAttribute('aria-label', current.label);
+        const start = document.createElement('div');
+        const end = document.createElement('div');
+        start.className = 'vcp-ui-toolbar-group';
+        end.className = 'vcp-ui-toolbar-group is-end';
+        const add = (host, item) => {
+            if (item === 'separator') {
+                const separator = document.createElement('span');
+                separator.className = 'vcp-ui-toolbar-separator';
+                separator.setAttribute('role', 'separator');
+                host.append(separator);
+            } else host.append(item.element || item);
+        };
+        current.start.forEach(item => add(start, item));
+        current.end.forEach(item => add(end, item));
+        element.replaceChildren(start, end);
+    });
+}
+
+function listFactory(options = {}) {
+    const element = document.createElement('div');
+    element.className = 'vcp-ui-list';
+    element.setAttribute('role', 'list');
+    const state = { items: [], ...options };
+    return makeController(element, state, current => {
+        element.replaceChildren();
+        current.items.forEach(item => {
+            const row = document.createElement(item.interactive === false ? 'div' : 'button');
+            if (row instanceof HTMLButtonElement) row.type = 'button';
+            row.className = 'vcp-ui-list-item';
+            row.setAttribute('role', 'listitem');
+            row.disabled = Boolean(item.disabled);
+            row.dataset.state = item.selected ? 'selected' : 'default';
+            if (item.icon) row.append(icon(item.icon));
+            const copy = document.createElement('span');
+            copy.className = 'vcp-ui-list-copy';
+            const primary = document.createElement('strong');
+            primary.textContent = item.label;
+            copy.append(primary);
+            if (item.description) {
+                const secondary = document.createElement('span');
+                secondary.textContent = item.description;
+                copy.append(secondary);
+            }
+            row.append(copy);
+            if (item.trailing) {
+                const trailing = document.createElement('span');
+                trailing.className = 'vcp-ui-list-trailing';
+                trailing.textContent = item.trailing;
+                row.append(trailing);
+            }
+            item.onClick && row.addEventListener('click', item.onClick);
+            element.append(row);
+        });
+    });
+}
+
+function tableFactory(options = {}) {
+    const element = document.createElement('div');
+    element.className = 'vcp-ui-table-frame';
+    const state = { columns: [], rows: [], loading: false, empty: '暂无数据', ...options };
+    return makeController(element, state, current => {
+        if (current.loading) {
+            element.replaceChildren(icon('progress_activity', 'vcp-ui-spinner'), document.createTextNode(' 正在加载'));
+            element.dataset.state = 'loading';
+            return;
+        }
+        if (!current.rows.length) {
+            element.textContent = current.empty;
+            element.dataset.state = 'empty';
+            return;
+        }
+        element.dataset.state = 'ready';
+        const table = document.createElement('table');
+        const head = table.createTHead().insertRow();
+        current.columns.forEach(column => {
+            const cell = document.createElement('th');
+            cell.scope = 'col';
+            cell.textContent = column.label;
+            head.append(cell);
+        });
+        const body = table.createTBody();
+        current.rows.forEach(row => {
+            const tr = body.insertRow();
+            current.columns.forEach(column => {
+                const cell = tr.insertCell();
+                cell.textContent = row[column.key] ?? '';
+            });
+        });
+        element.replaceChildren(table);
+    });
+}
+
+function emptyStateFactory(options = {}) {
+    const element = document.createElement('div');
+    element.className = 'vcp-ui-empty-state';
+    const state = { icon: 'inbox', title: '暂无内容', description: '', actions: [], ...options };
+    return makeController(element, state, current => {
+        element.replaceChildren(icon(current.icon, 'vcp-ui-empty-state-icon'));
+        const title = document.createElement('strong');
+        title.textContent = current.title;
+        const description = document.createElement('p');
+        description.textContent = current.description;
+        const actions = document.createElement('div');
+        actions.className = 'vcp-ui-empty-state-actions';
+        current.actions.forEach(action => actions.append(action.element || action));
+        element.append(title, description, actions);
+    });
+}
+
+function dividerFactory(options = {}) {
+    const element = document.createElement('div');
+    element.className = 'vcp-ui-divider';
+    element.setAttribute('role', 'separator');
+    const state = { label: '', orientation: 'horizontal', ...options };
+    return makeController(element, state, current => {
+        element.dataset.orientation = normalize(current.orientation, ['horizontal', 'vertical'], 'horizontal', 'orientation');
+        element.setAttribute('aria-orientation', element.dataset.orientation);
+        element.replaceChildren();
+        if (current.label) {
+            const label = document.createElement('span');
+            label.textContent = current.label;
+            element.append(label);
+        }
+    });
+}
+
+function tooltipFactory(options = {}) {
+    const element = document.createElement('span');
+    element.className = 'vcp-ui-tooltip';
+    const bubble = document.createElement('span');
+    bubble.className = 'vcp-ui-tooltip-bubble';
+    bubble.id = `vcp-ui-tooltip-${crypto.randomUUID()}`;
+    bubble.setAttribute('role', 'tooltip');
+    const state = { content: '', placement: 'top', open: false, ...options };
+    let trigger = null;
+    let controller;
+    controller = makeController(element, state, (current, records) => {
+        element.dataset.placement = normalize(current.placement, ['top', 'right', 'bottom', 'left'], 'top', 'placement');
+        element.dataset.state = current.open ? 'open' : 'closed';
+        const nextTrigger = current.trigger?.element || current.trigger;
+        if (nextTrigger && trigger !== nextTrigger) {
+            trigger = nextTrigger;
+            trigger.setAttribute('aria-describedby', bubble.id);
+            listen(records, trigger, 'mouseenter', () => controller.update({ open: true }));
+            listen(records, trigger, 'mouseleave', () => controller.update({ open: false }));
+            listen(records, trigger, 'focus', () => controller.update({ open: true }));
+            listen(records, trigger, 'blur', () => controller.update({ open: false }));
+        }
+        bubble.textContent = current.content;
+        if (element.firstChild !== trigger || element.lastChild !== bubble) element.replaceChildren(trigger, bubble);
+    }, () => trigger?.removeAttribute('aria-describedby'));
+    return controller;
+}
+
+function skeletonFactory(options = {}) {
+    const element = document.createElement('div');
+    element.className = 'vcp-ui-skeleton';
+    element.setAttribute('aria-hidden', 'true');
+    const state = { variant: 'text', lines: 1, size: 'md', ...options };
+    return makeController(element, state, current => {
+        element.dataset.variant = normalize(current.variant, ['text', 'rect', 'circle'], 'text', 'variant');
+        element.dataset.size = normalize(current.size, ['sm', 'md', 'lg'], 'md', 'size');
+        element.replaceChildren();
+        const count = element.dataset.variant === 'text' ? Math.max(1, Math.min(6, Number(current.lines) || 1)) : 1;
+        for (let index = 0; index < count; index += 1) {
+            const line = document.createElement('span');
+            line.className = 'vcp-ui-skeleton-line';
+            element.append(line);
+        }
+    });
+}
+
+function segmentedControlFactory(options = {}) {
+    const element = document.createElement('div');
+    element.className = 'vcp-ui-segmented';
+    element.setAttribute('role', 'radiogroup');
+    const state = { items: [], value: '', size: 'md', label: '选项', ...options };
+    let controller;
+    controller = makeController(element, state, current => {
+        element.dataset.size = normalize(current.size, ['sm', 'md'], 'md', 'size');
+        element.setAttribute('aria-label', current.label);
+        if (!current.value && current.items[0]) current.value = current.items[0].value;
+        element.replaceChildren();
+        current.items.forEach(item => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.setAttribute('role', 'radio');
+            button.dataset.value = item.value;
+            button.disabled = Boolean(item.disabled);
+            button.setAttribute('aria-checked', String(item.value === current.value));
+            button.tabIndex = item.value === current.value ? 0 : -1;
+            if (item.icon) button.append(icon(item.icon));
+            const label = document.createElement('span');
+            label.textContent = item.label;
+            button.append(label);
+            button.addEventListener('click', () => {
+                state.value = item.value;
+                controller.update();
+                emit(element, 'change');
+            });
+            element.append(button);
+        });
+    });
+    controller._listen(element, 'keydown', event => {
+        if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+        const items = [...element.querySelectorAll('[role="radio"]:not(:disabled)')];
+        const current = items.indexOf(document.activeElement);
+        if (current < 0) return;
+        event.preventDefault();
+        const next = (current + (event.key === 'ArrowRight' ? 1 : -1) + items.length) % items.length;
+        items[next].click();
+        items[next].focus();
+    });
+    return controller;
+}
+
+function paginationFactory(options = {}) {
+    const element = document.createElement('nav');
+    element.className = 'vcp-ui-pagination';
+    element.setAttribute('aria-label', options.label || '分页');
+    const state = { page: 1, total: 0, pageSize: 10, maxButtons: 5, ...options };
+    let controller;
+    controller = makeController(element, state, current => {
+        const pageCount = Math.max(1, Math.ceil(current.total / current.pageSize));
+        current.page = Math.min(pageCount, Math.max(1, Number(current.page) || 1));
+        const maxButtons = Math.max(3, Number(current.maxButtons) || 5);
+        const half = Math.floor(maxButtons / 2);
+        let start = Math.max(1, current.page - half);
+        const end = Math.min(pageCount, start + maxButtons - 1);
+        start = Math.max(1, end - maxButtons + 1);
+        element.replaceChildren();
+        const addButton = (label, page, disabled, ariaLabel = label) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.disabled = disabled;
+            button.setAttribute('aria-label', ariaLabel);
+            button.setAttribute('aria-current', page === current.page && !disabled ? 'page' : 'false');
+            button.textContent = label;
+            button.addEventListener('click', () => {
+                state.page = page;
+                controller.update();
+                emit(element, 'change');
+            });
+            element.append(button);
+        };
+        addButton('chevron_left', current.page - 1, current.page === 1, '上一页');
+        element.lastChild.classList.add('vcp-ui-icon');
+        for (let page = start; page <= end; page += 1) addButton(String(page), page, false, `第 ${page} 页`);
+        addButton('chevron_right', current.page + 1, current.page === pageCount, '下一页');
+        element.lastChild.classList.add('vcp-ui-icon');
+    });
+    return controller;
+}
+
+function scrollAreaFactory(options = {}) {
+    const element = document.createElement('div');
+    element.className = 'vcp-ui-scroll-area';
+    const viewport = document.createElement('div');
+    viewport.className = 'vcp-ui-scroll-area-viewport';
+    viewport.tabIndex = options.tabIndex ?? 0;
+    const fade = document.createElement('div');
+    fade.className = 'vcp-ui-scroll-area-fade';
+    fade.setAttribute('aria-hidden', 'true');
+    element.append(viewport, fade);
+    const state = { content: '', size: 'md', label: '可滚动内容', ...options };
+    const sync = () => {
+        const scrollable = viewport.scrollHeight > viewport.clientHeight + 1;
+        const atBottom = viewport.scrollTop + viewport.clientHeight >= viewport.scrollHeight - 5;
+        element.dataset.scrollable = String(scrollable);
+        element.dataset.atBottom = String(atBottom);
+    };
+    let observer;
+    const controller = makeController(element, state, current => {
+        element.dataset.size = normalize(current.size, ['sm', 'md', 'lg'], 'md', 'size');
+        viewport.setAttribute('aria-label', current.label);
+        if (current.content !== undefined && viewport.firstChild !== current.content) appendContent(viewport, current.content);
+        queueMicrotask(sync);
+    }, () => observer?.disconnect());
+    controller._listen(viewport, 'scroll', sync, { passive: true });
+    if (typeof ResizeObserver !== 'undefined') {
+        observer = new ResizeObserver(sync);
+        observer.observe(viewport);
+    }
+    controller.scrollToTop = () => viewport.scrollTo({ top: 0, behavior: 'smooth' });
+    controller.scrollToBottom = () => viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' });
+    return controller;
+}
+
+function focusable(dialog) {
+    return [...dialog.querySelectorAll('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])')];
+}
+
+function modalFactory(options = {}) {
+    const overlay = document.createElement('div');
+    overlay.className = 'vcp-ui-modal-overlay';
+    const dialog = document.createElement('section');
+    dialog.className = 'vcp-ui-modal';
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    overlay.append(dialog);
+    const previousFocus = document.activeElement;
+    const state = { title: 'Dialog', size: 'md', content: '', actions: [], closeOnBackdrop: true, ...options };
+    let controller;
+    const close = result => {
+        state.onClose?.(result);
+        controller.destroy();
+        if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
+    };
+    controller = makeController(overlay, state, current => {
+        dialog.dataset.size = normalize(current.size, ['sm', 'md', 'lg'], 'md', 'size');
+        dialog.replaceChildren();
+        const header = document.createElement('header');
+        const title = document.createElement('h2');
+        title.textContent = current.title;
+        const closeButton = iconButtonFactory({ icon: 'close', label: '关闭对话框', size: 'sm' });
+        closeButton.element.addEventListener('click', () => close(null), { once: true });
+        header.append(title, closeButton.element);
+        const body = document.createElement('div');
+        body.className = 'vcp-ui-modal-body';
+        appendContent(body, current.content);
+        const footer = document.createElement('footer');
+        current.actions.forEach(action => footer.append(action.element || action));
+        dialog.append(header, body, footer);
+    });
+    controller.close = close;
+    controller._listen(overlay, 'mousedown', event => {
+        if (event.target === overlay && state.closeOnBackdrop) close(null);
+    });
+    controller._listen(overlay, 'keydown', event => {
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            close(null);
+            return;
+        }
+        if (event.key !== 'Tab') return;
+        const items = focusable(dialog);
+        if (!items.length) return;
+        const first = items[0];
+        const last = items.at(-1);
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+        }
+    });
+    queueMicrotask(() => controller.focus());
+    return controller;
+}
+
+function toastFactory(options = {}) {
+    const element = document.createElement('div');
+    element.className = 'vcp-ui-toast';
+    element.setAttribute('role', 'status');
+    const state = { message: '', variant: 'info', dismissible: true, ...options };
+    let controller;
+    controller = makeController(element, state, current => {
+        element.dataset.variant = normalize(current.variant, ['info', 'success', 'warning', 'error'], 'info', 'variant');
+        element.replaceChildren(icon({ info: 'info', success: 'check_circle', warning: 'warning', error: 'error' }[element.dataset.variant]));
+        const message = document.createElement('span');
+        message.textContent = current.message;
+        element.append(message);
+        if (current.dismissible) {
+            const close = iconButtonFactory({ icon: 'close', label: '关闭通知', size: 'sm' });
+            close.element.addEventListener('click', () => controller.destroy(), { once: true });
+            element.append(close.element);
+        }
+    });
+    return controller;
+}
+
+function confirmFactory(options = {}) {
+    const content = document.createElement('p');
+    content.className = 'vcp-ui-dialog-copy';
+    content.textContent = options.message || '确定继续吗？';
+    let modal;
+    const cancel = buttonFactory({ label: options.cancelLabel || '取消', variant: 'ghost' });
+    const confirm = buttonFactory({ label: options.confirmLabel || '确认', variant: options.danger ? 'danger' : 'primary' });
+    modal = modalFactory({ ...options, content, actions: [cancel, confirm] });
+    cancel.element.addEventListener('click', () => modal.close(false));
+    confirm.element.addEventListener('click', () => modal.close(true));
+    return modal;
+}
+
+function inputDialogFactory(options = {}) {
+    const form = document.createElement('form');
+    form.className = 'vcp-ui-dialog-form';
+    const control = options.multiline
+        ? textControlFactory('textarea', { value: options.value, placeholder: options.placeholder, rows: options.rows || 4 })
+        : textControlFactory('input', { value: options.value, placeholder: options.placeholder });
+    const error = document.createElement('div');
+    error.className = 'vcp-ui-dialog-error';
+    form.append(control.element, error);
+    let modal;
+    const cancel = buttonFactory({ label: options.cancelLabel || '取消', variant: 'ghost' });
+    const submit = buttonFactory({ label: options.confirmLabel || '确认', variant: 'primary', type: 'submit' });
+    modal = modalFactory({ ...options, content: form, actions: [cancel, submit] });
+    const native = control.element.querySelector('input, textarea');
+    const validate = () => {
+        const value = native.value.trim();
+        const message = options.required && !value ? '此项不能为空' : options.validate?.(value);
+        error.textContent = message || '';
+        native.setAttribute('aria-invalid', String(Boolean(message)));
+        return message ? null : value;
+    };
+    cancel.element.addEventListener('click', () => modal.close(null));
+    form.addEventListener('submit', event => {
+        event.preventDefault();
+        const value = validate();
+        if (value !== null) modal.close(value);
+    });
+    return modal;
+}
+
+[
+    ['Button', buttonFactory], ['IconButton', iconButtonFactory],
+    ['Input', options => textControlFactory('input', options)],
+    ['Textarea', options => textControlFactory('textarea', options)],
+    ['Select', selectFactory], ['Range', rangeFactory], ['Checkbox', checkboxFactory], ['Switch', switchFactory],
+    ['Field', fieldFactory], ['Badge', badgeFactory], ['Alert', alertFactory], ['Card', cardFactory],
+    ['SettingsSection', settingsSectionFactory], ['SettingsActionBar', settingsActionBarFactory],
+    ['Tabs', tabsFactory], ['Toolbar', toolbarFactory], ['List', listFactory], ['ListItem', listFactory],
+    ['TableFrame', tableFactory], ['EmptyState', emptyStateFactory], ['Divider', dividerFactory],
+    ['Tooltip', tooltipFactory], ['Skeleton', skeletonFactory], ['SegmentedControl', segmentedControlFactory],
+    ['Pagination', paginationFactory], ['ScrollArea', scrollAreaFactory], ['Modal', modalFactory],
+    ['Toast', toastFactory], ['ConfirmDialog', confirmFactory], ['InputDialog', inputDialogFactory]
+].forEach(([name, factory]) => COMPONENTS.set(name.toLowerCase(), factory));
+
+ENHANCERS.set('input', (element, options) => nativeControlEnhancer(element, 'input', options));
+ENHANCERS.set('textarea', (element, options) => nativeControlEnhancer(element, 'textarea', options));
+ENHANCERS.set('select', (element, options) => nativeControlEnhancer(element, 'select', options));
+ENHANCERS.set('range', (element, options) => rangeEnhancer(element, options));
+ENHANCERS.set('switch', nativeSwitchEnhancer);
+ENHANCERS.set('field', fieldEnhancer);
+ENHANCERS.set('settingssection', settingsSectionEnhancer);
+ENHANCERS.set('settingsactionbar', settingsActionBarEnhancer);
+
+let feedbackHost;
+let loadingCount = 0;
+let activeDialog = null;
+const dialogQueue = [];
+const toastTimers = new Map();
+
+function ensureFeedbackHost() {
+    if (feedbackHost?.isConnected) return feedbackHost;
+    feedbackHost = document.createElement('div');
+    feedbackHost.className = 'vcp-ui-feedback-host vcp-ui-scope';
+    feedbackHost.innerHTML = '<div class="vcp-ui-loading-layer" hidden><span class="vcp-ui-icon vcp-ui-spinner" aria-hidden="true">progress_activity</span><span class="vcp-ui-loading-label">正在处理</span></div><div class="vcp-ui-toast-stack"></div><div class="vcp-ui-dialog-host"></div>';
+    document.body.append(feedbackHost);
+    return feedbackHost;
+}
+
+function runDialog(factory) {
+    return new Promise(resolve => {
+        dialogQueue.push({ factory, resolve });
+        processDialogQueue();
+    });
+}
+
+function processDialogQueue() {
+    if (activeDialog || !dialogQueue.length) return;
+    const item = dialogQueue.shift();
+    const dialog = item.factory(result => {
+        activeDialog = null;
+        item.resolve(result);
+        processDialogQueue();
+    });
+    activeDialog = dialog;
+    ensureFeedbackHost().querySelector('.vcp-ui-dialog-host').append(dialog.element);
+}
+
+const feedback = Object.freeze({
+    toast(message, options = {}) {
+        const controller = toastFactory({ ...options, message });
+        ensureFeedbackHost().querySelector('.vcp-ui-toast-stack').append(controller.element);
+        const duration = options.duration ?? 4200;
+        if (duration > 0) {
+            const timer = setTimeout(() => {
+                toastTimers.delete(controller);
+                controller.destroy();
+            }, duration);
+            toastTimers.set(controller, timer);
+        }
+        return controller;
+    },
+    confirm(options = {}) {
+        return runDialog(onClose => confirmFactory({ title: '请确认', ...options, onClose }));
+    },
+    prompt(options = {}) {
+        return runDialog(onClose => inputDialogFactory({ title: '请输入', ...options, onClose }));
+    },
+    setLoading(visible, label = '正在处理') {
+        loadingCount = Math.max(0, loadingCount + (visible ? 1 : -1));
+        const layer = ensureFeedbackHost().querySelector('.vcp-ui-loading-layer');
+        layer.hidden = loadingCount === 0;
+        layer.querySelector('.vcp-ui-loading-label').textContent = label;
+        return loadingCount;
+    },
+    cancelAll() {
+        const queued = dialogQueue.splice(0);
+        queued.forEach(item => item.resolve(null));
+        toastTimers.forEach((timer, controller) => {
+            clearTimeout(timer);
+            controller.destroy();
+        });
+        toastTimers.clear();
+        activeDialog?.close(null);
+        activeDialog = null;
+        loadingCount = 0;
+        feedbackHost?.remove();
+        feedbackHost = null;
+    }
+});
+
+const VCPUI = Object.freeze({
+    create(name, options = {}) {
+        const factory = COMPONENTS.get(String(name).toLowerCase());
+        if (!factory) throw new Error(`Unknown VCPUI component: ${name}`);
+        return factory(options);
+    },
+    enhance(name, element, options = {}) {
+        const normalized = String(name).toLowerCase();
+        const enhancer = ENHANCERS.get(normalized);
+        if (!enhancer) throw new Error(`Unknown VCPUI enhancer: ${name}`);
+        const existing = controllerByElement.get(element);
+        if (existing) return existing.update(options);
+        return enhancer(element, options);
+    },
+    feedback,
+    setDensity(target, density = 'comfortable') {
+        const normalized = normalize(density, ['compact', 'comfortable'], 'comfortable', 'density');
+        const candidate = target?.element || target;
+        const scope = candidate?.classList?.contains('vcp-ui-scope')
+            ? candidate
+            : candidate?.closest?.('.vcp-ui-scope') || document.querySelector('.vcp-ui-scope');
+        if (!scope) return normalized;
+        scope.dataset.density = normalized;
+        window.dispatchEvent(new CustomEvent('vcp-ui-density-changed', { detail: { density: normalized, scope } }));
+        return normalized;
+    },
+    getDensity(target) {
+        const candidate = target?.element || target;
+        const scope = candidate?.classList?.contains('vcp-ui-scope') ? candidate : candidate?.closest?.('.vcp-ui-scope');
+        return scope?.dataset.density === 'compact' ? 'compact' : 'comfortable';
+    },
+    getController(element) {
+        return controllerByElement.get(element) || null;
+    },
+    getComponentMeta(name) {
+        const normalized = String(name).toLowerCase();
+        return COMPONENT_MANIFEST.find(item => item.name.toLowerCase() === normalized || item.aliases.some(alias => alias.toLowerCase() === normalized)) || null;
+    },
+    manifest: COMPONENT_MANIFEST,
+    components: Object.freeze([...COMPONENTS.keys()])
+});
+
+window.VCPUI = VCPUI;
+window.dispatchEvent(new CustomEvent('vcp-ui-ready'));
+
+export default VCPUI;

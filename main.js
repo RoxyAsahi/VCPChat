@@ -47,10 +47,12 @@ const desktopHandlers = require('./modules/ipc/desktopHandlers'); // Import VCPd
 const desktopRemoteHandlers = require('./modules/ipc/desktopRemoteHandlers'); // Import desktop remote control handlers
 const tavernHandlers = require('./modules/ipc/tavernHandlers'); // Import VCPChatTarven (advanced reply) handlers
 const { PRELOAD_ROLES, resolveProjectPreload } = require('./modules/services/preloadPaths');
+const { createEmbeddedAppSessionManager } = require('./modules/services/embeddedAppSessionManager');
 // chokidar is now lazy-loaded
 
 // --- File Watcher ---
 let historyWatcher = null;
+let embeddedAppSessions = null;
 let lastInternalSaveTime = 0; // 🔧 改为时间戳记录
 let internalSaveTimeout = null; // 🔧 超时保护
 let isEditingInProgress = false; // 🔧 编辑状态标识
@@ -1000,6 +1002,44 @@ if (!gotTheLock) {
         emoticonHandlers.setupEmoticonHandlers();
         canvasHandlers.initialize({ mainWindow, openChildWindows, CANVAS_CACHE_DIR });
         desktopHandlers.initialize({ mainWindow, openChildWindows, settingsManager: appSettingsManager });
+        embeddedAppSessions?.closeAll();
+        embeddedAppSessions = createEmbeddedAppSessionManager({
+            mainWindow,
+            launchStandalone: desktopHandlers.launchVchatApp,
+        });
+        [
+            'embedded-vchat-app:create',
+            'embedded-vchat-app:activate',
+            'embedded-vchat-app:set-bounds',
+            'embedded-vchat-app:close',
+            'embedded-vchat-app:detach',
+            'embedded-vchat-app:close-all',
+        ].forEach(channel => ipcMain.removeHandler(channel));
+        ipcMain.handle('embedded-vchat-app:create', (event, appAction) => {
+            embeddedAppSessions.assertMainRenderer(event);
+            return embeddedAppSessions.create(appAction);
+        });
+        ipcMain.handle('embedded-vchat-app:activate', (event, appAction) => {
+            embeddedAppSessions.assertMainRenderer(event);
+            return embeddedAppSessions.activate(appAction || null);
+        });
+        ipcMain.handle('embedded-vchat-app:set-bounds', (event, appAction, bounds) => {
+            embeddedAppSessions.assertMainRenderer(event);
+            return embeddedAppSessions.setBounds(appAction, bounds);
+        });
+        ipcMain.handle('embedded-vchat-app:close', (event, appAction) => {
+            embeddedAppSessions.assertMainRenderer(event);
+            return embeddedAppSessions.close(appAction);
+        });
+        ipcMain.handle('embedded-vchat-app:detach', (event, appAction, point) => {
+            embeddedAppSessions.assertMainRenderer(event);
+            return embeddedAppSessions.detach(appAction, point);
+        });
+        ipcMain.handle('embedded-vchat-app:close-all', event => {
+            embeddedAppSessions.assertMainRenderer(event);
+            embeddedAppSessions.closeAll();
+            return { success: true };
+        });
         desktopRemoteHandlers.initialize({ mainWindow });
         promptHandlers.initialize({ AGENT_DIR, APP_DATA_ROOT_IN_PROJECT });
         tavernHandlers.initialize({ APP_DATA_ROOT_IN_PROJECT });

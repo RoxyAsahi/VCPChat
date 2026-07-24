@@ -1,0 +1,372 @@
+@layer vcp-ui.components {
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm {
+        gap: 0;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm > .agent-settings-section {
+        margin: 0;
+        padding: 0;
+        overflow: visible;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm > .agent-settings-section::before,
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm > .agent-settings-section::after {
+        display: none;
+        content: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm > .agent-settings-section + .agent-settings-section {
+        margin-top: var(--vcp-ui-space-1);
+        padding-top: var(--vcp-ui-space-1);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-settings-section-header {
+        position: relative;
+        isolation: isolate;
+        min-height: 0;
+        padding: var(--vcp-ui-space-1) 0;
+        grid-template-columns: minmax(0, 1fr) 24px;
+        grid-template-areas:
+            "title toggle"
+            "summary summary";
+        align-items: start;
+        column-gap: var(--vcp-ui-space-3);
+        row-gap: 0;
+        border: 0;
+        background: transparent;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-settings-section:not(.collapsed) .agent-settings-section-header {
+        border: 0;
+        background: transparent;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-settings-section-title {
+        align-self: center;
+        color: var(--vcp-ui-accent);
+        font-size: var(--vcp-ui-font-body);
+        font-weight: 550;
+        line-height: var(--vcp-ui-line-compact);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-settings-section-summary {
+        margin-top: var(--vcp-ui-space-1);
+        overflow: visible;
+        color: var(--vcp-ui-text-3);
+        font-size: var(--vcp-ui-font-caption);
+        line-height: var(--vcp-ui-line-body);
+        white-space: pre-line;
+        text-overflow: clip;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-settings-toggle-btn {
+        width: 24px;
+        height: 24px;
+        align-self: center;
+        border: 0;
+        border-radius: var(--vcp-ui-radius-full);
+        color: var(--vcp-ui-text-3);
+        background: transparent;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-settings-toggle-btn:hover {
+        color: var(--vcp-ui-accent);
+        background: var(--vcp-ui-fill-2);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-settings-section-content {
+        padding: var(--vcp-ui-space-1) 0 var(--vcp-ui-space-2);
+        overflow: visible;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-settings-section-content > :is(.agent-identity-container, .agent-settings-card-shell) {
+        margin: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-settings-section-content > .agent-identity-container {
+        display: flex;
+        flex-direction: column;
+        gap: var(--vcp-ui-space-3);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-identity-main {
+        align-items: center;
+        gap: var(--vcp-ui-space-3);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer :is(.agent-avatar-display, #agentAvatarPreview) {
+        width: 76px;
+        min-width: 76px;
+        max-width: 76px;
+        height: 76px;
+        min-height: 76px;
+        max-height: 76px;
+        flex-basis: 76px;
+        border-radius: var(--vcp-ui-radius-full);
+        object-fit: cover;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer #identitySummary.summary-with-avatar {
+        display: grid;
+        grid-template-columns: 30px minmax(0, 1fr);
+        align-items: center;
+        gap: var(--vcp-ui-space-2);
+        margin-top: var(--vcp-ui-space-2);
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer #identitySummary .agent-settings-summary-avatar {
+        width: 30px;
+        min-width: 30px;
+        max-width: 30px;
+        height: 30px;
+        min-height: 30px;
+        max-height: 30px;
+        border-radius: var(--vcp-ui-radius-full);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer #identitySummary .agent-settings-summary-label {
+        color: var(--vcp-ui-text-1);
+        font-size: var(--vcp-ui-font-body);
+        font-weight: 600;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-style-collapsible-container {
+        margin: 0;
+        border-top: 1px solid var(--vcp-ui-border);
+        background: transparent;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .style-collapse-header {
+        position: relative;
+        min-height: 0;
+        padding: var(--vcp-ui-space-1) 0;
+        color: var(--vcp-ui-text-2);
+        background: transparent;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .style-collapse-title {
+        color: var(--vcp-ui-accent);
+        font-size: var(--vcp-ui-font-helper);
+        font-weight: 550;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-style-controls {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--vcp-ui-space-3);
+        padding: var(--vcp-ui-space-1) 0 var(--vcp-ui-space-2);
+        background: transparent;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-style-collapsible-container.collapsed .agent-style-controls {
+        display: grid;
+        max-height: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+        overflow: hidden;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-settings-section-content > .agent-settings-card-shell {
+        display: flex;
+        flex-direction: column;
+        gap: var(--vcp-ui-space-1);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .params-content {
+        display: grid;
+        gap: var(--vcp-ui-space-3);
+        max-height: none;
+        margin-top: 0;
+        padding: var(--vcp-ui-space-1) 0 var(--vcp-ui-space-2);
+        overflow: visible;
+        opacity: 1;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-settings-collapsible-container.collapsed .params-content {
+        display: none;
+        max-height: 0;
+        margin-top: 0;
+        padding: 0;
+        overflow: hidden;
+        opacity: 0;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer :is(input[type="text"], input[type="url"], input[type="password"], input[type="number"], select, textarea) {
+        border-color: var(--vcp-ui-control-border);
+        color: var(--vcp-ui-text-0);
+        background: var(--vcp-ui-control-bg);
+        background-image: none;
+        box-shadow: none;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer :is(input[type="text"], input[type="url"], input[type="password"], input[type="number"], select) {
+        height: 34px;
+        min-height: 34px;
+        max-height: 34px;
+        padding: 0 var(--vcp-ui-space-3);
+        border-radius: 16px;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer textarea {
+        padding: var(--vcp-ui-space-2) var(--vcp-ui-space-3);
+        border-radius: var(--vcp-ui-radius-md);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer select {
+        padding-right: var(--vcp-ui-space-2);
+        appearance: auto;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer :is(input[type="text"], input[type="url"], input[type="password"], input[type="number"], select, textarea):hover {
+        border-color: var(--vcp-ui-control-focus);
+        box-shadow: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer :is(input[type="text"], input[type="url"], input[type="password"], input[type="number"], select, textarea):focus,
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer :is(input[type="text"], input[type="url"], input[type="password"], input[type="number"], select, textarea):focus-visible {
+        border-color: var(--vcp-ui-control-focus);
+        outline: none;
+        box-shadow: 0 0 0 2px var(--vcp-ui-focus-ring);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .model-input-container {
+        gap: var(--vcp-ui-space-1);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .model-input-container > button:not(#openModelSelectBtn),
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer :is(.reset-colors-btn, .small-button) {
+        min-height: 34px;
+        border: 1px solid var(--vcp-ui-control-border);
+        border-radius: 16px;
+        color: var(--vcp-ui-text-1);
+        background: var(--vcp-ui-control-bg);
+        box-shadow: none;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .model-input-container > button:not(#openModelSelectBtn):hover,
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer :is(.reset-colors-btn, .small-button):hover {
+        border-color: var(--vcp-ui-control-focus);
+        color: var(--vcp-ui-accent);
+        background: var(--vcp-ui-fill-1);
+        box-shadow: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .model-input-container > #openModelSelectBtn {
+        width: 24px;
+        min-width: 24px;
+        height: 24px;
+        min-height: 24px;
+        border: 0;
+        border-radius: var(--vcp-ui-radius-full);
+        color: var(--vcp-ui-text-3);
+        background: transparent;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .model-input-container > #openModelSelectBtn:hover {
+        color: var(--vcp-ui-accent);
+        background: var(--vcp-ui-fill-1);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .system-prompt-container,
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .system-prompt-container :is(.blocks-container, .warehouse-container, .preview-text, .modular-toolbar, .preset-path-section, .preset-selector-section, .preset-editor-section) {
+        border-color: var(--vcp-ui-border);
+        background: transparent;
+        box-shadow: none;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .system-prompt-container .prompt-mode-selector {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--vcp-ui-space-1);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .system-prompt-container .prompt-mode-button {
+        min-width: 0;
+        min-height: 32px;
+        border: 1px solid var(--vcp-ui-control-border);
+        border-radius: 16px;
+        color: var(--vcp-ui-text-2);
+        background: var(--vcp-ui-control-bg);
+        box-shadow: none;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .system-prompt-container .prompt-mode-button:hover,
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .system-prompt-container .prompt-mode-button.active {
+        border-color: var(--vcp-ui-control-focus);
+        color: var(--vcp-ui-accent);
+        background: var(--vcp-ui-fill-1);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .strip-regex-row {
+        padding-right: 0;
+        padding-left: 0;
+        border-right: 0;
+        border-left: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .slider-container {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: var(--vcp-ui-space-3);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer #ttsSpeedValue {
+        min-width: 34px;
+        color: var(--vcp-ui-text-2);
+        font-size: var(--vcp-ui-font-helper);
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm .form-actions {
+        position: static;
+        inset: auto;
+        z-index: auto;
+        flex-shrink: 0;
+        margin: var(--vcp-ui-space-3) 0 0;
+        padding: var(--vcp-ui-space-3) 0 0;
+        border-top: 1px solid var(--vcp-ui-border);
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer :is(.agent-settings-toggle-btn, .style-collapse-header, input, select, textarea, button):focus-visible {
+        outline-color: var(--vcp-ui-focus-ring);
+    }
+}

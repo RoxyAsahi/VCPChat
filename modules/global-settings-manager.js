@@ -226,6 +226,9 @@ export async function handleSaveGlobalSettings(e, deps) {
         }
 
         Object.assign(refs.globalSettings.get(), newSettings);
+        window.dispatchEvent(new CustomEvent('global-settings-updated', {
+            detail: { settings: refs.globalSettings.get() }
+        }));
         window.uiModeManager?.apply(newSettings.uiMode);
         if (typeof window.applyChatBubbleLayoutSettings === 'function') {
             window.applyChatBubbleLayoutSettings(refs.globalSettings.get());

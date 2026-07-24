@@ -377,28 +377,8 @@ function replaceToolRequestBlocks(text, replacer) {
 
 // --- Enhanced Rendering Styles (from UserScript) ---
 function injectEnhancedStyles() {
-    try {
-        // 检查是否已经通过 ID 或 href 引入了该样式表
-        const existingStyleElement = document.getElementById('vcp-enhanced-ui-styles');
-        if (existingStyleElement) return;
-
-        const links = document.getElementsByTagName('link');
-        for (let i = 0; i < links.length; i++) {
-            if (links[i].href && links[i].href.includes('messageRenderer.css')) {
-                return;
-            }
-        }
-
-        // 如果没有引入，则尝试从根路径引入（仅对根目录 HTML 有效）
-        const linkElement = document.createElement('link');
-        linkElement.id = 'vcp-enhanced-ui-styles';
-        linkElement.rel = 'stylesheet';
-        linkElement.type = 'text/css';
-        linkElement.href = 'styles/messageRenderer.css';
-        document.head.appendChild(linkElement);
-    } catch (error) {
-        console.error('VCPSub Enhanced UI: Failed to load external styles:', error);
-    }
+    // The stylesheet is imported through style.css in the legacy cascade layer.
+    // Keeping it there lets the next-UI system override only its own message surface.
 }
 
 // --- Core Logic ---

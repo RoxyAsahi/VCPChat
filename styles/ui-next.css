@@ -10,11 +10,13 @@
 
 html[data-ui-mode="next"] {
     --ui-mode: next;
+    --next-topbar-height: 44px;
 }
 
 html[data-ui-mode="next"] body {
     --next-shell-bg: var(--next-theme-shell-bg, color-mix(in srgb, var(--secondary-bg, #f3f4f6) 32%, transparent));
     --next-surface: var(--next-theme-surface, color-mix(in srgb, var(--secondary-bg, #ffffff) 24%, transparent));
+    --next-chat-surface: var(--next-theme-chat-surface, color-mix(in srgb, var(--next-surface) 72%, transparent));
     --next-header-bg: var(--next-theme-header-bg, transparent);
     --next-wallpaper: var(--chat-wallpaper-dark, none);
     --next-material-sheen: var(--next-theme-material-sheen, linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05) 48%, rgba(255, 255, 255, 0.12)));
@@ -37,6 +39,7 @@ html[data-ui-mode="next"] body.light-theme {
 html[data-ui-mode="next"] body.dark-theme {
     --next-shell-bg: var(--next-theme-shell-bg-dark, color-mix(in srgb, var(--secondary-bg, #17191d) 38%, transparent));
     --next-surface: var(--next-theme-surface-dark, color-mix(in srgb, var(--secondary-bg, #22252b) 32%, transparent));
+    --next-chat-surface: var(--next-theme-chat-surface-dark, color-mix(in srgb, var(--next-surface) 72%, transparent));
     --next-material-sheen: var(--next-theme-material-sheen-dark, linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.015) 46%, rgba(0, 0, 0, 0.08)));
     --next-hover: var(--next-theme-hover-dark, var(--accent-bg, #30343b));
     --next-text: var(--next-theme-text-dark, var(--primary-text, #f2f3f5));
@@ -72,8 +75,8 @@ html[data-ui-mode="next"] .next-ui-navigation-material {
     clip-path: polygon(
         0 0,
         100% 0,
-        100% 58px,
-        calc(var(--next-sidebar-width, 260px) + 14px) 58px,
+        100% calc(var(--next-topbar-height) + 14px),
+        calc(var(--next-sidebar-width, 260px) + 14px) calc(var(--next-topbar-height) + 14px),
         calc(var(--next-sidebar-width, 260px) + 14px) 100%,
         0 100%
     );
@@ -81,7 +84,7 @@ html[data-ui-mode="next"] .next-ui-navigation-material {
 
 html[data-ui-mode="next"] .next-ui-panel-elevation {
     position: fixed;
-    top: 44px;
+    top: var(--next-topbar-height);
     right: 0;
     bottom: 0;
     left: var(--next-sidebar-width, 260px);
@@ -99,11 +102,11 @@ html[data-ui-mode="next"] .next-ui-topbar {
     position: fixed;
     inset: 0 0 auto 0;
     z-index: 1100;
-    height: 44px;
+    height: var(--next-topbar-height);
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 0 10px 0 9px;
+    padding: 0 10px 0 15px;
     box-sizing: border-box;
     color: var(--next-text);
     background: transparent;
@@ -153,10 +156,14 @@ html[data-ui-mode="next"] .next-ui-presentation-switcher:focus-within .next-ui-c
     gap: 6px;
 }
 
+.next-ui-dynamic-tabs:empty {
+    display: none;
+}
+
 .next-ui-tab,
 .next-ui-add-tab,
 .next-ui-icon-button,
-.next-ui-window-button {
+html[data-ui-mode="next"] .next-ui-window-button {
     -webkit-app-region: no-drag;
     border: 0;
     color: inherit;
@@ -166,7 +173,7 @@ html[data-ui-mode="next"] .next-ui-presentation-switcher:focus-within .next-ui-c
 }
 
 .next-ui-tab {
-    height: 28px;
+    height: 30px;
     min-width: 112px;
     max-width: 180px;
     padding: 0 12px;
@@ -180,25 +187,24 @@ html[data-ui-mode="next"] .next-ui-presentation-switcher:focus-within .next-ui-c
     white-space: nowrap;
 }
 
-.next-ui-brand-avatar {
-    width: 22px;
-    height: 22px;
-    flex: 0 0 22px;
-    overflow: hidden;
-    border-radius: 50%;
-    background: var(--next-hover);
+html[data-ui-mode="next"] #nextUiHomeTab {
+    min-width: 80px;
+    max-width: 96px;
+    padding: 0 10px 0 3px;
+    justify-content: flex-start;
+    border-radius: 0 8px 8px 0;
+    background: transparent;
 }
 
-.next-ui-brand-avatar img {
-    width: 100%;
+html[data-ui-mode="next"] #nextUiHomeTab > span:last-child {
     height: 100%;
-    object-fit: cover;
-    transform: scale(1.35);
-    transform-origin: 56% 32%;
-}
-
-#nextUiHomeTab > span:last-child {
-    font-weight: 650;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0;
 }
 
 .next-ui-tab.active,
@@ -259,11 +265,76 @@ html[data-ui-mode="next"] .next-ui-presentation-switcher:focus-within .next-ui-c
     stroke-width: 2;
 }
 
+html[data-ui-mode="next"] .next-ui-tab-svg,
+html[data-ui-mode="next"] .next-ui-tab-svg svg {
+    width: 17px;
+    height: 17px;
+    display: block;
+    flex: 0 0 17px;
+}
+
+html[data-ui-mode="next"] .next-ui-tab.is-dragging {
+    position: relative;
+    z-index: 2;
+    opacity: 0.72;
+    transform: translateY(1px) scale(0.98);
+    cursor: grabbing;
+}
+
+html[data-ui-mode="next"] .next-ui-tab.is-detaching {
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+html[data-ui-mode="next"] body.next-ui-tab-dragging,
+html[data-ui-mode="next"] body.next-ui-tab-dragging * {
+    cursor: grabbing;
+    user-select: none;
+}
+
+html[data-ui-mode="next"] .next-ui-embedded-app-view {
+    position: relative;
+    overflow: hidden;
+    background: var(--next-surface);
+}
+
+html[data-ui-mode="next"] .next-ui-embedded-app-status {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: var(--next-muted);
+    font-size: 14px;
+}
+
+html[data-ui-mode="next"] .next-ui-embedded-app-status .vcp-ui-icon {
+    animation: next-ui-embedded-spin 0.9s linear infinite;
+}
+
+html[data-ui-mode="next"] .next-ui-embedded-app-status.is-error {
+    color: var(--error-color, var(--next-text));
+}
+
+html[data-ui-mode="next"] .next-ui-embedded-app-status.is-error .vcp-ui-icon {
+    animation: none;
+}
+
+@keyframes next-ui-embedded-spin {
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html[data-ui-mode="next"] .next-ui-embedded-app-status .vcp-ui-icon {
+        animation: none;
+    }
+}
+
 .next-ui-add-tab,
-.next-ui-icon-button,
-.next-ui-window-button {
-    width: 28px;
-    height: 28px;
+.next-ui-icon-button {
+    width: 30px;
+    height: 30px;
     padding: 0;
     display: grid;
     place-items: center;
@@ -271,20 +342,47 @@ html[data-ui-mode="next"] .next-ui-presentation-switcher:focus-within .next-ui-c
     flex: 0 0 auto;
 }
 
-.next-ui-topbar-actions {
-    margin-left: auto;
-    gap: 3px;
-    flex: 0 0 auto;
+html[data-ui-mode="next"] .next-ui-window-button {
+    width: 46px;
+    height: var(--next-topbar-height);
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border-radius: 0;
+    flex: 0 0 46px;
+    transition: background-color 150ms ease, color 150ms ease;
 }
 
-.next-ui-close-button:hover {
+html[data-ui-mode="next"] .next-ui-topbar-actions {
+    margin-left: auto;
+    gap: 0;
+    flex: 0 0 auto;
+    align-self: stretch;
+}
+
+html[data-ui-mode="next"] .next-ui-window-button:hover {
+    color: var(--next-text);
+    background: color-mix(in srgb, var(--next-text) 15%, transparent);
+}
+
+html[data-ui-mode="next"] .next-ui-window-button:active {
+    color: var(--next-text);
+    background: color-mix(in srgb, var(--next-text) 21%, transparent);
+}
+
+html[data-ui-mode="next"] .next-ui-close-button:hover {
     color: #ffffff;
-    background: #d92d3a;
+    background: #e81123;
+}
+
+html[data-ui-mode="next"] .next-ui-close-button:active {
+    color: #ffffff;
+    background: #c50e1f;
 }
 
 html[data-ui-mode="next"] .container {
-    height: calc(100vh - 44px);
-    margin: 44px 0 0;
+    height: calc(100vh - var(--next-topbar-height));
+    margin: var(--next-topbar-height) 0 0;
     width: 100%;
     border-radius: 0;
     overflow: hidden;
@@ -299,6 +397,16 @@ html[data-ui-mode="next"] .sidebar {
     background: transparent;
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
+}
+
+html[data-ui-mode="next"] .sidebar:not(.avatar-only) {
+    padding-left: 0;
+}
+
+html[data-ui-mode="next"] .sidebar.avatar-only {
+    width: 60px !important;
+    min-width: 60px !important;
+    max-width: 60px !important;
 }
 
 html[data-ui-mode="next"] #resizerLeft,
@@ -317,7 +425,7 @@ html[data-ui-mode="next"] .main-content {
     clip-path: inset(0 round 14px 0 0 0);
     background-color: var(--primary-bg, var(--next-surface));
     background-image:
-        linear-gradient(var(--next-surface), var(--next-surface)),
+        linear-gradient(var(--next-chat-surface), var(--next-chat-surface)),
         var(--next-wallpaper);
     background-repeat: no-repeat;
     background-position: center;
@@ -328,10 +436,130 @@ html[data-ui-mode="next"] .main-content {
 }
 
 html[data-ui-mode="next"] .chat-header {
+    padding: 7px 20px;
     border-bottom: 1px solid var(--next-border);
     background: var(--next-header-bg);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
+}
+
+html[data-ui-mode="next"] body.chat-presentation-panel .chat-header,
+html[data-ui-mode="next"] body.chat-presentation-immersive .chat-header {
+    background: var(--chat-presentation-surface);
+    backdrop-filter: var(--chat-presentation-surface-filter);
+    -webkit-backdrop-filter: var(--chat-presentation-surface-filter);
+}
+
+html[data-ui-mode="next"] .chat-actions .header-button {
+    line-height: 0;
+}
+
+html[data-ui-mode="next"] body #toggleSidebarModeBtn.next-ui-sidebar-mode-button.active {
+    color: var(--next-text);
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+html[data-ui-mode="next"] body #toggleSidebarModeBtn.next-ui-sidebar-mode-button.active:hover,
+html[data-ui-mode="next"] body #toggleSidebarModeBtn.next-ui-sidebar-mode-button.active:focus-visible {
+    background: color-mix(in srgb, var(--next-text) 8%, transparent);
+}
+
+html[data-ui-mode="next"] .next-ui-brand-tab-group {
+    height: 30px;
+    display: flex;
+    align-items: stretch;
+    overflow: hidden;
+    border-radius: 8px;
+    background: var(--next-hover);
+    -webkit-app-region: no-drag;
+}
+
+html[data-ui-mode="next"] .next-ui-brand-tab-group:has(#nextUiHomeTab.active) {
+    background: var(--next-surface);
+}
+
+html[data-ui-mode="next"] .next-ui-brand-tab-group #nextUiHomeTab:hover {
+    background: color-mix(in srgb, var(--next-text) 7%, transparent);
+}
+
+html[data-ui-mode="next"] #toggleSidebarModeBtn.next-ui-sidebar-mode-button {
+    position: relative;
+    width: 30px;
+    height: 30px;
+    display: grid;
+    overflow: hidden;
+    border-color: transparent;
+    border-radius: 8px 0 0 8px;
+    background: transparent;
+    box-shadow: none;
+}
+
+html[data-ui-mode="next"] .next-ui-sidebar-brand,
+html[data-ui-mode="next"] .next-ui-sidebar-control-icon {
+    position: absolute;
+    inset: 50% auto auto 50%;
+    transform: translate(-50%, -50%);
+    transition:
+        opacity 140ms ease,
+        transform 180ms ease;
+}
+
+html[data-ui-mode="next"] .next-ui-sidebar-brand {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    overflow: hidden;
+    box-sizing: border-box;
+    border-radius: 8px;
+    background: transparent;
+    opacity: 1;
+}
+
+html[data-ui-mode="next"] .next-ui-sidebar-brand img {
+    width: 22px;
+    height: 22px;
+    margin: 4px;
+    display: block;
+    object-fit: contain;
+}
+
+html[data-ui-mode="next"] .next-ui-sidebar-mode-button > .next-ui-sidebar-control-icon {
+    width: 18px;
+    height: 18px;
+    display: block;
+    flex: 0 0 18px;
+    stroke: currentColor;
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.76);
+}
+
+html[data-ui-mode="next"] .next-ui-sidebar-mode-button:hover .next-ui-sidebar-brand,
+html[data-ui-mode="next"] .next-ui-sidebar-mode-button:focus-visible .next-ui-sidebar-brand {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.76);
+}
+
+html[data-ui-mode="next"] .next-ui-sidebar-mode-button:hover > .next-ui-sidebar-control-icon,
+html[data-ui-mode="next"] .next-ui-sidebar-mode-button:focus-visible > .next-ui-sidebar-control-icon {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+}
+
+html[data-ui-mode="next"] .assistant-control-icon-classic {
+    display: none;
+}
+
+html[data-ui-mode="next"] .assistant-control-icon-next {
+    display: block;
+}
+
+html[data-ui-mode="next"] .chat-actions .header-button > svg {
+    align-self: center;
+    flex: 0 0 auto;
 }
 
 html[data-ui-mode="next"] .chat-messages-container {
@@ -467,6 +695,10 @@ html[data-ui-mode="next"] .chat-actions {
     gap: 2px;
 }
 
+html[data-ui-mode="next"] .chat-actions #themeToggleBtn {
+    display: none;
+}
+
 html[data-ui-mode="next"] .chat-actions .header-button {
     min-width: 30px;
     height: 30px;
@@ -489,7 +721,7 @@ html[data-ui-mode="next"] .chat-actions .header-button:hover {
 html[data-ui-mode="next"] .notifications-sidebar {
     background-color: var(--primary-bg, var(--next-surface));
     background-image:
-        linear-gradient(var(--next-surface), var(--next-surface)),
+        linear-gradient(var(--next-chat-surface), var(--next-chat-surface)),
         var(--next-wallpaper);
     background-repeat: no-repeat;
     background-position: center;
@@ -509,9 +741,14 @@ html[data-ui-mode="next"] body.next-ui-launchpad-open .container {
     display: none;
 }
 
+html[data-ui-mode="next"] body.next-ui-internal-app-open .container,
+html[data-ui-mode="next"] body.next-ui-internal-app-open .next-ui-launchpad {
+    display: none;
+}
+
 html[data-ui-mode="next"] .next-ui-launchpad {
     position: fixed;
-    inset: 44px 0 0;
+    inset: var(--next-topbar-height) 0 0;
     z-index: 1000;
     overflow: auto;
     border: 1px solid var(--next-border);
@@ -640,6 +877,11 @@ html[data-ui-mode="next"] #vchatAppTray + * {
 }
 
 @media (prefers-reduced-motion: reduce) {
+    html[data-ui-mode="next"] .next-ui-sidebar-brand,
+    html[data-ui-mode="next"] .next-ui-sidebar-control-icon {
+        transition: none;
+    }
+
     .next-ui-empty-brand {
         animation: none;
     }

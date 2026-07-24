@@ -152,6 +152,13 @@ const CHAT_KEYS = [
     'sendFlowlockRpcResponse',
     'minimizeToTray',
     'closeApp',
+    'desktopCreateEmbeddedVchatApp',
+    'desktopActivateEmbeddedVchatApp',
+    'desktopSetEmbeddedVchatAppBounds',
+    'desktopCloseEmbeddedVchatApp',
+    'desktopDetachEmbeddedVchatApp',
+    'desktopCloseAllEmbeddedVchatApps',
+    'onEmbeddedVchatAppState',
 ];
 
 const DESKTOP_KEYS = [
