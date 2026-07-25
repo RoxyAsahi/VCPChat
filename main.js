@@ -46,6 +46,7 @@ const canvasHandlers = require('./modules/ipc/canvasHandlers'); // Import canvas
 const desktopHandlers = require('./modules/ipc/desktopHandlers'); // Import VCPdesktop handlers
 const desktopRemoteHandlers = require('./modules/ipc/desktopRemoteHandlers'); // Import desktop remote control handlers
 const tavernHandlers = require('./modules/ipc/tavernHandlers'); // Import VCPChatTarven (advanced reply) handlers
+const agentRuntimeHandlers = require('./modules/ipc/agentRuntimeHandlers'); // Import Agent Runtime (Pi/VCP bridge) handlers
 const { PRELOAD_ROLES, resolveProjectPreload } = require('./modules/services/preloadPaths');
 const { createEmbeddedAppSessionManager } = require('./modules/services/embeddedAppSessionManager');
 // chokidar is now lazy-loaded
@@ -299,6 +300,8 @@ async function performQuitCleanup() {
                 distributedServer = null;
             }
         }
+
+        await agentRuntimeHandlers.shutdown();
 
         await stopAudioEngine();
     })();
@@ -707,6 +710,7 @@ if (!gotTheLock) {
 
         // Create the native window first, but load the renderer only after IPC registration.
         createWindow({ deferLoad: true });
+        agentRuntimeHandlers.initialize({ mainWindow, settingsManager: appSettingsManager, projectRoot: PROJECT_ROOT });
         createTray();
         // --- Application Menu ---
         const isMac = process.platform === 'darwin';
