@@ -20,7 +20,7 @@
 │    │  fork (ELECTRON_RUN_AS_NODE=1)，stdio JSON-lines 消息           │
 │    ▼                                                                │
 │  Pi Worker（每个 worker 可承载多 session，Phase 2 默认单 worker）     │
-│    agent-runtime/ 入口 + @earendil-works/pi-agent-core@0.82.0        │
+│    agent-runtime/ 入口 + vcp-pi-core（Pi 0.82.1 的最小 MIT fork）     │
 │      AgentHarness / agent loop                                       │
 │      结构化工具请求 → Electron Main VCP adapter                      │
 └─────┼───────────────────────────────────────────────────────────────┘
@@ -32,7 +32,7 @@
     VCPLog WebSocket（后端审批往返，第二层审批）
 ```
 
-信任边界与数据流方向详见 [security-threat-model.md](security-threat-model.md#信任边界)。Worker 内 Pi 的**全部**内置工具（read/write/edit/bash）与任意 extension 自动加载**一律禁用**。Pi 只负责编排、会话和事件；真实文件、终端及插件调用统一由 Electron Main 转发到 VCPToolBox。Main 不再维护第二套文件或终端执行器（AR-SEC-008）。
+信任边界与数据流方向详见 [security-threat-model.md](security-threat-model.md#信任边界)。Worker 内 `vcp-pi-core` 只保留 Agent loop、流事件、取消、steering/follow-up 队列和工具钩子；Pi 的**全部**内置工具（read/write/edit/bash）、extension、CLI、TUI、provider/credential registry 与 session JSONL 都不纳入 fork。真实文件、终端及插件调用统一由 Electron Main 转发到 VCPToolBox。Main 不再维护第二套文件或终端执行器（AR-SEC-008）。上游来源与同步规则见 `agent-runtime/vcp-pi-core/UPSTREAM.md`。
 
 ## 2. 分层依赖
 

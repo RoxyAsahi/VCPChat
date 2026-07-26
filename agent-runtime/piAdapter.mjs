@@ -1,4 +1,4 @@
-// Pi adapter: embeds @earendil-works/pi-agent-core in the worker process.
+// Pi adapter: embeds the VCP-controlled minimal Pi core fork in the worker process.
 //
 // Model traffic goes through a custom streamFn that talks to the VCPToolBox
 // OpenAI-compatible /v1/chat/completions endpoint, so no provider key is ever
@@ -7,8 +7,7 @@
 // VCPToolBox via vcp_invoke; only the reviewable patch workflow and orchestration
 // controls remain as VCPChat runtime tools.
 
-import { Agent } from '@earendil-works/pi-agent-core';
-import { createAssistantMessageEventStream } from '@earendil-works/pi-ai';
+import { Agent, createAssistantMessageEventStream, VCP_PI_CORE_VERSION } from './vcp-pi-core/index.mjs';
 import { Type } from 'typebox';
 
 const VCP_DELEGATE = 'vcp_delegate';
@@ -381,8 +380,7 @@ export function createPiAdapter() {
                 details: '',
             };
             try {
-                const pkg = await import('@earendil-works/pi-agent-core/package.json', { with: { type: 'json' } });
-                info.piAgentCore = pkg.default.version;
+                info.piAgentCore = VCP_PI_CORE_VERSION;
                 const majorNode = Number(process.versions.node.split('.')[0]);
                 const minorNode = Number(process.versions.node.split('.')[1]);
                 if (majorNode < 22 || (majorNode === 22 && minorNode < 19)) {
@@ -390,7 +388,7 @@ export function createPiAdapter() {
                     return info;
                 }
                 info.available = true;
-                info.details = 'pi-agent-core importable; model streamFn provided by VCP bridge';
+                info.details = 'VCP-controlled Pi core importable; model streamFn provided by VCP bridge';
                 return info;
             } catch (error) {
                 info.details = `pi import failed: ${error.message}`;

@@ -113,7 +113,7 @@ driver 抛出的错误统一为 `DriverError`：
 | 接口 | 映射 |
 | --- | --- |
 | 运行形态 | fork `agent-runtime/worker-entry.js`，`ELECTRON_RUN_AS_NODE=1`，stdio JSON-lines |
-| `probe` | spawn `worker-entry --probe`：校验 Node>=22.19、`@earendil-works/pi-agent-core` 与 `pi-ai` 精确 0.82.0 |
+| `probe` | spawn `worker-entry --probe`：校验 Node>=22.19、VCP Pi Core fork 可加载并报告来源版本 |
 | `startSession` | worker 内 `AgentHarness` 初始化；**禁用全部内置工具（read/write/edit/bash）与 extension 自动加载**；仅注册 VCP 桥工具（AR-SEC-008） |
 | `sendTurn` | 调 agent loop；流式 delta/tool call 经 sink 上报；turn 串行由 Manager 强制，worker 内不排队 |
 | `cancelTurn` | worker 侧 abort controller；桥向 `/v1/interrupt`（见 [tool-bridge.md](tool-bridge.md#取消与超时映射)） |

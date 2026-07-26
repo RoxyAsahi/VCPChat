@@ -7,6 +7,9 @@ const requiredFiles = [
     'agent-runtime/sidecar.cjs',
     'agent-runtime/protocol.cjs',
     'agent-runtime/piAdapter.mjs',
+    'agent-runtime/vcp-pi-core/index.mjs',
+    'agent-runtime/vcp-pi-core/UPSTREAM.md',
+    'agent-runtime/vcp-pi-core/LICENSE',
     'modules/agent-runtime/contracts.js',
     'modules/agent-runtime/runtimeManager.js',
     'modules/agent-runtime/workerTransport.js',
@@ -48,12 +51,10 @@ for (const forbidden of ['agentRuntimeExec', 'agentRuntimeReadFile', 'agentRunti
 }
 
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-if (packageJson.dependencies?.['@earendil-works/pi-agent-core'] !== '0.82.0') {
-    errors.push('pi-agent-core must be exactly pinned to 0.82.0');
+if (packageJson.dependencies?.['@earendil-works/pi-agent-core'] || packageJson.dependencies?.['@earendil-works/pi-ai']) {
+    errors.push('upstream Pi runtime packages must not be production dependencies after vendoring');
 }
-if (packageJson.dependencies?.['@earendil-works/pi-ai'] !== '0.82.0') {
-    errors.push('pi-ai must be exactly pinned to 0.82.0');
-}
+if (packageJson.dependencies?.typebox !== '1.1.38') errors.push('typebox must be directly pinned for VCP Pi tool schemas');
 if (!packageJson.build?.files?.includes('agent-runtime/**/*')) {
     errors.push('electron-builder files must include agent-runtime/**/*');
 }
@@ -77,4 +78,4 @@ if (errors.length > 0) {
     errors.forEach((error) => console.error(`- ${error}`));
     process.exit(1);
 }
-console.log(`Agent Runtime guard passed (${requiredFiles.length} required files, narrow preload, pinned Pi, credential boundary).`);
+console.log(`Agent Runtime guard passed (${requiredFiles.length} required files, narrow preload, controlled Pi core, credential boundary).`);

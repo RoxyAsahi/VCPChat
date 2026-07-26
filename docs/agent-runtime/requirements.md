@@ -55,7 +55,7 @@
 | AR-COMPAT-001 | legacy-frozen | 兼容旧 `POST /v1/chatvcp/completions` 与 `POST /v1/human/tool` 既有行为；本轮不改 VCPToolBox | 集成：对现有 ToolBox 回归 | ART-004, ART-005 |
 | AR-COMPAT-002 | legacy-frozen | 兼容 VCPLog WebSocket 审批往返协议 | 集成：审批请求/决议报文回放 | ART-023 |
 | AR-COMPAT-003 | stable | 支持 Windows 10/11：路径（空格/中文/长路径/UNC）、进程树清理 | E2E：Windows 语料套件 | ART-012, ART-013 |
-| AR-COMPAT-004 | stable | Pi 精确锁定 `0.82.0`（`@earendil-works/pi-agent-core` 与 `pi-ai`），经 driver facade 隔离 0.x 演进 | 构建：`npm ls` 精确版本断言 | ART-022 |
+| AR-COMPAT-004 | stable | Pi 最小 fork 的来源版本、许可证与同步点固定，并经 driver facade 隔离上游 0.x 演进 | 构建：fork import/probe 与核心 loop 回归断言 | ART-022 |
 | AR-COMPAT-005 | stable | 新 IPC 通道一律 `agent-runtime:` 命名空间并注册进 [ipcContracts.js](../../modules/ipc/ipcContracts.js) | 静态：通道注册 lint | ART-024（静态项） |
 | AR-COMPAT-006 | stable | 事件 `schemaVersion` 兼容策略：主版本不兼容事件不得崩溃，须告警并丢弃 | 契约：注入未知版本事件 | ART-024 |
 

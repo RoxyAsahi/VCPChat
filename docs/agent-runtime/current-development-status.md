@@ -17,7 +17,7 @@ VCPChat GUI / Agent Workbench
 
 ## 已落地能力
 
-- Pi Worker、主进程 RuntimeManager、窄 preload IPC 和 GUI Agent Workbench 已接通。
+- Pi Worker、主进程 RuntimeManager、窄 preload IPC 和 GUI Agent Workbench 已接通；Pi Agent loop 已裁剪并受控内嵌为 `agent-runtime/vcp-pi-core/`（MIT 来源与同步记录见该目录 `UPSTREAM.md`）。
 - OpenAI SSE 真流式、reasoning、usage、取消、session transcript/checkpoint、工具状态与本地审批已接入。
 - Patch proposal/apply/revert、workspace 路径范围、marker escaped write/edit、catalog、capability policy、subagent/team 领域核心均有对应自动测试。
 - FileOperator 的只读工作区调用可经 `vcp_invoke` 真实执行；Main 负责唯一的工具生命周期事件，避免 Pi Worker 和 Main 双重渲染工具卡。
@@ -51,8 +51,7 @@ ToolBox 中 `approveAll: true` 的含义是“所有工具都需要人工审核�
 ## 需要继续完成
 
 1. 将 TUI 的主题、block/工具展示、权限模式、steering/follow-up、用量与会话体验以 GUI 原生交互完整接入 Workbench，而非嵌一层终端。
-2. 把 Pi Agent loop 与最小 AI 协议依赖受控 vendoring 到 VCPChat，保留 MIT 许可证和上游版本/同步记录；删除对完整 Pi coding-agent/CLI 的需求。
-3. 为 GUI 的 Nova 开箱配置、VCPLog 后端审批桥和长程任务（多轮工具、取消、usage/compaction）补自动化与实机验收。
+2. 为 GUI 的 Nova 开箱配置、VCPLog 后端审批桥和长程任务（多轮工具、取消、usage/compaction）补自动化与实机验收。
 4. `gui-test-screenshots/` 与 `dist-fileoperator-*.log` 是手工/临时验证产物，不进入正式提交。
 
 ## 当前验证命令

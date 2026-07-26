@@ -13,7 +13,7 @@
 
 ## Phase 1 — Pi Worker + Driver facade 骨架
 
-- **进入条件**：Phase 0 文档合入；Node >= 22.19 可用；`@earendil-works/pi-agent-core`/`pi-ai`@0.82.0 锁定进 package.json。
+- **进入条件**：Phase 0 文档合入；Node >= 22.19 可用；`agent-runtime/vcp-pi-core/` 的最小 MIT fork 可由 Worker import，并有上游来源和许可证记录。
 - **交付物**：`agent-runtime/` worker 入口（`ELECTRON_RUN_AS_NODE=1`）；`modules/agent-runtime/drivers/` facade + Pi driver；无工具 hello turn 端到端（建 session → 流式回复 → 关闭）；内置工具/extension 禁用断言。
 - **非目标**：任何工具调用；审批 UI；持久化。
 - **验收需求**：AR-FR-001/002/003/008/010/011/014、AR-SEC-008、AR-NFR-004、AR-COMPAT-003/004。

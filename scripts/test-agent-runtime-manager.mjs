@@ -152,6 +152,6 @@ const piProbe = await new Promise((resolve, reject) => {
     child.on('error', reject);
 });
 assert.equal(piProbe.available, true, piProbe.details);
-assert.equal(piProbe.piAgentCore, '0.82.0');
+assert.equal(piProbe.piAgentCore, '0.82.1-vcp.1');
 
 console.log('Agent Runtime manager, worker lifecycle, mock turn, cancel, and Pi probe tests passed.');
