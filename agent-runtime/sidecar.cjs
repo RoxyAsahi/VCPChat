@@ -159,6 +159,15 @@ async function handleCancelTurn(message) {
     }
 }
 
+async function handleSteerTurn(message) {
+    try {
+        const result = await adapter.steerTurn(message.sessionId, message.turnId, message.prompt);
+        send(makeAck(message.requestId, !result || result.ok !== false, { result }));
+    } catch (error) {
+        send(makeAck(message.requestId, false, { error: error.message }));
+    }
+}
+
 async function handleCloseSession(message) {
     try {
         const result = await adapter.closeSession(message.sessionId);
@@ -236,6 +245,7 @@ const HANDLERS = {
     [MESSAGE_TYPES.START_SESSION]: handleStartSession,
     [MESSAGE_TYPES.CLOSE_SESSION]: handleCloseSession,
     [MESSAGE_TYPES.START_TURN]: handleStartTurn,
+    [MESSAGE_TYPES.STEER_TURN]: handleSteerTurn,
     [MESSAGE_TYPES.CANCEL_TURN]: handleCancelTurn,
     [MESSAGE_TYPES.MODEL_RESULT]: handleModelResult,
     [MESSAGE_TYPES.MODEL_DELTA]: handleModelDelta,

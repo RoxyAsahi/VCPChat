@@ -19,6 +19,7 @@ VCPChat GUI / Agent Workbench
 
 - Pi Worker、主进程 RuntimeManager、窄 preload IPC 和 GUI Agent Workbench 已接通；Pi Agent loop 已裁剪并受控内嵌为 `agent-runtime/vcp-pi-core/`（MIT 来源与同步记录见该目录 `UPSTREAM.md`）。
 - OpenAI SSE 真流式、reasoning、usage、取消、session transcript/checkpoint、工具状态与本地审批已接入。
+- GUI Workbench 复用主聊天 composer；运行中的输入会作为同一 turn 的 steering 指令排队，而不是创建冲突 turn。Pi fork 的 steering/follow-up 行为有独立自动回归。
 - Patch proposal/apply/revert、workspace 路径范围、marker escaped write/edit、catalog、capability policy、subagent/team 领域核心均有对应自动测试。
 - FileOperator 的只读工作区调用可经 `vcp_invoke` 真实执行；Main 负责唯一的工具生命周期事件，避免 Pi Worker 和 Main 双重渲染工具卡。
 

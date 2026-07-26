@@ -527,6 +527,15 @@ export function createPiAdapter() {
             return { ok: true };
         },
 
+        async steerTurn(sessionId, turnId, prompt) {
+            const session = sessions.get(sessionId);
+            if (!session || !session.turnTasks.has(turnId)) return { ok: false, error: 'no active Pi turn' };
+            session.agent.steer({
+                role: 'user', content: [{ type: 'text', text: String(prompt || '') }], timestamp: Date.now(),
+            });
+            return { ok: true };
+        },
+
         async closeSession(sessionId) {
             const session = sessions.get(sessionId);
             if (session) {

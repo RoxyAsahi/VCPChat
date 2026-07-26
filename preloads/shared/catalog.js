@@ -139,6 +139,7 @@ function createCatalog(ops) {
         agentRuntimeRejectPatchProposal: query((data) => ops.invoke('agent-runtime:reject-patch-proposal', data)),
         agentRuntimeCompactSession: query((data) => ops.invoke('agent-runtime:compact-session', data)),
         agentRuntimeStartTurn: query((data) => ops.invoke('agent-runtime:start-turn', data)),
+        agentRuntimeSteerTurn: query((data) => ops.invoke('agent-runtime:steer-turn', data)),
         agentRuntimeCancelTurn: query((data) => ops.invoke('agent-runtime:cancel-turn', data)),
         agentRuntimeRespondApproval: query((data) => ops.invoke('agent-runtime:respond-approval', data)),
         agentRuntimeSetWorkbenchPresence: command((mounted) => ops.send('agent-runtime:set-workbench-presence', { mounted })),

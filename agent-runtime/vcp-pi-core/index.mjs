@@ -246,7 +246,8 @@ export class Agent {
                 pending = this.steeringQueue.splice(0);
                 continue;
             }
-            pending = this.followUpQueue.splice(0);
+            pending = this.steeringQueue.splice(0);
+            if (!pending.length) pending = this.followUpQueue.splice(0);
             if (!pending.length) return;
         }
     }

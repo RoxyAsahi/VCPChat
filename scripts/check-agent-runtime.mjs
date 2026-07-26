@@ -41,7 +41,7 @@ const preload = fs.readFileSync(path.join(root, 'preloads/chat.js'), 'utf8');
 for (const method of [
     'agentRuntimeGetStatus', 'agentRuntimeStart', 'agentRuntimeStop',
     'agentRuntimeCreateSession', 'agentRuntimeListSessions',
-    'agentRuntimeStartTurn', 'agentRuntimeCancelTurn',
+    'agentRuntimeStartTurn', 'agentRuntimeSteerTurn', 'agentRuntimeCancelTurn',
     'agentRuntimeRespondApproval', 'agentRuntimeSetWorkbenchPresence', 'onAgentRuntimeEvent',
 ]) {
     if (!preload.includes(method)) errors.push(`chat preload missing API: ${method}`);

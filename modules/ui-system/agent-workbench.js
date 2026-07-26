@@ -553,7 +553,8 @@ function mountWorkbench(container) {
         const prompt = promptInput.value.trim();
         if (!prompt) return;
         run(async () => {
-            await controller.startTurn(prompt);
+            if (store.getState().activeTurnId) await controller.steerTurn(prompt);
+            else await controller.startTurn(prompt);
             promptInput.value = '';
             window.uiHelperFunctions?.autoResizeTextarea?.(promptInput);
         });

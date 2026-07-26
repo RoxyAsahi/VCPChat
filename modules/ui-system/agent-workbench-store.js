@@ -93,6 +93,17 @@ function reduceEvent(current, event) {
         }
         return next;
     }
+    if (event.type === 'user.message') {
+        next.messages = upsertMessage(next.messages, {
+            id: `user:${event.turnId}:${event.sequence || event.timestamp || ''}`,
+            turnId: event.turnId,
+            role: 'user',
+            content: event.payload?.prompt || '',
+            state: event.payload?.queued ? 'queued' : 'complete',
+            createdAt: event.timestamp || 0,
+        });
+        return next;
+    }
     if (event.type === 'assistant.started') {
         const existing = next.messages.find((message) => message.turnId === event.turnId && message.role === 'assistant');
         if (!existing) {

@@ -522,6 +522,27 @@ class AgentRuntimeManager {
         return { ok: true };
     }
 
+    async steerTurn(options) {
+        this._requireUsableRuntime();
+        const session = this.registry.get(options.sessionId);
+        const turn = session.activeTurn();
+        const prompt = assertPrompt(options.prompt);
+        if (!turn || turn.turnId !== options.turnId) {
+            fail(ERROR_CODES.INVALID_STATE_TRANSITION, 'Steering requires the active turn for this session');
+        }
+        const ack = await this.transport.sendRequest('steer-turn', {
+            sessionId: session.sessionId,
+            turnId: turn.turnId,
+            prompt,
+        }, 15000).promise;
+        if (ack.ok === false || ack.result?.ok === false) {
+            fail(ERROR_CODES.RUNTIME_NOT_READY, ack.error || ack.result?.error || 'Unable to queue steering input');
+        }
+        if (this.store) this.store.saveMessage({ sessionId: session.sessionId, turnId: turn.turnId, role: 'user', content: prompt });
+        this._emit(session, EVENT_TYPES.USER_MESSAGE, { prompt, queued: true }, { turnId: turn.turnId });
+        return { ok: true, turnId: turn.turnId };
+    }
+
     respondApproval(options) {
         const result = this.approvals.respond(
             options.approvalId,

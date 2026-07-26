@@ -61,6 +61,7 @@ function removeHandlers() {
         IPC_CHANNELS.REJECT_PATCH_PROPOSAL,
         IPC_CHANNELS.COMPACT_SESSION,
         IPC_CHANNELS.START_TURN,
+        IPC_CHANNELS.STEER_TURN,
         IPC_CHANNELS.CANCEL_TURN,
         IPC_CHANNELS.RESPOND_APPROVAL,
     ]) {
@@ -116,6 +117,7 @@ function initialize(options) {
     ipcMain.handle(IPC_CHANNELS.REJECT_PATCH_PROPOSAL, (event, payload) => guard(event, () => manager.rejectPatchProposal(payload || {})));
     ipcMain.handle(IPC_CHANNELS.COMPACT_SESSION, (event, payload) => guard(event, () => manager.compactSession(payload || {})));
     ipcMain.handle(IPC_CHANNELS.START_TURN, (event, payload) => guard(event, () => manager.startTurn(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.STEER_TURN, (event, payload) => guard(event, () => manager.steerTurn(payload || {})));
     ipcMain.handle(IPC_CHANNELS.CANCEL_TURN, (event, payload) => guard(event, () => manager.cancelTurn(payload || {})));
     ipcMain.handle(IPC_CHANNELS.RESPOND_APPROVAL, (event, payload) => guard(event, () => manager.respondApproval(payload || {})));
     ipcMain.on(IPC_CHANNELS.SET_WORKBENCH_PRESENCE, (event, payload) => {

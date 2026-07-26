@@ -135,6 +135,12 @@ function createWorkbenchController(runtimeApi) {
         return requireApi('agentRuntimeCancelTurn')({ sessionId, turnId: turnId || undefined });
     }
 
+    async function steerTurn(prompt) {
+        const { activeSessionId: sessionId, activeTurnId: turnId } = store.getState();
+        if (!sessionId || !turnId) throw new Error('当前没有可插入指令的任务');
+        return requireApi('agentRuntimeSteerTurn')({ sessionId, turnId, prompt });
+    }
+
     async function respondApproval(approval, decision) {
         const result = await requireApi('agentRuntimeRespondApproval')({
             approvalId: approval.approvalId,
@@ -182,6 +188,7 @@ function createWorkbenchController(runtimeApi) {
         forkSession,
         compactSession,
         startTurn,
+        steerTurn,
         cancelTurn,
         respondApproval,
     };
