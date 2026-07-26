@@ -15,6 +15,7 @@ class WorkerTransport {
         this.shutdownTimeoutMs = options.shutdownTimeoutMs || LIMITS.WORKER_SHUTDOWN_TIMEOUT_MS;
         this.onEvent = options.onEvent || (() => {});
         this.onModelRequest = options.onModelRequest || (() => {});
+        this.onModelAbort = options.onModelAbort || (() => {});
         this.onToolRequest = options.onToolRequest || (() => {});
         this.onFatal = options.onFatal || (() => {});
         this.onExit = options.onExit || (() => {});
@@ -110,6 +111,18 @@ class WorkerTransport {
             data: message.data,
             error: message.error,
         });
+    }
+
+    sendModelDelta(message) {
+        this._send({ type: 'model-delta', requestId: message.requestId, delta: message.delta });
+    }
+
+    sendModelDone(message) {
+        this._send({ type: 'model-done', requestId: message.requestId, usage: message.usage, finishReason: message.finishReason });
+    }
+
+    sendModelError(message) {
+        this._send({ type: 'model-error', requestId: message.requestId, error: message.error });
     }
 
     sendToolResult(message) {
@@ -239,6 +252,9 @@ class WorkerTransport {
                 return;
             case 'model-request':
                 this.onModelRequest(message);
+                return;
+            case 'model-abort':
+                this.onModelAbort(message);
                 return;
             case 'tool-request':
                 this.onToolRequest(message);

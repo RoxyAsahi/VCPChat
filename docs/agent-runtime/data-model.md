@@ -116,13 +116,14 @@ pending ──turn 取消/session 关闭──▶ cancelled (终态)
 - AgentSession/AgentTurn/AgentApproval/AgentArtifact 全量存内存 Map；应用退出即失。
 - **Phase 2 不做重启持久恢复**：重启后历史 session 不可恢复，Workbench 展示空列表。这不是缺陷而是本阶段声明的行为（ART-026 验证提示语义）；resume（AR-FR-009）是 Phase 3。
 
-## 6. Phase 3 SQLite 计划（provisional）
+## 6. Phase 3 SQLite 实现
 
-- 存储：`userdata/agent-runtime/agent-runtime.db`，WAL 模式。
-- 表：`agent_session`、`agent_turn`、`agent_event`（body 为信封 JSON，超 256KB 拒写）、`agent_approval`、`agent_artifact`、`runtime_opaque_state`。
-- 迁移：schema 版本号 + 顺序迁移脚本（参考仓库 `migration/` 既有约定）。
-- 恢复语义：启动时加载 `closed`/`failed` session 为只读历史；`ready/active` 中遗留的非终态一律迁移为 `failed`（reason=`restart`），不自动续跑；resume 必须用户显式触发且 driver 校验 `stateVersion`。
-- 凭据**不入库**（AR-SEC-005）；RuntimeOpaqueState 入库前确认 driver 声明其不含凭据，否则仅存内存。
+- 存储：Electron `userDataPath/agent-runtime.sqlite`，`better-sqlite3`，`foreign_keys=ON`、WAL、`synchronous=NORMAL`。
+- 迁移：`PRAGMA user_version` 顺序迁移；当前 schema version 为 1。表名为 `sessions`、`turns`、`messages`、`events`、`tool_calls`、`approvals`、`artifacts`、`runtime_state`、`checkpoints`。
+- 约束：`events.event_id` 唯一，`(events.session_id, events.sequence)` 唯一；会话读写经 Repository facade，不让 IPC/worker 直接访问 SQLite。
+- 恢复语义：启动时加载历史 session；遗留 `queued/running/awaiting-approval/cancelling` turn 及其 active session 统一标记为 `failed`，错误为 `interrupted by runtime restart`，绝不自动续跑。closed/failed 历史可查询、可删除。
+- 凭据**不入库**：Repository 在 JSON 化前调用 secret redactor；worker 仍仅收到模型元数据。`runtime_state` 已预留但此阶段没有宣称存储或恢复 Pi AgentHarness 私有状态。
+- Compaction：手动 compact 写入 `checkpoints` 和 session summary；采用明确标注的 transcript facade，不宣称 Pi 完整恢复。
 
 ## 7. 与 VCP 既有数据的关系
 

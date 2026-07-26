@@ -115,6 +115,7 @@ class LegacyVcpToolboxClient {
                 ok: normalized.ok,
                 output: normalized.output,
                 error: normalized.error,
+                raw: normalized.raw,
                 audit: { endpoint: 'human/tool', status: response.status },
             };
         } finally {

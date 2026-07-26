@@ -724,7 +724,7 @@ body.light-theme .message-item.system.welcome-bubble {
 }
 
 
-#messageInput {
+:is(#messageInput, .chat-message-input) {
     display: block;
     width: 100%;
     box-sizing: border-box;
@@ -743,7 +743,7 @@ body.light-theme .message-item.system.welcome-bubble {
     overflow-y: auto;
     line-height: 1.4;
 }
-#messageInput:focus {
+:is(#messageInput, .chat-message-input):focus {
     outline: none;
     box-shadow: none;
 }

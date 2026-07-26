@@ -15,6 +15,10 @@ const {
 } = require('./protocol.cjs');
 
 const driverKind = process.env.AGENT_RUNTIME_DRIVER || 'mock';
+const LOCAL_TOOL_NAMES = new Set([
+    'workspace_propose_patch', 'workspace_apply_patch', 'workspace_revert_patch',
+    'spawn_agent', 'await_agent', 'cancel_agent',
+]);
 
 let adapter = null;
 const pendingToolCalls = new Map();
@@ -31,19 +35,20 @@ function emitEvent(sessionId, event) {
 }
 
 function requestModelFactory(sessionId, turnId) {
-    return (body, signal) => new Promise((resolve) => {
+    return (body, signal, onEvent) => new Promise((resolve) => {
         const requestId = `model_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
         const timeout = setTimeout(() => {
             pendingModelRequests.delete(requestId);
             resolve({ ok: false, error: 'model bridge timeout' });
         }, 10 * 60 * 1000);
         if (typeof timeout.unref === 'function') timeout.unref();
-        pendingModelRequests.set(requestId, { resolve, timeout });
+        pendingModelRequests.set(requestId, { resolve, timeout, onEvent });
         send({ type: MESSAGE_TYPES.MODEL_REQUEST, requestId, sessionId, turnId, body });
         if (signal) {
             signal.addEventListener('abort', () => {
                 const pending = pendingModelRequests.get(requestId);
                 if (pending) {
+                    send({ type: MESSAGE_TYPES.MODEL_ABORT, requestId });
                     clearTimeout(pending.timeout);
                     pendingModelRequests.delete(requestId);
                     pending.resolve({ ok: false, error: 'cancelled', cancelled: true });
@@ -70,6 +75,7 @@ function requestToolFactory(sessionId, turnId) {
             turnId,
             toolCallId,
             toolName: request.toolName,
+            toolSource: LOCAL_TOOL_NAMES.has(request.toolName) ? 'local-main' : 'vcp',
             arguments: request.arguments || {},
             reason: request.reason,
         });
@@ -99,8 +105,14 @@ async function loadAdapter(kind) {
 
 async function handleStartSession(message) {
     try {
-        const options = { ...(message.options || {}) };
-        // Main process strips credentials before this message reaches the worker.
+        const incoming = message.options || {};
+        const options = {
+            systemPrompt: incoming.systemPrompt,
+            messages: Array.isArray(incoming.messages) ? incoming.messages : [],
+            summary: incoming.summary,
+            // Only model metadata crosses the process boundary; credentials are never forwarded.
+            vcp: { model: incoming.vcp && incoming.vcp.model },
+        };
         options.createRequestTool = (turnId) => requestToolFactory(message.sessionId, turnId);
         options.createRequestModel = (turnId) => requestModelFactory(message.sessionId, turnId);
         await adapter.createSession(message.sessionId, options);
@@ -147,12 +159,48 @@ async function handleCancelTurn(message) {
     }
 }
 
+async function handleCloseSession(message) {
+    try {
+        const result = await adapter.closeSession(message.sessionId);
+        send(makeAck(message.requestId, !result || result.ok !== false, { result }));
+    } catch (error) {
+        send(makeAck(message.requestId, false, { error: error.message }));
+    }
+}
+
 function handleModelResult(message) {
     const pending = pendingModelRequests.get(message.requestId);
     if (!pending) return;
     clearTimeout(pending.timeout);
     pendingModelRequests.delete(message.requestId);
     pending.resolve({ ok: message.ok, data: message.data, error: message.error });
+}
+
+function handleModelDelta(message) {
+    const pending = pendingModelRequests.get(message.requestId);
+    if (pending && typeof pending.onEvent === 'function') {
+        pending.onEvent({ type: 'delta', delta: message.delta });
+    }
+}
+
+function handleModelDone(message) {
+    const pending = pendingModelRequests.get(message.requestId);
+    if (!pending) return;
+    if (typeof pending.onEvent === 'function') {
+        pending.onEvent({ type: 'done', usage: message.usage, finishReason: message.finishReason });
+    }
+    clearTimeout(pending.timeout);
+    pendingModelRequests.delete(message.requestId);
+    pending.resolve({ ok: true, streamed: true, usage: message.usage, finishReason: message.finishReason });
+}
+
+function handleModelError(message) {
+    const pending = pendingModelRequests.get(message.requestId);
+    if (!pending) return;
+    if (typeof pending.onEvent === 'function') pending.onEvent({ type: 'error', error: message.error });
+    clearTimeout(pending.timeout);
+    pendingModelRequests.delete(message.requestId);
+    pending.resolve({ ok: false, error: message.error });
 }
 
 function handleToolResult(message) {
@@ -186,9 +234,13 @@ async function handleShutdown(message) {
 
 const HANDLERS = {
     [MESSAGE_TYPES.START_SESSION]: handleStartSession,
+    [MESSAGE_TYPES.CLOSE_SESSION]: handleCloseSession,
     [MESSAGE_TYPES.START_TURN]: handleStartTurn,
     [MESSAGE_TYPES.CANCEL_TURN]: handleCancelTurn,
     [MESSAGE_TYPES.MODEL_RESULT]: handleModelResult,
+    [MESSAGE_TYPES.MODEL_DELTA]: handleModelDelta,
+    [MESSAGE_TYPES.MODEL_DONE]: handleModelDone,
+    [MESSAGE_TYPES.MODEL_ERROR]: handleModelError,
     [MESSAGE_TYPES.TOOL_RESULT]: handleToolResult,
     [MESSAGE_TYPES.SHUTDOWN]: handleShutdown,
 };

@@ -3,11 +3,20 @@
 const { EVENT_SCHEMA_VERSION, newId, assertEventEnvelope } = require('./contracts');
 
 class SessionEventSequencer {
-    constructor(sessionId, runtime) {
+    constructor(sessionId, runtime, options = {}) {
         this.sessionId = sessionId;
         this.runtime = runtime;
-        this.sequence = 0;
-        this.seenEventIds = new Set();
+        this.sequence = options.sequence || 0;
+        this.seenEventIds = new Set(options.seenEventIds || []);
+    }
+
+    restore(events = []) {
+        for (const event of events) {
+            if (event && event.eventId) this.seenEventIds.add(event.eventId);
+            if (event && Number.isInteger(event.sequence)) {
+                this.sequence = Math.max(this.sequence, event.sequence);
+            }
+        }
     }
 
     next(type, payload, correlation = {}) {

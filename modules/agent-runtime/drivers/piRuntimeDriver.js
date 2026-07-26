@@ -16,6 +16,18 @@ module.exports = {
         cancellation: true,
         resume: false,
         compaction: false,
+        localToolCatalog: true,
+        capabilityPolicy: true,
+        subagents: Object.freeze({
+            supported: true,
+            integration: 'injected-adapters',
+            launchesCli: false,
+        }),
+        teams: Object.freeze({
+            supported: true,
+            orchestrationOnly: true,
+        }),
+        executionBackend: 'vcp-toolbox',
     }),
     requiresVcpSettings: true,
 };

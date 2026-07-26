@@ -1,6 +1,6 @@
 # Agent Runtime 路线图
 
-阶段定义、进入条件、交付物、非目标、验收需求/测试、回滚策略。**当前分支 `codex/agent-runtime-phase2` 交付 Phase 0-2。** 需求 ID 见 [requirements.md](requirements.md)，测试 ID 见 [test-matrix.md](test-matrix.md)。
+阶段定义、进入条件、交付物、非目标、验收需求/测试、回滚策略。**当前分支已完成 Agent Runtime 主链路接入，并收缩为“Pi 编排 + VCPToolBox 唯一执行后端”。** 需求 ID 见 [requirements.md](requirements.md)，测试 ID 见 [test-matrix.md](test-matrix.md)。
 
 ## Phase 0 — 文档与契约冻结
 
@@ -33,11 +33,11 @@
 ## Phase 3 — 持久化 / 重启恢复 / ToolBox 结构化 API
 
 - **进入条件**：Phase 2 安全门禁通过；与 ToolBox 维护者确认结构化契约排期。
-- **交付物**：SQLite 存储与迁移（[data-model.md](data-model.md#6-phase-3-sqlite-计划)）；`resumeSession` + RuntimeOpaqueState；Tool Catalog/JSON Invoke/事件流/scoped token 客户端侧对接（契约见 legacy 文档 §4）；capability 探测与 legacy 回退。
-- **非目标**：新 driver。
-- **验收需求**：AR-FR-009 + Phase 3 新增需求（届时扩充）。
-- **验收测试**：ART-026（扩展）+ 契约测试新增。
-- **回滚策略**：探测失败自动回 legacy；DB 迁移可逆（备份 + down 脚本）。
+- **交付物**：`userData/agent-runtime.sqlite`（WAL、schema version、sessions/turns/messages/events/tool_calls/approvals/artifacts/runtime_state/checkpoints）；Repository facade；启动恢复历史 session，并把遗留 in-flight turn 标记为 failed/interrupted；会话 CRUD/fork/history IPC；OpenAI SSE Main→worker→Pi 流桥（含 usage、Abort 与 8KB UTF-8 切片）；可测试 transcript-compaction facade 和持久 checkpoint。
+- **非目标**：不声称 Pi AgentHarness opaque state 可完整恢复；不自动续跑或自动 resume；新 driver、scoped token 和 ToolBox 结构化 API 仍待后续对接。
+- **验收需求**：AR-FR-009 + Phase 3 persistence/streaming/compaction requirements。
+- **验收测试**：`test-agent-persistence.mjs`、`test-agent-sse.mjs`、`test-agent-compaction.mjs`、Pi worker-loop 回归；本环境 Node ABI 与 Electron 预编译 `better-sqlite3` 不匹配时 persistence 脚本明确 skip，需 packaged/Electron ABI 环境执行。
+- **回滚策略**：store 为可注入依赖，未注入时保持 Phase 2 内存行为；DB 迁移前应由发行流程备份。
 
 ## Phase 4 — Grok Build（ACP）与 Claude Agent SDK Driver
 
@@ -47,16 +47,36 @@
 - **验收测试**：ART-022 参数化跑满三个 driver。
 - **回滚策略**：driver 维度独立开关；问题 driver 下线不影响其余。
 
-## Phase 5 — 沙箱与 scoped token 强制 / 并行工具
+## Phase 5 — Workspace Patch workflow 与 VCP 能力复用
 
-- **进入条件**：后端 scoped token 上线；capability 冲突矩阵评审通过。
-- **交付物**：scoped token 取代长期凭据（worker 只持 scoped token）；并行工具执行；平台沙箱调研落地（Windows 受限 token/job object 的 best-effort 加固，不承诺内核级隔离）。
-- **验收测试**：ART-014（并行语义更新）、ART-017（加固后复跑）。
-- **回滚策略**：并行度可配置为 1（退回串行）。
+- **进入条件**：现有 FileOperator、PowerShellExecutor 与 `/v1/human/tool` 链路可用。
+- **已交付**：PatchManager 只保留 proposal/diff/approval/TOCTOU/revert 状态机；读、写、创建、删除全部调用分布式 FileOperator。Pi 本地工具表删除 read/list/search/terminal，终端统一调用 PowerShellExecutor。
+- **安全边界**：FileOperator 路径参数在 Main 绑定到 session workspace；包含 VCP marker 的内容使用 FileOperator 的 escaped write/edit 命令；apply/revert 独立审批。
+- **已删除**：重复 WorkspaceManager、TerminalService、LocalToolProvider，以及未接入的 WSL/container/local-risk ExecutionPolicy。
+- **验收测试**：`test-agent-diff.mjs`、`test-agent-tool-bridge.mjs`、`test-pi-worker-loop.mjs`。
+- **回滚策略**：Patch 工具可独立从 Pi schema 移除；`vcp_invoke` 仍可继续使用原 ToolBox 插件能力。
 
-## Phase 6 — 多 Workspace / 分布式 / GA
+后续 scoped token、并行工具与 Windows restricted token/job object best-effort 加固仍需独立阶段；无内核沙箱承诺。
 
-- **进入条件**：Phase 5 稳定一个发布周期。
+## Phase 6 — Catalog / Capability / Subagent 领域核心（当前 checkpoint 增量）
+
+- **进入条件**：Phase 0-2 checkpoint `d929e2e9`；领域实现不得依赖主代理集成。
+- **交付物**：Local Tool Catalog（manifest/.block、hash/cache/refresh/drift、legacy unknown）；session/tool/action/path/expiry capability policy（deny 优先、默认拒绝）；adapter 驱动的 SubagentCoordinator（depth/concurrency/time/token/cost、取消级联）。
+- **非目标**：建立第二套本地执行后端；启动独立 CLI；声称客户端策略是服务端安全边界。
+- **验收测试**：`scripts/test-agent-catalog.mjs`、`scripts/test-agent-security.mjs`、`scripts/test-agent-subagents.mjs`（ART-029~031）。
+- **回滚策略**：领域目录与 driver capability 描述可独立移除；因未接主流程，不改变 Phase 2 行为。
+
+## Phase 7 — Team orchestration 领域核心
+
+- **进入条件**：Phase 6 领域契约和预算测试通过。
+- **交付物**：Run/Member/Wave/Role/Ownership/Handoff/Blackboard；sequential/parallel/adaptive wave；路径 ownership 冲突；结构化 blackboard/artifact refs；持久化和执行/取消 adapter；run 预算与取消。
+- **非目标**：RuntimeManager/Pi/Workbench 集成；分布式执行器；将 blackboard 内容当可信指令。
+- **验收测试**：`scripts/test-agent-team.mjs`（ART-032）。
+- **回滚策略**：TeamCoordinator 没有全局注册或后台进程，可整体下线。
+
+## Phase 8 — 多 Workspace / 分布式 / GA（后续）
+
+- **进入条件**：Phase 7 接入主代理并稳定一个发布周期。
 - **交付物**：多 workspace 并发 session、VCP 分布式节点上的 agent 调度、Agent 会话导出为聊天历史、GA 发布标准（测试矩阵全 complete）。
 - **回滚策略**：按功能开关逐项灰度。
 

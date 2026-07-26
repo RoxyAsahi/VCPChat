@@ -64,12 +64,20 @@
         "description": "功能: 将内容写入指定文件。如果目标路径已存在同名文件，它不会覆盖，而是自动在文件名后添加序号来创建新文件（例如，将 'file.txt' 创建为 'file(1).txt'），并会在返回结果中告知AI新的文件名。这确保了不会意外丢失数据。\n参数:\n- filePath (字符串, 必需): 要写入的文件的绝对路径。\n- content (字符串, 必需): 要写入文件的内容，支持多行。\n- encoding (字符串, 可选, 默认'utf8'): 写入时使用的文件编码。\n调用格式:\n<<<[TOOL_REQUEST]>>>\ntool_name:「始」FileOperator「末」,\ncommand:「始」WriteFile「末」,\nfilePath:「始」/path/to/your/file.txt「末」,\ncontent:「始」这是要写入的新内容。\n这是第二行。\n「末」\n<<<[END_TOOL_REQUEST]>>>"
       },
       {
+        "command": "WriteEscapedFile",
+        "description": "功能: 使用与 WriteFile 相同的安全检查创建文件，并在写入前还原 VCP 转义界定符。供 Agent Runtime 写入本身包含 TOOL_REQUEST 或字段界定符的源码和清单文件。"
+      },
+      {
         "command": "AppendFile",
         "description": "功能: 将内容追加到指定文件的末尾。如果文件不存在，则会创建新文件。\n参数:\n- filePath (字符串, 必需): 要追加内容的文件的绝对路径。\n- content (字符串, 必需): 要追加的内容。\n- encoding (字符串, 可选, 默认'utf8'): 追加时使用的文件编码。\n调用格式:\n<<<[TOOL_REQUEST]>>>\ntool_name:「始」FileOperator「末」,\ncommand:「始」AppendFile「末」,\nfilePath:「始」/path/to/your/log.txt「末」,\ncontent:「始」\n--- 新的日志条目 ---\n「末」\n<<<[END_TOOL_REQUEST]>>>"
       },
       {
         "command": "EditFile",
         "description": "功能: 编辑一个已存在的文件，用新内容完全覆盖旧内容。这是一个精确的覆写操作。如果文件不存在，此命令会返回错误，而不是创建新文件。若要创建文件，请使用'WriteFile'。\n参数:\n- filePath (字符串, 必需): 要编辑的文件的绝对路径。\n- content (字符串, 必需): 要写入的全新内容。\n- encoding (字符串, 可选, 默认'utf8'): 写入时使用的文件编码。\n调用格式:\n<<<[TOOL_REQUEST]>>>\ntool_name:「始」FileOperator「末」,\ncommand:「始」EditFile「末」,\nfilePath:「始」/path/to/existing_file.txt「末」,\ncontent:「始」这是覆盖后的新内容。\n「末」\n<<<[END_TOOL_REQUEST]>>>"
+      },
+      {
+        "command": "EditEscapedFile",
+        "description": "功能: 使用与 EditFile 相同的安全检查覆盖已有文件，并在写入前还原 VCP 转义界定符。供 Agent Runtime 精确编辑包含 VCP 协议文本的源码和清单文件。"
       },
       {
         "command": "ListDirectory",

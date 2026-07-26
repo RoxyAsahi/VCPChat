@@ -81,3 +81,33 @@
 
 - 每条威胁的验证测试见 [test-matrix.md](test-matrix.md) Security 列。
 - 发布前安全门禁：ART-006/007/008/015/016/017 必须 complete，不得以 partial 发布（沿用 [ui-system-qa-matrix.md](../ui-system-qa-matrix.md) 的纪律）。
+
+## 7. Workspace 与终端的单一执行边界
+
+Pi/worker 只发结构化 `tool-request`，不得直接 `fs`/`spawn`，renderer 也不得获得 raw spawn。VCPChat 不再维护与 ToolBox 并列的本地执行器：文件统一走 FileOperator，终端统一走 PowerShellExecutor。
+
+| ID | 威胁 | 缓解 | 验证 |
+| --- | --- | --- | --- |
+| T-17 | FileOperator 参数使用绝对路径、UNC、跨盘或 `..` 逃逸 session workspace | Main 将 FileOperator 路径参数解析并限制在 canonical workspaceRoot 内；Patch 只接受 relative path | `test-agent-tool-bridge.mjs`、`test-agent-diff.mjs` |
+| T-18 | 文件内容包含 VCP marker，导致工具协议截断或注入 | 普通桥继续拒绝 marker；受控文件写入改用 escaped write/edit，插件落盘前还原字面量 | `test-agent-diff.mjs` |
+| T-19 | Patch 审批后目标内容被替换（TOCTOU） | proposal 保存 before content/hash；apply 前后均经 FileOperator 重读并复核 hash | `test-agent-diff.mjs` |
+| T-20 | 未审批写入、revert 覆盖用户后续编辑 | propose 不写；apply/revert 每次均单独绑定审批；revert 复核 after hash | `test-agent-diff.mjs` |
+| T-21 | PowerShell 命令执行泄露凭据或造成主机副作用 | `vcp_invoke(PowerShellExecutor)` 归类为高风险并走本地审批；真实进程生命周期由既有插件负责 | `test-agent-tool-bridge.mjs` + live integration |
+| T-22 | 多 session 共享 PowerShellExecutor PTY 导致输出或 cwd 相互干扰 | 当前明确记录为后端插件并发限制；后续在既有插件增加 session id/串行化，不恢复第二套 TerminalService | integration planned |
+
+审批分类：`workspace_propose_patch` 为中风险但不写盘；`workspace_apply_patch/revert_patch` 为高风险；`vcp_invoke` 根据目标插件、command/action 和路径参数分类，PowerShellExecutor 与 FileOperator 写操作为高风险。ApprovalBroker 的四元组和参数 hash 仍是唯一批准绑定。
+
+## 8. Phase 6–7 威胁补充
+
+| ID | 威胁 | 缓解 | 验证 |
+| --- | --- | --- | --- |
+| T-11 | 恶意/被篡改 plugin manifest 注入配置密钥、HTML 描述或虚假低风险 | Catalog 只输出安全投影与 manifest hash；不输出 config；缺失 reliability/risk 显式 `unknown`；显示层仍须纯文本 | ART-029 |
+| T-12 | allow 规则覆盖更具体 deny，或过期授权继续生效 | capability policy deny 优先；session/tool/action/path/expiry 全部匹配；默认拒绝 write/shell/subagent；snapshot hash 防静默篡改 | ART-030 |
+| T-13 | 子代理递归爆炸、并发洪泛、token/cost/time 透支 | spawn 前检查 depth/concurrency/reserved budget，运行后核算 usage，超时 cancel，父取消级联 | ART-031 |
+| T-14 | Team 并行成员写入重叠路径导致覆盖/供应链污染 | Ownership 对规范化父子路径做冲突检测；冲突 fail closed；Handoff 使用结构化摘要和 artifact refs | ART-032 |
+| T-15 | Blackboard 作为命令/注入侧信道 | 仅接受结构化 object/array entry 与受限 artifact ref；拒绝裸字符串；消费者仍必须将其视为不可信数据 | ART-032 |
+| T-16 | 客户端把 capability/catalog 风险标签误当成 ToolBox 服务端授权 | 文档和审计明确它们只是客户端约束；后端鉴权、审批与插件自身边界仍必须成立 | ART-030 |
+
+### 7.1 边界声明
+
+CapabilityPolicy 与 Catalog risk/reliability 均是 **VCPChat 客户端约束与决策辅助，不是服务端安全边界**。攻击者若绕过客户端直接调用 ToolBox，必须仍受后端鉴权、scoped token、审批、路径限制和执行环境隔离约束。VCPChat 不声明自己的“沙箱执行模式”；执行环境能力由 ToolBox 节点和具体插件负责。

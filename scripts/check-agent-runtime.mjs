@@ -19,10 +19,19 @@ const requiredFiles = [
     'docs/agent-runtime/security-threat-model.md',
     'docs/agent-runtime/test-matrix.md',
 ];
+const removedDuplicateBackends = [
+    'modules/agent-runtime/workspace/workspaceManager.js',
+    'modules/agent-runtime/terminal/terminalService.js',
+    'modules/agent-runtime/tools/localToolProvider.js',
+    'modules/agent-runtime/security/executionPolicy.js',
+];
 
 const errors = [];
 for (const relative of requiredFiles) {
     if (!fs.existsSync(path.join(root, relative))) errors.push(`missing required file: ${relative}`);
+}
+for (const relative of removedDuplicateBackends) {
+    if (fs.existsSync(path.join(root, relative))) errors.push(`duplicate execution backend must stay removed: ${relative}`);
 }
 
 const preload = fs.readFileSync(path.join(root, 'preloads/chat.js'), 'utf8');
@@ -59,6 +68,9 @@ if (/vcpApiKey|Authorization:\s*`Bearer/.test(sidecar)) {
 const piAdapter = fs.readFileSync(path.join(root, 'agent-runtime/piAdapter.mjs'), 'utf8');
 if (/Authorization:\s*`Bearer|vcpConfig\.apiKey/.test(piAdapter)) {
     errors.push('Pi adapter must not receive or send VCP credentials');
+}
+for (const removedTool of ['workspace_read', 'workspace_list', 'workspace_search', 'terminal_execute']) {
+    if (piAdapter.includes(`['${removedTool}'`)) errors.push(`Pi adapter must not expose removed local tool: ${removedTool}`);
 }
 
 if (errors.length > 0) {

@@ -609,6 +609,22 @@ async function writeFile(filePath, content, encoding = 'utf8') {
   }
 }
 
+function restoreEscapedVcpDelimiters(content) {
+  return String(content)
+    .replace(/「始ESCAPE」/g, '「始」')
+    .replace(/「末ESCAPE」/g, '「末」')
+    .replace(/<<<\[TOOL_REQUEST_ESCAPE\]>>>/g, '<<<[TOOL_REQUEST]>>>')
+    .replace(/<<<\[END_TOOL_REQUEST_ESCAPE\]>>>/g, '<<<[END_TOOL_REQUEST]>>>');
+}
+
+async function writeEscapedFile(filePath, content, encoding = 'utf8') {
+  return writeFile(filePath, restoreEscapedVcpDelimiters(content), encoding);
+}
+
+async function editEscapedFile(filePath, content, encoding = 'utf8') {
+  return editFile(filePath, restoreEscapedVcpDelimiters(content), encoding);
+}
+
 async function appendFile(filePath, content, encoding = 'utf8') {
   try {
     debugLog('Appending to file', { filePath, contentLength: content.length, encoding });
@@ -1449,11 +1465,17 @@ async function processBatchRequest(request) {
         case 'WriteFile':
           result = await writeFile(getPathParameter(parameters), parameters.content, parameters.encoding);
           break;
+        case 'WriteEscapedFile':
+          result = await writeEscapedFile(getPathParameter(parameters), parameters.content, parameters.encoding);
+          break;
         case 'AppendFile':
           result = await appendFile(getPathParameter(parameters), parameters.content, parameters.encoding);
           break;
         case 'EditFile':
           result = await editFile(getPathParameter(parameters), parameters.content, parameters.encoding);
+          break;
+        case 'EditEscapedFile':
+          result = await editEscapedFile(getPathParameter(parameters), parameters.content, parameters.encoding);
           break;
         case 'ListDirectory':
           result = await listDirectory(getPathParameter(parameters), parameters.showHidden);
@@ -1581,10 +1603,14 @@ async function processRequest(request) {
       return await webReadFile(getParameterValue(parameters, 'url') || getPathParameter(parameters), parameters.lines);
     case 'WriteFile':
       return await writeFile(getPathParameter(parameters), parameters.content, parameters.encoding);
+    case 'WriteEscapedFile':
+      return await writeEscapedFile(getPathParameter(parameters), parameters.content, parameters.encoding);
     case 'AppendFile':
       return await appendFile(getPathParameter(parameters), parameters.content, parameters.encoding);
     case 'EditFile':
       return await editFile(getPathParameter(parameters), parameters.content, parameters.encoding);
+    case 'EditEscapedFile':
+      return await editEscapedFile(getPathParameter(parameters), parameters.content, parameters.encoding);
     case 'ListDirectory':
       return await listDirectory(getPathParameter(parameters), parameters.showHidden);
     case 'FileInfo':

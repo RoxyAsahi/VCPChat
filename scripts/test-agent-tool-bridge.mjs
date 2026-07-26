@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const { encodeToolRequestBlock } = require('../modules/agent-runtime/toolbox/legacyToolProtocol.js');
-const { classifyLegacyTool } = require('../modules/agent-runtime/toolbox/toolRiskClassifier.js');
+const { classifyLegacyTool, classifyPatchTool } = require('../modules/agent-runtime/toolbox/toolRiskClassifier.js');
 const { ApprovalBroker } = require('../modules/agent-runtime/approvalBroker.js');
 const { resolveInsideRoot } = require('../modules/agent-runtime/workspacePolicy.js');
 const { LEGACY_TOOL_NAMES } = require('../modules/agent-runtime/contracts.js');
@@ -23,6 +23,23 @@ const shellRisk = classifyLegacyTool(LEGACY_TOOL_NAMES.VCP_INVOKE, {
 assert.equal(shellRisk.riskLevel, 'high');
 const delegateRisk = classifyLegacyTool(LEGACY_TOOL_NAMES.VCP_DELEGATE, { task: 'delete the workspace' });
 assert.equal(delegateRisk.riskLevel, 'high');
+const fileReadRisk = classifyLegacyTool(LEGACY_TOOL_NAMES.VCP_INVOKE, {
+    toolName: 'FileOperator', arguments: { command: 'ReadFile', filePath: 'README.md' },
+});
+assert.equal(fileReadRisk.riskLevel, 'low');
+assert.equal(fileReadRisk.requiresApproval, false);
+const fileWriteRisk = classifyLegacyTool(LEGACY_TOOL_NAMES.VCP_INVOKE, {
+    toolName: 'FileOperator', arguments: { command: 'EditFile', filePath: 'README.md', content: 'x' },
+});
+assert.equal(fileWriteRisk.riskLevel, 'high');
+assert.equal(fileWriteRisk.requiresApproval, true);
+const fileBatchWriteRisk = classifyLegacyTool(LEGACY_TOOL_NAMES.VCP_INVOKE, {
+    toolName: 'FileOperator', arguments: { command1: 'ReadFile', filePath1: 'README.md', command2: 'DeleteFile', filePath2: 'tmp.txt' },
+});
+assert.equal(fileBatchWriteRisk.riskLevel, 'high');
+assert.equal(fileBatchWriteRisk.requiresApproval, true);
+const patchRisk = classifyPatchTool('workspace_apply_patch');
+assert.equal(patchRisk.requiresApproval, true);
 
 const approvalEvents = [];
 const broker = new ApprovalBroker({ timeoutMs: 200, hasUi: () => true, onEvent: (event) => approvalEvents.push(event) });

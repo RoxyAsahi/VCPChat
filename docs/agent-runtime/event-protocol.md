@@ -82,7 +82,7 @@
 | --- | --- | --- | --- |
 | `agent-runtime:plan.updated` | provisional | `{steps: [{id, title, status}]}` | driver 计划视图全量替换 |
 | `agent-runtime:context.usage` | provisional | `{usedTokens, maxTokens, ratio}` | 上下文水位 |
-| `agent-runtime:context.compacted` | provisional | `{beforeTokens, afterTokens, strategy}` | 压缩发生；细节存 RuntimeOpaqueState |
+| `agent-runtime:context.compaction_completed` | provisional | `{summary, messageCount, facade:"transcript"}` | 手动 transcript compaction 已持久化 checkpoint；不是 Pi opaque-state 恢复 |
 
 ### runtime.*
 

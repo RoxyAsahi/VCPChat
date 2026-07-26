@@ -15,19 +15,35 @@ class SessionRecord {
     constructor(sessionId, runtime, options = {}) {
         this.sessionId = sessionId;
         this.runtime = runtime;
-        this.state = SESSION_STATES.CREATED;
-        this.createdAt = Date.now();
+        this.state = options.state || SESSION_STATES.CREATED;
+        this.createdAt = options.createdAt || Date.now();
+        this.updatedAt = options.updatedAt || this.createdAt;
+        this.closedAt = options.closedAt || null;
+        this.title = options.title || null;
+        this.parentSessionId = options.parentSessionId || null;
         this.workspaceRoot = options.workspaceRoot || null;
         this.metadata = options.metadata || {};
-        this.sequencer = new SessionEventSequencer(sessionId, runtime);
+        this.summaryText = options.summaryText || null;
+        this.contextUsage = options.contextUsage || null;
+        this.sequencer = new SessionEventSequencer(sessionId, runtime, {
+            sequence: options.lastSequence || 0,
+        });
         this.buffer = new BoundedEventBuffer(sessionId, options.eventCapacity || LIMITS.MAX_EVENTS_PER_SESSION);
         this.turns = new Map();
         this.activeTurnId = null;
+        for (const turn of options.turns || []) {
+            this.turns.set(turn.turnId, { ...turn });
+            if (!TERMINAL_TURN_STATES.has(turn.state)) this.activeTurnId = turn.turnId;
+        }
+        for (const event of options.events || []) this.buffer.push(event);
+        this.sequencer.restore(options.events || []);
     }
 
     setState(next) {
         transition('session', this.state, next);
         this.state = next;
+        this.updatedAt = Date.now();
+        if (next === SESSION_STATES.CLOSED) this.closedAt = this.updatedAt;
         return next;
     }
 
@@ -47,6 +63,7 @@ class SessionRecord {
             turnId,
             prompt,
             state: TURN_STATES.QUEUED,
+            turnIndex: this.turns.size + 1,
             startedAt: Date.now(),
         });
         this.activeTurnId = turnId;
@@ -63,6 +80,7 @@ class SessionRecord {
         }
         transition('turn', turn.state, next);
         turn.state = next;
+        this.updatedAt = Date.now();
         if (TERMINAL_TURN_STATES.has(next)) {
             turn.completedAt = Date.now();
             if (this.activeTurnId === turnId) {
@@ -92,13 +110,19 @@ class SessionRecord {
     summary() {
         return {
             sessionId: this.sessionId,
+            parentSessionId: this.parentSessionId,
             runtime: this.runtime,
             state: this.state,
+            title: this.title,
             createdAt: this.createdAt,
+            updatedAt: this.updatedAt,
+            closedAt: this.closedAt,
             workspaceRoot: this.workspaceRoot,
             activeTurnId: this.activeTurnId,
             turnCount: this.turns.size,
             lastSequence: this.sequencer.sequence,
+            summary: this.summaryText,
+            contextUsage: this.contextUsage,
         };
     }
 }
@@ -113,10 +137,14 @@ class SessionRegistry {
         if (this.sessions.size >= this.maxSessions) {
             fail(ERROR_CODES.PAYLOAD_TOO_LARGE, 'Too many sessions', { limit: this.maxSessions });
         }
-        const sessionId = newId('sess');
+        const sessionId = options.sessionId || newId('sess');
         const record = new SessionRecord(sessionId, runtime, options);
         this.sessions.set(sessionId, record);
         return record;
+    }
+
+    restore(snapshot) {
+        return this.create(snapshot.runtime, { ...snapshot, sessionId: snapshot.sessionId });
     }
 
     get(sessionId) {
