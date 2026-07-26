@@ -62,3 +62,5 @@ npm run check:agent-runtime
 ```
 
 该命令已覆盖 Runtime 契约、Pi Worker loop、SSE、持久化、工具桥、Patch、Catalog、Capability、Subagent、Team 与 Workbench。真实模型和 ToolBox 验收另由受控 live 脚本执行，凭据只从环境变量或 VCPChat 设置读取，绝不写入测试源码。
+
+长程实机命令为 `npm run test:agent-runtime:live-long`：它临时启动分布式 FileOperator 节点，并在 `finally` 中恢复 ToolBox 审批配置；真实 `gpt-5.6-terra + {{Nova}}` 必须依次完成 `FileOperator(ListAllowedDirectories)` 与 `SciCalculator(6*7)` 两次调用，再输出验收标记。
