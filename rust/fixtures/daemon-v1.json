@@ -1,0 +1,50 @@
+{
+  "protocolVersion": 1,
+  "protocolRevision": "1.2",
+  "hostToDaemon": [
+    { "type": "hello", "protocolVersion": 1, "requestId": "hello_1" },
+    { "type": "create-session", "protocolVersion": 1, "requestId": "create_1" },
+    { "type": "close-session", "protocolVersion": 1, "requestId": "close_1", "sessionId": "session_1" },
+    { "type": "start-turn", "protocolVersion": 1, "requestId": "turn_1", "sessionId": "session_1", "turnId": "turn_1", "prompt": "你好" },
+    { "type": "cancel-turn", "protocolVersion": 1, "requestId": "cancel_1", "sessionId": "session_1", "turnId": "turn_1" },
+    { "type": "steer-turn", "protocolVersion": 1, "requestId": "steer_1", "sessionId": "session_1", "turnId": "turn_1", "prompt": "先检查风险" },
+    { "type": "follow-up-turn", "protocolVersion": 1, "requestId": "follow_1", "sessionId": "session_1", "turnId": "turn_1", "prompt": "完成后总结" },
+    { "type": "approval", "protocolVersion": 1, "requestId": "approval_1", "sessionId": "session_1", "turnId": "turn_1", "toolCallId": "tool_1", "approvalId": "approval_1", "allowed": false, "argumentsHash": "sha256:abc" },
+    { "type": "compact", "protocolVersion": 1, "requestId": "compact_1", "sessionId": "session_1" },
+    { "type": "list-topics", "protocolVersion": 1, "requestId": "topics_1" },
+    { "type": "read-topic", "protocolVersion": 1, "requestId": "topic_read_1", "topicId": "topic_1" },
+    { "type": "takeover-topic", "protocolVersion": 1, "requestId": "topic_takeover_1", "topicId": "topic_1" },
+    { "type": "rename-topic", "protocolVersion": 1, "requestId": "topic_rename_1", "topicId": "topic_1", "title": "重命名" },
+    { "type": "delete-topic", "protocolVersion": 1, "requestId": "topic_delete_1", "topicId": "topic_1" },
+    { "type": "list-interaction-queue", "protocolVersion": 1, "requestId": "queue_list_1" },
+    { "type": "replace-interaction-queue", "protocolVersion": 1, "requestId": "queue_replace_1", "sessionId": "session_1", "interactions": [] },
+    { "type": "clear-interaction-queue", "protocolVersion": 1, "requestId": "queue_clear_1" },
+    { "type": "get-settings", "protocolVersion": 1, "requestId": "settings_get_1" },
+    { "type": "update-settings", "protocolVersion": 1, "requestId": "settings_update_1", "settings": { "budget": { "maxTokensPerTurn": 1000 } } },
+    { "type": "set-workbench-presence", "protocolVersion": 1, "requestId": "presence_1", "mounted": true },
+    { "type": "shutdown", "protocolVersion": 1, "requestId": "shutdown_1" }
+  ],
+  "daemonToHost": [
+    { "type": "ready", "protocolVersion": 1, "protocolRevision": "1.2", "buildRevision": "0123456789abcdef0123456789abcdef01234567" },
+    { "type": "ack", "requestId": "topics_1", "ok": true },
+    { "type": "control-event", "requestId": "topics_1", "kind": "topics", "payload": [] },
+    { "type": "control-event", "requestId": "topic_read_1", "kind": "control-error", "payload": { "operation": "topic-read-only", "error": "unavailable" } },
+    { "type": "event", "event": { "eventId": "session_1:1", "sequence": 1, "timestamp": 1700000000000, "runtime": "rust", "sessionId": "session_1", "topicId": "topic_1", "turnId": "turn_1", "messageId": "assistant_1", "type": "assistant.delta", "payload": { "text": "你好" } } },
+    { "type": "event", "event": { "eventId": "session_1:2", "sequence": 2, "timestamp": 1700000000001, "runtime": "rust", "sessionId": "session_1", "topicId": "topic_1", "turnId": "turn_1", "messageId": "assistant_1", "type": "reasoning.completed", "payload": {} } },
+    { "type": "event", "event": { "eventId": "session_1:3", "sequence": 3, "timestamp": 1700000000002, "runtime": "rust", "sessionId": "session_1", "topicId": "topic_1", "turnId": "turn_1", "toolCallId": "tool_1", "type": "tool.started", "payload": { "toolName": "FileOperator" } } },
+    { "type": "event", "event": { "eventId": "session_1:4", "sequence": 4, "timestamp": 1700000000003, "runtime": "rust", "sessionId": "session_1", "topicId": "topic_1", "type": "runtime.warning", "payload": { "message": "warning" } } }
+  ],
+  "invalidHostToDaemon": [
+    { "type": "list-topics", "protocolVersion": 1 },
+    { "type": "start-turn", "protocolVersion": 1, "requestId": "missing_turn", "sessionId": "session_1", "prompt": "missing turn" },
+    { "type": "unknown-command", "protocolVersion": 1, "requestId": "unknown_1" },
+    { "type": "start-session", "protocolVersion": 1, "requestId": "legacy_session_1" },
+    { "type": "list-agents", "protocolVersion": 1, "requestId": "legacy_agents_1" },
+    { "type": "tool-result", "protocolVersion": 1, "requestId": "legacy_tool_result_1", "sessionId": "session_1", "turnId": "turn_1", "toolCallId": "tool_1", "approvalId": "approval_1", "allowed": true, "argumentsHash": "sha256:abc" }
+  ],
+  "invalidDaemonToHost": [
+    { "type": "ack", "ok": true },
+    { "type": "event", "event": { "eventId": "session_1:9", "sequence": 9, "timestamp": 1700000000009, "runtime": "rust", "sessionId": "session_1", "topicId": "topic_1", "turnId": "turn_1", "type": "assistant.delta", "payload": { "text": "missing message id" } } },
+    { "type": "event", "event": { "eventId": "session_1:10", "sequence": 10, "timestamp": 1700000000010, "runtime": "rust", "sessionId": "session_1", "topicId": "topic_1", "turnId": "turn_1", "type": "tool.started", "payload": {} } }
+  ]
+}

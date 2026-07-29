@@ -16,6 +16,8 @@ vchatCommand = "cmd /c cd /d """ & projectPath & """ && npx electron ."
 desktopCommand = "cmd /c cd /d """ & projectPath & """ && npx electron . --desktop-only"
 
 Set WshShell = CreateObject("WScript.Shell")
+WshShell.CurrentDirectory = projectPath
+If fso.FileExists(readyFilePath) Then fso.DeleteFile readyFilePath, True
 
 ' 第一步：启动启动动画（NativeSplash.exe）
 WshShell.Run splashPath, 0, False

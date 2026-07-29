@@ -502,53 +502,84 @@ export function setupEventListeners(deps) {
         }
     });
 
-
-    globalSettingsBtn.addEventListener('click', () => uiHelperFunctions.openModal('globalSettingsModal'));
-
-    // 🟢 优化：监听模态框就绪事件，动态绑定内部元素的事件
-    document.addEventListener('modal-ready', (e) => {
-        const { modalId } = e.detail;
-        if (modalId === 'globalSettingsModal') {
-            const modal = document.getElementById('globalSettingsModal');
-            const closeButton = modal?.querySelector('.close-button');
-            if (closeButton && !closeButton.dataset.closeBound) {
-                closeButton.addEventListener('click', () => {
-                    uiHelperFunctions.closeModal('globalSettingsModal');
-                });
-                closeButton.dataset.closeBound = 'true';
-            }
-
-            const form = document.getElementById('globalSettingsForm');
-            if (form) form.addEventListener('submit', (ev) => handleSaveGlobalSettings(ev, deps));
-
-            const addPathBtn = document.getElementById('addNetworkPathBtn');
-            if (addPathBtn) addPathBtn.addEventListener('click', () => addNetworkPathInput());
-
-            const avatarInput = document.getElementById('userAvatarInput');
-            if (avatarInput) setupUserAvatarListener(avatarInput);
-
-            const resetBtn = document.getElementById('resetUserAvatarColorsBtn');
-            if (resetBtn) setupResetUserColorsListener(resetBtn);
-
-            const styleHeader = document.getElementById('userStyleCollapseHeader');
-            if (styleHeader) {
-                styleHeader.addEventListener('click', () => {
-                    const container = styleHeader.closest('.agent-style-collapsible-container');
-                    if (container) container.classList.toggle('collapsed');
-                });
-            }
-
-            // 绑定颜色选择器同步
-            setupColorSyncListeners();
-
-            // 绑定 Rust 助手配置相关的事件
-            setupRustAssistantConfigListeners();
-
-            // 绑定全局设置导航切换
-            setupGlobalSettingsNavigation();
-
-            // continueWritingPrompt 使用 CSS field-sizing: content 自动调整高度，无需 JS 处理
+    // The modal is template-backed.  Do not rely solely on its one-time
+    // `modal-ready` event: an early open can otherwise leave the existing
+    // form without a submit listener, making the Save button appear inert.
+    function bindGlobalSettingsModal() {
+        const modal = document.getElementById('globalSettingsModal');
+        if (!modal) return;
+        const closeButton = modal.querySelector('.close-button');
+        if (closeButton && !closeButton.dataset.closeBound) {
+            closeButton.addEventListener('click', () => uiHelperFunctions.closeModal('globalSettingsModal'));
+            closeButton.dataset.closeBound = 'true';
         }
+
+        const form = modal.querySelector('#globalSettingsForm');
+        if (form && !form.dataset.globalSettingsSaveBound) {
+            form.addEventListener('submit', (ev) => {
+                Promise.resolve(handleSaveGlobalSettings(ev, deps)).catch((error) => {
+                    console.error('[GlobalSettings] Unexpected save failure:', error);
+                    form.dispatchEvent(new CustomEvent('vcp-settings-save-result', {
+                        detail: { success: false, error: error?.message || String(error) }
+                    }));
+                    uiHelperFunctions.showToastNotification(`保存全局设置失败: ${error?.message || error}`, 'error');
+                });
+            });
+            form.dataset.globalSettingsSaveBound = 'true';
+        }
+
+        const addPathBtn = modal.querySelector('#addNetworkPathBtn');
+        if (addPathBtn && !addPathBtn.dataset.globalSettingsBound) {
+            addPathBtn.addEventListener('click', () => addNetworkPathInput());
+            addPathBtn.dataset.globalSettingsBound = 'true';
+        }
+
+        const avatarInput = modal.querySelector('#userAvatarInput');
+        if (avatarInput && !avatarInput.dataset.globalSettingsBound) {
+            setupUserAvatarListener(avatarInput);
+            avatarInput.dataset.globalSettingsBound = 'true';
+        }
+
+        const resetBtn = modal.querySelector('#resetUserAvatarColorsBtn');
+        if (resetBtn && !resetBtn.dataset.globalSettingsBound) {
+            setupResetUserColorsListener(resetBtn);
+            resetBtn.dataset.globalSettingsBound = 'true';
+        }
+
+        const styleHeader = modal.querySelector('#userStyleCollapseHeader');
+        if (styleHeader && !styleHeader.dataset.globalSettingsBound) {
+            styleHeader.addEventListener('click', () => {
+                const container = styleHeader.closest('.agent-style-collapsible-container');
+                if (container) container.classList.toggle('collapsed');
+            });
+            styleHeader.dataset.globalSettingsBound = 'true';
+        }
+
+        if (!modal.dataset.globalSettingsControlsBound) {
+            setupColorSyncListeners();
+            setupRustAssistantConfigListeners();
+            setupGlobalSettingsNavigation();
+            modal.dataset.globalSettingsControlsBound = 'true';
+        }
+    }
+
+    const openGlobalSettings = () => {
+        uiHelperFunctions.openModal('globalSettingsModal');
+        bindGlobalSettingsModal();
+    };
+    // Classic settings and the Next UI account dock are two visual entry
+    // points for one shared settings surface. Keep their lifecycle identical
+    // instead of letting the redesigned shell expose an inert gear button.
+    [globalSettingsBtn, document.getElementById('nextUiAccountSettingsBtn')]
+        .filter(Boolean)
+        .forEach((trigger) => {
+            if (trigger.dataset.globalSettingsOpenBound) return;
+            trigger.addEventListener('click', openGlobalSettings);
+            trigger.dataset.globalSettingsOpenBound = 'true';
+        });
+
+    document.addEventListener('modal-ready', (e) => {
+        if (e.detail?.modalId === 'globalSettingsModal') bindGlobalSettingsModal();
     });
 
     // 全局设置双栏导航切换

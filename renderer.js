@@ -1032,6 +1032,13 @@ import { setupEventListeners } from './modules/event-listeners.js';
             addNetworkPathInput: uiHelperFunctions.addNetworkPathInput
         });
 
+        // A visible DOM shell is not enough to call the desktop interactive:
+        // template-backed modals and settings actions depend on the listeners
+        // registered above.  Expose one explicit readiness point for startup
+        // diagnostics and isolated Electron smoke tests.
+        document.documentElement.dataset.vcpRendererReady = 'true';
+        window.dispatchEvent(new CustomEvent('vcp-renderer-ready'));
+
         // Emoticon panel event listener
         if (attachFileBtn && emoticonTriggerBtn && window.emoticonManager) {
             const syncEmoticonTriggerButton = () => {
@@ -1558,7 +1565,9 @@ async function loadAndApplyGlobalSettings() {
         window.dispatchEvent(new CustomEvent('global-settings-updated', {
             detail: { settings: globalSettings }
         }));
-        window.uiModeManager?.apply(globalSettings.uiMode);
+        // Settings read through Main is authoritative; update the optional
+        // boot cache only after it has been successfully loaded.
+        window.uiModeManager?.apply(globalSettings.uiMode, { cache: true });
         applyChatBubbleLayoutSettings(globalSettings);
         
         // 🟢 优化：仅更新始终存在的 UI 元素
@@ -2406,7 +2415,96 @@ if (window.marked && typeof window.marked.Marked === 'function') { // Ensure Mar
     console.warn("Marked library not found or not in expected format, Markdown rendering will be basic.");
     markedInstance = { parse: (text) => `<p>${String(text || '').replace(/\n/g, '<br>')}</p>` };
 }
- 
+
+// Render bridge for Agent Workbench and other internal apps.
+// Provides markdown rendering (with <think> block support), reasoning blocks,
+// scroll utilities and post-render hooks — without pulling in the full
+// messageRenderer/streamManager pipeline.
+window.vcpRenderBridge = (() => {
+    // Matches complete <think>…</think> or <thinking>…</thinking> blocks.
+    const THINK_RE = /^[ \t]*<think(?:ing)?>[ \t]*(?:\r?\n|$)([\s\S]*?)^[ \t]*<\/think(?:ing)?>[ \t]*(?:\r?\n|$)/gim;
+
+    function esc(s) {
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function thinkHtml(rawContent, label) {
+        const content = rawContent.trim();
+        let body;
+        try { body = markedInstance.parse(content); }
+        catch { body = `<pre>${esc(content)}</pre>`; }
+        return `<div class="vcp-thought-chain-bubble collapsible" data-vcp-block-type="thought-chain">`
+            + `<div class="vcp-thought-chain-header">`
+            + `<span class="vcp-thought-chain-icon">🧠</span>`
+            + `<span class="vcp-thought-chain-label">${esc(label || '思维链')}</span>`
+            + `<span class="vcp-result-toggle-icon"></span>`
+            + `</div>`
+            + `<div class="vcp-thought-chain-collapsible-content">`
+            + `<div class="vcp-thought-chain-body">${body}</div>`
+            + `</div></div>`;
+    }
+
+    function renderContent(text) {
+        if (!text) return '';
+        try {
+            let src = String(text);
+            const blocks = [];
+            // Extract complete <think> blocks before markdown parsing so the
+            // parser does not escape or wrap their content.
+            src = src.replace(THINK_RE, (_, raw) => {
+                const idx = blocks.length;
+                blocks.push(thinkHtml(raw, '思维链'));
+                return `\nVCPBRDG${idx}X\n`;
+            });
+            let html = markedInstance.parse(src);
+            // marked wraps bare lines in <p>; unwrap placeholders.
+            blocks.forEach((block, idx) => {
+                html = html.replace(new RegExp(`<p>\\s*VCPBRDG${idx}X\\s*<\\/p>`, 'i'), block);
+                html = html.replace(`VCPBRDG${idx}X`, block);
+            });
+            return html
+                .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script\s*>/gi, '')
+                .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style\s*>/gi, '');
+        } catch {
+            return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+    }
+
+    // Render a standalone reasoning text (from Rust daemon's `reasoning` field)
+    // as the same collapsible thought-chain block used by the main chat.
+    function renderReasoningBlock(text) {
+        if (!text) return '';
+        return thinkHtml(String(text), '推理过程');
+    }
+
+    function isNearBottom(container, threshold) {
+        if (!container) return true;
+        const t = (threshold === undefined || threshold === null) ? 48 : threshold;
+        return container.scrollTop + container.clientHeight >= container.scrollHeight - t;
+    }
+
+    function autoScrollToBottom(container) {
+        if (!container || !isNearBottom(container)) return;
+        requestAnimationFrame(() => {
+            if (container.isConnected) container.scrollTop = container.scrollHeight;
+        });
+    }
+
+    // Wire up thought-chain expand/collapse on a freshly-inserted contentDiv.
+    // Safe to call multiple times (idempotent via data-vcpbound guard).
+    function runPostRender(contentDiv) {
+        if (!contentDiv) return;
+        contentDiv.querySelectorAll('.vcp-thought-chain-header:not([data-vcpbound])').forEach((h) => {
+            h.dataset.vcpbound = '1';
+            h.addEventListener('click', () => h.closest('.vcp-thought-chain-bubble')?.classList.toggle('expanded'));
+        });
+    }
+
+    return { renderContent, renderReasoningBlock, isNearBottom, autoScrollToBottom, runPostRender };
+})();
+// Backward-compatible alias used by earlier code.
+window.parseAgentMarkdown = window.vcpRenderBridge.renderContent;
+
 window.addEventListener('contextmenu', (e) => {
     // Allow context menu for text input fields
     if (e.target.closest('textarea, input[type="text"], .message-item .md-content')) { // Also allow on rendered message content

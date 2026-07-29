@@ -126,7 +126,35 @@ const fileWatcher = {
 // --- Configuration Paths ---
 // Data storage will be within the project's 'AppData' directory
 const PROJECT_ROOT = __dirname; // __dirname is the directory of main.js
-const APP_DATA_ROOT_IN_PROJECT = path.join(PROJECT_ROOT, 'AppData');
+// A packaged ASAR is read-only. Development keeps the historical repository
+// AppData layout, while installed builds use Electron's writable user-data
+// directory for settings, Agents and Agent Topics.
+const isolatedAppDataRoot = process.env.VCPCHAT_APP_DATA_DIR?.trim();
+const APP_DATA_ROOT_IN_PROJECT = isolatedAppDataRoot
+    ? path.resolve(isolatedAppDataRoot)
+    : app.isPackaged
+        ? app.getPath('userData')
+        : path.join(PROJECT_ROOT, 'AppData');
+
+// NativeSplash.exe predates the writable AppData migration and watches the
+// project-root marker.  Development launchers still use that binary, while a
+// packaged app must never write into app.asar.  Mirror the signal only during
+// development so both launch contracts remain valid.
+function nativeSplashReadyFiles() {
+    const files = [path.join(APP_DATA_ROOT_IN_PROJECT, '.vcp_ready')];
+    if (!app.isPackaged) files.push(path.join(PROJECT_ROOT, '.vcp_ready'));
+    return [...new Set(files)];
+}
+
+function signalNativeSplashReady() {
+    for (const file of nativeSplashReadyFiles()) fs.ensureFileSync(file);
+}
+
+function clearNativeSplashReadySignal() {
+    for (const file of nativeSplashReadyFiles()) {
+        if (fs.existsSync(file)) fs.unlinkSync(file);
+    }
+}
 
 const AGENT_DIR = path.join(APP_DATA_ROOT_IN_PROJECT, 'Agents');
 const USER_DATA_DIR = path.join(APP_DATA_ROOT_IN_PROJECT, 'UserData'); // For chat histories and attachments
@@ -409,16 +437,26 @@ function createWindow({ deferLoad = false } = {}) {
 
 function loadMainWindow() {
     mainWindow.webContents.once('did-finish-load', () => {
-        const readyFile = path.join(__dirname, '.vcp_ready');
-        fs.ensureFileSync(readyFile);
+        // The splash must only be released after the primary renderer is
+        // actually visible.  A second Electron instance never owns this
+        // marker; otherwise it can close the splash while the first instance
+        // is still registering its startup surface.
+        mainWindow.show();
+        signalNativeSplashReady();
 
         setTimeout(() => {
-            if (fs.existsSync(readyFile)) {
-                fs.unlinkSync(readyFile);
-            }
+            clearNativeSplashReadySignal();
         }, 3000);
+    });
 
+    mainWindow.webContents.once('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+        if (isMainFrame === false) return;
+        console.error('[Main] Primary renderer failed to load:', { errorCode, errorDescription, validatedURL });
+        // Do not leave users behind an infinite native animation on a failed
+        // renderer load.  The BrowserWindow can surface Electron's failure
+        // page while the error stays visible in the main-process logs.
         mainWindow.show();
+        signalNativeSplashReady();
     });
 
     return mainWindow.loadFile('main.html');
@@ -534,38 +572,23 @@ function createTray() {
 
 
 // --- App Lifecycle ---
-const gotTheLock = app.requestSingleInstanceLock();
-
+const allowMultipleInstances = process.argv.includes('--allow-multiple-instances');
+const gotTheLock = allowMultipleInstances || app.requestSingleInstanceLock();
 if (!gotTheLock) {
-    // 排除内部静默调用（内部调用时闪屏早已关闭，无需重复创建，防止破坏冷启动状态）
-    const isInternalLaunch = process.argv.includes('--desktop-only') || process.argv.includes('--rag-observer-only');
-    
-    if (!isInternalLaunch) {
-        const readyFile = path.join(__dirname, '.vcp_ready');
-        try {
-            fs.ensureFileSync(readyFile);
-            console.log('[Main] Second instance signaled NativeSplash to close.');
-        } catch (err) {
-            // 异常安全：只读/Docker 环境下静默降级，不影响单例聚焦
-            console.warn('[Main] Failed to create .vcp_ready in second instance:', err.message);
-        }
-    }
+    // The first instance owns the NativeSplash marker for its whole startup.
+    // A later invocation only delegates focus/opening through `second-instance`.
     app.quit();
 } else {
     app.on('second-instance', async (event, commandLine, workingDirectory) => {
-        // 当第一实例被第二实例唤醒时，延迟 1.5 秒清理可能由第二实例创建的信号文件。
-        // 1.5 秒足够 Rust 闪屏端（200ms轮询）检测并退出，且能 100% 避免冷启动信号残留。
-        const readyFile = path.join(__dirname, '.vcp_ready');
-        setTimeout(() => {
-            try {
-                if (fs.existsSync(readyFile)) {
-                    fs.unlinkSync(readyFile);
-                    console.log('[Main] Cleaned up .vcp_ready signal created by second instance.');
-                }
-            } catch (err) {
-                console.warn('[Main] Failed to clean up second-instance .vcp_ready:', err.message);
-            }
-        }, 1500);
+        // A launcher can be invoked while the primary window is already
+        // visible.  In that case the first instance, not the short-lived
+        // second process, releases the new splash.  During a cold start the
+        // window remains hidden and the original did-finish-load path keeps
+        // ownership of the marker.
+        if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+            signalNativeSplashReady();
+            setTimeout(() => clearNativeSplashReadySignal(), 3000);
+        }
 
         const wantsRagOnly = commandLine.includes('--rag-observer-only');
         const wantsDesktop = commandLine.includes('--desktop-only');
@@ -627,11 +650,15 @@ if (!gotTheLock) {
         // The native splash screen is started by the batch file, so no action is needed here.
 
         // Pre-warm the audio engine in the background. This doesn't block the main window.
-        startAudioEngine().catch(err => {
-            console.error('[Main] Failed to pre-warm audio engine on startup:', err);
-            // We don't need to show a dialog here, as it will be handled when the
-            // music window is actually opened.
-        });
+        // Isolated Electron smoke tests deliberately avoid owning the shared
+        // audio port; the rest of the desktop startup path remains real.
+        if (process.env.VCPCHAT_E2E_TEST !== '1') {
+            startAudioEngine().catch(err => {
+                console.error('[Main] Failed to pre-warm audio engine on startup:', err);
+                // We don't need to show a dialog here, as it will be handled when the
+                // music window is actually opened.
+            });
+        }
         // Register a custom protocol to handle loading local app files securely.
         fs.ensureDirSync(APP_DATA_ROOT_IN_PROJECT); // Ensure the main AppData directory in project exists
         fs.ensureDirSync(AGENT_DIR);
@@ -948,7 +975,13 @@ if (!gotTheLock) {
             agentConfigManager
         });
         
-        await assistantHandlers.initialize({ SETTINGS_FILE });
+        // The optional selection-assistant sidecar must never gate the main
+        // VCPChat window or the Rust Agent Workbench. Its public status
+        // functions are available synchronously; finish sidecar setup in the
+        // background and surface diagnostics without blocking startup.
+        assistantHandlers.initialize({ SETTINGS_FILE }).catch((error) => {
+            console.error('[Main] Assistant runtime background initialization failed:', error);
+        });
         fileDialogHandlers.initialize(mainWindow, {
             getSelectionListenerStatus: assistantHandlers.getSelectionListenerStatus,
             stopSelectionListener: assistantHandlers.stopSelectionListener,
@@ -1005,7 +1038,12 @@ if (!gotTheLock) {
         emoticonHandlers.initialize({ SETTINGS_FILE, APP_DATA_ROOT_IN_PROJECT });
         emoticonHandlers.setupEmoticonHandlers();
         canvasHandlers.initialize({ mainWindow, openChildWindows, CANVAS_CACHE_DIR });
-        desktopHandlers.initialize({ mainWindow, openChildWindows, settingsManager: appSettingsManager });
+        desktopHandlers.initialize({
+            mainWindow,
+            openChildWindows,
+            settingsManager: appSettingsManager,
+            APP_DATA_ROOT_IN_PROJECT
+        });
         embeddedAppSessions?.closeAll();
         embeddedAppSessions = createEmbeddedAppSessionManager({
             mainWindow,
@@ -1142,6 +1180,13 @@ if (!gotTheLock) {
                 console.log('[Main] Desktop window auto-opened.');
             }, 1000);
         }
+    }).catch((error) => {
+        console.error('[Main] Startup failed:', error);
+        dialog.showErrorBox(
+            'VCPChat 启动失败',
+            error && error.stack ? error.stack : String(error)
+        );
+        app.quit();
     });
 
     // --- Python Execution IPC Handler ---
@@ -1212,10 +1257,7 @@ if (!gotTheLock) {
 
     app.on('will-quit', () => {
         // 0. Clean up the ready signal file for the native splash screen
-        const readyFile = path.join(__dirname, '.vcp_ready');
-        if (fs.existsSync(readyFile)) {
-            fs.unlinkSync(readyFile);
-        }
+        clearNativeSplashReadySignal();
 
         // 1. 停止所有底层监听器
         console.log('[Main] App is quitting. Stopping all listeners...');

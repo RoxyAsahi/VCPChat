@@ -13,13 +13,17 @@ const SESSION_EVENT_TYPES = new Set([
 function createInitialState() {
     return {
         runtime: { state: 'unknown', worker: null, lastError: null },
-        sessions: [],
-        activeSessionId: null,
+        // A workbench has one ephemeral attachment. Durable history belongs
+        // exclusively to the Rust Topic identified by `attachment.topicId`.
+        attachment: null,
         messages: [],
         tools: new Map(),
         approvals: [],
+        // Rust Host already bounds and redacts these read-only ToolBox
+        // observations. Keep a second, smaller UI window so log traffic can
+        // never grow a renderer-side transcript or become an execution path.
+        toolboxWs: [],
         context: { usedTokens: 0, contextWindow: 0, percentage: 0, compacting: false, summary: '' },
-        artifacts: [],
         plan: null,
         activeTurnId: null,
         lastSequence: 0,
@@ -27,25 +31,17 @@ function createInitialState() {
     };
 }
 
-function upsertSession(sessions, sessionId, patch = {}) {
-    const index = sessions.findIndex((session) => session.sessionId === sessionId);
-    if (index < 0) return [{ sessionId, ...patch }, ...sessions];
-    const next = [...sessions];
-    next[index] = { ...next[index], ...patch };
-    return next;
-}
-
 function messageIdentity(message) {
-    return message.id || message.messageId || `${message.role || 'message'}:${message.turnId || message.createdAt || ''}`;
+    return message?.id || message?.messageId || null;
 }
 
 function upsertMessage(messages, candidate) {
     const id = messageIdentity(candidate);
-    const index = messages.findIndex((message) => messageIdentity(message) === id
-        || (candidate.turnId && message.turnId === candidate.turnId && message.role === candidate.role));
+    if (!id) return messages;
+    const index = messages.findIndex((message) => messageIdentity(message) === id);
     if (index < 0) return [...messages, { ...candidate, id }];
     const next = [...messages];
-    next[index] = { ...next[index], ...candidate, id: messageIdentity(next[index]) || id };
+    next[index] = { ...next[index], ...candidate, id };
     return next;
 }
 
@@ -59,7 +55,10 @@ function reduceEvent(current, event) {
         return next;
     }
     if (event.type === 'runtime.crashed') {
-        next.runtime = { ...next.runtime, state: 'degraded', lastError: event.payload || null };
+        // Recovery is deliberately user-driven: a daemon crash must not leave
+        // the composer in a passive "reconnecting" limbo or replay an
+        // interrupted turn.  Render the explicit reconnect action instead.
+        next.runtime = { ...next.runtime, state: 'failed', lastError: event.payload || null };
         return next;
     }
     if (event.type === 'runtime.warning') {
@@ -67,23 +66,28 @@ function reduceEvent(current, event) {
         return next;
     }
     if (event.type === 'session.created') {
-        next.sessions = upsertSession(next.sessions, event.sessionId, { state: 'created', ...(event.payload || {}) });
-        if (!next.activeSessionId) next.activeSessionId = event.sessionId;
+        if (next.attachment?.sessionId === event.sessionId) {
+            next.attachment = { ...next.attachment, state: 'created', ...(event.payload || {}) };
+        }
         return next;
     }
     if (event.type === 'session.state_changed' || event.type === 'session.closed') {
-        next.sessions = upsertSession(next.sessions, event.sessionId, {
-            ...(event.payload || {}),
-            state: event.type === 'session.closed' ? 'closed' : event.payload?.state,
-        });
+        if (next.attachment?.sessionId === event.sessionId) {
+            next.attachment = {
+                ...next.attachment,
+                ...(event.payload || {}),
+                state: event.type === 'session.closed' ? 'closed' : event.payload?.state,
+            };
+        }
         return next;
     }
     if (event.type === 'turn.started') {
+        if (!event.turnId) return current;
         next.activeTurnId = event.turnId;
         const existing = next.messages.find((message) => message.turnId === event.turnId && message.role === 'user');
         if (!existing) {
             next.messages = upsertMessage(next.messages, {
-                id: `user:${event.turnId}`,
+                id: event.eventId,
                 turnId: event.turnId,
                 role: 'user',
                 content: event.payload?.prompt || '',
@@ -94,8 +98,9 @@ function reduceEvent(current, event) {
         return next;
     }
     if (event.type === 'user.message') {
+        if (!event.eventId) return current;
         next.messages = upsertMessage(next.messages, {
-            id: `user:${event.turnId}:${event.sequence || event.timestamp || ''}`,
+            id: event.eventId,
             turnId: event.turnId,
             role: 'user',
             content: event.payload?.prompt || '',
@@ -105,10 +110,11 @@ function reduceEvent(current, event) {
         return next;
     }
     if (event.type === 'assistant.started') {
+        if (!event.messageId || !event.turnId) return current;
         const existing = next.messages.find((message) => message.turnId === event.turnId && message.role === 'assistant');
         if (!existing) {
             next.messages = upsertMessage(next.messages, {
-                id: event.messageId || `assistant:${event.turnId}`,
+                id: event.messageId,
                 messageId: event.messageId,
                 turnId: event.turnId,
                 role: 'assistant',
@@ -121,12 +127,12 @@ function reduceEvent(current, event) {
         return next;
     }
     if (event.type === 'assistant.delta' || event.type === 'reasoning.delta') {
-        const id = event.messageId || `assistant:${event.turnId}`;
+        if (!event.messageId || !event.turnId) return current;
+        const id = event.messageId;
         const messages = [...next.messages];
-        let index = messages.findIndex((message) => messageIdentity(message) === id
-            || (message.turnId === event.turnId && message.role === 'assistant'));
+        let index = messages.findIndex((message) => messageIdentity(message) === id);
         if (index < 0) {
-            messages.push({ id, turnId: event.turnId, role: 'assistant', content: '', reasoning: '', state: 'streaming' });
+            messages.push({ id, messageId: event.messageId, turnId: event.turnId, role: 'assistant', content: '', reasoning: '', state: 'streaming' });
             index = messages.length - 1;
         }
         const message = { ...messages[index] };
@@ -140,9 +146,9 @@ function reduceEvent(current, event) {
         return next;
     }
     if (event.type === 'assistant.completed') {
-        const id = event.messageId || `assistant:${event.turnId}`;
+        if (!event.messageId || !event.turnId) return current;
+        const id = event.messageId;
         next.messages = next.messages.map((message) => messageIdentity(message) === id
-            || (message.turnId === event.turnId && message.role === 'assistant')
             ? { ...message, state: 'complete' }
             : message);
         return next;
@@ -154,7 +160,9 @@ function reduceEvent(current, event) {
             const previous = tools.get(toolCallId) || { toolCallId, events: [] };
             tools.set(toolCallId, {
                 ...previous,
-                turnId: event.turnId || previous.turnId,
+                // A tool event without turnId remains explicitly unassociated.
+                // Never borrow a previous turn after a delayed daemon frame.
+                turnId: event.turnId || null,
                 name: event.payload?.toolName || previous.name || 'tool',
                 state: event.type.slice('tool.'.length),
                 payload: { ...(previous.payload || {}), ...(event.payload || {}) },
@@ -176,8 +184,20 @@ function reduceEvent(current, event) {
         next.approvals = next.approvals.filter((item) => item.approvalId !== approvalId);
         return next;
     }
+    if (event.type === 'toolbox.ws') {
+        const payload = event.payload || {};
+        const observation = {
+            id: `${payload.channel || 'toolbox'}:${payload.kind || 'event'}:${event.sequence || event.timestamp || Date.now()}`,
+            channel: String(payload.channel || 'ToolBox'),
+            kind: String(payload.kind || 'notification'),
+            value: payload.value ?? null,
+            timestamp: event.timestamp || null,
+        };
+        next.toolboxWs = [...next.toolboxWs, observation].slice(-100);
+        return next;
+    }
     if (event.type === 'context.usage') {
-        const usedTokens = Number(event.payload?.usedTokens) || 0;
+        const usedTokens = Number(event.payload?.usedTokens ?? event.payload?.totalTokens) || 0;
         const contextWindow = Number(event.payload?.contextWindow) || 0;
         next.context = {
             ...next.context,
@@ -188,28 +208,24 @@ function reduceEvent(current, event) {
         };
         return next;
     }
-    if (event.type === 'context.compaction_started') {
+    if (event.type === 'context.compaction.started') {
         next.context = { ...next.context, compacting: true };
         return next;
     }
-    if (event.type === 'context.compaction_completed') {
+    if (event.type === 'context.compaction.completed') {
         next.context = { ...next.context, compacting: false, summary: event.payload?.summary || '' };
+        return next;
+    }
+    if (event.type === 'context.compaction.failed') {
+        next.context = { ...next.context, compacting: false, summary: '', error: event.payload?.error || '上下文压缩失败' };
         return next;
     }
     if (event.type === 'plan.updated') {
         next.plan = event.payload?.plan || event.payload || null;
         return next;
     }
-    if (event.type === 'artifact.created' || event.type === 'artifact.updated') {
-        const artifact = event.payload?.artifact || event.payload;
-        const artifactId = artifact?.artifactId || artifact?.id;
-        if (artifactId) {
-            next.artifacts = [...next.artifacts.filter((item) => (item.artifactId || item.id) !== artifactId), artifact];
-        }
-        return next;
-    }
     if (TERMINAL_EVENT_TYPES.has(event.type)) {
-        if (!event.turnId || event.turnId === next.activeTurnId) next.activeTurnId = null;
+        if (event.turnId && event.turnId === next.activeTurnId) next.activeTurnId = null;
         if (event.type !== 'turn.completed') {
             next.notice = { level: 'error', text: event.payload?.error || event.payload?.reason || event.type };
         }
@@ -217,14 +233,7 @@ function reduceEvent(current, event) {
     return next;
 }
 
-function eventKey(event) {
-    const session = event.sessionId || 'runtime';
-    if (Number.isFinite(Number(event.sequence)) && Number(event.sequence) > 0) {
-        return `${session}:sequence:${Number(event.sequence)}`;
-    }
-    return [session, event.type, event.turnId || '', event.messageId || '', event.toolCallId || '',
-        event.approvalId || '', event.timestamp || '', JSON.stringify(event.payload || {})].join(':');
-}
+function eventKey(event) { return event.eventId || null; }
 
 function createWorkbenchStore(initial = createInitialState()) {
     let state = initial;
@@ -249,7 +258,8 @@ function createWorkbenchStore(initial = createInitialState()) {
             if (!event || typeof event !== 'object') return state;
             const isRuntimeEvent = !event.sessionId || event.sessionId === 'runtime' || event.type?.startsWith('runtime.');
             const isSessionEvent = SESSION_EVENT_TYPES.has(event.type);
-            if (!isRuntimeEvent && !isSessionEvent && state.activeSessionId && event.sessionId !== state.activeSessionId) {
+            if (!event.eventId || !Number.isFinite(Number(event.sequence)) || !Number.isFinite(Number(event.timestamp))) return state;
+            if (!isRuntimeEvent && !isSessionEvent && state.attachment?.sessionId && event.sessionId !== state.attachment.sessionId) {
                 return state;
             }
             const key = eventKey(event);
@@ -259,16 +269,16 @@ function createWorkbenchStore(initial = createInitialState()) {
             notify(event);
             return state;
         },
-        resetSession(sessionId) {
+        setAttachment(attachment) {
             seenEvents.clear();
             state = {
                 ...state,
-                activeSessionId: sessionId || null,
+                attachment: attachment ? { ...attachment } : null,
                 messages: [],
                 tools: new Map(),
                 approvals: [],
+                toolboxWs: [],
                 context: createInitialState().context,
-                artifacts: [],
                 plan: null,
                 activeTurnId: null,
                 lastSequence: 0,
@@ -284,8 +294,38 @@ function createWorkbenchStore(initial = createInitialState()) {
     };
 }
 
+/**
+ * R3 fixed Agent Workbench lifecycle state machine.  Derives a single
+ * authoritative view state from the renderer projection so the header, feed
+ * and composer stay in lock-step instead of each inferring state from a mix of
+ * booleans.  Precedence: error > reconnecting > disconnected > awaiting-approval
+ * > running > starting > idle.
+ */
+function deriveWorkbenchViewState(state = {}) {
+    const runtime = state.runtime || {};
+    const attachment = state.attachment;
+    const hasAttachment = Boolean(attachment && attachment.sessionId);
+    const hasTurn = Boolean(state.activeTurnId);
+    const hasApproval = Array.isArray(state.approvals) && state.approvals.length > 0;
+
+    if (runtime.state === 'failed') return 'error';
+    if (state.recovering || runtime.state === 'degraded') return 'reconnecting';
+    if (runtime.state === 'unknown' || runtime.state === 'stopped' || !hasAttachment) return 'disconnected';
+    if (hasApproval) return 'awaiting-approval';
+    if (hasTurn) return 'running';
+    // Rust daemon attachments are explicitly `idle` once their create-session
+    // ACK has completed.  Treat it as the writable steady state; only actual
+    // transitional/terminal states may keep the composer in "starting".
+    if (attachment && attachment.state
+        && !['created', 'ready', 'idle'].includes(attachment.state)) {
+        return 'starting';
+    }
+    return 'idle';
+}
+
 export {
     createInitialState,
     createWorkbenchStore,
     reduceEvent,
+    deriveWorkbenchViewState,
 };

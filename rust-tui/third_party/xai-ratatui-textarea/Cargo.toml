@@ -1,0 +1,26 @@
+[package]
+name = "xai-ratatui-textarea"
+version = "0.1.0-vcp.1"
+edition = "2024"
+license = "Apache-2.0"
+description = "VCP-vendored Grok Build textarea primitive"
+workspace = "../../../rust"
+
+[dependencies]
+crossterm = { workspace = true }
+ratatui = { workspace = true }
+ratatui-core = { workspace = true }
+textwrap = { workspace = true }
+tui-scrollbar = { workspace = true }
+unicode-segmentation = { workspace = true }
+unicode-width = { workspace = true }
+
+[dev-dependencies]
+chrono = "0.4"
+itertools = "0.14"
+pretty_assertions = "1"
+rand = "0.9"
+
+[features]
+default = []
+debug-logs = []

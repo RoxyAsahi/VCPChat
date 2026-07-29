@@ -18,6 +18,18 @@
         display: block;
     }
 
+    /* Agent intentionally shares the navigation material with the normal
+       sidebar. Other internal apps keep the opaque host surface above. */
+    html[data-ui-mode="next"] .vcp-ui-scope.next-ui-internal-app-host:has(.agent-chat-root) {
+        /* The normal chat shell joins the navigation background directly.
+           Do the same for Agent rather than retaining the generic internal
+           app divider below the top tab bar. */
+        border-top: 0;
+        background: transparent;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+
     html[data-ui-mode="next"] .vcp-ui-scope .next-ui-internal-app-view {
         width: 100%;
         height: 100%;

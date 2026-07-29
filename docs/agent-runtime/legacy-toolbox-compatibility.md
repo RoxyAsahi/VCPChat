@@ -1,4 +1,6 @@
-# VCPToolBox 旧接口兼容与补偿
+# 历史兼容说明（非当前真源）：VCPToolBox 旧接口与补偿
+
+> 本文记录早期接口讨论与未来后端提案，不是当前 VCPAgent 产品路径，也不授权修改 VCPToolBox。当前约束和 daemon 边界以 [current/README.md](current/README.md) 为准。
 
 Phase 2 用旧接口实连（`legacy-frozen`）：`POST /v1/chatvcp/completions`（vcp_delegate）、`POST /v1/human/tool`（vcp_invoke）、`/v1/interrupt`、VCPLog WebSocket 审批往返。本轮**不修改 VCPToolBox**。
 

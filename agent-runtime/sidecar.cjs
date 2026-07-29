@@ -14,7 +14,7 @@ const {
     makeAck,
 } = require('./protocol.cjs');
 
-const driverKind = process.env.AGENT_RUNTIME_DRIVER || 'mock';
+const driverKind = process.env.AGENT_RUNTIME_DRIVER;
 const LOCAL_TOOL_NAMES = new Set([
     'workspace_propose_patch', 'workspace_apply_patch', 'workspace_revert_patch',
     'spawn_agent', 'await_agent', 'cancel_agent',
@@ -97,6 +97,9 @@ async function loadAdapter(kind) {
         const moduleUrl = pathToFileURL(path.join(__dirname, 'piAdapter.mjs')).href;
         const mod = await import(moduleUrl);
         return mod.createPiAdapter();
+    }
+    if (kind !== 'mock') {
+        throw new Error('AGENT_RUNTIME_DRIVER must be explicitly set to pi or mock; the production Workbench uses Rust daemon');
     }
     const moduleUrl = pathToFileURL(path.join(__dirname, 'mockAdapter.mjs')).href;
     const mod = await import(moduleUrl);

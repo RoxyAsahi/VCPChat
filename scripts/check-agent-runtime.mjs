@@ -40,7 +40,7 @@ for (const relative of removedDuplicateBackends) {
 const preload = fs.readFileSync(path.join(root, 'preloads/chat.js'), 'utf8');
 for (const method of [
     'agentRuntimeGetStatus', 'agentRuntimeStart', 'agentRuntimeStop',
-    'agentRuntimeCreateSession', 'agentRuntimeListSessions',
+    'agentRuntimeCreateSession', 'agentRuntimeListTopics', 'agentRuntimeReadTopic',
     'agentRuntimeStartTurn', 'agentRuntimeSteerTurn', 'agentRuntimeCancelTurn',
     'agentRuntimeRespondApproval', 'agentRuntimeSetWorkbenchPresence', 'onAgentRuntimeEvent',
 ]) {

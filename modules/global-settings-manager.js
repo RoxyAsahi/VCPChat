@@ -4,6 +4,12 @@
 export async function handleSaveGlobalSettings(e, deps) {
     const chatAPI = window.chatAPI || window.electronAPI;
     e.preventDefault();
+    const settingsForm = e.currentTarget || document.getElementById('globalSettingsForm');
+    const reportSaveResult = (success, error = '') => {
+        settingsForm?.dispatchEvent(new CustomEvent('vcp-settings-save-result', {
+            detail: { success, error: error || undefined }
+        }));
+    };
 
     const {
         refs,
@@ -213,7 +219,7 @@ export async function handleSaveGlobalSettings(e, deps) {
     }
 
     const result = await chatAPI.saveSettings(newSettings);
-    if (result.success) {
+    if (result?.success) {
         if (chatAPI?.saveRustAssistantConfig) {
             const rustSaveResult = await chatAPI.saveRustAssistantConfig(rustConfigPatch);
             if (!rustSaveResult?.success) {
@@ -229,17 +235,28 @@ export async function handleSaveGlobalSettings(e, deps) {
         window.dispatchEvent(new CustomEvent('global-settings-updated', {
             detail: { settings: refs.globalSettings.get() }
         }));
-        window.uiModeManager?.apply(newSettings.uiMode);
-        if (typeof window.applyChatBubbleLayoutSettings === 'function') {
-            window.applyChatBubbleLayoutSettings(refs.globalSettings.get());
+        try {
+            // The settings write above succeeded, so this is the only point
+            // at which the renderer's boot cache may be synchronized.
+            window.uiModeManager?.apply(newSettings.uiMode, { cache: true });
+            if (typeof window.applyChatBubbleLayoutSettings === 'function') {
+                window.applyChatBubbleLayoutSettings(refs.globalSettings.get());
+            }
+            if (typeof window.applyChatPresentationMode === 'function') {
+                await window.applyChatPresentationMode(newSettings.chatPresentationMode, {
+                    persist: false,
+                    preserveScroll: true,
+                    source: 'global-settings'
+                });
+            }
+        } catch (presentationError) {
+            // Settings have already been written. Keep the dialog state
+            // truthful and surface this as a post-save presentation warning,
+            // rather than incorrectly reporting an unsaved form.
+            console.error('[GlobalSettings] Saved, but applying presentation settings failed:', presentationError);
+            uiHelperFunctions.showToastNotification(`设置已保存，但界面应用失败：${presentationError?.message || presentationError}`, 'warning');
         }
-        if (typeof window.applyChatPresentationMode === 'function') {
-            await window.applyChatPresentationMode(newSettings.chatPresentationMode, {
-                persist: false,
-                preserveScroll: true,
-                source: 'global-settings'
-            });
-        }
+        reportSaveResult(true);
         uiHelperFunctions.showToastNotification('全局设置已保存！部分设置（如通知URL/Key）可能需要重新连接生效。');
         uiHelperFunctions.closeModal('globalSettingsModal');
         if (refs.globalSettings.get().vcpLogUrl && refs.globalSettings.get().vcpLogKey) {
@@ -249,6 +266,8 @@ export async function handleSaveGlobalSettings(e, deps) {
              if (window.notificationRenderer) window.notificationRenderer.updateVCPLogStatus({ status: 'error', message: 'VCPLog未配置' }, document.getElementById('vcpLogConnectionStatus'));
         }
    } else {
-       uiHelperFunctions.showToastNotification(`保存全局设置失败: ${result.error}`, 'error');
+       const error = result?.error || '保存接口未返回成功结果';
+       reportSaveResult(false, error);
+       uiHelperFunctions.showToastNotification(`保存全局设置失败: ${error}`, 'error');
     }
 }

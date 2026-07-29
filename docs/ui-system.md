@@ -1,5 +1,7 @@
 # VCPChat 新版 UI 原生设计系统
 
+> 当前审计（2026-07-28）：Agent Workbench 的 scope、`!important` 与 inline-style 违规已修复，`npm run check:ui-system` 现已通过；高频流式消息已改为稳定节点原地更新，避免重建侧栏、标题与输入区。下文的迁移台账仍包含历史验证记录，不能替代 [GUI 当前开发状态](gui-current-development-status.md) 的发布判断。任何标为 `migrated` 的旧记录仍须完成真实 Electron 回归后重新确认。
+
 这套设计系统只服务于 `data-ui-mode="next"`，不迁移或覆盖经典 UI。实现使用原生 DOM、CSS Layer 和 ES Module，不依赖 Vue、React、Web Components 或额外构建步骤。
 
 ## 目录

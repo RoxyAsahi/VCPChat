@@ -16,8 +16,21 @@ const CHANNELS = Object.freeze({
     AGENT_RUNTIME_START: 'agent-runtime:start',
     AGENT_RUNTIME_STOP: 'agent-runtime:stop',
     AGENT_RUNTIME_CREATE_SESSION: 'agent-runtime:create-session',
-    AGENT_RUNTIME_LIST_SESSIONS: 'agent-runtime:list-sessions',
+    AGENT_RUNTIME_CLOSE_SESSION: 'agent-runtime:close-session',
+    AGENT_RUNTIME_COMPACT_SESSION: 'agent-runtime:compact-session',
+    AGENT_RUNTIME_LIST_TOPICS: 'agent-runtime:list-topics',
+    AGENT_RUNTIME_READ_TOPIC: 'agent-runtime:read-topic',
+    AGENT_RUNTIME_TAKEOVER_TOPIC: 'agent-runtime:takeover-topic',
+    AGENT_RUNTIME_RENAME_TOPIC: 'agent-runtime:rename-topic',
+    AGENT_RUNTIME_DELETE_TOPIC: 'agent-runtime:delete-topic',
+    AGENT_RUNTIME_LIST_INTERACTION_QUEUE: 'agent-runtime:list-interaction-queue',
+    AGENT_RUNTIME_REPLACE_INTERACTION_QUEUE: 'agent-runtime:replace-interaction-queue',
+    AGENT_RUNTIME_CLEAR_INTERACTION_QUEUE: 'agent-runtime:clear-interaction-queue',
+    AGENT_RUNTIME_GET_WORKBENCH_SETTINGS: 'agent-runtime:get-workbench-settings',
+    AGENT_RUNTIME_UPDATE_WORKBENCH_SETTINGS: 'agent-runtime:update-workbench-settings',
     AGENT_RUNTIME_START_TURN: 'agent-runtime:start-turn',
+    AGENT_RUNTIME_STEER_TURN: 'agent-runtime:steer-turn',
+    AGENT_RUNTIME_FOLLOW_UP_TURN: 'agent-runtime:follow-up-turn',
     AGENT_RUNTIME_CANCEL_TURN: 'agent-runtime:cancel-turn',
     AGENT_RUNTIME_RESPOND_APPROVAL: 'agent-runtime:respond-approval',
     AGENT_RUNTIME_SET_WORKBENCH_PRESENCE: 'agent-runtime:set-workbench-presence',
@@ -78,7 +91,7 @@ const channelRegistry = new Map([
         channelType: CHANNEL_TYPES.QUERY,
         owner: 'Agent Runtime',
         requestSchema: null,
-        responseSchema: { state: 'string', protocolVersion: 'number', worker: 'object?', sessions: 'object[]' },
+        responseSchema: { state: 'string', protocolVersion: 'number', worker: 'object?', attachment: 'object?' },
         supportsConcurrent: true,
     }],
     [CHANNELS.AGENT_RUNTIME_START, {
@@ -103,14 +116,6 @@ const channelRegistry = new Map([
         owner: 'Agent Runtime',
         requestSchema: { workspaceRoot: 'string?', model: 'string?', metadata: 'object?' },
         responseSchema: { sessionId: 'string', state: 'string' },
-        supportsConcurrent: true,
-    }],
-    [CHANNELS.AGENT_RUNTIME_LIST_SESSIONS, {
-        channelName: CHANNELS.AGENT_RUNTIME_LIST_SESSIONS,
-        channelType: CHANNEL_TYPES.QUERY,
-        owner: 'Agent Runtime',
-        requestSchema: null,
-        responseSchema: { sessions: 'object[]' },
         supportsConcurrent: true,
     }],
     [CHANNELS.AGENT_RUNTIME_START_TURN, {
@@ -154,6 +159,35 @@ const channelRegistry = new Map([
         supportsConcurrent: true,
     }],
 ]);
+
+// Rust daemon control-plane queries.  Their detailed result shape is daemon
+// versioned; Electron validates IPC origin and forwards the opaque response
+// without recreating Pi-era business state in Main.
+for (const channel of [
+    CHANNELS.AGENT_RUNTIME_CLOSE_SESSION,
+    CHANNELS.AGENT_RUNTIME_COMPACT_SESSION,
+    CHANNELS.AGENT_RUNTIME_LIST_TOPICS,
+    CHANNELS.AGENT_RUNTIME_READ_TOPIC,
+    CHANNELS.AGENT_RUNTIME_TAKEOVER_TOPIC,
+    CHANNELS.AGENT_RUNTIME_RENAME_TOPIC,
+    CHANNELS.AGENT_RUNTIME_DELETE_TOPIC,
+    CHANNELS.AGENT_RUNTIME_LIST_INTERACTION_QUEUE,
+    CHANNELS.AGENT_RUNTIME_REPLACE_INTERACTION_QUEUE,
+    CHANNELS.AGENT_RUNTIME_CLEAR_INTERACTION_QUEUE,
+    CHANNELS.AGENT_RUNTIME_GET_WORKBENCH_SETTINGS,
+    CHANNELS.AGENT_RUNTIME_UPDATE_WORKBENCH_SETTINGS,
+    CHANNELS.AGENT_RUNTIME_STEER_TURN,
+    CHANNELS.AGENT_RUNTIME_FOLLOW_UP_TURN,
+]) {
+    channelRegistry.set(channel, {
+        channelName: channel,
+        channelType: CHANNEL_TYPES.QUERY,
+        owner: 'Rust Agent daemon',
+        requestSchema: 'daemon-command-payload?',
+        responseSchema: 'daemon-control-result',
+        supportsConcurrent: true,
+    });
+}
 
 function getChannelMeta(channelName) {
     return channelRegistry.get(channelName) || null;

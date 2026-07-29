@@ -13,7 +13,11 @@
 
         document.documentElement.dataset.uiMode = normalizedMode;
 
-        if (options.cache !== false) {
+        // `settings.json` is the persistent authority.  localStorage is only
+        // a boot-time hint to avoid a blank classic shell before the renderer
+        // receives settings through IPC, so callers must opt in after a
+        // successful settings read/write.
+        if (options.cache === true) {
             localStorage.setItem(STORAGE_KEY, normalizedMode);
         }
 
@@ -30,6 +34,8 @@
         return normalize(document.documentElement.dataset.uiMode);
     }
 
+    // The cache never writes back by itself. `loadAndApplyGlobalSettings()`
+    // will reconcile it with the authoritative settings file.
     const cachedMode = localStorage.getItem(STORAGE_KEY);
     apply(cachedMode, { cache: false });
 

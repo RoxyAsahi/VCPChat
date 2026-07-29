@@ -98,6 +98,22 @@ html[data-ui-mode="next"] .next-ui-panel-elevation {
     box-sizing: border-box;
 }
 
+/* Internal apps normally sit above the shared decorative layers. The Agent
+   deliberately uses the same chat shell as the main view, so restore the
+   existing panel edge above its host instead of recreating a second border,
+   shadow, or rounded-corner treatment locally. */
+html[data-ui-mode="next"] body.next-ui-internal-app-open:has(.agent-chat-root) .next-ui-panel-elevation {
+    z-index: 1001;
+}
+
+/* Opening a generic internal app collapses the underlying chat and resets
+   this shared layout variable to 0px. Agent supplies its own real sidebar,
+   so retain the main chat's 260px geometry for the navigation cut-out and
+   panel-elevation layer. */
+html[data-ui-mode="next"] body.next-ui-internal-app-open:has(.agent-chat-root) {
+    --next-sidebar-width: 260px;
+}
+
 html[data-ui-mode="next"] .next-ui-topbar {
     position: fixed;
     inset: 0 0 auto 0;
@@ -741,7 +757,7 @@ html[data-ui-mode="next"] body.next-ui-launchpad-open .container {
     display: none;
 }
 
-html[data-ui-mode="next"] body.next-ui-internal-app-open .container,
+html[data-ui-mode="next"] body.next-ui-internal-app-open > .container,
 html[data-ui-mode="next"] body.next-ui-internal-app-open .next-ui-launchpad {
     display: none;
 }

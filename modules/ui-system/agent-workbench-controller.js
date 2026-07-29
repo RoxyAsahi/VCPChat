@@ -1,77 +1,117 @@
 import { createWorkbenchStore } from './agent-workbench-store.js';
 
+// The Workbench deliberately has no Main-process transcript cache.  A live
+// session is only an attachment to a durable Rust Topic; renderer reloads and
+// compaction rebuild the projection from `read-topic`.
 function createWorkbenchController(runtimeApi) {
     const store = createWorkbenchStore();
     let unsubscribeRuntime = null;
     let selectionVersion = 0;
+    let snapshotBarrier = null;
 
     function requireApi(name) {
         if (typeof runtimeApi[name] !== 'function') throw new Error(`Runtime API unavailable: ${name}`);
         return runtimeApi[name].bind(runtimeApi);
     }
 
-    async function callOptional(name, payload) {
-        if (typeof runtimeApi[name] !== 'function') return null;
-        try {
-            return await runtimeApi[name](payload);
-        } catch (error) {
-            return null;
-        }
-    }
-
     async function refreshStatus() {
         const status = await requireApi('agentRuntimeGetStatus')();
-        store.setState({
+        const projection = {
             runtime: {
                 state: status?.state || 'unknown',
                 worker: status?.worker || null,
                 lastError: status?.lastError || null,
             },
-            approvals: status?.pendingApprovals || store.getState().approvals,
-        });
+        };
+        // Approvals are a Renderer-only live projection. Rust events add and
+        // remove them; Main must never manufacture an empty list that erases
+        // a visible approval during an unrelated status refresh.
+        if (Array.isArray(status?.pendingApprovals)) projection.approvals = status.pendingApprovals;
+        store.setState(projection);
         return status;
     }
 
-    async function loadSessions() {
-        if (typeof runtimeApi.agentRuntimeListSessions !== 'function') return [];
-        const result = await runtimeApi.agentRuntimeListSessions();
-        const sessions = result?.sessions || [];
-        const activeSessionId = store.getState().activeSessionId;
-        store.setState({ sessions });
-        if (activeSessionId && !sessions.some((session) => session.sessionId === activeSessionId)) {
-            store.setState({ activeSessionId: null });
-        }
-        return sessions;
+    function historyToMessages(history) {
+        if (!Array.isArray(history)) return [];
+        return history.flatMap((entry) => {
+            const role = entry?.role === 'assistant' ? 'assistant' : 'user';
+            const content = typeof entry?.content === 'string'
+                ? entry.content
+                : Array.isArray(entry?.content)
+                    ? entry.content.map((part) => part?.text || '').join('')
+                    : '';
+            const id = entry?.id || entry?.messageId;
+            if (!id) return [];
+            return [{
+                ...entry,
+                id,
+                role,
+                content,
+                state: entry?.state || 'complete',
+                createdAt: entry?.createdAt || entry?.timestamp || 0,
+            }];
+        });
     }
 
-    async function selectSession(sessionId) {
+    function beginSnapshotBarrier() {
+        const barrier = { events: [] };
+        snapshotBarrier = barrier;
+        return barrier;
+    }
+
+    function eventBelongsToAttachment(event, attachment) {
+        if (!event || typeof event !== 'object') return false;
+        if (event.type?.startsWith('runtime.')) return true;
+        return Boolean(attachment?.sessionId
+            && event.sessionId === attachment.sessionId
+            && event.topicId === attachment.topicId);
+    }
+
+    function releaseSnapshotBarrier(barrier, snapshot, attachment) {
+        if (snapshotBarrier !== barrier) return;
+        snapshotBarrier = null;
+        // `snapshotSequence` is supplied with read-topic by the daemon. It is
+        // the durable-snapshot waterline: stale buffered events are never
+        // replayed by JS after a reload, switch or reconnect.
+        const minimumSequence = Number(snapshot?.snapshotSequence);
+        for (const event of barrier.events) {
+            if (!eventBelongsToAttachment(event, attachment)) continue;
+            if (Number.isFinite(minimumSequence) && Number(event.sequence) <= minimumSequence) continue;
+            store.dispatch(event);
+        }
+    }
+
+    async function hydrateTopic(topicId, attachment = null, existingBarrier = null) {
+        if (!topicId) return null;
         const version = ++selectionVersion;
-        store.resetSession(sessionId);
-        if (!sessionId) return store.getState();
-
-        const [session, messages, events, artifacts] = await Promise.all([
-            callOptional('agentRuntimeGetSession', { sessionId }),
-            callOptional('agentRuntimeGetMessages', { sessionId }),
-            callOptional('agentRuntimeGetEvents', { sessionId, sinceSequence: 0 }),
-            callOptional('agentRuntimeGetArtifacts', { sessionId }),
-        ]);
-        if (version !== selectionVersion || store.getState().activeSessionId !== sessionId) return store.getState();
-
-        if (session) {
-            const sessions = store.getState().sessions;
-            const index = sessions.findIndex((item) => item.sessionId === sessionId);
-            if (index >= 0) {
-                const updated = [...sessions];
-                updated[index] = { ...updated[index], ...session };
-                store.setState({ sessions: updated, activeTurnId: session.activeTurnId || null });
-            }
+        const barrier = existingBarrier || beginSnapshotBarrier();
+        try {
+            const snapshot = await requireApi('agentRuntimeReadTopic')({ topicId });
+            if (version !== selectionVersion) return null;
+            const current = store.getState();
+            const active = attachment || (current.attachment?.topicId === topicId ? current.attachment : null);
+            const nextAttachment = active ? { ...active, topicId } : null;
+            store.setAttachment(nextAttachment);
+            store.setState({ messages: historyToMessages(snapshot?.history) });
+            releaseSnapshotBarrier(barrier, snapshot, nextAttachment);
+            return snapshot;
+        } catch (error) {
+            releaseSnapshotBarrier(barrier, null, store.getState().attachment);
+            throw error;
         }
-        if (messages?.messages) store.setState({ messages: messages.messages });
-        if (artifacts?.artifacts || Array.isArray(artifacts)) {
-            store.setState({ artifacts: artifacts?.artifacts || artifacts });
-        }
-        for (const event of events?.events || []) store.dispatch(event);
-        return store.getState();
+    }
+
+    // Read-only preview of a Topic owned by another client.  Reads the durable
+    // checkpoint WITHOUT claiming its session lease, so the other live client
+    // is never disturbed.  The renderer shows a read-only banner and requires
+    // an explicit takeover before any write is allowed.
+    async function previewTopic(topicId) {
+        if (!topicId) return null;
+        const version = ++selectionVersion;
+        const snapshot = await requireApi('agentRuntimeReadTopic')({ topicId });
+        if (version !== selectionVersion) return null;
+        store.setState({ messages: historyToMessages(snapshot?.history) });
+        return snapshot;
     }
 
     async function startRuntime() {
@@ -87,58 +127,104 @@ function createWorkbenchController(runtimeApi) {
         return result;
     }
 
-    async function createSession(options) {
-        const session = await requireApi('agentRuntimeCreateSession')(options);
-        await loadSessions();
-        await selectSession(session.sessionId);
-        return session;
-    }
-
-    async function renameSession(sessionId, title) {
-        const result = await requireApi('agentRuntimeRenameSession')({ sessionId, title });
-        await loadSessions();
-        return result;
-    }
-
-    async function deleteSession(sessionId) {
-        const result = await requireApi('agentRuntimeDeleteSession')({ sessionId });
-        const remaining = await loadSessions();
-        const next = remaining.find((session) => session.sessionId !== sessionId);
-        await selectSession(next?.sessionId || null);
-        return result;
-    }
-
-    async function forkSession(sessionId, title) {
-        const fork = await requireApi('agentRuntimeForkSession')({ sessionId, title: title || undefined });
-        await loadSessions();
-        await selectSession(fork.sessionId);
-        return fork;
+    async function createSession(options = {}) {
+        const barrier = beginSnapshotBarrier();
+        const attachment = await requireApi('agentRuntimeCreateSession')(options);
+        // `create-session` creates a live attachment before the first safe
+        // checkpoint exists.  A fresh Rust Topic can therefore legitimately
+        // reject/read as empty here.  Install the attachment first so that
+        // this expected empty-snapshot path never leaves the composer in the
+        // disconnected state; history remains deliberately empty until Rust
+        // has a durable snapshot to return.
+        store.setAttachment(attachment);
+        // Session creation changes the daemon lifecycle from the control
+        // plane's point of view.  Refresh it explicitly instead of waiting for
+        // a diagnostic event: `session.attached` is informational and is not
+        // a durable replacement for the runtime status contract.
+        await refreshStatus();
+        // A newly-created Topic has no checkpoint until its first safe write.
+        // That is valid: render an empty projection, but never invent history.
+        if (attachment.topicId) {
+            try {
+                await hydrateTopic(attachment.topicId, attachment, barrier);
+            } catch {
+                // Keep the real attachment and release only the events that
+                // belong to it.  Do not synthesize a transcript from Main.
+                releaseSnapshotBarrier(barrier, null, attachment);
+            }
+        } else {
+            releaseSnapshotBarrier(barrier, null, attachment);
+        }
+        return attachment;
     }
 
     async function compactSession(sessionId, instructions) {
-        const result = await requireApi('agentRuntimeCompactSession')({ sessionId, instructions: instructions || undefined });
-        store.setState({ context: { ...store.getState().context, compacting: false, summary: result?.summary || '' } });
-        return result;
+        store.setState({ context: { ...store.getState().context, compacting: true, summary: '' } });
+        try {
+            const result = await requireApi('agentRuntimeCompactSession')({ sessionId, instructions: instructions || undefined });
+            if (result?.topicId) await hydrateTopic(result.topicId);
+            return result;
+        } finally {
+            store.setState({ context: { ...store.getState().context, compacting: false } });
+        }
     }
 
+    const listTopics = () => requireApi('agentRuntimeListTopics')();
+    const readTopic = (topicId) => requireApi('agentRuntimeReadTopic')({ topicId });
+    const takeoverTopic = (topicId) => requireApi('agentRuntimeTakeoverTopic')({ topicId });
+    const renameTopic = (topicId, title) => requireApi('agentRuntimeRenameTopic')({ topicId, title });
+    const deleteTopic = (topicId) => requireApi('agentRuntimeDeleteTopic')({ topicId });
+    const listInteractionQueue = () => requireApi('agentRuntimeListInteractionQueue')();
+    const replaceInteractionQueue = (interactions) => {
+        const sessionId = store.getState().attachment?.sessionId;
+        if (!sessionId) throw new Error('请先选择 Agent Session');
+        return requireApi('agentRuntimeReplaceInteractionQueue')({ sessionId, interactions });
+    };
+    const clearInteractionQueue = () => requireApi('agentRuntimeClearInteractionQueue')();
+    const getWorkbenchSettings = () => requireApi('agentRuntimeGetWorkbenchSettings')();
+    const updateWorkbenchSettings = (settings) => requireApi('agentRuntimeUpdateWorkbenchSettings')(settings);
+
     async function startTurn(prompt) {
-        const sessionId = store.getState().activeSessionId;
+        const sessionId = store.getState().attachment?.sessionId;
         if (!sessionId) throw new Error('请先选择或新建 Session');
-        const result = await requireApi('agentRuntimeStartTurn')({ sessionId, prompt });
-        store.setState({ activeTurnId: result.turnId });
-        return result;
+        // ACK only accepts the command. The daemon's turn.started event is
+        // the sole source that may create a live-turn projection.
+        return requireApi('agentRuntimeStartTurn')({ sessionId, prompt });
     }
 
     async function cancelTurn() {
-        const { activeSessionId: sessionId, activeTurnId: turnId } = store.getState();
+        const { activeTurnId: turnId } = store.getState();
+        const sessionId = store.getState().attachment?.sessionId;
         if (!sessionId) return null;
         return requireApi('agentRuntimeCancelTurn')({ sessionId, turnId: turnId || undefined });
     }
 
+    // Cancel a single tool call if the backend exposes a per-tool primitive;
+    // otherwise fall back to cancelling the whole turn that owns the call.  The
+    // Workbench UI only shows the cancel affordance while a tool is in flight.
+    async function cancelTool(toolCallId, turnId) {
+        const sessionId = store.getState().attachment?.sessionId;
+        if (!sessionId || !toolCallId) return null;
+        const cancelToolApi = runtimeApi['agentRuntimeCancelTool'];
+        if (typeof cancelToolApi === 'function') {
+            return cancelToolApi.call(runtimeApi, { sessionId, toolCallId });
+        }
+        if (!turnId) throw new Error('该工具事件缺少 daemon turnId，不能猜测并取消其他任务');
+        return requireApi('agentRuntimeCancelTurn')({ sessionId, turnId });
+    }
+
     async function steerTurn(prompt) {
-        const { activeSessionId: sessionId, activeTurnId: turnId } = store.getState();
+        const { activeTurnId: turnId } = store.getState();
+        const sessionId = store.getState().attachment?.sessionId;
         if (!sessionId || !turnId) throw new Error('当前没有可插入指令的任务');
         return requireApi('agentRuntimeSteerTurn')({ sessionId, turnId, prompt });
+    }
+
+    async function followUpTurn(prompt) {
+        const { activeTurnId: turnId } = store.getState();
+        const sessionId = store.getState().attachment?.sessionId;
+        if (!sessionId || !turnId) throw new Error('当前没有可追加后续指令的任务');
+        return requireApi('agentRuntimeFollowUpTurn')({ sessionId, turnId, prompt });
     }
 
     async function respondApproval(approval, decision) {
@@ -155,15 +241,35 @@ function createWorkbenchController(runtimeApi) {
     }
 
     async function initialize() {
+        // Subscribe before reading the Rust checkpoint.  The barrier belongs
+        // to the Renderer and buffers any live daemon frame that arrives
+        // while `read-topic` establishes the durable snapshot waterline.
+        const barrier = beginSnapshotBarrier();
+        subscribeRuntime();
         runtimeApi.agentRuntimeSetWorkbenchPresence?.(true);
-        if (typeof runtimeApi.onAgentRuntimeEvent === 'function') {
-            unsubscribeRuntime = runtimeApi.onAgentRuntimeEvent((event) => store.dispatch(event));
+        const status = await refreshStatus().catch(() => null);
+        // Ctrl+R leaves Electron Main and its daemon alive. Restore the
+        // existing attachment from the Rust Topic while the Renderer barrier
+        // buffers already-subscribed live daemon events.
+        if (status?.attachment?.topicId) {
+            await hydrateTopic(status.attachment.topicId, status.attachment, barrier);
+        } else {
+            releaseSnapshotBarrier(barrier, null, store.getState().attachment);
         }
-        await Promise.all([refreshStatus().catch(() => null), loadSessions()]);
-        const sessions = store.getState().sessions;
-        const active = store.getState().activeSessionId || sessions[0]?.sessionId;
-        if (active) await selectSession(active);
         return store.getState();
+    }
+
+    function subscribeRuntime() {
+        if (unsubscribeRuntime || typeof runtimeApi.onAgentRuntimeEvent !== 'function') return;
+        if (typeof runtimeApi.onAgentRuntimeEvent === 'function') {
+            unsubscribeRuntime = runtimeApi.onAgentRuntimeEvent((event) => {
+                if (snapshotBarrier) {
+                    snapshotBarrier.events.push(event);
+                    return;
+                }
+                store.dispatch(event);
+            });
+        }
     }
 
     function dispose() {
@@ -174,23 +280,12 @@ function createWorkbenchController(runtimeApi) {
     }
 
     return {
-        store,
-        initialize,
-        dispose,
-        refreshStatus,
-        loadSessions,
-        selectSession,
-        startRuntime,
-        stopRuntime,
-        createSession,
-        renameSession,
-        deleteSession,
-        forkSession,
-        compactSession,
-        startTurn,
-        steerTurn,
-        cancelTurn,
-        respondApproval,
+        store, initialize, subscribeRuntime, dispose, refreshStatus, startRuntime, stopRuntime,
+        createSession, compactSession, hydrateTopic, previewTopic,
+        listTopics, readTopic, takeoverTopic, renameTopic, deleteTopic,
+        listInteractionQueue, replaceInteractionQueue, clearInteractionQueue,
+        getWorkbenchSettings, updateWorkbenchSettings,
+        startTurn, steerTurn, followUpTurn, cancelTurn, cancelTool, respondApproval,
     };
 }
 

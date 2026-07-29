@@ -8,7 +8,7 @@ const { PRELOAD_ROLES, resolveProjectPreload } = require('../services/preloadPat
 
 let mainWindow;
 let openChildWindows;
-const CANVAS_CACHE_DIR = path.join(__dirname, '..', '..', 'AppData', 'Canvas');
+let CANVAS_CACHE_DIR = path.join(__dirname, '..', '..', 'AppData', 'Canvas');
 let canvasWindow = null;
 let fileWatcher = null;
 const internalSaveInProgress = new Set(); // Track internal saves
@@ -111,6 +111,8 @@ function restartFileWatcher() {
 function initialize(config) {
     mainWindow = config.mainWindow;
     openChildWindows = config.openChildWindows;
+    CANVAS_CACHE_DIR = config.CANVAS_CACHE_DIR || CANVAS_CACHE_DIR;
+    activeRootDir = CANVAS_CACHE_DIR;
     
     // Ensure the canvas directory exists
     fs.ensureDirSync(CANVAS_CACHE_DIR);

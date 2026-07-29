@@ -559,4 +559,4 @@ AI在生成表情包的`<img>`标签时，有时会因为模型幻觉或数据�
 
 ## Agent Runtime 开发文档
 
-Agent Runtime（Agent Workbench、Pi Worker、VCP 工具桥、双层审批与统一事件协议）的完整开发文档体系位于 [docs/agent-runtime/README.md](docs/agent-runtime/README.md)，包含架构、需求登记册、事件协议、Driver 接口、工具桥、旧接口兼容、安全威胁模型、数据模型、路线图、测试矩阵、贡献指南与 ADR（0001-0008）。
+Agent Workbench 的当前开发真源位于 [docs/agent-runtime/current/README.md](docs/agent-runtime/current/README.md)：正式链路为 Rust daemon → VCPToolBox；Pi Worker、多 Driver、SQLite Agent Repository 和 `vcp_delegate` 仅保留在历史资料中，不能作为当前实现或验收依据。

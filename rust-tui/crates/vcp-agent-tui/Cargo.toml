@@ -1,0 +1,22 @@
+[package]
+name = "vcp-agent-tui"
+version = "0.1.0"
+edition = "2024"
+license = "CC-BY-NC-SA-4.0"
+description = "VCPAgent Rust TUI, adapted from Grok Build UI primitives"
+workspace = "../../../rust"
+
+[dependencies]
+crossterm = { workspace = true }
+ratatui = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+unicode-width = { workspace = true }
+rpassword = { workspace = true }
+xai-ratatui-textarea = { path = "../../third_party/xai-ratatui-textarea" }
+vcp-agent-host = { path = "../../../rust/crates/vcp-agent-host" }
+
+[[bin]]
+name = "vcp-agent"
+path = "src/main.rs"

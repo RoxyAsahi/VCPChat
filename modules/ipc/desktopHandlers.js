@@ -36,11 +36,11 @@ let vchatPluginManagerWindow = null;
 
 // --- 收藏系统路径 - 使用项目根目录的 AppData ---
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
-const DESKTOP_WIDGETS_DIR = path.join(PROJECT_ROOT, 'AppData', 'DesktopWidgets');
-const DESKTOP_DATA_DIR = path.join(PROJECT_ROOT, 'AppData', 'DesktopData');
-const DOCK_CONFIG_PATH = path.join(DESKTOP_DATA_DIR, 'dock.json');
-const LAYOUT_CONFIG_PATH = path.join(DESKTOP_DATA_DIR, 'layout.json');
-const CATALOG_PATH = path.join(DESKTOP_WIDGETS_DIR, 'CATALOG.md');
+let DESKTOP_WIDGETS_DIR = path.join(PROJECT_ROOT, 'AppData', 'DesktopWidgets');
+let DESKTOP_DATA_DIR = path.join(PROJECT_ROOT, 'AppData', 'DesktopData');
+let DOCK_CONFIG_PATH = path.join(DESKTOP_DATA_DIR, 'dock.json');
+let LAYOUT_CONFIG_PATH = path.join(DESKTOP_DATA_DIR, 'layout.json');
+let CATALOG_PATH = path.join(DESKTOP_WIDGETS_DIR, 'CATALOG.md');
 
 // --- 布局文件写锁/队列 ---
 let layoutOpQueue = Promise.resolve();
@@ -923,6 +923,13 @@ function initialize(params) {
     mainWindow = params.mainWindow;
     openChildWindows = params.openChildWindows;
     appSettingsManager = params.settingsManager;
+    const appDataRoot = params.APP_DATA_ROOT_IN_PROJECT
+        || path.join(PROJECT_ROOT, 'AppData');
+    DESKTOP_WIDGETS_DIR = path.join(appDataRoot, 'DesktopWidgets');
+    DESKTOP_DATA_DIR = path.join(appDataRoot, 'DesktopData');
+    DOCK_CONFIG_PATH = path.join(DESKTOP_DATA_DIR, 'dock.json');
+    LAYOUT_CONFIG_PATH = path.join(DESKTOP_DATA_DIR, 'layout.json');
+    CATALOG_PATH = path.join(DESKTOP_WIDGETS_DIR, 'CATALOG.md');
     registerManagedWindows();
 
     if (!standaloneProcessCleanupRegistered) {
