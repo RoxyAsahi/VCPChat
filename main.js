@@ -49,6 +49,7 @@ const tavernHandlers = require('./modules/ipc/tavernHandlers'); // Import VCPCha
 const agentRuntimeHandlers = require('./modules/ipc/agentRuntimeHandlers'); // Import Agent Runtime (Pi/VCP bridge) handlers
 const { PRELOAD_ROLES, resolveProjectPreload } = require('./modules/services/preloadPaths');
 const { createEmbeddedAppSessionManager } = require('./modules/services/embeddedAppSessionManager');
+const { ChatDataServiceFacade } = require('./modules/services/chatDataService');
 // chokidar is now lazy-loaded
 
 // --- File Watcher ---
@@ -177,6 +178,7 @@ let vcpLogWebSocket;
 let vcpLogReconnectInterval;
 let openChildWindows = [];
 let distributedServer = null; // To hold the distributed server instance
+let chatDataService = null; // Optional VCP-CDS shadow service.
 let appSettingsManager = null;
 let networkNotesTreeCache = null; // In-memory cache for the network notes
 let cachedModels = []; // Cache for models fetched from VCP server
@@ -329,8 +331,18 @@ async function performQuitCleanup() {
             }
         }
 
+        // The Rust daemon owns Agent state. Stop it before the Electron
+        // process releases the shared application resources.
         await agentRuntimeHandlers.shutdown();
 
+        if (chatDataService) {
+            console.log('[Main] Stopping VCP-CDS...');
+            try {
+                await chatDataService.stop();
+            } finally {
+                chatDataService = null;
+            }
+        }
         await stopAudioEngine();
     })();
 
@@ -675,6 +687,33 @@ if (!gotTheLock) {
         appSettingsManager = new AppSettingsManager(SETTINGS_FILE);
         const agentConfigManager = new AgentConfigManager(AGENT_DIR);
 
+        // Phase 1: VCP-CDS runs only as an optional shadow mirror. Start it in
+        // the background so database reconciliation can never delay the window
+        // or the existing history.json chat path.
+        try {
+            const cdsSettings = await appSettingsManager.readSettings();
+            if (cdsSettings.ChatDataServiceEnabled !== false) {
+                chatDataService = new ChatDataServiceFacade({
+                    appDataPath: APP_DATA_ROOT_IN_PROJECT,
+                    enabled: true,
+                    notifyEnabled: cdsSettings.ChatDataServiceNotifyEnabled !== false,
+                    tantivyEnabled: cdsSettings.ChatDataServiceTantivyEnabled !== false,
+                    mobileSyncUseCentralIndex: cdsSettings.MobileSyncUseCentralIndex === true,
+                    logger: console
+                });
+                // 同步消费者依赖 CDS 在分布式插件初始化前 READY；中央迁移启用时
+                // 等待握手，旁路模式仍保持后台启动、不阻塞窗口。
+                if (cdsSettings.MobileSyncUseCentralIndex === true) {
+                    await chatDataService.startShadowMode();
+                } else {
+                    void chatDataService.startShadowMode();
+                }
+            }
+        } catch (error) {
+            chatDataService = null;
+            console.error('[Main] VCP-CDS shadow initialization failed; continuing without it:', error);
+        }
+
         appSettingsManager.startCleanupTimer();
         appSettingsManager.startAutoBackup(USER_DATA_DIR); // Start auto backup
         agentConfigManager.startCleanupTimer(); // Start agent config cleanup
@@ -960,7 +999,7 @@ if (!gotTheLock) {
         windowHandlers.initialize(mainWindow, openChildWindows);
         forumHandlers.initialize({ USER_DATA_DIR }); // Initialize forum handlers
         memoHandlers.initialize({ USER_DATA_DIR }); // Initialize memo handlers
-        
+
         // ⚠️ agentHandlers 必须在 assistantHandlers 之前初始化
         // 因为 assistantHandlers 依赖 getAgentConfigById 函数，该函数需要 AGENT_DIR_CACHE 已被初始化
         agentHandlers.initialize({
@@ -974,7 +1013,6 @@ if (!gotTheLock) {
             settingsManager: appSettingsManager,
             agentConfigManager
         });
-        
         // The optional selection-assistant sidecar must never gate the main
         // VCPChat window or the Rust Agent Workbench. Its public status
         // functions are available synchronously; finish sidecar setup in the
@@ -1031,6 +1069,24 @@ if (!gotTheLock) {
             }
             return { success: false, error: 'File watcher not initialized.' };
         });
+        ipcMain.handle('chat-data-service-status', async () => {
+            if (!chatDataService) {
+                return { status: 'disabled', searchAvailable: false, degraded: true };
+            }
+            return chatDataService.status();
+        });
+
+        ipcMain.handle('chat-data-service-reconcile', async () => {
+            if (!chatDataService?.client) {
+                return { success: false, error: 'VCP-CDS is unavailable.' };
+            }
+            try {
+                return await chatDataService.client.reconcile();
+            } catch (error) {
+                return { success: false, error: error.message, code: error.code };
+            }
+        });
+
         sovitsHandlers.initialize(mainWindow, appSettingsManager); // Initialize SovitsTTS handlers
         musicHandlers.initialize({ mainWindow, openChildWindows, APP_DATA_ROOT_IN_PROJECT, startAudioEngine, stopAudioEngine });
         diceHandlers.initialize({ projectRoot: PROJECT_ROOT });
@@ -1110,7 +1166,8 @@ if (!gotTheLock) {
                         handleDiceControl: diceHandlers.handleDiceControl, // Inject the dice control handler
                         handleCanvasControl: desktopRemoteHandlers.handleCanvasControl, // Inject the canvas control handler
                         handleFlowlockControl: desktopRemoteHandlers.handleFlowlockControl, // Inject the flowlock control handler
-                        handleDesktopRemoteControl: desktopRemoteHandlers.handleDesktopRemoteControl // Inject the desktop remote control handler
+                        handleDesktopRemoteControl: desktopRemoteHandlers.handleDesktopRemoteControl, // Inject the desktop remote control handler
+                        chatDataService // Share the Electron-owned VCP-CDS facade with direct plugins.
                     };
                     distributedServer = new DistributedServer(config);
                     await distributedServer.initialize();

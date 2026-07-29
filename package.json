@@ -32,9 +32,9 @@
     "probe:agent-runtime": "node scripts/probe-agent-runtime.mjs",
     "test:agent-runtime:live": "node scripts/test-live-agent-runtime.mjs && node scripts/test-live-agent-tool.mjs && node scripts/test-live-agent-delegate.mjs && node scripts/test-live-agent-deny.mjs && node scripts/test-live-agent-cancel.mjs",
     "test:agent-runtime:live-long": "node scripts/test-live-agent-long-task.mjs",
-      "test:rust-agent-runtime": "node scripts/test-rust-agent-runtime.mjs",
-      "test:rust-daemon-smoke": "node scripts/test-rust-daemon-smoke.mjs",
-      "test:rust-topic-takeover": "node scripts/test-rust-topic-takeover.mjs",
+    "test:rust-agent-runtime": "node scripts/test-rust-agent-runtime.mjs",
+    "test:rust-daemon-smoke": "node scripts/test-rust-daemon-smoke.mjs",
+    "test:rust-topic-takeover": "node scripts/test-rust-topic-takeover.mjs",
     "test:electron-topic-takeover": "node scripts/test-electron-topic-takeover.mjs",
     "test:rust-agent-live": "node scripts/test-live-rust-agent.mjs",
     "test:rust-agent-tools-live": "node scripts/test-live-rust-tools.mjs",
@@ -44,8 +44,10 @@
     "test:rust-tui-live": "cargo test --manifest-path rust/Cargo.toml -p vcp-agent-tui --test pty_acceptance native_tui_live_executes_fileoperator_from_real_keyboard_input -- --ignored --exact --test-threads=1",
     "check:rust-agent-runtime": "node --check modules/agent-runtime/rustDaemonTransport.js && node --check modules/agent-runtime/rustRuntimeManager.js && node --check modules/ipc/agentRuntimeHandlers.js && node --check modules/ui-system/agent-workbench.js && node --check modules/ui-system/agent-workbench-controller.js && node --check modules/ui-system/agent-workbench-store.js && node scripts/test-rust-protocol-fixture.mjs && node scripts/test-rust-live-contracts.mjs",
     "check:agent-runtime": "npm run check:rust-agent-runtime",
-    "pack": "npm run build:daemon && electron-builder --dir",
-    "dist": "npm run build:daemon && electron-builder"
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder",
+    "build:chat-data": "node rust_chat_data_service/build-runtime.js",
+    "build": "npm run build:chat-data && npm run build:daemon"
   },
   "keywords": [
     "VCP",
@@ -186,6 +188,9 @@
     "linux": {
       "target": "AppImage",
       "icon": "assets"
-    }
+    },
+    "asarUnpack": [
+      "modules/services/chatDataService/bin/**/*"
+    ]
   }
 }

@@ -13,6 +13,28 @@
 
 ## 当前可重复验证
 
+## 2026-07-29 上游整合记录
+
+本分支基于 Rust Agent 集成提交 `9f083b24`，在独立整合分支中合入
+`origin/main` 的 13 个上游提交（合并基线 `4b73a719`）。整合保留了 Rust
+daemon 的唯一 Agent Runtime 边界、Workbench snapshot-first 投影、daemon
+构建/打包资源和原有启动入口；上游的 VCP-CDS、DeepMemo、MobileSync、主聊天
+渲染修复和主题资源则作为主聊天/DistributedServer 功能接入，未成为 Agent
+Topic 的第二持久化来源。
+
+本次仅计入下列当前 revision 的 hermetic 证据：
+
+- `npm run build`（同时构建 VCP-CDS 与 `vcp-agentd`）；
+- `node --test tests/deepmemo-central-adapter.test.js tests/mobile-sync-central-adapter.test.js`；
+- `npm run test:rust-stack`、`npm run test:agent-workbench`、`npm run test:electron-gui-smoke`；
+- `cargo fmt --manifest-path rust/Cargo.toml --all --check`、
+  `cargo clippy --manifest-path rust/Cargo.toml --workspace -- -D warnings`、
+  `cargo test --manifest-path rust/Cargo.toml --workspace`；
+- 同等的 `rust_chat_data_service` fmt/clippy/test 门槛。
+
+真实 ToolBox 和 DistributedServer capability 证据仍保持 opt-in，不能由这次上游
+合并或 hermetic 通过替代；R4 继续为 `in progress`。
+
 R0–R2 已在 2026-07-29 以 hermetic 模式完成本 revision 的验收。下列是每次 Runtime 修改后都必须重新运行的门槛；不得将本次结果外推到未来 revision。
 
 ```powershell
