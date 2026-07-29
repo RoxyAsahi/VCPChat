@@ -6,13 +6,15 @@
 
 pub mod app;
 pub mod bridge;
+mod clipboard;
+mod markdown;
 pub mod protocol;
 pub mod theme;
 
 pub use app::{App, ChoiceItem, InputAction, MessageBlock, MessageKind};
 pub use bridge::HostBridge;
 pub use protocol::{
-    ApprovalBinding, PermissionMode, RuntimeState, ToolBoxState, ToolStatus, UiAction, UiInbound,
-    VcpEvent,
+    ApprovalBinding, InteractionItem, PermissionMode, RuntimeState, ToolBoxState, ToolStatus,
+    UiAction, UiInbound, VcpEvent,
 };
 pub use theme::ThemeId;

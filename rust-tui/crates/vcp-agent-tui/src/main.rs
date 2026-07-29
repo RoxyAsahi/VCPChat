@@ -18,8 +18,8 @@ use vcp_agent_host::{
     default_settings_path, load_config, start, update_shared_settings,
 };
 use vcp_agent_tui::{
-    App, ApprovalBinding, ChoiceItem, HostBridge, InputAction, PermissionMode, RuntimeState,
-    ToolBoxState, ToolStatus, UiAction, UiInbound, VcpEvent,
+    App, ApprovalBinding, ChoiceItem, HostBridge, InputAction, InteractionItem, ToolStatus,
+    UiAction, UiInbound, VcpEvent,
 };
 
 static TUI_REQUEST_SEQUENCE: AtomicU64 = AtomicU64::new(1);
@@ -34,6 +34,7 @@ fn tui_request_id() -> String {
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
+    vcp_grok_crash_handler::install_terminal_restore_only();
     let mut options = parse_options();
     if options.help {
         print_help();
@@ -49,9 +50,13 @@ async fn main() -> io::Result<()> {
     }
     loop {
         let use_alternate_screen = options.use_alternate_screen;
-        let mut terminal = enter_terminal(use_alternate_screen)?;
-        let outcome = run(&mut terminal, options.clone()).await;
-        restore_terminal(&mut terminal, use_alternate_screen)?;
+        let mut terminal = TerminalSession::enter(use_alternate_screen)?;
+        #[cfg(debug_assertions)]
+        if std::env::var_os("VCP_AGENT_TUI_TEST_PANIC_AFTER_INIT").is_some() {
+            panic!("VCPAgent PTY crash-cleanup fixture");
+        }
+        let outcome = run(terminal.terminal_mut(), options.clone()).await;
+        terminal.restore()?;
         let outcome = outcome?;
         if outcome == RunOutcome::OpenSettings {
             run_settings_wizard(&options.overrides)?;
@@ -67,30 +72,57 @@ enum RunOutcome {
     OpenSettings,
 }
 
-fn enter_terminal(
+struct TerminalSession {
+    terminal: Terminal<CrosstermBackend<std::io::Stdout>>,
     use_alternate_screen: bool,
-) -> io::Result<Terminal<CrosstermBackend<std::io::Stdout>>> {
-    enable_raw_mode()?;
-    let mut output = stdout();
-    if use_alternate_screen {
-        output.execute(EnterAlternateScreen)?;
-    }
-    output.execute(EnableMouseCapture)?;
-    output.execute(EnableBracketedPaste)?;
-    Terminal::new(CrosstermBackend::new(output))
+    restored: bool,
 }
 
-fn restore_terminal(
-    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
-    use_alternate_screen: bool,
-) -> io::Result<()> {
-    disable_raw_mode()?;
-    terminal.backend_mut().execute(DisableBracketedPaste)?;
-    terminal.backend_mut().execute(DisableMouseCapture)?;
-    if use_alternate_screen {
-        terminal.backend_mut().execute(LeaveAlternateScreen)?;
+impl TerminalSession {
+    fn enter(use_alternate_screen: bool) -> io::Result<Self> {
+        enable_raw_mode()?;
+        let mut output = stdout();
+        if use_alternate_screen {
+            output.execute(EnterAlternateScreen)?;
+        }
+        output.execute(EnableMouseCapture)?;
+        output.execute(EnableBracketedPaste)?;
+        vcp_grok_crash_handler::enable_terminal_escape_restore();
+        let terminal = Terminal::new(CrosstermBackend::new(output))?;
+        Ok(Self {
+            terminal,
+            use_alternate_screen,
+            restored: false,
+        })
     }
-    terminal.show_cursor()
+
+    fn terminal_mut(&mut self) -> &mut Terminal<CrosstermBackend<std::io::Stdout>> {
+        &mut self.terminal
+    }
+
+    fn restore(&mut self) -> io::Result<()> {
+        if self.restored {
+            return Ok(());
+        }
+        vcp_grok_crash_handler::disable_terminal_escape_restore();
+        disable_raw_mode()?;
+        self.terminal.backend_mut().execute(DisableBracketedPaste)?;
+        self.terminal.backend_mut().execute(DisableMouseCapture)?;
+        if self.use_alternate_screen {
+            self.terminal.backend_mut().execute(LeaveAlternateScreen)?;
+        }
+        self.terminal.show_cursor()?;
+        self.restored = true;
+        Ok(())
+    }
+}
+
+impl Drop for TerminalSession {
+    fn drop(&mut self) {
+        if self.restore().is_err() {
+            let _ = std::io::stderr().write_all(vcp_grok_crash_handler::RESTORE_SEQ);
+        }
+    }
 }
 
 enum Runtime {
@@ -99,7 +131,7 @@ enum Runtime {
         overrides: Box<RuntimeOverrides>,
     },
     Bridge(HostBridge),
-    Demo,
+    Unavailable,
 }
 
 async fn run(
@@ -116,29 +148,11 @@ async fn run(
                 overrides: Box::new(options.overrides.clone()),
             },
             Err(error) => {
-                app.apply_event(VcpEvent::RuntimeWarning {
-                    message: error.to_string(),
-                });
-                Runtime::Demo
+                app.set_runtime_unavailable(error.to_string());
+                Runtime::Unavailable
             }
         }
     };
-    if matches!(runtime, Runtime::Demo) {
-        app.apply_event(VcpEvent::SessionStarted {
-            agent: "Nova".into(),
-            model: options
-                .overrides
-                .model
-                .clone()
-                .unwrap_or_else(|| "未配置模型".into()),
-            workspace: options
-                .overrides
-                .workspace
-                .as_ref()
-                .map(|value| value.display().to_string())
-                .unwrap_or_else(|| ".".into()),
-        });
-    }
     let mut last_tick = Instant::now();
     loop {
         drain_runtime(&mut runtime, &mut app);
@@ -189,7 +203,7 @@ fn drain_runtime(runtime: &mut Runtime, app: &mut App) {
                 }
             }
         }
-        Runtime::Demo => {}
+        Runtime::Unavailable => {}
     }
 }
 
@@ -200,17 +214,18 @@ fn apply_host_event(app: &mut App, event: HostEvent) {
             channel,
             kind,
             payload,
-        } => app.apply_event(VcpEvent::Notice {
-            title: format!("ToolBox {channel} · {kind}"),
-            message: serde_json::to_string_pretty(&payload).unwrap_or_else(|_| payload.to_string()),
-        }),
+        } => {
+            if let Some(event) = toolbox_observation(channel, kind, payload) {
+                app.apply_event(event);
+            }
+        }
         HostEvent::Approval(request) => app.apply_event(VcpEvent::ApprovalRequested {
             approval_id: request.approval_id,
             tool_name: request.tool_name,
             risk: request.risk,
             reason: request.reason,
             argument_summary: request.argument_summary,
-            expires_at_ms: None,
+            expires_at_ms: Some(request.expires_at_ms),
             binding: Some(ApprovalBinding {
                 session_id: request.session_id,
                 turn_id: request.turn_id,
@@ -232,8 +247,60 @@ fn apply_host_event(app: &mut App, event: HostEvent) {
             "topics" => app.open_choice_picker(
                 "topic",
                 "Agent Topic",
-                choice_items(&payload, "id", "title", "model"),
+                topic_choice_items(&payload),
             ),
+            "interaction-queue" => app.apply_event(VcpEvent::InteractionQueue {
+                items: interaction_items(&payload),
+            }),
+            "settings" => apply_settings_snapshot(app, &payload, false),
+            "settings-updated" => apply_settings_snapshot(
+                app,
+                payload.get("settings").unwrap_or(&payload),
+                payload
+                    .get("restartRequired")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(true),
+            ),
+            "topic-read-only" => app.apply_event(topic_snapshot_event(&payload)),
+            "topic-renamed" => app.apply_event(VcpEvent::Notice {
+                title: "Topic 已重命名".into(),
+                message: format!(
+                    "{} → {}",
+                    payload
+                        .get("topicId")
+                        .and_then(Value::as_str)
+                        .unwrap_or("unknown"),
+                    payload
+                        .get("title")
+                        .and_then(Value::as_str)
+                        .unwrap_or("未命名")
+                ),
+            }),
+            "topic-deleted" => app.apply_event(VcpEvent::Notice {
+                title: "Topic 已删除".into(),
+                message: payload
+                    .get("topicId")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unknown")
+                    .to_string(),
+            }),
+            "topic-takeover-pending" => app.apply_event(VcpEvent::Notice {
+                title: "Topic 接管".into(),
+                message: format!(
+                    "已请求 {} 的协作式接管；旧持有者必须先取消 Turn、保存 checkpoint 并释放 lease。",
+                    payload
+                        .get("topicId")
+                        .and_then(Value::as_str)
+                        .unwrap_or("unknown")
+                ),
+            }),
+            "control-error" => app.apply_event(VcpEvent::RuntimeWarning {
+                message: payload
+                    .get("error")
+                    .and_then(Value::as_str)
+                    .unwrap_or("控制命令失败")
+                    .to_string(),
+            }),
             _ => app.apply_event(VcpEvent::Notice {
                 title: kind,
                 message: serde_json::to_string_pretty(&payload)
@@ -268,9 +335,281 @@ fn apply_host_event(app: &mut App, event: HostEvent) {
     }
 }
 
+fn interaction_items(value: &Value) -> Vec<InteractionItem> {
+    value
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|item| {
+            Some(InteractionItem {
+                interaction_id: item.get("interactionId")?.as_str()?.to_string(),
+                kind: item
+                    .get("kind")
+                    .and_then(Value::as_str)
+                    .unwrap_or("follow-up")
+                    .to_string(),
+                prompt: item
+                    .get("prompt")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string(),
+                consumed: item
+                    .get("consumed")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+            })
+        })
+        .collect()
+}
+
+fn budget_event(value: &Value, restart_required: bool) -> VcpEvent {
+    let budget = value.get("budget").unwrap_or(value);
+    VcpEvent::Budget {
+        max_requests_per_turn: budget.get("maxRequestsPerTurn").and_then(Value::as_u64),
+        max_tokens_per_turn: budget.get("maxTokensPerTurn").and_then(Value::as_u64),
+        restart_required,
+    }
+}
+
+fn apply_settings_snapshot(app: &mut App, value: &Value, restart_required: bool) {
+    app.apply_event(VcpEvent::SettingsSummary {
+        default_model: value
+            .get("defaultModel")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown")
+            .to_string(),
+        default_agent: value
+            .get("defaultAgentId")
+            .and_then(Value::as_str)
+            .unwrap_or("Nova")
+            .to_string(),
+        theme: value
+            .get("theme")
+            .and_then(Value::as_str)
+            .unwrap_or("Auto")
+            .to_string(),
+        permission_mode: value
+            .get("permissionMode")
+            .and_then(Value::as_str)
+            .unwrap_or("ask")
+            .to_string(),
+        restart_required,
+    });
+    app.apply_event(budget_event(value, restart_required));
+}
+
+fn topic_snapshot_event(value: &Value) -> VcpEvent {
+    let state = value.get("state").unwrap_or(&Value::Null);
+    let history = value
+        .get("history")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or(&[]);
+    let preview = history
+        .iter()
+        .rev()
+        .find_map(|entry| {
+            entry
+                .get("content")
+                .and_then(Value::as_str)
+                .or_else(|| entry.get("text").and_then(Value::as_str))
+        })
+        .unwrap_or("没有可显示的文本预览");
+    VcpEvent::TopicSnapshot {
+        topic_id: value
+            .get("topicId")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown")
+            .to_string(),
+        history_entries: history.len(),
+        state: state
+            .get("status")
+            .and_then(Value::as_str)
+            .or_else(|| state.get("turnStatus").and_then(Value::as_str))
+            .unwrap_or("checkpoint available")
+            .to_string(),
+        preview: preview.chars().take(600).collect(),
+    }
+}
+
+fn toolbox_observation(channel: String, kind: String, payload: Value) -> Option<VcpEvent> {
+    if kind == "backend-approval-request" {
+        let tool = payload
+            .get("toolName")
+            .or_else(|| payload.get("tool"))
+            .and_then(Value::as_str)
+            .unwrap_or("VCPToolBox tool");
+        return Some(VcpEvent::ToolboxObservation {
+            channel,
+            kind,
+            title: "等待 ToolBox 后端审批".into(),
+            detail: format!(
+                "{tool} 正在等待 ToolBox 自己的审批结果。客户端 always-approve/yolo 不会绕过此阶段。"
+            ),
+        });
+    }
+
+    let event_type = payload
+        .get("type")
+        .and_then(Value::as_str)
+        .unwrap_or(kind.as_str())
+        .to_string();
+    if matches!(
+        event_type.as_str(),
+        "connection_ack" | "META_THINKING_CHAIN"
+    ) {
+        return None;
+    }
+    let raw = serde_json::to_string_pretty(&payload).unwrap_or_else(|_| payload.to_string());
+    let (title, summary) = if event_type == "RAG_RETRIEVAL_DETAILS" {
+        rag_retrieval_summary(&payload)
+    } else {
+        let title = payload
+            .get("source")
+            .or_else(|| payload.get("title"))
+            .or_else(|| payload.get("requestId"))
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned)
+            .unwrap_or_else(|| friendly_toolbox_event_name(&event_type));
+        let summary = [
+            "message",
+            "query",
+            "response",
+            "extractedMemories",
+            "narrative",
+            "error",
+        ]
+        .into_iter()
+        .find_map(|field| payload.get(field).and_then(Value::as_str))
+        .map(|value| truncate_chars(value.trim(), 280))
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| format!("收到 {event_type} 结构化事件"));
+        (title, summary)
+    };
+    let detail = if raw.trim() == summary.trim() {
+        summary
+    } else {
+        format!("{summary}\n\n原始元数据\n{raw}")
+    };
+    Some(VcpEvent::ToolboxObservation {
+        channel,
+        kind: event_type,
+        title,
+        detail,
+    })
+}
+
+fn rag_retrieval_summary(payload: &Value) -> (String, String) {
+    let database = payload
+        .get("dbName")
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("Unknown");
+    let result_count = payload
+        .get("results")
+        .and_then(Value::as_array)
+        .map(Vec::len)
+        .unwrap_or(0);
+    let query = payload
+        .get("query")
+        .and_then(Value::as_str)
+        .map(|value| truncate_chars(value.trim(), 280))
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "未提供查询文本".into());
+    let mut strategies = Vec::new();
+    if payload.get("fromCache").and_then(Value::as_bool) == Some(true) {
+        strategies.push("缓存命中".to_string());
+    }
+    if payload.get("useTime").and_then(Value::as_bool) == Some(true) {
+        strategies.push("时间召回".to_string());
+    }
+    if payload.get("useGroup").and_then(Value::as_bool) == Some(true) {
+        strategies.push("分组".to_string());
+    }
+    if payload.get("useBM25").and_then(Value::as_bool) == Some(true) {
+        strategies.push("BM25".to_string());
+    }
+    if payload.get("useTagMemo").and_then(Value::as_bool) == Some(true) {
+        let weight = payload
+            .get("tagWeight")
+            .and_then(Value::as_f64)
+            .map(|value| format!(" {value:.2}"))
+            .unwrap_or_default();
+        strategies.push(format!("标签增强{weight}"));
+    }
+    if payload.get("useGeodesicRerank").and_then(Value::as_bool) == Some(true) {
+        strategies.push("GeoReRank".to_string());
+    }
+    if payload.get("useRerank").and_then(Value::as_bool) == Some(true) {
+        strategies.push("ReRank".to_string());
+    }
+    let strategy_line = if strategies.is_empty() {
+        "默认向量检索".to_string()
+    } else {
+        strategies.join(" · ")
+    };
+    let iteration = payload
+        .get("iteration")
+        .and_then(Value::as_u64)
+        .map(|value| format!(" · 第 {value} 轮"))
+        .unwrap_or_default();
+    (
+        format!("RAG 检索 · {database} · {result_count} 条命中"),
+        format!("查询：{query}\n策略：{strategy_line}{iteration}"),
+    )
+}
+
+fn friendly_toolbox_event_name(event_type: &str) -> String {
+    match event_type {
+        "META_THINKING_CHAIN" => "元思考链".into(),
+        "AGENT_PRIVATE_CHAT_PREVIEW" => "Agent 私聊预览".into(),
+        "AI_MEMO_RETRIEVAL" => "记忆检索".into(),
+        "DailyNote" => "日记召回".into(),
+        value if value.starts_with("AGENT_DREAM_") => "Agent 梦境".into(),
+        "notification" => "ToolBox 通知".into(),
+        other => other.to_string(),
+    }
+}
+
+fn truncate_chars(value: &str, limit: usize) -> String {
+    let mut chars = value.chars();
+    let head: String = chars.by_ref().take(limit).collect();
+    if chars.next().is_some() {
+        format!("{head}…")
+    } else {
+        head
+    }
+}
+
 fn apply_core_event(app: &mut App, event: &Value) {
     let payload = event.get("payload").unwrap_or(&Value::Null);
     match event.get("type").and_then(Value::as_str) {
+        Some("runtime.ready") => {
+            app.apply_theme_name(
+                payload
+                    .get("theme")
+                    .and_then(Value::as_str)
+                    .unwrap_or("Auto"),
+            );
+            app.apply_event(VcpEvent::SessionStarted {
+                agent: payload
+                    .get("agent")
+                    .and_then(Value::as_str)
+                    .unwrap_or("Nova")
+                    .to_string(),
+                model: payload
+                    .get("model")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string(),
+                workspace: payload
+                    .get("workspace")
+                    .and_then(Value::as_str)
+                    .unwrap_or(".")
+                    .to_string(),
+            });
+            app.set_context_window(payload.get("contextWindow").and_then(Value::as_u64));
+        }
         Some("assistant.delta") => app.apply_event(VcpEvent::AssistantDelta {
             text: payload
                 .get("text")
@@ -283,6 +622,12 @@ fn apply_core_event(app: &mut App, event: &Value) {
             if let Some(usage) = payload.get("usage") {
                 apply_usage(app, usage);
             }
+        }
+        Some("turn.completed") => {
+            if let Some(usage) = payload.get("usage") {
+                apply_usage(app, usage);
+            }
+            app.apply_event(VcpEvent::TurnCompleted);
         }
         Some("reasoning.delta") => app.apply_event(VcpEvent::ReasoningDelta {
             text: payload
@@ -357,6 +702,42 @@ fn choice_items(value: &Value, id_key: &str, label_key: &str, detail_key: &str) 
         .collect()
 }
 
+fn topic_choice_items(value: &Value) -> Vec<ChoiceItem> {
+    value
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|item| {
+            let id = item.get("id")?.as_str()?.to_string();
+            let state = if item.get("inUse").and_then(Value::as_bool) == Some(true) {
+                "in use"
+            } else if item.get("readOnly").and_then(Value::as_bool) == Some(true) {
+                "read only"
+            } else {
+                "available"
+            };
+            Some(ChoiceItem {
+                label: item
+                    .get("title")
+                    .and_then(Value::as_str)
+                    .unwrap_or(&id)
+                    .to_string(),
+                detail: format!(
+                    "{} · {} · {}",
+                    item.get("model")
+                        .and_then(Value::as_str)
+                        .unwrap_or("unknown model"),
+                    state,
+                    item.get("workspaceRef")
+                        .and_then(Value::as_str)
+                        .unwrap_or("unknown workspace")
+                ),
+                id,
+            })
+        })
+        .collect()
+}
+
 fn apply_tool_status(app: &mut App, event: &Value, payload: &Value, status: ToolStatus) {
     app.apply_event(VcpEvent::ToolStatus {
         call_id: event
@@ -380,23 +761,47 @@ fn apply_tool_status(app: &mut App, event: &Value, payload: &Value, status: Tool
 
 fn apply_usage(app: &mut App, usage: &Value) {
     let input = usage
-        .get("prompt_tokens")
+        .get("input")
+        .or_else(|| usage.get("prompt_tokens"))
         .or_else(|| usage.get("input_tokens"))
         .and_then(Value::as_u64)
         .unwrap_or(0);
     let output = usage
-        .get("completion_tokens")
+        .get("output")
+        .or_else(|| usage.get("completion_tokens"))
         .or_else(|| usage.get("output_tokens"))
         .and_then(Value::as_u64)
         .unwrap_or(0);
     app.apply_event(VcpEvent::Usage {
         input_tokens: input,
         output_tokens: output,
+        reasoning_tokens: usage.get("reasoning").and_then(Value::as_u64).unwrap_or(0),
+        cache_read_tokens: usage
+            .get("cacheRead")
+            .or_else(|| usage.get("cache_read"))
+            .and_then(Value::as_u64)
+            .unwrap_or(0),
+        cache_write_tokens: usage
+            .get("cacheWrite")
+            .or_else(|| usage.get("cache_write"))
+            .and_then(Value::as_u64)
+            .unwrap_or(0),
         total_tokens: usage
-            .get("total_tokens")
+            .get("totalTokens")
+            .or_else(|| usage.get("total_tokens"))
             .and_then(Value::as_u64)
             .unwrap_or(input + output),
-        context_window: None,
+        requests: usage.get("requests").and_then(Value::as_u64).unwrap_or(0),
+        context_window: usage.get("contextWindow").and_then(Value::as_u64),
+        estimated: usage
+            .get("estimated")
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
+        source: usage
+            .get("source")
+            .and_then(Value::as_str)
+            .unwrap_or("estimated")
+            .to_string(),
     });
 }
 
@@ -455,59 +860,167 @@ fn dispatch_command(app: &mut App, runtime: &mut Runtime, command: String) {
         "/follow-up" if !argument.is_empty() => {
             send(runtime, HostCommand::FollowUp { prompt: argument })
         }
-        "/model" if argument.is_empty() => send(runtime, HostCommand::ListModels { request_id: tui_request_id() }),
+        "/model" if argument.is_empty() => send(
+            runtime,
+            HostCommand::ListModels {
+                request_id: tui_request_id(),
+            },
+        ),
         "/model" => restart_native(runtime, app, |overrides| {
             overrides.model = Some(argument);
             overrides.resume = None;
         }),
-        "/agent" if argument.is_empty() => send(runtime, HostCommand::ListAgents { request_id: tui_request_id() }),
+        "/agent" if argument.is_empty() => send(
+            runtime,
+            HostCommand::ListAgents {
+                request_id: tui_request_id(),
+            },
+        ),
         "/agent" => restart_native(runtime, app, |overrides| {
             overrides.agent = Some(argument);
             overrides.resume = None;
         }),
-        "/topics" if argument.is_empty() => send(runtime, HostCommand::ListTopics { request_id: tui_request_id() }),
+        "/topics" if argument.is_empty() => send(
+            runtime,
+            HostCommand::ListTopics {
+                request_id: tui_request_id(),
+                agent_id: None,
+            },
+        ),
         "/topics" if argument.starts_with("rename ") => {
             let rest = argument.trim_start_matches("rename ");
             if let Some((topic_id, title)) = rest.split_once(char::is_whitespace) {
-                send(runtime, HostCommand::RenameTopic { request_id: tui_request_id(), topic_id: topic_id.into(), title: title.trim().into() });
+                send(
+                    runtime,
+                    HostCommand::RenameTopic {
+                        request_id: tui_request_id(),
+                        topic_id: topic_id.into(),
+                        title: title.trim().into(),
+                        agent_id: None,
+                    },
+                );
             }
         }
-        "/topics" if argument.starts_with("delete ") => send(runtime, HostCommand::DeleteTopic { request_id: tui_request_id(),
-            topic_id: argument.trim_start_matches("delete ").trim().into(),
-        }),
-        "/topics" if argument.starts_with("read ") => send(runtime, HostCommand::ReadTopic { request_id: tui_request_id(),
-            topic_id: argument.trim_start_matches("read ").trim().into(),
-        }),
-        "/topics" if argument.starts_with("takeover ") => {
-            send(runtime, HostCommand::RequestTopicTakeover {
+        "/topics" if argument.starts_with("delete ") => {
+            let rest = argument.trim_start_matches("delete ").trim();
+            let topic_id = rest.strip_suffix(" --confirm").map(str::trim);
+            if let Some(topic_id) = topic_id.filter(|value| !value.is_empty()) {
+                send(
+                    runtime,
+                    HostCommand::DeleteTopic {
+                        request_id: tui_request_id(),
+                        topic_id: topic_id.into(),
+                        agent_id: None,
+                    },
+                );
+            } else {
+                app.apply_event(VcpEvent::Notice {
+                    title: "确认删除 Topic".into(),
+                    message: format!(
+                        "删除不会影响其他 Topic。确认后执行：/topics delete {rest} --confirm"
+                    ),
+                });
+            }
+        }
+        "/topics" if argument.starts_with("read ") => send(
+            runtime,
+            HostCommand::ReadTopic {
                 request_id: tui_request_id(),
+                agent_id: None,
+                topic_id: argument.trim_start_matches("read ").trim().into(),
+            },
+        ),
+        "/topics" if argument.starts_with("takeover ") => send(
+            runtime,
+            HostCommand::RequestTopicTakeover {
+                request_id: tui_request_id(),
+                agent_id: None,
                 topic_id: argument.trim_start_matches("takeover ").trim().into(),
                 requester_id: format!("tui_{}", std::process::id()),
-            })
-        }
+            },
+        ),
         "/resume" if !argument.is_empty() => restart_native(runtime, app, |overrides| {
             overrides.resume = Some(argument);
         }),
         "/new" => restart_native(runtime, app, |overrides| overrides.resume = None),
-        "/clear-queue" => send(runtime, HostCommand::ClearInteractionQueue { request_id: tui_request_id() }),
+        "/clear-queue" => send(
+            runtime,
+            HostCommand::ClearInteractionQueue {
+                request_id: tui_request_id(),
+            },
+        ),
+        "/queue" if argument == "clear" => send(
+            runtime,
+            HostCommand::ClearInteractionQueue {
+                request_id: tui_request_id(),
+            },
+        ),
         "/compact" => send(runtime, HostCommand::Compact),
         "/permissions" if matches!(argument.as_str(), "ask" | "always-approve" | "yolo") => {
             let always = argument != "ask";
-            send(runtime, HostCommand::UpdateSettings { request_id: tui_request_id(), update: TuiSettingsUpdate {
-                permission_mode: Some(if always { "always-approve" } else { "ask" }.into()),
-                ..TuiSettingsUpdate::default()
-            }});
+            send(
+                runtime,
+                HostCommand::UpdateSettings {
+                    request_id: tui_request_id(),
+                    update: TuiSettingsUpdate {
+                        permission_mode: Some(if always { "always-approve" } else { "ask" }.into()),
+                        ..TuiSettingsUpdate::default()
+                    },
+                },
+            );
             restart_native(runtime, app, |overrides| overrides.always_approve = always);
         }
-        "/settings" => app.apply_event(VcpEvent::Notice {
-            title: "设置".into(),
-            message: "使用 /model <id>、/agent <id>、/permissions <ask|always-approve> 修改运行设置；Server URL/API Key 继续安全读取共享 settings.json 或环境变量。".into(),
-        }),
-        "/queue" => send(runtime, HostCommand::ListInteractionQueue { request_id: tui_request_id() }),
+        "/settings" => send(
+            runtime,
+            HostCommand::GetSettings {
+                request_id: tui_request_id(),
+            },
+        ),
+        "/queue" if argument.is_empty() => send(
+            runtime,
+            HostCommand::ListInteractionQueue {
+                request_id: tui_request_id(),
+            },
+        ),
+        "/queue" if argument.starts_with("remove ") => {
+            let interaction_id = argument.trim_start_matches("remove ").trim();
+            if interaction_id.is_empty() {
+                app.apply_event(VcpEvent::RuntimeWarning {
+                    message: "用法：/queue remove <interactionId>".into(),
+                });
+            } else {
+                send(
+                    runtime,
+                    HostCommand::RemoveInteractionQueueItem {
+                        request_id: tui_request_id(),
+                        interaction_id: interaction_id.into(),
+                    },
+                );
+            }
+        }
+        "/queue" if argument.starts_with("replace ") => {
+            let rest = argument.trim_start_matches("replace ").trim();
+            if let Some((interaction_id, prompt)) = rest.split_once(char::is_whitespace) {
+                send(
+                    runtime,
+                    HostCommand::ReplaceInteractionQueueItem {
+                        request_id: tui_request_id(),
+                        interaction_id: interaction_id.into(),
+                        prompt: prompt.trim().into(),
+                    },
+                );
+            } else {
+                app.apply_event(VcpEvent::RuntimeWarning {
+                    message: "用法：/queue replace <interactionId> <prompt>".into(),
+                });
+            }
+        }
         "/budget" if !argument.is_empty() => {
             let mut budget = BudgetLimits::default();
             for item in argument.split_whitespace() {
-                let Some((key, value)) = item.split_once('=') else { continue };
+                let Some((key, value)) = item.split_once('=') else {
+                    continue;
+                };
                 let parsed = value.parse::<u64>().ok().filter(|value| *value > 0);
                 match key {
                     "requests" => budget.max_requests_per_turn = parsed,
@@ -515,22 +1028,33 @@ fn dispatch_command(app: &mut App, runtime: &mut Runtime, command: String) {
                     _ => {}
                 }
             }
-            send(runtime, HostCommand::UpdateSettings { request_id: tui_request_id(), update: TuiSettingsUpdate {
-                budget: Some(budget),
-                ..TuiSettingsUpdate::default()
-            }});
-            app.apply_event(VcpEvent::Notice { title: "Budget".into(), message: "预算已保存；下次创建 Session 生效。格式：/budget requests=20 tokens=200000".into() });
+            if budget.max_requests_per_turn.is_none() && budget.max_tokens_per_turn.is_none() {
+                app.apply_event(VcpEvent::RuntimeWarning {
+                    message: "用法：/budget requests=<n> tokens=<n>；数值必须大于 0".into(),
+                });
+            } else {
+                send(
+                    runtime,
+                    HostCommand::UpdateSettings {
+                        request_id: tui_request_id(),
+                        update: TuiSettingsUpdate {
+                            budget: Some(budget),
+                            ..TuiSettingsUpdate::default()
+                        },
+                    },
+                );
+            }
         }
-        "/usage" | "/budget" => app.apply_event(VcpEvent::Notice {
-            title: "Usage / Budget".into(),
-            message: "当前累计 token 与上下文占比显示在 Footer；使用 /budget requests=<n> tokens=<n> 设置每轮上限。费用在没有可靠价格目录时保持未知。".into(),
-        }),
+        "/usage" => app.show_usage(),
+        "/budget" => send(
+            runtime,
+            HostCommand::GetSettings {
+                request_id: tui_request_id(),
+            },
+        ),
         "/reasoning" => app.toggle_reasoning_command(),
-        "/status" => app.apply_event(VcpEvent::RuntimeStatus {
-            runtime: RuntimeState::Ready,
-            toolbox: ToolBoxState::Connected,
-            permission_mode: PermissionMode::Ask,
-        }),
+        "/toolbox" => app.toggle_toolbox_observation_command(),
+        "/status" => app.show_runtime_status(),
         _ => app.apply_event(VcpEvent::RuntimeWarning {
             message: format!("未知或缺少参数的命令：{command}"),
         }),
@@ -544,7 +1068,7 @@ fn restart_native(
 ) {
     let Runtime::Native { host, overrides } = runtime else {
         app.apply_event(VcpEvent::RuntimeWarning {
-            message: "当前 bridge/demo 模式不支持重建 Rust Session".into(),
+            message: "当前 bridge/配置阻断模式不支持重建 Rust Session".into(),
         });
         return;
     };
@@ -587,7 +1111,7 @@ fn send(runtime: &mut Runtime, command: HostCommand) {
             }
             _ => {}
         },
-        Runtime::Demo => {}
+        Runtime::Unavailable => {}
     }
 }
 
@@ -597,7 +1121,7 @@ fn shutdown(runtime: &mut Runtime) {
             let _ = host.commands.send(HostCommand::Shutdown);
         }
         Runtime::Bridge(bridge) => bridge.send(UiAction::Quit),
-        Runtime::Demo => {}
+        Runtime::Unavailable => {}
     }
 }
 
@@ -715,4 +1239,227 @@ fn print_help() {
     println!(
         "VCP Agent (pure Rust)\n\nUsage:\n  vcp-agent [workspace] [options]\n\nOptions:\n  -m, --model <id>       模型\n  -a, --agent <id|name>  Agent（默认 Nova）\n      --settings         启动前打开共享配置向导\n      --settings-path <path>\n      --resume <id|latest>\n      --minimal | --fullscreen\n      --permission-mode <ask|always-approve>\n      --yolo\n  -h, --help\n  -v, --version\n\nEnvironment: VCP_SERVER_URL, VCP_API_KEY, VCP_AGENT_SETTINGS_PATH, VCP_AGENT_AGENTS_DIR"
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn native_tui_submit_uses_the_rust_host_command_channel() {
+        let (commands, mut command_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (_event_tx, events) = tokio::sync::mpsc::unbounded_channel();
+        let mut runtime = Runtime::Native {
+            host: RunningHost {
+                commands,
+                events,
+                session_id: "session-test".into(),
+                topic_id: "topic-test".into(),
+            },
+            overrides: Box::new(RuntimeOverrides::default()),
+        };
+        let mut app = App::new();
+
+        dispatch_action(
+            &mut app,
+            &mut runtime,
+            InputAction::Submit("通过 Rust Host 执行".into()),
+        );
+
+        match command_rx.try_recv().expect("native Host command") {
+            HostCommand::StartTurn { prompt, turn_id } => {
+                assert_eq!(prompt, "通过 Rust Host 执行");
+                assert_eq!(turn_id, None);
+            }
+            _ => panic!("TUI submit must project to HostCommand::StartTurn"),
+        }
+    }
+
+    #[test]
+    fn queue_item_commands_are_forwarded_to_the_authoritative_host() {
+        let (commands, mut command_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (_event_tx, events) = tokio::sync::mpsc::unbounded_channel();
+        let mut runtime = Runtime::Native {
+            host: RunningHost {
+                commands,
+                events,
+                session_id: "session-test".into(),
+                topic_id: "topic-test".into(),
+            },
+            overrides: Box::new(RuntimeOverrides::default()),
+        };
+        let mut app = App::new();
+
+        dispatch_command(&mut app, &mut runtime, "/queue remove interaction-1".into());
+        assert!(matches!(
+            command_rx.try_recv().expect("remove command"),
+            HostCommand::RemoveInteractionQueueItem { interaction_id, .. }
+                if interaction_id == "interaction-1"
+        ));
+
+        dispatch_command(
+            &mut app,
+            &mut runtime,
+            "/queue replace interaction-2 改成先检查测试".into(),
+        );
+        assert!(matches!(
+            command_rx.try_recv().expect("replace command"),
+            HostCommand::ReplaceInteractionQueueItem { interaction_id, prompt, .. }
+                if interaction_id == "interaction-2" && prompt == "改成先检查测试"
+        ));
+    }
+
+    #[test]
+    fn usage_is_local_projection_and_budget_queries_host_settings() {
+        let (commands, mut command_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (_event_tx, events) = tokio::sync::mpsc::unbounded_channel();
+        let mut runtime = Runtime::Native {
+            host: RunningHost {
+                commands,
+                events,
+                session_id: "session-test".into(),
+                topic_id: "topic-test".into(),
+            },
+            overrides: Box::new(RuntimeOverrides::default()),
+        };
+        let mut app = App::new();
+
+        dispatch_command(&mut app, &mut runtime, "/usage".into());
+        assert_eq!(
+            app.messages.last().map(|block| block.title.as_str()),
+            Some("Usage")
+        );
+        assert!(command_rx.try_recv().is_err());
+
+        dispatch_command(&mut app, &mut runtime, "/budget".into());
+        assert!(matches!(
+            command_rx.try_recv().expect("settings request"),
+            HostCommand::GetSettings { .. }
+        ));
+
+        dispatch_command(&mut app, &mut runtime, "/settings".into());
+        assert!(matches!(
+            command_rx.try_recv().expect("settings summary request"),
+            HostCommand::GetSettings { .. }
+        ));
+    }
+
+    #[test]
+    fn topic_delete_requires_explicit_confirmation() {
+        let (commands, mut command_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (_event_tx, events) = tokio::sync::mpsc::unbounded_channel();
+        let mut runtime = Runtime::Native {
+            host: RunningHost {
+                commands,
+                events,
+                session_id: "session-test".into(),
+                topic_id: "topic-test".into(),
+            },
+            overrides: Box::new(RuntimeOverrides::default()),
+        };
+        let mut app = App::new();
+
+        dispatch_command(&mut app, &mut runtime, "/topics delete old-topic".into());
+        assert!(command_rx.try_recv().is_err());
+        assert_eq!(
+            app.messages.last().map(|block| block.title.as_str()),
+            Some("确认删除 Topic")
+        );
+
+        dispatch_command(
+            &mut app,
+            &mut runtime,
+            "/topics delete old-topic --confirm".into(),
+        );
+        assert!(matches!(
+            command_rx.try_recv().expect("confirmed delete"),
+            HostCommand::DeleteTopic { topic_id, .. } if topic_id == "old-topic"
+        ));
+    }
+
+    #[test]
+    fn backend_approval_observation_is_explicit_and_not_locally_resolved() {
+        let event = toolbox_observation(
+            "VCPInfo".into(),
+            "backend-approval-request".into(),
+            serde_json::json!({"toolName":"PowerShellExecutor","approvalId":"backend-1"}),
+        )
+        .expect("backend approval must remain visible");
+        let VcpEvent::ToolboxObservation { title, detail, .. } = event else {
+            panic!("expected observer event");
+        };
+        assert_eq!(title, "等待 ToolBox 后端审批");
+        assert!(detail.contains("PowerShellExecutor"));
+        assert!(detail.contains("不会绕过"));
+    }
+
+    #[test]
+    fn rag_retrieval_observation_uses_a_compact_structured_summary() {
+        let event = toolbox_observation(
+            "Info".into(),
+            "notification".into(),
+            serde_json::json!({
+                "type":"RAG_RETRIEVAL_DETAILS",
+                "dbName":"KnowledgeBase",
+                "query":"VCPAgent 如何调用插件",
+                "results":[{"score":0.9},{"score":0.8}],
+                "iteration":2,
+                "useTime":true,
+                "useTagMemo":true,
+                "tagWeight":0.4595,
+                "useGeodesicRerank":true
+            }),
+        )
+        .expect("RAG retrieval must remain visible");
+        let VcpEvent::ToolboxObservation {
+            kind,
+            title,
+            detail,
+            ..
+        } = event
+        else {
+            panic!("expected observer event");
+        };
+        assert_eq!(kind, "RAG_RETRIEVAL_DETAILS");
+        assert_eq!(title, "RAG 检索 · KnowledgeBase · 2 条命中");
+        assert!(detail.contains("查询：VCPAgent 如何调用插件"));
+        assert!(detail.contains("时间召回 · 标签增强 0.46 · GeoReRank · 第 2 轮"));
+        assert!(detail.contains("原始元数据"));
+    }
+
+    #[test]
+    fn transport_ack_and_meta_chain_do_not_pollute_the_conversation() {
+        assert!(
+            toolbox_observation(
+                "Info".into(),
+                "notification".into(),
+                serde_json::json!({"type":"connection_ack","message":"connected"})
+            )
+            .is_none()
+        );
+        assert!(
+            toolbox_observation(
+                "Info".into(),
+                "notification".into(),
+                serde_json::json!({"type":"META_THINKING_CHAIN","query":"internal"})
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn topic_catalog_labels_lease_state_without_creating_local_topic_truth() {
+        let items = topic_choice_items(&serde_json::json!([{
+            "id":"topic-live",
+            "title":"正在执行",
+            "model":"gpt-5.6-terra",
+            "workspaceRef":"C:/VCP/workspace",
+            "inUse":true,
+            "readOnly":false
+        }]));
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].id, "topic-live");
+        assert!(items[0].detail.contains("in use"));
+        assert!(items[0].detail.contains("C:/VCP/workspace"));
+    }
 }

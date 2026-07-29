@@ -7,6 +7,7 @@ const require = createRequire(import.meta.url);
 const { RustDaemonTransport } = require('../modules/agent-runtime/rustDaemonTransport');
 const repo = path.resolve(import.meta.dirname, '..');
 await requireLiveRustEnvironment();
+process.env.VCP_AGENT_TEST_TOOL_CHOICE = 'required';
 
 let mode = 'read';
 let readCompleted = false;
@@ -16,9 +17,11 @@ let highApproval = null;
 let highRan = false;
 const observedTypes = [];
 let finishTurn;
+let failTurn;
 const waitTurn = () => new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`${mode} tool turn timed out; events=${observedTypes.join(',')}`)), 120_000);
     finishTurn = () => { clearTimeout(timer); resolve(); };
+    failTurn = (error) => { clearTimeout(timer); reject(error); };
 });
 const transport = new RustDaemonTransport({
     projectRoot: repo,
@@ -35,6 +38,10 @@ const transport = new RustDaemonTransport({
         if (message.type !== 'event') return;
         const event = message.event || {};
         observedTypes.push(`${mode}:${event.type}`);
+        if (event.type === 'turn.failed') {
+            failTurn?.(new Error(`${mode} tool turn failed: ${event.payload?.error || 'unknown error'}`));
+            return;
+        }
         if (event.type.startsWith('tool.') || event.type.startsWith('approval.')) {
             // A live FileOperator result may contain source files.  The test
             // needs the event kind and ToolBox identity for diagnosis, not raw
@@ -77,6 +84,7 @@ try {
     let done = waitTurn();
     await transport.request('start-turn', {
         sessionId: session.sessionId,
+        turnId: `turn-live-read-${Date.now()}`,
         prompt: '请务必调用 FileOperator 的 ReadFile 读取当前工作区 package.json，只告诉我 name 字段。',
     });
     await done;
@@ -88,6 +96,7 @@ try {
     done = waitTurn();
     await transport.request('start-turn', {
         sessionId: session.sessionId,
+        turnId: `turn-live-deny-${Date.now()}`,
         prompt: '请务必调用 PowerShellExecutor 执行 Get-Location，不要用别的方法。',
     });
     await done;

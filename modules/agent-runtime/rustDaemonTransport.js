@@ -26,6 +26,7 @@ function validateDirectCommand(message) {
     switch (message.type) {
     case 'hello': case 'shutdown': case 'create-session':
     case 'list-topics':
+        if (Object.prototype.hasOwnProperty.call(message, 'agentId')) requiredString(message.agentId, 'agentId');
     case 'list-interaction-queue': case 'clear-interaction-queue': case 'get-settings':
         return;
     case 'close-session': case 'cancel-turn': case 'compact':
@@ -37,8 +38,15 @@ function validateDirectCommand(message) {
         requiredString(message.approvalId, 'approvalId'); requiredString(message.argumentsHash, 'argumentsHash');
         if (typeof message.allowed !== 'boolean' && typeof message.decision !== 'string') throw new Error('daemon protocol requires allowed or decision');
         return;
-    case 'read-topic': case 'takeover-topic': case 'delete-topic': return requiredString(message.topicId, 'topicId');
-    case 'rename-topic': requiredString(message.topicId, 'topicId'); return requiredString(message.title, 'title');
+    case 'read-topic': case 'takeover-topic': case 'delete-topic':
+        requiredString(message.topicId, 'topicId');
+        if (Object.prototype.hasOwnProperty.call(message, 'agentId')) requiredString(message.agentId, 'agentId');
+        return;
+    case 'rename-topic':
+        requiredString(message.topicId, 'topicId');
+        requiredString(message.title, 'title');
+        if (Object.prototype.hasOwnProperty.call(message, 'agentId')) requiredString(message.agentId, 'agentId');
+        return;
     case 'replace-interaction-queue': requiredIdentity(message, 'sessionId'); if (!Array.isArray(message.interactions)) throw new Error('daemon protocol requires interactions array'); return;
     case 'update-settings': if (!message.settings || typeof message.settings !== 'object' || Array.isArray(message.settings)) throw new Error('daemon protocol requires settings object'); return;
     case 'set-workbench-presence': if (typeof message.mounted !== 'boolean') throw new Error('daemon protocol requires boolean mounted'); return;

@@ -6,7 +6,8 @@
   "scripts": {
     "start": "electron .",
     "build:daemon": "node scripts/build-rust-daemon.mjs",
-    "build:tui": "cargo build --manifest-path rust/Cargo.toml --release -p vcp-agent-tui",
+    "build:tui": "cargo build --manifest-path rust/Cargo.toml --release -p vcp-agent-tui && node scripts/check-rust-tui-size.mjs",
+    "check:tui-size": "node scripts/check-rust-tui-size.mjs",
     "start:rust-dev": "npm run build:daemon && npm run start",
     "start:desktop": "electron . --desktop-only",
     "start:rag-observer": "electron . --rag-observer-only",
@@ -22,6 +23,7 @@
     "test:agent-workbench": "node scripts/test-agent-workbench.mjs",
     "test:rust-stack": "npm run build:daemon && node scripts/test-rust-protocol-fixture.mjs && npm run test:rust-agent-runtime && npm run test:rust-daemon-smoke && npm run test:rust-topic-takeover && npm run test:agent-workbench-store && npm run test:agent-workbench && npm run test:electron-gui-smoke && npm run test:electron-topic-takeover",
     "test:rust-stack:live": "node scripts/test-rust-stack-live.mjs",
+    "test:rust-live-contracts": "node scripts/test-rust-live-contracts.mjs",
     "test:e2e": "node scripts/test-e2e.mjs",
     "test:e2e:live": "node scripts/test-rust-stack-live.mjs",
     "guard:agent-runtime": "node scripts/check-agent-runtime.mjs",
@@ -39,7 +41,8 @@
     "test:rust-agent-long-live": "node scripts/test-live-rust-long-task.mjs",
     "test:rust-agent-backend-yolo-live": "node scripts/test-live-rust-backend-yolo.mjs",
     "test:rust-agent-lifecycle-live": "node scripts/test-live-rust-lifecycle.mjs",
-    "check:rust-agent-runtime": "node --check modules/agent-runtime/rustDaemonTransport.js && node --check modules/agent-runtime/rustRuntimeManager.js && node --check modules/ipc/agentRuntimeHandlers.js && node --check modules/ui-system/agent-workbench.js && node --check modules/ui-system/agent-workbench-controller.js && node --check modules/ui-system/agent-workbench-store.js && node scripts/test-rust-protocol-fixture.mjs",
+    "test:rust-tui-live": "cargo test --manifest-path rust/Cargo.toml -p vcp-agent-tui --test pty_acceptance native_tui_live_executes_fileoperator_from_real_keyboard_input -- --ignored --exact --test-threads=1",
+    "check:rust-agent-runtime": "node --check modules/agent-runtime/rustDaemonTransport.js && node --check modules/agent-runtime/rustRuntimeManager.js && node --check modules/ipc/agentRuntimeHandlers.js && node --check modules/ui-system/agent-workbench.js && node --check modules/ui-system/agent-workbench-controller.js && node --check modules/ui-system/agent-workbench-store.js && node scripts/test-rust-protocol-fixture.mjs && node scripts/test-rust-live-contracts.mjs",
     "check:agent-runtime": "npm run check:rust-agent-runtime",
     "pack": "npm run build:daemon && electron-builder --dir",
     "dist": "npm run build:daemon && electron-builder"

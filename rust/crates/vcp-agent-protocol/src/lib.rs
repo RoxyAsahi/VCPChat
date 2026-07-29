@@ -139,7 +139,11 @@ pub fn validate_direct_command(message: &WireMessage) -> Result<(), ProtocolErro
         | "list-topics"
         | "list-interaction-queue"
         | "clear-interaction-queue"
-        | "get-settings" => {}
+        | "get-settings" => {
+            if message.kind == "list-topics" {
+                optional_payload_string(message, "agentId")?;
+            }
+        }
         "close-session" | "cancel-turn" | "compact" => {
             required_identity(message, "sessionId")?;
         }
@@ -167,10 +171,12 @@ pub fn validate_direct_command(message: &WireMessage) -> Result<(), ProtocolErro
         }
         "read-topic" | "takeover-topic" | "delete-topic" => {
             required_payload_string(message, "topicId")?;
+            optional_payload_string(message, "agentId")?;
         }
         "rename-topic" => {
             required_payload_string(message, "topicId")?;
             required_payload_string(message, "title")?;
+            optional_payload_string(message, "agentId")?;
         }
         "replace-interaction-queue" => {
             required_identity(message, "sessionId")?;
@@ -280,6 +286,16 @@ fn required_identity(message: &WireMessage, field: &str) -> Result<(), ProtocolE
 
 fn required_payload_string(message: &WireMessage, field: &str) -> Result<(), ProtocolError> {
     required_non_empty(message.string(field), field)
+}
+
+fn optional_payload_string(message: &WireMessage, field: &str) -> Result<(), ProtocolError> {
+    match message.value(field) {
+        None => Ok(()),
+        Some(Value::String(value)) if !value.trim().is_empty() => Ok(()),
+        Some(_) => Err(ProtocolError::InvalidMessage(format!(
+            "{field} must be a non-empty string when supplied"
+        ))),
+    }
 }
 
 fn validate_direct_event(value: Option<&Value>) -> Result<(), ProtocolError> {

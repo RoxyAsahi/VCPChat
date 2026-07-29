@@ -8,8 +8,10 @@ import { requireLiveRustEnvironment } from './rust-live-preflight.mjs';
 const require = createRequire(import.meta.url);
 const { RustDaemonTransport } = require('../modules/agent-runtime/rustDaemonTransport');
 const repo = path.resolve(import.meta.dirname, '..');
-await requireLiveRustEnvironment();
-const configuredApiKey = process.env.VCP_API_KEY || null;
+const liveEnvironment = await requireLiveRustEnvironment();
+process.env.VCP_SERVER_URL = liveEnvironment.serverUrl;
+process.env.VCP_API_KEY = liveEnvironment.apiKey;
+const configuredApiKey = liveEnvironment.apiKey;
 
 const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'vcp-agent-rust-live-'));
 const settingsPath = path.join(temporaryRoot, 'settings.json');
@@ -61,6 +63,7 @@ async function verifyCancelAndResume() {
     const session = await transport.request('create-session');
     await transport.request('start-turn', {
         sessionId: session.sessionId,
+        turnId: `turn-live-cancel-${Date.now()}`,
         prompt: '请写一篇很长的文章，逐条介绍二十种软件测试方法。',
     });
     await transport.request('cancel-turn', { sessionId: session.sessionId });
@@ -89,6 +92,7 @@ async function verifyCancelAndResume() {
     const resumedSession = await transport.request('create-session');
     await transport.request('start-turn', {
         sessionId: resumedSession.sessionId,
+        turnId: `turn-live-resume-${Date.now()}`,
         prompt: '只回答“恢复成功”，不要调用工具。',
     });
     await resumed.promise;
@@ -140,7 +144,8 @@ async function verifyRealCompaction() {
         }
     }, topicId));
     await transport.start();
-    await transport.request('compact');
+    const session = await transport.request('create-session');
+    await transport.request('compact', { sessionId: session.sessionId });
     await Promise.all([started.promise, completed.promise, checkpointed.promise]);
     await transport.stop();
 

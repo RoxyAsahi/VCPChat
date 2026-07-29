@@ -233,12 +233,12 @@ fn dispatch_direct(
         "cancel-turn" => { let _ = host.commands.send(HostCommand::Cancel); Some(ack) }
         "steer-turn" => { let _ = host.commands.send(HostCommand::Steer { prompt: message.string("prompt").unwrap_or("").to_string() }); Some(ack) }
         "follow-up-turn" => { let _ = host.commands.send(HostCommand::FollowUp { prompt: message.string("prompt").unwrap_or("").to_string() }); Some(ack) }
-        "list-topics" => { let _ = host.commands.send(HostCommand::ListTopics { request_id }); Some(ack) }
-        "read-topic" => { let _ = host.commands.send(HostCommand::ReadTopic { request_id, topic_id: message.string("topicId").unwrap_or("").to_string() }); Some(ack) }
-        "takeover-topic" => { let _ = host.commands.send(HostCommand::RequestTopicTakeover { request_id: request_id.clone(), topic_id: message.string("topicId").unwrap_or("").to_string(), requester_id: request_id }); Some(ack) }
+        "list-topics" => { let _ = host.commands.send(HostCommand::ListTopics { request_id, agent_id: message.string("agentId").map(ToOwned::to_owned) }); Some(ack) }
+        "read-topic" => { let _ = host.commands.send(HostCommand::ReadTopic { request_id, topic_id: message.string("topicId").unwrap_or("").to_string(), agent_id: message.string("agentId").map(ToOwned::to_owned) }); Some(ack) }
+        "takeover-topic" => { let _ = host.commands.send(HostCommand::RequestTopicTakeover { request_id: request_id.clone(), topic_id: message.string("topicId").unwrap_or("").to_string(), requester_id: request_id, agent_id: message.string("agentId").map(ToOwned::to_owned) }); Some(ack) }
         "list-interaction-queue" => { let _ = host.commands.send(HostCommand::ListInteractionQueue { request_id }); Some(ack) }
-        "rename-topic" => { let _ = host.commands.send(HostCommand::RenameTopic { request_id, topic_id: message.string("topicId").unwrap_or("").to_string(), title: message.string("title").unwrap_or("").to_string() }); Some(ack) }
-        "delete-topic" => { let _ = host.commands.send(HostCommand::DeleteTopic { request_id, topic_id: message.string("topicId").unwrap_or("").to_string() }); Some(ack) }
+        "rename-topic" => { let _ = host.commands.send(HostCommand::RenameTopic { request_id, topic_id: message.string("topicId").unwrap_or("").to_string(), title: message.string("title").unwrap_or("").to_string(), agent_id: message.string("agentId").map(ToOwned::to_owned) }); Some(ack) }
+        "delete-topic" => { let _ = host.commands.send(HostCommand::DeleteTopic { request_id, topic_id: message.string("topicId").unwrap_or("").to_string(), agent_id: message.string("agentId").map(ToOwned::to_owned) }); Some(ack) }
         "clear-interaction-queue" => { let _ = host.commands.send(HostCommand::ClearInteractionQueue { request_id }); Some(ack) }
         "set-workbench-presence" => {
             let mounted = message.bool("mounted").unwrap_or(false);
@@ -349,7 +349,7 @@ fn host_event_message(event: HostEvent) -> Option<WireMessage> {
         }
         HostEvent::Warning(message) => Some(WireMessage::new("event").put("event", serde_json::json!({"type":"runtime.warning", "payload":{"message":message}}))),
         HostEvent::ToolboxWs { channel, kind, payload } => Some(WireMessage::new("event").put("event", serde_json::json!({"type":"toolbox.ws", "payload":{"channel":channel,"kind":kind,"value":payload}}))),
-        HostEvent::Approval(request) => Some(WireMessage::new("event").put("event", serde_json::json!({"type":"approval.requested", "sessionId":request.session_id, "turnId":request.turn_id, "toolCallId":request.tool_call_id, "payload":{"approvalId":request.approval_id,"toolName":request.tool_name,"riskLevel":request.risk,"reason":request.reason,"argumentSummary":request.argument_summary,"argumentsHash":request.arguments_hash}}))),
+        HostEvent::Approval(request) => Some(WireMessage::new("event").put("event", serde_json::json!({"type":"approval.requested", "sessionId":request.session_id, "turnId":request.turn_id, "toolCallId":request.tool_call_id, "payload":{"approvalId":request.approval_id,"toolName":request.tool_name,"riskLevel":request.risk,"reason":request.reason,"argumentSummary":request.argument_summary,"argumentsHash":request.arguments_hash,"expiresAtMs":request.expires_at_ms}}))),
         HostEvent::Control { request_id, kind, payload } => {
             Some(WireMessage::new("control-event")
                 .put("kind", kind)

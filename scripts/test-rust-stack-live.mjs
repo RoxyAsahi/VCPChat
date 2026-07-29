@@ -22,6 +22,11 @@ run('scripts/test-live-rust-backend-yolo.mjs');
 run('scripts/test-live-rust-long-task.mjs');
 run('scripts/test-live-rust-lifecycle.mjs');
 run('scripts/test-electron-gui-smoke.mjs', {
+    // The GUI smoke asserts a real FileOperator lifecycle.  Make the
+    // underlying test model request deterministic just as
+    // test-live-rust-tools.mjs does; this is test-only and never changes the
+    // product's default native-tool selection policy.
+    VCP_AGENT_TEST_TOOL_CHOICE: 'required',
     VCPCHAT_E2E_LIVE_TOOLBOX: '1',
     VCPCHAT_E2E_LIVE_TOOLBOX_HIGH_RISK: '1',
     VCPCHAT_E2E_LIVE_TOOLBOX_BACKEND_YOLO: '1',

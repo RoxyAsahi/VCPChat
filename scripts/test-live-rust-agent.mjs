@@ -37,7 +37,11 @@ const transport = new RustDaemonTransport({
 try {
     await transport.start();
     const session = await transport.request('create-session');
-    await transport.request('start-turn', { sessionId: session.sessionId, prompt: `只回复 ${sentinel}，不要调用工具，也不要添加其他文字。` });
+    await transport.request('start-turn', {
+        sessionId: session.sessionId,
+        turnId: `turn-live-chat-${Date.now()}`,
+        prompt: `只回复 ${sentinel}，不要调用工具，也不要添加其他文字。`,
+    });
     await completion;
     assert.equal(terminalCompleted, true, 'the Nova turn must reach a terminal completed event');
     assert.match(answer, new RegExp(sentinel), 'Nova must return the requested live sentinel, not merely a non-empty response');

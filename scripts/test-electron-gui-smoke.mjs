@@ -23,6 +23,10 @@ const execFileAsync = promisify(execFile);
 // ToolBox request is deliberately opt-in because it consumes model capacity
 // and needs an operator-approved ToolBox endpoint.
 const liveToolBox = process.env.VCPCHAT_E2E_LIVE_TOOLBOX === '1';
+// Individual live gates may run independently after a prior FileOperator
+// proof.  Keeping this explicit prevents a flaky model response in the
+// read-only tool precondition from hiding the approval-card result.
+const skipLiveFileOperator = liveToolBox && process.env.VCPCHAT_E2E_LIVE_TOOLBOX_SKIP_FILEOPERATOR === '1';
 // This remains a separate opt-in from the read-only live path. It proves the
 // local approval boundary without allowing the requested command to execute.
 const liveHighRiskApproval = liveToolBox && process.env.VCPCHAT_E2E_LIVE_TOOLBOX_HIGH_RISK === '1';
@@ -33,6 +37,16 @@ const liveBackendYolo = liveToolBox && process.env.VCPCHAT_E2E_LIVE_TOOLBOX_BACK
 const liveCancellation = liveToolBox && process.env.VCPCHAT_E2E_LIVE_TOOLBOX_CANCEL === '1';
 const liveRendererReload = liveToolBox && process.env.VCPCHAT_E2E_LIVE_TOOLBOX_RELOAD === '1';
 const liveGuiCompaction = liveToolBox && process.env.VCPCHAT_E2E_LIVE_TOOLBOX_COMPACTION === '1';
+// R3-B visual probes remain opt-in: they require an operator-provided
+// ToolBox and are intentionally not a source of CI model traffic.
+const liveToolBoxWs = liveToolBox && process.env.VCPCHAT_E2E_LIVE_TOOLBOX_WS === '1';
+const liveLongStream = liveToolBox && process.env.VCPCHAT_E2E_LIVE_TOOLBOX_LONG_STREAM === '1';
+// This is a diagnostic escape hatch for the UI-only portion of the suite.
+// It is deliberately opt-in and never changes the default R2 crash/reconnect
+// gate. Some Windows test hosts terminate their containing job when a child
+// daemon is force-stopped, which would otherwise make the preceding R3 visual
+// assertions produce neither a pass record nor a failure report.
+const skipCrashRecovery = process.env.VCPCHAT_E2E_SKIP_CRASH_RECOVERY === '1';
 // Release smoke passes an isolated compiled daemon through this documented
 // development override.  Assert the child command line below so a future
 // fallback to the debug executable cannot turn that release test into a false
@@ -45,9 +59,48 @@ const expectedPackagedDaemon = packagedExecutable
     : null;
 const expectedSourceDaemon = path.join(root, 'rust', 'target', 'release', process.platform === 'win32' ? 'vcp-agentd.exe' : 'vcp-agentd');
 const expectedSourceRevision = rustSourceRevision(root);
+const smokeResultFile = process.env.VCPCHAT_E2E_RESULT_FILE
+    ? path.resolve(process.env.VCPCHAT_E2E_RESULT_FILE)
+    : null;
+let smokePhase = 'boot';
+
+async function confirmTopicFlow(page, label) {
+    await page.waitForSelector('.agent-chat-topic-flow-dialog', { visible: true, timeout: timeoutMs });
+    const clicked = await page.evaluate((buttonLabel) => {
+        const dialog = document.querySelector('.agent-chat-topic-flow-dialog');
+        const button = [...(dialog?.querySelectorAll('button') || [])]
+            .find((candidate) => candidate.textContent?.trim() === buttonLabel);
+        button?.click();
+        return Boolean(button);
+    }, label);
+    assert.ok(clicked, `Topic flow must expose ${label}`);
+}
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function recordSmokeResult(status, phase = null, failure = null) {
+    if (phase) smokePhase = phase;
+    if (!smokeResultFile) return;
+    // This is a test-harness liveness receipt, not product persistence. It
+    // deliberately contains no settings, endpoint, credentials or tool data.
+    await fs.writeFile(smokeResultFile, JSON.stringify({
+        status,
+        liveToolBox,
+        skipLiveFileOperator,
+        liveToolBoxWs,
+        liveLongStream,
+        liveHighRiskApproval,
+        skipCrashRecovery,
+        phase,
+        // Keep a short, credential-safe failure hint for harnesses whose
+        // enclosing Windows job is terminated before stderr can flush.
+        failure: failure ? String(failure)
+            .replace(/Bearer\s+[^\s"']+/gi, 'Bearer [redacted]')
+            .slice(0, 1200) : null,
+        timestamp: Date.now(),
+    }), 'utf8');
 }
 
 async function freePort() {
@@ -65,13 +118,20 @@ async function findDaemonChild(parentPid) {
     const shell = process.env.SystemRoot
         ? path.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
         : 'powershell.exe';
-    const script = `$parent = ${numericParentPid}; Get-CimInstance Win32_Process -Filter \"ParentProcessId = $parent\" | Where-Object { $_.Name -ieq 'vcp-agentd.exe' } | Select-Object -First 1 -ExpandProperty ProcessId`;
-    const { stdout } = await execFileAsync(shell, ['-NoProfile', '-NonInteractive', '-Command', script], {
-        windowsHide: true,
-        timeout: 5_000,
-    });
-    const pid = Number.parseInt(String(stdout).trim(), 10);
-    return Number.isSafeInteger(pid) && pid > 0 ? pid : null;
+    // A missing child is a normal polling state during daemon restart.  Avoid
+    // treating a transient CIM query failure as a test crash; waitForDaemonChild
+    // will retry and then report the actual attachment failure if it persists.
+    const script = `Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object { $_.ParentProcessId -eq ${numericParentPid} -and $_.Name -ieq 'vcp-agentd.exe' } | Select-Object -First 1 -ExpandProperty ProcessId`;
+    try {
+        const { stdout } = await execFileAsync(shell, ['-NoProfile', '-NonInteractive', '-Command', script], {
+            windowsHide: true,
+            timeout: 5_000,
+        });
+        const pid = Number.parseInt(String(stdout).trim(), 10);
+        return Number.isSafeInteger(pid) && pid > 0 ? pid : null;
+    } catch {
+        return null;
+    }
 }
 
 async function waitForDaemonChild(parentPid) {
@@ -150,6 +210,242 @@ async function assertResponsiveWorkbench(page) {
         }
         assert.ok(layout.sidebar.width > 0 && layout.sidebar.left >= -1 && layout.sidebar.right <= layout.viewportWidth + 1,
             `Agent sidebar must stay within the viewport at ${viewport.width}px: ${JSON.stringify(layout.sidebar)}`);
+    }
+}
+
+// A deterministic companion to the opt-in provider long-stream check. The
+// daemon/live gate proves the actual stream; this one keeps the CSS layout
+// contract reproducible when the provider is unavailable. It deliberately
+// uses the same message-item/md-content structure rendered by the Workbench.
+async function assertResponsiveLongMessageLayout(page) {
+    const viewports = [
+        { width: 680, height: 900 },
+        { width: 960, height: 900 },
+        { width: 1440, height: 960 },
+    ];
+    for (const viewport of viewports) {
+        await page.setViewport({ ...viewport, deviceScaleFactor: 1 });
+        await page.waitForFunction((expectedWidth) => window.innerWidth === expectedWidth, {}, viewport.width);
+        const layout = await page.evaluate(async () => {
+            const feed = document.querySelector('.agent-chat-messages-container');
+            const items = document.querySelector('.agent-chat-messages');
+            if (!feed || !items) return null;
+            document.querySelector('.agent-chat-long-layout-fixture')?.remove();
+            const row = document.createElement('article');
+            row.className = 'message-item assistant agent-chat-long-layout-fixture';
+            const content = document.createElement('div');
+            content.className = 'md-content';
+            content.textContent = '长流视觉回归内容。'.repeat(900);
+            row.append(content);
+            items.append(row);
+            // Read synchronously after insertion. Awaiting animation frames
+            // lets the live Workbench's independently scheduled projection
+            // replaceChildren() race this synthetic CSS fixture away.
+            void row.offsetHeight;
+            const rowStyle = getComputedStyle(row);
+            const feedStyle = getComputedStyle(feed);
+            const itemsStyle = getComputedStyle(items);
+            const contentRect = content.getBoundingClientRect();
+            const feedRect = feed.getBoundingClientRect();
+            const maxScroll = Math.max(0, feed.scrollHeight - feed.clientHeight);
+            feed.scrollTop = Math.floor(maxScroll / 2);
+            const anchor = feed.scrollTop;
+            const result = {
+                viewportWidth: window.innerWidth,
+                documentScrollWidth: document.documentElement.scrollWidth,
+                feedScrollHeight: feed.scrollHeight,
+                feedClientHeight: feed.clientHeight,
+                feedScrollTop: anchor,
+                rowHeight: row.getBoundingClientRect().height,
+                contentHeight: contentRect.height,
+                contentVisibility: rowStyle.contentVisibility,
+                feedFlexDirection: feedStyle.flexDirection,
+                itemsDisplay: itemsStyle.display,
+                itemsFlex: itemsStyle.flex,
+                itemsMinHeight: itemsStyle.minHeight,
+                itemsHeight: items.getBoundingClientRect().height,
+                itemsOverflow: itemsStyle.overflow,
+                rowDisplay: rowStyle.display,
+                rowVisibility: rowStyle.visibility,
+                rowPosition: rowStyle.position,
+                rowChildren: row.childElementCount,
+                feed: { left: feedRect.left, right: feedRect.right },
+            };
+            row.remove();
+            return result;
+        });
+        assert.ok(layout, `Agent feed must exist for the long-message layout check at ${viewport.width}px`);
+        // Chromium reports the initial `visible` value as an empty string on
+        // some Electron builds. The invariant is that Agent rows never retain
+        // the shared main-chat `auto` optimization.
+        assert.notEqual(layout.contentVisibility, 'auto', `Agent long messages must not inherit content-visibility:auto at ${viewport.width}px`);
+        assert.ok(layout.rowHeight > layout.feedClientHeight,
+            `a long Agent message must receive a real rendered height at ${viewport.width}px: ${JSON.stringify(layout)}`);
+        assert.ok(layout.feedScrollHeight > layout.feedClientHeight,
+            `Agent feed must remain scrollable for a long streamed message at ${viewport.width}px: ${JSON.stringify(layout)}`);
+        assert.ok(layout.feedScrollTop > 0,
+            `Agent feed must accept a non-bottom reading anchor at ${viewport.width}px: ${JSON.stringify(layout)}`);
+        assert.ok(layout.documentScrollWidth <= layout.viewportWidth + 1,
+            `long Agent content must not create horizontal document overflow at ${viewport.width}px: ${JSON.stringify(layout)}`);
+    }
+}
+
+async function assertResponsiveReadinessLayout(page) {
+    const viewports = [
+        { width: 680, height: 900 },
+        { width: 960, height: 900 },
+        { width: 1440, height: 960 },
+    ];
+    for (const viewport of viewports) {
+        await page.setViewport({ ...viewport, deviceScaleFactor: 1 });
+        await page.waitForFunction((expectedWidth) => window.innerWidth === expectedWidth, {}, viewport.width);
+        const layout = await page.evaluate(() => {
+            const rect = (element) => {
+                if (!element) return null;
+                const value = element.getBoundingClientRect();
+                return { left: value.left, right: value.right, top: value.top, bottom: value.bottom, width: value.width, height: value.height };
+            };
+            const cards = [...document.querySelectorAll('.agent-chat-readiness-card')];
+            cards[0]?.scrollIntoView({ block: 'center', inline: 'nearest' });
+            return {
+                viewportWidth: window.innerWidth,
+                scrollWidth: document.documentElement.scrollWidth,
+                root: rect(document.querySelector('.agent-chat-root')),
+                main: rect(document.querySelector('.agent-chat-main-content')),
+                panel: rect(document.querySelector('.agent-chat-activity-panel')),
+                cards: cards.map(rect),
+                labels: cards.map((card) => card.dataset.readiness || ''),
+            };
+        });
+        assert.deepEqual(layout.labels.sort(), ['capability', 'profile', 'server', 'toolbox'],
+            `connection panel must render exactly the four daemon-owned readiness facts at ${viewport.width}px`);
+        assert.ok(layout.scrollWidth <= layout.viewportWidth + 1,
+            `readiness cards must not create horizontal document overflow at ${viewport.width}px: ${JSON.stringify(layout)}`);
+        assert.ok(layout.panel && layout.panel.width > 0, `readiness panel must be open at ${viewport.width}px`);
+        for (const card of layout.cards) {
+            assert.ok(card && card.left >= -1 && card.right <= layout.viewportWidth + 1 && card.width > 0 && card.height > 0,
+                `each readiness card must remain visible and readable at ${viewport.width}px: ${JSON.stringify({ card, root: layout.root, main: layout.main, panel: layout.panel, scrollWidth: layout.scrollWidth })}`);
+        }
+    }
+}
+
+async function assertResponsiveToolboxWsCardLayout(page) {
+    const viewports = [
+        { width: 680, height: 900 },
+        { width: 960, height: 900 },
+        { width: 1440, height: 960 },
+    ];
+    for (const viewport of viewports) {
+        await page.setViewport({ ...viewport, deviceScaleFactor: 1 });
+        await page.waitForFunction((expectedWidth) => window.innerWidth === expectedWidth, {}, viewport.width);
+        const layout = await page.evaluate(() => {
+            const card = document.querySelector('.agent-chat-toolbox-ws-card');
+            card?.scrollIntoView({ block: 'center', inline: 'nearest' });
+            const rect = card?.getBoundingClientRect();
+            return {
+                viewportWidth: window.innerWidth,
+                viewportHeight: window.innerHeight,
+                scrollWidth: document.documentElement.scrollWidth,
+                card: rect ? { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height } : null,
+                textLength: card?.textContent?.length || 0,
+            };
+        });
+        assert.ok(layout.card && layout.textLength > 0,
+            `a real ToolBox WS observation must remain mounted at ${viewport.width}px`);
+        assert.ok(layout.scrollWidth <= layout.viewportWidth + 1,
+            `a ToolBox WS card must not create horizontal document overflow at ${viewport.width}px: ${JSON.stringify(layout)}`);
+        assert.ok(layout.card.left >= -1 && layout.card.right <= layout.viewportWidth + 1
+            && layout.card.top >= -1 && layout.card.bottom <= layout.viewportHeight + 1,
+        `a ToolBox WS card must be scrollable into view at ${viewport.width}px: ${JSON.stringify(layout)}`);
+    }
+}
+
+async function assertWorkbenchSidebarTabs(page) {
+    for (const label of ['会话', '设置', '助手']) {
+        const clicked = await page.evaluate((tabLabel) => {
+            const button = [...document.querySelectorAll('.agent-chat-sidebar .sidebar-tab-button')]
+                .find((candidate) => candidate.textContent?.trim() === tabLabel);
+            button?.click();
+            return Boolean(button);
+        }, label);
+        assert.ok(clicked, `Agent sidebar must expose the ${label} tab`);
+        await page.waitForFunction((tabLabel) => {
+            const selected = [...document.querySelectorAll('.agent-chat-sidebar .sidebar-tab-button')]
+                .find((candidate) => candidate.textContent?.trim() === tabLabel);
+            return selected?.getAttribute('aria-selected') === 'true';
+        }, { timeout: timeoutMs }, label);
+        const layout = await page.evaluate((tabLabel) => {
+            const rect = (selector) => {
+                const element = document.querySelector(selector);
+                if (!element) return null;
+                const value = element.getBoundingClientRect();
+                return { left: value.left, right: value.right, width: value.width, height: value.height };
+            };
+            const content = document.querySelector('.agent-chat-sidebar .sidebar-tab-content.active');
+            return {
+                sidebar: rect('.agent-chat-sidebar'),
+                content: rect('.agent-chat-sidebar .sidebar-tab-content.active'),
+                hasMainPaneClass: content?.classList.contains('agent-chat-pane') || false,
+                horizontalOverflow: content ? content.scrollWidth > content.clientWidth + 1 : true,
+                primaryControl: tabLabel === '助手'
+                    ? rect('.agent-chat-sidebar .agent-chat-agent-row .agent-name')
+                    : tabLabel === '会话'
+                        ? rect('.agent-chat-sidebar .next-ui-create-topic-trigger')
+                        : rect('.agent-chat-sidebar .agent-chat-setting-input'),
+                settingsPadding: tabLabel === '设置'
+                    ? Number.parseFloat(getComputedStyle(document.querySelector('.agent-chat-settings-pane')).paddingLeft || '0')
+                    : null,
+            };
+        }, label);
+        assert.ok(layout.sidebar && layout.content && layout.content.width >= layout.sidebar.width * 0.8,
+            `${label} content must use the sidebar width instead of collapsing into a narrow main-pane column: ${JSON.stringify(layout)}`);
+        assert.ok(layout.primaryControl && layout.primaryControl.width >= layout.sidebar.width * 0.35,
+            `${label} primary content must remain horizontally readable: ${JSON.stringify(layout)}`);
+        assert.equal(layout.hasMainPaneClass, false, `${label} content must not inherit agent-chat-pane`);
+        assert.equal(layout.horizontalOverflow, false, `${label} content must not overflow horizontally`);
+        if (label === '设置') {
+            assert.ok(layout.settingsPadding > 0, `settings must keep a real left page margin, got ${layout.settingsPadding}px`);
+        }
+    }
+}
+
+async function assertResponsiveTopicFlow(page, expectedButton) {
+    const viewports = [
+        { width: 680, height: 900 },
+        { width: 960, height: 900 },
+        { width: 1440, height: 960 },
+    ];
+    for (const viewport of viewports) {
+        await page.setViewport({ ...viewport, deviceScaleFactor: 1 });
+        await page.waitForFunction((expectedWidth) => window.innerWidth === expectedWidth, {}, viewport.width);
+        const layout = await page.evaluate((buttonLabel) => {
+            const rect = (element) => {
+                if (!element) return null;
+                const value = element.getBoundingClientRect();
+                return { left: value.left, right: value.right, top: value.top, bottom: value.bottom, width: value.width, height: value.height };
+            };
+            const dialog = document.querySelector('.agent-chat-topic-flow-dialog');
+            const action = [...(dialog?.querySelectorAll('button') || [])]
+                .find((candidate) => candidate.textContent?.trim() === buttonLabel);
+            return {
+                viewportWidth: window.innerWidth,
+                viewportHeight: window.innerHeight,
+                scrollWidth: document.documentElement.scrollWidth,
+                dialog: rect(dialog),
+                action: rect(action),
+                visibleText: dialog?.textContent || '',
+            };
+        }, expectedButton);
+        assert.ok(layout.dialog && layout.action,
+            `Topic flow must show its dialog and ${expectedButton} action at ${viewport.width}px: ${JSON.stringify(layout)}`);
+        assert.ok(layout.scrollWidth <= layout.viewportWidth + 1,
+            `Topic flow must not create horizontal document overflow at ${viewport.width}px: ${JSON.stringify(layout)}`);
+        for (const [name, rect] of Object.entries({ dialog: layout.dialog, action: layout.action })) {
+            assert.ok(rect.left >= -1 && rect.right <= layout.viewportWidth + 1 && rect.width > 0 && rect.height > 0,
+                `Topic flow ${name} must stay visible and usable at ${viewport.width}px: ${JSON.stringify(rect)}`);
+        }
+        assert.ok(layout.dialog.top >= -1 && layout.dialog.bottom <= layout.viewportHeight + 1,
+            `Topic flow dialog must fit the active viewport at ${viewport.width}px: ${JSON.stringify(layout.dialog)}`);
     }
 }
 
@@ -246,7 +542,9 @@ async function assertResponsiveApprovalCardLayout(page) {
                 viewportHeight: window.innerHeight,
                 scrollWidth: document.documentElement.scrollWidth,
                 card: rect ? { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height } : null,
-                allow: card?.querySelector('.agent-chat-approval-actions button.primary')?.getBoundingClientRect().toJSON?.() || null,
+                // Local approval deliberately makes deny the prominent/default
+                // action. "允许一次" remains a visible secondary action.
+                allow: card?.querySelector('.agent-chat-approval-actions button.secondary')?.getBoundingClientRect().toJSON?.() || null,
                 deny: card?.querySelector('.agent-chat-approval-actions button.danger')?.getBoundingClientRect().toJSON?.() || null,
             };
         });
@@ -306,12 +604,29 @@ async function terminate(child) {
         // directory. A hung CDP close must not leak it into subsequent GUI
         // tests or hold a temporary Topic lock forever.
         child.kill();
-        await Promise.race([
+        const forced = await Promise.race([
             exited,
             sleep(2_000),
         ]);
+        if (!forced && child.exitCode === null && process.platform === 'win32') {
+            // `ChildProcess.kill()` is best-effort on Windows and can leave
+            // an Electron process alive after its CDP endpoint has gone away.
+            // This is the exact PID spawned above (never a name/glob/tree
+            // scan), so forcing it cannot touch the operator's VCPChat.
+            const pid = Number(child.pid);
+            if (Number.isSafeInteger(pid) && pid > 0) {
+                const shell = process.env.SystemRoot
+                    ? path.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+                    : 'powershell.exe';
+                await execFileAsync(shell, ['-NoProfile', '-NonInteractive', '-Command', `Stop-Process -Id ${pid} -Force`], {
+                    windowsHide: true,
+                    timeout: 5_000,
+                }).catch(() => {});
+                await Promise.race([exited, sleep(2_000)]);
+            }
+        }
         if (child.exitCode === null) {
-            console.warn(`Electron GUI smoke could not confirm termination for PID ${child.pid}; it was isolated for diagnostics.`);
+            console.warn(`Electron GUI smoke could not confirm termination for its isolated PID ${child.pid}.`);
         }
     }
 }
@@ -441,12 +756,26 @@ async function runLiveToolBoxTurn(page, rendererErrors) {
     await page.keyboard.type(prompt);
     await page.click('.agent-chat-send-button');
 
+    // The daemon-owned turn.started event must establish both pieces of live
+    // UI state before any assistant/tool result arrives: the submitted user
+    // message and the cancellable stop control. This prevents ACK-only
+    // regressions where replies render but the user's side stays invisible.
+    await page.waitForFunction((submitted) => {
+        const userVisible = [...document.querySelectorAll('.message-item.user .md-content')]
+            .some((node) => (node.textContent || '').includes(submitted));
+        const send = document.querySelector('.agent-chat-send-button');
+        return userVisible
+            && send?.classList.contains('interrupt-mode')
+            && send?.querySelector('.vcp-ui-icon')?.textContent === 'stop'
+            && send?.getAttribute('aria-label') === '取消当前任务';
+    }, { timeout: timeoutMs }, prompt);
+
     try {
         const outcome = await page.waitForFunction(async (initialCount) => {
             const cards = [...document.querySelectorAll('.agent-chat-tool-activity')];
             const completed = cards.some((card) => {
                 const title = card.querySelector('.agent-chat-tool-title')?.textContent || '';
-                const state = card.querySelector('.agent-chat-tool-state')?.textContent || '';
+                const state = card.querySelector('.agent-chat-tool-status-badge')?.textContent || card.dataset.status || '';
                 return title.includes('FileOperator') && /completed|完成|success/i.test(state);
             });
             if (completed) return 'tool-completed';
@@ -477,7 +806,7 @@ async function runLiveToolBoxTurn(page, rendererErrors) {
             return {
                 toolCards: [...document.querySelectorAll('.agent-chat-tool-activity')].map((card) => ({
                     title: card.querySelector('.agent-chat-tool-title')?.textContent || '',
-                    state: card.querySelector('.agent-chat-tool-state')?.textContent || '',
+                    state: card.querySelector('.agent-chat-tool-status-badge')?.textContent || card.dataset.status || '',
                 })),
                 approvalVisible: Boolean(document.querySelector('.agent-chat-approval-card')),
                 recovery: document.querySelector('.agent-chat-activity-connection')?.textContent || null,
@@ -494,6 +823,119 @@ async function runLiveToolBoxTurn(page, rendererErrors) {
     }
 }
 
+async function runLiveToolBoxWsVisualRegression(page, rendererErrors) {
+    // The Rust daemon is the only observer. This gate neither opens a WebSocket
+    // from Electron nor fabricates an event; it waits for a real read-only
+    // VCPlog/vcpinfo observation generated by the preceding live tool turn.
+    const opened = await page.evaluate(() => {
+        const panel = document.querySelector('.agent-chat-activity-panel');
+        if (panel?.getAttribute('aria-hidden') !== 'false') {
+            document.querySelector('.agent-chat-status-chip[data-action="connection"]')?.click();
+        }
+        return Boolean(panel);
+    });
+    assert.ok(opened, 'the ToolBox WS visual check requires the Workbench activity panel');
+    await page.waitForFunction(() => document.querySelector('.agent-chat-activity-panel')?.getAttribute('aria-hidden') === 'false', { timeout: timeoutMs });
+    const selected = await page.evaluate(() => {
+        const tab = [...document.querySelectorAll('.agent-chat-activity-tab')]
+            .find((candidate) => candidate.textContent?.includes('工具活动'));
+        tab?.click();
+        return Boolean(tab);
+    });
+    assert.ok(selected, 'the ToolBox WS visual check requires the Workbench activity tab');
+    try {
+        await page.waitForSelector('.agent-chat-toolbox-ws-card', { visible: true, timeout: liveTurnTimeoutMs });
+        await assertResponsiveToolboxWsCardLayout(page);
+    } catch (error) {
+        const state = await page.evaluate(() => ({
+            wsCards: [...document.querySelectorAll('.agent-chat-toolbox-ws-card')]
+                .map((card) => card.textContent?.slice(0, 280) || ''),
+            activityText: document.querySelector('.agent-chat-activity-content')?.textContent?.slice(0, 600) || '',
+        }));
+        throw new Error(`Live ToolBox WS visual regression did not observe a daemon-owned read-only event: ${JSON.stringify(state)}\n${rendererErrors.join('\n')}\n${error.message}`);
+    }
+}
+
+async function runLiveLongStreamVisualRegression(page, rendererErrors) {
+    const inputSelector = '.agent-chat-message-input';
+    const sentinel = `LONG_STREAM_${Date.now().toString(36)}`;
+    // Ask well beyond the 4,000-character acceptance floor. Some providers
+    // truncate a nominal 12 × 420 response near their first output budget,
+    // which turns a genuine stream into an inconclusive short-response run.
+    // The assertion below deliberately remains 4,000; this is not a weaker
+    // definition of the long-stream regression.
+    const prompt = `只输出 16 段以 ${sentinel} 开头的中文说明，每段至少 600 个汉字。不得概括、不得省略段落、不得调用工具；总输出必须超过 8000 个汉字。`;
+    const initialCount = await page.$$eval('.message-item.assistant .md-content', (nodes) => nodes.length);
+    await page.click(inputSelector);
+    await page.keyboard.type(prompt);
+    await page.click('.agent-chat-send-button');
+    try {
+        await page.waitForFunction(({ count, marker }) => {
+            const messages = [...document.querySelectorAll('.message-item.assistant .md-content')];
+            const latest = messages.slice(count).map((node) => node.textContent || '').join('\n');
+            const idle = document.querySelector('.agent-chat-send-button')?.title === '发送消息';
+            return idle && latest.includes(marker) && latest.length >= 4_000;
+        }, { timeout: liveTurnTimeoutMs }, { count: initialCount, marker: sentinel });
+        const streamState = await page.evaluate(() => {
+            const feed = document.querySelector('.agent-chat-messages-container');
+            if (!feed) return null;
+            feed.scrollTop = Math.max(0, Math.floor(feed.scrollHeight * 0.35));
+            const anchor = feed.scrollTop;
+            return { anchor, scrollHeight: feed.scrollHeight, clientHeight: feed.clientHeight };
+        });
+        // A daemon status event is a non-streaming update; it must not pull an
+        // older reader back to the bottom while the large response is visible.
+        await page.click('.agent-chat-status-chip[data-action="connection"]');
+        await page.waitForFunction(() => {
+            const panel = document.querySelector('.agent-chat-activity-panel');
+            return panel?.getAttribute('aria-hidden') === 'false' && !panel?.hasAttribute('inert');
+        }, { timeout: timeoutMs });
+        // Opening Activity changes the available message width and can reflow
+        // CJK text, so a pixel-identical offset is not meaningful. The reader
+        // anchor is preserved if it remains materially away from both edges;
+        // this catches the historical reset-to-bottom bug without making a
+        // valid responsive reflow flaky.
+        const anchorState = await page.evaluate(async (anchor) => {
+            const feed = document.querySelector('.agent-chat-messages-container');
+            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            if (!feed) return null;
+            const maximum = Math.max(0, feed.scrollHeight - feed.clientHeight);
+            return { anchor, scrollTop: feed.scrollTop, maximum };
+        }, streamState?.anchor ?? 0);
+        assert.ok(anchorState && anchorState.maximum > 0,
+            `long-stream feed must remain scrollable after opening Activity: ${JSON.stringify(anchorState)}`);
+        assert.ok(anchorState.scrollTop > 48 && anchorState.scrollTop < anchorState.maximum - 48,
+            `opening Activity must preserve a readable, non-edge scroll anchor: ${JSON.stringify(anchorState)}`);
+    } catch (error) {
+        const state = await page.evaluate(() => ({
+            responseLengths: [...document.querySelectorAll('.message-item.assistant .md-content')]
+                .map((node) => (node.textContent || '').length),
+            feed: (() => {
+                const feed = document.querySelector('.agent-chat-messages-container');
+                return feed ? { scrollTop: feed.scrollTop, scrollHeight: feed.scrollHeight, clientHeight: feed.clientHeight } : null;
+            })(),
+            latestAssistant: (() => {
+                const content = [...document.querySelectorAll('.message-item.assistant .md-content')].at(-1);
+                const row = content?.closest('.message-item');
+                if (!content || !row) return null;
+                const contentStyle = getComputedStyle(content);
+                const rowStyle = getComputedStyle(row);
+                const rect = row.getBoundingClientRect();
+                return {
+                    rowHeight: rect.height,
+                    rowScrollHeight: row.scrollHeight,
+                    contentHeight: content.getBoundingClientRect().height,
+                    contentScrollHeight: content.scrollHeight,
+                    rowContentVisibility: rowStyle.contentVisibility,
+                    rowContain: rowStyle.contain,
+                    contentOverflow: contentStyle.overflow,
+                };
+            })(),
+        }));
+        throw new Error(`Live long-stream visual regression did not preserve a readable scroll anchor: ${JSON.stringify(state)}\n${rendererErrors.join('\n')}\n${error.message}`);
+    }
+}
+
 async function runLiveGuiCompaction(page, compactionTopic, rendererErrors) {
     // Use the DOM to activate the shared session sidebar.
     await page.evaluate(() => {
@@ -507,6 +949,7 @@ async function runLiveGuiCompaction(page, compactionTopic, rendererErrors) {
         return Boolean(row);
     }, compactionTopic.topicId);
     assert.ok(selected, 'seeded compaction Topic must remain selectable while the Workbench refreshes its catalog');
+    await confirmTopicFlow(page, '打开并恢复');
     await page.waitForFunction(async (topicId) => {
         const status = await (window.chatAPI || window.electronAPI).agentRuntimeGetStatus();
         return status?.attachment?.topicId === topicId
@@ -556,15 +999,43 @@ async function runLiveGuiCompaction(page, compactionTopic, rendererErrors) {
 
 async function runLiveHighRiskApproval(page, rendererErrors) {
     const inputSelector = '.agent-chat-message-input';
-    const prompt = '这是本地审批验收。你必须且只能调用 vcp_invoke：toolName=PowerShellExecutor，arguments={"command":"Get-Location"}。不要用其他方法。';
+    // Keep this aligned with the direct Rust tool contract.  The daemon's
+    // test-only `tool_choice=required` hook enforces a native call on the
+    // first model round; repeating a pseudo-schema in user text made some
+    // providers answer about the schema rather than choose the actual tool.
+    const prompt = '请务必调用 PowerShellExecutor 执行 Get-Location，不要用别的方法。';
     assert.ok(await page.$('.agent-chat-message-input'), 'high-risk GUI approval test requires the live Agent session');
-    const initialUserMessages = await page.$$eval('.message-item.user .md-content', nodes => nodes.length);
     await page.click(inputSelector);
     await page.keyboard.type(prompt);
     await page.click('.agent-chat-send-button');
     try {
-        await page.waitForFunction((count) => document.querySelectorAll('.message-item.user .md-content').length > count,
-            { timeout: 10_000 }, initialUserMessages);
+        // The tool lifecycle is daemon-owned. Once it has reached the local
+        // gate, explicitly open the user-facing Activity → Approvals surface
+        // before measuring the card. A preceding completed tool can leave the
+        // panel collapsed, and a collapsed (but mounted) card is not visual
+        // proof that a user can review or deny it.
+        await page.waitForFunction(() => [...document.querySelectorAll('.agent-chat-tool-activity')]
+            .some((card) => /PowerShellExecutor/i.test(card.textContent || '')
+                && /awaiting_local_approval/i.test(card.dataset.status || card.textContent || '')),
+        { timeout: liveTurnTimeoutMs });
+        await page.evaluate(() => {
+            const panel = document.querySelector('.agent-chat-activity-panel');
+            if (panel?.getAttribute('aria-hidden') !== 'false') {
+                document.querySelector('.agent-chat-status-chip[data-action="connection"]')?.click();
+            }
+        });
+        await page.waitForFunction(() => document.querySelector('.agent-chat-activity-panel')?.getAttribute('aria-hidden') === 'false', { timeout: timeoutMs });
+        const approvalsTab = await page.evaluate(() => {
+            const tab = [...document.querySelectorAll('.agent-chat-activity-tab')]
+                .find((candidate) => candidate.textContent?.includes('审批'));
+            tab?.click();
+            return Boolean(tab);
+        });
+        assert.ok(approvalsTab, 'a pending local approval must expose the Activity approvals tab');
+        // The product assertion is the daemon-owned approval card.  A user
+        // message block can be coalesced with the immediate native tool call
+        // during a renderer frame, so using it as an intermediate timing gate
+        // turns a valid approval into a flaky false failure.
         await page.waitForFunction(() => {
             const cards = [...document.querySelectorAll('.agent-chat-approval-card')];
             return cards.some((card) => /PowerShellExecutor/i.test(card.textContent || ''));
@@ -583,15 +1054,25 @@ async function runLiveHighRiskApproval(page, rendererErrors) {
             if (cards.some((card) => /PowerShellExecutor/i.test(card.textContent || ''))) return false;
             return document.querySelector('.agent-chat-send-button')?.title === '发送消息';
         }, { timeout: liveTurnTimeoutMs });
-        assert.equal([...document.querySelectorAll('.agent-chat-tool-activity')]
-            .some((card) => /PowerShellExecutor/i.test(card.textContent || '')), false,
-        'a locally denied high-risk call must not render a started ToolBox card');
+        const localDenyOutcome = await page.evaluate(() => [...document.querySelectorAll('.agent-chat-tool-activity')]
+            .filter((card) => /PowerShellExecutor/i.test(card.textContent || ''))
+            .map((card) => card.dataset.status || card.querySelector('.agent-chat-tool-status-badge')?.textContent || ''));
+        assert.equal(localDenyOutcome.some((state) => /running|started|completed|完成|success/i.test(state)), false,
+            `a locally denied high-risk call must not render a started ToolBox card: ${JSON.stringify(localDenyOutcome)}`);
     } catch (error) {
         const state = await page.evaluate(() => ({
             approvals: [...document.querySelectorAll('.agent-chat-approval-card')].map((card) => card.textContent?.slice(0, 240) || ''),
+            tools: [...document.querySelectorAll('.agent-chat-tool-activity')].map((card) => ({
+                text: card.textContent?.slice(0, 240) || '',
+                state: card.dataset.status || card.querySelector('.agent-chat-tool-status-badge')?.textContent || '',
+            })),
+            messages: [...document.querySelectorAll('.message-item')].slice(-4).map((message) => ({
+                role: message.classList.contains('assistant') ? 'assistant' : message.classList.contains('user') ? 'user' : 'other',
+                text: message.textContent?.slice(0, 240) || '',
+            })),
             recovery: document.querySelector('.agent-chat-activity-connection')?.textContent || null,
         }));
-        throw new Error(`Live high-risk GUI approval did not complete safely: ${JSON.stringify(state)}\n${rendererErrors.join('\n')}\n${error.message}`);
+        throw new Error(`Live high-risk GUI approval did not complete safely: ${JSON.stringify(state)}\n${rendererErrors.join('\n')}\n${error.stack || error.message}`);
     }
 }
 
@@ -609,7 +1090,7 @@ async function runLiveBackendYolo(page, rendererErrors) {
         const allowed = await page.evaluate(() => {
             const card = [...document.querySelectorAll('.agent-chat-approval-card')]
                 .find((candidate) => /PowerShellExecutor/i.test(candidate.textContent || ''));
-            const button = card?.querySelector('.agent-chat-approval-actions button.primary');
+            const button = card?.querySelector('.agent-chat-approval-actions button.secondary');
             button?.click();
             return Boolean(button);
         });
@@ -618,7 +1099,7 @@ async function runLiveBackendYolo(page, rendererErrors) {
             const cards = [...document.querySelectorAll('.agent-chat-tool-activity')];
             const completed = cards.some((card) => {
                 const title = card.querySelector('.agent-chat-tool-title')?.textContent || '';
-                const state = card.querySelector('.agent-chat-tool-state')?.textContent || '';
+                const state = card.querySelector('.agent-chat-tool-status-badge')?.textContent || card.dataset.status || '';
                 return title.includes('PowerShellExecutor') && /completed|完成|success/i.test(state);
             });
             if (!completed) return false;
@@ -647,7 +1128,7 @@ async function runLiveBackendYolo(page, rendererErrors) {
             return {
                 toolCards: [...document.querySelectorAll('.agent-chat-tool-activity')].map((card) => ({
                     title: card.querySelector('.agent-chat-tool-title')?.textContent || '',
-                    state: card.querySelector('.agent-chat-tool-state')?.textContent || '',
+                    state: card.querySelector('.agent-chat-tool-status-badge')?.textContent || card.dataset.status || '',
                 })),
                 runtime: { state: status?.state || null, attachment: status?.attachment || null },
                 recovery: document.querySelector('.agent-chat-activity-connection')?.textContent || null,
@@ -732,7 +1213,9 @@ let child;
 let appData;
 let compactionTopic;
 let durableWorkbenchTopic;
+let exitCode = 0;
 try {
+    await recordSmokeResult('running', 'bootstrap');
     await fs.access(electronBinary);
     const liveSettings = await readLiveToolBoxSettings();
     const port = await freePort();
@@ -774,14 +1257,25 @@ try {
         cwd: root,
         env: environment,
         stdio: ['ignore', 'ignore', 'pipe'],
-        windowsHide: false
+        // A smoke Electron child must not share the invoking terminal's
+        // visible console job. On Windows, closing that child can otherwise
+        // terminate the caller before it reports the assertion outcome.
+        windowsHide: true
     });
     child.stderr.on('data', chunk => {
         stderr.value = `${stderr.value}${chunk}`.slice(-8_000);
     });
 
     await waitForDebugger(port, child, stderr);
-    browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${port}` });
+    // The VCPChat renderer can be legitimately busy restoring the Next shell
+    // and an isolated Rust checkpoint at the same time. Keep Puppeteer's CDP
+    // transport alive longer than an individual UI assertion so a slow first
+    // paint reports the actual selector/state failure instead of a generic
+    // protocol timeout.
+    browser = await puppeteer.connect({
+        browserURL: `http://127.0.0.1:${port}`,
+        protocolTimeout: Math.max(timeoutMs * 4, liveTurnTimeoutMs + 30_000),
+    });
     const deadline = Date.now() + timeoutMs;
     let page;
     while (Date.now() < deadline) {
@@ -798,6 +1292,7 @@ try {
 
     await page.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout: timeoutMs });
     await page.waitForFunction(() => document.documentElement.dataset.uiMode === 'next', { timeout: timeoutMs });
+    await recordSmokeResult('running', 'main-chat-ready');
     await page.waitForSelector('#agentList li[data-item-id="Nova"][data-item-type="agent"]', { visible: true, timeout: timeoutMs });
     await page.click('#agentList li[data-item-id="Nova"][data-item-type="agent"]');
     await page.waitForFunction(() => {
@@ -835,13 +1330,11 @@ try {
         });
         throw new Error(`Global settings modal did not become visible: ${JSON.stringify(modalState)}\n${rendererErrors.join('\n')}\n${error.message}`);
     }
-    // The production form validates the server URL. A loopback discard port
-    // proves form submission without calling a real ToolBox from this GUI-only
-    // smoke instance.
+    // Submit the production form without changing the seeded isolated endpoint.
+    // The daemon later consumes that exact setting for its readiness probe;
+    // modifying it here adds no coverage and can invalidate the runtime fixture.
     await page.click('.settings-nav-item[data-section="server-connection"]');
     await page.waitForFunction(() => document.getElementById('section-server-connection')?.classList.contains('active'), { timeout: timeoutMs });
-    await page.click('#vcpServerUrl');
-    await page.keyboard.type('http://127.0.0.1:9');
     await page.click('.settings-nav-item[data-section="render-settings"]');
     await page.waitForFunction(() => document.getElementById('section-render-settings')?.classList.contains('active'), { timeout: timeoutMs });
     // Custom Switch intentionally hides the native checkbox. Its value is
@@ -870,7 +1363,106 @@ try {
     await page.click('.next-ui-internal-app-item[title="VCP Agent"]');
     await page.waitForSelector('#nextUiInternalAppHost .agent-workbench-root', { visible: true, timeout: timeoutMs });
     await page.waitForSelector('.next-ui-tab[data-view-id="app:agent-workbench"]', { visible: true, timeout: timeoutMs });
+    await recordSmokeResult('running', 'workbench-mounted');
     await assertResponsiveWorkbench(page);
+    await assertWorkbenchSidebarTabs(page);
+    // R4: readiness is emitted by Rust and only projected by the Renderer.
+    // The fixture intentionally uses an unused loopback port unless an
+    // explicitly opt-in live ToolBox run supplied an isolated real endpoint.
+    // Either result is daemon-owned: the Workbench itself never probes it.
+    // Runtime readiness can redraw the header between Puppeteer resolving the
+    // selector and issuing its synthetic pointer event.  Click in the current
+    // document instead of retaining a detached ElementHandle across that
+    // daemon-authored render.
+    const openedConnection = await page.evaluate(() => {
+        const trigger = document.querySelector('.agent-chat-status-chip[data-action="connection"]');
+        trigger?.click();
+        return Boolean(trigger);
+    });
+    assert.ok(openedConnection, 'Workbench must expose a connection-status trigger');
+    await page.waitForFunction(() => document.querySelectorAll('.agent-chat-readiness-card').length === 4, { timeout: timeoutMs });
+    await recordSmokeResult('running', 'readiness-cards-mounted');
+    try {
+        await page.waitForFunction((expectReady) => {
+            const toolbox = document.querySelector('[data-readiness="toolbox"]');
+            const text = toolbox?.textContent || '';
+            // Rust reports the canonical success state as “就绪”; older
+            // wording used “可用”.  Both are daemon-owned ready states, while
+            // “不可用” is explicitly distinct and must never satisfy this
+            // branch through substring matching.
+            return Boolean(toolbox && (expectReady
+                ? /(?:就绪|可用)/.test(text) && !/不可用/.test(text)
+                : /不可用/.test(text)));
+        }, { timeout: timeoutMs }, liveToolBox);
+    } catch (error) {
+        const readiness = await page.evaluate(() => ({
+            cards: [...document.querySelectorAll('.agent-chat-readiness-card')].map((card) => ({
+                key: card.dataset.readiness || '',
+                text: card.textContent || '',
+            })),
+        }));
+        throw new Error(`daemon-owned ToolBox readiness did not settle to unavailable: ${JSON.stringify(readiness)}\n${error.message}`);
+    }
+    await assertResponsiveReadinessLayout(page);
+    await page.click('.agent-chat-activity-close');
+    await page.waitForFunction(() => document.querySelector('.agent-chat-activity-panel')?.getAttribute('aria-hidden') === 'true', { timeout: timeoutMs });
+
+    // The Agent sidebar is a projection of the same VCPChat assistant
+    // catalog.  It must use the same create/search affordances as the main
+    // sidebar and, crucially, an inactive Topic-flow layer may not intercept
+    // those clicks.
+    const agentSidebar = '#nextUiInternalAppHost .agent-chat-sidebar';
+    await page.waitForSelector(`${agentSidebar} .next-ui-create-item-trigger`, { visible: true, timeout: timeoutMs });
+    await page.waitForSelector(`${agentSidebar} .next-ui-agent-search-trigger`, { visible: true, timeout: timeoutMs });
+    const sidebarHitTest = await page.evaluate((selector) => {
+        const button = document.querySelector(selector);
+        const box = button?.getBoundingClientRect();
+        const target = box && document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+        return {
+            hidden: document.querySelector('.agent-chat-topic-flow-layer')?.hidden === true,
+            hitCreate: Boolean(button && target && (target === button || button.contains(target))),
+        };
+    }, `${agentSidebar} .next-ui-create-item-trigger`);
+    assert.deepEqual(sidebarHitTest, { hidden: true, hitCreate: true },
+        'an inactive Topic flow must not cover or absorb clicks from Agent sidebar controls');
+    await page.click(`${agentSidebar} .next-ui-agent-search-trigger`);
+    await page.waitForSelector(`${agentSidebar} .agents-header.is-searching .topic-search-input`, { visible: true, timeout: timeoutMs });
+    await page.click(`${agentSidebar} .next-ui-agent-search-close`);
+    await page.waitForFunction((selector) => !document.querySelector(selector)?.classList.contains('is-searching'), { timeout: timeoutMs }, `${agentSidebar} .agents-header`);
+    await page.click(`${agentSidebar} .next-ui-create-item-trigger`);
+    // The host deliberately has zero layout height: its fixed overlay is the
+    // visible surface.  Assert the actual dialog instead of making Puppeteer
+    // mistake the zero-height positioning wrapper for a failed interaction.
+    await page.waitForSelector('.next-ui-create-dialog-host .vcp-ui-modal', { visible: true, timeout: timeoutMs });
+    await page.waitForFunction(() => document.querySelector('.next-ui-create-dialog-host')?.textContent?.includes('创建助手或群组'), { timeout: timeoutMs });
+    const dismissedCreate = await page.evaluate(() => {
+        const host = document.querySelector('.next-ui-create-dialog-host');
+        const button = [...(host?.querySelectorAll('button') || [])].find((candidate) => candidate.textContent?.trim() === '取消');
+        button?.click();
+        return Boolean(button);
+    });
+    assert.ok(dismissedCreate, 'Agent assistant create control must invoke the shared main-chat create dialog');
+    await page.waitForSelector('.next-ui-create-dialog-host .vcp-ui-modal', { hidden: true, timeout: timeoutMs });
+
+    // Agent sessions use the same three-control Topic toolbar as main chat:
+    // new, manage, and expandable search. These controls must not fall back
+    // to an always-visible, narrower custom input.
+    await page.evaluate(() => {
+        const tab = [...document.querySelectorAll('.agent-chat-sidebar .sidebar-tab-button')]
+            .find((candidate) => candidate.textContent.trim() === '会话');
+        tab?.click();
+    });
+    await page.waitForSelector(`${agentSidebar} .next-ui-create-topic-trigger`, { visible: true, timeout: timeoutMs });
+    await page.waitForSelector(`${agentSidebar} .next-ui-topic-icon-trigger[aria-label="管理会话"]`, { visible: true, timeout: timeoutMs });
+    await page.waitForSelector(`${agentSidebar} .next-ui-topic-icon-trigger[aria-label="搜索会话"]`, { visible: true, timeout: timeoutMs });
+    await page.click(`${agentSidebar} .next-ui-topic-icon-trigger[aria-label="管理会话"]`);
+    await page.waitForSelector(`${agentSidebar} .agent-chat-sidebar-content.is-managing .agent-chat-topic-manage-panel`, { visible: true, timeout: timeoutMs });
+    await page.click(`${agentSidebar} .agent-chat-topic-manage-panel [aria-label="退出会话管理"]`);
+    await page.waitForFunction((selector) => !document.querySelector(selector)?.classList.contains('is-managing'), { timeout: timeoutMs }, `${agentSidebar} .agent-chat-sidebar-content`);
+    await page.click(`${agentSidebar} .next-ui-topic-icon-trigger[aria-label="搜索会话"]`);
+    await page.waitForSelector(`${agentSidebar} .topics-header-container.is-searching .topic-search-input`, { visible: true, timeout: timeoutMs });
+    await page.click(`${agentSidebar} .topics-header-container .next-ui-topic-search-close`);
+    await page.waitForFunction((selector) => !document.querySelector(selector)?.classList.contains('is-searching'), { timeout: timeoutMs }, `${agentSidebar} .topics-header-container`);
 
     // R2: select an actual durable Rust Topic through the visible Workbench,
     // then tear down and remount that Workbench.  The only permitted source of
@@ -883,7 +1475,15 @@ try {
         tab?.click();
     });
     await page.waitForFunction((topicId) => Boolean(document.querySelector(`.agent-chat-persisted-topic[data-topic-id="${topicId}"]`)), { timeout: timeoutMs }, durableWorkbenchTopic.topicId);
-    await page.click(`.agent-chat-persisted-topic[data-topic-id="${durableWorkbenchTopic.topicId}"]`);
+    const openedDurableTopic = await page.evaluate((topicId) => {
+        const row = document.querySelector(`.agent-chat-persisted-topic[data-topic-id="${topicId}"]`);
+        row?.click();
+        return Boolean(row);
+    }, durableWorkbenchTopic.topicId);
+    assert.ok(openedDurableTopic, 'a durable Rust Topic row must remain actionable while control-plane refreshes redraw the sidebar');
+    await page.waitForFunction(() => document.querySelector('.agent-chat-topic-flow-checkpoint')?.textContent?.includes('已读取 Rust checkpoint'), { timeout: timeoutMs });
+    await assertResponsiveTopicFlow(page, '打开并恢复');
+    await confirmTopicFlow(page, '打开并恢复');
     await page.waitForFunction((text) => [...document.querySelectorAll('.message-item.assistant .md-content')]
         .some((node) => node.textContent.includes(text)), { timeout: timeoutMs }, durableWorkbenchTopic.assistantText);
     assert.deepEqual(await page.evaluate(() => JSON.parse(window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1'))), {
@@ -905,7 +1505,28 @@ try {
         return Boolean(toggle);
     });
     assert.ok(openedUsage, 'Agent Workbench must provide a usage control in the real Electron surface');
-    await page.waitForSelector('.agent-chat-usage-budget', { visible: true, timeout: timeoutMs });
+    try {
+        await page.waitForSelector('.agent-chat-usage-budget', { visible: true, timeout: timeoutMs });
+    } catch (error) {
+        const usageState = await page.evaluate(() => {
+            const panel = document.querySelector('.agent-chat-activity-panel');
+            const toggle = document.querySelector('.agent-chat-usage-toggle');
+            const activeTab = document.querySelector('.agent-chat-activity-tab.is-active');
+            return {
+                panelClass: panel?.className || null,
+                panelHidden: panel?.getAttribute('aria-hidden') || null,
+                panelInert: panel?.hasAttribute('inert') || false,
+                toggleExpanded: toggle?.getAttribute('aria-expanded') || null,
+                activeTab: activeTab?.dataset.tab || null,
+                hasUsageNode: Boolean(document.querySelector('.agent-chat-usage-budget')),
+                tabs: [...document.querySelectorAll('.agent-chat-activity-tab')].map(tab => ({
+                    id: tab.dataset.tab,
+                    selected: tab.getAttribute('aria-selected'),
+                })),
+            };
+        });
+        throw new Error(`Agent Workbench usage action did not project its activity panel: ${JSON.stringify(usageState)}\n${rendererErrors.join('\n')}\n${error.message}`);
+    }
     const configuredDaemonPid = await waitForDaemonChild(child.pid);
     const configuredDaemonCommand = await readProcessCommandLine(configuredDaemonPid);
     assert.ok(configuredDaemonCommand.includes(appData),
@@ -949,7 +1570,10 @@ try {
         return Boolean(button);
     });
     assert.ok(usageClosed, 'the usage panel must be dismissible through its visible toggle');
-    await page.waitForSelector('.agent-chat-usage-budget', { hidden: true, timeout: timeoutMs });
+    await page.waitForFunction(() => {
+        const panel = document.querySelector('.agent-chat-activity-panel');
+        return panel?.getAttribute('aria-hidden') === 'true' && panel?.hasAttribute('inert');
+    }, { timeout: timeoutMs });
 
     // Establish a durable Topic without contacting a model, then terminate
     // only this Electron child's daemon. This validates the user-visible
@@ -961,55 +1585,71 @@ try {
     });
     assert.ok(openedSession, 'Workbench must expose a real new-session action for daemon crash recovery');
     await page.waitForFunction(() => {
+        const dialog = document.querySelector('.agent-chat-topic-flow-dialog');
+        return Boolean(dialog && /共享 Agent/.test(dialog.textContent || '') && /共享模型/.test(dialog.textContent || '') && /工作目录/.test(dialog.textContent || ''));
+    }, { timeout: timeoutMs });
+    await assertResponsiveTopicFlow(page, '创建并打开');
+    await confirmTopicFlow(page, '创建并打开');
+    await page.waitForFunction(() => {
         const input = document.querySelector('.agent-chat-message-input');
         return Boolean(input && !input.disabled);
     }, { timeout: timeoutMs });
+    await assertResponsiveLongMessageLayout(page);
+    await recordSmokeResult('running', 'topic-created');
     if (liveToolBox) {
-        await runLiveToolBoxTurn(page, rendererErrors);
+        await recordSmokeResult('running', 'live-toolbox');
+        if (!skipLiveFileOperator) await runLiveToolBoxTurn(page, rendererErrors);
+        if (liveToolBoxWs) await runLiveToolBoxWsVisualRegression(page, rendererErrors);
+        if (liveLongStream) await runLiveLongStreamVisualRegression(page, rendererErrors);
         if (liveGuiCompaction) await runLiveGuiCompaction(page, compactionTopic, rendererErrors);
         if (liveRendererReload) await runLiveRendererReload(page, rendererErrors);
         if (liveHighRiskApproval) await runLiveHighRiskApproval(page, rendererErrors);
         if (liveBackendYolo) await runLiveBackendYolo(page, rendererErrors);
         if (liveCancellation) await runLiveCancellation(page, rendererErrors);
     }
-    const attachedBeforeCrash = await page.evaluate(() => (window.chatAPI || window.electronAPI).agentRuntimeGetStatus());
-    const crashedDaemonPid = Number(attachedBeforeCrash?.worker?.pid);
-    assert.ok(Number.isSafeInteger(crashedDaemonPid) && crashedDaemonPid > 0,
-        'runtime status must identify the currently attached daemon before the crash test');
-    await stopTestDaemon(crashedDaemonPid);
-    await page.waitForSelector('.agent-chat-connection-reconnect', { visible: true, timeout: timeoutMs });
-    assert.match(await page.$eval('.agent-chat-activity-connection', node => node.textContent), /vcp-agentd exited/,
-        'a direct daemon crash must surface a diagnostic rather than silently disabling Agent controls');
-    const reconnectRequested = await page.evaluate(() => {
-        const button = document.querySelector('.agent-chat-connection-reconnect');
-        button?.click();
-        return Boolean(button);
-    });
-    assert.ok(reconnectRequested, 'crashed daemon recovery must be explicit and user initiated');
-    await page.waitForFunction(async () => {
-        const input = document.querySelector('.agent-chat-message-input');
-        if (!input || input.disabled || document.querySelector('.agent-chat-connection-reconnect')) return false;
-        const status = await (window.chatAPI || window.electronAPI).agentRuntimeGetStatus();
-        return status?.state === 'ready' && status?.worker?.available === true;
-    }, { timeout: timeoutMs });
-    const recoveredRuntime = await page.evaluate(() => (window.chatAPI || window.electronAPI).agentRuntimeGetStatus());
-    assert.equal(recoveredRuntime?.state, 'ready', 'manual recovery must leave the Rust runtime ready');
-    assert.equal(recoveredRuntime?.worker?.available, true, 'manual recovery must own a fresh daemon transport');
-    const recoveredDaemonPid = Number(recoveredRuntime?.worker?.pid);
-    assert.ok(Number.isSafeInteger(recoveredDaemonPid) && recoveredDaemonPid > 0,
-        'manual recovery must report its newly attached daemon process');
-    assert.notEqual(recoveredDaemonPid, crashedDaemonPid,
-        'manual recovery must spawn a fresh daemon process instead of reviving the crashed transport');
+    if (!skipCrashRecovery) {
+        await recordSmokeResult('running', 'crash-recovery');
+        const attachedBeforeCrash = await page.evaluate(() => (window.chatAPI || window.electronAPI).agentRuntimeGetStatus());
+        const crashedDaemonPid = Number(attachedBeforeCrash?.worker?.pid);
+        assert.ok(Number.isSafeInteger(crashedDaemonPid) && crashedDaemonPid > 0,
+            'runtime status must identify the currently attached daemon before the crash test');
+        await stopTestDaemon(crashedDaemonPid);
+        await page.waitForSelector('.agent-chat-connection-reconnect', { visible: true, timeout: timeoutMs });
+        assert.match(await page.$eval('.agent-chat-activity-connection', node => node.textContent), /vcp-agentd exited/,
+            'a direct daemon crash must surface a diagnostic rather than silently disabling Agent controls');
+        const reconnectRequested = await page.evaluate(() => {
+            const button = document.querySelector('.agent-chat-connection-reconnect');
+            button?.click();
+            return Boolean(button);
+        });
+        assert.ok(reconnectRequested, 'crashed daemon recovery must be explicit and user initiated');
+        await page.waitForFunction(async () => {
+            const input = document.querySelector('.agent-chat-message-input');
+            if (!input || input.disabled || document.querySelector('.agent-chat-connection-reconnect')) return false;
+            const status = await (window.chatAPI || window.electronAPI).agentRuntimeGetStatus();
+            return status?.state === 'ready' && status?.worker?.available === true;
+        }, { timeout: timeoutMs });
+        const recoveredRuntime = await page.evaluate(() => (window.chatAPI || window.electronAPI).agentRuntimeGetStatus());
+        assert.equal(recoveredRuntime?.state, 'ready', 'manual recovery must leave the Rust runtime ready');
+        assert.equal(recoveredRuntime?.worker?.available, true, 'manual recovery must own a fresh daemon transport');
+        const recoveredDaemonPid = Number(recoveredRuntime?.worker?.pid);
+        assert.ok(Number.isSafeInteger(recoveredDaemonPid) && recoveredDaemonPid > 0,
+            'manual recovery must report its newly attached daemon process');
+        assert.notEqual(recoveredDaemonPid, crashedDaemonPid,
+            'manual recovery must spawn a fresh daemon transport instead of reviving the crashed process');
+    }
     await page.click('.next-ui-tab[data-view-id="app:agent-workbench"] .next-ui-tab-close');
     await page.waitForFunction(() => !document.querySelector('#nextUiInternalAppHost .agent-workbench-root'), { timeout: timeoutMs });
 
-    console.log(`Electron GUI smoke passed: renderer boot, main-chat Nova selection/topic/composer, global settings save, Next UI reload, daemon-owned budget readback,${liveToolBox ? ' opt-in live ToolBox FileOperator turn,' : ''}${liveGuiCompaction ? ' opt-in live GUI compaction,' : ''}${liveRendererReload ? ' opt-in Agent renderer reload,' : ''}${liveHighRiskApproval ? ' opt-in denied PowerShell approval,' : ''}${liveBackendYolo ? ' opt-in allowed PowerShell backend-YOLO,' : ''}${liveCancellation ? ' opt-in cancellation,' : ''} and explicit Rust daemon crash recovery.`);
+    await recordSmokeResult('passed');
+    console.log(`Electron GUI smoke passed: renderer boot, main-chat Nova selection/topic/composer, global settings save, Next UI reload, daemon-owned readiness projection, budget readback,${liveToolBox && !skipLiveFileOperator ? ' opt-in live ToolBox FileOperator turn,' : ''}${liveToolBoxWs ? ' opt-in live ToolBox WS visual regression,' : ''}${liveLongStream ? ' opt-in live long-stream scroll-anchor regression,' : ''}${liveGuiCompaction ? ' opt-in live GUI compaction,' : ''}${liveRendererReload ? ' opt-in Agent renderer reload,' : ''}${liveHighRiskApproval ? ' opt-in denied PowerShell approval,' : ''}${liveBackendYolo ? ' opt-in allowed PowerShell backend-YOLO,' : ''}${liveCancellation ? ' opt-in cancellation,' : ''}${skipCrashRecovery ? ' crash/reconnect skipped by explicit diagnostic flag.' : ' and explicit Rust daemon crash recovery.'}`);
 } catch (error) {
+    exitCode = 1;
     // Electron can close its remote-debugging endpoint during cleanup. Emit the
     // actual assertion before that happens so a live UI regression is never
     // mistaken for a silent, successful smoke exit.
+    await recordSmokeResult('failed', smokePhase, error?.message || error);
     console.error(`Electron GUI smoke failed: ${error?.stack || error}`);
-    throw error;
 } finally {
     // CDP Browser.close is an Electron-aware graceful shutdown. It avoids a
     // Windows process-tree kill that could take the Node test runner with it.
@@ -1018,8 +1658,16 @@ try {
             browser.close().then(() => true).catch(() => false),
             sleep(8_000).then(() => false),
         ]);
-        if (!closed) browser.disconnect();
+        // `Browser.close()` asks Electron to quit but Puppeteer's CDP socket
+        // can still keep Node's event loop alive on Windows. Disconnect in
+        // both outcomes; it is idempotent and never changes product state.
+        browser.disconnect();
     }
     await terminate(child);
     await removeTemporaryAppData(appData);
 }
+
+// This executable only owns the isolated Electron child above.  Explicitly
+// terminate the test runner after cleanup because an orphaned Puppeteer CDP
+// socket otherwise keeps Windows CI alive after a result receipt was written.
+process.exit(exitCode);

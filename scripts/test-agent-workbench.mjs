@@ -29,9 +29,12 @@ const replacedInteractionQueues = [];
 const createdSessions = [];
 const renamedTopics = [];
 const compactedSessions = [];
+const approvalResponses = [];
 const savedWorkbenchSettings = [];
 const runtimeTransitions = [];
 const takeoverRequests = [];
+let mainCreateProxyCalls = 0;
+let sharedCreateActionCalls = 0;
 let topicCatalog = [{
     id: 'topic-restored', title: '可恢复的 Rust Topic', agentId: 'Nova',
     model: 'gpt-5.6-terra', workspaceRef: root, inUse: false,
@@ -42,13 +45,21 @@ let topicCatalog = [{
     id: 'topic-in-use', title: '协作接管 Topic', agentId: 'Nova',
     model: 'gpt-5.6-terra', workspaceRef: root, inUse: true,
 }];
+const secondaryTopicCatalog = [{
+        id: 'topic-agent-123', title: '123 的既有 Topic', agentId: '123',
+        model: 'gpt-5.6-terra', workspaceRef: root, inUse: false,
+    }];
+const topicListRequests = [];
 window.nextUiApps = {
     register(definition) { registered = definition; return definition; },
     get() { return null; },
     list() { return []; },
 };
 window.chatAPI = {
-    getAgents: async () => [{ id: 'Nova', name: 'Nova', config: { model: 'gpt-5.6-terra', systemPrompt: '{{Nova}}' } }],
+    getAgents: async () => [
+        { id: 'Nova', name: 'Nova', config: { model: 'gpt-5.6-terra', systemPrompt: '{{Nova}}' } },
+        { id: '123', name: '123', config: { model: 'gpt-5.6-terra' } },
+    ],
     // Match the main-chat contract: this is a Main-process cache, not an
     // Agent Workbench request to the ToolBox model endpoint.
     getCachedModels: async () => {
@@ -85,8 +96,14 @@ window.chatAPI = {
         return { ok: true };
     },
     agentRuntimeCancelTurn: async () => ({ ok: true }),
-    agentRuntimeRespondApproval: async () => ({ approvalId: 'appr', decision: 'allow' }),
-    agentRuntimeListTopics: async () => topicCatalog,
+    agentRuntimeRespondApproval: async (payload) => {
+        approvalResponses.push(payload);
+        return { approvalId: payload.approvalId, decision: payload.decision };
+    },
+    agentRuntimeListTopics: async ({ agentId } = {}) => {
+        topicListRequests.push(agentId || 'Nova');
+        return agentId === '123' ? secondaryTopicCatalog : topicCatalog;
+    },
     agentRuntimeListInteractionQueue: async () => interactionQueue,
     agentRuntimeReplaceInteractionQueue: async ({ interactions }) => {
         interactionQueue = interactions;
@@ -96,10 +113,17 @@ window.chatAPI = {
     agentRuntimeClearInteractionQueue: async () => { interactionQueue = []; return { ok: true }; },
     agentRuntimeGetWorkbenchSettings: async () => ({
         budget: { maxRequestsPerTurn: 8, maxTokensPerTurn: 120000 },
+        permissionMode: 'ask',
     }),
     agentRuntimeUpdateWorkbenchSettings: async (payload) => {
         savedWorkbenchSettings.push(payload);
-        return { restartRequired: true, settings: payload };
+        return {
+            restartRequired: true,
+            settings: {
+                budget: payload.budget || { maxRequestsPerTurn: 8, maxTokensPerTurn: 120000 },
+                permissionMode: payload.permissionMode || 'ask',
+            },
+        };
     },
     agentRuntimeTakeoverTopic: async ({ topicId }) => {
         takeoverRequests.push(topicId);
@@ -137,6 +161,24 @@ assert.ok(registered, 'Agent Workbench must register as an internal app');
 assert.equal(registered.kind, 'internal');
 
 const host = document.getElementById('host');
+const mainCreateProxy = document.createElement('button');
+mainCreateProxy.id = 'nextUiCreateItemBtn';
+mainCreateProxy.addEventListener('click', () => { mainCreateProxyCalls += 1; });
+document.body.append(mainCreateProxy);
+window.topTabManager = {
+    openCreateDialog() { sharedCreateActionCalls += 1; },
+};
+// The Workbench uses its own Topic controls while routing their actions to
+// Rust-owned Agent Topics.  The only main-chat element below exists to retain
+// the compatibility fallback for a partially initialized shell.
+const mainTopicToolbar = document.createElement('div');
+mainTopicToolbar.innerHTML = `
+    <button id="nextUiCreateTopicBtn" class="next-ui-create-topic-trigger" type="button"><span>新建话题</span></button>
+    <button id="nextUiManageTopicsBtn" class="next-ui-topic-icon-trigger" type="button" aria-pressed="false">管理</button>
+    <button id="nextUiTopicSearchTrigger" class="next-ui-topic-icon-trigger" type="button" aria-expanded="false">搜索</button>
+    <div id="tabContentTopics"><div class="sidebar-subtab-item sidebar-search-subtab"><div class="topic-search-container"><input id="topicSearchInput" class="topic-search-input"><button class="next-ui-topic-search-close" type="button">关闭</button></div></div></div>
+`;
+document.body.append(mainTopicToolbar);
 window.prompt = () => '重命名后的 Topic';
 window.confirm = () => true;
 window.localStorage.setItem('vcpchat.agentWorkbench.lastTopic.v1', JSON.stringify({
@@ -159,17 +201,91 @@ assert.ok(host.querySelector('.agent-chat-messages-container.chat-messages-conta
 assert.ok(host.querySelector('.agent-chat-composer.chat-input-area'), 'Agent composer must reuse the main chat input area');
 assert.ok(host.querySelector('.agent-chat-composer .chat-input-card'), 'Agent composer must reuse the main chat input card');
 assert.ok(host.querySelector('.agent-chat-sidebar .sidebar-tabs'), 'Agent navigation must retain the redesigned sidebar tabs');
+assert.ok(host.querySelector('.agent-chat-sidebar .agent-chat-sidebar-content.sidebar-tab-content.active'),
+    'Agent sidebar must own a dedicated full-width tab content container');
+assert.equal(host.querySelector('.agent-chat-sidebar .sidebar-tab-content.active')?.classList.contains('agent-chat-pane'), false,
+    'sidebar tab content must never inherit the main conversation pane flex contract');
 const assistantTab = [...host.querySelectorAll('.agent-chat-sidebar .sidebar-tab-button')]
     .find((tab) => tab.textContent.trim() === '助手');
 assert.ok(assistantTab, 'Assistant tab must be available');
 assistantTab.click();
 assert.ok([...host.querySelectorAll('.agent-chat-agent-row .agent-name')].some((node) => node.textContent === 'Nova'),
     'slow model discovery must not prevent the local Nova Agent catalog from rendering');
-const immediateCreate = host.querySelector('.next-ui-create-item-trigger');
-assert.ok(immediateCreate, 'Agent page must expose the shared new-conversation action');
-immediateCreate.click();
+const sessionsBeforeAgentBrowse = createdSessions.length;
+const secondaryAgent = [...host.querySelectorAll('.agent-chat-agent-row')]
+    .find((row) => row.querySelector('.agent-name')?.textContent === '123');
+assert.ok(secondaryAgent, 'a second shared Agent must be selectable for Topic browsing');
+secondaryAgent.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
-assert.match(createdSessions.at(-1).title, /^新会话 /, 'new Agent conversations must be created immediately without a required title dialog');
+assert.equal(host.querySelector('.sidebar-tab-button.active')?.textContent, '会话',
+    'selecting an Agent must open its Topic catalog without requiring New Topic');
+assert.ok([...host.querySelectorAll('.agent-chat-persisted-topic .topic-title-display')]
+    .some((node) => node.textContent === '123 的既有 Topic'),
+    'the selected Agent history must render immediately from Rust Topic metadata');
+assert.equal(createdSessions.length, sessionsBeforeAgentBrowse,
+    'browsing an Agent history must not create an empty Agent Session');
+assert.equal(topicListRequests.at(-1), '123',
+    'the Workbench must request the selected Agent Topic catalog explicitly');
+assistantTab.click();
+const novaAgent = [...host.querySelectorAll('.agent-chat-sidebar .agent-chat-agent-row')]
+    .find((row) => row.querySelector('.agent-name')?.textContent === 'Nova');
+assert.ok(novaAgent, 'the Nova Agent must remain available after browsing another Agent');
+novaAgent.click();
+await new Promise((resolve) => setTimeout(resolve, 30));
+assistantTab.click();
+const sharedCreate = host.querySelector('.next-ui-create-item-trigger');
+const agentSearchTrigger = host.querySelector('.next-ui-agent-search-trigger');
+assert.ok(sharedCreate && agentSearchTrigger, 'Agent assistant sidebar must reuse the main shared create-and-search controls');
+assert.match(sharedCreate.textContent, /创建助手或群组/);
+sharedCreate.click();
+assert.equal(sharedCreateActionCalls, 1,
+    'Agent assistant creation must call the shared VCPChat create action, not a sidebar DOM proxy');
+assert.equal(mainCreateProxyCalls, 0,
+    'the shared creation action must not depend on the current main sidebar button instance');
+assert.equal(host.querySelector('.agent-chat-topic-flow-dialog'), null,
+    'creating an assistant must not accidentally create a Rust Agent Topic');
+agentSearchTrigger.click();
+const agentSearch = host.querySelector('.agents-header .topic-search-input');
+assert.ok(agentSearch && host.querySelector('.agents-header.is-searching'),
+    'the shared assistant search affordance must become interactive in the Agent projection');
+agentSearch.value = '123';
+agentSearch.dispatchEvent(new window.Event('input', { bubbles: true }));
+assert.equal(host.querySelector('.agent-chat-agent-row[data-agent-search*="nova"]').hidden, true,
+    'assistant search must filter the projected shared Agent catalog');
+host.querySelector('.next-ui-agent-search-close').click();
+assert.equal(agentSearch.value, '', 'closing assistant search must clear its transient query');
+const headerNewTopic = host.querySelector('.agent-chat-header-actions .agent-chat-icon-button[title="新建 Agent 会话"]');
+assert.ok(headerNewTopic, 'Agent header must retain the separate new-Topic action');
+headerNewTopic.click();
+await new Promise((resolve) => setTimeout(resolve, 30));
+const createTopicFlow = host.querySelector('.agent-chat-topic-flow-dialog');
+assert.ok(createTopicFlow, 'new Agent conversations must begin in the Workbench-owned Topic flow');
+assert.match(createTopicFlow.textContent, /共享 Agent/);
+assert.match(createTopicFlow.textContent, /共享模型/);
+assert.ok(createTopicFlow.querySelector('.agent-chat-topic-flow-context'),
+    'new Topic flow must show the selected Agent, model and workspace sources before creation');
+const createTitle = createTopicFlow.querySelector('[aria-label="Topic 标题"]');
+const createModel = createTopicFlow.querySelector('[aria-label="模型"]');
+const createWorkspace = createTopicFlow.querySelector('[aria-label="工作目录"]');
+assert.ok(createTitle && createModel && createWorkspace, 'the new Topic flow must expose title, shared model and workspace controls');
+createTitle.value = '独立产品流程 Topic';
+createTitle.dispatchEvent(new window.Event('input', { bubbles: true }));
+createModel.value = 'gpt-5.6-terra';
+createModel.dispatchEvent(new window.Event('input', { bubbles: true }));
+createWorkspace.value = root;
+createWorkspace.dispatchEvent(new window.Event('input', { bubbles: true }));
+const createSubmit = [...createTopicFlow.querySelectorAll('button')].find((button) => button.textContent === '创建并打开');
+assert.ok(createSubmit, 'the new Topic flow must require an explicit create action');
+createSubmit.click();
+await new Promise((resolve) => setTimeout(resolve, 30));
+assert.deepEqual({
+    title: createdSessions.at(-1).title,
+    agent: createdSessions.at(-1).agent,
+    model: createdSessions.at(-1).model,
+    workspaceRoot: createdSessions.at(-1).workspaceRoot,
+}, {
+    title: '独立产品流程 Topic', agent: 'Nova', model: 'gpt-5.6-terra', workspaceRoot: root,
+}, 'new Agent conversations must pass the chosen shared Agent/model/workspace through Rust IPC');
 assert.equal(host.querySelector('.agent-chat-message-input').disabled, false, 'a newly created Rust Session must unlock the composer');
 const sessionTab = [...host.querySelectorAll('.agent-chat-sidebar .sidebar-tab-button')]
     .find((tab) => tab.textContent.trim() === '会话');
@@ -179,6 +295,33 @@ assert.ok(host.querySelector('.agent-chat-session-row'));
 assert.ok([...host.querySelectorAll('.agent-chat-session-row .topic-title-display')]
     .some((node) => node.textContent === '另一条持久 Topic'),
     'the sidebar must render durable Rust Topics, not only the current in-memory session');
+const topicToolbar = host.querySelector('.topics-header-container .next-ui-topic-tools');
+assert.ok(topicToolbar, 'Agent sessions must use the same Topic toolbar shell as main chat');
+assert.ok(topicToolbar.querySelector('.next-ui-create-topic-trigger'), 'Agent sessions must expose a new Topic control');
+const topicManage = topicToolbar.querySelector('.next-ui-topic-icon-trigger[aria-label="管理会话"]');
+const topicSearchTrigger = topicToolbar.querySelector('.next-ui-topic-icon-trigger[aria-label="搜索会话"]');
+assert.ok(topicManage && topicSearchTrigger, 'Agent sessions must expose the same manage-and-search controls as main chat');
+topicSearchTrigger.click();
+const topicSearch = host.querySelector('.topics-header-container.is-searching .topic-search-input');
+assert.ok(topicSearch, 'Agent Topic search must expand from the shared Topic toolbar rather than remain permanently visible');
+topicSearch.value = '另一条';
+topicSearch.dispatchEvent(new window.Event('input', { bubbles: true }));
+assert.equal(host.querySelector('.agent-chat-persisted-topic[data-topic-id="topic-restored"]').hidden, true,
+    'expanded Topic search must filter durable Rust Topics');
+host.querySelector('.topics-header-container .next-ui-topic-search-close').click();
+assert.equal(topicSearch.value, '', 'closing Topic search must clear its transient query');
+topicManage.click();
+assert.equal(host.querySelector('.topics-header-container .next-ui-topic-icon-trigger[aria-label="管理会话"]')?.getAttribute('aria-pressed'), 'true',
+    'Topic manage control must enter renderer-local management mode');
+assert.ok(host.querySelector('.agent-chat-sidebar-content.is-managing .agent-chat-topic-manage-panel'),
+    'Topic manage mode must expose the same bottom management affordance as main chat');
+const selectableTopic = host.querySelector('.agent-chat-persisted-topic[data-topic-id="topic-archived"]');
+selectableTopic.click();
+assert.match(host.querySelector('.agent-chat-topic-selection-count').textContent, /1/,
+    'management mode must select a Rust Topic rather than opening it');
+host.querySelector('.agent-chat-topic-manage-panel [aria-label="退出会话管理"]').click();
+assert.equal(host.querySelector('.agent-chat-sidebar-content').classList.contains('is-managing'), false,
+    'exiting Topic management must discard renderer-only selection state');
 const persistedTopicMenu = host.querySelector('.agent-chat-persisted-topic .agent-chat-session-menu');
 assert.ok(persistedTopicMenu, 'a free durable Topic must expose its own management menu');
 persistedTopicMenu.click();
@@ -194,8 +337,14 @@ const inUseTopicRow = [...host.querySelectorAll('.agent-chat-persisted-topic')]
 assert.ok(inUseTopicRow, 'a Topic held by another daemon must remain visible as a read-only row');
 inUseTopicRow.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
-const takeoverButton = host.querySelector('.agent-chat-readonly-takeover');
-assert.ok(takeoverButton, 'an occupied Topic must be previewed read-only before the user explicitly requests takeover');
+const occupiedTopicFlow = host.querySelector('.agent-chat-topic-flow-dialog');
+assert.ok(occupiedTopicFlow, 'opening an occupied Topic must first show its Rust checkpoint state');
+assert.match(occupiedTopicFlow.textContent, /另一客户端写入/);
+assert.match(occupiedTopicFlow.textContent, /已读取 Rust checkpoint/);
+assert.match(occupiedTopicFlow.querySelector('.agent-chat-topic-flow-lease').textContent, /占用中/,
+    'occupied Topics must expose a distinct lease state instead of relying on a generic dialog sentence');
+const takeoverButton = [...occupiedTopicFlow.querySelectorAll('button')].find((button) => button.textContent === '请求安全接管');
+assert.ok(takeoverButton, 'an occupied Topic must require an explicit safe takeover action');
 takeoverButton.click();
 await new Promise((resolve) => setTimeout(resolve, 650));
 assert.deepEqual(takeoverRequests, ['topic-in-use'], 'a user click must request cooperative Rust Topic takeover exactly once');
@@ -224,9 +373,18 @@ assert.deepEqual(startedTurns, [{ sessionId: 'sess_test', prompt: '请介绍一�
 // the live turn used by steering and follow-up controls.
 emitDaemonEvent({
     sessionId: 'sess_test', turnId: 'turn_test', sequence: 3,
-    type: 'turn.started', payload: {},
+    type: 'turn.started', payload: { prompt: '请介绍一下自己' },
 });
-await new Promise((resolve) => setTimeout(resolve, 0));
+await new Promise((resolve) => setTimeout(resolve, 30));
+assert.ok([...host.querySelectorAll('.message-item.user .md-content')]
+    .some((node) => node.textContent.includes('请介绍一下自己')),
+    'daemon turn.started must render the submitted user message immediately');
+const activeSendButton = host.querySelector('.agent-chat-send-button');
+assert.equal(activeSendButton.querySelector('.vcp-ui-icon')?.textContent, 'stop',
+    'an active Rust turn must replace the send arrow with the main-chat stop icon');
+assert.equal(activeSendButton.getAttribute('aria-label'), '取消当前任务');
+assert.equal(activeSendButton.classList.contains('interrupt-mode'), true,
+    'an empty composer during an active turn must use the shared interrupt visual state');
 prompt.value = '完成后再列出风险';
 prompt.dispatchEvent(new window.Event('input', { bubbles: true }));
 host.querySelector('.agent-chat-send-button').click();
@@ -317,6 +475,7 @@ emitDaemonEvent({
             toolName: 'PowerShellExecutorWithAnIntentionallyVeryLongIdentifierForNarrowLayouts',
             riskLevel: 'high', reason: '长参数必须在窄窗口安全折行',
             argumentSummary: 'a'.repeat(8_192), argumentsHash: 'bound-hash',
+            expiresAtMs: Date.now() + 100,
         },
     },
 });
@@ -324,12 +483,54 @@ await new Promise((resolve) => setTimeout(resolve, 30));
 host.querySelector('.agent-chat-activity-tab[data-tab="approvals"]')?.click();
 const localApproval = host.querySelector('.agent-chat-approval-card');
 assert.ok(localApproval, 'local ToolBox preflight approval must render in a dedicated bounded card');
+const localApprovalActions = localApproval.querySelector('.agent-chat-approval-actions');
+assert.ok(localApprovalActions, 'a local approval card must always render its decision row');
+assert.deepEqual([...localApprovalActions.querySelectorAll('button')].map((button) => button.textContent), ['拒绝', '允许一次'],
+    'the real local deny and allow-once actions must be visible before verbose approval bindings');
+assert.ok(localApprovalActions.compareDocumentPosition(localApproval.querySelector('.agent-chat-approval-binding')) & window.Node.DOCUMENT_POSITION_FOLLOWING,
+    'the decision row must appear before long approval binding data and remain reachable in a narrow panel');
 assert.equal(localApproval.querySelector('.agent-chat-approval-args').textContent.length, 8_192,
     'approval parameters must remain text rather than being dropped or interpreted as HTML');
+await new Promise((resolve) => setTimeout(resolve, 650));
+assert.equal(approvalResponses.length, 0,
+    'Renderer must not manufacture a deny when the Rust Host-owned deadline expires');
+assert.match(localApproval.querySelector('.agent-chat-approval-countdown').textContent,
+    /等待 Rust Runtime/);
+
+// A fresh approval with a real future deadline proves the visible actions use
+// the complete Rust-owned four-part binding; the renderer never invents an
+// unbound approval decision.
+emitDaemonEvent({
+    sessionId: 'sess_test', turnId: 'turn_test', toolCallId: 'tool-action', sequence: 8,
+    type: 'approval.requested',
+    payload: { approval: {
+        approvalId: 'approval-action', sessionId: 'sess_test', turnId: 'turn_test', toolCallId: 'tool-action',
+        toolName: 'FileOperator', riskLevel: 'medium', argumentsHash: 'bound-action-hash',
+        expiresAtMs: Date.now() + 60_000,
+    } },
+});
+await new Promise((resolve) => setTimeout(resolve, 30));
+const actionableApproval = [...host.querySelectorAll('.agent-chat-approval-card')]
+    .find((card) => card.textContent.includes('FileOperator'));
+assert.ok(actionableApproval, 'a new pending local approval must be rendered after a previous timeout');
+actionableApproval.querySelector('.agent-chat-approval-actions button.danger').click();
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepEqual(approvalResponses.at(-1), {
+    approvalId: 'approval-action', decision: 'deny', sessionId: 'sess_test', turnId: 'turn_test',
+    toolCallId: 'tool-action', argumentsHash: 'bound-action-hash',
+}, 'the visible deny button must invoke the real narrowed approval IPC with its exact Rust binding');
 
 runtimeStatus = 'ready';
 emitDaemonEvent({
     sessionId: 'runtime', type: 'runtime.state_changed', payload: { state: 'ready' },
+});
+emitDaemonEvent({
+    sessionId: 'runtime', type: 'runtime.readiness', payload: {
+        server: { state: 'configured', detail: '共享 VCPChat 设置已加载' },
+        profile: { state: 'ready', detail: 'Nova · gpt-5.6-terra' },
+        toolbox: { state: 'ready', detail: 'VCPToolBox 受认证探测成功' },
+        capability: { state: 'unknown', detail: '等待 VCPLog 节点事件' },
+    },
 });
 emitDaemonEvent({
     sessionId: 'sess_test', turnId: 'turn_live', messageId: 'msg_live', sequence: 2,
@@ -338,6 +539,17 @@ emitDaemonEvent({
 await new Promise((resolve) => setTimeout(resolve, 30));
 assert.equal(host.querySelector('.agent-wb-runtime-dock'), null, 'Runtime lifecycle controls must stay out of the Agent UI');
 assert.ok([...host.querySelectorAll('.message-item .md-content')].some((node) => node.textContent.includes('live Rust delta')), 'Runtime delta must render in the migrated chat shell');
+host.querySelector('.agent-chat-status-chip[data-action="connection"]')?.click();
+// `setActivityOpen` queues the activity projection through the same animation
+// frame batcher used by streaming updates. Give JSDOM one actual frame rather
+// than assuming a zero-delay timer has already flushed it.
+await new Promise((resolve) => setTimeout(resolve, 30));
+assert.equal(host.querySelectorAll('.agent-chat-readiness-card').length, 4,
+    'the connection surface must render exactly the four daemon-owned readiness facts');
+assert.match(host.querySelector('[data-readiness="toolbox"]').textContent, /VCPToolBox.*就绪/s,
+    'ToolBox readiness must display the daemon probe result without a renderer HTTP request');
+assert.match(host.querySelector('[data-readiness="capability"]').textContent, /未知/,
+    'a missing DistributedServer lifecycle event must remain explicitly unknown instead of being guessed');
 
 // Streaming is the hot path.  A second delta must update the existing message
 // in place rather than replace the feed, composer or focused draft.
@@ -361,6 +573,37 @@ assert.equal(stableComposer.value, '保持中的草稿',
     'streaming deltas must preserve the user draft');
 assert.match(liveMessage.querySelector('.md-content').textContent, /live Rust delta and another delta/,
     'streaming deltas must append to the existing assistant message');
+
+emitDaemonEvent({
+    sessionId: 'sess_test', turnId: 'turn_live', messageId: 'msg_live', sequence: 4,
+    type: 'reasoning.delta', payload: { text: 'Inspecting the VCPToolBox environment before choosing the next safe action.' },
+});
+await new Promise((resolve) => setTimeout(resolve, 30));
+const reasoningCard = liveMessage.querySelector('.agent-chat-reasoning-block');
+assert.ok(reasoningCard, 'reasoning deltas must render the dedicated compact thinking card');
+assert.match(reasoningCard.querySelector('.vcp-thought-chain-label').textContent, /思考中.*s/,
+    'a streaming thought card must show a Cherry-style thinking status and live duration');
+assert.equal(reasoningCard.querySelector('.vcp-thought-chain-icon').textContent, 'lightbulb',
+    'the Agent Workbench thinking card must use the compact lightbulb treatment rather than a decorative brain emoji');
+reasoningCard.querySelector('.vcp-thought-chain-header').click();
+assert.equal(reasoningCard.querySelector('.vcp-thought-chain-bubble').classList.contains('expanded'), false,
+    'the fallback thinking header must remain explicitly collapsible');
+reasoningCard.querySelector('.vcp-thought-chain-header').click();
+emitDaemonEvent({
+    sessionId: 'sess_test', turnId: 'turn_live', messageId: 'msg_live', sequence: 5,
+    type: 'assistant.completed', payload: {},
+});
+await new Promise((resolve) => setTimeout(resolve, 30));
+const completedLiveMessage = host.querySelector('[data-message-id="msg_live"]');
+assert.match(completedLiveMessage.querySelector('.agent-chat-reasoning-block .vcp-thought-chain-label').textContent, /已深度思考.*s/,
+    'a completed thought card must collapse to a concise duration summary');
+assert.ok(completedLiveMessage.querySelector('.agent-chat-reasoning-copy'),
+    'completed reasoning must expose a small copy action, matching the Cherry-style review workflow');
+
+// `assistant.completed` intentionally requests a full durable projection.
+// Let that frame settle before the following scroll-anchor regression probe
+// installs its synthetic geometry.
+await new Promise((resolve) => setTimeout(resolve, 50));
 
 // Run this after the preceding streaming frame has settled. A full rerender
 // from a ToolBox status event must not force a reader who is inspecting older
@@ -394,8 +637,34 @@ const restoredTopicRow = [...host.querySelectorAll('.agent-chat-session-row')]
     .find((row) => row.dataset.topicId === 'topic-archived');
 assert.ok(restoredTopicRow, 'durable Topic row must retain its Topic identifier');
 restoredTopicRow.click();
+await new Promise((resolve) => setTimeout(resolve, 30));
+const restoredTopicFlow = host.querySelector('.agent-chat-topic-flow-dialog');
+assert.ok(restoredTopicFlow, 'an idle Topic must expose its durable snapshot before attachment');
+assert.match(restoredTopicFlow.textContent, /可写 attachment/);
+const openRestoredTopic = [...restoredTopicFlow.querySelectorAll('button')].find((button) => button.textContent === '打开并恢复');
+assert.ok(openRestoredTopic, 'an idle Topic must require an explicit restore action');
+openRestoredTopic.click();
 await new Promise((resolve) => setTimeout(resolve, 0));
 assert.equal(createdSessions.at(-1).resume, 'topic-archived', 'selecting a durable Topic must resume Rust persistence, not create a local copy');
+
+const settingsTab = [...host.querySelectorAll('.agent-chat-sidebar .sidebar-tab-button')]
+    .find((tab) => tab.textContent.trim() === '设置');
+settingsTab.click();
+assert.ok(host.querySelector('.agent-chat-settings-pane .agent-chat-settings-form'),
+    'settings must render inside a dedicated padded pane instead of placing fields against the sidebar edge');
+assert.equal(host.querySelector('.agent-chat-settings-pane > .agent-chat-settings-placeholder') !== null, true);
+const permissionSelect = [...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field select')]
+    .find((control) => [...control.options].some((option) => option.value === 'always-approve'));
+assert.ok(permissionSelect, 'Workbench settings must expose a visible local approval (YOLO) policy selector');
+permissionSelect.value = 'always-approve';
+permissionSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
+const savePermission = [...host.querySelectorAll('.agent-chat-settings-pane button')]
+    .find((button) => button.textContent === '保存本地审批策略');
+assert.ok(savePermission, 'the local approval policy must have an explicit save action');
+savePermission.click();
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.equal(savedWorkbenchSettings.at(-1)?.permissionMode, 'always-approve',
+    'saving YOLO must only persist the narrowed Rust Host permissionMode setting');
 
 dispose();
 assert.equal(unsubscribeCalls, 1, 'Workbench unmount must release runtime event subscription');

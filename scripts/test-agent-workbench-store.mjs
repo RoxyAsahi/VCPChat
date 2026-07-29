@@ -38,8 +38,12 @@ assert.equal(tool.name, 'vcp_invoke');
 assert.equal(tool.state, 'completed');
 assert.equal(tool.eventCount, 2);
 
-dispatch({ type: 'approval.requested', sessionId: 's1', turnId: 't1', approvalId: 'a1', sequence: 8, payload: { approval: { approvalId: 'a1', toolName: 'vcp_invoke' } } });
+dispatch({ type: 'approval.requested', sessionId: 's1', turnId: 't1', toolCallId: 'tool-1', approvalId: 'a1', sequence: 8, payload: { approval: { approvalId: 'a1', toolName: 'vcp_invoke', argumentsHash: 'hash-1', expiresAtMs: 1234 } } });
 assert.equal(store.getState().approvals.length, 1);
+assert.deepEqual(store.getState().approvals[0], {
+    approvalId: 'a1', toolName: 'vcp_invoke', argumentsHash: 'hash-1', expiresAtMs: 1234,
+    sessionId: 's1', turnId: 't1', toolCallId: 'tool-1',
+});
 dispatch({ type: 'approval.resolved', sessionId: 's1', approvalId: 'a1', sequence: 9, payload: {} });
 assert.equal(store.getState().approvals.length, 0);
 
@@ -54,6 +58,17 @@ dispatch({ type: 'turn.completed', sessionId: 's1', turnId: 't1', sequence: 11, 
 assert.equal(store.getState().activeTurnId, null);
 dispatch({ type: 'toolbox.ws', sessionId: 's1', sequence: 12, payload: { channel: 'Info', kind: 'notification', value: { message: 'ToolBox 已连接' } } });
 assert.deepEqual(store.getState().toolboxWs, [{ id: 'Info:notification:12', channel: 'Info', kind: 'notification', value: { message: 'ToolBox 已连接' }, timestamp: 1_700_000_000_014 }]);
+dispatch({ type: 'runtime.readiness', sessionId: 'runtime', sequence: 13, payload: {
+    server: { state: 'configured', detail: 'shared settings' },
+    toolbox: { state: 'checking', detail: 'daemon probe' },
+} });
+dispatch({ type: 'runtime.readiness', sessionId: 'runtime', sequence: 14, payload: {
+    toolbox: { state: 'ready', detail: 'authenticated probe' },
+    capability: { state: 'unknown', detail: 'awaiting VCPLog' },
+} });
+assert.equal(store.getState().readiness.server.state, 'configured', 'readiness must be daemon-projected instead of renderer-probed');
+assert.equal(store.getState().readiness.toolbox.state, 'ready', 'incremental daemon readiness must merge by subsystem');
+assert.equal(store.getState().readiness.capability.state, 'unknown', 'capability status must not be guessed from an absent node event');
 
 const messageCount = store.getState().messages.length;
 store.dispatch({ eventId: 'event-5', type: 'assistant.delta', sessionId: 's1', topicId: 'topic-1', turnId: 't1', messageId: 'assistant-1', sequence: 5, timestamp: 1_700_000_000_005, runtime: 'rust', payload: { text: 'lo' } });
@@ -87,6 +102,11 @@ liveEvent({
     sessionId: 'restored', topicId: 'topic-restored', turnId: 'turn-restored',
     messageId: 'assistant-live', type: 'assistant.delta', payload: { text: 'snapshot 期间的 live delta' },
 });
+liveEvent({
+    eventId: 'initial-readiness-event', sequence: 6, timestamp: 6, runtime: 'rust',
+    sessionId: 'restored', topicId: 'topic-restored', type: 'runtime.readiness',
+    payload: { toolbox: { state: 'unavailable', detail: 'daemon probe settled during snapshot' } },
+});
 resolveInitialRead({
     topicId: 'topic-restored', snapshotSequence: 4,
     history: [{ id: 'history-1', role: 'assistant', content: '来自 Rust Topic' }],
@@ -95,6 +115,8 @@ await initializing;
 assert.equal(controller.store.getState().messages[0].content, '来自 Rust Topic');
 assert.ok(controller.store.getState().messages.some((message) => message.id === 'assistant-live'),
     'a live event arriving during initial read-topic must be buffered and projected after the snapshot');
+assert.equal(controller.store.getState().readiness.toolbox.state, 'unavailable',
+    'daemon-global readiness must survive an attachment-less snapshot barrier instead of remaining at checking');
 controller.store.setState({ approvals: [{ approvalId: 'approval-live', toolName: 'PowerShellExecutor' }] });
 await controller.refreshStatus();
 assert.equal(controller.store.getState().approvals.length, 1,

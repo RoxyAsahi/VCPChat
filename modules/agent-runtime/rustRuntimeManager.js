@@ -167,31 +167,42 @@ class RustAgentRuntimeManager {
         }
     }
 
-    async listTopics() { await this._ensureControlTransport(); return this._requestControl('list-topics', {}, 'topics'); }
-    async readTopic({ topicId }) {
-        if (!topicId) throw new Error('Topic id is required');
-        await this._ensureControlTransport();
-        return this._requestControl('read-topic', { topicId }, 'topic-read-only');
+    async listTopics({ agentId } = {}) {
+        const normalizedAgentId = normalizeAgentId(agentId);
+        // A control daemon is deliberately not a second Session.  It may be
+        // attached to a different Agent, so Topic operations carry their
+        // target Agent explicitly rather than relying on daemon spawn args.
+        await this._ensureControlTransport(normalizedAgentId);
+        return this._requestControl('list-topics', withAgentId({}, normalizedAgentId), 'topics');
     }
-    async takeoverTopic({ topicId }) {
+    async readTopic({ topicId, agentId }) {
         if (!topicId) throw new Error('Topic id is required');
-        await this._ensureControlTransport();
-        return this._requestControl('takeover-topic', { topicId }, 'topic-takeover-pending');
+        const normalizedAgentId = normalizeAgentId(agentId);
+        await this._ensureControlTransport(normalizedAgentId);
+        return this._requestControl('read-topic', withAgentId({ topicId }, normalizedAgentId), 'topic-read-only');
     }
-    async renameTopic({ topicId, title }) {
+    async takeoverTopic({ topicId, agentId }) {
+        if (!topicId) throw new Error('Topic id is required');
+        const normalizedAgentId = normalizeAgentId(agentId);
+        await this._ensureControlTransport(normalizedAgentId);
+        return this._requestControl('takeover-topic', withAgentId({ topicId }, normalizedAgentId), 'topic-takeover-pending');
+    }
+    async renameTopic({ topicId, title, agentId }) {
         const normalizedTopicId = String(topicId || '').trim();
         const normalizedTitle = String(title || '').trim();
         if (!normalizedTopicId) throw new Error('Topic id is required');
         if (!normalizedTitle || Array.from(normalizedTitle).length > 120) throw new Error('Topic 名称不能为空且不能超过 120 个字符');
-        await this._ensureControlTransport();
-        return this._requestControl('rename-topic', { topicId: normalizedTopicId, title: normalizedTitle }, 'topic-renamed');
+        const normalizedAgentId = normalizeAgentId(agentId);
+        await this._ensureControlTransport(normalizedAgentId);
+        return this._requestControl('rename-topic', withAgentId({ topicId: normalizedTopicId, title: normalizedTitle }, normalizedAgentId), 'topic-renamed');
     }
-    async deleteTopic({ topicId }) {
+    async deleteTopic({ topicId, agentId }) {
         const normalizedTopicId = String(topicId || '').trim();
         if (!normalizedTopicId) throw new Error('Topic id is required');
         if (this.attachment?.topicId === normalizedTopicId) throw new Error('不能删除当前打开的 Agent Topic；请先切换到其他会话。');
-        await this._ensureControlTransport();
-        return this._requestControl('delete-topic', { topicId: normalizedTopicId }, 'topic-deleted');
+        const normalizedAgentId = normalizeAgentId(agentId);
+        await this._ensureControlTransport(normalizedAgentId);
+        return this._requestControl('delete-topic', withAgentId({ topicId: normalizedTopicId }, normalizedAgentId), 'topic-deleted');
     }
     async listInteractionQueue() { await this._ensureControlTransport(); return this._requestControl('list-interaction-queue', {}, 'interaction-queue'); }
     async replaceInteractionQueue({ sessionId, interactions }) {
@@ -210,7 +221,15 @@ class RustAgentRuntimeManager {
     async getWorkbenchSettings() { await this._ensureControlTransport(); return this._requestControl('get-settings', {}, 'settings'); }
     async updateWorkbenchSettings(payload = {}) {
         await this._ensureControlTransport();
-        return this._requestControl('update-settings', { settings: { budget: normalizeBudget(payload.budget) } }, 'settings-updated');
+        const permissionMode = payload.permissionMode === 'always-approve'
+            ? 'always-approve'
+            : payload.permissionMode === 'ask' ? 'ask' : undefined;
+        return this._requestControl('update-settings', {
+            settings: {
+                budget: normalizeBudget(payload.budget),
+                ...(permissionMode ? { permissionMode } : {}),
+            },
+        }, 'settings-updated');
     }
 
     // Presence is a daemon command, not a Main-process flag. When no
@@ -306,11 +325,11 @@ class RustAgentRuntimeManager {
         };
     }
 
-    async _ensureControlTransport() {
+    async _ensureControlTransport(agentId) {
         if (this.transport) return;
         if (!this.controlTransportPromise) {
             this.controlTransportPromise = (async () => {
-                const transport = this.transportFactory(this._transportConfig());
+                const transport = this.transportFactory(this._transportConfig({ agent: agentId }));
                 this.state = 'starting';
                 await transport.start();
                 this.transport = transport;
@@ -399,6 +418,15 @@ function normalizeBudget(value) {
         maxRequestsPerTurn: normalize(source.maxRequestsPerTurn, '每轮请求上限'),
         maxTokensPerTurn: normalize(source.maxTokensPerTurn, '每轮 token 上限'),
     };
+}
+
+function normalizeAgentId(value) {
+    if (value === undefined || value === null || String(value).trim() === '') return undefined;
+    return String(value).trim();
+}
+
+function withAgentId(payload, agentId) {
+    return agentId ? { ...payload, agentId } : payload;
 }
 
 module.exports = { RustAgentRuntimeManager };

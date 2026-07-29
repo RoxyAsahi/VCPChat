@@ -49,11 +49,13 @@ assert.equal(manager.getStatus().worker.pid, fake.child.pid,
 
 // R1: simultaneous control calls correlate by framed requestId, never by the
 // arrival order or response kind. Reply in reverse order to prove it.
-const topics = manager.listTopics();
+const topics = manager.listTopics({ agentId: 'Nova' });
 const settings = manager.getWorkbenchSettings();
 await new Promise((resolve) => setImmediate(resolve));
 const [topicsRequest, settingsRequest] = fake.requests.slice(-2);
 assert.equal(topicsRequest.type, 'list-topics');
+assert.deepEqual(topicsRequest.payload, { agentId: 'Nova' },
+    'Topic catalog requests must name the selected Agent instead of inheriting a daemon default');
 assert.equal(settingsRequest.type, 'get-settings');
 assert.notEqual(topicsRequest.requestId, settingsRequest.requestId);
 fake.control(settingsRequest.requestId, 'settings', { budget: { maxRequestsPerTurn: 8 } });

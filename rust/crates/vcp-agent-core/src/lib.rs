@@ -17,6 +17,7 @@ use vcp_grok_compaction::{
     CompactionFileRef, CompactionItem, CompactionRole, select_turns_to_compact,
 };
 use vcp_grok_interjection::{InterjectionBuffer, PendingInterjection, format_interjection};
+use vcp_grok_token_estimation::{estimate_tokens, exceeds_threshold_with_headroom};
 
 const SESSION_QUEUE_CAPACITY: usize = 128;
 const MAX_TRANSCRIPT_MESSAGES: usize = 160;
@@ -360,20 +361,34 @@ struct UsageTotals {
     reasoning: u64,
     total_tokens: u64,
     requests: u64,
+    provider_requests: u64,
+    estimated_requests: u64,
 }
 
 impl UsageTotals {
-    fn add(&mut self, usage: Option<&Value>) {
-        let Some(usage) = usage else {
-            return;
-        };
+    fn add(&mut self, usage: Option<&Value>, estimated_input: u64, estimated_output: u64) -> Value {
+        self.requests = self.requests.saturating_add(1);
+        let usage = usage.filter(|value| !value.is_null());
         let number = |keys: &[&str]| -> u64 {
             keys.iter()
-                .find_map(|key| usage.get(*key).and_then(Value::as_u64))
+                .find_map(|key| {
+                    usage
+                        .and_then(|value| value.get(*key))
+                        .and_then(Value::as_u64)
+                })
                 .unwrap_or(0)
         };
-        let input = number(&["input", "prompt_tokens"]);
-        let output = number(&["output", "completion_tokens"]);
+        let provider_input = number(&["input", "input_tokens", "prompt_tokens"]);
+        let provider_output = number(&["output", "output_tokens", "completion_tokens"]);
+        let provider_total = number(&["totalTokens", "total_tokens"]);
+        let has_provider_usage = provider_input > 0 || provider_output > 0 || provider_total > 0;
+        let (input, output, source) = if has_provider_usage {
+            self.provider_requests = self.provider_requests.saturating_add(1);
+            (provider_input, provider_output, "provider")
+        } else {
+            self.estimated_requests = self.estimated_requests.saturating_add(1);
+            (estimated_input, estimated_output, "estimated")
+        };
         self.input = self.input.saturating_add(input);
         self.output = self.output.saturating_add(output);
         self.cache_read = self
@@ -383,18 +398,32 @@ impl UsageTotals {
             .cache_write
             .saturating_add(number(&["cacheWrite", "cache_write"]));
         self.reasoning = self.reasoning.saturating_add(number(&["reasoning"]));
-        self.total_tokens = self.total_tokens.saturating_add(
-            number(&["totalTokens", "total_tokens"]).max(input.saturating_add(output)),
-        );
-        self.requests = self.requests.saturating_add(1);
+        let total = provider_total.max(input.saturating_add(output));
+        self.total_tokens = self.total_tokens.saturating_add(total);
+        json!({
+            "input": input,
+            "output": output,
+            "totalTokens": total,
+            "source": source,
+            "estimated": source == "estimated"
+        })
     }
 
     fn as_value(&self) -> Value {
+        let source = match (self.provider_requests > 0, self.estimated_requests > 0) {
+            (true, true) => "mixed",
+            (true, false) => "provider",
+            _ => "estimated",
+        };
         json!({
             "input": self.input, "output": self.output,
             "cacheRead": self.cache_read, "cacheWrite": self.cache_write,
             "reasoning": self.reasoning, "totalTokens": self.total_tokens,
             "requests": self.requests,
+            "source": source,
+            "estimated": self.estimated_requests > 0,
+            "providerRequests": self.provider_requests,
+            "estimatedRequests": self.estimated_requests,
         })
     }
 }
@@ -455,11 +484,13 @@ struct ActiveTurn {
     tool_queue: VecDeque<NativeToolCall>,
     pending_tool: Option<PendingTool>,
     purpose: ModelPurpose,
+    estimated_input_tokens: u64,
 }
 
 struct SessionActor {
     session_id: String,
     model: String,
+    max_output: u64,
     // `required` is accepted for controlled integration tests. It applies to
     // the first provider round of a Turn only, so the post-tool synthesis
     // round remains free to answer normally instead of entering a tool loop.
@@ -488,6 +519,13 @@ impl SessionActor {
             .and_then(Value::as_str)
             .unwrap_or("vcp-default")
             .to_string();
+        let max_output = options
+            .pointer("/vcp/maxOutput")
+            .and_then(Value::as_u64)
+            // An unspecified shared Agent limit must preserve ToolBox's
+            // default instead of sending an invalid `max_tokens: 0`.
+            .filter(|value| *value > 0)
+            .unwrap_or(0);
         let first_round_tool_choice =
             match options.pointer("/vcp/toolChoice").and_then(Value::as_str) {
                 Some("required") => "required".to_string(),
@@ -506,6 +544,7 @@ impl SessionActor {
         Self {
             session_id,
             model,
+            max_output,
             first_round_tool_choice,
             system_prompt,
             transcript,
@@ -614,6 +653,7 @@ impl SessionActor {
             tool_queue: VecDeque::new(),
             pending_tool: None,
             purpose: ModelPurpose::Agent,
+            estimated_input_tokens: 0,
         });
         match self.prepare_compaction(&compaction, &prompt) {
             Ok(Some(pending)) => {
@@ -873,12 +913,16 @@ impl SessionActor {
         if active.model_request_id != request_id {
             return;
         }
-        self.usage.add(usage.as_ref());
+        let estimated_input = active.estimated_input_tokens;
+        let estimated_output = estimate_vcp_text_tokens(&active.assistant_text).max(1);
+        let round_usage = self
+            .usage
+            .add(usage.as_ref(), estimated_input, estimated_output);
         if matches!(active.purpose, ModelPurpose::Compaction(_)) {
-            self.finish_compaction_round(usage).await;
+            self.finish_compaction_round(Some(round_usage)).await;
             return;
         }
-        self.finish_model_round(usage).await;
+        self.finish_model_round(Some(round_usage)).await;
     }
 
     async fn model_error(&mut self, request_id: &str, error: String, cancelled: bool) {
@@ -923,7 +967,12 @@ impl SessionActor {
     async fn finish_model_round(&mut self, usage: Option<Value>) {
         let mut active = self.active.take().expect("active model round");
         if active.reasoning_started {
-            self.emit(
+            // `active` has been removed from the actor while this terminal
+            // round is assembled. Do not use `emit()` here: it derives the
+            // Turn from `self.active` and would produce a reasoning.completed
+            // event without turnId, which the direct daemon correctly rejects.
+            self.emit_for_turn(
+                Some(&active.turn_id),
                 "reasoning.completed",
                 json!({ "messageId": active.assistant_id }),
             )
@@ -1117,7 +1166,7 @@ impl SessionActor {
         } else {
             "auto"
         };
-        let body = json!({
+        let mut body = json!({
             "model": self.model,
             "stream": true,
             "stream_options": { "include_usage": true },
@@ -1125,6 +1174,12 @@ impl SessionActor {
             "tools": [vcp_invoke_schema()],
             "tool_choice": tool_choice,
         });
+        // Match VCPChat normal chat: ToolBox exposes an OpenAI-compatible
+        // gateway and uses this completion ceiling for streamed output.
+        if self.max_output > 0 {
+            body["max_tokens"] = json!(self.max_output);
+        }
+        active.estimated_input_tokens = estimate_messages_tokens(&messages) as u64;
         let mut message = WireMessage::new("model-request")
             .with_request_id(active.model_request_id.clone())
             .put("body", body);
@@ -1155,9 +1210,16 @@ impl SessionActor {
         } else {
             0
         };
-        let trigger = request.context_window.saturating_mul(8) / 10;
         let exceeded = hard_limit > 0 && before_tokens >= hard_limit;
-        if !request.force && before_tokens < trigger && !exceeded {
+        if !request.force
+            && !exceeds_threshold_with_headroom(
+                before_tokens as u64,
+                request.context_window as u64,
+                80,
+                0,
+            )
+            && !exceeded
+        {
             return Ok(None);
         }
         let items: Vec<TranscriptItem> = self
@@ -1228,6 +1290,10 @@ impl SessionActor {
                 { "role": "user", "content": source }
             ]
         });
+        active.estimated_input_tokens = body["messages"]
+            .as_array()
+            .map(|messages| estimate_messages_tokens(messages) as u64)
+            .unwrap_or_default();
         let mut message = WireMessage::new("model-request")
             .with_request_id(active.model_request_id.clone())
             .put("body", body);
@@ -1418,6 +1484,7 @@ impl SessionActor {
         }
         let mut message = WireMessage::new("event").put("event", Value::Object(event));
         message.session_id = Some(self.session_id.clone());
+        message.turn_id = turn_id.map(ToOwned::to_owned);
         self.outbound(message).await;
     }
 
@@ -1545,8 +1612,8 @@ fn truncate_text(text: &str) -> String {
     format!("{}…[truncated]", &text[..cut])
 }
 
-/// Conservative local estimate used only for thresholding and safe-tail
-/// selection. Provider usage remains the source of truth for billing.
+/// Local estimate used for context thresholds and as an explicitly-labelled
+/// fallback because VCPToolBox currently does not return reliable usage.
 fn estimate_message_tokens(message: &Value) -> u32 {
     let mut text = String::new();
     text.push_str(message.get("role").and_then(Value::as_str).unwrap_or(""));
@@ -1558,14 +1625,21 @@ fn estimate_message_tokens(message: &Value) -> u32 {
     if let Some(call_id) = message.get("tool_call_id").and_then(Value::as_str) {
         text.push_str(call_id);
     }
-    let bytes = text.len() as f64;
-    let cjk = text
+    u32::try_from(estimate_vcp_text_tokens(&text).max(1))
+        .unwrap_or(u32::MAX)
+        .saturating_add(4)
+}
+
+/// VCP prompts are frequently Chinese-heavy. Grok's bytes/4 primitive remains
+/// the single base estimate; this adapter adds conservative multilingual
+/// headroom so compaction never fires later than the previous VCP policy.
+fn estimate_vcp_text_tokens(text: &str) -> u64 {
+    let multilingual_headroom = text
         .chars()
-        .filter(|ch| {
-            ('\u{2e80}'..='\u{9fff}').contains(ch) || ('\u{f900}'..='\u{faff}').contains(ch)
-        })
-        .count() as f64;
-    (bytes / 3.2 + cjk * 0.35).ceil().max(1.0) as u32 + 4
+        .filter(|character| !character.is_ascii())
+        .count() as u64
+        / 2;
+    estimate_tokens(text).saturating_add(multilingual_headroom)
 }
 
 fn estimate_messages_tokens(messages: &[Value]) -> u32 {
@@ -1725,6 +1799,29 @@ fn to_pi_snapshot(messages: &[Value]) -> Vec<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn missing_provider_usage_falls_back_to_labelled_estimates() {
+        let mut totals = UsageTotals::default();
+        let round = totals.add(None, 120, 30);
+        assert_eq!(round["source"], "estimated");
+        assert_eq!(round["totalTokens"], 150);
+        assert_eq!(totals.as_value()["estimated"], true);
+        assert_eq!(totals.as_value()["requests"], 1);
+    }
+
+    #[test]
+    fn provider_usage_wins_when_available() {
+        let mut totals = UsageTotals::default();
+        let round = totals.add(
+            Some(&json!({"prompt_tokens": 7, "completion_tokens": 5, "total_tokens": 12})),
+            120,
+            30,
+        );
+        assert_eq!(round["source"], "provider");
+        assert_eq!(round["totalTokens"], 12);
+        assert_eq!(totals.as_value()["source"], "provider");
+    }
     use tokio::time::{Duration, timeout};
 
     async fn next(outbound: &mut mpsc::Receiver<WireMessage>) -> WireMessage {
@@ -1828,11 +1925,79 @@ mod tests {
         let completed = next_type(&mut outbound_rx, "ack").await;
         assert_eq!(completed.request_id.as_deref(), Some("start"));
         assert_eq!(completed.value("result").unwrap()["snapshot"]["version"], 1);
-        assert_eq!(
-            completed.value("result").unwrap()["usage"]["totalTokens"],
-            12
+        let usage = &completed.value("result").unwrap()["usage"];
+        assert!(usage["totalTokens"].as_u64().unwrap() > 12);
+        assert_eq!(usage["requests"], 2);
+        assert_eq!(usage["source"], "mixed");
+    }
+
+    #[tokio::test]
+    async fn reasoning_events_keep_turn_and_message_identity_before_a_tool_round() {
+        let (outbound_tx, mut outbound_rx) = mpsc::channel(16);
+        let mut runtime = CoreRuntime::new(outbound_tx);
+        let mut create = session_message("create-session", "create", "session-reasoning-tool");
+        create
+            .payload
+            .insert("options".to_string(), json!({ "vcp": { "model": "test" } }));
+        runtime.handle(create).await.unwrap();
+        let _ = next(&mut outbound_rx).await;
+
+        let mut start = session_message("start-turn", "start", "session-reasoning-tool");
+        start.turn_id = Some("turn-reasoning-tool".to_string());
+        start
+            .payload
+            .insert("prompt".to_string(), json!("use a tool"));
+        runtime.handle(start).await.unwrap();
+        let request = next_type(&mut outbound_rx, "model-request").await;
+        let request_id = request.request_id.expect("model request id");
+        let mut delta = session_message("model-delta", &request_id, "session-reasoning-tool");
+        delta.payload.insert("delta".to_string(), json!({
+            "reasoning_content": "I should use the tool.",
+            "tool_calls": [{
+                "index": 0,
+                "id": "call_reasoning_tool",
+                "function": { "name": "vcp_invoke", "arguments": r#"{"toolName":"SciCalculator","arguments":{"expression":"6*7"}}"# }
+            }]
+        }));
+        runtime.handle(delta).await.unwrap();
+        runtime
+            .handle(session_message(
+                "model-done",
+                &request_id,
+                "session-reasoning-tool",
+            ))
+            .await
+            .unwrap();
+
+        let mut saw_reasoning_completed = false;
+        for _ in 0..8 {
+            let message = next(&mut outbound_rx).await;
+            if message.kind == "tool-request" {
+                break;
+            }
+            if message.kind != "event" {
+                continue;
+            }
+            let event = message.value("event").expect("event payload");
+            let event_type = event
+                .get("type")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            if event_type.starts_with("reasoning.") || event_type.starts_with("assistant.") {
+                assert_eq!(
+                    event.get("turnId").and_then(Value::as_str),
+                    Some("turn-reasoning-tool")
+                );
+                assert!(event.get("messageId").and_then(Value::as_str).is_some());
+            }
+            if event_type == "reasoning.completed" {
+                saw_reasoning_completed = true;
+            }
+        }
+        assert!(
+            saw_reasoning_completed,
+            "the tool round must finish the visible reasoning event"
         );
-        assert_eq!(completed.value("result").unwrap()["usage"]["requests"], 1);
     }
 
     #[tokio::test]
@@ -1870,6 +2035,7 @@ mod tests {
         for _ in 0..8 {
             let message = next(&mut outbound_rx).await;
             if message.kind == "event" {
+                assert_eq!(message.turn_id.as_deref(), Some("turn-terminal"));
                 events.push(
                     message
                         .value("event")
@@ -1933,6 +2099,27 @@ mod tests {
         runtime.handle(result).await.unwrap();
         let second = next_type(&mut outbound_rx, "model-request").await;
         assert_eq!(second.value("body").unwrap()["tool_choice"], "auto");
+    }
+
+    #[tokio::test]
+    async fn model_request_uses_shared_agent_max_output_when_configured() {
+        let (outbound_tx, mut outbound_rx) = mpsc::channel(16);
+        let mut runtime = CoreRuntime::new(outbound_tx);
+        let mut create = session_message("create-session", "create", "session-output-limit");
+        create.payload.insert(
+            "options".to_string(),
+            json!({ "vcp": { "model": "test", "maxOutput": 4096 } }),
+        );
+        runtime.handle(create).await.unwrap();
+        let _ = next(&mut outbound_rx).await;
+        let mut start = session_message("start-turn", "start", "session-output-limit");
+        start.turn_id = Some("turn-output-limit".to_string());
+        start
+            .payload
+            .insert("prompt".to_string(), json!("long answer"));
+        runtime.handle(start).await.unwrap();
+        let request = next_type(&mut outbound_rx, "model-request").await;
+        assert_eq!(request.value("body").unwrap()["max_tokens"], 4096);
     }
 
     #[tokio::test]

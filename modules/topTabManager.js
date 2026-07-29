@@ -803,5 +803,19 @@
         });
     }
 
-    window.topTabManager = Object.freeze({ init, openLaunchpad, openInternalApp, openEmbeddedApp, closeView, setView });
+    // Internal applications may need to enter the shared VCPChat Agent/Group
+    // creation flow.  Expose the action itself rather than asking them to
+    // synthesize a click on #nextUiCreateItemBtn: that element is part of a
+    // renderable sidebar and may be replaced while the Next UI changes mode.
+    // The action owns no Agent Runtime state; it only opens the existing
+    // VCPChat configuration modal.
+    window.topTabManager = Object.freeze({
+        init,
+        openLaunchpad,
+        openCreateDialog,
+        openInternalApp,
+        openEmbeddedApp,
+        closeView,
+        setView
+    });
 })();

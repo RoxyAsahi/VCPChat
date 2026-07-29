@@ -1,0 +1,28 @@
+[package]
+name = "vcp-grok-markdown"
+version.workspace = true
+edition.workspace = true
+license = "Apache-2.0"
+description = "Controlled import of Grok Build's streaming terminal Markdown renderer"
+
+[dependencies]
+anstyle.workspace = true
+anstyle-lossy.workspace = true
+anstyle-syntect.workspace = true
+html-escape.workspace = true
+linkify.workspace = true
+pulldown-cmark.workspace = true
+ratatui.workspace = true
+supports-color.workspace = true
+syntect.workspace = true
+textwrap.workspace = true
+two-face.workspace = true
+unicode-width.workspace = true
+url.workspace = true
+xai-grok-markdown-core = { package = "vcp-grok-markdown-core", path = "../vcp-grok-markdown-core" }
+
+[dev-dependencies]
+pretty_assertions = "1"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)'] }

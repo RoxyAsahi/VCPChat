@@ -15,15 +15,27 @@ export async function requireLiveRustEnvironment() {
     } catch {
         throw new Error(`Live Rust Agent validation requires readable shared settings: ${settingsPath}`);
     }
-    const serverUrl = String(process.env.VCP_SERVER_URL || settings.vcpServerUrl || '').trim().replace(/\/$/, '');
+    const configuredServerUrl = String(process.env.VCP_SERVER_URL || settings.vcpServerUrl || '').trim();
     const apiKey = String(process.env.VCP_API_KEY || settings.vcpApiKey || '').trim();
-    if (!serverUrl || !apiKey) throw new Error('Live Rust Agent validation requires a VCP Server URL and API Key.');
-    const response = await fetch(`${serverUrl}/v1/models`, {
+    if (!configuredServerUrl || !apiKey) throw new Error('Live Rust Agent validation requires a VCP Server URL and API Key.');
+    let serverUrl;
+    let modelsUrl;
+    try {
+        const configured = new URL(configuredServerUrl);
+        configured.pathname = '/';
+        configured.search = '';
+        configured.hash = '';
+        serverUrl = configured.toString().replace(/\/$/, '');
+        modelsUrl = new URL('/v1/models', configured);
+    } catch {
+        throw new Error('Live Rust Agent validation requires a valid HTTP(S) VCP Server URL.');
+    }
+    const response = await fetch(modelsUrl, {
         headers: { Authorization: `Bearer ${apiKey}` },
         signal: AbortSignal.timeout(10_000),
     }).catch((error) => { throw new Error(`Cannot reach VCPToolBox for live validation: ${error.message}`); });
     if (!response.ok) throw new Error(`VCPToolBox live validation preflight failed: HTTP ${response.status}`);
-    return { serverUrl, settingsPath };
+    return { serverUrl, apiKey, settingsPath };
 }
 
 if (path.resolve(process.argv[1] || '') === fileURLToPath(import.meta.url)) {

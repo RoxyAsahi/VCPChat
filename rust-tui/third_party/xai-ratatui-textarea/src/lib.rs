@@ -1,4 +1,5 @@
 #![allow(clippy::new_without_default)]
+#![allow(clippy::single_range_in_vec_init)]
 
 pub mod editor;
 pub mod render;

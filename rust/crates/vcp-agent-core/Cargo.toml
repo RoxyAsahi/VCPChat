@@ -15,3 +15,4 @@ vcp-agent-protocol = { path = "../vcp-agent-protocol" }
 vcp-agent-vcp = { path = "../vcp-agent-vcp" }
 vcp-grok-compaction = { path = "../vcp-grok-compaction" }
 vcp-grok-interjection = { path = "../vcp-grok-interjection" }
+vcp-grok-token-estimation = { path = "../vcp-grok-token-estimation" }

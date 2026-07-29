@@ -125,7 +125,7 @@ function createCatalog(ops) {
         agentRuntimeCreateSession: query((data) => ops.invoke('agent-runtime:create-session', data)),
         agentRuntimeCloseSession: query((data) => ops.invoke('agent-runtime:close-session', data)),
         agentRuntimeCompactSession: query((data) => ops.invoke('agent-runtime:compact-session', data)),
-        agentRuntimeListTopics: query(() => ops.invoke('agent-runtime:list-topics')),
+        agentRuntimeListTopics: query((data) => ops.invoke('agent-runtime:list-topics', data)),
         agentRuntimeReadTopic: query((data) => ops.invoke('agent-runtime:read-topic', data)),
         agentRuntimeTakeoverTopic: query((data) => ops.invoke('agent-runtime:takeover-topic', data)),
         agentRuntimeListInteractionQueue: query(() => ops.invoke('agent-runtime:list-interaction-queue')),

@@ -7,9 +7,14 @@ members = [
     "crates/vcp-agent-host",
     "crates/vcp-agentd",
     "crates/vcp-grok-compaction",
+    "crates/vcp-grok-crash-handler",
     "crates/vcp-grok-interjection",
+    "crates/vcp-grok-markdown-core",
+    "crates/vcp-grok-markdown",
     "crates/vcp-grok-prompt-queue",
+    "crates/vcp-grok-token-estimation",
     "../rust-tui/crates/vcp-agent-tui",
+    "../rust-tui/crates/vcp-agent-pty-harness",
     "../rust-tui/third_party/xai-ratatui-textarea",
 ]
 
@@ -22,9 +27,19 @@ authors = ["VCP Project"]
 
 [workspace.dependencies]
 anyhow = "1"
+anstyle = "1.0"
+anstyle-lossy = "1.1.4"
+anstyle-syntect = "1.0.4"
+arboard = { version = "3.6.1", default-features = false }
+base64 = "0.22"
+libc = "0.2"
 async-trait = "0.1"
 bytes = "1"
 futures-util = { version = "0.3", features = ["sink"] }
+html-escape = "0.2"
+linkify = "0.10"
+pulldown-cmark = "0.13"
+portable-pty = "0.9"
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -36,10 +51,17 @@ tokio-tungstenite = { version = "0.24", default-features = false, features = ["c
 tracing = "0.1"
 url = "2"
 crossterm = { version = "0.28", features = ["event-stream", "bracketed-paste"] }
-ratatui = { version = "0.29", features = ["crossterm", "unstable-widget-ref"] }
+ratatui = { version = "0.29", features = ["crossterm", "unstable-widget-ref", "unstable-rendered-line-info"] }
 ratatui-core = "0.1"
+supports-color = "3.0"
+syntect = "5.3"
 textwrap = "0.16"
+tempfile = "3"
+two-face = { version = "0.4", default-features = false, features = ["syntect-fancy"] }
 tui-scrollbar = "0.2"
 unicode-segmentation = "1.12"
 unicode-width = "0.2"
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_IO", "Win32_System_Kernel"] }
 rpassword = "7"
+wait-timeout = "0.2"
+vt100 = "0.15.2"

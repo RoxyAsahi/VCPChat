@@ -72,6 +72,7 @@ try {
     const session = await transport.request('create-session');
     await transport.request('start-turn', {
         sessionId: session.sessionId,
+        turnId: `turn-live-backend-yolo-${Date.now()}`,
         // Read-only process state: this is intentionally the smallest real
         // high-risk classification probe. It changes neither the workspace
         // nor VCPToolBox configuration.

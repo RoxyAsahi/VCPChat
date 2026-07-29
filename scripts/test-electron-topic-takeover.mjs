@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import http from 'node:http';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import puppeteer from 'puppeteer';
 
 // This is deliberately an Electron-level test rather than another direct
@@ -16,6 +17,28 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const electron = path.join(root, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron');
 const timeoutMs = 35_000;
 const topicId = 'electron-takeover-topic';
+const execFileAsync = promisify(execFile);
+// A Windows Electron child can occasionally close the parent job before
+// stderr flushes.  Keep a compact, credential-free receipt so this R3-A
+// cooperative-takeover gate always leaves machine-readable evidence instead
+// of looking like a silent success or failure.
+const resultFile = process.env.VCPCHAT_E2E_RESULT_FILE
+    ? path.resolve(process.env.VCPCHAT_E2E_RESULT_FILE)
+    : path.join(os.tmpdir(), `vcpchat-topic-takeover-${process.pid}.json`);
+let phase = 'boot';
+
+async function recordResult(status, nextPhase = null, failure = null) {
+    if (nextPhase) phase = nextPhase;
+    await fs.writeFile(resultFile, JSON.stringify({
+        status,
+        phase,
+        topicId,
+        // Never include app settings, endpoint paths, raw checkpoints, or
+        // daemon output in a test receipt.
+        failure: failure ? String(failure).slice(0, 1_200) : null,
+        timestamp: Date.now(),
+    }), 'utf8');
+}
 
 const sleep = (milliseconds) => new Promise(resolve => setTimeout(resolve, milliseconds));
 
@@ -85,11 +108,28 @@ async function close(instance) {
     if (!instance) return;
     try {
         const closed = await Promise.race([instance.browser.close().then(() => true).catch(() => false), sleep(8_000).then(() => false)]);
-        if (!closed) instance.browser.disconnect();
+        // Always detach the CDP client. `Browser.close()` can resolve before
+        // the local websocket releases its Node event-loop handle.
+        instance.browser.disconnect();
     } finally {
         if (instance.child.exitCode === null) {
             await Promise.race([new Promise(resolve => instance.child.once('exit', resolve)), sleep(3_000)]);
             if (instance.child.exitCode === null) instance.child.kill();
+            await Promise.race([new Promise(resolve => instance.child.once('exit', resolve)), sleep(2_000)]);
+            if (instance.child.exitCode === null && process.platform === 'win32') {
+                // Exact test-child PID only: never terminate by name or touch
+                // the developer's independently running VCPChat instance.
+                const pid = Number(instance.child.pid);
+                if (Number.isSafeInteger(pid) && pid > 0) {
+                    const shell = process.env.SystemRoot
+                        ? path.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+                        : 'powershell.exe';
+                    await execFileAsync(shell, ['-NoProfile', '-NonInteractive', '-Command', `Stop-Process -Id ${pid} -Force`], {
+                        windowsHide: true,
+                        timeout: 5_000,
+                    }).catch(() => {});
+                }
+            }
         }
     }
 }
@@ -135,31 +175,78 @@ async function writeFixture(appData) {
     ]), 'utf8');
 }
 
-async function openWorkbench(page) {
+async function openWorkbench(page, appData) {
     await page.click('#nextUiAddTabBtn');
     await page.waitForSelector('.next-ui-internal-app-item[title="VCP Agent"]', { visible: true, timeout: timeoutMs });
     await page.click('.next-ui-internal-app-item[title="VCP Agent"]');
     await page.waitForSelector('#nextUiInternalAppHost .agent-workbench-root', { visible: true, timeout: timeoutMs });
-    await page.waitForSelector(`.agent-chat-persisted-topic[data-topic-id="${topicId}"]`, { visible: true, timeout: timeoutMs });
+    const openedSessions = await page.evaluate(() => {
+        const button = [...document.querySelectorAll('#nextUiInternalAppHost .sidebar-tab-button')]
+            .find(candidate => candidate.textContent?.trim() === '会话');
+        button?.click();
+        return Boolean(button);
+    });
+    assert.ok(openedSessions, 'Agent Workbench must expose the current 会话 tab');
+    try {
+        await page.waitForSelector(`.agent-chat-persisted-topic[data-topic-id="${topicId}"]`, { visible: true, timeout: timeoutMs });
+    } catch (error) {
+        const projection = await page.evaluate(async () => {
+            const rows = [...document.querySelectorAll('.agent-chat-persisted-topic')].map(row => ({
+                topicId: row.dataset.topicId,
+                text: row.textContent,
+            }));
+            const api = window.chatAPI || window.electronAPI;
+            return {
+                rows,
+                status: await api.agentRuntimeGetStatus().catch(reason => ({ error: String(reason) })),
+                body: document.body.textContent?.slice(-4000),
+            };
+        });
+        const topicRoot = path.join(appData, 'UserData');
+        const disk = await fs.readdir(topicRoot, { recursive: true }).catch(reason => [`ERROR:${reason}`]);
+        throw new Error(`seeded Topic missing from Workbench; projection=${JSON.stringify(projection)} disk=${JSON.stringify(disk)}`, { cause: error });
+    }
 }
 
-async function selectTopic(page) {
+async function selectTopic(page, actionLabel) {
     const clicked = await page.evaluate((id) => {
         const row = document.querySelector(`.agent-chat-persisted-topic[data-topic-id="${id}"]`);
         row?.click();
         return Boolean(row);
     }, topicId);
     assert.ok(clicked, 'the seeded Topic must be visible in the Workbench session sidebar');
+    await page.waitForSelector('.agent-chat-topic-flow-dialog', { visible: true, timeout: timeoutMs });
+    const confirmed = await page.evaluate((label) => {
+        const dialog = document.querySelector('.agent-chat-topic-flow-dialog');
+        const action = [...(dialog?.querySelectorAll('button') || [])]
+            .find(candidate => candidate.textContent?.trim() === label);
+        action?.click();
+        return Boolean(action);
+    }, actionLabel);
+    assert.ok(confirmed, `Topic checkpoint flow must expose ${actionLabel}`);
 }
 
-async function waitForActiveTopic(page, label) {
-    await page.waitForFunction(async (id) => {
-        const api = window.chatAPI || window.electronAPI;
-        const status = await api.agentRuntimeGetStatus();
-        const attachment = status?.attachment;
-        return attachment?.topicId === id
-            && !document.querySelector('.agent-chat-message-input')?.disabled;
-    }, { timeout: timeoutMs }, topicId);
+async function waitForActiveTopic(page, label, diagnostics = null) {
+    try {
+        await page.waitForFunction(async (id) => {
+            const api = window.chatAPI || window.electronAPI;
+            const status = await api.agentRuntimeGetStatus();
+            const attachment = status?.attachment;
+            return attachment?.topicId === id
+                && !document.querySelector('.agent-chat-message-input')?.disabled;
+        }, { timeout: timeoutMs }, topicId);
+    } catch (error) {
+        const current = await page.evaluate(async () => ({
+            status: await (window.chatAPI || window.electronAPI).agentRuntimeGetStatus(),
+            rows: [...document.querySelectorAll('.agent-chat-persisted-topic')].map(row => ({
+                topicId: row.dataset.topicId,
+                text: row.textContent,
+            })),
+            notices: [...document.querySelectorAll('.agent-chat-toast, .vcp-ui-toast')].map(node => node.textContent),
+        }));
+        const extra = diagnostics ? await diagnostics() : null;
+        throw new Error(`${label} did not attach; current=${JSON.stringify(current)} extra=${JSON.stringify(extra)}`, { cause: error });
+    }
     assert.match(await page.$eval('.agent-chat-title', node => node.textContent || ''), /Electron 协作接管/,
         `${label} must display the restored Rust Topic title`);
     const checkpointText = await page.$eval('.message-item.user .md-content', node => node.textContent || '');
@@ -170,25 +257,40 @@ async function waitForActiveTopic(page, label) {
 let first;
 let second;
 let appData;
+let exitCode = 0;
 try {
+    await recordResult('running');
     await fs.access(electron);
     appData = await fs.mkdtemp(path.join(os.tmpdir(), 'vcpchat-electron-takeover-'));
     await writeFixture(appData);
 
     first = await launch(appData);
-    await openWorkbench(first.page);
-    await selectTopic(first.page);
+    await recordResult('running', 'first-owner-opened');
+    await openWorkbench(first.page, appData);
+    await selectTopic(first.page, '打开并恢复');
     await waitForActiveTopic(first.page, 'the original GUI owner');
 
     second = await launch(appData);
-    await openWorkbench(second.page);
+    await recordResult('running', 'second-observer-opened');
+    await openWorkbench(second.page, appData);
     await second.page.waitForFunction((id) => {
         const row = document.querySelector(`.agent-chat-persisted-topic[data-topic-id="${id}"]`);
         return row?.textContent?.includes('使用中');
     }, { timeout: timeoutMs }, topicId);
-    await selectTopic(second.page);
+    await selectTopic(second.page, '请求安全接管');
+    await recordResult('running', 'takeover-requested');
     await second.page.waitForFunction(() => document.body.textContent?.includes('已请求当前 Topic 持有者安全释放会话'), { timeout: timeoutMs });
-    await waitForActiveTopic(second.page, 'the replacement GUI owner');
+    await waitForActiveTopic(second.page, 'the replacement GUI owner', async () => {
+        const topicDirectory = path.join(appData, 'UserData', 'nova', 'topics', topicId);
+        const files = await fs.readdir(topicDirectory).catch(error => [`ERROR:${error}`]);
+        const read = async (name) => fs.readFile(path.join(topicDirectory, name), 'utf8').catch(error => `ERROR:${error}`);
+        return {
+            firstStatus: await first.page.evaluate(async () => (window.chatAPI || window.electronAPI).agentRuntimeGetStatus()),
+            files,
+            lock: await read('.vcp-agent.topic-lock.json'),
+            takeover: await read('.vcp-agent.topic-takeover.json'),
+        };
+    });
 
     const secondState = await second.page.evaluate(async () => {
         const status = await (window.chatAPI || window.electronAPI).agentRuntimeGetStatus();
@@ -197,9 +299,20 @@ try {
     assert.equal(secondState?.topicId, topicId, 'replacement GUI must obtain the requested Topic only after owner release');
     const state = JSON.parse(await fs.readFile(path.join(appData, 'UserData', 'nova', 'topics', topicId, 'agent-state.json'), 'utf8'));
     assert.equal(state.title, 'Electron 协作接管', 'cooperative takeover must retain the checkpoint instead of deleting or duplicating it');
+    await recordResult('passed', 'replacement-attached');
     console.log('Electron GUI cooperative Topic takeover test passed.');
+} catch (error) {
+    exitCode = 1;
+    await recordResult('failed', phase, error?.stack || error);
+    console.error(`Electron GUI cooperative Topic takeover test failed; receipt=${resultFile}: ${error?.stack || error}`);
 } finally {
     await close(second);
     await close(first);
     await removeTemporaryAppData(appData);
 }
+
+// Puppeteer/WebSocket handles can survive a successful Browser.close on
+// Windows. This is a standalone test process and all owned Electron children
+// were closed above, so force the recorded result instead of letting a stale
+// CDP handle turn a completed R3-A gate into an indefinitely running job.
+process.exit(exitCode);

@@ -1,0 +1,13 @@
+[package]
+name = "vcp-grok-crash-handler"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license = "Apache-2.0"
+description = "Controlled terminal-restore subset of Grok Build xai-crash-handler"
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys.workspace = true

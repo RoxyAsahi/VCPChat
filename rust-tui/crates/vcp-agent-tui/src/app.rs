@@ -15,7 +15,12 @@ use unicode_width::UnicodeWidthStr;
 use xai_ratatui_textarea::{TextArea, TextAreaState};
 
 use crate::{
-    protocol::{ApprovalBinding, PermissionMode, RuntimeState, ToolBoxState, ToolStatus, VcpEvent},
+    clipboard::SystemClipboard,
+    markdown::MarkdownBlockRenderer,
+    protocol::{
+        ApprovalBinding, InteractionItem, PermissionMode, RuntimeState, ToolBoxState, ToolStatus,
+        VcpEvent,
+    },
     theme::{Theme, ThemeId},
 };
 
@@ -38,7 +43,7 @@ const VCPCLI_LOGO_COLORS: [Color; 6] = [
     Color::Rgb(148, 226, 213), // teal
 ];
 
-const SLASH_COMMANDS: [(&str, &str); 19] = [
+const SLASH_COMMANDS: [(&str, &str); 20] = [
     ("/model", "选择模型"),
     ("/agent", "选择 Agent"),
     ("/theme", "选择主题"),
@@ -52,6 +57,7 @@ const SLASH_COMMANDS: [(&str, &str); 19] = [
     ("/clear-queue", "清空主动交互队列"),
     ("/compact", "压缩当前上下文"),
     ("/reasoning", "展开或折叠 Thinking"),
+    ("/toolbox", "展开或折叠最近的 ToolBox 事件"),
     ("/usage", "查看 token 用量"),
     ("/budget", "查看预算状态"),
     ("/status", "运行状态"),
@@ -66,6 +72,8 @@ pub enum MessageKind {
     Assistant,
     Reasoning,
     Notice,
+    Topic,
+    ToolboxWs,
     Warning,
 }
 
@@ -130,6 +138,27 @@ struct ApprovalCard {
     binding: Option<ApprovalBinding>,
 }
 
+#[derive(Debug, Clone, Default)]
+struct UsageView {
+    input: u64,
+    output: u64,
+    reasoning: u64,
+    cache_read: u64,
+    cache_write: u64,
+    total: u64,
+    requests: u64,
+    context_window: Option<u64>,
+    estimated: bool,
+    source: String,
+}
+
+#[derive(Debug, Clone, Default)]
+struct BudgetView {
+    max_requests_per_turn: Option<u64>,
+    max_tokens_per_turn: Option<u64>,
+    restart_required: bool,
+}
+
 /// The VCP-specific TUI projection. It intentionally owns no model credentials,
 /// filesystem, shell, ToolBox execution, or approval policy. The Rust Agent Core
 /// will stream [`VcpEvent`] into it and consume [`InputAction`] values.
@@ -138,6 +167,7 @@ pub struct App {
     pub model: String,
     pub workspace: String,
     pub messages: Vec<MessageBlock>,
+    markdown_blocks: Vec<Option<MarkdownBlockRenderer>>,
     pub status: String,
     pub input: TextArea,
     pub input_state: TextAreaState,
@@ -149,14 +179,21 @@ pub struct App {
     theme_picker_index: usize,
     theme_picker_area: Rect,
     choice_picker: Option<ChoicePicker>,
+    tool_detail_call_id: Option<String>,
+    tool_detail_scroll: u16,
     transcript_scroll: u16,
+    follow_tail: bool,
     input_area: Rect,
     transcript_area: Rect,
     welcome_cursor_visible: bool,
-    usage: (u64, u64, u64, Option<u64>),
+    usage: UsageView,
+    budget: BudgetView,
+    interaction_queue: Vec<InteractionItem>,
     runtime_state: RuntimeState,
     toolbox_state: ToolBoxState,
     permission_mode: PermissionMode,
+    execution_available: bool,
+    runtime_block_reason: Option<String>,
 }
 
 impl Default for App {
@@ -170,6 +207,7 @@ impl App {
         let theme_id = ThemeId::Auto;
         let theme = Theme::resolve(theme_id);
         let mut input = TextArea::new();
+        input.set_clipboard_provider(Box::<SystemClipboard>::default());
         input.selection_style = Style::default().bg(theme.selection).fg(theme.foreground);
         input.scrollbar_track_style = Style::default().bg(theme.surface_strong);
         input.scrollbar_thumb_style = Style::default().bg(theme.surface);
@@ -178,6 +216,7 @@ impl App {
             model: "gpt-5.6-terra".into(),
             workspace: ".".into(),
             messages: Vec::new(),
+            markdown_blocks: Vec::new(),
             status: "就绪".into(),
             input,
             input_state: TextAreaState::default(),
@@ -189,14 +228,25 @@ impl App {
             theme_picker_index: 0,
             theme_picker_area: Rect::default(),
             choice_picker: None,
+            tool_detail_call_id: None,
+            tool_detail_scroll: 0,
             transcript_scroll: 0,
+            follow_tail: true,
             input_area: Rect::default(),
             transcript_area: Rect::default(),
             welcome_cursor_visible: true,
-            usage: (0, 0, 0, None),
+            usage: UsageView {
+                estimated: true,
+                source: "estimated".into(),
+                ..UsageView::default()
+            },
+            budget: BudgetView::default(),
+            interaction_queue: Vec::new(),
             runtime_state: RuntimeState::Starting,
             toolbox_state: ToolBoxState::Unknown,
             permission_mode: PermissionMode::Ask,
+            execution_available: true,
+            runtime_block_reason: None,
         }
     }
 
@@ -213,11 +263,21 @@ impl App {
                     self.workspace = workspace;
                 }
                 self.messages.clear();
+                self.markdown_blocks.clear();
                 self.tools.clear();
+                self.tool_detail_call_id = None;
+                self.tool_detail_scroll = 0;
                 self.approval = None;
-                self.usage = (0, 0, 0, None);
+                self.usage = UsageView {
+                    estimated: true,
+                    source: "estimated".into(),
+                    ..UsageView::default()
+                };
                 self.transcript_scroll = 0;
+                self.follow_tail = true;
                 self.status = "会话已就绪".into();
+                self.execution_available = true;
+                self.runtime_block_reason = None;
             }
             VcpEvent::RuntimeStatus {
                 runtime,
@@ -237,11 +297,17 @@ impl App {
                 let agent = self.agent.clone();
                 self.append(MessageKind::Assistant, &agent, &text, true)
             }
-            VcpEvent::AssistantCompleted => self.status = "回复完成".into(),
+            VcpEvent::AssistantCompleted => {
+                self.finish_markdown_block(MessageKind::Assistant);
+                self.status = "回复完成".into();
+            }
             VcpEvent::ReasoningDelta { text } => {
                 self.append(MessageKind::Reasoning, "Thinking", &text, false)
             }
-            VcpEvent::ReasoningCompleted => self.status = "Thinking 完成（Ctrl+R 展开）".into(),
+            VcpEvent::ReasoningCompleted => {
+                self.finish_markdown_block(MessageKind::Reasoning);
+                self.status = "Thinking 完成（Ctrl+R 展开）".into();
+            }
             VcpEvent::ToolRequested { call_id, tool_name } => {
                 self.tools.insert(
                     call_id,
@@ -291,9 +357,114 @@ impl App {
             VcpEvent::Usage {
                 input_tokens,
                 output_tokens,
+                reasoning_tokens,
+                cache_read_tokens,
+                cache_write_tokens,
                 total_tokens,
+                requests,
                 context_window,
-            } => self.usage = (input_tokens, output_tokens, total_tokens, context_window),
+                estimated,
+                source,
+            } => {
+                self.usage = UsageView {
+                    input: input_tokens,
+                    output: output_tokens,
+                    reasoning: reasoning_tokens,
+                    cache_read: cache_read_tokens,
+                    cache_write: cache_write_tokens,
+                    total: total_tokens,
+                    requests,
+                    context_window,
+                    estimated,
+                    source,
+                }
+            }
+            VcpEvent::Budget {
+                max_requests_per_turn,
+                max_tokens_per_turn,
+                restart_required,
+            } => {
+                self.budget = BudgetView {
+                    max_requests_per_turn,
+                    max_tokens_per_turn,
+                    restart_required,
+                };
+                self.show_budget();
+            }
+            VcpEvent::SettingsSummary {
+                default_model,
+                default_agent,
+                theme,
+                permission_mode,
+                restart_required,
+            } => self.append(
+                MessageKind::Notice,
+                "共享 Agent 设置",
+                &format!(
+                    "model: {default_model}\nagent: {default_agent}\ntheme: {theme}\npermission: {permission_mode}\nrestart required: {restart_required}\nAPI Key 与 Server URL 不会从 Rust Host 投影到 UI；使用 vcp-agent --settings 安全修改。"
+                ),
+                true,
+            ),
+            VcpEvent::InteractionQueue { items } => {
+                self.interaction_queue = items;
+                if self.interaction_queue.is_empty() {
+                    self.append(MessageKind::Notice, "交互队列", "队列为空", true);
+                } else {
+                    self.open_choice_picker(
+                        "queue",
+                        "交互队列（Enter 删除）",
+                        self.interaction_queue
+                            .iter()
+                            .map(|item| ChoiceItem {
+                                id: item.interaction_id.clone(),
+                                label: format!("{} · {}", item.kind, item.prompt),
+                                detail: if item.consumed {
+                                    "consumed".into()
+                                } else {
+                                    "pending".into()
+                                },
+                            })
+                            .collect(),
+                    );
+                }
+            }
+            VcpEvent::TopicSnapshot {
+                topic_id,
+                history_entries,
+                state,
+                preview,
+            } => self.append(
+                MessageKind::Topic,
+                &format!("Topic {topic_id}"),
+                &format!("只读 checkpoint · {history_entries} 条历史\n状态: {state}\n{preview}"),
+                true,
+            ),
+            VcpEvent::ToolboxObservation {
+                channel,
+                kind,
+                title,
+                detail,
+            } => {
+                if kind == "RAG_RETRIEVAL_DETAILS" {
+                    self.append_rag_observation(&channel, &title, &detail);
+                    return;
+                }
+                let expanded = !matches!(
+                    kind.as_str(),
+                    "notification"
+                        | "RAG_RETRIEVAL_DETAILS"
+                        | "META_THINKING_CHAIN"
+                        | "AGENT_PRIVATE_CHAT_PREVIEW"
+                        | "AI_MEMO_RETRIEVAL"
+                        | "DailyNote"
+                ) && !kind.starts_with("AGENT_DREAM_");
+                self.append(
+                    MessageKind::ToolboxWs,
+                    &format!("{channel} · {title}"),
+                    &detail,
+                    expanded,
+                )
+            }
             VcpEvent::TurnCompleted => self.status = "本轮完成".into(),
             VcpEvent::Notice { title, message } => {
                 self.append(MessageKind::Notice, &title, &message, true)
@@ -317,6 +488,26 @@ impl App {
     }
 
     pub fn handle_key(&mut self, key: KeyEvent) -> InputAction {
+        if self.tool_detail_call_id.is_some() {
+            match key.code {
+                KeyCode::Esc | KeyCode::Char('q') => {
+                    self.tool_detail_call_id = None;
+                    self.tool_detail_scroll = 0;
+                }
+                KeyCode::Up => self.tool_detail_scroll = self.tool_detail_scroll.saturating_sub(1),
+                KeyCode::Down => {
+                    self.tool_detail_scroll = self.tool_detail_scroll.saturating_add(1)
+                }
+                KeyCode::PageUp => {
+                    self.tool_detail_scroll = self.tool_detail_scroll.saturating_sub(8)
+                }
+                KeyCode::PageDown => {
+                    self.tool_detail_scroll = self.tool_detail_scroll.saturating_add(8)
+                }
+                _ => {}
+            }
+            return InputAction::None;
+        }
         if self.approval.is_some() {
             return self.handle_approval_key(key);
         }
@@ -350,8 +541,14 @@ impl App {
             self.open_theme_picker();
             return InputAction::None;
         }
-        if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('d')) {
-            return InputAction::Demo;
+        if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('o')) {
+            if let Some(call_id) = self.tools.keys().next_back().cloned() {
+                self.tool_detail_call_id = Some(call_id);
+                self.tool_detail_scroll = 0;
+            } else {
+                self.status = "当前没有工具详情".into();
+            }
+            return InputAction::None;
         }
         if matches!(key.code, KeyCode::PageUp) {
             self.scroll_by(8);
@@ -365,7 +562,9 @@ impl App {
             self.complete_slash();
             return InputAction::None;
         }
-        if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Enter) {
+        if key.modifiers.contains(KeyModifiers::CONTROL)
+            && matches!(key.code, KeyCode::Enter | KeyCode::Char('s'))
+        {
             return self.submit_input();
         }
         // The editor is multiline, so Enter ordinarily inserts a newline. A
@@ -434,8 +633,14 @@ impl App {
         self.apply_event(VcpEvent::Usage {
             input_tokens: 824,
             output_tokens: 156,
+            reasoning_tokens: 0,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
             total_tokens: 980,
+            requests: 1,
             context_window: Some(128_000),
+            estimated: true,
+            source: "estimated".into(),
         });
     }
 
@@ -482,9 +687,13 @@ impl App {
         if self.choice_picker.is_some() {
             self.draw_choice_picker(frame);
         }
+        if self.tool_detail_call_id.is_some() {
+            self.draw_tool_detail(frame);
+        }
         if self.approval.is_none()
             && !self.theme_picker
             && self.choice_picker.is_none()
+            && self.tool_detail_call_id.is_none()
             && let Some((x, y)) = self
                 .input
                 .cursor_pos_with_state(self.input_area, self.input_state)
@@ -512,7 +721,7 @@ impl App {
             }
             "/hotkeys" if argument.is_empty() => {
                 self.input.set_text("");
-                self.append(MessageKind::Notice, "快捷键", "Ctrl+Enter 发送 · 忙碌时输入会成为 follow-up · /steer 插入指导 · Esc/Ctrl+C 取消 · Ctrl+R 展开 Thinking · Ctrl+T 主题", true);
+                self.append(MessageKind::Notice, "快捷键", "Ctrl+Enter / Ctrl+S 发送 · 忙碌时输入会成为 follow-up · /steer 插入指导 · Esc/Ctrl+C 取消 · Ctrl+R 展开 Thinking · Ctrl+T 主题 · Ctrl+O 工具详情", true);
                 InputAction::None
             }
             "/settings" if argument.is_empty() => {
@@ -522,15 +731,30 @@ impl App {
             "/quit" if argument.is_empty() => InputAction::Quit,
             "/status" | "/new" | "/model" | "/agent" | "/settings" | "/permissions" | "/steer"
             | "/follow-up" | "/topics" | "/resume" | "/queue" | "/clear-queue" | "/compact"
-            | "/reasoning" | "/usage" | "/budget" => {
+            | "/reasoning" | "/toolbox" | "/usage" | "/budget" => {
                 self.input.set_text("");
                 InputAction::Command(prompt)
             }
             _ => {
                 self.input.set_text("");
+                if !self.execution_available {
+                    let reason = self
+                        .runtime_block_reason
+                        .clone()
+                        .unwrap_or_else(|| "Rust Host 未就绪".into());
+                    self.append(
+                        MessageKind::Warning,
+                        "无法执行",
+                        &format!("{reason}。请使用 /settings 修复共享配置后重试。"),
+                        true,
+                    );
+                    self.status = "配置阻断：未发送给 Agent Core".into();
+                    return InputAction::None;
+                }
                 self.append(MessageKind::User, "You", &prompt, true);
                 self.status = "已交给 Agent Core".into();
-                self.transcript_scroll = 0;
+                self.follow_tail = true;
+                self.transcript_scroll = u16::MAX;
                 InputAction::Submit(prompt)
             }
         }
@@ -595,6 +819,9 @@ impl App {
     fn set_theme(&mut self, id: ThemeId) {
         self.theme_id = id;
         self.theme = Theme::resolve(id);
+        for renderer in self.markdown_blocks.iter_mut().flatten() {
+            renderer.set_theme(self.theme);
+        }
         self.input.selection_style = Style::default()
             .bg(self.theme.selection)
             .fg(self.theme.foreground);
@@ -647,6 +874,51 @@ impl App {
                 picker.index = 0;
                 InputAction::None
             }
+            KeyCode::Char('o')
+                if picker.kind == "topic" && key.modifiers.contains(KeyModifiers::CONTROL) =>
+            {
+                let selected = filtered_choice_indices(picker)
+                    .get(picker.index)
+                    .and_then(|index| picker.items.get(*index))
+                    .cloned();
+                self.choice_picker = None;
+                selected.map_or(InputAction::None, |item| {
+                    InputAction::Command(format!("/topics read {}", item.id))
+                })
+            }
+            KeyCode::Char('t')
+                if picker.kind == "topic" && key.modifiers.contains(KeyModifiers::CONTROL) =>
+            {
+                let selected = filtered_choice_indices(picker)
+                    .get(picker.index)
+                    .and_then(|index| picker.items.get(*index))
+                    .cloned();
+                self.choice_picker = None;
+                selected.map_or(InputAction::None, |item| {
+                    InputAction::Command(format!("/topics takeover {}", item.id))
+                })
+            }
+            KeyCode::F(2) if picker.kind == "topic" => {
+                let selected = filtered_choice_indices(picker)
+                    .get(picker.index)
+                    .and_then(|index| picker.items.get(*index))
+                    .cloned();
+                self.choice_picker = None;
+                if let Some(item) = selected {
+                    self.input.set_text(&format!("/topics rename {} ", item.id));
+                }
+                InputAction::None
+            }
+            KeyCode::Delete if picker.kind == "topic" => {
+                let selected = filtered_choice_indices(picker)
+                    .get(picker.index)
+                    .and_then(|index| picker.items.get(*index))
+                    .cloned();
+                self.choice_picker = None;
+                selected.map_or(InputAction::None, |item| {
+                    InputAction::Command(format!("/topics delete {}", item.id))
+                })
+            }
             KeyCode::Char(value) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
                 picker.query.push(value);
                 picker.index = 0;
@@ -664,6 +936,7 @@ impl App {
                         "model" => format!("/model {}", item.id),
                         "agent" => format!("/agent {}", item.id),
                         "topic" => format!("/resume {}", item.id),
+                        "queue" => format!("/queue remove {}", item.id),
                         _ => return InputAction::None,
                     };
                     InputAction::Command(command)
@@ -674,11 +947,14 @@ impl App {
     }
     fn clear_transcript(&mut self) {
         self.messages.clear();
+        self.markdown_blocks.clear();
         self.tools.clear();
         self.transcript_scroll = 0;
+        self.follow_tail = true;
         self.status = "已清屏".into();
     }
     fn scroll_by(&mut self, delta: i16) {
+        self.follow_tail = false;
         self.transcript_scroll = if delta >= 0 {
             self.transcript_scroll.saturating_add(delta as u16)
         } else {
@@ -697,6 +973,109 @@ impl App {
     pub fn toggle_reasoning_command(&mut self) {
         self.toggle_reasoning();
     }
+
+    pub fn toggle_toolbox_observation_command(&mut self) {
+        if let Some(entry) = self
+            .messages
+            .iter_mut()
+            .rev()
+            .find(|entry| entry.kind == MessageKind::ToolboxWs)
+        {
+            entry.expanded = !entry.expanded;
+            self.status = if entry.expanded {
+                "ToolBox 事件详情已展开"
+            } else {
+                "ToolBox 事件详情已折叠"
+            }
+            .into();
+        } else {
+            self.status = "当前没有 ToolBox 事件".into();
+        }
+    }
+
+    pub fn set_runtime_unavailable(&mut self, reason: String) {
+        self.execution_available = false;
+        self.runtime_block_reason = Some(reason.clone());
+        self.runtime_state = RuntimeState::Failed;
+        self.toolbox_state = ToolBoxState::Offline;
+        self.status = "配置阻断".into();
+        self.append(
+            MessageKind::Warning,
+            "Rust Host 无法启动",
+            &format!("{reason}。输入已禁用；使用 /settings 修复共享配置。"),
+            true,
+        );
+    }
+
+    pub fn show_runtime_status(&mut self) {
+        let message = format!(
+            "Runtime: {}\nToolBox: {}\nPermission: {}",
+            runtime_state_label(self.runtime_state),
+            toolbox_state_label(self.toolbox_state),
+            if self.permission_mode == PermissionMode::AlwaysApprove {
+                "always-approve"
+            } else {
+                "ask"
+            }
+        );
+        self.append(MessageKind::Notice, "运行状态", &message, true);
+    }
+
+    pub fn set_context_window(&mut self, context_window: Option<u64>) {
+        self.usage.context_window = context_window;
+    }
+
+    pub fn show_usage(&mut self) {
+        let context = self.usage.context_window.map_or_else(
+            || "unknown".into(),
+            |window| {
+                format!(
+                    "{} / {} ({}%)",
+                    self.usage.total,
+                    window,
+                    self.usage.total.saturating_mul(100) / window.max(1)
+                )
+            },
+        );
+        self.append(
+            MessageKind::Notice,
+            "Usage",
+            &format!(
+                "requests: {}\ninput: {}\noutput: {}\nreasoning: {}\ncache read/write: {}/{}\ntotal: {}\ncontext: {}\nsource: {}{}\ncost: unknown",
+                self.usage.requests,
+                self.usage.input,
+                self.usage.output,
+                self.usage.reasoning,
+                self.usage.cache_read,
+                self.usage.cache_write,
+                self.usage.total,
+                context,
+                self.usage.source,
+                if self.usage.estimated { " (estimated)" } else { "" },
+            ),
+            true,
+        );
+    }
+
+    pub fn show_budget(&mut self) {
+        let requests = self
+            .budget
+            .max_requests_per_turn
+            .map_or_else(|| "unlimited".into(), |value| value.to_string());
+        let tokens = self
+            .budget
+            .max_tokens_per_turn
+            .map_or_else(|| "unlimited".into(), |value| value.to_string());
+        self.append(
+            MessageKind::Notice,
+            "Budget",
+            &format!(
+                "requests/turn: {requests}\ntokens/turn: {tokens}\nrestart required: {}\ncost limit: unavailable without a reliable price catalog",
+                self.budget.restart_required
+            ),
+            true,
+        );
+    }
     fn complete_slash(&mut self) {
         let current = self.input.text().to_owned();
         if let Some((command, _)) = SLASH_COMMANDS
@@ -713,6 +1092,9 @@ impl App {
             && last.expanded == expanded
         {
             last.body.push_str(text);
+            if let Some(Some(renderer)) = self.markdown_blocks.last_mut() {
+                renderer.push(text);
+            }
         } else {
             self.messages.push(MessageBlock {
                 kind,
@@ -720,8 +1102,117 @@ impl App {
                 body: text.into(),
                 expanded,
             });
+            let renderer =
+                matches!(kind, MessageKind::Assistant | MessageKind::Reasoning).then(|| {
+                    let mut renderer = MarkdownBlockRenderer::new(self.theme);
+                    renderer.push(text);
+                    renderer
+                });
+            self.markdown_blocks.push(renderer);
         }
-        self.transcript_scroll = 0;
+        if self.follow_tail {
+            self.transcript_scroll = u16::MAX;
+        }
+    }
+
+    fn append_rag_observation(&mut self, channel: &str, title: &str, detail: &str) {
+        let (source, hits) = parse_rag_source(title);
+        let (summary, raw) = detail
+            .split_once("\n\n原始元数据\n")
+            .unwrap_or((detail, ""));
+        let mut summary_lines = summary.lines();
+        let query_line = summary_lines.next().unwrap_or("查询：未提供查询文本");
+        let strategy_line = summary_lines.next().unwrap_or("策略：默认向量检索");
+        let query_key = query_line.trim();
+
+        let existing = self.messages.iter_mut().rev().find(|entry| {
+            entry.kind == MessageKind::ToolboxWs
+                && entry.title.contains("RAG 检索")
+                && entry
+                    .body
+                    .lines()
+                    .next()
+                    .is_some_and(|line| line.trim() == query_key)
+        });
+        if let Some(entry) = existing {
+            let visible = entry
+                .body
+                .split("\n\n原始元数据\n")
+                .next()
+                .unwrap_or(entry.body.as_str());
+            let mut lines: Vec<String> = visible.lines().map(ToOwned::to_owned).collect();
+            let source_index = lines
+                .iter()
+                .position(|line| line.starts_with("来源："))
+                .unwrap_or(1.min(lines.len()));
+            let mut sources = lines
+                .get(source_index)
+                .and_then(|line| line.strip_prefix("来源："))
+                .map(parse_rag_sources)
+                .unwrap_or_default();
+            if let Some(existing_source) = sources.iter_mut().find(|item| item.0 == source) {
+                existing_source.1 = hits;
+            } else {
+                sources.push((source.clone(), hits));
+            }
+            let total_hits: usize = sources.iter().map(|item| item.1).sum();
+            let source_line = format!(
+                "来源：{}",
+                sources
+                    .iter()
+                    .map(|(name, count)| format!("{name} {count}"))
+                    .collect::<Vec<_>>()
+                    .join(" · ")
+            );
+            if source_index < lines.len() {
+                lines[source_index] = source_line;
+            } else {
+                lines.push(source_line);
+            }
+            if !lines.iter().any(|line| line.starts_with("策略：")) {
+                lines.push(strategy_line.to_string());
+            }
+            let prior_raw = entry
+                .body
+                .split_once("\n\n原始元数据\n")
+                .map(|(_, value)| value)
+                .unwrap_or("");
+            let merged_raw = if raw.is_empty() {
+                prior_raw.to_string()
+            } else if prior_raw.is_empty() {
+                format!("[{source}]\n{raw}")
+            } else {
+                format!("{prior_raw}\n\n[{source}]\n{raw}")
+            };
+            entry.title = format!(
+                "{channel} · RAG 检索 · {} 源 · {total_hits} 命中",
+                sources.len()
+            );
+            entry.body = if merged_raw.is_empty() {
+                lines.join("\n")
+            } else {
+                format!("{}\n\n原始元数据\n{merged_raw}", lines.join("\n"))
+            };
+            if self.follow_tail {
+                self.transcript_scroll = u16::MAX;
+            }
+            return;
+        }
+
+        let body = format!(
+            "{query_line}\n来源：{source} {hits}\n{strategy_line}{}",
+            if raw.is_empty() {
+                String::new()
+            } else {
+                format!("\n\n原始元数据\n[{source}]\n{raw}")
+            }
+        );
+        self.append(
+            MessageKind::ToolboxWs,
+            &format!("{channel} · RAG 检索 · 1 源 · {hits} 命中"),
+            &body,
+            false,
+        );
     }
 
     fn draw_header(&self, frame: &mut Frame<'_>, area: Rect) {
@@ -766,20 +1257,20 @@ impl App {
             self.draw_welcome(frame, area);
             return;
         }
-        let lines = self.transcript_lines();
+        let lines = self.transcript_lines(area.width.saturating_sub(4) as usize);
         let block = self.block(" Conversation ");
         let inner = block.inner(area);
-        let total = lines.len() as u16;
-        self.transcript_scroll = self
-            .transcript_scroll
-            .min(total.saturating_sub(inner.height));
-        frame.render_widget(
-            Paragraph::new(lines)
-                .wrap(Wrap { trim: false })
-                .scroll((self.transcript_scroll, 0))
-                .block(block),
-            area,
-        );
+        let paragraph = Paragraph::new(lines)
+            .wrap(Wrap { trim: false })
+            .block(block);
+        let total = u16::try_from(paragraph.line_count(inner.width)).unwrap_or(u16::MAX);
+        let max_scroll = total.saturating_sub(inner.height);
+        self.transcript_scroll = if self.follow_tail {
+            max_scroll
+        } else {
+            self.transcript_scroll.min(max_scroll)
+        };
+        frame.render_widget(paragraph.scroll((self.transcript_scroll, 0)), area);
         if total > inner.height && inner.width > 0 {
             let track_height = inner.height.max(1);
             let thumb =
@@ -1002,21 +1493,26 @@ impl App {
     }
 
     fn draw_footer(&self, frame: &mut Frame<'_>, area: Rect) {
-        let (_, _, total, window) = self.usage;
-        let usage = if total == 0 {
-            "tokens —".into()
-        } else if let Some(window) = window {
+        let label = if self.usage.estimated {
+            "est. tokens"
+        } else {
+            "tokens"
+        };
+        let usage = if self.usage.total == 0 {
+            format!("{label} —")
+        } else if let Some(window) = self.usage.context_window {
             format!(
-                "{total} tokens · ctx {}%",
-                total.saturating_mul(100) / window.max(1)
+                "{} {label} · ctx {}%",
+                self.usage.total,
+                self.usage.total.saturating_mul(100) / window.max(1)
             )
         } else {
-            format!("{total} tokens")
+            format!("{} {label}", self.usage.total)
         };
         let right = if area.width < 74 {
             usage
         } else {
-            format!("Ctrl+R thinking · Ctrl+T theme · {usage}")
+            format!("Ctrl+R thinking · Ctrl+O tool · Ctrl+T theme · {usage}")
         };
         let left = &self.status;
         let gap = (area.width as usize)
@@ -1087,6 +1583,30 @@ impl App {
         frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: true }), inner);
     }
 
+    fn draw_tool_detail(&self, frame: &mut Frame<'_>) {
+        let Some(call_id) = self.tool_detail_call_id.as_deref() else {
+            return;
+        };
+        let Some(tool) = self.tools.get(call_id) else {
+            return;
+        };
+        let area = centered_rect(90, frame.area().height.saturating_sub(4), frame.area());
+        frame.render_widget(Clear, area);
+        let block = Block::default()
+            .title(format!(" Tool detail · {} · {call_id} ", tool.tool_name))
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(self.theme.accent))
+            .style(Style::default().bg(self.theme.surface));
+        let inner = block.inner(area);
+        frame.render_widget(block, area);
+        frame.render_widget(
+            Paragraph::new(tool.detail.as_str())
+                .wrap(Wrap { trim: false })
+                .scroll((self.tool_detail_scroll, 0)),
+            inner,
+        );
+    }
+
     fn draw_theme_picker(&mut self, frame: &mut Frame<'_>) {
         let area = centered_rect(44, 13, frame.area());
         self.theme_picker_area = area;
@@ -1136,9 +1656,11 @@ impl App {
         let inner = block.inner(area);
         frame.render_widget(block, area);
         let filtered = filtered_choice_indices(picker);
-        let lines = filtered
+        let has_topic_hint = picker.kind == "topic";
+        let item_height = inner.height.saturating_sub(u16::from(has_topic_hint)) as usize;
+        let mut lines = filtered
             .iter()
-            .take(inner.height as usize)
+            .take(item_height)
             .enumerate()
             .filter_map(|(visible, index)| picker.items.get(*index).map(|item| (visible, item)))
             .map(|(visible, item)| {
@@ -1164,17 +1686,25 @@ impl App {
                 )
             })
             .collect::<Vec<_>>();
+        if has_topic_hint {
+            lines.push(Line::styled(
+                "Enter 恢复 · Ctrl+O 只读 · Ctrl+T 接管 · F2 重命名 · Del 删除",
+                Style::default().fg(self.theme.muted),
+            ));
+        }
         frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: true }), inner);
     }
 
-    fn transcript_lines(&self) -> Vec<Line<'static>> {
+    fn transcript_lines(&mut self, width: usize) -> Vec<Line<'static>> {
         let mut lines = Vec::new();
-        for block in &self.messages {
+        for (index, block) in self.messages.iter().enumerate() {
             let (color, prefix) = match block.kind {
                 MessageKind::User => (self.theme.accent_alt, "You"),
                 MessageKind::Assistant => (self.theme.accent, "Nova"),
                 MessageKind::Reasoning => (self.theme.muted, "Thinking"),
                 MessageKind::Notice => (self.theme.accent, "Info"),
+                MessageKind::Topic => (self.theme.accent_alt, "Topic"),
+                MessageKind::ToolboxWs => (self.theme.warning, "ToolBox WS"),
                 MessageKind::Warning => (self.theme.error, "Warning"),
             };
             if block.kind == MessageKind::Reasoning && !block.expanded {
@@ -1188,16 +1718,75 @@ impl App {
                         Style::default().fg(color),
                     ),
                 ]));
+            } else if block.kind == MessageKind::ToolboxWs && !block.expanded {
+                lines.push(Line::from(vec![
+                    Span::styled(" ▸ ", Style::default().fg(color)),
+                    Span::styled(
+                        block.title.clone(),
+                        Style::default().fg(color).add_modifier(Modifier::BOLD),
+                    ),
+                ]));
+                let summary = block
+                    .body
+                    .split("\n\n原始元数据\n")
+                    .next()
+                    .unwrap_or(block.body.as_str());
+                if block.title.contains("RAG 检索") {
+                    let mut summary_lines = summary.lines();
+                    let query = summary_lines
+                        .next()
+                        .unwrap_or("")
+                        .trim_start_matches("查询：");
+                    let sources = summary_lines
+                        .find(|line| line.starts_with("来源："))
+                        .unwrap_or("")
+                        .trim_start_matches("来源：");
+                    lines.push(Line::styled(
+                        format!("   {query} · {sources} · /toolbox"),
+                        Style::default().fg(self.theme.muted),
+                    ));
+                } else {
+                    for preview in summary
+                        .lines()
+                        .filter(|line| !line.trim().is_empty())
+                        .take(2)
+                    {
+                        lines.push(Line::styled(
+                            format!("   {preview}"),
+                            Style::default().fg(self.theme.muted),
+                        ));
+                    }
+                    lines.push(Line::styled(
+                        "   /toolbox 展开完整详情",
+                        Style::default().fg(self.theme.subtle),
+                    ));
+                }
             } else {
                 lines.push(Line::styled(
-                    format!(" {prefix}"),
+                    if block.kind == MessageKind::ToolboxWs {
+                        format!(" {prefix} · {}", block.title)
+                    } else {
+                        format!(" {prefix}")
+                    },
                     Style::default().fg(color).add_modifier(Modifier::BOLD),
                 ));
-                lines.extend(Text::from(block.body.clone()).lines);
+                if let Some(Some(renderer)) = self.markdown_blocks.get_mut(index) {
+                    lines.extend(renderer.lines(width));
+                } else {
+                    lines.extend(Text::from(block.body.clone()).lines);
+                }
             }
             lines.push(Line::default());
         }
         lines
+    }
+
+    fn finish_markdown_block(&mut self, kind: MessageKind) {
+        if self.messages.last().is_some_and(|block| block.kind == kind)
+            && let Some(Some(renderer)) = self.markdown_blocks.last_mut()
+        {
+            renderer.finish();
+        }
     }
 
     fn block(&self, title: &str) -> Block<'static> {
@@ -1255,6 +1844,28 @@ fn toolbox_state_label(state: ToolBoxState) -> &'static str {
         ToolBoxState::Degraded => "ToolBox degraded",
         ToolBoxState::Offline => "ToolBox offline",
     }
+}
+
+fn parse_rag_source(title: &str) -> (String, usize) {
+    let mut parts = title.split(" · ");
+    let _label = parts.next();
+    let source = parts.next().unwrap_or("Unknown").to_string();
+    let hits = parts
+        .next()
+        .and_then(|value| value.split_whitespace().next())
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(0);
+    (source, hits)
+}
+
+fn parse_rag_sources(value: &str) -> Vec<(String, usize)> {
+    value
+        .split(" · ")
+        .filter_map(|item| {
+            let (name, count) = item.rsplit_once(' ')?;
+            Some((name.to_string(), count.parse::<usize>().ok()?))
+        })
+        .collect()
 }
 
 fn now_millis() -> u64 {
@@ -1445,6 +2056,41 @@ mod tests {
         assert_eq!(app.messages[0].kind, MessageKind::Notice);
         assert!(app.messages[0].body.contains("Steering"));
     }
+
+    #[test]
+    fn unavailable_runtime_blocks_prompts_without_fake_submission() {
+        let mut app = App::new();
+        app.set_runtime_unavailable("missing API key".into());
+        app.input.set_text("执行真实任务");
+        assert_eq!(app.submit_input(), InputAction::None);
+        assert!(
+            !app.messages
+                .iter()
+                .any(|message| message.kind == MessageKind::User)
+        );
+        assert!(app.messages.iter().any(|message| {
+            message.kind == MessageKind::Warning && message.body.contains("/settings")
+        }));
+        assert_eq!(app.runtime_state, RuntimeState::Failed);
+        assert_eq!(app.toolbox_state, ToolBoxState::Offline);
+    }
+
+    #[test]
+    fn status_reports_projection_without_fabricating_ready_state() {
+        let mut app = App::new();
+        app.apply_event(VcpEvent::RuntimeStatus {
+            runtime: RuntimeState::Failed,
+            toolbox: ToolBoxState::Offline,
+            permission_mode: PermissionMode::AlwaysApprove,
+        });
+        app.show_runtime_status();
+        let status = app.messages.last().expect("status notice");
+        assert!(status.body.contains("failed"));
+        assert!(status.body.contains("offline"));
+        assert!(status.body.contains("always-approve"));
+        assert_eq!(app.runtime_state, RuntimeState::Failed);
+        assert_eq!(app.toolbox_state, ToolBoxState::Offline);
+    }
     #[test]
     fn searchable_catalog_picker_returns_a_session_switch_command() {
         let mut app = App::new();
@@ -1473,6 +2119,40 @@ mod tests {
         );
     }
     #[test]
+    fn topic_picker_projects_multiple_actions_without_owning_topic_state() {
+        let item = ChoiceItem {
+            id: "topic-7".into(),
+            label: "恢复工作".into(),
+            detail: "gpt-5.6-terra · available".into(),
+        };
+
+        let mut app = App::new();
+        app.open_choice_picker("topic", "Agent Topic", vec![item.clone()]);
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL)),
+            InputAction::Command("/topics read topic-7".into())
+        );
+
+        app.open_choice_picker("topic", "Agent Topic", vec![item.clone()]);
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL)),
+            InputAction::Command("/topics takeover topic-7".into())
+        );
+
+        app.open_choice_picker("topic", "Agent Topic", vec![item.clone()]);
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Delete, KeyModifiers::NONE)),
+            InputAction::Command("/topics delete topic-7".into())
+        );
+
+        app.open_choice_picker("topic", "Agent Topic", vec![item]);
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::F(2), KeyModifiers::NONE)),
+            InputAction::None
+        );
+        assert_eq!(app.input.text(), "/topics rename topic-7 ");
+    }
+    #[test]
     fn runtime_status_is_projected_without_claiming_toolbox_connection() {
         let mut app = App::new();
         app.apply_event(VcpEvent::RuntimeStatus {
@@ -1482,6 +2162,183 @@ mod tests {
         });
         let screen = render(&mut app, 100, 40);
         assert!(screen.contains("ToolBox offline"));
+    }
+    #[test]
+    fn estimated_usage_is_labelled_in_the_footer() {
+        let mut app = App::new();
+        app.apply_event(VcpEvent::Usage {
+            input_tokens: 120,
+            output_tokens: 30,
+            reasoning_tokens: 0,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
+            total_tokens: 150,
+            requests: 1,
+            context_window: Some(1000),
+            estimated: true,
+            source: "estimated".into(),
+        });
+        let screen = render(&mut app, 100, 40);
+        assert!(screen.contains("150 est. tokens"));
+        assert!(screen.contains("ctx 15%"));
+    }
+    #[test]
+    fn usage_and_budget_commands_render_complete_structured_state() {
+        let mut app = App::new();
+        app.apply_event(VcpEvent::Usage {
+            input_tokens: 100,
+            output_tokens: 40,
+            reasoning_tokens: 20,
+            cache_read_tokens: 10,
+            cache_write_tokens: 5,
+            total_tokens: 175,
+            requests: 3,
+            context_window: Some(1000),
+            estimated: true,
+            source: "xai-token-estimation".into(),
+        });
+        app.show_usage();
+        let usage = app.messages.last().expect("usage block");
+        assert!(usage.body.contains("requests: 3"));
+        assert!(usage.body.contains("reasoning: 20"));
+        assert!(usage.body.contains("cache read/write: 10/5"));
+        assert!(usage.body.contains("xai-token-estimation (estimated)"));
+        assert!(usage.body.contains("cost: unknown"));
+
+        app.apply_event(VcpEvent::Budget {
+            max_requests_per_turn: Some(12),
+            max_tokens_per_turn: Some(50_000),
+            restart_required: true,
+        });
+        let budget = app.messages.last().expect("budget block");
+        assert!(budget.body.contains("requests/turn: 12"));
+        assert!(budget.body.contains("tokens/turn: 50000"));
+        assert!(budget.body.contains("restart required: true"));
+    }
+    #[test]
+    fn settings_summary_never_contains_host_credentials() {
+        let mut app = App::new();
+        app.apply_event(VcpEvent::SettingsSummary {
+            default_model: "gpt-5.6-terra".into(),
+            default_agent: "Nova".into(),
+            theme: "VCPNight".into(),
+            permission_mode: "ask".into(),
+            restart_required: false,
+        });
+        let settings = app.messages.last().expect("settings block");
+        assert!(settings.body.contains("gpt-5.6-terra"));
+        assert!(settings.body.contains("Nova"));
+        assert!(settings.body.contains("API Key"));
+        assert!(!settings.body.contains("123456"));
+        assert!(!settings.body.contains("http://localhost:6005"));
+    }
+    #[test]
+    fn queue_picker_uses_stable_ids_and_topic_snapshot_is_bounded() {
+        let mut app = App::new();
+        app.apply_event(VcpEvent::InteractionQueue {
+            items: vec![InteractionItem {
+                interaction_id: "interaction-7".into(),
+                kind: "follow-up".into(),
+                prompt: "检查测试".into(),
+                consumed: false,
+            }],
+        });
+        assert_eq!(
+            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+            InputAction::Command("/queue remove interaction-7".into())
+        );
+
+        app.apply_event(VcpEvent::TopicSnapshot {
+            topic_id: "topic-1".into(),
+            history_entries: 9,
+            state: "interrupted".into(),
+            preview: "最后一条可见消息".into(),
+        });
+        let topic = app.messages.last().expect("topic block");
+        assert_eq!(topic.kind, MessageKind::Topic);
+        assert!(topic.body.contains("9 条历史"));
+        assert!(topic.body.contains("interrupted"));
+        assert!(!topic.body.contains("agent-state.json"));
+    }
+    #[test]
+    fn toolbox_observations_use_a_dedicated_observer_block() {
+        let mut app = App::new();
+        app.apply_event(VcpEvent::ToolboxObservation {
+            channel: "VCPLog".into(),
+            kind: "log".into(),
+            title: "Distributed Server".into(),
+            detail: "node ready".into(),
+        });
+        let block = app.messages.last().expect("ToolBox observer block");
+        assert_eq!(block.kind, MessageKind::ToolboxWs);
+        assert!(block.title.contains("VCPLog"));
+        assert_eq!(block.body, "node ready");
+    }
+
+    #[test]
+    fn rag_observation_is_compact_until_explicitly_expanded() {
+        let mut app = App::new();
+        app.apply_event(VcpEvent::ToolboxObservation {
+            channel: "Info".into(),
+            kind: "RAG_RETRIEVAL_DETAILS".into(),
+            title: "RAG 检索 · KnowledgeBase · 3 条命中".into(),
+            detail:
+                "查询：VCP Agent\n策略：时间 · 标签增强 0.46\n\n原始元数据\n{\"tagWeight\":0.46}"
+                    .into(),
+        });
+        app.apply_event(VcpEvent::ToolboxObservation {
+            channel: "Info".into(),
+            kind: "RAG_RETRIEVAL_DETAILS".into(),
+            title: "RAG 检索 · Nova · 2 条命中".into(),
+            detail:
+                "查询：VCP Agent\n策略：时间 · 标签增强 0.46\n\n原始元数据\n{\"dbName\":\"Nova\"}"
+                    .into(),
+        });
+        assert_eq!(app.messages.len(), 1);
+        let block = app.messages.last().expect("RAG observer block");
+        assert!(!block.expanded);
+        assert!(block.title.contains("2 源 · 5 命中"));
+        assert!(block.body.contains("KnowledgeBase 3 · Nova 2"));
+        let collapsed = app
+            .transcript_lines(100)
+            .into_iter()
+            .map(|line| line.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(collapsed.contains("RAG 检索"));
+        assert!(collapsed.contains("VCP Agent"));
+        assert!(!collapsed.contains("tagWeight"));
+
+        app.toggle_toolbox_observation_command();
+        let expanded = app
+            .transcript_lines(100)
+            .into_iter()
+            .map(|line| line.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(expanded.contains("tagWeight"));
+        assert!(expanded.contains("dbName"));
+    }
+    #[test]
+    fn tool_detail_overlay_exposes_long_result_without_changing_tool_state() {
+        let mut app = App::new();
+        let detail = format!("BEGIN\n{}\nEND", "长工具结果\n".repeat(80));
+        app.apply_event(VcpEvent::ToolStatus {
+            call_id: "call-long".into(),
+            tool_name: "FileOperator".into(),
+            status: ToolStatus::Completed,
+            detail,
+        });
+        app.handle_key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL));
+        assert_eq!(app.tool_detail_call_id.as_deref(), Some("call-long"));
+        app.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
+        assert_eq!(app.tool_detail_scroll, 8);
+        let screen = render(&mut app, 100, 40);
+        assert!(screen.contains("Tool detail"));
+        assert!(screen.contains("FileOperator"));
+        assert_eq!(app.tools["call-long"].status, ToolStatus::Completed);
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(app.tool_detail_call_id.is_none());
     }
     #[test]
     fn expired_approval_is_rejected_on_tick() {

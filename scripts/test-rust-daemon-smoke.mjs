@@ -23,6 +23,18 @@ await fs.writeFile(settingsPath, JSON.stringify({
     vcpApiKey: 'test-only-placeholder',
     agentRuntime: { tui: { defaultModel: 'gpt-5.6-terra', budget: { maxRequestsPerTurn: 8, maxTokensPerTurn: 120000 } } },
 }), 'utf8');
+// A control daemon may be attached to Nova while the Workbench is browsing a
+// different shared Agent. Seed that Agent's durable Rust Topic so the test
+// proves `agentId` is routed by Host rather than inherited from spawn args.
+await fs.mkdir(path.join(testRoot, 'UserData', '123', 'topics', 'topic-existing-123'), { recursive: true });
+await fs.writeFile(path.join(testRoot, 'UserData', '123', 'topics', 'topic-existing-123', 'agent-state.json'), JSON.stringify({
+    version: 1,
+    title: '123 的既有 Topic',
+    model: 'gpt-5.6-terra',
+    workspaceRef: repo,
+    updatedAt: 1_700_000_000_000,
+    history: [{ id: 'seeded-history', role: 'user', content: '历史消息' }],
+}), 'utf8');
 
 function waitForMessage(messages, predicate, label, timeoutMs = 5_000) {
     const deadline = Date.now() + timeoutMs;
@@ -47,6 +59,11 @@ async function startApprovalFixtureServer() {
         const firstRequest = modelRequests++ === 0;
         const delta = firstRequest
             ? {
+                // Tool-use models commonly stream reasoning before their
+                // vcp_invoke call. Keep this in the direct-daemon smoke: a
+                // terminal reasoning event used to lose turnId here and make
+                // the daemon exit only on tool-capable turns.
+                reasoning_content: 'I should request the tool.',
                 tool_calls: [{
                     index: 0,
                     id: 'call_presence_deny',
@@ -78,6 +95,7 @@ async function startApprovalFixtureServer() {
 
 let exitError = null;
 const controlEvents = [];
+const daemonEvents = [];
 const transport = new RustDaemonTransport({
     projectRoot: repo,
     settingsPath,
@@ -87,6 +105,7 @@ const transport = new RustDaemonTransport({
     agent: 'Nova',
     onMessage: (message) => {
         if (message?.type === 'control-event') controlEvents.push(message);
+        if (message?.type === 'event') daemonEvents.push(message.event);
     },
     onExit: (_code, _signal, error) => { exitError = error; },
 });
@@ -100,6 +119,27 @@ await transport.request('set-workbench-presence', { mounted: false }, 'smoke-pre
 const created = await transport.request('create-session');
 assert.ok(created.sessionId?.startsWith('session_'));
 assert.ok(created.topicId?.startsWith('topic_'), 'create-session must report the durable Topic identity to GUI hosts');
+await transport.request('list-topics', { agentId: '123' }, 'smoke-other-agent-topics');
+const otherAgentTopicDeadline = Date.now() + 5_000;
+while (!controlEvents.some((event) => event.requestId === 'smoke-other-agent-topics') && Date.now() < otherAgentTopicDeadline) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+}
+const otherAgentTopics = controlEvents.find((event) => event.requestId === 'smoke-other-agent-topics');
+assert.equal(otherAgentTopics?.kind, 'topics', 'cross-Agent Topic browsing must resolve through the daemon control plane');
+assert.deepEqual(otherAgentTopics?.payload?.map((topic) => ({ id: topic.id, agentId: topic.agentId })), [{
+    id: 'topic-existing-123', agentId: '123',
+}], 'the daemon must return the selected Agent history without creating a Session');
+const readinessDeadline = Date.now() + 7_000;
+while (!daemonEvents.some((event) => event?.type === 'runtime.readiness'
+    && event?.payload?.toolbox?.state === 'unavailable') && Date.now() < readinessDeadline) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+}
+assert.equal(daemonEvents.some((event) => event?.type === 'runtime.readiness'
+    && event?.payload?.toolbox?.state === 'checking'), true,
+    'direct daemon must publish the initial daemon-owned ToolBox readiness state');
+assert.equal(daemonEvents.some((event) => event?.type === 'runtime.readiness'
+    && event?.payload?.toolbox?.state === 'unavailable'), true,
+    'direct daemon must publish the asynchronous unavailable result instead of leaving GUI at checking');
 await transport.request('replace-interaction-queue', {
     sessionId: created.sessionId,
     interactions: [{ interactionId: 'smoke-follow-up', kind: 'follow-up', prompt: '完成后总结' }],

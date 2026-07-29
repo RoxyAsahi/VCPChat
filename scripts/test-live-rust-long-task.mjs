@@ -57,6 +57,7 @@ try {
     const session = await transport.request('create-session');
     await transport.request('start-turn', {
         sessionId: session.sessionId,
+        turnId: `turn-live-long-${Date.now()}`,
         prompt: '完成一个多步骤验证：先调用 vcp_invoke，toolName=FileOperator，arguments={"command":"ListAllowedDirectories"} 获取真实工作区；再调用 vcp_invoke，toolName=SciCalculator，arguments={"expression":"6*7"}。必须等待两个真实工具结果都返回，再用中文说明工作区和计算值，并包含标记 LONG_TASK_FILE_AND_42。不得使用其他工具。',
     });
     await completed;

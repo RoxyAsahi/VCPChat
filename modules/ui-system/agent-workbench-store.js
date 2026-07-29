@@ -23,6 +23,9 @@ function createInitialState() {
         // observations. Keep a second, smaller UI window so log traffic can
         // never grow a renderer-side transcript or become an execution path.
         toolboxWs: [],
+        // Rust emits these four non-sensitive readiness facts. The Renderer
+        // is a pure projection and must never probe ToolBox itself.
+        readiness: {},
         context: { usedTokens: 0, contextWindow: 0, percentage: 0, compacting: false, summary: '' },
         plan: null,
         activeTurnId: null,
@@ -63,6 +66,10 @@ function reduceEvent(current, event) {
     }
     if (event.type === 'runtime.warning') {
         next.notice = { level: 'warning', text: event.payload?.warning || 'Runtime warning' };
+        return next;
+    }
+    if (event.type === 'runtime.readiness') {
+        next.readiness = { ...(next.readiness || {}), ...(event.payload || {}) };
         return next;
     }
     if (event.type === 'session.created') {
@@ -173,7 +180,13 @@ function reduceEvent(current, event) {
         return next;
     }
     if (event.type === 'approval.requested') {
-        const approval = event.payload?.approval || event.payload;
+        const payload = event.payload?.approval || event.payload;
+        const approval = payload ? {
+            ...payload,
+            sessionId: event.sessionId,
+            turnId: event.turnId,
+            toolCallId: event.toolCallId,
+        } : null;
         if (approval?.approvalId) {
             next.approvals = [...next.approvals.filter((item) => item.approvalId !== approval.approvalId), approval];
         }

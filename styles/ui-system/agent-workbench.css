@@ -31,11 +31,96 @@
         transition: none;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-pane {
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-main-content.agent-chat-pane {
         width: auto;
         min-width: 0;
         flex: 1 1 0;
     }
+}
+
+/* The legacy shared `.container` is content-box and carries shell padding.
+ * Agent owns a full-bleed internal-app view, so keeping that padding together
+ * with width: 100% makes its right edge wider than the viewport.  This must
+ * stay outside the component layer because the legacy shell CSS is unlayered.
+ */
+html[data-ui-mode="next"] body.next-ui-internal-app-open .vcp-ui-scope.agent-chat-root.container {
+    box-sizing: border-box;
+    max-width: 100%;
+    padding: 0;
+}
+
+/* The Topic-flow layer is mounted once for lifecycle stability.  The browser
+ * `hidden` attribute must win while no flow is open; otherwise this invisible
+ * full-window grid sits above the Workbench and absorbs every pointer event. */
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer[hidden] {
+    display: none;
+}
+
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-chat-sidebar-content {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    flex: 1 1 auto;
+    align-self: stretch;
+    box-sizing: border-box;
+}
+
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-chat-sidebar-content > :is(
+    .agents-header,
+    .topics-header-container,
+    .sidebar-list-scroll,
+    .agent-chat-settings-pane
+) {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+/* layout.css is intentionally unlayered, so the tokenized rules in
+ * sidebar.css cannot override its legacy 54px glass-pill list rows. Keep the
+ * Agent projection on the exact same compact Next-sidebar metrics as main
+ * chat with a narrowly-scoped unlayered bridge. */
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-list .agent-chat-agent-row {
+    height: var(--vcp-ui-sidebar-row-height);
+    min-height: var(--vcp-ui-sidebar-row-height);
+    margin-bottom: var(--vcp-ui-space-2);
+    padding: 0 var(--vcp-ui-space-2);
+    border: 0;
+    border-radius: var(--vcp-ui-sidebar-item-radius);
+    background: transparent;
+    box-shadow: none;
+    cursor: pointer;
+}
+
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-list .agent-chat-agent-row:hover {
+    border: 0;
+    background: var(--vcp-ui-fill-0);
+    box-shadow: none;
+}
+
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-list .agent-chat-agent-row.active {
+    color: var(--vcp-ui-text-0);
+    background: var(--vcp-ui-bg-1);
+    box-shadow: var(--vcp-ui-sidebar-item-shadow);
+}
+
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-list .agent-chat-agent-row::after {
+    display: none;
+}
+
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-list .agent-chat-agent-row .avatar {
+    width: var(--vcp-ui-sidebar-avatar-size);
+    height: var(--vcp-ui-sidebar-avatar-size);
+    margin-right: var(--vcp-ui-space-2);
+    border: 0;
+}
+
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-list .agent-chat-agent-row .agent-name {
+    padding-bottom: 0;
+    color: var(--vcp-ui-text-0);
+    font-size: var(--vcp-ui-sidebar-font-size);
+    line-height: var(--vcp-ui-line-compact);
 }
 
 @layer vcp-ui.components {
@@ -44,20 +129,14 @@
         height: 100%;
         margin: 0;
         min-width: 0;
+        position: relative;
+        isolation: isolate;
         border-radius: 0;
         background: transparent;
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar {
         min-width: 0;
-    }
-
-    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-pane {
-        min-height: 0;
-    }
-
-    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-agent-row {
-        cursor: default;
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-agent-row .avatar {
@@ -135,6 +214,63 @@
         font: inherit;
     }
 
+    /* The Workbench Topic page reuses the main Topic toolbar classes, but
+       keeps its management selection transient in the renderer. Mirror the
+       shared visual contract without giving this projection main-chat IDs. */
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-chat-sidebar-content {
+        position: relative;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-chat-sidebar-content.is-managing .sidebar-list-scroll {
+        padding-bottom: calc(var(--vcp-ui-control-lg) + var(--vcp-ui-space-5));
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-chat-sidebar-content.is-managing .agent-chat-topic-manage-panel {
+        position: absolute;
+        right: var(--vcp-ui-sidebar-list-gutter);
+        bottom: var(--vcp-ui-space-2);
+        left: var(--vcp-ui-sidebar-list-gutter);
+        min-height: var(--vcp-ui-control-lg);
+        padding: var(--vcp-ui-space-2);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--vcp-ui-space-2);
+        border: 1px solid var(--vcp-ui-border);
+        border-radius: var(--vcp-ui-radius-md);
+        color: var(--vcp-ui-text-1);
+        background: var(--vcp-ui-bg-1);
+        box-shadow: var(--vcp-ui-shadow-md);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-chat-topic-selection-count {
+        font-size: var(--vcp-ui-font-caption);
+        white-space: nowrap;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .topic-list .topic-item .next-ui-topic-select-icon {
+        width: var(--vcp-ui-icon-sm);
+        height: var(--vcp-ui-icon-sm);
+        display: none;
+        place-items: center;
+        flex: 0 0 var(--vcp-ui-icon-sm);
+        color: var(--vcp-ui-text-3);
+        font-size: var(--vcp-ui-icon-sm);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-chat-sidebar-content.is-managing .topic-item .next-ui-topic-select-icon {
+        display: grid;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-chat-sidebar-content.is-managing .topic-item.selected {
+        color: var(--vcp-ui-text-0);
+        background: var(--vcp-ui-selection-bg);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-chat-sidebar-content.is-managing .topic-item.selected .next-ui-topic-select-icon {
+        color: var(--vcp-ui-accent);
+    }
+
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-empty-list {
         height: auto;
         min-height: 0;
@@ -143,7 +279,190 @@
         font-size: var(--vcp-ui-font-helper);
     }
 
+    /* R3-A Topic flow: a Workbench-local product surface. It uses only
+       temporary form/checkpoint-summary state; the actual Topic stays in the
+       Rust daemon and is never copied into renderer persistence. */
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer {
+        position: absolute;
+        z-index: 30;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding: var(--vcp-ui-space-4);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-backdrop {
+        position: absolute;
+        inset: 0;
+        background: color-mix(in srgb, var(--vcp-ui-bg-0) 72%, transparent);
+        backdrop-filter: blur(2px);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-dialog {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        gap: var(--vcp-ui-space-4);
+        width: min(100%, 560px);
+        max-height: min(720px, calc(100vh - var(--vcp-ui-space-8)));
+        overflow: auto;
+        padding: clamp(var(--vcp-ui-space-4), 3vw, var(--vcp-ui-space-6));
+        border: 1px solid var(--vcp-ui-border);
+        border-radius: var(--vcp-ui-radius-card);
+        color: var(--vcp-ui-text-0);
+        background: var(--vcp-ui-bg-1);
+        box-shadow: var(--vcp-ui-shadow-lg);
+        outline: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-title,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-description,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-status,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-loading,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-error,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-checkpoint {
+        margin: 0;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-description,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-status,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-loading,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-checkpoint {
+        color: var(--vcp-ui-text-2);
+        line-height: 1.5;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-status.is-busy {
+        color: var(--vcp-ui-warning);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-status.is-ready {
+        color: var(--vcp-ui-success);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-error {
+        color: var(--vcp-ui-danger);
+        line-height: 1.5;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-context {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--vcp-ui-space-2);
+        padding: var(--vcp-ui-space-2);
+        border: 1px solid var(--vcp-ui-border-subtle);
+        border-radius: var(--vcp-ui-radius-sm);
+        background: var(--vcp-ui-fill-0);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-context-item {
+        min-width: 0;
+        display: grid;
+        gap: 2px;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-context-label {
+        color: var(--vcp-ui-text-2);
+        font-size: var(--vcp-ui-font-caption);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-context-value {
+        min-width: 0;
+        overflow: hidden;
+        color: var(--vcp-ui-text-0);
+        font-size: var(--vcp-ui-font-caption);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-lease {
+        display: flex;
+        align-items: center;
+        gap: var(--vcp-ui-space-2);
+        padding: var(--vcp-ui-space-2) var(--vcp-ui-space-3);
+        border: 1px solid var(--vcp-ui-border-subtle);
+        border-radius: var(--vcp-ui-radius-sm);
+        font-size: var(--vcp-ui-font-helper);
+        line-height: 1.45;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-lease.is-idle {
+        color: var(--vcp-ui-success);
+        background: color-mix(in srgb, var(--vcp-ui-success) 10%, var(--vcp-ui-bg-1));
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-lease.is-occupied {
+        color: var(--vcp-ui-warning);
+        background: var(--vcp-ui-warning-bg);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-form {
+        display: grid;
+        gap: var(--vcp-ui-space-3);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-field {
+        display: grid;
+        gap: var(--vcp-ui-space-1);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-label {
+        color: var(--vcp-ui-text-1);
+        font-size: var(--vcp-ui-font-helper);
+        font-weight: 600;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-input {
+        width: 100%;
+        min-width: 0;
+        min-height: var(--vcp-ui-control-md);
+        padding: var(--vcp-ui-space-2) var(--vcp-ui-space-3);
+        border: 1px solid var(--vcp-ui-border);
+        border-radius: var(--vcp-ui-radius-sm);
+        color: var(--vcp-ui-text-0);
+        background: var(--vcp-ui-bg-0);
+        font: inherit;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-details {
+        display: grid;
+        grid-template-columns: minmax(88px, auto) minmax(0, 1fr);
+        gap: var(--vcp-ui-space-2) var(--vcp-ui-space-3);
+        margin: 0;
+        padding: var(--vcp-ui-space-3);
+        border: 1px solid var(--vcp-ui-border);
+        border-radius: var(--vcp-ui-radius-sm);
+        background: var(--vcp-ui-fill-0);
+        font-size: var(--vcp-ui-font-helper);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-details dt {
+        color: var(--vcp-ui-text-2);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-details dd {
+        min-width: 0;
+        margin: 0;
+        overflow-wrap: anywhere;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: var(--vcp-ui-space-2);
+    }
+
+    @media (max-width: 640px) {
+        html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-context {
+            grid-template-columns: minmax(0, 1fr);
+        }
+    }
+
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-settings-pane {
+        width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
         padding: var(--vcp-ui-space-4);
         color: var(--vcp-ui-text-2);
         font-size: var(--vcp-ui-font-helper);
@@ -155,6 +474,9 @@
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-settings-form {
         display: grid;
+        width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
         gap: var(--vcp-ui-space-3);
     }
 
@@ -218,18 +540,6 @@
         white-space: nowrap;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-header {
-        flex: 0 0 auto;
-        position: relative;
-    }
-
-    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-header .agent-chat-title {
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-status-chip {
         flex: 0 0 auto;
         display: inline-flex;
@@ -244,31 +554,35 @@
         background: var(--vcp-ui-fill-1);
     }
 
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-status-chip[data-action="connection"] {
+        cursor: pointer;
+    }
+
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-status-chip::before {
         content: "";
         width: 7px;
         height: 7px;
         border-radius: 50%;
-        background: var(--vcp-ui-text-disabled, #9aa0a6);
+        background: var(--vcp-ui-text-disabled);
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-status-chip[data-state="idle"]::before,
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-status-chip[data-state="running"]::before {
-        background: var(--vcp-ui-success, #1a9a5a);
+        background: var(--vcp-ui-success);
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-status-chip[data-state="starting"]::before,
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-status-chip[data-state="awaiting-approval"]::before,
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-status-chip[data-state="reconnecting"]::before {
-        background: var(--vcp-ui-warning, #c08a00);
+        background: var(--vcp-ui-warning);
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-status-chip[data-state="disconnected"]::before {
-        background: var(--vcp-ui-text-disabled, #9aa0a6);
+        background: var(--vcp-ui-text-disabled);
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-status-chip[data-state="error"]::before {
-        background: var(--vcp-ui-danger, #d23f3f);
+        background: var(--vcp-ui-danger);
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-header-actions .agent-chat-icon-button {
@@ -295,7 +609,7 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        font-size: var(--vcp-ui-font-title, 15px);
+        font-size: var(--vcp-ui-font-title);
         font-weight: 600;
         color: var(--vcp-ui-text-0);
     }
@@ -350,7 +664,7 @@
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-header-actions > * svg {
         width: 18px;
         height: 18px;
-        font-size: 18px;
+        font-size: var(--vcp-ui-icon-sm);
         stroke: currentColor;
     }
 
@@ -365,9 +679,9 @@
         display: inline-grid;
         place-items: center;
         border-radius: 999px;
-        background: var(--vcp-ui-danger, #d23f3f);
-        color: #fff;
-        font-size: 11px;
+        background: var(--vcp-ui-danger);
+        color: var(--vcp-ui-on-accent);
+        font-size: var(--vcp-ui-font-caption);
         line-height: 1;
         font-variant-numeric: tabular-nums;
         box-shadow: 0 0 0 2px var(--vcp-ui-bg-1);
@@ -375,11 +689,11 @@
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-action-badge.is-warning {
-        background: var(--vcp-ui-warning, #c08a00);
+        background: var(--vcp-ui-warning);
     }
 
     /* ---- Activity side panel (opencode review-panel slide-in) ---- */
-    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-pane {
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-main-content.agent-chat-pane {
         display: flex;
         flex-direction: row;
         min-height: 0;
@@ -387,7 +701,9 @@
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-main-column {
         display: flex;
-        flex-direction: column;
+        /* stylelint-disable-next-line declaration-no-important -- chat.css
+           is unlayered and sets column-reverse for the legacy transcript. */
+        flex-direction: column !important;
         min-width: 0;
         min-height: 0;
         flex: 1 1 auto;
@@ -410,8 +726,11 @@
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-activity-inner {
-        width: 340px;
-        flex: 0 0 340px;
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        box-sizing: border-box;
+        flex: 0 1 340px;
         display: flex;
         flex-direction: column;
         min-height: 0;
@@ -521,12 +840,12 @@
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-connection-status .vcp-ui-icon {
-        font-size: 20px;
+        font-size: var(--vcp-ui-icon-md);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-connection-success .agent-chat-connection-status { color: var(--vcp-ui-success, #1a9a5a); }
-    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-connection-warning .agent-chat-connection-status { color: var(--vcp-ui-warning, #c08a00); }
-    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-connection-danger .agent-chat-connection-status { color: var(--vcp-ui-danger, #d23f3f); }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-connection-success .agent-chat-connection-status { color: var(--vcp-ui-success); }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-connection-warning .agent-chat-connection-status { color: var(--vcp-ui-warning); }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-connection-danger .agent-chat-connection-status { color: var(--vcp-ui-danger); }
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-connection-muted .agent-chat-connection-status { color: var(--vcp-ui-text-2); }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-connection-message {
@@ -542,7 +861,7 @@
         padding: var(--vcp-ui-space-2) var(--vcp-ui-space-3);
         border: 0;
         border-radius: var(--vcp-ui-radius-sm);
-        color: var(--vcp-ui-on-accent, #fff);
+        color: var(--vcp-ui-on-accent);
         background: var(--vcp-ui-accent);
         font: inherit;
         cursor: pointer;
@@ -550,6 +869,93 @@
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-connection-reconnect:hover:not(:disabled) {
         filter: brightness(1.05);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-readiness-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--vcp-ui-space-2);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-readiness-card {
+        min-width: 0;
+        display: grid;
+        gap: var(--vcp-ui-space-1);
+        padding: var(--vcp-ui-space-2);
+        border: 1px solid var(--vcp-ui-border-subtle);
+        border-radius: var(--vcp-ui-radius-sm);
+        background: var(--vcp-ui-fill-0);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-readiness-heading {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: var(--vcp-ui-space-1);
+        color: var(--vcp-ui-text-0);
+        font-size: var(--vcp-ui-font-caption);
+        font-weight: 600;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-readiness-heading > span:nth-child(2) {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-readiness-state {
+        margin-left: auto;
+        flex: 0 0 auto;
+        color: var(--vcp-ui-text-2);
+        font-weight: 500;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-readiness-detail {
+        margin: 0;
+        color: var(--vcp-ui-text-2);
+        font-size: var(--vcp-ui-font-caption);
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-readiness-success .agent-chat-readiness-heading > .vcp-ui-icon { color: var(--vcp-ui-success); }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-readiness-warning .agent-chat-readiness-heading > .vcp-ui-icon { color: var(--vcp-ui-warning); }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-readiness-danger .agent-chat-readiness-heading > .vcp-ui-icon { color: var(--vcp-ui-danger); }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-readiness-muted .agent-chat-readiness-heading > .vcp-ui-icon { color: var(--vcp-ui-text-2); }
+
+    @media (max-width: 1100px) {
+        html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-readiness-grid {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        /* At compact desktop widths the regular 340px flex panel used to add
+           its border outside the main column.  That made the rightmost
+           readiness card unreadable at the 680px product breakpoint.  Keep
+           the panel inside the Agent main column as an overlay sheet instead;
+           it is still a real Activity panel, merely no longer competes with
+           the shared sidebar for horizontal flex space. */
+        html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-main-content.agent-chat-pane {
+            position: relative;
+        }
+
+        html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-activity-panel {
+            position: absolute;
+            inset: 0 0 0 auto;
+            z-index: 2;
+            max-width: 100%;
+            box-sizing: border-box;
+            box-shadow: var(--vcp-ui-shadow-lg);
+        }
+
+        html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-activity-panel.agent-chat-activity-open {
+            width: min(340px, 100%);
+        }
+
+        html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-activity-inner {
+            width: 100%;
+            flex-basis: auto;
+        }
     }
 
     /* Usage tab (opencode Share stats style) */
@@ -590,7 +996,7 @@
         border-radius: 999px;
         background: var(--vcp-ui-fill-1);
         color: var(--vcp-ui-text-1);
-        font-size: 10px;
+        font-size: var(--vcp-ui-font-caption);
         font-weight: 600;
     }
 
@@ -607,10 +1013,27 @@
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-usage-context-fill {
+        display: block;
+        width: 100%;
         height: 100%;
+        appearance: none;
+        border: 0;
         border-radius: 999px;
         background: var(--vcp-ui-accent);
-        transition: width 240ms ease;
+        overflow: hidden;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-usage-context-fill::-webkit-progress-bar {
+        background: var(--vcp-ui-fill-1);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-usage-context-fill::-webkit-progress-value {
+        background: var(--vcp-ui-accent);
+        transition: width var(--vcp-ui-transition-fast);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-usage-context-fill::-moz-progress-bar {
+        background: var(--vcp-ui-accent);
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-usage-context-label {
@@ -684,7 +1107,7 @@
         padding: var(--vcp-ui-space-2) var(--vcp-ui-space-3);
         border: 0;
         border-radius: var(--vcp-ui-radius-sm);
-        color: var(--vcp-ui-on-accent, #fff);
+        color: var(--vcp-ui-on-accent);
         background: var(--vcp-ui-accent);
         font: inherit;
         cursor: pointer;
@@ -786,10 +1209,10 @@
         flex-wrap: wrap;
         margin: 0 var(--vcp-ui-space-3) var(--vcp-ui-space-2);
         padding: var(--vcp-ui-space-2) var(--vcp-ui-space-3);
-        border: 1px solid color-mix(in srgb, var(--vcp-ui-warning, #c08a00) 52%, transparent);
+        border: 1px solid color-mix(in srgb, var(--vcp-ui-warning) 52%, transparent);
         border-radius: var(--vcp-ui-radius-sm);
         color: var(--vcp-ui-text-1);
-        background: color-mix(in srgb, var(--vcp-ui-warning, #c08a00) 12%, var(--vcp-ui-bg-1));
+        background: color-mix(in srgb, var(--vcp-ui-warning) 12%, var(--vcp-ui-bg-1));
         font-size: var(--vcp-ui-font-helper);
     }
 
@@ -806,7 +1229,7 @@
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-persisted-topic.previewing {
-        outline: 2px solid var(--vcp-ui-warning, #c08a00);
+        outline: 2px solid var(--vcp-ui-warning);
         outline-offset: -2px;
     }
 
@@ -840,10 +1263,38 @@
         flex: 1 1 auto;
         overflow-y: auto;
         overscroll-behavior: contain;
+        /* Unlike legacy main chat, Agent Topics are appended in chronological
+           order by the Rust snapshot/event projection.  The inherited
+           column-reverse makes Chromium use negative scroll coordinates,
+           which defeats the reader-anchor contract during a long stream. */
+        flex-direction: column;
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-messages {
+        /* Give the chronological feed an explicit flex basis. Otherwise this
+           child can shrink to the viewport while its long message overflows
+           visually and disappears from the parent's scroll range. */
+        flex: 0 0 auto;
         min-height: 100%;
+    }
+
+    /* The shared main-chat optimization uses `content-visibility:auto` with
+       a small intrinsic-size estimate.  It can suppress layout for a single
+       very long Rust-streamed message while the feed is pinned at its lower
+       edge: the text exists in the DOM but the reader cannot scroll through
+       it. Agent Topics are bounded (400 messages / 4 MiB), so correctness of
+       long streaming and the reader's scroll anchor wins over that generic
+       optimization here. */
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-messages .message-item {
+        /* `chat.css` is intentionally unlayered, while this surface is in
+           @layer vcp-ui.components. Its normal `content-visibility:auto`
+           would otherwise win across layers regardless of selector weight. */
+        /* stylelint-disable-next-line declaration-no-important -- unlayered
+           chat.css must be overridden only for this bounded Agent surface. */
+        content-visibility: visible !important;
+        /* stylelint-disable-next-line declaration-no-important -- see the
+           paired content-visibility override above. */
+        contain-intrinsic-size: auto !important;
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-activity {
@@ -1124,8 +1575,8 @@
         max-height: 9.5em;
         overflow: hidden;
         position: relative;
-        -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 1.6em), transparent 100%);
-        mask-image: linear-gradient(to bottom, #000 calc(100% - 1.6em), transparent 100%);
+        -webkit-mask-image: linear-gradient(to bottom, currentColor calc(100% - 1.6em), transparent 100%);
+        mask-image: linear-gradient(to bottom, currentColor calc(100% - 1.6em), transparent 100%);
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-detail-result--expanded {
@@ -1162,14 +1613,167 @@
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-cancel:hover {
-        color: var(--vcp-ui-danger, #d23f3f);
+        color: var(--vcp-ui-danger);
         background: var(--vcp-ui-fill-1);
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-reasoning-time {
         color: var(--vcp-ui-text-2);
-        font-weight: 400;
-        font-size: 0.85em;
+        font-weight: 500;
+        font-size: var(--vcp-ui-font-caption);
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* Cherry Studio-inspired thinking block: a compact status rail while
+       streaming, becoming an unobtrusive expandable transcript on completion.
+       This scope is intentionally Workbench-only: ordinary VCPChat thought
+       chains retain their existing presentation. */
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-reasoning-block {
+        width: min(100%, 680px);
+        margin: var(--vcp-ui-space-2) 0 var(--vcp-ui-space-3);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-reasoning-block .vcp-thought-chain-bubble {
+        width: 100%;
+        max-width: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        border: 1px solid var(--vcp-ui-border);
+        border-radius: 10px;
+        background: color-mix(in srgb, var(--vcp-ui-bg-2) 88%, var(--vcp-ui-fill-1));
+        color: var(--vcp-ui-text-1);
+        box-shadow: none;
+        transition: border-color var(--vcp-ui-transition-fast), background-color var(--vcp-ui-transition-fast);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-reasoning-block[data-state="streaming"] .vcp-thought-chain-bubble {
+        border-color: color-mix(in srgb, var(--vcp-ui-accent) 36%, var(--vcp-ui-border));
+        background: color-mix(in srgb, var(--vcp-ui-accent) 5%, var(--vcp-ui-bg-2));
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-reasoning-block .vcp-thought-chain-header {
+        min-height: 42px;
+        padding: 0 var(--vcp-ui-space-2) 0 0;
+        display: flex;
+        align-items: center;
+        gap: var(--vcp-ui-space-2);
+        color: var(--vcp-ui-text-1);
+        cursor: pointer;
+        opacity: 1;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-reasoning-block .vcp-thought-chain-icon {
+        width: 46px;
+        height: 42px;
+        display: grid;
+        place-items: center;
+        flex: 0 0 46px;
+        color: var(--vcp-ui-warning);
+        font-size: 21px;
+        filter: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-reasoning-block[data-state="streaming"] .vcp-thought-chain-icon {
+        animation: agent-chat-reasoning-pulse 1.35s ease-in-out infinite;
+    }
+
+    @keyframes agent-chat-reasoning-pulse {
+        0%, 100% { opacity: 0.58; transform: scale(0.94); }
+        50% { opacity: 1; transform: scale(1); }
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-reasoning-block .vcp-thought-chain-label {
+        min-width: 0;
+        flex: 1 1 auto;
+        overflow: hidden;
+        color: var(--vcp-ui-text-1);
+        font-size: 13px;
+        font-weight: 500;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-reasoning-block .vcp-result-toggle-icon {
+        width: 30px;
+        height: 30px;
+        margin-left: auto;
+        display: grid;
+        place-items: center;
+        color: var(--vcp-ui-text-2);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-reasoning-block .vcp-result-toggle-icon::before {
+        content: '›';
+        font-size: 24px;
+        font-weight: 300;
+        line-height: 1;
+        transition: transform 150ms ease;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-reasoning-block .vcp-thought-chain-bubble.expanded .vcp-result-toggle-icon::before {
+        transform: rotate(90deg);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-reasoning-block .vcp-thought-chain-collapsible-content {
+        position: relative;
+        max-height: 0;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        opacity: 0;
+        transition: max-height 220ms ease, opacity 160ms ease, padding 160ms ease;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-reasoning-block .vcp-thought-chain-bubble.expanded .vcp-thought-chain-collapsible-content {
+        max-height: min(52vh, 720px);
+        margin: 0;
+        padding: var(--vcp-ui-space-3) var(--vcp-ui-space-4);
+        overflow: auto;
+        border-top: 1px solid var(--vcp-ui-border-subtle);
+        opacity: 1;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-reasoning-block .vcp-thought-chain-body {
+        padding-right: var(--vcp-ui-space-4);
+        color: var(--vcp-ui-text-2);
+        font-size: var(--vcp-ui-font-helper);
+        font-style: normal;
+        line-height: 1.65;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-reasoning-block .vcp-thought-chain-body > :first-child { margin-top: 0; }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-reasoning-block .vcp-thought-chain-body > :last-child { margin-bottom: 0; }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-reasoning-copy {
+        position: absolute;
+        top: var(--vcp-ui-space-2);
+        right: var(--vcp-ui-space-2);
+        width: 28px;
+        height: 28px;
+        display: grid;
+        place-items: center;
+        padding: 0;
+        border: 0;
+        border-radius: var(--vcp-ui-radius-sm);
+        color: var(--vcp-ui-text-2);
+        background: transparent;
+        cursor: pointer;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-reasoning-copy:hover {
+        color: var(--vcp-ui-text-0);
+        background: var(--vcp-ui-fill-1);
+    }
+
+    @media (max-width: 680px) {
+        html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-reasoning-block .vcp-thought-chain-icon {
+            width: 40px;
+            flex-basis: 40px;
+        }
+        html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-reasoning-block .vcp-thought-chain-bubble.expanded .vcp-thought-chain-collapsible-content {
+            padding: var(--vcp-ui-space-3);
+        }
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-detail-label {
@@ -1318,8 +1922,14 @@
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-approval-actions {
         display: flex;
         flex-wrap: wrap;
-        justify-content: flex-end;
+        justify-content: flex-start;
         gap: var(--vcp-ui-space-2);
+    }
+
+    /* The decision row is intentionally placed before verbose identity data.
+       Do not let a long tool binding hide the two fail-closed user actions. */
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-approval-actions .agent-chat-button {
+        min-height: 32px;
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-empty-conversation {
@@ -1362,30 +1972,35 @@
     /* The main chat currently targets these controls by their global IDs.
        Agent cannot duplicate those IDs, so this is the exact same control
        contract scoped to its isolated composer. */
+    /* Reuse the original VChat main-chat input actions verbatim: round 32px
+       ghost buttons with 16px icons, plus a 36px round accent send button with
+       a 24px icon. This keeps the Agent composer in lockstep with the main chat
+       instead of the larger next-mode token sizing (which forced every action
+       icon to 24px and made the row look oversized). */
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .chat-input-actions > button {
-        width: var(--vcp-ui-control-md);
-        height: var(--vcp-ui-control-md);
+        width: 32px;
+        height: 32px;
         margin: 0;
         padding: 0;
         display: flex;
         flex: 0 0 auto;
         align-items: center;
         justify-content: center;
-        border: 1px solid transparent;
-        border-radius: var(--vcp-ui-radius-sm);
+        border: none;
+        border-radius: 50%;
         color: var(--vcp-ui-text-2);
         background: transparent;
         cursor: pointer;
-        transition: color var(--vcp-ui-transition-fast), background var(--vcp-ui-transition-fast), border-color var(--vcp-ui-transition-fast), transform var(--vcp-ui-transition-fast);
+        transition: color var(--vcp-ui-transition-fast), background var(--vcp-ui-transition-fast);
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .chat-input-actions > button .vcp-ui-icon {
-        font-size: var(--vcp-ui-icon-md);
+        font-size: var(--vcp-ui-icon-sm);
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .chat-input-actions > button svg {
-        width: var(--vcp-ui-send-icon-size);
-        height: var(--vcp-ui-send-icon-size);
+        width: var(--vcp-ui-icon-sm);
+        height: var(--vcp-ui-icon-sm);
         fill: none;
         stroke: currentColor;
         flex: 0 0 auto;
@@ -1397,33 +2012,40 @@
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .chat-input-actions .agent-chat-icon-button {
-        width: var(--vcp-ui-control-md);
-        height: var(--vcp-ui-control-md);
+        width: 32px;
+        height: 32px;
         display: grid;
         place-items: center;
         padding: 0;
         border: 0;
-        border-radius: var(--vcp-ui-radius-sm);
+        border-radius: 50%;
         color: var(--vcp-ui-text-2);
         background: transparent;
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .chat-input-actions .agent-chat-send-button {
-        width: var(--vcp-ui-send-button-size);
-        height: var(--vcp-ui-send-button-size);
+        width: 36px;
+        height: 36px;
         margin-left: auto;
-        border-radius: var(--vcp-ui-radius-full);
+        border-radius: 50%;
         color: var(--vcp-ui-on-accent);
         background: var(--vcp-ui-accent);
         box-shadow: none;
     }
 
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .chat-input-actions .agent-chat-send-button .vcp-ui-icon {
+        font-size: var(--vcp-ui-send-icon-size);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .chat-input-actions .agent-chat-send-button svg {
+        width: var(--vcp-ui-send-icon-size);
+        height: var(--vcp-ui-send-icon-size);
+    }
+
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .chat-input-actions > button:disabled {
-        border-color: transparent;
         color: var(--vcp-ui-text-disabled);
-        background: var(--vcp-ui-disabled-bg);
         cursor: not-allowed;
-        opacity: 1;
+        opacity: 0.55;
         transform: none;
     }
 

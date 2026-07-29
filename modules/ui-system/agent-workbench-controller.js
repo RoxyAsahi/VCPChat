@@ -14,6 +14,12 @@ function createWorkbenchController(runtimeApi) {
         return runtimeApi[name].bind(runtimeApi);
     }
 
+    function topicPayload(payload, agentId) {
+        return agentId === undefined || agentId === null || String(agentId).trim() === ''
+            ? payload
+            : { ...payload, agentId: String(agentId).trim() };
+    }
+
     async function refreshStatus() {
         const status = await requireApi('agentRuntimeGetStatus')();
         const projection = {
@@ -75,18 +81,29 @@ function createWorkbenchController(runtimeApi) {
         // replayed by JS after a reload, switch or reconnect.
         const minimumSequence = Number(snapshot?.snapshotSequence);
         for (const event of barrier.events) {
+            // Runtime diagnostics are daemon-global rather than a Topic
+            // transcript mutation.  The first attachment can legitimately be
+            // absent while the control transport is being created, so routing
+            // these through the attachment-only snapshot filter would drop
+            // the asynchronous ToolBox readiness result and leave the UI at
+            // a permanent “checking” state. They remain daemon-authored and
+            // reducer-owned; this is not a Main/Renderer probe or inference.
+            if (event?.type?.startsWith('runtime.')) {
+                store.dispatch(event);
+                continue;
+            }
             if (!eventBelongsToAttachment(event, attachment)) continue;
             if (Number.isFinite(minimumSequence) && Number(event.sequence) <= minimumSequence) continue;
             store.dispatch(event);
         }
     }
 
-    async function hydrateTopic(topicId, attachment = null, existingBarrier = null) {
+    async function hydrateTopic(topicId, attachment = null, existingBarrier = null, agentId = undefined) {
         if (!topicId) return null;
         const version = ++selectionVersion;
         const barrier = existingBarrier || beginSnapshotBarrier();
         try {
-            const snapshot = await requireApi('agentRuntimeReadTopic')({ topicId });
+            const snapshot = await requireApi('agentRuntimeReadTopic')(topicPayload({ topicId }, agentId));
             if (version !== selectionVersion) return null;
             const current = store.getState();
             const active = attachment || (current.attachment?.topicId === topicId ? current.attachment : null);
@@ -105,10 +122,10 @@ function createWorkbenchController(runtimeApi) {
     // checkpoint WITHOUT claiming its session lease, so the other live client
     // is never disturbed.  The renderer shows a read-only banner and requires
     // an explicit takeover before any write is allowed.
-    async function previewTopic(topicId) {
+    async function previewTopic(topicId, agentId = undefined) {
         if (!topicId) return null;
         const version = ++selectionVersion;
-        const snapshot = await requireApi('agentRuntimeReadTopic')({ topicId });
+        const snapshot = await requireApi('agentRuntimeReadTopic')(topicPayload({ topicId }, agentId));
         if (version !== selectionVersion) return null;
         store.setState({ messages: historyToMessages(snapshot?.history) });
         return snapshot;
@@ -169,11 +186,11 @@ function createWorkbenchController(runtimeApi) {
         }
     }
 
-    const listTopics = () => requireApi('agentRuntimeListTopics')();
-    const readTopic = (topicId) => requireApi('agentRuntimeReadTopic')({ topicId });
-    const takeoverTopic = (topicId) => requireApi('agentRuntimeTakeoverTopic')({ topicId });
-    const renameTopic = (topicId, title) => requireApi('agentRuntimeRenameTopic')({ topicId, title });
-    const deleteTopic = (topicId) => requireApi('agentRuntimeDeleteTopic')({ topicId });
+    const listTopics = (agentId = undefined) => requireApi('agentRuntimeListTopics')(topicPayload({}, agentId));
+    const readTopic = (topicId, agentId = undefined) => requireApi('agentRuntimeReadTopic')(topicPayload({ topicId }, agentId));
+    const takeoverTopic = (topicId, agentId = undefined) => requireApi('agentRuntimeTakeoverTopic')(topicPayload({ topicId }, agentId));
+    const renameTopic = (topicId, title, agentId = undefined) => requireApi('agentRuntimeRenameTopic')(topicPayload({ topicId, title }, agentId));
+    const deleteTopic = (topicId, agentId = undefined) => requireApi('agentRuntimeDeleteTopic')(topicPayload({ topicId }, agentId));
     const listInteractionQueue = () => requireApi('agentRuntimeListInteractionQueue')();
     const replaceInteractionQueue = (interactions) => {
         const sessionId = store.getState().attachment?.sessionId;

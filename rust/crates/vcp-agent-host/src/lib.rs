@@ -8,12 +8,12 @@
 pub mod topic;
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     env, fs,
     io::Write,
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
-    time::Duration,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use anyhow::{Context, Result, anyhow};
@@ -29,6 +29,7 @@ use vcp_agent_vcp::{
 };
 
 static IDS: AtomicU64 = AtomicU64::new(1);
+const LOCAL_APPROVAL_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Redacts a known secret from incremental model text without leaking a
 /// partial match at an SSE boundary.  A provider is free to split a token at
@@ -142,6 +143,10 @@ pub struct AgentProfile {
     pub name: String,
     pub model: String,
     pub system_prompt: String,
+    /// Provider limits stored in VCPChat's shared Agent config.  Sending this
+    /// through Rust keeps normal chat and Agent turns on the same output cap.
+    pub context_window: u64,
+    pub max_output: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -342,11 +347,11 @@ pub fn load_config(overrides: RuntimeOverrides) -> Result<HostConfig> {
         server_url,
         api_key,
         model,
+        context_window: agent.context_window,
+        max_output: agent.max_output,
         agent,
         workspace,
         permission_mode,
-        context_window: 0,
-        max_output: 0,
         data_root,
         topic_id,
         initial_messages,
@@ -373,6 +378,8 @@ fn nova() -> AgentProfile {
         name: "Nova".into(),
         model: String::new(),
         system_prompt: "{{Nova}}".into(),
+        context_window: 0,
+        max_output: 0,
     }
 }
 
@@ -412,6 +419,14 @@ pub fn load_agent(agents_dir: &Path, requested: &str) -> Result<AgentProfile> {
                         .trim()
                         .to_string(),
                     system_prompt: prompt.to_string(),
+                    context_window: value
+                        .get("contextTokenLimit")
+                        .and_then(Value::as_u64)
+                        .unwrap_or(0),
+                    max_output: value
+                        .get("maxOutputTokens")
+                        .and_then(Value::as_u64)
+                        .unwrap_or(0),
                 });
             }
         }
@@ -572,6 +587,7 @@ pub struct ApprovalRequest {
     pub risk: String,
     pub reason: String,
     pub argument_summary: String,
+    pub expires_at_ms: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -617,15 +633,18 @@ pub enum HostCommand {
     },
     ListTopics {
         request_id: String,
+        agent_id: Option<String>,
     },
     ReadTopic {
         request_id: String,
         topic_id: String,
+        agent_id: Option<String>,
     },
     RequestTopicTakeover {
         request_id: String,
         topic_id: String,
         requester_id: String,
+        agent_id: Option<String>,
     },
     ListInteractionQueue {
         request_id: String,
@@ -634,14 +653,25 @@ pub enum HostCommand {
         request_id: String,
         topic_id: String,
         title: String,
+        agent_id: Option<String>,
     },
     DeleteTopic {
         request_id: String,
         topic_id: String,
+        agent_id: Option<String>,
     },
     ReplaceInteractionQueue {
         request_id: String,
         interactions: Vec<Value>,
+    },
+    RemoveInteractionQueueItem {
+        request_id: String,
+        interaction_id: String,
+    },
+    ReplaceInteractionQueueItem {
+        request_id: String,
+        interaction_id: String,
+        prompt: String,
     },
     GetSettings {
         request_id: String,
@@ -739,7 +769,12 @@ async fn run_host(
     create.payload.insert(
         "options".into(),
         json!({
-            "vcp": { "model": config.model.clone(), "toolChoice": test_tool_choice }, "systemPrompt": config.agent.system_prompt.clone(),
+            "vcp": {
+                "model": config.model.clone(),
+                "toolChoice": test_tool_choice,
+                "contextWindow": config.context_window,
+                "maxOutput": config.max_output
+            }, "systemPrompt": config.agent.system_prompt.clone(),
             "initialMessages": config.initial_messages.clone()
         }),
     );
@@ -758,10 +793,17 @@ async fn run_host(
                 "agent": config.agent.name.clone(),
                 "model": config.model.clone(),
                 "theme": config.theme.clone(),
-                "workspace": config.workspace.display().to_string()
+                "workspace": config.workspace.display().to_string(),
+                "contextWindow": config.context_window,
+                "maxOutput": config.max_output
             }
         }),
     )));
+    // Readiness is emitted by the Rust host, never inferred by Electron.
+    // The renderer may show these non-sensitive facts but must not probe
+    // ToolBox, settings, or a distributed node on its own.
+    let _ = events_tx.send(runtime_readiness_event(initial_readiness(&config)));
+    spawn_toolbox_readiness_probe(toolbox.clone(), events_tx.clone());
     let observer_tasks =
         spawn_observers(toolbox.clone(), events_tx.clone(), config.api_key.clone());
     let mut approvals: HashMap<String, ApprovalRequest> = HashMap::new();
@@ -773,8 +815,29 @@ async fn run_host(
     let mut shutdown_after_takeover_checkpoint = false;
     let mut heartbeat = tokio::time::interval(Duration::from_secs(20));
     heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut approval_tick = tokio::time::interval(Duration::from_secs(1));
+    approval_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         tokio::select! {
+            _ = approval_tick.tick() => {
+                let now = now_millis();
+                let expired: Vec<String> = approvals
+                    .iter()
+                    .filter(|(_, request)| request.expires_at_ms <= now)
+                    .map(|(id, _)| id.clone())
+                    .collect();
+                for approval_id in expired {
+                    if let Some(request) = approvals.remove(&approval_id) {
+                        deny_approval(
+                            &mut core,
+                            &events_tx,
+                            request,
+                            "local approval timed out",
+                        )
+                        .await;
+                    }
+                }
+            }
             _ = heartbeat.tick() => {
                 if let Err(error) = store.heartbeat(&config.agent.id, &config.topic_id, &owner_id) {
                     let _ = events_tx.send(HostEvent::Warning(format!("Agent Topic lease lost: {error}")));
@@ -821,10 +884,22 @@ async fn run_host(
                         continue;
                     }
                     message.session_id = Some(session_id.clone()); message.turn_id = Some(turn_id.clone());
-                    message.payload.insert("prompt".into(), Value::String(prompt));
+                    message.payload.insert("prompt".into(), Value::String(prompt.clone()));
                     message.payload.insert("compaction".into(), json!({"contextWindow": config.context_window, "maxOutput": config.max_output}));
                     match core.handle(message).await {
-                        Ok(()) => active_turn_id = Some(turn_id),
+                        Ok(()) => {
+                            active_turn_id = Some(turn_id.clone());
+                            // `start-turn` ACK only confirms framed-command
+                            // acceptance. The daemon-owned event is what lets
+                            // every UI projection show the user message and
+                            // enter its cancellable running state.
+                            let _ = events_tx.send(session_event(
+                                &session_id,
+                                &turn_id,
+                                "turn.started",
+                                json!({ "prompt": prompt }),
+                            ));
+                        }
                         Err(error) => { let _ = events_tx.send(HostEvent::Warning(error.to_string())); }
                     }
                 }
@@ -851,24 +926,27 @@ async fn run_host(
                         Err(error) => { let _ = events_tx.send(HostEvent::Control { request_id, kind: "control-error".into(), payload: json!({"operation":"models","error":error.to_string()}) }); }
                     }
                 }
-                HostCommand::ListTopics { request_id } => {
-                    match store.list(&config.agent.id) {
+                HostCommand::ListTopics { request_id, agent_id } => {
+                    let agent_id = agent_id.unwrap_or_else(|| config.agent.id.clone());
+                    match store.list(&agent_id) {
                         Ok(topics) => { let _ = events_tx.send(HostEvent::Control { request_id, kind: "topics".into(), payload: json!(topics) }); }
                         Err(error) => { let _ = events_tx.send(HostEvent::Control { request_id, kind: "control-error".into(), payload: json!({"operation":"topics","error":error.to_string()}) }); }
                     }
                 }
-                HostCommand::ReadTopic { request_id, topic_id } => {
-                    match store.load_read_only(&config.agent.id, &topic_id) {
+                HostCommand::ReadTopic { request_id, topic_id, agent_id } => {
+                    let agent_id = agent_id.unwrap_or_else(|| config.agent.id.clone());
+                    match store.load_read_only(&agent_id, &topic_id) {
                         Ok(view) => { let _ = events_tx.send(HostEvent::Control { request_id, kind: "topic-read-only".into(), payload: view }); }
                         Err(error) => { let _ = events_tx.send(HostEvent::Control { request_id, kind: "control-error".into(), payload: json!({"operation":"topic-read-only","error":error.to_string()}) }); }
                     }
                 }
-                HostCommand::RequestTopicTakeover { request_id, topic_id, requester_id } => {
-                    let outcome = if topic_id == config.topic_id {
+                HostCommand::RequestTopicTakeover { request_id, topic_id, requester_id, agent_id } => {
+                    let agent_id = agent_id.unwrap_or_else(|| config.agent.id.clone());
+                    let outcome = if agent_id == config.agent.id && topic_id == config.topic_id {
                         Err(anyhow!("TOPIC_ALREADY_OWNED"))
                     } else {
                         store.request_takeover(
-                            &config.agent.id,
+                            &agent_id,
                             &topic_id,
                             &requester_id,
                         )
@@ -883,34 +961,81 @@ async fn run_host(
                 HostCommand::ListInteractionQueue { request_id } => {
                     let _ = events_tx.send(HostEvent::Control { request_id, kind: "interaction-queue".into(), payload: Value::Array(interaction_queue.clone()) });
                 }
-                HostCommand::RenameTopic { request_id, topic_id, title } => {
-                    let outcome = store.rename(&config.agent.id, &topic_id, &title);
+                HostCommand::RenameTopic { request_id, topic_id, title, agent_id } => {
+                    let agent_id = agent_id.unwrap_or_else(|| config.agent.id.clone());
+                    let outcome = store.rename(&agent_id, &topic_id, &title);
                     let _ = events_tx.send(control_result(request_id, "topic-renamed", outcome, json!({"topicId":topic_id,"title":title})));
                 }
-                HostCommand::DeleteTopic { request_id, topic_id } => {
-                    let outcome = store.delete(&config.agent.id, &topic_id);
+                HostCommand::DeleteTopic { request_id, topic_id, agent_id } => {
+                    let agent_id = agent_id.unwrap_or_else(|| config.agent.id.clone());
+                    let outcome = store.delete(&agent_id, &topic_id);
                     let _ = events_tx.send(control_result(request_id, "topic-deleted", outcome, json!({"topicId":topic_id})));
                 }
                 HostCommand::ReplaceInteractionQueue { request_id, interactions } => {
-                    let mut message = session_command("replace-interaction-queue", &session_id);
-                    message.payload.insert("interactions".into(), Value::Array(interactions.clone()));
-                    match core.handle(message).await {
-                        Ok(()) => {
-                            interaction_queue = interactions;
-                            let _ = events_tx.send(HostEvent::Control {
-                                request_id,
-                                kind: "interaction-queue".into(),
-                                payload: Value::Array(interaction_queue.clone()),
-                            });
-                        }
+                    replace_interaction_queue(
+                        &mut core,
+                        &events_tx,
+                        &session_id,
+                        &mut interaction_queue,
+                        request_id,
+                        interactions,
+                    )
+                    .await;
+                }
+                HostCommand::RemoveInteractionQueueItem {
+                    request_id,
+                    interaction_id,
+                } => {
+                    let next = match remove_interaction_item(&interaction_queue, &interaction_id) {
+                        Ok(next) => next,
                         Err(error) => {
-                            let _ = events_tx.send(HostEvent::Control {
+                            let _ = events_tx.send(control_error(
                                 request_id,
-                                kind: "control-error".into(),
-                                payload: json!({"operation":"replace-interaction-queue","error":error.to_string()}),
-                            });
+                                "remove-interaction-queue-item",
+                                error.to_string(),
+                            ));
+                            continue;
                         }
-                    }
+                    };
+                    replace_interaction_queue(
+                        &mut core,
+                        &events_tx,
+                        &session_id,
+                        &mut interaction_queue,
+                        request_id,
+                        next,
+                    )
+                    .await;
+                }
+                HostCommand::ReplaceInteractionQueueItem {
+                    request_id,
+                    interaction_id,
+                    prompt,
+                } => {
+                    let next = match replace_interaction_item(
+                        &interaction_queue,
+                        &interaction_id,
+                        prompt,
+                    ) {
+                        Ok(next) => next,
+                        Err(error) => {
+                            let _ = events_tx.send(control_error(
+                                request_id,
+                                "replace-interaction-queue-item",
+                                error.to_string(),
+                            ));
+                            continue;
+                        }
+                    };
+                    replace_interaction_queue(
+                        &mut core,
+                        &events_tx,
+                        &session_id,
+                        &mut interaction_queue,
+                        request_id,
+                        next,
+                    )
+                    .await;
                 }
                 HostCommand::GetSettings { request_id } => {
                     let _ = events_tx.send(HostEvent::Control {
@@ -1079,7 +1204,7 @@ async fn run_host(
                             || config.permission_mode == PermissionMode::AlwaysApprove {
                             let mut result = WireMessage::new("tool-result").put("ok", true); result.session_id = outbound.session_id.clone(); result.turn_id = outbound.turn_id.clone(); result.tool_call_id = outbound.tool_call_id.clone(); let _ = core.handle(result).await;
                         } else if let Some(request) = request {
-                            let _ = events_tx.send(tool_event("tool.awaiting_local_approval", &outbound, json!({"toolName": request.tool_name})));
+                            let _ = events_tx.send(tool_event("tool.awaiting_local_approval", &outbound, json!({"toolName": request.tool_name, "expiresAtMs": request.expires_at_ms})));
                             approvals.insert(request.approval_id.clone(), request.clone());
                             let _ = events_tx.send(HostEvent::Approval(request));
                         }
@@ -1132,28 +1257,109 @@ fn control_result(request_id: String, kind: &str, result: Result<()>, payload: V
     }
 }
 
+fn control_error(request_id: String, operation: &str, error: impl Into<String>) -> HostEvent {
+    HostEvent::Control {
+        request_id,
+        kind: "control-error".into(),
+        payload: json!({"operation":operation,"error":error.into()}),
+    }
+}
+
+async fn replace_interaction_queue(
+    core: &mut CoreRuntime,
+    events: &mpsc::UnboundedSender<HostEvent>,
+    session_id: &str,
+    current: &mut Vec<Value>,
+    request_id: String,
+    next: Vec<Value>,
+) {
+    let mut message = session_command("replace-interaction-queue", session_id);
+    message
+        .payload
+        .insert("interactions".into(), Value::Array(next.clone()));
+    match core.handle(message).await {
+        Ok(()) => {
+            *current = next;
+            let _ = events.send(HostEvent::Control {
+                request_id,
+                kind: "interaction-queue".into(),
+                payload: Value::Array(current.clone()),
+            });
+        }
+        Err(error) => {
+            let _ = events.send(control_error(
+                request_id,
+                "replace-interaction-queue",
+                error.to_string(),
+            ));
+        }
+    }
+}
+
+fn remove_interaction_item(queue: &[Value], interaction_id: &str) -> Result<Vec<Value>> {
+    let Some(index) = queue
+        .iter()
+        .position(|item| item.get("interactionId").and_then(Value::as_str) == Some(interaction_id))
+    else {
+        return Err(anyhow!("interaction not found: {interaction_id}"));
+    };
+    let mut next = queue.to_vec();
+    next.remove(index);
+    Ok(next)
+}
+
+fn replace_interaction_item(
+    queue: &[Value],
+    interaction_id: &str,
+    prompt: String,
+) -> Result<Vec<Value>> {
+    if prompt.trim().is_empty() {
+        return Err(anyhow!("replacement prompt is empty"));
+    }
+    let Some(index) = queue
+        .iter()
+        .position(|item| item.get("interactionId").and_then(Value::as_str) == Some(interaction_id))
+    else {
+        return Err(anyhow!("interaction not found: {interaction_id}"));
+    };
+    let mut next = queue.to_vec();
+    let Some(item) = next.get_mut(index).and_then(Value::as_object_mut) else {
+        return Err(anyhow!("interaction is not an object: {interaction_id}"));
+    };
+    item.insert("prompt".into(), Value::String(prompt));
+    item.insert("consumed".into(), Value::Bool(false));
+    Ok(next)
+}
+
 fn spawn_observers(
     toolbox: DirectToolboxHost,
     events: mpsc::UnboundedSender<HostEvent>,
     secret: String,
 ) -> Vec<tokio::task::JoinHandle<()>> {
     let mut tasks = Vec::new();
-    for channel in [
-        ToolboxWsChannel::Log,
-        ToolboxWsChannel::Info,
-        ToolboxWsChannel::Distributed,
-    ] {
+    // `/vcp-distributed-server` is a *node registration/execution* socket in
+    // ToolBox, not a passive observer channel. Connecting this Agent to it
+    // would create a fake capability node, so readiness derives node presence
+    // from authoritative VCPLog lifecycle records instead. VCPlog/vcpinfo
+    // remain read-only observers.
+    for channel in [ToolboxWsChannel::Log, ToolboxWsChannel::Info] {
         let toolbox = toolbox.clone();
         let events = events.clone();
         let secret = secret.clone();
         tasks.push(tokio::spawn(async move {
             let mut delay = 1_u64;
+            let mut observed_nodes = HashSet::new();
             loop {
                 let name = format!("{channel:?}");
                 let result = toolbox
                     .observe_websocket(channel, |event| {
                         let (kind, payload) = match event {
-                            ToolboxWsEvent::Log(entry) => ("log".to_string(), json!({"level":entry.level,"source":entry.source,"message":redact_string(&truncate(&entry.message, 16 * 1024), &secret),"timestamp":entry.timestamp})),
+                            ToolboxWsEvent::Log(entry) => {
+                                if let Some(capability) = capability_readiness_from_log(&entry.message, &mut observed_nodes) {
+                                    let _ = events.send(runtime_readiness_event(json!({"capability": capability})));
+                                }
+                                ("log".to_string(), json!({"level":entry.level,"source":entry.source,"message":redact_string(&truncate(&entry.message, 16 * 1024), &secret),"timestamp":entry.timestamp}))
+                            }
                             ToolboxWsEvent::Info(value) => ("notification".to_string(), redact_known_secret(redact(&value), &secret)),
                             // This is an observation only. The VCPAgent Host
                             // neither sends `tool_approval_response` nor
@@ -1183,6 +1389,111 @@ fn spawn_observers(
         }));
     }
     tasks
+}
+
+fn initial_readiness(config: &HostConfig) -> Value {
+    let server_state = if config.server_url.trim().is_empty() || config.api_key.trim().is_empty() {
+        "missing"
+    } else {
+        "configured"
+    };
+    let profile_state = if config.agent.id.trim().is_empty() || config.model.trim().is_empty() {
+        "missing"
+    } else {
+        "ready"
+    };
+    json!({
+        "server": {
+            "state": server_state,
+            "detail": "VCP Server 与 API Key 由共享 VCPChat 设置提供"
+        },
+        "profile": {
+            "state": profile_state,
+            "detail": format!("{} · {}", config.agent.name, config.model)
+        },
+        "toolbox": {
+            "state": "checking",
+            "detail": "Rust daemon 正在验证 VCPToolBox"
+        },
+        "capability": {
+            "state": "unknown",
+            "detail": "等待 VCPLog 的分布式节点生命周期事件"
+        }
+    })
+}
+
+fn runtime_readiness_event(readiness: Value) -> HostEvent {
+    HostEvent::Wire(WireMessage::new("event").put(
+        "event",
+        json!({ "type": "runtime.readiness", "payload": readiness }),
+    ))
+}
+
+fn spawn_toolbox_readiness_probe(
+    toolbox: DirectToolboxHost,
+    events: mpsc::UnboundedSender<HostEvent>,
+) {
+    tokio::spawn(async move {
+        // Readiness must settle even when a TCP peer accepts but never
+        // responds.  This is a diagnostic probe, not a model/tool request;
+        // leaving it in `checking` forever hides the actionable failure from
+        // the Workbench and makes an offline ToolBox indistinguishable from a
+        // slow start.  Do not include the transport error: it may contain a
+        // credential-bearing URL supplied by the user.
+        let readiness = match tokio::time::timeout(
+            Duration::from_secs(5),
+            toolbox.get_json("/v1/models"),
+        )
+        .await
+        {
+            Ok(Ok(_)) => json!({
+                "toolbox": {
+                    "state": "ready",
+                    "detail": "VCPToolBox 已响应受认证的模型目录请求"
+                }
+            }),
+            Ok(Err(_)) => json!({
+                "toolbox": {
+                    "state": "unavailable",
+                    "detail": "VCPToolBox 的受认证探测失败；请检查服务、API Key 与网络状态"
+                }
+            }),
+            Err(_) => json!({
+                "toolbox": {
+                    "state": "unavailable",
+                    "detail": "VCPToolBox 在 5 秒内未响应受认证探测；请检查服务、API Key 与网络状态"
+                }
+            }),
+        };
+        let _ = events.send(runtime_readiness_event(readiness));
+    });
+}
+
+fn capability_readiness_from_log(message: &str, nodes: &mut HashSet<String>) -> Option<Value> {
+    const PREFIX: &str = "Distributed Server ";
+    const CONNECTED: &str = " authenticated and connected.";
+    const DISCONNECTED: &str = " disconnected.";
+    let node = message.strip_prefix(PREFIX)?;
+    let (node, changed) = if let Some(node) = node.strip_suffix(CONNECTED) {
+        (node, nodes.insert(node.to_string()))
+    } else if let Some(node) = node.strip_suffix(DISCONNECTED) {
+        (node, nodes.remove(node))
+    } else {
+        return None;
+    };
+    if !changed {
+        return None;
+    }
+    let count = nodes.len();
+    Some(json!({
+        "state": if count > 0 { "ready" } else { "unavailable" },
+        "detail": if count > 0 {
+            format!("已从 VCPLog 观察到 {count} 个已连接 DistributedServer capability node（最近：{node}）")
+        } else {
+            "VCPLog 报告 DistributedServer capability node 已断开".to_string()
+        },
+        "observedNodes": count
+    }))
 }
 
 fn session_command(kind: &str, session_id: &str) -> WireMessage {
@@ -1406,7 +1717,40 @@ fn approval_from_wire(message: &WireMessage, secret: &str) -> Option<ApprovalReq
         risk,
         reason,
         argument_summary: redact_known_secret(redact(arguments), secret).to_string(),
+        expires_at_ms: now_millis().saturating_add(LOCAL_APPROVAL_TIMEOUT.as_millis() as u64),
     })
+}
+
+fn now_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
+
+async fn deny_approval(
+    core: &mut CoreRuntime,
+    events: &mpsc::UnboundedSender<HostEvent>,
+    request: ApprovalRequest,
+    reason: &str,
+) {
+    let mut result = WireMessage::new("tool-result")
+        .put("ok", false)
+        .put("error", reason);
+    result.session_id = Some(request.session_id);
+    result.turn_id = Some(request.turn_id);
+    result.tool_call_id = Some(request.tool_call_id);
+    let denial_event = tool_event(
+        "approval.resolved",
+        &result,
+        json!({
+            "approvalId": request.approval_id,
+            "decision": "deny",
+            "reason": reason,
+        }),
+    );
+    let _ = core.handle(result).await;
+    let _ = events.send(denial_event);
 }
 
 fn classify_tool_risk(tool: &str, arguments: Option<&Value>) -> (String, String) {
@@ -1679,6 +2023,26 @@ mod tests {
     }
 
     #[test]
+    fn shared_agent_output_limits_are_loaded_without_creating_a_second_profile() {
+        let root = env::temp_dir().join(format!("vcp-host-agent-limit-test-{}", next_id("case")));
+        let agents = root.join("Agents");
+        let nova_dir = agents.join("Nova");
+        fs::create_dir_all(&nova_dir).unwrap();
+        fs::write(
+            nova_dir.join("config.json"),
+            r#"{"name":"Nova","model":"gpt-5.6-terra","systemPrompt":"{{Nova}}","contextTokenLimit":128000,"maxOutputTokens":4096}"#,
+        )
+        .unwrap();
+
+        let agent = load_agent(&agents, "nova").unwrap();
+        assert_eq!(agent.name, "Nova");
+        assert_eq!(agent.system_prompt, "{{Nova}}");
+        assert_eq!(agent.context_window, 128000);
+        assert_eq!(agent.max_output, 4096);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn streaming_redaction_never_leaks_secret_across_sse_deltas() {
         let mut redactor = StreamingSecretRedactor::new("123456".into());
         let first = redactor.redact_model_delta(json!({
@@ -1747,6 +2111,7 @@ mod tests {
             risk: "high".into(),
             reason: String::new(),
             argument_summary: String::new(),
+            expires_at_ms: now_millis().saturating_add(60_000),
         };
         assert!(!approval_binding_matches(&request, None));
         assert!(!approval_binding_matches(
@@ -1780,6 +2145,88 @@ mod tests {
         );
         assert_eq!(paths["url"], "https://example.com/file");
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn distributed_node_readiness_uses_log_lifecycle_without_registering_a_node() {
+        let mut nodes = HashSet::new();
+        let connected = capability_readiness_from_log(
+            "Distributed Server dist-real authenticated and connected.",
+            &mut nodes,
+        )
+        .expect("connect lifecycle");
+        assert_eq!(
+            connected.get("state").and_then(Value::as_str),
+            Some("ready")
+        );
+        assert_eq!(
+            connected.get("observedNodes").and_then(Value::as_u64),
+            Some(1)
+        );
+        assert!(
+            capability_readiness_from_log(
+                "Distributed Server dist-real authenticated and connected.",
+                &mut nodes,
+            )
+            .is_none()
+        );
+        let disconnected =
+            capability_readiness_from_log("Distributed Server dist-real disconnected.", &mut nodes)
+                .expect("disconnect lifecycle");
+        assert_eq!(
+            disconnected.get("state").and_then(Value::as_str),
+            Some("unavailable")
+        );
+        assert_eq!(
+            disconnected.get("observedNodes").and_then(Value::as_u64),
+            Some(0)
+        );
+    }
+
+    #[test]
+    fn interaction_queue_item_updates_are_id_bound_and_fail_closed() {
+        let queue = vec![
+            json!({"interactionId":"one","kind":"steer","prompt":"first"}),
+            json!({"interactionId":"two","kind":"follow-up","prompt":"second","consumed":true}),
+        ];
+
+        let replaced = replace_interaction_item(&queue, "two", "updated".into()).unwrap();
+        assert_eq!(replaced.len(), 2);
+        assert_eq!(replaced[1]["prompt"], "updated");
+        assert_eq!(replaced[1]["consumed"], false);
+        assert_eq!(queue[1]["prompt"], "second");
+
+        let removed = remove_interaction_item(&replaced, "one").unwrap();
+        assert_eq!(
+            removed,
+            vec![json!({
+                "interactionId":"two",
+                "kind":"follow-up",
+                "prompt":"updated",
+                "consumed":false
+            })]
+        );
+
+        assert!(remove_interaction_item(&queue, "missing").is_err());
+        assert!(replace_interaction_item(&queue, "missing", "x".into()).is_err());
+        assert!(replace_interaction_item(&queue, "one", "  ".into()).is_err());
+    }
+
+    #[test]
+    fn local_approval_deadline_is_created_by_the_host() {
+        let before = now_millis();
+        let mut message = WireMessage::new("tool-request");
+        message.session_id = Some("session-1".into());
+        message.turn_id = Some("turn-1".into());
+        message.tool_call_id = Some("tool-1".into());
+        message.payload.insert(
+            "arguments".into(),
+            json!({"toolName":"PowerShellExecutor","arguments":{"command":"Get-Location"}}),
+        );
+        let request = approval_from_wire(&message, "secret").expect("approval request");
+        let after = now_millis();
+        assert!(request.expires_at_ms >= before + 59_000);
+        assert!(request.expires_at_ms <= after + 61_000);
     }
 
     #[tokio::test]
@@ -1834,32 +2281,41 @@ mod tests {
             .unwrap();
         let observed = timeout(Duration::from_secs(3), async {
             let mut text = String::new();
+            let mut started_prompt = None;
             while let Some(event) = host.events.recv().await {
                 if let HostEvent::Wire(message) = event
                     && message.kind == "event"
-                    && message
+                {
+                    let event_type = message
                         .value("event")
                         .and_then(|event| event.get("type"))
-                        .and_then(Value::as_str)
-                        == Some("assistant.delta")
-                {
-                    text.push_str(
-                        message
+                        .and_then(Value::as_str);
+                    if event_type == Some("turn.started") {
+                        started_prompt = message
                             .value("event")
-                            .and_then(|event| event.pointer("/payload/text"))
+                            .and_then(|event| event.pointer("/payload/prompt"))
                             .and_then(Value::as_str)
-                            .unwrap_or(""),
-                    );
-                    if text.contains("Rust Host") {
-                        return text;
+                            .map(ToOwned::to_owned);
+                    } else if event_type == Some("assistant.delta") {
+                        text.push_str(
+                            message
+                                .value("event")
+                                .and_then(|event| event.pointer("/payload/text"))
+                                .and_then(Value::as_str)
+                                .unwrap_or(""),
+                        );
+                        if text.contains("Rust Host") {
+                            return (text, started_prompt);
+                        }
                     }
                 }
             }
-            text
+            (text, started_prompt)
         })
         .await
         .unwrap();
-        assert_eq!(observed, "你好，Rust Host");
+        assert_eq!(observed.0, "你好，Rust Host");
+        assert_eq!(observed.1.as_deref(), Some("介绍一下自己"));
         let _ = host.commands.send(HostCommand::Shutdown);
     }
 }
