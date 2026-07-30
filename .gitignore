@@ -25,6 +25,10 @@ rust_audio_engine/.cargo/
 # Reports and logs
 **/reports/
 
+# Generated Electron packages and isolated Rust smoke-build caches
+/dist/
+/rust/target-smoke/
+
 # 临时忽略的文件（本地修改，不提交）
 .npmrc
 modules/ipc/chatHandlers.js
