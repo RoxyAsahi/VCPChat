@@ -24,8 +24,66 @@ assert.equal(deriveWorkbenchViewState(store.getState()), 'idle', 'a daemon-creat
 assert.equal('sessions' in store.getState(), false);
 assert.equal('artifacts' in store.getState(), false);
 
+// R3-C: the Renderer may show an accepted command immediately, but it must
+// replace that temporary projection with the daemon's event identity rather
+// than grow a second transcript or guess a durable message id.
+const deliveryStore = createWorkbenchStore();
+deliveryStore.setAttachment({ sessionId: 'delivery-session', topicId: 'delivery-topic', state: 'idle' });
+deliveryStore.addPendingUserMessage({ turnId: 'delivery-turn', prompt: '请先显示我，再等待 Rust 确认', createdAt: 123 });
+assert.deepEqual(deliveryStore.getState().messages, [{
+    id: 'pending-user:delivery-turn', turnId: 'delivery-turn', role: 'user',
+    content: '请先显示我，再等待 Rust 确认', attachments: [], state: 'pending', deliveryState: 'sending',
+    deliveryDetail: '正在等待 Rust Runtime 确认…', createdAt: 123,
+    firstSequence: null, lastSequence: null,
+}]);
+deliveryStore.dispatch({
+    eventId: 'daemon-turn-started', sequence: 1, timestamp: 124, runtime: 'rust',
+    sessionId: 'delivery-session', topicId: 'delivery-topic', turnId: 'delivery-turn',
+    messageId: 'msg_delivery-turn_user',
+    type: 'turn.started', payload: { prompt: '请先显示我，再等待 Rust 确认' },
+});
+assert.deepEqual(deliveryStore.getState().messages, [{
+    id: 'msg_delivery-turn_user', messageId: 'msg_delivery-turn_user', turnId: 'delivery-turn', role: 'user',
+    content: '请先显示我，再等待 Rust 确认', attachments: [], state: 'complete', deliveryState: 'confirmed',
+    deliveryDetail: '', createdAt: 124,
+    firstSequence: 1, lastSequence: 1,
+}], 'turn.started must confirm and replace the temporary user item');
+deliveryStore.addPendingUserMessage({ turnId: 'delivery-crash', prompt: '可能已经到达 daemon', createdAt: 125 });
+deliveryStore.dispatch({
+    eventId: 'daemon-crashed', sequence: 2, timestamp: 126, runtime: 'rust', sessionId: 'runtime',
+    topicId: 'runtime', type: 'runtime.crashed', payload: { error: 'pipe closed' },
+});
+assert.equal(deliveryStore.getState().messages.at(-1).deliveryState, 'unconfirmed',
+    'a broken pipe must not claim failure or auto-replay a command whose durable outcome is unknown');
+const missingAssetStore = createWorkbenchStore();
+missingAssetStore.setAttachment({ sessionId: 'asset-session', topicId: 'asset-topic', state: 'idle' });
+missingAssetStore.addPendingUserMessage({
+    turnId: 'asset-turn', prompt: '', attachments: [{ id: 'attachment-missing', displayName: '缺失.png' }], createdAt: 126,
+});
+missingAssetStore.dispatch({
+    eventId: 'asset-missing', sequence: 1, timestamp: 127, runtime: 'rust',
+    sessionId: 'asset-session', topicId: 'asset-topic', turnId: 'asset-turn',
+    type: 'turn.failed',
+    payload: { code: 'attachment-unavailable', error: '附件文件不可用或已损坏；请重新选择附件后再发送。' },
+});
+assert.equal(missingAssetStore.getState().messages[0].deliveryState, 'failed',
+    'a missing durable attachment must be distinct from an interrupted model turn');
+assert.match(missingAssetStore.getState().messages[0].deliveryDetail, /重新选择附件/);
+deliveryStore.dispatch({
+    eventId: 'assistant-part-one', sequence: 3, timestamp: 127, runtime: 'rust',
+    sessionId: 'delivery-session', topicId: 'delivery-topic', turnId: 'delivery-turn',
+    messageId: 'assistant-part-one', type: 'assistant.started', payload: {},
+});
+deliveryStore.dispatch({
+    eventId: 'assistant-part-two', sequence: 4, timestamp: 128, runtime: 'rust',
+    sessionId: 'delivery-session', topicId: 'delivery-topic', turnId: 'delivery-turn',
+    messageId: 'assistant-part-two', type: 'assistant.started', payload: {},
+});
+assert.equal(deliveryStore.getState().messages.filter((message) => message.role === 'assistant').length, 2,
+    'distinct daemon message ids in one turn must remain distinct timeline items');
+
 dispatch({ type: 'session.created', sessionId: 's1', sequence: 1, payload: { model: 'm1' } });
-dispatch({ type: 'turn.started', sessionId: 's1', turnId: 't1', sequence: 2, payload: { prompt: 'hello' } });
+dispatch({ type: 'turn.started', sessionId: 's1', turnId: 't1', messageId: 'msg_t1_user', sequence: 2, payload: { prompt: 'hello' } });
 dispatch({ type: 'assistant.started', sessionId: 's1', turnId: 't1', messageId: 'assistant-1', sequence: 3, payload: {} });
 dispatch({ type: 'assistant.delta', sessionId: 's1', turnId: 't1', messageId: 'assistant-1', sequence: 4, payload: { text: 'hel' } });
 dispatch({ type: 'assistant.delta', sessionId: 's1', turnId: 't1', messageId: 'assistant-1', sequence: 5, payload: { text: 'lo' } });
@@ -37,6 +95,8 @@ const tool = projectTool(store.getState().tools.get('tc1'));
 assert.equal(tool.name, 'vcp_invoke');
 assert.equal(tool.state, 'completed');
 assert.equal(tool.eventCount, 2);
+assert.equal(store.getState().tools.get('tc1').firstSequence, 6, 'tool timeline position must come from the first daemon event');
+assert.equal(store.getState().tools.get('tc1').lastSequence, 7, 'tool updates must not rewrite the first timeline position');
 
 dispatch({ type: 'approval.requested', sessionId: 's1', turnId: 't1', toolCallId: 'tool-1', approvalId: 'a1', sequence: 8, payload: { approval: { approvalId: 'a1', toolName: 'vcp_invoke', argumentsHash: 'hash-1', expiresAtMs: 1234 } } });
 assert.equal(store.getState().approvals.length, 1);
@@ -58,6 +118,11 @@ dispatch({ type: 'turn.completed', sessionId: 's1', turnId: 't1', sequence: 11, 
 assert.equal(store.getState().activeTurnId, null);
 dispatch({ type: 'toolbox.ws', sessionId: 's1', sequence: 12, payload: { channel: 'Info', kind: 'notification', value: { message: 'ToolBox 已连接' } } });
 assert.deepEqual(store.getState().toolboxWs, [{ id: 'Info:notification:12', channel: 'Info', kind: 'notification', value: { message: 'ToolBox 已连接' }, timestamp: 1_700_000_000_014 }]);
+dispatch({ type: 'marker.observed', sessionId: 's1', turnId: 't1', messageId: 'assistant-1', sequence: 12, payload: { kind: 'dynamic-fold', summary: '安全摘要', detail: '只在展开时显示的正文' } });
+assert.deepEqual(store.getState().markerObservations, [{
+    id: 'marker:dynamic-fold:12', kind: 'dynamic-fold', summary: '安全摘要', detail: '只在展开时显示的正文',
+    messageId: 'assistant-1', turnId: 't1', timestamp: 1_700_000_000_015,
+}], 'marker observations must remain a separate ephemeral projection, never a message/tool/Topic record');
 dispatch({ type: 'runtime.readiness', sessionId: 'runtime', sequence: 13, payload: {
     server: { state: 'configured', detail: 'shared settings' },
     toolbox: { state: 'checking', detail: 'daemon probe' },
@@ -69,6 +134,20 @@ dispatch({ type: 'runtime.readiness', sessionId: 'runtime', sequence: 14, payloa
 assert.equal(store.getState().readiness.server.state, 'configured', 'readiness must be daemon-projected instead of renderer-probed');
 assert.equal(store.getState().readiness.toolbox.state, 'ready', 'incremental daemon readiness must merge by subsystem');
 assert.equal(store.getState().readiness.capability.state, 'unknown', 'capability status must not be guessed from an absent node event');
+const interruptProjection = {
+    messageCount: store.getState().messages.length,
+    toolCount: store.getState().tools.size,
+    notice: store.getState().notice,
+};
+dispatch({
+    type: 'runtime.interrupt_result', sessionId: 's1', turnId: 't1', sequence: 15,
+    payload: { accepted: true, source: 'toolbox', outcome: 'accepted' },
+});
+assert.deepEqual({
+    messageCount: store.getState().messages.length,
+    toolCount: store.getState().tools.size,
+    notice: store.getState().notice,
+}, interruptProjection, 'interrupt receipts are transport diagnostics and must not create transcript/tool/UI state');
 
 const messageCount = store.getState().messages.length;
 store.dispatch({ eventId: 'event-5', type: 'assistant.delta', sessionId: 's1', topicId: 'topic-1', turnId: 't1', messageId: 'assistant-1', sequence: 5, timestamp: 1_700_000_000_005, runtime: 'rust', payload: { text: 'lo' } });
@@ -109,10 +188,25 @@ liveEvent({
 });
 resolveInitialRead({
     topicId: 'topic-restored', snapshotSequence: 4,
-    history: [{ id: 'history-1', role: 'assistant', content: '来自 Rust Topic' }],
+    history: [
+        { id: 'history-1', role: 'assistant', content: '来自 Rust Topic', snapshotOrdinal: 0 },
+        {
+            id: 'tool-call-restored', role: 'tool', toolCallId: 'call-restored', toolName: 'FileOperator',
+            state: 'completed', timestamp: 2, snapshotOrdinal: 1,
+            payload: {
+                toolName: 'FileOperator', result: 'package.json',
+                resources: [{ name: 'package.json', url: 'file-ref:package.json' }],
+                warnings: ['只读预览'], task: { id: 'task-restored', status: 'completed' },
+            },
+        },
+    ],
 });
 await initializing;
 assert.equal(controller.store.getState().messages[0].content, '来自 Rust Topic');
+const restoredTool = controller.store.getState().tools.get('call-restored');
+assert.equal(restoredTool?.name, 'FileOperator', 'read-topic must rebuild tool artifacts from the Rust snapshot');
+assert.equal(restoredTool?.payload.resources[0].name, 'package.json');
+assert.equal(restoredTool?.snapshotOrdinal, 1);
 assert.ok(controller.store.getState().messages.some((message) => message.id === 'assistant-live'),
     'a live event arriving during initial read-topic must be buffered and projected after the snapshot');
 assert.equal(controller.store.getState().readiness.toolbox.state, 'unavailable',

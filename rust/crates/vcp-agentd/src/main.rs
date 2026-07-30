@@ -99,6 +99,7 @@ async fn direct_main() -> Result<()> {
             "--resume" => overrides.resume = args.next(),
             "--workspace" => overrides.workspace = args.next().map(PathBuf::from),
             "--always-approve" | "--yolo" => overrides.always_approve = true,
+            "--control" => overrides.control_only = true,
             _ => {}
         }
     }
@@ -217,16 +218,26 @@ fn dispatch_direct(
             Some(ack)
         }
         "close-session" => { let _ = host.commands.send(HostCommand::Shutdown); Some(ack) }
+        "import-attachment" => {
+            let path = PathBuf::from(message.string("path").unwrap_or(""));
+            let _ = host.commands.send(HostCommand::ImportAttachment { request_id, path });
+            Some(ack)
+        }
         "start-turn" => {
             let prompt = message.string("prompt").unwrap_or("").trim().to_string();
-            if prompt.is_empty() {
-                Some(ack.put("ok", false).put("result", serde_json::json!({"error":"prompt is required"})))
+            let attachments = message
+                .value("attachments")
+                .and_then(serde_json::Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            if prompt.is_empty() && attachments.is_empty() {
+                Some(ack.put("ok", false).put("result", serde_json::json!({"error":"prompt or attachment is required"})))
             } else {
-                // v1.2 requires turnId in the declared envelope. An incomplete
+                // v1.4 requires turnId in the declared envelope. An incomplete
                 // frame is rejected before dispatch; never revive a legacy
                 // payload identity here.
                 let turn_id = message.turn_id.clone();
-                let _ = host.commands.send(HostCommand::StartTurn { prompt, turn_id });
+                let _ = host.commands.send(HostCommand::StartTurn { prompt, attachments, turn_id });
                 Some(ack)
             }
         }
@@ -235,6 +246,10 @@ fn dispatch_direct(
         "follow-up-turn" => { let _ = host.commands.send(HostCommand::FollowUp { prompt: message.string("prompt").unwrap_or("").to_string() }); Some(ack) }
         "list-topics" => { let _ = host.commands.send(HostCommand::ListTopics { request_id, agent_id: message.string("agentId").map(ToOwned::to_owned) }); Some(ack) }
         "read-topic" => { let _ = host.commands.send(HostCommand::ReadTopic { request_id, topic_id: message.string("topicId").unwrap_or("").to_string(), agent_id: message.string("agentId").map(ToOwned::to_owned) }); Some(ack) }
+        "search-topics" => { let _ = host.commands.send(HostCommand::SearchTopics { request_id, query: message.string("query").unwrap_or("").to_string(), agent_id: message.string("agentId").map(ToOwned::to_owned), limit: message.value("limit").and_then(serde_json::Value::as_u64).and_then(|value| usize::try_from(value).ok()).unwrap_or(20) }); Some(ack) }
+        "search-topic-messages" => { let _ = host.commands.send(HostCommand::SearchTopicMessages { request_id, query: message.string("query").unwrap_or("").to_string(), topic_id: message.string("topicId").unwrap_or("").to_string(), agent_id: message.string("agentId").map(ToOwned::to_owned), limit: message.value("limit").and_then(serde_json::Value::as_u64).and_then(|value| usize::try_from(value).ok()).unwrap_or(50) }); Some(ack) }
+        "get-index-status" => { let _ = host.commands.send(HostCommand::GetIndexStatus { request_id }); Some(ack) }
+        "rebuild-topic-index" => { let _ = host.commands.send(HostCommand::RebuildTopicIndex { request_id }); Some(ack) }
         "takeover-topic" => { let _ = host.commands.send(HostCommand::RequestTopicTakeover { request_id: request_id.clone(), topic_id: message.string("topicId").unwrap_or("").to_string(), requester_id: request_id, agent_id: message.string("agentId").map(ToOwned::to_owned) }); Some(ack) }
         "list-interaction-queue" => { let _ = host.commands.send(HostCommand::ListInteractionQueue { request_id }); Some(ack) }
         "rename-topic" => { let _ = host.commands.send(HostCommand::RenameTopic { request_id, topic_id: message.string("topicId").unwrap_or("").to_string(), title: message.string("title").unwrap_or("").to_string(), agent_id: message.string("agentId").map(ToOwned::to_owned) }); Some(ack) }
@@ -268,6 +283,18 @@ fn dispatch_direct(
                 message.string("argumentsHash").unwrap_or("").to_string(),
             ));
             let _ = host.commands.send(HostCommand::Approval { approval_id, allowed, binding }); Some(ack)
+        }
+        "toolbox-approval" => {
+            let approval_request_id = message.string("approvalRequestId").unwrap_or("").to_string();
+            let approved = message.bool("approved").unwrap_or(false);
+            let reason = message.string("reason").map(ToOwned::to_owned);
+            let _ = host.commands.send(HostCommand::ToolboxApproval {
+                request_id,
+                approval_request_id,
+                approved,
+                reason,
+            });
+            Some(ack)
         }
         _ => Some(ack.put("ok", false).put("result", serde_json::json!({"error": format!("unsupported direct daemon command: {}", message.kind)}))),
     }

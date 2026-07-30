@@ -1,8 +1,8 @@
-# daemon v1.2 协议（当前真源）
+# daemon v1.4 协议（当前真源）
 
-`vcp-agentd.exe --direct` 是 Workbench 的唯一 Agent Runtime。stdin/stdout 使用四字节大端长度前缀 JSON；没有 TCP 监听。`protocolVersion` 固定为 `1`，`protocolRevision` 固定为 **`1.2`**，单帧上限 256 KiB，模型 delta 上限 8 KiB。
+`vcp-agentd.exe --direct` 是 Workbench 的唯一 Agent Runtime。stdin/stdout 使用四字节大端长度前缀 JSON；没有 TCP 监听。`protocolVersion` 固定为 `1`，`protocolRevision` 固定为 **`1.4`**，单帧上限 256 KiB，模型 delta 上限 8 KiB。
 
-未知版本、未知命令、重复 `requestId`、缺字段、超大帧、断管和 daemon crash 一律 fail closed。协议主版本仍是 v1，因此共享夹具文件名为 [`rust/fixtures/daemon-v1.json`](../../../rust/fixtures/daemon-v1.json)；其 `protocolRevision` 才是 v1.2。
+未知版本、未知命令、重复 `requestId`、缺字段、超大帧、断管和 daemon crash 一律 fail closed。协议主版本仍是 v1，因此共享夹具文件名为 [`rust/fixtures/daemon-v1.json`](../../../rust/fixtures/daemon-v1.json)；其 `protocolRevision` 才是 v1.4。
 
 Rust daemon 与 Electron transport 都在边界执行同一套严格校验：命令在写入 stdin 前校验，daemon frame 在进入 Main waiter 或 Renderer 之前校验。`HostEvent::Control` 的 `requestId` 是非可选类型，因而 Rust 内部也不能构造没有 originating request 的 control reply。
 
@@ -14,7 +14,7 @@ daemon 首帧必须是：
 {
   "type": "ready",
   "protocolVersion": 1,
-  "protocolRevision": "1.2",
+  "protocolRevision": "1.4",
   "buildRevision": "<7-64 位十六进制 revision>"
 }
 ```
@@ -29,13 +29,18 @@ Electron transport 必须同时核对三个字段；只收到 `ready` 不代表�
 | --- | --- | --- |
 | `create-session` | 启动参数已通过 argv 传入 | `ack.result = {sessionId, topicId}` |
 | `close-session` | `sessionId` | 停止 attachment |
-| `start-turn` | `sessionId`, `turnId`, `prompt` | 异步 `event` 流 |
+| `import-attachment` | `sessionId`, 一次性本地 `path` | `attachment-imported`；结果只含 descriptor，不回传源路径/字节 |
+| `start-turn` | `sessionId`, `turnId`, `prompt` 或最多 8 个 `attachments` descriptor | 异步 `event` 流 |
 | `cancel-turn` | `sessionId`, 可选 `turnId` | 异步 terminal event |
 | `steer-turn` / `follow-up-turn` | `sessionId`, `turnId`, `prompt` | `ack` |
 | `approval` | `approvalId`, `allowed`, `sessionId`, `turnId`, `toolCallId`, `argumentsHash` | `ack`；binding 不匹配时 Rust 拒绝 |
 | `compact` | `sessionId` | `context.compaction.*` event，ack 不是完成 |
 | `list-topics` | — | `topics` |
 | `read-topic` | `topicId` | `topic-read-only` |
+| `search-topics` | `query`，可选 `agentId`、`limit` | `topic-search-results`；命中只提供 Topic/message 定位，不是恢复数据 |
+| `search-topic-messages` | `query`, `topicId`，可选 `agentId`、`limit` | `topic-message-search-results` |
+| `get-index-status` | — | `topic-index-status` |
+| `rebuild-topic-index` | — | `topic-index-rebuilt`；只重建可丢弃投影 |
 | `takeover-topic` | `topicId` | `topic-takeover-pending` |
 | `rename-topic` / `delete-topic` | `topicId`，rename 另含 `title` | `topic-renamed` / `topic-deleted` |
 | `list-interaction-queue` / `clear-interaction-queue` | — | `interaction-queue` |
@@ -84,9 +89,27 @@ Electron transport 必须同时核对三个字段；只收到 `ready` 不代表�
 }
 ```
 
-适用时必须另有 `turnId`、`messageId` 或 `toolCallId`。所有 `assistant.*`、`reasoning.*` 流式事件都必须有 `turnId + messageId`；工具事件必须有 `toolCallId`。消息、Turn 或工具关联字段缺失时 Main/Renderer 丢弃事件并仅产生 diagnostic，不能合成 `assistant:${turnId}`、不能以 active Turn 猜测、也不能改名 `tool.running → tool.started`。
+适用时必须另有 `turnId`、`messageId` 或 `toolCallId`。所有 `assistant.*`、`reasoning.*` 流式事件以及 `turn.started` 都必须有 `turnId + messageId`；工具事件必须有 `toolCallId`。`turn.started.messageId` 与随后写入 `agent-state.json/history.json` 的用户消息 ID 相同。消息、Turn 或工具关联字段缺失时 Main/Renderer 丢弃事件并仅产生 diagnostic，不能合成 `assistant:${turnId}`、不能以 active Turn 猜测、也不能改名 `tool.running → tool.started`。
+
+搜索控制面不改变黑箱边界：Electron Main 只转发请求和按 `requestId` 等待结果；Renderer 不能打开 `.index`。点击命中后仍必须调用 `read-topic` 取得 Rust snapshot，再进入既有只读/恢复/接管流程。搜索命中、分数和 snippet 永远不能用于重建 Session 或重放 Turn。
 
 Main 只做 frame 限长、握手、requestId waiter、进程生命周期与信封校验；它原样转发 event。Renderer 只以 `eventId` 去重，并把 snapshot 与后续 event 投影为 UI Block。
+
+取消活动模型流后，Rust Host 发送一次非持久诊断事件：
+
+```json
+{
+  "type": "runtime.interrupt_result",
+  "turnId": "turn_…",
+  "payload": {
+    "accepted": true,
+    "source": "toolbox",
+    "outcome": "accepted"
+  }
+}
+```
+
+`accepted=true` 表示 ToolBox `/v1/interrupt` 返回成功；按当前 ToolBox 合同，这意味着同一 model request ID 命中了后端 `activeRequests`。内部 requestId 不进入该事件、Renderer、日志或 Topic。`not-found`、`transport-error` 仍必须完成本地 fail-closed 取消与不可重放 checkpoint，但不能声称后端中断已接受。该事件只供诊断和验收，不得生成消息、工具卡或持久状态。
 
 当 `set-workbench-presence { mounted: false }` 关闭未决本地审批时，daemon 先向 Core 送入失败的 `tool-result`，随后发送最终 `approval.resolved`（`payload.approvalId`、`decision: "deny"`、失败原因）。因此前端不能把“页面已卸载”解释成保留、转交或自动允许审批。
 
@@ -99,4 +122,4 @@ node scripts/test-rust-protocol-fixture.mjs
 cargo test --manifest-path rust/Cargo.toml -p vcp-agent-protocol
 ```
 
-未经此双向门禁的协议改动不是 v1.2 的有效实现。
+未经此双向门禁的协议改动不是 v1.4 的有效实现。

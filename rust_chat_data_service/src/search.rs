@@ -15,6 +15,7 @@ use tantivy::{
     tokenizer::{LowerCaser, RemoveLongFilter, TextAnalyzer, Token, TokenStream, Tokenizer},
     Index, IndexReader, IndexWriter, ReloadPolicy, TantivyDocument, Term,
 };
+use vcp_shadow_index::normalize_query_syntax;
 
 use crate::{
     domain::{MemoryWindow, MessageView, OwnerType, SearchHit, TopicKey},
@@ -562,52 +563,9 @@ fn composite_topic_value(owner_type: OwnerType, owner_id: &str, topic_id: &str) 
     )
 }
 
-fn normalize_query_syntax(query: &str) -> String {
-    query
-        .split([',', '，'])
-        .map(str::trim)
-        .filter(|part| !part.is_empty())
-        .map(|part| {
-            if let Some(inner) = part.strip_prefix('[').and_then(|v| v.strip_suffix(']')) {
-                let term = inner.split(':').next().unwrap_or_default().trim();
-                return format!("-{term}");
-            }
-            if let Some(inner) = part.strip_prefix('{').and_then(|v| v.strip_suffix('}')) {
-                let (terms, weight) = match inner.rsplit_once(':') {
-                    Some((terms, weight)) if weight.trim().parse::<f32>().is_ok() => {
-                        (terms, Some(weight.trim()))
-                    }
-                    _ => (inner, None),
-                };
-                let group = format!(
-                    "({})",
-                    terms
-                        .split('|')
-                        .map(str::trim)
-                        .filter(|term| !term.is_empty())
-                        .collect::<Vec<_>>()
-                        .join(" OR ")
-                );
-                return weight
-                    .map(|weight| format!("{group}^{weight}"))
-                    .unwrap_or(group);
-            }
-            if let Some(inner) = part.strip_prefix('(').and_then(|v| v.strip_suffix(')')) {
-                if let Some((term, weight)) = inner.rsplit_once(':') {
-                    if weight.trim().parse::<f32>().is_ok() {
-                        return format!("{}^{}", term.trim(), weight.trim());
-                    }
-                }
-            }
-            part.to_string()
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
 #[cfg(test)]
 mod tests {
-    use super::normalize_query_syntax;
+    use vcp_shadow_index::normalize_query_syntax;
 
     #[test]
     fn converts_legacy_deepmemo_query_syntax() {

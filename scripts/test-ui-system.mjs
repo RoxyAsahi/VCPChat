@@ -171,6 +171,19 @@ assert.ok(!document.getElementById('bridgeInput').classList.contains('vcp-ui-nat
 window.VCPUISettingsBridge.destroy();
 settingsHost.remove();
 document.documentElement.dataset.uiMode = 'next';
+
+const classicPresentationSettingsHost = document.createElement('div');
+classicPresentationSettingsHost.id = 'tabContentSettings';
+classicPresentationSettingsHost.dataset.settingsPresentation = 'classic';
+classicPresentationSettingsHost.innerHTML = '<form id="agentSettingsForm"><input id="classicPresentationInput" type="text"></form>';
+scope.append(classicPresentationSettingsHost);
+await import(`${pathToFileURL(`${process.cwd()}/modules/ui-system/settings-bridge.js`).href}?classic-presentation-contract-test=1`);
+await new Promise(resolve => setTimeout(resolve, 0));
+assert.ok(!document.getElementById('classicPresentationInput').classList.contains('vcp-ui-native-input'));
+assert.equal(window.VCPUISettingsBridge.enhancedCount, 0);
+window.VCPUISettingsBridge.destroy();
+classicPresentationSettingsHost.remove();
+
 assert.equal(VCPUI.setDensity(scope, 'compact'), 'compact');
 assert.equal(VCPUI.getDensity(scope), 'compact');
 assert.equal(scope.dataset.density, 'compact');

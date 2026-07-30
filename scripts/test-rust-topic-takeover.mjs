@@ -57,7 +57,7 @@ try {
 
     // A visible Topic is always a checkpoint.  Seed one without a model call
     // so this concurrency test remains hermetic and never reaches ToolBox.
-    const topicDirectory = path.join(appData, 'UserData', 'nova', 'topics', topicId);
+    const topicDirectory = path.join(appData, 'AgentRuntimeData', 'nova', 'topics', topicId);
     await fs.mkdir(topicDirectory, { recursive: true });
     await fs.writeFile(path.join(topicDirectory, 'agent-state.json'), JSON.stringify({
         version: 1,

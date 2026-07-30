@@ -56,6 +56,10 @@ html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer[hidden] {
     display: none;
 }
 
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer[hidden] {
+    display: none;
+}
+
 html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-chat-sidebar-content {
     width: 100%;
     min-width: 0;
@@ -123,6 +127,30 @@ html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-list .agent-ch
     line-height: var(--vcp-ui-line-compact);
 }
 
+/* settings-sidebar-list.css is legacy, unlayered CSS and paints glass
+ * highlights on every `.sidebar .topic-list .topic-item`. Agent Topic rows
+ * deliberately share those structural classes, so disable only its decorative
+ * pseudo-elements here. Without this bridge an empty status/count still
+ * leaves a thin highlight line below each Agent conversation. */
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .topic-list .agent-chat-session-row::before,
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .topic-list .agent-chat-session-row::after,
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .topic-list .agent-chat-session-row .message-count::after {
+    display: none;
+}
+
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .topic-list .agent-chat-session-row .message-count {
+    isolation: auto;
+    overflow: visible;
+    box-shadow: none;
+}
+
+/* A persisted idle Topic has no count/status text. Legacy sidebar CSS gives
+ * even that empty span a minimum-width glass badge, which is the grey dash
+ * visible between the title and the three-dot action. */
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .topic-list .agent-chat-session-row .message-count:empty {
+    display: none;
+}
+
 @layer vcp-ui.components {
     html[data-ui-mode="next"] body.next-ui-internal-app-open .vcp-ui-scope.agent-chat-root.container {
         width: 100%;
@@ -155,6 +183,9 @@ html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-list .agent-ch
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-menu {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         width: var(--vcp-ui-control-sm);
         height: var(--vcp-ui-control-sm);
         margin-left: auto;
@@ -166,41 +197,22 @@ html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-list .agent-ch
         opacity: 0;
     }
 
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-menu svg {
+        width: 18px;
+        height: 18px;
+        stroke: currentColor;
+    }
+
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-row:hover .agent-chat-session-menu,
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-row:focus-within .agent-chat-session-menu {
         opacity: 1;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-actions {
-        position: absolute;
-        z-index: 8;
-        top: calc(100% - var(--vcp-ui-space-1));
-        right: var(--vcp-ui-space-2);
-        display: grid;
-        min-width: 92px;
-        padding: var(--vcp-ui-space-1);
-        border: 1px solid var(--vcp-ui-border);
-        border-radius: var(--vcp-ui-radius-card);
-        background: var(--vcp-ui-bg-1);
-        box-shadow: var(--vcp-ui-shadow-md);
-    }
-
-    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-actions button {
-        padding: var(--vcp-ui-space-2) var(--vcp-ui-space-3);
-        border: 0;
-        border-radius: var(--vcp-ui-radius-sm);
-        color: var(--vcp-ui-text-1);
-        background: transparent;
-        text-align: left;
-    }
-
-    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-actions button:hover {
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-menu:focus-visible {
+        outline: none;
         color: var(--vcp-ui-text-0);
         background: var(--vcp-ui-fill-0);
-    }
-
-    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-actions button.danger:hover {
-        color: var(--vcp-ui-danger);
+        opacity: 1;
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-search-input {
@@ -453,9 +465,114 @@ html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-list .agent-ch
         gap: var(--vcp-ui-space-2);
     }
 
+    /* Topic leases are background concurrency guards. A collision is shown
+       in the active conversation as a compact decision card: it must never
+       mask the existing transcript or composer. */
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer {
+        width: min(100%, 860px);
+        margin: 0 auto;
+        padding: 6px var(--vcp-ui-space-4) 0;
+        box-sizing: border-box;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-dialog {
+        display: flex;
+        min-height: 42px;
+        align-items: center;
+        gap: var(--vcp-ui-space-2);
+        width: 100%;
+        padding: 6px var(--vcp-ui-space-3);
+        border: 1px solid var(--vcp-ui-border);
+        border-radius: var(--vcp-ui-radius-sm);
+        color: var(--vcp-ui-text-0);
+        background: color-mix(in srgb, var(--vcp-ui-bg-1) 82%, transparent);
+        box-shadow: none;
+        outline: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-heading {
+        display: flex;
+        min-width: 0;
+        flex: 0 0 auto;
+        align-items: center;
+        gap: 6px;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-icon {
+        color: var(--vcp-ui-text-3);
+        font-size: 16px;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-title,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-description,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-detail,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-error {
+        margin: 0;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-description,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-detail {
+        min-width: 0;
+        flex: 1;
+        color: var(--vcp-ui-text-2);
+        font-size: var(--vcp-ui-font-caption);
+        line-height: 1.35;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-title {
+        color: var(--vcp-ui-text-1);
+        font-size: var(--vcp-ui-font-helper);
+        font-weight: 600;
+        line-height: 1.35;
+        white-space: nowrap;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-error {
+        color: var(--vcp-ui-danger);
+        font-size: var(--vcp-ui-font-helper);
+        line-height: 1.5;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-actions {
+        display: flex;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 6px;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-actions .agent-chat-button {
+        min-height: 28px;
+        padding: 0 9px;
+        border-radius: 6px;
+        font-size: var(--vcp-ui-font-caption);
+        line-height: 1;
+    }
+
     @media (max-width: 640px) {
         html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-context {
             grid-template-columns: minmax(0, 1fr);
+        }
+
+        html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer {
+            padding-inline: var(--vcp-ui-space-3);
+        }
+
+        html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-dialog {
+            flex-wrap: wrap;
+            align-items: flex-start;
+        }
+
+        html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-description {
+            flex-basis: 100%;
+            white-space: normal;
+        }
+
+        html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-actions {
+            justify-content: flex-start;
         }
     }
 
@@ -707,6 +824,7 @@ html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-list .agent-ch
         min-width: 0;
         min-height: 0;
         flex: 1 1 auto;
+        position: relative;
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-activity-panel {
@@ -1961,6 +2079,74 @@ html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-list .agent-ch
         color: var(--vcp-ui-text-2);
     }
 
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-composer-attachments:empty {
+        display: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-attachment-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 2px 0 8px;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-attachment-chip {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        max-width: min(100%, 360px);
+        padding: 7px 8px 7px 10px;
+        border: 1px solid var(--vcp-ui-border-1);
+        border-radius: 10px;
+        background: var(--vcp-ui-fill-1);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-attachment-summary {
+        display: grid;
+        grid-template-columns: 18px minmax(0, 1fr);
+        align-items: center;
+        column-gap: 7px;
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-attachment-summary > .vcp-ui-icon {
+        grid-row: 1 / span 2;
+        color: var(--vcp-ui-accent);
+        font-size: 18px;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-attachment-name {
+        overflow: hidden;
+        color: var(--vcp-ui-text-0);
+        font-size: 12px;
+        font-weight: 600;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-attachment-meta {
+        color: var(--vcp-ui-text-2);
+        font-size: 10px;
+        line-height: 1.25;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-attachment-remove {
+        width: 24px;
+        height: 24px;
+        margin-left: 6px;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        color: var(--vcp-ui-text-2);
+        background: transparent;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-attachment-remove:hover {
+        color: var(--vcp-ui-text-0);
+        background: var(--vcp-ui-fill-2);
+    }
+
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-file-picker {
         display: none;
     }
@@ -2113,6 +2299,77 @@ html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-list .agent-ch
         border-radius: 50%;
         background: currentColor;
         animation: agent-streaming-blink 1s ease-in-out infinite;
+    }
+
+    /* A user prompt becomes visible immediately after the daemon accepts the
+       command. This is renderer-only delivery feedback, not a second
+       transcript: a later Rust `turn.started` event confirms/replaces it. */
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .message-item.user[data-delivery-state="sending"] .md-content {
+        opacity: 0.72;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-message-delivery {
+        margin-top: 4px;
+        color: var(--vcp-ui-text-3);
+        font-size: var(--vcp-ui-font-caption);
+        line-height: 1.35;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .message-item.user[data-delivery-state="unconfirmed"] .agent-chat-message-delivery {
+        color: var(--vcp-ui-warning);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .message-item.user[data-delivery-state="interrupted"] .agent-chat-message-delivery {
+        color: var(--vcp-ui-danger);
+    }
+
+    /* A reader who intentionally scrolled away from a live Agent turn keeps
+       their anchor.  This is an explicit escape hatch, not automatic scroll
+       ownership: the button is only shown after a new timeline Part arrives. */
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-jump-to-latest {
+        position: absolute;
+        z-index: 3;
+        right: var(--vcp-ui-space-4);
+        bottom: 78px;
+        max-width: min(260px, calc(100% - var(--vcp-ui-space-8)));
+        padding: var(--vcp-ui-space-2) var(--vcp-ui-space-3);
+        border: 1px solid var(--vcp-ui-border);
+        border-radius: 999px;
+        color: var(--vcp-ui-text-0);
+        background: color-mix(in srgb, var(--vcp-ui-bg-2) 94%, transparent);
+        box-shadow: var(--vcp-ui-shadow-md);
+        font: inherit;
+        font-size: var(--vcp-ui-font-caption);
+        cursor: pointer;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-jump-to-latest:hover {
+        border-color: var(--vcp-ui-accent);
+        color: var(--vcp-ui-accent);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-jump-to-latest[hidden] {
+        display: none;
+    }
+
+    /* ── Occupied-topic inline banner ─────────────────────────────────────── */
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-occupied-banner {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        background: color-mix(in srgb, var(--vcp-ui-warning, #f59e0b) 15%, transparent);
+        border: 1px solid color-mix(in srgb, var(--vcp-ui-warning, #f59e0b) 40%, transparent);
+        border-radius: var(--vcp-ui-radius-sm, 6px);
+        margin: 8px 12px;
+        position: relative;
+        font-size: var(--vcp-ui-font-caption);
+        color: var(--vcp-ui-text-1);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-occupied-banner > span {
+        flex: 1;
+        min-width: 0;
     }
 }
 

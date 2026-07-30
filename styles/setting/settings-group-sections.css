@@ -2,7 +2,6 @@
    Group Settings Final Authority
    Mirrors the Agent settings experience.
    ======================================== */
-@scope (html:not([data-ui-mode="next"])) {
 #groupSettingsContainer {
     width: 100%;
     box-sizing: border-box;
@@ -1141,6 +1140,4 @@ body.light-theme #groupSettingsContainer .group-settings-model-shell .model-inpu
 
 body:not(.light-theme) #groupSettingsContainer .group-settings-model-shell .model-input-container #openGroupModelSelectBtn:hover {
     background-color: color-mix(in srgb, var(--highlight-text) 18%, rgba(255, 255, 255, 0.05));
-}
-
 }

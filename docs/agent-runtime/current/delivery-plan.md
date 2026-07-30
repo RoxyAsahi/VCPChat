@@ -5,13 +5,35 @@
 | 阶段 | 门槛 | 状态 | 当前证据 |
 | --- | --- | --- | --- |
 | R0 | 仅 `current/` 定义产品；Pi/Driver/SQLite/submodule/`vcp_delegate` 均归档 | complete | 2026-07-29，hermetic 文档拓扑审计：`rg` 当前/根入口审计、`npm run check:rust-agent-runtime`、`git diff --check`；Rust source revision `73effc24b6ddb3453c8a21adc6d9b363f79558b960f8e647a0a9c1cdba7da982`。这些旧术语只在明确的 history 指针或“非当前”说明中出现。 |
-| R1 | v1.2 command/ack/event schema、Rust/JS fixture、ready runtime 校验 | complete | 2026-07-29，hermetic：`node scripts/test-rust-protocol-fixture.mjs`、`npm run check:rust-agent-runtime`、`npm run test:rust-daemon-smoke` 与 `cargo test --manifest-path rust/Cargo.toml -p vcp-agent-protocol -p vcp-agentd`。direct command 仅保留本文件列出的集合；旧 `start-session`、`list-agents`、`list-models`、`tool-result` fixture 均 fail closed；Renderer 不再用 ACK/active Turn/旧工具状态推断关联。Rust source revision `73effc24b6ddb3453c8a21adc6d9b363f79558b960f8e647a0a9c1cdba7da982`。 |
+| R1 | v1.2 黑箱协议基础、requestId 关联、ready runtime 校验 | complete | 2026-07-29 的冻结基础仍成立；当前产品协议已因 R4 多模态 descriptor 明确提升到 v1.4，不能再用这条历史 v1.2 收据替代当前 fixture/daemon 验证。 |
 | R2 | Topic 真源、单 attachment、snapshot-first、presence close、无 Main replay | complete | 冻结边界的证据保留在 R2 提交 `dc5330b7`；后续 GUI 变更必须重新跑下列当前门槛，不能用历史 revision 外推。2026-07-29：当前 Electron hermetic smoke 已通过 close/reopen、snapshot 恢复、显式 daemon crash/reconnect 和退出清理；当前 daemon workspace revision `8b3fb40aea55d7a711eebca4bccd8441dcd77726610c912506d133a9cc0c6303`。 |
-| R3-A | 独立新建/打开 Topic 流程与 lease/checkpoint 状态页 | complete | 当前工作树已把创建配置来源、空闲 checkpoint、只读预览和安全接管做成明确页面状态，并移除了 Agent Workbench 对主聊天 sidebar DOM clone 的依赖。2026-07-29：`npm run test:agent-workbench`、`npm run test:agent-workbench-store`、`npm run test:electron-gui-smoke` 和 `npm run test:electron-topic-takeover` 通过；后者验证两个真实 Electron 窗口的协作 lease 释放、checkpoint 读取和安全接管。daemon workspace revision `8b3fb40aea55d7a711eebca4bccd8441dcd77726610c912506d133a9cc0c6303`。 |
-| R3-B | streaming、工具、审批、WS Block 的长内容与响应式视觉回归 | complete | 2026-07-29，Rust source revision `a98c5991e1552ac6197dd9d6fb66366c505fc5d963b3486ad9023eaebe08c681`：default Electron smoke 通过 680/960/1440px 长消息布局与 crash/reconnect；真实 GUI gates 分别通过 FileOperator `requested → running → completed`、PowerShellExecutor 完整 binding 后的本地默认拒绝、只读 VCPLog/VCPInfo WS 卡和不少于 4,000 字符的流式回复。长流实际获得 6,800 字符，并验证打开活动面板后的非边缘阅读位置未被重置。收据在 `%TEMP%\\vcpchat-live-file-approval-current.json`、`%TEMP%\\vcpchat-live-file-ws-current.json`、`%TEMP%\\vcpchat-live-long-stream-current.json`。 |
-| R4 | Rust daemon readiness 与 ToolBox/DistributedServer 可诊断性 | in progress | Host 发 `runtime.readiness`：共享 Server/API Key、共享 Agent/模型、受认证 ToolBox `/v1/models` 探测，以及 VCPLog 生命周期推导的 capability node。2026-07-29：`node scripts/test-rust-daemon-smoke.mjs` 断言 `checking → unavailable`；default Electron smoke 断言四张 daemon-owned 卡；live GUI 已断言 ToolBox `就绪` 与只读 WS 卡。`/vcp-distributed-server` 是 node 注册通道，禁止作为 observer。仍缺的是 observer 已启动后、现有 DistributedServer capability node 一次真实 reconnect 的 `capability=ready` 生命周期证据；未知必须继续显示未知，不能猜测。 |
+| R2.1 | Agent Topic 与 VCP-CDS 数据域隔离 | complete | 2026-07-30，基线 `4209a1ec` 加当前工作树：Agent 根目录改为 `AppData/AgentRuntimeData`，旧 checkpoint Topic 安全迁移，CDS ingest/watcher 与 MobileSync Push 双重拒绝 Agent Runtime Topic。Rust workspace 1134 项、VCP-CDS 19 项、两边 clippy `-D warnings`、daemon/Topic takeover、Workbench store/UI、双窗口 Electron 与完整 GUI smoke 均通过。GUI smoke 首次 renderer-ready 超时一次、独立重跑通过；不将本项外推为 live ToolBox 或发布证据。 |
+| R2.2 | Agent 稳定消息身份与独立只读影子索引 | complete | 2026-07-30，分支 `codex/vcpchat-rust-agent-origin-sync`，基线 `4209a1ec` 加当前工作树，Rust source revision `3be0430538a760b30b932647529d4527baa1ad07c72bd1376b797f8f32814f33`：稳定 `messageId/turnId/timestamp`、旧消息确定性 ID、一次性迁移完成标记、共享 `vcp-shadow-index` leaf、物理隔离的 `AgentRuntimeData/.index`、daemon v1.4 搜索/状态/重建控制面和 Workbench daemon 搜索投影均已落地。Rust workspace fmt、全目标 clippy、1163 项注册测试，VCP-CDS fmt/clippy/19 项测试，协议/Runtime/Workbench JS 测试、release daemon build/framed smoke、daemon/双窗口 Topic takeover 和 Electron GUI smoke 全部通过。该收据仅证明 hermetic 数据边界、搜索和恢复链路；不代表 live ToolBox 或发布门槛完成。 |
+| R3-A | 无感打开 Topic；仅 lease 冲突时确认安全接管 | in progress | 2026-07-30：当前工作树已删除只读 preview/checkpoint modal 与占用 banner。空闲 Topic 直接恢复；外部占用只显示“返回 / 接管并继续”，不会读取或替换当前 attachment 的 transcript。`npm run test:agent-workbench` 已通过；当前 revision 尚未取得新的 Electron 双窗口收据，不能使用旧 preview 流程的历史收据。 |
+| R3-B | streaming、工具、审批、WS Block 的长内容与响应式视觉回归 | complete | 2026-07-29 当前工作树：隔离 daemon 的 hermetic Electron smoke 通过；独立 live GUI 收据分别覆盖 FileOperator 完整生命周期、本地拒绝 PowerShell 审批、只读 WS 卡、真实 Topic 压缩、纯文本长流/滚动锚点，以及 renderer reload 后由 Rust Topic 恢复历史。强制 child crash 仍由独立 hermetic Electron gate 覆盖。backend-YOLO 属于 R4 capability 前置，不作为 R3-B 通过条件。 |
+| R3-C | 发送确认与按 daemon sequence 排序的消息/工具 Part 时间线 | complete | 2026-07-29，hermetic 当前工作树：`npm run build:daemon`（`ready.buildRevision=6f2bedb6c90f7d0a6dc7d3448cdc1662312dfd065c01127b56ea8e17183d5980`）、`npm run test:rust-agent-runtime`、`npm run test:agent-workbench-store`、`npm run test:agent-workbench`、`npm run test:electron-gui-smoke` 通过。覆盖 ACK 后“发送中” Part、daemon identity 确认、`assistant → tool → assistant` sequence、按需工具详情、回到最新，以及 control daemon 不会把只读 Topic 误占用。 |
+| R4 | Rust daemon readiness 与 VCPToolBox 特殊适配 | complete | P0/P1 适配范围已完成，证据为 2026-07-30 Rust source revision `3e35bc4cea29ce188d363b79b8dd5f26c137c98a7b57b73619bacad6fd3ec8bb`：request identity/interrupt、独立 ToolBox 后端审批、正常/已解决/过期 VCPLog replay、诚实 unknown readiness、无工具名猜测、256 KiB WS fail-closed，以及 VCPInfo/marker display-only 投影、结构化工具资源、图片/音频/视频 descriptor 导入已经 Rust、协议和 Workbench 测试。真实 VChat DistributedServer `PowerShellExecutor` deny/replay/TTL 过期测试通过；`npm run build:daemon && npm run test:rust-daemon-smoke && node scripts/test-rust-protocol-fixture.mjs` 通过。详见 [vcp-toolbox-adaptation.md](vcp-toolbox-adaptation.md)。这不等于产品可发布：真实桌面 TUI clipboard、短音频/视频、ToolBox WS 极限、真实 VCPInfo/marker 和完整 workspace/release/live 门槛仍在 R5/readiness verdict 跟踪。 |
+| R5 | Rust 黑箱生产工程质量：固定工具链、lint、CI、背压、fuzz、性能预算与机器可读发布证据 | in progress | 2026-07-29，Rust source revision `63ce97ed3b4bdb6f84b0300687a3a49023d2a91395cffb49790c9e7289b25e0f`：固定 Rust 1.93.1、根级 rustfmt/Clippy、Windows 静态 CRT、`release-dist`、专属 CI 和 readiness contract 已落地；Rust workspace 1128 tests、完整 `test:rust-stack`、daemon/TUI distribution build 与体积 gate 通过。Host 有界事件背压、property/fuzz、Loom、benchmark/soak 和当前 revision 的 live ToolBox verdict 尚未完成，整体仍为 `NOT_READY`。 |
+| R6 | Unix/script CLI：stdin、稳定 stdout、取消和 fail-closed 本地审批 | in progress | 2026-07-30，未提交工作树 atop `4209a1ec`：新增 `vcp-agent-cli`，受控适配 Grok headless output shape；CLI 现有 5 个单测（含 cancelled → exit 130 / shutdown）和 2 个真实 `vcp-agent` 子进程 mock-gateway 测试（显式 `--print` 与 pipe positional prompt；高风险 `PowerShellExecutor` 的 complete binding 本地拒绝且绝不请求 `/v1/human/tool`）、指定 crate Clippy、目标文件 rustfmt 与 `npm run build:tui:dist` 均通过。显式 opt-in 的本机 ToolBox preflight 及 Nova `gpt-5.6-terra` 的普通 `--print`/stdin pipe sentinel 均通过，且 JSON 返回真实 provider usage。release-dist TUI 为 16,465,920 bytes，低于 18,962,944-byte gate；普通 release profile 为 21,412,864 bytes，超过 gate，不可发布。真实工具/后端审批与 Windows Terminal/PowerShell Ctrl+C 手工仍未执行，不得标为产品可用。 |
 
 ## 当前可重复验证
+
+## OpenCode 交互对照（R3-C）
+
+OpenCode 是消息时间线的交互参考，不是本项目的运行时或存储依赖。当前差异和采取
+措施如下：
+
+| 维度 | OpenCode 模式 | VCPChat 采用方式 | 明确不采用 |
+| --- | --- | --- | --- |
+| 用户发送 | prompt 立即显示，后续由 runtime part 确认 | Renderer-only `发送中…` Part，由 `turn.started`/`user.message` 替换 | JS 持久化或重放 prompt |
+| 流式/工具顺序 | Part timeline 保持原始位置 | daemon `firstSequence` 决定稳定顺序，tool update 不移动卡片 | 按 active Turn 或终态时间重新分组 |
+| 长工具结果 | 详情延迟挂载 | 折叠卡只显示 daemon 摘要，展开才挂 Markdown | Renderer 截断/缓存 Rust 工具结果 |
+| 阅读旧内容 | 保持锚点，显式回最新 | 临时未读提示 + `回到最新` | 新 delta 强制滚动或修改 Topic |
+| 审批 | 显式 action | Rust binding + 默认拒绝卡 | 本地 schema/第二工具执行通道 |
+
+control plane 也在本轮收紧：无 attachment 的 catalog/read 进程必须使用
+`vcp-agentd --direct --control`，不取得任何 Topic lease。这个约束是 R2 的补充回归
+门槛，防止“只读打开”被后台 daemon 初始化意外投影为“占用中”。
 
 ## 2026-07-29 上游整合记录
 
@@ -51,20 +73,22 @@ npm run test:electron-topic-takeover
 
 还必须执行 `cargo fmt --all --check --manifest-path rust/Cargo.toml`、`cargo clippy --manifest-path rust/Cargo.toml --workspace -- -D warnings`、`cargo test --manifest-path rust/Cargo.toml --workspace`、`git diff --check` 与 R0 文档拓扑审计。Electron smoke 只有在明确显示通过后，才能作为 Topic attachment、Workbench projection、daemon crash/reconnect、close/reopen 和退出清理的证据。2026-07-29 default smoke 与 `test:electron-topic-takeover` 的双窗口收据均已通过；R3-B 的 GUI real ToolBox/WS/长流门槛仍须独立执行，不能由 hermetic smoke 或 direct Rust live 代替。
 
-## R3-A：独立 Topic 产品流程（完成）
+## R3-A：无感 Topic 打开与冲突处理（进行中）
 
-R3-A 的目标不是把主聊天的“新建会话”按钮复制到 Agent Workbench，而是把 Rust Topic 的创建、读取和 lease 语义变成可见且可确认的产品流程。
+R3-A 的目标不是把 Rust lease/checkpoint 暴露为用户流程。正常打开应与主聊天一致；Rust 仍是唯一的 Topic、attachment 与并发真源。
 
 1. 任何新建入口先显示共享 Agent、共享模型、workspace 和标题；只有用户点击“创建并打开”才发送 `create-session`。
-2. 点击持久 Topic 必须先 `read-topic`，展示 Rust checkpoint。空闲 Topic 只能由“打开并恢复”附着；占用 Topic 明确提供只读 checkpoint 或请求安全接管，不能由侧栏点击隐式夺取写入权。
-3. 弹层的表单/读取/错误状态只存在 Renderer 内存；Agent/model catalog 继续来自 VCPChat 共享配置，Topic、lease、snapshot 和 attachment 继续来自 daemon。
-4. 2026-07-29 的 JSDOM、680/960/1440 Electron layout、空闲恢复、daemon crash/reconnect 和双窗口安全接管均已通过。真实 ToolBox 流式、审批、WS 通知与长 Topic 的视觉交互仍归 R3-B/R4，不能因 R3-A 完成而外推。
+2. 点击空闲持久 Topic 直接 `create-session(resume)` 并按 Rust snapshot 重建；点击本 Main 已持有的 Topic 幂等复用 attachment。只有外部占用 Topic 显示“返回 / 接管并继续”冲突确认；侧栏点击本身不能夺取写入权、读取 checkpoint 或替换当前 transcript。
+3. 新建表单和冲突确认只存在 Renderer 内存；Agent/model catalog 继续来自 VCPChat 共享配置，Topic、lease、snapshot 和 attachment 继续来自 daemon。
+4. 2026-07-30 已通过 `npm run test:agent-workbench`；当前 revision 的 Electron 双窗口接管、close/reopen 和 crash/reconnect 收据仍待重跑。真实 ToolBox 流式、审批、WS 通知与长 Topic 的视觉交互仍归 R3-B/R4，不能因 JSDOM 通过而外推。
 
-## R3-B：真实 Block 与视觉回归（进行中）
+## R3-B：真实 Block 与视觉回归（完成）
 
 R3-B 只验证来自 daemon 的真实事件投影，不允许 Renderer 伪造工具、审批或 WebSocket 状态。现有 hermetic 测试覆盖事件渲染、8 KiB 参数文本、streaming DOM identity 与滚动锚点；Electron smoke 必须在 680/960/1440px 验证 Workbench、Topic flow、readiness 和真实 Tool/Approval Block 不溢出。
 
-真实 ToolBox 验收仍是显式 opt-in，须在当前工作树重新记录通过结果：
+真实 ToolBox 验收保持显式 opt-in，并已在当前工作树按场景记录通过结果。必须按场景启动
+独立 Electron 进程：`VCP_AGENT_TEST_TOOL_CHOICE=required` 只可用于 FileOperator/PowerShell
+测试，绝不能与“不得调用工具”的长流复用，否则会把测试环境变量误判为产品问题。
 
 ```powershell
 $env:VCPCHAT_E2E_LIVE_TOOLBOX = '1'
@@ -75,18 +99,57 @@ $env:VCPCHAT_E2E_LIVE_TOOLBOX_LONG_STREAM = '1'
 npm run test:electron-gui-smoke
 ```
 
-`WS=1` 已在 2026-07-29 通过：Rust 只读 VCPlog/vcpinfo observer 产出真实卡片，Electron 在 680/960/1440px 完成卡片可视与无横向溢出检查；收据为 `%TEMP%\\vcpchat-live-file-ws-current.json`。`LONG_STREAM=1` 也已在同一 Rust source revision 通过：实际输出 6,800 字符，超过 4,000 字符门槛，并验证用户滚到历史位置后打开连接活动面板仍处于可读的非边缘位置；收据为 `%TEMP%\\vcpchat-live-long-stream-current.json`。此前 provider 的 3,429 字符短流和一次无输出超时仅作为历史失败记录，不计入当前通过。2026-07-29 同时修复了导致短流的真实 Runtime 差异：Rust Host 从共享 Agent `config.json` 读取 `maxOutputTokens`，Core 在模型请求中发送对应的 OpenAI-compatible `max_tokens`（`cargo test --manifest-path rust/Cargo.toml -p vcp-agent-host shared_agent_output_limits_are_loaded_without_creating_a_second_profile` 与 `cargo test --manifest-path rust/Cargo.toml -p vcp-agent-core model_request_uses_shared_agent_max_output_when_configured` 通过）。Agent feed 还显式脱离主聊天的 `column-reverse`/`content-visibility:auto` 优化，使用正常的时间顺序和可保持的滚动坐标；这仅作用于有界 Rust Topic，不影响主聊天。
+2026-07-29 当前工作树的单项 live 证据：`FileOperator` GUI 场景通过；本地拒绝
+`PowerShellExecutor(Get-Location)` 的审批卡通过；FileOperator 后 Rust 只读 VCPlog/vcpinfo WS
+卡通过；预置 Rust Topic 的 GUI 压缩落盘通过；纯文本长流场景通过并保持非边缘阅读锚点。最后一项
+收据为 `%TEMP%\\vcpchat-live-gui-long-current.json`。此前将强制 native-tool 环境变量带入长流，
+得到短回复并超时；该失败已证明为测试污染，现由 `test-rust-stack-live.mjs` 的独立 Electron 进程
+修正，不能计入产品失败或通过。Agent feed 仍显式脱离主聊天的 `column-reverse`/
+`content-visibility:auto` 优化，使用正常时间顺序与可保持滚动坐标；这仅作用于有界 Rust Topic，
+不影响主聊天。
 
-## R4：daemon readiness（进行中）
+## R3-C：发送确认与顺序 Part 时间线（完成）
+
+OpenCode 调研只借鉴前端交互模型，不借用其 SQLite、local shell、工具 schema、
+SDK session 或服务端持久化：
+
+```text
+用户点击发送
+  → Rust ACK 接受命令
+  → Renderer 临时 user Part（发送中）
+  → daemon turn.started / user.message（带 eventId、messageId、sequence）确认同一 Part
+  → read-topic snapshot 决定断线后的最终持久结果
+```
+
+临时 Part 只存在 Renderer 当前页面，绝不写入 Electron Main、localStorage 或 Rust Topic。
+daemon pipe 在确认前断开时，它必须显示“发送状态未确认”，不得自动重放、更不得伪造失败。
+
+Conversation feed 不再按 `turnId` 批量拼接工具卡。message 和 tool Part 都保留 daemon 的
+`firstSequence`（更新另保留 `lastSequence`），并按该序列稳定排序；因此一个 Turn 的
+`assistant text → vcp_invoke → next assistant text` 会原样呈现。旧 checkpoint 缺少 sequence 时
+保留 Rust snapshot 的原始顺序，不能由 Renderer 时间或 active Turn 猜测补齐。
+
+当前代码与 JSDOM、隔离 Electron 和独立真实 FileOperator/长流/reload 回归均已完成。读者离开
+live edge 后，新 timeline Part 不会夺走滚动锚点，而是显示一个仅 Renderer 本地的“回到最新”按钮；
+点击后才明确回到实时底部。终态工具卡只显示摘要；用户展开后才创建参数表、Markdown 结果和大
+结果的“展开结果”控制，使长 Topic 不会为所有折叠工具预渲染完整 payload。680/960/1440px 的
+响应式基线由 Electron smoke 覆盖；这些实现不改变 daemon 事件，也不把审批/WS 伪造为 transcript Part。
+
+## R4：daemon readiness 与 ToolBox 特殊适配（进行中）
 
 `runtime.readiness` 是 Rust Host 事件而不是 Renderer probe：
 
 1. `server` 只说明共享 VCPChat Server/API Key 是否齐备，绝不发送密钥。
 2. `profile` 只说明共享 Agent/模型是否可用。
 3. `toolbox` 由 Rust 的受认证 `/v1/models` 探测异步更新为 ready/unavailable。
-4. `capability` 只从 VCPlog 中 `Distributed Server … authenticated and connected/disconnected` 生命周期记录推导；未知时必须显示未知。
+4. `capability` 当前只能保持 `unknown` 或反映一次真实工具调用的结果。旧实现解析 `Distributed Server … authenticated and connected/disconnected` 字符串，但 ToolBox 只把这些内容写到控制台，并不会广播到 VCPLog；该实现必须移除，不能作为验收证据。
 
-`/vcp-distributed-server` 会注册一个 DistributedServer node，因而不是观察通道。Rust Host 只观察 `VCPlog` 与 `vcpinfo`，Electron/Renderer 不得连接、探测或伪造 capability 状态。R4 只有在 default Electron smoke 和真实 ToolBox 场景都重新通过后才可完成。
+`/vcp-distributed-server` 会注册一个 DistributedServer node，因而不是观察通道。Rust Host 只通过受限 VCPLog 客户端与 `vcpinfo` 观察/响应后端审批；Electron/Renderer 不得连接、探测或伪造 capability 状态。完整边界和 P0/P1 队列以 [vcp-toolbox-adaptation.md](vcp-toolbox-adaptation.md) 为准。R4 只有在 default Electron smoke 和真实 ToolBox 场景都重新通过后才可完成。
+
+当前真实 backend-YOLO 运行（2026-07-29）在本地允许 PowerShellExecutor 后停在失败 Tool card，
+180 秒内没有完成事件。共享设置的 `enableDistributedServer` 为 true，但隔离 Electron smoke 会
+显式关闭自己的 DistributedServer，且当时没有由开发者 VCPChat 实例提供可观察到的 capability
+connected 生命周期。该结果必须显示为能力不可用/未知，不能通过本地 YOLO 或 Renderer 重试绕过。
 
 真实 ToolBox 验收仍是单独的 opt-in gate，必须设置 `VCP_AGENT_LIVE=1`，且不得回显密钥。它不属于 R0–R2 的完成证据，也不能被本次 hermetic 通过替代；普通聊天、真实工具、高风险拒绝、取消和长会话压缩须在有 ToolBox 环境时重新记录。
 
@@ -196,3 +259,22 @@ R3 的目标是在不改变 Cherry-style 黑盒 GUI 架构的前提下，把 `vc
 - `always-approve/yolo` 只影响本地客户端审批，永远不能绕过 ToolBox 后端审批。
 - 不修改 VCPToolBox，不增加本地 Shell、文件工具、MCP、worktree 或第二套插件系统。
 - 每个阶段完成前必须同时说明 standalone 证据和 GUI 回归证据；不能因为 TUI 可用就外推 GUI，也不能因为 GUI smoke 通过就宣称 TUI 产品化完成。
+
+## R5：Rust 黑箱生产工程质量
+
+R5 不增加 Electron 业务职责，也不替换 VCPToolBox。所有运行时改动只能位于
+`vcp-agentd -> Rust Host/Core -> VCPToolBox` 黑箱内部；CI、benchmark、fuzz 和发布证据属于开发/交付层。
+
+执行顺序固定为：
+
+1. **R5.0 工具链与发布配置**：固定 Rust、rustfmt、Clippy，建立 `release-dist`、静态 CRT、PDB/体积门槛。
+2. **R5.1 测试与 CI**：Rust quality、hermetic stack、Windows artifact、live opt-in 分层；默认 CI 永不读取真实 ToolBox 密钥。
+3. **R5.2 背压与并发证明**：替换 Host/TUI 生产路径中的无界 channel；控制事件不可丢，文本 delta 可合并，WS observer 有界并报告丢弃数。
+4. **R5.3 property/fuzz/Loom**：覆盖 framed protocol、SSE、marker、secret chunk、Topic 损坏恢复，以及 cancel/approval/takeover 竞态。
+5. **R5.4 性能与 soak**：建立启动、首 delta、长流、Topic 恢复、压缩、RSS、TUI frame、退出清理预算。
+6. **R5.5 发布证据**：只有机器可读 readiness verdict 的全部 blocking gate 对当前 Rust source revision 为 pass，才能声明可发布。
+
+R5.0 与 R5.1 的本地 Windows 基线已于 2026-07-29 对 revision
+`63ce97ed3b4bdb6f84b0300687a3a49023d2a91395cffb49790c9e7289b25e0f` 验证。下一施工顺序为 R5.2 有界背压，再进入 R5.3 property/fuzz/Loom；不能用导入 crate 的大量测试替代 VCP 自有并发与协议证明。
+
+`pi_agent_rust` 只提供工程方法参考。其许可证包含 OpenAI/Anthropic Rider，禁止将源码复制、修改或纳入本项目；ACP、SQLite Session、内建工具、扩展系统和 `asupersync` 也与当前黑箱边界冲突。Grok Build 的 Apache-2.0 leaf crate 仍按 `rust/GROK_SOURCE_PROVENANCE.md` 的受控导入流程处理。

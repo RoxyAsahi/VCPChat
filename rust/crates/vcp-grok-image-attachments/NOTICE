@@ -1,0 +1,12 @@
+This crate contains code derived from Grok Build revision
+02d9359435d0e9c20a20945679389cdce441e431.
+
+Original paths:
+  crates/codegen/xai-grok-tools/src/util/image_validate.rs
+  crates/codegen/xai-grok-tools/src/util/image_compress.rs
+  crates/codegen/xai-grok-pager-render/src/prompt_images.rs
+  crates/codegen/xai-grok-shell/src/session/image_normalize.rs
+
+The imported validation and compression code remains licensed under
+Apache-2.0. VCP-specific asset descriptors, Topic storage integration and
+OpenAI content-part adapters are local additions.

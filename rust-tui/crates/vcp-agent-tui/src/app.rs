@@ -43,7 +43,7 @@ const VCPCLI_LOGO_COLORS: [Color; 6] = [
     Color::Rgb(148, 226, 213), // teal
 ];
 
-const SLASH_COMMANDS: [(&str, &str); 20] = [
+const SLASH_COMMANDS: [(&str, &str); 22] = [
     ("/model", "选择模型"),
     ("/agent", "选择 Agent"),
     ("/theme", "选择主题"),
@@ -56,6 +56,8 @@ const SLASH_COMMANDS: [(&str, &str); 20] = [
     ("/queue", "查看主动交互队列"),
     ("/clear-queue", "清空主动交互队列"),
     ("/compact", "压缩当前上下文"),
+    ("/attach", "添加图片、音频或视频附件路径"),
+    ("/paste-image", "从系统剪贴板添加图片"),
     ("/reasoning", "展开或折叠 Thinking"),
     ("/toolbox", "展开或折叠最近的 ToolBox 事件"),
     ("/usage", "查看 token 用量"),
@@ -731,7 +733,7 @@ impl App {
             "/quit" if argument.is_empty() => InputAction::Quit,
             "/status" | "/new" | "/model" | "/agent" | "/settings" | "/permissions" | "/steer"
             | "/follow-up" | "/topics" | "/resume" | "/queue" | "/clear-queue" | "/compact"
-            | "/reasoning" | "/toolbox" | "/usage" | "/budget" => {
+            | "/attach" | "/paste-image" | "/reasoning" | "/toolbox" | "/usage" | "/budget" => {
                 self.input.set_text("");
                 InputAction::Command(prompt)
             }

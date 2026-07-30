@@ -9,7 +9,7 @@ license.workspace = true
 default = []
 # Future Rust TUI / standalone host only. The current daemon relies on the JS
 # Host, so its normal build does not pull an HTTP or WebSocket stack.
-direct-host = ["dep:futures-util", "dep:reqwest", "dep:tokio-tungstenite", "dep:url"]
+direct-host = ["dep:futures-util", "dep:reqwest", "dep:tokio", "dep:tokio-tungstenite", "dep:url"]
 
 [dependencies]
 futures-util = { workspace = true, optional = true }
@@ -17,6 +17,10 @@ reqwest = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+tokio = { workspace = true, optional = true }
 tokio-tungstenite = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
 vcp-agent-protocol = { path = "../vcp-agent-protocol" }
+
+[lints]
+workspace = true

@@ -23,6 +23,10 @@ function createInitialState() {
         // observations. Keep a second, smaller UI window so log traffic can
         // never grow a renderer-side transcript or become an execution path.
         toolboxWs: [],
+        // Core-filtered VCP_DYNAMIC_FOLD/VCPINFO display projections.  Unlike
+        // toolboxWs these came from model text, not a WebSocket; both are
+        // ephemeral Activity-only view state and never Topic persistence.
+        markerObservations: [],
         // Rust emits these four non-sensitive readiness facts. The Renderer
         // is a pure projection and must never probe ToolBox itself.
         readiness: {},
@@ -48,6 +52,53 @@ function upsertMessage(messages, candidate) {
     return next;
 }
 
+function pendingUserMessageId(turnId) {
+    return `pending-user:${turnId}`;
+}
+
+function eventSequence(event) {
+    const value = Number(event?.sequence);
+    return Number.isFinite(value) ? value : null;
+}
+
+function confirmUserMessage(messages, event) {
+    const index = messages.findIndex((message) => message.turnId === event.turnId && message.role === 'user');
+    const candidate = {
+        ...(index >= 0 ? messages[index] : {}),
+        id: event.messageId,
+        messageId: event.messageId,
+        turnId: event.turnId,
+        role: 'user',
+        content: event.payload?.prompt || (index >= 0 ? messages[index].content : ''),
+        attachments: Array.isArray(event.payload?.attachments)
+            ? event.payload.attachments
+            : (index >= 0 ? messages[index].attachments || [] : []),
+        state: 'complete',
+        deliveryState: 'confirmed',
+        deliveryDetail: '',
+        createdAt: event.timestamp || (index >= 0 ? messages[index].createdAt : 0),
+        // Timeline order comes from the daemon, never from the Renderer clock
+        // or an inferred active turn.  A turn.started/user.message event is
+        // the authoritative moment a pending UI delivery becomes durable.
+        firstSequence: eventSequence(event) ?? (index >= 0 ? messages[index].firstSequence : null),
+        lastSequence: eventSequence(event) ?? (index >= 0 ? messages[index].lastSequence : null),
+    };
+    if (index < 0) return [...messages, candidate];
+    const next = [...messages];
+    next[index] = candidate;
+    return next;
+}
+
+function markPendingTurn(messages, turnId, deliveryState, deliveryDetail) {
+    return messages.map((message) => (
+        message.role === 'user'
+        && message.turnId === turnId
+        && message.deliveryState === 'sending'
+            ? { ...message, deliveryState, deliveryDetail }
+            : message
+    ));
+}
+
 function reduceEvent(current, event) {
     if (!event || typeof event !== 'object' || !event.type) return current;
     const next = { ...current };
@@ -62,6 +113,18 @@ function reduceEvent(current, event) {
         // the composer in a passive "reconnecting" limbo or replay an
         // interrupted turn.  Render the explicit reconnect action instead.
         next.runtime = { ...next.runtime, state: 'failed', lastError: event.payload || null };
+        // The daemon may have accepted a frame just before its pipe broke.
+        // Do not mark it as failed or replay it: its durable outcome is only
+        // knowable from the next Rust Topic snapshot after reconnect.
+        next.messages = next.messages.map((message) => (
+            message.role === 'user' && message.deliveryState === 'sending'
+                ? {
+                    ...message,
+                    deliveryState: 'unconfirmed',
+                    deliveryDetail: '连接中断，消息是否已写入将由重新连接后的 Topic 快照确认。',
+                }
+                : message
+        ));
         return next;
     }
     if (event.type === 'runtime.warning') {
@@ -89,36 +152,19 @@ function reduceEvent(current, event) {
         return next;
     }
     if (event.type === 'turn.started') {
-        if (!event.turnId) return current;
+        if (!event.turnId || !event.messageId) return current;
         next.activeTurnId = event.turnId;
-        const existing = next.messages.find((message) => message.turnId === event.turnId && message.role === 'user');
-        if (!existing) {
-            next.messages = upsertMessage(next.messages, {
-                id: event.eventId,
-                turnId: event.turnId,
-                role: 'user',
-                content: event.payload?.prompt || '',
-                state: 'complete',
-                createdAt: event.timestamp || 0,
-            });
-        }
+        next.messages = confirmUserMessage(next.messages, event);
         return next;
     }
     if (event.type === 'user.message') {
         if (!event.eventId) return current;
-        next.messages = upsertMessage(next.messages, {
-            id: event.eventId,
-            turnId: event.turnId,
-            role: 'user',
-            content: event.payload?.prompt || '',
-            state: event.payload?.queued ? 'queued' : 'complete',
-            createdAt: event.timestamp || 0,
-        });
+        next.messages = confirmUserMessage(next.messages, event);
         return next;
     }
     if (event.type === 'assistant.started') {
         if (!event.messageId || !event.turnId) return current;
-        const existing = next.messages.find((message) => message.turnId === event.turnId && message.role === 'assistant');
+        const existing = next.messages.find((message) => messageIdentity(message) === event.messageId);
         if (!existing) {
             next.messages = upsertMessage(next.messages, {
                 id: event.messageId,
@@ -129,6 +175,8 @@ function reduceEvent(current, event) {
                 reasoning: '',
                 state: 'streaming',
                 createdAt: event.timestamp || 0,
+                firstSequence: eventSequence(event),
+                lastSequence: eventSequence(event),
             });
         }
         return next;
@@ -139,7 +187,18 @@ function reduceEvent(current, event) {
         const messages = [...next.messages];
         let index = messages.findIndex((message) => messageIdentity(message) === id);
         if (index < 0) {
-            messages.push({ id, messageId: event.messageId, turnId: event.turnId, role: 'assistant', content: '', reasoning: '', state: 'streaming' });
+            messages.push({
+                id,
+                messageId: event.messageId,
+                turnId: event.turnId,
+                role: 'assistant',
+                content: '',
+                reasoning: '',
+                state: 'streaming',
+                createdAt: event.timestamp || 0,
+                firstSequence: eventSequence(event),
+                lastSequence: eventSequence(event),
+            });
             index = messages.length - 1;
         }
         const message = { ...messages[index] };
@@ -148,6 +207,7 @@ function reduceEvent(current, event) {
         } else if (event.type === 'reasoning.delta') {
             message.reasoning = `${message.reasoning || ''}${event.payload?.text || ''}`;
         }
+        message.lastSequence = eventSequence(event) ?? message.lastSequence ?? null;
         messages[index] = message;
         next.messages = messages;
         return next;
@@ -156,7 +216,11 @@ function reduceEvent(current, event) {
         if (!event.messageId || !event.turnId) return current;
         const id = event.messageId;
         next.messages = next.messages.map((message) => messageIdentity(message) === id
-            ? { ...message, state: 'complete' }
+            ? {
+                ...message,
+                state: 'complete',
+                lastSequence: eventSequence(event) ?? message.lastSequence ?? null,
+            }
             : message);
         return next;
     }
@@ -174,6 +238,10 @@ function reduceEvent(current, event) {
                 state: event.type.slice('tool.'.length),
                 payload: { ...(previous.payload || {}), ...(event.payload || {}) },
                 events: [...previous.events, event],
+                firstSequence: previous.firstSequence ?? eventSequence(event),
+                lastSequence: eventSequence(event) ?? previous.lastSequence ?? null,
+                firstTimestamp: previous.firstTimestamp ?? event.timestamp ?? null,
+                lastTimestamp: event.timestamp ?? previous.lastTimestamp ?? null,
             });
             next.tools = tools;
         }
@@ -209,6 +277,20 @@ function reduceEvent(current, event) {
         next.toolboxWs = [...next.toolboxWs, observation].slice(-100);
         return next;
     }
+    if (event.type === 'marker.observed') {
+        const payload = event.payload || {};
+        const observation = {
+            id: `marker:${payload.kind || 'unknown'}:${event.sequence}`,
+            kind: String(payload.kind || 'unknown'),
+            summary: typeof payload.summary === 'string' ? payload.summary : '',
+            detail: typeof payload.detail === 'string' ? payload.detail : '',
+            messageId: event.messageId || null,
+            turnId: event.turnId || null,
+            timestamp: event.timestamp || null,
+        };
+        next.markerObservations = [...next.markerObservations, observation].slice(-100);
+        return next;
+    }
     if (event.type === 'context.usage') {
         const usedTokens = Number(event.payload?.usedTokens ?? event.payload?.totalTokens) || 0;
         const contextWindow = Number(event.payload?.contextWindow) || 0;
@@ -239,6 +321,18 @@ function reduceEvent(current, event) {
     }
     if (TERMINAL_EVENT_TYPES.has(event.type)) {
         if (event.turnId && event.turnId === next.activeTurnId) next.activeTurnId = null;
+        if (event.turnId && event.type !== 'turn.completed') {
+            const attachmentUnavailable = event.type === 'turn.failed'
+                && event.payload?.code === 'attachment-unavailable';
+            next.messages = markPendingTurn(
+                next.messages,
+                event.turnId,
+                attachmentUnavailable ? 'failed' : 'interrupted',
+                attachmentUnavailable
+                    ? '附件文件不可用或已损坏；请重新选择附件后重试。'
+                    : '任务已中断；为避免重复执行，Rust Runtime 不会自动重放此消息。',
+            );
+        }
         if (event.type !== 'turn.completed') {
             next.notice = { level: 'error', text: event.payload?.error || event.payload?.reason || event.type };
         }
@@ -267,6 +361,29 @@ function createWorkbenchStore(initial = createInitialState()) {
             state = { ...state, ...patch };
             notify();
         },
+        addPendingUserMessage({ turnId, prompt, attachments = [], createdAt = Date.now() } = {}) {
+            if (!turnId || (!String(prompt || '').trim() && !attachments.length)) return state;
+            const existing = state.messages.find((message) => message.turnId === turnId && message.role === 'user');
+            if (existing) return state;
+            state = {
+                ...state,
+                messages: upsertMessage(state.messages, {
+                    id: pendingUserMessageId(turnId),
+                    turnId,
+                    role: 'user',
+                    content: String(prompt).trim(),
+                    attachments: Array.isArray(attachments) ? attachments.map((item) => ({ ...item })) : [],
+                    state: 'pending',
+                    deliveryState: 'sending',
+                    deliveryDetail: '正在等待 Rust Runtime 确认…',
+                    createdAt,
+                    firstSequence: null,
+                    lastSequence: null,
+                }),
+            };
+            notify({ type: 'ui.user_message.pending', turnId });
+            return state;
+        },
         dispatch(event) {
             if (!event || typeof event !== 'object') return state;
             const isRuntimeEvent = !event.sessionId || event.sessionId === 'runtime' || event.type?.startsWith('runtime.');
@@ -291,6 +408,7 @@ function createWorkbenchStore(initial = createInitialState()) {
                 tools: new Map(),
                 approvals: [],
                 toolboxWs: [],
+                markerObservations: [],
                 context: createInitialState().context,
                 plan: null,
                 activeTurnId: null,

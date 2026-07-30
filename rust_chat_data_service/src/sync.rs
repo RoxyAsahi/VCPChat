@@ -5,15 +5,15 @@ use std::{
     str::FromStr,
 };
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use rusqlite::{params, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 
 use crate::{
-    domain::{OwnerType, TopicKey},
-    ingest::{sha256_hex, Reconciler},
+    domain::{OwnerKey, OwnerType, TopicKey},
+    ingest::{is_agent_runtime_history_path, sha256_hex, Reconciler},
     storage::{now_ms, Database, IngestCommit},
 };
 
@@ -613,6 +613,20 @@ async fn push_topic(reconciler: &Reconciler, topic: &MessagesPushTopic) -> Resul
             owner_id: topic.owner_id.clone(),
         },
     )?;
+    let registry = reconciler.scan_owner_registry()?.0;
+    let owner = registry
+        .get(&OwnerKey {
+            owner_type: key.owner_type,
+            owner_id: key.owner_id.clone(),
+        })
+        .context("mobile sync owner is not configured")?;
+    if !owner
+        .topics
+        .iter()
+        .any(|configured| configured.topic_id == key.topic_id)
+    {
+        bail!("mobile sync refuses an unconfigured or orphan Topic");
+    }
     let history_path = reconciler
         .config()
         .user_data_dir
@@ -620,6 +634,9 @@ async fn push_topic(reconciler: &Reconciler, topic: &MessagesPushTopic) -> Resul
         .join("topics")
         .join(&topic.topic_id)
         .join("history.json");
+    if is_agent_runtime_history_path(&history_path) {
+        bail!("mobile sync refuses a Rust Agent runtime Topic");
+    }
 
     let mut current = read_history_or_empty(&history_path)?;
     let deleted = topic
@@ -1250,11 +1267,57 @@ const fn is_false(value: &bool) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use std::{collections::HashMap, fs, sync::Arc};
 
-    use super::{aggregate_hash, mobile_message_hash, unique_manifest_item_by_id, ManifestItem};
-    use crate::domain::OwnerType;
+    use super::{
+        aggregate_hash, mobile_message_hash, push_topic, unique_manifest_item_by_id, ManifestItem,
+        MessagesPushTopic,
+    };
+    use crate::{
+        config::{Cli, ServiceConfig},
+        domain::OwnerType,
+        ingest::Reconciler,
+        storage::Database,
+    };
     use serde_json::json;
+    use tempfile::TempDir;
+
+    fn fixture() -> (TempDir, Arc<ServiceConfig>, Reconciler) {
+        let temp = TempDir::new().expect("create temp directory");
+        let app_data = temp.path().join("AppData");
+        fs::create_dir_all(app_data.join("Agents/Nova")).expect("create Agents");
+        fs::create_dir_all(app_data.join("AgentGroups")).expect("create AgentGroups");
+        fs::create_dir_all(app_data.join("UserData")).expect("create UserData");
+        let config = Arc::new(
+            ServiceConfig::from_cli(Cli {
+                app_data,
+                host: "127.0.0.1".to_string(),
+                port: 0,
+                notify_enabled: false,
+                tantivy_enabled: false,
+                raw_event_capacity: 64,
+                coalesced_path_capacity: 64,
+                ingest_capacity: 16,
+            })
+            .expect("create config"),
+        );
+        let database = Database::open(&config.database_path).expect("open database");
+        let reconciler = Reconciler::new(config.clone(), database);
+        (temp, config, reconciler)
+    }
+
+    fn write_agent_config(config: &ServiceConfig, topics: serde_json::Value) {
+        fs::write(
+            config.agents_dir.join("Nova/config.json"),
+            serde_json::to_vec_pretty(&json!({
+                "id": "Nova",
+                "name": "Nova",
+                "topics": topics
+            }))
+            .expect("serialize Agent config"),
+        )
+        .expect("write Agent config");
+    }
 
     fn manifest_item(id: &str, owner_type: OwnerType, owner_id: &str) -> ManifestItem {
         ManifestItem {
@@ -1318,5 +1381,74 @@ mod tests {
             aggregate_hash(vec!["b".to_string(), "a".to_string()]),
             aggregate_hash(vec!["a".to_string(), "b".to_string()])
         );
+    }
+
+    #[tokio::test]
+    async fn mobile_sync_refuses_an_orphan_topic() {
+        let (_temp, config, reconciler) = fixture();
+        write_agent_config(&config, json!([]));
+        let directory = config.user_data_dir.join("Nova/topics/orphan-topic");
+        fs::create_dir_all(&directory).expect("create orphan Topic directory");
+        let history = directory.join("history.json");
+        fs::write(
+            &history,
+            br#"[{"id":"message-1","role":"user","content":"local"}]"#,
+        )
+        .expect("write orphan history");
+        reconciler
+            .ingest_path(&history, "test")
+            .await
+            .expect("ingest orphan Topic")
+            .expect("orphan Topic commit");
+
+        let error = push_topic(
+            &reconciler,
+            &MessagesPushTopic {
+                topic_id: "orphan-topic".to_string(),
+                owner_type: Some(OwnerType::Agent),
+                owner_id: Some("Nova".to_string()),
+                messages: vec![json!({"id":"message-2","role":"user","content":"remote"})],
+                deleted_message_ids: Vec::new(),
+            },
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("unconfigured or orphan"));
+        assert!(!fs::read_to_string(history).unwrap().contains("remote"));
+    }
+
+    #[tokio::test]
+    async fn mobile_sync_refuses_a_marked_agent_runtime_topic() {
+        let (_temp, config, reconciler) = fixture();
+        write_agent_config(
+            &config,
+            json!([{"id":"runtime-topic","name":"Runtime Topic","createdAt":1}]),
+        );
+        reconciler
+            .reconcile()
+            .await
+            .expect("reconcile configured Topic");
+        let directory = config.user_data_dir.join("Nova/topics/runtime-topic");
+        fs::create_dir_all(&directory).expect("create runtime Topic directory");
+        fs::write(directory.join("agent-state.json"), "{}").expect("write checkpoint marker");
+        let history = directory.join("history.json");
+        fs::write(&history, "[]").expect("write runtime history projection");
+
+        let error = push_topic(
+            &reconciler,
+            &MessagesPushTopic {
+                topic_id: "runtime-topic".to_string(),
+                owner_type: Some(OwnerType::Agent),
+                owner_id: Some("Nova".to_string()),
+                messages: vec![json!({"id":"message-2","role":"user","content":"remote"})],
+                deleted_message_ids: Vec::new(),
+            },
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("Rust Agent runtime Topic"));
+        assert_eq!(fs::read_to_string(history).unwrap(), "[]");
     }
 }

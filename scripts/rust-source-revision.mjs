@@ -7,7 +7,7 @@ import path from 'node:path';
 // standalone `rust-tui/` workspace is deliberately excluded: it has its own
 // release cadence and cannot change vcp-agentd. Including it made an unrelated
 // TUI edit look like an Electron/daemon binary drift. The result stays a
-// 64-char hex value, which the framed v1.2 ready contract can validate without
+// 64-char hex value, which the framed v1.4 ready contract can validate without
 // exposing a path or user-specific timestamp.
 function rustSourceRevision(projectRoot) {
     const sourceRoot = path.join(projectRoot, 'rust');

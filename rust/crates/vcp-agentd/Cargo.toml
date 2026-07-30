@@ -18,3 +18,6 @@ tokio-util.workspace = true
 vcp-agent-core = { path = "../vcp-agent-core" }
 vcp-agent-host = { path = "../vcp-agent-host" }
 vcp-agent-protocol = { path = "../vcp-agent-protocol" }
+
+[lints]
+workspace = true

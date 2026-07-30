@@ -32,6 +32,10 @@ const IPC_CHANNELS = Object.freeze({
     CLOSE_SESSION: 'agent-runtime:close-session',
     COMPACT_SESSION: 'agent-runtime:compact-session',
     LIST_TOPICS: 'agent-runtime:list-topics',
+    SEARCH_TOPICS: 'agent-runtime:search-topics',
+    SEARCH_TOPIC_MESSAGES: 'agent-runtime:search-topic-messages',
+    GET_TOPIC_INDEX_STATUS: 'agent-runtime:get-topic-index-status',
+    REBUILD_TOPIC_INDEX: 'agent-runtime:rebuild-topic-index',
     READ_TOPIC: 'agent-runtime:read-topic',
     TAKEOVER_TOPIC: 'agent-runtime:takeover-topic',
     RENAME_TOPIC: 'agent-runtime:rename-topic',
@@ -41,6 +45,7 @@ const IPC_CHANNELS = Object.freeze({
     CLEAR_INTERACTION_QUEUE: 'agent-runtime:clear-interaction-queue',
     GET_WORKBENCH_SETTINGS: 'agent-runtime:get-workbench-settings',
     UPDATE_WORKBENCH_SETTINGS: 'agent-runtime:update-workbench-settings',
+    SELECT_ATTACHMENTS: 'agent-runtime:select-attachments',
     START_TURN: 'agent-runtime:start-turn',
     STEER_TURN: 'agent-runtime:steer-turn',
     FOLLOW_UP_TURN: 'agent-runtime:follow-up-turn',
@@ -97,7 +102,12 @@ const EVENT_TYPES = Object.freeze({
     // Read-only projection of VCPlog / vcpinfo / vcp-distributed-server.
     // It is observability only and can never request a ToolBox execution.
     TOOLBOX_WS: 'toolbox.ws',
+    // A model-emitted VCP marker is filtered by Rust Core before projection.
+    // It is display-only and is deliberately neither a ToolBox WS event nor a
+    // second tool execution path.
+    MARKER_OBSERVED: 'marker.observed',
     RUNTIME_STATE_CHANGED: 'runtime.state_changed',
+    RUNTIME_INTERRUPT_RESULT: 'runtime.interrupt_result',
     RUNTIME_WARNING: 'runtime.warning',
     RUNTIME_CRASHED: 'runtime.crashed',
 });

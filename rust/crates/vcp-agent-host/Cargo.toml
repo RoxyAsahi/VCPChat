@@ -6,7 +6,10 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+arboard.workspace = true
 anyhow.workspace = true
+dunce.workspace = true
+image.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
@@ -14,3 +17,12 @@ tokio.workspace = true
 vcp-agent-core = { path = "../vcp-agent-core" }
 vcp-agent-protocol = { path = "../vcp-agent-protocol" }
 vcp-agent-vcp = { path = "../vcp-agent-vcp", features = ["direct-host"] }
+vcp-grok-image-attachments = { path = "../vcp-grok-image-attachments" }
+vcp-shadow-index = { path = "../vcp-shadow-index" }
+
+[dev-dependencies]
+image.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

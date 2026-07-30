@@ -488,11 +488,12 @@ impl Database {
 
     pub fn source_metadata(&self, source_path: &Path) -> Result<Option<SourceMetadata>> {
         let connection = self.connection.lock();
+        let source_path = normalized_path_key(source_path);
         connection
             .query_row(
                 "SELECT mtime_ns, file_size, status
                  FROM history_sources WHERE source_path=?1",
-                [source_path.to_string_lossy().as_ref()],
+                [source_path],
                 |row| {
                     Ok(SourceMetadata {
                         mtime_ns: row.get(0)?,
@@ -1078,6 +1079,13 @@ impl Database {
         connection.execute_batch("PRAGMA wal_checkpoint(PASSIVE);")?;
         Ok(())
     }
+}
+
+fn normalized_path_key(path: &Path) -> String {
+    path.components()
+        .collect::<PathBuf>()
+        .to_string_lossy()
+        .into_owned()
 }
 
 fn mark_topic_deleted(

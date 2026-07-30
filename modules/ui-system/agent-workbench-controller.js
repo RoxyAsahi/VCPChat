@@ -37,9 +37,30 @@ function createWorkbenchController(runtimeApi) {
         return status;
     }
 
-    function historyToMessages(history) {
-        if (!Array.isArray(history)) return [];
-        return history.flatMap((entry) => {
+    function historyToProjection(history) {
+        const messages = [];
+        const tools = new Map();
+        if (!Array.isArray(history)) return { messages, tools };
+        for (const entry of history) {
+            if (entry?.role === 'tool') {
+                const toolCallId = String(entry.toolCallId || '').trim();
+                if (!toolCallId) continue;
+                const payload = entry.payload && typeof entry.payload === 'object' ? entry.payload : {};
+                tools.set(toolCallId, {
+                    toolCallId,
+                    turnId: entry.turnId || null,
+                    name: entry.toolName || payload.toolName || 'vcp_invoke',
+                    state: entry.state === 'failed' ? 'failed' : 'completed',
+                    payload,
+                    events: [],
+                    firstSequence: null,
+                    lastSequence: null,
+                    firstTimestamp: entry.createdAt || entry.timestamp || 0,
+                    lastTimestamp: entry.createdAt || entry.timestamp || 0,
+                    snapshotOrdinal: Number.isFinite(Number(entry.snapshotOrdinal)) ? Number(entry.snapshotOrdinal) : null,
+                });
+                continue;
+            }
             const role = entry?.role === 'assistant' ? 'assistant' : 'user';
             const content = typeof entry?.content === 'string'
                 ? entry.content
@@ -47,16 +68,23 @@ function createWorkbenchController(runtimeApi) {
                     ? entry.content.map((part) => part?.text || '').join('')
                     : '';
             const id = entry?.id || entry?.messageId;
-            if (!id) return [];
-            return [{
+            if (!id) continue;
+            messages.push({
                 ...entry,
                 id,
                 role,
                 content,
                 state: entry?.state || 'complete',
                 createdAt: entry?.createdAt || entry?.timestamp || 0,
-            }];
-        });
+                // Checkpoints may predate v1.2 sequence fields.  Keep such
+                // entries in their durable snapshot order; only live events
+                // receive daemon sequence ordering.
+                firstSequence: Number.isFinite(Number(entry?.firstSequence)) ? Number(entry.firstSequence) : null,
+                lastSequence: Number.isFinite(Number(entry?.lastSequence)) ? Number(entry.lastSequence) : null,
+                snapshotOrdinal: Number.isFinite(Number(entry?.snapshotOrdinal)) ? Number(entry.snapshotOrdinal) : null,
+            });
+        }
+        return { messages, tools };
     }
 
     function beginSnapshotBarrier() {
@@ -109,7 +137,8 @@ function createWorkbenchController(runtimeApi) {
             const active = attachment || (current.attachment?.topicId === topicId ? current.attachment : null);
             const nextAttachment = active ? { ...active, topicId } : null;
             store.setAttachment(nextAttachment);
-            store.setState({ messages: historyToMessages(snapshot?.history) });
+            const projection = historyToProjection(snapshot?.history);
+            store.setState(projection);
             releaseSnapshotBarrier(barrier, snapshot, nextAttachment);
             return snapshot;
         } catch (error) {
@@ -127,7 +156,7 @@ function createWorkbenchController(runtimeApi) {
         const version = ++selectionVersion;
         const snapshot = await requireApi('agentRuntimeReadTopic')(topicPayload({ topicId }, agentId));
         if (version !== selectionVersion) return null;
-        store.setState({ messages: historyToMessages(snapshot?.history) });
+        store.setState(historyToProjection(snapshot?.history));
         return snapshot;
     }
 
@@ -187,6 +216,10 @@ function createWorkbenchController(runtimeApi) {
     }
 
     const listTopics = (agentId = undefined) => requireApi('agentRuntimeListTopics')(topicPayload({}, agentId));
+    const searchTopics = (query, agentId = undefined, limit = 20) => requireApi('agentRuntimeSearchTopics')(topicPayload({ query, limit }, agentId));
+    const searchTopicMessages = (query, topicId, agentId = undefined, limit = 50) => requireApi('agentRuntimeSearchTopicMessages')(topicPayload({ query, topicId, limit }, agentId));
+    const getTopicIndexStatus = () => requireApi('agentRuntimeGetTopicIndexStatus')();
+    const rebuildTopicIndex = () => requireApi('agentRuntimeRebuildTopicIndex')();
     const readTopic = (topicId, agentId = undefined) => requireApi('agentRuntimeReadTopic')(topicPayload({ topicId }, agentId));
     const takeoverTopic = (topicId, agentId = undefined) => requireApi('agentRuntimeTakeoverTopic')(topicPayload({ topicId }, agentId));
     const renameTopic = (topicId, title, agentId = undefined) => requireApi('agentRuntimeRenameTopic')(topicPayload({ topicId, title }, agentId));
@@ -200,13 +233,24 @@ function createWorkbenchController(runtimeApi) {
     const clearInteractionQueue = () => requireApi('agentRuntimeClearInteractionQueue')();
     const getWorkbenchSettings = () => requireApi('agentRuntimeGetWorkbenchSettings')();
     const updateWorkbenchSettings = (settings) => requireApi('agentRuntimeUpdateWorkbenchSettings')(settings);
-
-    async function startTurn(prompt) {
+    const selectAttachments = () => {
         const sessionId = store.getState().attachment?.sessionId;
         if (!sessionId) throw new Error('请先选择或新建 Session');
-        // ACK only accepts the command. The daemon's turn.started event is
-        // the sole source that may create a live-turn projection.
-        return requireApi('agentRuntimeStartTurn')({ sessionId, prompt });
+        return requireApi('agentRuntimeSelectAttachments')({ sessionId });
+    };
+
+    async function startTurn(prompt, attachments = []) {
+        const sessionId = store.getState().attachment?.sessionId;
+        if (!sessionId) throw new Error('请先选择或新建 Session');
+        // ACK means the daemon accepted this command, not that a durable
+        // Topic checkpoint already exists.  Project a renderer-only pending
+        // item immediately so the user never sends into an apparently empty
+        // conversation; `turn.started`/`user.message` later replaces it with
+        // the daemon event identity.  If the pipe breaks first, the item is
+        // explicitly unconfirmed and is never automatically replayed.
+        const accepted = await requireApi('agentRuntimeStartTurn')({ sessionId, prompt, attachments });
+        store.addPendingUserMessage({ turnId: accepted?.turnId, prompt, attachments });
+        return accepted;
     }
 
     async function cancelTurn() {
@@ -257,6 +301,15 @@ function createWorkbenchController(runtimeApi) {
         return result;
     }
 
+    async function respondToolboxApproval(approvalId, decision) {
+        if (!approvalId) throw new Error('ToolBox 后端审批缺少 requestId');
+        return requireApi('agentRuntimeRespondApproval')({
+            approvalId,
+            decision,
+            scope: 'toolbox',
+        });
+    }
+
     async function initialize() {
         // Subscribe before reading the Rust checkpoint.  The barrier belongs
         // to the Renderer and buffers any live daemon frame that arrives
@@ -299,10 +352,12 @@ function createWorkbenchController(runtimeApi) {
     return {
         store, initialize, subscribeRuntime, dispose, refreshStatus, startRuntime, stopRuntime,
         createSession, compactSession, hydrateTopic, previewTopic,
-        listTopics, readTopic, takeoverTopic, renameTopic, deleteTopic,
+        listTopics, searchTopics, searchTopicMessages, getTopicIndexStatus, rebuildTopicIndex,
+        readTopic, takeoverTopic, renameTopic, deleteTopic,
         listInteractionQueue, replaceInteractionQueue, clearInteractionQueue,
-        getWorkbenchSettings, updateWorkbenchSettings,
+        getWorkbenchSettings, updateWorkbenchSettings, selectAttachments,
         startTurn, steerTurn, followUpTurn, cancelTurn, cancelTool, respondApproval,
+        respondToolboxApproval,
     };
 }
 

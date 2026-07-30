@@ -30,6 +30,8 @@ rows are now part of this source tree; the inline renderer remains conditional:
 | `xai-grok-pager-pty-harness` | extract generic PTY runner/test concepts, not Grok scenarios | extracted into test-only crate; see below |
 | `crates/codegen/xai-ratatui-inline` | import only if a VCP minimal-mode PTY regression first demonstrates the need | rejected for now: PTY baseline passes |
 | `crates/codegen/xai-token-estimation` | controlled leaf import as `vcp-grok-token-estimation`; replace duplicate VCP estimates and label all projected values as estimated | imported; see below |
+| `xai-grok-tools/src/util/image_validate.rs`, `image_compress.rs` plus attachment lifecycle seams | controlled leaf import as `vcp-grok-image-attachments` | imported from `02d9359`; see below |
+| `xai-grok-pager/src/headless.rs` | controlled extraction of output-mode/emitter structure for VCP script CLI | extracted; see below |
 
 Before any row becomes imported, record its exact source revision, original
 path, import date, copied files, local modifications, license/NOTICE changes,
@@ -45,6 +47,8 @@ Imported on 2026-07-29 from the local Grok Build checkout:
 | `vcp-grok-token-estimation` | `crates/codegen/xai-token-estimation` | bytes/4 estimate, percentage, free-token and threshold/headroom primitives | focused upstream-derived tests retained; Core provider/estimated/mixed tests and full workspace tests pass |
 | `vcp-grok-markdown-core` | `crates/codegen/xai-grok-markdown-core` | complete `src/` library surface; playground, benches and fuzz targets excluded | 45 upstream tests pass |
 | `vcp-grok-markdown` | `crates/codegen/xai-grok-markdown` | `src/` plus `assets/tokyo-night.tmTheme`; bin/playground entry points excluded | 472 upstream tests and VCP streaming/full CJK-table-code-link parity pass |
+| `vcp-grok-image-attachments` | `crates/codegen/xai-grok-tools/src/util/image_validate.rs`, `image_compress.rs`; lifecycle reference from pager-render `prompt_images.rs` and shell `image_normalize.rs` | complete environment-independent image validation/re-encode implementations plus VCP descriptor/atomic asset adapter; Grok pager, ACP, Agent, cache and JSONL code excluded. Native TUI clipboard raster input uses the already-present `arboard` dependency and enters this same leaf crate; Grok clipboard code itself is not copied. VCP-local media adapter additionally uses the existing VCPChat/ToolBox `image_url` data-URI contract for a conservative audio/video magic allow-list; it does not import a Grok media stack. | focused VCP tests cover image magic/decode, truncated data, dimension floor, image/audio/video hash validation, descriptor-only persistence, ephemeral ToolBox-compatible data URL and Host-only clipboard command delegation; real desktop clipboard and audio/video provider smoke remain pending |
+| `vcp-agent-cli` headless output adapter | `crates/codegen/xai-grok-pager/src/headless.rs` | Apache-2.0-adapted `OutputFormat` and stdout emitter lifecycle shape only; `crates/vcp-agent-cli/NOTICE` preserves source/revision; VCP adds capped UTF-8 stdin, Rust Host events, temporary Topic policy, VCP approval binding and no-ToolBox-bypass behavior | focused CLI tests plus real `vcp-agent` process tests against a hermetic mock ToolBox gateway cover pipe input, JSON stdout, cancellation projection and local high-risk deny before marker execution; direct ToolBox text/pipe smoke also passes, while backend approval/tool and Ctrl+C terminal signal live checks remain pending |
 
 The Markdown adapter is `rust-tui/crates/vcp-agent-tui/src/markdown.rs`.
 It consumes message text and emits ratatui lines only. Session, Topic, tool and
@@ -86,6 +90,23 @@ helper. VCP adds conservative multilingual message headroom on top of the
 single bytes/4 primitive so automatic compaction does not regress for Chinese
 sessions. Projected usage now carries `provider`, `estimated`, or `mixed`
 source metadata; estimated values are never described as billing usage.
+
+The image attachment import preserves Grok's Apache-2.0 validation and
+PNG/JPEG re-encoding primitives. VCP replaces `PastedImage`, ACP content
+blocks, NormalizeCache and JSONL persistence with a Topic-owned content-addressed
+asset directory and a serializable descriptor. The same VCP-local adapter also
+stores ToolBox-supported audio/video bytes only after conservative magic-byte
+validation; it deliberately does not decode, transcode or create provider-specific
+content parts. Base64 is generated only in the Rust Host immediately before the
+ToolBox model request, using VCPChat's existing `image_url` data-URI shape for
+image/audio/video. It is never part of the daemon protocol, Renderer state
+persisted to disk, or Topic history.
+
+The script CLI adaptation preserves an upstream-style `plain`, one-shot JSON,
+and JSONL streaming output contract, but is not a Grok Agent import. VCP never
+imports `run_single_turn`, ACP, Grok session persistence, permissions, local
+tools, authentication, telemetry, or background task reapers. The only runtime
+authority remains `vcp-agent-host` → `vcp-agent-core` → VCPToolBox.
 
 ## Local modifications
 

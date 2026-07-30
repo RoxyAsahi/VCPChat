@@ -1,0 +1,37 @@
+{
+  "schema": "vcp.agent.product_readiness_contract.v1",
+  "version": "1.0.0",
+  "architecture": "renderer -> electron transport -> vcp-agentd -> rust host/core -> vcptoolbox",
+  "gates": [
+    {
+      "gateId": "architecture-black-box",
+      "blocking": true,
+      "passCriteria": "Electron owns no Agent transcript, tool, approval, usage or Topic persistence state."
+    },
+    {
+      "gateId": "rust-quality",
+      "blocking": true,
+      "passCriteria": "Pinned toolchain, rustfmt, Clippy -D warnings and Rust workspace tests pass."
+    },
+    {
+      "gateId": "protocol-hermetic",
+      "blocking": true,
+      "passCriteria": "v1.4 fixtures, daemon protocol, Topic recovery and adapter tests pass without a live ToolBox."
+    },
+    {
+      "gateId": "windows-distribution",
+      "blocking": true,
+      "passCriteria": "Windows MSVC release-dist daemon and TUI build, pass size gates and retain matching build revision."
+    },
+    {
+      "gateId": "live-toolbox",
+      "blocking": true,
+      "passCriteria": "Current revision passes chat, tool allow/deny, cancel, compact, restore and capability lifecycle against a real ToolBox."
+    },
+    {
+      "gateId": "installer",
+      "blocking": false,
+      "passCriteria": "Deferred while VChat keeps its existing start.bat/VBS launch path."
+    }
+  ]
+}

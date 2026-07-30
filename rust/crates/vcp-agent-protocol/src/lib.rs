@@ -18,7 +18,7 @@ pub const PROTOCOL_VERSION: u32 = 1;
 /// Additive revision of the stable v1 frame contract. Keep this explicit so
 /// the daemon and Electron transport cannot silently drift while retaining
 /// the same major framing version.
-pub const PROTOCOL_REVISION: &str = "1.2";
+pub const PROTOCOL_REVISION: &str = "1.4";
 pub const MAX_FRAME_BYTES: usize = 256 * 1024;
 pub const MAX_MODEL_DELTA_BYTES: usize = 8 * 1024;
 
@@ -139,7 +139,9 @@ pub fn validate_direct_command(message: &WireMessage) -> Result<(), ProtocolErro
         | "list-topics"
         | "list-interaction-queue"
         | "clear-interaction-queue"
-        | "get-settings" => {
+        | "get-settings"
+        | "get-index-status"
+        | "rebuild-topic-index" => {
             if message.kind == "list-topics" {
                 optional_payload_string(message, "agentId")?;
             }
@@ -147,10 +149,23 @@ pub fn validate_direct_command(message: &WireMessage) -> Result<(), ProtocolErro
         "close-session" | "cancel-turn" | "compact" => {
             required_identity(message, "sessionId")?;
         }
+        "import-attachment" => {
+            required_identity(message, "sessionId")?;
+            required_payload_string(message, "path")?;
+        }
         "start-turn" => {
             required_identity(message, "sessionId")?;
             required_identity(message, "turnId")?;
-            required_payload_string(message, "prompt")?;
+            let prompt = message
+                .value("prompt")
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            let attachments = validate_attachment_array(message.value("attachments"))?;
+            if prompt.trim().is_empty() && attachments == 0 {
+                return Err(ProtocolError::InvalidMessage(
+                    "start-turn requires prompt or attachments".to_string(),
+                ));
+            }
         }
         "steer-turn" | "follow-up-turn" => {
             required_identity(message, "sessionId")?;
@@ -169,9 +184,29 @@ pub fn validate_direct_command(message: &WireMessage) -> Result<(), ProtocolErro
                 ));
             }
         }
+        "toolbox-approval" => {
+            required_payload_string(message, "approvalRequestId")?;
+            if message.bool("approved").is_none() {
+                return Err(ProtocolError::InvalidMessage(
+                    "toolbox-approval requires boolean approved".to_string(),
+                ));
+            }
+            optional_payload_string(message, "reason")?;
+        }
         "read-topic" | "takeover-topic" | "delete-topic" => {
             required_payload_string(message, "topicId")?;
             optional_payload_string(message, "agentId")?;
+        }
+        "search-topics" => {
+            required_payload_string(message, "query")?;
+            optional_payload_string(message, "agentId")?;
+            optional_search_limit(message)?;
+        }
+        "search-topic-messages" => {
+            required_payload_string(message, "query")?;
+            required_payload_string(message, "topicId")?;
+            optional_payload_string(message, "agentId")?;
+            optional_search_limit(message)?;
         }
         "rename-topic" => {
             required_payload_string(message, "topicId")?;
@@ -211,7 +246,7 @@ pub fn validate_direct_command(message: &WireMessage) -> Result<(), ProtocolErro
 
 /// Validate final daemon frames that cross the Rust ↔ GUI boundary. Internal
 /// Host/Core messages are allowed to be richer; this function establishes the
-/// stable v1.2 public projection consumed by Electron and the standalone TUI.
+/// stable v1.4 public projection consumed by Electron and the standalone TUI.
 pub fn validate_direct_daemon_message(message: &WireMessage) -> Result<(), ProtocolError> {
     match message.kind.as_str() {
         "ready" => {
@@ -298,6 +333,44 @@ fn optional_payload_string(message: &WireMessage, field: &str) -> Result<(), Pro
     }
 }
 
+fn optional_search_limit(message: &WireMessage) -> Result<(), ProtocolError> {
+    match message.value("limit") {
+        None => Ok(()),
+        Some(Value::Number(value))
+            if value
+                .as_u64()
+                .is_some_and(|limit| (1..=500).contains(&limit)) =>
+        {
+            Ok(())
+        }
+        Some(_) => Err(ProtocolError::InvalidMessage(
+            "limit must be an integer between 1 and 500".to_string(),
+        )),
+    }
+}
+
+fn validate_attachment_array(value: Option<&Value>) -> Result<usize, ProtocolError> {
+    let Some(value) = value else {
+        return Ok(0);
+    };
+    let Some(attachments) = value.as_array() else {
+        return Err(ProtocolError::InvalidMessage(
+            "attachments must be an array".to_string(),
+        ));
+    };
+    if attachments.len() > 8 {
+        return Err(ProtocolError::InvalidMessage(
+            "attachments exceeds the per-turn limit".to_string(),
+        ));
+    }
+    if attachments.iter().any(|attachment| !attachment.is_object()) {
+        return Err(ProtocolError::InvalidMessage(
+            "each attachment must be a descriptor object".to_string(),
+        ));
+    }
+    Ok(attachments.len())
+}
+
 fn validate_direct_event(value: Option<&Value>) -> Result<(), ProtocolError> {
     let Some(Value::Object(event)) = value else {
         return Err(ProtocolError::InvalidMessage(
@@ -323,12 +396,14 @@ fn validate_direct_event(value: Option<&Value>) -> Result<(), ProtocolError> {
         .get("type")
         .and_then(Value::as_str)
         .unwrap_or_default();
-    if (event_type.starts_with("assistant.") || event_type.starts_with("reasoning."))
+    if (event_type.starts_with("assistant.")
+        || event_type.starts_with("reasoning.")
+        || event_type == "turn.started")
         && (event.get("turnId").and_then(Value::as_str).is_none()
             || event.get("messageId").and_then(Value::as_str).is_none())
     {
         return Err(ProtocolError::InvalidMessage(
-            "streaming event requires turnId and messageId".into(),
+            "message event requires turnId and messageId".into(),
         ));
     }
     if event_type.starts_with("tool.") && event.get("toolCallId").and_then(Value::as_str).is_none()
@@ -433,12 +508,12 @@ mod tests {
         assert!(fixture.daemon_to_host.len() >= 8);
         for message in fixture.host_to_daemon.iter() {
             validate_message(message).expect("fixture message must satisfy v1 bounds");
-            validate_direct_command(message).expect("fixture command must satisfy v1.2 schema");
+            validate_direct_command(message).expect("fixture command must satisfy v1.4 schema");
         }
         for message in fixture.daemon_to_host.iter() {
             validate_message(message).expect("fixture message must satisfy v1 bounds");
             validate_direct_daemon_message(message)
-                .expect("fixture response must satisfy v1.2 schema");
+                .expect("fixture response must satisfy v1.4 schema");
         }
         for message in fixture.invalid_host_to_daemon.iter() {
             assert!(validate_direct_command(message).is_err());

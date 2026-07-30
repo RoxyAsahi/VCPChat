@@ -7,7 +7,7 @@ const crypto = require('crypto');
 
 const MAX_FRAME_BYTES = 256 * 1024;
 const PROTOCOL_VERSION = 1;
-const PROTOCOL_REVISION = '1.2';
+const PROTOCOL_REVISION = '1.4';
 
 function requiredString(value, field) {
     if (typeof value !== 'string' || !value.trim()) throw new Error(`daemon protocol requires ${field}`);
@@ -28,19 +28,43 @@ function validateDirectCommand(message) {
     case 'list-topics':
         if (Object.prototype.hasOwnProperty.call(message, 'agentId')) requiredString(message.agentId, 'agentId');
     case 'list-interaction-queue': case 'clear-interaction-queue': case 'get-settings':
+    case 'get-index-status': case 'rebuild-topic-index':
         return;
     case 'close-session': case 'cancel-turn': case 'compact':
         return requiredIdentity(message, 'sessionId');
-    case 'start-turn': case 'steer-turn': case 'follow-up-turn':
+    case 'import-attachment':
+        requiredIdentity(message, 'sessionId'); return requiredString(message.path, 'path');
+    case 'start-turn': {
+        requiredIdentity(message, 'sessionId'); requiredIdentity(message, 'turnId');
+        if (typeof message.prompt !== 'string') throw new Error('daemon protocol requires string prompt');
+        const attachments = message.attachments || [];
+        if (!Array.isArray(attachments) || attachments.length > 8 || attachments.some((item) => !item || typeof item !== 'object' || Array.isArray(item))) {
+            throw new Error('daemon protocol requires at most 8 attachment descriptors');
+        }
+        if (!message.prompt.trim() && attachments.length === 0) throw new Error('daemon protocol requires prompt or attachments');
+        return;
+    }
+    case 'steer-turn': case 'follow-up-turn':
         requiredIdentity(message, 'sessionId'); requiredIdentity(message, 'turnId'); return requiredString(message.prompt, 'prompt');
     case 'approval':
         requiredIdentity(message, 'sessionId'); requiredIdentity(message, 'turnId'); requiredIdentity(message, 'toolCallId');
         requiredString(message.approvalId, 'approvalId'); requiredString(message.argumentsHash, 'argumentsHash');
         if (typeof message.allowed !== 'boolean' && typeof message.decision !== 'string') throw new Error('daemon protocol requires allowed or decision');
         return;
+    case 'toolbox-approval':
+        requiredString(message.approvalRequestId, 'approvalRequestId');
+        if (typeof message.approved !== 'boolean') throw new Error('daemon protocol requires boolean approved');
+        if (Object.prototype.hasOwnProperty.call(message, 'reason') && message.reason != null && typeof message.reason !== 'string') throw new Error('daemon protocol requires string reason');
+        return;
     case 'read-topic': case 'takeover-topic': case 'delete-topic':
         requiredString(message.topicId, 'topicId');
         if (Object.prototype.hasOwnProperty.call(message, 'agentId')) requiredString(message.agentId, 'agentId');
+        return;
+    case 'search-topics': case 'search-topic-messages':
+        requiredString(message.query, 'query');
+        if (message.type === 'search-topic-messages') requiredString(message.topicId, 'topicId');
+        if (Object.prototype.hasOwnProperty.call(message, 'agentId')) requiredString(message.agentId, 'agentId');
+        if (Object.prototype.hasOwnProperty.call(message, 'limit') && (!Number.isInteger(message.limit) || message.limit < 1 || message.limit > 500)) throw new Error('daemon protocol requires limit between 1 and 500');
         return;
     case 'rename-topic':
         requiredString(message.topicId, 'topicId');
@@ -67,7 +91,7 @@ function validateDaemonFrame(message) {
     const event = message.event;
     for (const field of ['eventId', 'sessionId', 'topicId', 'type']) requiredString(event[field], field);
     if (event.runtime !== 'rust' || !Number.isFinite(Number(event.sequence)) || !Number.isFinite(Number(event.timestamp))) throw new Error('daemon event has invalid envelope');
-    if ((event.type.startsWith('assistant.') || event.type.startsWith('reasoning.')) && (!event.turnId || !event.messageId)) throw new Error('daemon streaming event lacks turnId/messageId');
+    if ((event.type.startsWith('assistant.') || event.type.startsWith('reasoning.') || event.type === 'turn.started') && (!event.turnId || !event.messageId)) throw new Error('daemon message event lacks turnId/messageId');
     if (event.type.startsWith('tool.') && !event.toolCallId) throw new Error('daemon tool event lacks toolCallId');
 }
 
@@ -81,6 +105,7 @@ class RustDaemonTransport {
         this.agent = options.agent || 'Nova';
         this.resume = options.resume;
         this.alwaysApprove = options.alwaysApprove === true;
+        this.controlOnly = options.controlOnly === true;
         this.onMessage = options.onMessage || (() => {});
         this.onExit = options.onExit || (() => {});
         this.child = null;
@@ -119,6 +144,7 @@ class RustDaemonTransport {
         append('--agent', this.agent);
         append('--resume', this.resume);
         if (this.alwaysApprove) args.push('--always-approve');
+        if (this.controlOnly) args.push('--control');
         this.child = spawn(this.resolveExecutable(), args, {
             windowsHide: true,
             stdio: ['pipe', 'pipe', 'pipe'],

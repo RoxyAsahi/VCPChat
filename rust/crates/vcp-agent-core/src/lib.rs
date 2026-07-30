@@ -4,7 +4,10 @@
 //! It requests models and tools from a host, which keeps VCPChat/Electron
 //! credential ownership and the existing ApprovalBroker intact.
 
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::{
+    collections::{BTreeMap, HashMap, VecDeque},
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use serde_json::{Map, Value, json};
 use thiserror::Error;
@@ -22,6 +25,196 @@ use vcp_grok_token_estimation::{estimate_tokens, exceeds_threshold_with_headroom
 const SESSION_QUEUE_CAPACITY: usize = 128;
 const MAX_TRANSCRIPT_MESSAGES: usize = 160;
 const MAX_SNAPSHOT_TEXT_BYTES: usize = 8 * 1024;
+const MAX_MARKER_DETAIL_BYTES: usize = 16 * 1024;
+const MAX_TOOL_AUDIT_ITEMS: usize = 32;
+const MAX_TOOL_AUDIT_VALUE_BYTES: usize = 8 * 1024;
+
+#[derive(Debug, Clone, Copy)]
+enum AssistantMarkerKind {
+    RawToolRequest,
+    DynamicFold,
+    VcpInfo,
+}
+
+impl AssistantMarkerKind {
+    const fn start(self) -> &'static str {
+        match self {
+            Self::RawToolRequest => "<<<[TOOL_REQUEST]>>>",
+            Self::DynamicFold => "<<<[VCP_DYNAMIC_FOLD]>>>",
+            Self::VcpInfo => "<<<[VCPINFO]>>>",
+        }
+    }
+
+    const fn end(self) -> &'static str {
+        match self {
+            Self::RawToolRequest => "<<<[END_TOOL_REQUEST]>>>",
+            Self::DynamicFold => "<<<[END_VCP_DYNAMIC_FOLD]>>>",
+            Self::VcpInfo => "<<<[END_VCPINFO]>>>",
+        }
+    }
+
+    const fn event_kind(self) -> &'static str {
+        match self {
+            Self::RawToolRequest => "raw-tool-request",
+            Self::DynamicFold => "dynamic-fold",
+            Self::VcpInfo => "vcpinfo",
+        }
+    }
+
+    const fn label(self) -> &'static str {
+        match self {
+            Self::RawToolRequest => "raw TOOL_REQUEST",
+            Self::DynamicFold => "VCP dynamic context",
+            Self::VcpInfo => "VCP notification",
+        }
+    }
+}
+
+#[derive(Debug)]
+enum AssistantMarkerOutput {
+    Text(String),
+    Observation {
+        kind: AssistantMarkerKind,
+        summary: String,
+        detail: String,
+    },
+    Warning(String),
+}
+
+/// A streaming, fail-closed marker filter.  ToolBox marker examples may be
+/// present in a provider's expanded prompt, but a model printing one is never
+/// an execution request.  The filter works before an assistant delta reaches
+/// a UI or the Core transcript, including when a marker boundary is split
+/// across SSE chunks.
+#[derive(Debug, Default)]
+struct AssistantMarkerFilter {
+    pending: String,
+}
+
+impl AssistantMarkerFilter {
+    fn push(&mut self, text: &str) -> Vec<AssistantMarkerOutput> {
+        self.pending.push_str(text);
+        self.drain(false)
+    }
+
+    fn finish(&mut self) -> Vec<AssistantMarkerOutput> {
+        self.drain(true)
+    }
+
+    fn drain(&mut self, final_chunk: bool) -> Vec<AssistantMarkerOutput> {
+        let mut output = Vec::new();
+        loop {
+            let next = [
+                AssistantMarkerKind::RawToolRequest,
+                AssistantMarkerKind::DynamicFold,
+                AssistantMarkerKind::VcpInfo,
+            ]
+            .into_iter()
+            .filter_map(|kind| {
+                self.pending
+                    .find(kind.start())
+                    .map(|position| (position, kind))
+            })
+            .min_by_key(|(position, _)| *position);
+            let Some((position, kind)) = next else {
+                if final_chunk {
+                    if !self.pending.is_empty() {
+                        output.push(AssistantMarkerOutput::Text(std::mem::take(
+                            &mut self.pending,
+                        )));
+                    }
+                } else {
+                    let retained = marker_prefix_suffix_len(&self.pending);
+                    let safe_len = self.pending.len().saturating_sub(retained);
+                    if safe_len > 0 {
+                        output.push(AssistantMarkerOutput::Text(
+                            self.pending[..safe_len].to_string(),
+                        ));
+                        self.pending.drain(..safe_len);
+                    }
+                }
+                break;
+            };
+            if position > 0 {
+                output.push(AssistantMarkerOutput::Text(
+                    self.pending[..position].to_string(),
+                ));
+                self.pending.drain(..position);
+                continue;
+            }
+            let content_start = kind.start().len();
+            if let Some(relative_end) = self.pending[content_start..].find(kind.end()) {
+                let content_end = content_start + relative_end;
+                let detail = truncate_marker_text(&self.pending[content_start..content_end]);
+                self.pending.drain(..content_end + kind.end().len());
+                match kind {
+                    AssistantMarkerKind::RawToolRequest => {
+                        output.push(AssistantMarkerOutput::Warning(
+                            "[VCP protocol warning: raw TOOL_REQUEST removed and not executed]"
+                                .to_string(),
+                        ))
+                    }
+                    _ => output.push(AssistantMarkerOutput::Observation {
+                        kind,
+                        summary: marker_summary(&detail),
+                        detail,
+                    }),
+                }
+                continue;
+            }
+            if final_chunk {
+                self.pending.clear();
+                output.push(AssistantMarkerOutput::Warning(format!(
+                    "[VCP protocol warning: incomplete {} removed and not executed]",
+                    kind.label()
+                )));
+            }
+            break;
+        }
+        output
+    }
+}
+
+fn marker_prefix_suffix_len(value: &str) -> usize {
+    [
+        AssistantMarkerKind::RawToolRequest,
+        AssistantMarkerKind::DynamicFold,
+        AssistantMarkerKind::VcpInfo,
+    ]
+    .into_iter()
+    .map(AssistantMarkerKind::start)
+    .filter_map(|marker| {
+        (1..marker.len())
+            .rev()
+            .find(|length| value.ends_with(&marker[..*length]))
+    })
+    .max()
+    .unwrap_or(0)
+}
+
+fn truncate_marker_text(value: &str) -> String {
+    if value.len() <= MAX_MARKER_DETAIL_BYTES {
+        return value.to_string();
+    }
+    let mut end = MAX_MARKER_DETAIL_BYTES;
+    while !value.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}…[truncated]", &value[..end])
+}
+
+fn marker_summary(value: &str) -> String {
+    let summary = value.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut end = summary.len().min(240);
+    while !summary.is_char_boundary(end) {
+        end -= 1;
+    }
+    if end == summary.len() {
+        summary
+    } else {
+        format!("{}…", &summary[..end])
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum CoreError {
@@ -66,6 +259,7 @@ impl CoreRuntime {
                     request_id: message.request_id.clone().unwrap_or_default(),
                     turn_id: message.turn_id.clone().unwrap_or_default(),
                     prompt: message.string("prompt").unwrap_or_default().to_string(),
+                    attachments: attachment_descriptors(message.value("attachments")),
                     compaction: CompactionRequest::from_wire(message.value("compaction")),
                 })
                 .await
@@ -266,6 +460,7 @@ enum SessionCommand {
         request_id: String,
         turn_id: String,
         prompt: String,
+        attachments: Vec<Value>,
         compaction: CompactionRequest,
     },
     Interaction {
@@ -458,7 +653,7 @@ impl CompactionRequest {
 
 #[derive(Debug)]
 struct PendingCompaction {
-    pending_prompt: String,
+    pending_user_message: Option<Value>,
     tail: Vec<Value>,
     before_tokens: u32,
     hard_limit: u32,
@@ -479,6 +674,7 @@ struct ActiveTurn {
     model_round: u32,
     assistant_id: String,
     assistant_text: String,
+    marker_filter: AssistantMarkerFilter,
     reasoning_started: bool,
     tool_calls: BTreeMap<u64, NativeToolCall>,
     tool_queue: VecDeque<NativeToolCall>,
@@ -573,9 +769,10 @@ impl SessionActor {
                 request_id,
                 turn_id,
                 prompt,
+                attachments,
                 compaction,
             } => {
-                self.start_turn(request_id, turn_id, prompt, compaction)
+                self.start_turn(request_id, turn_id, prompt, attachments, compaction)
                     .await
             }
             SessionCommand::Interaction {
@@ -627,9 +824,10 @@ impl SessionActor {
         request_id: String,
         turn_id: String,
         prompt: String,
+        attachments: Vec<Value>,
         compaction: CompactionRequest,
     ) {
-        if (prompt.trim().is_empty() && !compaction.only)
+        if (prompt.trim().is_empty() && attachments.is_empty() && !compaction.only)
             || turn_id.is_empty()
             || self.active.is_some()
         {
@@ -648,6 +846,7 @@ impl SessionActor {
             model_round: 0,
             assistant_id: format!("msg_{turn_id}_1"),
             assistant_text: String::new(),
+            marker_filter: AssistantMarkerFilter::default(),
             reasoning_started: false,
             tool_calls: BTreeMap::new(),
             tool_queue: VecDeque::new(),
@@ -655,7 +854,14 @@ impl SessionActor {
             purpose: ModelPurpose::Agent,
             estimated_input_tokens: 0,
         });
-        match self.prepare_compaction(&compaction, &prompt) {
+        let pending_user_message = (!compaction.only).then(|| {
+            identified_message(
+                user_message(&prompt, &attachments),
+                format!("msg_{turn_id}_user"),
+                &turn_id,
+            )
+        });
+        match self.prepare_compaction(&compaction, pending_user_message.as_ref()) {
             Ok(Some(pending)) => {
                 let before_tokens = pending.before_tokens;
                 let tail_tokens = estimate_messages_tokens(&pending.tail);
@@ -684,8 +890,9 @@ impl SessionActor {
                 return;
             }
         }
-        self.transcript
-            .push(json!({ "role": "user", "content": prompt }));
+        if let Some(message) = pending_user_message {
+            self.transcript.push(message);
+        }
         self.request_model().await;
     }
 
@@ -779,7 +986,7 @@ impl SessionActor {
     }
 
     async fn cancel(&mut self, request_id: String) {
-        if let Some(active) = self.active.take() {
+        if let Some(mut active) = self.active.take() {
             if !active.model_request_id.is_empty() {
                 self.outbound(
                     WireMessage::new("model-abort")
@@ -788,6 +995,18 @@ impl SessionActor {
                 .await;
             }
             self.clear_all_interactions();
+            for output in active.marker_filter.finish() {
+                match output {
+                    AssistantMarkerOutput::Text(text) | AssistantMarkerOutput::Warning(text) => {
+                        active.assistant_text.push_str(&text);
+                    }
+                    AssistantMarkerOutput::Observation { kind, summary, .. } => {
+                        active
+                            .assistant_text
+                            .push_str(&format!("[{}: {summary}]", kind.label()));
+                    }
+                }
+            }
             let interrupted_text = if active.assistant_text.trim().is_empty() {
                 "[任务已中断，恢复后不会自动重放。]".to_string()
             } else {
@@ -796,8 +1015,11 @@ impl SessionActor {
                     active.assistant_text.trim_end()
                 )
             };
-            self.transcript
-                .push(json!({ "role": "assistant", "content": interrupted_text }));
+            self.transcript.push(identified_message(
+                json!({ "role": "assistant", "content": interrupted_text }),
+                active.assistant_id.clone(),
+                &active.turn_id,
+            ));
             self.emit_for_turn(
                 Some(&active.turn_id),
                 "turn.cancelled",
@@ -841,17 +1063,40 @@ impl SessionActor {
                 return;
             }
             if let Some(text) = delta.get("content").and_then(Value::as_str) {
-                if active.assistant_text.is_empty() {
-                    emissions.push((
-                        "assistant.started",
-                        json!({ "messageId": active.assistant_id }),
-                    ));
+                for output in active.marker_filter.push(text) {
+                    match output {
+                        AssistantMarkerOutput::Text(text)
+                        | AssistantMarkerOutput::Warning(text)
+                            if !text.is_empty() =>
+                        {
+                            if active.assistant_text.is_empty() {
+                                emissions.push((
+                                    "assistant.started",
+                                    json!({ "messageId": active.assistant_id }),
+                                ));
+                            }
+                            active.assistant_text.push_str(&text);
+                            emissions.push((
+                                "assistant.delta",
+                                json!({ "messageId": active.assistant_id, "text": text }),
+                            ));
+                        }
+                        AssistantMarkerOutput::Observation {
+                            kind,
+                            summary,
+                            detail,
+                        } => emissions.push((
+                            "marker.observed",
+                            json!({
+                                "messageId": active.assistant_id,
+                                "kind": kind.event_kind(),
+                                "summary": summary,
+                                "detail": detail,
+                            }),
+                        )),
+                        AssistantMarkerOutput::Text(_) | AssistantMarkerOutput::Warning(_) => {}
+                    }
                 }
-                active.assistant_text.push_str(text);
-                emissions.push((
-                    "assistant.delta",
-                    json!({ "messageId": active.assistant_id, "text": text }),
-                ));
             }
             let reasoning = delta
                 .get("reasoning_content")
@@ -948,8 +1193,9 @@ impl SessionActor {
                     json!({ "error": error }),
                 )
                 .await;
-                self.transcript
-                    .push(json!({ "role": "user", "content": pending.pending_prompt }));
+                if let Some(message) = pending.pending_user_message {
+                    self.transcript.push(message);
+                }
                 self.active = Some(active);
                 self.request_model().await;
                 return;
@@ -978,8 +1224,56 @@ impl SessionActor {
             )
             .await;
         }
+        // A marker opener can end exactly on the provider's final chunk.  Do
+        // not leave that text in a renderer or transcript merely because no
+        // later SSE delta arrived to complete the streaming filter.
+        for output in active.marker_filter.finish() {
+            match output {
+                AssistantMarkerOutput::Text(text) | AssistantMarkerOutput::Warning(text)
+                    if !text.is_empty() =>
+                {
+                    if active.assistant_text.is_empty() {
+                        self.emit_for_turn(
+                            Some(&active.turn_id),
+                            "assistant.started",
+                            json!({ "messageId": active.assistant_id }),
+                        )
+                        .await;
+                    }
+                    active.assistant_text.push_str(&text);
+                    self.emit_for_turn(
+                        Some(&active.turn_id),
+                        "assistant.delta",
+                        json!({ "messageId": active.assistant_id, "text": text }),
+                    )
+                    .await;
+                }
+                AssistantMarkerOutput::Observation {
+                    kind,
+                    summary,
+                    detail,
+                } => {
+                    self.emit_for_turn(
+                        Some(&active.turn_id),
+                        "marker.observed",
+                        json!({
+                            "messageId": active.assistant_id,
+                            "kind": kind.event_kind(),
+                            "summary": summary,
+                            "detail": detail,
+                        }),
+                    )
+                    .await;
+                }
+                AssistantMarkerOutput::Text(_) | AssistantMarkerOutput::Warning(_) => {}
+            }
+        }
         let calls: Vec<NativeToolCall> = active.tool_calls.values().cloned().collect();
-        let mut assistant = json!({ "role": "assistant", "content": active.assistant_text });
+        let mut assistant = identified_message(
+            json!({ "role": "assistant", "content": active.assistant_text }),
+            active.assistant_id.clone(),
+            &active.turn_id,
+        );
         if !calls.is_empty() {
             let tool_calls: Vec<Value> = calls.iter().map(|call| json!({
                 "id": if call.id.is_empty() { format!("tool_{}_{}", active.turn_id, call.index) } else { call.id.clone() },
@@ -1130,8 +1424,16 @@ impl SessionActor {
             self.request_model().await;
             return;
         };
-        self.transcript
-            .push(json!({ "role": "user", "content": next.prompt }));
+        let turn_id = self
+            .active
+            .as_ref()
+            .map(|active| active.turn_id.clone())
+            .unwrap_or_default();
+        self.transcript.push(identified_message(
+            json!({ "role": "user", "content": next.prompt }),
+            format!("msg_{}_interaction_{}", turn_id, next.id),
+            &turn_id,
+        ));
         self.emit(
             "interaction.consumed",
             json!({ "interactionId": next.id, "kind": next.kind.as_str() }),
@@ -1156,7 +1458,7 @@ impl SessionActor {
         active.purpose = ModelPurpose::Agent;
         let mut messages = Vec::with_capacity(self.transcript.len() + 1);
         messages.push(json!({ "role": "system", "content": external_loop_system_prompt(self.system_prompt.as_deref()) }));
-        messages.extend(self.transcript.iter().cloned());
+        messages.extend(self.transcript.iter().map(provider_message));
         // Production sessions use `auto`. An explicitly supplied `required`
         // value is intentionally limited to the first model round, allowing
         // deterministic live integration fixtures while preserving the
@@ -1167,6 +1469,7 @@ impl SessionActor {
             "auto"
         };
         let mut body = json!({
+            "requestId": active.model_request_id,
             "model": self.model,
             "stream": true,
             "stream_options": { "include_usage": true },
@@ -1191,14 +1494,14 @@ impl SessionActor {
     fn prepare_compaction(
         &self,
         request: &CompactionRequest,
-        pending_prompt: &str,
+        pending_user_message: Option<&Value>,
     ) -> Result<Option<PendingCompaction>, String> {
         if !request.force && (request.context_window == 0 || request.max_output == 0) {
             return Ok(None);
         }
         let mut candidate = self.transcript.clone();
-        if !pending_prompt.trim().is_empty() {
-            candidate.push(json!({ "role": "user", "content": pending_prompt }));
+        if let Some(message) = pending_user_message {
+            candidate.push(message.clone());
         }
         let before_tokens = estimate_messages_tokens(&candidate);
         let hard_limit = if request.context_window > 0 {
@@ -1258,7 +1561,7 @@ impl SessionActor {
             return Err("no compactable transcript".to_string());
         }
         Ok(Some(PendingCompaction {
-            pending_prompt: pending_prompt.to_string(),
+            pending_user_message: pending_user_message.cloned(),
             tail: self.transcript[plan.split_idx..].to_vec(),
             before_tokens,
             hard_limit,
@@ -1282,6 +1585,7 @@ impl SessionActor {
         );
         active.assistant_text.clear();
         let body = json!({
+            "requestId": active.model_request_id,
             "model": self.model,
             "stream": true,
             "stream_options": { "include_usage": true },
@@ -1320,15 +1624,19 @@ impl SessionActor {
             .await;
             return;
         }
-        let checkpoint = json!({ "role": "user", "content": format!("[VCP CHECKPOINT — completed history]\n{summary}") });
+        let checkpoint = identified_message(
+            json!({ "role": "user", "content": format!("[VCP CHECKPOINT — completed history]\n{summary}") }),
+            format!("msg_{}_compaction", active.turn_id),
+            &active.turn_id,
+        );
         let mut next = vec![checkpoint];
         // Keep `pending` intact until the candidate has passed its reduction
         // checks: on failure the ordinary-turn fallback must resume with the
         // original transcript, not a partially moved tail.
         next.extend(pending.tail.iter().cloned());
         let mut candidate = next.clone();
-        if !pending.pending_prompt.trim().is_empty() {
-            candidate.push(json!({ "role": "user", "content": pending.pending_prompt }));
+        if let Some(message) = pending.pending_user_message.as_ref() {
+            candidate.push(message.clone());
         }
         let after_tokens = estimate_messages_tokens(&candidate);
         if after_tokens >= pending.before_tokens
@@ -1351,8 +1659,9 @@ impl SessionActor {
             self.complete_with_snapshot(active).await;
             return;
         }
-        self.transcript
-            .push(json!({ "role": "user", "content": pending.pending_prompt }));
+        if let Some(message) = pending.pending_user_message {
+            self.transcript.push(message);
+        }
         self.active = Some(active);
         self.request_model().await;
     }
@@ -1377,8 +1686,9 @@ impl SessionActor {
                 json!({ "error": error }),
             )
             .await;
-            self.transcript
-                .push(json!({ "role": "user", "content": pending.pending_prompt }));
+            if let Some(message) = pending.pending_user_message {
+                self.transcript.push(message);
+            }
             self.active = Some(active);
             self.request_model().await;
             return;
@@ -1391,8 +1701,11 @@ impl SessionActor {
         // Steering has the same priority as Pi's inner-loop queue. A
         // follow-up is only eligible after the agent has no more work.
         if let Some(next) = self.take_steering().or_else(|| self.follow_ups.pop_front()) {
-            self.transcript
-                .push(json!({ "role": "user", "content": next.prompt }));
+            self.transcript.push(identified_message(
+                json!({ "role": "user", "content": next.prompt }),
+                format!("msg_{}_interaction_{}", active.turn_id, next.id),
+                &active.turn_id,
+            ));
             self.emit_for_turn(
                 Some(&active.turn_id),
                 "interaction.consumed",
@@ -1503,8 +1816,9 @@ impl SessionActor {
 
 /// Normalise snapshot data produced by the existing Pi runtime into the
 /// OpenAI-compatible transcript held by this actor.  The conversion is
-/// deliberately lossy for thinking/attachments: neither belongs in a VCP
-/// checkpoint and retaining them risks persisting hidden reasoning.
+/// deliberately lossy for thinking and raw media bytes. Durable attachment
+/// descriptors survive, while Base64 and hidden reasoning never enter the
+/// checkpoint.
 fn normalize_initial_messages(value: Option<&Value>) -> Vec<Value> {
     value
         .and_then(Value::as_array)
@@ -1519,7 +1833,9 @@ fn normalize_initial_message(message: &Value) -> Option<Value> {
     match role {
         "user" => {
             let content = snapshot_text(message.get("content"));
-            (!content.is_empty()).then(|| json!({ "role": "user", "content": content }))
+            let attachments = snapshot_attachments(message.get("content"));
+            (!content.is_empty() || !attachments.is_empty())
+                .then(|| copy_message_identity(message, user_message(&content, &attachments)))
         }
         "assistant" => {
             let content = snapshot_text(message.get("content"));
@@ -1550,7 +1866,7 @@ fn normalize_initial_message(message: &Value) -> Option<Value> {
             if !tool_calls.is_empty() {
                 output["tool_calls"] = Value::Array(tool_calls);
             }
-            Some(output)
+            Some(copy_message_identity(message, output))
         }
         "toolResult" => {
             let tool_call_id = message.get("toolCallId").and_then(Value::as_str)?.trim();
@@ -1567,7 +1883,12 @@ fn normalize_initial_message(message: &Value) -> Option<Value> {
             } else {
                 text
             };
-            Some(json!({ "role": "tool", "tool_call_id": tool_call_id, "content": content }))
+            let mut output =
+                json!({ "role": "tool", "tool_call_id": tool_call_id, "content": content });
+            if let Some(audit) = snapshot_tool_audit(message.get("vcpAudit")) {
+                output["vcp_audit"] = audit;
+            }
+            Some(output)
         }
         // A snapshot written by an early Rust build or a future native host.
         "tool" => {
@@ -1579,16 +1900,93 @@ fn normalize_initial_message(message: &Value) -> Option<Value> {
             if tool_call_id.is_empty() {
                 return None;
             }
-            Some(
-                json!({ "role": "tool", "tool_call_id": tool_call_id, "content": truncate_text(&snapshot_text(message.get("content"))) }),
-            )
+            let mut output = json!({ "role": "tool", "tool_call_id": tool_call_id, "content": truncate_text(&snapshot_text(message.get("content"))) });
+            if let Some(audit) =
+                snapshot_tool_audit(message.get("vcp_audit").or_else(|| message.get("vcpAudit")))
+            {
+                output["vcp_audit"] = audit;
+            }
+            Some(output)
         }
         _ => None,
     }
 }
 
 fn snapshot_text(content: Option<&Value>) -> String {
-    let text = match content {
+    truncate_text(&content_text(content))
+}
+
+/// ToolBox artifacts are useful to a restored UI, but they are never model
+/// context. Keep only a small, structural audit projection in a checkpoint:
+/// no paths, data URIs or arbitrarily deep/large values may survive.
+fn snapshot_tool_audit(value: Option<&Value>) -> Option<Value> {
+    let object = value?.as_object()?;
+    let mut output = Map::new();
+    if let Some(name) = object.get("toolName").and_then(Value::as_str) {
+        let name = name.trim();
+        if !name.is_empty() && name.len() <= 256 {
+            output.insert("toolName".into(), Value::String(name.to_string()));
+        }
+    }
+    for key in ["resources", "warnings"] {
+        let values = object
+            .get(key)
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .take(MAX_TOOL_AUDIT_ITEMS)
+            .map(|item| snapshot_audit_value(item, 0))
+            .collect::<Vec<_>>();
+        if !values.is_empty() {
+            output.insert(key.into(), Value::Array(values));
+        }
+    }
+    if let Some(task) = object.get("task").filter(|task| !task.is_null()) {
+        output.insert("task".into(), snapshot_audit_value(task, 0));
+    }
+    (!output.is_empty()).then_some(Value::Object(output))
+}
+
+fn snapshot_audit_value(value: &Value, depth: usize) -> Value {
+    if depth >= 4 {
+        return Value::String("[nested ToolBox metadata omitted]".to_string());
+    }
+    match value {
+        Value::String(text) if text.trim_start().starts_with("data:") => {
+            Value::String("[data URI omitted]".to_string())
+        }
+        Value::String(text) => Value::String(truncate_to_bytes(text, MAX_TOOL_AUDIT_VALUE_BYTES)),
+        Value::Array(values) => Value::Array(
+            values
+                .iter()
+                .take(MAX_TOOL_AUDIT_ITEMS)
+                .map(|item| snapshot_audit_value(item, depth + 1))
+                .collect(),
+        ),
+        Value::Object(values) => {
+            let mut output = Map::new();
+            for (key, item) in values.iter().take(MAX_TOOL_AUDIT_ITEMS) {
+                let normalized = key.to_ascii_lowercase();
+                if matches!(
+                    normalized.as_str(),
+                    "path" | "localpath" | "internalpath" | "base64" | "bytes" | "buffer"
+                ) || (normalized == "url"
+                    && item
+                        .as_str()
+                        .is_some_and(|url| url.trim_start().starts_with("file:")))
+                {
+                    continue;
+                }
+                output.insert(key.clone(), snapshot_audit_value(item, depth + 1));
+            }
+            Value::Object(output)
+        }
+        _ => value.clone(),
+    }
+}
+
+fn content_text(content: Option<&Value>) -> String {
+    match content {
         Some(Value::String(text)) => text.clone(),
         Some(Value::Array(parts)) => parts
             .iter()
@@ -1597,8 +1995,169 @@ fn snapshot_text(content: Option<&Value>) -> String {
             .collect::<Vec<_>>()
             .join("\n"),
         _ => String::new(),
+    }
+}
+
+const MAX_ATTACHMENTS_PER_TURN: usize = 8;
+
+fn attachment_descriptors(value: Option<&Value>) -> Vec<Value> {
+    value
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(sanitize_attachment_descriptor)
+        .take(MAX_ATTACHMENTS_PER_TURN)
+        .collect()
+}
+
+fn snapshot_attachments(content: Option<&Value>) -> Vec<Value> {
+    content
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|part| {
+            matches!(
+                part.get("type").and_then(Value::as_str),
+                Some("attachment" | "attachment_ref")
+            )
+        })
+        .filter_map(|part| part.get("attachment"))
+        .filter_map(sanitize_attachment_descriptor)
+        .take(MAX_ATTACHMENTS_PER_TURN)
+        .collect()
+}
+
+fn sanitize_attachment_descriptor(value: &Value) -> Option<Value> {
+    let id = value.get("id")?.as_str()?.trim();
+    let display_name = value.get("displayName")?.as_str()?.trim();
+    let mime_type = value.get("mimeType")?.as_str()?.trim();
+    let byte_len = value.get("byteLen")?.as_u64()?;
+    let sha256 = value.get("sha256")?.as_str()?.trim();
+    let asset_file = value.get("assetFile")?.as_str()?.trim();
+    // v1.4 image descriptors predate `kind`; retain them as images. Audio and
+    // video are descriptor-only VCPToolBox media assets, never provider-
+    // specific content parts and never raw data URLs in a Topic snapshot.
+    let kind = value.get("kind").and_then(Value::as_str).unwrap_or("image");
+    if id.is_empty()
+        || id.len() > 96
+        || display_name.is_empty()
+        || display_name.len() > 512
+        || byte_len == 0
+        || sha256.len() != 64
+        || !sha256
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+        || asset_file.contains(['/', '\\'])
+    {
+        return None;
+    }
+    let mut descriptor = serde_json::Map::new();
+    descriptor.insert("id".into(), Value::String(id.to_string()));
+    descriptor.insert(
+        "displayName".into(),
+        Value::String(display_name.to_string()),
+    );
+    descriptor.insert("kind".into(), Value::String(kind.to_string()));
+    descriptor.insert("mimeType".into(), Value::String(mime_type.to_string()));
+    descriptor.insert("byteLen".into(), Value::from(byte_len));
+    descriptor.insert("sha256".into(), Value::String(sha256.to_string()));
+    descriptor.insert("assetFile".into(), Value::String(asset_file.to_string()));
+    match kind {
+        "image"
+            if matches!(
+                mime_type,
+                "image/png" | "image/jpeg" | "image/gif" | "image/webp"
+            ) && byte_len <= 1_500_000 =>
+        {
+            let width = value.get("width")?.as_u64()?;
+            let height = value.get("height")?.as_u64()?;
+            if width == 0 || height == 0 {
+                return None;
+            }
+            descriptor.insert("width".into(), Value::from(width));
+            descriptor.insert("height".into(), Value::from(height));
+        }
+        "audio"
+            if matches!(
+                mime_type,
+                "audio/wav"
+                    | "audio/mpeg"
+                    | "audio/mp3"
+                    | "audio/aiff"
+                    | "audio/aac"
+                    | "audio/ogg"
+                    | "audio/flac"
+            ) && byte_len <= 25_000_000
+                && value.get("width").is_none()
+                && value.get("height").is_none() => {}
+        "video"
+            if matches!(
+                mime_type,
+                "video/mp4" | "video/webm" | "video/quicktime" | "video/x-msvideo"
+            ) && byte_len <= 50_000_000
+                && value.get("width").is_none()
+                && value.get("height").is_none() => {}
+        _ => return None,
+    }
+    Some(Value::Object(descriptor))
+}
+
+fn user_message(prompt: &str, attachments: &[Value]) -> Value {
+    if attachments.is_empty() {
+        return json!({ "role": "user", "content": prompt });
+    }
+    let mut content = Vec::with_capacity(attachments.len() + 1);
+    if !prompt.trim().is_empty() {
+        content.push(json!({ "type": "text", "text": prompt }));
+    }
+    content.extend(
+        attachments
+            .iter()
+            .map(|attachment| json!({ "type": "attachment_ref", "attachment": attachment })),
+    );
+    json!({ "role": "user", "content": content })
+}
+
+fn identified_message(mut message: Value, message_id: String, turn_id: &str) -> Value {
+    if let Value::Object(map) = &mut message {
+        map.insert("messageId".into(), Value::String(message_id));
+        map.insert("turnId".into(), Value::String(turn_id.to_string()));
+        map.insert("timestamp".into(), Value::from(now_millis()));
+    }
+    message
+}
+
+fn copy_message_identity(source: &Value, mut target: Value) -> Value {
+    let Value::Object(target_map) = &mut target else {
+        return target;
     };
-    truncate_text(&text)
+    for key in ["messageId", "id", "turnId", "timestamp", "createdAt"] {
+        if let Some(value) = source.get(key) {
+            target_map.insert(key.to_string(), value.clone());
+        }
+    }
+    target
+}
+
+fn provider_message(message: &Value) -> Value {
+    let mut output = message.clone();
+    if let Value::Object(map) = &mut output {
+        for key in ["messageId", "id", "turnId", "timestamp", "createdAt"] {
+            map.remove(key);
+        }
+    }
+    output
+}
+
+fn now_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
+
+fn message_text(message: &Value) -> String {
+    content_text(message.get("content"))
 }
 
 fn truncate_text(text: &str) -> String {
@@ -1618,16 +2177,20 @@ fn estimate_message_tokens(message: &Value) -> u32 {
     let mut text = String::new();
     text.push_str(message.get("role").and_then(Value::as_str).unwrap_or(""));
     text.push('\n');
-    text.push_str(message.get("content").and_then(Value::as_str).unwrap_or(""));
+    text.push_str(&message_text(message));
     if let Some(calls) = message.get("tool_calls") {
         text.push_str(&calls.to_string());
     }
     if let Some(call_id) = message.get("tool_call_id").and_then(Value::as_str) {
         text.push_str(call_id);
     }
+    let attachment_tokens = u32::try_from(snapshot_attachments(message.get("content")).len())
+        .unwrap_or(u32::MAX)
+        .saturating_mul(1_024);
     u32::try_from(estimate_vcp_text_tokens(&text).max(1))
         .unwrap_or(u32::MAX)
         .saturating_add(4)
+        .saturating_add(attachment_tokens)
 }
 
 /// VCP prompts are frequently Chinese-heavy. Grok's bytes/4 primitive remains
@@ -1661,11 +2224,11 @@ fn format_compaction_source(messages: &[Value]) -> String {
             .get("role")
             .and_then(Value::as_str)
             .unwrap_or("unknown");
-        let raw = message.get("content").and_then(Value::as_str).unwrap_or("");
+        let raw = message_text(message);
         let content = if role == "tool" {
-            truncate_to_bytes(raw, MAX_TOOL_BYTES)
+            truncate_to_bytes(&raw, MAX_TOOL_BYTES)
         } else {
-            truncate_to_bytes(raw, 6 * 1024)
+            truncate_to_bytes(&raw, 6 * 1024)
         };
         if content.is_empty() && message.get("tool_calls").is_none() {
             continue;
@@ -1753,16 +2316,30 @@ fn safe_snapshot_tail(messages: &[Value]) -> Vec<Value> {
 }
 
 /// Convert the internal OpenAI-compatible transcript into the bounded,
-/// model-usable Pi snapshot shape shared by the existing standalone TopicStore
-/// and future VCPChat host. Thinking, audit metadata and attachments are
-/// intentionally omitted; these checkpoints are continuation state, not a
-/// JSONL event log.
+/// model-usable bounded snapshot shape shared by TopicStore and VCPChat.
+/// Thinking, audit metadata and raw attachment bytes are omitted; only durable
+/// attachment descriptors survive. These checkpoints are continuation state,
+/// not a JSONL event log.
 fn to_pi_snapshot(messages: &[Value]) -> Vec<Value> {
     messages.iter().filter_map(|message| {
         match message.get("role").and_then(Value::as_str) {
             Some("user") => {
-                let text = truncate_text(message.get("content").and_then(Value::as_str).unwrap_or(""));
-                (!text.is_empty()).then(|| json!({ "role": "user", "content": [{ "type": "text", "text": text }] }))
+                let text = message_text(message);
+                let attachments = snapshot_attachments(message.get("content"));
+                if text.is_empty() && attachments.is_empty() {
+                    return None;
+                }
+                let mut content = Vec::with_capacity(attachments.len() + 1);
+                if !text.is_empty() {
+                    content.push(json!({ "type": "text", "text": truncate_text(&text) }));
+                }
+                content.extend(attachments.into_iter().map(|attachment| {
+                    json!({ "type": "attachment", "attachment": attachment })
+                }));
+                Some(copy_message_identity(
+                    message,
+                    json!({ "role": "user", "content": content }),
+                ))
             }
             Some("assistant") => {
                 let mut content = Vec::new();
@@ -1778,7 +2355,12 @@ fn to_pi_snapshot(messages: &[Value]) -> Vec<Value> {
                         .unwrap_or_else(|| json!({}));
                     content.push(json!({ "type": "toolCall", "id": id, "name": name, "arguments": arguments }));
                 }
-                (!content.is_empty()).then(|| json!({ "role": "assistant", "content": content }))
+                (!content.is_empty()).then(|| {
+                    copy_message_identity(
+                        message,
+                        json!({ "role": "assistant", "content": content }),
+                    )
+                })
             }
             Some("tool") => {
                 let tool_call_id = message.get("tool_call_id").and_then(Value::as_str).unwrap_or("").trim();
@@ -1786,10 +2368,14 @@ fn to_pi_snapshot(messages: &[Value]) -> Vec<Value> {
                 let raw = message.get("content").and_then(Value::as_str).unwrap_or("");
                 let is_error = raw.starts_with("[error]");
                 let text = truncate_text(raw.strip_prefix("[error] ").unwrap_or(raw));
-                Some(json!({
+                let mut output = json!({
                     "role": "toolResult", "toolCallId": tool_call_id,
                     "isError": is_error, "content": [{ "type": "text", "text": text }]
-                }))
+                });
+                if let Some(audit) = snapshot_tool_audit(message.get("vcp_audit")) {
+                    output["vcpAudit"] = audit;
+                }
+                Some(output)
             }
             _ => None,
         }
@@ -1799,6 +2385,91 @@ fn to_pi_snapshot(messages: &[Value]) -> Vec<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn attachment_fixture() -> Value {
+        json!({
+            "id": format!("attachment_{}", "a".repeat(64)),
+            "displayName": "截图.png",
+            "mimeType": "image/png",
+            "byteLen": 1024,
+            "width": 32,
+            "height": 32,
+            "sha256": "a".repeat(64),
+            "assetFile": format!("{}.png", "a".repeat(64)),
+        })
+    }
+
+    #[test]
+    fn attachment_descriptor_round_trips_without_base64() {
+        let message = identified_message(
+            user_message("看图", &[attachment_fixture()]),
+            "msg-turn-user".into(),
+            "turn-1",
+        );
+        let snapshot = to_pi_snapshot(std::slice::from_ref(&message));
+        let serialized = serde_json::to_string(&snapshot).expect("snapshot json");
+        assert!(!serialized.contains("base64"));
+        assert!(serialized.contains("attachment_"));
+        let restored = normalize_initial_messages(Some(&Value::Array(snapshot)));
+        assert_eq!(
+            restored[0]
+                .pointer("/content/1/type")
+                .and_then(Value::as_str),
+            Some("attachment_ref")
+        );
+        assert_eq!(
+            restored[0]
+                .pointer("/content/1/attachment/displayName")
+                .and_then(Value::as_str),
+            Some("截图.png")
+        );
+    }
+
+    #[test]
+    fn media_attachment_descriptor_round_trips_without_dimensions_or_data_url() {
+        let attachment = json!({
+            "id": format!("attachment_{}", "b".repeat(64)),
+            "displayName": "录音.mp3",
+            "kind": "audio",
+            "mimeType": "audio/mpeg",
+            "byteLen": 128,
+            "sha256": "b".repeat(64),
+            "assetFile": format!("{}.mp3", "b".repeat(64)),
+        });
+        let snapshot = to_pi_snapshot(&[identified_message(
+            user_message("请转写", &[attachment]),
+            "msg-turn-user".into(),
+            "turn-1",
+        )]);
+        let serialized = serde_json::to_string(&snapshot).expect("snapshot json");
+        assert!(!serialized.contains("base64"));
+        assert!(!serialized.contains("data:audio"));
+        let restored = normalize_initial_messages(Some(&Value::Array(snapshot)));
+        let descriptor = restored[0]
+            .pointer("/content/1/attachment")
+            .expect("attachment descriptor");
+        assert_eq!(descriptor["kind"], "audio");
+        assert!(descriptor.get("width").is_none());
+        assert!(descriptor.get("height").is_none());
+    }
+
+    #[test]
+    fn rejects_media_descriptors_with_image_dimensions_or_unknown_mime() {
+        let mut audio = json!({
+            "id": format!("attachment_{}", "c".repeat(64)),
+            "displayName": "录音.mp3",
+            "kind": "audio",
+            "mimeType": "audio/mpeg",
+            "byteLen": 128,
+            "sha256": "c".repeat(64),
+            "assetFile": format!("{}.mp3", "c".repeat(64)),
+        });
+        audio["width"] = json!(32);
+        assert!(sanitize_attachment_descriptor(&audio).is_none());
+        audio.as_object_mut().expect("object").remove("width");
+        audio["mimeType"] = json!("audio/not-real");
+        assert!(sanitize_attachment_descriptor(&audio).is_none());
+    }
 
     #[test]
     fn missing_provider_usage_falls_back_to_labelled_estimates() {
@@ -1821,6 +2492,41 @@ mod tests {
         assert_eq!(round["source"], "provider");
         assert_eq!(round["totalTokens"], 12);
         assert_eq!(totals.as_value()["source"], "provider");
+    }
+
+    #[test]
+    fn streaming_marker_filter_never_releases_raw_tool_markers_and_projects_display_markers() {
+        let mut filter = AssistantMarkerFilter::default();
+        let first = filter.push("回答前<<<[VCP_DY");
+        assert!(matches!(
+            first.as_slice(),
+            [AssistantMarkerOutput::Text(text)] if text == "回答前"
+        ));
+        let second = filter.push("NAMIC_FOLD]>>> 私有   上下文 <<<[END_VCP_DYNAMIC_FOLD]>>>后");
+        assert!(matches!(
+            second.as_slice(),
+            [
+                AssistantMarkerOutput::Observation { kind: AssistantMarkerKind::DynamicFold, summary, detail },
+                AssistantMarkerOutput::Text(text)
+            ] if summary == "私有 上下文" && detail == " 私有   上下文 " && text == "后"
+        ));
+        let third = filter.push("<<<[TOOL_REQUEST]>>>{\"danger\":true}<<<[END_TOOL_REQUEST]>>>");
+        assert!(matches!(
+            third.as_slice(),
+            [AssistantMarkerOutput::Warning(text)] if text.contains("removed and not executed")
+        ));
+        assert!(filter.finish().is_empty());
+    }
+
+    #[test]
+    fn incomplete_marker_is_removed_fail_closed_at_model_end() {
+        let mut filter = AssistantMarkerFilter::default();
+        assert!(filter.push("<<<[VCPINFO]>>>不完整").is_empty());
+        let finished = filter.finish();
+        assert!(matches!(
+            finished.as_slice(),
+            [AssistantMarkerOutput::Warning(text)] if text.contains("incomplete VCP notification")
+        ));
     }
     use tokio::time::{Duration, timeout};
 
@@ -2119,6 +2825,10 @@ mod tests {
             .insert("prompt".to_string(), json!("long answer"));
         runtime.handle(start).await.unwrap();
         let request = next_type(&mut outbound_rx, "model-request").await;
+        assert_eq!(
+            request.value("body").unwrap()["requestId"],
+            request.request_id.as_deref().unwrap()
+        );
         assert_eq!(request.value("body").unwrap()["max_tokens"], 4096);
     }
 
@@ -2204,6 +2914,10 @@ mod tests {
         );
         runtime.handle(start).await.unwrap();
         let summary_request = next_type(&mut outbound_rx, "model-request").await;
+        assert_eq!(
+            summary_request.value("body").unwrap()["requestId"],
+            summary_request.request_id.as_deref().unwrap()
+        );
         assert!(
             summary_request
                 .value("body")
@@ -2685,16 +3399,51 @@ mod tests {
     #[test]
     fn publishes_a_topic_store_compatible_pi_snapshot() {
         let snapshot = to_pi_snapshot(&[
-            json!({ "role": "user", "content": "请计算" }),
+            json!({ "messageId":"msg-1", "turnId":"turn-1", "timestamp":7, "role": "user", "content": "请计算" }),
             json!({ "role": "assistant", "content": null, "tool_calls": [{
                 "id": "call_1", "function": { "name": "vcp_invoke", "arguments": "{\"toolName\":\"SciCalculator\",\"arguments\":{}}" }
             }] }),
-            json!({ "role": "tool", "tool_call_id": "call_1", "content": "42", "vcp_audit": { "mustNotPersist": true } }),
+            json!({ "role": "tool", "tool_call_id": "call_1", "content": "42", "vcp_audit": {
+                "toolName": "SciCalculator", "resources": [{"url":"https://example.invalid/result"}],
+                "warnings": ["rounded"], "task": {"id":"task-1", "status":"completed"}
+            } }),
         ]);
         assert_eq!(snapshot[0]["role"], "user");
+        assert_eq!(snapshot[0]["messageId"], "msg-1");
+        assert_eq!(snapshot[0]["turnId"], "turn-1");
+        assert_eq!(snapshot[0]["timestamp"], 7);
+        assert!(provider_message(&snapshot[0]).get("messageId").is_none());
         assert_eq!(snapshot[1]["content"][0]["type"], "toolCall");
         assert_eq!(snapshot[2]["role"], "toolResult");
-        assert!(snapshot[2].get("vcp_audit").is_none());
+        assert_eq!(snapshot[2]["vcpAudit"]["toolName"], "SciCalculator");
+        assert_eq!(snapshot[2]["vcpAudit"]["task"]["id"], "task-1");
+        let restored = normalize_initial_messages(Some(&Value::Array(snapshot)));
+        assert_eq!(restored[2]["vcp_audit"]["warnings"][0], "rounded");
+    }
+
+    #[test]
+    fn tool_audit_checkpoint_is_bounded_and_omits_paths_and_data_uris() {
+        let audit = snapshot_tool_audit(Some(&json!({
+            "toolName": "FileOperator",
+            "resources": [{
+                "path": "C:\\Users\\person\\secret.txt",
+                "url": "file:///C:/Users/person/secret.txt",
+                "preview": "data:image/png;base64,AAAA",
+                "name": "safe.txt"
+            }],
+            "warnings": ["x".repeat(16 * 1024)]
+        })))
+        .expect("audit projection");
+        let serialized = audit.to_string();
+        assert!(!serialized.contains("C:\\Users"));
+        assert!(!serialized.contains("file:///"));
+        assert!(!serialized.contains("data:image"));
+        assert!(serialized.contains("safe.txt"));
+        assert!(
+            audit["warnings"][0]
+                .as_str()
+                .is_some_and(|warning| warning.len() < 9 * 1024)
+        );
     }
 
     #[test]

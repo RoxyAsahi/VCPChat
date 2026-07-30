@@ -30,7 +30,7 @@ class RustAgentRuntimeManager {
         return {
             state: this.state,
             protocolVersion: 1,
-            protocolRevision: '1.2',
+            protocolRevision: '1.4',
             driver: 'rust',
             worker: this.transport ? {
                 available: true,
@@ -63,7 +63,22 @@ class RustAgentRuntimeManager {
         return this.getStatus();
     }
 
+    getAttachedTopicId() {
+        return this.attachment?.topicId ?? null;
+    }
+
     async createSession(options = {}) {
+        // A second Workbench window can select the Topic already attached to
+        // this Main process. Reuse the existing Rust attachment instead of
+        // stopping its daemon and reacquiring the same lease.
+        if (
+            options.resume
+            && this.attachment?.topicId === options.resume
+            && this.transport
+            && this.state === 'ready'
+        ) {
+            return { ...this.attachment };
+        }
         await this.transport?.stop();
         this._rejectControlWaiters(new Error('Rust Agent attachment replaced'));
         this._rejectEventWaiters(new Error('Rust Agent attachment replaced'));
@@ -100,12 +115,22 @@ class RustAgentRuntimeManager {
         return closed;
     }
 
-    async startTurn({ sessionId, prompt }) {
+    async importAttachment({ sessionId, path: filePath }) {
+        this._assertAttachment(sessionId);
+        const value = String(filePath || '').trim();
+        if (!value) throw new Error('Attachment path must not be empty');
+        return this._requestControl('import-attachment', { sessionId, path: value }, 'attachment-imported');
+    }
+
+    async startTurn({ sessionId, prompt, attachments = [] }) {
         this._assertAttachment(sessionId);
         const value = String(prompt || '').trim();
-        if (!value) throw new Error('Prompt must not be empty');
+        if (!Array.isArray(attachments) || attachments.length > 8 || attachments.some((item) => !item || typeof item !== 'object' || Array.isArray(item))) {
+            throw new Error('Attachments must be descriptor objects (maximum 8)');
+        }
+        if (!value && attachments.length === 0) throw new Error('Prompt or attachment must not be empty');
         const turnId = `turn_${crypto.randomUUID()}`;
-        await this.transport.request('start-turn', { sessionId, turnId, prompt: value });
+        await this.transport.request('start-turn', { sessionId, turnId, prompt: value, attachments });
         return { sessionId, turnId };
     }
 
@@ -132,6 +157,15 @@ class RustAgentRuntimeManager {
     }
 
     async respondApproval(payload = {}) {
+        if (payload.scope === 'toolbox') {
+            if (!payload.approvalId) throw new Error('ToolBox approval request ID is required');
+            await this.transport.request('toolbox-approval', {
+                approvalRequestId: payload.approvalId,
+                approved: payload.decision === 'allow',
+                reason: payload.reason || (payload.decision === 'allow' ? 'approved by VCPAgent user' : 'denied by VCPAgent user'),
+            });
+            return { ok: true, approvalId: payload.approvalId, decision: payload.decision };
+        }
         this._assertAttachment(payload.sessionId);
         if (!payload.approvalId || !payload.turnId || !payload.toolCallId || !payload.argumentsHash) {
             throw new Error('Approval binding is incomplete');
@@ -180,6 +214,30 @@ class RustAgentRuntimeManager {
         const normalizedAgentId = normalizeAgentId(agentId);
         await this._ensureControlTransport(normalizedAgentId);
         return this._requestControl('read-topic', withAgentId({ topicId }, normalizedAgentId), 'topic-read-only');
+    }
+    async searchTopics({ query, agentId, limit = 20 } = {}) {
+        const normalizedQuery = String(query || '').trim();
+        if (!normalizedQuery) throw new Error('Topic search query is required');
+        const normalizedAgentId = normalizeAgentId(agentId);
+        await this._ensureControlTransport(normalizedAgentId);
+        return this._requestControl('search-topics', withAgentId({ query: normalizedQuery, limit: normalizeSearchLimit(limit, 20) }, normalizedAgentId), 'topic-search-results');
+    }
+    async searchTopicMessages({ query, topicId, agentId, limit = 50 } = {}) {
+        const normalizedQuery = String(query || '').trim();
+        const normalizedTopicId = String(topicId || '').trim();
+        if (!normalizedQuery) throw new Error('Topic message search query is required');
+        if (!normalizedTopicId) throw new Error('Topic id is required');
+        const normalizedAgentId = normalizeAgentId(agentId);
+        await this._ensureControlTransport(normalizedAgentId);
+        return this._requestControl('search-topic-messages', withAgentId({ query: normalizedQuery, topicId: normalizedTopicId, limit: normalizeSearchLimit(limit, 50) }, normalizedAgentId), 'topic-message-search-results');
+    }
+    async getTopicIndexStatus() {
+        await this._ensureControlTransport();
+        return this._requestControl('get-index-status', {}, 'topic-index-status');
+    }
+    async rebuildTopicIndex() {
+        await this._ensureControlTransport();
+        return this._requestControl('rebuild-topic-index', {}, 'topic-index-rebuilt');
     }
     async takeoverTopic({ topicId, agentId }) {
         if (!topicId) throw new Error('Topic id is required');
@@ -272,7 +330,7 @@ class RustAgentRuntimeManager {
             this._emitDiagnostic('runtime.warning', { warning: 'Rust daemon emitted an invalid event envelope' }, 'runtime');
             return;
         }
-        if ((event.type === 'assistant.started' || event.type === 'assistant.delta'
+        if ((event.type === 'turn.started' || event.type === 'assistant.started' || event.type === 'assistant.delta'
             || event.type === 'assistant.completed' || event.type === 'reasoning.delta')
             && (!event.turnId || !event.messageId)) {
             this._emitDiagnostic('runtime.warning', { warning: 'Rust daemon emitted a streaming event without turnId/messageId' }, 'runtime');
@@ -320,6 +378,7 @@ class RustAgentRuntimeManager {
             agent: options.agent || options.agentId || settings.agentRuntime?.tui?.defaultAgentId || 'Nova',
             resume: options.resume,
             alwaysApprove: options.permissionMode === 'always-approve',
+            controlOnly: options.controlOnly === true,
             onMessage: (message) => this._handleMessage(message),
             onExit: (_code, _signal, error) => this._handleExit(error),
         };
@@ -329,7 +388,7 @@ class RustAgentRuntimeManager {
         if (this.transport) return;
         if (!this.controlTransportPromise) {
             this.controlTransportPromise = (async () => {
-                const transport = this.transportFactory(this._transportConfig({ agent: agentId }));
+                const transport = this.transportFactory(this._transportConfig({ agent: agentId, controlOnly: true }));
                 this.state = 'starting';
                 await transport.start();
                 this.transport = transport;
@@ -423,6 +482,12 @@ function normalizeBudget(value) {
 function normalizeAgentId(value) {
     if (value === undefined || value === null || String(value).trim() === '') return undefined;
     return String(value).trim();
+}
+
+function normalizeSearchLimit(value, fallback) {
+    const limit = Number(value ?? fallback);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 500) throw new Error('Search limit must be an integer between 1 and 500');
+    return limit;
 }
 
 function withAgentId(payload, agentId) {

@@ -1,4 +1,4 @@
-use std::io::{self, Write, stdout};
+use std::io::{self, IsTerminal, Write, stdout};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
@@ -13,6 +13,10 @@ use crossterm::{
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 use serde_json::Value;
+use vcp_agent_cli::{
+    DEFAULT_STDIN_MAX_BYTES, HeadlessRequest, MAX_STDIN_MAX_BYTES, OutputFormat, read_stdin_capped,
+    run_headless,
+};
 use vcp_agent_host::{
     BudgetLimits, HostCommand, HostEvent, RunningHost, RuntimeOverrides, TuiSettingsUpdate,
     default_settings_path, load_config, start, update_shared_settings,
@@ -36,6 +40,10 @@ fn tui_request_id() -> String {
 async fn main() -> io::Result<()> {
     vcp_grok_crash_handler::install_terminal_restore_only();
     let mut options = parse_options();
+    if let Some(error) = options.parse_error.take() {
+        eprintln!("vcp-agent: {error}");
+        std::process::exit(2);
+    }
     if options.help {
         print_help();
         return Ok(());
@@ -43,6 +51,9 @@ async fn main() -> io::Result<()> {
     if options.version {
         println!("vcp-agent 0.1.0");
         return Ok(());
+    }
+    if let Some(headless) = options.headless.clone() {
+        return run_headless_entry(options, headless).await;
     }
     if options.open_settings {
         run_settings_wizard(&options.overrides)?;
@@ -129,6 +140,10 @@ enum Runtime {
     Native {
         host: RunningHost,
         overrides: Box<RuntimeOverrides>,
+        /// Descriptor-only media queued by `/attach <path>`. The TUI never
+        /// reads source files or retains Base64; Rust Host validates and
+        /// persists the asset before emitting this descriptor.
+        pending_attachments: Vec<Value>,
     },
     Bridge(HostBridge),
     Unavailable,
@@ -146,6 +161,7 @@ async fn run(
             Ok(host) => Runtime::Native {
                 host,
                 overrides: Box::new(options.overrides.clone()),
+                pending_attachments: Vec::new(),
             },
             Err(error) => {
                 app.set_runtime_unavailable(error.to_string());
@@ -189,8 +205,15 @@ async fn run(
 fn drain_runtime(runtime: &mut Runtime, app: &mut App) {
     match runtime {
         Runtime::Native { host, .. } => {
+            // Do not hold a borrow of the Host event receiver while handling
+            // a control event: attachment imports mutate the same Runtime's
+            // descriptor queue.
+            let mut events = Vec::new();
             while let Ok(event) = host.events.try_recv() {
-                apply_host_event(app, event);
+                events.push(event);
+            }
+            for event in events {
+                apply_host_event(app, runtime, event);
             }
         }
         Runtime::Bridge(bridge) => {
@@ -207,7 +230,7 @@ fn drain_runtime(runtime: &mut Runtime, app: &mut App) {
     }
 }
 
-fn apply_host_event(app: &mut App, event: HostEvent) {
+fn apply_host_event(app: &mut App, runtime: &mut Runtime, event: HostEvent) {
     match event {
         HostEvent::Warning(message) => app.apply_event(VcpEvent::RuntimeWarning { message }),
         HostEvent::ToolboxWs {
@@ -234,6 +257,7 @@ fn apply_host_event(app: &mut App, event: HostEvent) {
             }),
         }),
         HostEvent::Control { kind, payload, .. } => match kind.as_str() {
+            "attachment-imported" => stage_imported_attachment(app, runtime, payload),
             "models" => app.open_choice_picker(
                 "model",
                 "模型",
@@ -617,6 +641,32 @@ fn apply_core_event(app: &mut App, event: &Value) {
                 .unwrap_or("")
                 .to_string(),
         }),
+        Some("marker.observed") => {
+            let kind = payload
+                .get("kind")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown");
+            let title = match kind {
+                "dynamic-fold" => "VCP 动态上下文",
+                "vcpinfo" => "VCP 通知",
+                _ => "VCP 受限标记",
+            };
+            let summary = payload
+                .get("summary")
+                .and_then(Value::as_str)
+                .unwrap_or("VCP 内容已安全投影");
+            let detail = payload.get("detail").and_then(Value::as_str).unwrap_or("");
+            app.apply_event(VcpEvent::ToolboxObservation {
+                channel: "VCP 内容".into(),
+                kind: format!("marker-{kind}"),
+                title: title.into(),
+                detail: if detail.is_empty() {
+                    summary.to_string()
+                } else {
+                    format!("{summary}\n\n{detail}")
+                },
+            });
+        }
         Some("assistant.completed") => {
             app.apply_event(VcpEvent::AssistantCompleted);
             if let Some(usage) = payload.get("usage") {
@@ -629,6 +679,13 @@ fn apply_core_event(app: &mut App, event: &Value) {
             }
             app.apply_event(VcpEvent::TurnCompleted);
         }
+        Some("turn.failed") => app.apply_event(VcpEvent::RuntimeWarning {
+            message: payload
+                .get("error")
+                .and_then(Value::as_str)
+                .unwrap_or("Agent Turn 失败")
+                .to_string(),
+        }),
         Some("reasoning.delta") => app.apply_event(VcpEvent::ReasoningDelta {
             text: payload
                 .get("text")
@@ -819,13 +876,24 @@ fn dispatch_action(app: &mut App, runtime: &mut Runtime, action: InputAction) {
             },
         ),
         InputAction::Demo => app.load_demo(),
-        InputAction::Submit(prompt) => send(
-            runtime,
-            HostCommand::StartTurn {
-                prompt,
-                turn_id: None,
-            },
-        ),
+        InputAction::Submit(prompt) => {
+            let attachments = take_pending_attachments(runtime);
+            let attachment_count = attachments.len();
+            send(
+                runtime,
+                HostCommand::StartTurn {
+                    prompt,
+                    attachments,
+                    turn_id: None,
+                },
+            );
+            if attachment_count > 0 {
+                app.apply_event(VcpEvent::Notice {
+                    title: "附件已发送".into(),
+                    message: format!("本轮已安全提交 {attachment_count} 个媒体 descriptor。"),
+                });
+            }
+        }
         InputAction::Cancel => send(runtime, HostCommand::Cancel),
         InputAction::Approval {
             approval_id,
@@ -956,6 +1024,8 @@ fn dispatch_command(app: &mut App, runtime: &mut Runtime, command: String) {
             },
         ),
         "/compact" => send(runtime, HostCommand::Compact),
+        "/attach" if !argument.is_empty() => queue_attachment_import(app, runtime, &argument),
+        "/paste-image" if argument.is_empty() => queue_clipboard_image_import(app, runtime),
         "/permissions" if matches!(argument.as_str(), "ask" | "always-approve" | "yolo") => {
             let always = argument != "ask";
             send(
@@ -1061,12 +1131,144 @@ fn dispatch_command(app: &mut App, runtime: &mut Runtime, command: String) {
     }
 }
 
+fn queue_attachment_import(app: &mut App, runtime: &mut Runtime, argument: &str) {
+    let path = argument.trim().trim_matches('"');
+    if path.is_empty() {
+        app.apply_event(VcpEvent::RuntimeWarning {
+            message: "用法：/attach <图片、音频或视频路径>".into(),
+        });
+        return;
+    }
+    if !matches!(runtime, Runtime::Native { .. }) {
+        app.apply_event(VcpEvent::RuntimeWarning {
+            message: "bridge 模式不接受本地路径；请在原宿主中选择附件。".into(),
+        });
+        return;
+    }
+    send(
+        runtime,
+        HostCommand::ImportAttachment {
+            request_id: tui_request_id(),
+            path: PathBuf::from(path),
+        },
+    );
+}
+
+fn queue_clipboard_image_import(app: &mut App, runtime: &mut Runtime) {
+    if !matches!(runtime, Runtime::Native { .. }) {
+        app.apply_event(VcpEvent::RuntimeWarning {
+            message: "bridge 模式不读取系统剪贴板图片；请在原宿主中选择附件。".into(),
+        });
+        return;
+    }
+    send(
+        runtime,
+        HostCommand::ImportClipboardImage {
+            request_id: tui_request_id(),
+        },
+    );
+}
+
+fn stage_imported_attachment(app: &mut App, runtime: &mut Runtime, payload: Value) {
+    let Some(descriptor) = payload.get("attachment").cloned() else {
+        app.apply_event(VcpEvent::RuntimeWarning {
+            message: "Rust Host 返回了不完整的附件 descriptor。".into(),
+        });
+        return;
+    };
+    let Runtime::Native {
+        pending_attachments,
+        ..
+    } = runtime
+    else {
+        app.apply_event(VcpEvent::RuntimeWarning {
+            message: "bridge 模式不能暂存本地附件。".into(),
+        });
+        return;
+    };
+    let id = descriptor
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    if id.is_empty()
+        || descriptor
+            .get("assetFile")
+            .and_then(Value::as_str)
+            .is_none()
+    {
+        app.apply_event(VcpEvent::RuntimeWarning {
+            message: "Rust Host 返回的附件缺少稳定 ID 或 asset 标识。".into(),
+        });
+        return;
+    }
+    if pending_attachments.len() >= 8 {
+        app.apply_event(VcpEvent::RuntimeWarning {
+            message: "每轮最多添加 8 个媒体附件。".into(),
+        });
+        return;
+    }
+    if pending_attachments
+        .iter()
+        .any(|existing| existing.get("id") == descriptor.get("id"))
+    {
+        app.apply_event(VcpEvent::Notice {
+            title: "附件已存在".into(),
+            message: "该媒体 descriptor 已在下一轮队列中。".into(),
+        });
+        return;
+    }
+    let display_name = descriptor
+        .get("displayName")
+        .and_then(Value::as_str)
+        .unwrap_or("附件")
+        .to_string();
+    let kind = descriptor
+        .get("kind")
+        .and_then(Value::as_str)
+        .unwrap_or("image");
+    let byte_len = descriptor
+        .get("byteLen")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let metadata = if kind == "image" {
+        let width = descriptor.get("width").and_then(Value::as_u64).unwrap_or(0);
+        let height = descriptor
+            .get("height")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        format!("{width}×{height}")
+    } else {
+        format!("{kind} · {byte_len} B")
+    };
+    pending_attachments.push(descriptor);
+    app.apply_event(VcpEvent::Notice {
+        title: "附件已准备".into(),
+        message: format!(
+            "{display_name} · {metadata}。内容仅保存在 Rust Topic asset；下次发送时提交 {} 个 descriptor。",
+            pending_attachments.len()
+        ),
+    });
+}
+
+fn take_pending_attachments(runtime: &mut Runtime) -> Vec<Value> {
+    match runtime {
+        Runtime::Native {
+            pending_attachments,
+            ..
+        } => std::mem::take(pending_attachments),
+        Runtime::Bridge(_) | Runtime::Unavailable => Vec::new(),
+    }
+}
+
 fn restart_native(
     runtime: &mut Runtime,
     app: &mut App,
     update: impl FnOnce(&mut RuntimeOverrides),
 ) {
-    let Runtime::Native { host, overrides } = runtime else {
+    let Runtime::Native {
+        host, overrides, ..
+    } = runtime
+    else {
         app.apply_event(VcpEvent::RuntimeWarning {
             message: "当前 bridge/配置阻断模式不支持重建 Rust Session".into(),
         });
@@ -1133,11 +1335,29 @@ struct Options {
     version: bool,
     open_settings: bool,
     overrides: RuntimeOverrides,
+    headless: Option<HeadlessOptions>,
+    parse_error: Option<String>,
+}
+
+#[derive(Clone)]
+struct HeadlessOptions {
+    instruction: String,
+    output_format: OutputFormat,
+    read_stdin: bool,
+    stdin_max_bytes: usize,
+    persist: bool,
 }
 
 fn parse_options() -> Options {
     let mut args = std::env::args().skip(1);
     let mut screen_mode_explicit = false;
+    let stdin_is_terminal = io::stdin().is_terminal();
+    let mut wants_headless = !stdin_is_terminal;
+    let mut headless_instruction = None;
+    let mut headless_output = OutputFormat::Plain;
+    let mut read_stdin_explicit = false;
+    let mut persist = false;
+    let mut stdin_max_bytes = DEFAULT_STDIN_MAX_BYTES;
     let mut options = Options {
         bridge_path: None,
         use_alternate_screen: true,
@@ -1145,6 +1365,8 @@ fn parse_options() -> Options {
         version: false,
         open_settings: false,
         overrides: RuntimeOverrides::default(),
+        headless: None,
+        parse_error: None,
     };
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -1159,9 +1381,49 @@ fn parse_options() -> Options {
             }
             "--model" | "-m" => options.overrides.model = args.next(),
             "--agent" | "-a" => options.overrides.agent = args.next(),
+            "--workspace" => options.overrides.workspace = args.next().map(PathBuf::from),
             "--settings-path" => options.overrides.settings_path = args.next().map(PathBuf::from),
             "--agents-dir" => options.overrides.agents_dir = args.next().map(PathBuf::from),
             "--resume" => options.overrides.resume = args.next(),
+            "--print" | "-p" | "--single" => {
+                wants_headless = true;
+                headless_instruction = args.next();
+                if headless_instruction.is_none() {
+                    options.parse_error = Some(format!("{arg} requires an instruction"));
+                }
+            }
+            "--output-format" => {
+                wants_headless = true;
+                match args.next().as_deref().map(OutputFormat::parse) {
+                    Some(Ok(format)) => headless_output = format,
+                    Some(Err(error)) => options.parse_error = Some(error.to_string()),
+                    None => options.parse_error = Some("--output-format requires a value".into()),
+                }
+            }
+            "--stdin" => {
+                wants_headless = true;
+                read_stdin_explicit = true;
+            }
+            "--stdin-max-bytes" => {
+                wants_headless = true;
+                match args.next().and_then(|value| value.parse::<usize>().ok()) {
+                    Some(value) if (1..=MAX_STDIN_MAX_BYTES).contains(&value) => {
+                        stdin_max_bytes = value;
+                    }
+                    Some(_) => {
+                        options.parse_error = Some(format!(
+                            "--stdin-max-bytes must be between 1 and {MAX_STDIN_MAX_BYTES}"
+                        ))
+                    }
+                    None => {
+                        options.parse_error = Some("--stdin-max-bytes requires an integer".into())
+                    }
+                }
+            }
+            "--persist" => {
+                wants_headless = true;
+                persist = true;
+            }
             "--settings" => options.open_settings = true,
             "--permission-mode" => {
                 options.overrides.always_approve = matches!(
@@ -1172,11 +1434,39 @@ fn parse_options() -> Options {
             "--always-approve" | "--yolo" => options.overrides.always_approve = true,
             "--help" | "-h" => options.help = true,
             "--version" | "-v" => options.version = true,
-            value if value.starts_with('-') => {}
+            value if value.starts_with('-') => {
+                options.parse_error = Some(format!("unknown option: {value}"));
+            }
             value => {
-                if options.overrides.workspace.is_none() {
+                if wants_headless && headless_instruction.is_none() {
+                    headless_instruction = Some(value.to_string());
+                } else if options.overrides.workspace.is_none() {
                     options.overrides.workspace = Some(PathBuf::from(value));
+                } else {
+                    options.parse_error = Some("only one workspace path may be specified".into());
                 }
+            }
+        }
+    }
+    if wants_headless && !options.help && !options.version {
+        if options.bridge_path.is_some() {
+            options.parse_error = Some(
+                "--bridge is an internal TUI transport and cannot be used with --print".into(),
+            );
+        }
+        match headless_instruction.filter(|value| !value.trim().is_empty()) {
+            Some(instruction) => {
+                options.headless = Some(HeadlessOptions {
+                    instruction,
+                    output_format: headless_output,
+                    read_stdin: read_stdin_explicit || !stdin_is_terminal,
+                    stdin_max_bytes,
+                    persist: persist || options.overrides.resume.is_some(),
+                });
+            }
+            None => {
+                options.parse_error =
+                    Some("non-interactive mode requires an instruction; use --print \"…\"".into());
             }
         }
     }
@@ -1197,6 +1487,56 @@ fn parse_options() -> Options {
         }
     }
     options
+}
+
+async fn run_headless_entry(options: Options, headless: HeadlessOptions) -> io::Result<()> {
+    if options.open_settings {
+        eprintln!("vcp-agent: --settings is interactive and cannot be combined with --print");
+        std::process::exit(2);
+    }
+    let stdin = if headless.read_stdin {
+        let mut input = io::stdin().lock();
+        read_stdin_capped(&mut input, headless.stdin_max_bytes).map_err(io::Error::other)?
+    } else {
+        String::new()
+    };
+    let mut config = load_config(options.overrides.clone()).map_err(io::Error::other)?;
+    // Shell one-shots should not create a durable Agent Topic by surprise.
+    // `--persist` and `--resume` deliberately preserve the normal Host Topic
+    // path, while the default temp directory is released after graceful host
+    // shutdown.
+    let ephemeral = if headless.persist {
+        None
+    } else {
+        let directory = tempfile::Builder::new()
+            .prefix("vcp-agent-cli-")
+            .tempdir()
+            .map_err(io::Error::other)?;
+        config.data_root = directory.path().join("AgentRuntimeData");
+        Some(directory)
+    };
+    let host = start(config).map_err(io::Error::other)?;
+    let mut stdout = io::stdout().lock();
+    let mut stderr = io::stderr().lock();
+    let outcome = run_headless(
+        host,
+        HeadlessRequest {
+            instruction: headless.instruction,
+            stdin,
+            output_format: headless.output_format,
+            persistent: headless.persist,
+        },
+        &mut stdout,
+        &mut stderr,
+    )
+    .await
+    .map_err(io::Error::other)?;
+    drop(ephemeral);
+    let code = outcome.stop_reason.exit_code();
+    if code != 0 {
+        std::process::exit(code);
+    }
+    Ok(())
 }
 
 fn run_settings_wizard(overrides: &RuntimeOverrides) -> io::Result<()> {
@@ -1237,7 +1577,7 @@ fn prompt_line(label: &str) -> io::Result<String> {
 
 fn print_help() {
     println!(
-        "VCP Agent (pure Rust)\n\nUsage:\n  vcp-agent [workspace] [options]\n\nOptions:\n  -m, --model <id>       模型\n  -a, --agent <id|name>  Agent（默认 Nova）\n      --settings         启动前打开共享配置向导\n      --settings-path <path>\n      --resume <id|latest>\n      --minimal | --fullscreen\n      --permission-mode <ask|always-approve>\n      --yolo\n  -h, --help\n  -v, --version\n\nEnvironment: VCP_SERVER_URL, VCP_API_KEY, VCP_AGENT_SETTINGS_PATH, VCP_AGENT_AGENTS_DIR"
+        "VCP Agent (pure Rust)\n\nInteractive usage:\n  vcp-agent [workspace] [options]\n\nScript / pipeline usage:\n  git log --oneline | vcp-agent --print \"分析这些提交\"\n  vcp-agent --print \"分析日志\" --output-format json < error.log\n\nOptions:\n  -m, --model <id>       模型\n  -a, --agent <id|name>  Agent（默认 Nova）\n      --workspace <path> 显式工作目录（脚本模式推荐）\n      --settings         启动前打开共享配置向导\n      --settings-path <path>\n      --resume <id|latest>\n  -p, --print <prompt>   无界面执行一次 Agent Turn\n      --stdin            在 --print 模式读取标准输入\n      --stdin-max-bytes <n>\n                        标准输入上限（默认 1048576，最大 8388608）\n      --output-format <plain|json|streaming-json>\n      --persist          保留本次脚本 Topic；--resume 自动持久化\n      --minimal | --fullscreen\n      --permission-mode <ask|always-approve>\n      --yolo             仅跳过本地审批；ToolBox 后端审批仍独立\n  -h, --help\n  -v, --version\n\nScript contract: stdout only contains answer/JSON; diagnostics go to stderr.\nWithout --persist, script runs use a temporary Topic.\nEnvironment: VCP_SERVER_URL, VCP_API_KEY, VCP_AGENT_SETTINGS_PATH, VCP_AGENT_AGENTS_DIR"
     );
 }
 
@@ -1257,6 +1597,7 @@ mod tests {
                 topic_id: "topic-test".into(),
             },
             overrides: Box::new(RuntimeOverrides::default()),
+            pending_attachments: Vec::new(),
         };
         let mut app = App::new();
 
@@ -1267,12 +1608,137 @@ mod tests {
         );
 
         match command_rx.try_recv().expect("native Host command") {
-            HostCommand::StartTurn { prompt, turn_id } => {
+            HostCommand::StartTurn {
+                prompt,
+                attachments,
+                turn_id,
+            } => {
                 assert_eq!(prompt, "通过 Rust Host 执行");
+                assert!(attachments.is_empty());
                 assert_eq!(turn_id, None);
             }
             _ => panic!("TUI submit must project to HostCommand::StartTurn"),
         }
+    }
+
+    #[test]
+    fn native_tui_attachment_is_descriptor_only_and_moves_to_the_next_turn() {
+        let (commands, mut command_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (_event_tx, events) = tokio::sync::mpsc::unbounded_channel();
+        let mut runtime = Runtime::Native {
+            host: RunningHost {
+                commands,
+                events,
+                session_id: "session-test".into(),
+                topic_id: "topic-test".into(),
+            },
+            overrides: Box::new(RuntimeOverrides::default()),
+            pending_attachments: Vec::new(),
+        };
+        let mut app = App::new();
+
+        dispatch_command(
+            &mut app,
+            &mut runtime,
+            "/attach C:\\work\\设计图.png".into(),
+        );
+        match command_rx.try_recv().expect("attachment import command") {
+            HostCommand::ImportAttachment { path, .. } => assert_eq!(
+                path.as_os_str(),
+                std::ffi::OsStr::new("C:\\work\\设计图.png")
+            ),
+            _ => panic!("/attach must invoke the Rust Host import command"),
+        }
+
+        let descriptor = serde_json::json!({
+            "id": "attachment-1",
+            "displayName": "设计图.png",
+            "mimeType": "image/png",
+            "byteLen": 42,
+            "width": 16,
+            "height": 16,
+            "sha256": "a".repeat(64),
+            "assetFile": "a".repeat(64) + ".png"
+        });
+        apply_host_event(
+            &mut app,
+            &mut runtime,
+            HostEvent::Control {
+                request_id: "attach-1".into(),
+                kind: "attachment-imported".into(),
+                payload: serde_json::json!({ "attachment": descriptor.clone() }),
+            },
+        );
+        assert!(
+            app.messages
+                .last()
+                .is_some_and(|message| message.body.contains("设计图.png"))
+        );
+        assert!(
+            app.messages
+                .iter()
+                .all(|message| !message.body.contains("base64"))
+        );
+
+        dispatch_action(&mut app, &mut runtime, InputAction::Submit(String::new()));
+        match command_rx.try_recv().expect("attachment-only turn") {
+            HostCommand::StartTurn {
+                prompt,
+                attachments,
+                ..
+            } => {
+                assert!(prompt.is_empty());
+                assert_eq!(attachments, vec![descriptor]);
+            }
+            _ => panic!("attachment must reach the authoritative Host StartTurn command"),
+        }
+        assert!(matches!(
+            &runtime,
+            Runtime::Native {
+                pending_attachments,
+                ..
+            } if pending_attachments.is_empty()
+        ));
+    }
+
+    #[test]
+    fn native_tui_paste_image_delegates_clipboard_access_to_host() {
+        let (commands, mut command_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (_event_tx, events) = tokio::sync::mpsc::unbounded_channel();
+        let mut runtime = Runtime::Native {
+            host: RunningHost {
+                commands,
+                events,
+                session_id: "session-test".into(),
+                topic_id: "topic-test".into(),
+            },
+            overrides: Box::new(RuntimeOverrides::default()),
+            pending_attachments: Vec::new(),
+        };
+        let mut app = App::new();
+        dispatch_command(&mut app, &mut runtime, "/paste-image".into());
+        assert!(matches!(
+            command_rx.try_recv().expect("clipboard image command"),
+            HostCommand::ImportClipboardImage { .. }
+        ));
+    }
+
+    #[test]
+    fn unavailable_attachment_is_projected_as_a_safe_tui_warning() {
+        let mut app = App::new();
+        apply_core_event(
+            &mut app,
+            &serde_json::json!({
+                "type": "turn.failed",
+                "payload": {
+                    "code": "attachment-unavailable",
+            "error": "附件文件不可用或已损坏；请重新选择附件后再发送。"
+                }
+            }),
+        );
+        assert!(app.messages.last().is_some_and(|message| {
+            message.title == "运行告警" && message.body.contains("重新选择附件")
+        }));
     }
 
     #[test]
@@ -1287,6 +1753,7 @@ mod tests {
                 topic_id: "topic-test".into(),
             },
             overrides: Box::new(RuntimeOverrides::default()),
+            pending_attachments: Vec::new(),
         };
         let mut app = App::new();
 
@@ -1321,6 +1788,7 @@ mod tests {
                 topic_id: "topic-test".into(),
             },
             overrides: Box::new(RuntimeOverrides::default()),
+            pending_attachments: Vec::new(),
         };
         let mut app = App::new();
 
@@ -1356,6 +1824,7 @@ mod tests {
                 topic_id: "topic-test".into(),
             },
             overrides: Box::new(RuntimeOverrides::default()),
+            pending_attachments: Vec::new(),
         };
         let mut app = App::new();
 

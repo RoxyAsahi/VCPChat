@@ -68,7 +68,7 @@ impl ServiceConfig {
                 cli.app_data.display()
             )
         })?;
-        let app_data = cli.app_data.canonicalize().with_context(|| {
+        let app_data = dunce::canonicalize(&cli.app_data).with_context(|| {
             format!("failed to canonicalize AppData {}", cli.app_data.display())
         })?;
 
@@ -96,8 +96,7 @@ impl ServiceConfig {
     }
 
     pub fn validate_source_path(&self, path: &Path) -> Result<PathBuf> {
-        let canonical = path
-            .canonicalize()
+        let canonical = dunce::canonicalize(path)
             .with_context(|| format!("failed to canonicalize {}", path.display()))?;
         if !canonical.starts_with(&self.app_data) {
             anyhow::bail!("path is outside configured AppData");

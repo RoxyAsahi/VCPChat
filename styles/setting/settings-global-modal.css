@@ -1,6 +1,5 @@
 /* --- Global Settings Modal Scrollbar Styles --- */
 /* 全局设置模态框常驻滚动条，避免布局动态波动 */
-@scope (html:not([data-ui-mode="next"])) {
 #globalSettingsModal .modal-content {
     overflow-y: auto !important;
     /* 强制始终显示滚动条，覆盖:hover选择器 */
@@ -697,6 +696,4 @@ body.light-theme .global-settings-footer button[type="submit"]:hover {
     .chat-presentation-mode-options {
         grid-template-columns: 1fr;
     }
-}
-
 }

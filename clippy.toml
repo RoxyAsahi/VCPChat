@@ -1,0 +1,7 @@
+large-error-threshold = 256
+
+disallowed-methods = [
+    { path = "std::fs::canonicalize", reason = "Windows may return verbatim paths; use dunce::canonicalize at the workspace boundary" },
+    { path = "std::path::Path::canonicalize", reason = "Windows may return verbatim paths; use dunce::canonicalize at the workspace boundary" },
+    { path = "tokio::fs::canonicalize", reason = "Use the audited blocking workspace canonicalization helper" },
+]

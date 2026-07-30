@@ -30,6 +30,11 @@ html[data-ui-mode="next"] body {
     --next-backdrop-filter: var(--next-theme-backdrop-filter, blur(18px) saturate(1.28) brightness(1.03));
     --next-surface-backdrop-filter: var(--next-theme-surface-backdrop-filter, none);
     background-color: var(--primary-bg, var(--next-shell-bg));
+    /* 新版 UI 下壁纸只铺在右侧主面板/通知栏/启动台，关掉 body 的全屏铺底，
+       让顶栏与侧栏显示干净的 shell-bg + material sheen，不再对壁纸做无效覆盖。
+       !important 是因为 styles/themes.css 的 body 壁纸规则是 unlayered，
+       跨层压制需要显式提权。 */
+    background-image: none !important;
 }
 
 html[data-ui-mode="next"] body.light-theme {

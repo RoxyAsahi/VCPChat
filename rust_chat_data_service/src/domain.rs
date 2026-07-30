@@ -56,15 +56,6 @@ pub struct TopicKey {
     pub topic_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MessageKey {
-    pub owner_type: OwnerType,
-    pub owner_id: String,
-    pub topic_id: String,
-    pub msg_id: String,
-}
-
 #[derive(Debug, Clone)]
 pub struct OwnerRecord {
     pub key: OwnerKey,

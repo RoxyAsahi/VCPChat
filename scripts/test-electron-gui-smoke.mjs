@@ -66,14 +66,25 @@ let smokePhase = 'boot';
 
 async function confirmTopicFlow(page, label) {
     await page.waitForSelector('.agent-chat-topic-flow-dialog', { visible: true, timeout: timeoutMs });
+    // Opening a persisted Topic starts with an explicit Rust read-topic
+    // loading state. Wait for the requested action instead of racing the
+    // first visible dialog frame, which only contains the safe Cancel action.
+    await page.waitForFunction((buttonLabel) => {
+        const dialog = document.querySelector('.agent-chat-topic-flow-dialog');
+        return [...(dialog?.querySelectorAll('button') || [])]
+            .some((candidate) => candidate.textContent?.trim() === buttonLabel && !candidate.disabled);
+    }, { timeout: timeoutMs }, label);
     const clicked = await page.evaluate((buttonLabel) => {
         const dialog = document.querySelector('.agent-chat-topic-flow-dialog');
         const button = [...(dialog?.querySelectorAll('button') || [])]
             .find((candidate) => candidate.textContent?.trim() === buttonLabel);
-        button?.click();
-        return Boolean(button);
+        if (button) {
+            button.click();
+            return { clicked: true, text: dialog?.textContent?.slice(0, 1_200) || '' };
+        }
+        return { clicked: false, text: dialog?.textContent?.slice(0, 1_200) || '' };
     }, label);
-    assert.ok(clicked, `Topic flow must expose ${label}`);
+    assert.ok(clicked.clicked, `Topic flow must expose ${label}: ${clicked.text}`);
 }
 
 function sleep(ms) {
@@ -372,7 +383,13 @@ async function assertWorkbenchSidebarTabs(page) {
         await page.waitForFunction((tabLabel) => {
             const selected = [...document.querySelectorAll('.agent-chat-sidebar .sidebar-tab-button')]
                 .find((candidate) => candidate.textContent?.trim() === tabLabel);
-            return selected?.getAttribute('aria-selected') === 'true';
+            const active = document.querySelector('.agent-chat-sidebar .sidebar-tab-content.active');
+            const primary = tabLabel === '助手'
+                ? document.querySelector('.agent-chat-sidebar .agent-chat-agent-row .agent-name')
+                : tabLabel === '会话'
+                    ? document.querySelector('.agent-chat-sidebar .next-ui-create-topic-trigger')
+                    : document.querySelector('.agent-chat-sidebar .agent-chat-setting-input');
+            return selected?.getAttribute('aria-selected') === 'true' && Boolean(active && primary);
         }, { timeout: timeoutMs }, label);
         const layout = await page.evaluate((tabLabel) => {
             const rect = (selector) => {
@@ -393,7 +410,7 @@ async function assertWorkbenchSidebarTabs(page) {
                         ? rect('.agent-chat-sidebar .next-ui-create-topic-trigger')
                         : rect('.agent-chat-sidebar .agent-chat-setting-input'),
                 settingsPadding: tabLabel === '设置'
-                    ? Number.parseFloat(getComputedStyle(document.querySelector('.agent-chat-settings-pane')).paddingLeft || '0')
+                    ? Number.parseFloat(getComputedStyle(document.querySelector('.agent-chat-settings-pane') || content).paddingLeft || '0')
                     : null,
             };
         }, label);
@@ -633,6 +650,10 @@ async function terminate(child) {
 
 async function removeTemporaryAppData(target) {
     if (!target) return;
+    if (process.env.VCPCHAT_E2E_KEEP_APP_DATA === '1') {
+        console.warn(`Electron GUI smoke retained isolated AppData for diagnostics: ${target}`);
+        return;
+    }
     let lastError = null;
     for (let attempt = 0; attempt < 15; attempt += 1) {
         try {
@@ -678,7 +699,7 @@ async function writeMainChatFixture(appDataRoot) {
 async function seedDurableWorkbenchTopic(appDataRoot) {
     const topicId = 'gui-rust-snapshot-reopen';
     const updatedAt = Date.now();
-    const topicDirectory = path.join(appDataRoot, 'UserData', 'nova', 'topics', topicId);
+    const topicDirectory = path.join(appDataRoot, 'AgentRuntimeData', 'nova', 'topics', topicId);
     const history = [
         { id: 'seed-user', messageId: 'seed-user', turnId: 'seed-turn', role: 'user', content: '来自 Rust checkpoint 的问题', timestamp: updatedAt - 1 },
         { id: 'seed-assistant', messageId: 'seed-assistant', turnId: 'seed-turn', role: 'assistant', content: 'Rust snapshot 只应由 read-topic 恢复。', timestamp: updatedAt },
@@ -699,7 +720,7 @@ async function seedDurableWorkbenchTopic(appDataRoot) {
 
 async function seedLiveCompactionTopic(appDataRoot) {
     const topicId = 'gui-seed-compact';
-    const topicDirectory = path.join(appDataRoot, 'UserData', 'Nova', 'topics', topicId);
+    const topicDirectory = path.join(appDataRoot, 'AgentRuntimeData', 'Nova', 'topics', topicId);
     const messages = Array.from({ length: 12 }, (_, index) => ({
         role: index % 2 === 0 ? 'user' : 'assistant',
         content: [{ type: 'text', text: `GUI 压缩历史 ${index}：${'这是用于 Electron 真实上下文压缩验收的中文记录。'.repeat(120)}` }],
@@ -949,7 +970,6 @@ async function runLiveGuiCompaction(page, compactionTopic, rendererErrors) {
         return Boolean(row);
     }, compactionTopic.topicId);
     assert.ok(selected, 'seeded compaction Topic must remain selectable while the Workbench refreshes its catalog');
-    await confirmTopicFlow(page, '打开并恢复');
     await page.waitForFunction(async (topicId) => {
         const status = await (window.chatAPI || window.electronAPI).agentRuntimeGetStatus();
         return status?.attachment?.topicId === topicId
@@ -1252,6 +1272,12 @@ try {
     child = spawn(electronBinary, [
         ...(packagedExecutable ? [] : ['.']),
         '--allow-multiple-instances',
+        // VCPCHAT_APP_DATA_DIR isolates shared settings/Topics, but Chromium
+        // localStorage lives under Electron's userData profile. Keep that
+        // profile isolated too, otherwise a previous smoke's lastTopic pointer
+        // can legitimately auto-resume this run's fixture before its explicit
+        // open-flow assertion.
+        `--user-data-dir=${path.join(appData, 'electron-profile')}`,
         `--remote-debugging-port=${port}`,
     ], {
         cwd: root,
@@ -1360,7 +1386,14 @@ try {
     // removed through its tab close control without leaving a mounted view.
     await page.click('#nextUiAddTabBtn');
     await page.waitForSelector('.next-ui-internal-app-item[title="VCP Agent"]', { visible: true, timeout: timeoutMs });
-    await page.click('.next-ui-internal-app-item[title="VCP Agent"]');
+    // Opening the launcher can redraw when the daemon emits readiness. Click
+    // the current document rather than keeping Puppeteer's ElementHandle
+    // across that independently scheduled renderer update.
+    assert.equal(await page.evaluate(() => {
+        const item = document.querySelector('.next-ui-internal-app-item[title="VCP Agent"]');
+        item?.click();
+        return Boolean(item);
+    }), true, 'the Agent launchpad item must remain actionable during daemon startup');
     await page.waitForSelector('#nextUiInternalAppHost .agent-workbench-root', { visible: true, timeout: timeoutMs });
     await page.waitForSelector('.next-ui-tab[data-view-id="app:agent-workbench"]', { visible: true, timeout: timeoutMs });
     await recordSmokeResult('running', 'workbench-mounted');
@@ -1475,15 +1508,112 @@ try {
         tab?.click();
     });
     await page.waitForFunction((topicId) => Boolean(document.querySelector(`.agent-chat-persisted-topic[data-topic-id="${topicId}"]`)), { timeout: timeoutMs }, durableWorkbenchTopic.topicId);
+    const durableTopicLease = await page.evaluate(async (topicId) => {
+        const api = window.chatAPI || window.electronAPI;
+        const topics = await api.agentRuntimeListTopics({ agentId: 'Nova' });
+        const topic = (Array.isArray(topics) ? topics : topics?.topics || [])
+            .find((candidate) => candidate?.id === topicId);
+        const row = document.querySelector(`.agent-chat-persisted-topic[data-topic-id="${topicId}"]`);
+        return {
+            daemonInUse: topic?.inUse,
+            daemonReadOnly: topic?.readOnly,
+            rowClass: row?.className || null,
+            rowText: row?.textContent || null,
+        };
+    }, durableWorkbenchTopic.topicId);
+    assert.equal(durableTopicLease.daemonInUse, false,
+        `a read-only control daemon must not claim the durable Topic lease: ${JSON.stringify(durableTopicLease)}`);
+    assert.equal(durableTopicLease.daemonReadOnly, false,
+        `a free Topic must remain writable after control-plane reads: ${JSON.stringify(durableTopicLease)}`);
+    // Topic actions are a Workbench-local context menu: the Rust daemon still
+    // owns every mutation, but the fixed body-level popover must work both
+    // from the three-dot affordance and from a native-looking right click.
+    const durableTopicSelector = `.agent-chat-persisted-topic[data-topic-id="${durableWorkbenchTopic.topicId}"]`;
+    // A control-plane refresh may replace Topic rows between Puppeteer's
+    // hover and click. Resolve the trigger from the current renderer frame;
+    // the right-click branch below still validates a physical pointer path.
+    assert.equal(await page.evaluate((selector) => {
+        const trigger = document.querySelector(`${selector} .agent-chat-session-menu`);
+        trigger?.click();
+        return Boolean(trigger);
+    }, durableTopicSelector), true, 'the current Topic row must expose an actionable three-dot trigger');
+    await page.waitForSelector('.agent-chat-topic-context-menu', { visible: true, timeout: timeoutMs });
+    const threeDotMenu = await page.evaluate(() => {
+        const menu = document.querySelector('.agent-chat-topic-context-menu');
+        const trigger = document.querySelector('.agent-chat-persisted-topic .agent-chat-session-menu');
+        const deleteItem = menu?.querySelector('.context-menu-item.danger-item');
+        const rect = menu?.getBoundingClientRect();
+        return {
+            parentIsBody: menu?.parentElement === document.body,
+            role: menu?.getAttribute('role'),
+            labels: [...(menu?.querySelectorAll('[role="menuitem"]') || [])].map((item) => item.textContent?.trim()),
+            usesMainMenuClass: menu?.classList.contains('context-menu') || false,
+            itemIcons: menu?.querySelectorAll('.context-menu-item > i.fas').length || 0,
+            triggerUsesSvg: Boolean(trigger?.querySelector('svg')),
+            triggerUsesTextIcon: Boolean(trigger?.querySelector('.vcp-ui-icon')),
+            deleteUsesMainDangerClass: deleteItem?.classList.contains('danger-item') || false,
+            rect: rect && { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom },
+            width: window.innerWidth,
+            height: window.innerHeight,
+        };
+    });
+    assert.equal(threeDotMenu.parentIsBody, true, 'the Topic menu must not be clipped by the sidebar scroll container');
+    assert.equal(threeDotMenu.role, 'menu', 'the Topic action popover must expose a menu role');
+    assert.ok(threeDotMenu.labels.includes('重命名') && threeDotMenu.labels.some((label) => label.includes('删除')),
+        `a free Topic must expose Rust-backed rename/delete actions: ${JSON.stringify(threeDotMenu)}`);
+    assert.ok(threeDotMenu.usesMainMenuClass && threeDotMenu.itemIcons >= 4,
+        `Topic actions must reuse the main-chat context-menu primitive and icon hierarchy: ${JSON.stringify(threeDotMenu)}`);
+    assert.deepEqual({ triggerUsesSvg: threeDotMenu.triggerUsesSvg, triggerUsesTextIcon: threeDotMenu.triggerUsesTextIcon },
+        { triggerUsesSvg: true, triggerUsesTextIcon: false },
+        `the Topic three-dot trigger must not degrade to an unloaded icon-font dash: ${JSON.stringify(threeDotMenu)}`);
+    assert.equal(threeDotMenu.deleteUsesMainDangerClass, true,
+        `the destructive Topic action must use the main-chat danger-item contract: ${JSON.stringify(threeDotMenu)}`);
+    assert.ok(threeDotMenu.rect.left >= 0 && threeDotMenu.rect.top >= 0
+        && threeDotMenu.rect.right <= threeDotMenu.width && threeDotMenu.rect.bottom <= threeDotMenu.height,
+    `the Topic action menu must remain inside the Electron viewport: ${JSON.stringify(threeDotMenu)}`);
+    if (process.env.VCPCHAT_E2E_SCREENSHOT_PATH) {
+        await page.screenshot({ path: process.env.VCPCHAT_E2E_SCREENSHOT_PATH, fullPage: false });
+    }
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('.agent-chat-topic-context-menu', { hidden: true, timeout: timeoutMs });
+    await page.click(durableTopicSelector, { button: 'right' });
+    await page.waitForSelector('.agent-chat-topic-context-menu', { visible: true, timeout: timeoutMs });
+    const rightClickMenu = await page.$$eval('.agent-chat-topic-context-menu [role="menuitem"]', (items) => items.map((item) => item.textContent?.trim()));
+    assert.ok(rightClickMenu.includes('打开会话') && rightClickMenu.includes('复制 Topic ID'),
+        `right-click must open the same Topic context menu: ${JSON.stringify(rightClickMenu)}`);
+    const legacyTopicDecorations = await page.evaluate((selector) => {
+        const row = document.querySelector(selector);
+        const count = row?.querySelector('.message-count');
+        return {
+            rowBefore: row ? getComputedStyle(row, '::before').display : null,
+            rowAfter: row ? getComputedStyle(row, '::after').display : null,
+            countAfter: count ? getComputedStyle(count, '::after').display : null,
+            emptyCountDisplay: count?.textContent?.trim() === '' ? getComputedStyle(count).display : null,
+        };
+    }, durableTopicSelector);
+    assert.equal(legacyTopicDecorations.rowBefore, 'none',
+        `Agent Topic rows must not inherit a legacy leading glass-line: ${JSON.stringify(legacyTopicDecorations)}`);
+    assert.equal(legacyTopicDecorations.rowAfter, 'none',
+        `Agent Topic rows must not inherit a legacy trailing glass-line: ${JSON.stringify(legacyTopicDecorations)}`);
+    // The Rust Topic projection no longer renders the legacy message-count
+    // decoration. If an older row shape supplies one, it must remain hidden.
+    assert.ok(
+        legacyTopicDecorations.countAfter === null
+            || (legacyTopicDecorations.countAfter === 'none' && legacyTopicDecorations.emptyCountDisplay === 'none'),
+        `Agent Topic rows must not expose the legacy message-count decoration: ${JSON.stringify(legacyTopicDecorations)}`
+    );
+    await page.keyboard.press('Escape');
     const openedDurableTopic = await page.evaluate((topicId) => {
         const row = document.querySelector(`.agent-chat-persisted-topic[data-topic-id="${topicId}"]`);
         row?.click();
         return Boolean(row);
     }, durableWorkbenchTopic.topicId);
     assert.ok(openedDurableTopic, 'a durable Rust Topic row must remain actionable while control-plane refreshes redraw the sidebar');
-    await page.waitForFunction(() => document.querySelector('.agent-chat-topic-flow-checkpoint')?.textContent?.includes('已读取 Rust checkpoint'), { timeout: timeoutMs });
-    await assertResponsiveTopicFlow(page, '打开并恢复');
-    await confirmTopicFlow(page, '打开并恢复');
+    await page.waitForFunction(async (topicId) => {
+        const status = await (window.chatAPI || window.electronAPI).agentRuntimeGetStatus();
+        return status?.attachment?.topicId === topicId
+            && !document.querySelector('.agent-chat-topic-flow-dialog');
+    }, { timeout: timeoutMs }, durableWorkbenchTopic.topicId);
     await page.waitForFunction((text) => [...document.querySelectorAll('.message-item.assistant .md-content')]
         .some((node) => node.textContent.includes(text)), { timeout: timeoutMs }, durableWorkbenchTopic.assistantText);
     assert.deepEqual(await page.evaluate(() => JSON.parse(window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1'))), {

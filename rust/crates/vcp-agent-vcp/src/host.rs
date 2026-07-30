@@ -8,12 +8,16 @@
 
 use std::collections::BTreeMap;
 
-use futures_util::StreamExt;
+use futures_util::{SinkExt, StreamExt};
 use reqwest::{Client, header};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use thiserror::Error;
-use tokio_tungstenite::{connect_async, tungstenite::Message};
+use tokio::sync::mpsc;
+use tokio_tungstenite::{
+    connect_async_with_config,
+    tungstenite::{Message, protocol::WebSocketConfig},
+};
 use url::Url;
 
 use crate::encode_legacy_tool_request;
@@ -21,6 +25,7 @@ use crate::encode_legacy_tool_request;
 const MAX_SSE_EVENT_BYTES: usize = 256 * 1024;
 const MAX_HTTP_BODY_BYTES: usize = 256 * 1024;
 const MAX_TOOL_OUTPUT_BYTES: usize = 64 * 1024;
+const MAX_WS_MESSAGE_BYTES: usize = 256 * 1024;
 
 #[derive(Debug, Error)]
 pub enum ToolboxHostError {
@@ -189,6 +194,12 @@ pub struct ToolboxToolResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     pub status: u16,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub resources: Vec<Value>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task: Option<Value>,
 }
 
 /// Future Rust-only ToolBox client. It accepts an already-loaded connection;
@@ -296,6 +307,9 @@ impl DirectToolboxHost {
                 output: String::new(),
                 error: Some(truncate(&display_value(parsed), 1_000)),
                 status: status.as_u16(),
+                resources: Vec::new(),
+                warnings: Vec::new(),
+                task: None,
             });
         }
         Ok(normalize_human_tool_result(parsed, status.as_u16()))
@@ -329,9 +343,7 @@ impl DirectToolboxHost {
         let endpoint = endpoints
             .get(&channel)
             .ok_or(ToolboxHostError::InvalidServerUrl)?;
-        let (mut socket, _) = connect_async(endpoint.as_str())
-            .await
-            .map_err(|error| ToolboxHostError::WebSocket(error.to_string()))?;
+        let (mut socket, _) = connect_toolbox_websocket(endpoint).await?;
         while let Some(message) = socket.next().await {
             match message.map_err(|error| ToolboxHostError::WebSocket(error.to_string()))? {
                 Message::Text(text) => dispatch_ws_payload(channel, &text, &mut on_event),
@@ -348,6 +360,133 @@ impl DirectToolboxHost {
         let _ = socket.close(None).await;
         Ok(())
     }
+
+    /// Run the authenticated VCPLog frontend connection. This is the only
+    /// ToolBox observer socket allowed to send application messages, and the
+    /// caller can only supply the already validated approval response shape.
+    pub async fn run_log_websocket(
+        &self,
+        device_name: &str,
+        responses: &mut mpsc::Receiver<ToolboxApprovalResponse>,
+        mut on_event: impl FnMut(ToolboxWsEvent),
+    ) -> Result<(), ToolboxHostError> {
+        let endpoints = websocket_endpoints(&self.connection)?;
+        let mut endpoint = endpoints
+            .get(&ToolboxWsChannel::Log)
+            .cloned()
+            .ok_or(ToolboxHostError::InvalidServerUrl)?;
+        endpoint
+            .query_pairs_mut()
+            .append_pair("deviceName", device_name);
+        let (mut socket, _) = connect_toolbox_websocket(&endpoint).await?;
+        let mut terminal_error = None;
+        loop {
+            tokio::select! {
+                inbound = socket.next() => {
+                    let Some(inbound) = inbound else { break; };
+                    let inbound = match inbound {
+                        Ok(message) => message,
+                        Err(error) => {
+                            terminal_error = Some(ToolboxHostError::WebSocket(error.to_string()));
+                            break;
+                        }
+                    };
+                    match inbound {
+                        Message::Text(text) => dispatch_ws_payload(ToolboxWsChannel::Log, &text, &mut on_event),
+                        Message::Binary(bytes) => {
+                            match std::str::from_utf8(&bytes) {
+                                Ok(text) => dispatch_ws_payload(ToolboxWsChannel::Log, text, &mut on_event),
+                                Err(_) => {
+                                    terminal_error = Some(ToolboxHostError::InvalidUtf8);
+                                    break;
+                                }
+                            }
+                        }
+                        Message::Ping(_) | Message::Pong(_) | Message::Frame(_) => {}
+                        Message::Close(_) => break,
+                    }
+                }
+                response = responses.recv() => {
+                    let Some(response) = response else { break; };
+                    let payload = match serde_json::to_string(&json!({
+                        "type": "tool_approval_response",
+                        "data": {
+                            "requestId": response.request_id,
+                            "approved": response.approved,
+                            "reason": response.reason,
+                        }
+                    })) {
+                        Ok(payload) => payload,
+                        Err(error) => {
+                            if let Some(completion) = response.completion {
+                                let _ = completion.send(Err(error.to_string()));
+                            }
+                            terminal_error = Some(ToolboxHostError::InvalidResponse(error.to_string()));
+                            break;
+                        }
+                    };
+                    if payload.len() > MAX_WS_MESSAGE_BYTES {
+                        if let Some(completion) = response.completion {
+                            let _ = completion.send(Err("VCPLog approval response exceeds the message limit".into()));
+                        }
+                        terminal_error = Some(ToolboxHostError::ResponseTooLarge);
+                        break;
+                    }
+                    match socket.send(Message::Text(payload)).await {
+                        Ok(()) => {
+                            if let Some(completion) = response.completion {
+                                let _ = completion.send(Ok(()));
+                            }
+                        }
+                        Err(error) => {
+                            let message = error.to_string();
+                            if let Some(completion) = response.completion {
+                                let _ = completion.send(Err(message.clone()));
+                            }
+                            terminal_error = Some(ToolboxHostError::WebSocket(message));
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        // A response can be queued while the socket is closing. Resolve all
+        // such waiters explicitly; otherwise the Host could leave a GUI
+        // approval in an indeterminate state forever.
+        while let Ok(response) = responses.try_recv() {
+            if let Some(completion) = response.completion {
+                let _ = completion.send(Err(
+                    "VCPLog WebSocket closed before approval response was written".into(),
+                ));
+            }
+        }
+        let _ = socket.close(None).await;
+        match terminal_error {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
+    }
+}
+
+async fn connect_toolbox_websocket(
+    endpoint: &Url,
+) -> Result<
+    (
+        tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
+        tokio_tungstenite::tungstenite::handshake::client::Response,
+    ),
+    ToolboxHostError,
+> {
+    let config = WebSocketConfig {
+        max_message_size: Some(MAX_WS_MESSAGE_BYTES),
+        max_frame_size: Some(MAX_WS_MESSAGE_BYTES),
+        ..WebSocketConfig::default()
+    };
+    connect_async_with_config(endpoint.as_str(), Some(config), false)
+        .await
+        .map_err(|error| ToolboxHostError::WebSocket(error.to_string()))
 }
 
 async fn http_error(response: reqwest::Response) -> ToolboxHostError {
@@ -376,12 +515,22 @@ async fn read_response_text(response: reqwest::Response) -> Result<String, Toolb
 
 fn normalize_human_tool_result(value: Value, status: u16) -> ToolboxToolResult {
     if let Value::Object(object) = &value {
+        let resources = bounded_array(object.get("resources"));
+        let warnings = bounded_array(object.get("warnings"));
+        let task = object
+            .get("task")
+            .or_else(|| object.get("accepted"))
+            .cloned()
+            .map(bounded_value);
         if let Some(error) = object.get("error") {
             return ToolboxToolResult {
                 ok: false,
                 output: String::new(),
                 error: Some(truncate(&display_value(error.clone()), 1_000)),
                 status,
+                resources,
+                warnings,
+                task,
             };
         }
         if object.get("status").and_then(Value::as_str) == Some("error") {
@@ -395,6 +544,9 @@ fn normalize_human_tool_result(value: Value, status: u16) -> ToolboxToolResult {
                 output: String::new(),
                 error: Some(truncate(&display_value(error), 1_000)),
                 status,
+                resources,
+                warnings,
+                task,
             };
         }
         let content = object
@@ -407,6 +559,9 @@ fn normalize_human_tool_result(value: Value, status: u16) -> ToolboxToolResult {
             output: truncate(&display_value(content), MAX_TOOL_OUTPUT_BYTES),
             error: None,
             status,
+            resources,
+            warnings,
+            task,
         };
     }
     ToolboxToolResult {
@@ -414,6 +569,29 @@ fn normalize_human_tool_result(value: Value, status: u16) -> ToolboxToolResult {
         output: truncate(&display_value(value), MAX_TOOL_OUTPUT_BYTES),
         error: None,
         status,
+        resources: Vec::new(),
+        warnings: Vec::new(),
+        task: None,
+    }
+}
+
+fn bounded_array(value: Option<&Value>) -> Vec<Value> {
+    value
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .take(32)
+        .cloned()
+        .map(bounded_value)
+        .collect()
+}
+
+fn bounded_value(value: Value) -> Value {
+    let encoded = value.to_string();
+    if encoded.len() <= 8 * 1024 {
+        value
+    } else {
+        json!({"truncated": true, "preview": truncate(&encoded, 8 * 1024)})
     }
 }
 
@@ -515,6 +693,17 @@ pub enum ToolboxWsEvent {
     DistributedExecutionIgnored(Value),
 }
 
+#[derive(Debug)]
+pub struct ToolboxApprovalResponse {
+    pub request_id: String,
+    pub approved: bool,
+    pub reason: Option<String>,
+    /// The Host uses this to distinguish “queued locally” from a response
+    /// actually written to the VCPLog WebSocket. It is intentionally not
+    /// serializable and never crosses the daemon protocol boundary.
+    pub completion: Option<tokio::sync::oneshot::Sender<Result<(), String>>>,
+}
+
 fn dispatch_ws_payload(
     channel: ToolboxWsChannel,
     text: &str,
@@ -596,6 +785,18 @@ fn normalize_log_entries(value: Value) -> Vec<ToolboxLogEntry> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+
+    use tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        net::TcpListener,
+        sync::mpsc,
+        time::{Duration, timeout},
+    };
+    use tokio_tungstenite::accept_async;
 
     #[test]
     fn sse_decoder_handles_cjk_split_and_done() {
@@ -629,6 +830,13 @@ mod tests {
             endpoints[&ToolboxWsChannel::Info].as_str(),
             "ws://localhost:6005/vcpinfo/VCP_Key=a%20b"
         );
+        let mut log = endpoints[&ToolboxWsChannel::Log].clone();
+        log.query_pairs_mut()
+            .append_pair("deviceName", "vcp-agent-rust");
+        assert_eq!(
+            log.as_str(),
+            "ws://localhost:6005/VCPlog/VCP_Key=a%20b?deviceName=vcp-agent-rust"
+        );
     }
 
     #[test]
@@ -640,6 +848,60 @@ mod tests {
         );
         assert_eq!(logs[0].level, "warn");
         assert_eq!(logs[0].message, "插件已连接");
+    }
+
+    #[test]
+    fn structured_tool_resources_are_preserved_without_replacing_text_output() {
+        let result = normalize_human_tool_result(
+            json!({
+                "content": "done",
+                "resources": [{"type":"image","url":"https://example.invalid/a.png"}],
+                "warnings": ["preview only"],
+                "task": {"status":"accepted","id":"task-1"}
+            }),
+            200,
+        );
+        assert_eq!(result.output, "done");
+        assert_eq!(result.resources[0]["type"], "image");
+        assert_eq!(result.warnings[0], "preview only");
+        assert_eq!(result.task.as_ref().unwrap()["status"], "accepted");
+    }
+
+    #[tokio::test]
+    async fn interrupt_uses_the_exact_request_id_and_reports_backend_acceptance() {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind interrupt fixture");
+        let address = listener.local_addr().expect("fixture address");
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.expect("accept interrupt request");
+            let mut request = vec![0_u8; 4096];
+            let read = socket
+                .read(&mut request)
+                .await
+                .expect("read interrupt request");
+            request.truncate(read);
+            let request = String::from_utf8(request).expect("HTTP request is UTF-8");
+            assert!(request.starts_with("POST /v1/interrupt HTTP/1.1"));
+            assert!(
+                request.contains(r#"{"requestId":"model-request-exact"}"#),
+                "interrupt body must carry the exact model request identity: {request}"
+            );
+            socket
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 20\r\nConnection: close\r\n\r\n{\"status\":\"success\"}",
+                )
+                .await
+                .expect("write interrupt response");
+        });
+        let endpoint = format!("http://{address}");
+        let host = DirectToolboxHost::new(
+            ToolboxConnection::new(&endpoint, "fixture-key").expect("fixture connection"),
+        )
+        .expect("fixture client");
+
+        assert!(host.interrupt("model-request-exact").await.unwrap());
+        server.await.expect("fixture server task");
     }
 
     #[test]
@@ -660,5 +922,142 @@ mod tests {
             }
             other => panic!("unexpected VCPlog event: {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn vcp_log_round_trip_keeps_backend_approval_on_the_narrow_channel() {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind local websocket fixture");
+        let address = listener.local_addr().expect("fixture address");
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.expect("accept websocket");
+            let mut socket = accept_async(stream).await.expect("upgrade websocket");
+            socket
+                .send(Message::Text(
+                    json!({
+                        "type": "tool_approval_request",
+                        "data": {
+                            "requestId": "toolbox-approval-1",
+                            "toolName": "PowerShellExecutor",
+                            "approvalTtlMs": 30_000
+                        }
+                    })
+                    .to_string(),
+                ))
+                .await
+                .expect("send backend approval request");
+            let response = timeout(Duration::from_secs(2), socket.next())
+                .await
+                .expect("backend approval response timeout")
+                .expect("socket did not close before response")
+                .expect("receive backend approval response");
+            let Message::Text(response) = response else {
+                panic!("backend approval response must be text");
+            };
+            let response =
+                serde_json::from_str::<Value>(&response).expect("valid backend approval json");
+            socket.close(None).await.expect("close websocket fixture");
+            response
+        });
+
+        let endpoint = format!("http://{address}");
+        let host = DirectToolboxHost::new(
+            ToolboxConnection::new(&endpoint, "fixture-key").expect("fixture connection"),
+        )
+        .expect("fixture client");
+        let (response_tx, mut response_rx) = mpsc::channel(1);
+        let (completion_tx, completion_rx) = tokio::sync::oneshot::channel();
+        let mut completion_tx = Some(completion_tx);
+        let observed = Arc::new(AtomicBool::new(false));
+        let callback_observed = Arc::clone(&observed);
+        let client = tokio::spawn(async move {
+            host.run_log_websocket("vcp-agent-rust-test", &mut response_rx, move |event| {
+                if let ToolboxWsEvent::BackendApprovalRequest(value) = event {
+                    callback_observed.store(true, Ordering::SeqCst);
+                    let request_id = value
+                        .pointer("/data/requestId")
+                        .and_then(Value::as_str)
+                        .expect("request id in fixture")
+                        .to_string();
+                    response_tx
+                        .try_send(ToolboxApprovalResponse {
+                            request_id,
+                            approved: false,
+                            reason: Some("fixture deny".to_string()),
+                            completion: completion_tx.take(),
+                        })
+                        .expect("queue narrow approval response");
+                } else {
+                    panic!("backend approval must not be projected as a log event");
+                }
+            })
+            .await
+        });
+
+        let response = server.await.expect("fixture server task");
+        let result = timeout(Duration::from_secs(2), client)
+            .await
+            .expect("client close timeout")
+            .expect("client task");
+        assert!(
+            result.is_ok(),
+            "log websocket should end cleanly: {result:?}"
+        );
+        assert!(observed.load(Ordering::SeqCst));
+        assert_eq!(
+            response.pointer("/type").and_then(Value::as_str),
+            Some("tool_approval_response")
+        );
+        assert_eq!(
+            response.pointer("/data/requestId").and_then(Value::as_str),
+            Some("toolbox-approval-1")
+        );
+        assert_eq!(
+            response.pointer("/data/approved").and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            response.pointer("/data/reason").and_then(Value::as_str),
+            Some("fixture deny")
+        );
+        assert_eq!(completion_rx.await.expect("completion signal"), Ok(()));
+    }
+
+    #[tokio::test]
+    async fn oversized_websocket_message_fails_closed_before_projection() {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind local websocket fixture");
+        let address = listener.local_addr().expect("fixture address");
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.expect("accept websocket");
+            let mut socket = accept_async(stream).await.expect("upgrade websocket");
+            socket
+                .send(Message::Text("x".repeat(MAX_WS_MESSAGE_BYTES + 1)))
+                .await
+                .expect("send oversized websocket message");
+        });
+        let endpoint = format!("http://{address}");
+        let host = DirectToolboxHost::new(
+            ToolboxConnection::new(&endpoint, "fixture-key").expect("fixture connection"),
+        )
+        .expect("fixture client");
+        let projected = Arc::new(AtomicBool::new(false));
+        let callback_projected = Arc::clone(&projected);
+        let result = timeout(
+            Duration::from_secs(2),
+            host.observe_websocket(ToolboxWsChannel::Info, move |_| {
+                callback_projected.store(true, Ordering::SeqCst);
+            }),
+        )
+        .await
+        .expect("client must reject oversized websocket message promptly");
+        server.await.expect("fixture server task");
+        assert!(matches!(result, Err(ToolboxHostError::WebSocket(_))));
+        assert!(
+            !projected.load(Ordering::SeqCst),
+            "oversized WS payload must never reach a UI projection"
+        );
     }
 }

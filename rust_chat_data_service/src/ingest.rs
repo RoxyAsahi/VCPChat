@@ -120,6 +120,10 @@ impl Reconciler {
     }
 
     pub async fn ingest_path(&self, path: &Path, origin: &str) -> Result<Option<IngestCommit>> {
+        if is_agent_runtime_history_path(path) {
+            tracing::debug!(path = %path.display(), "ignored Rust Agent runtime history projection");
+            return Ok(None);
+        }
         let Some((owner_id, topic_id)) = parse_history_path(&self.config.user_data_dir, path)
         else {
             return Ok(None);
@@ -488,6 +492,18 @@ pub fn parse_history_path(user_data_dir: &Path, path: &Path) -> Option<(String, 
     }
 }
 
+/// Rust Agent `history.json` is a bounded, sanitized UI projection whose
+/// authoritative recovery state lives in the sibling `agent-state.json`.
+/// It must never enter the ordinary chat index or MobileSync write path.
+pub fn is_agent_runtime_history_path(path: &Path) -> bool {
+    path.file_name()
+        .is_some_and(|name| name.to_string_lossy().eq_ignore_ascii_case("history.json"))
+        && path.parent().is_some_and(|directory| {
+            directory.join("agent-state.json").is_file()
+                || directory.join(".vcp-agent.topic-lock.json").is_file()
+        })
+}
+
 async fn read_stable_file(path: &Path) -> Result<Vec<u8>> {
     let mut delay = Duration::from_millis(75);
     let mut previous: Option<(u64, i64)> = None;
@@ -606,7 +622,7 @@ mod tests {
 
     use tempfile::TempDir;
 
-    use super::{normalize_history, Reconciler};
+    use super::{is_agent_runtime_history_path, normalize_history, Reconciler};
     use crate::{
         config::{Cli, ServiceConfig},
         domain::{OwnerKey, OwnerType, TopicKey},
@@ -1089,5 +1105,41 @@ mod tests {
             owner_type: OwnerType::Group,
             owner_id: "same_owner_id".to_string(),
         }));
+    }
+
+    #[tokio::test]
+    async fn rust_agent_runtime_history_is_not_ingested_as_chat_data() {
+        let (_temp, config, database, reconciler) = fixture();
+        write_owner(&config, OwnerType::Agent, "Nova", "Nova", &[]);
+        let directory = config.user_data_dir.join("Nova/topics/runtime-topic");
+        fs::create_dir_all(&directory).expect("create runtime Topic directory");
+        fs::write(
+            directory.join("agent-state.json"),
+            br#"{"version":1,"snapshot":{"messages":[]}}"#,
+        )
+        .expect("write Agent checkpoint marker");
+        let history_path = directory.join("history.json");
+        fs::write(
+            &history_path,
+            br#"[{"id":"runtime-message","role":"user","content":"private runtime projection"}]"#,
+        )
+        .expect("write Agent history projection");
+
+        assert!(is_agent_runtime_history_path(&history_path));
+        assert!(reconciler
+            .ingest_path(&history_path, "test")
+            .await
+            .expect("ignore Agent runtime history")
+            .is_none());
+        assert_eq!(
+            database
+                .topic_revision(&TopicKey {
+                    owner_type: OwnerType::Agent,
+                    owner_id: "Nova".to_string(),
+                    topic_id: "runtime-topic".to_string(),
+                })
+                .expect("read Topic revision"),
+            None
+        );
     }
 }

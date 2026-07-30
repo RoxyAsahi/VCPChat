@@ -19,7 +19,7 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    ingest::{parse_history_path, Reconciler},
+    ingest::{is_agent_runtime_history_path, parse_history_path, Reconciler},
     search::SearchIndex,
 };
 
@@ -338,7 +338,8 @@ fn is_relevant_path(
 ) -> bool {
     is_owner_config(path, agents_dir)
         || is_owner_config(path, groups_dir)
-        || parse_history_path(user_data_dir, path).is_some()
+        || (parse_history_path(user_data_dir, path).is_some()
+            && !is_agent_runtime_history_path(path))
 }
 
 fn is_owner_config(path: &Path, base: &Path) -> bool {
@@ -351,4 +352,29 @@ fn is_owner_config(path: &Path, base: &Path) -> bool {
             .as_os_str()
             .to_string_lossy()
             .eq_ignore_ascii_case("config.json")
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use tempfile::TempDir;
+
+    use super::is_relevant_path;
+
+    #[test]
+    fn watcher_ignores_rust_agent_history_projections() {
+        let temp = TempDir::new().expect("create temp directory");
+        let app_data = temp.path();
+        let agents = app_data.join("Agents");
+        let groups = app_data.join("AgentGroups");
+        let user_data = app_data.join("UserData");
+        let topic = user_data.join("Nova/topics/runtime-topic");
+        fs::create_dir_all(&topic).expect("create runtime Topic directory");
+        fs::write(topic.join("agent-state.json"), "{}").expect("write checkpoint marker");
+        let history = topic.join("history.json");
+        fs::write(&history, "[]").expect("write history projection");
+
+        assert!(!is_relevant_path(&history, &agents, &groups, &user_data));
+    }
 }

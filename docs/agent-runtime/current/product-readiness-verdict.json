@@ -1,0 +1,51 @@
+{
+  "schema": "vcp.agent.product_readiness_verdict.v1",
+  "contractVersion": "1.0.0",
+  "generatedAt": "2026-07-30",
+  "rustSourceRevision": "3e35bc4cea29ce188d363b79b8dd5f26c137c98a7b57b73619bacad6fd3ec8bb",
+  "overallVerdict": "NOT_READY",
+  "gateResults": [
+    {
+      "gateId": "architecture-black-box",
+      "status": "pending",
+      "evidence": [
+        "2026-07-30: current architecture documents are present, but the complete Electron/Main ownership audit has not been rerun for this Rust source revision."
+      ]
+    },
+    {
+      "gateId": "rust-quality",
+      "status": "pending",
+      "evidence": [
+        "2026-07-30: targeted P0/P1 crates pass rustfmt, Clippy -D warnings and 78 tests; the full current-workspace quality gate remains required."
+      ]
+    },
+    {
+      "gateId": "protocol-hermetic",
+      "status": "pending",
+      "evidence": [
+        "2026-07-30: P0/P1 daemon v1.4 fixture, runtime and Workbench tests passed; the full hermetic stack must be rerun for this revision."
+      ]
+    },
+    {
+      "gateId": "windows-distribution",
+      "status": "pending",
+      "evidence": [
+        "2026-07-30: release-dist daemon/TUI build, size gate and revision-aware smoke have not been rerun for this revision."
+      ]
+    },
+    {
+      "gateId": "live-toolbox",
+      "status": "pending",
+      "evidence": [
+        "2026-07-30: targeted real ToolBox receipts cover VChat DistributedServer PowerShellExecutor deny, offline replay and expiry; the full live acceptance matrix remains required."
+      ]
+    },
+    {
+      "gateId": "installer",
+      "status": "blocked",
+      "evidence": [
+        "Explicitly deferred: retain the existing VChat start.bat/VBS launch path."
+      ]
+    }
+  ]
+}

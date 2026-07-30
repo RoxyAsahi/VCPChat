@@ -114,6 +114,13 @@ function vectorIcon(name, label) {
             ['path', { d: 'm3 12 2 2 4-4' }], ['path', { d: 'M11 12h10' }],
             ['path', { d: 'm3 18 2 2 4-4' }], ['path', { d: 'M11 18h10' }],
         ],
+        more: [['circle', { cx: '5', cy: '12', r: '1' }], ['circle', { cx: '12', cy: '12', r: '1' }], ['circle', { cx: '19', cy: '12', r: '1' }]],
+        open: [['path', { d: 'M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' }], ['path', { d: 'M3 10h18' }]],
+        edit: [['path', { d: 'M12 20h9' }], ['path', { d: 'M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z' }]],
+        copy: [['rect', { x: '9', y: '9', width: '11', height: '11', rx: '1' }], ['path', { d: 'M15 9V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h4' }]],
+        view: [['path', { d: 'M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6' }], ['circle', { cx: '12', cy: '12', r: '2.5' }]],
+        takeover: [['path', { d: 'M7 7h12l-3-3' }], ['path', { d: 'm19 7-3 3' }], ['path', { d: 'M17 17H5l3 3' }], ['path', { d: 'm5 17 3-3' }]],
+        delete: [['path', { d: 'M4 7h16' }], ['path', { d: 'M9 7V4h6v3' }], ['path', { d: 'm6 7 1 13h10l1-13' }], ['path', { d: 'M10 11v5' }], ['path', { d: 'M14 11v5' }]],
         close: [['path', { d: 'm7 7 10 10' }], ['path', { d: 'm17 7-10 10' }]],
     };
     const shape = paths[name];
@@ -213,6 +220,37 @@ function nextSessionTitle() {
 function formatTime(value) {
     if (!value) return '';
     try { return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' }).format(new Date(value)); } catch { return ''; }
+}
+
+function deliveryLabel(item) {
+    if (item.role !== 'user') return '';
+    const labels = {
+        sending: '发送中…',
+        unconfirmed: '发送状态未确认',
+        interrupted: '任务已中断',
+        failed: '附件不可用',
+    };
+    return labels[item.deliveryState] || '';
+}
+
+function syncMessageDelivery(row, body, item) {
+    if (!row || item.role !== 'user') return;
+    const label = deliveryLabel(item);
+    row.dataset.deliveryState = item.deliveryState || 'confirmed';
+    let status = body?.querySelector('.agent-chat-message-delivery');
+    if (!label) {
+        status?.remove();
+        row.removeAttribute('data-delivery-state');
+        return;
+    }
+    if (!status) {
+        status = node('div', 'agent-chat-message-delivery');
+        status.setAttribute('role', 'status');
+        status.setAttribute('aria-live', 'polite');
+        body?.append(status);
+    }
+    status.textContent = label;
+    status.title = item.deliveryDetail || label;
 }
 
 function safeText(value) {
@@ -352,6 +390,58 @@ function isFollowingContainer(container) {
     return bridge ? bridge.isNearBottom(container, 48) : (container.scrollTop + container.clientHeight >= container.scrollHeight - 48);
 }
 
+function formatAttachmentSize(bytes) {
+    const value = Number(bytes) || 0;
+    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)} MB`;
+    if (value >= 1_000) return `${Math.round(value / 1_000)} KB`;
+    return `${value} B`;
+}
+
+function attachmentKindLabel(attachment) {
+    switch (attachment?.kind) {
+    case 'audio': return '音频';
+    case 'video': return '视频';
+    default: return '图片';
+    }
+}
+
+function attachmentKindIcon(attachment) {
+    switch (attachment?.kind) {
+    case 'audio': return 'audiotrack';
+    case 'video': return 'movie';
+    default: return 'image';
+    }
+}
+
+function attachmentMetadata(attachment) {
+    const dimensions = attachment?.kind === 'image'
+        ? `${attachment.width || '?'}×${attachment.height || '?'}`
+        : attachmentKindLabel(attachment);
+    return `${dimensions} · ${formatAttachmentSize(attachment?.byteLen)}`;
+}
+
+function createAttachmentChips(attachments, onRemove = null) {
+    const list = node('div', 'agent-chat-attachment-list');
+    list.setAttribute('aria-label', '媒体附件');
+    attachments.forEach((attachment, index) => {
+        const chip = node('div', 'agent-chat-attachment-chip');
+        const summary = node('div', 'agent-chat-attachment-summary');
+        summary.append(
+            ...icon(attachmentKindIcon(attachment)),
+            node('span', 'agent-chat-attachment-name', attachment.displayName || attachmentKindLabel(attachment)),
+            node('span', 'agent-chat-attachment-meta', attachmentMetadata(attachment)),
+        );
+        chip.append(summary);
+        if (onRemove) {
+            const remove = visualActionButton('close', `移除 ${attachment.displayName || '附件'}`, 'agent-chat-attachment-remove');
+            remove.addEventListener('click', () => onRemove(index));
+            chip.append(remove);
+        }
+        list.append(chip);
+    });
+    return list;
+}
+
 function createMessage(message) {
     const item = projectMessage(message);
     const role = item.role === 'user' ? 'user' : 'assistant';
@@ -373,6 +463,7 @@ function createMessage(message) {
         content.innerHTML = '<span class="agent-chat-thinking-placeholder">正在思考…</span>';
     }
     body.append(heading, content);
+    if (item.attachments?.length) body.append(createAttachmentChips(item.attachments));
     if (item.reasoning) {
         const reasoningEl = node('div', 'agent-chat-reasoning-block');
         reasoningEl.innerHTML = renderReasoning(item.reasoning);
@@ -380,6 +471,7 @@ function createMessage(message) {
         applyReasoningState(reasoningEl, item);
         body.append(reasoningEl);
     }
+    syncMessageDelivery(row, body, item);
     // Streaming indicator: only show when there is no content yet
     if (item.state === 'streaming' && !item.content) {
         body.append(node('span', 'agent-chat-streaming', '正在生成'));
@@ -405,6 +497,13 @@ function patchMessage(row, message) {
     }
 
     const body = row.querySelector('.details-and-bubble-wrapper');
+    body?.querySelector('.agent-chat-attachment-list')?.remove();
+    if (item.attachments?.length && body) {
+        const attachmentList = createAttachmentChips(item.attachments);
+        const reasoningBlock = body.querySelector('.agent-chat-reasoning-block');
+        if (reasoningBlock) body.insertBefore(attachmentList, reasoningBlock);
+        else body.append(attachmentList);
+    }
     let reasoningEl = body?.querySelector('.agent-chat-reasoning-block');
     if (item.reasoning) {
         if (!reasoningEl) {
@@ -418,6 +517,7 @@ function patchMessage(row, message) {
         reasoningEl.remove();
         reasoningStartTimes.delete(item.id);
     }
+    syncMessageDelivery(row, body, item);
 
     // Streaming indicator: only show when there is no content yet
     let streaming = body?.querySelector('.agent-chat-streaming');
@@ -464,6 +564,79 @@ function renderToolContent(value) {
     return renderMarkdown(text);
 }
 
+function toolDetailPayload(tool) {
+    const payload = tool?.payload || {};
+    const args = payload.arguments ?? payload.args ?? payload.parameters;
+    const result = payload.result ?? payload.output ?? payload.response;
+    const resources = Array.isArray(payload.resources) ? payload.resources : [];
+    const warnings = Array.isArray(payload.warnings) ? payload.warnings : [];
+    const task = payload.task && typeof payload.task === 'object' ? payload.task : null;
+    const hasArgs = args && typeof args === 'object' && Object.keys(args).length > 0;
+    const hasResult = result != null && String(result).trim() !== '';
+    const summary = detailsSummary(tool);
+    return { args, result, resources, warnings, task, hasArgs, hasResult, summary };
+}
+
+// Long outputs are intentionally built only after an explicit user action.
+// A Topic can contain many completed tools; eagerly calling Markdown/render
+// hooks for every collapsed result makes a long Agent session both slower and
+// harder to scan. This is UI-only laziness: the full result remains in the
+// daemon-owned Topic and no result is dropped or redacted by the Renderer.
+function createToolDetail(tool) {
+    const { args, result, resources, warnings, task, hasArgs, hasResult, summary } = toolDetailPayload(tool);
+    if (hasArgs || hasResult || resources.length || warnings.length || task) {
+        const detail = node('div', 'agent-chat-tool-detail');
+        if (hasArgs) detail.append(buildToolArgsTable(args));
+        if (hasResult) {
+            detail.append(node('div', 'agent-chat-tool-detail-label', '结果'));
+            const resultEl = node('div', 'agent-chat-tool-detail-result');
+            resultEl.innerHTML = renderToolContent(result);
+            postRender(resultEl);
+            const resultText = typeof result === 'string' ? result : safeText(result);
+            if (resultText.length > 480) {
+                resultEl.classList.add('agent-chat-tool-detail-result--truncated');
+                const toggle = node('button', 'agent-chat-tool-result-toggle', '展开结果');
+                toggle.type = 'button';
+                toggle.setAttribute('aria-label', '展开/收起工具结果');
+                toggle.addEventListener('click', () => {
+                    const expanded = resultEl.classList.toggle('agent-chat-tool-detail-result--expanded');
+                    toggle.textContent = expanded ? '收起结果' : '展开结果';
+                });
+                detail.append(resultEl, toggle);
+            } else {
+                detail.append(resultEl);
+            }
+        }
+        if (resources.length) {
+            detail.append(node('div', 'agent-chat-tool-detail-label', '资源'));
+            detail.append(node('pre', 'agent-chat-tool-resource-list', safeText(resources)));
+        }
+        if (warnings.length) {
+            detail.append(node('div', 'agent-chat-tool-detail-label', '警告'));
+            detail.append(node('pre', 'agent-chat-tool-warning-list', safeText(warnings)));
+        }
+        if (task) {
+            detail.append(node('div', 'agent-chat-tool-detail-label', '异步任务'));
+            detail.append(node('pre', 'agent-chat-tool-task', safeText(task)));
+        }
+        return detail;
+    }
+    return summary ? node('pre', 'agent-chat-tool-output', summary) : null;
+}
+
+function mountToolDetail(card, tool) {
+    if (card.dataset.toolDetailMounted === 'true') return;
+    const detail = createToolDetail(tool);
+    card.dataset.toolDetailMounted = 'true';
+    if (detail) card.append(detail);
+}
+
+function toggleToolDetail(card, tool) {
+    tool.expanded = !tool.expanded;
+    if (tool.expanded) mountToolDetail(card, tool);
+    card.classList.toggle('expanded', !!tool.expanded);
+}
+
 function createToolCard(tool, onCancel) {
     const value = projectTool(tool);
     const status = value.state || 'requested';
@@ -471,7 +644,7 @@ function createToolCard(tool, onCancel) {
     const card = node('section', 'agent-chat-tool-activity');
     card.dataset.toolCallId = value.toolCallId || '';
     card.dataset.status = status;
-    if (tool.expanded && isTerminal) card.classList.add('expanded');
+    const shouldStartExpanded = Boolean(tool.expanded && isTerminal);
 
     // Header row (always visible)
     const header = node('div', 'agent-chat-tool-header');
@@ -505,54 +678,24 @@ function createToolCard(tool, onCancel) {
         header.append(cancel);
     }
 
-    if (isTerminal) {
+    const detail = toolDetailPayload(tool);
+    const canExpand = Boolean(detail.hasArgs || detail.hasResult || detail.resources.length
+        || detail.warnings.length || detail.task || detail.summary);
+    if (isTerminal && canExpand) {
         const chevron = node('button', 'agent-chat-tool-chevron');
         chevron.type = 'button';
         chevron.setAttribute('aria-label', '展开/折叠工具详情');
         chevron.append(...icon('expand_more'));
         chevron.addEventListener('click', () => {
-            tool.expanded = !tool.expanded;
-            card.classList.toggle('expanded', !!tool.expanded);
+            toggleToolDetail(card, tool);
         });
         header.append(chevron);
     }
 
-    // Collapsed detail: structured arguments + result when the daemon supplies
-    // them (Cherry-style ArgsTable), otherwise fall back to the summary blob.
-    const payload = tool.payload || {};
-    const args = payload.arguments ?? payload.args ?? payload.parameters;
-    const result = payload.result ?? payload.output ?? payload.response;
-    const hasArgs = args && typeof args === 'object' && Object.keys(args).length > 0;
-    const hasResult = result != null && String(result).trim() !== '';
-    if (hasArgs || hasResult) {
-        const detail = node('div', 'agent-chat-tool-detail');
-        if (hasArgs) detail.append(buildToolArgsTable(args));
-        if (hasResult) {
-            detail.append(node('div', 'agent-chat-tool-detail-label', '结果'));
-            const resultEl = node('div', 'agent-chat-tool-detail-result');
-            resultEl.innerHTML = renderToolContent(result);
-            postRender(resultEl);
-            const resultText = typeof result === 'string' ? result : safeText(result);
-            if (resultText.length > 480) {
-                // Long tool output is clamped with a fade; the toggle expands
-                // it in place (Cherry Studio shows the same "Show more" affordance).
-                resultEl.classList.add('agent-chat-tool-detail-result--truncated');
-                const toggle = node('button', 'agent-chat-tool-result-toggle', '展开结果');
-                toggle.type = 'button';
-                toggle.setAttribute('aria-label', '展开/收起工具结果');
-                toggle.addEventListener('click', () => {
-                    const expanded = resultEl.classList.toggle('agent-chat-tool-detail-result--expanded');
-                    toggle.textContent = expanded ? '收起结果' : '展开结果';
-                });
-                detail.append(resultEl, toggle);
-            } else {
-                detail.append(resultEl);
-            }
-        }
-        card.append(header, detail);
-    } else {
-        const output = node('pre', 'agent-chat-tool-output', detailsSummary(tool));
-        card.append(header, output);
+    card.append(header);
+    if (shouldStartExpanded && canExpand) {
+        card.classList.add('expanded');
+        mountToolDetail(card, tool);
     }
     return card;
 }
@@ -592,21 +735,23 @@ function patchToolCard(card, tool) {
         riskEl.textContent = value.riskLevel;
     }
 
-    // Add chevron when card becomes terminal
-    if (isTerminal && !card.querySelector('.agent-chat-tool-chevron')) {
+    // Add a lazy detail affordance only once the daemon has a terminal
+    // result/argument payload. A running card remains concise and cancellable.
+    const detail = toolDetailPayload(tool);
+    const canExpand = Boolean(detail.hasArgs || detail.hasResult || detail.summary);
+    if (isTerminal && canExpand && !card.querySelector('.agent-chat-tool-chevron')) {
         const chevron = node('button', 'agent-chat-tool-chevron');
         chevron.type = 'button';
         chevron.setAttribute('aria-label', '展开/折叠工具详情');
         chevron.append(...icon('expand_more'));
         chevron.addEventListener('click', () => {
-            tool.expanded = !tool.expanded;
-            card.classList.toggle('expanded', !!tool.expanded);
+            toggleToolDetail(card, tool);
         });
         card.querySelector('.agent-chat-tool-header')?.append(chevron);
     }
-
-    const output = card.querySelector('.agent-chat-tool-output');
-    if (output) output.textContent = detailsSummary(tool);
+    if ((!isTerminal || !canExpand) && card.querySelector('.agent-chat-tool-chevron')) {
+        card.querySelector('.agent-chat-tool-chevron')?.remove();
+    }
 }
 
 function projectToolboxObservation(observation = {}) {
@@ -615,6 +760,11 @@ function projectToolboxObservation(observation = {}) {
     const labels = {
         log: '运行日志',
         notification: '服务通知',
+        rag: 'RAG 召回',
+        memory: '记忆召回',
+        'agent-preview': 'Agent 私聊预览',
+        diary: '日记',
+        dream: '梦境状态',
         // ToolBox does not expose a correlation key between this requestId
         // and the legacy marker call owned by Rust Agent. Keep that boundary
         // visible instead of attaching a misleading backend state to a local
@@ -630,10 +780,13 @@ function projectToolboxObservation(observation = {}) {
         const toolName = safeText(data.toolName || '未知工具').slice(0, 160);
         const timeout = Number(data.approvalTtlMs);
         const ttl = Number.isFinite(timeout) && timeout > 0 ? `，最长等待 ${Math.ceil(timeout / 60_000)} 分钟` : '';
-        summary = `请求 ${requestId}：${toolName} 正在等待 VCPToolBox 后端审核${ttl}。请在已授权的 VCPLog 客户端或管理面板处理；此卡不能批准、拒绝或关联本地工具调用。`;
+        summary = `请求 ${requestId}：${toolName} 正在等待 VCPToolBox 后端审核${ttl}。该 requestId 仅属于 ToolBox 审批，不会关联或替代 Agent toolCallId。`;
     } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+        summary = structuredToolboxObservationSummary(kind, value);
+    }
+    if (!summary && value && typeof value === 'object' && !Array.isArray(value)) {
         summary = safeText(value.message || value.title || value.type || value.status || value);
-    } else {
+    } else if (!summary) {
         summary = safeText(value);
     }
     return {
@@ -645,7 +798,71 @@ function projectToolboxObservation(observation = {}) {
     };
 }
 
-function createToolboxWsCard(observation) {
+// VCPInfo is an observer-only ToolBox channel.  These summaries make its
+// established event shapes readable without turning them into Agent messages,
+// Topic data, a second catalog, or a renderer-side capability decision.  The
+// full redacted value remains available only after the user explicitly expands
+// the Activity card below.
+function structuredToolboxObservationSummary(kind, value) {
+    const payload = value.data && typeof value.data === 'object' && !Array.isArray(value.data)
+        ? value.data
+        : value;
+    const text = (...keys) => {
+        for (const key of keys) {
+            const candidate = payload[key];
+            if (typeof candidate === 'string' && candidate.trim()) return safeText(candidate.trim()).slice(0, 360);
+        }
+        return '';
+    };
+    const labels = (candidate) => {
+        const values = Array.isArray(candidate) ? candidate : candidate ? [candidate] : [];
+        const output = values
+            .filter((item) => typeof item === 'string' && item.trim())
+            .slice(0, 3)
+            .map((item) => safeText(item.trim()).slice(0, 80));
+        return output.length ? output.join('、') : '';
+    };
+    const count = (...keys) => {
+        for (const key of keys) {
+            const candidate = payload[key];
+            if (Array.isArray(candidate)) return candidate.length;
+            const number = Number(candidate);
+            if (Number.isFinite(number) && number >= 0) return Math.floor(number);
+        }
+        return null;
+    };
+    const query = text('query', 'searchQuery', 'prompt');
+
+    if (kind === 'rag') {
+        const source = text('dbName', 'database') || labels(payload.diaryNames) || '知识库';
+        const hits = count('results', 'matchedCount', 'k');
+        return `RAG · ${source}${hits === null ? '' : ` · ${hits} 条命中`}${query ? `\n查询：${query}` : ''}`;
+    }
+    if (kind === 'memory') {
+        const sources = labels(payload.dbNames) || text('dbName') || '记忆库';
+        const files = count('fileCount', 'files', 'diaryCount');
+        const result = text('extractedMemories', 'summary', 'error');
+        return `记忆 · ${sources}${files === null ? '' : ` · ${files} 个来源`}${query ? `\n查询：${query}` : ''}${result ? `\n${result}` : ''}`;
+    }
+    if (kind === 'agent-preview') {
+        const agent = text('agentName', 'agentId') || 'Agent';
+        const response = text('response', 'preview', 'message');
+        return `${agent} 的私聊预览${query ? `\n请求：${query}` : ''}${response ? `\n回复：${response}` : ''}`;
+    }
+    if (kind === 'diary') {
+        const title = text('title', 'name', 'message', 'status') || '日记状态已更新';
+        const notebook = text('dbName', 'diaryName', 'folder');
+        return `${title}${notebook ? ` · ${notebook}` : ''}`;
+    }
+    if (kind === 'dream') {
+        const state = text('status', 'phase', 'message', 'title') || '梦境任务状态已更新';
+        const agent = text('agentName', 'agentId');
+        return `${state}${agent ? ` · ${agent}` : ''}`;
+    }
+    return '';
+}
+
+function createToolboxWsCard(observation, onBackendApproval) {
     const value = projectToolboxObservation(observation);
     const card = node('section', `agent-chat-toolbox-ws-card agent-chat-toolbox-ws-${value.kind}`);
     card.dataset.toolboxChannel = value.channel;
@@ -660,6 +877,51 @@ function createToolboxWsCard(observation) {
     summary.append(title, node('span', 'agent-chat-toolbox-ws-channel', value.channel));
     const detail = node('p', 'agent-chat-toolbox-ws-detail', value.summary);
     const output = node('pre', 'agent-chat-toolbox-ws-output', value.detail);
+    output.hidden = true;
+    summary.addEventListener('click', () => {
+        output.hidden = !output.hidden;
+        card.classList.toggle('expanded', !output.hidden);
+    });
+    card.append(summary, detail, output);
+    if (value.kind === 'backend-approval-request') {
+        const raw = observation?.value && typeof observation.value === 'object' ? observation.value : {};
+        const data = raw.data && typeof raw.data === 'object' ? raw.data : raw;
+        const approvalId = typeof data.requestId === 'string' ? data.requestId : '';
+        if (approvalId) {
+            const actions = node('div', 'agent-chat-approval-actions');
+            const deny = button('拒绝', 'danger');
+            const allow = button('允许一次', 'secondary');
+            const decide = (decision) => {
+                if (card.dataset.deciding === 'true') return;
+                card.dataset.deciding = 'true';
+                deny.disabled = true;
+                allow.disabled = true;
+                onBackendApproval?.(approvalId, decision);
+            };
+            deny.addEventListener('click', () => decide('deny'));
+            allow.addEventListener('click', () => decide('allow'));
+            actions.append(deny, allow);
+            card.append(actions);
+        }
+    }
+    return card;
+}
+
+function createMarkerObservationCard(observation = {}) {
+    const labels = {
+        'dynamic-fold': '动态上下文',
+        vcpinfo: 'VCP 通知',
+    };
+    const kind = String(observation.kind || 'unknown');
+    const card = node('section', `agent-chat-toolbox-ws-card agent-chat-marker-card agent-chat-marker-${kind}`);
+    card.dataset.markerKind = kind;
+    const summary = node('button', 'agent-chat-toolbox-ws-summary');
+    summary.type = 'button';
+    const title = node('span', 'agent-chat-toolbox-ws-title');
+    title.append(...icon(kind === 'dynamic-fold' ? 'unfold_more' : 'info'), node('span', '', `VCP 内容 · ${labels[kind] || '受限标记'}`));
+    summary.append(title, node('span', 'agent-chat-toolbox-ws-channel', 'display only'));
+    const detail = node('p', 'agent-chat-toolbox-ws-detail', safeText(observation.summary).slice(0, 2_000) || 'VCP 内容标记已被 Rust Core 安全投影。');
+    const output = node('pre', 'agent-chat-toolbox-ws-output', safeText(observation.detail).slice(0, 16_384));
     output.hidden = true;
     summary.addEventListener('click', () => {
         output.hidden = !output.hidden;
@@ -755,6 +1017,9 @@ function mountWorkbench(container) {
         modelCatalog: [],
         topics: [],
         topicSearch: '',
+        topicSearchResults: [],
+        topicSearchLoading: false,
+        topicSearchError: '',
         topicSearchOpen: false,
         topicManaging: false,
         topicSelectedIds: new Set(),
@@ -774,29 +1039,46 @@ function mountWorkbench(container) {
         workspace: '',
         model: 'gpt-5.6-terra',
         prompt: '',
+        pendingAttachments: [],
         rememberedTopic: loadRememberedTopic(),
         takeoverTopicId: null,
-        previewTopic: null,
+        topicConflict: null,
+        // A purely visual reading aid.  It records neither transcript content
+        // nor daemon state; it only lets a reader return to the live edge
+        // after intentionally browsing older timeline Parts.
+        followingFeed: true,
+        unreadTimelineCount: 0,
         // This is deliberately a transient UI flow, not a second Topic
         // store.  Rust remains the source of the Topic metadata/checkpoint;
         // the renderer only keeps the currently-open form and a small
         // read-only snapshot summary while the dialog is visible.
         topicFlow: null,
+        // A document-level popover is intentionally transient. It is never
+        // used as Topic state: Rust remains the owner of Topic metadata,
+        // leases and mutations.
+        topicContextMenu: null,
         disposed: false,
     };
-    const pendingRender = { shell: false, header: false, feed: false, composer: false, activity: false };
+    const pendingRender = { shell: false, header: false, feed: false, composer: false, activity: false, conflict: false };
     let renderFrame = null;
     // Control-plane replies can arrive after a user picked another Agent.
     // Keep the latest selection authoritative; an older Topic list must not
     // replace the newly selected Agent's history.
     let controlPlaneRequest = 0;
+    let topicSearchRequest = 0;
+    let topicSearchTimer = null;
 
     const root = node('section', 'container agent-chat-root vcp-ui-scope');
     const topicFlowLayer = node('div', 'vcp-ui-scope agent-chat-topic-flow-layer');
+    const topicConflictLayer = node('div', 'vcp-ui-scope agent-chat-topic-conflict-layer');
+    topicConflictLayer.hidden = true;
     const sidebar = node('aside', 'sidebar active vcp-ui-scope agent-chat-sidebar');
     const main = node('main', 'main-content agent-chat-main-content agent-chat-pane');
     const feed = node('div', 'chat-messages-container vcp-ui-scope agent-chat-messages-container');
     const feedItems = node('div', 'chat-messages agent-chat-messages');
+    const jumpToLatest = button('回到最新', 'agent-chat-jump-to-latest');
+    jumpToLatest.hidden = true;
+    jumpToLatest.setAttribute('aria-live', 'polite');
     const header = node('header', 'chat-header vcp-ui-scope agent-chat-header');
     const composer = node('footer', 'chat-input-area agent-chat-composer');
     const inputCard = node('div', 'chat-input-card');
@@ -807,16 +1089,16 @@ function mountWorkbench(container) {
     input.setAttribute('aria-label', '输入 Agent 消息');
     const composerActions = node('div', 'chat-input-actions');
     const newButton = visualActionButton('add_comment', '新建 Agent 会话', 'agent-chat-composer-new');
-    const attachButton = visualActionButton('attach_file', '附件暂不支持；文件操作请由 VCPToolBox 工具完成');
+    const attachButton = visualActionButton('attach_file', '添加图片、音频或视频附件');
     const emoticonButton = visualActionButton('sentiment_satisfied', '打开表情包');
     const sendButton = visualActionButton('arrow_upward', '发送消息', 'agent-chat-send-button');
-    attachButton.disabled = true;
+    const attachmentTray = node('div', 'agent-chat-composer-attachments');
     emoticonButton.addEventListener('click', () => {
         if (window.emoticonManager?.togglePanel) window.emoticonManager.togglePanel(emoticonButton, input);
         else notify('表情包系统尚未准备好。', 'warning');
     });
     composerActions.append(newButton, attachButton, emoticonButton, sendButton);
-    inputCard.append(input, composerActions);
+    inputCard.append(attachmentTray, input, composerActions);
     composer.append(inputCard);
     feed.append(feedItems);
     const mainColumn = node('div', 'agent-chat-main-column');
@@ -826,7 +1108,10 @@ function mountWorkbench(container) {
     activityPanel.setAttribute('aria-label', 'Agent 活动面板');
     activityPanel.setAttribute('aria-hidden', 'true');
     activityPanel.setAttribute('inert', '');
-    mainColumn.append(header, feed, composer);
+    // A Topic collision is an in-context decision, not a blocking app-wide
+    // modal. Keep the existing transcript and composer visible behind the
+    // compact card so opening a busy Topic never feels like the page broke.
+    mainColumn.append(header, topicConflictLayer, feed, jumpToLatest, composer);
     main.append(mainColumn, activityPanel);
     root.append(sidebar, main);
     container.classList.add('agent-workbench-root', 'agent-chat-root');
@@ -980,7 +1265,8 @@ function mountWorkbench(container) {
     }
 
     async function createSession(overrides = {}) {
-        state.previewTopic = null;
+        state.topicConflict = null;
+        state.pendingAttachments = [];
         const runtimeState = store.getState().runtime.state;
         if (runtimeState === 'stopped' || runtimeState === 'unknown') {
             await controller.startRuntime();
@@ -1022,26 +1308,6 @@ function mountWorkbench(container) {
         queueRender({ topicFlow: true });
     }
 
-    async function openTopicFlow(topic) {
-        if (!topic?.id || state.topicFlow?.loading) return;
-        // The first frame makes the asynchronous Rust read visible.  This is
-        // important for occupied Topics: users must see that they are looking
-        // at a durable checkpoint, not a stale JS session cache.
-        state.topicFlow = { kind: 'open', topic, loading: true, snapshot: null, error: null };
-        queueRender({ topicFlow: true });
-        try {
-            const snapshot = await controller.readTopic(topic.id, topic.agentId);
-            if (state.topicFlow?.kind === 'open' && state.topicFlow.topic?.id === topic.id) {
-                state.topicFlow = { ...state.topicFlow, loading: false, snapshot };
-            }
-        } catch (error) {
-            if (state.topicFlow?.kind === 'open' && state.topicFlow.topic?.id === topic.id) {
-                state.topicFlow = { ...state.topicFlow, loading: false, error: error?.message || String(error) };
-            }
-        }
-        queueRender({ topicFlow: true });
-    }
-
     async function requestTopicTakeover(topic) {
         if (!topic?.id || state.takeoverTopicId) return;
         state.takeoverTopicId = topic.id;
@@ -1063,36 +1329,26 @@ function mountWorkbench(container) {
                         workspaceRoot: released.workspaceRef,
                     });
                     notify('Topic 已安全接管，并恢复到最近的 checkpoint。', 'success');
-                    return;
+                    return true;
                 }
             }
             if (!state.disposed) throw new Error('等待 Topic 持有者释放超时；其 lease 仍有效，请稍后重试。');
         } finally {
             state.takeoverTopicId = null;
-            queueRender({ shell: true, header: true, composer: true });
+            queueRender({ shell: true, header: true, composer: true, conflict: true });
         }
     }
 
-    function clearPreview() {
-        state.previewTopic = null;
-        store.setState({ messages: [] });
-        render();
+    function openTopicConflict(topic) {
+        if (!topic?.id || state.takeoverTopicId) return;
+        state.topicConflict = { topic, takingOver: false, error: null };
+        queueRender({ conflict: true });
     }
 
-    // Open a read-only snapshot of an occupied (in-use) Topic.  This reads the
-    // durable checkpoint WITHOUT claiming its session lease, so the other live
-    // client keeps ownership until the user explicitly chooses takeover.
-    async function previewOccupiedTopic(topic) {
-        if (!topic?.id || state.disposed) return;
-        state.previewTopic = topic;
-        queueRender({ shell: true, header: true, feed: true, composer: true });
-        try {
-            await controller.previewTopic(topic.id, topic.agentId);
-        } catch (error) {
-            notify(`无法只读预览此 Topic：${error?.message || error}`, 'error');
-            state.previewTopic = null;
-        }
-        queueRender({ shell: true, header: true, feed: true, composer: true });
+    function closeTopicConflict() {
+        if (state.topicConflict?.takingOver) return;
+        state.topicConflict = null;
+        queueRender({ conflict: true });
     }
 
     async function recoverDaemon() {
@@ -1145,45 +1401,153 @@ function mountWorkbench(container) {
         try { window.localStorage?.removeItem(LAST_TOPIC_STORAGE_KEY); } catch { /* convenience pointer only */ }
     }
 
-    function appendTopicActions(row, topic) {
-        const menu = iconButton('more_horiz', `管理 Topic：${topic.title || topic.id}`, 'agent-chat-session-menu');
-        const actions = node('div', 'agent-chat-session-actions');
-        actions.hidden = true;
-        const rename = button('重命名');
-        const remove = button('删除', 'danger');
-        menu.addEventListener('click', (event) => {
+    function closeTopicContextMenu({ returnFocus = false } = {}) {
+        const current = state.topicContextMenu;
+        if (!current) return;
+        state.topicContextMenu = null;
+        current.menu.remove();
+        document.removeEventListener('pointerdown', current.onPointerDown, true);
+        document.removeEventListener('keydown', current.onKeyDown, true);
+        if (returnFocus && current.trigger?.isConnected) current.trigger.focus();
+    }
+
+    async function copyTopicId(topicId) {
+        try {
+            if (!navigator.clipboard?.writeText) throw new Error('clipboard API unavailable');
+            await navigator.clipboard.writeText(topicId);
+            notify('Topic ID 已复制。', 'success');
+        } catch {
+            // This copies only a durable identifier supplied by Rust; it is
+            // not a transcript or a second renderer-side Topic store.
+            const temporary = document.createElement('textarea');
+            temporary.value = topicId;
+            temporary.setAttribute('readonly', '');
+            temporary.style.position = 'fixed';
+            temporary.style.opacity = '0';
+            document.body.append(temporary);
+            temporary.select();
+            const copied = document.execCommand?.('copy');
+            temporary.remove();
+            if (copied) notify('Topic ID 已复制。', 'success');
+            else notify(`无法访问系统剪贴板；Topic ID：${topicId}`, 'warning');
+        }
+    }
+
+    function addTopicContextMenuItem(menu, iconName, label, action, { danger = false } = {}) {
+        // Deliberately reuse the main-chat DOM primitives. The callbacks stay
+        // Agent-specific and go through Rust, but the visual contract (size,
+        // font, icon spacing, theme and hover state) is the exact same shared
+        // `.context-menu` / `.context-menu-item` implementation.
+        const item = node('div', `context-menu-item agent-chat-topic-context-menu-item${danger ? ' danger-item' : ''}`);
+        item.setAttribute('role', 'menuitem');
+        item.tabIndex = 0;
+        const iconElement = node('i', `fas fa-${iconName}`);
+        iconElement.setAttribute('aria-hidden', 'true');
+        item.append(iconElement, document.createTextNode(label));
+        const invoke = (event) => {
             event.preventDefault();
             event.stopPropagation();
-            actions.hidden = !actions.hidden;
+            closeTopicContextMenu();
+            run(action);
+        };
+        item.addEventListener('click', invoke);
+        item.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') invoke(event);
         });
-        rename.addEventListener('click', (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            actions.hidden = true;
-            const title = window.prompt?.('重命名 Agent Topic', topic.title || '');
-            if (title === null || title === undefined || title.trim() === (topic.title || '').trim()) return;
-            run(async () => {
+        menu.append(item);
+        return item;
+    }
+
+    function positionTopicContextMenu(menu, point) {
+        // Mount under document.body so a sidebar scroller cannot clip the
+        // menu; then clamp it to the active Electron viewport.
+        const gap = 8;
+        const width = menu.offsetWidth || 188;
+        const height = menu.offsetHeight || 240;
+        const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+        const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+        menu.style.left = `${Math.max(gap, Math.min(point.x, viewportWidth - width - gap))}px`;
+        menu.style.top = `${Math.max(gap, Math.min(point.y, viewportHeight - height - gap))}px`;
+        menu.style.visibility = 'visible';
+    }
+
+    function showTopicContextMenu(topic, trigger, point, { live = false } = {}) {
+        if (!topic?.id || state.topicManaging) return;
+        closeTopicContextMenu();
+        const menu = node('div', 'context-menu agent-chat-topic-context-menu');
+        menu.setAttribute('role', 'menu');
+        menu.setAttribute('aria-label', `管理 Topic：${topic.title || topic.id}`);
+        menu.style.left = '0px';
+        menu.style.top = '0px';
+        menu.style.visibility = 'hidden';
+
+        if (topic.inUse && !live) {
+            addTopicContextMenuItem(menu, 'folder-open', '打开会话', async () => openTopicConflict(topic));
+        } else if (live) {
+            addTopicContextMenuItem(menu, 'folder-open', '打开当前会话', async () => controller.hydrateTopic(topic.id, null, null, topic.agentId));
+        } else {
+            addTopicContextMenuItem(menu, 'folder-open', '打开会话', async () => createSession({
+                resume: topic.id,
+                title: topic.title,
+                model: topic.model,
+                agent: topic.agentId,
+                workspaceRoot: topic.workspaceRef,
+            }));
+            addTopicContextMenuItem(menu, 'edit', '重命名', async () => {
+                const title = window.prompt?.('重命名 Agent Topic', topic.title || '');
+                if (title === null || title === undefined || title.trim() === (topic.title || '').trim()) return;
                 await controller.renameTopic(topic.id, title, topic.agentId);
                 rememberTopicTitle(topic, title.trim());
                 await refreshControlPlane();
                 notify('Agent Topic 已重命名。', 'success');
             });
-        });
-        remove.addEventListener('click', (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            actions.hidden = true;
-            const confirmed = window.confirm?.(`确定删除「${topic.title || topic.id}」吗？此操作不能恢复。`);
-            if (!confirmed) return;
-            run(async () => {
+        }
+        if (topic.inUse || live) addTopicContextMenuItem(menu, 'copy', '复制 Topic ID', async () => copyTopicId(topic.id));
+        else addTopicContextMenuItem(menu, 'copy', '复制 Topic ID', async () => copyTopicId(topic.id));
+        if (!topic.inUse && !live) {
+            addTopicContextMenuItem(menu, 'trash-alt', '删除此话题', async () => {
+                const confirmed = window.confirm?.(`确定删除「${topic.title || topic.id}」吗？此操作不能恢复。`);
+                if (!confirmed) return;
                 await controller.deleteTopic(topic.id, topic.agentId);
                 forgetTopic(topic.id);
                 await refreshControlPlane();
                 notify('Agent Topic 已删除。', 'success');
-            });
+            }, { danger: true });
+        }
+
+        const onPointerDown = (event) => {
+            if (!menu.contains(event.target) && event.target !== trigger) closeTopicContextMenu();
+        };
+        const onKeyDown = (event) => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            closeTopicContextMenu({ returnFocus: true });
+        };
+        state.topicContextMenu = { menu, trigger, onPointerDown, onKeyDown };
+        document.body.append(menu);
+        positionTopicContextMenu(menu, point);
+        document.addEventListener('pointerdown', onPointerDown, true);
+        document.addEventListener('keydown', onKeyDown, true);
+        queueMicrotask(() => menu.querySelector('[role="menuitem"]')?.focus());
+    }
+
+    function appendTopicActions(row, topic, { live = false } = {}) {
+        // Use an inline SVG here rather than a Material Symbols glyph. The
+        // Agent Workbench can mount before that optional font is ready; its
+        // text fallback was the small grey dash seen beside every Topic row.
+        const menu = visualActionButton('more', `管理 Topic：${topic.title || topic.id}`, 'agent-chat-session-menu');
+        menu.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const rect = menu.getBoundingClientRect();
+            showTopicContextMenu(topic, menu, { x: rect.right, y: rect.bottom }, { live });
         });
-        actions.append(rename, remove);
-        row.append(menu, actions);
+        row.addEventListener('contextmenu', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            showTopicContextMenu(topic, menu, { x: event.clientX, y: event.clientY }, { live });
+        });
+        row.append(menu);
     }
 
     function renderSidebar() {
@@ -1195,6 +1559,7 @@ function mountWorkbench(container) {
             tab.setAttribute('role', 'tab');
             tab.setAttribute('aria-selected', String(state.tab === id));
             tab.addEventListener('click', () => {
+                closeTopicContextMenu();
                 state.tab = id;
                 // Topic management is a transient renderer affordance. Never
                 // leave selection mode active while the Topic page is hidden.
@@ -1203,6 +1568,10 @@ function mountWorkbench(container) {
                     state.topicSelectedIds.clear();
                     state.topicSearchOpen = false;
                     state.topicSearch = '';
+                    state.topicSearchResults = [];
+                    state.topicSearchLoading = false;
+                    state.topicSearchError = '';
+                    topicSearchRequest += 1;
                 }
                 renderSidebar();
                 // Topic metadata is owned by Rust and may have changed while
@@ -1223,6 +1592,7 @@ function mountWorkbench(container) {
             add.addEventListener('click', openNewTopicFlow);
             const manage = visualActionButton('checklist', '管理会话', 'next-ui-topic-icon-trigger');
             manage.addEventListener('click', () => {
+                closeTopicContextMenu();
                 state.topicManaging = !state.topicManaging;
                 if (!state.topicManaging) state.topicSelectedIds.clear();
                 renderSidebar();
@@ -1248,6 +1618,10 @@ function mountWorkbench(container) {
                 header.classList.toggle('is-searching', open);
                 if (clear) {
                     state.topicSearch = '';
+                    state.topicSearchResults = [];
+                    state.topicSearchLoading = false;
+                    state.topicSearchError = '';
+                    topicSearchRequest += 1;
                     search.value = '';
                     applyTopicFilter();
                 }
@@ -1269,8 +1643,21 @@ function mountWorkbench(container) {
             const liveSessions = attachment ? [projectSession(attachment)] : [];
             const activeSessionId = attachment?.sessionId;
             const liveTopicIds = new Set(liveSessions.map((session) => session.topicId).filter(Boolean));
-            const persistedTopics = state.topics.filter((topic) => !liveTopicIds.has(topic.id));
-            if (!liveSessions.length && !persistedTopics.length) list.append(node('li', 'agent-chat-empty-list', `${state.selectedAgent || '当前 Agent'} 还没有会话。创建一个会话后即可开始。`));
+            const indexedTopics = state.topicSearch.trim()
+                ? state.topicSearchResults.map((hit) => ({
+                    id: hit.topicId,
+                    title: hit.title || hit.topicId,
+                    agentId: hit.agentId || state.selectedAgent,
+                    inUse: hit.inUse === true,
+                    readOnly: hit.readOnly === true,
+                    model: hit.model || '',
+                    workspaceRef: hit.workspaceRef || '',
+                    updatedAt: hit.updatedAt || hit.timestamp || 0,
+                    searchHit: hit,
+                }))
+                : state.topics;
+            const persistedTopics = indexedTopics.filter((topic) => !liveTopicIds.has(topic.id));
+            if (!state.topicSearch.trim() && !liveSessions.length && !persistedTopics.length) list.append(node('li', 'agent-chat-empty-list', `${state.selectedAgent || '当前 Agent'} 还没有会话。创建一个会话后即可开始。`));
             for (const session of liveSessions) {
                 const active = session.sessionId === activeSessionId;
                 // Keep this deliberately isomorphic to topicListManager's main
@@ -1295,6 +1682,16 @@ function mountWorkbench(container) {
                 // Rebuild only from the Rust Topic snapshot; Main has no
                 // message/event ring to select from.
                 row.addEventListener('click', () => run(() => controller.hydrateTopic(session.topicId, session, null, session.agentId)));
+                if (!state.topicManaging && session.topicId) {
+                    appendTopicActions(row, {
+                        id: session.topicId,
+                        title: session.title,
+                        agentId: session.agentId,
+                        model: session.model,
+                        workspaceRef: session.workspaceRoot,
+                        inUse: false,
+                    }, { live: true });
+                }
                 list.append(row);
             }
             // Old conversations are Topics, not abandoned in-memory GUI
@@ -1303,7 +1700,7 @@ function mountWorkbench(container) {
             for (const topic of persistedTopics) {
                 const selectable = !topic.inUse;
                 const selected = state.topicSelectedIds.has(topic.id);
-                const row = node('li', `topic-item agent-chat-session-row agent-chat-persisted-topic${state.previewTopic?.id === topic.id ? ' previewing' : ''}${selected ? ' selected' : ''}`);
+                const row = node('li', `topic-item agent-chat-session-row agent-chat-persisted-topic${selected ? ' selected' : ''}`);
                 row.tabIndex = 0;
                 row.dataset.itemId = topic.agentId || state.selectedAgent || 'Nova';
                 row.dataset.itemType = 'agent-topic';
@@ -1317,8 +1714,14 @@ function mountWorkbench(container) {
                 avatar.alt = `${topic.agentId || 'Nova'} - ${topic.title || topic.id}`;
                 avatar.onerror = () => { avatar.src = 'assets/default_avatar.png'; };
                 const title = node('span', 'topic-title-display', topic.title || topic.id);
-                const status = node('span', 'message-count', topic.inUse ? '使用中' : '');
-                row.append(avatar, title, status);
+                // A Topic lease is a concurrency guard, not sidebar content.
+                // Keep normal rows visually identical to VCPChat history;
+                // only a click on a genuinely external lease may surface the
+                // explicit conflict/takeover flow.
+                const status = topic.searchHit ? node('span', 'message-count', '匹配') : null;
+                if (topic.searchHit?.snippet) row.title = topic.searchHit.snippet;
+                row.append(avatar, title);
+                if (status) row.append(status);
                 if (selectable) {
                     const selectIcon = node('span', 'vcp-ui-icon next-ui-topic-select-icon', selected ? 'check_box' : 'check_box_outline_blank');
                     selectIcon.setAttribute('aria-hidden', 'true');
@@ -1326,7 +1729,7 @@ function mountWorkbench(container) {
                 }
                 row.setAttribute('aria-selected', String(selected));
                 row.addEventListener('click', (event) => run(async () => {
-                    if (event.target.closest('.agent-chat-session-menu, .agent-chat-session-actions')) return;
+                    if (event.target.closest('.agent-chat-session-menu')) return;
                     if (state.topicManaging) {
                         if (!selectable) return;
                         if (state.topicSelectedIds.has(topic.id)) state.topicSelectedIds.delete(topic.id);
@@ -1334,22 +1737,81 @@ function mountWorkbench(container) {
                         renderSidebar();
                         return;
                     }
-                    await openTopicFlow(topic);
+                    const current = store.getState();
+                    if (topic.locallyAttached) return;
+                    if (current.activeTurnId || current.approvals?.length) {
+                        notify('当前 Agent 任务仍在运行或等待审批。请先完成或取消，再切换会话。', 'warning');
+                        return;
+                    }
+                    // A normal open is intentionally indistinguishable from
+                    // VCPChat history: Rust owns the snapshot and write lease.
+                    if (!topic.inUse) {
+                        await createSession({
+                            resume: topic.id,
+                            title: topic.title,
+                            model: topic.model,
+                            agent: topic.agentId,
+                            workspaceRoot: topic.workspaceRef,
+                        });
+                    } else {
+                        // Never replace the current attachment/transcript with
+                        // a read-only preview. A real collision is the only
+                        // exceptional UI path and requires explicit takeover.
+                        openTopicConflict(topic);
+                    }
                 }));
-                if (!state.topicManaging && !topic.inUse) appendTopicActions(row, topic);
+                if (!state.topicManaging) appendTopicActions(row, topic);
                 list.append(row);
             }
             const applyTopicFilter = () => {
                 const query = search.value.trim().toLocaleLowerCase();
                 state.topicSearch = search.value;
                 for (const row of list.querySelectorAll('[data-topic-search]')) {
-                    row.hidden = Boolean(query) && !row.dataset.topicSearch.includes(query);
+                    row.hidden = Boolean(query) && !state.topicSearchResults.length && !row.dataset.topicSearch.includes(query);
                 }
             };
-            search.addEventListener('input', applyTopicFilter);
+            search.addEventListener('input', () => {
+                applyTopicFilter();
+                clearTimeout(topicSearchTimer);
+                const query = search.value.trim();
+                const request = ++topicSearchRequest;
+                if (!query) {
+                    state.topicSearchResults = [];
+                    state.topicSearchLoading = false;
+                    state.topicSearchError = '';
+                    renderSidebar();
+                    return;
+                }
+                state.topicSearchLoading = true;
+                state.topicSearchError = '';
+                topicSearchTimer = setTimeout(() => run(async () => {
+                    try {
+                        const hits = await controller.searchTopics(query, state.selectedAgent, 50);
+                        if (request !== topicSearchRequest || query !== state.topicSearch.trim()) return;
+                        state.topicSearchResults = Array.isArray(hits) ? hits : [];
+                    } catch (error) {
+                        if (request !== topicSearchRequest) return;
+                        state.topicSearchResults = [];
+                        state.topicSearchError = error?.message || String(error);
+                    } finally {
+                        if (request === topicSearchRequest) {
+                            state.topicSearchLoading = false;
+                            renderSidebar();
+                            queueMicrotask(() => {
+                                const active = document.getElementById('agentWorkbenchTopicSearchInput');
+                                active?.focus();
+                                active?.setSelectionRange(active.value.length, active.value.length);
+                            });
+                        }
+                    }
+                }), 180);
+            });
             applyTopicFilter();
             const scroll = node('div', 'sidebar-list-scroll');
             scroll.append(list);
+            if (state.topicSearchLoading) scroll.prepend(node('div', 'agent-chat-empty-list', '正在搜索 Rust Agent 索引…'));
+            else if (state.topicSearchError) scroll.prepend(node('div', 'agent-chat-empty-list', `索引搜索不可用：${state.topicSearchError}`));
+            else if (state.topicSearch.trim() && !persistedTopics.length) scroll.prepend(node('div', 'agent-chat-empty-list', '没有匹配的 Agent Topic。'));
             content.append(scroll);
             if (state.topicManaging) {
                 content.classList.add('is-managing');
@@ -1675,71 +2137,6 @@ function mountWorkbench(container) {
                 actions,
             );
             dialog.append(title, description, context, form);
-        } else {
-            const topic = flow.topic || {};
-            const title = node('h2', 'agent-chat-topic-flow-title', topic.title || topic.id || '打开 Agent Topic');
-            title.id = 'agentChatTopicFlowTitle';
-            const lease = node('div', `agent-chat-topic-flow-lease ${topic.inUse ? 'is-occupied' : 'is-idle'}`);
-            lease.setAttribute('role', 'status');
-            lease.append(
-                ...icon(topic.inUse ? 'lock' : 'lock_open'),
-                node('span', '', topic.inUse ? '占用中：仅可读取 checkpoint 或请求安全接管' : '空闲：可恢复为新的可写 attachment'),
-            );
-            const status = node('p', `agent-chat-topic-flow-status ${topic.inUse ? 'is-busy' : 'is-ready'}`,
-                topic.inUse ? '此 Topic 正由另一客户端写入。可读取最近 checkpoint，但必须明确接管后才能写入。' : '此 Topic 当前空闲，可从 Rust checkpoint 恢复为新的可写 attachment。');
-            const details = node('dl', 'agent-chat-topic-flow-details');
-            const addDetail = (label, value) => {
-                if (value == null || value === '') return;
-                details.append(node('dt', '', label), node('dd', '', String(value)));
-            };
-            addDetail('Topic ID', topic.id);
-            addDetail('Agent', topic.agentId || state.selectedAgent || 'Nova');
-            addDetail('模型', topic.model || '未知');
-            addDetail('工作目录', topic.workspaceRef || '未记录');
-            addDetail('最近更新', formatTime(topic.updatedAt));
-            dialog.append(title, lease, status, details);
-            if (flow.loading) {
-                dialog.append(node('p', 'agent-chat-topic-flow-loading', '正在从 Rust Topic Store 读取最近的安全 checkpoint…'));
-            } else if (flow.error) {
-                dialog.append(node('p', 'agent-chat-topic-flow-error', `无法读取该 Topic：${flow.error}`));
-            } else {
-                const messageCount = Array.isArray(flow.snapshot?.history) ? flow.snapshot.history.length : 0;
-                dialog.append(node('p', 'agent-chat-topic-flow-checkpoint',
-                    messageCount ? `已读取 Rust checkpoint：${messageCount} 条可见消息。` : '该 Topic 尚无可见 checkpoint；打开后将保持空白历史。'));
-            }
-            const actions = node('div', 'agent-chat-topic-flow-actions');
-            const close = button('取消', 'secondary');
-            close.addEventListener('click', closeTopicFlow);
-            actions.append(close);
-            if (!flow.loading && !flow.error) {
-                if (topic.inUse) {
-                    const preview = button('只读查看 checkpoint', 'secondary');
-                    preview.addEventListener('click', () => run(async () => {
-                        closeTopicFlow();
-                        await previewOccupiedTopic(topic);
-                    }));
-                    const takeover = button('请求安全接管', 'primary');
-                    takeover.addEventListener('click', () => run(async () => {
-                        closeTopicFlow();
-                        await requestTopicTakeover(topic);
-                    }));
-                    actions.append(preview, takeover);
-                } else {
-                    const open = button('打开并恢复', 'primary');
-                    open.addEventListener('click', () => run(async () => {
-                        closeTopicFlow();
-                        await createSession({
-                            resume: topic.id,
-                            title: topic.title,
-                            model: topic.model,
-                            agent: topic.agentId,
-                            workspaceRoot: topic.workspaceRef,
-                        });
-                    }));
-                    actions.append(open);
-                }
-            }
-            dialog.append(actions);
         }
         topicFlowLayer.append(backdrop, dialog);
         // A microtask avoids stealing the click that opened the dialog while
@@ -1747,9 +2144,56 @@ function mountWorkbench(container) {
         queueMicrotask(() => dialog.focus());
     }
 
+    function renderTopicConflict() {
+        topicConflictLayer.replaceChildren();
+        const conflict = state.topicConflict;
+        topicConflictLayer.hidden = !conflict;
+        if (!conflict) return;
+
+        const { topic } = conflict;
+        const dialog = node('section', 'agent-chat-topic-conflict-dialog');
+        dialog.setAttribute('role', 'alert');
+        dialog.setAttribute('aria-labelledby', 'agentChatTopicConflictTitle');
+
+        const heading = node('div', 'agent-chat-topic-conflict-heading');
+        const icon = node('span', 'vcp-ui-icon agent-chat-topic-conflict-icon', 'sync_problem');
+        const title = node('h2', 'agent-chat-topic-conflict-title', '会话正在其他位置使用');
+        title.id = 'agentChatTopicConflictTitle';
+        heading.append(icon, title);
+        const description = node('p', 'agent-chat-topic-conflict-description',
+            conflict.takingOver
+                ? '正在安全接管，等待另一处会话释放。'
+                : `“${topic.title || topic.id}”正在另一处运行。`);
+        const actions = node('div', 'agent-chat-topic-conflict-actions');
+        const cancel = button('暂不接管', 'secondary');
+        cancel.disabled = conflict.takingOver;
+        cancel.addEventListener('click', closeTopicConflict);
+        const takeover = button(conflict.takingOver ? '正在接管…' : '接管并继续', 'primary');
+        takeover.disabled = conflict.takingOver;
+        takeover.addEventListener('click', () => run(async () => {
+            state.topicConflict = { ...conflict, takingOver: true, error: null };
+            queueRender({ conflict: true });
+            try {
+                if (await requestTopicTakeover(topic)) state.topicConflict = null;
+            } catch (error) {
+                if (state.topicConflict?.topic?.id === topic.id) {
+                    state.topicConflict = { ...state.topicConflict, takingOver: false, error: error?.message || String(error) };
+                }
+                throw error;
+            } finally {
+                queueRender({ conflict: true });
+            }
+        }));
+        actions.append(cancel, takeover);
+        dialog.append(heading, description);
+        if (conflict.error) dialog.append(node('p', 'agent-chat-topic-conflict-error', conflict.error));
+        dialog.append(actions);
+        topicConflictLayer.append(dialog);
+    }
+
     function renderHeader() {
         header.replaceChildren();
-        const session = activeSession() || (state.previewTopic ? { title: state.previewTopic.title || state.previewTopic.id } : null);
+        const session = activeSession();
         const current = store.getState();
         const viewState = deriveWorkbenchViewState(current);
         const left = node('h3', 'agent-chat-title', session?.title || `与 ${state.selectedAgent || 'Nova'} 聊天中`);
@@ -1818,20 +2262,6 @@ function mountWorkbench(container) {
         newSession.addEventListener('click', openNewTopicFlow);
         actions.append(assistant, activityBtn, permissions, theme, queueButton, usageButton, compact, newSession);
         header.append(left, statusChip, actions);
-        if (state.previewTopic) {
-            const banner = node('div', 'agent-chat-readonly-banner');
-            banner.append(node('span', '', `此 Topic「${state.previewTopic.title || state.previewTopic.id}」正被另一客户端占用，当前为只读预览。`));
-            const takeover = button('接管此 Topic', 'agent-chat-readonly-takeover');
-            takeover.addEventListener('click', () => run(async () => {
-                const topic = state.previewTopic;
-                state.previewTopic = null;
-                await requestTopicTakeover(topic);
-            }));
-            const exit = button('退出预览', 'agent-chat-readonly-exit');
-            exit.addEventListener('click', () => run(clearPreview));
-            banner.append(takeover, exit);
-            header.append(banner);
-        }
         if (!state.queueOpen) return;
         const panel = node('section', 'agent-chat-queue-popover');
         const title = node('div', 'agent-chat-queue-heading');
@@ -1901,29 +2331,44 @@ function mountWorkbench(container) {
             return;
         }
 
-        // Group tool cards by turnId so they interleave with messages correctly:
-        // user message → tool cards for same turn → assistant message.
-        const toolsByTurn = new Map();
-        for (const [, tool] of current.tools) {
-            const tid = tool.turnId || '';
-            if (!toolsByTurn.has(tid)) toolsByTurn.set(tid, []);
-            toolsByTurn.get(tid).push(tool);
-        }
-
-        const emittedToolTurns = new Set();
-        for (const message of current.messages) {
-            feedItems.append(createMessage(message));
-            if (message.role === 'user') {
-                const tid = message.turnId || '';
-                if (!emittedToolTurns.has(tid) && toolsByTurn.has(tid)) {
-                    emittedToolTurns.add(tid);
-                    for (const tool of toolsByTurn.get(tid)) feedItems.append(createToolCard(tool, (t) => run(() => controller.cancelTool(t.toolCallId, t.turnId))));
-                }
+        // The daemon sequence is the single ordering authority.  A turn can
+        // contain text → tool → text (and multiple tool calls), so grouping
+        // every tool by turnId would visibly rewrite the actual Agent loop.
+        // Snapshot entries without a v1.2 sequence retain their durable order
+        // and precede the live sequence range.
+        const timeline = [
+            ...current.messages.map((message, index) => ({
+                kind: 'message',
+                value: message,
+                index,
+                sequence: Number.isFinite(Number(message.firstSequence)) ? Number(message.firstSequence) : null,
+                timestamp: Number(message.createdAt) || 0,
+                snapshotOrdinal: Number.isFinite(Number(message.snapshotOrdinal)) ? Number(message.snapshotOrdinal) : null,
+            })),
+            ...[...current.tools.values()].map((tool, index) => ({
+                kind: 'tool',
+                value: tool,
+                index: current.messages.length + index,
+                sequence: Number.isFinite(Number(tool.firstSequence)) ? Number(tool.firstSequence) : null,
+                timestamp: Number(tool.firstTimestamp) || 0,
+                snapshotOrdinal: Number.isFinite(Number(tool.snapshotOrdinal)) ? Number(tool.snapshotOrdinal) : null,
+            })),
+        ];
+        timeline.sort((left, right) => {
+            const leftLive = left.sequence !== null;
+            const rightLive = right.sequence !== null;
+            if (leftLive && rightLive && left.sequence !== right.sequence) return left.sequence - right.sequence;
+            if (leftLive !== rightLive) return leftLive ? 1 : -1;
+            if (left.snapshotOrdinal !== null && right.snapshotOrdinal !== null
+                && left.snapshotOrdinal !== right.snapshotOrdinal) {
+                return left.snapshotOrdinal - right.snapshotOrdinal;
             }
-        }
-        // Orphan tool cards (no matching user message found for this turnId)
-        for (const [, tool] of current.tools) {
-            if (!emittedToolTurns.has(tool.turnId || '')) feedItems.append(createToolCard(tool, (t) => run(() => controller.cancelTool(t.toolCallId, t.turnId))));
+            if (left.timestamp !== right.timestamp) return left.timestamp - right.timestamp;
+            return left.index - right.index;
+        });
+        for (const part of timeline) {
+            if (part.kind === 'message') feedItems.append(createMessage(part.value));
+            else feedItems.append(createToolCard(part.value, (tool) => run(() => controller.cancelTool(tool.toolCallId, tool.turnId))));
         }
 
         // R3: approvals and VCPToolBox observer events no longer pollute the
@@ -1931,7 +2376,29 @@ function mountWorkbench(container) {
         // (renderActivity), which keeps the conversation flow readable while
         // still surfacing actionable approvals behind a badge.
         if (!current.messages.length && !current.tools.size) feedItems.append(node('div', 'agent-chat-empty-conversation', '会话已就绪，发送第一条消息开始。'));
+
         scrollFeed(feed, follow);
+    }
+
+    function renderJumpToLatest() {
+        const count = Math.min(99, state.unreadTimelineCount || 0);
+        const visible = !state.followingFeed && count > 0;
+        jumpToLatest.hidden = !visible;
+        if (!visible) return;
+        const suffix = count > 1 ? `（${count} 条新动态）` : '（有新动态）';
+        jumpToLatest.textContent = `回到最新${suffix}`;
+        jumpToLatest.setAttribute('aria-label', `回到最新消息${suffix}`);
+    }
+
+    function noteTimelineActivity() {
+        if (isFollowingContainer(feed)) {
+            state.followingFeed = true;
+            state.unreadTimelineCount = 0;
+        } else {
+            state.followingFeed = false;
+            state.unreadTimelineCount = Math.min(99, (state.unreadTimelineCount || 0) + 1);
+        }
+        renderJumpToLatest();
     }
 
     function setActivityOpen(open, tab) {
@@ -2184,10 +2651,18 @@ function mountWorkbench(container) {
             content.append(buildUsagePanel(current));
         } else {
             const ws = current.toolboxWs || [];
-            if (!ws.length) {
-                content.append(node('div', 'agent-chat-activity-empty', '暂无 VCPToolBox 观察者事件。'));
+            const markers = current.markerObservations || [];
+            if (!ws.length && !markers.length) {
+                content.append(node('div', 'agent-chat-activity-empty', '暂无 VCPToolBox 或 VCP 内容观察事件。'));
             } else {
-                for (const observation of ws) content.append(createToolboxWsCard(observation));
+                for (const observation of ws) {
+                    content.append(createToolboxWsCard(observation, (approvalId, decision) => {
+                        run(() => controller.respondToolboxApproval(approvalId, decision));
+                    }));
+                }
+                for (const observation of markers) {
+                    content.append(createMarkerObservationCard(observation));
+                }
             }
         }
 
@@ -2199,20 +2674,17 @@ function mountWorkbench(container) {
         const current = store.getState();
         const messageId = event.messageId;
         if (!messageId) return;
-        const message = current.messages.find((item) => {
-            const projected = projectMessage(item);
-            return projected.id === messageId
-                || (projected.turnId === event.turnId && projected.role === 'assistant');
-        });
+        const message = current.messages.find((item) => projectMessage(item).id === messageId);
         if (!message) return;
         const follow = isFollowingContainer(feed);
         let row = [...feedItems.querySelectorAll('[data-message-id]')]
             .find((candidate) => candidate.dataset.messageId === messageId);
         if (!row) {
-            row = createMessage(message);
-            // Assistant messages belong after any tool cards for the same turn,
-            // so append at the end of the feed rather than inserting before them.
-            feedItems.append(row);
+            // A delta can be the first frame observed after a renderer reload.
+            // Rebuild once so this late-created message is inserted at its
+            // daemon sequence position instead of being appended after an
+            // unrelated tool/result card.
+            renderFeed();
         } else {
             patchMessage(row, message);
         }
@@ -2234,6 +2706,7 @@ function mountWorkbench(container) {
             if (next.activity) renderActivity();
             if (next.composer) renderComposer();
             if (next.topicFlow) renderTopicFlow();
+            if (next.conflict) renderTopicConflict();
         });
     }
 
@@ -2243,6 +2716,7 @@ function mountWorkbench(container) {
             return;
         }
         if (event.type === 'assistant.delta' || event.type === 'reasoning.delta') {
+            noteTimelineActivity();
             // Delta events are the hot path.  Preserve focus, scroll anchors,
             // expanded tool cards and pending approval buttons by changing
             // only the matching assistant node.
@@ -2259,7 +2733,11 @@ function mountWorkbench(container) {
         }
         if (event.type.startsWith('tool.') || event.type.startsWith('approval.')
             || event.type === 'assistant.started' || event.type === 'assistant.completed'
-            || event.type === 'user.message' || event.type.startsWith('turn.')) {
+            || event.type === 'user.message' || event.type.startsWith('turn.')
+            || event.type === 'ui.user_message.pending') {
+            if (event.type !== 'approval.requested' && event.type !== 'approval.resolved' && event.type !== 'approval.expired') {
+                noteTimelineActivity();
+            }
             // Approvals live in the activity panel now; keep it in sync too.
             maybeAutoOpenActivity();
             queueRender({ feed: true, header: true, activity: true, composer: true });
@@ -2290,12 +2768,20 @@ function mountWorkbench(container) {
         // approval — never while it is starting, reconnecting, or down.
         const composerReady = Boolean(current.attachment?.sessionId
             && (viewState === 'idle' || viewState === 'running' || viewState === 'awaiting-approval'));
-        const canSend = Boolean(composerReady && state.prompt.trim());
         const hasActiveTurn = Boolean(current.activeTurnId);
+        const canSend = Boolean(composerReady && (state.prompt.trim() || (!hasActiveTurn && state.pendingAttachments.length)));
         const interruptMode = Boolean(hasActiveTurn && !canSend);
         input.value = state.prompt;
         input.disabled = !composerReady;
         sendButton.disabled = !composerReady;
+        attachButton.disabled = !composerReady || hasActiveTurn || state.pendingAttachments.length >= 8;
+        attachmentTray.replaceChildren();
+        if (state.pendingAttachments.length) {
+            attachmentTray.append(createAttachmentChips(state.pendingAttachments, (index) => {
+                state.pendingAttachments.splice(index, 1);
+                renderComposer();
+            }));
+        }
         // Keep the main chat's original SVG / icon hierarchy intact.  Replacing
         // it on every streaming update was the source of the wrong button size.
         sendButton.title = hasActiveTurn
@@ -2304,9 +2790,7 @@ function mountWorkbench(container) {
         sendButton.setAttribute('aria-label', interruptMode ? '取消当前任务' : '发送消息');
         const sendIcon = sendButton.querySelector('.vcp-ui-icon');
         if (sendIcon) sendIcon.textContent = interruptMode ? 'stop' : 'arrow_upward';
-        input.placeholder = state.previewTopic
-            ? '只读预览中：此 Topic 正被占用，无法发送消息。点击「接管」以获得写入权限。'
-            : (viewState === 'reconnecting' || viewState === 'error')
+        input.placeholder = (viewState === 'reconnecting' || viewState === 'error')
             ? '正在重新连接 Rust Agent…'
             : !current.attachment?.sessionId
             ? '请先创建 Agent 会话…'
@@ -2328,12 +2812,39 @@ function mountWorkbench(container) {
         renderActivity();
         renderComposer();
         renderTopicFlow();
+        renderTopicConflict();
     }
 
     input.addEventListener('input', () => { state.prompt = input.value; renderComposer(); });
+    feed.addEventListener('scroll', () => {
+        const following = isFollowingContainer(feed);
+        if (following === state.followingFeed && !(following && state.unreadTimelineCount)) return;
+        state.followingFeed = following;
+        if (following) state.unreadTimelineCount = 0;
+        renderJumpToLatest();
+    }, { passive: true });
+    jumpToLatest.addEventListener('click', () => {
+        state.followingFeed = true;
+        state.unreadTimelineCount = 0;
+        renderJumpToLatest();
+        scrollFeed(feed, true);
+    });
     input.addEventListener('keydown', (event) => {
         if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendButton.click(); }
     });
+    attachButton.addEventListener('click', () => run(async () => {
+        const result = await controller.selectAttachments();
+        const imported = Array.isArray(result?.attachments) ? result.attachments : [];
+        const existing = new Set(state.pendingAttachments.map((item) => item.id));
+        for (const attachment of imported) {
+            if (!existing.has(attachment.id) && state.pendingAttachments.length < 8) {
+                state.pendingAttachments.push(attachment);
+                existing.add(attachment.id);
+            }
+        }
+        if (result?.errors?.length) notify(result.errors.join('；'), imported.length ? 'warning' : 'error');
+        renderComposer();
+    }));
     sendButton.addEventListener('click', () => run(async () => {
         const current = store.getState();
         const prompt = state.prompt.trim();
@@ -2352,10 +2863,12 @@ function mountWorkbench(container) {
             await refreshControlPlane();
             return;
         }
-        if (!prompt) return;
+        if (!prompt && !state.pendingAttachments.length) return;
+        const attachments = state.pendingAttachments.map((item) => ({ ...item }));
         state.prompt = '';
+        state.pendingAttachments = [];
         renderComposer();
-        await controller.startTurn(prompt);
+        await controller.startTurn(prompt, attachments);
     }));
     newButton.addEventListener('click', openNewTopicFlow);
 
@@ -2388,12 +2901,14 @@ function mountWorkbench(container) {
 
     return () => {
         state.disposed = true;
+        closeTopicContextMenu();
         if (renderFrame !== null && typeof window.cancelAnimationFrame === 'function') window.cancelAnimationFrame(renderFrame);
         state.accountThemeObserver?.disconnect();
         unsubscribe();
         controller.dispose();
         root.remove();
         topicFlowLayer.remove();
+        topicConflictLayer.remove();
     };
 }
 

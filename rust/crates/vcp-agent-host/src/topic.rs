@@ -8,12 +8,16 @@ use std::{
 
 use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
+use sha2::{Digest, Sha256};
+use vcp_shadow_index::ShadowDocument;
 
 const MAX_HISTORY_ENTRIES: usize = 400;
 const MAX_HISTORY_BYTES: usize = 4 * 1024 * 1024;
 const MAX_CHECKPOINT_BYTES: usize = 8 * 1024 * 1024;
 const LEASE: Duration = Duration::from_secs(60);
+const LEGACY_MIGRATION_VERSION: u32 = 1;
+const LEGACY_MIGRATION_MARKER: &str = ".agent-runtime-migration-v1.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -100,16 +104,122 @@ struct TakeoverRequest {
     owner_id: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LegacyMigrationMarker {
+    version: u32,
+    completed_at: u64,
+    source_root: String,
+    migrated_count: usize,
+}
+
 impl TopicStore {
     pub fn new(root: PathBuf) -> Self {
         Self { root }
     }
+
+    /// Move Topic directories created by the pre-CDS layout out of
+    /// `AppData/UserData`. Only directories carrying the Agent checkpoint
+    /// marker are eligible, so ordinary VChat Topics are never touched.
+    pub fn migrate_legacy_from(&self, legacy_root: &Path) -> Result<usize> {
+        if legacy_root == self.root {
+            return Ok(0);
+        }
+
+        let marker_path = self.root.join(LEGACY_MIGRATION_MARKER);
+        if marker_path.is_file() {
+            let marker: LegacyMigrationMarker =
+                serde_json::from_str(&fs::read_to_string(&marker_path)?)
+                    .context("invalid Agent Runtime migration marker")?;
+            if marker.version != LEGACY_MIGRATION_VERSION {
+                return Err(anyhow!(
+                    "unsupported Agent Runtime migration marker version"
+                ));
+            }
+            return Ok(0);
+        }
+
+        fs::create_dir_all(&self.root)?;
+
+        let mut migrated = 0;
+        let owners = match fs::read_dir(legacy_root) {
+            Ok(owners) => Some(owners),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+            Err(error) => return Err(error.into()),
+        };
+        for owner in owners
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|entry| entry.path().is_dir())
+        {
+            let owner_id = owner.file_name().to_string_lossy().to_string();
+            let legacy_topics = owner.path().join("topics");
+            let topics = match fs::read_dir(&legacy_topics) {
+                Ok(topics) => topics,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+                Err(error) => return Err(error.into()),
+            };
+
+            for topic in topics.flatten().filter(|entry| entry.path().is_dir()) {
+                let source = topic.path();
+                if !has_checkpoint(&source) {
+                    continue;
+                }
+                if live_lock(&source.join(".vcp-agent.topic-lock.json")) {
+                    return Err(anyhow!(
+                        "legacy Agent Topic is in use and cannot be migrated: {}",
+                        source.display()
+                    ));
+                }
+
+                let topic_id = topic.file_name().to_string_lossy().to_string();
+                let destination = self.directory(&owner_id, &topic_id)?;
+                if destination.exists() {
+                    return Err(anyhow!(
+                        "Agent Topic migration destination already exists: {}",
+                        destination.display()
+                    ));
+                }
+                let parent = destination
+                    .parent()
+                    .context("Agent Topic migration destination has no parent")?;
+                fs::create_dir_all(parent)?;
+                fs::rename(&source, &destination).with_context(|| {
+                    format!(
+                        "failed to migrate Agent Topic {} to {}",
+                        source.display(),
+                        destination.display()
+                    )
+                })?;
+                migrated += 1;
+            }
+
+            remove_if_empty(&legacy_topics);
+            remove_if_empty(&owner.path());
+        }
+        atomic_json(
+            &marker_path,
+            &LegacyMigrationMarker {
+                version: LEGACY_MIGRATION_VERSION,
+                completed_at: now(),
+                source_root: legacy_root.display().to_string(),
+                migrated_count: migrated,
+            },
+        )?;
+        Ok(migrated)
+    }
+
     pub fn directory(&self, agent_id: &str, topic_id: &str) -> Result<PathBuf> {
         Ok(self
             .root
             .join(safe(agent_id, "agent id")?)
             .join("topics")
             .join(safe(topic_id, "topic id")?))
+    }
+
+    pub fn attachments_directory(&self, agent_id: &str, topic_id: &str) -> Result<PathBuf> {
+        Ok(self.directory(agent_id, topic_id)?.join("attachments"))
     }
     pub fn acquire(&self, agent_id: &str, topic_id: &str, owner_id: &str) -> Result<()> {
         let directory = self.directory(agent_id, topic_id)?;
@@ -353,6 +463,85 @@ impl TopicStore {
         }
         Ok(())
     }
+
+    /// Project the bounded, redacted UI history into disposable search
+    /// documents. Recovery never calls this path: `agent-state.json` remains
+    /// the sole checkpoint source.
+    pub fn search_documents_for_topic(
+        &self,
+        agent_id: &str,
+        topic_id: &str,
+    ) -> Result<Vec<ShadowDocument>> {
+        let directory = self.directory(agent_id, topic_id)?;
+        let state: Value =
+            serde_json::from_str(&fs::read_to_string(directory.join("agent-state.json"))?)?;
+        let history_path = directory.join("history.json");
+        let history: Vec<Value> = match fs::read_to_string(&history_path) {
+            Ok(raw) => serde_json::from_str(&raw)?,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => snapshot_to_history(
+                state
+                    .pointer("/snapshot/messages")
+                    .and_then(Value::as_array)
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[]),
+            ),
+            Err(error) => return Err(error.into()),
+        };
+        let title = state
+            .get("title")
+            .and_then(Value::as_str)
+            .unwrap_or("新会话")
+            .to_string();
+        let documents = history
+            .into_iter()
+            .enumerate()
+            .filter_map(|(ordinal, message)| {
+                let role = message.get("role")?.as_str()?.to_string();
+                let content = message.get("content")?.as_str()?.to_string();
+                let message_id = message
+                    .get("messageId")
+                    .or_else(|| message.get("id"))?
+                    .as_str()?
+                    .to_string();
+                let turn_id = message
+                    .get("turnId")
+                    .and_then(Value::as_str)
+                    .map(ToOwned::to_owned);
+                let timestamp = message
+                    .get("timestamp")
+                    .and_then(Value::as_i64)
+                    .unwrap_or_default();
+                Some(ShadowDocument {
+                    owner_id: agent_id.to_string(),
+                    topic_id: topic_id.to_string(),
+                    topic_title: title.clone(),
+                    message_id,
+                    turn_id,
+                    ordinal: u64::try_from(ordinal).unwrap_or(u64::MAX),
+                    timestamp,
+                    role,
+                    content,
+                })
+            })
+            .collect();
+        Ok(documents)
+    }
+
+    pub fn all_search_documents(&self) -> Result<Vec<ShadowDocument>> {
+        if !self.root.is_dir() {
+            return Ok(Vec::new());
+        }
+        let mut documents = Vec::new();
+        for owner in fs::read_dir(&self.root)?.flatten().filter(|entry| {
+            entry.path().is_dir() && entry.file_name().to_string_lossy() != ".index"
+        }) {
+            let agent_id = owner.file_name().to_string_lossy().to_string();
+            for topic in self.list(&agent_id)? {
+                documents.extend(self.search_documents_for_topic(&agent_id, &topic.id)?);
+            }
+        }
+        Ok(documents)
+    }
     pub fn save(
         &self,
         agent_id: &str,
@@ -541,15 +730,329 @@ fn truncate(value: &str, limit: usize) -> String {
     format!("{}…[truncated]", &value[..end])
 }
 fn sanitize_snapshot(messages: Vec<Value>) -> Vec<Value> {
-    messages.into_iter().map(redact).collect()
+    messages
+        .into_iter()
+        .map(redact)
+        .map(sanitize_marker_message)
+        .collect()
+}
+
+fn sanitize_marker_message(mut message: Value) -> Value {
+    if let Some(content) = message.get_mut("content") {
+        match content {
+            Value::String(text) => *text = sanitize_marker_text(text),
+            Value::Array(parts) => {
+                for part in parts {
+                    if part
+                        .pointer("/image_url/url")
+                        .and_then(Value::as_str)
+                        .is_some_and(|url| url.starts_with("data:"))
+                    {
+                        *part = json!({
+                            "type": "text",
+                            "text": "[attachment omitted from Topic; durable descriptor required]"
+                        });
+                        continue;
+                    }
+                    if let Some(text) = part.get("text").and_then(Value::as_str).map(str::to_string)
+                    {
+                        part["text"] = Value::String(sanitize_marker_text(&text));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    if let Some(audit) = message.get("vcpAudit").cloned() {
+        message["vcpAudit"] = sanitize_tool_audit(audit);
+    }
+    message
+}
+
+/// Checkpoints can also arrive from an older daemon or an external repair
+/// tool. Re-apply the artifact boundary at persistence time so an otherwise
+/// valid `toolResult` can never smuggle a local path or data URI into Topic.
+fn sanitize_tool_audit(value: Value) -> Value {
+    let Some(object) = value.as_object() else {
+        return Value::Null;
+    };
+    let mut output = Map::new();
+    if let Some(name) = object.get("toolName").and_then(Value::as_str) {
+        let name = name.trim();
+        if !name.is_empty() {
+            output.insert("toolName".into(), Value::String(truncate(name, 256)));
+        }
+    }
+    for key in ["resources", "warnings"] {
+        let values = object
+            .get(key)
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .take(32)
+            .map(|item| sanitize_tool_audit_value(item, 0))
+            .collect::<Vec<_>>();
+        if !values.is_empty() {
+            output.insert(key.into(), Value::Array(values));
+        }
+    }
+    if let Some(task) = object.get("task").filter(|task| !task.is_null()) {
+        output.insert("task".into(), sanitize_tool_audit_value(task, 0));
+    }
+    Value::Object(output)
+}
+
+fn sanitize_tool_audit_value(value: &Value, depth: usize) -> Value {
+    if depth >= 4 {
+        return Value::String("[nested ToolBox metadata omitted]".into());
+    }
+    match value {
+        Value::String(text) if text.trim_start().starts_with("data:") => {
+            Value::String("[data URI omitted]".into())
+        }
+        Value::String(text) => Value::String(truncate(text, 8 * 1024)),
+        Value::Array(values) => Value::Array(
+            values
+                .iter()
+                .take(32)
+                .map(|item| sanitize_tool_audit_value(item, depth + 1))
+                .collect(),
+        ),
+        Value::Object(values) => {
+            let mut output = Map::new();
+            for (key, item) in values.iter().take(32) {
+                let normalized = key.to_ascii_lowercase();
+                if matches!(
+                    normalized.as_str(),
+                    "path" | "localpath" | "internalpath" | "base64" | "bytes" | "buffer"
+                ) || (normalized == "url"
+                    && item
+                        .as_str()
+                        .is_some_and(|url| url.trim_start().starts_with("file:")))
+                {
+                    continue;
+                }
+                output.insert(key.clone(), sanitize_tool_audit_value(item, depth + 1));
+            }
+            Value::Object(output)
+        }
+        _ => value.clone(),
+    }
+}
+
+fn sanitize_marker_text(text: &str) -> String {
+    let text = replace_marker_blocks(
+        text,
+        "<<<[TOOL_REQUEST]>>>",
+        "<<<[END_TOOL_REQUEST]>>>",
+        "[VCP protocol warning: raw TOOL_REQUEST removed and not executed]",
+    );
+    let text = summarize_marker_blocks(
+        &text,
+        "<<<[VCP_DYNAMIC_FOLD]>>>",
+        "<<<[END_VCP_DYNAMIC_FOLD]>>>",
+        "VCP dynamic context",
+    );
+    summarize_marker_blocks(
+        &text,
+        "<<<[VCPINFO]>>>",
+        "<<<[END_VCPINFO]>>>",
+        "VCP notification",
+    )
+}
+
+fn replace_marker_blocks(input: &str, start: &str, end: &str, replacement: &str) -> String {
+    let mut output = String::new();
+    let mut cursor = 0;
+    while let Some(relative_start) = input[cursor..].find(start) {
+        let block_start = cursor + relative_start;
+        let content_start = block_start + start.len();
+        let Some(relative_end) = input[content_start..].find(end) else {
+            output.push_str(&input[cursor..]);
+            return output;
+        };
+        let block_end = content_start + relative_end + end.len();
+        output.push_str(&input[cursor..block_start]);
+        output.push_str(replacement);
+        cursor = block_end;
+    }
+    output.push_str(&input[cursor..]);
+    output
+}
+
+fn summarize_marker_blocks(input: &str, start: &str, end: &str, label: &str) -> String {
+    let mut output = String::new();
+    let mut cursor = 0;
+    while let Some(relative_start) = input[cursor..].find(start) {
+        let block_start = cursor + relative_start;
+        let content_start = block_start + start.len();
+        let Some(relative_end) = input[content_start..].find(end) else {
+            output.push_str(&input[cursor..]);
+            return output;
+        };
+        let content_end = content_start + relative_end;
+        let summary = input[content_start..content_end]
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        output.push_str(&input[cursor..block_start]);
+        output.push_str(&format!("[{label}: {}]", truncate(&summary, 240)));
+        cursor = content_end + end.len();
+    }
+    output.push_str(&input[cursor..]);
+    output
 }
 fn snapshot_to_history(messages: &[Value]) -> Vec<Value> {
-    messages.iter().filter_map(|message| { let role = message.get("role").and_then(Value::as_str)?; if !matches!(role, "user" | "assistant") { return None; } let content = message.get("content").and_then(Value::as_array).and_then(|parts| parts.iter().find_map(|part| part.get("text").and_then(Value::as_str))).or_else(|| message.get("content").and_then(Value::as_str)).unwrap_or(""); Some(json!({"id":format!("history-{}", now()),"role":role,"content":truncate(content, 32*1024),"timestamp":now()})) }).collect()
+    messages
+        .iter()
+        .enumerate()
+        .filter_map(|(index, message)| {
+            let role = message.get("role").and_then(Value::as_str)?;
+            if role == "toolResult" {
+                return history_tool_result(message, index);
+            }
+            if !matches!(role, "user" | "assistant") {
+                return None;
+            }
+            let content = message_text(message).unwrap_or("");
+            let message_id = message
+                .get("messageId")
+                .or_else(|| message.get("id"))
+                .and_then(Value::as_str)
+                .filter(|value| !value.trim().is_empty())
+                .map(ToOwned::to_owned)
+                .unwrap_or_else(|| deterministic_history_id(message, index, role, content));
+            let timestamp = message
+                .get("timestamp")
+                .or_else(|| message.get("createdAt"))
+                .cloned()
+                .unwrap_or_else(|| Value::from(0));
+            let mut projected = json!({
+                "id": message_id.clone(),
+                "messageId": message_id,
+                "role": role,
+                "content": truncate(content, 32 * 1024),
+                "timestamp": timestamp,
+                "snapshotOrdinal": index,
+            });
+            if let Some(turn_id) = message.get("turnId").and_then(Value::as_str) {
+                projected["turnId"] = Value::String(turn_id.to_string());
+            }
+            Some(projected)
+        })
+        .collect()
+}
+
+/// A restored Workbench needs the bounded ToolBox artifact projection to be
+/// in the same durable Topic as messages. This is display metadata only: the
+/// model transcript remains the Core's normal `toolResult.content` text.
+fn history_tool_result(message: &Value, index: usize) -> Option<Value> {
+    let tool_call_id = message.get("toolCallId")?.as_str()?.trim();
+    if tool_call_id.is_empty() {
+        return None;
+    }
+    let audit = message.get("vcpAudit").cloned().unwrap_or(Value::Null);
+    let tool_name = audit
+        .get("toolName")
+        .and_then(Value::as_str)
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or("vcp_invoke");
+    let content = truncate(message_text(message).unwrap_or(""), 32 * 1024);
+    let timestamp = message
+        .get("timestamp")
+        .or_else(|| message.get("createdAt"))
+        .cloned()
+        .unwrap_or_else(|| Value::from(0));
+    let mut projected = json!({
+        "id": format!("tool-{tool_call_id}"),
+        "role": "tool",
+        "toolCallId": tool_call_id,
+        "toolName": tool_name,
+        "state": if message.get("isError").and_then(Value::as_bool).unwrap_or(false) { "failed" } else { "completed" },
+        "payload": {
+            "toolName": tool_name,
+            "result": content,
+            "resources": audit.get("resources").cloned().unwrap_or_else(|| json!([])),
+            "warnings": audit.get("warnings").cloned().unwrap_or_else(|| json!([])),
+            "task": audit.get("task").cloned().unwrap_or(Value::Null),
+        },
+        "timestamp": timestamp,
+        "snapshotOrdinal": index,
+    });
+    if let Some(turn_id) = message.get("turnId").and_then(Value::as_str) {
+        projected["turnId"] = Value::String(turn_id.to_string());
+    }
+    Some(projected)
+}
+
+fn deterministic_history_id(message: &Value, index: usize, role: &str, content: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(b"vcp-agent-history-v1\0");
+    hasher.update(index.to_le_bytes());
+    hasher.update(role.as_bytes());
+    hasher.update(b"\0");
+    hasher.update(content.as_bytes());
+    if let Some(turn_id) = message.get("turnId").and_then(Value::as_str) {
+        hasher.update(b"\0");
+        hasher.update(turn_id.as_bytes());
+    }
+    let digest = format!("{:x}", hasher.finalize());
+    format!("history-{}", &digest[..24])
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn topic_sanitizer_never_persists_image_audio_or_video_data_uris() {
+        let sanitized = sanitize_snapshot(vec![json!({
+            "role": "user",
+            "content": [
+                {"type":"text","text":"看图"},
+                {"type":"image_url","image_url":{"url":"data:image/png;base64,AAAA"}},
+                {"type":"image_url","image_url":{"url":"data:audio/mpeg;base64,BBBB"}},
+                {"type":"image_url","image_url":{"url":"data:video/mp4;base64,CCCC"}}
+            ]
+        })]);
+        let serialized = serde_json::to_string(&sanitized).expect("sanitized json");
+        assert!(!serialized.contains("base64"));
+        assert_eq!(serialized.matches("durable descriptor required").count(), 3);
+    }
+
+    #[test]
+    fn topic_persists_safe_tool_artifacts_as_a_durable_timeline_entry() {
+        let messages = sanitize_snapshot(vec![json!({
+            "role": "toolResult",
+            "toolCallId": "call-1",
+            "content": [{"type":"text","text":"package.json"}],
+            "vcpAudit": {
+                "toolName": "FileOperator",
+                "resources": [{
+                    "name": "package.json",
+                    "url": "file-ref:package.json",
+                    "path": "C:\\Users\\person\\project\\package.json",
+                    "preview": "data:image/png;base64,AAAA"
+                }],
+                "warnings": ["只读预览"],
+                "task": {"id":"task-1", "status":"completed"}
+            }
+        })]);
+        let history = snapshot_to_history(&messages);
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0]["role"], "tool");
+        assert_eq!(history[0]["toolCallId"], "call-1");
+        assert_eq!(history[0]["toolName"], "FileOperator");
+        assert_eq!(
+            history[0]["payload"]["resources"][0]["name"],
+            "package.json"
+        );
+        let serialized = serde_json::to_string(&history).expect("history json");
+        assert!(!serialized.contains("C:\\Users"));
+        assert!(!serialized.contains("data:image"));
+        assert!(serialized.contains("[data URI omitted]"));
+    }
+
     #[test]
     fn checkpoint_is_bounded_and_resumable() {
         let root = std::env::temp_dir().join(format!("vcp-topic-test-{}", std::process::id()));
@@ -572,6 +1075,135 @@ mod tests {
                 .contains("nope")
         );
         store.release("nova", "topic-1", "owner-1");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn history_projection_preserves_identity_and_has_a_stable_legacy_fallback() {
+        let messages = vec![
+            json!({
+                "messageId":"msg-turn-1-user",
+                "turnId":"turn-1",
+                "timestamp":42,
+                "role":"user",
+                "content":[{"type":"text","text":"重复内容"}]
+            }),
+            json!({"role":"assistant","content":"重复内容"}),
+            json!({"role":"assistant","content":"重复内容"}),
+        ];
+        let first = snapshot_to_history(&messages);
+        let second = snapshot_to_history(&messages);
+
+        assert_eq!(first, second, "re-saving a snapshot must not churn IDs");
+        assert_eq!(first[0]["id"], "msg-turn-1-user");
+        assert_eq!(first[0]["messageId"], "msg-turn-1-user");
+        assert_eq!(first[0]["turnId"], "turn-1");
+        assert_eq!(first[0]["timestamp"], 42);
+        assert_ne!(first[1]["id"], first[2]["id"]);
+        assert_eq!(first[1]["timestamp"], 0);
+    }
+
+    #[test]
+    fn checkpoint_removes_raw_tool_markers_and_compacts_display_only_markers() {
+        let messages = sanitize_snapshot(vec![json!({
+            "role": "assistant",
+            "content": [{"type":"text","text": concat!(
+                "before\n<<<[TOOL_REQUEST]>>>danger<<<[END_TOOL_REQUEST]>>>\n",
+                "<<<[VCP_DYNAMIC_FOLD]>>>large private context<<<[END_VCP_DYNAMIC_FOLD]>>>\n",
+                "<<<[VCPINFO]>>>retrieval details<<<[END_VCPINFO]>>>\nafter"
+            )}]
+        })]);
+        let text = messages[0]["content"][0]["text"].as_str().unwrap();
+        assert!(!text.contains("danger"));
+        assert!(!text.contains("<<<[TOOL_REQUEST]>>>"));
+        assert!(text.contains("raw TOOL_REQUEST removed and not executed"));
+        assert!(text.contains("VCP dynamic context: large private context"));
+        assert!(text.contains("VCP notification: retrieval details"));
+    }
+
+    #[test]
+    fn legacy_agent_topics_move_out_of_vchat_user_data() {
+        let root = std::env::temp_dir().join(format!("vcp-topic-migration-test-{}", now()));
+        let legacy_root = root.join("UserData");
+        let runtime_root = root.join("AgentRuntimeData");
+        let legacy_store = TopicStore::new(legacy_root.clone());
+        legacy_store
+            .acquire("Nova", "topic-1", "legacy-owner")
+            .unwrap();
+        legacy_store
+            .save(
+                "Nova",
+                "topic-1",
+                json!({"messages":[{"role":"user","content":"迁移测试"}]}),
+                Value::Null,
+                Path::new("."),
+                "model",
+            )
+            .unwrap();
+        legacy_store.release("Nova", "topic-1", "legacy-owner");
+
+        let runtime_store = TopicStore::new(runtime_root.clone());
+        assert_eq!(runtime_store.migrate_legacy_from(&legacy_root).unwrap(), 1);
+        assert!(
+            runtime_root
+                .join("Nova/topics/topic-1/agent-state.json")
+                .is_file()
+        );
+        assert!(!legacy_root.join("Nova/topics/topic-1").exists());
+        assert_eq!(
+            runtime_store.load_snapshot("Nova", "topic-1").unwrap()[0]["content"],
+            "迁移测试"
+        );
+        let marker_path = runtime_root.join(LEGACY_MIGRATION_MARKER);
+        let marker: LegacyMigrationMarker =
+            serde_json::from_str(&fs::read_to_string(marker_path).unwrap()).unwrap();
+        assert_eq!(marker.version, LEGACY_MIGRATION_VERSION);
+        assert_eq!(marker.migrated_count, 1);
+        assert_eq!(runtime_store.migrate_legacy_from(&legacy_root).unwrap(), 0);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn legacy_agent_topic_migration_refuses_a_live_writer() {
+        let root = std::env::temp_dir().join(format!("vcp-topic-live-migration-test-{}", now()));
+        let legacy_root = root.join("UserData");
+        let runtime_root = root.join("AgentRuntimeData");
+        let legacy_store = TopicStore::new(legacy_root.clone());
+        legacy_store
+            .acquire("nova", "topic-1", "live-owner")
+            .unwrap();
+        atomic_json(
+            &legacy_store
+                .directory("nova", "topic-1")
+                .unwrap()
+                .join("agent-state.json"),
+            &json!({"version":1,"snapshot":{"messages":[]}}),
+        )
+        .unwrap();
+
+        let runtime_store = TopicStore::new(runtime_root.clone());
+        let error = runtime_store
+            .migrate_legacy_from(&legacy_root)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("is in use"));
+        assert!(legacy_root.join("nova/topics/topic-1").is_dir());
+        assert!(!runtime_root.join("nova/topics/topic-1").exists());
+        assert!(!runtime_root.join(LEGACY_MIGRATION_MARKER).exists());
+
+        legacy_store.release("nova", "topic-1", "live-owner");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn empty_legacy_scan_is_marked_complete() {
+        let root = std::env::temp_dir().join(format!("vcp-topic-empty-migration-test-{}", now()));
+        let legacy_root = root.join("UserData");
+        let runtime_root = root.join("AgentRuntimeData");
+        let runtime_store = TopicStore::new(runtime_root.clone());
+
+        assert_eq!(runtime_store.migrate_legacy_from(&legacy_root).unwrap(), 0);
+        assert!(runtime_root.join(LEGACY_MIGRATION_MARKER).is_file());
         let _ = fs::remove_dir_all(root);
     }
 

@@ -4,7 +4,12 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const binaryPath = path.join(repoRoot, 'rust', 'target', 'release', 'vcp-agent.exe');
+const profileFlagIndex = process.argv.indexOf('--profile');
+const profile = profileFlagIndex >= 0 ? process.argv[profileFlagIndex + 1] : 'release';
+if (!profile || !/^[a-z0-9-]+$/.test(profile)) {
+  throw new Error('check-rust-tui-size --profile must be followed by a Cargo profile name');
+}
+const binaryPath = path.join(repoRoot, 'rust', 'target', profile, 'vcp-agent.exe');
 const baselineBytes = 6_380_032;
 const defaultLimitBytes = 18_962_944;
 const limitBytes = Number.parseInt(
@@ -20,6 +25,7 @@ const { size } = await stat(binaryPath);
 const delta = size - baselineBytes;
 console.log(
   '[vcp-agent-size] binary=' + binaryPath
+    + ' profile=' + profile
     + ' size=' + size
     + ' baseline=' + baselineBytes
     + ' delta=' + delta

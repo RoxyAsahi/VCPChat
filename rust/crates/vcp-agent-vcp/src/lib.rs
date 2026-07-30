@@ -8,8 +8,8 @@ pub mod host;
 
 #[cfg(feature = "direct-host")]
 pub use host::{
-    DirectToolboxHost, SseDecoder, ToolboxConnection, ToolboxHostError, ToolboxLogEntry,
-    ToolboxSseEvent, ToolboxToolResult, ToolboxWsChannel, ToolboxWsEvent,
+    DirectToolboxHost, SseDecoder, ToolboxApprovalResponse, ToolboxConnection, ToolboxHostError,
+    ToolboxLogEntry, ToolboxSseEvent, ToolboxToolResult, ToolboxWsChannel, ToolboxWsEvent,
     normalize_toolbox_base_url, websocket_endpoints,
 };
 

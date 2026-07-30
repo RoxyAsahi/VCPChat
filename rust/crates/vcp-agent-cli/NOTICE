@@ -1,0 +1,13 @@
+This crate contains a narrowly adapted output-contract structure from Grok
+Build revision 02d9359435d0e9c20a20945679389cdce441e431.
+
+Original path:
+  crates/codegen/xai-grok-pager/src/headless.rs
+
+The adapted `plain`, one-shot JSON, and JSONL emitter lifecycle remains
+licensed under Apache-2.0. VCP-specific capped stdin handling, temporary Topic
+policy, Rust Host event projection, approval binding, cancellation behavior,
+and all tests are local additions.
+
+This crate does not import Grok Agent execution, ACP, sessions, authentication,
+telemetry, Shell, MCP, sandbox, tool permissions, or background task reapers.

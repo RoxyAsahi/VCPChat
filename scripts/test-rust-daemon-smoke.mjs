@@ -26,8 +26,8 @@ await fs.writeFile(settingsPath, JSON.stringify({
 // A control daemon may be attached to Nova while the Workbench is browsing a
 // different shared Agent. Seed that Agent's durable Rust Topic so the test
 // proves `agentId` is routed by Host rather than inherited from spawn args.
-await fs.mkdir(path.join(testRoot, 'UserData', '123', 'topics', 'topic-existing-123'), { recursive: true });
-await fs.writeFile(path.join(testRoot, 'UserData', '123', 'topics', 'topic-existing-123', 'agent-state.json'), JSON.stringify({
+await fs.mkdir(path.join(testRoot, 'AgentRuntimeData', '123', 'topics', 'topic-existing-123'), { recursive: true });
+await fs.writeFile(path.join(testRoot, 'AgentRuntimeData', '123', 'topics', 'topic-existing-123', 'agent-state.json'), JSON.stringify({
     version: 1,
     title: '123 的既有 Topic',
     model: 'gpt-5.6-terra',
@@ -35,6 +35,10 @@ await fs.writeFile(path.join(testRoot, 'UserData', '123', 'topics', 'topic-exist
     updatedAt: 1_700_000_000_000,
     history: [{ id: 'seeded-history', role: 'user', content: '历史消息' }],
 }), 'utf8');
+await fs.writeFile(path.join(testRoot, 'AgentRuntimeData', '123', 'topics', 'topic-existing-123', 'history.json'), JSON.stringify([{
+    id: 'seeded-history', messageId: 'seeded-history', turnId: 'turn-seeded',
+    role: 'user', content: '数据库同步历史消息', timestamp: 1_700_000_000_000,
+}]), 'utf8');
 
 function waitForMessage(messages, predicate, label, timeoutMs = 5_000) {
     const deadline = Date.now() + timeoutMs;
@@ -113,7 +117,7 @@ const transport = new RustDaemonTransport({
 await transport.start();
 assert.equal(transport.readyMessage?.buildRevision, pinnedRevision,
     'the smoke daemon must be compiled from the exact in-repository Rust revision');
-assert.equal(transport.readyMessage?.protocolRevision, '1.2', 'daemon must advertise the v1.2 GUI protocol revision');
+assert.equal(transport.readyMessage?.protocolRevision, '1.4', 'daemon must advertise the v1.4 GUI protocol revision');
 await transport.request('get-settings', {}, 'smoke-settings-request');
 await transport.request('set-workbench-presence', { mounted: false }, 'smoke-presence-request');
 const created = await transport.request('create-session');
@@ -129,6 +133,25 @@ assert.equal(otherAgentTopics?.kind, 'topics', 'cross-Agent Topic browsing must 
 assert.deepEqual(otherAgentTopics?.payload?.map((topic) => ({ id: topic.id, agentId: topic.agentId })), [{
     id: 'topic-existing-123', agentId: '123',
 }], 'the daemon must return the selected Agent history without creating a Session');
+await transport.request('search-topics', { query: '数据库', agentId: '123', limit: 20 }, 'smoke-topic-search');
+const topicSearch = await waitForMessage(
+    controlEvents,
+    (event) => event.requestId === 'smoke-topic-search',
+    'Agent Topic shadow-index search',
+);
+assert.equal(topicSearch.kind, 'topic-search-results');
+assert.deepEqual(topicSearch.payload.map((hit) => ({ topicId: hit.topicId, messageId: hit.messageId })), [{
+    topicId: 'topic-existing-123', messageId: 'seeded-history',
+}], 'search results must retain stable message identity and point back to a Rust Topic');
+await transport.request('get-index-status', {}, 'smoke-index-status');
+const indexStatus = await waitForMessage(
+    controlEvents,
+    (event) => event.requestId === 'smoke-index-status',
+    'Agent Topic shadow-index status',
+);
+assert.equal(indexStatus.kind, 'topic-index-status');
+assert.equal(indexStatus.payload.available, true);
+assert.ok(indexStatus.payload.documentCount >= 1);
 const readinessDeadline = Date.now() + 7_000;
 while (!daemonEvents.some((event) => event?.type === 'runtime.readiness'
     && event?.payload?.toolbox?.state === 'unavailable') && Date.now() < readinessDeadline) {

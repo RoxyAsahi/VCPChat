@@ -1,0 +1,19 @@
+[package]
+name = "vcp-shadow-index"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+jieba-rs.workspace = true
+parking_lot.workspace = true
+serde.workspace = true
+tantivy.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

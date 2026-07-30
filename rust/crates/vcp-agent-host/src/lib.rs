@@ -8,7 +8,7 @@
 pub mod topic;
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     env, fs,
     io::Write,
     path::{Path, PathBuf},
@@ -21,12 +21,15 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 use tokio::sync::mpsc;
-use topic::TopicStore;
+use topic::{TopicMetadata, TopicStore};
 use vcp_agent_core::CoreRuntime;
 use vcp_agent_protocol::WireMessage;
 use vcp_agent_vcp::{
-    DirectToolboxHost, ToolboxConnection, ToolboxSseEvent, ToolboxWsChannel, ToolboxWsEvent,
+    DirectToolboxHost, ToolboxApprovalResponse, ToolboxConnection, ToolboxSseEvent,
+    ToolboxWsChannel, ToolboxWsEvent,
 };
+use vcp_grok_image_attachments::{AttachmentDescriptor, AttachmentStore, MAX_SOURCE_BYTES};
+use vcp_shadow_index::{ShadowIndex, ShadowSearchHit};
 
 static IDS: AtomicU64 = AtomicU64::new(1);
 const LOCAL_APPROVAL_TIMEOUT: Duration = Duration::from_secs(60);
@@ -207,6 +210,9 @@ pub struct HostConfig {
     pub initial_messages: Vec<Value>,
     pub budget: BudgetLimits,
     pub theme: String,
+    /// A control-only daemon services catalog, Topic and settings commands
+    /// without becoming a writer for any Agent Topic.
+    pub control_only: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -220,6 +226,7 @@ pub struct RuntimeOverrides {
     pub workspace: Option<PathBuf>,
     pub always_approve: bool,
     pub resume: Option<String>,
+    pub control_only: bool,
 }
 
 pub fn default_settings_path() -> PathBuf {
@@ -314,11 +321,13 @@ pub fn load_config(overrides: RuntimeOverrides) -> Result<HostConfig> {
     } else {
         PermissionMode::Ask
     };
-    let data_root = settings_path
-        .parent()
-        .unwrap_or(Path::new("."))
-        .join("UserData");
+    let app_data_root = settings_path.parent().unwrap_or(Path::new("."));
+    let legacy_data_root = app_data_root.join("UserData");
+    let data_root = app_data_root.join("AgentRuntimeData");
     let store = TopicStore::new(data_root.clone());
+    store
+        .migrate_legacy_from(&legacy_data_root)
+        .context("failed to migrate legacy Agent Topics out of VChat UserData")?;
     let topic_id = match overrides.resume.as_deref() {
         Some("latest") => store
             .latest_topic(&agent.id)?
@@ -357,11 +366,12 @@ pub fn load_config(overrides: RuntimeOverrides) -> Result<HostConfig> {
         initial_messages,
         budget,
         theme,
+        control_only: overrides.control_only,
     })
 }
 
 fn canonical_workspace(path: PathBuf) -> Result<PathBuf> {
-    let canonical = fs::canonicalize(&path)
+    let canonical = dunce::canonicalize(&path)
         .with_context(|| format!("workspace does not exist: {}", path.display()))?;
     if !canonical.is_dir() {
         return Err(anyhow!(
@@ -613,10 +623,21 @@ pub enum HostEvent {
 pub enum HostCommand {
     StartTurn {
         prompt: String,
+        attachments: Vec<Value>,
         /// GUI hosts already own a public Turn identity. Preserve it through
         /// the Host/Core boundary so terminal events can update the same UI
         /// state. Standalone callers leave this empty and Host generates one.
         turn_id: Option<String>,
+    },
+    ImportAttachment {
+        request_id: String,
+        path: PathBuf,
+    },
+    /// A Native TUI command. The Host, not the TUI projection, reads the OS
+    /// clipboard and immediately converts it to a durable descriptor-only
+    /// Topic asset.
+    ImportClipboardImage {
+        request_id: String,
     },
     Cancel,
     Steer {
@@ -634,6 +655,25 @@ pub enum HostCommand {
     ListTopics {
         request_id: String,
         agent_id: Option<String>,
+    },
+    SearchTopics {
+        request_id: String,
+        query: String,
+        agent_id: Option<String>,
+        limit: usize,
+    },
+    SearchTopicMessages {
+        request_id: String,
+        query: String,
+        topic_id: String,
+        agent_id: Option<String>,
+        limit: usize,
+    },
+    GetIndexStatus {
+        request_id: String,
+    },
+    RebuildTopicIndex {
+        request_id: String,
     },
     ReadTopic {
         request_id: String,
@@ -695,6 +735,30 @@ pub enum HostCommand {
         allowed: bool,
         binding: Option<(String, String, String, String)>,
     },
+    ToolboxApproval {
+        request_id: String,
+        approval_request_id: String,
+        approved: bool,
+        reason: Option<String>,
+    },
+    /// Completion after the VCPLog socket has accepted the response frame.
+    ToolboxApprovalFinished {
+        request_id: String,
+        approval_request_id: String,
+        approved: bool,
+        accepted: bool,
+        error: Option<String>,
+    },
+    ToolboxApprovalObserved(Value),
+    /// Internal completion of the best-effort ToolBox interrupt request.
+    /// The model request ID is kept inside the Host and is never projected to
+    /// Renderer/TUI events.
+    ModelInterruptFinished {
+        request_id: String,
+        turn_id: String,
+        accepted: bool,
+        outcome: &'static str,
+    },
     /// Internal transport from asynchronous ToolBox tasks back into the one
     /// CoreRuntime owner. It is deliberately not exposed by the TUI API.
     Core(WireMessage),
@@ -718,7 +782,31 @@ pub fn start(config: HostConfig) -> Result<RunningHost> {
     let session_id = next_id("session");
     let owner_id = next_id("owner");
     let store = TopicStore::new(config.data_root.clone());
-    store.acquire(&config.agent.id, &config.topic_id, &owner_id)?;
+    // Electron can start a daemon solely to list/read Topics and shared
+    // settings. That control plane must never acquire a lease as a side
+    // effect: a lease represents the one writable Topic attachment only.
+    if !config.control_only {
+        store.acquire(&config.agent.id, &config.topic_id, &owner_id)?;
+    }
+    let search_index = match ShadowIndex::open(&config.data_root.join(".index")) {
+        Ok(index) => {
+            if let Err(error) = store
+                .all_search_documents()
+                .and_then(|documents| index.rebuild(&documents).map(|_| ()))
+            {
+                let _ = events_tx.send(HostEvent::Warning(format!(
+                    "Agent Topic shadow index is unavailable and may be rebuilt later: {error}"
+                )));
+            }
+            Some(index)
+        }
+        Err(error) => {
+            let _ = events_tx.send(HostEvent::Warning(format!(
+                "Agent Topic shadow index could not be opened: {error}"
+            )));
+            None
+        }
+    };
     let task_session = session_id.clone();
     let topic_id = config.topic_id.clone();
     let task_commands = commands_tx.clone();
@@ -731,6 +819,7 @@ pub fn start(config: HostConfig) -> Result<RunningHost> {
             task_commands,
             events_tx,
             store,
+            search_index,
             owner_id,
         )
         .await;
@@ -752,37 +841,40 @@ async fn run_host(
     commands_tx: mpsc::UnboundedSender<HostCommand>,
     events_tx: mpsc::UnboundedSender<HostEvent>,
     store: TopicStore,
+    search_index: Option<ShadowIndex>,
     owner_id: String,
 ) {
     let (core_tx, mut core_rx) = mpsc::channel(256);
     let mut core = CoreRuntime::new(core_tx);
-    let mut create = WireMessage::new("create-session").with_request_id(next_id("create"));
-    create.session_id = Some(session_id.clone());
-    // This is intentionally an environment-only integration-test hook: it
-    // never persists to shared settings and is not exposed to GUI/TUI users.
-    // Core validates the value and limits `required` to the first model round.
-    let test_tool_choice = matches!(
-        env::var("VCP_AGENT_TEST_TOOL_CHOICE").as_deref(),
-        Ok("required")
-    )
-    .then_some("required");
-    create.payload.insert(
-        "options".into(),
-        json!({
-            "vcp": {
-                "model": config.model.clone(),
-                "toolChoice": test_tool_choice,
-                "contextWindow": config.context_window,
-                "maxOutput": config.max_output
-            }, "systemPrompt": config.agent.system_prompt.clone(),
-            "initialMessages": config.initial_messages.clone()
-        }),
-    );
-    if let Err(error) = core.handle(create).await {
-        let _ = events_tx.send(HostEvent::Warning(error.to_string()));
-        return;
+    if !config.control_only {
+        let mut create = WireMessage::new("create-session").with_request_id(next_id("create"));
+        create.session_id = Some(session_id.clone());
+        // This is intentionally an environment-only integration-test hook: it
+        // never persists to shared settings and is not exposed to GUI/TUI users.
+        // Core validates the value and limits `required` to the first model round.
+        let test_tool_choice = matches!(
+            env::var("VCP_AGENT_TEST_TOOL_CHOICE").as_deref(),
+            Ok("required")
+        )
+        .then_some("required");
+        create.payload.insert(
+            "options".into(),
+            json!({
+                "vcp": {
+                    "model": config.model.clone(),
+                    "toolChoice": test_tool_choice,
+                    "contextWindow": config.context_window,
+                    "maxOutput": config.max_output
+                }, "systemPrompt": config.agent.system_prompt.clone(),
+                "initialMessages": config.initial_messages.clone()
+            }),
+        );
+        if let Err(error) = core.handle(create).await {
+            let _ = events_tx.send(HostEvent::Warning(error.to_string()));
+            return;
+        }
     }
-    // `host-ready` used to be an ad-hoc framed message.  The v1.2 GUI
+    // `host-ready` used to be an ad-hoc framed message.  The v1.4 GUI
     // boundary only permits final daemon event names, so make readiness a
     // normal event with daemon-generated envelope fields instead.
     let _ = events_tx.send(HostEvent::Wire(WireMessage::new("event").put(
@@ -804,10 +896,16 @@ async fn run_host(
     // ToolBox, settings, or a distributed node on its own.
     let _ = events_tx.send(runtime_readiness_event(initial_readiness(&config)));
     spawn_toolbox_readiness_probe(toolbox.clone(), events_tx.clone());
-    let observer_tasks =
-        spawn_observers(toolbox.clone(), events_tx.clone(), config.api_key.clone());
+    let (observer_tasks, toolbox_approval_tx) = spawn_observers(
+        toolbox.clone(),
+        commands_tx.clone(),
+        events_tx.clone(),
+        config.api_key.clone(),
+    );
     let mut approvals: HashMap<String, ApprovalRequest> = HashMap::new();
-    let mut model_tasks = HashMap::new();
+    let mut toolbox_approvals: HashMap<String, u64> = HashMap::new();
+    let mut toolbox_approval_order = VecDeque::new();
+    let mut model_tasks: HashMap<String, tokio::task::JoinHandle<()>> = HashMap::new();
     let mut turn_requests: HashMap<String, u64> = HashMap::new();
     let mut turn_tokens: HashMap<String, u64> = HashMap::new();
     let mut interaction_queue: Vec<Value> = Vec::new();
@@ -838,7 +936,7 @@ async fn run_host(
                     }
                 }
             }
-            _ = heartbeat.tick() => {
+            _ = heartbeat.tick(), if !config.control_only => {
                 if let Err(error) = store.heartbeat(&config.agent.id, &config.topic_id, &owner_id) {
                     let _ = events_tx.send(HostEvent::Warning(format!("Agent Topic lease lost: {error}")));
                     break;
@@ -876,15 +974,52 @@ async fn run_host(
                     }
                     if let Err(error) = core.handle(message).await { let _ = events_tx.send(HostEvent::Warning(error.to_string())); }
                 }
-                HostCommand::StartTurn { prompt, turn_id } => {
+                HostCommand::ModelInterruptFinished {
+                    request_id,
+                    turn_id,
+                    accepted,
+                    outcome,
+                } => {
+                    if let Some(task) = model_tasks.remove(&request_id) {
+                        task.abort();
+                    }
+                    let _ = events_tx.send(session_event(
+                        &session_id,
+                        &turn_id,
+                        "runtime.interrupt_result",
+                        json!({
+                            "accepted": accepted,
+                            "source": "toolbox",
+                            "outcome": outcome,
+                        }),
+                    ));
+                }
+                HostCommand::StartTurn { prompt, attachments, turn_id } => {
                     let mut message = WireMessage::new("start-turn").with_request_id(next_id("turn"));
                     let turn_id = turn_id.filter(|value| !value.trim().is_empty()).unwrap_or_else(|| next_id("turn"));
                     if active_turn_id.is_some() {
                         let _ = events_tx.send(turn_rejected_event(&session_id, &turn_id, "session already has an active turn"));
                         continue;
                     }
+                    let attachment_store = match store.attachments_directory(&config.agent.id, &config.topic_id) {
+                        Ok(directory) => AttachmentStore::new(directory),
+                        Err(error) => {
+                            let _ = events_tx.send(turn_rejected_event(&session_id, &turn_id, &format!("cannot resolve attachment store: {error}")));
+                            continue;
+                        }
+                    };
+                    let attachments = match validate_attachment_descriptors(attachments, &attachment_store) {
+                        Ok(attachments) => attachments,
+                        Err(error) => {
+                            let _ = events_tx.send(attachment_rejected_event(&session_id, &turn_id, &error.to_string()));
+                            continue;
+                        }
+                    };
                     message.session_id = Some(session_id.clone()); message.turn_id = Some(turn_id.clone());
                     message.payload.insert("prompt".into(), Value::String(prompt.clone()));
+                    if !attachments.is_empty() {
+                        message.payload.insert("attachments".into(), Value::Array(attachments.clone()));
+                    }
                     message.payload.insert("compaction".into(), json!({"contextWindow": config.context_window, "maxOutput": config.max_output}));
                     match core.handle(message).await {
                         Ok(()) => {
@@ -893,14 +1028,89 @@ async fn run_host(
                             // acceptance. The daemon-owned event is what lets
                             // every UI projection show the user message and
                             // enter its cancellable running state.
-                            let _ = events_tx.send(session_event(
+                            let _ = events_tx.send(session_message_event(
                                 &session_id,
                                 &turn_id,
+                                &format!("msg_{turn_id}_user"),
                                 "turn.started",
-                                json!({ "prompt": prompt }),
+                                json!({ "prompt": prompt, "attachments": attachments }),
                             ));
                         }
                         Err(error) => { let _ = events_tx.send(HostEvent::Warning(error.to_string())); }
+                    }
+                }
+                HostCommand::ImportAttachment { request_id, path } => {
+                    let attachment_store = match store.attachments_directory(&config.agent.id, &config.topic_id) {
+                        Ok(directory) => AttachmentStore::new(directory),
+                        Err(error) => {
+                            let _ = events_tx.send(HostEvent::Control {
+                                request_id,
+                                kind: "control-error".into(),
+                                payload: json!({"operation":"attachment-import","error":safe_attachment_import_error(&error.to_string())}),
+                            });
+                            continue;
+                        }
+                    };
+                    match attachment_store.import_attachment(&path) {
+                        Ok(imported) => {
+                            let _ = events_tx.send(HostEvent::Control {
+                                request_id,
+                                kind: "attachment-imported".into(),
+                                payload: json!({
+                                    "attachment": imported.descriptor,
+                                    "originalByteLen": imported.original_byte_len,
+                                    "normalized": imported.normalized,
+                                }),
+                            });
+                        }
+                        Err(error) => {
+                            let _ = events_tx.send(HostEvent::Control {
+                                request_id,
+                                kind: "control-error".into(),
+                                payload: json!({"operation":"attachment-import","error":safe_attachment_import_error(&error.to_string())}),
+                            });
+                        }
+                    }
+                }
+                HostCommand::ImportClipboardImage { request_id } => {
+                    let attachment_store = match store.attachments_directory(&config.agent.id, &config.topic_id) {
+                        Ok(directory) => AttachmentStore::new(directory),
+                        Err(error) => {
+                            let _ = events_tx.send(HostEvent::Control {
+                                request_id,
+                                kind: "control-error".into(),
+                                payload: json!({"operation":"clipboard-image-import","error":error.to_string()}),
+                            });
+                            continue;
+                        }
+                    };
+                    match clipboard_image_png().and_then(|bytes| {
+                        attachment_store
+                            .import_image_bytes(bytes, "clipboard-image.png")
+                            .map_err(anyhow::Error::from)
+                    }) {
+                        Ok(imported) => {
+                            let _ = events_tx.send(HostEvent::Control {
+                                request_id,
+                                kind: "attachment-imported".into(),
+                                payload: json!({
+                                    "attachment": imported.descriptor,
+                                    "originalByteLen": imported.original_byte_len,
+                                    "normalized": imported.normalized,
+                                    "source": "clipboard",
+                                }),
+                            });
+                        }
+                        Err(_) => {
+                            let _ = events_tx.send(HostEvent::Control {
+                                request_id,
+                                kind: "control-error".into(),
+                                payload: json!({
+                                    "operation":"clipboard-image-import",
+                                    "error":"系统剪贴板中没有可安全导入的图片。",
+                                }),
+                            });
+                        }
                     }
                 }
                 HostCommand::Cancel => {
@@ -931,6 +1141,71 @@ async fn run_host(
                     match store.list(&agent_id) {
                         Ok(topics) => { let _ = events_tx.send(HostEvent::Control { request_id, kind: "topics".into(), payload: json!(topics) }); }
                         Err(error) => { let _ = events_tx.send(HostEvent::Control { request_id, kind: "control-error".into(), payload: json!({"operation":"topics","error":error.to_string()}) }); }
+                    }
+                }
+                HostCommand::SearchTopics { request_id, query, agent_id, limit } => {
+                    let agent_id = agent_id.unwrap_or_else(|| config.agent.id.clone());
+                    let result = search_index.as_ref().context("Agent Topic shadow index is unavailable")
+                        .and_then(|index| index.search(&query, Some(&agent_id), None, limit))
+                        .and_then(|hits| Ok((hits, store.list(&agent_id)?)));
+                    match result {
+                        Ok((hits, topics)) => {
+                            let _ = events_tx.send(HostEvent::Control {
+                                request_id,
+                                kind: "topic-search-results".into(),
+                                payload: Value::Array(project_topic_search_hits(hits, &topics)),
+                            });
+                        }
+                        Err(error) => {
+                            let _ = events_tx.send(control_error(request_id, "search-topics", error.to_string()));
+                        }
+                    }
+                }
+                HostCommand::SearchTopicMessages { request_id, query, topic_id, agent_id, limit } => {
+                    let agent_id = agent_id.unwrap_or_else(|| config.agent.id.clone());
+                    let result = search_index.as_ref().context("Agent Topic shadow index is unavailable")
+                        .and_then(|index| index.search(&query, Some(&agent_id), Some(&topic_id), limit));
+                    match result {
+                        Ok(hits) => {
+                            let _ = events_tx.send(HostEvent::Control {
+                                request_id,
+                                kind: "topic-message-search-results".into(),
+                                payload: json!(hits),
+                            });
+                        }
+                        Err(error) => {
+                            let _ = events_tx.send(control_error(request_id, "search-topic-messages", error.to_string()));
+                        }
+                    }
+                }
+                HostCommand::GetIndexStatus { request_id } => {
+                    let payload = search_index.as_ref()
+                        .map(|index| serde_json::to_value(index.status()).unwrap_or_else(|_| json!({"available":false})))
+                        .unwrap_or_else(|| json!({"available":false,"writable":false,"rebuilding":false,"documentCount":0,"topicCount":0}));
+                    let _ = events_tx.send(HostEvent::Control {
+                        request_id,
+                        kind: "topic-index-status".into(),
+                        payload,
+                    });
+                }
+                HostCommand::RebuildTopicIndex { request_id } => {
+                    let result = search_index.as_ref().context("Agent Topic shadow index is unavailable")
+                        .and_then(|index| {
+                            let documents = store.all_search_documents()?;
+                            let topic_count = index.rebuild(&documents)?;
+                            Ok(json!({"topicCount":topic_count,"documentCount":documents.len(),"status":index.status()}))
+                        });
+                    match result {
+                        Ok(payload) => {
+                            let _ = events_tx.send(HostEvent::Control {
+                                request_id,
+                                kind: "topic-index-rebuilt".into(),
+                                payload,
+                            });
+                        }
+                        Err(error) => {
+                            let _ = events_tx.send(control_error(request_id, "rebuild-topic-index", error.to_string()));
+                        }
                     }
                 }
                 HostCommand::ReadTopic { request_id, topic_id, agent_id } => {
@@ -964,11 +1239,24 @@ async fn run_host(
                 HostCommand::RenameTopic { request_id, topic_id, title, agent_id } => {
                     let agent_id = agent_id.unwrap_or_else(|| config.agent.id.clone());
                     let outcome = store.rename(&agent_id, &topic_id, &title);
+                    if outcome.is_ok()
+                        && let Some(index) = &search_index
+                        && let Err(error) = store.search_documents_for_topic(&agent_id, &topic_id)
+                            .and_then(|documents| index.replace_topic(&agent_id, &topic_id, &documents))
+                    {
+                        let _ = events_tx.send(HostEvent::Warning(format!("Topic renamed, but its disposable search projection was not updated: {error}")));
+                    }
                     let _ = events_tx.send(control_result(request_id, "topic-renamed", outcome, json!({"topicId":topic_id,"title":title})));
                 }
                 HostCommand::DeleteTopic { request_id, topic_id, agent_id } => {
                     let agent_id = agent_id.unwrap_or_else(|| config.agent.id.clone());
                     let outcome = store.delete(&agent_id, &topic_id);
+                    if outcome.is_ok()
+                        && let Some(index) = &search_index
+                        && let Err(error) = index.delete_topic(&agent_id, &topic_id)
+                    {
+                        let _ = events_tx.send(HostEvent::Warning(format!("Topic deleted, but its disposable search projection was not updated: {error}")));
+                    }
                     let _ = events_tx.send(control_result(request_id, "topic-deleted", outcome, json!({"topicId":topic_id})));
                 }
                 HostCommand::ReplaceInteractionQueue { request_id, interactions } => {
@@ -1098,6 +1386,15 @@ async fn run_host(
                             // card from the same authoritative transition.
                             let _ = events_tx.send(denial_event);
                         }
+                        for (approval_request_id, _) in toolbox_approvals.drain() {
+                            let _ = toolbox_approval_tx.try_send(ToolboxApprovalResponse {
+                                request_id: approval_request_id,
+                                approved: false,
+                                reason: Some("workbench closed before ToolBox backend approval".into()),
+                                completion: None,
+                            });
+                        }
+                        toolbox_approval_order.clear();
                     }
                     let _ = events_tx.send(HostEvent::Control {
                         request_id,
@@ -1135,6 +1432,88 @@ async fn run_host(
                         let _ = core.handle(result).await;
                     }
                 }
+                HostCommand::ToolboxApprovalObserved(value) => {
+                    let now = now_millis();
+                    let Some((approval_request_id, expires_at_ms)) = backend_approval_identity(&value, now) else {
+                        let _ = events_tx.send(HostEvent::Warning(
+                            "ignored invalid or expired ToolBox backend approval replay".into(),
+                        ));
+                        continue;
+                    };
+                    if toolbox_approvals.contains_key(&approval_request_id) {
+                        continue;
+                    }
+                    toolbox_approvals.insert(approval_request_id.clone(), expires_at_ms);
+                    toolbox_approval_order.push_back(approval_request_id);
+                    while toolbox_approval_order.len() > 256 {
+                        if let Some(old) = toolbox_approval_order.pop_front() {
+                            toolbox_approvals.remove(&old);
+                        }
+                    }
+                    let _ = events_tx.send(HostEvent::ToolboxWs {
+                        channel: "Log".into(),
+                        kind: "backend-approval-request".into(),
+                        payload: redact_known_secret(redact(&value), &config.api_key),
+                    });
+                }
+                HostCommand::ToolboxApproval { request_id, approval_request_id, approved, reason } => {
+                    let now = now_millis();
+                    let Some(&expires_at_ms) = toolbox_approvals.get(&approval_request_id) else {
+                        let _ = events_tx.send(control_error(request_id, "toolbox-approval", "ToolBox approval request is unknown or already resolved"));
+                        continue;
+                    };
+                    if expires_at_ms <= now {
+                        toolbox_approvals.remove(&approval_request_id);
+                        toolbox_approval_order.retain(|id| id != &approval_request_id);
+                        let _ = events_tx.send(control_error(request_id, "toolbox-approval", "ToolBox approval request expired"));
+                        continue;
+                    }
+                    let (completion_tx, completion_rx) = tokio::sync::oneshot::channel();
+                    match toolbox_approval_tx.try_send(ToolboxApprovalResponse {
+                        request_id: approval_request_id.clone(),
+                        approved,
+                        reason,
+                        completion: Some(completion_tx),
+                    }) {
+                        Ok(()) => {
+                            toolbox_approvals.remove(&approval_request_id);
+                            toolbox_approval_order.retain(|id| id != &approval_request_id);
+                            let commands = commands_tx.clone();
+                            tokio::spawn(async move {
+                                let (accepted, error) = match completion_rx.await {
+                                    Ok(Ok(())) => (true, None),
+                                    Ok(Err(error)) => (false, Some(error)),
+                                    Err(_) => (false, Some("VCPLog response writer stopped before completion".into())),
+                                };
+                                let _ = commands.send(HostCommand::ToolboxApprovalFinished {
+                                    request_id,
+                                    approval_request_id,
+                                    approved,
+                                    accepted,
+                                    error,
+                                });
+                            });
+                        }
+                        Err(_) => {
+                            let _ = events_tx.send(control_error(request_id, "toolbox-approval", "VCPLog connection is unavailable"));
+                        }
+                    }
+                }
+                HostCommand::ToolboxApprovalFinished { request_id, approval_request_id, approved, accepted, error } => {
+                    if accepted {
+                        let _ = events_tx.send(HostEvent::Control {
+                            request_id,
+                            kind: "toolbox-approval-sent".into(),
+                            payload: json!({"approvalRequestId": approval_request_id, "approved": approved}),
+                        });
+                    } else {
+                        let _ = events_tx.send(control_error(
+                            request_id,
+                            "toolbox-approval",
+                            error.unwrap_or_else(|| "VCPLog connection is unavailable".into()),
+                        ));
+                    }
+                }
             },
             Some(outbound) = core_rx.recv() => {
                 if outbound.kind == "event"
@@ -1153,8 +1532,18 @@ async fn run_host(
                 if outbound.kind == "ack" {
                     if let Some(result) = outbound.value("result") {
                         if let Some(snapshot) = result.get("snapshot") {
-                            if let Err(error) = store.save(&config.agent.id, &config.topic_id, snapshot.clone(), result.get("usage").cloned().unwrap_or(Value::Null), &config.workspace, &config.model) {
-                                let _ = events_tx.send(HostEvent::Warning(format!("cannot save Agent Topic: {error}")));
+                            match store.save(&config.agent.id, &config.topic_id, snapshot.clone(), result.get("usage").cloned().unwrap_or(Value::Null), &config.workspace, &config.model) {
+                                Ok(()) => {
+                                    if let Some(index) = &search_index
+                                        && let Err(error) = store.search_documents_for_topic(&config.agent.id, &config.topic_id)
+                                            .and_then(|documents| index.replace_topic(&config.agent.id, &config.topic_id, &documents))
+                                    {
+                                        let _ = events_tx.send(HostEvent::Warning(format!("Agent Topic was saved, but its disposable search projection was not updated: {error}")));
+                                    }
+                                }
+                                Err(error) => {
+                                    let _ = events_tx.send(HostEvent::Warning(format!("cannot save Agent Topic: {error}")));
+                                }
                             }
                         }
                     }
@@ -1178,15 +1567,44 @@ async fn run_host(
                         }
                         *requests += 1;
                         let toolbox = toolbox.clone(); let commands = commands_tx.clone(); let event_tx = events_tx.clone();
+                        let attachment_store = match store.attachments_directory(&config.agent.id, &config.topic_id) {
+                            Ok(directory) => AttachmentStore::new(directory),
+                            Err(error) => {
+                                let mut failure = WireMessage::new("model-error")
+                                    .with_request_id(outbound.request_id.clone().unwrap_or_default())
+                                    .put("error", format!("cannot resolve attachment store: {error}"));
+                                failure.session_id = outbound.session_id.clone();
+                                failure.turn_id = outbound.turn_id.clone();
+                                let _ = core.handle(failure).await;
+                                continue;
+                            }
+                        };
                         let request_id = outbound.request_id.clone().unwrap_or_default();
-                        let task = tokio::spawn(run_model_request(toolbox, outbound, commands, event_tx, config.api_key.clone()));
+                        let task = tokio::spawn(run_model_request(toolbox, attachment_store, outbound, commands, event_tx, config.api_key.clone()));
                         model_tasks.insert(request_id, task);
                     }
                     "model-abort" => {
                         let request_id = outbound.request_id.clone().unwrap_or_default();
-                        if let Some(task) = model_tasks.remove(&request_id) { task.abort(); }
+                        let turn_id = outbound.turn_id.clone().unwrap_or_default();
                         let toolbox = toolbox.clone();
-                        tokio::spawn(async move { let _ = toolbox.interrupt(&request_id).await; });
+                        let commands = commands_tx.clone();
+                        tokio::spawn(async move {
+                            let (accepted, outcome) = if request_id.is_empty() {
+                                (false, "invalid-request")
+                            } else {
+                                match toolbox.interrupt(&request_id).await {
+                                    Ok(true) => (true, "accepted"),
+                                    Ok(false) => (false, "not-found"),
+                                    Err(_) => (false, "transport-error"),
+                                }
+                            };
+                            let _ = commands.send(HostCommand::ModelInterruptFinished {
+                                request_id,
+                                turn_id,
+                                accepted,
+                                outcome,
+                            });
+                        });
                     }
                     "tool-request" if outbound.string("phase") == Some("preflight") => {
                         if let Some(reason) = workspace_violation(&outbound, &config.workspace) {
@@ -1227,7 +1645,9 @@ async fn run_host(
     for task in observer_tasks {
         task.abort();
     }
-    store.release(&config.agent.id, &config.topic_id, &owner_id);
+    if !config.control_only {
+        store.release(&config.agent.id, &config.topic_id, &owner_id);
+    }
 }
 
 fn approval_binding_matches(
@@ -1263,6 +1683,34 @@ fn control_error(request_id: String, operation: &str, error: impl Into<String>) 
         kind: "control-error".into(),
         payload: json!({"operation":operation,"error":error.into()}),
     }
+}
+
+fn project_topic_search_hits(hits: Vec<ShadowSearchHit>, topics: &[TopicMetadata]) -> Vec<Value> {
+    let mut seen = HashSet::new();
+    hits.into_iter()
+        .filter_map(|hit| {
+            if !seen.insert((hit.owner_id.clone(), hit.topic_id.clone())) {
+                return None;
+            }
+            let topic = topics.iter().find(|topic| topic.id == hit.topic_id);
+            Some(json!({
+                "agentId": hit.owner_id,
+                "topicId": hit.topic_id,
+                "title": hit.topic_title,
+                "messageId": hit.message_id,
+                "turnId": hit.turn_id,
+                "role": hit.role,
+                "snippet": truncate(&hit.content, 400),
+                "timestamp": hit.timestamp,
+                "score": hit.score,
+                "model": topic.map(|topic| topic.model.as_str()),
+                "workspaceRef": topic.map(|topic| topic.workspace_ref.as_str()),
+                "updatedAt": topic.map(|topic| topic.updated_at).unwrap_or_default(),
+                "inUse": topic.is_some_and(|topic| topic.in_use),
+                "readOnly": topic.is_some_and(|topic| topic.read_only),
+            }))
+        })
+        .collect()
 }
 
 async fn replace_interaction_queue(
@@ -1333,43 +1781,79 @@ fn replace_interaction_item(
 
 fn spawn_observers(
     toolbox: DirectToolboxHost,
+    commands: mpsc::UnboundedSender<HostCommand>,
     events: mpsc::UnboundedSender<HostEvent>,
     secret: String,
-) -> Vec<tokio::task::JoinHandle<()>> {
+) -> (
+    Vec<tokio::task::JoinHandle<()>>,
+    mpsc::Sender<ToolboxApprovalResponse>,
+) {
     let mut tasks = Vec::new();
+    let (approval_tx, mut approval_rx) = mpsc::channel(64);
+    let vcp_log_device_name = vcp_log_device_name();
     // `/vcp-distributed-server` is a *node registration/execution* socket in
     // ToolBox, not a passive observer channel. Connecting this Agent to it
-    // would create a fake capability node, so readiness derives node presence
-    // from authoritative VCPLog lifecycle records instead. VCPlog/vcpinfo
-    // remain read-only observers.
-    for channel in [ToolboxWsChannel::Log, ToolboxWsChannel::Info] {
+    // would create a fake capability node. VCPlog/vcpinfo are the only
+    // observer channels used here; neither is an authoritative capability
+    // catalog, so capability readiness stays unknown.
+    {
+        let toolbox = toolbox.clone();
+        let commands = commands.clone();
+        let events = events.clone();
+        let secret = secret.clone();
+        let device_name = vcp_log_device_name.clone();
+        tasks.push(tokio::spawn(async move {
+            let mut delay = 1_u64;
+            loop {
+                let result = toolbox
+                    .run_log_websocket(&device_name, &mut approval_rx, |event| match event {
+                        ToolboxWsEvent::BackendApprovalRequest(value) => {
+                            let _ = commands.send(HostCommand::ToolboxApprovalObserved(value));
+                        }
+                        ToolboxWsEvent::Log(entry) => {
+                            let _ = events.send(HostEvent::ToolboxWs {
+                                channel: "Log".into(),
+                                kind: "log".into(),
+                                payload: json!({"level":entry.level,"source":entry.source,"message":redact_string(&truncate(&entry.message, 16 * 1024), &secret),"timestamp":entry.timestamp}),
+                            });
+                        }
+                        _ => {}
+                    })
+                    .await;
+                if let Err(error) = result {
+                    let _ = events.send(HostEvent::Warning(format!(
+                        "ToolBox Log WS unavailable; retrying in {delay}s: {error}"
+                    )));
+                } else {
+                    delay = 1;
+                }
+                tokio::time::sleep(Duration::from_secs(delay)).await;
+                delay = (delay * 2).min(30);
+            }
+        }));
+    }
+    {
         let toolbox = toolbox.clone();
         let events = events.clone();
         let secret = secret.clone();
         tasks.push(tokio::spawn(async move {
             let mut delay = 1_u64;
-            let mut observed_nodes = HashSet::new();
             loop {
-                let name = format!("{channel:?}");
                 let result = toolbox
-                    .observe_websocket(channel, |event| {
+                    .observe_websocket(ToolboxWsChannel::Info, |event| {
                         let (kind, payload) = match event {
                             ToolboxWsEvent::Log(entry) => {
-                                if let Some(capability) = capability_readiness_from_log(&entry.message, &mut observed_nodes) {
-                                    let _ = events.send(runtime_readiness_event(json!({"capability": capability})));
-                                }
                                 ("log".to_string(), json!({"level":entry.level,"source":entry.source,"message":redact_string(&truncate(&entry.message, 16 * 1024), &secret),"timestamp":entry.timestamp}))
                             }
-                            ToolboxWsEvent::Info(value) => ("notification".to_string(), redact_known_secret(redact(&value), &secret)),
-                            // This is an observation only. The VCPAgent Host
-                            // neither sends `tool_approval_response` nor
-                            // claims the ToolBox requestId is one of its own
-                            // toolCallIds.
+                            ToolboxWsEvent::Info(value) => {
+                                let (kind, value) = classify_vcpinfo(value);
+                                (kind, redact_known_secret(redact(&value), &secret))
+                            }
                             ToolboxWsEvent::BackendApprovalRequest(value) => ("backend-approval-request".to_string(), redact_known_secret(redact(&value), &secret)),
                             ToolboxWsEvent::DistributedExecutionIgnored(value) => ("distributed-observation".to_string(), redact_known_secret(redact(&value), &secret)),
                         };
                         let _ = events.send(HostEvent::ToolboxWs {
-                            channel: name.clone(),
+                            channel: "Info".into(),
                             kind,
                             payload,
                         });
@@ -1379,7 +1863,7 @@ fn spawn_observers(
                     Ok(()) => delay = 1,
                     Err(error) => {
                         let _ = events.send(HostEvent::Warning(format!(
-                            "ToolBox {name} WS unavailable; retrying in {delay}s: {error}"
+                            "ToolBox Info WS unavailable; retrying in {delay}s: {error}"
                         )));
                     }
                 }
@@ -1388,7 +1872,61 @@ fn spawn_observers(
             }
         }));
     }
-    tasks
+    (tasks, approval_tx)
+}
+
+fn vcp_log_device_name() -> String {
+    std::env::var("VCP_AGENT_VCPLOG_DEVICE_NAME")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| valid_vcp_log_device_name(value))
+        .unwrap_or_else(|| "vcp-agent-rust".to_string())
+}
+
+fn valid_vcp_log_device_name(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 80
+        && value.chars().all(|character| {
+            character.is_ascii_alphanumeric()
+                || matches!(
+                    character,
+                    '_' | '.' | '-' | ':' | '@' | '(' | ')' | '[' | ']'
+                )
+        })
+}
+
+fn backend_approval_identity(value: &Value, now_ms: u64) -> Option<(String, u64)> {
+    let data = value.get("data").unwrap_or(value);
+    let request_id = data.get("requestId")?.as_str()?.trim();
+    let ttl = data.get("approvalTtlMs")?.as_u64()?.min(10 * 60 * 1000);
+    if request_id.is_empty() || ttl == 0 {
+        return None;
+    }
+    let replayed = value.get("_vcpReplay").and_then(Value::as_bool) == Some(true);
+    let issued_at = if replayed {
+        value.get("_vcpReplayOriginalAt")?.as_u64()?
+    } else {
+        now_ms
+    };
+    let expires_at = issued_at.saturating_add(ttl);
+    (expires_at > now_ms).then(|| (request_id.to_string(), expires_at))
+}
+
+fn classify_vcpinfo(value: Value) -> (String, Value) {
+    let event_type = value
+        .get("type")
+        .or_else(|| value.pointer("/data/type"))
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let kind = match event_type {
+        "RAG_RETRIEVAL_DETAILS" | "META_THINKING_CHAIN" => "rag",
+        "AI_MEMO_RETRIEVAL" => "memory",
+        "AGENT_PRIVATE_CHAT_PREVIEW" => "agent-preview",
+        "DailyNote" => "diary",
+        value if value.starts_with("AGENT_DREAM_") => "dream",
+        _ => "notification",
+    };
+    (kind.to_string(), value)
 }
 
 fn initial_readiness(config: &HostConfig) -> Value {
@@ -1417,7 +1955,7 @@ fn initial_readiness(config: &HostConfig) -> Value {
         },
         "capability": {
             "state": "unknown",
-            "detail": "等待 VCPLog 的分布式节点生命周期事件"
+            "detail": "VCPToolBox 当前没有公开的只读 capability readiness 接口；以动态工具说明和真实调用结果为准"
         }
     })
 }
@@ -1469,33 +2007,6 @@ fn spawn_toolbox_readiness_probe(
     });
 }
 
-fn capability_readiness_from_log(message: &str, nodes: &mut HashSet<String>) -> Option<Value> {
-    const PREFIX: &str = "Distributed Server ";
-    const CONNECTED: &str = " authenticated and connected.";
-    const DISCONNECTED: &str = " disconnected.";
-    let node = message.strip_prefix(PREFIX)?;
-    let (node, changed) = if let Some(node) = node.strip_suffix(CONNECTED) {
-        (node, nodes.insert(node.to_string()))
-    } else if let Some(node) = node.strip_suffix(DISCONNECTED) {
-        (node, nodes.remove(node))
-    } else {
-        return None;
-    };
-    if !changed {
-        return None;
-    }
-    let count = nodes.len();
-    Some(json!({
-        "state": if count > 0 { "ready" } else { "unavailable" },
-        "detail": if count > 0 {
-            format!("已从 VCPLog 观察到 {count} 个已连接 DistributedServer capability node（最近：{node}）")
-        } else {
-            "VCPLog 报告 DistributedServer capability node 已断开".to_string()
-        },
-        "observedNodes": count
-    }))
-}
-
 fn session_command(kind: &str, session_id: &str) -> WireMessage {
     let mut message = WireMessage::new(kind).with_request_id(next_id("request"));
     message.session_id = Some(session_id.to_string());
@@ -1519,6 +2030,7 @@ fn interaction_command(
 
 async fn run_model_request(
     toolbox: DirectToolboxHost,
+    attachment_store: AttachmentStore,
     request: WireMessage,
     commands: mpsc::UnboundedSender<HostCommand>,
     events: mpsc::UnboundedSender<HostEvent>,
@@ -1526,7 +2038,16 @@ async fn run_model_request(
 ) {
     let request_id = request.request_id.clone().unwrap_or_default();
     let session_id = request.session_id.clone().unwrap_or_default();
-    let body = request.value("body").cloned().unwrap_or(Value::Null);
+    let mut body = request.value("body").cloned().unwrap_or(Value::Null);
+    if let Err(error) = hydrate_attachment_refs(&mut body, &attachment_store) {
+        let mut inbound = WireMessage::new("model-error")
+            .with_request_id(request_id)
+            .put("error", format!("attachment hydration failed: {error}"));
+        inbound.session_id = Some(session_id);
+        inbound.turn_id = request.turn_id;
+        let _ = commands.send(HostCommand::Core(inbound));
+        return;
+    }
     let mut usage = None;
     let mut redactor = StreamingSecretRedactor::new(secret.clone());
     let result = toolbox
@@ -1579,6 +2100,83 @@ async fn run_model_request(
     let _ = commands.send(HostCommand::Core(done));
 }
 
+fn hydrate_attachment_refs(body: &mut Value, store: &AttachmentStore) -> Result<()> {
+    let messages = body
+        .get_mut("messages")
+        .and_then(Value::as_array_mut)
+        .context("model request messages must be an array")?;
+    for message in messages {
+        let Some(parts) = message.get_mut("content").and_then(Value::as_array_mut) else {
+            continue;
+        };
+        for part in parts {
+            if part.get("type").and_then(Value::as_str) != Some("attachment_ref") {
+                continue;
+            }
+            let descriptor: AttachmentDescriptor = serde_json::from_value(
+                part.get("attachment")
+                    .cloned()
+                    .context("attachment_ref is missing its descriptor")?,
+            )
+            .context("attachment_ref descriptor is invalid")?;
+            let data_url = store.data_url(&descriptor)?;
+            *part = json!({
+                "type": "image_url",
+                "image_url": { "url": data_url },
+            });
+        }
+    }
+    Ok(())
+}
+
+fn validate_attachment_descriptors(
+    attachments: Vec<Value>,
+    store: &AttachmentStore,
+) -> Result<Vec<Value>> {
+    if attachments.len() > 8 {
+        return Err(anyhow!("at most 8 attachments are allowed per turn"));
+    }
+    attachments
+        .into_iter()
+        .map(|value| {
+            let descriptor: AttachmentDescriptor =
+                serde_json::from_value(value).context("attachment descriptor is invalid")?;
+            store.validate(&descriptor)?;
+            serde_json::to_value(descriptor).context("cannot serialize attachment descriptor")
+        })
+        .collect()
+}
+
+fn clipboard_image_png() -> Result<Vec<u8>> {
+    let mut clipboard = arboard::Clipboard::new().context("clipboard unavailable")?;
+    let image = clipboard
+        .get_image()
+        .context("clipboard has no raster image")?;
+    let width = u32::try_from(image.width).context("clipboard image width is invalid")?;
+    let height = u32::try_from(image.height).context("clipboard image height is invalid")?;
+    let expected = image
+        .width
+        .checked_mul(image.height)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .context("clipboard image dimensions overflow")?;
+    let rgba = image.bytes.into_owned();
+    if rgba.len() != expected || rgba.len() > MAX_SOURCE_BYTES {
+        return Err(anyhow!(
+            "clipboard image bytes exceed the safe import limit"
+        ));
+    }
+    let image = image::RgbaImage::from_raw(width, height, rgba)
+        .context("clipboard image layout is invalid")?;
+    let mut encoded = Vec::new();
+    image::DynamicImage::ImageRgba8(image)
+        .write_to(
+            &mut std::io::Cursor::new(&mut encoded),
+            image::ImageFormat::Png,
+        )
+        .context("clipboard image could not be encoded")?;
+    Ok(encoded)
+}
+
 async fn run_tool_request(
     toolbox: DirectToolboxHost,
     request: WireMessage,
@@ -1603,19 +2201,9 @@ async fn run_tool_request(
     inbound.session_id = request.session_id.clone();
     inbound.turn_id = request.turn_id.clone();
     inbound.tool_call_id = request.tool_call_id.clone();
-    let mut invocation = toolbox.invoke_legacy_tool(tool_name, &arguments).await;
-    if tool_name.eq_ignore_ascii_case("FileOperator")
-        && invocation.as_ref().is_ok_and(|result| {
-            !result.ok
-                && result.error.as_deref().is_some_and(|error| {
-                    error.contains("FileOperator") && error.contains("not found")
-                })
-        })
-    {
-        invocation = toolbox
-            .invoke_legacy_tool("ServerFileOperator", &arguments)
-            .await;
-    }
+    // ToolBox owns tool names and their semantics. Never rewrite a requested
+    // tool into another plugin when the first invocation fails.
+    let invocation = toolbox.invoke_legacy_tool(tool_name, &arguments).await;
     match invocation {
         Ok(result) => {
             let status = if result.ok {
@@ -1632,12 +2220,29 @@ async fn run_tool_request(
             let _ = events.send(tool_event(
                 status,
                 &request,
-                json!({"toolName": tool_name, "detail": truncate(&detail, 2_000)}),
+                json!({
+                    "toolName": tool_name,
+                    "detail": truncate(&detail, 2_000),
+                    "outputSummary": truncate(&detail, 2_000),
+                    "result": output.clone(),
+                    "resources": redact_known_secret(redact(&Value::Array(result.resources.clone())), &secret),
+                    "warnings": redact_known_secret(redact(&Value::Array(result.warnings.clone())), &secret),
+                    "task": redact_known_secret(redact(&result.task.clone().unwrap_or(Value::Null)), &secret),
+                }),
             ));
             inbound.payload.insert("ok".into(), Value::Bool(result.ok));
             inbound
                 .payload
                 .insert("output".into(), Value::String(output));
+            inbound.payload.insert(
+                "audit".into(),
+                json!({
+                    "toolName": tool_name,
+                    "resources": redact_known_secret(redact(&Value::Array(result.resources)), &secret),
+                    "warnings": redact_known_secret(redact(&Value::Array(result.warnings)), &secret),
+                    "task": redact_known_secret(redact(&result.task.unwrap_or(Value::Null)), &secret),
+                }),
+            );
             if let Some(error) = result.error {
                 inbound.payload.insert(
                     "error".into(),
@@ -1673,6 +2278,22 @@ fn session_event(session_id: &str, turn_id: &str, event_type: &str, payload: Val
     HostEvent::Wire(event)
 }
 
+fn session_message_event(
+    session_id: &str,
+    turn_id: &str,
+    message_id: &str,
+    event_type: &str,
+    payload: Value,
+) -> HostEvent {
+    let mut event = WireMessage::new("event").put(
+        "event",
+        json!({ "type": event_type, "messageId": message_id, "payload": payload }),
+    );
+    event.session_id = Some(session_id.to_string());
+    event.turn_id = Some(turn_id.to_string());
+    HostEvent::Wire(event)
+}
+
 fn session_notice_event(session_id: &str, event_type: &str, payload: Value) -> HostEvent {
     let mut event =
         WireMessage::new("event").put("event", json!({ "type": event_type, "payload": payload }));
@@ -1687,6 +2308,43 @@ fn turn_rejected_event(session_id: &str, turn_id: &str, error: &str) -> HostEven
         "turn.failed",
         json!({ "error": error }),
     )
+}
+
+/// Attachments are content-addressed Topic assets. Never expose the store
+/// path or a lower-level I/O error to a UI: it could reveal user filesystem
+/// layout and does not tell the user the safe recovery action.
+fn attachment_rejected_event(session_id: &str, turn_id: &str, error: &str) -> HostEvent {
+    let normalized = error.to_ascii_lowercase();
+    let unavailable = normalized.contains("hash")
+        || normalized.contains("no such file")
+        || normalized.contains("cannot find")
+        || normalized.contains("not found");
+    session_event(
+        session_id,
+        turn_id,
+        "turn.failed",
+        json!({
+            "code": if unavailable { "attachment-unavailable" } else { "attachment-invalid" },
+            "error": if unavailable {
+                "附件文件不可用或已损坏；请重新选择附件后再发送。"
+            } else {
+                "附件 descriptor 无效；请重新选择附件后再发送。"
+            }
+        }),
+    )
+}
+
+/// Import failures cross the daemon/Renderer boundary before a descriptor
+/// exists. Never leak a user-selected path or a lower-level parser error here.
+fn safe_attachment_import_error(error: &str) -> &'static str {
+    let normalized = error.to_ascii_lowercase();
+    if normalized.contains("source limit") || normalized.contains("exceeds") {
+        "附件超过安全大小限制；请选择更小的文件。"
+    } else if normalized.contains("supported") || normalized.contains("invalid media") {
+        "仅支持已验证的图片、音频或视频文件。"
+    } else {
+        "附件无法安全导入；请重新选择文件。"
+    }
 }
 
 fn compaction_failed_event(session_id: &str, turn_id: &str, error: impl Into<String>) -> HostEvent {
@@ -1868,7 +2526,7 @@ fn workspace_violation(message: &WireMessage, workspace: &Path) -> Option<String
                 resolved.display()
             ));
         }
-        if let Ok(canonical) = fs::canonicalize(&normalized)
+        if let Ok(canonical) = dunce::canonicalize(&normalized)
             && !canonical.starts_with(workspace)
         {
             return Some(format!(
@@ -2007,6 +2665,102 @@ mod tests {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
     use tokio::time::{Duration, timeout};
+
+    #[test]
+    fn model_attachment_refs_are_hydrated_only_at_the_toolbox_boundary() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let source = directory.path().join("图片.fake");
+        let image = image::ImageBuffer::from_pixel(32, 32, image::Rgba([10_u8, 20, 30, 255]));
+        let mut bytes = Vec::new();
+        image::DynamicImage::ImageRgba8(image)
+            .write_to(
+                &mut std::io::Cursor::new(&mut bytes),
+                image::ImageFormat::Png,
+            )
+            .expect("encode png");
+        fs::write(&source, bytes).expect("write source");
+
+        let store = AttachmentStore::new(directory.path().join("assets"));
+        let imported = store.import_image(&source).expect("import image");
+        let descriptor = serde_json::to_value(&imported.descriptor).expect("descriptor json");
+        let mut body = json!({
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type":"text","text":"看图"},
+                    {"type":"attachment_ref","attachment":descriptor}
+                ]
+            }]
+        });
+
+        assert!(!body.to_string().contains("base64"));
+        hydrate_attachment_refs(&mut body, &store).expect("hydrate");
+        assert!(
+            body.pointer("/messages/0/content/1/image_url/url")
+                .and_then(Value::as_str)
+                .is_some_and(|url| url.starts_with("data:image/png;base64,"))
+        );
+    }
+
+    #[test]
+    fn media_attachment_refs_hydrate_to_the_existing_toolbox_image_url_shape() {
+        let directory = tempfile::tempdir().expect("tempdir");
+        let source = directory.path().join("录音.mp3");
+        fs::write(&source, [b"ID3".as_slice(), &[4, 0, 0, 0, 0, 0]].concat()).expect("write audio");
+        let store = AttachmentStore::new(directory.path().join("assets"));
+        let imported = store.import_attachment(&source).expect("import media");
+        let descriptor = serde_json::to_value(&imported.descriptor).expect("descriptor json");
+        assert!(!descriptor.to_string().contains("base64"));
+        let mut body = json!({
+            "messages": [{
+                "role": "user",
+                "content": [{"type":"attachment_ref","attachment":descriptor}]
+            }]
+        });
+
+        hydrate_attachment_refs(&mut body, &store).expect("hydrate media");
+        let url = body
+            .pointer("/messages/0/content/0/image_url/url")
+            .and_then(Value::as_str)
+            .expect("ToolBox-compatible media URL");
+        assert!(url.starts_with("data:audio/mpeg;base64,"));
+        assert!(!url.is_empty());
+    }
+
+    #[test]
+    fn missing_attachment_is_a_safe_distinct_turn_failure() {
+        let event = attachment_rejected_event(
+            "session-test",
+            "turn-test",
+            "No such file or directory (os error 2): C:\\Users\\person\\secret-image.png",
+        );
+        let HostEvent::Wire(message) = event else {
+            panic!("attachment rejection must remain a daemon event");
+        };
+        let payload = message
+            .value("event")
+            .and_then(|event| event.get("payload"));
+        assert_eq!(
+            payload
+                .and_then(|value| value.get("code"))
+                .and_then(Value::as_str),
+            Some("attachment-unavailable")
+        );
+        let visible = payload.cloned().unwrap_or_default().to_string();
+        assert!(visible.contains("重新选择附件"));
+        assert!(!visible.contains("C:\\Users"));
+        assert!(!visible.contains("secret-image"));
+    }
+
+    #[test]
+    fn import_errors_do_not_project_user_paths() {
+        let visible = safe_attachment_import_error(
+            "No such file or directory (os error 2): C:\\Users\\person\\secret-video.mp4",
+        );
+        assert_eq!(visible, "附件无法安全导入；请重新选择文件。");
+        assert!(!visible.contains("C:\\Users"));
+        assert!(!visible.contains("secret-video"));
+    }
 
     #[test]
     fn redaction_and_nova_fallback_never_expose_credentials() {
@@ -2148,39 +2902,78 @@ mod tests {
     }
 
     #[test]
-    fn distributed_node_readiness_uses_log_lifecycle_without_registering_a_node() {
-        let mut nodes = HashSet::new();
-        let connected = capability_readiness_from_log(
-            "Distributed Server dist-real authenticated and connected.",
-            &mut nodes,
-        )
-        .expect("connect lifecycle");
-        assert_eq!(
-            connected.get("state").and_then(Value::as_str),
-            Some("ready")
-        );
-        assert_eq!(
-            connected.get("observedNodes").and_then(Value::as_u64),
-            Some(1)
-        );
+    fn distributed_node_readiness_stays_unknown_without_an_authoritative_interface() {
+        let root = env::current_dir().unwrap();
+        let config = HostConfig {
+            settings_path: root.join("settings.json"),
+            agents_dir: root.join("Agents"),
+            server_url: "http://127.0.0.1:6005".into(),
+            api_key: "secret".into(),
+            model: "test".into(),
+            agent: nova(),
+            workspace: root.clone(),
+            permission_mode: PermissionMode::Ask,
+            context_window: 0,
+            max_output: 0,
+            data_root: root,
+            topic_id: "topic".into(),
+            initial_messages: Vec::new(),
+            budget: BudgetLimits::default(),
+            theme: "Auto".into(),
+            control_only: false,
+        };
+        let readiness = initial_readiness(&config);
+        assert_eq!(readiness["capability"]["state"], "unknown");
         assert!(
-            capability_readiness_from_log(
-                "Distributed Server dist-real authenticated and connected.",
-                &mut nodes,
-            )
-            .is_none()
+            readiness["capability"]["detail"]
+                .as_str()
+                .unwrap()
+                .contains("没有公开的只读 capability readiness 接口")
         );
-        let disconnected =
-            capability_readiness_from_log("Distributed Server dist-real disconnected.", &mut nodes)
-                .expect("disconnect lifecycle");
+    }
+
+    #[test]
+    fn toolbox_backend_approval_replay_is_ttl_bound_and_vcpinfo_is_typed() {
+        let now = 1_000_000;
         assert_eq!(
-            disconnected.get("state").and_then(Value::as_str),
-            Some("unavailable")
+            backend_approval_identity(
+                &json!({"type":"tool_approval_request","data":{"requestId":"approve-1","approvalTtlMs":300_000}}),
+                now,
+            ),
+            Some(("approve-1".into(), 1_300_000))
+        );
+        assert!(backend_approval_identity(
+            &json!({"_vcpReplay":true,"_vcpReplayOriginalAt":500_000,"data":{"requestId":"approve-old","approvalTtlMs":300_000}}),
+            now,
+        ).is_none());
+        assert!(backend_approval_identity(
+            &json!({"_vcpReplay":true,"data":{"requestId":"approve-unknown","approvalTtlMs":300_000}}),
+            now,
+        ).is_none());
+
+        assert_eq!(
+            classify_vcpinfo(json!({"type":"RAG_RETRIEVAL_DETAILS"})).0,
+            "rag"
         );
         assert_eq!(
-            disconnected.get("observedNodes").and_then(Value::as_u64),
-            Some(0)
+            classify_vcpinfo(json!({"type":"AI_MEMO_RETRIEVAL"})).0,
+            "memory"
         );
+        assert_eq!(classify_vcpinfo(json!({"type":"DailyNote"})).0, "diary");
+        assert_eq!(
+            classify_vcpinfo(json!({"type":"AGENT_DREAM_FINISHED"})).0,
+            "dream"
+        );
+    }
+
+    #[test]
+    fn vcp_log_device_name_override_is_strictly_bounded() {
+        assert!(valid_vcp_log_device_name("vcp-agent-ci-17"));
+        assert!(valid_vcp_log_device_name("agent@host:1"));
+        assert!(!valid_vcp_log_device_name(""));
+        assert!(!valid_vcp_log_device_name("contains space"));
+        assert!(!valid_vcp_log_device_name("../unexpected"));
+        assert!(!valid_vcp_log_device_name(&"a".repeat(81)));
     }
 
     #[test]
@@ -2271,11 +3064,13 @@ mod tests {
             initial_messages: Vec::new(),
             budget: BudgetLimits::default(),
             theme: "Auto".into(),
+            control_only: false,
         };
         let mut host = start(config).unwrap();
         host.commands
             .send(HostCommand::StartTurn {
                 prompt: "介绍一下自己".into(),
+                attachments: Vec::new(),
                 turn_id: None,
             })
             .unwrap();
@@ -2317,5 +3112,40 @@ mod tests {
         assert_eq!(observed.0, "你好，Rust Host");
         assert_eq!(observed.1.as_deref(), Some("介绍一下自己"));
         let _ = host.commands.send(HostCommand::Shutdown);
+    }
+
+    #[tokio::test]
+    async fn control_host_never_claims_a_topic_lease() {
+        let data_root =
+            env::temp_dir().join(format!("vcp-agent-control-host-test-{}", now_millis()));
+        let config = HostConfig {
+            settings_path: PathBuf::from("settings.json"),
+            agents_dir: PathBuf::from("Agents"),
+            server_url: "http://127.0.0.1:9".into(),
+            api_key: "test-key".into(),
+            model: "test-model".into(),
+            agent: nova(),
+            workspace: env::current_dir().unwrap(),
+            permission_mode: PermissionMode::Ask,
+            context_window: 0,
+            max_output: 0,
+            data_root: data_root.clone(),
+            topic_id: "control-placeholder".into(),
+            initial_messages: Vec::new(),
+            budget: BudgetLimits::default(),
+            theme: "Auto".into(),
+            control_only: true,
+        };
+        let topic_directory = TopicStore::new(data_root.clone())
+            .directory("Nova", "control-placeholder")
+            .unwrap();
+        let host = start(config).unwrap();
+
+        assert!(
+            !topic_directory.exists(),
+            "a catalog/read-only daemon must not create a durable Topic directory or lease"
+        );
+        let _ = host.commands.send(HostCommand::Shutdown);
+        let _ = fs::remove_dir_all(data_root);
     }
 }

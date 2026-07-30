@@ -46,6 +46,13 @@ assert.equal('pendingApprovals' in manager.getStatus(), false,
     'Main status must not manufacture an approval collection owned by the Renderer/Rust daemon');
 assert.equal(manager.getStatus().worker.pid, fake.child.pid,
     'runtime status must identify the attached daemon process for lifecycle diagnostics');
+assert.equal(manager.getAttachedTopicId(), 'topic-rust');
+const requestCountBeforeIdempotentResume = fake.requests.length;
+const sameAttachment = await manager.createSession({ resume: 'topic-rust', agent: 'Nova' });
+assert.deepEqual(sameAttachment, session,
+    'selecting a Topic already attached in this Main process must reuse the live Rust attachment');
+assert.equal(fake.requests.length, requestCountBeforeIdempotentResume,
+    'idempotent Topic selection must not stop and respawn the daemon');
 
 // R1: simultaneous control calls correlate by framed requestId, never by the
 // arrival order or response kind. Reply in reverse order to prove it.
@@ -63,6 +70,28 @@ fake.control(topicsRequest.requestId, 'topics', [{ id: 'topic-rust', title: 'Rus
 assert.deepEqual(await topics, [{ id: 'topic-rust', title: 'Rust Topic' }]);
 assert.deepEqual(await settings, { budget: { maxRequestsPerTurn: 8 } });
 
+const topicSearch = manager.searchTopics({ query: '数据库', agentId: 'Nova', limit: 25 });
+await new Promise((resolve) => setImmediate(resolve));
+const topicSearchRequest = fake.requests.at(-1);
+assert.equal(topicSearchRequest.type, 'search-topics');
+assert.deepEqual(topicSearchRequest.payload, { query: '数据库', limit: 25, agentId: 'Nova' });
+fake.control(topicSearchRequest.requestId, 'topic-search-results', [{ topicId: 'topic-rust', messageId: 'msg-1' }]);
+assert.deepEqual(await topicSearch, [{ topicId: 'topic-rust', messageId: 'msg-1' }]);
+
+const messageSearch = manager.searchTopicMessages({ query: '同步', topicId: 'topic-rust', agentId: 'Nova' });
+await new Promise((resolve) => setImmediate(resolve));
+const messageSearchRequest = fake.requests.at(-1);
+assert.equal(messageSearchRequest.type, 'search-topic-messages');
+fake.control(messageSearchRequest.requestId, 'topic-message-search-results', [{ topicId: 'topic-rust', messageId: 'msg-2' }]);
+assert.equal((await messageSearch)[0].messageId, 'msg-2');
+
+const indexStatus = manager.getTopicIndexStatus();
+await new Promise((resolve) => setImmediate(resolve));
+const indexStatusRequest = fake.requests.at(-1);
+assert.equal(indexStatusRequest.type, 'get-index-status');
+fake.control(indexStatusRequest.requestId, 'topic-index-status', { available: true, documentCount: 2 });
+assert.equal((await indexStatus).documentCount, 2);
+
 // Renderer presence is a Rust control-plane command. Main forwards it but
 // never owns pending approvals or an ApprovalBroker.
 const presence = manager.setWorkbenchPresence(false);
@@ -79,7 +108,22 @@ const mismatchRequest = fake.requests.at(-1);
 fake.control(mismatchRequest.requestId, 'settings', {});
 await assert.rejects(mismatch, /control response mismatch/);
 
-const turn = await manager.startTurn({ sessionId: session.sessionId, prompt: '介绍一下自己' });
+const attachmentImport = manager.importAttachment({ sessionId: session.sessionId, path: 'C:\\Temp\\图片.png' });
+await new Promise((resolve) => setImmediate(resolve));
+const attachmentRequest = fake.requests.at(-1);
+assert.equal(attachmentRequest.type, 'import-attachment');
+fake.control(attachmentRequest.requestId, 'attachment-imported', {
+    attachment: {
+        id: `attachment_${'a'.repeat(64)}`, displayName: '图片.png', kind: 'image', mimeType: 'image/png',
+        byteLen: 1024, width: 32, height: 32, sha256: 'a'.repeat(64), assetFile: `${'a'.repeat(64)}.png`,
+    },
+});
+const imported = await attachmentImport;
+assert.equal(imported.attachment.displayName, '图片.png');
+assert.equal('path' in imported.attachment, false, 'Renderer must receive an asset descriptor, not a durable local path');
+
+const turn = await manager.startTurn({ sessionId: session.sessionId, prompt: '介绍一下自己', attachments: [imported.attachment] });
+assert.deepEqual(fake.requests.at(-1).payload.attachments, [imported.attachment]);
 assert.equal('updatedAt' in manager.getStatus().attachment, false,
     'Main must not mutate attachment business metadata when a turn command is accepted');
 fake.event({ type: 'assistant.delta', turnId: turn.turnId, messageId: 'assistant-rust-1', payload: { text: '来自 daemon 的原样事件' } });
@@ -97,6 +141,15 @@ await manager.respondApproval({ approvalId: 'approval-1', decision: 'deny', sess
 assert.deepEqual(fake.requests.at(-1).payload, {
     approvalId: 'approval-1', allowed: false, sessionId: session.sessionId,
     turnId: turn.turnId, toolCallId: 'tool-1', argumentsHash: 'hash-1',
+});
+await manager.respondApproval({ approvalId: 'approve-backend-1', decision: 'allow', scope: 'toolbox' });
+assert.deepEqual(fake.requests.at(-1), {
+    type: 'toolbox-approval',
+    payload: {
+        approvalRequestId: 'approve-backend-1', approved: true,
+        reason: 'approved by VCPAgent user',
+    },
+    requestId: undefined,
 });
 
 // ACK means accepted only. A stale completed event (sequence <= request
@@ -130,6 +183,28 @@ const closed = await manager.closeSession({ sessionId: session.sessionId });
 assert.equal(closed.sessionId, session.sessionId);
 assert.equal(manager.getStatus().attachment, null,
     'an explicit close must clear Main\'s process-local attachment identity');
+
+// Before a user explicitly opens or creates a Topic, catalog/read operations
+// must use Rust's lease-free control daemon. The normal attachment is started
+// only after the Topic flow is confirmed.
+let controlFake;
+const controlManager = new RustAgentRuntimeManager({
+    projectRoot: process.cwd(),
+    getSettings: () => ({ vcpServerUrl: 'http://localhost:6005', vcpApiKey: 'redacted' }),
+    transportFactory: (options) => (controlFake = new FakeTransport(options)),
+});
+const controlTopics = controlManager.listTopics({ agentId: 'Nova' });
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(controlFake.options.controlOnly, true,
+    'Topic catalog reads without an attachment must spawn the lease-free --control daemon');
+assert.equal(controlManager.getStatus().attachment, null,
+    'a control daemon must not fabricate a writable Topic attachment in Electron Main');
+const controlRequest = controlFake.requests.at(-1);
+assert.equal(controlRequest.type, 'list-topics');
+controlFake.control(controlRequest.requestId, 'topics', []);
+assert.deepEqual(await controlTopics, []);
+await controlManager.stop();
+
 assert.equal(MAX_FRAME_BYTES, 256 * 1024);
 
 console.log('Rust Agent daemon-client tests passed.');

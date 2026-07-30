@@ -3,7 +3,8 @@ let observer = null;
 let refreshQueued = false;
 
 function isNextUi() {
-    return document.documentElement.dataset.uiMode === 'next';
+    return document.documentElement.dataset.uiMode === 'next'
+        && settingsHost?.dataset.settingsPresentation !== 'classic';
 }
 
 function enhance(name, element, options = {}) {

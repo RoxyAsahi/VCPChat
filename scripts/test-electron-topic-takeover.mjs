@@ -25,6 +25,11 @@ const execFileAsync = promisify(execFile);
 const resultFile = process.env.VCPCHAT_E2E_RESULT_FILE
     ? path.resolve(process.env.VCPCHAT_E2E_RESULT_FILE)
     : path.join(os.tmpdir(), `vcpchat-topic-takeover-${process.pid}.json`);
+// Optional visual evidence for focused Workbench layout checks. It is never
+// created by the normal hermetic gate and contains only its synthetic fixture.
+const takeoverScreenshotPath = process.env.VCPCHAT_E2E_TOPIC_TAKEOVER_SCREENSHOT_PATH
+    ? path.resolve(process.env.VCPCHAT_E2E_TOPIC_TAKEOVER_SCREENSHOT_PATH)
+    : null;
 let phase = 'boot';
 
 async function recordResult(status, nextPhase = null, failure = null) {
@@ -149,7 +154,7 @@ async function removeTemporaryAppData(target) {
 async function writeFixture(appData) {
     const createdAt = Date.now();
     const agentDirectory = path.join(appData, 'Agents', 'Nova');
-    const topicDirectory = path.join(appData, 'UserData', 'nova', 'topics', topicId);
+    const topicDirectory = path.join(appData, 'AgentRuntimeData', 'nova', 'topics', topicId);
     await fs.mkdir(agentDirectory, { recursive: true });
     await fs.mkdir(topicDirectory, { recursive: true });
     await fs.writeFile(path.join(appData, 'settings.json'), JSON.stringify({
@@ -202,7 +207,7 @@ async function openWorkbench(page, appData) {
                 body: document.body.textContent?.slice(-4000),
             };
         });
-        const topicRoot = path.join(appData, 'UserData');
+        const topicRoot = path.join(appData, 'AgentRuntimeData');
         const disk = await fs.readdir(topicRoot, { recursive: true }).catch(reason => [`ERROR:${reason}`]);
         throw new Error(`seeded Topic missing from Workbench; projection=${JSON.stringify(projection)} disk=${JSON.stringify(disk)}`, { cause: error });
     }
@@ -215,6 +220,37 @@ async function selectTopic(page, actionLabel) {
         return Boolean(row);
     }, topicId);
     assert.ok(clicked, 'the seeded Topic must be visible in the Workbench session sidebar');
+    if (actionLabel === '打开并恢复') {
+        await page.waitForFunction(async (id) => {
+            const status = await (window.chatAPI || window.electronAPI).agentRuntimeGetStatus();
+            return status?.attachment?.topicId === id
+                && !document.querySelector('.agent-chat-topic-flow-dialog');
+        }, { timeout: timeoutMs }, topicId);
+        return;
+    }
+    if (actionLabel === '请求接管') {
+        await page.waitForSelector('.agent-chat-topic-conflict-dialog', { visible: true, timeout: timeoutMs });
+        const conflict = await page.$eval('.agent-chat-topic-conflict-dialog', (dialog) => ({
+            text: dialog.textContent || '',
+            actions: [...dialog.querySelectorAll('button')].map(button => button.textContent?.trim()),
+            legacyFlow: Boolean(document.querySelector('.agent-chat-topic-flow-dialog')),
+            preview: Boolean(document.querySelector('.agent-chat-occupied-banner')),
+        }));
+        assert.match(conflict.text, /会话正在其他位置使用/);
+        assert.deepEqual(conflict.actions, ['暂不接管', '接管并继续']);
+        assert.equal(conflict.legacyFlow, false);
+        assert.equal(conflict.preview, false);
+        if (takeoverScreenshotPath) await page.screenshot({ path: takeoverScreenshotPath, fullPage: false });
+        const requested = await page.evaluate(() => {
+            const dialog = document.querySelector('.agent-chat-topic-conflict-dialog');
+            const action = [...(dialog?.querySelectorAll('button') || [])]
+                .find(candidate => candidate.textContent?.trim() === '接管并继续');
+            action?.click();
+            return Boolean(action);
+        });
+        assert.ok(requested, 'occupied Topic conflict must expose an explicit cooperative takeover action');
+        return;
+    }
     await page.waitForSelector('.agent-chat-topic-flow-dialog', { visible: true, timeout: timeoutMs });
     const confirmed = await page.evaluate((label) => {
         const dialog = document.querySelector('.agent-chat-topic-flow-dialog');
@@ -275,13 +311,15 @@ try {
     await openWorkbench(second.page, appData);
     await second.page.waitForFunction((id) => {
         const row = document.querySelector(`.agent-chat-persisted-topic[data-topic-id="${id}"]`);
-        return row?.textContent?.includes('使用中');
+        // Lease state must not be rendered as a sidebar label. The following
+        // explicit action is the only visible conflict proof.
+        return Boolean(row) && !/使用中|占用/.test(row.textContent || '');
     }, { timeout: timeoutMs }, topicId);
-    await selectTopic(second.page, '请求安全接管');
+    await selectTopic(second.page, '请求接管');
     await recordResult('running', 'takeover-requested');
     await second.page.waitForFunction(() => document.body.textContent?.includes('已请求当前 Topic 持有者安全释放会话'), { timeout: timeoutMs });
     await waitForActiveTopic(second.page, 'the replacement GUI owner', async () => {
-        const topicDirectory = path.join(appData, 'UserData', 'nova', 'topics', topicId);
+        const topicDirectory = path.join(appData, 'AgentRuntimeData', 'nova', 'topics', topicId);
         const files = await fs.readdir(topicDirectory).catch(error => [`ERROR:${error}`]);
         const read = async (name) => fs.readFile(path.join(topicDirectory, name), 'utf8').catch(error => `ERROR:${error}`);
         return {
@@ -297,7 +335,7 @@ try {
         return status?.attachment || null;
     });
     assert.equal(secondState?.topicId, topicId, 'replacement GUI must obtain the requested Topic only after owner release');
-    const state = JSON.parse(await fs.readFile(path.join(appData, 'UserData', 'nova', 'topics', topicId, 'agent-state.json'), 'utf8'));
+    const state = JSON.parse(await fs.readFile(path.join(appData, 'AgentRuntimeData', 'nova', 'topics', topicId, 'agent-state.json'), 'utf8'));
     assert.equal(state.title, 'Electron 协作接管', 'cooperative takeover must retain the checkpoint instead of deleting or duplicating it');
     await recordResult('passed', 'replacement-attached');
     console.log('Electron GUI cooperative Topic takeover test passed.');

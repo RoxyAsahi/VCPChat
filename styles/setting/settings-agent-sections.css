@@ -2,7 +2,6 @@
    Agent Settings Final Layout
    Unified section-based layout for the agent settings page.
    ======================================== */
-@scope (html:not([data-ui-mode="next"])) {
 #agentSettingsForm > .agent-settings-section,
 #agentSettingsContainer .agent-settings-section.agent-settings-card-shell,
 #agentSettingsContainer .agent-settings-section.agent-identity-container,
@@ -492,6 +491,4 @@ body.light-theme #agentSettingsContainer .agent-settings-toggle-btn:hover::befor
 
 #agentSettingsContainer .strip-regex-container .strip-regex-list-container {
     margin-bottom: 8px;
-}
-
 }

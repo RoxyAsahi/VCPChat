@@ -51,9 +51,18 @@ function transportOptions(onMessage, resume) {
 async function verifyCancelAndResume() {
     const cancelled = deferred('cancel event');
     const checkpointed = deferred('cancel checkpoint');
+    const streamStarted = deferred('model stream start');
+    const interruptResult = deferred('ToolBox interrupt result');
     let transport = new RustDaemonTransport(transportOptions((message) => {
         if (message.type === 'event' && message.event?.type === 'turn.cancelled') {
             cancelled.resolve(message.event);
+        }
+        if (message.type === 'event'
+            && (message.event?.type === 'assistant.delta' || message.event?.type === 'reasoning.delta')) {
+            streamStarted.resolve(message.event);
+        }
+        if (message.type === 'event' && message.event?.type === 'runtime.interrupt_result') {
+            interruptResult.resolve(message.event);
         }
         if (message.type === 'ack' && message.result?.interrupted === true) {
             checkpointed.resolve(message.result);
@@ -64,14 +73,25 @@ async function verifyCancelAndResume() {
     await transport.request('start-turn', {
         sessionId: session.sessionId,
         turnId: `turn-live-cancel-${Date.now()}`,
-        prompt: '请写一篇很长的文章，逐条介绍二十种软件测试方法。',
+        prompt: '请逐段写一篇不少于五千字的长文，详细介绍二十种软件测试方法。不要调用工具。',
     });
+    // Wait until ToolBox has begun streaming so a successful interrupt is a
+    // meaningful receipt for the exact active request ID, not a race against
+    // request registration.
+    await streamStarted.promise;
     await transport.request('cancel-turn', { sessionId: session.sessionId });
-    const [cancelEvent, checkpoint] = await Promise.all([
+    const [cancelEvent, checkpoint, interruptEvent] = await Promise.all([
         cancelled.promise,
         checkpointed.promise,
+        interruptResult.promise,
     ]);
     assert.equal(cancelEvent.payload?.replay, false);
+    assert.equal(interruptEvent.payload?.source, 'toolbox');
+    assert.equal(interruptEvent.payload?.accepted, true,
+        `ToolBox did not accept the active request interrupt: ${JSON.stringify(interruptEvent.payload)}`);
+    assert.equal(interruptEvent.payload?.outcome, 'accepted');
+    assert.ok(!Object.hasOwn(interruptEvent.payload || {}, 'requestId'),
+        'internal model request IDs must not be projected to the GUI');
     assert.equal(checkpoint.snapshot?.version, 1);
     assert.match(
         JSON.stringify(checkpoint.snapshot),
@@ -105,7 +125,7 @@ async function verifyRealCompaction() {
     const topicId = 'seed-compact';
     const topicDirectory = path.join(
         temporaryRoot,
-        'UserData',
+        'AgentRuntimeData',
         'nova',
         'topics',
         topicId,

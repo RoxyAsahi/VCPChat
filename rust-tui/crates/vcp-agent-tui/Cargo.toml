@@ -20,6 +20,7 @@ unicode-width = { workspace = true }
 rpassword = { workspace = true }
 xai-ratatui-textarea = { path = "../../third_party/xai-ratatui-textarea" }
 vcp-agent-host = { path = "../../../rust/crates/vcp-agent-host" }
+vcp-agent-cli = { path = "../../../rust/crates/vcp-agent-cli" }
 vcp-grok-crash-handler = { path = "../../../rust/crates/vcp-grok-crash-handler" }
 vcp-grok-markdown = { path = "../../../rust/crates/vcp-grok-markdown" }
 wait-timeout = { workspace = true }

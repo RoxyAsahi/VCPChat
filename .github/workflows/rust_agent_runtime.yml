@@ -1,0 +1,157 @@
+name: Rust Agent Runtime
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "rust/**"
+      - "rust-tui/**"
+      - "modules/agent-runtime/**"
+      - "modules/ipc/agentRuntimeHandlers.js"
+      - "modules/ui-system/agent-workbench*.js"
+      - "preloads/**"
+      - "scripts/*rust*"
+      - "scripts/*agent-workbench*"
+      - "docs/agent-runtime/current/**"
+      - "package.json"
+      - "rust-toolchain.toml"
+      - "rustfmt.toml"
+      - "clippy.toml"
+      - ".cargo/config.toml"
+      - ".github/workflows/rust_agent_runtime.yml"
+  pull_request:
+    paths:
+      - "rust/**"
+      - "rust-tui/**"
+      - "modules/agent-runtime/**"
+      - "modules/ipc/agentRuntimeHandlers.js"
+      - "modules/ui-system/agent-workbench*.js"
+      - "preloads/**"
+      - "scripts/*rust*"
+      - "scripts/*agent-workbench*"
+      - "docs/agent-runtime/current/**"
+      - "package.json"
+      - "rust-toolchain.toml"
+      - "rustfmt.toml"
+      - "clippy.toml"
+      - ".cargo/config.toml"
+      - ".github/workflows/rust_agent_runtime.yml"
+
+concurrency:
+  group: rust-agent-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Rust quality and unit tests
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@1.93.1
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate machine-readable readiness files
+        run: npm run check:rust-readiness
+
+      - name: Rustfmt and Clippy
+        run: npm run check:rust-quality
+
+      - name: Rust workspace tests
+        run: npm run test:rust-unit
+
+      - name: Protocol and adapter contracts
+        run: npm run check:rust-agent-runtime
+
+  hermetic-stack:
+    name: Windows daemon and Electron hermetic stack
+    runs-on: windows-latest
+    needs: quality
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@1.93.1
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Run Rust GUI stack without a live ToolBox
+        run: npm run test:rust-stack
+
+  windows-distribution:
+    name: Windows release-dist artifacts
+    runs-on: windows-latest
+    needs: quality
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@1.93.1
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build daemon distribution profile
+        run: npm run build:daemon:dist
+
+      - name: Build TUI distribution profile and enforce size budget
+        run: npm run build:tui:dist
+
+      - name: Smoke release-dist daemon
+        shell: pwsh
+        run: |
+          $env:VCP_AGENT_RUST_DAEMON_PATH = "$PWD\rust\target\release-dist\vcp-agentd.exe"
+          npm run test:rust-daemon-smoke
+
+      - name: Smoke release-dist TUI
+        shell: pwsh
+        run: '& "$PWD\rust\target\release-dist\vcp-agent.exe" --version'
+
+      - name: Record checksums
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          Copy-Item rust/target/release-dist/vcp-agentd.exe artifacts/vcp-agentd.exe
+          Copy-Item rust/target/release-dist/vcp-agent.exe artifacts/vcp-agent.exe
+          Get-FileHash artifacts/*.exe -Algorithm SHA256 |
+            Select-Object Path, Hash |
+            ConvertTo-Json |
+            Set-Content artifacts/SHA256.json
+          Get-ChildItem rust/target/release-dist/*.pdb -ErrorAction SilentlyContinue |
+            Copy-Item -Destination artifacts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vcp-agent-windows-x64-${{ github.sha }}
+          path: artifacts/*
+          if-no-files-found: error
+
+# Real VCPToolBox tests remain an explicit self-hosted/manual gate. This
+# workflow never receives VCP_API_KEY and cannot promote the readiness verdict.
