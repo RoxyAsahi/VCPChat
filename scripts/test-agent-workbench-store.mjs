@@ -24,6 +24,14 @@ assert.equal(deriveWorkbenchViewState(store.getState()), 'idle', 'a daemon-creat
 assert.equal('sessions' in store.getState(), false);
 assert.equal('artifacts' in store.getState(), false);
 
+const previewOnlyStore = createWorkbenchStore();
+previewOnlyStore.setState({
+    runtime: { state: 'ready', worker: null, lastError: null },
+    selectedTopic: { topicId: 'preview-only-topic', mode: 'preview' },
+});
+assert.equal(deriveWorkbenchViewState(previewOnlyStore.getState()), 'idle',
+    'a ready control daemon must keep an idle Topic preview send-capable until send-time attachment');
+
 // R3-C: the Renderer may show an accepted command immediately, but it must
 // replace that temporary projection with the daemon's event identity rather
 // than grow a second transcript or guess a durable message id.
@@ -211,6 +219,17 @@ assert.ok(controller.store.getState().messages.some((message) => message.id === 
     'a live event arriving during initial read-topic must be buffered and projected after the snapshot');
 assert.equal(controller.store.getState().readiness.toolbox.state, 'unavailable',
     'daemon-global readiness must survive an attachment-less snapshot barrier instead of remaining at checking');
+// A daemon crash is global, not a transcript event. It must still reach the
+// currently previewed Topic when the writable attachment has a different
+// identity, otherwise the user sees a silently disabled composer with no
+// reconnect affordance.
+controller.store.setState({ selectedTopic: { topicId: 'previewed-other-topic', mode: 'preview' } });
+liveEvent({
+    eventId: 'runtime-crash-on-other-topic', sequence: 7, timestamp: 7, runtime: 'vcpchat',
+    sessionId: 'runtime', topicId: 'topic-restored', type: 'runtime.crashed', payload: { error: 'pipe closed' },
+});
+assert.equal(controller.store.getState().runtime.state, 'failed',
+    'daemon-global crash diagnostics must not be discarded as a foreign Topic event');
 controller.store.setState({ approvals: [{ approvalId: 'approval-live', toolName: 'PowerShellExecutor' }] });
 await controller.refreshStatus();
 assert.equal(controller.store.getState().approvals.length, 1,
@@ -254,5 +273,31 @@ assert.deepEqual(fresh.store.getState().attachment, {
 }, 'a fresh Topic must retain the daemon attachment when no snapshot exists');
 assert.deepEqual(fresh.store.getState().messages, [], 'a fresh Topic must not receive a fabricated JS transcript');
 fresh.dispose();
+
+// Cherry-style selection is snapshot-only.  The first send is the sole point
+// where the controller asks Main/Rust to obtain a writable attachment.
+const previewCalls = [];
+const preview = createWorkbenchController({
+    agentRuntimeGetStatus: async () => ({ state: 'ready', pendingApprovals: [] }),
+    agentRuntimeReadTopic: async ({ topicId }) => ({ topicId, snapshotSequence: 0, history: [{ id: 'preview-history', role: 'assistant', content: 'preview only' }] }),
+    agentRuntimeCreateSession: async (payload) => {
+        previewCalls.push(['attach', payload]);
+        return { sessionId: 'preview-session', topicId: payload.resume, state: 'idle' };
+    },
+    agentRuntimeStartTurn: async (payload) => {
+        previewCalls.push(['turn', payload]);
+        return { turnId: 'preview-turn' };
+    },
+});
+await preview.previewTopic('preview-topic', 'Nova', { title: 'Preview', model: 'gpt-5.6-terra' });
+assert.equal(previewCalls.length, 0, 'selecting a Topic must not acquire a writable Rust attachment');
+assert.equal(preview.store.getState().selectedTopic.mode, 'preview');
+assert.equal(preview.store.getState().messages[0].content, 'preview only');
+await preview.startTurn('继续这个任务');
+assert.equal(previewCalls[0][0], 'attach', 'first send must acquire the selected Topic before issuing a turn');
+assert.equal(previewCalls[0][1].resume, 'preview-topic');
+assert.equal(previewCalls[1][0], 'turn');
+assert.equal(previewCalls[1][1].sessionId, 'preview-session');
+preview.dispose();
 
 console.log('Agent Workbench store/reducer/controller projection tests passed.');

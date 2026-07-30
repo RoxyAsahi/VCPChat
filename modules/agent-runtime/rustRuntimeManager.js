@@ -30,7 +30,7 @@ class RustAgentRuntimeManager {
         return {
             state: this.state,
             protocolVersion: 1,
-            protocolRevision: '1.4',
+            protocolRevision: '1.5',
             driver: 'rust',
             worker: this.transport ? {
                 available: true,
@@ -79,22 +79,27 @@ class RustAgentRuntimeManager {
         ) {
             return { ...this.attachment };
         }
-        await this.transport?.stop();
-        this._rejectControlWaiters(new Error('Rust Agent attachment replaced'));
-        this._rejectEventWaiters(new Error('Rust Agent attachment replaced'));
         const settings = this.getSettings() || {};
         const workspaceRoot = path.resolve(options.workspaceRoot || this.projectRoot);
-        this.state = 'starting';
-        this.transport = this.transportFactory(this._transportConfig({ ...options, workspaceRoot }));
-        await this.transport.start();
-        const created = await this.transport.request('create-session');
+        // Selecting a Topic is a view operation.  Keep one lease-free daemon
+        // transport alive and promote it to a writable attachment only when a
+        // caller explicitly needs to create/continue a session.
+        await this._ensureControlTransport(options.agent || options.agentId || 'Nova');
+        const created = await this.transport.request('switch-attachment', {
+            ...(this.attachment?.sessionId ? { sessionId: this.attachment.sessionId } : {}),
+            ...(options.resume ? { topicId: options.resume } : {}),
+            ...(options.agent || options.agentId ? { agentId: options.agent || options.agentId } : {}),
+            ...(options.model ? { model: options.model } : {}),
+            workspaceRoot,
+            permissionMode: options.permissionMode === 'always-approve' ? 'always-approve' : 'ask',
+        });
         this.attachment = {
             sessionId: created.sessionId,
             topicId: created.topicId || options.resume || null,
             title: options.title || 'Nova Agent',
-            workspaceRoot,
-            model: options.model || settings.agentRuntime?.tui?.defaultModel || '',
-            agentId: options.agent || options.agentId || 'Nova',
+            workspaceRoot: created.workspaceRoot || workspaceRoot,
+            model: created.model || options.model || settings.agentRuntime?.tui?.defaultModel || '',
+            agentId: created.agentId || options.agent || options.agentId || 'Nova',
             runtime: 'rust',
         };
         if (this.workbenchMounted) {
@@ -104,13 +109,27 @@ class RustAgentRuntimeManager {
         return { ...this.attachment };
     }
 
+    async ensureAttachmentForTopic(options = {}) {
+        if (options.topicId && this.attachment?.topicId === options.topicId) return { ...this.attachment };
+        return this.createSession({
+            ...options,
+            resume: options.topicId || options.resume,
+        });
+    }
+
     async closeSession({ sessionId }) {
         this._assertAttachment(sessionId);
         const closed = { ...this.attachment };
-        await this.stop();
-        // `close-session` is different from a crash/reconnect stop: it is an
-        // explicit abandonment of the process-local attachment. Keep no stale
-        // session identity in Main after the daemon has been shut down.
+        if (!this.transport) {
+            // A crashed daemon cannot release anything over stdio.  Forget the
+            // process-local identity; the next control Host will inspect the
+            // durable Rust lease/snapshot instead of replaying this session.
+            this.attachment = null;
+            return closed;
+        }
+        await this.transport.request('close-session', { sessionId });
+        // Closing an attachment returns the same daemon to the lease-free
+        // control plane.  Keep its PID alive for Topic reads and future opens.
         this.attachment = null;
         return closed;
     }

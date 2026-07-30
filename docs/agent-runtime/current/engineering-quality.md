@@ -69,7 +69,7 @@ Grok pager、session JSONL、Agent 或 Shell。
 - `cargo fmt --manifest-path rust/Cargo.toml --all --check` 通过。
 - `cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets -- -D warnings` 通过。
 - `cargo test --manifest-path rust/Cargo.toml --workspace` 通过：1128 个测试通过，1 个真实 ToolBox opt-in PTY 测试按设计忽略。
-- `npm run check:rust-agent-runtime` 与 `npm run test:rust-stack` 通过；后者覆盖 v1.4 fixture、daemon framed stdio、Topic takeover、Renderer projection、Electron crash/reconnect 和双窗口协作接管。
+- `npm run check:rust-agent-runtime` 与 `npm run test:rust-stack` 覆盖 v1.5 fixture、daemon framed stdio、Topic takeover、Renderer projection、Electron crash/reconnect 和双窗口协作接管；每次协议变更后必须重新取得当前 revision 的完整收据。
 - `npm run build:daemon:dist` 通过：`vcp-agentd.exe` 3,838,464 bytes。
 - `npm run build:tui:dist` 通过：`vcp-agent.exe` 6,958,080 bytes，较 Markdown 导入前基线增加 578,048 bytes，低于 18,962,944-byte gate。
 - `release-dist` daemon 通过 revision-aware framed stdio smoke；`release-dist` TUI 的 `--version` 启动 smoke 通过。CI distribution job 已固定执行相同检查后才上传产物。

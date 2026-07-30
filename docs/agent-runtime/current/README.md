@@ -6,7 +6,7 @@
 
 阅读顺序：
 
-1. [daemon-protocol.md](daemon-protocol.md)：v1.4 framed stdio、附件 descriptor、控制响应和事件信封。
+1. [daemon-protocol.md](daemon-protocol.md)：v1.5 framed stdio、同 PID `switch-attachment`、附件 descriptor、控制响应和事件信封。
 2. [topic-and-recovery.md](topic-and-recovery.md)：Topic、lease、恢复、压缩及 Agent 独立影子索引。
 3. [agent-workbench-state.md](agent-workbench-state.md)：Electron Main 与 Renderer 的状态边界。
 4. [delivery-plan.md](delivery-plan.md)：当前验证门槛、影响边界与下一阶段工作。

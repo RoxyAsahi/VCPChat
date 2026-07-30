@@ -512,6 +512,7 @@ mod tests {
             events,
             session_id: "session_test".into(),
             topic_id: "topic_test".into(),
+            task: None,
         };
         tokio::spawn(async move {
             assert!(matches!(
@@ -570,6 +571,7 @@ mod tests {
             events,
             session_id: "session_test".into(),
             topic_id: "topic_test".into(),
+            task: None,
         };
         tokio::spawn(async move {
             assert!(matches!(
@@ -656,6 +658,7 @@ mod tests {
             events,
             session_id: "session_test".into(),
             topic_id: "topic_test".into(),
+            task: None,
         };
         tokio::spawn(async move {
             assert!(matches!(

@@ -122,27 +122,32 @@ async function freePort() {
     return port;
 }
 
-async function findDaemonChild(parentPid) {
+async function findDaemonChildren(parentPid) {
     if (process.platform !== 'win32') return null;
     const numericParentPid = Number(parentPid);
-    if (!Number.isSafeInteger(numericParentPid) || numericParentPid <= 0) return null;
+    if (!Number.isSafeInteger(numericParentPid) || numericParentPid <= 0) return [];
     const shell = process.env.SystemRoot
         ? path.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
         : 'powershell.exe';
     // A missing child is a normal polling state during daemon restart.  Avoid
     // treating a transient CIM query failure as a test crash; waitForDaemonChild
     // will retry and then report the actual attachment failure if it persists.
-    const script = `Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object { $_.ParentProcessId -eq ${numericParentPid} -and $_.Name -ieq 'vcp-agentd.exe' } | Select-Object -First 1 -ExpandProperty ProcessId`;
+    const script = `Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object { $_.ParentProcessId -eq ${numericParentPid} -and $_.Name -ieq 'vcp-agentd.exe' } | Select-Object -ExpandProperty ProcessId`;
     try {
         const { stdout } = await execFileAsync(shell, ['-NoProfile', '-NonInteractive', '-Command', script], {
             windowsHide: true,
             timeout: 5_000,
         });
-        const pid = Number.parseInt(String(stdout).trim(), 10);
-        return Number.isSafeInteger(pid) && pid > 0 ? pid : null;
+        return String(stdout).split(/\s+/)
+            .map(value => Number.parseInt(value, 10))
+            .filter(pid => Number.isSafeInteger(pid) && pid > 0);
     } catch {
-        return null;
+        return [];
     }
+}
+
+async function findDaemonChild(parentPid) {
+    return (await findDaemonChildren(parentPid))[0] || null;
 }
 
 async function waitForDaemonChild(parentPid) {
@@ -607,7 +612,16 @@ async function waitForDebugger(port, child, stderr) {
 }
 
 async function terminate(child) {
-    if (!child || child.exitCode !== null) return;
+    if (!child) return;
+    // Electron is the direct parent of the daemon. Capture only those exact
+    // child PIDs *before* browser.close()/Stop-Process can orphan them; a
+    // parent-only Windows termination otherwise leaks vcp-agentd.exe and its
+    // temporary Topic lease after a successful smoke run.
+    const daemonPids = await findDaemonChildren(child.pid);
+    if (child.exitCode !== null) {
+        await Promise.all(daemonPids.map(pid => stopTestDaemon(pid).catch(() => {})));
+        return;
+    }
     // `browser.close()` below asks Electron to quit through CDP.  Only wait
     // here: both `taskkill /T` and Node's Windows signal emulation can kill
     // the enclosing test job, hiding an assertion failure as a false pass.
@@ -646,6 +660,11 @@ async function terminate(child) {
             console.warn(`Electron GUI smoke could not confirm termination for its isolated PID ${child.pid}.`);
         }
     }
+    // Never use taskkill /T here: a test runner may share a Windows job with
+    // its Electron child. These PIDs were proved to be children of this exact
+    // isolated Electron instance, so stopping them is narrow and cannot touch
+    // an operator's VCPChat daemon.
+    await Promise.all(daemonPids.map(pid => stopTestDaemon(pid).catch(() => {})));
 }
 
 async function removeTemporaryAppData(target) {
@@ -696,13 +715,13 @@ async function writeMainChatFixture(appDataRoot) {
 // a durable transcript without a model call, so close/reopen can prove the
 // Workbench rebuilds from `read-topic` rather than from renderer memory or a
 // localStorage transcript cache.
-async function seedDurableWorkbenchTopic(appDataRoot) {
-    const topicId = 'gui-rust-snapshot-reopen';
+async function seedDurableWorkbenchTopic(appDataRoot, ordinal = 0) {
+    const topicId = ordinal === 0 ? 'gui-rust-snapshot-reopen' : `gui-rust-snapshot-preview-${ordinal}`;
     const updatedAt = Date.now();
     const topicDirectory = path.join(appDataRoot, 'AgentRuntimeData', 'nova', 'topics', topicId);
     const history = [
-        { id: 'seed-user', messageId: 'seed-user', turnId: 'seed-turn', role: 'user', content: '来自 Rust checkpoint 的问题', timestamp: updatedAt - 1 },
-        { id: 'seed-assistant', messageId: 'seed-assistant', turnId: 'seed-turn', role: 'assistant', content: 'Rust snapshot 只应由 read-topic 恢复。', timestamp: updatedAt },
+        { id: `seed-user-${ordinal}`, messageId: `seed-user-${ordinal}`, turnId: `seed-turn-${ordinal}`, role: 'user', content: `来自 Rust checkpoint 的问题 #${ordinal}`, timestamp: updatedAt - 1 },
+        { id: `seed-assistant-${ordinal}`, messageId: `seed-assistant-${ordinal}`, turnId: `seed-turn-${ordinal}`, role: 'assistant', content: `Rust snapshot #${ordinal} 只应由 read-topic 恢复。`, timestamp: updatedAt },
     ];
     await fs.mkdir(topicDirectory, { recursive: true });
     await fs.writeFile(path.join(topicDirectory, 'agent-state.json'), JSON.stringify({
@@ -1233,6 +1252,7 @@ let child;
 let appData;
 let compactionTopic;
 let durableWorkbenchTopic;
+let previewTopics;
 let exitCode = 0;
 try {
     await recordSmokeResult('running', 'bootstrap');
@@ -1260,6 +1280,10 @@ try {
     // Agent config, not an Agent Workbench-specific replacement.
     await writeMainChatFixture(appData);
     durableWorkbenchTopic = await seedDurableWorkbenchTopic(appData);
+    previewTopics = [
+        durableWorkbenchTopic,
+        ...await Promise.all(Array.from({ length: 9 }, (_, index) => seedDurableWorkbenchTopic(appData, index + 1))),
+    ];
     if (liveGuiCompaction) compactionTopic = await seedLiveCompactionTopic(appData);
     const stderr = { value: '' };
     const environment = {
@@ -1603,17 +1627,68 @@ try {
         `Agent Topic rows must not expose the legacy message-count decoration: ${JSON.stringify(legacyTopicDecorations)}`
     );
     await page.keyboard.press('Escape');
+    const attachmentBeforePreview = await page.evaluate(async () => {
+        const status = await (window.chatAPI || window.electronAPI).agentRuntimeGetStatus();
+        return status?.attachment?.topicId || null;
+    });
     const openedDurableTopic = await page.evaluate((topicId) => {
         const row = document.querySelector(`.agent-chat-persisted-topic[data-topic-id="${topicId}"]`);
         row?.click();
         return Boolean(row);
     }, durableWorkbenchTopic.topicId);
     assert.ok(openedDurableTopic, 'a durable Rust Topic row must remain actionable while control-plane refreshes redraw the sidebar');
-    await page.waitForFunction(async (topicId) => {
+    await page.waitForFunction((text) => [...document.querySelectorAll('.message-item.assistant .md-content')]
+        .some((node) => node.textContent.includes(text)), { timeout: timeoutMs }, durableWorkbenchTopic.assistantText);
+    const previewState = await page.evaluate(async (topicId) => {
         const status = await (window.chatAPI || window.electronAPI).agentRuntimeGetStatus();
-        return status?.attachment?.topicId === topicId
-            && !document.querySelector('.agent-chat-topic-flow-dialog');
-    }, { timeout: timeoutMs }, durableWorkbenchTopic.topicId);
+        const row = document.querySelector(`.agent-chat-persisted-topic[data-topic-id="${topicId}"]`);
+        const composer = document.querySelector('.agent-chat-message-input');
+        return {
+            attachmentTopicId: status?.attachment?.topicId || null,
+            selected: row?.classList.contains('active') || false,
+            composerDisabled: composer?.disabled ?? true,
+            topicFlowOpen: Boolean(document.querySelector('.agent-chat-topic-flow-dialog')),
+        };
+    }, durableWorkbenchTopic.topicId);
+    assert.equal(previewState.attachmentTopicId, attachmentBeforePreview,
+        `clicking a Topic must only read its Rust snapshot; attachment changes only when sending: ${JSON.stringify(previewState)}`);
+    assert.equal(previewState.selected, true,
+        `the clicked Topic row must update in place as the current preview: ${JSON.stringify(previewState)}`);
+    assert.equal(previewState.composerDisabled, false,
+        `an idle snapshot preview must keep its composer ready for send-time attachment: ${JSON.stringify(previewState)}`);
+    assert.equal(previewState.topicFlowOpen, false,
+        `opening a free Topic must not force an attachment or takeover dialog: ${JSON.stringify(previewState)}`);
+    const previewDaemonPid = await page.evaluate(async () => {
+        const status = await (window.chatAPI || window.electronAPI).agentRuntimeGetStatus();
+        return status?.worker?.pid || null;
+    });
+    assert.ok(Number.isSafeInteger(previewDaemonPid) && previewDaemonPid > 0,
+        'Topic preview must keep a single live Rust control daemon');
+    for (const topic of previewTopics.slice(1)) {
+        const clicked = await page.evaluate((topicId) => {
+            const row = document.querySelector(`.agent-chat-persisted-topic[data-topic-id="${topicId}"]`);
+            row?.click();
+            return Boolean(row);
+        }, topic.topicId);
+        assert.ok(clicked, `preview Topic ${topic.topicId} must remain selectable without a sidebar rebuild`);
+        await page.waitForFunction((text) => [...document.querySelectorAll('.message-item.assistant .md-content')]
+            .some((node) => node.textContent.includes(text)), { timeout: timeoutMs }, topic.assistantText);
+        const switchState = await page.evaluate(async () => {
+            const status = await (window.chatAPI || window.electronAPI).agentRuntimeGetStatus();
+            return { pid: status?.worker?.pid || null, attachmentTopicId: status?.attachment?.topicId || null };
+        });
+        assert.equal(switchState.pid, previewDaemonPid,
+            `preview Topic ${topic.topicId} must not respawn the Rust daemon`);
+        assert.equal(switchState.attachmentTopicId, attachmentBeforePreview,
+            `preview Topic ${topic.topicId} must not acquire a writable attachment before send`);
+    }
+    // Restore the original snapshot so the existing reload assertion also
+    // proves the localStorage pointer is only a Topic ID, never a transcript.
+    assert.equal(await page.evaluate((topicId) => {
+        const row = document.querySelector(`.agent-chat-persisted-topic[data-topic-id="${topicId}"]`);
+        row?.click();
+        return Boolean(row);
+    }, durableWorkbenchTopic.topicId), true, 'the first preview Topic must remain selectable after rapid sibling previews');
     await page.waitForFunction((text) => [...document.querySelectorAll('.message-item.assistant .md-content')]
         .some((node) => node.textContent.includes(text)), { timeout: timeoutMs }, durableWorkbenchTopic.assistantText);
     assert.deepEqual(await page.evaluate(() => JSON.parse(window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1'))), {

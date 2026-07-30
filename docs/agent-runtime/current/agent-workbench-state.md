@@ -13,8 +13,9 @@ Electron Main 的 `RustAgentRuntimeManager` 是 daemon client：只保存 transp
 在尚未创建 attachment 时，Main 启动的是 `vcp-agentd --direct --control`。该
 control daemon 只处理 Agent catalog、Topic read/list/search、影子索引状态/重建、共享 settings 与其它控制请求；
 它**不得创建 Topic 目录、lease 或 Core Session**。用户确认“创建并打开”或“打开并恢复”
-后，Main 停止 control daemon，再启动唯一的普通 daemon attachment。于是“读取 checkpoint”
-永远不可能把某个 Topic 标记成占用，也不会为一个隐藏的临时 Topic 建立第二个写入者。
+后，Main 在同一 daemon 进程内发出 `switch-attachment`：Rust 先确认旧 attachment
+没有运行 Turn、未决本地/后端审批或 queue，落盘、等待释放 lease，才启动目标 Host。
+这不会重启 `vcp-agentd.exe`；读取 checkpoint 也不会产生隐藏 writer。
 
 这与 Cherry Studio 将 Claude SDK 作为黑盒 Agent Runtime 的接入原则相同：GUI 不理解或重跑 Agent loop，只负责命令、事件转发与 UI 投影。这里的黑盒实现是仓库内 `vcp-agentd --direct`；VCPToolBox 仍在该黑盒之外，继续是模型、插件、marker 执行和后端审批权威。
 
@@ -27,7 +28,7 @@ GUI:        Renderer → preload → Electron Main transport → vcp-agentd → 
 
 TUI 的布局、主题、输入、错误页、状态展示和终端清理属于 standalone 表面，不改变 GUI 架构。若需求涉及 Topic、usage、审批、ToolBox 事件或 Agent loop，应先在共享 Rust Host/Core 中形成稳定语义，再由 TUI 和 daemon 分别投影；禁止为了补 TUI 功能向 Electron Main 增加第二份业务状态。
 
-Renderer 只有一份页面存活期的投影：`attachment`、流式 delta、Block 展开状态、滚动锚点和弹窗。它没有 Session 列表、artifact 缓存或持久 transcript。侧栏的持久对象是 Rust `list-topics` 的 Topic；当前 attachment 只是该 Topic 的临时写入者。
+Renderer 只有一份页面存活期的投影：`selectedTopic`、`attachment`、流式 delta、Block 展开状态、滚动锚点和弹窗。`selectedTopic` 可以是只读 Rust snapshot；`attachment` 始终是 daemon 当前唯一可写者。Renderer 没有持久 transcript；仅允许页面内 16 个 Topic / 16 MiB 的 snapshot LRU，并且每次选择均用 `read-topic` 重验。侧栏的持久对象是 Rust `list-topics` 的 Topic。
 
 重新挂载、刷新、crash reconnect 和 Topic takeover 都必须采用下列 snapshot-first 事务：
 
@@ -62,16 +63,17 @@ loading/error 与命中列表；命中携带 durable `topicId/messageId`，点�
 ```text
 新建 → 选择共享 Agent / 模型 / workspace / 标题 → 明确“创建并打开”
 点击已有 Topic
-  ├─ 空闲 → create-session(resume) → daemon snapshot-first 恢复 → 可写 attachment
-  ├─ 已由本 Main attachment 持有 → 幂等复用 attachment，不重启 daemon/lease
-  └─ 被外部进程占用 → 小型冲突确认 → 返回或“接管并继续”
+  ├─ 任意 Topic → read-topic → 立即显示 snapshot；不申请 lease
+  ├─ 空闲 preview 首次发送 → switch-attachment → snapshot barrier → start-turn
+  ├─ 旧 attachment 仍在运行/审批 → preview 可读、输入禁用、审批全局可见
+  └─ 外部 lease 首次发送失败 → 小型冲突确认 → 返回或“接管并继续”
 ```
 
 正常打开必须和 VCPChat 主聊天一样无感：空闲 lease 不显示、不预读/展示 checkpoint，也不要求用户理解 attachment。只有 TUI、另一窗口或另一进程持有同一 Topic 时才展示冲突确认；该确认绝不读取或替换当前 transcript。表单和冲突确认只存在 Renderer 内存，不能写入 localStorage 或成为 Topic/transcript 的副本。Agent 目录和模型目录来自 VCPChat 已共享的 catalog；Workbench 不直接把 ToolBox `/v1/models` 当成第二份 UI 真源。
 
-`read-topic` 失败时不能用旧 JS transcript、localStorage 或 Main 内存猜测内容。占用 Topic 的普通点击不能读取 checkpoint、不能替换当前 attachment；只有“接管并继续”会要求 Rust daemon 协调旧持有者 checkpoint/release。lease 未释放或超时即保持冲突状态。空闲 Topic 的普通点击直接恢复，避免用户每次打开历史都重复确认；真正会改变所有权的接管仍必须显式确认。
+`read-topic` 失败时不能用旧 JS transcript、localStorage 或 Main 内存猜测内容。普通点击永远不替换 attachment；只有首次发送或“接管并继续”才会要求 Rust daemon 协调旧持有者 checkpoint/release。lease 未释放或超时即保持冲突状态；真正会改变所有权的接管仍必须显式确认。
 
-R3-A 进行中。2026-07-30 当前工作树已删除旧的只读 preview、占用 banner 与 checkpoint 打开弹窗，改为“空闲一键恢复、冲突才确认接管”。`npm run test:agent-workbench` 已覆盖并通过空闲恢复、外部冲突确认和接管；当前 revision 尚未取得新的 Electron 双窗口收据，不能沿用旧 preview 流程的历史收据。验收仍必须覆盖：空闲 Topic 直接恢复、外部占用不读/不替换当前 transcript、接管成功和超时、活动 Turn/审批时拒绝切换、关闭冲突确认后当前 attachment 不变。
+R3-A 进行中。2026-07-30、Rust source revision `7578067edb828fcccae5ca87f73b91369dc4bd02092845f64484481fd96ef469`：`npm run test:rust-agent-runtime`、`npm run test:agent-workbench-store`、`npm run test:agent-workbench` 与 hermetic `npm run test:electron-gui-smoke` 已覆盖同 PID attachment switch、preview 不创建 Session、首次发送才接管、连续 10 个 Electron Topic preview 不重启 daemon、close/reopen snapshot 恢复、crash/reconnect 与无残留临时 child。当前 revision 仍缺双窗口 external lease 的 Electron 收据，以及真实 ToolBox 流/滚动性能；在此之前不得标记为完整产品验收。
 
 ## R3-B：真实 Block 的视觉与滚动契约
 

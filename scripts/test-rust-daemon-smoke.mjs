@@ -107,6 +107,7 @@ const transport = new RustDaemonTransport({
     workspaceRoot: repo,
     model: 'gpt-5.6-terra',
     agent: 'Nova',
+    controlOnly: true,
     onMessage: (message) => {
         if (message?.type === 'control-event') controlEvents.push(message);
         if (message?.type === 'event') daemonEvents.push(message.event);
@@ -115,14 +116,54 @@ const transport = new RustDaemonTransport({
 });
 
 await transport.start();
+const daemonPidBeforeAttachment = transport.child?.pid;
 assert.equal(transport.readyMessage?.buildRevision, pinnedRevision,
     'the smoke daemon must be compiled from the exact in-repository Rust revision');
-assert.equal(transport.readyMessage?.protocolRevision, '1.4', 'daemon must advertise the v1.4 GUI protocol revision');
+assert.equal(transport.readyMessage?.protocolRevision, '1.5', 'daemon must advertise the v1.5 GUI protocol revision');
 await transport.request('get-settings', {}, 'smoke-settings-request');
 await transport.request('set-workbench-presence', { mounted: false }, 'smoke-presence-request');
-const created = await transport.request('create-session');
+let created = await transport.request('switch-attachment', {
+    agentId: 'Nova',
+    model: 'gpt-5.6-terra',
+    workspaceRoot: repo,
+    permissionMode: 'ask',
+}, 'smoke-attach-request');
 assert.ok(created.sessionId?.startsWith('session_'));
-assert.ok(created.topicId?.startsWith('topic_'), 'create-session must report the durable Topic identity to GUI hosts');
+assert.ok(created.topicId?.startsWith('topic_'), 'switch-attachment must report the durable Topic identity to GUI hosts');
+assert.equal(transport.child?.pid, daemonPidBeforeAttachment,
+    'switch-attachment must promote the control Host without restarting vcp-agentd.exe');
+assert.equal(daemonEvents.some((event) => event?.type === 'session.attached'
+    && event?.sessionId === created.sessionId
+    && event?.topicId === created.topicId
+    && event?.payload?.reason === 'switch-attachment'), true,
+    'a successful attachment must emit its final session.attached identity before the ACK resolves');
+
+// The Cherry-style preview path has to scale beyond a single change: the
+// control process remains alive while only the Rust writer lease moves. This
+// is deliberately hermetic (no ToolBox model request) but validates the exact
+// 10-Topic/PID invariant required by the Electron runtime contract.
+for (let index = 1; index < 10; index += 1) {
+    const previous = created;
+    created = await transport.request('switch-attachment', {
+        sessionId: previous.sessionId,
+        agentId: 'Nova',
+        model: 'gpt-5.6-terra',
+        workspaceRoot: repo,
+        permissionMode: 'ask',
+    }, `smoke-switch-${index}`);
+    assert.equal(transport.child?.pid, daemonPidBeforeAttachment,
+        `switch ${index} must keep the original control daemon PID`);
+    assert.equal(daemonEvents.some((event) => event?.type === 'session.detached'
+        && event?.sessionId === previous.sessionId
+        && event?.topicId === previous.topicId
+        && event?.payload?.reason === 'switch-attachment'), true,
+        `switch ${index} must report the detached attachment with its original identity`);
+    assert.equal(daemonEvents.some((event) => event?.type === 'session.attached'
+        && event?.sessionId === created.sessionId
+        && event?.topicId === created.topicId
+        && event?.payload?.reason === 'switch-attachment'), true,
+        `switch ${index} must report the attached Topic without UI-side inference`);
+}
 await transport.request('list-topics', { agentId: '123' }, 'smoke-other-agent-topics');
 const otherAgentTopicDeadline = Date.now() + 5_000;
 while (!controlEvents.some((event) => event.requestId === 'smoke-other-agent-topics') && Date.now() < otherAgentTopicDeadline) {

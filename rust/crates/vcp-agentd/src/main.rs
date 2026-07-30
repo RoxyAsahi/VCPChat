@@ -10,6 +10,7 @@ use tokio_util::codec::{FramedRead, FramedWrite, LengthDelimitedCodec};
 use vcp_agent_core::CoreRuntime;
 use vcp_agent_host::{
     HostCommand, HostEvent, RuntimeOverrides, TuiSettingsUpdate, load_config, start,
+    start_without_index_rebuild,
 };
 use vcp_agent_protocol::{
     PROTOCOL_REVISION, PROTOCOL_VERSION, WireMessage, codec, read_message, validate_direct_command,
@@ -103,7 +104,12 @@ async fn direct_main() -> Result<()> {
             _ => {}
         }
     }
+    // GUI transport starts as a lease-free control Host.  Selecting a Topic
+    // must not acquire it or restart this stdio process; a writable Host is
+    // created only by `switch-attachment` immediately before a real turn.
+    let initial_overrides = overrides.clone();
     let config = load_config(overrides)?;
+    let mut active_overrides = (!config.control_only).then_some(initial_overrides.clone());
     let mut host = start(config)?;
     let mut reader = FramedRead::new(stdin(), codec());
     let mut writer = FramedWrite::new(stdout(), codec());
@@ -160,12 +166,49 @@ async fn direct_main() -> Result<()> {
                         recent_ids.remove(&old);
                     }
                     if message.kind == "shutdown" {
-                        let _ = host.commands.send(HostCommand::Shutdown);
+                        host.shutdown().await;
                         let ack = WireMessage::new("ack")
                             .with_request_id(message.request_id.expect("validated requestId"))
                             .put("ok", true);
                         write_direct_message(&mut writer, &ack).await?;
                         break;
+                    }
+                    if message.kind == "switch-attachment" {
+                        let mut lifecycle = Vec::new();
+                        let response = switch_direct_attachment(
+                            &mut host,
+                            &initial_overrides,
+                            &mut active_overrides,
+                            &message,
+                            &mut lifecycle,
+                        ).await;
+                        // These lifecycle events are informational; the ACK is
+                        // the only success authority for the Electron manager.
+                        // They are still emitted with final daemon identities
+                        // so observers never infer a switch from a Host warning
+                        // or an uncorrelated status frame.
+                        for mut event in lifecycle {
+                            event_sequence = event_sequence.saturating_add(1);
+                            project_event_envelope(
+                                &mut event,
+                                &host.session_id,
+                                &host.topic_id,
+                                event_sequence,
+                            );
+                            write_direct_message(&mut writer, &event).await?;
+                        }
+                        write_direct_message(&mut writer, &response).await?;
+                        continue;
+                    }
+                    if message.kind == "close-session" {
+                        let response = close_direct_attachment(
+                            &mut host,
+                            &initial_overrides,
+                            &mut active_overrides,
+                            &message,
+                        ).await;
+                        write_direct_message(&mut writer, &response).await?;
+                        continue;
                     }
                     if message.kind == "hello" {
                         let ack = WireMessage::new("ack")
@@ -179,11 +222,255 @@ async fn direct_main() -> Result<()> {
                         write_direct_message(&mut writer, &response).await?;
                     }
                 }
-                None => { let _ = host.commands.send(HostCommand::Shutdown); break; }
+                None => { host.shutdown().await; break; }
             }
         }
     }
     Ok(())
+}
+
+fn direct_ack(request_id: String, result: serde_json::Value) -> WireMessage {
+    WireMessage::new("ack")
+        .with_request_id(request_id)
+        .put("ok", true)
+        .put("result", result)
+}
+
+fn direct_error(request_id: String, code: &str, error: impl Into<String>) -> WireMessage {
+    WireMessage::new("ack")
+        .with_request_id(request_id)
+        .put("ok", false)
+        .put(
+            "result",
+            serde_json::json!({ "code": code, "error": error.into() }),
+        )
+}
+
+fn control_overrides(base: &RuntimeOverrides) -> RuntimeOverrides {
+    let mut control = base.clone();
+    control.control_only = true;
+    control.resume = None;
+    control
+}
+
+fn attachment_overrides(base: &RuntimeOverrides, message: &WireMessage) -> RuntimeOverrides {
+    let mut target = base.clone();
+    target.control_only = false;
+    target.resume = message.string("topicId").map(ToOwned::to_owned);
+    if let Some(value) = message.string("agentId") {
+        target.agent = Some(value.to_string());
+    }
+    if let Some(value) = message.string("model") {
+        target.model = Some(value.to_string());
+    }
+    if let Some(value) = message.string("workspaceRoot") {
+        target.workspace = Some(PathBuf::from(value));
+    }
+    target.always_approve = matches!(message.string("permissionMode"), Some("always-approve"));
+    target
+}
+
+async fn restore_control_host(
+    host: &mut vcp_agent_host::RunningHost,
+    base: &RuntimeOverrides,
+) -> Result<()> {
+    let config = load_config(control_overrides(base))?;
+    *host = start_without_index_rebuild(config)?;
+    Ok(())
+}
+
+async fn switch_direct_attachment(
+    host: &mut vcp_agent_host::RunningHost,
+    base: &RuntimeOverrides,
+    active_overrides: &mut Option<RuntimeOverrides>,
+    message: &WireMessage,
+    lifecycle: &mut Vec<WireMessage>,
+) -> WireMessage {
+    let request_id = message.request_id.clone().unwrap_or_default();
+    if let Some(expected_session) = message.session_id.as_deref() {
+        if active_overrides.is_none() || expected_session != host.session_id {
+            return direct_error(
+                request_id,
+                "attachment-mismatch",
+                "current Rust attachment does not match sessionId",
+            );
+        }
+    }
+
+    let target = attachment_overrides(base, message);
+    let next_config = match load_config(target.clone()) {
+        Ok(config) => config,
+        Err(error) => {
+            let code = if error.to_string().contains("workspace") {
+                "invalid-workspace"
+            } else {
+                "invalid-topic"
+            };
+            return direct_error(request_id, code, error.to_string());
+        }
+    };
+
+    if active_overrides.is_some() {
+        let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+        if host
+            .commands
+            .send(HostCommand::PrepareSwitch { reply: reply_tx })
+            .is_err()
+        {
+            return direct_error(
+                request_id,
+                "attachment-busy",
+                "current Rust attachment is unavailable",
+            );
+        }
+        match reply_rx.await {
+            Ok(Ok(())) => {}
+            Ok(Err(reason)) => {
+                return direct_error(
+                    request_id,
+                    &reason,
+                    "current Topic has a running turn, approval, or queued interaction",
+                );
+            }
+            Err(_) => {
+                return direct_error(
+                    request_id,
+                    "attachment-busy",
+                    "current Rust attachment stopped before it could be released",
+                );
+            }
+        }
+    }
+
+    let previous = active_overrides.clone();
+    let previous_identity = previous
+        .as_ref()
+        .map(|_| (host.session_id.clone(), host.topic_id.clone()));
+    host.shutdown().await;
+    match start_without_index_rebuild(next_config) {
+        Ok(next) => {
+            if let Some((session_id, topic_id)) = previous_identity {
+                lifecycle.push(attachment_lifecycle_event(
+                    "session.detached",
+                    &session_id,
+                    &topic_id,
+                    serde_json::json!({ "reason": "switch-attachment" }),
+                ));
+            }
+            lifecycle.push(attachment_lifecycle_event(
+                "session.attached",
+                &next.session_id,
+                &next.topic_id,
+                serde_json::json!({ "reason": "switch-attachment" }),
+            ));
+            lifecycle.push(attachment_lifecycle_event(
+                "runtime.ready",
+                &next.session_id,
+                &next.topic_id,
+                serde_json::json!({ "attachment": true }),
+            ));
+            let result = serde_json::json!({
+                "sessionId": next.session_id,
+                "topicId": next.topic_id,
+                "agentId": target.agent.clone().unwrap_or_else(|| "Nova".to_string()),
+                "model": target.model.clone().unwrap_or_default(),
+                "workspaceRoot": target.workspace.as_ref().map(|path| path.display().to_string()).unwrap_or_default(),
+                "attached": true,
+            });
+            *host = next;
+            *active_overrides = Some(target);
+            direct_ack(request_id, result)
+        }
+        Err(error) => {
+            // Acquiring the target lease failed after the old Host was safely
+            // closed. Restore the previous attachment (or control Host) so a
+            // rejected switch never leaves a live daemon with a phantom UI
+            // attachment.
+            let restore = previous.clone().unwrap_or_else(|| control_overrides(base));
+            match load_config(restore).and_then(start_without_index_rebuild) {
+                Ok(restored) => {
+                    *host = restored;
+                    *active_overrides = previous;
+                }
+                Err(restore_error) => {
+                    return direct_error(
+                        request_id,
+                        "attachment-restore-failed",
+                        format!("{error}; restore failed: {restore_error}"),
+                    );
+                }
+            }
+            let code = if error.to_string().contains("lease") || error.to_string().contains("TOPIC")
+            {
+                "topic-in-use"
+            } else {
+                "invalid-topic"
+            };
+            direct_error(request_id, code, error.to_string())
+        }
+    }
+}
+
+/// Lifecycle projection for direct-daemon attachment changes.  The nested
+/// event carries all durable routing values before the outbound projector adds
+/// `sequence`, `eventId`, `timestamp` and `runtime`; consumers can therefore
+/// observe old and new attachments without guessing from the currently active
+/// Host at write time.
+fn attachment_lifecycle_event(
+    event_type: &str,
+    session_id: &str,
+    topic_id: &str,
+    payload: serde_json::Value,
+) -> WireMessage {
+    let mut message = WireMessage::new("event").put(
+        "event",
+        serde_json::json!({
+            "type": event_type,
+            "sessionId": session_id,
+            "topicId": topic_id,
+            "payload": payload,
+        }),
+    );
+    message.session_id = Some(session_id.to_string());
+    message
+}
+
+async fn close_direct_attachment(
+    host: &mut vcp_agent_host::RunningHost,
+    base: &RuntimeOverrides,
+    active_overrides: &mut Option<RuntimeOverrides>,
+    message: &WireMessage,
+) -> WireMessage {
+    let request_id = message.request_id.clone().unwrap_or_default();
+    if active_overrides.is_none() || message.session_id.as_deref() != Some(host.session_id.as_str())
+    {
+        return direct_error(
+            request_id,
+            "attachment-mismatch",
+            "current Rust attachment does not match sessionId",
+        );
+    }
+    let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+    if host
+        .commands
+        .send(HostCommand::PrepareSwitch { reply: reply_tx })
+        .is_err()
+        || !matches!(reply_rx.await, Ok(Ok(())))
+    {
+        return direct_error(
+            request_id,
+            "attachment-busy",
+            "current Topic has a running turn, approval, or queued interaction",
+        );
+    }
+    host.shutdown().await;
+    match restore_control_host(host, base).await {
+        Ok(()) => {
+            *active_overrides = None;
+            direct_ack(request_id, serde_json::json!({ "closed": true }))
+        }
+        Err(error) => direct_error(request_id, "attachment-restore-failed", error.to_string()),
+    }
 }
 
 async fn write_direct_message(
@@ -233,7 +520,7 @@ fn dispatch_direct(
             if prompt.is_empty() && attachments.is_empty() {
                 Some(ack.put("ok", false).put("result", serde_json::json!({"error":"prompt or attachment is required"})))
             } else {
-                // v1.4 requires turnId in the declared envelope. An incomplete
+                // v1.5 requires turnId in the declared envelope. An incomplete
                 // frame is rejected before dispatch; never revive a legacy
                 // payload identity here.
                 let turn_id = message.turn_id.clone();

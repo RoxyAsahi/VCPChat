@@ -66,7 +66,7 @@ CDS 同时保留防御性约束：
 
 Renderer 可持有当前 attachment 与即时渲染投影，但不是 transcript 真源。
 
-Workbench 点击规则固定为：空闲 Topic 直接恢复；与当前 Main attachment 相同的 Topic 幂等
+Workbench 点击规则固定为：任何 Topic 先只读 `read-topic` 预览；首次发送时才安全切换 attachment；与当前 Main attachment 相同的 Topic 幂等
 复用；外部有效 lease 的 Topic 只读打开并显示 inline banner，只有用户点击“请求接管”才发起
 Rust 协作接管。无论哪条路径，Renderer 都不得用旧 JS Session、localStorage transcript 或
 Main 内存消息补齐内容。
@@ -98,7 +98,7 @@ git diff --check
 本次 Rust source revision 为
 `3be0430538a760b30b932647529d4527baa1ad07c72bd1376b797f8f32814f33`。Rust
 workspace 注册 1163 项测试且所有非 ignored 测试通过，VCP-CDS 19 项通过；两边 fmt 与
-clippy `-D warnings` 均通过。共享 v1.4 fixture、Runtime manager、Workbench store/UI、
+clippy `-D warnings` 均通过。共享 v1.5 fixture、Runtime manager、Workbench store/UI、
 release daemon framed smoke、daemon 与双窗口 Electron Topic 接管、完整 Electron GUI smoke
 均通过。GUI smoke 同时核验运行 daemon 报告的 build revision 与当前 Rust 源码一致。本收据
 仍是 hermetic 证据，不外推为真实 ToolBox、DistributedServer capability 或发布证据。

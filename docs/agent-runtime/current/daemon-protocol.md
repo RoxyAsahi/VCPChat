@@ -1,8 +1,8 @@
-# daemon v1.4 协议（当前真源）
+# daemon v1.5 协议（当前真源）
 
-`vcp-agentd.exe --direct` 是 Workbench 的唯一 Agent Runtime。stdin/stdout 使用四字节大端长度前缀 JSON；没有 TCP 监听。`protocolVersion` 固定为 `1`，`protocolRevision` 固定为 **`1.4`**，单帧上限 256 KiB，模型 delta 上限 8 KiB。
+`vcp-agentd.exe --direct` 是 Workbench 的唯一 Agent Runtime。stdin/stdout 使用四字节大端长度前缀 JSON；没有 TCP 监听。`protocolVersion` 固定为 `1`，`protocolRevision` 固定为 **`1.5`**，单帧上限 256 KiB，模型 delta 上限 8 KiB。
 
-未知版本、未知命令、重复 `requestId`、缺字段、超大帧、断管和 daemon crash 一律 fail closed。协议主版本仍是 v1，因此共享夹具文件名为 [`rust/fixtures/daemon-v1.json`](../../../rust/fixtures/daemon-v1.json)；其 `protocolRevision` 才是 v1.4。
+未知版本、未知命令、重复 `requestId`、缺字段、超大帧、断管和 daemon crash 一律 fail closed。协议主版本仍是 v1，因此共享夹具文件名为 [`rust/fixtures/daemon-v1.json`](../../../rust/fixtures/daemon-v1.json)；其 `protocolRevision` 才是 v1.5。
 
 Rust daemon 与 Electron transport 都在边界执行同一套严格校验：命令在写入 stdin 前校验，daemon frame 在进入 Main waiter 或 Renderer 之前校验。`HostEvent::Control` 的 `requestId` 是非可选类型，因而 Rust 内部也不能构造没有 originating request 的 control reply。
 
@@ -14,7 +14,7 @@ daemon 首帧必须是：
 {
   "type": "ready",
   "protocolVersion": 1,
-  "protocolRevision": "1.4",
+  "protocolRevision": "1.5",
   "buildRevision": "<7-64 位十六进制 revision>"
 }
 ```
@@ -28,6 +28,7 @@ Electron transport 必须同时核对三个字段；只收到 `ready` 不代表�
 | 命令 | 必填 payload | 最终 control kind / 行为 |
 | --- | --- | --- |
 | `create-session` | 启动参数已通过 argv 传入 | `ack.result = {sessionId, topicId}` |
+| `switch-attachment` | 可选当前 `sessionId`；可选 `topicId`（省略即新建）、`agentId`、`model`、`workspaceRoot`、`permissionMode` | 同 PID 内安全替换唯一 writable attachment；`ack.result = {sessionId, topicId, agentId, model, workspaceRoot, attached:true}` |
 | `close-session` | `sessionId` | 停止 attachment |
 | `import-attachment` | `sessionId`, 一次性本地 `path` | `attachment-imported`；结果只含 descriptor，不回传源路径/字节 |
 | `start-turn` | `sessionId`, `turnId`, `prompt` 或最多 8 个 `attachments` descriptor | 异步 `event` 流 |
@@ -69,6 +70,15 @@ Electron transport 必须同时核对三个字段；只收到 `ready` 不代表�
 ```
 
 `control-error` 也必须带 originating `requestId`。Main 只以 `requestId` 找 waiter，绝不能按 `kind`、抵达顺序或当前 session 猜测归属；kind 不匹配、超时或重复 reply 均拒绝该调用。
+
+`switch-attachment` 的失败 ACK 也是最终结果，且不会让 Renderer 猜测 attachment 已替换：`attachment-busy`（Turn/任一审批/queue 未清空）、`attachment-mismatch`、`topic-in-use`、`invalid-topic`、`invalid-workspace` 或 `attachment-restore-failed`。Rust 只有在旧 Host 已落盘、结束并释放 lease 后才启动目标 Host；目标 lease 失败时会恢复原 attachment 或 lease-free control Host。该 command 不重启 `vcp-agentd.exe`，也不全量重建 shadow index。
+
+成功切换会在 ACK 前发出最终身份完整的生命周期 event：旧 attachment 的
+`session.detached`，接着是新 attachment 的 `session.attached` 与
+`runtime.ready`。这些 event 仅供观察和诊断；Electron 只以同一 requestId 的成功 ACK
+替换 Main attachment，绝不能凭 event 推断切换成功。2026-07-30 的 hermetic 验收为
+`npm run test:rust-daemon-smoke`（release `vcp-agentd.exe`，同 PID 连续切换 10 个
+Topic，并逐项核对旧/新 identity）。真实 ToolBox 或多窗口 lease 场景不包含在此收据内。
 
 `topic-read-only.payload.snapshotSequence` 是读取时已经包含进 Rust durable snapshot 的事件水位。它不是 Renderer 的 event cursor：Renderer 安装 snapshot 后只投影已缓冲且 `sequence > snapshotSequence` 的同 attachment event，绝不把水位以内的旧 delta 回放到 snapshot 上。
 
@@ -122,4 +132,4 @@ node scripts/test-rust-protocol-fixture.mjs
 cargo test --manifest-path rust/Cargo.toml -p vcp-agent-protocol
 ```
 
-未经此双向门禁的协议改动不是 v1.4 的有效实现。
+未经此双向门禁的协议改动不是 v1.5 的有效实现。

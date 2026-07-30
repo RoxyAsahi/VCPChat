@@ -1,9 +1,10 @@
 {
   "protocolVersion": 1,
-  "protocolRevision": "1.4",
+  "protocolRevision": "1.5",
   "hostToDaemon": [
     { "type": "hello", "protocolVersion": 1, "requestId": "hello_1" },
     { "type": "create-session", "protocolVersion": 1, "requestId": "create_1" },
+    { "type": "switch-attachment", "protocolVersion": 1, "requestId": "attach_1", "sessionId": "session_1", "topicId": "topic_2", "agentId": "Nova", "model": "gpt-5.6-terra", "workspaceRoot": "C:\\VCP", "permissionMode": "ask" },
     { "type": "close-session", "protocolVersion": 1, "requestId": "close_1", "sessionId": "session_1" },
     { "type": "import-attachment", "protocolVersion": 1, "requestId": "attachment_1", "sessionId": "session_1", "path": "C:\\Temp\\image.png" },
     { "type": "start-turn", "protocolVersion": 1, "requestId": "turn_1", "sessionId": "session_1", "turnId": "turn_1", "prompt": "请查看图片", "attachments": [{ "id": "attachment_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "displayName": "image.png", "kind": "image", "mimeType": "image/png", "byteLen": 1024, "width": 32, "height": 32, "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "assetFile": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.png" }] },
@@ -31,7 +32,7 @@
     { "type": "shutdown", "protocolVersion": 1, "requestId": "shutdown_1" }
   ],
   "daemonToHost": [
-    { "type": "ready", "protocolVersion": 1, "protocolRevision": "1.4", "buildRevision": "0123456789abcdef0123456789abcdef01234567" },
+    { "type": "ready", "protocolVersion": 1, "protocolRevision": "1.5", "buildRevision": "0123456789abcdef0123456789abcdef01234567" },
     { "type": "ack", "requestId": "topics_1", "ok": true },
     { "type": "control-event", "requestId": "topics_1", "kind": "topics", "payload": [] },
     { "type": "control-event", "requestId": "topic_read_1", "kind": "control-error", "payload": { "operation": "topic-read-only", "error": "unavailable" } },

@@ -9,19 +9,30 @@ class FakeTransport {
     constructor(options) {
         this.options = options; this.requests = []; this.sequence = 0;
         this.child = { pid: 4242 };
+        this.sessionId = 'session-rust'; this.topicId = 'topic-rust';
+        this.failNextSwitch = false;
     }
     async start() {}
     async stop() { this.stopped = true; this.options.onExit?.(0, null, null); }
     async request(type, payload = {}, requestId) {
         this.requests.push({ type, payload, requestId });
-        if (type === 'create-session') return { sessionId: 'session-rust', topicId: 'topic-rust' };
+        if (type === 'switch-attachment') {
+            if (this.failNextSwitch) {
+                this.failNextSwitch = false;
+                throw new Error('attachment-busy');
+            }
+            const topicId = payload.topicId || 'topic-rust';
+            this.sessionId = `session-${topicId}`;
+            this.topicId = topicId;
+            return { sessionId: this.sessionId, topicId, agentId: payload.agentId || 'Nova', model: payload.model || 'gpt-5.6-terra', workspaceRoot: payload.workspaceRoot, attached: true };
+        }
         return { ok: true };
     }
     event(event) {
         this.sequence += 1;
         this.options.onMessage({
             type: 'event', event: {
-                sessionId: 'session-rust', topicId: 'topic-rust', sequence: this.sequence,
+                sessionId: this.sessionId, topicId: this.topicId, sequence: this.sequence,
                 eventId: `event-${this.sequence}`, timestamp: Date.now(), runtime: 'rust', ...event,
             },
         });
@@ -40,7 +51,7 @@ const manager = new RustAgentRuntimeManager({
 
 await manager.start();
 const session = await manager.createSession({ workspaceRoot: process.cwd(), model: 'gpt-5.6-terra', agent: 'Nova' });
-assert.deepEqual({ sessionId: session.sessionId, topicId: session.topicId }, { sessionId: 'session-rust', topicId: 'topic-rust' });
+assert.deepEqual({ sessionId: session.sessionId, topicId: session.topicId }, { sessionId: 'session-topic-rust', topicId: 'topic-rust' });
 assert.equal(manager.getStatus().attachment.topicId, 'topic-rust');
 assert.equal('pendingApprovals' in manager.getStatus(), false,
     'Main status must not manufacture an approval collection owned by the Renderer/Rust daemon');
@@ -53,6 +64,24 @@ assert.deepEqual(sameAttachment, session,
     'selecting a Topic already attached in this Main process must reuse the live Rust attachment');
 assert.equal(fake.requests.length, requestCountBeforeIdempotentResume,
     'idempotent Topic selection must not stop and respawn the daemon');
+const workerBeforeTopicSwitch = manager.getStatus().worker.pid;
+const secondTopic = await manager.ensureAttachmentForTopic({ topicId: 'topic-next', agent: 'Nova', workspaceRoot: process.cwd() });
+assert.equal(secondTopic.topicId, 'topic-next');
+assert.equal(fake.stopped, undefined, 'switching attachments must keep the same daemon transport alive');
+assert.equal(manager.getStatus().worker.pid, workerBeforeTopicSwitch,
+    'switching attachments must not create a second daemon child process');
+assert.equal(fake.requests.at(-1).type, 'switch-attachment');
+assert.equal(fake.requests.at(-1).payload.sessionId, 'session-topic-rust');
+assert.equal(fake.requests.at(-1).payload.topicId, 'topic-next');
+const stableAttachmentAfterSwitch = manager.getStatus().attachment;
+fake.failNextSwitch = true;
+await assert.rejects(
+    manager.ensureAttachmentForTopic({ topicId: 'topic-busy', agent: 'Nova', workspaceRoot: process.cwd() }),
+    /attachment-busy/,
+);
+assert.deepEqual(manager.getStatus().attachment, stableAttachmentAfterSwitch,
+    'a failed switch must preserve the old attachment identity and daemon transport');
+assert.equal(fake.stopped, undefined, 'a failed switch must not terminate the current daemon');
 
 // R1: simultaneous control calls correlate by framed requestId, never by the
 // arrival order or response kind. Reply in reverse order to prove it.
@@ -108,7 +137,7 @@ const mismatchRequest = fake.requests.at(-1);
 fake.control(mismatchRequest.requestId, 'settings', {});
 await assert.rejects(mismatch, /control response mismatch/);
 
-const attachmentImport = manager.importAttachment({ sessionId: session.sessionId, path: 'C:\\Temp\\图片.png' });
+const attachmentImport = manager.importAttachment({ sessionId: secondTopic.sessionId, path: 'C:\\Temp\\图片.png' });
 await new Promise((resolve) => setImmediate(resolve));
 const attachmentRequest = fake.requests.at(-1);
 assert.equal(attachmentRequest.type, 'import-attachment');
@@ -122,7 +151,7 @@ const imported = await attachmentImport;
 assert.equal(imported.attachment.displayName, '图片.png');
 assert.equal('path' in imported.attachment, false, 'Renderer must receive an asset descriptor, not a durable local path');
 
-const turn = await manager.startTurn({ sessionId: session.sessionId, prompt: '介绍一下自己', attachments: [imported.attachment] });
+const turn = await manager.startTurn({ sessionId: secondTopic.sessionId, prompt: '介绍一下自己', attachments: [imported.attachment] });
 assert.deepEqual(fake.requests.at(-1).payload.attachments, [imported.attachment]);
 assert.equal('updatedAt' in manager.getStatus().attachment, false,
     'Main must not mutate attachment business metadata when a turn command is accepted');
@@ -133,13 +162,13 @@ assert.equal(observed.at(-1).eventId, 'event-1');
 assert.equal(observed.at(-1).sequence, 1);
 assert.equal(manager.messages, undefined, 'Main must not retain a second transcript');
 
-await manager.followUpTurn({ sessionId: session.sessionId, turnId: turn.turnId, prompt: '完成后总结' });
+await manager.followUpTurn({ sessionId: secondTopic.sessionId, turnId: turn.turnId, prompt: '完成后总结' });
 assert.equal(fake.requests.at(-1).type, 'follow-up-turn');
-await manager.steerTurn({ sessionId: session.sessionId, turnId: turn.turnId, prompt: '先检查风险' });
+await manager.steerTurn({ sessionId: secondTopic.sessionId, turnId: turn.turnId, prompt: '先检查风险' });
 assert.equal(fake.requests.at(-1).type, 'steer-turn');
-await manager.respondApproval({ approvalId: 'approval-1', decision: 'deny', sessionId: session.sessionId, turnId: turn.turnId, toolCallId: 'tool-1', argumentsHash: 'hash-1' });
+await manager.respondApproval({ approvalId: 'approval-1', decision: 'deny', sessionId: secondTopic.sessionId, turnId: turn.turnId, toolCallId: 'tool-1', argumentsHash: 'hash-1' });
 assert.deepEqual(fake.requests.at(-1).payload, {
-    approvalId: 'approval-1', allowed: false, sessionId: session.sessionId,
+    approvalId: 'approval-1', allowed: false, sessionId: secondTopic.sessionId,
     turnId: turn.turnId, toolCallId: 'tool-1', argumentsHash: 'hash-1',
 });
 await manager.respondApproval({ approvalId: 'approve-backend-1', decision: 'allow', scope: 'toolbox' });
@@ -155,7 +184,7 @@ assert.deepEqual(fake.requests.at(-1), {
 // ACK means accepted only. A stale completed event (sequence <= request
 // watermark) cannot complete a new compaction request.
 fake.event({ type: 'context.compaction.completed', payload: { beforeTokens: 1, afterTokens: 1 } });
-const compact = manager.compactSession({ sessionId: session.sessionId });
+const compact = manager.compactSession({ sessionId: secondTopic.sessionId });
 await new Promise((resolve) => setImmediate(resolve));
 assert.equal(fake.requests.at(-1).type, 'compact');
 let settled = false;
@@ -167,7 +196,7 @@ const compacted = await compact;
 assert.deepEqual(compacted.compaction, { beforeTokens: 2400, afterTokens: 800, summaryTokens: 180 });
 assert.equal(manager.eventWaiters.size, 0);
 
-const failed = manager.compactSession({ sessionId: session.sessionId });
+const failed = manager.compactSession({ sessionId: secondTopic.sessionId });
 await new Promise((resolve) => setImmediate(resolve));
 fake.event({ type: 'context.compaction.failed', payload: { error: 'summary rejected' } });
 await assert.rejects(failed, /summary rejected/);
@@ -179,8 +208,8 @@ assert.equal('state' in manager.getStatus().attachment, false,
     'Main must not derive an attachment business state after daemon crash');
 assert.equal(manager.transport, null);
 assert.ok(observed.some((event) => event.type === 'runtime.crashed'));
-const closed = await manager.closeSession({ sessionId: session.sessionId });
-assert.equal(closed.sessionId, session.sessionId);
+const closed = await manager.closeSession({ sessionId: secondTopic.sessionId });
+assert.equal(closed.sessionId, secondTopic.sessionId);
 assert.equal(manager.getStatus().attachment, null,
     'an explicit close must clear Main\'s process-local attachment identity');
 

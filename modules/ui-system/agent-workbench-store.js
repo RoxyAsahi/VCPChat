@@ -16,6 +16,10 @@ function createInitialState() {
         // A workbench has one ephemeral attachment. Durable history belongs
         // exclusively to the Rust Topic identified by `attachment.topicId`.
         attachment: null,
+        // A displayed Topic may be a read-only Rust snapshot while the one
+        // writable daemon attachment safely finishes another turn.
+        selectedTopic: null,
+        backgroundAttachment: null,
         messages: [],
         tools: new Map(),
         approvals: [],
@@ -436,12 +440,23 @@ function deriveWorkbenchViewState(state = {}) {
     const runtime = state.runtime || {};
     const attachment = state.attachment;
     const hasAttachment = Boolean(attachment && attachment.sessionId);
+    // A Rust snapshot preview is intentionally not a writable attachment,
+    // but it is still an idle, send-capable view while the control daemon is
+    // ready. The first send will acquire the attachment atomically; treating
+    // this as disconnected made the composer unusable until an obsolete
+    // eager-resume path had recreated the very lease preview is meant to
+    // avoid.
+    const hasIdlePreview = Boolean(
+        state.selectedTopic?.mode === 'preview'
+        && state.selectedTopic?.topicId
+        && !state.backgroundAttachment?.busy
+    );
     const hasTurn = Boolean(state.activeTurnId);
     const hasApproval = Array.isArray(state.approvals) && state.approvals.length > 0;
 
     if (runtime.state === 'failed') return 'error';
     if (state.recovering || runtime.state === 'degraded') return 'reconnecting';
-    if (runtime.state === 'unknown' || runtime.state === 'stopped' || !hasAttachment) return 'disconnected';
+    if (runtime.state === 'unknown' || runtime.state === 'stopped' || (!hasAttachment && !hasIdlePreview)) return 'disconnected';
     if (hasApproval) return 'awaiting-approval';
     if (hasTurn) return 'running';
     // Rust daemon attachments are explicitly `idle` once their create-session

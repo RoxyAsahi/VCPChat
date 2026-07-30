@@ -1300,7 +1300,11 @@ function mountWorkbench(container) {
 
     function openNewTopicFlow() {
         state.topicFlow = defaultNewTopicFlow();
-        queueRender({ topicFlow: true });
+        // A modal is a user-initiated foreground action, not a background
+        // control-plane refresh. Render it synchronously so a ready/readiness
+        // event cannot replace the header between the click and the next RAF
+        // and make the create affordance look inert.
+        renderTopicFlow();
     }
 
     function closeTopicFlow() {
@@ -1353,9 +1357,8 @@ function mountWorkbench(container) {
 
     async function recoverDaemon() {
         // Recovery is intentionally user-driven.  A daemon crash must never
-        // replay an interrupted model/tool turn.  Reattaching the bounded
-        // Topic checkpoint creates a fresh Session and keeps that boundary
-        // explicit in both the UI and Rust Host.
+        // replay an interrupted model/tool turn or silently reacquire a
+        // writable lease; restore only the durable preview snapshot.
         if (state.recovering) return;
         state.recovering = true;
         queueRender({ header: true, composer: true });
@@ -1364,14 +1367,8 @@ function mountWorkbench(container) {
             await controller.stopRuntime();
             await controller.startRuntime();
             if (previous?.topicId) {
-                await createSession({
-                    resume: previous.topicId,
-                    title: previous.title,
-                    model: previous.model,
-                    agent: previous.agentId,
-                    workspaceRoot: previous.workspaceRoot,
-                });
-                notify('Rust Agent 已重新连接，并恢复到最近的安全 Topic checkpoint。中断的 Turn 不会重放。', 'success');
+                await controller.previewTopic(previous.topicId, previous.agentId, previous);
+                notify('Rust Agent 已重新连接，并显示最近的安全 Topic checkpoint。中断的 Turn 不会重放。', 'success');
             } else {
                 await refreshControlPlane();
                 notify('Rust Agent 已重新连接。请新建一个 Agent 会话。', 'success');
@@ -1551,6 +1548,9 @@ function mountWorkbench(container) {
     }
 
     function renderSidebar() {
+        // Topic selection is allowed to update the renderer projection, but
+        // it must not throw the conversation list back to its top.
+        const scrollTop = sidebar.scrollTop;
         sidebar.replaceChildren();
         const tabs = node('div', 'sidebar-tabs');
         for (const [id, label] of [['agents', '助手'], ['sessions', '会话'], ['settings', '设置']]) {
@@ -1641,7 +1641,7 @@ function mountWorkbench(container) {
             const list = node('ul', 'topic-list agent-chat-session-list');
             const attachment = store.getState().attachment;
             const liveSessions = attachment ? [projectSession(attachment)] : [];
-            const activeSessionId = attachment?.sessionId;
+            const selectedTopicId = store.getState().selectedTopic?.topicId || attachment?.topicId || null;
             const liveTopicIds = new Set(liveSessions.map((session) => session.topicId).filter(Boolean));
             const indexedTopics = state.topicSearch.trim()
                 ? state.topicSearchResults.map((hit) => ({
@@ -1659,14 +1659,14 @@ function mountWorkbench(container) {
             const persistedTopics = indexedTopics.filter((topic) => !liveTopicIds.has(topic.id));
             if (!state.topicSearch.trim() && !liveSessions.length && !persistedTopics.length) list.append(node('li', 'agent-chat-empty-list', `${state.selectedAgent || '当前 Agent'} 还没有会话。创建一个会话后即可开始。`));
             for (const session of liveSessions) {
-                const active = session.sessionId === activeSessionId;
+                const active = session.topicId === selectedTopicId;
                 // Keep this deliberately isomorphic to topicListManager's main
                 // chat rows.  The only different bit is the select callback.
                 const row = node('li', `topic-item agent-chat-session-row${active ? ' active active-topic-glowing' : ''}`);
                 row.tabIndex = 0;
                 row.dataset.itemId = session.agentId || state.selectedAgent || 'Nova';
                 row.dataset.itemType = 'agent-runtime';
-                row.dataset.topicId = session.sessionId;
+                row.dataset.topicId = session.topicId;
                 row.dataset.topicSearch = `${session.title} ${session.model}`.toLocaleLowerCase();
                 const avatar = document.createElement('img');
                 avatar.className = 'avatar';
@@ -1700,7 +1700,8 @@ function mountWorkbench(container) {
             for (const topic of persistedTopics) {
                 const selectable = !topic.inUse;
                 const selected = state.topicSelectedIds.has(topic.id);
-                const row = node('li', `topic-item agent-chat-session-row agent-chat-persisted-topic${selected ? ' selected' : ''}`);
+                const active = topic.id === selectedTopicId;
+                const row = node('li', `topic-item agent-chat-session-row agent-chat-persisted-topic${selected ? ' selected' : ''}${active ? ' active active-topic-glowing' : ''}`);
                 row.tabIndex = 0;
                 row.dataset.itemId = topic.agentId || state.selectedAgent || 'Nova';
                 row.dataset.itemType = 'agent-topic';
@@ -1737,22 +1738,13 @@ function mountWorkbench(container) {
                         renderSidebar();
                         return;
                     }
-                    const current = store.getState();
                     if (topic.locallyAttached) return;
-                    if (current.activeTurnId || current.approvals?.length) {
-                        notify('当前 Agent 任务仍在运行或等待审批。请先完成或取消，再切换会话。', 'warning');
-                        return;
-                    }
-                    // A normal open is intentionally indistinguishable from
-                    // VCPChat history: Rust owns the snapshot and write lease.
+                    // Topic selection is a Rust snapshot read, not a Session
+                    // resume.  The daemon stays attached to its current
+                    // writer until this Topic actually receives a new turn.
                     if (!topic.inUse) {
-                        await createSession({
-                            resume: topic.id,
-                            title: topic.title,
-                            model: topic.model,
-                            agent: topic.agentId,
-                            workspaceRoot: topic.workspaceRef,
-                        });
+                        await controller.previewTopic(topic.id, topic.agentId, topic);
+                        rememberTopic({ topicId: topic.id });
                     } else {
                         // Never replace the current attachment/transcript with
                         // a read-only preview. A real collision is the only
@@ -1995,6 +1987,7 @@ function mountWorkbench(container) {
             content.append(settingsPane);
         }
         sidebar.append(tabs, content, createAccountDock(state));
+        if (sidebar.scrollTop !== scrollTop) sidebar.scrollTop = scrollTop;
     }
 
     function renderTopicFlow() {
@@ -2326,7 +2319,7 @@ function mountWorkbench(container) {
         const follow = isFollowingContainer(feed);
         feedItems.replaceChildren();
         const current = store.getState();
-        if (!current.attachment?.sessionId) {
+        if (!current.attachment?.sessionId && !current.selectedTopic?.topicId) {
             feedItems.append(node('div', 'agent-chat-empty-conversation', '创建一个真实 Agent 会话，即可开始与 VCPToolBox 协作。'));
             return;
         }
@@ -2710,9 +2703,26 @@ function mountWorkbench(container) {
         });
     }
 
+    function patchSidebarTopicSelection() {
+        const selectedTopicId = store.getState().selectedTopic?.topicId
+            || store.getState().attachment?.topicId
+            || null;
+        for (const row of sidebar.querySelectorAll('.agent-chat-session-row[data-topic-id]')) {
+            const active = Boolean(selectedTopicId && row.dataset.topicId === selectedTopicId);
+            row.classList.toggle('active', active);
+            row.classList.toggle('active-topic-glowing', active);
+            row.setAttribute('aria-current', active ? 'true' : 'false');
+        }
+    }
+
     function renderForStoreEvent(event) {
         if (!event?.type) {
-            queueRender({ shell: true, header: true, feed: true, composer: true });
+            // A snapshot preview changes only the visible projection.  Do not
+            // rebuild the sidebar shell/list (and therefore do not lose its
+            // row identity, focus or scroll anchor) merely to mark one Topic
+            // active.
+            patchSidebarTopicSelection();
+            queueRender({ header: true, feed: true, composer: true });
             return;
         }
         if (event.type === 'assistant.delta' || event.type === 'reasoning.delta') {
@@ -2766,7 +2776,11 @@ function mountWorkbench(container) {
         // The composer is live only when the fixed R3 lifecycle state machine
         // reports the agent as idle, running, or parked on an actionable
         // approval — never while it is starting, reconnecting, or down.
-        const composerReady = Boolean(current.attachment?.sessionId
+        const previewReady = Boolean(current.selectedTopic?.mode === 'preview'
+            && !current.backgroundAttachment?.busy
+            && (viewState === 'idle' || viewState === 'running' || viewState === 'awaiting-approval'));
+        const previewBlocked = Boolean(current.selectedTopic?.mode === 'preview' && current.backgroundAttachment?.busy);
+        const composerReady = Boolean(!previewBlocked && (current.attachment?.sessionId || previewReady)
             && (viewState === 'idle' || viewState === 'running' || viewState === 'awaiting-approval'));
         const hasActiveTurn = Boolean(current.activeTurnId);
         const canSend = Boolean(composerReady && (state.prompt.trim() || (!hasActiveTurn && state.pendingAttachments.length)));
@@ -2774,7 +2788,10 @@ function mountWorkbench(container) {
         input.value = state.prompt;
         input.disabled = !composerReady;
         sendButton.disabled = !composerReady;
-        attachButton.disabled = !composerReady || hasActiveTurn || state.pendingAttachments.length >= 8;
+        // Attachment import is Host-owned; a preview has not acquired that
+        // Topic's attachment store yet, so it may send text but cannot add a
+        // file until it is safely switched on the first turn.
+        attachButton.disabled = !composerReady || previewReady || hasActiveTurn || state.pendingAttachments.length >= 8;
         attachmentTray.replaceChildren();
         if (state.pendingAttachments.length) {
             attachmentTray.append(createAttachmentChips(state.pendingAttachments, (index) => {
@@ -2792,6 +2809,10 @@ function mountWorkbench(container) {
         if (sendIcon) sendIcon.textContent = interruptMode ? 'stop' : 'arrow_upward';
         input.placeholder = (viewState === 'reconnecting' || viewState === 'error')
             ? '正在重新连接 Rust Agent…'
+            : current.backgroundAttachment?.busy
+            ? '另一个会话正在运行或等待审批；当前仅可查看…'
+            : previewReady
+            ? '输入消息…（发送时接管此会话）'
             : !current.attachment?.sessionId
             ? '请先创建 Agent 会话…'
             : viewState === 'starting'
@@ -2865,10 +2886,12 @@ function mountWorkbench(container) {
         }
         if (!prompt && !state.pendingAttachments.length) return;
         const attachments = state.pendingAttachments.map((item) => ({ ...item }));
+        await controller.startTurn(prompt, attachments);
+        // Preserve the draft if attachment switching or turn acceptance
+        // fails.  The daemon is the only place that can confirm a turn.
         state.prompt = '';
         state.pendingAttachments = [];
         renderComposer();
-        await controller.startTurn(prompt, attachments);
     }));
     newButton.addEventListener('click', openNewTopicFlow);
 
@@ -2878,24 +2901,19 @@ function mountWorkbench(container) {
         .then(async () => {
             const runtime = store.getState().runtime;
             if (runtime.state === 'stopped' || runtime.state === 'unknown') await controller.startRuntime();
-            await refreshControlPlane();
-            // A renderer reload does not own the transcript.  If Main has no
-            // live daemon session (for example after the app restarted), use
-            // the remembered Topic pointer to reattach to the Rust checkpoint.
-            // We only auto-resume a free Topic; another live client must opt
-            // into the explicit takeover flow instead.
+            // A renderer reload restores a durable Rust snapshot, not a
+            // writable attachment.  The first actual send performs the safe
+            // in-process attachment switch; this mirrors normal chat's
+            // instant view selection without reopening a runtime on click.
             if (!store.getState().attachment?.sessionId && state.rememberedTopic?.topicId) {
-                const topic = state.topics.find((item) => item.id === state.rememberedTopic.topicId);
-                if (topic && !topic.inUse) {
-                    await createSession({
-                        resume: topic.id,
-                        title: topic.title,
-                        model: topic.model,
-                        agent: topic.agentId,
-                        workspaceRoot: topic.workspaceRef,
-                    });
-                }
+                // Do not wait for model/catalog discovery before restoring
+                // the visible history.  Rust validates the durable Topic;
+                // catalog data enriches the row in the background.
+                const topicId = state.rememberedTopic.topicId;
+                rememberTopic({ topicId });
+                await controller.previewTopic(topicId);
             }
+            await refreshControlPlane();
         })
         .catch((error) => notify(`Agent Runtime 无法启动：${error?.message || error}`, 'error'));
 

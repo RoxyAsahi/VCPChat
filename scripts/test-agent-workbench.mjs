@@ -216,7 +216,8 @@ window.localStorage.setItem('vcpchat.agentWorkbench.lastTopic.v1', JSON.stringif
 }));
 const dispose = registered.mount(host, {});
 await new Promise((resolve) => setTimeout(resolve, 100));
-assert.equal(createdSessions[0]?.resume, 'topic-restored', 'renderer reload must reattach the saved Rust Topic, not start an empty Session');
+assert.equal(createdSessions.length, 0,
+    'renderer reload must preview the saved Rust Topic without acquiring a writable Session');
 assert.deepEqual(JSON.parse(window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1')), { topicId: 'topic-restored' },
     'localStorage must retain only the durable Topic pointer');
 assert.ok([...host.querySelectorAll('.message-item .md-content')]
@@ -842,20 +843,29 @@ await new Promise((resolve) => setTimeout(resolve, 30));
 const reconnect = host.querySelector('.agent-chat-connection-reconnect');
 assert.ok(reconnect, 'a daemon crash must expose an explicit reconnect action instead of leaving a dead composer');
 assert.match(host.querySelector('.agent-chat-activity-connection').textContent, /simulated daemon crash/);
+const sessionsBeforeRecovery = createdSessions.length;
 reconnect.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
 assert.deepEqual(runtimeTransitions.slice(-2), ['stop', 'start'], 'recovery must restart the Main-supervised daemon boundary');
-assert.equal(createdSessions.at(-1).resume, 'topic-in-use', 'recovery must explicitly reattach the durable Topic rather than replay the interrupted turn');
+assert.equal(createdSessions.length, sessionsBeforeRecovery,
+    'recovery must restore a Rust snapshot without silently reacquiring a Topic lease or replaying a Turn');
 
 const restoredTopicRow = [...host.querySelectorAll('.agent-chat-session-row')]
     .find((row) => row.dataset.topicId === 'topic-archived');
 assert.ok(restoredTopicRow, 'durable Topic row must retain its Topic identifier');
+const topicSidebar = host.querySelector('.agent-chat-sidebar');
+topicSidebar.scrollTop = 73;
+const sessionsBeforeTopicPreview = createdSessions.length;
 restoredTopicRow.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
 assert.equal(host.querySelector('.agent-chat-topic-flow-dialog'), null,
     'clicking an idle Topic row must not show a blocking restore dialog');
-assert.equal(createdSessions.at(-1).resume, 'topic-archived',
-    'clicking a durable Topic must directly resume Rust persistence, not create a local copy');
+assert.equal(createdSessions.length, sessionsBeforeTopicPreview,
+    'clicking a durable Topic must preview Rust persistence without acquiring a Session');
+assert.strictEqual(host.querySelector('.agent-chat-session-row[data-topic-id="topic-archived"]'), restoredTopicRow,
+    'preview selection must patch the existing sidebar row instead of rebuilding the session list');
+assert.equal(topicSidebar.scrollTop, 73,
+    'preview selection must preserve the conversation-list scroll position');
 
 const settingsTab = [...host.querySelectorAll('.agent-chat-sidebar .sidebar-tab-button')]
     .find((tab) => tab.textContent.trim() === '设置');

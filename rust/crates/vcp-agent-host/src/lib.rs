@@ -20,7 +20,7 @@ use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use topic::{TopicMetadata, TopicStore};
 use vcp_agent_core::CoreRuntime;
 use vcp_agent_protocol::WireMessage;
@@ -621,6 +621,12 @@ pub enum HostEvent {
 
 #[derive(Debug)]
 pub enum HostCommand {
+    /// The direct daemon asks the current attachment whether it may be
+    /// replaced.  This check lives beside the real turn/approval/queue state;
+    /// Electron must never infer that a Topic lease is safe to release.
+    PrepareSwitch {
+        reply: oneshot::Sender<std::result::Result<(), String>>,
+    },
     StartTurn {
         prompt: String,
         attachments: Vec<Value>,
@@ -770,9 +776,36 @@ pub struct RunningHost {
     pub events: mpsc::UnboundedReceiver<HostEvent>,
     pub session_id: String,
     pub topic_id: String,
+    /// Test adapters may construct an in-memory Host with no actor task.
+    /// Production Hosts are always created by `start` and carry `Some(task)`.
+    pub task: Option<tokio::task::JoinHandle<()>>,
+}
+
+impl RunningHost {
+    /// Stop the Host and wait until it has released its Topic lease.  A daemon
+    /// attachment switch is not safe if the old actor still owns a writer
+    /// lease, even if its command channel accepted `Shutdown`.
+    pub async fn shutdown(&mut self) {
+        let _ = self.commands.send(HostCommand::Shutdown);
+        if let Some(task) = self.task.take() {
+            let _ = task.await;
+        }
+    }
 }
 
 pub fn start(config: HostConfig) -> Result<RunningHost> {
+    start_with_index_rebuild(config, true)
+}
+
+/// Start a new attachment without rebuilding the daemon-owned shadow index.
+/// The direct daemon invokes this after its control Host has already opened
+/// and indexed the Topic store; changing a visible Topic must not turn into a
+/// full-history indexing pause.
+pub fn start_without_index_rebuild(config: HostConfig) -> Result<RunningHost> {
+    start_with_index_rebuild(config, false)
+}
+
+fn start_with_index_rebuild(config: HostConfig, rebuild_index: bool) -> Result<RunningHost> {
     let toolbox = DirectToolboxHost::new(ToolboxConnection::new(
         &config.server_url,
         config.api_key.clone(),
@@ -790,9 +823,10 @@ pub fn start(config: HostConfig) -> Result<RunningHost> {
     }
     let search_index = match ShadowIndex::open(&config.data_root.join(".index")) {
         Ok(index) => {
-            if let Err(error) = store
-                .all_search_documents()
-                .and_then(|documents| index.rebuild(&documents).map(|_| ()))
+            if rebuild_index
+                && let Err(error) = store
+                    .all_search_documents()
+                    .and_then(|documents| index.rebuild(&documents).map(|_| ()))
             {
                 let _ = events_tx.send(HostEvent::Warning(format!(
                     "Agent Topic shadow index is unavailable and may be rebuilt later: {error}"
@@ -810,7 +844,7 @@ pub fn start(config: HostConfig) -> Result<RunningHost> {
     let task_session = session_id.clone();
     let topic_id = config.topic_id.clone();
     let task_commands = commands_tx.clone();
-    tokio::spawn(async move {
+    let task = tokio::spawn(async move {
         run_host(
             config,
             toolbox,
@@ -829,6 +863,7 @@ pub fn start(config: HostConfig) -> Result<RunningHost> {
         events: events_rx,
         session_id,
         topic_id,
+        task: Some(task),
     })
 }
 
@@ -966,6 +1001,17 @@ async fn run_host(
             }
             Some(command) = commands_rx.recv() => match command {
                 HostCommand::Shutdown => break,
+                HostCommand::PrepareSwitch { reply } => {
+                    let busy = active_turn_id.is_some()
+                        || !approvals.is_empty()
+                        || !toolbox_approvals.is_empty()
+                        || !interaction_queue.is_empty();
+                    let _ = reply.send(if busy {
+                        Err("attachment-busy".to_string())
+                    } else {
+                        Ok(())
+                    });
+                }
                 HostCommand::Core(message) => {
                     if message.kind == "model-done" {
                         let turn = message.turn_id.clone().unwrap_or_default();

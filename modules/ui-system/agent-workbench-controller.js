@@ -8,6 +8,12 @@ function createWorkbenchController(runtimeApi) {
     let unsubscribeRuntime = null;
     let selectionVersion = 0;
     let snapshotBarrier = null;
+    // Renderer-only, bounded cache. Rust remains the durable Topic source;
+    // this only prevents a visible flash while `read-topic` revalidates.
+    const snapshotCache = new Map();
+    const MAX_SNAPSHOT_CACHE_ENTRIES = 16;
+    const MAX_SNAPSHOT_CACHE_BYTES = 16 * 1024 * 1024;
+    let snapshotCacheBytes = 0;
 
     function requireApi(name) {
         if (typeof runtimeApi[name] !== 'function') throw new Error(`Runtime API unavailable: ${name}`);
@@ -87,6 +93,46 @@ function createWorkbenchController(runtimeApi) {
         return { messages, tools };
     }
 
+    function cacheSnapshot(topicId, snapshot) {
+        if (!topicId || !snapshot) return;
+        const projection = historyToProjection(snapshot.history);
+        const bytes = Math.min(MAX_SNAPSHOT_CACHE_BYTES, JSON.stringify(snapshot.history || []).length * 2);
+        const existing = snapshotCache.get(topicId);
+        if (existing) snapshotCacheBytes -= existing.bytes;
+        snapshotCache.set(topicId, { projection, snapshotSequence: Number(snapshot.snapshotSequence) || 0, bytes });
+        snapshotCacheBytes += bytes;
+        while (snapshotCache.size > MAX_SNAPSHOT_CACHE_ENTRIES || snapshotCacheBytes > MAX_SNAPSHOT_CACHE_BYTES) {
+            const [oldestTopicId, oldest] = snapshotCache.entries().next().value;
+            snapshotCache.delete(oldestTopicId);
+            snapshotCacheBytes -= oldest.bytes;
+        }
+    }
+
+    function cachedProjection(topicId) {
+        const cached = snapshotCache.get(topicId);
+        if (!cached) return null;
+        snapshotCache.delete(topicId);
+        snapshotCache.set(topicId, cached);
+        return cached.projection;
+    }
+
+    function applyPreviewProjection(projection, selectedTopic) {
+        const current = store.getState();
+        const backgroundBusy = Boolean(current.attachment?.sessionId
+            && current.attachment.topicId !== selectedTopic.topicId
+            && (current.activeTurnId || current.approvals.length));
+        store.setState({
+            ...projection,
+            selectedTopic,
+            activeTurnId: null,
+            context: { usedTokens: 0, contextWindow: 0, percentage: 0, compacting: false, summary: '' },
+            plan: null,
+            backgroundAttachment: current.attachment?.sessionId && current.attachment.topicId !== selectedTopic.topicId
+                ? { ...current.attachment, busy: backgroundBusy }
+                : null,
+        });
+    }
+
     function beginSnapshotBarrier() {
         const barrier = { events: [] };
         snapshotBarrier = barrier;
@@ -138,7 +184,12 @@ function createWorkbenchController(runtimeApi) {
             const nextAttachment = active ? { ...active, topicId } : null;
             store.setAttachment(nextAttachment);
             const projection = historyToProjection(snapshot?.history);
-            store.setState(projection);
+            cacheSnapshot(topicId, snapshot);
+            store.setState({
+                ...projection,
+                selectedTopic: { topicId, agentId, mode: 'attached' },
+                backgroundAttachment: null,
+            });
             releaseSnapshotBarrier(barrier, snapshot, nextAttachment);
             return snapshot;
         } catch (error) {
@@ -151,12 +202,23 @@ function createWorkbenchController(runtimeApi) {
     // checkpoint WITHOUT claiming its session lease, so the other live client
     // is never disturbed.  The renderer shows a read-only banner and requires
     // an explicit takeover before any write is allowed.
-    async function previewTopic(topicId, agentId = undefined) {
+    async function previewTopic(topicId, agentId = undefined, metadata = {}) {
         if (!topicId) return null;
         const version = ++selectionVersion;
+        const selectedTopic = {
+            topicId,
+            agentId: agentId || metadata.agentId || null,
+            model: metadata.model || '',
+            workspaceRoot: metadata.workspaceRef || metadata.workspaceRoot || '',
+            title: metadata.title || '',
+            mode: 'preview',
+        };
+        const cached = cachedProjection(topicId);
+        if (cached) applyPreviewProjection(cached, selectedTopic);
         const snapshot = await requireApi('agentRuntimeReadTopic')(topicPayload({ topicId }, agentId));
         if (version !== selectionVersion) return null;
-        store.setState(historyToProjection(snapshot?.history));
+        cacheSnapshot(topicId, snapshot);
+        applyPreviewProjection(historyToProjection(snapshot?.history), selectedTopic);
         return snapshot;
     }
 
@@ -240,7 +302,25 @@ function createWorkbenchController(runtimeApi) {
     };
 
     async function startTurn(prompt, attachments = []) {
-        const sessionId = store.getState().attachment?.sessionId;
+        let current = store.getState();
+        const selected = current.selectedTopic;
+        if (selected?.mode === 'preview' && current.backgroundAttachment?.busy) {
+            throw new Error('另一个 Agent Topic 仍在运行或等待审批；当前仅可只读查看。');
+        }
+        if (selected?.topicId && selected.topicId !== current.attachment?.topicId) {
+            // `agentRuntimeCreateSession` now maps to Rust's in-process
+            // switch-attachment command.  Do this only at send time, never
+            // when the sidebar row was selected.
+            await createSession({
+                resume: selected.topicId,
+                agent: selected.agentId || undefined,
+                model: selected.model || undefined,
+                workspaceRoot: selected.workspaceRoot || undefined,
+                title: selected.title || undefined,
+            });
+            current = store.getState();
+        }
+        const sessionId = current.attachment?.sessionId;
         if (!sessionId) throw new Error('请先选择或新建 Session');
         // ACK means the daemon accepted this command, not that a durable
         // Topic checkpoint already exists.  Project a renderer-only pending
@@ -335,6 +415,26 @@ function createWorkbenchController(runtimeApi) {
             unsubscribeRuntime = runtimeApi.onAgentRuntimeEvent((event) => {
                 if (snapshotBarrier) {
                     snapshotBarrier.events.push(event);
+                    return;
+                }
+                const current = store.getState();
+                const selectedTopicId = current.selectedTopic?.topicId;
+                const isApproval = event?.type?.startsWith('approval.');
+                const isDaemonGlobal = event?.type?.startsWith('runtime.');
+                if (!isApproval && !isDaemonGlobal && event?.topicId && selectedTopicId && event.topicId !== selectedTopicId) {
+                    // Do not retain another Topic's transcript in the
+                    // Renderer.  A minimal badge is enough to say that the
+                    // one Rust attachment is still busy in the background.
+                    const busy = event.type === 'turn.started'
+                        ? true
+                        : ['turn.completed', 'turn.failed', 'turn.cancelled'].includes(event.type)
+                            ? false
+                            : current.backgroundAttachment?.busy === true;
+                    store.setState({
+                        backgroundAttachment: current.attachment?.sessionId
+                            ? { ...current.attachment, busy }
+                            : current.backgroundAttachment,
+                    });
                     return;
                 }
                 store.dispatch(event);

@@ -7,7 +7,7 @@ const crypto = require('crypto');
 
 const MAX_FRAME_BYTES = 256 * 1024;
 const PROTOCOL_VERSION = 1;
-const PROTOCOL_REVISION = '1.4';
+const PROTOCOL_REVISION = '1.5';
 
 function requiredString(value, field) {
     if (typeof value !== 'string' || !value.trim()) throw new Error(`daemon protocol requires ${field}`);
@@ -29,6 +29,16 @@ function validateDirectCommand(message) {
         if (Object.prototype.hasOwnProperty.call(message, 'agentId')) requiredString(message.agentId, 'agentId');
     case 'list-interaction-queue': case 'clear-interaction-queue': case 'get-settings':
     case 'get-index-status': case 'rebuild-topic-index':
+        return;
+    case 'switch-attachment':
+        if (Object.prototype.hasOwnProperty.call(message, 'sessionId')) requiredString(message.sessionId, 'sessionId');
+        for (const field of ['topicId', 'agentId', 'model', 'workspaceRoot']) {
+            if (Object.prototype.hasOwnProperty.call(message, field)) requiredString(message[field], field);
+        }
+        if (Object.prototype.hasOwnProperty.call(message, 'permissionMode')
+            && message.permissionMode !== 'ask' && message.permissionMode !== 'always-approve') {
+            throw new Error('daemon protocol requires permissionMode ask or always-approve');
+        }
         return;
     case 'close-session': case 'cancel-turn': case 'compact':
         return requiredIdentity(message, 'sessionId');

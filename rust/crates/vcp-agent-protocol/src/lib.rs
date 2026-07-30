@@ -18,7 +18,7 @@ pub const PROTOCOL_VERSION: u32 = 1;
 /// Additive revision of the stable v1 frame contract. Keep this explicit so
 /// the daemon and Electron transport cannot silently drift while retaining
 /// the same major framing version.
-pub const PROTOCOL_REVISION: &str = "1.4";
+pub const PROTOCOL_REVISION: &str = "1.5";
 pub const MAX_FRAME_BYTES: usize = 256 * 1024;
 pub const MAX_MODEL_DELTA_BYTES: usize = 8 * 1024;
 
@@ -146,6 +146,20 @@ pub fn validate_direct_command(message: &WireMessage) -> Result<(), ProtocolErro
                 optional_payload_string(message, "agentId")?;
             }
         }
+        "switch-attachment" => {
+            optional_identity(message, "sessionId")?;
+            optional_payload_string(message, "topicId")?;
+            optional_payload_string(message, "agentId")?;
+            optional_payload_string(message, "model")?;
+            optional_payload_string(message, "workspaceRoot")?;
+            if let Some(mode) = message.string("permissionMode")
+                && !matches!(mode, "ask" | "always-approve")
+            {
+                return Err(ProtocolError::InvalidMessage(
+                    "switch-attachment permissionMode must be ask or always-approve".to_string(),
+                ));
+            }
+        }
         "close-session" | "cancel-turn" | "compact" => {
             required_identity(message, "sessionId")?;
         }
@@ -246,7 +260,7 @@ pub fn validate_direct_command(message: &WireMessage) -> Result<(), ProtocolErro
 
 /// Validate final daemon frames that cross the Rust ↔ GUI boundary. Internal
 /// Host/Core messages are allowed to be richer; this function establishes the
-/// stable v1.4 public projection consumed by Electron and the standalone TUI.
+/// stable v1.5 public projection consumed by Electron and the standalone TUI.
 pub fn validate_direct_daemon_message(message: &WireMessage) -> Result<(), ProtocolError> {
     match message.kind.as_str() {
         "ready" => {
@@ -317,6 +331,22 @@ fn required_identity(message: &WireMessage, field: &str) -> Result<(), ProtocolE
         _ => None,
     };
     required_non_empty(value, field)
+}
+
+fn optional_identity(message: &WireMessage, field: &str) -> Result<(), ProtocolError> {
+    let value = match field {
+        "sessionId" => message.session_id.as_deref(),
+        "turnId" => message.turn_id.as_deref(),
+        "toolCallId" => message.tool_call_id.as_deref(),
+        _ => None,
+    };
+    match value {
+        None => Ok(()),
+        Some(value) if !value.trim().is_empty() => Ok(()),
+        Some(_) => Err(ProtocolError::InvalidMessage(format!(
+            "{field} must be a non-empty string when supplied"
+        ))),
+    }
 }
 
 fn required_payload_string(message: &WireMessage, field: &str) -> Result<(), ProtocolError> {
@@ -508,12 +538,12 @@ mod tests {
         assert!(fixture.daemon_to_host.len() >= 8);
         for message in fixture.host_to_daemon.iter() {
             validate_message(message).expect("fixture message must satisfy v1 bounds");
-            validate_direct_command(message).expect("fixture command must satisfy v1.4 schema");
+            validate_direct_command(message).expect("fixture command must satisfy v1.5 schema");
         }
         for message in fixture.daemon_to_host.iter() {
             validate_message(message).expect("fixture message must satisfy v1 bounds");
             validate_direct_daemon_message(message)
-                .expect("fixture response must satisfy v1.4 schema");
+                .expect("fixture response must satisfy v1.5 schema");
         }
         for message in fixture.invalid_host_to_daemon.iter() {
             assert!(validate_direct_command(message).is_err());

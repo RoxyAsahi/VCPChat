@@ -51,7 +51,7 @@ Get-Content error.log -Raw | .\vcp-agent.exe "分析这些错误"
 
 - 不把 daemon 的 framed stdin/stdout 暴露为 shell 文本管道。
 - 不增加本地 Shell、文件工具、MCP、worktree、插件系统或工具目录。
-- 不改变 GUI/Workbench、Electron Main 或 daemon v1.4 协议。
+- 不改变 GUI/Workbench、Electron Main 或 daemon v1.5 协议。
 - 不把临时 CLI transcript 写入 localStorage、主聊天 Topic 或 VCP-CDS。
 
 ## 当前验证
