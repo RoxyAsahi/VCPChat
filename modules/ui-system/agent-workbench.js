@@ -2,6 +2,42 @@ import { register } from './next-ui-apps.js';
 import { createWorkbenchController } from './agent-workbench-controller.js';
 import { projectMessage, projectSession, projectTool } from './agent-workbench-projections.js';
 import { deriveWorkbenchViewState } from './agent-workbench-store.js';
+import {
+    createAgentTimelineParts,
+    projectVcpToolPresentation,
+    reconcileAgentTimeline,
+} from './agent-workbench-timeline.js';
+
+// The Workbench is mounted before the shared Agent-directory IPC may finish
+// walking avatars/config files. Keep the built-in, ToolBox-compatible Nova
+// entry visible synchronously; the authoritative shared catalog replaces it
+// as soon as Main returns. This is a view fallback, never a second config
+// store and never persisted by the renderer.
+const NOVA_CATALOG_FALLBACK = Object.freeze({
+    id: 'Nova', name: 'Nova', model: '', systemPrompt: '{{Nova}}', avatarUrl: null,
+});
+
+function seedSharedAgentCatalogFromShell() {
+    // The main VCPChat sidebar has normally already rendered its cached Agent
+    // directory by the time the internal Agent Workbench opens. Reuse that
+    // display metadata for first paint only; Main's `getAgents()` remains the
+    // sole authoritative configuration/catalog read and replaces this seed.
+    if (typeof document === 'undefined') return [{ ...NOVA_CATALOG_FALLBACK }];
+    const seen = new Set();
+    const seeded = [];
+    for (const row of document.querySelectorAll('#agentList li[data-item-type="agent"][data-item-id]')) {
+        const id = String(row.dataset.itemId || '').trim();
+        if (!id || seen.has(id.toLocaleLowerCase())) continue;
+        seen.add(id.toLocaleLowerCase());
+        const name = row.querySelector('.agent-name')?.textContent?.trim() || id;
+        const avatarUrl = row.querySelector('img.avatar')?.getAttribute('src') || null;
+        seeded.push({ id, name, model: '', systemPrompt: '', avatarUrl });
+    }
+    if (!seeded.some((agent) => String(agent.id).toLocaleLowerCase() === 'nova')) {
+        seeded.unshift({ ...NOVA_CATALOG_FALLBACK });
+    }
+    return seeded;
+}
 
 // This is deliberately a view over AgentRuntime, not a second chat/session
 // implementation.  Session, message, tool, approval and topic state all come
@@ -456,7 +492,13 @@ function createMessage(message) {
     const heading = node('div', 'name-time-block');
     heading.append(node('div', 'sender-name', role === 'user' ? '你' : 'Nova'), node('div', 'message-timestamp', formatTime(item.createdAt)));
     const content = node('div', 'md-content');
-    if (item.content) {
+    if (item.content && item.state === 'streaming') {
+        // Streaming text is patched as text until the daemon closes the
+        // message.  This avoids reparsing an ever-growing Markdown document
+        // on every delta while leaving final rendering to the shared bridge.
+        content.textContent = item.content;
+        content.dataset.agentStreaming = 'true';
+    } else if (item.content) {
         content.innerHTML = renderMarkdown(item.content);
         postRender(content);
     } else if (item.state === 'streaming') {
@@ -484,8 +526,12 @@ function patchMessage(row, message) {
     const item = projectMessage(message);
     const content = row.querySelector('.md-content');
     if (content) {
-        if (item.content) {
+        if (item.content && item.state === 'streaming') {
+            content.textContent = item.content;
+            content.dataset.agentStreaming = 'true';
+        } else if (item.content) {
             content.innerHTML = renderMarkdown(item.content);
+            delete content.dataset.agentStreaming;
             postRender(content);
         } else if (item.state === 'streaming') {
             if (!content.querySelector('.agent-chat-thinking-placeholder')) {
@@ -493,6 +539,7 @@ function patchMessage(row, message) {
             }
         } else {
             content.innerHTML = '';
+            delete content.dataset.agentStreaming;
         }
     }
 
@@ -639,6 +686,7 @@ function toggleToolDetail(card, tool) {
 
 function createToolCard(tool, onCancel) {
     const value = projectTool(tool);
+    const presentation = projectVcpToolPresentation(tool);
     const status = value.state || 'requested';
     const isTerminal = status === 'completed' || status === 'failed' || status === 'cancelled';
     const card = node('section', 'agent-chat-tool-activity');
@@ -651,8 +699,9 @@ function createToolCard(tool, onCancel) {
 
     // Left: icon + name + separator + subtitle
     const titleRow = node('span', 'agent-chat-tool-title');
-    const nameText = node('span', 'agent-chat-tool-name-text', value.name);
-    titleRow.append(...icon('build_circle'), nameText);
+    const nameText = node('span', 'agent-chat-tool-name-text', presentation.label);
+    titleRow.append(...icon(presentation.icon), nameText);
+    titleRow.dataset.toolPresentation = presentation.kind;
     const sub = value.summary || detailsSummary(tool);
     if (sub) {
         titleRow.append(node('span', 'agent-chat-tool-sep', '·'), node('span', 'agent-chat-tool-sub', sub));
@@ -702,17 +751,23 @@ function createToolCard(tool, onCancel) {
 
 function patchToolCard(card, tool) {
     const value = projectTool(tool);
+    const presentation = projectVcpToolPresentation(tool);
     const status = value.state || 'requested';
     const isTerminal = status === 'completed' || status === 'failed' || status === 'cancelled';
     card.dataset.status = status;
 
     const nameText = card.querySelector('.agent-chat-tool-name-text');
-    if (nameText) nameText.textContent = value.name;
+    if (nameText) nameText.textContent = presentation.label;
+    const titleRow = card.querySelector('.agent-chat-tool-title');
+    if (titleRow) {
+        titleRow.dataset.toolPresentation = presentation.kind;
+        const toolIcon = titleRow.querySelector('.vcp-ui-icon');
+        if (toolIcon) toolIcon.textContent = presentation.icon;
+    }
 
     let sub = card.querySelector('.agent-chat-tool-sub');
     const summary = value.summary || detailsSummary(tool);
     if (summary) {
-        const titleRow = card.querySelector('.agent-chat-tool-title');
         if (!sub && titleRow) {
             titleRow.append(node('span', 'agent-chat-tool-sep', '·'), node('span', 'agent-chat-tool-sub', summary));
             sub = titleRow.querySelector('.agent-chat-tool-sub');
@@ -1012,7 +1067,7 @@ function mountWorkbench(container) {
     const state = {
         tab: 'agents',
         selectedAgent: 'Nova',
-        agentCatalog: [],
+        agentCatalog: seedSharedAgentCatalogFromShell(),
         agentSearch: '',
         modelCatalog: [],
         topics: [],
@@ -1048,6 +1103,14 @@ function mountWorkbench(container) {
         // after intentionally browsing older timeline Parts.
         followingFeed: true,
         unreadTimelineCount: 0,
+        // Keyed by Rust-owned messageId/toolCallId.  This is a DOM cache only;
+        // it never contains a transcript beyond the current renderer view.
+        timelineRows: new Map(),
+        // The session sidebar is a stable DOM shell while its normal Topic
+        // list is visible. Rust refreshes patch its rows in place so a
+        // background catalog read cannot discard the reader's scroll anchor,
+        // search control or selected row.
+        sessionSidebar: null,
         // This is deliberately a transient UI flow, not a second Topic
         // store.  Rust remains the source of the Topic metadata/checkpoint;
         // the renderer only keeps the currently-open form and a small
@@ -1067,6 +1130,7 @@ function mountWorkbench(container) {
     let controlPlaneRequest = 0;
     let topicSearchRequest = 0;
     let topicSearchTimer = null;
+    let topicMenuInstance = 0;
 
     const root = node('section', 'container agent-chat-root vcp-ui-scope');
     const topicFlowLayer = node('div', 'vcp-ui-scope agent-chat-topic-flow-layer');
@@ -1176,6 +1240,14 @@ function mountWorkbench(container) {
             === String(right || '').trim().toLocaleLowerCase();
     }
 
+    function isEmptyTopicCheckpointError(error) {
+        // A Topic directory is created before its first safe checkpoint. Rust
+        // correctly refuses `read-topic` for that empty history; on a later
+        // renderer reload the local convenience pointer must not turn this
+        // valid state into a Runtime-start failure notification.
+        return /Agent Topic has no checkpoint/i.test(String(error?.message || error || ''));
+    }
+
     function selectedAgentProfile() {
         return state.agentCatalog.find((agent) => sameAgent(agent.id || agent.name, state.selectedAgent)) || null;
     }
@@ -1207,7 +1279,7 @@ function mountWorkbench(container) {
             }))
             : [];
         if (!normalizedAgents.some((agent) => agent.id === 'Nova' || agent.name === 'Nova')) {
-            normalizedAgents.unshift({ id: 'Nova', name: 'Nova', model: '', systemPrompt: '{{Nova}}', avatarUrl: null });
+            normalizedAgents.unshift({ ...NOVA_CATALOG_FALLBACK });
         }
         state.agentCatalog = normalizedAgents;
         // Preserve a deliberate Agent selection. Nova is a fallback only
@@ -1286,6 +1358,25 @@ function mountWorkbench(container) {
         return session;
     }
 
+    async function createTopic(overrides = {}) {
+        state.topicConflict = null;
+        state.pendingAttachments = [];
+        const runtimeState = store.getState().runtime.state;
+        if (runtimeState === 'stopped' || runtimeState === 'unknown') {
+            await controller.startRuntime();
+        }
+        const created = await controller.createTopic({
+            workspaceRoot: overrides.workspaceRoot ?? (state.workspace.trim() || undefined),
+            model: overrides.model ?? (state.model.trim() || undefined),
+            agent: overrides.agent ?? (state.selectedAgent || 'Nova'),
+            title: overrides.title || nextSessionTitle(),
+        });
+        rememberTopic(created);
+        state.tab = 'sessions';
+        await refreshControlPlane();
+        return created;
+    }
+
     function defaultNewTopicFlow() {
         return {
             kind: 'create',
@@ -1349,6 +1440,17 @@ function mountWorkbench(container) {
         queueRender({ conflict: true });
     }
 
+    function clearTopicConflictForSelection(topicId) {
+        const conflict = state.topicConflict;
+        // A conflict is an explicit decision for one Topic only. Browsing a
+        // different Rust snapshot must never leave the old dialog floating
+        // above unrelated history. An in-flight cooperative takeover remains
+        // visible until Rust reaches its safe terminal result.
+        if (!conflict || conflict.takingOver || conflict.topic?.id === topicId) return;
+        state.topicConflict = null;
+        queueRender({ conflict: true });
+    }
+
     function closeTopicConflict() {
         if (state.topicConflict?.takingOver) return;
         state.topicConflict = null;
@@ -1403,6 +1505,7 @@ function mountWorkbench(container) {
         if (!current) return;
         state.topicContextMenu = null;
         current.menu.remove();
+        current.positionRule?.remove();
         document.removeEventListener('pointerdown', current.onPointerDown, true);
         document.removeEventListener('keydown', current.onKeyDown, true);
         if (returnFocus && current.trigger?.isConnected) current.trigger.focus();
@@ -1418,9 +1521,8 @@ function mountWorkbench(container) {
             // not a transcript or a second renderer-side Topic store.
             const temporary = document.createElement('textarea');
             temporary.value = topicId;
+            temporary.className = 'agent-chat-clipboard-proxy';
             temporary.setAttribute('readonly', '');
-            temporary.style.position = 'fixed';
-            temporary.style.opacity = '0';
             document.body.append(temporary);
             temporary.select();
             const copied = document.execCommand?.('copy');
@@ -1463,9 +1565,17 @@ function mountWorkbench(container) {
         const height = menu.offsetHeight || 240;
         const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
         const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-        menu.style.left = `${Math.max(gap, Math.min(point.x, viewportWidth - width - gap))}px`;
-        menu.style.top = `${Math.max(gap, Math.min(point.y, viewportHeight - height - gap))}px`;
-        menu.style.visibility = 'visible';
+        const left = Math.max(gap, Math.min(point.x, viewportWidth - width - gap));
+        const top = Math.max(gap, Math.min(point.y, viewportHeight - height - gap));
+        const instance = String(++topicMenuInstance);
+        menu.dataset.agentMenuInstance = instance;
+        // Keep transient pointer coordinates out of element inline styles.
+        // The rule contains only clamped numeric viewport coordinates and is
+        // removed with the document-level menu; it never holds Topic data.
+        const positionRule = document.createElement('style');
+        positionRule.textContent = `.agent-chat-topic-context-menu[data-agent-menu-instance="${instance}"] { left: ${left}px; top: ${top}px; visibility: visible; }`;
+        document.head.append(positionRule);
+        return positionRule;
     }
 
     function showTopicContextMenu(topic, trigger, point, { live = false } = {}) {
@@ -1474,22 +1584,17 @@ function mountWorkbench(container) {
         const menu = node('div', 'context-menu agent-chat-topic-context-menu');
         menu.setAttribute('role', 'menu');
         menu.setAttribute('aria-label', `管理 Topic：${topic.title || topic.id}`);
-        menu.style.left = '0px';
-        menu.style.top = '0px';
-        menu.style.visibility = 'hidden';
+        menu.hidden = true;
 
         if (topic.inUse && !live) {
             addTopicContextMenuItem(menu, 'folder-open', '打开会话', async () => openTopicConflict(topic));
         } else if (live) {
             addTopicContextMenuItem(menu, 'folder-open', '打开当前会话', async () => controller.hydrateTopic(topic.id, null, null, topic.agentId));
         } else {
-            addTopicContextMenuItem(menu, 'folder-open', '打开会话', async () => createSession({
-                resume: topic.id,
-                title: topic.title,
-                model: topic.model,
-                agent: topic.agentId,
-                workspaceRoot: topic.workspaceRef,
-            }));
+            addTopicContextMenuItem(menu, 'folder-open', '打开会话', async () => {
+                await controller.previewTopic(topic.id, topic.agentId, topic);
+                rememberTopic({ topicId: topic.id });
+            });
             addTopicContextMenuItem(menu, 'edit', '重命名', async () => {
                 const title = window.prompt?.('重命名 Agent Topic', topic.title || '');
                 if (title === null || title === undefined || title.trim() === (topic.title || '').trim()) return;
@@ -1520,9 +1625,10 @@ function mountWorkbench(container) {
             event.preventDefault();
             closeTopicContextMenu({ returnFocus: true });
         };
-        state.topicContextMenu = { menu, trigger, onPointerDown, onKeyDown };
         document.body.append(menu);
-        positionTopicContextMenu(menu, point);
+        const positionRule = positionTopicContextMenu(menu, point);
+        menu.hidden = false;
+        state.topicContextMenu = { menu, trigger, onPointerDown, onKeyDown, positionRule };
         document.addEventListener('pointerdown', onPointerDown, true);
         document.addEventListener('keydown', onKeyDown, true);
         queueMicrotask(() => menu.querySelector('[role="menuitem"]')?.focus());
@@ -1547,7 +1653,73 @@ function mountWorkbench(container) {
         row.append(menu);
     }
 
+    function sessionSidebarEntries() {
+        const current = store.getState();
+        const attachment = current.attachment;
+        // Every daemon-reported runtime is a separate Topic Host. Scope them
+        // by Rust-confirmed Agent identity; never reuse the selected Topic's
+        // metadata as a fallback, which was the Nova/123 cross-routing bug.
+        const liveSessions = (Array.isArray(current.activeRuntimes) ? current.activeRuntimes : [])
+            .filter((runtime) => sameAgent(runtime.agentId, state.selectedAgent))
+            .map((runtime) => projectSession({
+                ...(state.topics.find((topic) => topic.id === runtime.topicId) || {}),
+                ...runtime,
+            }));
+        const liveTopicIds = new Set(liveSessions.map((session) => session.topicId).filter(Boolean));
+        return {
+            attachment,
+            liveSessions,
+            persistedTopics: state.topics.filter((topic) => !liveTopicIds.has(topic.id)),
+            selectedTopicId: store.getState().selectedTopic?.topicId || attachment?.topicId || null,
+        };
+    }
+
+    function patchSessionSidebar() {
+        const shell = state.sessionSidebar;
+        if (!shell || shell.agentId !== state.selectedAgent || state.tab !== 'sessions'
+            || state.topicManaging || state.topicSearchOpen || state.topicSearch.trim()) return false;
+        const { attachment, liveSessions, persistedTopics, selectedTopicId } = sessionSidebarEntries();
+        const desired = [
+            ...liveSessions.map((session) => ({ id: session.topicId, live: true, value: session })),
+            ...persistedTopics.map((topic) => ({ id: topic.id, live: false, value: topic })),
+        ];
+        // `children` avoids a JSDOM/Chromium `:scope` edge case and makes the
+        // ownership boundary explicit: only direct Topic rows participate in
+        // keyed reconciliation, never the empty/search status helpers.
+        const rows = [...shell.list.children].filter((row) => row.classList.contains('agent-chat-session-row'));
+        if (rows.length !== desired.length || rows.some((row, index) => row.dataset.topicId !== desired[index].id)) {
+            return false;
+        }
+
+        // A transition to an externally held lease changes the permitted click
+        // path. Rebuild that rare row shell so its event handler is updated;
+        // normal metadata/status refreshes remain keyed and allocation-free.
+        if (desired.some((entry, index) => Boolean(rows[index].dataset.topicInUse === 'true') !== Boolean(entry.value.inUse))) return false;
+
+        for (const [index, entry] of desired.entries()) {
+            const row = rows[index];
+            const active = entry.id === selectedTopicId;
+            row.classList.toggle('active', active);
+            row.classList.toggle('active-topic-glowing', active);
+            row.dataset.topicSearch = `${entry.value.title || entry.id} ${entry.value.model || ''}`.toLocaleLowerCase();
+            row.dataset.topicInUse = String(Boolean(entry.value.inUse));
+            const title = row.querySelector('.topic-title-display');
+            if (title) title.textContent = entry.value.title || entry.id;
+            if (entry.live) {
+                const count = row.querySelector('.message-count');
+                if (count) count.textContent = active ? String(store.getState().messages.length) : '';
+            } else {
+                row.title = entry.value.searchHit?.snippet || '';
+            }
+        }
+        return true;
+    }
+
     function renderSidebar() {
+        if (patchSessionSidebar()) return;
+        // A change of sidebar mode/form is intentionally a shell transition.
+        // Ordinary Topic refreshes take the keyed fast path above instead.
+        state.sessionSidebar = null;
         // Topic selection is allowed to update the renderer projection, but
         // it must not throw the conversation list back to its top.
         const scrollTop = sidebar.scrollTop;
@@ -1639,10 +1811,7 @@ function mountWorkbench(container) {
             header.append(tools, searchPanel);
             content.append(header);
             const list = node('ul', 'topic-list agent-chat-session-list');
-            const attachment = store.getState().attachment;
-            const liveSessions = attachment ? [projectSession(attachment)] : [];
-            const selectedTopicId = store.getState().selectedTopic?.topicId || attachment?.topicId || null;
-            const liveTopicIds = new Set(liveSessions.map((session) => session.topicId).filter(Boolean));
+            const { liveSessions, persistedTopics: normalPersistedTopics, selectedTopicId } = sessionSidebarEntries();
             const indexedTopics = state.topicSearch.trim()
                 ? state.topicSearchResults.map((hit) => ({
                     id: hit.topicId,
@@ -1655,8 +1824,8 @@ function mountWorkbench(container) {
                     updatedAt: hit.updatedAt || hit.timestamp || 0,
                     searchHit: hit,
                 }))
-                : state.topics;
-            const persistedTopics = indexedTopics.filter((topic) => !liveTopicIds.has(topic.id));
+                : normalPersistedTopics;
+            const persistedTopics = indexedTopics.filter((topic) => !liveSessions.some((session) => session.topicId === topic.id));
             if (!state.topicSearch.trim() && !liveSessions.length && !persistedTopics.length) list.append(node('li', 'agent-chat-empty-list', `${state.selectedAgent || '当前 Agent'} 还没有会话。创建一个会话后即可开始。`));
             for (const session of liveSessions) {
                 const active = session.topicId === selectedTopicId;
@@ -1667,6 +1836,8 @@ function mountWorkbench(container) {
                 row.dataset.itemId = session.agentId || state.selectedAgent || 'Nova';
                 row.dataset.itemType = 'agent-runtime';
                 row.dataset.topicId = session.topicId;
+                row.dataset.topicInUse = 'false';
+                row.dataset.runtimeActivity = session.activity || 'idle';
                 row.dataset.topicSearch = `${session.title} ${session.model}`.toLocaleLowerCase();
                 const avatar = document.createElement('img');
                 avatar.className = 'avatar';
@@ -1676,7 +1847,10 @@ function mountWorkbench(container) {
                 avatar.alt = `${state.selectedAgent || 'Nova'} - ${session.title}`;
                 avatar.onerror = () => { avatar.src = 'assets/default_avatar.png'; };
                 const title = node('span', 'topic-title-display', session.title);
-                const count = node('span', 'message-count', active ? String(store.getState().messages.length) : '');
+                const count = node('span', 'message-count', active
+                    ? String(store.getState().messages.length)
+                    : session.activity === 'running' ? '●'
+                        : session.activity === 'awaiting-approval' ? '!' : '');
                 row.append(avatar, title, count);
                 // The row is a live attachment, not a durable GUI Session.
                 // Rebuild only from the Rust Topic snapshot; Main has no
@@ -1706,6 +1880,7 @@ function mountWorkbench(container) {
                 row.dataset.itemId = topic.agentId || state.selectedAgent || 'Nova';
                 row.dataset.itemType = 'agent-topic';
                 row.dataset.topicId = topic.id;
+                row.dataset.topicInUse = String(Boolean(topic.inUse));
                 row.dataset.topicSearch = `${topic.title || topic.id} ${topic.model || ''}`.toLocaleLowerCase();
                 const avatar = document.createElement('img');
                 avatar.className = 'avatar';
@@ -1742,6 +1917,7 @@ function mountWorkbench(container) {
                     // Topic selection is a Rust snapshot read, not a Session
                     // resume.  The daemon stays attached to its current
                     // writer until this Topic actually receives a new turn.
+                    clearTopicConflictForSelection(topic.id);
                     if (!topic.inUse) {
                         await controller.previewTopic(topic.id, topic.agentId, topic);
                         rememberTopic({ topicId: topic.id });
@@ -1859,6 +2035,9 @@ function mountWorkbench(container) {
                 actions.append(removeSelected, exit);
                 panel.append(selection, actions);
                 content.append(panel);
+            }
+            if (!state.topicManaging && !state.topicSearchOpen && !state.topicSearch.trim()) {
+                state.sessionSidebar = { tabs, content, header, list, scroll, agentId: state.selectedAgent };
             }
         } else if (state.tab === 'agents') {
             const header = node('div', 'agents-header');
@@ -2011,7 +2190,7 @@ function mountWorkbench(container) {
             const title = node('h2', 'agent-chat-topic-flow-title', '新建 Agent Topic');
             title.id = 'agentChatTopicFlowTitle';
             const description = node('p', 'agent-chat-topic-flow-description',
-                '选择 VCPChat 共享的 Agent 与模型；工作目录只会传给 Rust daemon 作为本次 Topic 的 workspace。');
+                '创建独立的 Rust Topic。其它 Topic 可继续运行；首次发送时才会启动此 Topic Runtime。');
             const context = node('section', 'agent-chat-topic-flow-context');
             context.setAttribute('aria-label', 'Topic 创建配置来源');
             const addContext = (label, value) => {
@@ -2030,7 +2209,7 @@ function mountWorkbench(container) {
                     state.topicFlow = { ...state.topicFlow, saving: true };
                     queueRender({ topicFlow: true });
                     try {
-                        const created = await createSession({
+                        const created = await createTopic({
                             title: state.topicFlow.title.trim() || nextSessionTitle(),
                             agent: state.topicFlow.agent,
                         model: state.topicFlow.model.trim() || undefined,
@@ -2189,7 +2368,15 @@ function mountWorkbench(container) {
         const session = activeSession();
         const current = store.getState();
         const viewState = deriveWorkbenchViewState(current);
-        const left = node('h3', 'agent-chat-title', session?.title || `与 ${state.selectedAgent || 'Nova'} 聊天中`);
+        // `attachment` may continue a different Agent's background turn while
+        // the user reads a Rust snapshot here. Never let that hidden writer
+        // label masquerade as the selected Topic/Agent.
+        const selected = current.selectedTopic;
+        const selectedIsAttachment = selected?.topicId && selected.topicId === session?.topicId;
+        const headingTitle = selected?.title
+            || (selectedIsAttachment ? session?.title : '')
+            || `与 ${selected?.agentId || state.selectedAgent || 'Nova'} 聊天中`;
+        const left = node('h3', 'agent-chat-title', headingTitle);
         // R3 fixed lifecycle state chip — single source of truth for the
         // Workbench's connection/execution phase, surfaced in the header.
         const statusChip = node('span', 'agent-chat-status-chip', WORKBENCH_VIEW_STATE_LABELS[viewState] || viewState);
@@ -2312,63 +2499,42 @@ function mountWorkbench(container) {
     }
 
     function renderFeed() {
-        // Preserve a reader's position during non-delta control updates. A
-        // conversation should follow live output only when the reader was
-        // already at the bottom; ToolBox status, approvals and Topic refreshes
-        // must not pull someone away from an older tool result.
+        // Preserve a reader's position during control updates.  The daemon is
+        // the ordering authority; this renderer only reconciles keyed rows.
         const follow = isFollowingContainer(feed);
-        feedItems.replaceChildren();
         const current = store.getState();
+        const clearEmpty = () => {
+            state.timelineEmpty?.remove();
+            state.timelineEmpty = null;
+        };
+        const showEmpty = (text) => {
+            reconcileAgentTimeline(feedItems, [], {}, state.timelineRows);
+            if (!state.timelineEmpty) {
+                state.timelineEmpty = node('div', 'agent-chat-empty-conversation');
+                feedItems.append(state.timelineEmpty);
+            }
+            state.timelineEmpty.textContent = text;
+        };
         if (!current.attachment?.sessionId && !current.selectedTopic?.topicId) {
-            feedItems.append(node('div', 'agent-chat-empty-conversation', '创建一个真实 Agent 会话，即可开始与 VCPToolBox 协作。'));
+            showEmpty('创建一个真实 Agent 会话，即可开始与 VCPToolBox 协作。');
             return;
         }
-
-        // The daemon sequence is the single ordering authority.  A turn can
-        // contain text → tool → text (and multiple tool calls), so grouping
-        // every tool by turnId would visibly rewrite the actual Agent loop.
-        // Snapshot entries without a v1.2 sequence retain their durable order
-        // and precede the live sequence range.
-        const timeline = [
-            ...current.messages.map((message, index) => ({
-                kind: 'message',
-                value: message,
-                index,
-                sequence: Number.isFinite(Number(message.firstSequence)) ? Number(message.firstSequence) : null,
-                timestamp: Number(message.createdAt) || 0,
-                snapshotOrdinal: Number.isFinite(Number(message.snapshotOrdinal)) ? Number(message.snapshotOrdinal) : null,
-            })),
-            ...[...current.tools.values()].map((tool, index) => ({
-                kind: 'tool',
-                value: tool,
-                index: current.messages.length + index,
-                sequence: Number.isFinite(Number(tool.firstSequence)) ? Number(tool.firstSequence) : null,
-                timestamp: Number(tool.firstTimestamp) || 0,
-                snapshotOrdinal: Number.isFinite(Number(tool.snapshotOrdinal)) ? Number(tool.snapshotOrdinal) : null,
-            })),
-        ];
-        timeline.sort((left, right) => {
-            const leftLive = left.sequence !== null;
-            const rightLive = right.sequence !== null;
-            if (leftLive && rightLive && left.sequence !== right.sequence) return left.sequence - right.sequence;
-            if (leftLive !== rightLive) return leftLive ? 1 : -1;
-            if (left.snapshotOrdinal !== null && right.snapshotOrdinal !== null
-                && left.snapshotOrdinal !== right.snapshotOrdinal) {
-                return left.snapshotOrdinal - right.snapshotOrdinal;
-            }
-            if (left.timestamp !== right.timestamp) return left.timestamp - right.timestamp;
-            return left.index - right.index;
-        });
-        for (const part of timeline) {
-            if (part.kind === 'message') feedItems.append(createMessage(part.value));
-            else feedItems.append(createToolCard(part.value, (tool) => run(() => controller.cancelTool(tool.toolCallId, tool.turnId))));
+        const timeline = createAgentTimelineParts(current);
+        if (!timeline.length) {
+            showEmpty('会话已就绪，发送第一条消息开始。');
+            return;
         }
-
-        // R3: approvals and VCPToolBox observer events no longer pollute the
-        // main chat. They live in the dedicated activity side panel
-        // (renderActivity), which keeps the conversation flow readable while
-        // still surfacing actionable approvals behind a badge.
-        if (!current.messages.length && !current.tools.size) feedItems.append(node('div', 'agent-chat-empty-conversation', '会话已就绪，发送第一条消息开始。'));
+        clearEmpty();
+        reconcileAgentTimeline(feedItems, timeline, {
+            create(part) {
+                if (part.kind === 'message') return createMessage(part.value);
+                return createToolCard(part.value, (tool) => run(() => controller.cancelTool(tool.toolCallId, tool.turnId)));
+            },
+            patch(row, part) {
+                if (part.kind === 'message') patchMessage(row, part.value);
+                else patchToolCard(row, part.value);
+            },
+        }, state.timelineRows);
 
         scrollFeed(feed, follow);
     }
@@ -2604,7 +2770,10 @@ function mountWorkbench(container) {
         closeBtn.addEventListener('click', () => setActivityOpen(false));
         panelHeader.append(closeBtn);
 
-        const pendingApprovals = (current.approvals || []).length;
+        const localApprovals = current.approvals || [];
+        const backendApprovals = (current.toolboxWs || [])
+            .filter((item) => item?.kind === 'backend-approval-request');
+        const pendingApprovals = localApprovals.length + backendApprovals.length;
         const tabDefs = [
             ['activity', '工具活动'],
             ['approvals', pendingApprovals ? `审批 (${pendingApprovals})` : '审批'],
@@ -2631,18 +2800,27 @@ function mountWorkbench(container) {
             content.append(buildConnectionPanel(current, viewState));
         } else if (state.activityTab === 'approvals') {
             if (!pendingApprovals) {
-                content.append(node('div', 'agent-chat-activity-empty', '没有待确认的本地审批。'));
+                content.append(node('div', 'agent-chat-activity-empty', '没有待确认的审批。'));
             } else {
-                for (const approval of current.approvals) {
+                for (const approval of localApprovals) {
                     content.append(createApprovalCard(approval, (item, decision) => {
                         approvalRegistry.delete(item.approvalId);
                         run(() => controller.respondApproval(item, decision));
                     }, approvalRegistry, ensureApprovalTicker));
                 }
+                // ToolBox approval IDs have no trustworthy Topic correlation.
+                // They live in this global center, never on a Topic card.
+                for (const observation of backendApprovals) {
+                    content.append(createToolboxWsCard(observation, (approvalId, decision) => {
+                        run(() => controller.respondToolboxApproval(approvalId, decision));
+                    }));
+                }
             }
         } else if (state.activityTab === 'usage') {
             content.append(buildUsagePanel(current));
         } else {
+            // This is a daemon-global observation feed, not a Topic feed;
+            // backend approval cards may also be reached from Approvals.
             const ws = current.toolboxWs || [];
             const markers = current.markerObservations || [];
             if (!ws.length && !markers.length) {
@@ -2664,24 +2842,10 @@ function mountWorkbench(container) {
     }
 
     function patchStreamingFeed(event) {
-        const current = store.getState();
-        const messageId = event.messageId;
-        if (!messageId) return;
-        const message = current.messages.find((item) => projectMessage(item).id === messageId);
-        if (!message) return;
-        const follow = isFollowingContainer(feed);
-        let row = [...feedItems.querySelectorAll('[data-message-id]')]
-            .find((candidate) => candidate.dataset.messageId === messageId);
-        if (!row) {
-            // A delta can be the first frame observed after a renderer reload.
-            // Rebuild once so this late-created message is inserted at its
-            // daemon sequence position instead of being appended after an
-            // unrelated tool/result card.
-            renderFeed();
-        } else {
-            patchMessage(row, message);
-        }
-        if (follow) scrollFeed(feed, true);
+        // Deltas share the same requestAnimationFrame batcher as all other
+        // timeline parts.  The keyed reconciler changes only this message row
+        // and keeps tool cards, expanded details and the composer intact.
+        if (event?.messageId) queueRender({ feed: true });
     }
 
     function queueRender(parts = {}) {
@@ -2777,10 +2941,8 @@ function mountWorkbench(container) {
         // reports the agent as idle, running, or parked on an actionable
         // approval — never while it is starting, reconnecting, or down.
         const previewReady = Boolean(current.selectedTopic?.mode === 'preview'
-            && !current.backgroundAttachment?.busy
             && (viewState === 'idle' || viewState === 'running' || viewState === 'awaiting-approval'));
-        const previewBlocked = Boolean(current.selectedTopic?.mode === 'preview' && current.backgroundAttachment?.busy);
-        const composerReady = Boolean(!previewBlocked && (current.attachment?.sessionId || previewReady)
+        const composerReady = Boolean((current.attachment?.sessionId || previewReady)
             && (viewState === 'idle' || viewState === 'running' || viewState === 'awaiting-approval'));
         const hasActiveTurn = Boolean(current.activeTurnId);
         const canSend = Boolean(composerReady && (state.prompt.trim() || (!hasActiveTurn && state.pendingAttachments.length)));
@@ -2809,10 +2971,8 @@ function mountWorkbench(container) {
         if (sendIcon) sendIcon.textContent = interruptMode ? 'stop' : 'arrow_upward';
         input.placeholder = (viewState === 'reconnecting' || viewState === 'error')
             ? '正在重新连接 Rust Agent…'
-            : current.backgroundAttachment?.busy
-            ? '另一个会话正在运行或等待审批；当前仅可查看…'
             : previewReady
-            ? '输入消息…（发送时接管此会话）'
+            ? '输入消息…（发送时启动此会话）'
             : !current.attachment?.sessionId
             ? '请先创建 Agent 会话…'
             : viewState === 'starting'
@@ -2911,7 +3071,15 @@ function mountWorkbench(container) {
                 // catalog data enriches the row in the background.
                 const topicId = state.rememberedTopic.topicId;
                 rememberTopic({ topicId });
-                await controller.previewTopic(topicId);
+                try {
+                    await controller.previewTopic(topicId);
+                } catch (error) {
+                    if (!isEmptyTopicCheckpointError(error)) throw error;
+                    // The pointer is not durable history. Forget only it;
+                    // Rust retains the empty Topic and will write its first
+                    // checkpoint normally after a future attachment/turn.
+                    forgetTopic(topicId);
+                }
             }
             await refreshControlPlane();
         })

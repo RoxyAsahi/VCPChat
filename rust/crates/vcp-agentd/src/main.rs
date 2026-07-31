@@ -1,7 +1,7 @@
 //! Supervised VCP Agent daemon. It has no credentials and no network listener.
 
 use anyhow::Result;
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::io::{Stdout, stdin, stdout};
@@ -9,7 +9,7 @@ use tokio::sync::mpsc;
 use tokio_util::codec::{FramedRead, FramedWrite, LengthDelimitedCodec};
 use vcp_agent_core::CoreRuntime;
 use vcp_agent_host::{
-    HostCommand, HostEvent, RuntimeOverrides, TuiSettingsUpdate, load_config, start,
+    HostCommand, HostEvent, RunningHost, RuntimeOverrides, TuiSettingsUpdate, load_config, start,
     start_without_index_rebuild,
 };
 use vcp_agent_protocol::{
@@ -89,6 +89,108 @@ async fn main() -> Result<()> {
 /// The daemon reads the shared VCP settings itself; Electron only sends UI
 /// intent and forwards these framed events to its restricted preload API.
 async fn direct_main() -> Result<()> {
+    direct_main_v17().await
+}
+
+const MAX_RESIDENT_TOPIC_RUNTIMES: usize = 8;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct TopicRuntimeKey {
+    agent_id: String,
+    topic_id: String,
+}
+
+impl TopicRuntimeKey {
+    fn new(agent_id: impl AsRef<str>, topic_id: impl AsRef<str>) -> Self {
+        Self {
+            agent_id: agent_id.as_ref().trim().to_ascii_lowercase(),
+            topic_id: topic_id.as_ref().trim().to_string(),
+        }
+    }
+}
+
+struct ForwardedHostEvent {
+    session_id: String,
+    topic_id: String,
+    event: HostEvent,
+}
+
+struct HostSlot {
+    agent_id: String,
+    session_id: String,
+    topic_id: String,
+    commands: mpsc::UnboundedSender<HostCommand>,
+    task: Option<tokio::task::JoinHandle<()>>,
+    forward_task: tokio::task::JoinHandle<()>,
+    last_used_ms: u64,
+}
+
+impl HostSlot {
+    fn from_host(
+        host: RunningHost,
+        agent_id: String,
+        events: mpsc::Sender<ForwardedHostEvent>,
+    ) -> Self {
+        let RunningHost {
+            commands,
+            events: mut host_events,
+            session_id,
+            topic_id,
+            task,
+        } = host;
+        let event_session_id = session_id.clone();
+        let event_topic_id = topic_id.clone();
+        let forward_task = tokio::spawn(async move {
+            while let Some(event) = host_events.recv().await {
+                if events
+                    .send(ForwardedHostEvent {
+                        session_id: event_session_id.clone(),
+                        topic_id: event_topic_id.clone(),
+                        event,
+                    })
+                    .await
+                    .is_err()
+                {
+                    break;
+                }
+            }
+        });
+        Self {
+            agent_id,
+            session_id,
+            topic_id,
+            commands,
+            task,
+            forward_task,
+            last_used_ms: now_millis(),
+        }
+    }
+
+    fn matches(&self, message: &WireMessage) -> bool {
+        message.session_id.as_deref() == Some(self.session_id.as_str())
+            && message.string("topicId") == Some(self.topic_id.as_str())
+    }
+
+    async fn prepare_detach(&self) -> std::result::Result<(), String> {
+        let (reply, response) = tokio::sync::oneshot::channel();
+        self.commands
+            .send(HostCommand::PrepareSwitch { reply })
+            .map_err(|_| "runtime-unavailable".to_string())?;
+        response
+            .await
+            .map_err(|_| "runtime-unavailable".to_string())?
+    }
+
+    async fn shutdown(mut self) {
+        let _ = self.commands.send(HostCommand::Shutdown);
+        if let Some(task) = self.task.take() {
+            let _ = task.await;
+        }
+        self.forward_task.abort();
+    }
+}
+
+async fn direct_main_v17() -> Result<()> {
     let mut overrides = RuntimeOverrides::default();
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -104,20 +206,23 @@ async fn direct_main() -> Result<()> {
             _ => {}
         }
     }
-    // GUI transport starts as a lease-free control Host.  Selecting a Topic
-    // must not acquire it or restart this stdio process; a writable Host is
-    // created only by `switch-attachment` immediately before a real turn.
-    let initial_overrides = overrides.clone();
-    let config = load_config(overrides)?;
-    let mut active_overrides = (!config.control_only).then_some(initial_overrides.clone());
-    let mut host = start(config)?;
+
+    // The control Host is the daemon-level control plane and the sole owner
+    // of VCPLog/VCPInfo. Every writable Topic Host is created independently
+    // and deliberately disables its observer sockets.
+    let base = overrides.clone();
+    let control_config = load_config(control_overrides(&base))?;
+    let (event_tx, mut event_rx) = mpsc::channel::<ForwardedHostEvent>(1024);
+    let control_host = start(control_config)?;
+    let control = HostSlot::from_host(control_host, "__control__".into(), event_tx.clone());
+    let mut slots: HashMap<TopicRuntimeKey, HostSlot> = HashMap::new();
     let mut reader = FramedRead::new(stdin(), codec());
     let mut writer = FramedWrite::new(stdout(), codec());
     let mut ready = WireMessage::new("ready").put(
         "probe",
         serde_json::json!({
             "available": true, "runtime": "rust", "hosted": true,
-            "details": "VCP Rust daemon with direct ToolBox host"
+            "details": "VCP Rust daemon multi-Topic supervisor"
         }),
     );
     ready.protocol_version = Some(PROTOCOL_VERSION);
@@ -128,21 +233,17 @@ async fn direct_main() -> Result<()> {
         .payload
         .insert("buildRevision".into(), build_revision().into());
     write_direct_message(&mut writer, &ready).await?;
+
     let mut recent_ids = HashSet::new();
     let mut recent_order = VecDeque::new();
     let mut event_sequence = 0_u64;
     loop {
         tokio::select! {
-            Some(event) = host.events.recv() => {
-                if let Some(mut message) = host_event_message(event) {
+            Some(forwarded) = event_rx.recv() => {
+                if let Some(mut message) = host_event_message(forwarded.event) {
                     if message.kind == "event" {
                         event_sequence = event_sequence.saturating_add(1);
-                        project_event_envelope(
-                            &mut message,
-                            &host.session_id,
-                            &host.topic_id,
-                            event_sequence,
-                        );
+                        project_event_envelope(&mut message, &forwarded.session_id, &forwarded.topic_id, event_sequence);
                     }
                     project_topic_snapshot_watermark(&mut message, event_sequence);
                     write_direct_message(&mut writer, &message).await?;
@@ -166,67 +267,262 @@ async fn direct_main() -> Result<()> {
                         recent_ids.remove(&old);
                     }
                     if message.kind == "shutdown" {
-                        host.shutdown().await;
-                        let ack = WireMessage::new("ack")
-                            .with_request_id(message.request_id.expect("validated requestId"))
-                            .put("ok", true);
+                        for (_, slot) in slots.drain() { slot.shutdown().await; }
+                        control.shutdown().await;
+                        let ack = WireMessage::new("ack").with_request_id(message.request_id.expect("validated requestId")).put("ok", true);
                         write_direct_message(&mut writer, &ack).await?;
                         break;
                     }
-                    if message.kind == "switch-attachment" {
-                        let mut lifecycle = Vec::new();
-                        let response = switch_direct_attachment(
-                            &mut host,
-                            &initial_overrides,
-                            &mut active_overrides,
-                            &message,
-                            &mut lifecycle,
-                        ).await;
-                        // These lifecycle events are informational; the ACK is
-                        // the only success authority for the Electron manager.
-                        // They are still emitted with final daemon identities
-                        // so observers never infer a switch from a Host warning
-                        // or an uncorrelated status frame.
-                        for mut event in lifecycle {
-                            event_sequence = event_sequence.saturating_add(1);
-                            project_event_envelope(
-                                &mut event,
-                                &host.session_id,
-                                &host.topic_id,
-                                event_sequence,
-                            );
-                            write_direct_message(&mut writer, &event).await?;
-                        }
-                        write_direct_message(&mut writer, &response).await?;
-                        continue;
-                    }
-                    if message.kind == "close-session" {
-                        let response = close_direct_attachment(
-                            &mut host,
-                            &initial_overrides,
-                            &mut active_overrides,
-                            &message,
-                        ).await;
-                        write_direct_message(&mut writer, &response).await?;
-                        continue;
-                    }
-                    if message.kind == "hello" {
-                        let ack = WireMessage::new("ack")
-                            .with_request_id(message.request_id.expect("validated requestId"))
-                            .put("ok", true)
-                            .put("result", serde_json::json!({"protocolVersion": PROTOCOL_VERSION, "hosted": true}));
-                        write_direct_message(&mut writer, &ack).await?;
-                        continue;
-                    }
-                    if let Some(response) = dispatch_direct(&host, message) {
-                        write_direct_message(&mut writer, &response).await?;
-                    }
+                    let response = match message.kind.as_str() {
+                        "ensure-topic-runtime" => ensure_topic_runtime(&base, &mut slots, &event_tx, message).await,
+                        "detach-topic" => detach_topic_runtime(&mut slots, message).await,
+                        "list-active-runtimes" => list_active_runtimes(&slots, message),
+                        _ => dispatch_direct_v17(&control, &mut slots, message),
+                    };
+                    write_direct_message(&mut writer, &response).await?;
                 }
-                None => { host.shutdown().await; break; }
+                None => {
+                    for (_, slot) in slots.drain() { slot.shutdown().await; }
+                    control.shutdown().await;
+                    break;
+                }
             }
         }
     }
     Ok(())
+}
+
+fn runtime_overrides(base: &RuntimeOverrides, message: &WireMessage) -> RuntimeOverrides {
+    let mut target = base.clone();
+    target.control_only = false;
+    target.resume = message.string("topicId").map(ToOwned::to_owned);
+    target.agent = message.string("agentId").map(ToOwned::to_owned);
+    if let Some(value) = message.string("model") {
+        target.model = Some(value.to_string());
+    }
+    if let Some(value) = message.string("workspaceRoot") {
+        target.workspace = Some(PathBuf::from(value));
+    }
+    target.always_approve = message.string("permissionMode") == Some("always-approve");
+    target
+}
+
+async fn ensure_topic_runtime(
+    base: &RuntimeOverrides,
+    slots: &mut HashMap<TopicRuntimeKey, HostSlot>,
+    events: &mpsc::Sender<ForwardedHostEvent>,
+    message: WireMessage,
+) -> WireMessage {
+    let request_id = message.request_id.clone().unwrap_or_default();
+    let target = runtime_overrides(base, &message);
+    let mut config = match load_config(target) {
+        Ok(config) => config,
+        Err(error) => {
+            return direct_error(
+                request_id,
+                if error.to_string().contains("workspace") {
+                    "invalid-workspace"
+                } else {
+                    "invalid-topic"
+                },
+                error.to_string(),
+            );
+        }
+    };
+    let key = TopicRuntimeKey::new(&config.agent.id, &config.topic_id);
+    if let Some(slot) = slots.get_mut(&key) {
+        slot.last_used_ms = now_millis();
+        return direct_ack(
+            request_id,
+            serde_json::json!({
+                "sessionId": slot.session_id, "topicId": slot.topic_id, "agentId": slot.agent_id,
+                "model": config.model, "workspaceRoot": config.workspace.display().to_string(), "resident": true,
+            }),
+        );
+    }
+    if slots.len() >= MAX_RESIDENT_TOPIC_RUNTIMES && !evict_idle_runtime(slots).await {
+        return direct_error(
+            request_id,
+            "runtime-capacity",
+            format!("all {MAX_RESIDENT_TOPIC_RUNTIMES} Topic runtimes are active"),
+        );
+    }
+    let agent_id = config.agent.id.clone();
+    let model = config.model.clone();
+    let workspace = config.workspace.display().to_string();
+    config.observe_toolbox = false;
+    match start_without_index_rebuild(config) {
+        Ok(host) => {
+            let session_id = host.session_id.clone();
+            let topic_id = host.topic_id.clone();
+            slots.insert(
+                key,
+                HostSlot::from_host(host, agent_id.clone(), events.clone()),
+            );
+            direct_ack(
+                request_id,
+                serde_json::json!({
+                    "sessionId": session_id, "topicId": topic_id, "agentId": agent_id,
+                    "model": model, "workspaceRoot": workspace, "resident": true,
+                }),
+            )
+        }
+        Err(error) => direct_error(
+            request_id,
+            if error.to_string().contains("lease") {
+                "topic-in-use"
+            } else {
+                "invalid-topic"
+            },
+            error.to_string(),
+        ),
+    }
+}
+
+async fn evict_idle_runtime(slots: &mut HashMap<TopicRuntimeKey, HostSlot>) -> bool {
+    let mut keys: Vec<_> = slots.keys().cloned().collect();
+    keys.sort_by_key(|key| {
+        slots
+            .get(key)
+            .map(|slot| slot.last_used_ms)
+            .unwrap_or(u64::MAX)
+    });
+    for key in keys {
+        let idle = match slots.get(&key) {
+            Some(slot) => slot.prepare_detach().await.is_ok(),
+            None => false,
+        };
+        if idle && let Some(slot) = slots.remove(&key) {
+            slot.shutdown().await;
+            return true;
+        }
+    }
+    false
+}
+
+async fn detach_topic_runtime(
+    slots: &mut HashMap<TopicRuntimeKey, HostSlot>,
+    message: WireMessage,
+) -> WireMessage {
+    let request_id = message.request_id.clone().unwrap_or_default();
+    let Some(key) = find_runtime_key(slots, &message) else {
+        return direct_error(
+            request_id,
+            "attachment-mismatch",
+            "sessionId and topicId do not identify a live Topic runtime",
+        );
+    };
+    if let Some(slot) = slots.get(&key)
+        && let Err(reason) = slot.prepare_detach().await
+    {
+        return direct_error(
+            request_id,
+            &reason,
+            "Topic has a running turn, approval, or queued interaction",
+        );
+    }
+    if let Some(slot) = slots.remove(&key) {
+        slot.shutdown().await;
+    }
+    direct_ack(request_id, serde_json::json!({"detached":true}))
+}
+
+fn list_active_runtimes(
+    slots: &HashMap<TopicRuntimeKey, HostSlot>,
+    message: WireMessage,
+) -> WireMessage {
+    let request_id = message.request_id.unwrap_or_default();
+    let runtimes: Vec<_> = slots
+        .values()
+        .map(|slot| {
+            serde_json::json!({
+                "sessionId": slot.session_id, "topicId": slot.topic_id, "agentId": slot.agent_id,
+                "lastUsedAtMs": slot.last_used_ms,
+            })
+        })
+        .collect();
+    direct_ack(
+        request_id,
+        serde_json::json!({"runtimes":runtimes, "capacity":MAX_RESIDENT_TOPIC_RUNTIMES}),
+    )
+}
+
+fn find_runtime_key(
+    slots: &HashMap<TopicRuntimeKey, HostSlot>,
+    message: &WireMessage,
+) -> Option<TopicRuntimeKey> {
+    slots
+        .iter()
+        .find_map(|(key, slot)| slot.matches(message).then(|| key.clone()))
+}
+
+fn dispatch_direct_v17(
+    control: &HostSlot,
+    slots: &mut HashMap<TopicRuntimeKey, HostSlot>,
+    message: WireMessage,
+) -> WireMessage {
+    let request_id = message.request_id.clone().unwrap_or_default();
+    let ack = || {
+        WireMessage::new("ack")
+            .with_request_id(request_id.clone())
+            .put("ok", true)
+    };
+    let control_command = |command| control.commands.send(command).is_ok();
+    match message.kind.as_str() {
+        "hello" => ack().put("result", serde_json::json!({"protocolVersion":PROTOCOL_VERSION, "protocolRevision":PROTOCOL_REVISION, "hosted":true})),
+        "create-topic" => {
+            let sent = control_command(HostCommand::CreateTopic { request_id: request_id.clone(), agent_id: message.string("agentId").unwrap_or_default().into(), title: message.string("title").map(ToOwned::to_owned), model: message.string("model").map(ToOwned::to_owned), workspace: message.string("workspaceRoot").map(PathBuf::from) });
+            if sent { ack() } else { direct_error(request_id.clone(), "control-unavailable", "daemon control host stopped") }
+        }
+        "list-topics" => { control_command(HostCommand::ListTopics { request_id: request_id.clone(), agent_id: message.string("agentId").map(ToOwned::to_owned) }); ack() }
+        "read-topic" => { control_command(HostCommand::ReadTopic { request_id: request_id.clone(), topic_id: message.string("topicId").unwrap_or_default().into(), agent_id: message.string("agentId").map(ToOwned::to_owned) }); ack() }
+        "search-topics" => { control_command(HostCommand::SearchTopics { request_id: request_id.clone(), query: message.string("query").unwrap_or_default().into(), agent_id: message.string("agentId").map(ToOwned::to_owned), limit: message.value("limit").and_then(serde_json::Value::as_u64).unwrap_or(20) as usize }); ack() }
+        "search-topic-messages" => { control_command(HostCommand::SearchTopicMessages { request_id: request_id.clone(), query: message.string("query").unwrap_or_default().into(), topic_id: message.string("topicId").unwrap_or_default().into(), agent_id: message.string("agentId").map(ToOwned::to_owned), limit: message.value("limit").and_then(serde_json::Value::as_u64).unwrap_or(50) as usize }); ack() }
+        "get-index-status" => { control_command(HostCommand::GetIndexStatus { request_id: request_id.clone() }); ack() }
+        "rebuild-topic-index" => { control_command(HostCommand::RebuildTopicIndex { request_id: request_id.clone() }); ack() }
+        "takeover-topic" => { control_command(HostCommand::RequestTopicTakeover { request_id: request_id.clone(), topic_id: message.string("topicId").unwrap_or_default().into(), requester_id: request_id.clone(), agent_id: message.string("agentId").map(ToOwned::to_owned) }); ack() }
+        "rename-topic" => { control_command(HostCommand::RenameTopic { request_id: request_id.clone(), topic_id: message.string("topicId").unwrap_or_default().into(), title: message.string("title").unwrap_or_default().into(), agent_id: message.string("agentId").map(ToOwned::to_owned) }); ack() }
+        "delete-topic" => {
+            if slots.values().any(|slot| slot.topic_id == message.string("topicId").unwrap_or_default()) { return direct_error(request_id, "topic-active", "detach the Topic runtime before deleting it"); }
+            control_command(HostCommand::DeleteTopic { request_id: request_id.clone(), topic_id: message.string("topicId").unwrap_or_default().into(), agent_id: message.string("agentId").map(ToOwned::to_owned) }); ack()
+        }
+        "get-settings" => { control_command(HostCommand::GetSettings { request_id: request_id.clone() }); ack() }
+        "update-settings" => match message.value("settings").cloned().and_then(|value| serde_json::from_value::<TuiSettingsUpdate>(value).ok()) { Some(update) => { control_command(HostCommand::UpdateSettings { request_id: request_id.clone(), update }); ack() }, None => direct_error(request_id.clone(), "invalid-settings", "invalid settings payload") },
+        "toolbox-approval" => { control_command(HostCommand::ToolboxApproval { request_id: request_id.clone(), approval_request_id: message.string("approvalRequestId").unwrap_or_default().into(), approved: message.bool("approved").unwrap_or(false), reason: message.string("reason").map(ToOwned::to_owned) }); ack() }
+        "set-workbench-presence" => {
+            let mounted = message.bool("mounted").unwrap_or(false);
+            control_command(HostCommand::WorkbenchPresence { request_id: request_id.clone(), mounted });
+            if !mounted { for slot in slots.values() { let _ = slot.commands.send(HostCommand::WorkbenchPresence { request_id: format!("{request_id}:{}", slot.topic_id), mounted }); } }
+            ack()
+        }
+        "import-attachment" | "start-turn" | "cancel-turn" | "steer-turn" | "follow-up-turn" | "compact" | "approval" | "list-interaction-queue" | "replace-interaction-queue" | "clear-interaction-queue" => {
+            let Some(key) = find_runtime_key(slots, &message) else { return direct_error(request_id, "attachment-mismatch", "sessionId and topicId do not identify a live Topic runtime"); };
+            let slot = slots.get_mut(&key).expect("key from slots");
+            slot.last_used_ms = now_millis();
+            let sent = match message.kind.as_str() {
+                "import-attachment" => slot.commands.send(HostCommand::ImportAttachment { request_id: request_id.clone(), path: PathBuf::from(message.string("path").unwrap_or_default()) }),
+                "start-turn" => slot.commands.send(HostCommand::StartTurn { prompt: message.string("prompt").unwrap_or_default().trim().into(), attachments: message.value("attachments").and_then(serde_json::Value::as_array).cloned().unwrap_or_default(), turn_id: message.turn_id.clone() }),
+                "cancel-turn" => slot.commands.send(HostCommand::Cancel),
+                "steer-turn" => slot.commands.send(HostCommand::Steer { prompt: message.string("prompt").unwrap_or_default().into() }),
+                "follow-up-turn" => slot.commands.send(HostCommand::FollowUp { prompt: message.string("prompt").unwrap_or_default().into() }),
+                "compact" => slot.commands.send(HostCommand::Compact),
+                "approval" => slot.commands.send(HostCommand::Approval { approval_id: message.string("approvalId").unwrap_or_default().into(), allowed: message.bool("allowed").unwrap_or(false), binding: Some((message.session_id.clone().unwrap_or_default(), message.turn_id.clone().unwrap_or_default(), message.tool_call_id.clone().unwrap_or_default(), message.string("argumentsHash").unwrap_or_default().into())) }),
+                "list-interaction-queue" => slot.commands.send(HostCommand::ListInteractionQueue { request_id: request_id.clone() }),
+                "replace-interaction-queue" => slot.commands.send(HostCommand::ReplaceInteractionQueue { request_id: request_id.clone(), interactions: message.value("interactions").and_then(serde_json::Value::as_array).cloned().unwrap_or_default() }),
+                "clear-interaction-queue" => slot.commands.send(HostCommand::ClearInteractionQueue { request_id: request_id.clone() }),
+                _ => unreachable!(),
+            };
+            if sent.is_ok() { ack() } else { direct_error(request_id.clone(), "runtime-unavailable", "Topic runtime stopped") }
+        }
+        _ => direct_error(request_id, "unsupported-command", format!("unsupported direct daemon command: {}", message.kind)),
+    }
+}
+
+fn now_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
 }
 
 fn direct_ack(request_id: String, result: serde_json::Value) -> WireMessage {
@@ -253,226 +549,6 @@ fn control_overrides(base: &RuntimeOverrides) -> RuntimeOverrides {
     control
 }
 
-fn attachment_overrides(base: &RuntimeOverrides, message: &WireMessage) -> RuntimeOverrides {
-    let mut target = base.clone();
-    target.control_only = false;
-    target.resume = message.string("topicId").map(ToOwned::to_owned);
-    if let Some(value) = message.string("agentId") {
-        target.agent = Some(value.to_string());
-    }
-    if let Some(value) = message.string("model") {
-        target.model = Some(value.to_string());
-    }
-    if let Some(value) = message.string("workspaceRoot") {
-        target.workspace = Some(PathBuf::from(value));
-    }
-    target.always_approve = matches!(message.string("permissionMode"), Some("always-approve"));
-    target
-}
-
-async fn restore_control_host(
-    host: &mut vcp_agent_host::RunningHost,
-    base: &RuntimeOverrides,
-) -> Result<()> {
-    let config = load_config(control_overrides(base))?;
-    *host = start_without_index_rebuild(config)?;
-    Ok(())
-}
-
-async fn switch_direct_attachment(
-    host: &mut vcp_agent_host::RunningHost,
-    base: &RuntimeOverrides,
-    active_overrides: &mut Option<RuntimeOverrides>,
-    message: &WireMessage,
-    lifecycle: &mut Vec<WireMessage>,
-) -> WireMessage {
-    let request_id = message.request_id.clone().unwrap_or_default();
-    if let Some(expected_session) = message.session_id.as_deref() {
-        if active_overrides.is_none() || expected_session != host.session_id {
-            return direct_error(
-                request_id,
-                "attachment-mismatch",
-                "current Rust attachment does not match sessionId",
-            );
-        }
-    }
-
-    let target = attachment_overrides(base, message);
-    let next_config = match load_config(target.clone()) {
-        Ok(config) => config,
-        Err(error) => {
-            let code = if error.to_string().contains("workspace") {
-                "invalid-workspace"
-            } else {
-                "invalid-topic"
-            };
-            return direct_error(request_id, code, error.to_string());
-        }
-    };
-
-    if active_overrides.is_some() {
-        let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
-        if host
-            .commands
-            .send(HostCommand::PrepareSwitch { reply: reply_tx })
-            .is_err()
-        {
-            return direct_error(
-                request_id,
-                "attachment-busy",
-                "current Rust attachment is unavailable",
-            );
-        }
-        match reply_rx.await {
-            Ok(Ok(())) => {}
-            Ok(Err(reason)) => {
-                return direct_error(
-                    request_id,
-                    &reason,
-                    "current Topic has a running turn, approval, or queued interaction",
-                );
-            }
-            Err(_) => {
-                return direct_error(
-                    request_id,
-                    "attachment-busy",
-                    "current Rust attachment stopped before it could be released",
-                );
-            }
-        }
-    }
-
-    let previous = active_overrides.clone();
-    let previous_identity = previous
-        .as_ref()
-        .map(|_| (host.session_id.clone(), host.topic_id.clone()));
-    host.shutdown().await;
-    match start_without_index_rebuild(next_config) {
-        Ok(next) => {
-            if let Some((session_id, topic_id)) = previous_identity {
-                lifecycle.push(attachment_lifecycle_event(
-                    "session.detached",
-                    &session_id,
-                    &topic_id,
-                    serde_json::json!({ "reason": "switch-attachment" }),
-                ));
-            }
-            lifecycle.push(attachment_lifecycle_event(
-                "session.attached",
-                &next.session_id,
-                &next.topic_id,
-                serde_json::json!({ "reason": "switch-attachment" }),
-            ));
-            lifecycle.push(attachment_lifecycle_event(
-                "runtime.ready",
-                &next.session_id,
-                &next.topic_id,
-                serde_json::json!({ "attachment": true }),
-            ));
-            let result = serde_json::json!({
-                "sessionId": next.session_id,
-                "topicId": next.topic_id,
-                "agentId": target.agent.clone().unwrap_or_else(|| "Nova".to_string()),
-                "model": target.model.clone().unwrap_or_default(),
-                "workspaceRoot": target.workspace.as_ref().map(|path| path.display().to_string()).unwrap_or_default(),
-                "attached": true,
-            });
-            *host = next;
-            *active_overrides = Some(target);
-            direct_ack(request_id, result)
-        }
-        Err(error) => {
-            // Acquiring the target lease failed after the old Host was safely
-            // closed. Restore the previous attachment (or control Host) so a
-            // rejected switch never leaves a live daemon with a phantom UI
-            // attachment.
-            let restore = previous.clone().unwrap_or_else(|| control_overrides(base));
-            match load_config(restore).and_then(start_without_index_rebuild) {
-                Ok(restored) => {
-                    *host = restored;
-                    *active_overrides = previous;
-                }
-                Err(restore_error) => {
-                    return direct_error(
-                        request_id,
-                        "attachment-restore-failed",
-                        format!("{error}; restore failed: {restore_error}"),
-                    );
-                }
-            }
-            let code = if error.to_string().contains("lease") || error.to_string().contains("TOPIC")
-            {
-                "topic-in-use"
-            } else {
-                "invalid-topic"
-            };
-            direct_error(request_id, code, error.to_string())
-        }
-    }
-}
-
-/// Lifecycle projection for direct-daemon attachment changes.  The nested
-/// event carries all durable routing values before the outbound projector adds
-/// `sequence`, `eventId`, `timestamp` and `runtime`; consumers can therefore
-/// observe old and new attachments without guessing from the currently active
-/// Host at write time.
-fn attachment_lifecycle_event(
-    event_type: &str,
-    session_id: &str,
-    topic_id: &str,
-    payload: serde_json::Value,
-) -> WireMessage {
-    let mut message = WireMessage::new("event").put(
-        "event",
-        serde_json::json!({
-            "type": event_type,
-            "sessionId": session_id,
-            "topicId": topic_id,
-            "payload": payload,
-        }),
-    );
-    message.session_id = Some(session_id.to_string());
-    message
-}
-
-async fn close_direct_attachment(
-    host: &mut vcp_agent_host::RunningHost,
-    base: &RuntimeOverrides,
-    active_overrides: &mut Option<RuntimeOverrides>,
-    message: &WireMessage,
-) -> WireMessage {
-    let request_id = message.request_id.clone().unwrap_or_default();
-    if active_overrides.is_none() || message.session_id.as_deref() != Some(host.session_id.as_str())
-    {
-        return direct_error(
-            request_id,
-            "attachment-mismatch",
-            "current Rust attachment does not match sessionId",
-        );
-    }
-    let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
-    if host
-        .commands
-        .send(HostCommand::PrepareSwitch { reply: reply_tx })
-        .is_err()
-        || !matches!(reply_rx.await, Ok(Ok(())))
-    {
-        return direct_error(
-            request_id,
-            "attachment-busy",
-            "current Topic has a running turn, approval, or queued interaction",
-        );
-    }
-    host.shutdown().await;
-    match restore_control_host(host, base).await {
-        Ok(()) => {
-            *active_overrides = None;
-            direct_ack(request_id, serde_json::json!({ "closed": true }))
-        }
-        Err(error) => direct_error(request_id, "attachment-restore-failed", error.to_string()),
-    }
-}
-
 async fn write_direct_message(
     writer: &mut FramedWrite<Stdout, LengthDelimitedCodec>,
     message: &WireMessage,
@@ -482,6 +558,10 @@ async fn write_direct_message(
     Ok(())
 }
 
+// The v1.6 dispatcher is deliberately compiled out while its source remains
+// available for one release-cycle forensic comparison. It cannot be reached
+// by v1.7 builds or clients; `validate_direct_command` rejects its commands.
+#[cfg(any())]
 fn dispatch_direct(
     host: &vcp_agent_host::RunningHost,
     message: WireMessage,
@@ -502,6 +582,20 @@ fn dispatch_direct(
                     "topicId": host.topic_id,
                 }),
             );
+            Some(ack)
+        }
+        "create-topic" => {
+            let agent_id = message.string("agentId").unwrap_or("").to_string();
+            let title = message.string("title").map(ToOwned::to_owned);
+            let model = message.string("model").map(ToOwned::to_owned);
+            let workspace = message.string("workspaceRoot").map(PathBuf::from);
+            let _ = host.commands.send(HostCommand::CreateTopic {
+                request_id,
+                agent_id,
+                title,
+                model,
+                workspace,
+            });
             Some(ack)
         }
         "close-session" => { let _ = host.commands.send(HostCommand::Shutdown); Some(ack) }

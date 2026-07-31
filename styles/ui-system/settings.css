@@ -10,14 +10,9 @@
         gap: var(--vcp-ui-space-3);
         color: var(--vcp-ui-text-1);
         font-family: "Noto Sans SC Variable", sans-serif;
-        /* 与助手/话题 tab 的 agent-list/topic-list 左右缩进保持一致。
-           !important 是为了盖过 settings-agent-form.css 里 unlayered 的
-           `#tabContentSettings { padding: 12px 0 0 3px }`（该规则把左右 padding
-           设成了 0/3px，导致设置 tab 内容贴窗口左边缘）。 */
-        /* stylelint-disable-next-line declaration-no-important */
-        padding-left: var(--vcp-ui-sidebar-list-gutter) !important;
-        /* stylelint-disable-next-line declaration-no-important */
-        padding-right: var(--vcp-ui-sidebar-list-gutter) !important;
+        /* 与助手/话题 tab 的 agent-list/topic-list 左右缩进保持一致。 */
+        padding-left: var(--vcp-ui-sidebar-list-gutter);
+        padding-right: var(--vcp-ui-sidebar-list-gutter);
         box-sizing: border-box;
     }
 

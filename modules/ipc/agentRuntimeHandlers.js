@@ -42,6 +42,7 @@ function removeHandlers() {
         IPC_CHANNELS.GET_STATUS,
         IPC_CHANNELS.START,
         IPC_CHANNELS.STOP,
+        IPC_CHANNELS.CREATE_TOPIC,
         IPC_CHANNELS.CREATE_SESSION,
         IPC_CHANNELS.CLOSE_SESSION,
         IPC_CHANNELS.COMPACT_SESSION,
@@ -102,6 +103,7 @@ function initialize(options) {
     ipcMain.handle(IPC_CHANNELS.GET_STATUS, (event) => guard(event, () => manager.getStatus()));
     ipcMain.handle(IPC_CHANNELS.START, (event) => guard(event, () => manager.start()));
     ipcMain.handle(IPC_CHANNELS.STOP, (event) => guard(event, () => manager.stop()));
+    ipcMain.handle(IPC_CHANNELS.CREATE_TOPIC, (event, payload) => guard(event, () => manager.createTopic(payload || {})));
     ipcMain.handle(IPC_CHANNELS.CREATE_SESSION, (event, payload) => guard(event, () => manager.createSession(payload || {})));
     ipcMain.handle(IPC_CHANNELS.CLOSE_SESSION, (event, payload) => guard(event, () => manager.closeSession(payload || {})));
     ipcMain.handle(IPC_CHANNELS.COMPACT_SESSION, (event, payload) => guard(event, () => manager.compactSession(payload || {})));

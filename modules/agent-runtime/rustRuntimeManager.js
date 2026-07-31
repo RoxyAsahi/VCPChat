@@ -17,6 +17,9 @@ class RustAgentRuntimeManager {
         this.transportFactory = options.transportFactory || ((config) => new RustDaemonTransport(config));
         this.state = 'stopped';
         this.transport = null;
+        // Rust owns every live Topic runtime. Main keeps only routing identity
+        // for the transport boundary, never transcript or Turn state.
+        this.runtimes = new Map();
         this.attachment = null;
         this.controlWaiters = new Map();
         this.eventWaiters = new Set();
@@ -30,7 +33,7 @@ class RustAgentRuntimeManager {
         return {
             state: this.state,
             protocolVersion: 1,
-            protocolRevision: '1.5',
+            protocolRevision: '1.7',
             driver: 'rust',
             worker: this.transport ? {
                 available: true,
@@ -44,6 +47,7 @@ class RustAgentRuntimeManager {
             } : null,
             lastError: this.lastError,
             attachment: this.attachment ? { ...this.attachment } : null,
+            runtimes: Array.from(this.runtimes.values(), (runtime) => ({ ...runtime })),
             toolbox: { configured: Boolean(this.getSettings()?.vcpServerUrl && this.getSettings()?.vcpApiKey) },
         };
     }
@@ -59,6 +63,8 @@ class RustAgentRuntimeManager {
         this._rejectEventWaiters(new Error('Rust Agent runtime stopped'));
         await this.transport?.stop();
         this.transport = null;
+        this.runtimes.clear();
+        this.attachment = null;
         this.state = 'stopped';
         return this.getStatus();
     }
@@ -67,50 +73,66 @@ class RustAgentRuntimeManager {
         return this.attachment?.topicId ?? null;
     }
 
+    async createTopic(options = {}) {
+        const agentId = normalizeAgentId(options.agent || options.agentId);
+        if (!agentId) throw new Error('创建 Agent Topic 需要明确的 Agent');
+        const workspaceRoot = options.workspaceRoot ? path.resolve(options.workspaceRoot) : undefined;
+        await this._ensureControlTransport(agentId);
+        return this._requestControl('create-topic', {
+            agentId,
+            ...(typeof options.title === 'string' && options.title.trim() ? { title: options.title.trim() } : {}),
+            ...(typeof options.model === 'string' && options.model.trim() ? { model: options.model.trim() } : {}),
+            ...(workspaceRoot ? { workspaceRoot } : {}),
+        }, 'topic-created');
+    }
+
     async createSession(options = {}) {
-        // A second Workbench window can select the Topic already attached to
-        // this Main process. Reuse the existing Rust attachment instead of
-        // stopping its daemon and reacquiring the same lease.
-        if (
-            options.resume
-            && this.attachment?.topicId === options.resume
-            && this.transport
-            && this.state === 'ready'
-        ) {
-            return { ...this.attachment };
+        const requestedTopicId = String(options.topicId || options.resume || '').trim();
+        if (requestedTopicId && this.runtimes.has(requestedTopicId)) {
+            const runtime = this.runtimes.get(requestedTopicId);
+            this.attachment = runtime;
+            return { ...runtime };
         }
         const settings = this.getSettings() || {};
         const workspaceRoot = path.resolve(options.workspaceRoot || this.projectRoot);
-        // Selecting a Topic is a view operation.  Keep one lease-free daemon
-        // transport alive and promote it to a writable attachment only when a
-        // caller explicitly needs to create/continue a session.
-        await this._ensureControlTransport(options.agent || options.agentId || 'Nova');
-        const created = await this.transport.request('switch-attachment', {
-            ...(this.attachment?.sessionId ? { sessionId: this.attachment.sessionId } : {}),
-            ...(options.resume ? { topicId: options.resume } : {}),
-            ...(options.agent || options.agentId ? { agentId: options.agent || options.agentId } : {}),
+        const agentId = normalizeAgentId(options.agent || options.agentId);
+        if (!agentId) throw new Error('Agent runtime requires an explicit Agent identity');
+        await this._ensureControlTransport(agentId);
+        let topicId = requestedTopicId;
+        if (!topicId) {
+            const topic = await this.createTopic({ agentId, title: options.title, model: options.model, workspaceRoot });
+            topicId = String(topic?.topicId || '').trim();
+            if (!topicId) throw new Error('Rust daemon did not return a Topic identity');
+        }
+        const created = await this.transport.request('ensure-topic-runtime', {
+            topicId,
+            agentId,
             ...(options.model ? { model: options.model } : {}),
             workspaceRoot,
             permissionMode: options.permissionMode === 'always-approve' ? 'always-approve' : 'ask',
         });
-        this.attachment = {
+        const runtime = {
             sessionId: created.sessionId,
-            topicId: created.topicId || options.resume || null,
+            topicId: created.topicId || topicId,
             title: options.title || 'Nova Agent',
             workspaceRoot: created.workspaceRoot || workspaceRoot,
             model: created.model || options.model || settings.agentRuntime?.tui?.defaultModel || '',
-            agentId: created.agentId || options.agent || options.agentId || 'Nova',
+            agentId: created.agentId || agentId,
             runtime: 'rust',
         };
+        this.runtimes.set(runtime.topicId, runtime);
+        // Compatibility projection for legacy IPC callers only. Workbench
+        // uses selected Topic plus `runtimes`, never this as a global lock.
+        this.attachment = runtime;
         if (this.workbenchMounted) {
             await this._requestControl('set-workbench-presence', { mounted: true }, 'workbench-presence');
         }
         this.state = 'ready';
-        return { ...this.attachment };
+        return { ...runtime };
     }
 
     async ensureAttachmentForTopic(options = {}) {
-        if (options.topicId && this.attachment?.topicId === options.topicId) return { ...this.attachment };
+        if (options.topicId && this.runtimes.has(options.topicId)) return { ...this.runtimes.get(options.topicId) };
         return this.createSession({
             ...options,
             resume: options.topicId || options.resume,
@@ -119,59 +141,59 @@ class RustAgentRuntimeManager {
 
     async closeSession({ sessionId }) {
         this._assertAttachment(sessionId);
-        const closed = { ...this.attachment };
+        const closed = this._runtimeForSession(sessionId);
         if (!this.transport) {
             // A crashed daemon cannot release anything over stdio.  Forget the
             // process-local identity; the next control Host will inspect the
             // durable Rust lease/snapshot instead of replaying this session.
-            this.attachment = null;
+            this.runtimes.delete(closed.topicId);
+            if (this.attachment?.sessionId === sessionId) this.attachment = null;
             return closed;
         }
-        await this.transport.request('close-session', { sessionId });
-        // Closing an attachment returns the same daemon to the lease-free
-        // control plane.  Keep its PID alive for Topic reads and future opens.
-        this.attachment = null;
+        await this.transport.request('detach-topic', { sessionId, topicId: closed.topicId });
+        this.runtimes.delete(closed.topicId);
+        if (this.attachment?.sessionId === sessionId) this.attachment = null;
         return closed;
     }
 
     async importAttachment({ sessionId, path: filePath }) {
-        this._assertAttachment(sessionId);
+        const runtime = this._runtimeForSession(sessionId);
         const value = String(filePath || '').trim();
         if (!value) throw new Error('Attachment path must not be empty');
-        return this._requestControl('import-attachment', { sessionId, path: value }, 'attachment-imported');
+        return this._requestControl('import-attachment', { sessionId, topicId: runtime.topicId, path: value }, 'attachment-imported');
     }
 
     async startTurn({ sessionId, prompt, attachments = [] }) {
-        this._assertAttachment(sessionId);
+        const runtime = this._runtimeForSession(sessionId);
         const value = String(prompt || '').trim();
         if (!Array.isArray(attachments) || attachments.length > 8 || attachments.some((item) => !item || typeof item !== 'object' || Array.isArray(item))) {
             throw new Error('Attachments must be descriptor objects (maximum 8)');
         }
         if (!value && attachments.length === 0) throw new Error('Prompt or attachment must not be empty');
         const turnId = `turn_${crypto.randomUUID()}`;
-        await this.transport.request('start-turn', { sessionId, turnId, prompt: value, attachments });
-        return { sessionId, turnId };
+        await this.transport.request('start-turn', { sessionId, topicId: runtime.topicId, turnId, prompt: value, attachments });
+        return { sessionId, topicId: runtime.topicId, turnId };
     }
 
     async steerTurn({ sessionId, turnId, prompt }) {
-        this._assertAttachment(sessionId);
+        const runtime = this._runtimeForSession(sessionId);
         const value = String(prompt || '').trim();
         if (!turnId || !value) throw new Error('Steering requires the active turn and a non-empty prompt');
-        await this.transport.request('steer-turn', { sessionId, turnId, prompt: value });
+        await this.transport.request('steer-turn', { sessionId, topicId: runtime.topicId, turnId, prompt: value });
         return { ok: true };
     }
 
     async followUpTurn({ sessionId, turnId, prompt }) {
-        this._assertAttachment(sessionId);
+        const runtime = this._runtimeForSession(sessionId);
         const value = String(prompt || '').trim();
         if (!turnId || !value) throw new Error('Follow-up requires the active turn and a non-empty prompt');
-        await this.transport.request('follow-up-turn', { sessionId, turnId, prompt: value });
+        await this.transport.request('follow-up-turn', { sessionId, topicId: runtime.topicId, turnId, prompt: value });
         return { ok: true };
     }
 
     async cancelTurn({ sessionId, turnId }) {
-        this._assertAttachment(sessionId);
-        await this.transport.request('cancel-turn', { sessionId, turnId });
+        const runtime = this._runtimeForSession(sessionId);
+        await this.transport.request('cancel-turn', { sessionId, topicId: runtime.topicId, turnId });
         return { ok: true };
     }
 
@@ -185,7 +207,7 @@ class RustAgentRuntimeManager {
             });
             return { ok: true, approvalId: payload.approvalId, decision: payload.decision };
         }
-        this._assertAttachment(payload.sessionId);
+        const runtime = this._runtimeForSession(payload.sessionId);
         if (!payload.approvalId || !payload.turnId || !payload.toolCallId || !payload.argumentsHash) {
             throw new Error('Approval binding is incomplete');
         }
@@ -193,6 +215,7 @@ class RustAgentRuntimeManager {
             approvalId: payload.approvalId,
             allowed: payload.decision === 'allow',
             sessionId: payload.sessionId,
+            topicId: runtime.topicId,
             turnId: payload.turnId,
             toolCallId: payload.toolCallId,
             argumentsHash: payload.argumentsHash,
@@ -201,19 +224,19 @@ class RustAgentRuntimeManager {
     }
 
     async compactSession({ sessionId }) {
-        this._assertAttachment(sessionId);
+        const runtime = this._runtimeForSession(sessionId);
         if (!this.transport) throw new Error('Rust Agent daemon is not running');
         const outcome = this._waitForEvent((event) => (
             event.sessionId === sessionId
             && (event.type === 'context.compaction.completed' || event.type === 'context.compaction.failed')
         ), 180_000, 'Rust Agent context compaction timed out');
         try {
-            await this.transport.request('compact', { sessionId });
+            await this.transport.request('compact', { sessionId, topicId: runtime.topicId });
             const event = await outcome.promise;
             if (event.type === 'context.compaction.failed') {
                 throw new Error(event.payload?.error || event.payload?.message || 'Rust Agent context compaction failed');
             }
-            return { ok: true, sessionId, topicId: this.attachment.topicId, compaction: event.payload || {} };
+            return { ok: true, sessionId, topicId: runtime.topicId, compaction: event.payload || {} };
         } catch (error) {
             outcome.cancel(error);
             throw error;
@@ -276,14 +299,18 @@ class RustAgentRuntimeManager {
     async deleteTopic({ topicId, agentId }) {
         const normalizedTopicId = String(topicId || '').trim();
         if (!normalizedTopicId) throw new Error('Topic id is required');
-        if (this.attachment?.topicId === normalizedTopicId) throw new Error('不能删除当前打开的 Agent Topic；请先切换到其他会话。');
+        if (this.runtimes.has(normalizedTopicId)) throw new Error('不能删除正在运行的 Agent Topic；请先停止该会话。');
         const normalizedAgentId = normalizeAgentId(agentId);
         await this._ensureControlTransport(normalizedAgentId);
         return this._requestControl('delete-topic', withAgentId({ topicId: normalizedTopicId }, normalizedAgentId), 'topic-deleted');
     }
-    async listInteractionQueue() { await this._ensureControlTransport(); return this._requestControl('list-interaction-queue', {}, 'interaction-queue'); }
+    async listInteractionQueue({ sessionId } = {}) {
+        const runtime = this._runtimeForSession(sessionId || this.attachment?.sessionId);
+        await this._ensureControlTransport();
+        return this._requestControl('list-interaction-queue', { sessionId: runtime.sessionId, topicId: runtime.topicId }, 'interaction-queue');
+    }
     async replaceInteractionQueue({ sessionId, interactions }) {
-        this._assertAttachment(sessionId);
+        const runtime = this._runtimeForSession(sessionId);
         if (!Array.isArray(interactions)) throw new Error('Interaction queue must be an array');
         const normalized = interactions.map((item, index) => {
             const interactionId = String(item?.interactionId || '').trim();
@@ -292,9 +319,20 @@ class RustAgentRuntimeManager {
             if (!interactionId || !prompt || !['steer', 'follow-up'].includes(kind)) throw new Error(`Invalid interaction queue item at index ${index}`);
             return { interactionId, kind, prompt };
         });
-        return this._requestControl('replace-interaction-queue', { sessionId, interactions: normalized }, 'interaction-queue');
+        return this._requestControl('replace-interaction-queue', { sessionId, topicId: runtime.topicId, interactions: normalized }, 'interaction-queue');
     }
-    async clearInteractionQueue() { await this._ensureControlTransport(); return this._requestControl('clear-interaction-queue', {}, 'interaction-queue'); }
+    async clearInteractionQueue({ sessionId } = {}) {
+        const runtime = this._runtimeForSession(sessionId || this.attachment?.sessionId);
+        await this._ensureControlTransport();
+        return this._requestControl('clear-interaction-queue', { sessionId: runtime.sessionId, topicId: runtime.topicId }, 'interaction-queue');
+    }
+    async listActiveRuntimes() {
+        await this._ensureControlTransport();
+        const result = await this.transport.request('list-active-runtimes', {});
+        const runtimes = Array.isArray(result?.runtimes) ? result.runtimes : [];
+        this.runtimes = new Map(runtimes.map((runtime) => [runtime.topicId, { ...runtime, runtime: 'rust' }]));
+        return { ...result, runtimes };
+    }
     async getWorkbenchSettings() { await this._ensureControlTransport(); return this._requestControl('get-settings', {}, 'settings'); }
     async updateWorkbenchSettings(payload = {}) {
         await this._ensureControlTransport();
@@ -478,8 +516,14 @@ class RustAgentRuntimeManager {
         this.controlWaiters.clear();
     }
 
+    _runtimeForSession(sessionId) {
+        const runtime = Array.from(this.runtimes.values()).find((candidate) => candidate.sessionId === sessionId);
+        if (!runtime) throw new Error(`Unknown Rust Agent session: ${sessionId}`);
+        return runtime;
+    }
+
     _assertAttachment(sessionId) {
-        if (!this.attachment || this.attachment.sessionId !== sessionId) throw new Error(`Unknown Rust Agent session: ${sessionId}`);
+        this._runtimeForSession(sessionId);
     }
 }
 

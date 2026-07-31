@@ -74,7 +74,7 @@ Grok pager、session JSONL、Agent 或 Shell。
 - `npm run build:tui:dist` 通过：`vcp-agent.exe` 6,958,080 bytes，较 Markdown 导入前基线增加 578,048 bytes，低于 18,962,944-byte gate。
 - `release-dist` daemon 通过 revision-aware framed stdio smoke；`release-dist` TUI 的 `--version` 启动 smoke 通过。CI distribution job 已固定执行相同检查后才上传产物。
 
-这些证据只将 `rust-quality`、`protocol-hermetic` 和 `windows-distribution` 标为 pass。真实 ToolBox 的当前 revision 验收尚未重跑，因此 `live-toolbox` 仍为 pending，整体 verdict 必须保持 `NOT_READY`。
+这些历史证据只将 `rust-quality`、`protocol-hermetic` 和 `windows-distribution` 标为 pass。2026-07-31 的 v1.7 revision `a08bd985cd919d5bcb4b1969194c5ff01d7677947a8923c479efc6ef3fc74519` 已新增通过 `VCP_AGENT_LIVE=1 npm run test:rust-stack:live` 的双 Nova Topic 并发/取消 gate；它不替代完整的 ToolBox、TUI、工具和审批 live matrix。因此 `live-toolbox` 总体仍为 pending，整体 verdict 必须保持 `NOT_READY`。
 
 ### Fast PR
 

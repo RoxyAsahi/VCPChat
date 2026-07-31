@@ -1,6 +1,11 @@
 function projectSession(summary = {}) {
     return {
         sessionId: summary.sessionId,
+        // These are Rust daemon identities, not renderer-generated aliases.
+        // The sidebar needs them to distinguish the sole writable attachment
+        // from durable preview Topics without inventing a legacy JS Session.
+        topicId: summary.topicId || null,
+        agentId: summary.agentId || summary.metadata?.agentId || null,
         title: summary.title || summary.metadata?.title || '新 Agent 会话',
         model: summary.model || summary.metadata?.model || '未选择模型',
         workspaceRoot: summary.workspaceRoot || '',

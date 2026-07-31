@@ -26,6 +26,36 @@ function createWorkbenchController(runtimeApi) {
             : { ...payload, agentId: String(agentId).trim() };
     }
 
+    function runtimeForTopic(topicId, state = store.getState()) {
+        if (!topicId) return null;
+        return (Array.isArray(state.activeRuntimes) ? state.activeRuntimes : [])
+            .find((runtime) => runtime?.topicId === topicId) || null;
+    }
+
+    function selectedRuntime(state = store.getState()) {
+        return runtimeForTopic(state.selectedTopic?.topicId, state)
+            // Transitional bootstrap compatibility only: the pointer is set
+            // by a selected-topic hydration, never used to find another Host.
+            || state.attachment || null;
+    }
+
+    function projectRuntimeActivity(event) {
+        if (!event?.topicId || !event?.sessionId) return;
+        const current = store.getState();
+        const index = (current.activeRuntimes || []).findIndex((runtime) => (
+            runtime.topicId === event.topicId && runtime.sessionId === event.sessionId
+        ));
+        if (index < 0) return;
+        let activity = null;
+        if (event.type === 'turn.started') activity = 'running';
+        else if (event.type === 'approval.requested') activity = 'awaiting-approval';
+        else if (['turn.completed', 'turn.failed', 'turn.cancelled'].includes(event.type)) activity = 'idle';
+        if (!activity) return;
+        const activeRuntimes = [...current.activeRuntimes];
+        activeRuntimes[index] = { ...activeRuntimes[index], activity, activeTurnId: activity === 'running' ? event.turnId : null };
+        store.setState({ activeRuntimes });
+    }
+
     async function refreshStatus() {
         const status = await requireApi('agentRuntimeGetStatus')();
         const projection = {
@@ -34,6 +64,7 @@ function createWorkbenchController(runtimeApi) {
                 worker: status?.worker || null,
                 lastError: status?.lastError || null,
             },
+            activeRuntimes: Array.isArray(status?.runtimes) ? status.runtimes : [],
         };
         // Approvals are a Renderer-only live projection. Rust events add and
         // remove them; Main must never manufacture an empty list that erases
@@ -118,18 +149,17 @@ function createWorkbenchController(runtimeApi) {
 
     function applyPreviewProjection(projection, selectedTopic) {
         const current = store.getState();
-        const backgroundBusy = Boolean(current.attachment?.sessionId
-            && current.attachment.topicId !== selectedTopic.topicId
-            && (current.activeTurnId || current.approvals.length));
+        const runtime = runtimeForTopic(selectedTopic.topicId, current);
         store.setState({
             ...projection,
             selectedTopic,
+            // This compatibility pointer is scoped to the currently viewed
+            // Topic only. It must never stand for a daemon-global attachment.
+            attachment: runtime ? { ...runtime } : null,
             activeTurnId: null,
             context: { usedTokens: 0, contextWindow: 0, percentage: 0, compacting: false, summary: '' },
             plan: null,
-            backgroundAttachment: current.attachment?.sessionId && current.attachment.topicId !== selectedTopic.topicId
-                ? { ...current.attachment, busy: backgroundBusy }
-                : null,
+            backgroundAttachment: null,
         });
     }
 
@@ -139,15 +169,15 @@ function createWorkbenchController(runtimeApi) {
         return barrier;
     }
 
-    function eventBelongsToAttachment(event, attachment) {
+    function eventBelongsToTopicRuntime(event, runtime) {
         if (!event || typeof event !== 'object') return false;
         if (event.type?.startsWith('runtime.')) return true;
-        return Boolean(attachment?.sessionId
-            && event.sessionId === attachment.sessionId
-            && event.topicId === attachment.topicId);
+        return Boolean(runtime?.sessionId
+            && event.sessionId === runtime.sessionId
+            && event.topicId === runtime.topicId);
     }
 
-    function releaseSnapshotBarrier(barrier, snapshot, attachment) {
+    function releaseSnapshotBarrier(barrier, snapshot, runtime) {
         if (snapshotBarrier !== barrier) return;
         snapshotBarrier = null;
         // `snapshotSequence` is supplied with read-topic by the daemon. It is
@@ -166,7 +196,11 @@ function createWorkbenchController(runtimeApi) {
                 store.dispatch(event);
                 continue;
             }
-            if (!eventBelongsToAttachment(event, attachment)) continue;
+            if (event?.type?.startsWith('approval.')) {
+                store.dispatch(event);
+                continue;
+            }
+            if (!eventBelongsToTopicRuntime(event, runtime)) continue;
             if (Number.isFinite(minimumSequence) && Number(event.sequence) <= minimumSequence) continue;
             store.dispatch(event);
         }
@@ -180,14 +214,39 @@ function createWorkbenchController(runtimeApi) {
             const snapshot = await requireApi('agentRuntimeReadTopic')(topicPayload({ topicId }, agentId));
             if (version !== selectionVersion) return null;
             const current = store.getState();
-            const active = attachment || (current.attachment?.topicId === topicId ? current.attachment : null);
-            const nextAttachment = active ? { ...active, topicId } : null;
+            const active = attachment || runtimeForTopic(topicId, current);
+            // `read-topic` is the durable metadata source after a reload or
+            // takeover. Main's attachment is deliberately small and can have
+            // only a fallback title; promote only non-sensitive Topic fields
+            // from the Rust snapshot instead of keeping a stale shell label.
+            const durableState = snapshot?.state && typeof snapshot.state === 'object' ? snapshot.state : {};
+            const durableAgentId = typeof snapshot?.agentId === 'string' && snapshot.agentId.trim()
+                ? snapshot.agentId
+                : agentId || active?.agentId || null;
+            const nextAttachment = active ? {
+                ...active,
+                topicId,
+                title: typeof durableState.title === 'string' && durableState.title.trim()
+                    ? durableState.title : active.title,
+                model: typeof durableState.model === 'string' && durableState.model.trim()
+                    ? durableState.model : active.model,
+                workspaceRoot: typeof durableState.workspaceRef === 'string' && durableState.workspaceRef.trim()
+                    ? durableState.workspaceRef : active.workspaceRoot,
+                agentId: durableAgentId || active.agentId,
+            } : null;
             store.setAttachment(nextAttachment);
             const projection = historyToProjection(snapshot?.history);
             cacheSnapshot(topicId, snapshot);
             store.setState({
                 ...projection,
-                selectedTopic: { topicId, agentId, mode: 'attached' },
+                selectedTopic: {
+                    topicId,
+                    agentId: durableAgentId,
+                    title: nextAttachment?.title || '',
+                    model: nextAttachment?.model || '',
+                    workspaceRoot: nextAttachment?.workspaceRoot || '',
+                    mode: nextAttachment ? 'attached' : 'preview',
+                },
                 backgroundAttachment: null,
             });
             releaseSnapshotBarrier(barrier, snapshot, nextAttachment);
@@ -217,8 +276,22 @@ function createWorkbenchController(runtimeApi) {
         if (cached) applyPreviewProjection(cached, selectedTopic);
         const snapshot = await requireApi('agentRuntimeReadTopic')(topicPayload({ topicId }, agentId));
         if (version !== selectionVersion) return null;
+        const durableAgentId = typeof snapshot?.agentId === 'string' && snapshot.agentId.trim()
+            ? snapshot.agentId
+            : selectedTopic.agentId;
+        const durableState = snapshot?.state && typeof snapshot.state === 'object' ? snapshot.state : {};
+        const resolvedTopic = {
+            ...selectedTopic,
+            agentId: durableAgentId,
+            title: typeof durableState.title === 'string' && durableState.title.trim()
+                ? durableState.title : selectedTopic.title,
+            model: typeof durableState.model === 'string' && durableState.model.trim()
+                ? durableState.model : selectedTopic.model,
+            workspaceRoot: typeof durableState.workspaceRef === 'string' && durableState.workspaceRef.trim()
+                ? durableState.workspaceRef : selectedTopic.workspaceRoot,
+        };
         cacheSnapshot(topicId, snapshot);
-        applyPreviewProjection(historyToProjection(snapshot?.history), selectedTopic);
+        applyPreviewProjection(historyToProjection(snapshot?.history), resolvedTopic);
         return snapshot;
     }
 
@@ -237,33 +310,34 @@ function createWorkbenchController(runtimeApi) {
 
     async function createSession(options = {}) {
         const barrier = beginSnapshotBarrier();
+        // Main maps this compatibility API to v1.7 ensure-topic-runtime. It
+        // starts only the selected Topic Host and never replaces other Hosts.
         const attachment = await requireApi('agentRuntimeCreateSession')(options);
-        // `create-session` creates a live attachment before the first safe
-        // checkpoint exists.  A fresh Rust Topic can therefore legitimately
-        // reject/read as empty here.  Install the attachment first so that
-        // this expected empty-snapshot path never leaves the composer in the
-        // disconnected state; history remains deliberately empty until Rust
-        // has a durable snapshot to return.
         store.setAttachment(attachment);
-        // Session creation changes the daemon lifecycle from the control
-        // plane's point of view.  Refresh it explicitly instead of waiting for
-        // a diagnostic event: `session.attached` is informational and is not
-        // a durable replacement for the runtime status contract.
         await refreshStatus();
-        // A newly-created Topic has no checkpoint until its first safe write.
-        // That is valid: render an empty projection, but never invent history.
         if (attachment.topicId) {
             try {
-                await hydrateTopic(attachment.topicId, attachment, barrier);
+                await hydrateTopic(attachment.topicId, attachment, barrier, attachment.agentId);
             } catch {
-                // Keep the real attachment and release only the events that
-                // belong to it.  Do not synthesize a transcript from Main.
                 releaseSnapshotBarrier(barrier, null, attachment);
             }
         } else {
             releaseSnapshotBarrier(barrier, null, attachment);
         }
         return attachment;
+    }
+
+    async function createTopic(options = {}) {
+        const topic = await requireApi('agentRuntimeCreateTopic')(options);
+        const topicId = String(topic?.topicId || '').trim();
+        const agentId = String(topic?.agentId || options.agent || options.agentId || '').trim();
+        if (!topicId || !agentId) throw new Error('Rust Runtime 未返回新 Topic 的完整身份');
+        await previewTopic(topicId, agentId, {
+            title: topic.title || '',
+            model: topic.model || '',
+            workspaceRoot: topic.workspaceRoot || '',
+        });
+        return { ...topic, topicId, agentId };
     }
 
     async function compactSession(sessionId, instructions) {
@@ -286,17 +360,25 @@ function createWorkbenchController(runtimeApi) {
     const takeoverTopic = (topicId, agentId = undefined) => requireApi('agentRuntimeTakeoverTopic')(topicPayload({ topicId }, agentId));
     const renameTopic = (topicId, title, agentId = undefined) => requireApi('agentRuntimeRenameTopic')(topicPayload({ topicId, title }, agentId));
     const deleteTopic = (topicId, agentId = undefined) => requireApi('agentRuntimeDeleteTopic')(topicPayload({ topicId }, agentId));
-    const listInteractionQueue = () => requireApi('agentRuntimeListInteractionQueue')();
+    const listInteractionQueue = () => {
+        const runtime = selectedRuntime();
+        if (!runtime) throw new Error('当前 Topic 没有运行中的 Rust Runtime');
+        return requireApi('agentRuntimeListInteractionQueue')({ sessionId: runtime.sessionId });
+    };
     const replaceInteractionQueue = (interactions) => {
-        const sessionId = store.getState().attachment?.sessionId;
+        const sessionId = selectedRuntime()?.sessionId;
         if (!sessionId) throw new Error('请先选择 Agent Session');
         return requireApi('agentRuntimeReplaceInteractionQueue')({ sessionId, interactions });
     };
-    const clearInteractionQueue = () => requireApi('agentRuntimeClearInteractionQueue')();
+    const clearInteractionQueue = () => {
+        const runtime = selectedRuntime();
+        if (!runtime) throw new Error('当前 Topic 没有运行中的 Rust Runtime');
+        return requireApi('agentRuntimeClearInteractionQueue')({ sessionId: runtime.sessionId });
+    };
     const getWorkbenchSettings = () => requireApi('agentRuntimeGetWorkbenchSettings')();
     const updateWorkbenchSettings = (settings) => requireApi('agentRuntimeUpdateWorkbenchSettings')(settings);
     const selectAttachments = () => {
-        const sessionId = store.getState().attachment?.sessionId;
+        const sessionId = selectedRuntime()?.sessionId;
         if (!sessionId) throw new Error('请先选择或新建 Session');
         return requireApi('agentRuntimeSelectAttachments')({ sessionId });
     };
@@ -304,13 +386,12 @@ function createWorkbenchController(runtimeApi) {
     async function startTurn(prompt, attachments = []) {
         let current = store.getState();
         const selected = current.selectedTopic;
-        if (selected?.mode === 'preview' && current.backgroundAttachment?.busy) {
-            throw new Error('另一个 Agent Topic 仍在运行或等待审批；当前仅可只读查看。');
-        }
-        if (selected?.topicId && selected.topicId !== current.attachment?.topicId) {
-            // `agentRuntimeCreateSession` now maps to Rust's in-process
-            // switch-attachment command.  Do this only at send time, never
-            // when the sidebar row was selected.
+        if (selected?.topicId && !selectedRuntime(current)) {
+            if (!selected.agentId) {
+                throw new Error('当前 Topic 缺少 Rust 确认的 Agent 身份，不能猜测并发送。请重新从会话列表打开它。');
+            }
+            // Runtime activation happens only at send time. The v1.7 daemon
+            // creates/reuses this Topic Host without touching other Topics.
             await createSession({
                 resume: selected.topicId,
                 agent: selected.agentId || undefined,
@@ -320,7 +401,7 @@ function createWorkbenchController(runtimeApi) {
             });
             current = store.getState();
         }
-        const sessionId = current.attachment?.sessionId;
+        const sessionId = selectedRuntime(current)?.sessionId;
         if (!sessionId) throw new Error('请先选择或新建 Session');
         // ACK means the daemon accepted this command, not that a durable
         // Topic checkpoint already exists.  Project a renderer-only pending
@@ -335,7 +416,7 @@ function createWorkbenchController(runtimeApi) {
 
     async function cancelTurn() {
         const { activeTurnId: turnId } = store.getState();
-        const sessionId = store.getState().attachment?.sessionId;
+        const sessionId = selectedRuntime()?.sessionId;
         if (!sessionId) return null;
         return requireApi('agentRuntimeCancelTurn')({ sessionId, turnId: turnId || undefined });
     }
@@ -344,7 +425,7 @@ function createWorkbenchController(runtimeApi) {
     // otherwise fall back to cancelling the whole turn that owns the call.  The
     // Workbench UI only shows the cancel affordance while a tool is in flight.
     async function cancelTool(toolCallId, turnId) {
-        const sessionId = store.getState().attachment?.sessionId;
+        const sessionId = selectedRuntime()?.sessionId;
         if (!sessionId || !toolCallId) return null;
         const cancelToolApi = runtimeApi['agentRuntimeCancelTool'];
         if (typeof cancelToolApi === 'function') {
@@ -356,14 +437,14 @@ function createWorkbenchController(runtimeApi) {
 
     async function steerTurn(prompt) {
         const { activeTurnId: turnId } = store.getState();
-        const sessionId = store.getState().attachment?.sessionId;
+        const sessionId = selectedRuntime()?.sessionId;
         if (!sessionId || !turnId) throw new Error('当前没有可插入指令的任务');
         return requireApi('agentRuntimeSteerTurn')({ sessionId, turnId, prompt });
     }
 
     async function followUpTurn(prompt) {
         const { activeTurnId: turnId } = store.getState();
-        const sessionId = store.getState().attachment?.sessionId;
+        const sessionId = selectedRuntime()?.sessionId;
         if (!sessionId || !turnId) throw new Error('当前没有可追加后续指令的任务');
         return requireApi('agentRuntimeFollowUpTurn')({ sessionId, turnId, prompt });
     }
@@ -398,13 +479,15 @@ function createWorkbenchController(runtimeApi) {
         subscribeRuntime();
         runtimeApi.agentRuntimeSetWorkbenchPresence?.(true);
         const status = await refreshStatus().catch(() => null);
-        // Ctrl+R leaves Electron Main and its daemon alive. Restore the
-        // existing attachment from the Rust Topic while the Renderer barrier
-        // buffers already-subscribed live daemon events.
-        if (status?.attachment?.topicId) {
-            await hydrateTopic(status.attachment.topicId, status.attachment, barrier);
+        // Ctrl+R restores only an actual selected runtime. A list of active
+        // Topic Hosts is not a request to pick one or replay its transcript.
+        const selected = store.getState().selectedTopic;
+        const runtime = selectedRuntime() || status?.attachment || null;
+        const topicId = selected?.topicId || runtime?.topicId || null;
+        if (topicId && runtime) {
+            await hydrateTopic(topicId, runtime, barrier, selected?.agentId || runtime.agentId);
         } else {
-            releaseSnapshotBarrier(barrier, null, store.getState().attachment);
+            releaseSnapshotBarrier(barrier, null, runtime);
         }
         return store.getState();
     }
@@ -418,23 +501,16 @@ function createWorkbenchController(runtimeApi) {
                     return;
                 }
                 const current = store.getState();
+                projectRuntimeActivity(event);
                 const selectedTopicId = current.selectedTopic?.topicId;
                 const isApproval = event?.type?.startsWith('approval.');
-                const isDaemonGlobal = event?.type?.startsWith('runtime.');
+                const isDaemonGlobal = event?.type?.startsWith('runtime.') || event?.type === 'toolbox.ws';
                 if (!isApproval && !isDaemonGlobal && event?.topicId && selectedTopicId && event.topicId !== selectedTopicId) {
-                    // Do not retain another Topic's transcript in the
-                    // Renderer.  A minimal badge is enough to say that the
-                    // one Rust attachment is still busy in the background.
-                    const busy = event.type === 'turn.started'
-                        ? true
-                        : ['turn.completed', 'turn.failed', 'turn.cancelled'].includes(event.type)
-                            ? false
-                            : current.backgroundAttachment?.busy === true;
-                    store.setState({
-                        backgroundAttachment: current.attachment?.sessionId
-                            ? { ...current.attachment, busy }
-                            : current.backgroundAttachment,
-                    });
+                    // Do not retain another Topic's transcript. Its sidebar
+                    // badge derives from the daemon's active runtime Map.
+                    // A debounced status pull is sufficient and cannot lock
+                    // the current Topic's composer.
+                    void refreshStatus().catch(() => {});
                     return;
                 }
                 store.dispatch(event);
@@ -451,7 +527,7 @@ function createWorkbenchController(runtimeApi) {
 
     return {
         store, initialize, subscribeRuntime, dispose, refreshStatus, startRuntime, stopRuntime,
-        createSession, compactSession, hydrateTopic, previewTopic,
+        createSession, createTopic, compactSession, hydrateTopic, previewTopic,
         listTopics, searchTopics, searchTopicMessages, getTopicIndexStatus, rebuildTopicIndex,
         readTopic, takeoverTopic, renameTopic, deleteTopic,
         listInteractionQueue, replaceInteractionQueue, clearInteractionQueue,

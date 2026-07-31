@@ -193,10 +193,13 @@ async function openWorkbench(page, appData) {
     });
     assert.ok(openedSessions, 'Agent Workbench must expose the current 会话 tab');
     try {
-        await page.waitForSelector(`.agent-chat-persisted-topic[data-topic-id="${topicId}"]`, { visible: true, timeout: timeoutMs });
+        // On a re-open the same Rust Topic may already be the sole live
+        // attachment, so it is intentionally rendered as the live row rather
+        // than duplicated as a persisted preview row.
+        await page.waitForSelector(`.agent-chat-session-row[data-topic-id="${topicId}"]`, { visible: true, timeout: timeoutMs });
     } catch (error) {
         const projection = await page.evaluate(async () => {
-            const rows = [...document.querySelectorAll('.agent-chat-persisted-topic')].map(row => ({
+            const rows = [...document.querySelectorAll('.agent-chat-session-row')].map(row => ({
                 topicId: row.dataset.topicId,
                 text: row.textContent,
             }));
@@ -221,11 +224,34 @@ async function selectTopic(page, actionLabel) {
     }, topicId);
     assert.ok(clicked, 'the seeded Topic must be visible in the Workbench session sidebar');
     if (actionLabel === '打开并恢复') {
+        // R3-A/R3-D separate immediate Topic preview from the first writable
+        // attachment. This fixture deliberately has no model server, so it
+        // cannot use the visible send button to create the owner. First prove
+        // the GUI took the preview path, then use the same narrowed Main API
+        // to establish a writer for the independent lease/takeover scenario.
+        await page.waitForFunction(async (id) => {
+            const status = await (window.chatAPI || window.electronAPI).agentRuntimeGetStatus();
+            return status?.attachment?.topicId !== id
+                && document.querySelector(`.agent-chat-session-row[data-topic-id="${id}"]`)?.classList.contains('active')
+                && !document.querySelector('.agent-chat-topic-flow-dialog');
+        }, { timeout: timeoutMs }, topicId);
+        const attached = await page.evaluate(async (id) => {
+            const api = window.chatAPI || window.electronAPI;
+            return api.agentRuntimeCreateSession({ resume: id, agent: 'Nova' });
+        }, topicId);
+        assert.equal(attached?.topicId, topicId, 'fixture owner attachment must be created through the narrowed Rust Runtime API');
         await page.waitForFunction(async (id) => {
             const status = await (window.chatAPI || window.electronAPI).agentRuntimeGetStatus();
             return status?.attachment?.topicId === id
-                && !document.querySelector('.agent-chat-topic-flow-dialog');
+                && !document.querySelector('.agent-chat-message-input')?.disabled;
         }, { timeout: timeoutMs }, topicId);
+        // The direct fixture attachment intentionally bypasses the Workbench
+        // controller (there is no model server to send through). Reloading
+        // proves the actual snapshot-first mount path rebuilds the title and
+        // transcript from the Rust attachment rather than a JS transcript.
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await page.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout: timeoutMs });
+        await openWorkbench(page, appData);
         return;
     }
     if (actionLabel === '请求接管') {

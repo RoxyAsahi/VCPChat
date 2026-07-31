@@ -7,7 +7,7 @@ const crypto = require('crypto');
 
 const MAX_FRAME_BYTES = 256 * 1024;
 const PROTOCOL_VERSION = 1;
-const PROTOCOL_REVISION = '1.5';
+const PROTOCOL_REVISION = '1.7';
 
 function requiredString(value, field) {
     if (typeof value !== 'string' || !value.trim()) throw new Error(`daemon protocol requires ${field}`);
@@ -24,28 +24,32 @@ function validateDirectCommand(message) {
     if (!message || message.protocolVersion !== PROTOCOL_VERSION) throw new Error(`daemon protocol requires protocolVersion ${PROTOCOL_VERSION}`);
     requiredString(message.requestId, 'requestId');
     switch (message.type) {
-    case 'hello': case 'shutdown': case 'create-session':
+    case 'hello': case 'shutdown': case 'list-active-runtimes':
     case 'list-topics':
         if (Object.prototype.hasOwnProperty.call(message, 'agentId')) requiredString(message.agentId, 'agentId');
-    case 'list-interaction-queue': case 'clear-interaction-queue': case 'get-settings':
+    case 'get-settings':
     case 'get-index-status': case 'rebuild-topic-index':
         return;
-    case 'switch-attachment':
-        if (Object.prototype.hasOwnProperty.call(message, 'sessionId')) requiredString(message.sessionId, 'sessionId');
-        for (const field of ['topicId', 'agentId', 'model', 'workspaceRoot']) {
-            if (Object.prototype.hasOwnProperty.call(message, field)) requiredString(message[field], field);
-        }
+    case 'ensure-topic-runtime':
+        requiredString(message.topicId, 'topicId'); requiredString(message.agentId, 'agentId');
+        for (const field of ['model', 'workspaceRoot']) if (Object.prototype.hasOwnProperty.call(message, field)) requiredString(message[field], field);
         if (Object.prototype.hasOwnProperty.call(message, 'permissionMode')
             && message.permissionMode !== 'ask' && message.permissionMode !== 'always-approve') {
             throw new Error('daemon protocol requires permissionMode ask or always-approve');
         }
         return;
-    case 'close-session': case 'cancel-turn': case 'compact':
-        return requiredIdentity(message, 'sessionId');
+    case 'create-topic':
+        requiredString(message.agentId, 'agentId');
+        for (const field of ['title', 'model', 'workspaceRoot']) {
+            if (Object.prototype.hasOwnProperty.call(message, field)) requiredString(message[field], field);
+        }
+        return;
+    case 'detach-topic': case 'cancel-turn': case 'compact': case 'list-interaction-queue': case 'clear-interaction-queue':
+        requiredIdentity(message, 'sessionId'); return requiredString(message.topicId, 'topicId');
     case 'import-attachment':
-        requiredIdentity(message, 'sessionId'); return requiredString(message.path, 'path');
+        requiredIdentity(message, 'sessionId'); requiredString(message.topicId, 'topicId'); return requiredString(message.path, 'path');
     case 'start-turn': {
-        requiredIdentity(message, 'sessionId'); requiredIdentity(message, 'turnId');
+        requiredIdentity(message, 'sessionId'); requiredIdentity(message, 'turnId'); requiredString(message.topicId, 'topicId');
         if (typeof message.prompt !== 'string') throw new Error('daemon protocol requires string prompt');
         const attachments = message.attachments || [];
         if (!Array.isArray(attachments) || attachments.length > 8 || attachments.some((item) => !item || typeof item !== 'object' || Array.isArray(item))) {
@@ -55,9 +59,9 @@ function validateDirectCommand(message) {
         return;
     }
     case 'steer-turn': case 'follow-up-turn':
-        requiredIdentity(message, 'sessionId'); requiredIdentity(message, 'turnId'); return requiredString(message.prompt, 'prompt');
+        requiredIdentity(message, 'sessionId'); requiredIdentity(message, 'turnId'); requiredString(message.topicId, 'topicId'); return requiredString(message.prompt, 'prompt');
     case 'approval':
-        requiredIdentity(message, 'sessionId'); requiredIdentity(message, 'turnId'); requiredIdentity(message, 'toolCallId');
+        requiredIdentity(message, 'sessionId'); requiredIdentity(message, 'turnId'); requiredIdentity(message, 'toolCallId'); requiredString(message.topicId, 'topicId');
         requiredString(message.approvalId, 'approvalId'); requiredString(message.argumentsHash, 'argumentsHash');
         if (typeof message.allowed !== 'boolean' && typeof message.decision !== 'string') throw new Error('daemon protocol requires allowed or decision');
         return;
@@ -81,7 +85,7 @@ function validateDirectCommand(message) {
         requiredString(message.title, 'title');
         if (Object.prototype.hasOwnProperty.call(message, 'agentId')) requiredString(message.agentId, 'agentId');
         return;
-    case 'replace-interaction-queue': requiredIdentity(message, 'sessionId'); if (!Array.isArray(message.interactions)) throw new Error('daemon protocol requires interactions array'); return;
+    case 'replace-interaction-queue': requiredIdentity(message, 'sessionId'); requiredString(message.topicId, 'topicId'); if (!Array.isArray(message.interactions)) throw new Error('daemon protocol requires interactions array'); return;
     case 'update-settings': if (!message.settings || typeof message.settings !== 'object' || Array.isArray(message.settings)) throw new Error('daemon protocol requires settings object'); return;
     case 'set-workbench-presence': if (typeof message.mounted !== 'boolean') throw new Error('daemon protocol requires boolean mounted'); return;
     default: throw new Error(`unsupported direct daemon command: ${String(message.type)}`);

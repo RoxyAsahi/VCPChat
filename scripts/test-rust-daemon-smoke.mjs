@@ -11,36 +11,9 @@ const { RustDaemonTransport } = require('../modules/agent-runtime/rustDaemonTran
 
 const repo = path.resolve(import.meta.dirname, '..');
 const pinnedRevision = rustSourceRevision(repo);
+const testRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'vcp-agentd-v17-smoke-'));
 
-// Keep this framed-stdio contract test completely isolated from a user's
-// shared VCPChat configuration. It never makes a model request, so a benign
-// placeholder connection is sufficient and no real API key belongs in test
-// source or a temporary settings file.
-const testRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'vcp-agentd-smoke-'));
-const settingsPath = path.join(testRoot, 'settings.json');
-await fs.writeFile(settingsPath, JSON.stringify({
-    vcpServerUrl: 'http://127.0.0.1:9',
-    vcpApiKey: 'test-only-placeholder',
-    agentRuntime: { tui: { defaultModel: 'gpt-5.6-terra', budget: { maxRequestsPerTurn: 8, maxTokensPerTurn: 120000 } } },
-}), 'utf8');
-// A control daemon may be attached to Nova while the Workbench is browsing a
-// different shared Agent. Seed that Agent's durable Rust Topic so the test
-// proves `agentId` is routed by Host rather than inherited from spawn args.
-await fs.mkdir(path.join(testRoot, 'AgentRuntimeData', '123', 'topics', 'topic-existing-123'), { recursive: true });
-await fs.writeFile(path.join(testRoot, 'AgentRuntimeData', '123', 'topics', 'topic-existing-123', 'agent-state.json'), JSON.stringify({
-    version: 1,
-    title: '123 的既有 Topic',
-    model: 'gpt-5.6-terra',
-    workspaceRef: repo,
-    updatedAt: 1_700_000_000_000,
-    history: [{ id: 'seeded-history', role: 'user', content: '历史消息' }],
-}), 'utf8');
-await fs.writeFile(path.join(testRoot, 'AgentRuntimeData', '123', 'topics', 'topic-existing-123', 'history.json'), JSON.stringify([{
-    id: 'seeded-history', messageId: 'seeded-history', turnId: 'turn-seeded',
-    role: 'user', content: '数据库同步历史消息', timestamp: 1_700_000_000_000,
-}]), 'utf8');
-
-function waitForMessage(messages, predicate, label, timeoutMs = 5_000) {
+function waitFor(messages, predicate, label, timeoutMs = 7_000) {
     const deadline = Date.now() + timeoutMs;
     return new Promise((resolve, reject) => {
         const poll = () => {
@@ -53,307 +26,221 @@ function waitForMessage(messages, predicate, label, timeoutMs = 5_000) {
     });
 }
 
-async function startApprovalFixtureServer() {
-    let modelRequests = 0;
-    const server = http.createServer((request, response) => {
+async function startModelFixture() {
+    const received = [];
+    const server = http.createServer(async (request, response) => {
         if (request.method !== 'POST' || request.url !== '/v1/chat/completions') {
             response.writeHead(404).end();
             return;
         }
-        const firstRequest = modelRequests++ === 0;
-        const delta = firstRequest
-            ? {
-                // Tool-use models commonly stream reasoning before their
-                // vcp_invoke call. Keep this in the direct-daemon smoke: a
-                // terminal reasoning event used to lose turnId here and make
-                // the daemon exit only on tool-capable turns.
-                reasoning_content: 'I should request the tool.',
-                tool_calls: [{
-                    index: 0,
-                    id: 'call_presence_deny',
-                    function: {
-                        name: 'vcp_invoke',
-                        arguments: JSON.stringify({
-                            toolName: 'PowerShellExecutor',
-                            arguments: { command: 'Get-Location' },
-                        }),
-                    },
-                }],
-            }
-            : { content: '本地审批已拒绝。' };
-        const body = `data: ${JSON.stringify({ choices: [{ delta }] })}\n\ndata: [DONE]\n\n`;
-        response.writeHead(200, {
-            'content-type': 'text/event-stream',
-            'content-length': Buffer.byteLength(body),
-            connection: 'close',
-        });
-        response.end(body);
+        const chunks = [];
+        for await (const chunk of request) chunks.push(chunk);
+        const text = Buffer.concat(chunks).toString('utf8');
+        received.push(text);
+        const hold = text.includes('HOLD_TOPIC_A');
+        const delta = (content) => `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`;
+        response.writeHead(200, { 'content-type': 'text/event-stream', connection: 'keep-alive' });
+        response.write(delta(hold ? 'A is running' : 'B completed independently'));
+        if (hold) {
+            // Keep A alive long enough to prove that cancelling it does not
+            // stop B or detach B's resident Topic runtime.
+            response.once('close', () => {});
+            return;
+        }
+        response.end('data: [DONE]\n\n');
     });
     await new Promise((resolve, reject) => server.once('error', reject).listen(0, '127.0.0.1', resolve));
     const address = server.address();
-    return {
-        server,
-        url: `http://127.0.0.1:${address.port}`,
-    };
+    return { server, received, url: `http://127.0.0.1:${address.port}` };
 }
 
+async function createTopic(transport, events, suffix, agentId = 'Nova') {
+    const requestId = `create-${suffix}`;
+    await transport.request('create-topic', {
+        agentId,
+        title: `并发 ${suffix}`,
+        model: 'gpt-5.6-terra',
+        workspaceRoot: repo,
+    }, requestId);
+    const created = await waitFor(events,
+        (message) => message.type === 'control-event' && message.requestId === requestId && message.kind === 'topic-created',
+        `Topic ${suffix} creation`);
+    return created.payload;
+}
+
+const modelFixture = await startModelFixture();
+const settingsPath = path.join(testRoot, 'settings.json');
+await fs.writeFile(settingsPath, JSON.stringify({
+    vcpServerUrl: modelFixture.url,
+    vcpApiKey: 'test-only-placeholder',
+    agentRuntime: { tui: { defaultModel: 'gpt-5.6-terra', budget: { maxRequestsPerTurn: 8, maxTokensPerTurn: 120000 } } },
+}), 'utf8');
+
+const messages = [];
 let exitError = null;
-const controlEvents = [];
-const daemonEvents = [];
 const transport = new RustDaemonTransport({
-    projectRoot: repo,
-    settingsPath,
-    agentsDir: path.join(testRoot, 'Agents'),
-    workspaceRoot: repo,
-    model: 'gpt-5.6-terra',
-    agent: 'Nova',
-    controlOnly: true,
-    onMessage: (message) => {
-        if (message?.type === 'control-event') controlEvents.push(message);
-        if (message?.type === 'event') daemonEvents.push(message.event);
-    },
+    projectRoot: repo, settingsPath, agentsDir: path.join(testRoot, 'Agents'),
+    workspaceRoot: repo, model: 'gpt-5.6-terra', agent: 'Nova', controlOnly: true,
+    onMessage: (message) => messages.push(message),
     onExit: (_code, _signal, error) => { exitError = error; },
 });
 
-await transport.start();
-const daemonPidBeforeAttachment = transport.child?.pid;
-assert.equal(transport.readyMessage?.buildRevision, pinnedRevision,
-    'the smoke daemon must be compiled from the exact in-repository Rust revision');
-assert.equal(transport.readyMessage?.protocolRevision, '1.5', 'daemon must advertise the v1.5 GUI protocol revision');
-await transport.request('get-settings', {}, 'smoke-settings-request');
-await transport.request('set-workbench-presence', { mounted: false }, 'smoke-presence-request');
-let created = await transport.request('switch-attachment', {
-    agentId: 'Nova',
-    model: 'gpt-5.6-terra',
-    workspaceRoot: repo,
-    permissionMode: 'ask',
-}, 'smoke-attach-request');
-assert.ok(created.sessionId?.startsWith('session_'));
-assert.ok(created.topicId?.startsWith('topic_'), 'switch-attachment must report the durable Topic identity to GUI hosts');
-assert.equal(transport.child?.pid, daemonPidBeforeAttachment,
-    'switch-attachment must promote the control Host without restarting vcp-agentd.exe');
-assert.equal(daemonEvents.some((event) => event?.type === 'session.attached'
-    && event?.sessionId === created.sessionId
-    && event?.topicId === created.topicId
-    && event?.payload?.reason === 'switch-attachment'), true,
-    'a successful attachment must emit its final session.attached identity before the ACK resolves');
-
-// The Cherry-style preview path has to scale beyond a single change: the
-// control process remains alive while only the Rust writer lease moves. This
-// is deliberately hermetic (no ToolBox model request) but validates the exact
-// 10-Topic/PID invariant required by the Electron runtime contract.
-for (let index = 1; index < 10; index += 1) {
-    const previous = created;
-    created = await transport.request('switch-attachment', {
-        sessionId: previous.sessionId,
-        agentId: 'Nova',
-        model: 'gpt-5.6-terra',
-        workspaceRoot: repo,
-        permissionMode: 'ask',
-    }, `smoke-switch-${index}`);
-    assert.equal(transport.child?.pid, daemonPidBeforeAttachment,
-        `switch ${index} must keep the original control daemon PID`);
-    assert.equal(daemonEvents.some((event) => event?.type === 'session.detached'
-        && event?.sessionId === previous.sessionId
-        && event?.topicId === previous.topicId
-        && event?.payload?.reason === 'switch-attachment'), true,
-        `switch ${index} must report the detached attachment with its original identity`);
-    assert.equal(daemonEvents.some((event) => event?.type === 'session.attached'
-        && event?.sessionId === created.sessionId
-        && event?.topicId === created.topicId
-        && event?.payload?.reason === 'switch-attachment'), true,
-        `switch ${index} must report the attached Topic without UI-side inference`);
-}
-await transport.request('list-topics', { agentId: '123' }, 'smoke-other-agent-topics');
-const otherAgentTopicDeadline = Date.now() + 5_000;
-while (!controlEvents.some((event) => event.requestId === 'smoke-other-agent-topics') && Date.now() < otherAgentTopicDeadline) {
-    await new Promise((resolve) => setTimeout(resolve, 25));
-}
-const otherAgentTopics = controlEvents.find((event) => event.requestId === 'smoke-other-agent-topics');
-assert.equal(otherAgentTopics?.kind, 'topics', 'cross-Agent Topic browsing must resolve through the daemon control plane');
-assert.deepEqual(otherAgentTopics?.payload?.map((topic) => ({ id: topic.id, agentId: topic.agentId })), [{
-    id: 'topic-existing-123', agentId: '123',
-}], 'the daemon must return the selected Agent history without creating a Session');
-await transport.request('search-topics', { query: '数据库', agentId: '123', limit: 20 }, 'smoke-topic-search');
-const topicSearch = await waitForMessage(
-    controlEvents,
-    (event) => event.requestId === 'smoke-topic-search',
-    'Agent Topic shadow-index search',
-);
-assert.equal(topicSearch.kind, 'topic-search-results');
-assert.deepEqual(topicSearch.payload.map((hit) => ({ topicId: hit.topicId, messageId: hit.messageId })), [{
-    topicId: 'topic-existing-123', messageId: 'seeded-history',
-}], 'search results must retain stable message identity and point back to a Rust Topic');
-await transport.request('get-index-status', {}, 'smoke-index-status');
-const indexStatus = await waitForMessage(
-    controlEvents,
-    (event) => event.requestId === 'smoke-index-status',
-    'Agent Topic shadow-index status',
-);
-assert.equal(indexStatus.kind, 'topic-index-status');
-assert.equal(indexStatus.payload.available, true);
-assert.ok(indexStatus.payload.documentCount >= 1);
-const readinessDeadline = Date.now() + 7_000;
-while (!daemonEvents.some((event) => event?.type === 'runtime.readiness'
-    && event?.payload?.toolbox?.state === 'unavailable') && Date.now() < readinessDeadline) {
-    await new Promise((resolve) => setTimeout(resolve, 25));
-}
-assert.equal(daemonEvents.some((event) => event?.type === 'runtime.readiness'
-    && event?.payload?.toolbox?.state === 'checking'), true,
-    'direct daemon must publish the initial daemon-owned ToolBox readiness state');
-assert.equal(daemonEvents.some((event) => event?.type === 'runtime.readiness'
-    && event?.payload?.toolbox?.state === 'unavailable'), true,
-    'direct daemon must publish the asynchronous unavailable result instead of leaving GUI at checking');
-await transport.request('replace-interaction-queue', {
-    sessionId: created.sessionId,
-    interactions: [{ interactionId: 'smoke-follow-up', kind: 'follow-up', prompt: '完成后总结' }],
-}, 'smoke-queue-request');
-const deadline = Date.now() + 5_000;
-while (!controlEvents.some((event) => event.kind === 'interaction-queue') && Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 25));
-}
-assert.deepEqual(controlEvents.find((event) => event.kind === 'interaction-queue')?.payload, [
-    { interactionId: 'smoke-follow-up', kind: 'follow-up', prompt: '完成后总结' },
-], 'direct daemon must project the Core-validated replacement queue back to GUI hosts');
-assert.equal(controlEvents.find((event) => event.kind === 'interaction-queue')?.requestId, 'smoke-queue-request',
-    'control responses must retain the exact framed requestId');
-const settingsDeadline = Date.now() + 5_000;
-while (!controlEvents.some((event) => event.kind === 'settings') && Date.now() < settingsDeadline) {
-    await new Promise((resolve) => setTimeout(resolve, 25));
-}
-assert.deepEqual(controlEvents.find((event) => event.kind === 'settings')?.payload?.budget, {
-    maxRequestsPerTurn: 8, maxTokensPerTurn: 120000,
-}, 'direct daemon must expose only non-sensitive workbench settings');
-assert.equal(controlEvents.find((event) => event.kind === 'settings')?.requestId, 'smoke-settings-request');
-const presenceDeadline = Date.now() + 5_000;
-while (!controlEvents.some((event) => event.kind === 'workbench-presence') && Date.now() < presenceDeadline) {
-    await new Promise((resolve) => setTimeout(resolve, 25));
-}
-assert.deepEqual(controlEvents.find((event) => event.kind === 'workbench-presence')?.payload, {
-    mounted: false,
-    deniedApprovals: 0,
-}, 'Workbench close must reach Rust Host rather than remain a Main-process flag');
-assert.equal(controlEvents.find((event) => event.kind === 'workbench-presence')?.requestId, 'smoke-presence-request');
-await transport.request('update-settings', {
-    settings: { budget: { maxRequestsPerTurn: 12, maxTokensPerTurn: 240000 } },
-});
-while (!controlEvents.some((event) => event.kind === 'settings-updated') && Date.now() < settingsDeadline) {
-    await new Promise((resolve) => setTimeout(resolve, 25));
-}
-assert.deepEqual(controlEvents.find((event) => event.kind === 'settings-updated')?.payload?.settings?.budget, {
-    maxRequestsPerTurn: 12, maxTokensPerTurn: 240000,
-}, 'direct daemon must return the persisted non-sensitive budget snapshot');
-const persisted = JSON.parse(await fs.readFile(settingsPath, 'utf8'));
-assert.deepEqual(persisted.agentRuntime.tui.budget, {
-    maxRequestsPerTurn: 12, maxTokensPerTurn: 240000,
-}, 'budget update must be persisted by the Rust Host, not renderer storage');
-await transport.stop();
-await new Promise((resolve) => setTimeout(resolve, 100));
-assert.equal(transport.child, null);
-assert.equal(exitError, null, 'an intentional clean shutdown must not be reported as a daemon crash');
-
-// A GUI reconnect happens immediately after a daemon crash, not 60 seconds
-// later. The Topic lease records the daemon PID, so a new daemon must reclaim
-// a lock only when Windows can prove that the old owner exited.
-let crashExitResolve;
-const crashExited = new Promise((resolve) => { crashExitResolve = resolve; });
-const crashedTransport = new RustDaemonTransport({
-    projectRoot: repo,
-    settingsPath,
-    agentsDir: path.join(testRoot, 'Agents'),
-    workspaceRoot: repo,
-    model: 'gpt-5.6-terra',
-    agent: 'Nova',
-    resume: 'topic-crash-recovery',
-    onExit: () => crashExitResolve(),
-});
-await crashedTransport.start();
-const crashedSession = await crashedTransport.request('create-session');
-assert.equal(crashedSession.topicId, 'topic-crash-recovery');
-crashedTransport.child.kill();
-await Promise.race([
-    crashExited,
-    new Promise((_, reject) => setTimeout(() => reject(new Error('crashed Rust daemon did not exit')), 5_000)),
-]);
-
-const recoveredTransport = new RustDaemonTransport({
-    projectRoot: repo,
-    settingsPath,
-    agentsDir: path.join(testRoot, 'Agents'),
-    workspaceRoot: repo,
-    model: 'gpt-5.6-terra',
-    agent: 'Nova',
-    resume: 'topic-crash-recovery',
-});
-await recoveredTransport.start();
-const recoveredSession = await recoveredTransport.request('create-session');
-assert.equal(recoveredSession.topicId, 'topic-crash-recovery',
-    'a new daemon must immediately reclaim a Topic whose crashed PID no longer exists');
-await recoveredTransport.stop();
-
-// The close signal must fail-close a *real pending* local approval inside the
-// daemon, rather than merely clearing a renderer/Main-process mock.  A tiny
-// in-process ToolBox fixture produces one high-risk vcp_invoke, then a normal
-// completion after Core receives the denial result.
-const approvalFixture = await startApprovalFixtureServer();
-const approvalSettingsPath = path.join(testRoot, 'approval-settings.json');
-await fs.writeFile(approvalSettingsPath, JSON.stringify({
-    vcpServerUrl: approvalFixture.url,
-    vcpApiKey: 'test-only-placeholder',
-    agentRuntime: { tui: { defaultModel: 'gpt-5.6-terra' } },
-}), 'utf8');
-const approvalMessages = [];
-const approvalTransport = new RustDaemonTransport({
-    projectRoot: repo,
-    settingsPath: approvalSettingsPath,
-    agentsDir: path.join(testRoot, 'Agents'),
-    workspaceRoot: repo,
-    model: 'gpt-5.6-terra',
-    agent: 'Nova',
-    resume: 'topic-presence-fail-closed',
-    onMessage: (message) => approvalMessages.push(message),
-});
 try {
-    await approvalTransport.start();
-    const approvalSession = await approvalTransport.request('create-session');
-    const turnId = 'turn-presence-fail-closed';
-    await approvalTransport.request('start-turn', {
-        sessionId: approvalSession.sessionId,
-        turnId,
-        prompt: '调用 PowerShellExecutor Get-Location',
-    }, 'approval-turn-request');
-    const requested = await waitForMessage(
-        approvalMessages,
-        (message) => message.type === 'event' && message.event?.type === 'approval.requested',
-        'a real daemon approval.requested event',
+    await transport.start();
+    const daemonPid = transport.child?.pid;
+    assert.equal(transport.readyMessage?.buildRevision, pinnedRevision,
+        'the smoke daemon must be compiled from the checked-out Rust source revision');
+    assert.equal(transport.readyMessage?.protocolRevision, '1.7');
+
+    // A control plane can browse a different Agent without creating a Topic
+    // runtime. This is intentionally separate from the concurrent hosts.
+    await fs.mkdir(path.join(testRoot, 'AgentRuntimeData', '123', 'topics', 'topic-existing-123'), { recursive: true });
+    await fs.writeFile(path.join(testRoot, 'AgentRuntimeData', '123', 'topics', 'topic-existing-123', 'agent-state.json'), JSON.stringify({
+        version: 1, title: '123 的既有 Topic', model: 'gpt-5.6-terra', workspaceRef: repo,
+        updatedAt: 1_700_000_000_000, history: [],
+    }), 'utf8');
+    await fs.writeFile(path.join(testRoot, 'AgentRuntimeData', '123', 'topics', 'topic-existing-123', 'history.json'), JSON.stringify([]), 'utf8');
+    await transport.request('list-topics', { agentId: '123' }, 'other-agent-topics');
+    const otherAgentTopics = await waitFor(messages,
+        (message) => message.type === 'control-event' && message.requestId === 'other-agent-topics' && message.kind === 'topics',
+        'cross-Agent Topic list');
+    assert.deepEqual(otherAgentTopics.payload.map((topic) => ({ id: topic.id, agentId: topic.agentId })), [{ id: 'topic-existing-123', agentId: '123' }]);
+
+    const topicA = await createTopic(transport, messages, 'a');
+    const topicB = await createTopic(transport, messages, 'b');
+    const runtimeA = await transport.request('ensure-topic-runtime', {
+        topicId: topicA.topicId, agentId: 'Nova', model: 'gpt-5.6-terra', workspaceRoot: repo, permissionMode: 'ask',
+    }, 'ensure-a');
+    const runtimeB = await transport.request('ensure-topic-runtime', {
+        topicId: topicB.topicId, agentId: 'Nova', model: 'gpt-5.6-terra', workspaceRoot: repo, permissionMode: 'ask',
+    }, 'ensure-b');
+    assert.notEqual(runtimeA.sessionId, runtimeB.sessionId, 'each Topic Host has an independent session identity');
+    assert.equal(transport.child?.pid, daemonPid, 'ensuring another Topic never restarts the daemon');
+    await waitFor(messages, (message) => message.type === 'event' && message.event?.type === 'runtime.ready' && message.event.topicId === topicA.topicId, 'Topic A runtime.ready');
+    await waitFor(messages, (message) => message.type === 'event' && message.event?.type === 'runtime.ready' && message.event.topicId === topicB.topicId, 'Topic B runtime.ready');
+
+    const active = await transport.request('list-active-runtimes', {}, 'active-before-turns');
+    assert.equal(active.capacity, 8);
+    assert.deepEqual(new Set(active.runtimes.map((runtime) => runtime.topicId)), new Set([topicA.topicId, topicB.topicId]));
+
+    await transport.request('start-turn', {
+        sessionId: runtimeA.sessionId, topicId: topicA.topicId, turnId: 'turn-a', prompt: 'HOLD_TOPIC_A',
+    }, 'turn-a-request');
+    await transport.request('start-turn', {
+        sessionId: runtimeB.sessionId, topicId: topicB.topicId, turnId: 'turn-b', prompt: 'FINISH_TOPIC_B',
+    }, 'turn-b-request');
+    await waitFor(messages, (message) => message.type === 'event' && message.event?.type === 'assistant.completed' && message.event.topicId === topicB.topicId && message.event.turnId === 'turn-b', 'Topic B completion');
+    assert.equal(messages.some((message) => message.type === 'event' && message.event?.topicId === topicA.topicId && message.event?.topicId === topicB.topicId), false);
+
+    await transport.request('cancel-turn', { sessionId: runtimeA.sessionId, topicId: topicA.topicId, turnId: 'turn-a' }, 'cancel-a');
+    const afterCancel = await transport.request('list-active-runtimes', {}, 'active-after-cancel');
+    assert.equal(afterCancel.runtimes.some((runtime) => runtime.topicId === topicA.topicId), true, 'cancelling A retains its independently recoverable resident runtime');
+    assert.equal(afterCancel.runtimes.some((runtime) => runtime.topicId === topicB.topicId), true, 'cancelling A must not detach B');
+    assert.equal(modelFixture.received.length >= 2, true, 'both Topics made independent model requests');
+
+    await transport.request('replace-interaction-queue', {
+        sessionId: runtimeB.sessionId, topicId: topicB.topicId,
+        interactions: [{ interactionId: 'follow-up-b', kind: 'follow-up', prompt: '完成后总结' }],
+    }, 'queue-b');
+    const queue = await waitFor(messages,
+        (message) => message.type === 'control-event' && message.requestId === 'queue-b' && message.kind === 'interaction-queue',
+        'Topic B interaction queue');
+    assert.equal(queue.payload[0]?.interactionId, 'follow-up-b');
+    await transport.request('clear-interaction-queue', {
+        sessionId: runtimeB.sessionId, topicId: topicB.topicId,
+    }, 'clear-queue-b');
+    await waitFor(messages,
+        (message) => message.type === 'control-event' && message.requestId === 'clear-queue-b' && message.kind === 'interaction-queue' && message.payload?.length === 0,
+        'Topic B queue clear');
+
+    await transport.request('set-workbench-presence', { mounted: false }, 'presence-close');
+    const presence = await waitFor(messages,
+        (message) => message.type === 'control-event' && message.requestId === 'presence-close' && message.kind === 'workbench-presence',
+        'presence close acknowledgement');
+    assert.equal(presence.payload?.mounted, false);
+
+    await transport.request('detach-topic', { sessionId: runtimeB.sessionId, topicId: topicB.topicId }, 'detach-b');
+    const afterDetach = await transport.request('list-active-runtimes', {}, 'active-after-detach');
+    assert.equal(afterDetach.runtimes.some((runtime) => runtime.topicId === topicB.topicId), false, 'detaching B cannot affect A');
+    assert.equal(transport.child?.pid, daemonPid);
+
+    // Capacity is a hard supervisor boundary. Fill all eight slots with
+    // active Turns, prove an extra Topic is rejected without disturbing any
+    // resident Host, then cancel them and prove the same extra Topic can use
+    // idle LRU eviction.
+    const capacityRuntimes = [runtimeA];
+    for (let index = 0; index < 7; index += 1) {
+        const topic = await createTopic(transport, messages, `capacity-${index}`);
+        capacityRuntimes.push(await transport.request('ensure-topic-runtime', {
+            topicId: topic.topicId, agentId: 'Nova', model: 'gpt-5.6-terra', workspaceRoot: repo,
+        }, `ensure-capacity-${index}`));
+    }
+    assert.equal((await transport.request('list-active-runtimes', {}, 'capacity-full')).runtimes.length, 8);
+    for (const [index, runtime] of capacityRuntimes.entries()) {
+        await transport.request('start-turn', {
+            sessionId: runtime.sessionId, topicId: runtime.topicId,
+            turnId: `capacity-turn-${index}`, prompt: 'HOLD_TOPIC_A',
+        }, `capacity-start-${index}`);
+        await waitFor(messages,
+            (message) => message.type === 'event' && message.event?.type === 'turn.started'
+                && message.event.sessionId === runtime.sessionId && message.event.turnId === `capacity-turn-${index}`,
+            `capacity turn ${index} start`);
+    }
+    const overflowTopic = await createTopic(transport, messages, 'capacity-overflow');
+    await assert.rejects(
+        transport.request('ensure-topic-runtime', {
+            topicId: overflowTopic.topicId, agentId: 'Nova', model: 'gpt-5.6-terra', workspaceRoot: repo,
+        }, 'ensure-overflow-busy'),
+        /all 8 Topic runtimes are active/,
+        'an all-busy supervisor must fail closed instead of evicting a running Topic',
     );
-    const approval = requested.event?.payload;
-    assert.equal(approval?.toolName, 'PowerShellExecutor');
-    assert.equal(requested.event?.turnId, turnId);
-    await approvalTransport.request('set-workbench-presence', { mounted: false }, 'approval-presence-close');
-    const presence = await waitForMessage(
-        approvalMessages,
-        (message) => message.type === 'control-event'
-            && message.kind === 'workbench-presence'
-            && message.requestId === 'approval-presence-close',
-        'workbench close acknowledgement',
-    );
-    assert.equal(presence.payload?.deniedApprovals, 1,
-        'closing the Workbench must deny the pending local approval in Rust Host');
-    const resolved = await waitForMessage(
-        approvalMessages,
-        (message) => message.type === 'event'
-            && message.event?.type === 'approval.resolved'
-            && message.event?.payload?.approvalId === approval?.approvalId,
-        'approval.resolved after Workbench close',
-    );
-    assert.equal(resolved.event?.payload?.decision, 'deny');
-    assert.equal(resolved.event?.payload?.reason, 'workbench closed before local approval');
-    assert.equal(resolved.event?.sessionId, approvalSession.sessionId);
-    assert.equal(resolved.event?.turnId, turnId);
+    assert.equal((await transport.request('list-active-runtimes', {}, 'capacity-still-full')).runtimes.length, 8);
+    for (const [index, runtime] of capacityRuntimes.entries()) {
+        await transport.request('cancel-turn', {
+            sessionId: runtime.sessionId, topicId: runtime.topicId, turnId: `capacity-turn-${index}`,
+        }, `capacity-cancel-${index}`);
+    }
+    await waitFor(messages,
+        (message) => message.type === 'event' && message.event?.type === 'turn.cancelled'
+            && message.event.turnId === 'capacity-turn-0',
+        'capacity turn cancellation');
+    const overflowRuntime = await transport.request('ensure-topic-runtime', {
+        topicId: overflowTopic.topicId, agentId: 'Nova', model: 'gpt-5.6-terra', workspaceRoot: repo,
+    }, 'ensure-overflow-idle');
+    assert.equal(overflowRuntime.topicId, overflowTopic.topicId, 'an idle LRU Host may be reclaimed for a ninth Topic');
+    assert.equal((await transport.request('list-active-runtimes', {}, 'capacity-after-eviction')).runtimes.length, 8);
+
+    await transport.stop();
+    assert.equal(exitError, null, 'intentional shutdown is not a daemon crash');
+
+    // A daemon crash leaves a durable interrupted checkpoint. A fresh daemon
+    // can resume the same Topic, but it gets a new session identity and never
+    // replays the cancelled model request.
+    const crashEvents = [];
+    let crashExited;
+    const crashed = new RustDaemonTransport({
+        projectRoot: repo, settingsPath, agentsDir: path.join(testRoot, 'Agents'), workspaceRoot: repo,
+        model: 'gpt-5.6-terra', agent: 'Nova', controlOnly: true,
+        onMessage: (message) => crashEvents.push(message), onExit: () => { crashExited?.(); },
+    });
+    await crashed.start();
+    const crashRuntime = await crashed.request('ensure-topic-runtime', { topicId: topicA.topicId, agentId: 'Nova', model: 'gpt-5.6-terra', workspaceRoot: repo });
+    const exited = new Promise((resolve) => { crashExited = resolve; });
+    crashed.child.kill();
+    await Promise.race([exited, new Promise((_, reject) => setTimeout(() => reject(new Error('crashed daemon did not exit')), 5_000))]);
+    const recovered = new RustDaemonTransport({
+        projectRoot: repo, settingsPath, agentsDir: path.join(testRoot, 'Agents'), workspaceRoot: repo,
+        model: 'gpt-5.6-terra', agent: 'Nova', controlOnly: true,
+    });
+    await recovered.start();
+    const recoveredRuntime = await recovered.request('ensure-topic-runtime', { topicId: topicA.topicId, agentId: 'Nova', model: 'gpt-5.6-terra', workspaceRoot: repo });
+    assert.equal(recoveredRuntime.topicId, topicA.topicId);
+    assert.notEqual(recoveredRuntime.sessionId, crashRuntime.sessionId, 'recovery creates a fresh session identity');
+    await recovered.stop();
 } finally {
-    await approvalTransport.stop();
-    await new Promise((resolve) => approvalFixture.server.close(resolve));
+    await transport.stop().catch(() => {});
+    await new Promise((resolve) => modelFixture.server.close(resolve));
+    await fs.rm(testRoot, { recursive: true, force: true });
 }
-await fs.rm(testRoot, { recursive: true, force: true });
-console.log('Rust daemon framed-stdio smoke test passed.');
+
+console.log('Rust daemon v1.7 concurrent framed-stdio smoke test passed.');

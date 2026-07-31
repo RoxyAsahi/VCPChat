@@ -13,11 +13,13 @@ const SESSION_EVENT_TYPES = new Set([
 function createInitialState() {
     return {
         runtime: { state: 'unknown', worker: null, lastError: null },
-        // A workbench has one ephemeral attachment. Durable history belongs
-        // exclusively to the Rust Topic identified by `attachment.topicId`.
+        // `attachment` is a compatibility pointer for the displayed Topic.
+        // The daemon may concurrently own several Topic runtimes; their
+        // identities remain renderer-only live state and never transcripts.
         attachment: null,
-        // A displayed Topic may be a read-only Rust snapshot while the one
-        // writable daemon attachment safely finishes another turn.
+        activeRuntimes: [],
+        // A displayed Topic can be a read-only snapshot while several other
+        // Topic runtimes keep working. This is never a global composer lock.
         selectedTopic: null,
         backgroundAttachment: null,
         messages: [],
@@ -255,6 +257,7 @@ function reduceEvent(current, event) {
         const payload = event.payload?.approval || event.payload;
         const approval = payload ? {
             ...payload,
+            topicId: event.topicId,
             sessionId: event.sessionId,
             turnId: event.turnId,
             toolCallId: event.toolCallId,
@@ -390,10 +393,24 @@ function createWorkbenchStore(initial = createInitialState()) {
         },
         dispatch(event) {
             if (!event || typeof event !== 'object') return state;
-            const isRuntimeEvent = !event.sessionId || event.sessionId === 'runtime' || event.type?.startsWith('runtime.');
+            const isRuntimeEvent = !event.sessionId || event.sessionId === 'runtime'
+                || event.type?.startsWith('runtime.') || event.type === 'toolbox.ws';
             const isSessionEvent = SESSION_EVENT_TYPES.has(event.type);
             if (!event.eventId || !Number.isFinite(Number(event.sequence)) || !Number.isFinite(Number(event.timestamp))) return state;
-            if (!isRuntimeEvent && !isSessionEvent && state.attachment?.sessionId && event.sessionId !== state.attachment.sessionId) {
+            const isApproval = event.type?.startsWith('approval.');
+            // The fallback preserves the narrow unit-test/legacy bootstrap
+            // shape before the first snapshot installs selectedTopic. Normal
+            // Workbench routing always uses selectedTopic.
+            const selectedTopicId = state.selectedTopic?.topicId || state.attachment?.topicId || null;
+            // Only the visible Topic may change this live transcript. Local
+            // approvals are global Activity state and retain their complete
+            // daemon identities when the user switches Topics.
+            if (!isRuntimeEvent && !isSessionEvent && !isApproval
+                && (!selectedTopicId || event.topicId !== selectedTopicId)) {
+                return state;
+            }
+            if (!isRuntimeEvent && !isSessionEvent && !isApproval
+                && state.attachment?.sessionId && event.sessionId !== state.attachment.sessionId) {
                 return state;
             }
             const key = eventKey(event);
@@ -449,10 +466,14 @@ function deriveWorkbenchViewState(state = {}) {
     const hasIdlePreview = Boolean(
         state.selectedTopic?.mode === 'preview'
         && state.selectedTopic?.topicId
-        && !state.backgroundAttachment?.busy
     );
     const hasTurn = Boolean(state.activeTurnId);
-    const hasApproval = Array.isArray(state.approvals) && state.approvals.length > 0;
+    const selectedTopicId = state.selectedTopic?.topicId || attachment?.topicId || null;
+    // Local approvals stay visible in the global Activity center, but only
+    // their owning Topic is paused. A pending approval in Topic A must not
+    // stop the user from starting an independent Topic B turn.
+    const hasApproval = Boolean(selectedTopicId && Array.isArray(state.approvals)
+        && state.approvals.some((approval) => approval?.topicId === selectedTopicId));
 
     if (runtime.state === 'failed') return 'error';
     if (state.recovering || runtime.state === 'degraded') return 'reconnecting';

@@ -1,29 +1,45 @@
-# Rust Agent Runtime：当前真源
+# Rust Agent Runtime: current source of truth
 
-最后更新：2026-07-30。适用分支：`codex/vcpchat-rust-agent-origin-sync`。
+Last updated: 2026-07-31. Active branch: `codex/vcpchat-rust-agent-origin-sync`.
 
-本目录的七份 Markdown 文档与两份 readiness JSON 是 Agent GUI、Rust daemon 与 standalone Rust 产品面的**唯一当前实现真源**。其它 `docs/agent-runtime/*.md` 中标为历史/Pi/legacy 的材料只用于追溯，不可作为新功能依据，也不得作为实施计划或验收依据。
+The supported GUI path is a black-box runtime integration:
 
-阅读顺序：
+```text
+Agent Workbench Renderer -> preload allowlist -> Electron Main transport
+  -> vcp-agentd --direct -> Rust Host/Core -> VCPToolBox
+```
 
-1. [daemon-protocol.md](daemon-protocol.md)：v1.5 framed stdio、同 PID `switch-attachment`、附件 descriptor、控制响应和事件信封。
-2. [topic-and-recovery.md](topic-and-recovery.md)：Topic、lease、恢复、压缩及 Agent 独立影子索引。
-3. [agent-workbench-state.md](agent-workbench-state.md)：Electron Main 与 Renderer 的状态边界。
-4. [delivery-plan.md](delivery-plan.md)：当前验证门槛、影响边界与下一阶段工作。
-5. [engineering-quality.md](engineering-quality.md)：Grok/Pi Rust 审计结论、CI、性能、可靠性与发布标准。
-6. [vcp-toolbox-adaptation.md](vcp-toolbox-adaptation.md)：VCPToolBox 依赖边界、特殊协议适配及 P0/P1/P2 队列。
-7. [unix-cli.md](unix-cli.md)：`vcp-agent --print` 的 stdin/stdout、脚本、取消与审批边界。
+`vcp-agentd` protocol revision **1.7** is one control process supervising up to
+eight independent Topic Hosts. A Topic has at most one writer lease and one
+active Turn; different Topics can run concurrently. `selectedTopic` is only a
+Renderer view. It does not select, stop, or otherwise replace another runtime.
 
-机器可读发布判断由 `product-readiness-contract.json` 和
-`product-readiness-verdict.json` 提供。Markdown 中的完成描述不能覆盖 verdict；正式发布前必须运行
-`npm run check:rust-readiness:release`。
+Rust Topic data in `AppData/AgentRuntimeData` is the sole durable Agent source.
+Renderer keeps an ephemeral snapshot cache and local UI projection only;
+Electron Main only owns process supervision, framed transport, request waiters,
+and short-lived runtime identities. VCPToolBox remains the authority for
+models, dynamic prompts, plugins, tools, markers, and backend approvals.
 
-产品边界固定如下：Rust Core/Host 是 Agent 业务实现，GUI 通过 `vcp-agentd --direct` 将其视为黑盒 Runtime；standalone `vcp-agent` 的 TUI 与 headless CLI 都直接调用同一 Rust Host。VCPToolBox 是模型、`{{Nova}}`、动态工具知识、插件、marker 执行和后端审批真源。GUI、TUI 与 CLI 都不创建本地 Shell、MCP 或第二套工具系统。
+Current documents:
 
-数据边界同样固定：Rust Agent Topic 位于 `AppData/AgentRuntimeData`，是 Agent
-checkpoint、恢复与 lease 的唯一持久真源；主聊天 `AppData/UserData` 仍由既有 JSON
-管理链路负责，VCP-CDS/SQLite/Tantivy 只是主聊天的可重建查询与同步投影。Agent
-Runtime 自己的 `AgentRuntimeData/.index` 同样只是可重建查询投影，并与主聊天数据库物理
-隔离；它不依赖 CDS 启动，也不允许 CDS 或 MobileSync 写回 Agent Topic。
+1. [daemon-protocol.md](daemon-protocol.md): v1.7 framed command/event contract.
+2. [topic-and-recovery.md](topic-and-recovery.md): durable Topic, lease, recovery, and continuation rules.
+3. [agent-workbench-state.md](agent-workbench-state.md): Renderer/Main/Rust state ownership.
+4. [delivery-plan.md](delivery-plan.md): current gates and non-completed work.
 
-TUI 产品化不得改变 GUI 的黑盒接入原则。主题、布局、输入、真实状态显示、终端恢复等 TUI-only 修改不需要扩张 daemon 协议；共享 Host/Core 修改必须同时通过 Rust、daemon adapter 和 Workbench 回归；daemon 协议修改必须先更新共享 fixture。
+Pi, Driver API, `vcp_delegate`, Agent SQLite/submodule routes, and historical
+single-attachment behavior are not current product paths. They only belong in
+`docs/agent-runtime/history/` and may not be used as implementation authority.
+
+**Current hermetic evidence, not product completion**: 2026-07-31, Rust build
+revision `a08bd985cd919d5bcb4b1969194c5ff01d7677947a8923c479efc6ef3fc74519`.
+`node scripts/test-rust-protocol-fixture.mjs`, `npm run test:rust-agent-runtime`,
+`npm run test:agent-workbench-store`, `npm run test:agent-workbench`,
+`npm run test:agent-workbench-timeline`, `npm run build:daemon`,
+`npm run test:rust-daemon-smoke`, `npm run test:rust-topic-takeover`,
+`npm run test:electron-gui-smoke`, `cargo test --manifest-path rust/Cargo.toml --workspace`,
+and `cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets -- -D warnings`
+passed. The matching opt-in live receipt,
+`VCP_AGENT_LIVE=1 npm run test:rust-stack:live`, passed two concurrent Nova
+Topics where A was cancelled without replay and B independently completed.
+These receipts do not mark the broader Agent product as complete.

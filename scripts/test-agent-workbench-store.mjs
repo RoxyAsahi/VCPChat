@@ -32,6 +32,21 @@ previewOnlyStore.setState({
 assert.equal(deriveWorkbenchViewState(previewOnlyStore.getState()), 'idle',
     'a ready control daemon must keep an idle Topic preview send-capable until send-time attachment');
 
+const concurrentApprovalStore = createWorkbenchStore();
+concurrentApprovalStore.setState({
+    runtime: { state: 'ready', worker: null, lastError: null },
+    selectedTopic: { topicId: 'topic-b', mode: 'preview' },
+    approvals: [{ approvalId: 'approval-a', topicId: 'topic-a', sessionId: 'session-a', turnId: 'turn-a', toolCallId: 'tool-a' }],
+});
+assert.equal(deriveWorkbenchViewState(concurrentApprovalStore.getState()), 'idle',
+    'a local approval in Topic A must not disable Topic B composer');
+concurrentApprovalStore.setState({
+    selectedTopic: { topicId: 'topic-a', mode: 'attached' },
+    attachment: { sessionId: 'session-a', topicId: 'topic-a', state: 'idle' },
+});
+assert.equal(deriveWorkbenchViewState(concurrentApprovalStore.getState()), 'awaiting-approval',
+    'the approval-owning Topic must remain paused until Rust resolves it');
+
 // R3-C: the Renderer may show an accepted command immediately, but it must
 // replace that temporary projection with the daemon's event identity rather
 // than grow a second transcript or guess a durable message id.
@@ -110,7 +125,7 @@ dispatch({ type: 'approval.requested', sessionId: 's1', turnId: 't1', toolCallId
 assert.equal(store.getState().approvals.length, 1);
 assert.deepEqual(store.getState().approvals[0], {
     approvalId: 'a1', toolName: 'vcp_invoke', argumentsHash: 'hash-1', expiresAtMs: 1234,
-    sessionId: 's1', turnId: 't1', toolCallId: 'tool-1',
+    topicId: 'topic-1', sessionId: 's1', turnId: 't1', toolCallId: 'tool-1',
 });
 dispatch({ type: 'approval.resolved', sessionId: 's1', approvalId: 'a1', sequence: 9, payload: {} });
 assert.equal(store.getState().approvals.length, 0);
@@ -196,6 +211,7 @@ liveEvent({
 });
 resolveInitialRead({
     topicId: 'topic-restored', snapshotSequence: 4,
+    state: { title: '恢复的 Rust Topic 标题', model: 'gpt-5.6-terra', workspaceRef: 'C:\\workspace\\restored' },
     history: [
         { id: 'history-1', role: 'assistant', content: '来自 Rust Topic', snapshotOrdinal: 0 },
         {
@@ -211,6 +227,9 @@ resolveInitialRead({
 });
 await initializing;
 assert.equal(controller.store.getState().messages[0].content, '来自 Rust Topic');
+assert.equal(controller.store.getState().attachment.title, '恢复的 Rust Topic 标题',
+    'snapshot-first hydration must promote the durable Topic title over Main\'s fallback attachment label');
+assert.equal(controller.store.getState().attachment.workspaceRoot, 'C:\\workspace\\restored');
 const restoredTool = controller.store.getState().tools.get('call-restored');
 assert.equal(restoredTool?.name, 'FileOperator', 'read-topic must rebuild tool artifacts from the Rust snapshot');
 assert.equal(restoredTool?.payload.resources[0].name, 'package.json');

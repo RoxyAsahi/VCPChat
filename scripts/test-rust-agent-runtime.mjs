@@ -10,21 +10,31 @@ class FakeTransport {
         this.options = options; this.requests = []; this.sequence = 0;
         this.child = { pid: 4242 };
         this.sessionId = 'session-rust'; this.topicId = 'topic-rust';
-        this.failNextSwitch = false;
+        this.failNextEnsure = false;
+        this.createdTopics = 0;
     }
     async start() {}
     async stop() { this.stopped = true; this.options.onExit?.(0, null, null); }
     async request(type, payload = {}, requestId) {
         this.requests.push({ type, payload, requestId });
-        if (type === 'switch-attachment') {
-            if (this.failNextSwitch) {
-                this.failNextSwitch = false;
-                throw new Error('attachment-busy');
+        if (type === 'create-topic') {
+            this.createdTopics += 1;
+            const topicId = this.createdTopics === 1 ? 'topic-rust' : `topic-created-${this.createdTopics}`;
+            queueMicrotask(() => this.control(requestId, 'topic-created', {
+                topicId, agentId: payload.agentId, title: payload.title || 'Nova Agent',
+                model: payload.model || 'gpt-5.6-terra', workspaceRoot: payload.workspaceRoot, readOnly: true,
+            }));
+            return { ok: true };
+        }
+        if (type === 'ensure-topic-runtime') {
+            if (this.failNextEnsure) {
+                this.failNextEnsure = false;
+                throw new Error('runtime-capacity');
             }
             const topicId = payload.topicId || 'topic-rust';
             this.sessionId = `session-${topicId}`;
             this.topicId = topicId;
-            return { sessionId: this.sessionId, topicId, agentId: payload.agentId || 'Nova', model: payload.model || 'gpt-5.6-terra', workspaceRoot: payload.workspaceRoot, attached: true };
+            return { sessionId: this.sessionId, topicId, agentId: payload.agentId || 'Nova', model: payload.model || 'gpt-5.6-terra', workspaceRoot: payload.workspaceRoot, resident: true };
         }
         return { ok: true };
     }
@@ -50,6 +60,11 @@ const manager = new RustAgentRuntimeManager({
 });
 
 await manager.start();
+await assert.rejects(
+    manager.createSession({ workspaceRoot: process.cwd(), model: 'gpt-5.6-terra' }),
+    /explicit Agent identity/,
+    'a missing Agent identity must fail closed instead of falling back to a daemon default',
+);
 const session = await manager.createSession({ workspaceRoot: process.cwd(), model: 'gpt-5.6-terra', agent: 'Nova' });
 assert.deepEqual({ sessionId: session.sessionId, topicId: session.topicId }, { sessionId: 'session-topic-rust', topicId: 'topic-rust' });
 assert.equal(manager.getStatus().attachment.topicId, 'topic-rust');
@@ -61,23 +76,52 @@ assert.equal(manager.getAttachedTopicId(), 'topic-rust');
 const requestCountBeforeIdempotentResume = fake.requests.length;
 const sameAttachment = await manager.createSession({ resume: 'topic-rust', agent: 'Nova' });
 assert.deepEqual(sameAttachment, session,
-    'selecting a Topic already attached in this Main process must reuse the live Rust attachment');
+    'ensuring an already resident Topic must reuse its Rust Host');
 assert.equal(fake.requests.length, requestCountBeforeIdempotentResume,
-    'idempotent Topic selection must not stop and respawn the daemon');
+    'idempotent Topic selection must not stop or respawn the daemon');
 const workerBeforeTopicSwitch = manager.getStatus().worker.pid;
+const firstTurn = await manager.startTurn({ sessionId: session.sessionId, prompt: '后台 Topic A 持续运行' });
 const secondTopic = await manager.ensureAttachmentForTopic({ topicId: 'topic-next', agent: 'Nova', workspaceRoot: process.cwd() });
 assert.equal(secondTopic.topicId, 'topic-next');
 assert.equal(fake.stopped, undefined, 'switching attachments must keep the same daemon transport alive');
 assert.equal(manager.getStatus().worker.pid, workerBeforeTopicSwitch,
     'switching attachments must not create a second daemon child process');
-assert.equal(fake.requests.at(-1).type, 'switch-attachment');
-assert.equal(fake.requests.at(-1).payload.sessionId, 'session-topic-rust');
+assert.equal(fake.requests.at(-1).type, 'ensure-topic-runtime');
+assert.equal('sessionId' in fake.requests.at(-1).payload, false);
 assert.equal(fake.requests.at(-1).payload.topicId, 'topic-next');
+assert.equal(manager.getStatus().runtimes.length, 2,
+    'a second Topic runtime must coexist with the first instead of replacing it');
+await manager.cancelTurn({ sessionId: session.sessionId, turnId: firstTurn.turnId });
+assert.deepEqual(fake.requests.at(-1).payload, {
+    sessionId: session.sessionId, topicId: session.topicId, turnId: firstTurn.turnId,
+}, 'cancelling Topic A must target its own session/topic and leave Topic B resident');
+assert.equal(manager.getStatus().runtimes.some((runtime) => runtime.topicId === secondTopic.topicId), true);
 const stableAttachmentAfterSwitch = manager.getStatus().attachment;
-fake.failNextSwitch = true;
+// Creating a Topic is control-plane work. It must stay available while the
+// sole attachment is busy and must never replace that attachment or require a
+// second daemon process.
+const preparedTopic = manager.createTopic({
+    agent: 'Nova', title: '后台任务期间的新 Topic', model: 'gpt-5.6-terra', workspaceRoot: process.cwd(),
+});
+await new Promise((resolve) => setImmediate(resolve));
+const createTopicRequest = fake.requests.at(-1);
+assert.equal(createTopicRequest.type, 'create-topic');
+assert.deepEqual(createTopicRequest.payload, {
+    agentId: 'Nova', title: '后台任务期间的新 Topic', model: 'gpt-5.6-terra', workspaceRoot: process.cwd(),
+});
+assert.deepEqual(manager.getStatus().attachment, stableAttachmentAfterSwitch,
+    'preparing a Topic must not detach another running runtime');
+fake.control(createTopicRequest.requestId, 'topic-created', {
+    topicId: 'topic-prepared', agentId: 'Nova', title: '后台任务期间的新 Topic',
+    model: 'gpt-5.6-terra', workspaceRoot: process.cwd(), readOnly: true,
+});
+assert.equal((await preparedTopic).agentId, 'Nova');
+assert.deepEqual(manager.getStatus().attachment, stableAttachmentAfterSwitch,
+    'a completed create-topic control reply must preserve the old attachment identity');
+fake.failNextEnsure = true;
 await assert.rejects(
     manager.ensureAttachmentForTopic({ topicId: 'topic-busy', agent: 'Nova', workspaceRoot: process.cwd() }),
-    /attachment-busy/,
+    /runtime-capacity/,
 );
 assert.deepEqual(manager.getStatus().attachment, stableAttachmentAfterSwitch,
     'a failed switch must preserve the old attachment identity and daemon transport');
@@ -169,6 +213,7 @@ assert.equal(fake.requests.at(-1).type, 'steer-turn');
 await manager.respondApproval({ approvalId: 'approval-1', decision: 'deny', sessionId: secondTopic.sessionId, turnId: turn.turnId, toolCallId: 'tool-1', argumentsHash: 'hash-1' });
 assert.deepEqual(fake.requests.at(-1).payload, {
     approvalId: 'approval-1', allowed: false, sessionId: secondTopic.sessionId,
+    topicId: secondTopic.topicId,
     turnId: turn.turnId, toolCallId: 'tool-1', argumentsHash: 'hash-1',
 });
 await manager.respondApproval({ approvalId: 'approve-backend-1', decision: 'allow', scope: 'toolbox' });

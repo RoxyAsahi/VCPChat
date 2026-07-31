@@ -213,6 +213,10 @@ pub struct HostConfig {
     /// A control-only daemon services catalog, Topic and settings commands
     /// without becoming a writer for any Agent Topic.
     pub control_only: bool,
+    /// The direct daemon owns exactly one ToolBox VCPLog/VCPInfo observer.
+    /// Topic Hosts set this to false so a concurrent runtime never duplicates
+    /// a global backend-approval broadcast.
+    pub observe_toolbox: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -367,6 +371,7 @@ pub fn load_config(overrides: RuntimeOverrides) -> Result<HostConfig> {
         budget,
         theme,
         control_only: overrides.control_only,
+        observe_toolbox: true,
     })
 }
 
@@ -658,6 +663,16 @@ pub enum HostCommand {
     ListModels {
         request_id: String,
     },
+    /// Creates a durable, empty Topic without claiming a writer lease or
+    /// starting Core. This is control-plane work so background turns can keep
+    /// running while users prepare another conversation.
+    CreateTopic {
+        request_id: String,
+        agent_id: String,
+        title: Option<String>,
+        model: Option<String>,
+        workspace: Option<PathBuf>,
+    },
     ListTopics {
         request_id: String,
         agent_id: Option<String>,
@@ -931,12 +946,21 @@ async fn run_host(
     // ToolBox, settings, or a distributed node on its own.
     let _ = events_tx.send(runtime_readiness_event(initial_readiness(&config)));
     spawn_toolbox_readiness_probe(toolbox.clone(), events_tx.clone());
-    let (observer_tasks, toolbox_approval_tx) = spawn_observers(
-        toolbox.clone(),
-        commands_tx.clone(),
-        events_tx.clone(),
-        config.api_key.clone(),
-    );
+    let (observer_tasks, toolbox_approval_tx) = if config.observe_toolbox {
+        spawn_observers(
+            toolbox.clone(),
+            commands_tx.clone(),
+            events_tx.clone(),
+            config.api_key.clone(),
+        )
+    } else {
+        // Active Topic Hosts never receive a ToolBox backend-approval frame:
+        // the daemon control Host owns the one authenticated VCPLog writer.
+        // Keep a closed-safe sender so an accidental direct command fails
+        // rather than creating a second observer connection.
+        let (tx, _rx) = mpsc::channel(1);
+        (Vec::new(), tx)
+    };
     let mut approvals: HashMap<String, ApprovalRequest> = HashMap::new();
     let mut toolbox_approvals: HashMap<String, u64> = HashMap::new();
     let mut toolbox_approval_order = VecDeque::new();
@@ -1180,6 +1204,44 @@ async fn run_host(
                     match toolbox.get_json("/v1/models").await {
                         Ok(value) => { let _ = events_tx.send(HostEvent::Control { request_id, kind: "models".into(), payload: json!(parse_models(&value)) }); }
                         Err(error) => { let _ = events_tx.send(HostEvent::Control { request_id, kind: "control-error".into(), payload: json!({"operation":"models","error":error.to_string()}) }); }
+                    }
+                }
+                HostCommand::CreateTopic { request_id, agent_id, title, model, workspace } => {
+                    let result = (|| -> Result<Value> {
+                        let agent = load_agent(&config.agents_dir, &agent_id)?;
+                        let workspace = match workspace {
+                            Some(path) => canonical_workspace(path)?,
+                            None => config.workspace.clone(),
+                        };
+                        let model = model
+                            .filter(|value| !value.trim().is_empty())
+                            .or_else(|| (!agent.model.trim().is_empty()).then(|| agent.model.clone()))
+                            .unwrap_or_else(|| config.model.clone());
+                        let title = title
+                            .filter(|value| !value.trim().is_empty())
+                            .unwrap_or_else(|| "新会话".to_string());
+                        let topic_id = next_id("topic");
+                        store.create_empty(&agent.id, &topic_id, &title, &workspace, &model)?;
+                        Ok(json!({
+                            "topicId": topic_id,
+                            "agentId": agent.id,
+                            "title": title,
+                            "model": model,
+                            "workspaceRoot": workspace.display().to_string(),
+                            "readOnly": true
+                        }))
+                    })();
+                    match result {
+                        Ok(payload) => {
+                            let _ = events_tx.send(HostEvent::Control {
+                                request_id,
+                                kind: "topic-created".into(),
+                                payload,
+                            });
+                        }
+                        Err(error) => {
+                            let _ = events_tx.send(control_error(request_id, "create-topic", error.to_string()));
+                        }
                     }
                 }
                 HostCommand::ListTopics { request_id, agent_id } => {
@@ -2967,6 +3029,7 @@ mod tests {
             budget: BudgetLimits::default(),
             theme: "Auto".into(),
             control_only: false,
+            observe_toolbox: false,
         };
         let readiness = initial_readiness(&config);
         assert_eq!(readiness["capability"]["state"], "unknown");
@@ -3111,6 +3174,7 @@ mod tests {
             budget: BudgetLimits::default(),
             theme: "Auto".into(),
             control_only: false,
+            observe_toolbox: false,
         };
         let mut host = start(config).unwrap();
         host.commands
@@ -3181,6 +3245,7 @@ mod tests {
             budget: BudgetLimits::default(),
             theme: "Auto".into(),
             control_only: true,
+            observe_toolbox: false,
         };
         let topic_directory = TopicStore::new(data_root.clone())
             .directory("Nova", "control-placeholder")

@@ -74,11 +74,14 @@
         --vcp-ui-radius-full: 9999px;
 
         --vcp-ui-font-caption: 12px;
+        --vcp-ui-font-micro: 10px;
         --vcp-ui-font-helper: 13px;
         --vcp-ui-font-body: 14px;
         --vcp-ui-font-emphasis: 15px;
         --vcp-ui-font-title: 18px;
         --vcp-ui-font-display: 22px;
+        --vcp-ui-font-reasoning-icon: 21px;
+        --vcp-ui-font-disclosure: 24px;
         --vcp-ui-line-compact: 1.35;
         --vcp-ui-line-body: 1.5;
         --vcp-ui-line-relaxed: 1.65;

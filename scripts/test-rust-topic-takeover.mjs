@@ -18,7 +18,7 @@ function sleep(milliseconds) {
     return new Promise(resolve => setTimeout(resolve, milliseconds));
 }
 
-function options(onMessage, resume) {
+function options(onMessage) {
     return {
         projectRoot: repo,
         settingsPath,
@@ -26,7 +26,7 @@ function options(onMessage, resume) {
         workspaceRoot: repo,
         model: 'gpt-5.6-terra',
         agent: 'Nova',
-        resume,
+        controlOnly: true,
         onMessage,
     };
 }
@@ -72,9 +72,11 @@ try {
         { id: 'history-user', role: 'user', content: '保留的 checkpoint', timestamp: Date.now() },
     ]), 'utf8');
 
-    owner = new RustDaemonTransport(options(() => {}, topicId));
+    owner = new RustDaemonTransport(options(() => {}));
     await owner.start();
-    const ownerSession = await owner.request('create-session');
+    const ownerSession = await owner.request('ensure-topic-runtime', {
+        topicId, agentId: 'Nova', model: 'gpt-5.6-terra', workspaceRoot: repo,
+    });
     assert.equal(ownerSession.topicId, topicId, 'first daemon must own the source Topic');
 
     const requesterEvents = [];
@@ -105,9 +107,11 @@ try {
 
     await requester.stop();
     requester = null;
-    claimant = new RustDaemonTransport(options(() => {}, topicId));
+    claimant = new RustDaemonTransport(options(() => {}));
     await claimant.start();
-    const claimedSession = await claimant.request('create-session');
+    const claimedSession = await claimant.request('ensure-topic-runtime', {
+        topicId, agentId: 'Nova', model: 'gpt-5.6-terra', workspaceRoot: repo,
+    });
     assert.equal(claimedSession.topicId, topicId, 'a replacement daemon must acquire the released Topic');
 } finally {
     await claimant?.stop();

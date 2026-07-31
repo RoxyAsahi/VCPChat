@@ -15,6 +15,7 @@ const CHANNELS = Object.freeze({
     AGENT_RUNTIME_GET_STATUS: 'agent-runtime:get-status',
     AGENT_RUNTIME_START: 'agent-runtime:start',
     AGENT_RUNTIME_STOP: 'agent-runtime:stop',
+    AGENT_RUNTIME_CREATE_TOPIC: 'agent-runtime:create-topic',
     AGENT_RUNTIME_CREATE_SESSION: 'agent-runtime:create-session',
     AGENT_RUNTIME_CLOSE_SESSION: 'agent-runtime:close-session',
     AGENT_RUNTIME_COMPACT_SESSION: 'agent-runtime:compact-session',
@@ -114,6 +115,14 @@ const channelRegistry = new Map([
         requestSchema: null,
         responseSchema: { state: 'string' },
         supportsConcurrent: false,
+    }],
+    [CHANNELS.AGENT_RUNTIME_CREATE_TOPIC, {
+        channelName: CHANNELS.AGENT_RUNTIME_CREATE_TOPIC,
+        channelType: CHANNEL_TYPES.QUERY,
+        owner: 'Agent Runtime',
+        requestSchema: { agent: 'string', title: 'string?', model: 'string?', workspaceRoot: 'string?' },
+        responseSchema: { topicId: 'string', agentId: 'string', title: 'string', model: 'string' },
+        supportsConcurrent: true,
     }],
     [CHANNELS.AGENT_RUNTIME_CREATE_SESSION, {
         channelName: CHANNELS.AGENT_RUNTIME_CREATE_SESSION,

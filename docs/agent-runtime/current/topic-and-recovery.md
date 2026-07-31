@@ -1,6 +1,6 @@
 # Topic、压缩与恢复
 
-`topicId` 是持久身份；`sessionId` 是 daemon 进程内短生命周期 attachment。每个 Topic 由 Rust Store 管理 `history.json`、`agent-state.json` 与 `.vcp-agent.topic-lock.json`。历史为已脱敏有界投影，不能保存 API Key、原始大工具结果或 reasoning。
+`topicId` 是持久身份；`sessionId` 是某个 Topic Host 在 daemon 进程内的短生命周期 identity。每个 Topic 由 Rust Store 管理 `history.json`、`agent-state.json` 与 `.vcp-agent.topic-lock.json`。历史为已脱敏有界投影，不能保存 API Key、原始大工具结果或 reasoning。
 
 ## 物理数据域
 
@@ -64,41 +64,26 @@ CDS 同时保留防御性约束：
 - 未完成 Turn 恢复为 `interrupted`，绝不重放模型或工具调用。
 - 手动 compact 在活跃 Turn 时由 Rust 拒绝。Main 必须等本次请求之后的 `context.compaction.completed|failed`，完成后 Renderer 再读 Topic 刷新。ack 不是压缩完成。
 
-Renderer 可持有当前 attachment 与即时渲染投影，但不是 transcript 真源。
+Renderer 可持有当前 selected Topic 的即时渲染投影及最多 16 个 snapshot cache 条目，但不是 transcript 真源。v1.7 daemon 可同时驻留最多 8 个 Topic Host；每个 Topic 仍只有一个 writer lease 和一个 active Turn。
 
-Workbench 点击规则固定为：任何 Topic 先只读 `read-topic` 预览；首次发送时才安全切换 attachment；与当前 Main attachment 相同的 Topic 幂等
-复用；外部有效 lease 的 Topic 只读打开并显示 inline banner，只有用户点击“请求接管”才发起
-Rust 协作接管。无论哪条路径，Renderer 都不得用旧 JS Session、localStorage transcript 或
+Workbench 点击规则固定为：任何 Topic 先只读 `read-topic` 预览；首次发送时才 `ensure-topic-runtime` 启动或复用该 Topic Host；这不会停止或替换其它 Topic Host。外部有效 lease 的 Topic 只读打开并显示 inline banner，只有用户点击“请求接管”才发起 Rust 协作接管。无论哪条路径，Renderer 都不得用旧 JS Session、localStorage transcript 或
 Main 内存消息补齐内容。
 
 ## 当前验证
 
-2026-07-30 在 `codex/vcpchat-rust-agent-origin-sync`、基线提交 `4209a1ec` 加当前隔离
-工作树上执行：
+历史 v1.5/v1.6 收据不证明 v1.7。当前验证为 2026-07-31、Rust build revision
+`a08bd985cd919d5bcb4b1969194c5ff01d7677947a8923c479efc6ef3fc74519`：
 
 ```powershell
-cargo fmt --manifest-path rust/Cargo.toml --all --check
-cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets -- -D warnings
-cargo test --manifest-path rust/Cargo.toml --workspace
-cargo fmt --manifest-path rust_chat_data_service/Cargo.toml --check
-cargo clippy --manifest-path rust_chat_data_service/Cargo.toml --all-targets -- -D warnings
-cargo test --manifest-path rust_chat_data_service/Cargo.toml
 node scripts/test-rust-protocol-fixture.mjs
-node scripts/test-rust-agent-runtime.mjs
-node scripts/test-agent-workbench-store.mjs
-node scripts/test-agent-workbench.mjs
 npm run build:daemon
+npm run test:rust-agent-runtime
 npm run test:rust-daemon-smoke
 npm run test:rust-topic-takeover
-npm run test:electron-topic-takeover
-npm run test:electron-gui-smoke
-git diff --check
 ```
 
-本次 Rust source revision 为
-`3be0430538a760b30b932647529d4527baa1ad07c72bd1376b797f8f32814f33`。Rust
-workspace 注册 1163 项测试且所有非 ignored 测试通过，VCP-CDS 19 项通过；两边 fmt 与
-clippy `-D warnings` 均通过。共享 v1.5 fixture、Runtime manager、Workbench store/UI、
-release daemon framed smoke、daemon 与双窗口 Electron Topic 接管、完整 Electron GUI smoke
-均通过。GUI smoke 同时核验运行 daemon 报告的 build revision 与当前 Rust 源码一致。本收据
-仍是 hermetic 证据，不外推为真实 ToolBox、DistributedServer capability 或发布证据。
+上述命令通过，覆盖 control-plane Topic、两个并发 Host、独立 Turn/cancel、单 writer
+takeover 与恢复。`npm run test:rust-stack`、workspace fmt/clippy/test 和 Electron 并发
+smoke 也在该 revision 通过。真实双 Topic 模型/取消门槛随后以
+`VCP_AGENT_LIVE=1 npm run test:rust-stack:live` 通过：A 的流式 Turn 取消且不可重放，B
+在同一 daemon PID 中独立完成。该 live receipt 不覆盖所有 ToolBox 插件或审批策略。

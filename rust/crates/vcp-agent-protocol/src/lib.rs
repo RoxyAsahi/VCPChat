@@ -18,7 +18,7 @@ pub const PROTOCOL_VERSION: u32 = 1;
 /// Additive revision of the stable v1 frame contract. Keep this explicit so
 /// the daemon and Electron transport cannot silently drift while retaining
 /// the same major framing version.
-pub const PROTOCOL_REVISION: &str = "1.5";
+pub const PROTOCOL_REVISION: &str = "1.7";
 pub const MAX_FRAME_BYTES: usize = 256 * 1024;
 pub const MAX_MODEL_DELTA_BYTES: usize = 8 * 1024;
 
@@ -135,10 +135,7 @@ pub fn validate_direct_command(message: &WireMessage) -> Result<(), ProtocolErro
     match message.kind.as_str() {
         "hello"
         | "shutdown"
-        | "create-session"
         | "list-topics"
-        | "list-interaction-queue"
-        | "clear-interaction-queue"
         | "get-settings"
         | "get-index-status"
         | "rebuild-topic-index" => {
@@ -146,30 +143,42 @@ pub fn validate_direct_command(message: &WireMessage) -> Result<(), ProtocolErro
                 optional_payload_string(message, "agentId")?;
             }
         }
-        "switch-attachment" => {
-            optional_identity(message, "sessionId")?;
-            optional_payload_string(message, "topicId")?;
-            optional_payload_string(message, "agentId")?;
+        "create-topic" => {
+            required_payload_string(message, "agentId")?;
+            optional_payload_string(message, "title")?;
+            optional_payload_string(message, "model")?;
+            optional_payload_string(message, "workspaceRoot")?;
+        }
+        "ensure-topic-runtime" => {
+            required_payload_string(message, "topicId")?;
+            required_payload_string(message, "agentId")?;
             optional_payload_string(message, "model")?;
             optional_payload_string(message, "workspaceRoot")?;
             if let Some(mode) = message.string("permissionMode")
                 && !matches!(mode, "ask" | "always-approve")
             {
                 return Err(ProtocolError::InvalidMessage(
-                    "switch-attachment permissionMode must be ask or always-approve".to_string(),
+                    "ensure-topic-runtime permissionMode must be ask or always-approve".to_string(),
                 ));
             }
         }
-        "close-session" | "cancel-turn" | "compact" => {
+        "detach-topic"
+        | "cancel-turn"
+        | "compact"
+        | "list-interaction-queue"
+        | "clear-interaction-queue" => {
             required_identity(message, "sessionId")?;
+            required_payload_string(message, "topicId")?;
         }
         "import-attachment" => {
             required_identity(message, "sessionId")?;
+            required_payload_string(message, "topicId")?;
             required_payload_string(message, "path")?;
         }
         "start-turn" => {
             required_identity(message, "sessionId")?;
             required_identity(message, "turnId")?;
+            required_payload_string(message, "topicId")?;
             let prompt = message
                 .value("prompt")
                 .and_then(Value::as_str)
@@ -184,12 +193,14 @@ pub fn validate_direct_command(message: &WireMessage) -> Result<(), ProtocolErro
         "steer-turn" | "follow-up-turn" => {
             required_identity(message, "sessionId")?;
             required_identity(message, "turnId")?;
+            required_payload_string(message, "topicId")?;
             required_payload_string(message, "prompt")?;
         }
         "approval" => {
             required_identity(message, "sessionId")?;
             required_identity(message, "turnId")?;
             required_identity(message, "toolCallId")?;
+            required_payload_string(message, "topicId")?;
             required_payload_string(message, "approvalId")?;
             required_payload_string(message, "argumentsHash")?;
             if message.bool("allowed").is_none() && message.string("decision").is_none() {
@@ -229,12 +240,14 @@ pub fn validate_direct_command(message: &WireMessage) -> Result<(), ProtocolErro
         }
         "replace-interaction-queue" => {
             required_identity(message, "sessionId")?;
+            required_payload_string(message, "topicId")?;
             if !matches!(message.value("interactions"), Some(Value::Array(_))) {
                 return Err(ProtocolError::InvalidMessage(
                     "replace-interaction-queue requires interactions array".to_string(),
                 ));
             }
         }
+        "list-active-runtimes" => {}
         "update-settings" => {
             if !matches!(message.value("settings"), Some(Value::Object(_))) {
                 return Err(ProtocolError::InvalidMessage(
@@ -260,7 +273,7 @@ pub fn validate_direct_command(message: &WireMessage) -> Result<(), ProtocolErro
 
 /// Validate final daemon frames that cross the Rust ↔ GUI boundary. Internal
 /// Host/Core messages are allowed to be richer; this function establishes the
-/// stable v1.5 public projection consumed by Electron and the standalone TUI.
+/// stable v1.7 public projection consumed by Electron and the standalone TUI.
 pub fn validate_direct_daemon_message(message: &WireMessage) -> Result<(), ProtocolError> {
     match message.kind.as_str() {
         "ready" => {
@@ -331,22 +344,6 @@ fn required_identity(message: &WireMessage, field: &str) -> Result<(), ProtocolE
         _ => None,
     };
     required_non_empty(value, field)
-}
-
-fn optional_identity(message: &WireMessage, field: &str) -> Result<(), ProtocolError> {
-    let value = match field {
-        "sessionId" => message.session_id.as_deref(),
-        "turnId" => message.turn_id.as_deref(),
-        "toolCallId" => message.tool_call_id.as_deref(),
-        _ => None,
-    };
-    match value {
-        None => Ok(()),
-        Some(value) if !value.trim().is_empty() => Ok(()),
-        Some(_) => Err(ProtocolError::InvalidMessage(format!(
-            "{field} must be a non-empty string when supplied"
-        ))),
-    }
 }
 
 fn required_payload_string(message: &WireMessage, field: &str) -> Result<(), ProtocolError> {
@@ -538,12 +535,12 @@ mod tests {
         assert!(fixture.daemon_to_host.len() >= 8);
         for message in fixture.host_to_daemon.iter() {
             validate_message(message).expect("fixture message must satisfy v1 bounds");
-            validate_direct_command(message).expect("fixture command must satisfy v1.5 schema");
+            validate_direct_command(message).expect("fixture command must satisfy v1.7 schema");
         }
         for message in fixture.daemon_to_host.iter() {
             validate_message(message).expect("fixture message must satisfy v1 bounds");
             validate_direct_daemon_message(message)
-                .expect("fixture response must satisfy v1.5 schema");
+                .expect("fixture response must satisfy v1.7 schema");
         }
         for message in fixture.invalid_host_to_daemon.iter() {
             assert!(validate_direct_command(message).is_err());

@@ -28,6 +28,7 @@ const IPC_CHANNELS = Object.freeze({
     GET_STATUS: 'agent-runtime:get-status',
     START: 'agent-runtime:start',
     STOP: 'agent-runtime:stop',
+    CREATE_TOPIC: 'agent-runtime:create-topic',
     CREATE_SESSION: 'agent-runtime:create-session',
     CLOSE_SESSION: 'agent-runtime:close-session',
     COMPACT_SESSION: 'agent-runtime:compact-session',

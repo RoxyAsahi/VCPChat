@@ -1691,6 +1691,27 @@ try {
     }, durableWorkbenchTopic.topicId), true, 'the first preview Topic must remain selectable after rapid sibling previews');
     await page.waitForFunction((text) => [...document.querySelectorAll('.message-item.assistant .md-content')]
         .some((node) => node.textContent.includes(text)), { timeout: timeoutMs }, durableWorkbenchTopic.assistantText);
+    // v1.7: two Topics may have independent Rust Hosts in one daemon. This
+    // uses the real preload/Main bridge, then returns the Workbench to a
+    // snapshot preview without creating a model request.
+    const concurrentRuntime = await page.evaluate(async ({ firstTopicId, secondTopicId }) => {
+        const api = window.chatAPI || window.electronAPI;
+        const first = await api.agentRuntimeCreateSession({ resume: firstTopicId, agent: 'Nova' });
+        const second = await api.agentRuntimeCreateSession({ resume: secondTopicId, agent: 'Nova' });
+        const status = await api.agentRuntimeGetStatus();
+        await api.agentRuntimeCloseSession({ sessionId: first.sessionId });
+        await api.agentRuntimeCloseSession({ sessionId: second.sessionId });
+        return { first, second, status };
+    }, { firstTopicId: durableWorkbenchTopic.topicId, secondTopicId: previewTopics[1].topicId });
+    assert.notEqual(concurrentRuntime.first.sessionId, concurrentRuntime.second.sessionId,
+        'two concurrent Topic Hosts must have distinct Rust session identities');
+    assert.equal(concurrentRuntime.first.topicId, durableWorkbenchTopic.topicId);
+    assert.equal(concurrentRuntime.second.topicId, previewTopics[1].topicId);
+    assert.equal(concurrentRuntime.status?.runtimes?.filter((runtime) => (
+        runtime.topicId === durableWorkbenchTopic.topicId || runtime.topicId === previewTopics[1].topicId
+    )).length, 2, 'Electron must observe two resident Topic runtimes through one daemon manager');
+    assert.equal(concurrentRuntime.status?.worker?.pid, previewDaemonPid,
+        'creating a second Topic Host must not replace the daemon process');
     assert.deepEqual(await page.evaluate(() => JSON.parse(window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1'))), {
         topicId: durableWorkbenchTopic.topicId,
     }, 'Workbench localStorage may retain only the durable Rust Topic pointer');

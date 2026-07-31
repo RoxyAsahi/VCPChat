@@ -355,6 +355,7 @@ impl TopicStore {
         Ok(json!({
             "readOnly": true,
             "topicId": topic_id,
+            "agentId": agent_id,
             "state": redact(state),
             "history": redact(history)
         }))
@@ -595,6 +596,53 @@ impl TopicStore {
             atomic_json(&continuation_dir.join("history.json"), &overflow)?;
         }
         atomic_json(&directory.join("history.json"), &history)
+    }
+
+    /// Create a durable, lease-free Topic before it is attached to an Agent
+    /// runtime. This is deliberately separate from `acquire`: a user may
+    /// prepare and browse several Topics while one attachment is streaming.
+    pub fn create_empty(
+        &self,
+        agent_id: &str,
+        topic_id: &str,
+        title: &str,
+        workspace: &Path,
+        model: &str,
+    ) -> Result<()> {
+        let agent_id = safe(agent_id, "agent id")?;
+        let topic_id = safe(topic_id, "topic id")?;
+        let title = title.trim();
+        if title.is_empty() || title.chars().count() > 120 {
+            return Err(anyhow!("invalid topic title"));
+        }
+        let directory = self.directory(&agent_id, &topic_id)?;
+        let parent = directory
+            .parent()
+            .ok_or_else(|| anyhow!("invalid topic directory"))?;
+        fs::create_dir_all(parent)?;
+        match fs::create_dir(&directory) {
+            Ok(()) => {}
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                return Err(anyhow!("Topic already exists: {topic_id}"));
+            }
+            Err(error) => return Err(error.into()),
+        }
+        let checkpoint = json!({
+            "version": 1,
+            "title": title,
+            "snapshot": {"version": 1, "messages": []},
+            "usage": Value::Null,
+            "workspaceRef": workspace.display().to_string(),
+            "model": model,
+            "updatedAt": now()
+        });
+        if let Err(error) = atomic_json(&directory.join("agent-state.json"), &checkpoint)
+            .and_then(|_| atomic_json(&directory.join("history.json"), &Vec::<Value>::new()))
+        {
+            let _ = fs::remove_dir_all(&directory);
+            return Err(error);
+        }
+        Ok(())
     }
 }
 
@@ -1218,6 +1266,39 @@ mod tests {
         assert_eq!(store.latest_topic("nova").unwrap(), None);
         store.release("nova", "topic-control", "owner-control");
         assert!(!store.directory("nova", "topic-control").unwrap().exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn prepared_topic_is_durable_without_claiming_a_writer_lease() {
+        let root = std::env::temp_dir().join(format!("vcp-topic-prepared-test-{}", now()));
+        let store = TopicStore::new(root.clone());
+        store
+            .create_empty(
+                "nova",
+                "topic-prepared",
+                "后台任务期间的新 Topic",
+                Path::new("."),
+                "gpt-5.6-terra",
+            )
+            .unwrap();
+
+        let topic = store
+            .list("nova")
+            .unwrap()
+            .into_iter()
+            .find(|topic| topic.id == "topic-prepared")
+            .expect("prepared Topic must appear in the catalog");
+        assert!(
+            !topic.in_use,
+            "creating a Topic must not claim its writer lease"
+        );
+        assert_eq!(topic.title, "后台任务期间的新 Topic");
+        let view = store.load_read_only("nova", "topic-prepared").unwrap();
+        assert_eq!(view["agentId"], "nova");
+        assert_eq!(view["history"], json!([]));
+        assert!(store.acquire("nova", "topic-prepared", "owner-1").is_ok());
+        store.release("nova", "topic-prepared", "owner-1");
         let _ = fs::remove_dir_all(root);
     }
 
