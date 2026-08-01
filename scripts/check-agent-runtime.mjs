@@ -10,6 +10,8 @@ const requiredFiles = [
     'modules/codex-runtime/toolboxResponsesAdapter.js',
     'modules/codex-runtime/projection/repository.js',
     'modules/codex-runtime/projection/projector.js',
+    'fixtures/codex-app-server-v0.146.json',
+    'fixtures/codex-app-server/0.146.0/manifest.json',
     'modules/ipc/agentRuntimeHandlers.js',
     'modules/ui-system/agent-workbench-controller.js',
     'modules/ui-system/agent-workbench-store.js',
@@ -60,6 +62,9 @@ if (!packageJson.build?.extraResources?.some((item) => String(item.from).include
 }
 if (!packageJson.scripts?.['test:codex-stack']) errors.push('package scripts must define test:codex-stack');
 if (!packageJson.scripts?.['test:codex-toolbox-responses-adapter']) errors.push('package scripts must define the VChat-owned Responses adapter test');
+if (packageJson.devDependencies?.['@openai/codex'] !== '0.146.0') {
+    errors.push('Codex App Server must be pinned exactly to @openai/codex 0.146.0');
+}
 
 const currentDocs = fs.readdirSync(path.join(root, 'docs/agent-runtime/current'));
 for (const file of currentDocs) {

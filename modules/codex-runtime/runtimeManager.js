@@ -8,9 +8,27 @@ const { CodexAppServerTransport, CodexAppServerError } = require('./appServerTra
 const { AgentProjectionRepository, CodexProjectionProjector } = require('./projection');
 const { ToolboxBridgeTransport } = require('./toolboxBridgeTransport');
 const { ToolboxResponsesAdapter } = require('./toolboxResponsesAdapter');
+const { InteractionRegistry } = require('./interactionRegistry');
+const {
+    capabilityMatrix,
+    failClosedServerRequestResponse,
+    serverRequestPolicy,
+} = require('./protocolCapabilities');
 
 function id(prefix) {
     return `${prefix}_${crypto.randomUUID()}`;
+}
+
+function submissionDedupeKey(prompt, attachments = []) {
+    const descriptors = (Array.isArray(attachments) ? attachments : []).map((attachment) => ({
+        attachmentId: attachment?.attachmentId || null,
+        displayName: attachment?.displayName || null,
+        byteLen: Number(attachment?.byteLen) || 0,
+        kind: attachment?.kind || null,
+    }));
+    return crypto.createHash('sha256')
+        .update(JSON.stringify({ prompt: String(prompt || '').trim(), attachments: descriptors }))
+        .digest('hex');
 }
 
 function explicitAgent(value) {
@@ -48,6 +66,8 @@ class CodexRuntimeManager extends EventEmitter {
         this.state = 'stopped';
         this.lastError = null;
         this.serverRequests = new Map();
+        this.interactions = new InteractionRegistry();
+        this.interactionTimers = new Map();
         this.bridge = null;
         this.responsesAdapter = null;
         this.threadStates = new Map();
@@ -64,6 +84,9 @@ class CodexRuntimeManager extends EventEmitter {
         this.toolboxConfigFingerprint = null;
         this.toolboxReconfiguration = null;
         this.sessionWarmPromises = new Map();
+        this.turnStartPromises = new Map();
+        this.followUpDrainPromises = new Map();
+        this.compactionWaiters = new Map();
         this.idleWarmSessions = new Map();
         this.maxIdleWarmSessions = Number.isInteger(options.maxIdleWarmSessions)
             ? Math.max(0, options.maxIdleWarmSessions) : 2;
@@ -83,11 +106,17 @@ class CodexRuntimeManager extends EventEmitter {
                 .filter((session) => session.threadId)
                 .map((session) => compatibilityRuntime(session, this.threadStates.get(session.threadId))),
             pendingApprovals: [...this.serverRequests.entries()]
-                .filter(([, request]) => request.method !== 'item/tool/call')
-                .map(([requestId, request]) => approvalProjection(requestId, request, this.repository)),
+                .filter(([, request]) => [
+                    'item/commandExecution/requestApproval',
+                    'item/fileChange/requestApproval',
+                ].includes(request.method))
+                .map(([requestId, request]) => approvalProjection(requestId, request, this.repository))
+                .concat([...this.toolboxApprovals.values()]),
+            pendingInteractions: this.interactions.active(),
             toolbox: {
                 configured: Boolean(this.getSettings()?.vcpServerUrl && this.getSettings()?.vcpApiKey),
             },
+            capabilities: capabilityMatrix('toolbox-only'),
         };
     }
 
@@ -105,6 +134,7 @@ class CodexRuntimeManager extends EventEmitter {
                 cwd: this.projectRoot,
                 clientVersion: 'vcp-chat-codex-agent-0.1.0',
                 executable: settings.agentRuntime?.codex?.executable || settings.codexAppServerPath,
+                supportedVersionLine: '0.146',
                 // The Codex child sees only a per-process loopback capability;
                 // VCPToolBox credentials remain in the local adapter and bridge.
                 env: this.responsesAdapter
@@ -166,6 +196,8 @@ class CodexRuntimeManager extends EventEmitter {
         this.resumedThreadIds.clear();
         this.resumingThreads.clear();
         this.sessionWarmPromises.clear();
+        this.turnStartPromises.clear();
+        this.followUpDrainPromises.clear();
         this.idleWarmSessions.clear();
         this.dynamicCalls.clear();
         this.toolboxApprovals.clear();
@@ -310,12 +342,12 @@ class CodexRuntimeManager extends EventEmitter {
         return projection;
     }
 
-    async listTopics({ agentId } = {}) {
+    async listTopics({ agentId, archived = false } = {}) {
         const startedAt = this.diagnosticClock();
         this.ensureProjectionStore();
         const requested = explicitAgent(agentId);
         const identity = requested ? this._resolveCanonicalAgent(requested, { failOnAmbiguous: true }) : null;
-        const sessions = this.repository.listSessions()
+        const sessions = this.repository.listSessions({ archived: archived === true })
             .map((session) => this._repairSessionIdentity(session))
             .filter((session) => !identity || sameIdentity(session.agentCatalogId || session.agentId, identity.catalogId));
         const topics = sessions.map((session) => ({
@@ -330,6 +362,8 @@ class CodexRuntimeManager extends EventEmitter {
             workspaceRoot: session.workspaceRoot,
             state: session.state,
             orphaned: session.orphaned,
+            pinnedAt: session.pinnedAt || null,
+            archivedAt: session.archivedAt || null,
             updatedAt: session.updatedAt,
         }));
         this._diagnostic('projection-list-returned', {
@@ -341,8 +375,26 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     async startTurn({ sessionId, topicId, prompt, attachments = [] } = {}) {
+        const requestedSessionId = String(sessionId || topicId || '').trim();
+        const text = String(prompt || '').trim();
+        const requestKey = submissionDedupeKey(text, attachments);
+        const existing = this.turnStartPromises.get(requestedSessionId);
+        if (existing) {
+            if (existing.requestKey === requestKey) return existing.promise;
+            throw new CodexAppServerError('SESSION_BUSY', 'A different message is already being submitted for this Session');
+        }
+        const promise = this._startTurn({ sessionId: requestedSessionId, prompt: text, attachments });
+        this.turnStartPromises.set(requestedSessionId, { requestKey, promise });
+        try {
+            return await promise;
+        } finally {
+            if (this.turnStartPromises.get(requestedSessionId)?.promise === promise) this.turnStartPromises.delete(requestedSessionId);
+        }
+    }
+
+    async _startTurn({ sessionId, prompt, attachments = [] } = {}) {
         const startedAt = this.diagnosticClock();
-        const session = await this.ensureSessionRuntime({ sessionId: sessionId || topicId, reason: 'send' });
+        const session = await this.ensureSessionRuntime({ sessionId, reason: 'send' });
         const text = String(prompt || '').trim();
         if (!text && (!Array.isArray(attachments) || attachments.length === 0)) {
             throw new CodexAppServerError('INVALID_INPUT', 'Prompt or attachment must not be empty');
@@ -390,6 +442,24 @@ class CodexRuntimeManager extends EventEmitter {
         return { sessionId: session.sessionId, threadId: session.threadId, turnId: result?.turnId || turnId };
     }
 
+    async followUpTurn({ sessionId, topicId, prompt, attachments = [] } = {}) {
+        if (Array.isArray(attachments) && attachments.length) {
+            throw new CodexAppServerError('QUEUE_ATTACHMENT_UNSUPPORTED', 'Queued follow-up attachments are not persisted; send them as a new turn instead');
+        }
+        const idValue = String(sessionId || topicId || '').trim();
+        const session = this.repository.getSession(idValue);
+        const text = String(prompt || '').trim();
+        if (!session?.threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached');
+        if (!text) throw new CodexAppServerError('INVALID_INPUT', 'Follow-up message must not be empty');
+        const queued = this.repository.enqueuePendingInput(idValue, {
+            dedupeKey: submissionDedupeKey(text, []),
+            prompt: text,
+        });
+        const state = this.threadStates.get(session.threadId);
+        if (state?.activity !== 'running') void this._drainFollowUpQueue(session);
+        return { sessionId: idValue, threadId: session.threadId, inputId: queued.input_id, queued: true };
+    }
+
     async cancelTurn({ sessionId, topicId, turnId } = {}) {
         const session = this.repository.getSession(sessionId || topicId);
         if (!session?.threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached');
@@ -397,6 +467,10 @@ class CodexRuntimeManager extends EventEmitter {
             threadId: session.threadId,
             turnId,
         });
+        // The adapter receives Codex's signed-by-process turn metadata header
+        // and can therefore interrupt only this exact ToolBox model request.
+        // Do this before unrelated dynamic VCP calls are considered.
+        await this.responsesAdapter?.cancelTurn?.({ threadId: session.threadId, turnId });
         const interrupts = [...this.dynamicCalls.values()]
             .filter((call) => call.threadId === session.threadId && (!turnId || call.turnId === turnId))
             .map((call) => this.bridge?.interrupt(call.bridgeRequestId).catch(() => false));
@@ -424,14 +498,56 @@ class CodexRuntimeManager extends EventEmitter {
         });
     }
 
-    async closeSession({ sessionId, topicId } = {}) {
-        const idValue = sessionId || topicId;
-        if (!this.repository.getSession(idValue)) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
-        this.repository.archiveSession(idValue);
-        return { sessionId: idValue, archived: true };
+    _assertLifecycleIdle(session) {
+        const state = session?.threadId ? this.threadStates.get(session.threadId) : null;
+        const hasInteraction = session?.threadId && [...this.serverRequests.values()]
+            .some((request) => request?.params?.threadId === session.threadId);
+        if (state?.activity === 'running' || hasInteraction) {
+            throw new CodexAppServerError('SESSION_BUSY', 'Finish or cancel the current turn or interaction first');
+        }
     }
 
-    async followUpTurn(options = {}) { return this.steerTurn(options); }
+    async archiveSession({ sessionId, topicId } = {}) {
+        const idValue = sessionId || topicId;
+        const session = this.repository.getSession(idValue);
+        if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
+        this._assertLifecycleIdle(session);
+        if (session.threadId) {
+            await this.start();
+            await this.transport.request('thread/archive', { threadId: session.threadId });
+        }
+        const archived = this.repository.archiveSession(idValue);
+        return { sessionId: idValue, threadId: session.threadId, archived: true, session: compatibilitySession(archived) };
+    }
+
+    async closeSession(options = {}) { return this.archiveSession(options); }
+
+    async restoreSession({ sessionId, topicId } = {}) {
+        const idValue = sessionId || topicId;
+        const session = this.repository.getSession(idValue);
+        if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
+        if (!session.archivedAt) return { sessionId: idValue, threadId: session.threadId, restored: false, session: compatibilitySession(session) };
+        if (session.threadId) {
+            await this.start();
+            const result = await this.transport.request('thread/unarchive', { threadId: session.threadId });
+            const returnedThreadId = String(result?.thread?.id || session.threadId);
+            if (returnedThreadId !== session.threadId) {
+                throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/unarchive returned a mismatched thread id');
+            }
+        }
+        const restored = this.repository.unarchiveSession(idValue);
+        return { sessionId: idValue, threadId: restored.threadId, restored: true, session: compatibilitySession(restored) };
+    }
+
+    async setSessionPinned({ sessionId, topicId, pinned } = {}) {
+        const idValue = sessionId || topicId;
+        if (typeof pinned !== 'boolean') throw new CodexAppServerError('INVALID_INPUT', 'Session pin state must be boolean');
+        const session = this.repository.getSession(idValue);
+        if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
+        const updated = this.repository.setPinned(idValue, pinned);
+        return { sessionId: idValue, pinned, session: compatibilitySession(updated) };
+    }
+
     async setWorkbenchPresence(mounted = true) {
         this.workbenchMounted = mounted === true;
         if (!this.workbenchMounted) {
@@ -446,8 +562,44 @@ class CodexRuntimeManager extends EventEmitter {
         }
         return { mounted: this.workbenchMounted };
     }
-    async compactSession() { throw new CodexAppServerError('UNSUPPORTED', 'Codex automatic compaction is runtime-owned'); }
-    async searchTopics() { return { topics: await this.listTopics() }; }
+    async compactSession({ sessionId, topicId, timeoutMs = 120_000 } = {}) {
+        const session = this.repository.getSession(sessionId || topicId);
+        if (!session?.threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached');
+        this._assertLifecycleIdle(session);
+        if (this.compactionWaiters.has(session.threadId)) {
+            throw new CodexAppServerError('SESSION_BUSY', 'Context compaction is already running for this Session');
+        }
+        await this.start();
+        let resolveWaiter;
+        let rejectWaiter;
+        const completion = new Promise((resolve, reject) => { resolveWaiter = resolve; rejectWaiter = reject; });
+        const timeout = setTimeout(() => {
+            const waiter = this.compactionWaiters.get(session.threadId);
+            if (!waiter) return;
+            this.compactionWaiters.delete(session.threadId);
+            waiter.reject(new CodexAppServerError('COMPACTION_TIMEOUT', 'Codex context compaction did not complete in time'));
+            this._sendUiEvent({ type: 'compaction.failed', topicId: session.sessionId, sessionId: session.sessionId,
+                payload: { reason: 'timeout' } });
+        }, Math.max(1_000, Number(timeoutMs) || 120_000));
+        this.compactionWaiters.set(session.threadId, {
+            sessionId: session.sessionId, threadId: session.threadId, resolve: resolveWaiter, reject: rejectWaiter, timeout,
+        });
+        this._sendUiEvent({ type: 'compaction.started', topicId: session.sessionId, sessionId: session.sessionId });
+        try {
+            // ACK proves only admission. Completion requires a terminal item.
+            await this.transport.request('thread/compact/start', { threadId: session.threadId });
+        } catch (error) {
+            const waiter = this.compactionWaiters.get(session.threadId);
+            if (waiter) {
+                this.compactionWaiters.delete(session.threadId);
+                clearTimeout(waiter.timeout);
+                waiter.reject(error);
+            }
+            throw error;
+        }
+        return completion;
+    }
+    async searchTopics(options = {}) { return { topics: await this.listTopics(options) }; }
     async searchTopicMessages({ topicId, sessionId } = {}) { return this.readTopic({ topicId, sessionId }); }
     async getTopicIndexStatus() { return { available: false, source: 'codex-thread-store' }; }
     async rebuildTopicIndex() { return { available: false }; }
@@ -458,7 +610,7 @@ class CodexRuntimeManager extends EventEmitter {
         this.repository.saveSession({ ...session, title: String(title || '').trim(), updatedAt: Date.now() });
         return this.repository.getSession(session.sessionId);
     }
-    async deleteTopic({ topicId, sessionId }) { return this.closeSession({ topicId, sessionId }); }
+    async deleteTopic({ topicId, sessionId }) { return this.archiveSession({ topicId, sessionId }); }
     async listInteractionQueue() { return { items: [] }; }
     async replaceInteractionQueue() { return { items: [] }; }
     async clearInteractionQueue() { return { items: [] }; }
@@ -555,13 +707,26 @@ class CodexRuntimeManager extends EventEmitter {
                 this.toolboxApprovals.delete(pendingId);
                 throw new CodexAppServerError('NOT_FOUND', 'ToolBox approval is no longer pending');
             }
-            const result = await this.bridge?.respondApproval({
-                requestId: pendingId,
-                approved: normalizeApprovalDecision(decision) === 'accept',
-                reason,
-            });
-            if (!result?.written) throw new CodexAppServerError('TOOLBOX_APPROVAL_FAILED', result?.error || 'ToolBox approval response was not written');
+            if (!this.interactions.begin('toolbox', pendingId)) {
+                throw new CodexAppServerError('INTERACTION_ALREADY_RESOLVED', 'ToolBox approval is already being answered');
+            }
+            let result;
+            try {
+                result = await this.bridge?.respondApproval({
+                    requestId: pendingId,
+                    approved: normalizeApprovalDecision(decision) === 'accept',
+                    reason,
+                });
+            } catch (error) {
+                this.interactions.rollback('toolbox', pendingId);
+                throw error;
+            }
+            if (!result?.written) {
+                this.interactions.rollback('toolbox', pendingId);
+                throw new CodexAppServerError('TOOLBOX_APPROVAL_FAILED', result?.error || 'ToolBox approval response was not written');
+            }
             this.toolboxApprovals.delete(pendingId);
+            this.interactions.complete('toolbox', pendingId);
             this._sendUiEvent({
                 type: 'approval.resolved',
                 approvalId: pendingId,
@@ -573,10 +738,22 @@ class CodexRuntimeManager extends EventEmitter {
             throw new CodexAppServerError('NOT_FOUND', 'Approval request is no longer pending');
         }
         const request = this.serverRequests.get(pendingId);
+        if (!['item/commandExecution/requestApproval', 'item/fileChange/requestApproval'].includes(request.method)) {
+            throw new CodexAppServerError('INTERACTION_KIND_MISMATCH', 'This request must be answered through respondInteraction');
+        }
+        if (!this.interactions.begin('codex-native', pendingId)) {
+            throw new CodexAppServerError('INTERACTION_ALREADY_RESOLVED', 'Codex approval is already being answered');
+        }
         const response = approvalResponse(request.method, decision);
-        if (response) this.transport.respond(pendingId, response);
-        else this.transport.respondError(pendingId, -32002, `Unsupported Codex server request: ${request.method}`);
+        try {
+            if (response) this.transport.respond(pendingId, response);
+            else this.transport.respondError(pendingId, -32002, `Unsupported Codex server request: ${request.method}`);
+        } catch (error) {
+            this.interactions.rollback('codex-native', pendingId);
+            throw error;
+        }
         this.serverRequests.delete(pendingId);
+        this.interactions.complete('codex-native', pendingId);
         this._sendUiEvent({
             type: 'approval.resolved',
             topicId: approvalProjection(pendingId, request, this.repository).topicId,
@@ -585,6 +762,55 @@ class CodexRuntimeManager extends EventEmitter {
             payload: { approvalId: pendingId, decision },
         });
         return { requestId: pendingId, resolved: true };
+    }
+
+    async respondInteraction({ source = 'codex-native', requestId, kind, response = {} } = {}) {
+        const pendingId = String(requestId || '').trim();
+        if (source !== 'codex-native') {
+            throw new CodexAppServerError('INTERACTION_SOURCE_MISMATCH', 'Only Codex server requests use the interaction response channel');
+        }
+        const request = this.serverRequests.get(pendingId);
+        if (!request) throw new CodexAppServerError('NOT_FOUND', 'Interaction request is no longer pending');
+        const policy = serverRequestPolicy(request.method, this._profileForRequest(request));
+        if (policy.state !== 'supported' || policy.kind !== kind) {
+            throw new CodexAppServerError('INTERACTION_KIND_MISMATCH', 'Interaction kind does not match the pending request');
+        }
+        if (!this.interactions.begin(source, pendingId)) {
+            throw new CodexAppServerError('INTERACTION_ALREADY_RESOLVED', 'Interaction is already being answered');
+        }
+        let normalized;
+        try {
+            normalized = normalizeInteractionResponse(request, response);
+            this.transport.respond(pendingId, normalized);
+        } catch (error) {
+            this.interactions.rollback(source, pendingId);
+            throw error;
+        }
+        this._clearInteractionTimer(pendingId);
+        this.serverRequests.delete(pendingId);
+        this.interactions.complete(source, pendingId);
+        const projection = approvalProjection(pendingId, request, this.repository);
+        this._sendUiEvent({
+            type: 'interaction.resolved',
+            topicId: projection.topicId,
+            sessionId: projection.sessionId,
+            turnId: projection.turnId,
+            payload: { source, requestId: pendingId, kind, state: 'completed' },
+        });
+        return { requestId: pendingId, resolved: true, kind };
+    }
+
+    _profileForRequest(request) {
+        const threadId = request?.params?.threadId;
+        return threadId
+            ? (this.repository?.getSessionByThread(threadId)?.configSnapshot?.executionProfile || 'toolbox-only')
+            : 'toolbox-only';
+    }
+
+    _clearInteractionTimer(requestId) {
+        const timer = this.interactionTimers.get(String(requestId));
+        if (timer) clearTimeout(timer);
+        this.interactionTimers.delete(String(requestId));
     }
 
     _configSnapshot(options) {
@@ -759,6 +985,17 @@ class CodexRuntimeManager extends EventEmitter {
         if (config.executionProfile !== 'toolbox-only') return provider;
         const policyConfig = {
             ...(provider.config || {}),
+            // ToolBox-backed Threads use the VChat Agent prompt as their only
+            // instruction source. Native Codex permission, capability, skill,
+            // project-doc and environment context is unnecessary because the
+            // model can only call the allowlisted vcp_invoke dynamic tool.
+            include_permissions_instructions: false,
+            include_apps_instructions: false,
+            include_collaboration_mode_instructions: false,
+            include_environment_context: false,
+            project_doc_max_bytes: 0,
+            'skills.include_instructions': false,
+            model_reasoning_summary: 'detailed',
             web_search: 'disabled',
             mcp_servers: {},
             'tools.update_plan.enabled': false,
@@ -805,6 +1042,17 @@ class CodexRuntimeManager extends EventEmitter {
         this.responsesAdapter = this.responsesAdapterFactory({
             toolboxUrl: settings.vcpServerUrl,
             toolboxApiKey: settings.vcpApiKey,
+            onRequest: (identity) => this._diagnostic('toolbox-response-request', identity),
+            resolveBaseInstructions: ({ threadId }) => {
+                const session = threadId ? this.repository?.getSessionByThread(threadId) : null;
+                if (!session) {
+                    throw new CodexAppServerError('SESSION_NOT_FOUND', 'ToolBox request is not bound to a known VChat Agent Session');
+                }
+                if (session.configSnapshot?.executionProfile !== 'toolbox-only') {
+                    throw new CodexAppServerError('PROFILE_MISMATCH', 'Only toolbox-only Threads may use the VCPToolBox Responses adapter');
+                }
+                return String(session.configSnapshot?.baseInstructions || '');
+            },
         });
         try {
             await this.responsesAdapter.start();
@@ -892,6 +1140,7 @@ class CodexRuntimeManager extends EventEmitter {
         this._transportWired = true;
         this.transport.on('notification', (message) => {
             const projected = this.projector?.projectNotification(message);
+            this._observeCompactionNotification(message);
             const threadId = message?.params?.threadId || message?.params?.thread?.id || null;
             const session = threadId ? this.repository?.getSessionByThread(threadId) : null;
             this._updateThreadState(message, session);
@@ -920,20 +1169,102 @@ class CodexRuntimeManager extends EventEmitter {
                 void this._handleDynamicToolCall(message);
                 return;
             }
-            if (!this.workbenchMounted) {
-                const response = failClosedApprovalResponse(message.method);
-                if (response) this.transport.respond(message.id, response);
-                else this.transport.respondError(message.id, -32002, `Unsupported Codex server request: ${message.method}`);
+            const threadId = message?.params?.threadId || null;
+            const session = threadId ? this.repository?.getSessionByThread(threadId) : null;
+            const profile = session?.configSnapshot?.executionProfile || 'toolbox-only';
+            const policy = serverRequestPolicy(message.method, profile);
+            if (policy.state !== 'supported') {
+                this._failClosedServerRequest(message, policy.reason);
                 return;
             }
+            if (!this.workbenchMounted) {
+                this._failClosedServerRequest(message, 'VChat Workbench is closed');
+                return;
+            }
+            const queued = this.interactions.enqueue({
+                source: 'codex-native',
+                requestId: String(message.id),
+                sessionId: session?.sessionId || null,
+                threadId,
+                turnId: message?.params?.turnId || null,
+                kind: policy.kind || 'approval',
+                method: message.method,
+                payload: sanitizeInteractionPayload(message.params),
+                expiresAtMs: interactionExpiry(message),
+            });
+            if (!queued.accepted) return;
             this.serverRequests.set(String(message.id), message);
-            this._sendUiEvent(approvalEvent(String(message.id), message, this.repository));
+            if (policy.kind === 'native-approval' || policy.kind === 'legacy-native-approval') {
+                this._sendUiEvent(approvalEvent(String(message.id), message, this.repository));
+            } else {
+                const projection = approvalProjection(String(message.id), message, this.repository);
+                this._sendUiEvent({
+                    type: 'interaction.requested',
+                    topicId: projection.topicId,
+                    sessionId: projection.sessionId,
+                    turnId: projection.turnId,
+                    payload: queued.record,
+                });
+            }
+            const expiresAtMs = queued.record.expiresAtMs;
+            if (expiresAtMs) {
+                const delay = Math.max(0, expiresAtMs - Date.now());
+                const timer = setTimeout(() => {
+                    if (!this.serverRequests.has(String(message.id))) return;
+                    this._failClosedServerRequest(message, 'Interaction timed out');
+                }, delay);
+                timer.unref?.();
+                this.interactionTimers.set(String(message.id), timer);
+            }
         });
         this.transport.on('exit', (error) => {
             if (this.intentionalStop) return;
             void this._handleTransportCrash(error);
         });
         this.transport.on('stderr', (line) => this.emit('diagnostic', line));
+    }
+
+    _observeCompactionNotification(message) {
+        const params = message?.params || {};
+        const item = params.item;
+        if (!item || item.type !== 'contextCompaction' || !params.threadId) return;
+        const waiter = this.compactionWaiters.get(params.threadId);
+        if (!waiter) return;
+        if (message.method === 'item/started') {
+            this._sendUiEvent({ type: 'compaction.started', topicId: waiter.sessionId, sessionId: waiter.sessionId,
+                payload: { itemId: item.id || null } });
+            return;
+        }
+        if (message.method !== 'item/completed') return;
+        this.compactionWaiters.delete(params.threadId);
+        clearTimeout(waiter.timeout);
+        const failed = ['failed', 'error', 'cancelled', 'interrupted'].includes(String(item.status || '').toLowerCase());
+        if (failed) {
+            const error = new CodexAppServerError('COMPACTION_FAILED', item.message || 'Codex context compaction failed');
+            waiter.reject(error);
+            this._sendUiEvent({ type: 'compaction.failed', topicId: waiter.sessionId, sessionId: waiter.sessionId,
+                payload: { itemId: item.id || null, reason: error.message } });
+            return;
+        }
+        void this.readTopic({ sessionId: waiter.sessionId }).then((snapshot) => {
+            waiter.resolve({ sessionId: waiter.sessionId, threadId: waiter.threadId, itemId: item.id || null, snapshot });
+            this._sendUiEvent({ type: 'compaction.completed', topicId: waiter.sessionId, sessionId: waiter.sessionId,
+                payload: { itemId: item.id || null } });
+        }).catch((error) => {
+            waiter.reject(error);
+            this._sendUiEvent({ type: 'compaction.failed', topicId: waiter.sessionId, sessionId: waiter.sessionId,
+                payload: { itemId: item.id || null, reason: error.message } });
+        });
+    }
+
+    _rejectCompactionWaiters(error) {
+        for (const [threadId, waiter] of this.compactionWaiters) {
+            this.compactionWaiters.delete(threadId);
+            clearTimeout(waiter.timeout);
+            waiter.reject(error);
+            this._sendUiEvent({ type: 'compaction.failed', topicId: waiter.sessionId, sessionId: waiter.sessionId,
+                payload: { reason: error.message } });
+        }
     }
 
     async _ensureBridge(settings = this.getSettings() || {}) {
@@ -965,6 +1296,7 @@ class CodexRuntimeManager extends EventEmitter {
         this.lastError = serializeError(error);
         this.resumedThreadIds.clear();
         this.resumingThreads.clear();
+        this._rejectCompactionWaiters(new CodexAppServerError('RUNTIME_CRASHED', 'Codex App Server crashed during compaction'));
         await this._failClosedNativeApprovals('Codex App Server crashed', { respond: false });
         await this._interruptDynamicCalls('Codex App Server crashed');
         await this._failClosedToolboxApprovals('Codex App Server crashed');
@@ -977,11 +1309,11 @@ class CodexRuntimeManager extends EventEmitter {
         for (const [requestId, request] of [...this.serverRequests.entries()]) {
             if (request.method === 'item/tool/call') continue;
             this.serverRequests.delete(requestId);
+            this._clearInteractionTimer(requestId);
+            this.interactions.complete('codex-native', requestId, 'expired');
             if (respond) {
                 try {
-                    const response = failClosedApprovalResponse(request.method);
-                    if (response) this.transport?.respond(requestId, response);
-                    else this.transport?.respondError(requestId, -32002, `Unsupported Codex server request: ${request.method}`);
+                    this._failClosedServerRequest({ ...request, id: requestId }, reason);
                 } catch (error) {
                     this.emit('diagnostic', `Could not fail-close Codex request ${requestId}: ${error.message}`);
                 }
@@ -994,6 +1326,23 @@ class CodexRuntimeManager extends EventEmitter {
                 payload: { approvalId: requestId, decision: 'decline', scope: 'codex-native', reason },
             });
         }
+    }
+
+    _failClosedServerRequest(message, reason) {
+        const requestId = String(message?.id || '');
+        const response = failClosedServerRequestResponse(message?.method);
+        if (response) this.transport?.respond(requestId, response);
+        else this.transport?.respondError(requestId, -32002, reason || `Unsupported Codex server request: ${message?.method || '(empty)'}`);
+        this.serverRequests.delete(requestId);
+        this._clearInteractionTimer(requestId);
+        this.interactions.complete('codex-native', requestId, 'rejected');
+        this._sendUiEvent({
+            type: 'interaction.rejected',
+            topicId: approvalProjection(requestId, message, this.repository).topicId,
+            sessionId: approvalProjection(requestId, message, this.repository).sessionId,
+            turnId: message?.params?.turnId || null,
+            payload: { requestId, method: message?.method || null, reason: reason || 'Unsupported server request' },
+        });
     }
 
     async _interruptDynamicCalls(reason) {
@@ -1039,6 +1388,7 @@ class CodexRuntimeManager extends EventEmitter {
                     personality: config.personality || 'pragmatic',
                     ...(config.baseInstructions ? { baseInstructions: config.baseInstructions } : {}),
                     ...(config.developerInstructions ? { developerInstructions: config.developerInstructions } : {}),
+                    ...(config.executionProfile === 'toolbox-only' ? { dynamicTools: [vcpInvokeTool()] } : {}),
                     excludeTurns: true,
                 });
                 const resumedThreadId = String(result?.thread?.id || '').trim();
@@ -1139,6 +1489,43 @@ class CodexRuntimeManager extends EventEmitter {
         this.repository.saveSession({ ...session, state: next.activity, updatedAt: Date.now() });
         if (next.activity === 'idle') this._rememberIdleWarmSession(session.sessionId);
         else this.idleWarmSessions.delete(session.sessionId);
+        if (message.method === 'turn/completed' && next.activity === 'idle') {
+            void this._drainFollowUpQueue(session);
+        }
+    }
+
+    async _drainFollowUpQueue(session) {
+        if (!session?.sessionId || this.followUpDrainPromises.has(session.sessionId)) {
+            return this.followUpDrainPromises.get(session?.sessionId) || null;
+        }
+        const drain = (async () => {
+            const state = this.threadStates.get(session.threadId);
+            if (state?.activity === 'running') return null;
+            const [next] = this.repository.listPendingInputs(session.sessionId);
+            if (!next) return null;
+            try {
+                const accepted = await this.startTurn({ sessionId: session.sessionId, prompt: next.prompt });
+                this.repository.removePendingInput(next.inputId);
+                this._sendUiEvent({
+                    type: 'input.dequeued',
+                    topicId: session.sessionId,
+                    sessionId: session.sessionId,
+                    turnId: accepted.turnId,
+                    payload: { inputId: next.inputId },
+                });
+                return accepted;
+            } catch (error) {
+                this._sendUiEvent({
+                    type: 'input.queue.failed',
+                    topicId: session.sessionId,
+                    sessionId: session.sessionId,
+                    payload: { inputId: next.inputId, error: error.message },
+                });
+                return null;
+            }
+        })().finally(() => this.followUpDrainPromises.delete(session.sessionId));
+        this.followUpDrainPromises.set(session.sessionId, drain);
+        return drain;
     }
 
     _handleBridgeEvent(message) {
@@ -1157,6 +1544,10 @@ class CodexRuntimeManager extends EventEmitter {
                 toolName: value?.data?.toolName || null,
                 reason: value?.data?.reason || null,
             };
+            const queued = this.interactions.enqueue({
+                source: 'toolbox', requestId, kind: 'backend-approval', expiresAtMs,
+            });
+            if (!queued.accepted) return;
             this.toolboxApprovals.set(requestId, approval);
             this._sendUiEvent({
                 type: 'approval.requested',
@@ -1188,6 +1579,21 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     _sendUiEvent(event) {
+        if (event.sessionId && this.repository) {
+            if (event.type === 'context.usage') {
+                this.repository.updateActivity(event.sessionId, { usage: sanitizeInteractionPayload(event.payload || {}) });
+            } else if (event.type === 'compaction.started') {
+                this.repository.updateActivity(event.sessionId, { compaction: { state: 'started', summary: '', error: '' } });
+            } else if (event.type === 'compaction.completed') {
+                this.repository.updateActivity(event.sessionId, { compaction: {
+                    state: 'completed', summary: String(event.payload?.summary || '').slice(0, 2_000), error: '',
+                } });
+            } else if (event.type === 'compaction.failed') {
+                this.repository.updateActivity(event.sessionId, { compaction: {
+                    state: 'failed', summary: '', error: String(event.payload?.error || 'Context compaction failed').slice(0, 2_000),
+                } });
+            }
+        }
         this.uiEventSequence += 1;
         const envelope = {
             runtime: 'codex',
@@ -1439,6 +1845,10 @@ function approvalResponse(method, decision) {
     if (method === 'item/commandExecution/requestApproval' || method === 'item/fileChange/requestApproval') {
         return { decision: normalizeApprovalDecision(decision) };
     }
+    if (method === 'applyPatchApproval' || method === 'execCommandApproval') {
+        const normalized = normalizeApprovalDecision(decision);
+        return { decision: normalized === 'accept' || normalized === 'acceptForSession' ? 'approved' : 'abort' };
+    }
     return failClosedApprovalResponse(method);
 }
 
@@ -1446,7 +1856,97 @@ function failClosedApprovalResponse(method) {
     if (method === 'item/commandExecution/requestApproval' || method === 'item/fileChange/requestApproval') {
         return { decision: 'decline' };
     }
+    if (method === 'applyPatchApproval' || method === 'execCommandApproval') return { decision: 'abort' };
     return null;
+}
+
+function interactionExpiry(message) {
+    const autoResolutionMs = Number(message?.params?.autoResolutionMs);
+    if (!Number.isFinite(autoResolutionMs) || autoResolutionMs <= 0) return null;
+    return Date.now() + Math.min(15 * 60 * 1000, Math.max(1_000, autoResolutionMs));
+}
+
+function sanitizeInteractionPayload(value, depth = 0) {
+    if (value == null || typeof value === 'boolean' || typeof value === 'number') return value;
+    if (typeof value === 'string') return value.slice(0, 16_384);
+    if (depth >= 6) return '[truncated]';
+    if (Array.isArray(value)) return value.slice(0, 64).map((item) => sanitizeInteractionPayload(item, depth + 1));
+    if (typeof value !== 'object') return String(value).slice(0, 16_384);
+    const result = {};
+    for (const [key, child] of Object.entries(value).slice(0, 128)) {
+        if (/token|secret|password|api.?key|authorization/i.test(key)) {
+            result[key] = '[redacted]';
+        } else {
+            result[key] = sanitizeInteractionPayload(child, depth + 1);
+        }
+    }
+    return result;
+}
+
+function normalizeInteractionResponse(request, response) {
+    const method = request?.method;
+    const params = request?.params || {};
+    if (method === 'item/tool/requestUserInput') {
+        const questions = Array.isArray(params.questions) ? params.questions : [];
+        const submitted = response?.answers && typeof response.answers === 'object' ? response.answers : {};
+        const answers = {};
+        for (const question of questions.slice(0, 16)) {
+            const id = String(question?.id || '').trim();
+            if (!id) continue;
+            const raw = submitted[id]?.answers ?? submitted[id] ?? [];
+            const values = (Array.isArray(raw) ? raw : [raw])
+                .map((value) => String(value ?? '').slice(0, 16_384))
+                .filter((value) => value.length > 0)
+                .slice(0, 8);
+            if (values.length) answers[id] = { answers: values };
+        }
+        return { answers };
+    }
+    if (method === 'item/permissions/requestApproval') {
+        if (response?.decision !== 'accept') return { permissions: {}, scope: 'turn' };
+        const requested = params.permissions && typeof params.permissions === 'object' ? params.permissions : {};
+        const permissions = {};
+        if (requested.network) permissions.network = sanitizeInteractionPayload(requested.network);
+        if (requested.fileSystem) permissions.fileSystem = sanitizeInteractionPayload(requested.fileSystem);
+        return {
+            permissions,
+            scope: response?.scope === 'session' ? 'session' : 'turn',
+            strictAutoReview: response?.strictAutoReview === true ? true : undefined,
+        };
+    }
+    if (method === 'mcpServer/elicitation/request') {
+        const action = ['accept', 'decline', 'cancel'].includes(response?.action) ? response.action : 'cancel';
+        const content = action === 'accept' && params.mode !== 'url' && response?.content && typeof response.content === 'object'
+            ? validateMcpElicitationContent(params.requestedSchema, response.content)
+            : null;
+        return { action, content, _meta: null };
+    }
+    throw new CodexAppServerError('UNSUPPORTED_INTERACTION', `Unsupported Codex interaction: ${method || '(empty)'}`);
+}
+
+function validateMcpElicitationContent(schema, input) {
+    if (!schema || typeof schema !== 'object' || !schema.properties || typeof schema.properties !== 'object') {
+        return sanitizeInteractionPayload(input);
+    }
+    const required = new Set(Array.isArray(schema.required) ? schema.required.map(String) : []);
+    const content = {};
+    for (const [key, definition] of Object.entries(schema.properties).slice(0, 64)) {
+        if (!(key in input)) {
+            if (required.has(key)) throw new CodexAppServerError('INVALID_INTERACTION_RESPONSE', `Missing required MCP field: ${key}`);
+            continue;
+        }
+        const value = input[key];
+        const type = Array.isArray(definition?.type) ? definition.type[0] : definition?.type;
+        if (type === 'boolean' && typeof value !== 'boolean') throw new CodexAppServerError('INVALID_INTERACTION_RESPONSE', `MCP field ${key} must be boolean`);
+        if ((type === 'number' || type === 'integer') && !Number.isFinite(Number(value))) {
+            throw new CodexAppServerError('INVALID_INTERACTION_RESPONSE', `MCP field ${key} must be numeric`);
+        }
+        if (Array.isArray(definition?.enum) && !definition.enum.includes(value)) {
+            throw new CodexAppServerError('INVALID_INTERACTION_RESPONSE', `MCP field ${key} is outside the allowed values`);
+        }
+        content[key] = sanitizeInteractionPayload(value);
+    }
+    return content;
 }
 
 function bridgeResultContentItems(result) {

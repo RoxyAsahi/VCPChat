@@ -161,6 +161,14 @@ assert.equal('VCP_TOOLBOX_API_KEY' in providerTransportConfig.env, false);
 assert.deepEqual(providerTransportConfig.unsetEnv, ['VCP_TOOLBOX_API_KEY', 'VCP_TOOLBOX_URL']);
 assert.deepEqual(providerStart.params.environments, [],
     'ToolBox-backed Sessions must not expose a Codex filesystem/shell execution environment');
+assert.equal(providerStart.params.config.include_permissions_instructions, false);
+assert.equal(providerStart.params.config.include_apps_instructions, false);
+assert.equal(providerStart.params.config.include_collaboration_mode_instructions, false);
+assert.equal(providerStart.params.config.include_environment_context, false);
+assert.equal(providerStart.params.config.project_doc_max_bytes, 0);
+assert.equal(providerStart.params.config['skills.include_instructions'], false,
+    'ToolBox-backed Sessions must not inject the Codex skills catalog');
+assert.equal(providerStart.params.config.model_reasoning_summary, 'detailed');
 assert.equal(providerStart.params.config['tools.update_plan.enabled'], false);
 assert.equal(providerStart.params.config['tools.experimental_request_user_input.enabled'], false);
 assert.equal(providerStart.params.config['features.collab'], false);
@@ -359,6 +367,26 @@ fake.emit('notification', {
 });
 const projection = await manager.readTopic({ topicId: session.sessionId });
 assert.equal(projection.messages[0].blocks[0].content.text, 'done');
+fake.emit('notification', { method: 'turn/completed', params: { threadId: 'thr_test', turn: { id: 'turn_test', status: 'completed' } } });
+let compactionSettled = false;
+const compaction = manager.compactSession({ sessionId: session.sessionId, timeoutMs: 5_000 })
+    .then((result) => { compactionSettled = true; return result; });
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(fake.calls.at(-1).method, 'thread/compact/start');
+assert.equal(compactionSettled, false, 'thread/compact/start ACK must not resolve GUI compaction');
+fake.emit('notification', {
+    method: 'item/started',
+    params: { threadId: 'thr_test', item: { id: 'compact_1', type: 'contextCompaction', status: 'inProgress' } },
+});
+assert.equal(compactionSettled, false);
+fake.emit('notification', {
+    method: 'item/completed',
+    params: { threadId: 'thr_test', item: { id: 'compact_1', type: 'contextCompaction', status: 'completed' } },
+});
+const compacted = await compaction;
+assert.equal(compacted.itemId, 'compact_1');
+assert.equal(compacted.snapshot.session.sessionId, session.sessionId,
+    'terminal compaction must reconcile the durable SQLite projection before resolving');
 fake.readError = new Error('temporary App Server transport failure');
 const temporaryFailureProjection = await manager.readTopic({ topicId: session.sessionId });
 assert.equal(temporaryFailureProjection.session.orphaned, false,
@@ -376,6 +404,90 @@ assert.equal(manager.repository.getSession(session.sessionId).orphaned, false,
 const fork = await manager.forkSession({ sessionId: session.sessionId, turnId: 'turn_test' });
 assert.equal(fork.threadId, 'thr_fork');
 assert.equal(manager.getStatus().runtimes.some((runtime) => runtime.topicId === session.sessionId), true);
+// Archive/unarchive must move the actual Codex Thread, while pinning remains
+// VChat-only presentation metadata. None of these navigation operations may
+// infer or replace a Thread identity.
+const lifecycleSession = await manager.createSession({ topicId: baseInstructionsTopic.topicId });
+const pinned = await manager.setSessionPinned({ sessionId: lifecycleSession.sessionId, pinned: true });
+assert.equal(pinned.session.pinnedAt > 0, true);
+const archived = await manager.closeSession({ sessionId: lifecycleSession.sessionId });
+assert.equal(archived.archived, true);
+assert.ok(fake.calls.some((call) => call.method === 'thread/archive' && call.params.threadId === lifecycleSession.threadId));
+assert.equal((await manager.listTopics()).some((entry) => entry.sessionId === lifecycleSession.sessionId), false);
+assert.equal((await manager.listTopics({ archived: true })).some((entry) => entry.sessionId === lifecycleSession.sessionId), true);
+const restored = await manager.restoreSession({ sessionId: lifecycleSession.sessionId });
+assert.equal(restored.restored, true);
+assert.ok(fake.calls.some((call) => call.method === 'thread/unarchive' && call.params.threadId === lifecycleSession.threadId));
+assert.equal((await manager.listTopics()).find((entry) => entry.sessionId === lifecycleSession.sessionId).pinnedAt > 0, true);
+// Main is the last idempotency boundary: two renderer sends with the exact
+// same payload share one request, while a different payload never becomes an
+// accidental second concurrent Turn.
+const originalStartTurn = manager._startTurn.bind(manager);
+let deferredStarts = 0;
+let resolveDeferred;
+manager._startTurn = async () => {
+    deferredStarts += 1;
+    return new Promise((resolve) => { resolveDeferred = resolve; });
+};
+const firstSubmit = manager.startTurn({ sessionId: lifecycleSession.sessionId, prompt: 'same submit' });
+const sameSubmit = manager.startTurn({ sessionId: lifecycleSession.sessionId, prompt: 'same submit' });
+await assert.rejects(
+    () => manager.startTurn({ sessionId: lifecycleSession.sessionId, prompt: 'different submit' }),
+    (error) => error.code === 'SESSION_BUSY',
+);
+fake.emit('server-request', {
+    id: 'req_user_input', method: 'item/tool/requestUserInput',
+    params: {
+        threadId: 'thr_test', turnId: 'turn_test', itemId: 'input_a', autoResolutionMs: 60_000,
+        questions: [{ id: 'choice', header: 'Choice', question: 'Pick one', isOther: true, isSecret: false,
+            options: [{ label: 'Alpha', description: 'A' }, { label: 'Beta', description: 'B' }] }],
+    },
+});
+assert.equal(uiEvents.at(-1).type, 'interaction.requested');
+assert.equal(uiEvents.at(-1).payload.kind, 'user-input');
+await manager.respondInteraction({
+    source: 'codex-native', requestId: 'req_user_input', kind: 'user-input',
+    response: { answers: { choice: { answers: ['Alpha'] }, unknown: { answers: ['ignored'] } } },
+});
+assert.deepEqual(fake.responses.at(-1), { id: 'req_user_input', result: { answers: { choice: { answers: ['Alpha'] } } } });
+
+fake.emit('server-request', {
+    id: 'req_permissions', method: 'item/permissions/requestApproval',
+    params: { threadId: 'thr_test', turnId: 'turn_test', itemId: 'permission_a', cwd: root,
+        permissions: { network: { enabled: true }, fileSystem: { read: [root], write: [] } } },
+});
+await manager.respondInteraction({
+    source: 'codex-native', requestId: 'req_permissions', kind: 'permission',
+    response: { decision: 'accept', scope: 'session', permissions: { network: { enabled: false } } },
+});
+assert.deepEqual(fake.responses.at(-1), { id: 'req_permissions', result: {
+    permissions: { network: { enabled: true }, fileSystem: { read: [root], write: [] } }, scope: 'session', strictAutoReview: undefined,
+} }, 'the renderer may only grant the exact permission profile requested by Codex');
+
+fake.emit('server-request', {
+    id: 'req_mcp', method: 'mcpServer/elicitation/request',
+    params: { threadId: 'thr_test', turnId: 'turn_test', serverName: 'fixture', mode: 'form', message: 'Configure',
+        requestedSchema: { type: 'object', required: ['name'], properties: { name: { type: 'string' }, count: { type: 'integer' } } } },
+});
+await manager.respondInteraction({
+    source: 'codex-native', requestId: 'req_mcp', kind: 'mcp-elicitation',
+    response: { action: 'accept', content: { name: 'Nova', count: 2, extra: 'ignored' } },
+});
+assert.deepEqual(fake.responses.at(-1), { id: 'req_mcp', result: {
+    action: 'accept', content: { name: 'Nova', count: 2 }, _meta: null,
+} });
+assert.equal(deferredStarts, 1);
+resolveDeferred({ sessionId: lifecycleSession.sessionId, threadId: lifecycleSession.threadId, turnId: 'deduped-turn' });
+assert.deepEqual(await firstSubmit, await sameSubmit);
+manager._startTurn = originalStartTurn;
+manager.threadStates.set(lifecycleSession.threadId, { activity: 'running', activeTurnId: 'active-turn' });
+const queuedFollowUp = await manager.followUpTurn({ sessionId: lifecycleSession.sessionId, prompt: 'run after current turn' });
+assert.equal(queuedFollowUp.queued, true);
+assert.equal(manager.repository.listPendingInputs(lifecycleSession.sessionId).length, 1);
+fake.emit('notification', { method: 'turn/completed', params: { threadId: lifecycleSession.threadId, turn: { id: 'active-turn' } } });
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(manager.repository.listPendingInputs(lifecycleSession.sessionId).length, 0, 'a completed Turn must drain one durable follow-up');
+assert.ok(fake.calls.some((call) => call.method === 'turn/start' && call.params.input[0]?.text === 'run after current turn'));
 fake.emit('server-request', {
     id: 'req_approval',
     method: 'item/commandExecution/requestApproval',
@@ -385,6 +497,11 @@ assert.equal(uiEvents.at(-1).type, 'approval.requested');
 assert.equal(uiEvents.at(-1).payload.approval.scope, 'codex-native');
 await manager.respondApproval({ approvalId: 'req_approval', decision: 'allow' });
 assert.deepEqual(fake.responses.at(-1), { id: 'req_approval', result: { decision: 'accept' } });
+await assert.rejects(
+    () => manager.respondApproval({ approvalId: 'req_approval', decision: 'allow' }),
+    (error) => error.code === 'NOT_FOUND' || error.code === 'INTERACTION_ALREADY_RESOLVED',
+    'a resolved Codex approval must never be replayed',
+);
 fake.emit('server-request', { id: 'req_tool', method: 'item/tool/call', params: { callId: 'call_a' } });
 await new Promise((resolve) => setImmediate(resolve));
 assert.equal(fake.responses.at(-1).error.code, -32001);
@@ -457,6 +574,12 @@ manager._handleBridgeEvent({
 assert.equal(uiEvents.at(-1).payload.approval.scope, 'toolbox');
 await manager.respondApproval({ approvalId: 'toolbox-approval-1', scope: 'toolbox', decision: 'deny' });
 assert.equal(toolboxDecisions[0].approved, false);
+manager._handleBridgeEvent({
+    channel: 'backend-approval',
+    event: { requestId: 'toolbox-approval-1', expiresAtMs: Date.now() + 30_000, replay: true, data: { toolName: 'PowerShellExecutor' } },
+});
+assert.notEqual(uiEvents.at(-1).payload?.approval?.approvalId, 'toolbox-approval-1',
+    'a replayed ToolBox approval must not create a second actionable interaction');
 manager._handleBridgeEvent({
     channel: 'info',
     event: { type: 'RAG_RETRIEVAL_DETAILS', apiKey: 'must-not-leak', detail: 'x'.repeat(20_000) },

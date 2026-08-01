@@ -53,8 +53,10 @@ function removeHandlers() {
         IPC_CHANNELS.CREATE_TOPIC,
          IPC_CHANNELS.CREATE_SESSION,
          IPC_CHANNELS.ENSURE_SESSION_RUNTIME,
-        IPC_CHANNELS.FORK_SESSION,
-        IPC_CHANNELS.CLOSE_SESSION,
+         IPC_CHANNELS.FORK_SESSION,
+         IPC_CHANNELS.CLOSE_SESSION,
+         IPC_CHANNELS.RESTORE_SESSION,
+         IPC_CHANNELS.SET_SESSION_PINNED,
         IPC_CHANNELS.COMPACT_SESSION,
         IPC_CHANNELS.LIST_TOPICS,
         IPC_CHANNELS.SEARCH_TOPICS,
@@ -77,6 +79,7 @@ function removeHandlers() {
         IPC_CHANNELS.FOLLOW_UP_TURN,
         IPC_CHANNELS.CANCEL_TURN,
         IPC_CHANNELS.RESPOND_APPROVAL,
+        IPC_CHANNELS.RESPOND_INTERACTION,
     ]) {
         ipcMain.removeHandler(channel);
     }
@@ -139,6 +142,8 @@ function initialize(options) {
     ipcMain.handle(IPC_CHANNELS.ENSURE_SESSION_RUNTIME, (event, payload) => guard(event, () => manager.ensureSessionRuntime(payload || {})));
     ipcMain.handle(IPC_CHANNELS.FORK_SESSION, (event, payload) => guard(event, () => manager.forkSession(payload || {})));
     ipcMain.handle(IPC_CHANNELS.CLOSE_SESSION, (event, payload) => guard(event, () => manager.closeSession(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.RESTORE_SESSION, (event, payload) => guard(event, () => manager.restoreSession(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.SET_SESSION_PINNED, (event, payload) => guard(event, () => manager.setSessionPinned(payload || {})));
     ipcMain.handle(IPC_CHANNELS.COMPACT_SESSION, (event, payload) => guard(event, () => manager.compactSession(payload || {})));
     ipcMain.handle(IPC_CHANNELS.LIST_TOPICS, (event, payload) => guard(event, async () => {
         const topics = await manager.listTopics(payload || {});
@@ -197,6 +202,7 @@ function initialize(options) {
     ipcMain.handle(IPC_CHANNELS.FOLLOW_UP_TURN, (event, payload) => guard(event, () => manager.followUpTurn(payload || {})));
     ipcMain.handle(IPC_CHANNELS.CANCEL_TURN, (event, payload) => guard(event, () => manager.cancelTurn(payload || {})));
     ipcMain.handle(IPC_CHANNELS.RESPOND_APPROVAL, (event, payload) => guard(event, () => manager.respondApproval(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.RESPOND_INTERACTION, (event, payload) => guard(event, () => manager.respondInteraction(payload || {})));
     ipcMain.on(IPC_CHANNELS.SET_WORKBENCH_PRESENCE, (event, payload) => {
         const senderWindow = assertMainWindowSender(event);
         if (payload?.mounted === true) {

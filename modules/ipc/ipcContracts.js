@@ -21,6 +21,8 @@ const CHANNELS = Object.freeze({
     AGENT_RUNTIME_ENSURE_SESSION_RUNTIME: 'agent-runtime:ensure-session-runtime',
     AGENT_RUNTIME_FORK_SESSION: 'agent-runtime:fork-session',
     AGENT_RUNTIME_CLOSE_SESSION: 'agent-runtime:close-session',
+    AGENT_RUNTIME_RESTORE_SESSION: 'agent-runtime:restore-session',
+    AGENT_RUNTIME_SET_SESSION_PINNED: 'agent-runtime:set-session-pinned',
     AGENT_RUNTIME_COMPACT_SESSION: 'agent-runtime:compact-session',
     AGENT_RUNTIME_LIST_TOPICS: 'agent-runtime:list-topics',
     AGENT_RUNTIME_SEARCH_TOPICS: 'agent-runtime:search-topics',
@@ -43,6 +45,7 @@ const CHANNELS = Object.freeze({
     AGENT_RUNTIME_FOLLOW_UP_TURN: 'agent-runtime:follow-up-turn',
     AGENT_RUNTIME_CANCEL_TURN: 'agent-runtime:cancel-turn',
     AGENT_RUNTIME_RESPOND_APPROVAL: 'agent-runtime:respond-approval',
+    AGENT_RUNTIME_RESPOND_INTERACTION: 'agent-runtime:respond-interaction',
     AGENT_RUNTIME_SET_WORKBENCH_PRESENCE: 'agent-runtime:set-workbench-presence',
     AGENT_RUNTIME_EVENT: 'agent-runtime:event',
 });
@@ -186,6 +189,14 @@ const channelRegistry = new Map([
         responseSchema: { approvalId: 'string', decision: 'string' },
         supportsConcurrent: true,
     }],
+    [CHANNELS.AGENT_RUNTIME_RESPOND_INTERACTION, {
+        channelName: CHANNELS.AGENT_RUNTIME_RESPOND_INTERACTION,
+        channelType: CHANNEL_TYPES.QUERY,
+        owner: 'Agent Runtime',
+        requestSchema: { source: 'string', requestId: 'string', kind: 'string', response: 'object' },
+        responseSchema: { requestId: 'string', resolved: 'boolean', kind: 'string' },
+        supportsConcurrent: true,
+    }],
     [CHANNELS.AGENT_RUNTIME_SET_WORKBENCH_PRESENCE, {
         channelName: CHANNELS.AGENT_RUNTIME_SET_WORKBENCH_PRESENCE,
         channelType: CHANNEL_TYPES.COMMAND,
@@ -209,6 +220,8 @@ const channelRegistry = new Map([
 for (const channel of [
     CHANNELS.AGENT_RUNTIME_FORK_SESSION,
     CHANNELS.AGENT_RUNTIME_CLOSE_SESSION,
+    CHANNELS.AGENT_RUNTIME_RESTORE_SESSION,
+    CHANNELS.AGENT_RUNTIME_SET_SESSION_PINNED,
     CHANNELS.AGENT_RUNTIME_COMPACT_SESSION,
     CHANNELS.AGENT_RUNTIME_LIST_TOPICS,
     CHANNELS.AGENT_RUNTIME_SEARCH_TOPICS,

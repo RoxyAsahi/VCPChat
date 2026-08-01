@@ -2,12 +2,13 @@
 
 const { EventEmitter } = require('events');
 const { spawn, spawnSync } = require('child_process');
+const fs = require('fs');
 const path = require('path');
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 const DEFAULT_START_TIMEOUT_MS = 30_000;
 const MAX_LINE_BYTES = 4 * 1024 * 1024;
-const MINIMUM_CODEX_VERSION = '0.124.0';
+const MINIMUM_CODEX_VERSION = '0.146.0';
 
 class CodexAppServerError extends Error {
     constructor(code, message, details = {}) {
@@ -35,6 +36,17 @@ function candidateFromWhere(command = 'codex') {
         || null;
 }
 
+function candidateFromProject(projectRoot) {
+    if (!projectRoot) return null;
+    const executable = path.join(
+        path.resolve(projectRoot),
+        'node_modules',
+        '.bin',
+        process.platform === 'win32' ? 'codex.cmd' : 'codex',
+    );
+    return fs.existsSync(executable) ? executable : null;
+}
+
 function resolveCodexLaunch(options = {}) {
     const explicit = String(
         process.env.VCP_CODEX_APP_SERVER
@@ -42,7 +54,11 @@ function resolveCodexLaunch(options = {}) {
         || options.executable
         || ''
     ).trim();
-    const executable = explicit || candidateFromWhere('codex-app-server') || candidateFromWhere('codex') || 'codex';
+    const executable = explicit
+        || candidateFromProject(options.cwd)
+        || candidateFromWhere('codex-app-server')
+        || candidateFromWhere('codex')
+        || 'codex';
     const basename = path.basename(executable).toLowerCase();
     const direct = basename.startsWith('codex-app-server');
     const args = direct ? ['--listen', 'stdio://'] : ['app-server', '--listen', 'stdio://'];
@@ -61,13 +77,13 @@ function resolveCodexLaunch(options = {}) {
 
 function parseCodexVersion(initializeResult) {
     const userAgent = String(initializeResult?.userAgent || '');
-    // First-party Codex prefixes: `Codex/0.124.0` or `Codex Desktop/0.124.0`.
+    // First-party Codex prefixes: `Codex/0.146.0` or `Codex Desktop/0.146.0`.
     const firstParty = userAgent.match(/Codex(?: Desktop)?\/(\d+)\.(\d+)\.(\d+)/i);
     if (firstParty) return `${firstParty[1]}.${firstParty[2]}.${firstParty[3]}`;
     // The app-server echoes the negotiated originator token as
     // `<originator>/<buildVersion> (<os> <osVersion>; <arch>) ...`, so the
     // build version is always the first semver triplet after the leading
-    // originator token (e.g. `vcp_chat/0.124.0 (Windows ...)`).
+    // originator token (e.g. `vcp_chat/0.146.0 (Windows ...)`).
     const originatorForm = userAgent.match(/^[^/\s]+\/(\d+)\.(\d+)\.(\d+)/);
     return originatorForm ? `${originatorForm[1]}.${originatorForm[2]}.${originatorForm[3]}` : null;
 }
@@ -159,6 +175,14 @@ class CodexAppServerTransport extends EventEmitter {
                     'UNSUPPORTED_VERSION',
                     `Codex App Server ${this.version || 'unknown'} is unsupported; expected ${minimumVersion} or newer`,
                     { userAgent: this.initializeResult?.userAgent || null, minimumVersion },
+                );
+            }
+            if (this.options.supportedVersionLine
+                && !this.version.startsWith(`${this.options.supportedVersionLine}.`)) {
+                throw new CodexAppServerError(
+                    'UNSUPPORTED_PROTOCOL_VERSION',
+                    `Codex App Server ${this.version} is outside the pinned ${this.options.supportedVersionLine}.x protocol fixture`,
+                    { actual: this.version, expectedVersionLine: this.options.supportedVersionLine },
                 );
             }
             this.notify('initialized', {});

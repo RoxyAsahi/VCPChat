@@ -1,5 +1,9 @@
 'use strict';
 
+const { StreamingAccumulatorRegistry } = require('../streamingAccumulator');
+const { normalizeCodexFileChanges } = require('../diffModel');
+const { projectVcpContent } = require('../vcpContentProjection');
+
 const ITEM_KIND = Object.freeze({
     userMessage: ['user', 'message'],
     agentMessage: ['assistant', 'message'],
@@ -18,9 +22,18 @@ const ITEM_KIND = Object.freeze({
 function itemContent(item) {
     switch (item.type) {
         case 'userMessage': return { parts: item.content || [] };
-        case 'agentMessage': return { text: item.text || '' };
+        case 'agentMessage': return projectVcpContent(item.text || '');
         case 'reasoning': return { summary: item.summary || [], content: item.content || [] };
         case 'plan': return { text: item.text || '' };
+        case 'contextCompaction': {
+            const summary = typeof item.summary === 'string' ? item.summary
+                : typeof item.message === 'string' ? item.message
+                    : item.status === 'failed' ? '上下文压缩失败。'
+                        : item.status === 'completed' ? '上下文压缩完成。'
+                            : '正在整理上下文。';
+            return { text: summary.slice(0, 2_000), phase: item.status || 'inProgress' };
+        }
+        case 'fileChange': return { changes: normalizeCodexFileChanges(item.changes), status: item.status || 'inProgress' };
         default: return { item };
     }
 }
@@ -28,6 +41,7 @@ function itemContent(item) {
 class CodexProjectionProjector {
     constructor(repository) {
         this.repository = repository;
+        this.streaming = new StreamingAccumulatorRegistry();
     }
 
     projectNotification(message) {
@@ -35,7 +49,10 @@ class CodexProjectionProjector {
         const params = message?.params || {};
         if (!method) return false;
         if (method === 'item/started' || method === 'item/completed') {
-            return this._projectItem(params, method === 'item/completed');
+            const completed = method === 'item/completed';
+            const result = this._projectItem(params, completed);
+            if (completed) this.streaming.clearItem(params.threadId, params.item?.id);
+            return result;
         }
         if (method === 'item/agentMessage/delta') {
             return this._append(params, 0, params.delta, 'message');
@@ -74,7 +91,10 @@ class CodexProjectionProjector {
     _projectItem(params, completed, knownSessionId) {
         const entry = this._itemEntry(params, completed, knownSessionId);
         if (!entry) return false;
-        this.repository.upsertItem(entry.sessionId, entry.record, entry.block);
+        this.repository.upsertItem(entry.sessionId, entry.record, entry.blocks || entry.block);
+        if (!completed && entry.itemText !== undefined) {
+            this.streaming.seed(this._streamKey(params.threadId, params.item.id, 0, entry.block.kind), entry.itemText);
+        }
         return true;
     }
 
@@ -103,6 +123,16 @@ class CodexProjectionProjector {
                 ordinal: 0,
                 content: itemContent(item),
             },
+            blocks: (() => {
+                const content = itemContent(item);
+                const primary = { kind, status, ordinal: 0, content };
+                if (item.type !== 'agentMessage' || !Array.isArray(content.observations) || !content.observations.length) return [primary];
+                return [primary, ...content.observations.map((marker, ordinal) => ({
+                    kind: 'observation', status, ordinal: ordinal + 1,
+                    content: { marker: { ...marker, source: 'vcp-marker' } },
+                }))];
+            })(),
+            itemText: item.type === 'agentMessage' ? String(itemContent(item).text || '') : undefined,
         };
     }
 
@@ -110,11 +140,16 @@ class CodexProjectionProjector {
         const session = this.repository.getSessionByThread(params.threadId);
         if (!session || !params.itemId) return false;
         try {
-            this.repository.appendBlockText(session.sessionId, params.itemId, ordinal, delta, kind);
+            const novel = this.streaming.append(this._streamKey(params.threadId, params.itemId, ordinal, kind), delta);
+            if (novel) this.repository.appendBlockText(session.sessionId, params.itemId, ordinal, novel, kind);
             return true;
         } catch (_error) {
             return false;
         }
+    }
+
+    _streamKey(threadId, itemId, ordinal, kind) {
+        return `${kind}:${threadId || ''}:${itemId || ''}:${ordinal}`;
     }
 }
 

@@ -1,0 +1,33 @@
+{
+  "protocol": "codex-app-server-jsonl",
+  "codexVersion": "0.146.0",
+  "codexVersionLine": "0.146",
+  "releaseTag": "rust-v0.146.0",
+  "sourceRevision": "e363b08c9175ac1cbe5893615dd2cb9ddf95043b",
+  "schemaManifest": "fixtures/codex-app-server/0.146.0/manifest.json",
+  "clientMethods": {
+    "stable": ["initialize", "initialized", "thread/start", "thread/read", "thread/resume", "thread/fork", "thread/archive", "thread/unarchive", "thread/delete", "thread/compact/start", "turn/start", "turn/steer", "turn/interrupt"],
+    "disabledInToolboxOnly": ["thread/shellCommand"]
+  },
+  "notifications": {
+    "stable": ["thread/started", "turn/started", "turn/completed", "thread/status/changed", "item/started", "item/completed", "item/agentMessage/delta", "item/reasoning/summaryTextDelta", "item/reasoning/textDelta", "item/plan/delta", "item/commandExecution/outputDelta", "item/fileChange/patchUpdated", "serverRequest/resolved"],
+    "recognizedReadOnly": ["thread/deleted", "thread/goal/cleared", "thread/goal/updated", "thread/settings/updated", "process/exited", "process/outputDelta", "turn/moderationMetadata"]
+  },
+  "items": {
+    "stable": ["userMessage", "agentMessage", "reasoning", "plan", "contextCompaction", "dynamicToolCall"],
+    "readOnlyOrDisabledInToolboxOnly": ["commandExecution", "fileChange", "mcpToolCall", "collabAgentToolCall", "webSearch", "imageView", "imageGeneration", "subAgentActivity", "hookPrompt", "sleep", "enteredReviewMode", "exitedReviewMode"]
+  },
+  "serverRequests": {
+    "item/tool/call": "dynamic-vcp-invoke-only",
+    "item/commandExecution/requestApproval": "native-only",
+    "item/fileChange/requestApproval": "native-only",
+    "applyPatchApproval": "legacy-native-only",
+    "execCommandApproval": "legacy-native-only",
+    "item/tool/requestUserInput": "interactive",
+    "item/permissions/requestApproval": "interactive",
+    "mcpServer/elicitation/request": "interactive",
+    "account/chatgptAuthTokens/refresh": "unsupported",
+    "attestation/generate": "unsupported",
+    "currentTime/read": "unsupported"
+  }
+}

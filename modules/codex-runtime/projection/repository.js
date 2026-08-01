@@ -16,6 +16,29 @@ function json(value) {
     return JSON.stringify(value ?? null);
 }
 
+function hasProjectionValue(value) {
+    if (value == null) return false;
+    if (typeof value === 'string') return value.length > 0;
+    if (Array.isArray(value)) return value.some(hasProjectionValue);
+    if (typeof value === 'object') return Object.values(value).some(hasProjectionValue);
+    return true;
+}
+
+function mergeProjectionContent(existing, incoming) {
+    if (!hasProjectionValue(incoming)) return existing;
+    if (Array.isArray(incoming)) return incoming;
+    if (!incoming || typeof incoming !== 'object') return incoming;
+    const base = existing && typeof existing === 'object' && !Array.isArray(existing) ? existing : {};
+    const merged = { ...base };
+    for (const [key, value] of Object.entries(incoming)) {
+        if (!hasProjectionValue(value)) continue;
+        merged[key] = value && typeof value === 'object' && !Array.isArray(value)
+            ? mergeProjectionContent(base[key], value)
+            : value;
+    }
+    return merged;
+}
+
 class AgentProjectionRepository {
     constructor(options = {}) {
         const Database = options.Database || require('better-sqlite3');
@@ -32,11 +55,11 @@ class AgentProjectionRepository {
                 INSERT INTO agent_sessions (
                     session_id, codex_thread_id, agent_id, agent_catalog_id, agent_name_snapshot,
                     title, workspace_root, state,
-                    config_snapshot_json, orphaned, created_at, updated_at, archived_at
+                    config_snapshot_json, orphaned, pinned_at, created_at, updated_at, archived_at
                 ) VALUES (
                     @session_id, @codex_thread_id, @agent_id, @agent_catalog_id, @agent_name_snapshot,
                     @title, @workspace_root, @state,
-                    @config_snapshot_json, @orphaned, @created_at, @updated_at, @archived_at
+                    @config_snapshot_json, @orphaned, @pinned_at, @created_at, @updated_at, @archived_at
                 ) ON CONFLICT(session_id) DO UPDATE SET
                     codex_thread_id = COALESCE(excluded.codex_thread_id, agent_sessions.codex_thread_id),
                     agent_id = excluded.agent_id,
@@ -47,6 +70,7 @@ class AgentProjectionRepository {
                     state = excluded.state,
                     config_snapshot_json = excluded.config_snapshot_json,
                     orphaned = excluded.orphaned,
+                    pinned_at = excluded.pinned_at,
                     updated_at = excluded.updated_at,
                     archived_at = excluded.archived_at
             `),
@@ -54,10 +78,22 @@ class AgentProjectionRepository {
             getByThread: this.db.prepare('SELECT * FROM agent_sessions WHERE codex_thread_id = ?'),
             listSessions: this.db.prepare(`
                 SELECT * FROM agent_sessions WHERE archived_at IS NULL
-                ORDER BY updated_at DESC, session_id
+                ORDER BY CASE WHEN pinned_at IS NULL THEN 1 ELSE 0 END, pinned_at DESC, updated_at DESC, session_id
+            `),
+            listArchivedSessions: this.db.prepare(`
+                SELECT * FROM agent_sessions WHERE archived_at IS NOT NULL
+                ORDER BY archived_at DESC, updated_at DESC, session_id
             `),
             archiveSession: this.db.prepare(`
                 UPDATE agent_sessions SET archived_at = @now, updated_at = @now, state = 'archived'
+                WHERE session_id = @session_id
+            `),
+            unarchiveSession: this.db.prepare(`
+                UPDATE agent_sessions SET archived_at = NULL, state = 'ready', updated_at = @now
+                WHERE session_id = @session_id
+            `),
+            setPinned: this.db.prepare(`
+                UPDATE agent_sessions SET pinned_at = @pinned_at, updated_at = @now
                 WHERE session_id = @session_id
             `),
             setOrphaned: this.db.prepare(`
@@ -120,6 +156,21 @@ class AgentProjectionRepository {
             setError: this.db.prepare(`
                 UPDATE projection_state SET last_error = @error, updated_at = @now WHERE session_id = @session_id
             `),
+            setActivity: this.db.prepare(`
+                UPDATE projection_state SET activity_json = @activity_json, updated_at = @now
+                WHERE session_id = @session_id
+            `),
+            insertPendingInput: this.db.prepare(`
+                INSERT OR IGNORE INTO agent_pending_inputs(input_id, session_id, dedupe_key, prompt, created_at)
+                VALUES (@input_id, @session_id, @dedupe_key, @prompt, @created_at)
+            `),
+            getPendingInputByKey: this.db.prepare(`
+                SELECT * FROM agent_pending_inputs WHERE session_id = ? AND dedupe_key = ?
+            `),
+            listPendingInputs: this.db.prepare(`
+                SELECT * FROM agent_pending_inputs WHERE session_id = ? ORDER BY created_at, input_id
+            `),
+            deletePendingInput: this.db.prepare('DELETE FROM agent_pending_inputs WHERE input_id = ?'),
         };
         this.upsertItemTransaction = this.db.transaction((sessionId, record, block) => {
             this._upsertItem(sessionId, record, block);
@@ -130,14 +181,9 @@ class AgentProjectionRepository {
             if (Number.isInteger(expectedGeneration) && state?.mutation_generation !== expectedGeneration) {
                 return false;
             }
-            const authoritativeIds = new Set(entries.map((entry) => String(entry.record.itemId)));
             for (const entry of entries) {
-                this._upsertItem(sessionId, entry.record, entry.block);
-            }
-            for (const row of this.stmt.listMessages.all(sessionId)) {
-                if (!authoritativeIds.has(String(row.codex_item_id))) {
-                    this.stmt.deleteMessage.run(sessionId, row.codex_item_id);
-                }
+                const blocks = Array.isArray(entry.blocks) ? entry.blocks : [entry.block];
+                for (const block of blocks.filter(Boolean)) this._upsertItem(sessionId, entry.record, block);
             }
             this.stmt.setReconciled.run({ session_id: sessionId, now: Date.now() });
             this.stmt.advanceGeneration.run({ session_id: sessionId, now: Date.now() });
@@ -159,6 +205,7 @@ class AgentProjectionRepository {
             state: session.state || 'ready',
             config_snapshot_json: json(session.configSnapshot || {}),
             orphaned: session.orphaned ? 1 : 0,
+            pinned_at: session.pinnedAt || null,
             created_at: session.createdAt || now,
             updated_at: session.updatedAt || now,
             archived_at: session.archivedAt || null,
@@ -177,8 +224,11 @@ class AgentProjectionRepository {
         return row ? this._session(row) : null;
     }
 
-    listSessions() {
-        return this.stmt.listSessions.all().map((row) => this._session(row));
+    listSessions(options = {}) {
+        const rows = options.archived === true
+            ? this.stmt.listArchivedSessions.all()
+            : this.stmt.listSessions.all();
+        return rows.map((row) => this._session(row));
     }
 
     readProjection(sessionId) {
@@ -204,6 +254,7 @@ class AgentProjectionRepository {
             projection: state ? {
                 lastReconciledAt: state.last_reconciled_at,
                 lastError: state.last_error,
+                activity: parseJson(state.activity_json, {}),
             } : null,
         };
     }
@@ -227,12 +278,32 @@ class AgentProjectionRepository {
     }
 
     upsertItem(sessionId, record, block) {
-        this.upsertItemTransaction(sessionId, record, block);
+        if (Array.isArray(block)) {
+            this.db.transaction(() => {
+                for (const entry of block.filter(Boolean)) this._upsertItem(sessionId, record, entry);
+                this.stmt.advanceGeneration.run({ session_id: sessionId, now: Date.now() });
+            })();
+        } else {
+            this.upsertItemTransaction(sessionId, record, block);
+        }
         return this.stmt.getMessageByItem.get(sessionId, record.itemId);
     }
 
     projectionGeneration(sessionId) {
         return Number(this.stmt.getState.get(sessionId)?.mutation_generation || 0);
+    }
+
+    updateActivity(sessionId, patch = {}) {
+        const state = this.stmt.getState.get(sessionId);
+        if (!state) return null;
+        const current = parseJson(state.activity_json, {});
+        const activity = mergeProjectionContent(current, patch);
+        this.stmt.setActivity.run({
+            session_id: sessionId,
+            activity_json: json(activity),
+            now: Date.now(),
+        });
+        return activity;
     }
 
     reconcileItems(sessionId, entries, expectedGeneration = undefined) {
@@ -269,14 +340,17 @@ class AgentProjectionRepository {
         });
         if (block) {
             const ordinal = Number.isInteger(block.ordinal) ? block.ordinal : 0;
+            const existingBlock = this.stmt.getBlock.get(existing.message_id, ordinal);
+            const existingContent = parseJson(existingBlock?.content_json, {});
+            const content = mergeProjectionContent(existingContent, block.content || {});
             this.stmt.upsertBlock.run({
-                block_id: block.blockId || `block:${sessionId}:${record.itemId}:${ordinal}`,
+                block_id: block.blockId || existingBlock?.block_id || `block:${sessionId}:${record.itemId}:${ordinal}`,
                 message_id: existing.message_id,
-                kind: block.kind,
+                kind: block.kind || existingBlock?.kind,
                 status: block.status || record.status || 'inProgress',
                 ordinal,
-                content_json: json(block.content || {}),
-                created_at: block.createdAt || now,
+                content_json: json(content),
+                created_at: existingBlock?.created_at || block.createdAt || now,
                 updated_at: now,
             });
         }
@@ -342,6 +416,47 @@ class AgentProjectionRepository {
 
     archiveSession(sessionId) {
         this.stmt.archiveSession.run({ session_id: sessionId, now: Date.now() });
+        return this.getSession(sessionId);
+    }
+
+    unarchiveSession(sessionId) {
+        this.stmt.unarchiveSession.run({ session_id: sessionId, now: Date.now() });
+        return this.getSession(sessionId);
+    }
+
+    setPinned(sessionId, pinned) {
+        this.stmt.setPinned.run({
+            session_id: sessionId,
+            pinned_at: pinned ? Date.now() : null,
+            now: Date.now(),
+        });
+        return this.getSession(sessionId);
+    }
+
+    enqueuePendingInput(sessionId, { dedupeKey, prompt }) {
+        const inputId = `pending:${crypto.randomUUID()}`;
+        this.stmt.insertPendingInput.run({
+            input_id: inputId,
+            session_id: sessionId,
+            dedupe_key: String(dedupeKey),
+            prompt: String(prompt),
+            created_at: Date.now(),
+        });
+        return this.stmt.getPendingInputByKey.get(sessionId, String(dedupeKey));
+    }
+
+    listPendingInputs(sessionId) {
+        return this.stmt.listPendingInputs.all(sessionId).map((row) => ({
+            inputId: row.input_id,
+            sessionId: row.session_id,
+            dedupeKey: row.dedupe_key,
+            prompt: row.prompt,
+            createdAt: row.created_at,
+        }));
+    }
+
+    removePendingInput(inputId) {
+        this.stmt.deletePendingInput.run(String(inputId));
     }
 
     close() {
@@ -358,6 +473,7 @@ class AgentProjectionRepository {
             title: row.title,
             workspaceRoot: row.workspace_root,
             state: row.state,
+            pinnedAt: row.pinned_at || null,
             configSnapshot: parseJson(row.config_snapshot_json, {}),
             orphaned: row.orphaned === 1,
             createdAt: row.created_at,

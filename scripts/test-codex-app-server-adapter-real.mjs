@@ -36,6 +36,8 @@ function stream(response, chunks) {
 }
 
 const requests = [];
+const runtimeEvents = [];
+const pureBaseInstructions = 'You are the VChat-selected Agent identity. Reply through the configured provider.';
 const upstream = http.createServer(async (request, response) => {
     assert.equal(request.method, 'POST');
     assert.equal(request.url, '/v1/chat/completions');
@@ -44,6 +46,19 @@ const upstream = http.createServer(async (request, response) => {
     requests.push(body);
     const hasToolOutput = body.messages.some((message) => message.role === 'tool' && message.tool_call_id === 'call_adapter_file');
     if (!hasToolOutput) {
+        assert.deepEqual(body.messages.filter((message) => message.role === 'system'), [
+            { role: 'system', content: pureBaseInstructions },
+        ], 'the VChat base instructions must be the only system instruction sent upstream');
+        assert.equal(body.messages.some((message) => message.role === 'developer'), false,
+            'ToolBox-only Threads must disable Codex developer context');
+        const serializedMessages = JSON.stringify(body.messages);
+        for (const marker of [
+            '<permissions instructions>', '<skills_instructions>', '<apps_instructions>',
+            '<collaboration_mode>', '<environment_context>', '# AGENTS.md instructions',
+        ]) {
+            assert.equal(serializedMessages.includes(marker), false,
+                `ToolBox-only upstream context must not contain ${marker}`);
+        }
         const toolNames = (body.tools || []).map((tool) => tool.function?.name || tool.name).filter(Boolean).sort();
         assert.deepEqual(toolNames, ['vcp_invoke'],
             'ToolBox-only Threads must expose exactly vcp_invoke and no native Codex/MCP/utility tools');
@@ -57,6 +72,9 @@ const upstream = http.createServer(async (request, response) => {
         return;
     }
     stream(response, [{
+        id: 'chat_final', model: body.model,
+        choices: [{ delta: { reasoning_content: 'Checked the ToolBox result before answering. ' } }],
+    }, {
         id: 'chat_final', model: body.model,
         choices: [{ delta: { content: 'adapter-real-sentinel' } }],
     }]);
@@ -105,8 +123,13 @@ function waitForTurn(session, timeoutMs = 45_000) {
 }
 
 try {
+    manager.on('event', (event) => runtimeEvents.push(event));
     await manager.start();
-    const topic = await manager.createTopic({ title: 'Codex App Server adapter real', model: 'gpt-5.6-luna' });
+    const topic = await manager.createTopic({
+        title: 'Codex App Server adapter real',
+        model: 'gpt-5.6-luna',
+        baseInstructions: pureBaseInstructions,
+    });
     const session = await manager.createSession({ resume: topic.topicId });
     const completed = waitForTurn(session);
     await manager.startTurn({ sessionId: session.sessionId, prompt: 'Use FileOperator to read package.json.' });
@@ -121,6 +144,11 @@ try {
     assert.ok(requests.at(-1).messages.some((message) => message.role === 'tool' && message.tool_call_id === 'call_adapter_file'));
     const projection = await manager.readTopic({ sessionId: session.sessionId, reconcile: false });
     assert.match(JSON.stringify(projection), /adapter-real-sentinel/);
+    const reasoningMessage = projection.messages.find((message) => message.blocks?.some((block) => block.kind === 'reasoning'));
+    assert.ok(reasoningMessage, 'real App Server notifications must materialize a reasoning projection item');
+    assert.match(JSON.stringify(reasoningMessage), /Checked the ToolBox result before answering/);
+    assert.ok(runtimeEvents.some((event) => event.method === 'item/reasoning/textDelta'),
+        'the Chat reasoning stream must emerge from App Server as item/reasoning/textDelta');
     console.log('Real Codex App Server -> VChat Responses adapter -> Chat tool call continuation passed.');
 } finally {
     await manager.stop().catch(() => null);

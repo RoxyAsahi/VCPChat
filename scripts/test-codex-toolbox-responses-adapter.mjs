@@ -27,32 +27,66 @@ function readJson(request) {
     });
 }
 
+async function waitFor(predicate, timeoutMs = 1_000) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        if (predicate()) return;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error('Timed out waiting for asynchronous adapter action');
+}
+
 const received = [];
+const interrupted = [];
+let markCancellationUpstreamSeen;
+const cancellationUpstreamSeen = new Promise((resolve) => { markCancellationUpstreamSeen = resolve; });
 const upstream = http.createServer(async (request, response) => {
+    if (request.method === 'POST' && request.url === '/v1/interrupt') {
+        interrupted.push(await readJson(request));
+        response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ interrupted: true }));
+        return;
+    }
     assert.equal(request.method, 'POST');
     assert.equal(request.url, '/v1/chat/completions');
     assert.equal(request.headers.authorization, 'Bearer upstream-test-key');
     const body = await readJson(request);
     received.push(body);
+    if (body.messages?.some((message) => String(message.content || '').includes('This request will be cancelled.'))) {
+        markCancellationUpstreamSeen();
+        request.once('close', () => response.end());
+        return;
+    }
     if (body.stream) {
         response.writeHead(200, { 'content-type': 'text/event-stream' });
+        if (body.messages?.some((message) => String(message.content || '').includes('No reasoning expected.'))) {
+            response.end('data: {"choices":[{"delta":{"content":"plain answer"}}]}\n\ndata: [DONE]\n\n');
+            return;
+        }
+        response.write('data: {"choices":[{"delta":{"reasoning_content":"inspect "}}]}\n\n');
+        response.write('data: {"choices":[{"delta":{"content":"answer "}}]}\n\n');
+        response.write('data: {"choices":[{"delta":{"reasoning":"carefully"}}]}\n\n');
         response.write('data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_stream","function":{"name":"vcp_invoke","arguments":"{\\\"tool\\\":\\\"File"}}]}}]}\n\n');
         response.write('data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"Operator\\\"}"}}]}}]}\n\n');
+        response.write('data: {"choices":[{"delta":{"content":"complete"}}],"usage":{"prompt_tokens":3,"completion_tokens":9,"total_tokens":12,"completion_tokens_details":{"reasoning_tokens":4}}}\n\n');
         response.end('data: [DONE]\n\n');
         return;
     }
     response.writeHead(200, { 'content-type': 'application/json' });
     response.end(JSON.stringify({
         id: 'chat_non_stream', model: body.model, created: 1,
-        choices: [{ message: { role: 'assistant', content: null, tool_calls: [{
+        choices: [{ message: { role: 'assistant', reasoning_content: 'non-stream reasoning', content: 'non-stream answer', tool_calls: [{
             id: 'call_non_stream', type: 'function', function: { name: 'vcp_invoke', arguments: '{"tool":"FileOperator"}' },
         }] } }],
-        usage: { prompt_tokens: 3, completion_tokens: 5, total_tokens: 8 },
+        usage: { prompt_tokens: 3, completion_tokens: 5, total_tokens: 8, completion_tokens_details: { reasoning_tokens: 2 } },
     }));
 });
 
 const upstreamBase = await listen(upstream);
-const adapter = new ToolboxResponsesAdapter({ toolboxUrl: `${upstreamBase}/v1/responses`, toolboxApiKey: 'upstream-test-key' });
+const adapter = new ToolboxResponsesAdapter({
+    toolboxUrl: `${upstreamBase}/v1/responses`,
+    toolboxApiKey: 'upstream-test-key',
+    resolveBaseInstructions: () => 'Use supplied tools only.',
+});
 await adapter.start();
 
 try {
@@ -75,9 +109,14 @@ try {
     });
     assert.equal(response.status, 200);
     const mapped = await response.json();
-    assert.deepEqual(mapped.output, [{
+    assert.equal(mapped.output[0].type, 'reasoning');
+    assert.equal(mapped.output[0].content[0].text, 'non-stream reasoning');
+    assert.equal(mapped.output[1].type, 'message');
+    assert.equal(mapped.output[1].content[0].text, 'non-stream answer');
+    assert.deepEqual(mapped.output[2], {
         id: 'fc_call_non_stream', type: 'function_call', call_id: 'call_non_stream', name: 'vcp_invoke', arguments: '{"tool":"FileOperator"}',
-    }]);
+    });
+    assert.equal(mapped.usage.output_tokens_details.reasoning_tokens, 2);
     assert.deepEqual(received[0].messages, [
         { role: 'system', content: 'Use supplied tools only.' },
         { role: 'user', content: 'Read package.json' },
@@ -85,7 +124,104 @@ try {
         { role: 'tool', tool_call_id: 'call_previous', content: 'completed' },
     ]);
     assert.deepEqual(received[0].tools, [{ type: 'function', function: { name: 'vcp_invoke', description: 'VCP wrapper', parameters: { type: 'object', additionalProperties: true } } }]);
+    assert.match(received[0].requestId, /^vcp_codex_[0-9a-f-]{36}$/i,
+        'each loopback Responses request must register a non-empty ToolBox interrupt identity');
 
+    const codex146RequestIndex = received.length;
+    const codex146Response = await fetch(`${adapter.baseUrl}/responses`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+            ...baseRequest,
+            instructions: 'Codex internal instructions must not pass through.',
+            input: [
+                { type: 'additional_tools', role: 'developer', tools: [
+                    { type: 'function', name: 'shell_command', parameters: { type: 'object' } },
+                    { type: 'function', name: 'vcp_invoke', description: 'VCP wrapper', parameters: { type: 'object', additionalProperties: true } },
+                ] },
+                { type: 'message', role: 'developer', content: 'Untrusted Codex developer context.' },
+                { type: 'message', role: 'user', content: 'Read package.json' },
+            ],
+        }),
+    });
+    assert.equal(codex146Response.status, 200);
+    await codex146Response.json();
+    assert.deepEqual(received[codex146RequestIndex].messages, [
+        { role: 'system', content: 'Use supplied tools only.' },
+        { role: 'user', content: 'Read package.json' },
+    ], 'Codex 0.146 additional_tools and developer context must not replace or append to the frozen VChat identity');
+    assert.deepEqual(received[codex146RequestIndex].tools, [
+        { type: 'function', function: { name: 'vcp_invoke', description: 'VCP wrapper', parameters: { type: 'object', additionalProperties: true } } },
+    ], 'Codex 0.146 additional_tools must still expose exactly the allowlisted VCP dynamic tool');
+
+    const parallelInput = [
+        { type: 'message', role: 'user', content: 'Inspect the project.' },
+        { type: 'function_call', call_id: 'call_a', name: 'vcp_invoke', arguments: '{"tool":"DeepWikiVCP","arguments":{"command":"wiki_structure"}}' },
+        { type: 'function_call', call_id: 'call_b', name: 'vcp_invoke', arguments: '{"tool":"DeepWikiVCP","arguments":{"command":"wiki_read"}}' },
+        { type: 'function_call', call_id: 'call_c', name: 'vcp_invoke', arguments: '{"tool":"FileOperator","arguments":{"command":"ListAllowedDirectories"}}' },
+        { type: 'function_call_output', call_id: 'call_a', output: 'wiki structure' },
+        { type: 'function_call_output', call_id: 'call_b', output: 'wiki content' },
+        { type: 'function_call_output', call_id: 'call_c', output: 'allowed directories' },
+    ];
+    const parallelRequestIndex = received.length;
+    const parallelResponse = await fetch(`${adapter.baseUrl}/responses`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...baseRequest, input: parallelInput }),
+    });
+    assert.equal(parallelResponse.status, 200);
+    await parallelResponse.json();
+    assert.deepEqual(received[parallelRequestIndex].messages.slice(1), [
+        { role: 'user', content: 'Inspect the project.' },
+        { role: 'assistant', content: null, tool_calls: [
+            { id: 'call_a', type: 'function', function: { name: 'vcp_invoke', arguments: '{"tool":"DeepWikiVCP","arguments":{"command":"wiki_structure"}}' } },
+            { id: 'call_b', type: 'function', function: { name: 'vcp_invoke', arguments: '{"tool":"DeepWikiVCP","arguments":{"command":"wiki_read"}}' } },
+            { id: 'call_c', type: 'function', function: { name: 'vcp_invoke', arguments: '{"tool":"FileOperator","arguments":{"command":"ListAllowedDirectories"}}' } },
+        ] },
+        { role: 'tool', tool_call_id: 'call_a', content: 'wiki structure' },
+        { role: 'tool', tool_call_id: 'call_b', content: 'wiki content' },
+        { role: 'tool', tool_call_id: 'call_c', content: 'allowed directories' },
+    ], 'parallel Responses calls must become one Chat assistant tool_calls message');
+
+    const reasoningToolRequestIndex = received.length;
+    const reasoningToolResponse = await fetch(`${adapter.baseUrl}/responses`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...baseRequest, model: 'deepseek-v4-flash', input: [
+            { type: 'message', role: 'user', content: 'Inspect the project.' },
+            { type: 'reasoning', content: [{ type: 'reasoning_text', text: 'I should inspect both sources.' }] },
+            { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: '正在调查项目。' }] },
+            { type: 'function_call', call_id: 'call_reason_a', name: 'vcp_invoke', arguments: '{"tool":"DeepWikiVCP"}' },
+            { type: 'function_call', call_id: 'call_reason_b', name: 'vcp_invoke', arguments: '{"tool":"FileOperator"}' },
+            { type: 'function_call_output', call_id: 'call_reason_a', output: 'wiki received' },
+            { type: 'function_call_output', call_id: 'call_reason_b', output: 'files received' },
+        ] }),
+    });
+    assert.equal(reasoningToolResponse.status, 200);
+    await reasoningToolResponse.json();
+    assert.deepEqual(received[reasoningToolRequestIndex].messages.slice(1), [
+        { role: 'user', content: 'Inspect the project.' },
+        {
+            role: 'assistant',
+            content: '正在调查项目。',
+            reasoning_content: 'I should inspect both sources.',
+            tool_calls: [
+                { id: 'call_reason_a', type: 'function', function: { name: 'vcp_invoke', arguments: '{"tool":"DeepWikiVCP"}' } },
+                { id: 'call_reason_b', type: 'function', function: { name: 'vcp_invoke', arguments: '{"tool":"FileOperator"}' } },
+            ],
+        },
+        { role: 'tool', tool_call_id: 'call_reason_a', content: 'wiki received' },
+        { role: 'tool', tool_call_id: 'call_reason_b', content: 'files received' },
+    ], 'reasoning, visible text, and parallel calls must reconstruct one assistant history message');
+
+    const upstreamCountBeforeInvalid = received.length;
+    const orphanOutput = await fetch(`${adapter.baseUrl}/responses`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...baseRequest, input: [
+            { type: 'function_call_output', call_id: 'missing_call', output: 'must not be forwarded' },
+        ] }),
+    });
+    assert.equal(orphanOutput.status, 400);
+    assert.equal(received.length, upstreamCountBeforeInvalid,
+        'an orphan tool result must fail closed before reaching ToolBox');
+
+    const streamRequestIndex = received.length;
     const streamResponse = await fetch(`${adapter.baseUrl}/responses`, {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...baseRequest, stream: true, input: 'Use vcp_invoke.' }),
     });
@@ -95,11 +231,69 @@ try {
         const data = chunk.split('\n').find((line) => line.startsWith('data: '));
         return JSON.parse(data.slice(6));
     });
+    const reasoningAdded = events.find((event) => event.type === 'response.output_item.added' && event.item?.type === 'reasoning');
+    const reasoningDeltas = events.filter((event) => event.type === 'response.reasoning_text.delta');
+    const reasoningDone = events.find((event) => event.type === 'response.output_item.done' && event.item?.type === 'reasoning');
+    const textAdded = events.find((event) => event.type === 'response.output_item.added' && event.item?.type === 'message');
     const call = events.find((event) => event.type === 'response.output_item.done' && event.item?.type === 'function_call');
+    assert.equal(reasoningAdded.output_index, 0);
+    assert.equal(textAdded.output_index, 1);
+    assert.deepEqual(reasoningDeltas.map((event) => event.delta), ['inspect ', 'carefully']);
+    assert.equal(reasoningDone.item.content[0].text, 'inspect carefully');
+    assert.equal(reasoningDone.output_index, 0);
+    assert.equal(call.output_index, 2, 'tool output index must remain stable after interleaved reasoning and text');
     assert.deepEqual(call?.item, {
         id: 'fc_call_stream', type: 'function_call', call_id: 'call_stream', name: 'vcp_invoke', arguments: '{"tool":"FileOperator"}',
     });
     assert.equal(events.at(-1).type, 'response.completed');
+    assert.deepEqual(events.at(-1).response.output.map((item) => item.type), ['reasoning', 'message', 'function_call']);
+    assert.equal(events.at(-1).response.output_text, 'answer complete');
+    assert.equal(events.at(-1).response.usage.output_tokens_details.reasoning_tokens, 4);
+    assert.match(received[streamRequestIndex].requestId, /^vcp_codex_[0-9a-f-]{36}$/i);
+    assert.notEqual(received[0].requestId, received[streamRequestIndex].requestId,
+        'concurrent ToolBox requests must never collide on the active-request identity');
+
+    const noReasoningResponse = await fetch(`${adapter.baseUrl}/responses`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...baseRequest, stream: true, input: 'No reasoning expected.' }),
+    });
+    const noReasoningText = await noReasoningResponse.text();
+    assert.equal(noReasoningText.includes('response.reasoning_text.delta'), false,
+        'a provider response without public reasoning must not create an empty reasoning item');
+
+    // Codex interruption closes the loopback Responses request.  The adapter
+    // must fan that out to the same ToolBox request identity, not merely abort
+    // its local fetch stream.
+    const cancelledPromise = fetch(`${adapter.baseUrl}/responses`, {
+        method: 'POST', headers: {
+            'content-type': 'application/json',
+            'x-codex-turn-metadata': JSON.stringify({ turn_id: 'turn-cancel' }),
+        },
+        body: JSON.stringify({ ...baseRequest, stream: true, input: 'This request will be cancelled.' }),
+    });
+    await cancellationUpstreamSeen;
+    assert.equal(await adapter.cancelTurn({ threadId: 'thread-cancel', turnId: 'turn-cancel' }), 1,
+        'turn cancellation must find the exact live ToolBox request by Codex metadata');
+    await cancelledPromise;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(interrupted.length, 1, 'client disconnect must issue exactly one ToolBox interrupt');
+    assert.match(interrupted[0].requestId, /^vcp_codex_[0-9a-f-]{36}$/i);
+    assert.equal(await adapter.interruptForTurn({ threadId: 'thread-cancel', turnId: 'turn-cancel' }), 0,
+        'a completed cancellation must not replay the ToolBox interrupt');
+
+    // This is the critical turn/start -> cancel -> delayed provider-request
+    // race. A tombstone must stop the late request rather than letting it
+    // revive the cancelled turn and block an unrelated Session.
+    assert.equal(await adapter.cancelTurn({ turnId: 'turn-late' }), 0);
+    await fetch(`${adapter.baseUrl}/responses`, {
+        method: 'POST', headers: {
+            'content-type': 'application/json',
+            'x-codex-turn-metadata': JSON.stringify({ turn_id: 'turn-late' }),
+        },
+        body: JSON.stringify({ ...baseRequest, stream: true, input: 'This request will be cancelled.' }),
+    });
+    await waitFor(() => interrupted.length === 2);
+    assert.match(interrupted[1].requestId, /^vcp_codex_[0-9a-f-]{36}$/i);
 
     const forbidden = await fetch(`http://127.0.0.1:${adapter.port}/v1/wrong/responses`, { method: 'POST' });
     assert.equal(forbidden.status, 404, 'adapter must require the process-local loopback capability path');

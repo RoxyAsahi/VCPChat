@@ -34,6 +34,8 @@ const IPC_CHANNELS = Object.freeze({
     ENSURE_SESSION_RUNTIME: 'agent-runtime:ensure-session-runtime',
     FORK_SESSION: 'agent-runtime:fork-session',
     CLOSE_SESSION: 'agent-runtime:close-session',
+    RESTORE_SESSION: 'agent-runtime:restore-session',
+    SET_SESSION_PINNED: 'agent-runtime:set-session-pinned',
     COMPACT_SESSION: 'agent-runtime:compact-session',
     LIST_TOPICS: 'agent-runtime:list-topics',
     SEARCH_TOPICS: 'agent-runtime:search-topics',
@@ -56,6 +58,7 @@ const IPC_CHANNELS = Object.freeze({
     FOLLOW_UP_TURN: 'agent-runtime:follow-up-turn',
     CANCEL_TURN: 'agent-runtime:cancel-turn',
     RESPOND_APPROVAL: 'agent-runtime:respond-approval',
+    RESPOND_INTERACTION: 'agent-runtime:respond-interaction',
     SET_WORKBENCH_PRESENCE: 'agent-runtime:set-workbench-presence',
     EVENT: 'agent-runtime:event',
 });

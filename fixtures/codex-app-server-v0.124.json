@@ -1,0 +1,28 @@
+{
+  "protocol": "codex-app-server-jsonl",
+  "codexVersionLine": "0.124",
+  "sourceRevision": "f0c30e528a54bdf0fa9a4d52ff74b34383434811",
+  "clientMethods": {
+    "stable": ["initialize", "initialized", "thread/start", "thread/read", "thread/resume", "thread/fork", "turn/start", "turn/steer", "turn/interrupt"],
+    "experimental": ["thread/archive", "thread/unarchive", "thread/delete", "thread/compact/start"],
+    "disabledInToolboxOnly": ["thread/shellCommand"]
+  },
+  "notifications": {
+    "stable": ["thread/started", "turn/started", "turn/completed", "thread/status/changed", "item/started", "item/completed", "item/agentMessage/delta", "item/reasoning/summaryTextDelta", "item/reasoning/textDelta", "item/plan/delta", "item/commandExecution/outputDelta", "serverRequest/resolved"],
+    "experimental": ["item/fileChange/patchUpdated"]
+  },
+  "items": {
+    "stable": ["userMessage", "agentMessage", "reasoning", "plan", "contextCompaction", "dynamicToolCall"],
+    "readOnlyOrDisabledInToolboxOnly": ["commandExecution", "fileChange", "mcpToolCall", "collabToolCall", "webSearch", "imageView", "imageGeneration", "subAgentActivity", "hookPrompt", "sleep", "enteredReviewMode", "exitedReviewMode"]
+  },
+  "serverRequests": {
+    "item/tool/call": "dynamic-vcp-invoke-only",
+    "item/commandExecution/requestApproval": "native-only",
+    "item/fileChange/requestApproval": "native-only",
+    "item/tool/requestUserInput": "interactive",
+    "item/permissions/requestApproval": "interactive",
+    "mcpServer/elicitation/request": "interactive",
+    "attestation/generate": "unsupported",
+    "currentTime/read": "unsupported"
+  }
+}

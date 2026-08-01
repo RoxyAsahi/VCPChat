@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url);
 const { CodexAppServerTransport, resolveCodexLaunch } = require('../modules/codex-runtime/appServerTransport.js');
 
 class FakeChild extends EventEmitter {
-    constructor(userAgent = 'Codex Desktop/0.124.0 (fixture)') {
+    constructor(userAgent = 'Codex Desktop/0.146.0 (fixture)') {
         super();
         this.killed = false;
         this.pid = 4242;
@@ -59,7 +59,7 @@ const notifications = [];
 transport.on('notification', (message) => notifications.push(message));
 await transport.start();
 assert.equal(transport.status.ready, true);
-assert.equal(transport.status.version, '0.124.0');
+assert.equal(transport.status.version, '0.146.0');
 assert.equal(spawnedEnv.VCP_TOOLBOX_API_KEY, undefined, 'Codex must not inherit the upstream ToolBox API key');
 assert.equal(spawnedEnv.VCP_CODEX_RESPONSES_ADAPTER_CAPABILITY, 'loopback-capability');
 const result = await transport.request('thread/start', { model: 'fake' });
@@ -78,7 +78,7 @@ transport.respond(request.id, { contentItems: [{ type: 'inputText', text: 'ok' }
 await transport.stop();
 assert.equal(transport.status.ready, false);
 
-const obsolete = new FakeChild('Codex Desktop/0.123.0 (fixture)');
+const obsolete = new FakeChild('Codex Desktop/0.145.0 (fixture)');
 const obsoleteTransport = new CodexAppServerTransport({
     executable: 'codex-app-server.exe',
     spawnImpl: () => obsolete,
@@ -89,17 +89,17 @@ assert.equal(obsolete.killed, true, 'unsupported App Server must be stopped fail
 
 // The app-server negotiates the client name into its userAgent prefix
 // (`<originator>/<version> ...`) rather than an immutable `Codex/` prefix.
-const originatorForm = new FakeChild('vcp_chat/0.124.0 (Windows 10.0.26200; x86_64) unknown (vcp_chat; vcp-chat-codex-agent-0.1.0)');
+const originatorForm = new FakeChild('vcp_chat/0.146.0 (Windows 10.0.26200; x86_64) unknown (vcp_chat; vcp-chat-codex-agent-0.1.0)');
 const originatorTransport = new CodexAppServerTransport({
     executable: 'codex-app-server.exe',
     spawnImpl: () => originatorForm,
     startTimeoutMs: 2_000,
 });
 await originatorTransport.start();
-assert.equal(originatorTransport.status.version, '0.124.0', 'version must be parsed from the echoed originator userAgent');
+assert.equal(originatorTransport.status.version, '0.146.0', 'version must be parsed from the echoed originator userAgent');
 await originatorTransport.stop();
 
-const obsoleteOriginator = new FakeChild('vcp_chat/0.123.0 (Windows 10.0.26200; x86_64) unknown (vcp_chat; vcp-chat-codex-agent-0.1.0)');
+const obsoleteOriginator = new FakeChild('vcp_chat/0.145.0 (Windows 10.0.26200; x86_64) unknown (vcp_chat; vcp-chat-codex-agent-0.1.0)');
 const obsoleteOriginatorTransport = new CodexAppServerTransport({
     executable: 'codex-app-server.exe',
     spawnImpl: () => obsoleteOriginator,
@@ -107,4 +107,14 @@ const obsoleteOriginatorTransport = new CodexAppServerTransport({
 });
 await assert.rejects(() => obsoleteOriginatorTransport.start(), (error) => error.code === 'UNSUPPORTED_VERSION');
 assert.equal(obsoleteOriginator.killed, true, 'obsolete originator-form App Server must be stopped fail-closed');
+
+const newerLine = new FakeChild('Codex Desktop/0.147.0 (fixture)');
+const pinnedTransport = new CodexAppServerTransport({
+    executable: 'codex-app-server.exe',
+    supportedVersionLine: '0.146',
+    spawnImpl: () => newerLine,
+    startTimeoutMs: 2_000,
+});
+await assert.rejects(() => pinnedTransport.start(), (error) => error.code === 'UNSUPPORTED_PROTOCOL_VERSION');
+assert.equal(newerLine.killed, true, 'a server outside the pinned fixture line must stop fail-closed');
 console.log('Codex App Server transport tests passed.');
