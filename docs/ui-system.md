@@ -1,8 +1,10 @@
 # VCPChat 新版 UI 原生设计系统
 
-> 当前审计（2026-07-28）：Agent Workbench 的 scope、`!important` 与 inline-style 违规已修复，`npm run check:ui-system` 现已通过；高频流式消息已改为稳定节点原地更新，避免重建侧栏、标题与输入区。下文的迁移台账仍包含历史验证记录，不能替代 [GUI 当前开发状态](gui-current-development-status.md) 的发布判断。任何标为 `migrated` 的旧记录仍须完成真实 Electron 回归后重新确认。
+> 当前审计（2026-08-01）：UI 组件库已加入 Web Awesome 3.11.0 受控对照页，并在真实 Electron 中验证 Button、Input、Select、Tooltip 与 Dialog。该结果只证明混合设计系统可行，不代表业务页面已经迁移。应用页与全局设置的后续范围、批次和门槛见 [Web Awesome 全量重构计划](./ui-applications-webawesome-migration-plan.md)。
 
-这套设计系统只服务于 `data-ui-mode="next"`，不迁移或覆盖经典 UI。实现使用原生 DOM、CSS Layer 和 ES Module，不依赖 Vue、React、Web Components 或额外构建步骤。
+这套设计系统只服务于 `data-ui-mode="next"`，不迁移或覆盖经典 UI。公共 API 仍使用原生 DOM、CSS Layer 和 ES Module；基础控件允许在 `VCPUI` 内部受控采用 Web Awesome Web Components，但业务页面不得直接依赖 `<wa-*>`。系统不引入 Vue、React 或新的构建步骤。
+
+Web Awesome runtime 只能在新版 UI 实际需要时加载。经典模式不得加载 adapter/theme、不得改变现有页面布局；模式切回 classic 时必须销毁新版控制器并恢复原业务 DOM。当前组件库 pilot 的顶层注册将在正式迁移的 R5.0 改为 lazy-load。
 
 ## 目录
 
@@ -11,6 +13,8 @@
 - `modules/ui-system/component-manifest.js`：组件类别、成熟度、版本和别名清单。
 - `modules/ui-system/next-ui-apps.js`：新版 UI 内部应用注册表。
 - `modules/ui-system/component-showcase.js`：用户可见的“UI 组件库”应用。
+- `modules/ui-system/webawesome-comparison.js`：Web Awesome 受控试验页，不是业务 API。
+- `styles/ui-system/webawesome-adapter.css`：将 Web Awesome token 映射到 VCPChat 主题的唯一入口。
 - `scripts/check-ui-system.mjs`：作用域、色值、字号、内联样式和注册唯一性门禁。
 
 ## Token 分层
@@ -119,3 +123,5 @@ npm run check:ui-system
 该命令依次执行语法检查、Stylelint、静态门禁和 JSDOM 组件契约测试。
 
 真实 Electron 验证记录与剩余矩阵见 [新版 UI Electron QA 矩阵](./ui-system-qa-matrix.md)。
+
+应用页与全局设置迁移见 [VCPChat 应用页面与全局设置 Web Awesome 全量重构计划](./ui-applications-webawesome-migration-plan.md)。

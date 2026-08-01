@@ -1,5 +1,6 @@
 import VCPUI from './vcp-ui.js';
 import { register } from './next-ui-apps.js';
+import { mountWebAwesomeComparison } from './webawesome-comparison.js';
 
 const CATEGORIES = [
     { id: 'foundation', label: '基础', icon: 'foundation' },
@@ -7,7 +8,8 @@ const CATEGORIES = [
     { id: 'forms', label: '表单', icon: 'edit_note' },
     { id: 'navigation', label: '导航', icon: 'tab' },
     { id: 'data', label: '数据', icon: 'table' },
-    { id: 'feedback', label: '反馈', icon: 'notifications' }
+    { id: 'feedback', label: '反馈', icon: 'notifications' },
+    { id: 'webawesome', label: 'WA 对照', icon: 'compare' }
 ];
 
 function mountShowcase(container) {
@@ -399,6 +401,14 @@ function mountShowcase(container) {
         setTimeout(() => VCPUI.feedback.setLoading(false), 1200);
     });
     group.append(loadingTrigger.element);
+
+    categoryHeading('webawesome', 'Web Awesome 对照', '验证成熟 Web Components 能否保留 VCPChat 的视觉身份，同时接管基础交互与无障碍细节。');
+    const comparisonHost = document.createElement('section');
+    comparisonHost.className = 'vcp-ui-showcase-section vcp-ui-wa-section';
+    comparisonHost.dataset.component = 'web awesome comparison button input select tooltip dialog';
+    content.append(comparisonHost);
+    sections.push(comparisonHost);
+    disposers.push(mountWebAwesomeComparison(comparisonHost, { create, on }));
 
     function updateThemeStatus() {
         const isLight = document.body.classList.contains('light-theme');

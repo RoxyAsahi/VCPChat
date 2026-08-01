@@ -84,6 +84,19 @@ COMPONENT_MANIFEST.forEach(item => {
 registrations.filter(name => !manifestNames.includes(name)).forEach(name => report(manifestFile, `registered component is missing from manifest: ${name}`));
 manifestNames.filter(name => !registrations.includes(name)).forEach(name => report(manifestFile, `manifest component is not registered: ${name}`));
 
+const webAwesomeComparisonFile = path.join(moduleDir, 'webawesome-comparison.js');
+const webAwesomeComparison = fs.readFileSync(webAwesomeComparisonFile, 'utf8');
+if (!webAwesomeComparison.includes('@awesome.me/webawesome/dist-cdn/components/')) {
+    report(webAwesomeComparisonFile, 'must use the self-contained dist-cdn build in the no-bundler renderer');
+}
+if (webAwesomeComparison.includes('@awesome.me/webawesome/dist/components/')) {
+    report(webAwesomeComparisonFile, 'standard dist build contains bare Lit imports and breaks app registration');
+}
+const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+if (packageJson.dependencies?.['@awesome.me/webawesome'] !== '3.11.0') {
+    report(path.join(root, 'package.json'), 'Web Awesome showcase dependency must remain pinned to 3.11.0');
+}
+
 const mainHtmlFile = path.join(root, 'main.html');
 const mainDom = new JSDOM(fs.readFileSync(mainHtmlFile, 'utf8'));
 const modalTemplates = [...mainDom.window.document.querySelectorAll('template[id$="ModalTemplate"]')];

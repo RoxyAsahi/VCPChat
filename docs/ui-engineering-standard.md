@@ -2,7 +2,7 @@
 
 ## 最终目标
 
-VCPChat 最终应形成一套只服务于新版 UI、以原生 HTML/CSS/JavaScript 实现、视觉一致且可持续演进的桌面端 UI 平台：所有新版业务界面都从统一 Token、字体图标、密度、组件、反馈与内部应用运行时中组合，不再复制控件样式或自行发明交互；经典 UI、主题 IPC、聊天领域逻辑和外部 Electron 应用保持清晰边界，设计系统不反向侵入这些区域；任何新增或迁移界面只有在静态门禁、组件契约测试、明暗/壁纸/透明主题、默认与最小窗口、键盘与焦点、reduced-motion、生命周期清理和真实 Electron 截图审查全部通过后，才视为完成。
+VCPChat 最终应形成一套只服务于新版 UI、以稳定 VCPUI API 组织、视觉一致且可持续演进的桌面端 UI 平台：所有新版业务界面都从统一 Token、字体图标、密度、组件、反馈与内部应用运行时中组合，不再复制控件样式或自行发明交互。基础控件允许由受控的 Web Awesome adapter 提供行为与无障碍内核，但业务模块不能直接依赖第三方标签或 token。经典 UI、主题 IPC、聊天领域逻辑和外部 Electron 应用保持清晰边界，设计系统不反向侵入这些区域；任何新增或迁移界面只有在静态门禁、组件契约测试、明暗/壁纸/透明主题、默认与最小窗口、键盘与焦点、reduced-motion、生命周期清理和真实 Electron 截图审查全部通过后，才视为完成。
 
 ## 参考原则
 
@@ -15,7 +15,7 @@ VCPChat 最终应形成一套只服务于新版 UI、以原生 HTML/CSS/JavaScri
 - 加载态优先保持布局稳定，使用 Skeleton，而不是让内容区突然收缩。
 - 数据页面由筛选、操作、表格、空态和分页组成固定工作流。
 
-VCPChat 保留自身约束：卡片圆角不超过 8px，不使用 `!important`，不在组件样式中声明裸色值，不引入前端框架或构建步骤。
+VCPChat 保留自身约束：卡片圆角不超过 8px，不使用 `!important`，不在组件样式中声明裸色值，不引入前端框架或新的构建步骤。Web Awesome 必须通过 VCP adapter 使用，不能成为业务页面的公共 API。
 
 新版主聊天面板使用 `--next-chat-surface`，默认由 `--next-theme-chat-surface` / `--next-theme-chat-surface-dark` 覆盖，且默认以半透明表面显示壁纸。主题若明确需要完全实色的聊天面板，才应覆盖这两个变量；不得再以不透明 `--next-surface` 直接盖住 `--chat-wallpaper-*`。
 
@@ -54,6 +54,7 @@ VCPChat 保留自身约束：卡片圆角不超过 8px，不使用 `!important`�
 ## 工程规则
 
 - 新版 UI 样式必须同时受 `html[data-ui-mode="next"] .vcp-ui-scope` 约束。
+- Web Awesome runtime 和 adapter 只能在 `data-ui-mode="next"` 下按需加载；classic 模式不得仅靠 CSS 隐藏一个仍在运行的新版组件树。
 - 颜色、字号、圆角、阴影、控件高度、间距和 Z-index 只能来自 Token。
 - 页面不嵌套卡片；卡片只用于可重复对象、弹窗或确实需要边界的工具。
 - 布局密度只能通过 `data-density="comfortable|compact"` 切换。
