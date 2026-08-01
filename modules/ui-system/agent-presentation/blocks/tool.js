@@ -10,32 +10,55 @@ function toolStatusLabel(state) {
 
 function detailsSummary(tool) {
     const raw = tool?.payload || {};
+    const item = raw.item && typeof raw.item === 'object' ? raw.item : {};
     return safeText(raw.argumentSummary || raw.argsPreview || raw.outputSummary || raw.note
-        || raw.reason || raw.error || tool?.summary);
+        || raw.reason || raw.error || item.outputSummary || item.error || item.message || tool?.summary);
+}
+
+function normalizeArguments(value) {
+    if (value == null || value === '') return null;
+    if (typeof value === 'object') return value;
+    if (typeof value !== 'string') return { value };
+    try {
+        const parsed = JSON.parse(value);
+        return parsed && typeof parsed === 'object' ? parsed : { value: parsed };
+    } catch {
+        return { value };
+    }
 }
 
 function toolDetailPayload(tool) {
     const payload = tool?.payload || {};
-    const args = payload.arguments ?? payload.args ?? payload.parameters;
-    const result = payload.result ?? payload.output ?? payload.response;
-    const resources = Array.isArray(payload.resources) ? payload.resources : [];
-    const warnings = Array.isArray(payload.warnings) ? payload.warnings : [];
-    const task = payload.task && typeof payload.task === 'object' ? payload.task : null;
+    const item = payload.item && typeof payload.item === 'object' ? payload.item : {};
+    const args = normalizeArguments(payload.arguments ?? payload.args ?? payload.parameters
+        ?? item.arguments ?? item.args ?? item.parameters ?? item.input);
+    const result = payload.result ?? payload.output ?? payload.response
+        ?? item.result ?? item.output ?? item.response;
+    const error = payload.error ?? item.error ?? item.failure?.message
+        ?? (item.status === 'failed' ? item.message : null);
+    const resources = Array.isArray(payload.resources) ? payload.resources
+        : Array.isArray(item.resources) ? item.resources : [];
+    const warnings = Array.isArray(payload.warnings) ? payload.warnings
+        : Array.isArray(item.warnings) ? item.warnings : [];
+    const taskValue = payload.task ?? item.task;
+    const task = taskValue && typeof taskValue === 'object' ? taskValue : null;
     return {
         args,
         result,
+        error,
         resources,
         warnings,
         task,
         hasArgs: Boolean(args && typeof args === 'object' && Object.keys(args).length),
         hasResult: result != null && String(result).trim() !== '',
+        hasError: error != null && String(error).trim() !== '',
         summary: detailsSummary(tool),
     };
 }
 
 function canExpandTool(tool) {
     const detail = toolDetailPayload(tool);
-    return Boolean(detail.hasArgs || detail.hasResult || detail.resources.length || detail.warnings.length
+    return Boolean(detail.hasArgs || detail.hasResult || detail.hasError || detail.resources.length || detail.warnings.length
         || detail.task || detail.summary);
 }
 
@@ -60,7 +83,7 @@ function buildToolArgsTable(document, args) {
 
 function createToolDetail(document, tool, renderContent, postRender) {
     const detail = toolDetailPayload(tool);
-    if (!(detail.hasArgs || detail.hasResult || detail.resources.length || detail.warnings.length || detail.task)) {
+    if (!(detail.hasArgs || detail.hasResult || detail.hasError || detail.resources.length || detail.warnings.length || detail.task)) {
         return detail.summary ? createNode(document, 'pre', 'agent-chat-tool-output', detail.summary) : null;
     }
     const container = createNode(document, 'div', 'agent-chat-tool-detail vcp-tool-result-bubble collapsible expanded');
@@ -85,6 +108,10 @@ function createToolDetail(document, tool, renderContent, postRender) {
         } else {
             container.append(output);
         }
+    }
+    if (detail.hasError) {
+        container.append(createNode(document, 'div', 'agent-chat-tool-detail-label', '错误'));
+        container.append(createNode(document, 'pre', 'agent-chat-tool-detail-error', safeText(detail.error)));
     }
     for (const [label, className, value] of [
         ['资源', 'agent-chat-tool-resource-list', detail.resources],

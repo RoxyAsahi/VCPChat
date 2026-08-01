@@ -17,6 +17,7 @@ function timestampOf(value) {
 function timelinePartKey(part) {
     if (part.kind === 'message') return `message:${part.messageId || part.presentationKey || part.id}`;
     if (part.kind === 'tool') return `tool:${part.toolCallId}`;
+    if (part.kind === 'tool-group') return `tool-group:${part.id}`;
     return `${part.kind}:${part.id}`;
 }
 
@@ -32,7 +33,12 @@ const VCP_TOOL_PRESENTATIONS = new Map([
 
 function projectVcpToolPresentation(tool = {}) {
     const payload = tool.payload && typeof tool.payload === 'object' ? tool.payload : {};
-    const target = String(payload.toolName || tool.name || 'vcp_invoke');
+    const item = payload.item && typeof payload.item === 'object' ? payload.item : {};
+    let itemArguments = item.arguments;
+    if (typeof itemArguments === 'string') {
+        try { itemArguments = JSON.parse(itemArguments); } catch { itemArguments = null; }
+    }
+    const target = String(payload.toolName || itemArguments?.tool || item.tool || tool.name || 'vcp_invoke');
     const known = VCP_TOOL_PRESENTATIONS.get(target.toLocaleLowerCase());
     if (known) return { ...known, target, fallback: false };
     if (target === 'vcp_invoke') {
@@ -97,6 +103,52 @@ function compareTimelineParts(left, right) {
     return left.index - right.index;
 }
 
+function toolGroupPart(parts) {
+    const first = parts[0];
+    return {
+        kind: 'tool-group',
+        id: first.toolCallId,
+        turnId: first.turnId,
+        sequence: first.sequence,
+        timestamp: first.timestamp,
+        snapshotOrdinal: first.snapshotOrdinal,
+        index: first.index,
+        toolCallIds: parts.map((part) => part.toolCallId),
+        blocks: parts.flatMap((part) => part.blocks || []),
+        value: {
+            turnId: first.turnId,
+            tools: parts.map((part) => part.value),
+        },
+    };
+}
+
+// Cherry-style display grouping: only adjacent tools from the same identified
+// Turn are folded together. Messages, reasoning/error rows and unassociated
+// tools are hard boundaries, so grouping cannot invent protocol ownership.
+function groupConsecutiveToolParts(parts = []) {
+    const grouped = [];
+    let pending = [];
+    const flush = () => {
+        if (pending.length === 1) grouped.push(pending[0]);
+        else if (pending.length > 1) grouped.push(toolGroupPart(pending));
+        pending = [];
+    };
+    for (const part of parts) {
+        const canJoin = part.kind === 'tool'
+            && Boolean(part.turnId)
+            && (pending.length === 0 || pending[0].turnId === part.turnId);
+        if (canJoin) {
+            pending.push(part);
+            continue;
+        }
+        flush();
+        if (part.kind === 'tool' && part.turnId) pending.push(part);
+        else grouped.push(part);
+    }
+    flush();
+    return grouped;
+}
+
 /**
  * Canonical, ephemeral AgentTimelinePart projection.  Approval and observer
  * parts deliberately stay out of this main conversation feed; their owning
@@ -105,10 +157,11 @@ function compareTimelineParts(left, right) {
 function createAgentTimelineParts(state = {}) {
     const messages = Array.isArray(state.messages) ? state.messages : [];
     const tools = state.tools instanceof Map ? [...state.tools.values()] : [];
-    return [
+    const parts = [
         ...messages.map(messagePart).filter(Boolean),
         ...tools.map((tool, index) => toolPart(tool, messages.length + index)).filter(Boolean),
     ].sort(compareTimelineParts);
+    return groupConsecutiveToolParts(parts);
 }
 
 /**
@@ -153,6 +206,7 @@ function reconcileAgentTimeline(container, parts, callbacks, rows = new Map()) {
 
 export {
     createAgentTimelineParts,
+    groupConsecutiveToolParts,
     projectVcpToolPresentation,
     reconcileAgentTimeline,
     timelinePartKey,

@@ -3,6 +3,7 @@ import { JSDOM } from 'jsdom';
 
 import {
     createAgentTimelineParts,
+    groupConsecutiveToolParts,
     projectVcpToolPresentation,
     reconcileAgentTimeline,
     timelinePartKey,
@@ -36,6 +37,20 @@ assert.deepEqual(projectVcpToolPresentation({ payload: { toolName: 'FileOperator
 });
 assert.equal(projectVcpToolPresentation({ payload: { toolName: 'PluginFromToolBox' } }).kind, 'unknown',
     'an unknown ToolBox target must remain a display-only fallback rather than being rewritten');
+
+const groupedParts = groupConsecutiveToolParts([
+    { kind: 'message', id: 'm1', messageId: 'm1', turnId: 'turn-1' },
+    { kind: 'tool', id: 'a', toolCallId: 'a', turnId: 'turn-1', value: { toolCallId: 'a' }, blocks: [] },
+    { kind: 'tool', id: 'b', toolCallId: 'b', turnId: 'turn-1', value: { toolCallId: 'b' }, blocks: [] },
+    { kind: 'message', id: 'm2', messageId: 'm2', turnId: 'turn-1' },
+    { kind: 'tool', id: 'c', toolCallId: 'c', turnId: 'turn-1', value: { toolCallId: 'c' }, blocks: [] },
+    { kind: 'tool', id: 'd', toolCallId: 'd', turnId: 'turn-2', value: { toolCallId: 'd' }, blocks: [] },
+    { kind: 'tool', id: 'orphan', toolCallId: 'orphan', turnId: null, value: { toolCallId: 'orphan' }, blocks: [] },
+]);
+assert.deepEqual(groupedParts.map(timelinePartKey), [
+    'message:m1', 'tool-group:a', 'message:m2', 'tool:c', 'tool:d', 'tool:orphan',
+], 'only adjacent tools with the same explicit turn identity may share a display group');
+assert.deepEqual(groupedParts[1].toolCallIds, ['a', 'b']);
 
 const dom = new JSDOM('<!doctype html><div id="feed"></div>');
 const feed = dom.window.document.getElementById('feed');

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { JSDOM } from 'jsdom';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
@@ -33,6 +34,7 @@ const importedVideoAttachment = {
 let selectedAttachments = [importedAttachment];
 const followUpTurns = [];
 const steeringTurns = [];
+const cancelledTurns = [];
 let interactionQueue = [];
 const replacedInteractionQueues = [];
 const createdSessions = [];
@@ -40,6 +42,8 @@ const createdTopics = [];
 const renamedTopics = [];
 const compactedSessions = [];
 const approvalResponses = [];
+const interactionResponses = [];
+const openedExternalLinks = [];
 const savedWorkbenchSettings = [];
 const runtimeTransitions = [];
 const takeoverRequests = [];
@@ -69,6 +73,7 @@ window.nextUiApps = {
     list() { return []; },
 };
 window.chatAPI = {
+    sendOpenExternalLink: (url) => { openedExternalLinks.push(url); },
     getAgents: async () => {
         await agentCatalogGate;
         return [
@@ -113,6 +118,36 @@ window.chatAPI = {
     agentRuntimeCompactSession: async ({ sessionId }) => { compactedSessions.push(sessionId); return { ok: true }; },
     agentRuntimeReadTopic: async ({ topicId }) => {
         if (topicId === 'topic-empty-checkpoint') throw new Error('Agent Topic has no checkpoint');
+        if (topicId === 'topic-restored') return {
+            topicId,
+            readOnly: true,
+            messages: [{
+                messageId: 'msg_reason_saved', itemId: 'reason_saved', turnId: 'turn_saved', role: 'assistant',
+                status: 'completed', sourceOrder: 1, createdAt: 1,
+                blocks: [{ blockId: 'block_reason_saved', kind: 'reasoning', ordinal: 0,
+                    content: { summary: [], content: [], text: 'restored reasoning detail' } }],
+            }, {
+                messageId: 'msg_saved', itemId: 'answer_saved', turnId: 'turn_saved', role: 'assistant',
+                status: 'completed', sourceOrder: 2, createdAt: 2,
+                blocks: [{ blockId: 'block_answer_saved', kind: 'message', ordinal: 0,
+                    content: { text: 'restored answer' } }],
+            }, {
+                messageId: 'msg_tool_saved', itemId: 'tool_saved', turnId: 'turn_saved', role: 'assistant',
+                status: 'completed', sourceOrder: 3, createdAt: 3,
+                blocks: [{ blockId: 'block_tool_saved', kind: 'tool', ordinal: 0, content: {
+                    item: { type: 'dynamicToolCall', tool: 'FileOperator', arguments: { operation: 'read' }, result: 'package.json' },
+                } }],
+            }, {
+                messageId: 'msg_plan_saved', itemId: 'plan_saved', turnId: 'turn_saved', role: 'assistant',
+                status: 'completed', sourceOrder: 4, createdAt: 4,
+                blocks: [{ blockId: 'block_plan_saved', kind: 'observation', ordinal: 0,
+                    content: { text: '1. 恢复计划\n2. 验证 Activity' } }],
+            }],
+            projection: { activity: {
+                usage: { source: 'real', totalTokens: 42, inputTokens: 20, outputTokens: 22, model: 'fixture-model', provider: 'vcp_toolbox' },
+                compaction: { state: 'completed', summary: '已恢复压缩摘要', error: '' },
+            } },
+        };
         return {
             topicId,
             ...(topicId === 'topic-archived' ? {
@@ -143,10 +178,14 @@ window.chatAPI = {
         interactionQueue = [...interactionQueue, { interactionId: 'steer-test', kind: 'steer', prompt: payload.prompt }];
         return { ok: true };
     },
-    agentRuntimeCancelTurn: async () => ({ ok: true }),
+    agentRuntimeCancelTurn: async (payload) => { cancelledTurns.push(payload); return { ok: true }; },
     agentRuntimeRespondApproval: async (payload) => {
         approvalResponses.push(payload);
         return { approvalId: payload.approvalId, decision: payload.decision };
+    },
+    agentRuntimeRespondInteraction: async (payload) => {
+        interactionResponses.push(payload);
+        return { requestId: payload.requestId, resolved: true, kind: payload.kind };
     },
     agentRuntimeListTopics: async ({ agentId } = {}) => {
         topicListRequests.push(agentId || 'Nova');
@@ -272,6 +311,52 @@ assert.deepEqual(JSON.parse(window.localStorage.getItem('vcpchat.agentWorkbench.
 assert.ok([...host.querySelectorAll('.message-item .md-content')]
     .some((node) => node.textContent.includes('restored answer')),
     'a resumed Rust Topic must render its saved history rather than an empty feed');
+const restoredReasoning = host.querySelector('[data-message-id="msg_reason_saved"] .agent-chat-reasoning-block');
+assert.ok(restoredReasoning, 'a SQLite-first cold mount must restore reasoning as a compact thought card');
+assert.equal(restoredReasoning.closest('.message-item')?.querySelector('.md-content')?.textContent?.trim() || '', '',
+    'restored reasoning must not degrade into a normal large assistant text bubble');
+assert.equal(restoredReasoning.closest('.message-item')?.querySelector('.md-content')?.hidden, true,
+    'a reasoning-only message must hide its empty standard bubble in bubble presentation mode');
+assert.ok(restoredReasoning.closest('.message-item')?.classList.contains('agent-chat-reasoning-only'),
+    'reasoning-only state must be explicit so later text can restore the same message bubble');
+const restoredReasoningHeader = restoredReasoning.querySelector('.vcp-thought-chain-header');
+const restoredReasoningBubble = restoredReasoning.querySelector('.vcp-thought-chain-bubble');
+assert.equal(restoredReasoningBubble.classList.contains('expanded'), false,
+    'completed reasoning restored from SQLite must start collapsed');
+restoredReasoningHeader.click();
+assert.equal(restoredReasoningBubble.classList.contains('expanded'), true,
+    'restored reasoning must remain clickable after a cold mount');
+restoredReasoningHeader.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+assert.equal(restoredReasoningBubble.classList.contains('expanded'), false,
+    'restored reasoning must support keyboard collapse without relying on the live event path');
+restoredReasoningHeader.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+assert.equal(restoredReasoningBubble.classList.contains('expanded'), true,
+    'restored reasoning must support Space-key expansion');
+assert.ok(restoredReasoning.querySelector('.agent-chat-reasoning-copy'),
+    'restored completed reasoning must expose the copy action');
+const restoredToolCard = host.querySelector('.agent-chat-tool-activity[data-tool-call-id="tool_saved"]');
+assert.ok(restoredToolCard,
+    'a SQLite-first cold mount must restore structured tool activity instead of flattening it into text');
+assert.match(restoredToolCard.textContent, /FileOperator/,
+    'a restored dynamic vcp_invoke item must display the actual ToolBox target');
+assert.ok(restoredToolCard.querySelector('.agent-chat-tool-chevron'),
+    'nested dynamicToolCall arguments and results must make a restored tool card expandable');
+restoredToolCard.querySelector('.agent-chat-tool-chevron').click();
+assert.match(restoredToolCard.querySelector('.agent-chat-tool-detail')?.textContent || '', /operation.*read.*package\.json/s,
+    'expanded restored tools must expose their durable arguments and result');
+assert.doesNotMatch(host.querySelector('.agent-chat-messages')?.textContent || '', /恢复计划/,
+    'a durable Plan Item must not duplicate itself as a normal assistant bubble');
+host.querySelector('.agent-chat-header-activity')?.click();
+assert.equal(host.querySelector('.agent-chat-activity-tab[data-tab="plan"]'), null,
+    'the toolbox-only product must hide Plan until collaboration mode is wired to turn/start');
+assert.equal(host.querySelector('.agent-chat-inspector-plan'), null,
+    'a durable Plan projection must remain internal while Plan mode is unavailable');
+host.querySelector('.agent-chat-activity-tab[data-tab="usage"]')?.click();
+assert.match(host.querySelector('.agent-chat-activity-usage')?.textContent || '', /42/,
+    'a cold SQLite projection must restore durable usage metrics');
+assert.match(host.querySelector('.agent-chat-activity-usage')?.textContent || '', /已恢复压缩摘要/,
+    'a cold SQLite projection must restore the last compaction summary');
+host.querySelector('.agent-chat-activity-close')?.click();
 assert.ok(host.querySelector('.agent-chat-root.container'));
 assert.ok(host.querySelector('.agent-chat-sidebar.sidebar'), 'Agent sessions must reuse the main sidebar shell');
 assert.ok(host.querySelector('.agent-chat-main-content.main-content'), 'Agent conversation must reuse the main chat content shell');
@@ -337,8 +422,8 @@ assert.equal(host.querySelector('.agent-chat-agent-row[data-agent-search*="nova"
     'assistant search must filter the projected shared Agent catalog');
 host.querySelector('.next-ui-agent-search-close').click();
 assert.equal(agentSearch.value, '', 'closing assistant search must clear its transient query');
-const headerNewTopic = host.querySelector('.agent-chat-header-actions .agent-chat-icon-button[title="新建 Agent 会话"]');
-assert.ok(headerNewTopic, 'Agent header must retain the separate new-Topic action');
+const headerNewTopic = host.querySelector('.agent-chat-composer-new');
+assert.ok(headerNewTopic, 'Agent composer must retain the separate new-Topic action');
 headerNewTopic.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
 const createTopicFlow = host.querySelector('.agent-chat-topic-flow-dialog');
@@ -564,6 +649,16 @@ assert.ok([...host.querySelectorAll('.message-item.user .md-content')]
     .some((node) => node.textContent.includes('请介绍一下自己')),
     'daemon turn.started must render the submitted user message immediately');
 const activeSendButton = host.querySelector('.agent-chat-send-button');
+const activeRunStatus = host.querySelector('.agent-chat-run-status');
+assert.equal(activeRunStatus.hidden, false, 'an active Turn must expose a dedicated status rail above the composer');
+assert.match(activeRunStatus.textContent, /正在运行.*Agent 正在处理当前任务.*\d+\.\d+s/s,
+    'the status rail must show explicit running state and elapsed time without relying on the send button');
+const runStatusStop = activeRunStatus.querySelector('.agent-chat-run-status-stop');
+assert.ok(runStatusStop, 'the running rail must expose an independent stop action');
+runStatusStop.click();
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepEqual(cancelledTurns, [{ sessionId: 'sess_test', turnId: 'turn_test' }],
+    'the status-rail stop action must cancel the authoritative active Turn');
 assert.equal(activeSendButton.querySelector('.vcp-ui-icon')?.textContent, 'stop',
     'an active Rust turn must replace the send arrow with the main-chat stop icon');
 assert.equal(activeSendButton.getAttribute('aria-label'), '取消当前任务');
@@ -599,28 +694,47 @@ assert.equal(replacedInteractionQueues[0].length, 1, 'removing one queue item mu
 emitDaemonEvent({
     sessionId: 'sess_test', turnId: 'turn_test', sequence: 4,
     type: 'context.usage',
-    payload: { inputTokens: 12, outputTokens: 8, totalTokens: 20, requests: 1, usageAvailable: true },
+    payload: { source: 'real', inputTokens: 12, outputTokens: 8, cacheWriteTokens: 2,
+        totalTokens: 20, usedTokens: 20, contextWindow: 100, requests: 1 },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
 const usageToggle = host.querySelector('.agent-chat-usage-toggle');
 assert.ok(usageToggle, 'the header must expose Rust usage state');
+assert.equal(usageToggle.querySelector('.agent-chat-context-ring-core')?.textContent, '20',
+    'the header must expose an always-visible OpenCode-style context percentage indicator');
 usageToggle.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
+assert.equal(host.querySelectorAll('.agent-chat-activity-tab-group').length, 0,
+    'the remaining right-panel tabs must share one compact row');
+assert.deepEqual([...host.querySelectorAll('.agent-chat-activity-tabs > .agent-chat-activity-tab')]
+    .map((tab) => tab.dataset.tab), ['usage', 'activity', 'approvals'],
+    'Context, notifications, and approvals must be the only directly visible tabs');
+assert.equal(host.querySelector('.agent-chat-activity-tab-group-label'), null,
+    'the two tab rows must not spend visible space on redundant group headings');
+assert.equal(host.querySelector('.agent-chat-activity-tab[data-tab="changes"]'), null,
+    'the toolbox-only product must hide Changes until VCP file mutations have a reliable receipt');
+assert.equal(host.querySelector('.agent-chat-activity-tab[data-tab="plan"]'), null,
+    'the toolbox-only product must hide Plan until Codex collaboration mode is explicitly supported');
+assert.equal(host.querySelector('.agent-chat-activity-tab[data-tab="connection"]'), null,
+    'internal runtime diagnostics must not occupy a product-facing tab');
 assert.match(host.querySelector('.agent-chat-activity-usage').textContent, /Tokens/,
     'usage panel must present the daemon-projected aggregate rather than a fake cost');
 assert.match(host.querySelector('.agent-chat-activity-usage').textContent, /20/,
     'usage panel must display total tokens from the runtime event');
-const budgetForm = host.querySelector('.agent-chat-usage-budget');
-assert.ok(budgetForm, 'usage panel must expose daemon-owned per-turn budget controls');
-assert.equal(budgetForm.querySelector('[name="maxRequestsPerTurn"]').value, '8');
-assert.equal(budgetForm.querySelector('[name="maxTokensPerTurn"]').value, '120000');
-budgetForm.querySelector('[name="maxRequestsPerTurn"]').value = '12';
-budgetForm.querySelector('[name="maxTokensPerTurn"]').value = '240000';
-budgetForm.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
-await new Promise((resolve) => setTimeout(resolve, 30));
-assert.deepEqual(savedWorkbenchSettings, [{
-    budget: { maxRequestsPerTurn: '12', maxTokensPerTurn: '240000' },
-}], 'budget save must use the narrow Rust Agent settings IPC, never renderer storage');
+assert.equal(host.querySelector('.agent-chat-usage-budget'), null,
+    'runtime budgets are settings and must not be mixed into the read-only Context inspector');
+assert.match(host.querySelector('.agent-chat-context-stats')?.textContent || '', /模型.*消息/s,
+    'the Context inspector must expose stable session metadata alongside token usage');
+assert.match(host.querySelector('.agent-chat-usage-stats')?.textContent || '', /缓存写入.*2/s,
+    'the Context inspector must retain cache write usage when the provider reports it');
+const stableUsagePanel = host.querySelector('[data-activity-panel="usage"]');
+stableUsagePanel.scrollTop = 47;
+host.querySelector('.agent-chat-activity-tab[data-tab="activity"]').click();
+host.querySelector('.agent-chat-activity-tab[data-tab="usage"]').click();
+assert.strictEqual(host.querySelector('[data-activity-panel="usage"]'), stableUsagePanel,
+    'switching right-panel tabs must retain the Context panel DOM identity');
+assert.equal(stableUsagePanel.scrollTop, 47,
+    'each right-panel tab must retain its own scroll position');
 
 emitDaemonEvent({
     sessionId: 'sess_test', turnId: 'turn_test', sequence: 5, type: 'toolbox.ws',
@@ -637,6 +751,17 @@ assert.ok(toolboxObservation, 'ToolBox WS observations must render in their own 
 assert.match(toolboxObservation.textContent, /服务通知/);
 assert.match(toolboxObservation.textContent, /ToolBox 只读通知/);
 assert.equal(toolboxObservation.querySelector('img'), null, 'ToolBox WS text must never be interpreted as renderer HTML');
+const activityListBeforeFilter = host.querySelector('.agent-chat-activity-list');
+assert.ok(activityListBeforeFilter, 'the notification cards need a dedicated scroller below the fixed filters');
+activityListBeforeFilter.scrollTop = 33;
+const activitySearch = host.querySelector('.agent-chat-activity-filters input[type="search"]');
+activitySearch.value = 'ToolBox';
+activitySearch.dispatchEvent(new window.Event('input', { bubbles: true }));
+assert.equal(host.querySelector('.agent-chat-activity-list').scrollTop, 33,
+    'filter rerenders must retain the notification-list scroll position without scrolling the toolbar');
+host.querySelector('.agent-chat-activity-filters input[type="search"]').value = '';
+host.querySelector('.agent-chat-activity-filters input[type="search"]')
+    .dispatchEvent(new window.Event('input', { bubbles: true }));
 emitDaemonEvent({
     sessionId: 'sess_test', turnId: 'turn_test', sequence: 6, type: 'toolbox.ws',
     payload: {
@@ -711,6 +836,110 @@ assert.deepEqual(approvalResponses.at(-1), {
     toolCallId: 'tool-action', argumentsHash: 'bound-action-hash',
 }, 'the visible deny button must invoke the real narrowed approval IPC with its exact Rust binding');
 
+emitDaemonEvent({
+    sessionId: 'sess_test', turnId: 'turn_test', sequence: 9, type: 'interaction.requested',
+    payload: {
+        source: 'codex-native', requestId: 'input-request-1', kind: 'user-input', state: 'pending',
+        expiresAtMs: Date.now() + 60_000,
+        payload: { questions: [{ id: 'choice', header: '选择', question: '请选择一个选项', isOther: true,
+            options: [{ label: 'Alpha', description: '第一个选项' }, { label: 'Beta', description: '第二个选项' }] },
+        { id: 'secret', header: '秘密', question: '输入一次性秘密', isSecret: true }] },
+    },
+});
+await new Promise((resolve) => setTimeout(resolve, 30));
+const interactionCard = host.querySelector('[data-interaction-id="input-request-1"]');
+assert.ok(interactionCard, 'Codex requestUserInput must render as an actionable Interaction Center form');
+const otherAnswer = interactionCard.querySelector('[name="other:choice"]');
+otherAnswer.value = '自定义回答';
+const secretAnswer = interactionCard.querySelector('[name="other:secret"]');
+assert.equal(secretAnswer?.type, 'password', 'secret user-input questions must use password controls');
+secretAnswer.value = 'never-persist-this-secret';
+emitDaemonEvent({
+    sessionId: 'runtime', sequence: 10, type: 'toolbox.ws',
+    payload: { channel: 'Info', kind: 'notification', value: { message: 'unrelated refresh' } },
+});
+await new Promise((resolve) => setTimeout(resolve, 30));
+assert.equal(host.querySelector('[data-interaction-id="input-request-1"]'), interactionCard,
+    'unrelated Activity traffic must retain the same pending interaction DOM node');
+assert.equal(otherAnswer.value, '自定义回答', 'Activity updates must not erase an in-progress user answer');
+interactionCard.querySelector('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepEqual(interactionResponses.at(-1), {
+    source: 'codex-native', requestId: 'input-request-1', kind: 'user-input',
+    response: { answers: { choice: { answers: ['自定义回答'] }, secret: { answers: ['never-persist-this-secret'] } } },
+});
+assert.doesNotMatch(JSON.stringify({ ...window.localStorage }), /never-persist-this-secret/,
+    'secret interaction answers must never be written to localStorage');
+
+emitDaemonEvent({
+    sessionId: 'sess_test', turnId: 'turn_test', sequence: 10, type: 'interaction.requested',
+    payload: { source: 'codex-native', requestId: 'permission-request-1', kind: 'permission', state: 'pending',
+        payload: { cwd: root, permissions: { network: { enabled: true }, fileSystem: { read: [root], write: [] } } } },
+});
+await new Promise((resolve) => setTimeout(resolve, 30));
+const permissionCard = host.querySelector('[data-interaction-id="permission-request-1"]');
+assert.match(permissionCard?.textContent || '', /工作目录.*按请求授权/s,
+    'Codex permission requests must expose their bounded request and explicit decision controls');
+permissionCard.querySelector('select').value = 'session';
+[...permissionCard.querySelectorAll('button')].find((item) => item.textContent === '按请求授权').click();
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepEqual(interactionResponses.at(-1), {
+    source: 'codex-native', requestId: 'permission-request-1', kind: 'permission',
+    response: { decision: 'accept', scope: 'session' },
+});
+
+emitDaemonEvent({
+    sessionId: 'sess_test', turnId: 'turn_test', sequence: 11, type: 'interaction.requested',
+    payload: { source: 'codex-native', requestId: 'mcp-form-1', kind: 'mcp-elicitation', state: 'pending',
+        payload: { mode: 'form', requestedSchema: { type: 'object', required: ['name'], properties: {
+            name: { type: 'string', title: '名称' }, enabled: { type: 'boolean', title: '启用' },
+        } } } },
+});
+await new Promise((resolve) => setTimeout(resolve, 30));
+const mcpFormCard = host.querySelector('[data-interaction-id="mcp-form-1"]');
+mcpFormCard.querySelector('[name="name"]').value = 'fixture';
+mcpFormCard.querySelector('[name="enabled"]').checked = true;
+mcpFormCard.querySelector('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepEqual(interactionResponses.at(-1), {
+    source: 'codex-native', requestId: 'mcp-form-1', kind: 'mcp-elicitation',
+    response: { action: 'accept', content: { name: 'fixture', enabled: true } },
+}, 'typed MCP elicitation must submit only the rendered structured fields');
+
+emitDaemonEvent({
+    sessionId: 'sess_test', turnId: 'turn_test', sequence: 12, type: 'interaction.requested',
+    payload: { source: 'codex-native', requestId: 'mcp-url-1', kind: 'mcp-elicitation', state: 'pending',
+        payload: { mode: 'url', url: 'https://example.com/authorize' } },
+});
+await new Promise((resolve) => setTimeout(resolve, 30));
+const mcpUrlCard = host.querySelector('[data-interaction-id="mcp-url-1"]');
+const responseCountBeforeOpen = interactionResponses.length;
+[...mcpUrlCard.querySelectorAll('button')].find((item) => item.textContent === '在系统浏览器打开').click();
+assert.deepEqual(openedExternalLinks, ['https://example.com/authorize']);
+assert.equal(interactionResponses.length, responseCountBeforeOpen,
+    'opening an MCP URL must remain separate from accepting the elicitation');
+mcpUrlCard.querySelector('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepEqual(interactionResponses.at(-1), {
+    source: 'codex-native', requestId: 'mcp-url-1', kind: 'mcp-elicitation',
+    response: { action: 'accept', content: {} },
+});
+
+host.querySelector('.agent-chat-activity-tab[data-tab="activity"]')?.click();
+host.querySelector('.agent-chat-activity-tab[data-tab="approvals"]')?.click();
+emitDaemonEvent({
+    sessionId: 'runtime', sequence: 13, type: 'toolbox.ws',
+    payload: { channel: 'Info', kind: 'notification', value: { message: 'one unread activity item' } },
+});
+await new Promise((resolve) => setTimeout(resolve, 30));
+assert.match(host.querySelector('.agent-chat-activity-tab[data-tab="activity"]')?.textContent || '', /通知 · 1/,
+    'background Activity updates must increment only their own tab unread count');
+assert.doesNotMatch(host.querySelector('.agent-chat-activity-tab[data-tab="approvals"]')?.textContent || '', /·/,
+    'the currently visible Activity tab must not accumulate unread state');
+host.querySelector('.agent-chat-activity-tab[data-tab="activity"]')?.click();
+assert.doesNotMatch(host.querySelector('.agent-chat-activity-tab[data-tab="activity"]')?.textContent || '', /·/,
+    'entering a tab must acknowledge only that tab unread count');
+
 runtimeStatus = 'ready';
 emitDaemonEvent({
     sessionId: 'runtime', type: 'runtime.state_changed', payload: { state: 'ready' },
@@ -730,17 +959,10 @@ emitDaemonEvent({
 await new Promise((resolve) => setTimeout(resolve, 30));
 assert.equal(host.querySelector('.agent-wb-runtime-dock'), null, 'Runtime lifecycle controls must stay out of the Agent UI');
 assert.ok([...host.querySelectorAll('.message-item .md-content')].some((node) => node.textContent.includes('live Rust delta')), 'Runtime delta must render in the migrated chat shell');
-host.querySelector('.agent-chat-status-chip[data-action="connection"]')?.click();
-// `setActivityOpen` queues the activity projection through the same animation
-// frame batcher used by streaming updates. Give JSDOM one actual frame rather
-// than assuming a zero-delay timer has already flushed it.
-await new Promise((resolve) => setTimeout(resolve, 30));
-assert.equal(host.querySelectorAll('.agent-chat-readiness-card').length, 4,
-    'the connection surface must render exactly the four daemon-owned readiness facts');
-assert.match(host.querySelector('[data-readiness="toolbox"]').textContent, /VCPToolBox.*就绪/s,
-    'ToolBox readiness must display the daemon probe result without a renderer HTTP request');
-assert.match(host.querySelector('[data-readiness="capability"]').textContent, /未知/,
-    'a missing DistributedServer lifecycle event must remain explicitly unknown instead of being guessed');
+assert.equal(host.querySelector('.agent-chat-status-chip')?.dataset.action, undefined,
+    'the header runtime status must remain informative without opening a hidden diagnostics surface');
+assert.equal(host.querySelectorAll('.agent-chat-readiness-card').length, 0,
+    'internal readiness details must not render after the Diagnostics tab is hidden');
 
 // Streaming is the hot path.  A second delta must update the existing message
 // in place rather than replace the feed, composer or focused draft.
@@ -772,10 +994,34 @@ emitDaemonEvent({
 await new Promise((resolve) => setTimeout(resolve, 30));
 const reasoningCard = liveMessage.querySelector('.agent-chat-reasoning-block');
 assert.ok(reasoningCard, 'reasoning deltas must render the dedicated compact thinking card');
+assert.equal(liveMessage.querySelector('.md-content').hidden, false,
+    'a message that already has assistant text must keep its standard bubble beside the reasoning card');
 assert.match(reasoningCard.querySelector('.vcp-thought-chain-label').textContent, /思考中.*s/,
     'a streaming thought card must show a Cherry-style thinking status and live duration');
 assert.equal(reasoningCard.querySelector('.vcp-thought-chain-icon').textContent, 'lightbulb',
     'the Agent Workbench thinking card must use the compact lightbulb treatment rather than a decorative brain emoji');
+assert.equal(reasoningCard.querySelector('.vcp-thought-chain-icon').dataset.vcpIcon, 'lightbulb',
+    'the reasoning icon must declare its Lucide identity before post-render processing');
+assert.ok(reasoningCard.querySelector('.vcp-thought-chain-icon').classList.contains('vcp-ui-icon'),
+    'the reasoning icon must enter the shared Lucide observer contract when it is created');
+assert.equal(reasoningCard.querySelectorAll('.vcp-result-toggle-icon').length, 1,
+    'a reasoning card must render exactly one disclosure control');
+const workbenchCss = fs.readFileSync(path.join(root, 'styles', 'ui-system', 'agent-workbench.css'), 'utf8');
+assert.match(workbenchCss,
+    /:is\(\.agent-chat-reasoning-block, \.agent-chat-tool-group\) \.vcp-result-toggle-icon::after\s*\{[^}]*content:\s*none;[^}]*display:\s*none;/s,
+    'reasoning and folded tools must share one rule that removes the inherited second toggle stroke');
+assert.match(workbenchCss,
+    /agent-chat-reasoning-block \.vcp-thought-chain-icon\s*\{[^}]*width:\s*18px;[^}]*height:\s*18px;/s,
+    'the Lucide lightbulb must remain compact rather than filling the reasoning header');
+assert.match(workbenchCss,
+    /:is\(\.agent-chat-reasoning-block, \.agent-chat-tool-group\) \.vcp-result-toggle-icon::before\s*\{[^}]*width:\s*7px;[^}]*height:\s*7px;[^}]*border-right:/s,
+    'reasoning and folded tools must consume the same centered geometric arrow rather than a font glyph');
+assert.match(workbenchCss,
+    /agent-chat-tool-activity\.vcp-tool-call-summary-bubble\s*\{[^}]*width:\s*min\(680px,[^}]*margin:[^}]*var\(--vcp-ui-message-avatar\)/s,
+    'tool cards must share the reasoning-card width and align to the assistant content column');
+assert.match(workbenchCss,
+    /agent-chat-run-status\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*center;/s,
+    'the explicit Turn status rail must remain vertically aligned above the composer');
 reasoningCard.querySelector('.vcp-thought-chain-header').click();
 assert.equal(reasoningCard.querySelector('.vcp-thought-chain-bubble').classList.contains('expanded'), false,
     'the fallback thinking header must remain explicitly collapsible');
@@ -790,6 +1036,27 @@ assert.match(completedLiveMessage.querySelector('.agent-chat-reasoning-block .vc
     'a completed thought card must collapse to a concise duration summary');
 assert.ok(completedLiveMessage.querySelector('.agent-chat-reasoning-copy'),
     'completed reasoning must expose a small copy action, matching the Cherry-style review workflow');
+
+const projectedEventTopicId = host.querySelector('.agent-chat-session-row.active')?.dataset.topicId
+    || JSON.parse(window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1') || '{}').topicId;
+emitDaemonEvent({
+    runtime: 'codex', type: 'projection.updated', method: 'item/completed',
+    sessionId: 'sess_test', topicId: projectedEventTopicId, threadId: 'thread_test', turnId: 'turn_projected',
+    itemId: 'reason_projected', activity: 'idle',
+    projectionMessage: {
+        messageId: 'msg_reason_projected', itemId: 'reason_projected', turnId: 'turn_projected',
+        role: 'assistant', status: 'completed', sourceOrder: 19, createdAt: 19,
+        blocks: [{ blockId: 'block_reason_projected', kind: 'reasoning', ordinal: 0,
+            content: { text: 'reasoning delivered through the real projection.updated path' } }],
+    },
+});
+await new Promise((resolve) => setTimeout(resolve, 30));
+const projectedReasoning = host.querySelector('[data-message-id="msg_reason_projected"] .agent-chat-reasoning-block');
+assert.ok(projectedReasoning,
+    'the current Codex projection.updated event path must render reasoning without a synthetic reasoning.delta event');
+assert.match(projectedReasoning.textContent, /real projection\.updated path/);
+assert.equal(projectedReasoning.closest('.message-item')?.querySelector('.md-content')?.hidden, true,
+    'projection reasoning without assistant text must not leave a visible empty bubble');
 
 // OpenCode's timeline model is the relevant interaction reference: a single
 // turn can include assistant text, a tool call, then more assistant text.  The
@@ -842,6 +1109,35 @@ assert.match(completedToolCard.querySelector('.agent-chat-tool-resource-list').t
 assert.match(completedToolCard.querySelector('.agent-chat-tool-warning-list').textContent, /只读预览/);
 assert.match(completedToolCard.querySelector('.agent-chat-tool-task').textContent, /task-1/);
 
+emitDaemonEvent({
+    sessionId: 'sess_test', turnId: 'turn-tool-group', toolCallId: 'tool-group-a', sequence: 24,
+    type: 'tool.requested', payload: { toolName: 'FileOperator', argumentSummary: 'ReadFile README.md' },
+});
+emitDaemonEvent({
+    sessionId: 'sess_test', turnId: 'turn-tool-group', toolCallId: 'tool-group-b', sequence: 25,
+    type: 'tool.requested', payload: { toolName: 'DeepWikiVCP', argumentSummary: 'Inspect repository' },
+});
+await new Promise((resolve) => setTimeout(resolve, 30));
+const groupedTools = host.querySelector('.agent-chat-tool-group[data-turn-id="turn-tool-group"]');
+assert.ok(groupedTools, 'adjacent tools from one identified Turn must render as one compact group');
+assert.equal(groupedTools.querySelectorAll('.agent-chat-tool-group-item').length, 2,
+    'the group must retain both real toolCallId child cards');
+assert.equal(groupedTools.querySelector('.agent-chat-tool-group-body').hidden, true,
+    'a multi-tool group must default collapsed');
+groupedTools.querySelector('.agent-chat-tool-group-toggle').click();
+assert.equal(groupedTools.querySelector('.agent-chat-tool-group-body').hidden, false,
+    'the group header must reveal the preserved structured tool cards');
+const groupedFirstCard = groupedTools.querySelector('[data-tool-call-id="tool-group-a"]');
+emitDaemonEvent({
+    sessionId: 'sess_test', turnId: 'turn-tool-group', toolCallId: 'tool-group-a', sequence: 26,
+    type: 'tool.completed', payload: { toolName: 'FileOperator', outputSummary: 'README.md loaded' },
+});
+await new Promise((resolve) => setTimeout(resolve, 30));
+assert.strictEqual(groupedTools.querySelector('[data-tool-call-id="tool-group-a"]'), groupedFirstCard,
+    'a grouped tool status update must patch the child card in place');
+assert.equal(groupedTools.querySelector('.agent-chat-tool-group-body').hidden, false,
+    'patching a child tool must preserve the group expansion state');
+
 // `assistant.completed` intentionally requests a full durable projection.
 // Let that frame settle before the following scroll-anchor regression probe
 // installs its synthetic geometry.
@@ -879,6 +1175,8 @@ for (const [sequence, kind, value] of [
 }
 await new Promise((resolve) => setTimeout(resolve, 30));
 host.querySelector('.agent-chat-activity-tab[data-tab="activity"]')?.click();
+assert.match(host.querySelector('.agent-chat-activity-note')?.textContent || '', /仅保留本次运行/,
+    'global VCPLog and VCPInfo observations must be labelled as ephemeral rather than durable Session history');
 await new Promise((resolve) => setTimeout(resolve, 0));
 assert.match(host.querySelector('.agent-chat-toolbox-ws-rag .agent-chat-toolbox-ws-detail').textContent, /项目笔记[\s\S]*2 条命中/,
     'RAG VCPInfo must be compactly projected instead of exposing raw JSON as the primary card text');
@@ -924,9 +1222,11 @@ emitDaemonEvent({
     payload: { error: 'simulated daemon crash', recoverable: true },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
-const reconnect = host.querySelector('.agent-chat-connection-reconnect');
-assert.ok(reconnect, 'a daemon crash must expose an explicit reconnect action instead of leaving a dead composer');
-assert.match(host.querySelector('.agent-chat-activity-connection').textContent, /simulated daemon crash/);
+const reconnect = host.querySelector('.agent-chat-status-chip[data-state="error"]');
+assert.equal(reconnect?.getAttribute('role'), 'button',
+    'a daemon crash must turn the compact header status into an explicit reconnect action');
+assert.equal(host.querySelector('.agent-chat-activity-connection'), null,
+    'runtime failure must not reopen the hidden Diagnostics surface');
 const sessionsBeforeRecovery = createdSessions.length;
 reconnect.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
@@ -956,6 +1256,17 @@ const settingsTab = [...host.querySelectorAll('.agent-chat-sidebar .sidebar-tab-
 settingsTab.click();
 assert.ok(host.querySelector('.agent-chat-settings-pane .agent-chat-settings-form'),
     'settings must render inside a dedicated padded pane instead of placing fields against the sidebar edge');
+const budgetSettings = host.querySelector('.agent-chat-settings-budget');
+assert.ok(budgetSettings, 'per-turn safety budgets must live in Agent settings rather than the usage inspector');
+assert.equal(budgetSettings.querySelector('[name="maxRequestsPerTurn"]').value, '8');
+assert.equal(budgetSettings.querySelector('[name="maxTokensPerTurn"]').value, '120000');
+budgetSettings.querySelector('[name="maxRequestsPerTurn"]').value = '12';
+budgetSettings.querySelector('[name="maxTokensPerTurn"]').value = '240000';
+[...budgetSettings.querySelectorAll('button')].find((item) => item.textContent.includes('保存安全预算')).click();
+await new Promise((resolve) => setTimeout(resolve, 30));
+assert.ok(savedWorkbenchSettings.some((item) => item.budget?.maxRequestsPerTurn === '12'
+    && item.budget?.maxTokensPerTurn === '240000'),
+    'budget save must use the narrow Agent settings IPC, never renderer storage');
 assert.equal(host.querySelector('.agent-chat-settings-pane > .agent-chat-settings-placeholder') !== null, true);
 const permissionSelect = [...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field select')]
     .find((control) => [...control.options].some((option) => option.value === 'always-approve'));
@@ -969,7 +1280,7 @@ const promptPreview = host.querySelector('.agent-chat-settings-pane textarea[rea
 assert.equal(promptPreview?.value, '冻结的 Nova 指令',
     'settings must show the selected Session frozen developer instructions before the Agent fallback prompt');
 savePermission.click();
-await new Promise((resolve) => setTimeout(resolve, 0));
+await new Promise((resolve) => setTimeout(resolve, 30));
 assert.equal(savedWorkbenchSettings.at(-1)?.permissionMode, 'always-approve',
     'saving YOLO must only persist the narrowed Rust Host permissionMode setting');
 assert.equal(savedWorkbenchSettings.at(-1)?.sessionId, 'topic-archived',
@@ -977,8 +1288,8 @@ assert.equal(savedWorkbenchSettings.at(-1)?.sessionId, 'topic-archived',
 assert.equal([...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field select')]
     .find((control) => [...control.options].some((option) => option.value === 'always-approve'))?.value, 'always-approve',
     'the selected Session must retain its newly saved policy after the settings pane rerenders');
-assert.match(host.querySelector('.agent-chat-header-permissions')?.getAttribute('aria-label') || '', /YOLO/,
-    'the header permission indicator must read the selected Session policy, not the global default');
+assert.match(host.querySelector('.agent-chat-composer-permissions')?.getAttribute('aria-label') || '', /YOLO/,
+    'the composer permission indicator must read the selected Session policy, not the global default');
 const modelSelect = [...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field select')]
     .find((control) => [...control.options].some((option) => option.value === 'gpt-5.6-luna'));
 assert.ok(modelSelect, 'settings must expose the shared model catalog for the current Session');
@@ -1010,6 +1321,8 @@ assert.equal(window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1'),
 assert.equal([...host.querySelectorAll('.agent-chat-toast, .vcp-ui-toast')]
     .some((toast) => /Agent Runtime 无法启动|has no checkpoint/.test(toast.textContent || '')), false,
     'an empty remembered Topic must not surface as a Runtime startup error');
+assert.equal(host.querySelector('.agent-chat-toolbox-ws-backend-approval-request'), null,
+    'global VCPLog/VCPInfo observations from the previous Workbench lifetime must not reappear as Session history');
 emptyCheckpointDispose();
 assert.equal(unsubscribeCalls, 2, 'empty Topic recovery mount must also release its runtime subscription');
 assert.deepEqual(presenceCalls, [true, false, true, false]);

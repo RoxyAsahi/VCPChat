@@ -1461,17 +1461,29 @@ export function setupEventListeners(deps) {
             toggleSidebarBtn?.classList.toggle('active', isActive);
         };
 
-        const setAvatarOnlyMode = (enabled) => {
-            if (!leftSidebar) return false;
+        // The Agent Workbench is an internal app with its own sidebar. When it
+        // is the focused view, the logo/sidebar-mode button must drive the
+        // Workbench sidebar instead of the hidden main-chat sidebar.
+        const getAgentSidebar = () => {
+            const host = document.querySelector('.next-ui-internal-app-view[data-app-id="agent-workbench"]:not([hidden])');
+            return host?.querySelector('.agent-chat-sidebar') || null;
+        };
 
-            const agentsTabIsActive = document.getElementById('tabContentAgents')?.classList.contains('active');
+        const setAvatarOnlyMode = (enabled) => {
+            const agentSidebar = getAgentSidebar();
+            const target = agentSidebar || leftSidebar;
+            if (!target) return false;
+
+            const agentsTabIsActive = agentSidebar
+                ? true
+                : document.getElementById('tabContentAgents')?.classList.contains('active');
             if (enabled && !agentsTabIsActive) return false;
 
-            leftSidebar.classList.toggle('avatar-only', enabled);
+            target.classList.toggle('avatar-only', enabled);
             toggleSidebarModeBtn?.classList.toggle('active', enabled);
             toggleSidebarModeBtn?.setAttribute('aria-pressed', String(enabled));
             if (enabled) {
-                leftSidebar.classList.add('active');
+                target.classList.add('active');
                 syncSidebarVisibility(true);
             }
 
@@ -1483,13 +1495,15 @@ export function setupEventListeners(deps) {
         };
 
         const toggleSidebarVisibility = () => {
-            if (!leftSidebar) return;
-            leftSidebar.classList.remove('avatar-only', 'compact-topics-open');
+            const agentSidebar = getAgentSidebar();
+            const target = agentSidebar || leftSidebar;
+            if (!target) return;
+            target.classList.remove('avatar-only', 'compact-topics-open');
             document.getElementById('tabContentTopics')?.classList.remove('compact-drawer-open');
             toggleSidebarModeBtn?.classList.remove('active');
             toggleSidebarModeBtn?.setAttribute('aria-pressed', 'false');
 
-            const isActive = leftSidebar.classList.toggle('active');
+            const isActive = target.classList.toggle('active');
             syncSidebarVisibility(isActive);
 
             const globalSettings = refs.globalSettings.get();
@@ -1613,7 +1627,7 @@ export function setupEventListeners(deps) {
                 wasSidebarLongPress = false;
                 sidebarLongPressTimer = setTimeout(() => {
                     sidebarLongPressTimer = null;
-                    if (!leftSidebar) return;
+                    if (!leftSidebar && !getAgentSidebar()) return;
 
                     wasSidebarLongPress = true;
                     toggleSidebarVisibility();
@@ -1630,13 +1644,17 @@ export function setupEventListeners(deps) {
                 }
                 clearSidebarLongPress();
 
-                const agentsTabIsActive = document.getElementById('tabContentAgents')?.classList.contains('active');
-                if (!leftSidebar || !agentsTabIsActive) {
+                const agentSidebar = getAgentSidebar();
+                const agentsTabIsActive = agentSidebar
+                    ? true
+                    : document.getElementById('tabContentAgents')?.classList.contains('active');
+                if ((!leftSidebar && !agentSidebar) || !agentsTabIsActive) {
                     uiHelperFunctions.showToastNotification('请先切换到助手列表。', 'info');
                     return;
                 }
 
-                const enableAvatarOnly = !leftSidebar.classList.contains('avatar-only');
+                const target = agentSidebar || leftSidebar;
+                const enableAvatarOnly = !target.classList.contains('avatar-only');
                 if (setAvatarOnlyMode(enableAvatarOnly)) {
                     uiHelperFunctions.showToastNotification(
                         enableAvatarOnly ? '侧栏已切换为仅头像模式' : '侧栏已恢复完整模式',

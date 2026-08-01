@@ -85,6 +85,83 @@ assert.match(card.querySelector('.agent-chat-tool-detail-result').textContent, /
     'expanded detail must read the latest projection payload');
 assert.ok(rendered.length >= 2);
 
+const groupPart = {
+    kind: 'tool-group', id: 'group-call-1', turnId: 'turn-group',
+    value: {
+        turnId: 'turn-group',
+        tools: [
+            {
+                toolCallId: 'group-call-1', name: 'FileOperator', state: 'completed',
+                firstTimestamp: 1_000, lastTimestamp: 2_000,
+                payload: { toolName: 'FileOperator', revision: 'group-complete', result: 'read complete' },
+            },
+            {
+                toolCallId: 'group-call-2', name: 'PowerShellExecutor', state: 'running',
+                firstTimestamp: 2_000, lastTimestamp: 3_000,
+                payload: { toolName: 'PowerShellExecutor', revision: 'group-running', arguments: { command: 'npm test' } },
+            },
+        ],
+    },
+};
+const group = presentation.timelineCallbacks.create(groupPart);
+assert.ok(group.classList.contains('agent-chat-tool-group'));
+assert.equal(group.dataset.toolGroupId, 'group-call-1');
+assert.equal(group.dataset.status, 'running');
+assert.match(group.textContent, /PowerShellExecutor/,
+    'a folded group must surface its most recent active tool instead of hiding live progress');
+assert.equal(group.querySelector('.agent-chat-tool-group-body').hidden, true);
+assert.ok(group.querySelector('.agent-chat-tool-group-chevron.vcp-result-toggle-icon'),
+    'the group chevron must use the same CSS-drawn toggle structure as the reasoning card');
+assert.doesNotMatch(group.querySelector('.agent-chat-tool-group-chevron').textContent, /expand_more/,
+    'the group chevron must never expose a Material icon ligature as English text');
+group.querySelector('.agent-chat-tool-group-cancel').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+assert.deepEqual(cancelled, ['running', 'group-running']);
+group.querySelector('.agent-chat-tool-group-label').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+assert.equal(group.querySelector('.agent-chat-tool-group-body').hidden, false);
+assert.equal(group.querySelectorAll('.agent-chat-tool-group-item').length, 2);
+const stableGroupedTool = group.querySelector('[data-tool-call-id="group-call-2"]');
+
+const completedGroupPart = {
+    ...groupPart,
+    value: {
+        ...groupPart.value,
+        tools: groupPart.value.tools.map((tool) => tool.toolCallId === 'group-call-2' ? {
+            ...tool, state: 'completed', lastTimestamp: 4_000,
+            payload: { ...tool.payload, revision: 'group-finished', result: 'tests passed' },
+        } : tool),
+    },
+};
+assert.strictEqual(presentation.timelineCallbacks.patch(group, completedGroupPart), group);
+assert.equal(group.dataset.status, 'completed');
+assert.match(group.textContent, /2 个工具调用/);
+assert.equal(group.querySelector('.agent-chat-tool-group-cancel'), null);
+assert.equal(group.querySelector('.agent-chat-tool-group-body').hidden, false,
+    'patching group status must retain the user expansion state');
+assert.strictEqual(group.querySelector('[data-tool-call-id="group-call-2"]'), stableGroupedTool,
+    'toolCallId must keep the same nested card while its status and result are patched');
+
+const failedNested = {
+    kind: 'tool', id: 'call-failed', toolCallId: 'call-failed',
+    value: {
+        toolCallId: 'call-failed', name: 'vcp_invoke', state: 'failed',
+        payload: {
+            item: {
+                type: 'dynamicToolCall', tool: 'vcp_invoke',
+                arguments: JSON.stringify({ tool: 'Browser', arguments: { url: 'https://vcptoolbox.com' } }),
+                status: 'failed', error: 'Browser capability is unavailable',
+            },
+        },
+    },
+};
+const failedCard = presentation.timelineCallbacks.create(failedNested);
+assert.match(failedCard.textContent, /Browser/,
+    'dynamic vcp_invoke cards must surface the actual nested ToolBox target');
+assert.ok(failedCard.querySelector('.agent-chat-tool-chevron'),
+    'a failed dynamic tool with nested error data must remain expandable');
+failedCard.querySelector('.agent-chat-tool-chevron').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+assert.match(failedCard.querySelector('.agent-chat-tool-detail-error')?.textContent || '', /capability is unavailable/,
+    'expanding a failed tool must reveal the persisted error instead of showing a dead card');
+
 const approvals = [];
 const approvalRegistry = new Map();
 const approval = presentation.createApproval({

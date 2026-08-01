@@ -7,6 +7,7 @@ import {
 } from './fork/agentMessageRenderer.js';
 import { createAgentPresentationCallbacks } from './renderer.js';
 import { createAgentBlockPresentation } from './blocks/registry.js';
+import { patchAgentStreamingMarkdown } from './markdown-stream-dom.js';
 
 function createMarkedParser(targetWindow, explicit) {
     if (explicit) return explicit;
@@ -128,7 +129,23 @@ function syncStreamingReasoning(row, message, markedInstance) {
     const seconds = Math.max(0.1, (now - startedAt) / 1000).toFixed(1);
     const expanded = message.isStreaming ? ' expanded' : '';
     const label = message.isStreaming ? '思考中' : '已深度思考';
-    wrapper.innerHTML = `<div class="vcp-thought-chain-bubble collapsible${expanded}" data-vcp-block-type="thought-chain"><div class="vcp-thought-chain-header"><span class="vcp-thought-chain-icon">lightbulb</span><span class="vcp-thought-chain-label">${label} <span class="agent-chat-reasoning-time">${seconds}s</span></span><span class="vcp-result-toggle-icon"></span></div><div class="vcp-thought-chain-collapsible-content"><div class="vcp-thought-chain-body">${markedInstance.parse(String(message.reasoning))}</div></div></div>`;
+    wrapper.innerHTML = `<div class="vcp-thought-chain-bubble collapsible${expanded}" data-vcp-block-type="thought-chain"><div class="vcp-thought-chain-header"><span class="vcp-thought-chain-icon vcp-ui-icon" data-vcp-icon="lightbulb">lightbulb</span><span class="vcp-thought-chain-label">${label} <span class="agent-chat-reasoning-time">${seconds}s</span></span><span class="vcp-result-toggle-icon"></span></div><div class="vcp-thought-chain-collapsible-content"><div class="vcp-thought-chain-body">${markedInstance.parse(String(message.reasoning))}</div></div></div>`;
+    const header = wrapper.querySelector('.vcp-thought-chain-header');
+    const bubble = wrapper.querySelector('.vcp-thought-chain-bubble');
+    if (header) {
+        header.tabIndex = 0;
+        header.setAttribute('role', 'button');
+        header.setAttribute('aria-expanded', String(bubble?.classList.contains('expanded')));
+        header.addEventListener('click', () => queueMicrotask(() => {
+            header.setAttribute('aria-expanded', String(bubble?.classList.contains('expanded')));
+        }));
+        header.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            bubble?.classList.toggle('expanded');
+            header.setAttribute('aria-expanded', String(bubble?.classList.contains('expanded')));
+        });
+    }
     if (!message.isStreaming) {
         const copy = row.ownerDocument.createElement('button');
         copy.type = 'button';
@@ -141,6 +158,24 @@ function syncStreamingReasoning(row, message, markedInstance) {
         });
         wrapper.append(copy);
     }
+}
+
+function syncReasoningOnlyContent(row, message) {
+    const source = message?.content;
+    const text = typeof source === 'string' ? source
+        : source && typeof source.text === 'string' ? source.text
+            : source === null || source === undefined ? '' : String(source);
+    const hasBody = text.trim().length > 0;
+    const hasAttachments = Array.isArray(message?.attachments) && message.attachments.length > 0;
+    const hasReasoning = typeof message?.reasoning === 'string' && message.reasoning.trim().length > 0;
+    const reasoningOnly = message?.role === 'assistant'
+        && hasReasoning
+        && !hasBody
+        && !hasAttachments
+        && !message.presentationRole;
+    row.classList.toggle('agent-chat-reasoning-only', reasoningOnly);
+    const content = row.querySelector('.md-content');
+    if (content) content.hidden = reasoningOnly;
 }
 
 function activateWhenConnected(targetWindow, row) {
@@ -197,9 +232,13 @@ function createAgentMessagePresentation(options = {}) {
             if (part.kind !== 'message') return fallback.create(part);
             const message = messageFromPart(part, resolveContext(part));
             const row = renderMessage(message, true, false);
+            if (message.isStreaming && !message.presentationRole) {
+                patchAgentStreamingMarkdown(row.querySelector('.md-content'), message.content, markedInstance);
+            }
             syncEphemeralTurnState(row, message);
             syncDeliveryState(row, message);
             syncStreamingReasoning(row, message, markedInstance);
+            syncReasoningOnlyContent(row, message);
             row.dataset.agentPresentationKey = `${part.kind}:${part.id}`;
             activateWhenConnected(targetWindow, row);
             return row;
@@ -212,13 +251,14 @@ function createAgentMessagePresentation(options = {}) {
                 const content = row.querySelector('.md-content');
                 if (content && content.dataset.agentSourceText !== message.content) {
                     content.dataset.agentSourceText = message.content;
-                    content.textContent = message.content;
+                    patchAgentStreamingMarkdown(content, message.content, markedInstance);
                 }
                 row.classList.add('streaming');
                 row.dataset.state = 'streaming';
                 syncDeliveryState(row, message);
                 syncStreamingReasoning(row, message, markedInstance);
                 syncEphemeralTurnState(row, message);
+                syncReasoningOnlyContent(row, message);
                 return row;
             }
             const replacement = renderMessage(message, true, false);
@@ -232,6 +272,7 @@ function createAgentMessagePresentation(options = {}) {
             syncDeliveryState(row, message);
             syncStreamingReasoning(row, message, markedInstance);
             syncEphemeralTurnState(row, message);
+            syncReasoningOnlyContent(row, message);
             activateWhenConnected(targetWindow, row);
             return row;
         },
@@ -259,4 +300,4 @@ function createAgentMessagePresentation(options = {}) {
     };
 }
 
-export { createAgentBlockPresentation, createAgentMessagePresentation };
+export { createAgentBlockPresentation, createAgentMessagePresentation, patchAgentStreamingMarkdown };

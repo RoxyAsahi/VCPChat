@@ -4,6 +4,7 @@ import { projectMessage, projectSession } from './agent-workbench-projections.js
 import { deriveWorkbenchViewState } from './agent-workbench-store.js';
 import {
     createAgentTimelineParts,
+    projectVcpToolPresentation,
     reconcileAgentTimeline,
 } from './agent-workbench-timeline.js';
 import { createAgentBlockPresentation, createAgentMessagePresentation } from './agent-presentation/index.js';
@@ -209,14 +210,72 @@ function createAccountDock(state) {
     const themeToggle = button(document.body.classList.contains('dark-theme') ? '切换为浅色模式' : '切换为深色模式', 'next-ui-account-menu-item');
     themeToggle.prepend(...icon(document.body.classList.contains('dark-theme') ? 'light_mode' : 'dark_mode'));
     themeToggle.addEventListener('click', () => { closeMenu(); proxyMainButton('themeToggleBtn'); });
-    menu.append(themeStore, themeToggle);
-    // Keep the dock's theme labels in sync with runtime theme switching. The
-    // main chat toggles `dark-theme` on <body>; without watching it the account
-    // menu would show a stale label/icon until the next full re-render.
+    // Chat presentation mode submenu, mirroring the main chat's account-dock
+    // switcher: label row expands a submenu of bubble/panel/immersive options.
+    const presentationLabels = { bubble: '气泡', panel: '面板', immersive: '沉浸' };
+    const getPresentationMode = () => {
+        if (document.body.classList.contains('chat-presentation-panel')) return 'panel';
+        if (document.body.classList.contains('chat-presentation-immersive')) return 'immersive';
+        return window.globalSettings?.chatPresentationMode || 'bubble';
+    };
+    const presentationItem = node('button', 'agent-chat-button next-ui-account-menu-item');
+    presentationItem.type = 'button';
+    presentationItem.prepend(...icon('view_agenda'));
+    presentationItem.append(
+        node('span', 'next-ui-account-menu-label', '聊天显示模式'),
+        node('span', 'next-ui-account-menu-value agent-chat-account-presentation-value', presentationLabels[getPresentationMode()] || '气泡'),
+        ...icon('chevron_right')
+    );
+    presentationItem.setAttribute('aria-expanded', 'false');
+    const presentationOptions = node('div', 'next-ui-account-submenu agent-chat-account-presentation-options');
+    presentationOptions.setAttribute('role', 'group');
+    presentationOptions.setAttribute('aria-label', '选择聊天显示模式');
+    presentationOptions.hidden = true;
+    const presentationOptionSpecs = [
+        ['bubble', 'chat_bubble', '气泡模式'],
+        ['panel', 'view_day', '面板模式'],
+        ['immersive', 'fullscreen', '沉浸模式'],
+    ];
+    for (const [mode, iconName, label] of presentationOptionSpecs) {
+        const option = node('button', 'next-ui-account-submenu-item');
+        option.type = 'button';
+        option.dataset.presentationMode = mode;
+        option.append(...icon(iconName), node('span', '', label), node('span', 'vcp-ui-icon next-ui-account-option-check', 'check'));
+        option.addEventListener('click', async () => {
+            if (typeof window.applyChatPresentationMode === 'function') {
+                await window.applyChatPresentationMode(mode, {
+                    persist: true,
+                    preserveScroll: true,
+                    notify: false,
+                    source: 'agent-account-menu'
+                });
+            }
+            closeMenu();
+        });
+        presentationOptions.append(option);
+    }
+    presentationItem.addEventListener('click', () => {
+        const expanded = presentationOptions.hidden;
+        presentationOptions.hidden = !expanded;
+        presentationItem.setAttribute('aria-expanded', String(!expanded));
+    });
+    menu.append(themeStore, themeToggle, presentationItem, presentationOptions);
+    // Keep the dock's theme labels and presentation mode in sync with runtime
+    // switching. The main chat toggles `dark-theme` and `chat-presentation-*`
+    // on <body>; without watching it the account menu would show stale labels
+    // until the next full re-render.
     const syncAccountTheme = () => {
         const dark = document.body.classList.contains('dark-theme');
         themeStore.replaceChildren(...icon('palette'), document.createTextNode('主题选择'));
         themeToggle.replaceChildren(...icon(dark ? 'light_mode' : 'dark_mode'), document.createTextNode(dark ? '切换为浅色模式' : '切换为深色模式'));
+        const mode = getPresentationMode();
+        const value = menu.querySelector('.agent-chat-account-presentation-value');
+        if (value) value.textContent = presentationLabels[mode] || '气泡';
+        presentationOptions.querySelectorAll('[data-presentation-mode]').forEach(option => {
+            const active = option.dataset.presentationMode === mode;
+            option.classList.toggle('active', active);
+            option.setAttribute('aria-pressed', String(active));
+        });
     };
     if (typeof MutationObserver !== 'undefined') {
         const observer = new MutationObserver(syncAccountTheme);
@@ -237,6 +296,7 @@ function createAccountDock(state) {
         event.stopPropagation();
         menu.hidden = !menu.hidden;
         trigger.setAttribute('aria-expanded', String(!menu.hidden));
+        if (!menu.hidden) presentationOptions.hidden = true;
     });
     const settings = iconButton('settings', '全局设置', 'next-ui-account-settings');
     settings.addEventListener('click', () => { closeMenu(); window.uiHelperFunctions?.openModal?.('globalSettingsModal'); });
@@ -311,7 +371,7 @@ function renderReasoning(text) {
     // interaction and visual hierarchy in tests or during a partial renderer
     // bootstrap, instead of dropping to a browser-default <details> control.
     return `<div class="vcp-thought-chain-bubble collapsible expanded" data-vcp-block-type="thought-chain">
-        <div class="vcp-thought-chain-header"><span class="vcp-thought-chain-icon">lightbulb</span><span class="vcp-thought-chain-label">思考中</span><span class="vcp-result-toggle-icon"></span></div>
+        <div class="vcp-thought-chain-header"><span class="vcp-thought-chain-icon vcp-ui-icon" data-vcp-icon="lightbulb">lightbulb</span><span class="vcp-thought-chain-label">思考中</span><span class="vcp-result-toggle-icon"></span></div>
         <div class="vcp-thought-chain-collapsible-content"><div class="vcp-thought-chain-body"><pre>${
             String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         }</pre></div></div>
@@ -343,6 +403,8 @@ function applyReasoningState(reasoningEl, item) {
         // Workbench projection into that compact status treatment.
         iconEl.classList.add('vcp-ui-icon');
         iconEl.textContent = 'lightbulb';
+        iconEl.dataset.vcpIcon = 'lightbulb';
+        window.VCPIcons?.set?.(iconEl, 'lightbulb');
     }
     header?.setAttribute('title', completed ? '展开推理过程' : '查看正在生成的推理过程');
     // The normal renderer binds this through vcpRenderBridge.  Keep the
@@ -612,6 +674,11 @@ function mountWorkbench(container) {
         recovering: false,
         activityOpen: false,
         activityTab: 'activity',
+        activitySearch: '',
+        activitySourceFilter: 'all',
+        activityKindFilter: 'all',
+        activityTabPanels: new Map(),
+        activityTabButtons: new Map(),
         lastViewState: null,
         hadApprovals: false,
         workspace: '',
@@ -649,6 +716,7 @@ function mountWorkbench(container) {
         // leases and mutations.
         topicContextMenu: null,
         uxTimings: new Map(),
+        turnStartedAt: new Map(),
         disposed: false,
     };
     const pendingRender = { shell: false, header: false, feed: false, composer: false, activity: false, conflict: false };
@@ -661,6 +729,7 @@ function mountWorkbench(container) {
     let topicSearchRequest = 0;
     let topicSearchTimer = null;
     let topicMenuInstance = 0;
+    let runStatusTimer = null;
 
     const root = node('section', 'container agent-chat-root vcp-ui-scope');
     // Read-only diagnostics for Electron smoke/visual QA. The mode still
@@ -678,6 +747,16 @@ function mountWorkbench(container) {
     jumpToLatest.setAttribute('aria-live', 'polite');
     const header = node('header', 'chat-header vcp-ui-scope agent-chat-header');
     const composer = node('footer', 'chat-input-area agent-chat-composer');
+    const runStatus = node('div', 'agent-chat-run-status');
+    runStatus.hidden = true;
+    runStatus.setAttribute('role', 'status');
+    runStatus.setAttribute('aria-live', 'polite');
+    const runStatusIcon = node('span', 'vcp-ui-icon agent-chat-run-status-icon', 'progress_activity');
+    const runStatusLabel = node('strong', 'agent-chat-run-status-label', '正在运行');
+    const runStatusDetail = node('span', 'agent-chat-run-status-detail');
+    const runStatusElapsed = node('time', 'agent-chat-run-status-elapsed', '0.0s');
+    const runStatusStop = visualActionButton('stop', '停止当前任务', 'agent-chat-run-status-stop');
+    runStatus.append(runStatusIcon, runStatusLabel, runStatusDetail, runStatusElapsed, runStatusStop);
     const inputCard = node('div', 'chat-input-card');
     const input = document.createElement('textarea');
     input.className = 'agent-chat-message-input';
@@ -688,15 +767,20 @@ function mountWorkbench(container) {
     const newButton = visualActionButton('add_comment', '新建 Agent 会话', 'agent-chat-composer-new');
     const attachButton = visualActionButton('attach_file', '添加图片、音频或视频附件');
     const emoticonButton = visualActionButton('sentiment_satisfied', '打开表情包');
+    const permissionsButton = visualActionButton('policy', '本地审批', 'agent-chat-composer-permissions');
     const sendButton = visualActionButton('arrow_upward', '发送消息', 'agent-chat-send-button');
     const attachmentTray = node('div', 'agent-chat-composer-attachments');
     emoticonButton.addEventListener('click', () => {
         if (window.emoticonManager?.togglePanel) window.emoticonManager.togglePanel(emoticonButton, input);
         else notify('表情包系统尚未准备好。', 'warning');
     });
-    composerActions.append(newButton, attachButton, emoticonButton, sendButton);
+    permissionsButton.addEventListener('click', () => {
+        state.tab = 'settings';
+        queueRender({ shell: true });
+    });
+    composerActions.append(newButton, attachButton, emoticonButton, permissionsButton, sendButton);
     inputCard.append(attachmentTray, input, composerActions);
-    composer.append(inputCard);
+    composer.append(runStatus, inputCard);
     feed.append(feedItems);
     const mainColumn = node('div', 'agent-chat-main-column');
     const activityPanel = node('aside', 'agent-chat-activity-panel agent-chat-activity-collapsed');
@@ -705,6 +789,18 @@ function mountWorkbench(container) {
     activityPanel.setAttribute('aria-label', 'Agent 活动面板');
     activityPanel.setAttribute('aria-hidden', 'true');
     activityPanel.setAttribute('inert', '');
+    const activityInner = node('div', 'agent-chat-activity-inner');
+    const activityHeader = node('div', 'agent-chat-activity-header');
+    const activityTitle = node('strong', 'agent-chat-activity-title', '会话信息');
+    const activityClose = iconButton('close', '关闭会话信息面板', 'agent-chat-activity-close');
+    activityClose.addEventListener('click', () => setActivityOpen(false));
+    activityHeader.append(activityTitle, activityClose);
+    const activityTabs = node('div', 'agent-chat-activity-tabs');
+    activityTabs.setAttribute('role', 'tablist');
+    const activityContent = node('div', 'agent-chat-activity-content');
+    activityContent.setAttribute('role', 'presentation');
+    activityInner.append(activityHeader, activityTabs, activityContent);
+    activityPanel.append(activityInner);
     // A Topic collision is an in-context decision, not a blocking app-wide
     // modal. Keep the existing transcript and composer visible behind the
     // compact card so opening a busy Topic never feels like the page broke.
@@ -723,6 +819,10 @@ function mountWorkbench(container) {
             notify(error?.message || String(error), 'error');
         }
     };
+    runStatusStop.addEventListener('click', () => run(async () => {
+        runStatusStop.disabled = true;
+        await controller.cancelTurn();
+    }));
 
     const blockPresentation = createAgentBlockPresentation({
         document,
@@ -1927,6 +2027,51 @@ function mountWorkbench(container) {
             settingsForm.append(promptField);
             const permissionHint = node('p', 'agent-chat-settings-placeholder',
                 'YOLO 仅跳过 Codex 本地审批；VCPToolBox 的后端审批不会被关闭或绕过。');
+            const budgetSection = node('section', 'agent-chat-settings-budget');
+            budgetSection.append(node('strong', 'agent-chat-setting-label', '新 Session 每轮安全预算'));
+            const budgetHint = node('p', 'agent-chat-settings-placeholder', '留空表示不设客户端上限。预算属于运行配置，不属于用量统计。');
+            const budgetFields = node('div', 'agent-chat-settings-budget-fields');
+            const budgetInput = (label, name, value) => {
+                const wrap = node('label', 'agent-chat-setting-field');
+                wrap.append(node('span', 'agent-chat-setting-label', label));
+                const control = document.createElement('input');
+                control.className = 'agent-chat-setting-input';
+                control.type = 'number';
+                control.name = name;
+                control.min = '1';
+                control.step = '1';
+                control.placeholder = '不限';
+                control.value = value == null ? '' : String(value);
+                control.disabled = state.budgetSaving;
+                wrap.append(control);
+                return wrap;
+            };
+            budgetFields.append(
+                budgetInput('模型请求数', 'maxRequestsPerTurn', state.budget.maxRequestsPerTurn),
+                budgetInput('累计 token', 'maxTokensPerTurn', state.budget.maxTokensPerTurn),
+            );
+            const saveBudget = button(state.budgetSaving ? '正在保存预算…' : '保存安全预算', 'secondary agent-chat-settings-save');
+            saveBudget.disabled = state.budgetSaving;
+            saveBudget.addEventListener('click', () => run(async () => {
+                const requestInput = budgetFields.querySelector('[name="maxRequestsPerTurn"]');
+                const tokenInput = budgetFields.querySelector('[name="maxTokensPerTurn"]');
+                state.budgetSaving = true;
+                renderSidebar();
+                try {
+                    const saved = await controller.updateWorkbenchSettings({
+                        budget: {
+                            maxRequestsPerTurn: String(requestInput?.value || '').trim() || null,
+                            maxTokensPerTurn: String(tokenInput?.value || '').trim() || null,
+                        },
+                    });
+                    state.budget = saved?.settings?.budget || state.budget;
+                    notify('安全预算已保存，新建 Agent Session 后生效。', 'success');
+                } finally {
+                    state.budgetSaving = false;
+                    renderSidebar();
+                }
+            }));
+            budgetSection.append(budgetHint, budgetFields, saveBudget);
             const savePermission = button(state.permissionSaving ? '正在保存…' : '保存本地审批策略', 'secondary agent-chat-settings-save');
             savePermission.disabled = state.permissionSaving;
             savePermission.addEventListener('click', () => run(async () => {
@@ -1942,6 +2087,17 @@ function mountWorkbench(container) {
                         ...(selectedSession ? { sessionId: selectedSession } : {}),
                     });
                     state.permissionMode = saved?.settings?.permissionMode === 'always-approve' ? 'always-approve' : 'ask';
+                    if (selectedSession && saved?.session?.configSnapshot) {
+                        const currentProjection = store.getState();
+                        store.setState({
+                            selectedTopic: currentProjection.selectedTopic?.topicId === selectedSession
+                                ? { ...currentProjection.selectedTopic, configSnapshot: saved.session.configSnapshot }
+                                : currentProjection.selectedTopic,
+                            attachment: currentProjection.attachment?.sessionId === selectedSession
+                                ? { ...currentProjection.attachment, configSnapshot: saved.session.configSnapshot }
+                                : currentProjection.attachment,
+                        });
+                    }
                     notify(state.permissionMode === 'always-approve'
                         ? `本地 YOLO 已保存${selectedSession ? '，当前 Session 的下一次 Turn 起生效' : ''}。ToolBox 后端审批仍独立。`
                         : `已恢复逐次本地确认${selectedSession ? '，当前 Session 的下一次 Turn 起生效' : ''}。`, 'success');
@@ -1976,7 +2132,7 @@ function mountWorkbench(container) {
             }));
             const save = button('用此配置新建会话', 'primary agent-chat-settings-save');
             save.addEventListener('click', openNewTopicFlow);
-            settingsForm.append(permissionHint, savePermission, saveModel, save);
+            settingsForm.append(permissionHint, savePermission, saveModel, budgetSection, save);
             settingsPane.append(settingsForm);
             content.append(settingsPane);
         }
@@ -2200,16 +2356,24 @@ function mountWorkbench(container) {
         statusChip.dataset.state = viewState;
         statusChip.setAttribute('role', 'status');
         statusChip.setAttribute('aria-live', 'polite');
-        statusChip.dataset.action = 'connection';
-        statusChip.title = '查看连接状态';
-        statusChip.addEventListener('click', () => setActivityOpen(true, 'connection'));
+        if (viewState === 'error') {
+            statusChip.setAttribute('role', 'button');
+            statusChip.tabIndex = 0;
+            statusChip.title = '点击重新连接';
+            const reconnect = () => run(recoverDaemon);
+            statusChip.addEventListener('click', reconnect);
+            statusChip.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                reconnect();
+            });
+        } else {
+            statusChip.title = '当前运行状态';
+        }
         const actions = node('div', 'chat-actions agent-chat-header-actions');
         // R3 header action cluster: every button is a uniform ghost-muted icon
         // button (opencode icon-button-v2 / Cherry NavbarIcon spec) so the
         // title | status chip | actions row stays aligned regardless of source.
-        const isDark = document.body.classList.contains('dark-theme');
-        const assistant = iconButton('assistant', '划词助手开关与呼出', 'agent-chat-header-assistant');
-        assistant.addEventListener('click', () => proxyMainButton('toggleAssistantBtn'));
         const pendingApprovals = (store.getState().approvals || []).length;
         const alertState = viewState === 'error' || viewState === 'reconnecting';
         const activityBtn = iconButton('notifications', state.activityOpen ? '关闭活动面板' : '打开活动面板', 'agent-chat-header-activity');
@@ -2218,19 +2382,12 @@ function mountWorkbench(container) {
         activityBtn.setAttribute('aria-controls', 'agentChatActivityPanel');
         if (pendingApprovals) {
             activityBtn.append(node('span', 'agent-chat-action-badge', String(pendingApprovals)));
+        } else if (Number(current.activityUnread) > 0) {
+            activityBtn.append(node('span', 'agent-chat-action-badge', String(Math.min(99, Number(current.activityUnread)))));
         } else if (alertState) {
             activityBtn.append(node('span', 'agent-chat-action-badge is-warning', '!'));
         }
         activityBtn.addEventListener('click', () => setActivityOpen(!state.activityOpen));
-        const permissionLabel = state.permissionMode === 'always-approve' ? '本地审批：YOLO（设置）' : '本地审批：逐次确认（设置）';
-        const permissions = iconButton('policy', permissionLabel, 'agent-chat-header-permissions');
-        permissions.classList.toggle('is-active', state.permissionMode === 'always-approve');
-        permissions.addEventListener('click', () => {
-            state.tab = 'settings';
-            queueRender({ shell: true });
-        });
-        const theme = iconButton(isDark ? 'light_mode' : 'dark_mode', '深色/浅色模式', 'agent-chat-header-theme');
-        theme.addEventListener('click', () => proxyMainButton('themeToggleBtn'));
         const queueButton = isCodexRuntime ? null : iconButton('queue_play_next', state.queue.length ? `后续指令（${state.queue.length}）` : '后续指令', 'agent-chat-queue-toggle');
         if (queueButton) {
             queueButton.setAttribute('aria-expanded', String(state.queueOpen));
@@ -2240,15 +2397,38 @@ function mountWorkbench(container) {
             });
         }
         const usage = store.getState().context;
-        const usageLabel = usage.requests ? `用量（${usage.requests} 轮）` : '用量';
-        const usageButton = iconButton('data_usage', usageLabel, 'agent-chat-usage-toggle');
+        const contextPct = Number.isFinite(Number(usage.percentage)) ? Math.max(0, Math.min(100, Number(usage.percentage))) : 0;
+        const usageButton = button('', 'agent-chat-usage-toggle agent-chat-context-toggle');
+        const contextRing = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        contextRing.classList.add('agent-chat-context-ring');
+        contextRing.setAttribute('viewBox', '0 0 36 36');
+        contextRing.setAttribute('aria-hidden', 'true');
+        const ringTrack = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        ringTrack.classList.add('agent-chat-context-ring-track');
+        ringTrack.setAttribute('cx', '18'); ringTrack.setAttribute('cy', '18'); ringTrack.setAttribute('r', '15.5');
+        const ringValue = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        ringValue.classList.add('agent-chat-context-ring-value');
+        ringValue.setAttribute('cx', '18'); ringValue.setAttribute('cy', '18'); ringValue.setAttribute('r', '15.5');
+        ringValue.setAttribute('pathLength', '100');
+        ringValue.setAttribute('stroke-dasharray', `${contextPct} 100`);
+        const ringText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        ringText.classList.add('agent-chat-context-ring-core');
+        ringText.setAttribute('x', '18'); ringText.setAttribute('y', '21'); ringText.setAttribute('text-anchor', 'middle');
+        ringText.textContent = contextPct ? String(Math.round(contextPct)) : '';
+        contextRing.append(ringTrack, ringValue, ringText);
+        usageButton.append(contextRing);
+        usageButton.title = usage.contextWindow
+            ? `上下文 ${contextPct}% · ${Number(usage.usedTokens || 0).toLocaleString('zh-CN')} / ${Number(usage.contextWindow).toLocaleString('zh-CN')} tokens`
+            : '查看上下文、用量与会话信息';
+        usageButton.setAttribute('aria-label', usageButton.title);
         const usageExpanded = state.activityOpen && state.activityTab === 'usage';
+        usageButton.classList.toggle('is-active', usageExpanded);
         usageButton.setAttribute('aria-expanded', String(usageExpanded));
         usageButton.addEventListener('click', () => {
             if (state.activityOpen && state.activityTab === 'usage') setActivityOpen(false);
             else setActivityOpen(true, 'usage');
         });
-        const compact = isCodexRuntime ? null : iconButton('compress', usage.compacting ? '正在安全压缩上下文' : '压缩当前 Agent 上下文', 'agent-chat-compact');
+        const compact = iconButton('compress', usage.compacting ? '正在安全压缩上下文' : '压缩当前 Agent 上下文', 'agent-chat-compact');
         if (compact) {
             compact.disabled = !session || Boolean(usage.compacting);
             compact.addEventListener('click', () => run(async () => {
@@ -2259,9 +2439,7 @@ function mountWorkbench(container) {
                 notify(before && after ? `上下文已完成压缩：${before} -> ${after} tokens。` : '上下文已完成压缩并刷新会话历史。', 'success');
             }));
         }
-        const newSession = iconButton('add_comment', '新建 Agent 会话');
-        newSession.addEventListener('click', openNewTopicFlow);
-        actions.append(assistant, activityBtn, permissions, theme, ...(queueButton ? [queueButton] : []), usageButton, ...(compact ? [compact] : []), newSession);
+        actions.append(activityBtn, ...(queueButton ? [queueButton] : []), usageButton, ...(compact ? [compact] : []));
         header.append(left, statusChip, actions);
         if (!state.queueOpen) return;
         const panel = node('section', 'agent-chat-queue-popover');
@@ -2403,6 +2581,7 @@ function mountWorkbench(container) {
     function setActivityOpen(open, tab) {
         if (open && tab) state.activityTab = tab;
         state.activityOpen = open;
+        if (open) clearActivityUnread(state.activityTab);
         if (open) {
             activityPanel.classList.add('agent-chat-activity-open');
             activityPanel.classList.remove('agent-chat-activity-collapsed');
@@ -2417,6 +2596,17 @@ function mountWorkbench(container) {
         queueRender({ activity: true, header: true });
     }
 
+    function clearActivityUnread(tab) {
+        const current = store.getState();
+        const byTab = { ...(current.activityUnreadByTab || {}) };
+        if (!byTab[tab]) return;
+        byTab[tab] = 0;
+        store.setState({
+            activityUnreadByTab: byTab,
+            activityUnread: Object.values(byTab).reduce((sum, value) => sum + Number(value || 0), 0),
+        });
+    }
+
     // Surface the activity panel automatically on state transitions the user
     // must notice: a daemon error, or the first pending approval arriving.
     // Rust Host remains responsible for fail-closed expiry even while this
@@ -2425,9 +2615,7 @@ function mountWorkbench(container) {
         const current = store.getState();
         const viewState = deriveWorkbenchViewState(current);
         const approvalsCount = (current.approvals || []).length;
-        if (viewState === 'error' && state.lastViewState !== 'error') {
-            setActivityOpen(true, 'connection');
-        } else if (approvalsCount > 0 && !state.hadApprovals && !state.activityOpen) {
+        if (approvalsCount > 0 && !state.hadApprovals && !state.activityOpen) {
             setActivityOpen(true, 'approvals');
         }
         state.lastViewState = viewState;
@@ -2453,25 +2641,25 @@ function mountWorkbench(container) {
         if (viewState === 'error') {
             const runtime = current.runtime || {};
             const rawError = typeof runtime.lastError === 'object' ? runtime.lastError?.error : runtime.lastError;
-            const message = String(rawError || 'Rust Agent daemon 已中断').slice(0, 280);
+            const message = String(rawError || 'Codex App Server 已中断').slice(0, 280);
             card.append(node('p', 'agent-chat-connection-message', message));
             const reconnect = button('重新连接', 'primary agent-chat-connection-reconnect');
             reconnect.addEventListener('click', () => run(recoverDaemon));
             card.append(reconnect);
         } else if (viewState === 'reconnecting') {
-            card.append(node('p', 'agent-chat-connection-message', 'Agent 正在重新连接并校验最近的安全 checkpoint…'));
+            card.append(node('p', 'agent-chat-connection-message', '正在重新连接 Codex App Server，并从 Projection SQLite 对账会话展示…'));
         } else {
             card.append(node('p', 'agent-chat-connection-message', WORKBENCH_VIEW_STATE_LABELS[viewState] || viewState));
         }
         wrap.append(card);
         const readiness = current.readiness || {};
         const readinessGrid = node('section', 'agent-chat-readiness-grid');
-        readinessGrid.setAttribute('aria-label', 'Rust Agent readiness');
+        readinessGrid.setAttribute('aria-label', 'Codex Agent readiness');
         const readinessEntries = [
-            ['server', 'VCP Server / API Key'],
-            ['profile', '共享 Agent / 模型'],
-            ['toolbox', 'VCPToolBox'],
-            ['capability', 'DistributedServer capability node'],
+            ['server', 'Codex App Server'],
+            ['profile', 'Projection SQLite / Agent 配置'],
+            ['toolbox', 'VCPToolBox Bridge'],
+            ['capability', 'VCPToolBox 动态能力'],
         ];
         const readinessState = {
             ready: { icon: 'check_circle', label: '就绪', tone: 'success' },
@@ -2501,8 +2689,21 @@ function mountWorkbench(container) {
         const usage = current.context || {};
         const format = (value) => new Intl.NumberFormat('zh-CN').format(Number(value) || 0);
         const placeholder = '—';
-        const hasUsage = usage.usageAvailable;
-        const total = hasUsage ? usage.totalTokens : null;
+        const hasUsage = usage.usageAvailable === true;
+        const usageSourceLabel = usage.source === 'real' ? '模型实际返回'
+            : usage.source === 'estimated' ? '估算（ToolBox 未返回真实 usage）'
+                : '未知（未报告 usage）';
+        const messages = current.messages || [];
+        const selected = current.selectedTopic || current.attachment || {};
+        const snapshot = selected.configSnapshot || current.attachment?.configSnapshot || {};
+        const prompt = snapshot.baseInstructions || snapshot.developerInstructions || '';
+        const userCount = messages.filter((message) => message.role === 'user').length;
+        const assistantCount = messages.filter((message) => message.role === 'assistant').length;
+        const timestamps = messages.map((message) => Number(message.createdAt || message.timestamp)).filter(Number.isFinite);
+        const formatTimeValue = (value) => value ? new Intl.DateTimeFormat('zh-CN', {
+            year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+        }).format(new Date(value)) : placeholder;
+        const total = hasUsage ? (usage.totalTokens ?? usage.usedTokens) : null;
         const totalText = total != null ? format(total) : placeholder;
         const contextPct = usage.contextWindow ? usage.percentage : null;
 
@@ -2513,9 +2714,32 @@ function mountWorkbench(container) {
         summary.append(totalChip);
 
         const costChip = node('div', 'agent-chat-usage-metric');
-        costChip.append(node('span', 'agent-chat-usage-label', '费用'), node('span', 'agent-chat-usage-value', placeholder));
+        costChip.append(node('span', 'agent-chat-usage-label', '费用'), node('span', 'agent-chat-usage-value', '不可用'));
         summary.append(costChip);
         wrap.append(summary);
+
+        const identity = node('dl', 'agent-chat-context-stats');
+        const identityStat = (label, value) => {
+            const row = node('div', 'agent-chat-context-stat');
+            row.append(node('dt', '', label), node('dd', '', value || placeholder));
+            identity.append(row);
+        };
+        identityStat('会话', selected.title || selected.topicId || current.attachment?.sessionId);
+        identityStat('Provider', usage.provider);
+        identityStat('模型', usage.model || selected.model || snapshot.model);
+        identityStat('消息', `${messages.length}（用户 ${userCount} / 助手 ${assistantCount}）`);
+        identityStat('创建时间', formatTimeValue(timestamps.length ? Math.min(...timestamps) : null));
+        identityStat('最后活动', formatTimeValue(timestamps.length ? Math.max(...timestamps) : null));
+        wrap.append(identity);
+
+        if (usage.compactionState) {
+            const text = usage.compactionState === 'started' ? '正在等待 Codex 上下文压缩的终态事件…'
+                : usage.compactionState === 'completed' ? (usage.summary || '上下文压缩已完成，已从 Thread 对账恢复。')
+                    : usage.compactionError || '上下文压缩失败。';
+            const status = node('p', `agent-chat-usage-note agent-chat-compaction-${usage.compactionState}`, text);
+            status.setAttribute('role', 'status');
+            wrap.append(status);
+        }
 
         if (usage.contextWindow) {
             const context = node('div', 'agent-chat-usage-context');
@@ -2540,100 +2764,348 @@ function mountWorkbench(container) {
         stat('输出', hasUsage ? usage.outputTokens : null);
         stat('推理', hasUsage ? usage.reasoningTokens : null);
         stat('缓存读取', hasUsage ? usage.cacheReadTokens : null);
+        stat('缓存写入', hasUsage ? usage.cacheWriteTokens : null);
         wrap.append(stats);
 
-        wrap.append(node('p', 'agent-chat-usage-note', '费用没有可靠价格表，暂显示为占位符。'));
+        const identityLabel = [usage.model, usage.provider].filter(Boolean).join(' · ');
+        wrap.append(node('p', 'agent-chat-usage-note', `${usageSourceLabel}${identityLabel ? `；${identityLabel}` : ''}。此处是最近一次可靠报告，不伪装为 Session 累计费用。`));
 
-        const budgetForm = node('form', 'agent-chat-usage-budget');
-        budgetForm.addEventListener('submit', (event) => {
-            event.preventDefault();
-            run(async () => {
-                const data = new window.FormData(budgetForm);
-                state.budgetSaving = true;
-                renderActivity();
-                try {
-                    const saved = await controller.updateWorkbenchSettings({
-                        budget: {
-                            maxRequestsPerTurn: String(data.get('maxRequestsPerTurn') || '').trim() || null,
-                            maxTokensPerTurn: String(data.get('maxTokensPerTurn') || '').trim() || null,
-                        },
-                    });
-                    state.budget = saved?.settings?.budget || state.budget;
-                    notify('预算已保存；为避免改变正在运行的限制，新建 Agent Session 后生效。', 'success');
-                } finally {
-                    state.budgetSaving = false;
-                    renderActivity();
-                }
-            });
-        });
-        budgetForm.append(node('strong', 'agent-chat-usage-budget-title', '每轮安全预算'));
-        const budgetHint = node('p', 'agent-chat-usage-note', '留空表示不设客户端上限。保存后新建会话生效。');
-        const budgetFields = node('div', 'agent-chat-usage-budget-fields');
-        const budgetField = (label, name, value, placeholder) => {
-            const field = node('label', 'agent-chat-usage-budget-field');
-            field.append(node('span', '', label));
-            const control = document.createElement('input');
-            control.type = 'number';
-            control.name = name;
-            control.min = '1';
-            control.max = '100000000';
-            control.step = '1';
-            control.inputMode = 'numeric';
-            control.placeholder = placeholder;
-            control.value = value == null ? '' : String(value);
-            control.disabled = state.budgetSaving;
-            field.append(control);
-            return field;
-        };
-        budgetFields.append(
-            budgetField('模型请求', 'maxRequestsPerTurn', state.budget.maxRequestsPerTurn, '不限'),
-            budgetField('累计 token', 'maxTokensPerTurn', state.budget.maxTokensPerTurn, '不限'),
-        );
-        const saveBudget = button(state.budgetSaving ? '保存中…' : '保存预算', 'primary agent-chat-usage-budget-save');
-        saveBudget.type = 'submit';
-        saveBudget.disabled = state.budgetSaving;
-        budgetForm.append(budgetHint, budgetFields, saveBudget);
-        wrap.append(budgetForm);
+        if (usage.inputTokens && messages.length) {
+            const charCount = (value) => typeof value === 'string' ? value.length : JSON.stringify(value || '').length;
+            const raw = {
+                system: charCount(prompt),
+                user: messages.filter((message) => message.role === 'user').reduce((sum, message) => sum + charCount(message.content || message.blocks), 0),
+                assistant: messages.filter((message) => message.role === 'assistant').reduce((sum, message) => sum + charCount(message.content || message.blocks), 0),
+                tool: [...(current.tools instanceof Map ? current.tools.values() : [])].reduce((sum, tool) => sum + charCount(tool.payload), 0),
+            };
+            const estimated = Object.fromEntries(Object.entries(raw).map(([key, chars]) => [key, Math.ceil(chars / 4)]));
+            const known = Object.values(estimated).reduce((sum, value) => sum + value, 0);
+            estimated.other = Math.max(0, Number(usage.inputTokens) - known);
+            const denominator = Math.max(1, Object.values(estimated).reduce((sum, value) => sum + value, 0));
+            const breakdown = node('section', 'agent-chat-context-breakdown');
+            breakdown.append(node('strong', 'agent-chat-context-section-title', '上下文构成（估算）'));
+            const bar = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            bar.classList.add('agent-chat-context-breakdown-bar');
+            bar.setAttribute('viewBox', '0 0 100 8');
+            bar.setAttribute('preserveAspectRatio', 'none');
+            const legend = node('div', 'agent-chat-context-breakdown-legend');
+            let offset = 0;
+            for (const [key, label] of [['system', '系统'], ['user', '用户'], ['assistant', '助手'], ['tool', '工具'], ['other', '其他']]) {
+                const value = estimated[key] || 0;
+                if (!value) continue;
+                const pct = Math.round((value / denominator) * 1000) / 10;
+                const segment = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                segment.classList.add('agent-chat-context-segment', `is-${key}`);
+                segment.setAttribute('x', String(offset)); segment.setAttribute('y', '0');
+                segment.setAttribute('width', String(pct)); segment.setAttribute('height', '8');
+                segment.setAttribute('aria-label', `${label} ${pct}%`);
+                bar.append(segment);
+                offset += pct;
+                const item = node('span', `agent-chat-context-legend-item is-${key}`);
+                item.append(node('i'), document.createTextNode(`${label} ${pct}%`));
+                legend.append(item);
+            }
+            breakdown.append(bar, legend, node('p', 'agent-chat-usage-note', '构成仅根据 VChat 可见消息和工具投影估算，不代表模型服务端精确计费。'));
+            wrap.append(breakdown);
+        }
+
+        if (prompt) {
+            const promptDetails = node('details', 'agent-chat-context-prompt');
+            promptDetails.append(node('summary', 'agent-chat-context-section-title', '实际注入的 Agent 指令'),
+                node('pre', 'agent-chat-toolbox-ws-output', String(prompt).slice(0, 32_768)));
+            wrap.append(promptDetails);
+        }
 
         return wrap;
+    }
+
+    function buildPlanInspector(current) {
+        const wrap = node('section', 'agent-chat-activity-usage agent-chat-inspector-plan');
+        const plan = current.plan;
+        wrap.append(node('strong', '', '最新计划'));
+        if (!plan?.text) {
+            wrap.append(node('p', 'agent-chat-muted', '当前会话尚未收到 Codex Plan Item。'));
+            return wrap;
+        }
+        const content = node('pre', 'agent-chat-toolbox-ws-output', String(plan.text).slice(0, 16_384));
+        content.hidden = false;
+        wrap.append(content);
+        return wrap;
+    }
+
+    function buildChangeInspector(current) {
+        const wrap = node('section', 'agent-chat-activity-usage agent-chat-inspector-changes');
+        const changes = [...(current.tools instanceof Map ? current.tools.values() : [])]
+            .flatMap((tool) => Array.isArray(tool?.payload?.changes?.files) ? tool.payload.changes.files : []);
+        wrap.append(node('strong', '', 'Codex 文件变化（只读）'));
+        if (!changes.length) {
+            wrap.append(node('p', 'agent-chat-muted', '当前会话尚未收到 Codex fileChange Item。'));
+            return wrap;
+        }
+        for (const change of changes.slice(0, 16)) {
+            const item = node('details', 'agent-chat-toolbox-ws-card agent-chat-diff-file');
+            item.dataset.activityKey = `diff:${change.path || 'unknown'}:${change.status || 'modified'}`;
+            const summary = node('summary', 'agent-chat-toolbox-ws-title', `${change.status || 'modified'} · ${change.path || 'unknown'}`);
+            summary.append(node('span', 'agent-chat-toolbox-ws-channel', `+${Number(change.additions) || 0} −${Number(change.deletions) || 0}`));
+            const patch = node('pre', 'agent-chat-toolbox-ws-output', String(change.patch || '').slice(0, 131_072));
+            patch.hidden = false;
+            item.append(summary, patch);
+            wrap.append(item);
+        }
+        return wrap;
+    }
+
+    function buildInteractionCard(interaction) {
+        const payload = interaction.payload || {};
+        const card = node('section', 'agent-chat-toolbox-ws-card agent-chat-interaction-card');
+        card.dataset.interactionSource = String(interaction.source || 'unknown');
+        card.dataset.interactionState = String(interaction.state || 'pending');
+        card.dataset.interactionId = String(interaction.requestId || '');
+        const labels = {
+            'user-input': 'Codex 需要你的输入',
+            permission: 'Codex 请求额外权限',
+            'mcp-elicitation': 'MCP 请求用户交互',
+        };
+        card.append(node('strong', 'agent-chat-toolbox-ws-title', labels[interaction.kind] || `受限交互 · ${interaction.kind || 'unknown'}`));
+        card.append(node('p', 'agent-chat-toolbox-ws-detail', [payload.header, payload.message, payload.reason]
+            .filter(Boolean).join(' · ') || `${interaction.source || 'unknown'} / ${interaction.requestId || 'unknown'}`));
+        if (interaction.expiresAtMs) {
+            approvalRegistry.set(interaction.requestId, { deadline: interaction.expiresAtMs, expired: false });
+            const countdown = node('p', 'agent-chat-approval-countdown', '超时后安全取消');
+            card.dataset.approvalId = interaction.requestId;
+            card.append(countdown);
+            ensureApprovalTicker();
+        }
+
+        if (interaction.kind === 'user-input') {
+            const form = node('form', 'agent-chat-interaction-form');
+            for (const question of (payload.questions || []).slice(0, 16)) {
+                const fieldset = node('fieldset', 'agent-chat-interaction-fieldset');
+                fieldset.dataset.questionId = String(question.id || '');
+                fieldset.append(node('legend', '', question.header || question.question || '需要输入'));
+                if (question.question && question.question !== question.header) fieldset.append(node('p', 'agent-chat-muted', question.question));
+                const options = Array.isArray(question.options) ? question.options : [];
+                for (const [index, option] of options.entries()) {
+                    const label = node('label', 'agent-chat-interaction-option');
+                    const input = document.createElement('input');
+                    input.type = 'radio';
+                    input.name = `question:${question.id}`;
+                    input.value = String(option.label || '');
+                    if (index === 0) input.required = !question.isOther;
+                    label.append(input, node('span', '', option.label || '选项'));
+                    if (option.description) label.append(node('small', '', option.description));
+                    fieldset.append(label);
+                }
+                if (!options.length || question.isOther) {
+                    const input = document.createElement(options.length || question.isSecret ? 'input' : 'textarea');
+                    input.name = `other:${question.id}`;
+                    if (input.tagName === 'INPUT') input.type = question.isSecret ? 'password' : 'text';
+                    if (input.tagName === 'TEXTAREA') input.rows = 3;
+                    input.autocomplete = question.isSecret ? 'off' : 'on';
+                    input.placeholder = options.length ? '其他答案' : '输入回答';
+                    fieldset.append(input);
+                }
+                form.append(fieldset);
+            }
+            const actions = node('div', 'agent-chat-approval-actions');
+            const cancel = button('取消', 'secondary');
+            cancel.type = 'button';
+            cancel.addEventListener('click', () => run(() => controller.respondInteraction(interaction, { answers: {} })));
+            const submit = button('提交回答', 'primary');
+            submit.type = 'submit';
+            actions.append(cancel, submit);
+            form.append(actions);
+            form.addEventListener('submit', (event) => {
+                event.preventDefault();
+                const answers = {};
+                for (const question of (payload.questions || []).slice(0, 16)) {
+                    const selected = form.querySelector(`input[name="question:${cssEscape(question.id)}"]:checked`)?.value;
+                    const other = form.querySelector(`[name="other:${cssEscape(question.id)}"]`)?.value?.trim();
+                    const answer = other || selected;
+                    if (answer) answers[question.id] = { answers: [answer] };
+                }
+                run(() => controller.respondInteraction(interaction, { answers }));
+            });
+            card.append(form);
+            return card;
+        }
+
+        if (interaction.kind === 'permission') {
+            card.append(node('p', 'agent-chat-approval-binding-value', `工作目录：${payload.cwd || '未知'}`));
+            card.append(node('pre', 'agent-chat-approval-args', JSON.stringify(payload.permissions || {}, null, 2).slice(0, 16_384)));
+            const scope = document.createElement('select');
+            scope.setAttribute('aria-label', '授权范围');
+            for (const [value, label] of [['turn', '仅当前 Turn'], ['session', '当前 Session']]) {
+                const option = document.createElement('option'); option.value = value; option.textContent = label; scope.append(option);
+            }
+            const actions = node('div', 'agent-chat-approval-actions');
+            const deny = button('拒绝', 'danger');
+            const accept = button('按请求授权', 'secondary');
+            deny.addEventListener('click', () => run(() => controller.respondInteraction(interaction, { decision: 'decline' })));
+            accept.addEventListener('click', () => run(() => controller.respondInteraction(interaction, { decision: 'accept', scope: scope.value })));
+            actions.append(scope, deny, accept);
+            card.append(actions);
+            return card;
+        }
+
+        if (interaction.kind === 'mcp-elicitation') {
+            const mode = payload.mode || 'form';
+            const schema = payload.requestedSchema || {};
+            if (mode === 'url') {
+                const url = String(payload.url || '');
+                card.append(node('p', 'agent-chat-toolbox-ws-detail', url));
+                const open = button('在系统浏览器打开', 'secondary');
+                open.disabled = !/^https?:\/\//i.test(url);
+                open.addEventListener('click', () => runtimeApi().sendOpenExternalLink?.(url));
+                card.append(open);
+            }
+            const form = node('form', 'agent-chat-interaction-form');
+            if (mode !== 'url') {
+                const properties = Object.entries(schema.properties || {}).slice(0, 64);
+                for (const [key, definition] of properties) {
+                    const field = node('label', 'agent-chat-interaction-field');
+                    field.append(node('span', '', definition.title || key));
+                    let input;
+                    if (Array.isArray(definition.enum)) {
+                        input = document.createElement('select');
+                        for (const value of definition.enum) {
+                            const option = document.createElement('option'); option.value = value; option.textContent = value; input.append(option);
+                        }
+                    } else {
+                        input = document.createElement('input');
+                        input.type = definition.format === 'password' ? 'password'
+                            : definition.type === 'boolean' ? 'checkbox'
+                                : ['number', 'integer'].includes(definition.type) ? 'number' : 'text';
+                    }
+                    input.name = key;
+                    if ((schema.required || []).includes(key)) input.required = true;
+                    field.append(input);
+                    form.append(field);
+                }
+                if (!properties.length) {
+                    const rawField = node('label', 'agent-chat-interaction-field');
+                    rawField.append(node('span', '', '结构化响应（JSON）'));
+                    const raw = document.createElement('textarea');
+                    raw.name = '__json';
+                    raw.rows = 6;
+                    raw.placeholder = '{}';
+                    rawField.append(raw);
+                    form.append(rawField);
+                }
+            }
+            const actions = node('div', 'agent-chat-approval-actions');
+            const cancel = button('取消', 'danger');
+            cancel.type = 'button';
+            cancel.addEventListener('click', () => run(() => controller.respondInteraction(interaction, { action: 'cancel' })));
+            const decline = button('拒绝', 'secondary');
+            decline.type = 'button';
+            decline.addEventListener('click', () => run(() => controller.respondInteraction(interaction, { action: 'decline' })));
+            const accept = button('接受', 'primary');
+            accept.type = 'submit';
+            actions.append(cancel, decline, accept);
+            form.append(actions);
+            form.addEventListener('submit', (event) => {
+                event.preventDefault();
+                const content = {};
+                for (const control of form.elements) {
+                    if (!control.name) continue;
+                    if (control.name === '__json') {
+                        try { Object.assign(content, JSON.parse(control.value || '{}')); }
+                        catch { notify('MCP 表单 JSON 无效。', 'error'); return; }
+                        continue;
+                    }
+                    content[control.name] = control.type === 'checkbox' ? control.checked
+                        : control.type === 'number' ? Number(control.value) : control.value;
+                }
+                run(() => controller.respondInteraction(interaction, { action: 'accept', content }));
+            });
+            card.append(form);
+            return card;
+        }
+
+        card.append(node('p', 'agent-chat-muted', '该交互类型没有可用响应控件，保持 fail-closed。'));
+        return card;
     }
 
     function renderActivity() {
         if (state.disposed) return;
         const current = store.getState();
-        activityPanel.replaceChildren();
-        const inner = node('div', 'agent-chat-activity-inner');
-
-        const panelHeader = node('div', 'agent-chat-activity-header');
-        panelHeader.append(node('strong', 'agent-chat-activity-title', '活动'));
-        const closeBtn = iconButton('close', '关闭活动面板', 'agent-chat-activity-close');
-        closeBtn.addEventListener('click', () => setActivityOpen(false));
-        panelHeader.append(closeBtn);
+        const previousContent = state.activityTabPanels.get(state.activityTab);
+        const previousScrollTarget = state.activityTab === 'activity'
+            ? previousContent?.querySelector('.agent-chat-activity-list')
+            : previousContent;
+        const scrollTop = previousScrollTarget?.scrollTop || 0;
+        const searchFocused = document.activeElement?.matches?.('.agent-chat-activity-filters input[type="search"]');
+        const searchSelection = searchFocused ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null;
+        const existingInteractions = new Map([...activityPanel.querySelectorAll('.agent-chat-interaction-card[data-interaction-id]')]
+            .map((item) => [item.dataset.interactionId, item]));
+        const existingActivityCards = new Map([...activityPanel.querySelectorAll('[data-activity-key]')]
+            .map((item) => [item.dataset.activityKey, item]));
+        const openKeys = new Set([...activityPanel.querySelectorAll('details[open][data-activity-key]')]
+            .map((item) => item.dataset.activityKey));
 
         const localApprovals = current.approvals || [];
         const backendApprovals = (current.toolboxWs || [])
             .filter((item) => item?.kind === 'backend-approval-request');
-        const pendingApprovals = localApprovals.length + backendApprovals.length;
+        const interactionKey = (source, requestId) => `${String(source || 'codex-native')}:${String(requestId || '')}`;
+        const actionableKeys = new Set([
+            ...localApprovals.map((item) => interactionKey(item.scope || 'codex-native', item.requestId || item.approvalId)),
+            ...backendApprovals.map((item) => interactionKey('toolbox', item?.value?.requestId || item?.value?.data?.requestId)),
+        ]);
+        const passiveInteractions = (current.interactions || []).filter((item) => (
+            !actionableKeys.has(interactionKey(item.source, item.requestId))
+        ));
+        const pendingApprovals = localApprovals.length + backendApprovals.length + passiveInteractions.length;
+        const unread = current.activityUnreadByTab || {};
         const tabDefs = [
-            ['activity', '工具活动'],
-            ['approvals', pendingApprovals ? `审批 (${pendingApprovals})` : '审批'],
-            ['usage', '用量'],
-            ['connection', '连接'],
+            { id: 'usage', label: '上下文' },
+            { id: 'activity', label: '通知' },
+            { id: 'approvals', label: pendingApprovals ? `审批 (${pendingApprovals})` : '审批' },
         ];
-        const tabs = node('div', 'agent-chat-activity-tabs');
-        tabs.setAttribute('role', 'tablist');
-        for (const [id, label] of tabDefs) {
-            const tab = node('button', `agent-chat-activity-tab${state.activityTab === id ? ' is-active' : ''}`, label);
-            tab.type = 'button';
-            tab.dataset.tab = id;
-            tab.setAttribute('role', 'tab');
+        if (!tabDefs.some((tab) => tab.id === state.activityTab)) state.activityTab = 'usage';
+        const visibleTabIds = new Set(tabDefs.map(({ id }) => id));
+        for (const [id, tab] of state.activityTabButtons) {
+            if (visibleTabIds.has(id)) continue;
+            tab.remove();
+            state.activityTabButtons.delete(id);
+        }
+        for (const { id, label } of tabDefs) {
+            const count = Number(unread[id] || 0);
+            let tab = state.activityTabButtons.get(id);
+            if (!tab) {
+                tab = node('button', 'agent-chat-activity-tab');
+                tab.type = 'button';
+                tab.dataset.tab = id;
+                tab.setAttribute('role', 'tab');
+                tab.addEventListener('click', () => { state.activityTab = id; clearActivityUnread(id); renderActivity(); });
+                state.activityTabButtons.set(id, tab);
+            }
+            activityTabs.append(tab);
+            tab.textContent = count ? `${label} · ${Math.min(99, count)}` : label;
+            tab.classList.toggle('is-active', state.activityTab === id);
             tab.setAttribute('aria-selected', String(state.activityTab === id));
-            tab.addEventListener('click', () => { state.activityTab = id; renderActivity(); });
-            tabs.append(tab);
+        }
+        activityTabs.querySelectorAll('.agent-chat-activity-tab-group').forEach((group) => group.remove());
+
+        for (const [id, panel] of state.activityTabPanels) {
+            if (visibleTabIds.has(id)) continue;
+            panel.remove();
+            state.activityTabPanels.delete(id);
         }
 
-        const content = node('div', 'agent-chat-activity-content');
-        content.setAttribute('role', 'tabpanel');
+        for (const { id } of tabDefs) {
+            let panel = state.activityTabPanels.get(id);
+            if (!panel) {
+                panel = node('div', 'agent-chat-activity-tabpanel');
+                panel.dataset.activityPanel = id;
+                panel.setAttribute('role', 'tabpanel');
+                state.activityTabPanels.set(id, panel);
+                activityContent.append(panel);
+            }
+            panel.hidden = id !== state.activityTab;
+        }
+        const content = state.activityTabPanels.get(state.activityTab);
+        content.replaceChildren();
         const viewState = deriveWorkbenchViewState(current);
 
         if (state.activityTab === 'connection') {
@@ -2657,28 +3129,81 @@ function mountWorkbench(container) {
                 for (const observation of backendApprovals) {
                     content.append(blockPresentation.createToolboxObservation(observation));
                 }
+                for (const interaction of passiveInteractions) {
+                    content.append(existingInteractions.get(String(interaction.requestId)) || buildInteractionCard(interaction));
+                }
             }
         } else if (state.activityTab === 'usage') {
             content.append(buildUsagePanel(current));
+        } else if (state.activityTab === 'plan') {
+            content.append(buildPlanInspector(current));
+        } else if (state.activityTab === 'changes') {
+            content.append(buildChangeInspector(current));
         } else {
             // This is a daemon-global observation feed, not a Topic feed;
             // backend approval cards may also be reached from Approvals.
             const ws = current.toolboxWs || [];
             const markers = current.markerObservations || [];
-            if (!ws.length && !markers.length) {
-                content.append(node('div', 'agent-chat-activity-empty', '暂无 VCPToolBox 或 VCP 内容观察事件。'));
+            content.append(node('div', 'agent-chat-activity-note', '全局 VCPLog/VCPInfo 仅保留本次运行；会话关联的工具、推理和检查结果会随会话恢复。'));
+            const controls = node('div', 'agent-chat-activity-filters');
+            const search = document.createElement('input');
+            search.type = 'search';
+            search.placeholder = '搜索活动';
+            search.value = state.activitySearch;
+            search.setAttribute('aria-label', '搜索工具活动');
+            search.addEventListener('input', () => { state.activitySearch = search.value; renderActivity(); });
+            const sourceFilter = document.createElement('select');
+            sourceFilter.setAttribute('aria-label', '活动来源');
+            for (const value of ['all', ...new Set(ws.map((item) => item.channel).filter(Boolean))]) {
+                const option = document.createElement('option'); option.value = value; option.textContent = value === 'all' ? '全部来源' : value; sourceFilter.append(option);
+            }
+            sourceFilter.value = state.activitySourceFilter;
+            sourceFilter.addEventListener('change', () => { state.activitySourceFilter = sourceFilter.value; renderActivity(); });
+            const kindFilter = document.createElement('select');
+            kindFilter.setAttribute('aria-label', '活动类型');
+            for (const value of ['all', ...new Set([...ws.map((item) => item.kind), ...markers.map((item) => item.kind)].filter(Boolean))]) {
+                const option = document.createElement('option'); option.value = value; option.textContent = value === 'all' ? '全部类型' : value; kindFilter.append(option);
+            }
+            kindFilter.value = state.activityKindFilter;
+            kindFilter.addEventListener('change', () => { state.activityKindFilter = kindFilter.value; renderActivity(); });
+            controls.append(search, sourceFilter, kindFilter);
+            content.append(controls);
+            const query = state.activitySearch.trim().toLocaleLowerCase();
+            const visibleWs = ws.filter((item) => (state.activitySourceFilter === 'all' || item.channel === state.activitySourceFilter)
+                && (state.activityKindFilter === 'all' || item.kind === state.activityKindFilter)
+                && (!query || JSON.stringify(item).toLocaleLowerCase().includes(query)));
+            const visibleMarkers = markers.filter((item) => (state.activitySourceFilter === 'all')
+                && (state.activityKindFilter === 'all' || item.kind === state.activityKindFilter)
+                && (!query || JSON.stringify(item).toLocaleLowerCase().includes(query)));
+            const list = node('div', 'agent-chat-activity-list');
+            if (!visibleWs.length && !visibleMarkers.length) {
+                list.append(node('div', 'agent-chat-activity-empty', '暂无 VCPToolBox 或 VCP 内容观察事件。'));
             } else {
-                for (const observation of ws) {
-                    content.append(blockPresentation.createToolboxObservation(observation));
+                for (const observation of visibleWs) {
+                    const card = existingActivityCards.get(observation.id) || blockPresentation.createToolboxObservation(observation);
+                    card.dataset.activityKey = observation.id;
+                    list.append(card);
                 }
-                for (const observation of markers) {
-                    content.append(blockPresentation.createMarkerObservation(observation));
+                for (const observation of visibleMarkers) {
+                    const card = existingActivityCards.get(observation.id) || blockPresentation.createMarkerObservation(observation);
+                    card.dataset.activityKey = observation.id;
+                    list.append(card);
                 }
             }
+            content.append(list);
         }
-
-        inner.append(panelHeader, tabs, content);
-        activityPanel.append(inner);
+        for (const details of content.querySelectorAll('details[data-activity-key]')) {
+            if (openKeys.has(details.dataset.activityKey)) details.open = true;
+        }
+        const scrollTarget = state.activityTab === 'activity'
+            ? content.querySelector('.agent-chat-activity-list')
+            : content;
+        if (scrollTarget) scrollTarget.scrollTop = scrollTop;
+        if (searchFocused) {
+            const nextSearch = content.querySelector('.agent-chat-activity-filters input[type="search"]');
+            nextSearch?.focus();
+            if (searchSelection) nextSearch?.setSelectionRange?.(...searchSelection);
+        }
     }
 
     function patchStreamingFeed(event) {
@@ -2748,6 +3273,25 @@ function mountWorkbench(container) {
     }
 
     function renderForStoreEvent(event) {
+        if (event?.type && state.activityOpen) {
+            const eventTab = event.type === 'toolbox.ws' || event.type === 'marker.observed' ? 'activity'
+                : event.type.startsWith('approval.') || event.type.startsWith('interaction.') ? 'approvals'
+                    : event.type === 'plan.updated' ? 'plan'
+                        : event.type === 'context.usage' || event.type.includes('compaction') ? 'usage'
+                            : null;
+            if (eventTab === state.activityTab) clearActivityUnread(eventTab);
+        }
+        if (event?.type === 'turn.started' && event.turnId) {
+            const rawTimestamp = typeof event.timestamp === 'string' ? Date.parse(event.timestamp) : Number(event.timestamp);
+            const eventTime = Number.isFinite(rawTimestamp) && rawTimestamp >= 1_000_000_000_000
+                ? rawTimestamp
+                : Number.isFinite(rawTimestamp) && rawTimestamp >= 1_000_000_000
+                    ? rawTimestamp * 1000
+                    : Date.now();
+            if (!state.turnStartedAt.has(event.turnId)) state.turnStartedAt.set(event.turnId, eventTime);
+        } else if (event?.turnId && ['turn.completed', 'turn.failed', 'turn.cancelled'].includes(event.type)) {
+            state.turnStartedAt.delete(event.turnId);
+        }
         settleTurnStartIndicator(event);
         if (!event?.type) {
             // A snapshot preview changes only the visible projection.  Do not
@@ -2805,6 +3349,62 @@ function mountWorkbench(container) {
             return;
         }
         queueRender({ feed: true, activity: true, composer: true });
+    }
+
+    function formatRunElapsed(milliseconds) {
+        const seconds = Math.max(0, milliseconds) / 1000;
+        if (seconds < 60) return `${seconds.toFixed(1)}s`;
+        const wholeSeconds = Math.floor(seconds);
+        const minutes = Math.floor(wholeSeconds / 60);
+        const remainder = wholeSeconds % 60;
+        if (minutes < 60) return `${minutes}m ${String(remainder).padStart(2, '0')}s`;
+        const hours = Math.floor(minutes / 60);
+        return `${hours}h ${String(minutes % 60).padStart(2, '0')}m`;
+    }
+
+    function latestRunningTool(current, turnId) {
+        const tools = current.tools instanceof Map ? [...current.tools.values()] : [];
+        return tools
+            .filter((tool) => (!turnId || !tool.turnId || tool.turnId === turnId)
+                && ['requested', 'running'].includes(tool.state))
+            .sort((left, right) => Number(right.lastTimestamp || right.firstTimestamp || 0)
+                - Number(left.lastTimestamp || left.firstTimestamp || 0))[0] || null;
+    }
+
+    function syncRunStatus(current = store.getState()) {
+        const turnId = current.activeTurnId || state.turnStart?.turnId || null;
+        const visible = Boolean(turnId || state.turnStart);
+        runStatus.hidden = !visible;
+        if (!visible) {
+            if (runStatusTimer !== null) clearInterval(runStatusTimer);
+            runStatusTimer = null;
+            return;
+        }
+        const startedAt = turnId
+            ? (state.turnStartedAt.get(turnId) || state.turnStart?.startedAt || Date.now())
+            : (state.turnStart?.startedAt || Date.now());
+        if (turnId && !state.turnStartedAt.has(turnId)) state.turnStartedAt.set(turnId, startedAt);
+        const viewState = deriveWorkbenchViewState(current);
+        runStatus.dataset.state = viewState;
+        runStatusLabel.textContent = viewState === 'awaiting-approval'
+            ? '等待审批'
+            : state.turnStart?.phase === 'starting' && !current.activeTurnId
+                ? '正在启动 Agent'
+                : '正在运行';
+        const runningTool = latestRunningTool(current, turnId);
+        runStatusDetail.textContent = runningTool
+            ? `正在执行 ${projectVcpToolPresentation(runningTool).label}`
+            : 'Agent 正在处理当前任务';
+        const elapsedMs = Date.now() - startedAt;
+        runStatusElapsed.textContent = formatRunElapsed(elapsedMs);
+        runStatusElapsed.dateTime = `PT${Math.max(0, elapsedMs / 1000).toFixed(1)}S`;
+        runStatusStop.hidden = !current.activeTurnId;
+        runStatusStop.disabled = !current.activeTurnId;
+        if (runStatusTimer === null) {
+            runStatusTimer = setInterval(() => {
+                if (!state.disposed) syncRunStatus();
+            }, 250);
+        }
     }
 
     function renderComposer() {
@@ -2867,6 +3467,11 @@ function mountWorkbench(container) {
         inputCard.classList.toggle('is-busy', hasActiveTurn);
         sendButton.classList.toggle('interrupt-mode', interruptMode);
         sendButton.classList.toggle('is-ready', canSend || hasActiveTurn);
+        const permissionLabel = state.permissionMode === 'always-approve' ? '本地审批：YOLO（设置）' : '本地审批：逐次确认（设置）';
+        permissionsButton.title = permissionLabel;
+        permissionsButton.setAttribute('aria-label', permissionLabel);
+        permissionsButton.classList.toggle('is-active', state.permissionMode === 'always-approve');
+        syncRunStatus(current);
     }
 
     function render() {
@@ -2937,6 +3542,7 @@ function mountWorkbench(container) {
             attachments,
             phase: 'starting',
             turnId: null,
+            startedAt: Date.now(),
             createdAt: Date.now(),
         };
         state.uxTimings.set(`turn-start:${topicId || 'new'}`, window.performance?.now?.() || Date.now());
@@ -2952,6 +3558,9 @@ function mountWorkbench(container) {
                 phase: accepted?.turnId ? 'thinking' : 'starting',
                 turnId: accepted?.turnId || null,
             };
+            if (accepted?.turnId && !state.turnStartedAt.has(accepted.turnId)) {
+                state.turnStartedAt.set(accepted.turnId, state.turnStart?.startedAt || Date.now());
+            }
             uxMark('turn-start-ack', accepted?.turnId, state.uxTimings.get(`turn-start:${topicId || 'new'}`) || null);
             // Preserve the draft if attachment switching or turn acceptance
             // fails.  The daemon is the only place that can confirm a turn.
@@ -3012,6 +3621,7 @@ function mountWorkbench(container) {
 
     return () => {
         state.disposed = true;
+        if (runStatusTimer !== null) clearInterval(runStatusTimer);
         closeTopicContextMenu();
         if (renderFrame !== null && typeof window.cancelAnimationFrame === 'function') window.cancelAnimationFrame(renderFrame);
         state.accountThemeObserver?.disconnect();
@@ -3026,8 +3636,10 @@ function mountWorkbench(container) {
 
 register({
     id: 'agent-workbench',
-    title: 'VCP Agent',
-    icon: 'smart_toy',
+    title: 'VCPBuild',
+    // Rounded-square "code" chip mirroring opencode's tab project-avatar:
+    // a small filled tile with an inset ring and a code glyph inside.
+    iconSvg: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="1.5" y="1.5" width="21" height="21" rx="5" fill="currentColor" fill-opacity="0.12"/><rect x="1.5" y="1.5" width="21" height="21" rx="5" stroke="currentColor" stroke-opacity="0.35" stroke-width="1"/><path d="m9.2 9.2-3 3 3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="m14.8 9.2 3 3-3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.2 7.5l-2.4 9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
     kind: 'internal',
     mount: mountWorkbench,
 });

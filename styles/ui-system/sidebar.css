@@ -423,7 +423,7 @@
     html[data-ui-mode="next"] .vcp-ui-scope.sidebar .agent-list li.active,
     html[data-ui-mode="next"] .vcp-ui-scope.sidebar .topic-list .topic-item.active {
         color: var(--vcp-ui-text-0);
-        background: var(--vcp-ui-bg-1);
+        background: var(--vcp-ui-selection-bg);
         backdrop-filter: none;
         -webkit-backdrop-filter: none;
         box-shadow: var(--vcp-ui-sidebar-item-shadow);
@@ -488,7 +488,7 @@
     html[data-ui-mode="next"] .vcp-ui-scope .next-ui-account-dock {
         position: relative;
         width: calc(100% - var(--vcp-ui-sidebar-list-gutter) - var(--vcp-ui-sidebar-list-gutter));
-        min-height: var(--vcp-ui-control-lg);
+        min-height: 46px;
         margin: var(--vcp-ui-space-2) var(--vcp-ui-sidebar-list-gutter) 0;
         display: flex;
         align-items: center;
@@ -508,7 +508,7 @@
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope .next-ui-account-trigger {
-        height: var(--vcp-ui-control-lg);
+        height: 46px;
         min-width: 0;
         padding: 0 var(--vcp-ui-space-2) 0 var(--vcp-ui-sidebar-account-left-padding);
         display: flex;
@@ -558,12 +558,12 @@
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope .next-ui-account-settings {
-        width: var(--vcp-ui-control-lg);
-        height: var(--vcp-ui-control-lg);
+        width: 46px;
+        height: 46px;
         padding: 0;
         display: grid;
         place-items: center;
-        flex: 0 0 var(--vcp-ui-control-lg);
+        flex: 0 0 46px;
         border-radius: var(--vcp-ui-radius-md);
     }
 

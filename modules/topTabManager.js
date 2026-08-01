@@ -170,7 +170,7 @@
         container.dataset.appId = app.id;
         container.hidden = true;
         host.append(container);
-        const tab = createTab({ id: viewId, title: app.title, icon: app.icon });
+        const tab = createTab({ id: viewId, title: app.title, icon: app.icon, iconSvg: app.iconSvg });
         const context = Object.freeze({
             close: () => closeView(viewId),
             activate: () => setView(viewId),
@@ -378,7 +378,11 @@
             button.title = app.title;
             const appIcon = document.createElement('span');
             appIcon.className = 'next-ui-app-icon vcp-ui-internal-app-icon vcp-ui-scope';
-            appIcon.append(Object.assign(document.createElement('span'), { className: 'vcp-ui-icon', textContent: app.icon }));
+            if (app.icon) {
+                appIcon.append(Object.assign(document.createElement('span'), { className: 'vcp-ui-icon', textContent: app.icon }));
+            } else if (app.iconSvg) {
+                appIcon.innerHTML = app.iconSvg;
+            }
             const label = document.createElement('span');
             label.textContent = app.title;
             button.append(appIcon, label);

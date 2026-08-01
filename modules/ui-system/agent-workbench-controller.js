@@ -1,4 +1,5 @@
 import { createWorkbenchStore } from './agent-workbench-store.js';
+import { createAgentSessionUiState, reconcileAgentSessionUiState, reduceAgentSessionUiState } from './agent-session-state.js';
 
 // The Workbench deliberately has no Main-process transcript cache. SQLite is
 // the durable presentation projection while Codex Thread Store remains the
@@ -73,11 +74,19 @@ function createWorkbenchController(runtimeApi) {
                 lastError: status?.lastError || null,
             },
             activeRuntimes: Array.isArray(status?.runtimes) ? status.runtimes : [],
+            sessionUi: reconcileAgentSessionUiState(
+                store.getState().sessionUi,
+                Array.isArray(status?.sessions) ? status.sessions : [],
+            ),
         };
         // Approvals are a Renderer-only live projection. Rust events add and
         // remove them; Main must never manufacture an empty list that erases
         // a visible approval during an unrelated status refresh.
+        // These lists are independently optional during restart/compatibility
+        // refreshes.  Never let a status response that merely adds interaction
+        // identities erase an approval already delivered as a live event.
         if (Array.isArray(status?.pendingApprovals)) projection.approvals = status.pendingApprovals;
+        if (Array.isArray(status?.pendingInteractions)) projection.interactions = status.pendingInteractions;
         store.setState(projection);
         return status;
     }
@@ -180,9 +189,60 @@ function createWorkbenchController(runtimeApi) {
         if (!Array.isArray(snapshot?.messages)) return historyToProjection(snapshot?.history);
         const messages = [];
         const tools = new Map();
+        const markerObservations = [];
+        let plan = null;
+        const projectionActivity = snapshot?.projection?.activity || {};
+        const restoredUsage = projectionActivity.usage || {};
+        const restoredCompaction = projectionActivity.compaction || {};
+        const usageSource = ['real', 'estimated', 'unknown'].includes(restoredUsage.source) ? restoredUsage.source : 'unknown';
+        const restoredUsedTokens = Number(restoredUsage.usedTokens ?? restoredUsage.totalTokens) || 0;
+        const restoredContextWindow = Number(restoredUsage.contextWindow) || 0;
+        const context = {
+            ...restoredUsage,
+            source: usageSource,
+            usageAvailable: ['real', 'estimated'].includes(usageSource)
+                && ['totalTokens', 'usedTokens', 'inputTokens', 'outputTokens', 'reasoningTokens', 'cacheReadTokens', 'cacheWriteTokens']
+                    .some((key) => Number.isFinite(Number(restoredUsage[key]))),
+            usedTokens: restoredUsedTokens,
+            contextWindow: restoredContextWindow,
+            percentage: restoredContextWindow ? Math.min(100, Math.round((restoredUsedTokens / restoredContextWindow) * 100)) : 0,
+            compacting: restoredCompaction.state === 'started',
+            compactionState: restoredCompaction.state || null,
+            summary: restoredCompaction.summary || '',
+            compactionError: restoredCompaction.error || '',
+        };
+        const textFromContent = (content = {}) => {
+            const parts = Array.isArray(content.parts) ? content.parts : [];
+            const summary = Array.isArray(content.summary) ? content.summary : [];
+            const detail = Array.isArray(content.content) ? content.content : [];
+            return content.text
+                || parts.map((part) => typeof part === 'string' ? part : part?.text || '').join('')
+                || summary.map((part) => typeof part === 'string' ? part : part?.text || '').join('')
+                || detail.map((part) => typeof part === 'string' ? part : part?.text || '').join('')
+                || '';
+        };
+        const messageState = (status) => {
+            if (status === 'completed') return 'complete';
+            if (['inProgress', 'running', 'started'].includes(status)) return 'streaming';
+            return status || 'complete';
+        };
         for (const entry of snapshot.messages) {
+            const reasoning = [];
             for (const block of entry.blocks || []) {
                 const blockId = block.blockId || `${entry.messageId}:${block.ordinal || 0}`;
+                if (block.kind === 'observation' && block.content?.marker) {
+                    const marker = block.content.marker;
+                    markerObservations.push({
+                        id: `marker:${entry.messageId}:${block.ordinal || 0}`,
+                        kind: String(marker.kind || 'unknown'),
+                        summary: typeof marker.summary === 'string' ? marker.summary : '',
+                        detail: typeof marker.detail === 'string' ? marker.detail : '',
+                        messageId: entry.messageId,
+                        turnId: entry.turnId || null,
+                        timestamp: entry.updatedAt || entry.createdAt || null,
+                    });
+                    continue;
+                }
                 if (block.kind === 'tool') {
                     const item = block.content?.item || {};
                     tools.set(entry.itemId, {
@@ -201,21 +261,76 @@ function createWorkbenchController(runtimeApi) {
                     });
                     continue;
                 }
-                const parts = Array.isArray(block.content?.parts) ? block.content.parts : [];
-                const summary = Array.isArray(block.content?.summary) ? block.content.summary : [];
-                const content = block.content?.text
-                    || parts.map((part) => part?.text || '').join('')
-                    || summary.map((part) => typeof part === 'string' ? part : part?.text || '').join('')
-                    || '';
+                if (block.kind === 'attachment') {
+                    const item = block.content?.item || block.content || {};
+                    messages.push({
+                        id: blockId,
+                        messageId: entry.messageId,
+                        itemId: entry.itemId,
+                        turnId: entry.turnId || null,
+                        role: 'assistant',
+                        content: item.message || '',
+                        attachments: [{
+                            id: blockId,
+                            itemId: entry.itemId,
+                            kind: item.type === 'imageView' ? 'image' : (item.kind || 'file'),
+                            displayName: item.path || item.url || item.name || 'Codex 资源',
+                            path: item.path || null,
+                            url: item.url || null,
+                        }],
+                        state: messageState(entry.status),
+                        createdAt: entry.createdAt || 0,
+                        snapshotOrdinal: entry.sourceOrder || null,
+                    });
+                    continue;
+                }
+                if (block.kind === 'reasoning') {
+                    const text = textFromContent(block.content);
+                    if (text) reasoning.push({ ordinal: Number(block.ordinal) || 0, text });
+                    continue;
+                }
+                if (block.kind === 'observation' && typeof block.content?.text === 'string'
+                    && !block.content?.phase && entry.role === 'assistant') {
+                    plan = { text: block.content.text, turnId: entry.turnId || null,
+                        itemId: entry.itemId, updatedAt: entry.updatedAt || entry.createdAt || null };
+                    continue;
+                }
+                if (block.kind === 'observation' && block.content?.phase) {
+                    context.compactionState = block.content.phase;
+                    context.compacting = block.content.phase === 'inProgress';
+                    context.summary = block.content.text || context.summary;
+                    continue;
+                }
+                const content = textFromContent(block.content);
+                const fallbackContent = content || (block.content?.item
+                    ? `Codex ${block.content.item.type || 'unknown'} Item\n\n${JSON.stringify(block.content.item, null, 2).slice(0, 16_384)}`
+                    : '');
+                if (!fallbackContent) continue;
                 messages.push({
                     id: blockId,
                     messageId: entry.messageId,
                     itemId: entry.itemId,
                     turnId: entry.turnId || null,
                     role: entry.role === 'user' ? 'user' : entry.role === 'system' ? 'system' : 'assistant',
-                    content,
-                    state: entry.status === 'completed' ? 'complete' : entry.status,
-                    isReasoning: block.kind === 'reasoning',
+                    content: fallbackContent,
+                    state: messageState(entry.status),
+                    createdAt: entry.createdAt || 0,
+                    firstSequence: null,
+                    lastSequence: null,
+                    snapshotOrdinal: entry.sourceOrder || null,
+                });
+            }
+            if (reasoning.length) {
+                messages.push({
+                    id: entry.messageId,
+                    messageId: entry.messageId,
+                    itemId: entry.itemId,
+                    turnId: entry.turnId || null,
+                    role: 'assistant',
+                    content: '',
+                    reasoning: reasoning.sort((left, right) => left.ordinal - right.ordinal)
+                        .map((part) => part.text).join('\n'),
+                    state: messageState(entry.status),
                     createdAt: entry.createdAt || 0,
                     firstSequence: null,
                     lastSequence: null,
@@ -223,7 +338,7 @@ function createWorkbenchController(runtimeApi) {
                 });
             }
         }
-        return { messages, tools };
+        return { messages, tools, markerObservations, plan, context };
     }
 
     function applyCodexProjectionMessage(entry) {
@@ -264,7 +379,15 @@ function createWorkbenchController(runtimeApi) {
         for (const [toolCallId, tool] of patch.tools) {
             tools.set(toolCallId, { ...(tools.get(toolCallId) || {}), ...tool });
         }
-        store.setState({ messages, tools });
+        const markerObservations = [...(current.markerObservations || [])];
+        for (const marker of patch.markerObservations || []) {
+            const index = markerObservations.findIndex((item) => item.id === marker.id);
+            if (index >= 0) markerObservations[index] = marker;
+            else markerObservations.push(marker);
+        }
+        store.setState({ messages, tools, markerObservations: markerObservations.slice(-100),
+            ...(patch.plan ? { plan: patch.plan } : {}),
+            ...(patch.context && Object.keys(patch.context).length ? { context: { ...current.context, ...patch.context } } : {}) });
     }
 
     function applyCodexRuntimeEvent(event) {
@@ -289,6 +412,22 @@ function createWorkbenchController(runtimeApi) {
             liveProjectionRevision.set(event.topicId, (liveProjectionRevision.get(event.topicId) || 0) + 1);
         }
         if (selected && event.projectionMessage) applyCodexProjectionMessage(event.projectionMessage);
+        applySessionUiEvent(event);
+    }
+
+    function applySessionUiEvent(event) {
+        const current = store.getState();
+        const method = event?.method;
+        const mappedType = method === 'turn/started' ? 'turn.started'
+            : method === 'turn/completed' ? 'turn.completed'
+                : event?.type;
+        const sessionEvent = {
+            ...event,
+            type: mappedType,
+            requestId: event?.payload?.approval?.approvalId || event?.approvalId || null,
+        };
+        const reduced = reduceAgentSessionUiState(current.sessionUi || createAgentSessionUiState(), sessionEvent);
+        if (reduced !== current.sessionUi) store.setState({ sessionUi: reduced });
     }
 
     function cacheSnapshot(topicId, snapshot) {
@@ -324,8 +463,8 @@ function createWorkbenchController(runtimeApi) {
             // Topic only. It must never stand for a daemon-global attachment.
             attachment: runtime ? { ...runtime } : null,
             activeTurnId: null,
-            context: { usedTokens: 0, contextWindow: 0, percentage: 0, compacting: false, summary: '' },
-            plan: null,
+            context: projection.context || current.context,
+            plan: projection.plan || null,
             backgroundAttachment: null,
         });
     }
@@ -613,7 +752,11 @@ function createWorkbenchController(runtimeApi) {
         store.setState({ context: { ...store.getState().context, compacting: true, summary: '' } });
         try {
             const result = await requireApi('agentRuntimeCompactSession')({ sessionId, instructions: instructions || undefined });
-            if (result?.topicId) await hydrateTopic(result.topicId);
+            // Codex returns its reconciled projection snapshot with sessionId;
+            // the Rust compatibility runtime may also return sessionId but its
+            // preview flow remains topicId-based and must not be disturbed.
+            const refreshedTopicId = result?.topicId || (result?.snapshot ? (result?.sessionId || sessionId) : null);
+            if (refreshedTopicId) await hydrateTopic(refreshedTopicId);
             return result;
         } finally {
             store.setState({ context: { ...store.getState().context, compacting: false } });
@@ -629,6 +772,9 @@ function createWorkbenchController(runtimeApi) {
     const takeoverTopic = (topicId, agentId = undefined) => requireApi('agentRuntimeTakeoverTopic')(topicPayload({ topicId }, agentId));
     const renameTopic = (topicId, title, agentId = undefined) => requireApi('agentRuntimeRenameTopic')(topicPayload({ topicId, title }, agentId));
     const deleteTopic = (topicId, agentId = undefined) => requireApi('agentRuntimeDeleteTopic')(topicPayload({ topicId }, agentId));
+    const archiveSession = (sessionId) => requireApi('agentRuntimeCloseSession')({ sessionId });
+    const restoreSession = (sessionId) => requireApi('agentRuntimeRestoreSession')({ sessionId });
+    const setSessionPinned = (sessionId, pinned) => requireApi('agentRuntimeSetSessionPinned')({ sessionId, pinned });
     const listInteractionQueue = () => {
         const runtime = selectedRuntime();
         if (!runtime) throw new Error('当前会话没有运行中的 Codex Thread');
@@ -739,8 +885,20 @@ function createWorkbenchController(runtimeApi) {
             toolCallId: approval.toolCallId,
             argumentsHash: approval.argumentsHash,
         });
-        store.setState({ approvals: store.getState().approvals.filter((item) => item.approvalId !== approval.approvalId) });
+        const key = `${approval.scope || approval.source || 'codex-native'}:${approval.approvalId}`;
+        store.setState({ approvals: store.getState().approvals.filter((item) => (
+            `${item.scope || item.source || 'codex-native'}:${item.approvalId}` !== key
+        )) });
         return result;
+    }
+
+    async function respondInteraction(interaction, response) {
+        return requireApi('agentRuntimeRespondInteraction')({
+            source: interaction.source,
+            requestId: interaction.requestId,
+            kind: interaction.kind,
+            response,
+        });
     }
 
     async function respondToolboxApproval(approvalId, decision) {
@@ -786,6 +944,7 @@ function createWorkbenchController(runtimeApi) {
                     applyCodexRuntimeEvent(event);
                     return;
                 }
+                applySessionUiEvent(event);
                 projectRuntimeActivity(event);
                 const selectedTopicId = current.selectedTopic?.topicId;
                 const isApproval = event?.type?.startsWith('approval.');
@@ -814,10 +973,10 @@ function createWorkbenchController(runtimeApi) {
         store, initialize, subscribeRuntime, dispose, refreshStatus, startRuntime, stopRuntime,
         createSession, createTopic, forkSession, compactSession, hydrateTopic, previewTopic, ensureSessionRuntime,
         listTopics, searchTopics, searchTopicMessages, getTopicIndexStatus, rebuildTopicIndex,
-        readTopic, takeoverTopic, renameTopic, deleteTopic,
+        readTopic, takeoverTopic, renameTopic, deleteTopic, archiveSession, restoreSession, setSessionPinned,
         listInteractionQueue, replaceInteractionQueue, clearInteractionQueue,
         getWorkbenchSettings, updateWorkbenchSettings, selectAttachments,
-        startTurn, steerTurn, followUpTurn, cancelTurn, cancelTool, respondApproval,
+        startTurn, steerTurn, followUpTurn, cancelTurn, cancelTool, respondApproval, respondInteraction,
         respondToolboxApproval,
     };
 }

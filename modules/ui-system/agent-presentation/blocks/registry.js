@@ -2,6 +2,7 @@ import { createApprovalCard } from './approval.js';
 import { createErrorCard, createUnknownBlockCard } from './error.js';
 import { createMarkerObservationCard, createToolboxObservationCard } from './observation.js';
 import { createToolBlockRenderer } from './tool.js';
+import { createToolGroupRenderer } from './tool-group.js';
 
 function createAgentBlockPresentation(options = {}) {
     const document = options.document || globalThis.document;
@@ -13,16 +14,24 @@ function createAgentBlockPresentation(options = {}) {
         postRender: options.postRender,
         onCancel: actions.cancelTool,
     });
+    const toolGroup = createToolGroupRenderer({
+        document,
+        renderContent: options.renderContent,
+        postRender: options.postRender,
+        onCancel: actions.cancelTool,
+    });
 
     return {
         timelineCallbacks: {
             create(part) {
                 if (part.kind === 'tool') return tool.create(part.value);
+                if (part.kind === 'tool-group') return toolGroup.create(part.value);
                 if (part.kind === 'error') return createErrorCard(document, part.value || part);
                 return createUnknownBlockCard(document, part);
             },
             patch(row, part) {
                 if (part.kind === 'tool') return tool.patch(row, part.value);
+                if (part.kind === 'tool-group') return toolGroup.patch(row, part.value);
                 const replacement = part.kind === 'error'
                     ? createErrorCard(document, part.value || part)
                     : createUnknownBlockCard(document, part);

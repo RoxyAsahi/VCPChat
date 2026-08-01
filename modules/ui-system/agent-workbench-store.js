@@ -1,3 +1,5 @@
+import { createAgentSessionUiState } from './agent-session-state.js';
+
 const TERMINAL_EVENT_TYPES = new Set([
     'turn.completed',
     'turn.failed',
@@ -21,10 +23,18 @@ function createInitialState() {
         // A displayed Topic can be a read-only snapshot while several other
         // Topic runtimes keep working. This is never a global composer lock.
         selectedTopic: null,
+        // Codex Thread lifecycle is identity-keyed renderer state. It never
+        // derives activity from the selected sidebar row.
+        sessionUi: createAgentSessionUiState(),
         backgroundAttachment: null,
         messages: [],
         tools: new Map(),
         approvals: [],
+        // Main-owned InteractionRegistry projection.  These are identities
+        // and lifecycle state only; payloads and response channels remain in
+        // Main so the Renderer cannot accidentally approve an unsupported
+        // Codex capability.
+        interactions: [],
         // Rust Host already bounds and redacts these read-only ToolBox
         // observations. Keep a second, smaller UI window so log traffic can
         // never grow a renderer-side transcript or become an execution path.
@@ -33,6 +43,10 @@ function createInitialState() {
         // toolboxWs these came from model text, not a WebSocket; both are
         // ephemeral Activity-only view state and never Topic persistence.
         markerObservations: [],
+        // A bounded, Renderer-only unread cursor for activity observations.
+        // It is deliberately not transcript state and is cleared on open.
+        activityUnread: 0,
+        activityUnreadByTab: { activity: 0, approvals: 0, plan: 0, changes: 0, usage: 0, connection: 0 },
         // Rust emits these four non-sensitive readiness facts. The Renderer
         // is a pure projection and must never probe ToolBox itself.
         readiness: {},
@@ -46,6 +60,22 @@ function createInitialState() {
 
 function messageIdentity(message) {
     return message?.id || message?.messageId || null;
+}
+
+function approvalIdentity(approval) {
+    const source = String(approval?.scope || approval?.source || 'codex-native');
+    const id = String(approval?.approvalId || approval?.requestId || '');
+    return id ? `${source}:${id}` : '';
+}
+
+function incrementActivityUnread(state, tab) {
+    const current = state.activityUnreadByTab || {};
+    const activityUnreadByTab = { ...current, [tab]: Math.min(100, (current[tab] || 0) + 1) };
+    return {
+        activityUnreadByTab,
+        activityUnread: Math.min(100, Object.values(activityUnreadByTab)
+            .reduce((sum, value) => sum + Number(value || 0), 0)),
+    };
 }
 
 function upsertMessage(messages, candidate) {
@@ -263,13 +293,18 @@ function reduceEvent(current, event) {
             toolCallId: event.toolCallId,
         } : null;
         if (approval?.approvalId) {
-            next.approvals = [...next.approvals.filter((item) => item.approvalId !== approval.approvalId), approval];
+            const key = approvalIdentity(approval);
+            next.approvals = [...next.approvals.filter((item) => approvalIdentity(item) !== key), approval];
         }
+        Object.assign(next, incrementActivityUnread(next, 'approvals'));
         return next;
     }
     if (event.type === 'approval.resolved' || event.type === 'approval.expired') {
         const approvalId = event.approvalId || event.payload?.approvalId || event.payload?.approval?.approvalId;
-        next.approvals = next.approvals.filter((item) => item.approvalId !== approvalId);
+        const scope = event.payload?.scope || event.scope || null;
+        next.approvals = next.approvals.filter((item) => (
+            scope ? approvalIdentity(item) !== `${scope}:${approvalId}` : item.approvalId !== approvalId
+        ));
         return next;
     }
     if (event.type === 'toolbox.ws') {
@@ -282,6 +317,7 @@ function reduceEvent(current, event) {
             timestamp: event.timestamp || null,
         };
         next.toolboxWs = [...next.toolboxWs, observation].slice(-100);
+        Object.assign(next, incrementActivityUnread(next, payload.kind === 'backend-approval-request' ? 'approvals' : 'activity'));
         return next;
     }
     if (event.type === 'marker.observed') {
@@ -296,34 +332,63 @@ function reduceEvent(current, event) {
             timestamp: event.timestamp || null,
         };
         next.markerObservations = [...next.markerObservations, observation].slice(-100);
+        Object.assign(next, incrementActivityUnread(next, 'activity'));
+        return next;
+    }
+    if (event.type === 'interaction.requested') {
+        const interaction = event.payload || {};
+        const key = `${interaction.source || 'codex-native'}:${interaction.requestId || ''}`;
+        next.interactions = [...next.interactions.filter((item) => `${item.source}:${item.requestId}` !== key), interaction];
+        Object.assign(next, incrementActivityUnread(next, 'approvals'));
+        return next;
+    }
+    if (event.type === 'interaction.resolved' || event.type === 'interaction.rejected') {
+        const payload = event.payload || {};
+        next.interactions = next.interactions.filter((item) => !(
+            item.source === (payload.source || 'codex-native') && item.requestId === payload.requestId
+        ));
         return next;
     }
     if (event.type === 'context.usage') {
-        const usedTokens = Number(event.payload?.usedTokens ?? event.payload?.totalTokens) || 0;
-        const contextWindow = Number(event.payload?.contextWindow) || 0;
+        const payload = event.payload || {};
+        const source = ['real', 'estimated', 'unknown'].includes(payload.source) ? payload.source : 'unknown';
+        const hasReportedUsage = ['real', 'estimated'].includes(source)
+            && ['totalTokens', 'usedTokens', 'inputTokens', 'outputTokens', 'reasoningTokens', 'cacheReadTokens', 'cacheWriteTokens']
+                .some((key) => Number.isFinite(Number(payload[key])));
+        const usedTokens = Number(payload.usedTokens ?? payload.totalTokens) || 0;
+        const contextWindow = Number(payload.contextWindow) || 0;
         next.context = {
             ...next.context,
-            ...event.payload,
+            ...payload,
+            source,
+            usageAvailable: hasReportedUsage,
             usedTokens,
             contextWindow,
             percentage: contextWindow ? Math.min(100, Math.round((usedTokens / contextWindow) * 100)) : 0,
         };
+        Object.assign(next, incrementActivityUnread(next, 'usage'));
         return next;
     }
-    if (event.type === 'context.compaction.started') {
-        next.context = { ...next.context, compacting: true };
+    if (event.type === 'context.compaction.started' || event.type === 'compaction.started') {
+        next.context = { ...next.context, compacting: true, compactionState: 'started', compactionError: '' };
+        Object.assign(next, incrementActivityUnread(next, 'usage'));
         return next;
     }
-    if (event.type === 'context.compaction.completed') {
-        next.context = { ...next.context, compacting: false, summary: event.payload?.summary || '' };
+    if (event.type === 'context.compaction.completed' || event.type === 'compaction.completed') {
+        next.context = { ...next.context, compacting: false, compactionState: 'completed',
+            summary: event.payload?.summary || '', compactionError: '' };
+        Object.assign(next, incrementActivityUnread(next, 'usage'));
         return next;
     }
-    if (event.type === 'context.compaction.failed') {
-        next.context = { ...next.context, compacting: false, summary: '', error: event.payload?.error || '上下文压缩失败' };
+    if (event.type === 'context.compaction.failed' || event.type === 'compaction.failed') {
+        next.context = { ...next.context, compacting: false, compactionState: 'failed', summary: '',
+            compactionError: event.payload?.error || '上下文压缩失败' };
+        Object.assign(next, incrementActivityUnread(next, 'usage'));
         return next;
     }
     if (event.type === 'plan.updated') {
         next.plan = event.payload?.plan || event.payload || null;
+        Object.assign(next, incrementActivityUnread(next, 'plan'));
         return next;
     }
     if (TERMINAL_EVENT_TYPES.has(event.type)) {
@@ -398,6 +463,7 @@ function createWorkbenchStore(initial = createInitialState()) {
             const isSessionEvent = SESSION_EVENT_TYPES.has(event.type);
             if (!event.eventId || !Number.isFinite(Number(event.sequence)) || !Number.isFinite(Number(event.timestamp))) return state;
             const isApproval = event.type?.startsWith('approval.');
+            const isInteraction = event.type?.startsWith('interaction.');
             // The fallback preserves the narrow unit-test/legacy bootstrap
             // shape before the first snapshot installs selectedTopic. Normal
             // Workbench routing always uses selectedTopic.
@@ -405,11 +471,11 @@ function createWorkbenchStore(initial = createInitialState()) {
             // Only the visible Topic may change this live transcript. Local
             // approvals are global Activity state and retain their complete
             // daemon identities when the user switches Topics.
-            if (!isRuntimeEvent && !isSessionEvent && !isApproval
+            if (!isRuntimeEvent && !isSessionEvent && !isApproval && !isInteraction
                 && (!selectedTopicId || event.topicId !== selectedTopicId)) {
                 return state;
             }
-            if (!isRuntimeEvent && !isSessionEvent && !isApproval
+            if (!isRuntimeEvent && !isSessionEvent && !isApproval && !isInteraction
                 && state.attachment?.sessionId && event.sessionId !== state.attachment.sessionId) {
                 return state;
             }
@@ -430,6 +496,8 @@ function createWorkbenchStore(initial = createInitialState()) {
                 approvals: [],
                 toolboxWs: [],
                 markerObservations: [],
+                activityUnread: 0,
+                activityUnreadByTab: createInitialState().activityUnreadByTab,
                 context: createInitialState().context,
                 plan: null,
                 activeTurnId: null,

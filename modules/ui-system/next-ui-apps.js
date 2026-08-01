@@ -11,7 +11,11 @@ function validate(definition) {
 function register(definition) {
     validate(definition);
     if (apps.has(definition.id)) throw new Error(`Next UI app id already registered: ${definition.id}`);
-    const app = Object.freeze({ icon: 'widgets', unmount: () => {}, ...definition });
+    const app = Object.freeze({
+        icon: definition.iconSvg ? undefined : 'widgets',
+        unmount: () => {},
+        ...definition,
+    });
     apps.set(app.id, app);
     window.dispatchEvent(new CustomEvent('next-ui-apps-changed', { detail: { id: app.id } }));
     return app;

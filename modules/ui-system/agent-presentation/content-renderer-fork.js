@@ -58,7 +58,7 @@ function protectPresentationBlocks(source, parseMarkdown) {
         const token = `VCPAGENTBLOCK${index}X`;
         const replacement = block.kind === 'mermaid'
             ? `<div class="mermaid-placeholder" data-vcp-block-type="mermaid" data-vcp-preserve-children="true" data-mermaid-code="${encodeURIComponent(block.source)}"></div>`
-            : `<div class="vcp-thought-chain-bubble collapsible" data-vcp-block-type="thought-chain"><div class="vcp-thought-chain-header"><span class="vcp-thought-chain-icon">lightbulb</span><span class="vcp-thought-chain-label">思维链</span><span class="vcp-result-toggle-icon"></span></div><div class="vcp-thought-chain-collapsible-content"><div class="vcp-thought-chain-body">${parseMarkdown(block.source)}</div></div></div>`;
+            : `<div class="vcp-thought-chain-bubble collapsible" data-vcp-block-type="thought-chain"><div class="vcp-thought-chain-header"><span class="vcp-thought-chain-icon vcp-ui-icon" data-vcp-icon="lightbulb">lightbulb</span><span class="vcp-thought-chain-label">思维链</span><span class="vcp-result-toggle-icon"></span></div><div class="vcp-thought-chain-collapsible-content"><div class="vcp-thought-chain-body">${parseMarkdown(block.source)}</div></div></div>`;
         html = html.replace(new RegExp(`<p>\\s*${token}\\s*<\\/p>`, 'i'), replacement).replace(token, replacement);
     });
     return html;
@@ -137,7 +137,7 @@ function createAgentContentRendererFork(options = {}) {
         },
         renderReasoning(text) {
             const body = parseMarkdown(String(text || ''));
-            return `<div class="vcp-thought-chain-bubble collapsible" data-vcp-block-type="thought-chain"><div class="vcp-thought-chain-header"><span class="vcp-thought-chain-icon">lightbulb</span><span class="vcp-thought-chain-label">推理过程</span><span class="vcp-result-toggle-icon"></span></div><div class="vcp-thought-chain-collapsible-content"><div class="vcp-thought-chain-body">${body}</div></div></div>`;
+            return `<div class="vcp-thought-chain-bubble collapsible" data-vcp-block-type="thought-chain"><div class="vcp-thought-chain-header"><span class="vcp-thought-chain-icon vcp-ui-icon" data-vcp-icon="lightbulb">lightbulb</span><span class="vcp-thought-chain-label">推理过程</span><span class="vcp-result-toggle-icon"></span></div><div class="vcp-thought-chain-collapsible-content"><div class="vcp-thought-chain-body">${body}</div></div></div>`;
         },
         async runPostRender(container) {
             if (!container?.isConnected && !options.allowDetachedPostRender) return;

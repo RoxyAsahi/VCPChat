@@ -47,6 +47,30 @@ concurrentApprovalStore.setState({
 assert.equal(deriveWorkbenchViewState(concurrentApprovalStore.getState()), 'awaiting-approval',
     'the approval-owning Topic must remain paused until Rust resolves it');
 
+const usageStore = createWorkbenchStore();
+usageStore.setAttachment({ sessionId: 'usage-session', topicId: 'usage-topic', state: 'idle' });
+usageStore.dispatch({ eventId: 'usage-unknown', sequence: 1, timestamp: 1, sessionId: 'usage-session', topicId: 'usage-topic', type: 'context.usage', runtime: 'codex', payload: { totalTokens: 123 } });
+assert.equal(usageStore.getState().context.source, 'unknown');
+assert.equal(usageStore.getState().context.usageAvailable, false,
+    'token-shaped data without explicit provenance must never be displayed as real usage');
+usageStore.dispatch({ eventId: 'usage-estimate', sequence: 2, timestamp: 2, sessionId: 'usage-session', topicId: 'usage-topic', type: 'context.usage', runtime: 'codex', payload: { source: 'estimated', totalTokens: 123 } });
+assert.equal(usageStore.getState().context.usageAvailable, true);
+assert.equal(usageStore.getState().context.source, 'estimated');
+
+const activityStore = createWorkbenchStore();
+activityStore.setAttachment({ sessionId: 'activity-session', topicId: 'activity-topic', state: 'idle' });
+activityStore.dispatch({ eventId: 'activity-1', sequence: 1, timestamp: 1, sessionId: 'activity-session', topicId: 'activity-topic', type: 'toolbox.ws', runtime: 'codex', payload: { kind: 'notification', value: 'one' } });
+activityStore.dispatch({ eventId: 'activity-2', sequence: 2, timestamp: 2, sessionId: 'activity-session', topicId: 'activity-topic', type: 'marker.observed', runtime: 'codex', payload: { kind: 'vcpinfo', summary: 'two' } });
+assert.equal(activityStore.getState().activityUnread, 2, 'activity observations must increment a bounded Renderer-only unread cursor');
+
+const compactStore = createWorkbenchStore();
+compactStore.setAttachment({ sessionId: 'compact-session', topicId: 'compact-topic', state: 'idle' });
+compactStore.dispatch({ eventId: 'compact-start', sequence: 1, timestamp: 1, sessionId: 'compact-session', topicId: 'compact-topic', type: 'compaction.started', runtime: 'codex', payload: {} });
+assert.equal(compactStore.getState().context.compacting, true,
+    'Codex runtime compaction.started must drive the Workbench state rather than only legacy context.compaction.* names');
+compactStore.dispatch({ eventId: 'compact-done', sequence: 2, timestamp: 2, sessionId: 'compact-session', topicId: 'compact-topic', type: 'compaction.completed', runtime: 'codex', payload: { summary: 'checkpoint reconciled' } });
+assert.deepEqual(compactStore.getState().context.compactionState, 'completed');
+
 // R3-C: the Renderer may show an accepted command immediately, but it must
 // replace that temporary projection with the daemon's event identity rather
 // than grow a second transcript or guess a durable message id.
@@ -183,10 +207,15 @@ assert.equal(store.getState().messages.length, messageCount, 'missing daemon eve
 const calls = [];
 let liveEvent;
 let resolveInitialRead;
+const pendingInteraction = {
+    source: 'toolbox', requestId: 'same-id', sessionId: null, threadId: null,
+    turnId: null, kind: 'backend-approval', state: 'pending', createdAt: 1,
+};
 const controller = createWorkbenchController({
     agentRuntimeGetStatus: async () => ({
         state: 'ready',
         attachment: { sessionId: 'restored', topicId: 'topic-restored', state: 'idle' },
+        pendingInteractions: [pendingInteraction],
     }),
     agentRuntimeReadTopic: async (payload) => {
         calls.push(['topic', payload]);
@@ -197,6 +226,8 @@ const controller = createWorkbenchController({
 });
 const initializing = controller.initialize();
 await new Promise((resolve) => setImmediate(resolve));
+assert.deepEqual(controller.store.getState().interactions, [pendingInteraction],
+    'Activity Center must receive Main-owned interaction identities independently of approval cards');
 assert.equal(typeof liveEvent, 'function', 'Renderer must subscribe before it starts reading a Rust Topic snapshot');
 assert.deepEqual(calls.find(([name]) => name === 'topic')[1], { topicId: 'topic-restored' });
 liveEvent({
