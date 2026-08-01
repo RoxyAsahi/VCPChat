@@ -1,5 +1,36 @@
 # Codex App Server 协议适配
 
+## 版本与能力合同
+
+当前开发基线固定为 Codex CLI `0.146.0`、release tag `rust-v0.146.0`、Codex source
+`e363b08c9175ac1cbe5893615dd2cb9ddf95043b`。npm package integrity 固定为
+`sha512-yG3sPWNda/2YAIQIDq9MrrjoCTIQ7rxYM5IasrG3VBcuhCLTkgeg/JzqmJq1V98RE4MJ5jCxDXXQlOjrditFRw==`。
+VChat 从这个精确包生成并提交 TypeScript/JSON schema fixture；本地 `codex` 仓库的 `main` 只用于审计，
+不能替代 release schema。
+
+生成与校验命令：
+
+```powershell
+npm run sync:codex-schema
+npm run check:codex-schema
+```
+
+stable JSON tree：275 files，SHA-256 `6283c8d607b5153578b7e0d7708b3180321d84a37bdf5249a68a49bb13f8affa`；
+experimental JSON tree：349 files，SHA-256 `c1492848a4728f0681bfc85d0f087f28bf2962b70abe8eb91c72cac1daa57392`。
+协议字段或 Item 类型变化必须先更新 fixture、投影和测试，再允许 GUI 消费。
+
+能力分三层：
+
+| 层级 | 含义 | GUI 行为 |
+|---|---|---|
+| `stable` | 当前固定版本、Projection 和交互闭环均有 fixture | 可进入正式 UI。 |
+| `experimental` | App Server 暴露但参数或行为可能变化 | 必须经 capability discovery，并显示实验状态。 |
+| `unsupported` | VChat 没有可靠投影或响应通道 | 不显示控制项；收到请求时 fail-closed。 |
+
+当前产品 profile 为 `toolbox-only`，模型可见工具只允许 `vcp_invoke`。App Server 的 command、file、MCP、collaboration、subagent 等能力不能因为 schema 中存在就自动启用。未来 `codex-native` profile 必须拥有独立能力矩阵和审批门槛。
+
+初始化后同时校验 `userAgent` 版本与返回 capabilities。源码中出现而运行版本未声明的 Notification/Item 只能进入限长 Unknown fallback；未知 Server Request 不得返回伪成功。GUI-R0 的完整要求见 [gui-capability-roadmap.md](gui-capability-roadmap.md)。
+
 ## 传输
 
 当前使用 `codex app-server --listen stdio://` 的 JSONL 协议，不使用 ACP，不使用 `codex exec --experimental-json`，不读取 Codex 内部 rollout 文件。
@@ -10,7 +41,8 @@
 2. `CODEX_APP_SERVER_EXECUTABLE`；
 3. VChat 设置中的 `agentRuntime.codex.executable` / `codexAppServerPath`；
 4. Windows `where codex-app-server`；
-5. Windows `where codex` / PATH。
+5. 开发工作树的 `node_modules/.bin/codex.cmd`；
+6. Windows `where codex` / PATH。
 
 `.cmd` 通过 Windows shell 启动；原生 `.exe` 直接 spawn。stdout 只允许协议 JSONL，stderr 只作为诊断流。单行上限当前为 4 MiB。
 
@@ -25,7 +57,19 @@ server -> initialize result
 client -> initialized {}
 ```
 
-必须保存但不得记录敏感信息：executable source、PID、CLI version、initialize result/capabilities。当前最低兼容版本为 Codex `0.124.0`；无法从 `userAgent` 识别版本或版本过低时立即停止进程。初始化超时、非法 JSON、未知 envelope、进程退出或版本不兼容均拒绝启动，不回退旧 Rust daemon。
+必须保存但不得记录敏感信息：executable source、PID、CLI version、initialize result/capabilities。当前最低兼容版本为 Codex `0.146.0`，支持版本线固定为 `0.146`；无法从 `userAgent` 识别版本、版本过低或版本线不匹配时立即停止进程。初始化超时、非法 JSON、未知 envelope、进程退出或版本不兼容均拒绝启动，不回退旧 Rust daemon。
+
+### 0.146 provider wire 兼容
+
+0.146 的 Responses Lite 请求将 base instructions 表达为 `input` 中的 developer message，并把 Codex
+内建工具放入 `additional_tools` item。ToolBox-only adapter 不信任这两类文本/工具：它根据
+`x-codex-turn-metadata` 的 Thread identity 回查 Projection SQLite，只把该 Session 冻结的
+`baseInstructions` 映射为唯一 Chat `system` message；`additional_tools` 中的 exec/wait/native tools 全部丢弃。
+
+0.146 的自定义 provider 请求可能不在顶层 `tools` 重复携带已注册 dynamic tool。VChat 因此在最终
+ToolBox allowlist 边界补出唯一 `vcp_invoke` Chat definition。真实 App Server 已验证模型返回该 function
+call 后，Codex 仍会发出原生 `item/tool/call`，Main 解包、bridge 返回、continuation 和 SQLite projection
+均正常。该兼容层不执行工具，也不修改 Codex 或 ToolBox。
 
 ## Thread 操作
 
@@ -96,12 +140,14 @@ SQLite 更新成功后，Main 发送包含单个 `projectionMessage` 的 keyed p
 | `item/tool/call` | ToolBox bridge | 已接基础路由；必须返回 `contentItems + success`。 |
 | `item/commandExecution/requestApproval` | Codex native approval UI | fake 测试通过，真实验收待做。 |
 | `item/fileChange/requestApproval` | Codex native approval UI | fake 测试通过，真实验收待做。 |
-| `item/permissions/requestApproval` | Codex native approval UI | 未实现，当前应 fail-closed。 |
-| `item/tool/requestUserInput` | Workbench interaction UI | 未实现，当前应 fail-closed。 |
-| `mcpServer/elicitation/request` | Codex native/MCP UI | 未实现，当前应 fail-closed。 |
+| `item/permissions/requestApproval` | Codex native approval UI | hermetic 已接线；只允许原请求权限，scope 仅 turn/session，拒绝返回空 profile。真实触发待验收。 |
+| `item/tool/requestUserInput` | Workbench interaction UI | hermetic 已接线；多问题、单选/其他、文本和 secret password，超时返回空答案。真实触发待验收。 |
+| `mcpServer/elicitation/request` | Codex native/MCP UI | hermetic 已接线；typed/OpenAI form 与 URL 显式打开，accept 与打开链接分离。真实触发待验收。 |
 | auth/attestation requests | Codex host integration | 未实现，不得返回伪成功。 |
 
-所有 request 按 JSON-RPC `id` 精确响应，不按“最近事件”或选中 Session 匹配。
+所有 request 按 `source + JSON-RPC id` 精确响应，不按“最近事件”或选中 Session 匹配。Main
+内存中的 Interaction Registry 负责 exactly-once、限长、脱敏、自动超时和 crash/close fail-closed；
+密码、表单答案和授权内容不进入 Projection SQLite 或 localStorage。
 
 ## 系统提示词/人设覆盖
 
@@ -138,7 +184,7 @@ Codex 自带模型级 system prompt，例如 `core/gpt_5_codex_prompt.md` 以
   experimental `environments: []`，并通过 Thread `config` 请求禁用 update_plan、
   request_user_input、web search、MCP、collaboration/multi-agent、apps/plugins、memory 和其他
   非 VCP utility surface；`dynamicTools` 固定只注册 `vcp_invoke`。这些 App Server 参数是
-  defense-in-depth，不能单独作为工具面收据，因为当前 Codex CLI `0.124.0` 的真实 provider
+  defense-in-depth，不能单独作为工具面收据，因为当前 Codex CLI `0.146.0` 的真实 provider
   request 仍可能包含部分原生/MCP/utility definitions。
 - 真正的模型可见工具边界位于 VChat-owned loopback Responses adapter：在转发到 ToolBox
   `/v1/chat/completions` 前，它只保留名字精确为 `vcp_invoke` 的 function definition，丢弃
@@ -154,15 +200,22 @@ Codex 自带模型级 system prompt，例如 `core/gpt_5_codex_prompt.md` 以
 
 ## 动态工具
 
-VChat 注册一个 flat function tool：`vcp_invoke`。输入至少包含目标 `tool` 和 `arguments`。App Server 发出 `item/tool/call {threadId, turnId, callId, namespace, tool, arguments}` 后，Main 生成稳定 bridge request identity 并转发。使用 flat function 是为了兼容当前 Codex CLI 0.124 的动态工具 schema；不引入第二套 catalog。
+VChat 注册一个 flat function tool：`vcp_invoke`。输入至少包含目标 `tool` 和 `arguments`。App Server 发出 `item/tool/call {threadId, turnId, callId, namespace, tool, arguments}` 后，Main 生成稳定 bridge request identity 并转发。使用 flat function 是为了兼容 Codex CLI 0.146 的 `DynamicToolSpec::Function` 与 ToolBox 现有执行入口；不引入第二套 catalog。
 
 动态工具不是审批请求。它不能出现在原生 Codex approval 列表中。bridge 返回后必须使用原始 JSON-RPC request id 响应一次。
 
+Responses → Chat 历史转换必须保持一次 assistant 输出的原子性：相邻的并行
+`function_call` 合并为同一条 assistant `tool_calls`，此前的公开 reasoning、可见正文和
+工具调用也必须合并回同一条 assistant message。`deepseek-*` 经 Console Go 续写工具结果时
+要求该消息保留 `reasoning_content`，缺失会返回 `invalid_request_error`。孤立、重复或无法
+绑定的 `call_id` 在 VChat adapter 边界 fail-closed，不转发给 ToolBox；该兼容逻辑不需要修改
+VCPToolBox。
+
 ## 当前协议缺口
 
-- 版本低于 `0.124.0` 或无法识别 Codex `userAgent` 时 fail-closed；`thread/start` 拒绝 `dynamicTools` 时原样失败，不降级为没有 `vcp_invoke` 的隐藏兼容模式。
+- 版本低于 `0.146.0`、版本线不是 `0.146` 或无法识别 Codex `userAgent` 时 fail-closed；`thread/start` 拒绝 `dynamicTools` 时原样失败，不降级为没有 `vcp_invoke` 的隐藏兼容模式。
 - 未覆盖真实双 Thread streaming/crash/restart。
-- 未完整处理 permissions、user input、MCP elicitation。
+- permissions、user input、MCP elicitation 已有 hermetic response/UI 闭环；真实 Codex/MCP 请求仍未验收。
 - token usage、raw resource、warning 的规范 Block 映射未完成。
 - VChat loopback Responses adapter 已有 hermetic fixture；真实 Nova/ToolBox live 必须额外断言
   “你是谁”返回 Nova 且不含 Codex，不能再以随机 sentinel 或非空回复代替身份验收。

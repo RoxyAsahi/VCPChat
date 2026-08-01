@@ -20,20 +20,33 @@ VChat Workbench
 
 VChat 不 fork、不 vendor Codex，也不读取或修改 Codex rollout。旧 Rust daemon、Rust Topic、Pi、`vcp_delegate`、SQLite Runtime Repository 和多 Driver 仅保留在 `../history/rust/` 与 `../history/pi/`，不在本分支恢复或迁移。
 
+## Codex 0.146.0 升级基线
+
+当前项目内 Runtime 精确固定为 `@openai/codex@0.146.0`，对应 release tag
+`rust-v0.146.0`、source revision `e363b08c9175ac1cbe5893615dd2cb9ddf95043b`。开发环境优先解析
+`node_modules/.bin/codex.cmd`，因此本机全局仍安装的 `0.124.0` 不参与本分支测试，也暂不升级。
+
+`npm run sync:codex-schema` 生成 stable/experimental JSON 与 TypeScript schema；
+`npm run check:codex-schema` 校验 npm integrity、release revision 和 canonical tree hash。固定 manifest 位于
+`fixtures/codex-app-server/0.146.0/manifest.json`。当前 0.146.0 的本机 App Server start/read/restart 与
+真实 adapter dynamic-tool continuation 已通过。2026-08-01 已使用 `deepseek-v4-flash` 重跑 Nova identity、
+sentinel、reasoning projection、restart/resume、fork、interrupt、FileOperator 与双 Thread cancel isolation；
+ToolBox backend approval 和富消息 Electron live gate 仍待，因此产品状态仍为 experimental。
+
 ## 截止 2026-08-01 的完成度
 
 | 区域 | 当前状态 | 说明 |
 |---|---|---|
 | R0 分支与基线 | 已完成 | Rust R3-M 位于 `d441675a`；Codex App Server 首个功能 checkpoint 为 `29c2068a`；旧文档已归档。 |
-| App Server transport | checkpoint pass | JSONL、initialize、waiter、server request、退出清理已有测试；本机 `codex-cli 0.124.0` 已真实启动 App Server 并完成 Thread start/read。 |
+| App Server transport | 0.146 working-tree pass | JSONL、initialize、waiter、server request、退出清理已有测试；项目内 `codex-cli 0.146.0` 已真实完成 Thread start/read/restart。 |
 | Projection SQLite | checkpoint pass | WAL、迁移、Session/Message/Block、delta、权威 reconcile 清理、orphan 基础路径已有测试；SQLite 测试与产品统一使用 Electron ABI。 |
-| Runtime Manager | checkpoint pass；历史 Nova live pass | Agent `systemPrompt -> baseInstructions`、旧 placeholder 快照安全迁移、Thread start/read/fork、Turn start/steer/interrupt 与 resume 已接线；真实 Nova 身份 gate 仍是 2026-07-31 working-tree live 收据，尚未在 checkpoint 后重跑。 |
+| Runtime Manager | 0.146 deepseek live pass | Agent `systemPrompt -> baseInstructions`、旧 placeholder 快照安全迁移、Thread start/read/fork、Turn start/steer/interrupt 与 resume 已接线；`deepseek-v4-flash` 的 Nova identity、reasoning、恢复、fork 和 interrupt 已真实通过。 |
 | ToolBox bridge 进程 | checkpoint pass | Rust bridge 可构建、ready、bounded JSONL、shutdown；`/v1/human/tool`、interrupt、VCPLog/VCPInfo 观察代码路径存在。 |
 | Workbench 兼容接线 | checkpoint pass，仍在迁移 | SQLite snapshot、keyed delta、Full Fork Message 与结构化 Block 已进入 `29c2068a`；仍有 Rust Topic 兼容文案和完整 Electron 富消息流程需要清理。 |
 | ToolBox backend approval | implemented，未 live 验证 | Bridge 已有独立 approval ID、TTL、replay 去重、双向响应和关闭 fail-closed；尚未连接真实 ToolBox 验证补发与恰好一次响应。 |
 | VCPInfo/VCPLog 展示 | implemented，未 live 验证 | 单连接观察、类型分类、限长脱敏和 Workbench 全局卡片已接线；尚缺真实通知、重连和完整内容净化验收。 |
-| VChat Responses adapter | checkpoint pass | 回环 capability、Responses → Chat、function output 历史与流式参数聚合已有 fixture；真实 App Server 请求经 adapter 后模型可见工具集合严格为 `[vcp_invoke]`。 |
-| Nova / VCP dynamic tool | Nova live pass；工具 pending | 未修改 ToolBox 上的 Nova 身份、sentinel、restart/resume、fork、interrupt 已通过；DistributedServer `FileOperator` 正式 live gate 仍待执行。 |
+| VChat Responses adapter | 0.146 real hermetic pass | 兼容 0.146 的 developer instruction 与 `additional_tools` wire shape；只从 VChat Session 冻结快照注入唯一 system identity，并在最终 provider 边界只暴露 `[vcp_invoke]`。真实 App Server 的 tool call、bridge continuation、reasoning 与 SQLite 投影已通过；0.146 Nova live 仍待。 |
+| Nova / VCP dynamic tool | 0.146 deepseek live pass | 未修改 ToolBox；Nova identity/sentinel/reasoning、DistributedServer `FileOperator`、双 Thread 并发与取消隔离均通过。backend approval replay/deny 仍待。 |
 | Electron Codex smoke | checkpoint pass | preload/IPC、Session/Thread、projection-only read、Runtime identity 与默认 Fork renderer 已通过。 |
 | 产品可用 | 否 | live gate 未通过。 |
 
@@ -47,10 +60,14 @@ VChat 不 fork、不 vendor Codex，也不读取或修改 Codex rollout。旧 Ru
 - [projection-store.md](projection-store.md)：SQLite schema、事务、delta、对账和 orphan 恢复。
 - [toolbox-bridge.md](toolbox-bridge.md)：Nova、`vcp_invoke`、interrupt、VCPLog/VCPInfo。
 - [agent-workbench.md](agent-workbench.md)：Session 切换、Message/Block、动作与主聊天复用边界。
+- [gui-capability-roadmap.md](gui-capability-roadmap.md)：Codex GUI-R0–R6 的导航、Composer、时间线、审批、Inspector 与真实验收路线。
 - [workbench-experience-roadmap.md](workbench-experience-roadmap.md)：Session 目录、Runtime/Thread 预热、主聊天同构 loading/streaming 与工具卡收口路线图。
 - [reuse-register.md](reuse-register.md)：外部项目可复用模块、采用方式、许可证和禁止边界。
+- [gui-reuse-implementation-plan.md](gui-reuse-implementation-plan.md)：OpenCode、CodexMonitor、DeepChat、Harnss 等候选的具体文件映射、当前完成度和施工顺序。
 - [delivery-plan.md](delivery-plan.md)：按依赖顺序拆分的长期施工计划。
 - [test-matrix.md](test-matrix.md)：门槛、当前证据、缺口与验证收据。
+
+Workbench 当前已完成 SQLite 快路径、canonical Agent identity、Thread warm、Full Fork Message renderer、首发 thinking/streaming 骨架与基础 Block registry。下一阶段不重复 UX-R0–R4，而按 GUI-R0–R6 补齐协议能力矩阵、Session 状态机、完整 Composer、规范 Block、审批/交互中心、Inspector 和真实视觉性能门槛。当前正式执行 profile 仍只有 `toolbox-only`；App Server 支持但 VChat 未启用的能力不得直接暴露为 GUI 开关。
 
 ## 状态词规则
 

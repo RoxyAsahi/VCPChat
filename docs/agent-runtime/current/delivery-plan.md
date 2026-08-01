@@ -17,6 +17,18 @@
 
 退出门槛：工作树无构建产物；文档、代码、测试脚本进入同一提交；`git status` 中不存在误纳入的数据库、API Key、`node_modules` 或 `rust/target*`。
 
+## R0.5：Codex 0.146.0 协议升级
+
+目标：项目使用精确、可复现的最新稳定 Runtime，而不是按本地 `main` 或全局 CLI 猜协议。
+
+- [x] 精确依赖 `@openai/codex@0.146.0`，记录 tag、source revision 与 npm integrity；开发期优先项目内 executable，不升级全局 `0.124.0`。
+- [x] 生成 stable/experimental JSON 与 TypeScript schema，canonicalize JSON key，并提交 manifest/tree hash。
+- [x] capability fixture、最低版本、支持版本线与 guard 切换到 `0.146`；`test:codex-native` 强制包含 schema capability gate。
+- [x] 真实 App Server start/read/restart 通过 `npm run test:codex-app-server-real`。
+- [x] 适配 0.146 developer instruction、`additional_tools` 与 custom-provider dynamic tool 差异；真实 App Server tool continuation 通过 `npm run test:codex-app-server-adapter-real`。
+- [~] 使用 0.146 + `deepseek-v4-flash` 重跑 live gate：Nova identity/sentinel/reasoning、restart/resume、fork、interrupt、FileOperator、双 Thread cancel isolation 与 VCPLog/VCPInfo connect 已通过；backend approval replay/deny 和富消息 Electron live 尚未完成。
+- [ ] live gate 全通过后再决定是否升级全局 Codex 和产品打包版本；此前不得标记迁移完成或 product ready。
+
 ## R1：原生 Codex App Server 黑盒证明
 
 目标：不接 GUI、不接 ToolBox 工具时，证明 VChat 能稳定托管未经修改的 App Server。
@@ -25,8 +37,8 @@
 - [x] `initialize -> initialized` 生命周期。
 - [x] Windows `.cmd` 和原生可执行文件解析。
 - [x] server request、notification、stderr、exit 分流。
-- [x] 环境变量、VChat 配置路径、PATH 的解析顺序；记录 executable/PID/version，并以 `0.124.0` 为最低兼容版本。
-- [~] Thread start/read/fork、Turn start/steer/interrupt：manager fake 测试通过；2026-07-31 working tree 已真实验证两个空 Thread 的身份隔离、空 Thread restart 后安全重建，以及 `gpt-5.6-luna + {{Nova}}` 完成 Turn 后的原 ID restart/resume。fork/interrupt 仍缺真实自动测试。
+- [x] 环境变量、VChat 配置路径、项目内固定 executable、PATH 的解析顺序；记录 executable/PID/version，并以 `0.146.0` 为最低兼容版本。
+- [~] Thread start/read/fork、Turn start/steer/interrupt：manager fake 测试通过；Codex 0.146 + `deepseek-v4-flash + {{Nova}}` 已真实验证身份、reasoning、原 ID restart/resume、fork 与 interrupt。真实 App Server crash 时 waiter 全清理仍缺自动 gate。
 - [~] 同一 App Server 的两个空 Thread 可并发 start/read 且身份隔离；两个真实 streaming Thread 与取消 A 不影响 B 仍缺。
 - [ ] App Server crash/restart 后 Thread resume 和 waiter 全部清理。
 - [x] 不支持的 Codex 版本 fail-closed；缺少 experimental dynamic tools 时 `thread/start` 原样失败，不静默降级。
@@ -65,7 +77,8 @@
 - [x] 原生 command/file approval 与 dynamic tool server request 分流。
 - [~] Workbench presence=false 时原生审批 fail-closed；仍需真实 Codex approval schema 全覆盖。
 - [~] 图片、音频和文件 descriptor 输入已接基础路径；尚未做真实 App Server 和 UI 验收。
-- [ ] `requestUserInput`、permissions、MCP elicitation 等 server request 的明确支持矩阵。
+- [x] `requestUserInput`、permissions、MCP elicitation 已建立明确能力矩阵、统一 response IPC、
+  source-namespaced exactly-once Registry 与 fail-closed hermetic UI；真实上游触发仍是 release gate。
 - [~] App Server crash 后 native approval、dynamic call routing、ToolBox backend approval 已统一 fail-closed，并以 hermetic manager fixture 覆盖；真实进程 crash + UI 恢复审计仍缺。
 
 退出门槛：Renderer 无法直接访问数据库、API Key 或 Codex stdin；所有 Thread/Turn/Item/request identity 可追踪且跨 Thread 不串线。
@@ -105,6 +118,7 @@
 - [x] 编辑、重试、分支通过 action adapter 调用 `thread/fork`；取消路由目标 Turn，SQLite 不被菜单动作直接改写。
 - [~] 转发当前为安全剪贴板交接；尚缺不依赖主聊天 history identity 的目标选择 adapter。
 - [ ] **R5.1 Session UI 状态机复用**：从 vcp-code `sessionStateMachine.ts` 抽取 transition 机制和 fixture，建立 Renderer-only 的纯函数 reducer，覆盖 idle/creating/streaming、两类审批、用户输入、completed/interrupted/error/orphaned；不得把 UI state 当作 Runtime 真源。
+- [ ] R5.1 同时端口 CodexMonitor `threadReducer` 的纯 reducer/fixture，并使用 DeepChat `sessionStateResolver`、`sessionStatusPublisher` 测试补 query、close、reconnect 边界；删除所有本地伪 ID 生成。
 - [ ] R5.1 并发隔离：取消 A、审批 B、切换 C 的事件必须按完整 Session/Thread/Turn identity 更新，selected Session 不得参与事件归属推断。
 - [ ] **R5.3 通知与观察中心复用**：借鉴 vcp-code 的 200 条 bounded ring、未读游标和 typed status，接收 Bridge 输出的已限长、去重、脱敏 observation；无可靠 Thread identity 时保持全局。
 - [ ] R5.3 不复制 `VcpCapsule` 布局，不把 API Key、原始大 JSON 或通知自动写回 Codex/SQLite transcript。
@@ -124,10 +138,39 @@
   和 `.streaming` 流光，真实 Item 接管无重复、无明显布局跳变。
 - [x] **UX-R4 Tool Activity 视觉统一**：结构化 lifecycle 保持 Codex identity，展示 clean-room 复用主聊天
   `vcp-tool-use/result` 视觉和 token，紧凑、可折叠、keyed 原地更新。
+- [~] **UX-R4 连续工具聚合**：2026-08-01 working tree 已按 Cherry 的机制将同一 Turn 内相邻的多个
+  Tool Part 投影为 Renderer-only 折叠组；正文/推理/不同 Turn/无 identity 均为硬边界，组内仍按真实
+  `toolCallId` 原地更新。`test:agent-workbench-timeline`、`test:agent-presentation`、
+  `test:agent-workbench` 已通过；Electron 长任务视觉、滚动和真实审批密度仍待 GUI-R6 验收。
 - [ ] **UX-R5 视觉/性能门槛**：主题/分辨率截图、10 Agent/50 Session 切换、cold/warm 首发 latency、
   scroll anchor <= 2 px、Electron 重开恢复。
 
 退出门槛：Session 切换只读 SQLite 且即时；后台 Thread 不停止；消息、工具、usage、审批不串线；主聊天体验差异有明确清单且无 P0。R5.1/R5.3 必须附 transition/notification fixture 与复用收据，禁止以 UI snapshot 代替身份隔离和行为断言。
+
+### GUI-R0–R6：Workbench 产品能力收口
+
+详细能力合同和退出门槛以 [gui-capability-roadmap.md](gui-capability-roadmap.md) 为真源。本交付轨不重复已经完成的 UX-R0–R4；Renderer 展示实现可由并行开发线推进，但合并时必须通过同一协议、Projection 和 identity 门槛。
+
+- [~] **GUI-R0 协议与能力矩阵**：固定 `0.146.0` stable/experimental schema fixture、`toolbox-only` capability gate、未知交互 fail-closed 已实现并通过 `check:codex-schema` / `test:codex-app-server-capabilities` / `test:codex-app-server-transport`；真实 App Server start/read 与 adapter continuation 已通过，仍待干净提交和 0.146 live receipt。
+- [~] **GUI-R1 Session 导航与状态机**：archive/restore/pin、Session 临时状态和完整 identity reducer 已实现并通过 `test:agent-session-state` / `test:agent-workbench`；keyed list、unread、scroll anchor 与 Electron gate 仍未完成。
+- [~] **GUI-R2 Composer**：Main-side submit idempotency、steer 与持久文本 follow-up queue 已实现并通过 `test:codex-runtime-manager`；附件排队、完整设置 UX 和 Electron cold-start gate 仍未完成。
+- [~] **GUI-R3 规范时间线 Block**：OpenCode frozen-tail Markdown 与 Harnss 式累计/重叠 delta accumulator 已以 clean-room 最小模块接入，`test:agent-markdown-stream` / projection store 测试通过；Plan/resource/warning/compaction/Diff 专用 Block 与 Electron 长流 trace 仍待。
+- [~] **GUI-R3 持久恢复**：2026-08-01 working tree 已将 ToolBox Chat 的公开 `reasoning_content`/字符串 `reasoning` 转为 Codex Responses reasoning Item，并将实时 `projection.updated` 与 SQLite-first snapshot 统一投影为 Full Fork `message.reasoning`；真实 App Server mock provider 已产生 `item/reasoning/textDelta` 并写入 SQLite。Projection 与 Workbench 测试覆盖空 completed payload、数据库关闭重开、点击/键盘折叠及工具卡冷恢复。真实 `deepseek-v4-flash` + ToolBox live gate 已断言 durable projection 存在非空 reasoning，后续请求历史也包含 reasoning Item；Electron 关闭重开截图仍待，因此不得标记产品完成。
+- [~] **GUI-R4 审批与交互中心**：source-namespaced Registry、统一 response IPC、requestUserInput、
+  exact permission、MCP typed/opaque/URL 表单和超时/关闭/crash fail-closed 已通过 hermetic 测试；真实
+  Codex native/MCP 请求与 ToolBox backend approval live gate 待完成。
+- [~] **GUI-R5 Inspector 与 Activity Center**：Plan/Context/Usage/Compaction Inspector、100 条有界
+  observation ring、分 Tab 未读、搜索/来源/类型筛选和 Codex 三层连接文案已接线；schema v6 持久恢复
+  usage/compaction。2026-08-01 working tree 已将产品入口收口为一行 Context/Notifications/Approvals，
+  隐藏无可靠数据来源的 Plan/Changes 与内部 Diagnostics，同时保留 header context 水位环、usage
+  provenance、cache write、Session 元数据、只读 instruction 和响应式 420/380px 面板；Safety budget
+  已迁回 Settings。
+  toolbox-only 已隐藏无真实数据来源的 Changes；VCP mutation receipt、Session 生命周期通知持久索引、
+  非交互卡完整 keyed patch、Plan dock、Diff 文件导航、专用 timeline Block 与视觉/性能验收仍待。
+- [ ] **GUI-R6 视觉、性能与 live gate**：富消息截图、scroll anchor、10 Agent/50 Session、cold/warm latency、crash/restart、双 Thread 和真实 ToolBox。
+- [ ] assistant-ui 仅登记为未来 React island 的条件式评估；acp-ui 仅登记为未来 ACP profile 参考，本轮不得增加 React/Vue/Tauri/ACP 依赖。
+
+退出门槛：GUI 不按最新 Codex 源码猜能力，不显示无法执行的开关，不显示原始协议 JSON；所有交互按完整 identity 路由，并有 `test-matrix.md` 收据。
 
 ## R6：真实 Nova + ToolBox 验收
 
@@ -138,11 +181,11 @@
   Nova 且不含 Codex，随机 sentinel、restart/resume、fork、interrupt 全部通过。VChat HEAD
   `d441675a`，Codex source `f0c30e528a`；因接入改动尚未提交，此项是 working-tree live pass，
   不是版本级 verified。
-- [ ] 流式 text/reasoning delta 与最终 `thread/read` 一致。
+- [~] 流式 text/reasoning delta 与 durable projection、后续 Codex history 一致已由 2026-08-01 live gate 证明；仍待 Electron 关闭重开后的展开、顺序和视觉截图收据。
 - [ ] 对未修改 ToolBox 执行 `vcp_invoke(FileOperator)`：必须经 Codex dynamic call -> VChat bridge -> ToolBox -> VChat DistributedServer 返回指定 `package.json` name。前置条件是 VChat 已配置 ToolBox 并启动 DistributedServer；不得依赖 ToolBox 的 Responses 改动。之后补流状态卡、并发与取消隔离收据。
 - [ ] Codex 原生 Shell/file approval 与 VCP backend approval 身份、UI、响应通道分离。
-- [ ] `/v1/interrupt` 使用稳定 request identity，取消产生不可自动重放的中断结果。
-- [ ] 两个 Nova Thread 同时执行，取消 A 不影响 B。
+- [~] `/v1/interrupt` 使用稳定 request identity：2026-08-01 working tree 已在 VChat Responses adapter 为每次 ToolBox Chat body 写入唯一 `vcp_codex_*` `requestId`，loopback client 断开时以同一 ID 发送一次 `/v1/interrupt`；`test:codex-toolbox-responses-adapter` 通过。真实 App Server cancel 到该断开传播的全链路仍随并发 gate 阻塞。
+- [~] 两个 Nova Thread 同时执行，取消 A 不影响 B：2026-08-01 working-tree 使用 `test:codex-concurrent-live`（300 s 上限）通过，实际耗时 199 s：A/B 均 started，A interrupted，B completed；同一 App Server PID 不变，B sentinel 只在 B projection。Codex 0.124.x HTTP header 的 `session_id` 与公开 threadId 相等、provider 子 `turn_id` 不等于公开 Turn ID；adapter 使用 session_id 路由、以取消 tombstone 防止 A 的迟到 provider request 复活。此前 60/180 s 失败是超时阈值不足。该 receipt 仍位于 dirty working tree，真实 backend approval/VCPLog/Electron gate 未完成，故不得标记 R6 或产品完成。
 - [ ] VCPLog replay/TTL/去重与 VCPInfo 结构化通知。
 - [ ] Electron 视觉、滚动、Session 秒切、重开恢复和进程清理。
 
@@ -150,13 +193,9 @@
 
 ## 当前最近施工顺序
 
-1. 在不覆盖并行 Renderer 工作的前提下，审查并回退仅为旧试验引入的 ToolBox Responses 改动；VChat adapter、文档和测试保持在 VChat 工作树。之后建立可审查 checkpoint，排除数据库、构建产物与凭据。
-2. 扩大真实 App Server fixture：双 Thread 同时 streaming、取消 A 不影响 B、真实 fork、真实 interrupt、crash/restart 后 resume 与 waiter 清理。修复 Electron smoke，使 `ERR_FILE_NOT_FOUND` 记录具体资源 URL 后再判断归属。
-3. 执行 R4.1 复用：先移植 vcp-code 的 endpoint/reconnect fixture，再补 Rust bridge 的 jitter、config reconnect、oversized frame、replay/TTL 与 shutdown 安全断言；随后对真实 VCPLog 执行 reconnect/replay/恰好一次审批验收。
-4. 执行 R4.2 复用：将 VCP marker 投影为规范 Block，并以 fixture 证明 `TOOL_REQUEST` 只会产生 warning、永不触发 `vcp_invoke`。之后补齐资源、warning、异步 task 和动态 catalog 的受控投影。
-5. 对未修改 ToolBox 重跑并扩大 R6 live gate：普通 Nova 流式/usage 对账、`FileOperator`、双 Thread 并发与取消隔离、稳定 `/v1/interrupt`、native/VCP backend approval 分离、VCPInfo 真实通知。旧 `FileOperator` probe 不能替代这些场景。
-6. UX-R0–R4 已在当前 working tree 实现；当前只继续执行
-   [workbench-experience-roadmap.md](workbench-experience-roadmap.md) 的 UX-R5：补富消息深浅主题截图、
-   cold/warm 首发性能录制、非底部滚动锚点与 Electron 重开恢复。状态机和通知中心仍按 R5.1/R5.3
-   独立验收，不得用空页面 shell smoke 代替。
-7. 所有 hermetic/live 收据与 worktree 状态一致后，形成首个干净 checkpoint；在此之前始终保持 experimental。
+1. 固化 GUI-R0 至 GUI-R2 working-tree checkpoint：运行 capability、transport、projection、runtime manager、session state 和 Workbench 测试；形成干净提交前不得把它们标为 release verified。
+2. GUI-R3：补 Plan/resource/warning/compaction Block、复杂 Markdown fixture 和长流 trace；frozen-tail/accumulator 基线已存在，不得退回整段 `textContent` 重绘。
+5. GUI-R4：端口 Harnss permission queue 与 CodexMonitor/openclaw interaction fixture，完成 requestUserInput 和多审批来源的恰好一次响应。
+6. GUI-R5：当前 Context/Usage Inspector 与分组 Activity Center 已接线；下一步先补 Session 生命周期通知索引、Plan dock 和 Diff 文件导航，再做非交互卡 keyed patch。引入 `@pierre/diffs` 前执行 release-size gate。
+7. R4/R6 live：始终使用未修改 ToolBox，重跑动态 `FileOperator`、双 Thread、取消隔离、backend approval、VCPInfo reconnect/replay 和 Electron 富消息/性能门槛。
+8. 所有端口附来源 revision、许可证、行为差异和测试收据；所有 hermetic/live 收据与 worktree 状态一致后再形成 checkpoint。在此之前始终保持 experimental。

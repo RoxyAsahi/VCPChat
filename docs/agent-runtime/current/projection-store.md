@@ -60,7 +60,11 @@ Block content 使用 JSON，必须有大小上限、资源 descriptor 和脱敏�
 
 ### `projection_state`
 
-记录 schema/reconcile 状态、`next_source_order`、`mutation_generation`、最后成功对账时间和最后错误。`thread/read` 发出前捕获 generation；若请求期间 live Item/Block 已事务写入 SQLite，对账提交会因 generation 不一致整体跳过，绝不删除或覆盖新投影。下一次后台对账再获取新的权威 snapshot。
+记录 schema/reconcile 状态、`next_source_order`、`mutation_generation`、最后成功对账时间、最后错误和
+`activity_json`。schema v6 的 `activity_json` 只持久化 Session-scoped usage provenance/model/provider 与最近
+compaction 状态/摘要；无 Thread identity 的 VCPLog/VCPInfo 和 pending Interaction 不进入该字段。
+`thread/read` 发出前捕获 generation；若请求期间 live Item/Block 已事务写入 SQLite，对账提交会因
+generation 不一致整体跳过，绝不覆盖新投影。下一次后台对账再获取新的权威 snapshot。
 
 ## 增量投影
 
@@ -95,9 +99,10 @@ item/completed
 
 对账必须满足：
 
-- Codex 返回的 Item 新增或覆盖 projection。
+- Codex 返回的 Item 新增或非破坏性补齐 projection。
 - 重复 Item 不产生重复 Message。
-- 本地存在、Codex 不存在的 Item 不能静默保留为可继续上下文；需要 generation 标记或完整重建。
+- 本地存在、稀疏 `thread/read` 未返回的 reasoning/tool/plan/diff/compaction Item 不删除；只有明确的
+  Session 删除操作才删除展示投影。SQLite 展示投影仍不被当作 Codex 可继续上下文。
 - 对账期间收到 live delta 时，通过 barrier/generation 避免旧 snapshot 覆盖新 delta。
 - 成功后清空 `last_error` 并记录时间。
 - 失败后保留旧 projection，显示“未对账”，不清空历史。
@@ -112,8 +117,11 @@ item/completed
 
 ## 当前已覆盖与缺口
 
-已覆盖：migration、WAL、Session CRUD、Item/Block upsert、text delta、基础 reconcile、orphan、临时数据库测试。
+已覆盖：schema 5 -> 6 migration、WAL、Session CRUD、Item/Block upsert、text/reasoning delta、
+非破坏性 reconcile、orphan、usage/compaction Activity 持久化和临时数据库测试。
 
-当前 `thread/read` reconcile 会在单个 SQLite 事务中 upsert 权威 Item，并删除 Codex Thread 已不存在的旧投影 Item，避免幽灵消息；v2 schema 的 generation gate 会在 live 更新竞态时跳过整次旧 snapshot。仍未覆盖：没有 source offset 的重复 delta、复杂乱序 delta、磁盘故障、数据大小 gate、正式 redaction、归档/删除策略和长期数据库升级测试。
+当前 `thread/read` reconcile 会在单个 SQLite 事务中 upsert 权威 Item，但不会因为稀疏 snapshot 删除
+事件阶段捕获的展示记录；generation gate 会在 live 更新竞态时跳过整次旧 snapshot。仍未覆盖：
+磁盘故障、完整数据大小 gate、正式 redaction、归档/删除策略和长期多版本升级测试。
 
 `better-sqlite3` 固定按 Electron ABI 构建。依赖 SQLite 的命令通过 `scripts/run-electron-node.mjs` 在 `ELECTRON_RUN_AS_NODE=1` 下执行，不允许为了普通 Node 测试反复重编译原生模块并破坏产品 Electron。

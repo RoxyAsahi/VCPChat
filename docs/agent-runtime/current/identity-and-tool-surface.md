@@ -1,7 +1,8 @@
 # Agent 身份与模型工具面
 
-状态：实现已进入 VChat checkpoint `29c2068a`。2026-07-31 的 Nova live 测试运行于此前 working tree，
-Codex CLI `0.124.0` / source `f0c30e528a`，ToolBox `324a659f`；checkpoint 后尚未重跑，因此本页仍不是
+状态：实现已进入 VChat checkpoint `29c2068a`。当前项目内迁移目标为 Codex CLI `0.146.0` /
+source `e363b08c9175ac1cbe5893615dd2cb9ddf95043b`；真实 App Server adapter continuation 已通过。
+2026-07-31/08-01 的 Nova live 收据仍来自旧 `0.124.0` working tree，0.146 尚未重跑，因此本页仍不是
 `live verified` 收据。
 
 ## 问题与根因
@@ -70,9 +71,11 @@ Main 在读取或恢复 Session 时执行窄迁移：
 - VChat loopback adapter 对最终发给 ToolBox 的 `tools` 再做精确 allowlist，只接受
   `name === "vcp_invoke"`。
 
-真实 Codex CLI `0.124.0` 证明：即使 App Server 接受上述 Thread 参数，它生成的 provider request
-仍可能包含原生/MCP/utility definitions。因此 App Server 参数只能算 defense-in-depth；adapter
-allowlist 才是 Nova 模型可见工具面的权威门槛。
+真实 Codex CLI `0.146.0` 证明：Responses Lite 会把 Codex 内建 exec/wait definitions 放进
+`additional_tools`，而自定义 provider 请求的顶层 `tools` 可能不重复携带已注册 dynamic tool。
+因此 App Server 参数只能算 defense-in-depth；adapter 会丢弃内建工具，并在最终 provider 边界
+精确提供唯一 `vcp_invoke`。真实 App Server tool continuation 已证明该 function call 仍由 Codex
+路由为原生 `item/tool/call`，不需要 fork Codex 或修改 ToolBox。
 
 旧 Thread 无法通过 `thread/resume` 重新选择 execution environment，故标记为
 `codex-native-legacy`，不能声称 App Server 内部环境已被移除。不过，只要它使用 ToolBox provider，
@@ -111,7 +114,7 @@ request 经 adapter 后工具集合恰好为 `[vcp_invoke]`，并能完成 dynam
 $env:VCP_CODEX_LIVE='1'
 $env:VCP_TOOLBOX_URL='http://127.0.0.1:6005'
 $env:VCP_TOOLBOX_API_KEY='123456'
-$env:VCP_CODEX_LIVE_MODEL='gpt-5.6-luna'
+$env:VCP_CODEX_LIVE_MODEL='deepseek-v4-flash'
 $env:VCP_CODEX_LIVE_BASE_INSTRUCTIONS='{{Nova}}'
 npm run test:codex-nova-live
 ```

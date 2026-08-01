@@ -19,7 +19,7 @@ Codex provider
   -> Nova / upstream provider
 ```
 
-VChat 拥有这个极窄的协议兼容层，以保持 ToolBox 不变：它转换 Responses/Chat 请求、工具调用、工具结果历史和 SSE，不执行工具、不读取 catalog、不改写 ToolBox 目标工具名。由于真实 Codex `0.124.0` provider request 即使收到 Thread 收缩参数仍可能携带原生/MCP/utility definitions，adapter 在转发前执行精确 allowlist，只保留外层动态工具 `vcp_invoke`。它只监听 `127.0.0.1` 的随机端口及随机 capability path；ToolBox API Key 不传给 Codex。未修改 ToolBox 的真实 Nova 身份、sentinel、restart/resume、fork 与 interrupt 已通过；usage 仍不是 ToolBox 的可信来源。
+VChat 拥有这个极窄的协议兼容层，以保持 ToolBox 不变：它转换 Responses/Chat 请求、工具调用、工具结果历史和 SSE，不执行工具、不读取 catalog、不改写 ToolBox 目标工具名。Codex `0.146.0` 会把 base instructions 作为 developer input、把内建 exec/wait 放进 `additional_tools`；adapter 根据 Thread identity 回查 VChat 冻结快照，只上送唯一 system identity，并在最终边界只提供 `vcp_invoke`。自定义 provider 未携带顶层 dynamic tool 时，adapter 使用固定 schema补出这个唯一 wrapper；真实 App Server 已证明返回的 function call 仍能进入原生 `item/tool/call` continuation。它只监听 `127.0.0.1` 的随机端口及随机 capability path；ToolBox API Key 不传给 Codex。0.146 Nova live 尚未重跑，usage 仍不是 ToolBox 的可信来源。
 
 ### 动态工具链路
 

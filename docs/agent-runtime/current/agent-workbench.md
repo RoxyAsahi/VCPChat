@@ -6,6 +6,16 @@ Agent 页面应获得与 VChat 主聊天一致的消息阅读和操作体验，�
 
 借鉴 Cherry 的机制是“Session 持久展示与 Runtime 执行分离”，不是复制其 AGPL 代码、SQLite schema、Claude SDK 或工具系统。
 
+目标页面结构以 [gui-capability-roadmap.md](gui-capability-roadmap.md) 为真源：左侧 Agent/Session 导航，中间规范消息与任务时间线及 Composer，跨 Session 的 Activity Center，以及承载 Plan、Diff、Context/Usage 和 Session 设置的 Inspector。选择 Session 只改变展示；后台 Thread、审批和任务状态独立存在。
+
+## 持久展示与临时观察
+
+- Codex reasoning、工具、Plan、Diff、Usage、Compaction 以及具有 Session/Turn identity 的 VCP marker 属于 durable Session projection，必须在 SQLite-first 重开后恢复。
+- reasoning 的实时 `projection.updated` 与冷启动 `readProjection` 使用同一转换合同：标准 assistant 消息的正文为空，公开推理内容进入 `message.reasoning`，由 Full Fork Renderer 恢复为可展开的 `vcp-thought-chain-*` 卡片。
+- ToolBox Chat 仅将模型明确公开的 `reasoning_content` 或字符串 `reasoning` 转换为 Responses reasoning Item；隐藏 Chain-of-Thought 不读取、不推断、不持久化。没有公开 reasoning 的 Turn 只显示临时“思考中”状态，完成后不生成空推理卡。
+- `thread/read` 是后台对账来源，不得因为稀疏快照缺少某个展示 Item 就删除已经由事件写入 SQLite 的推理或工具记录；空的 completed payload 也不得覆盖已有流式内容。
+- 无可靠 Thread identity 的全局 VCPLog/VCPInfo 是 Renderer-only bounded observation，Activity Center 明确标注“仅本次运行”，不写入任一 Session transcript。
+
 ## Renderer 数据模型
 
 ```text
@@ -67,6 +77,25 @@ Codex Item 和 ToolBox 结果先转为规范 Block，DOM 不理解 JSON-RPC、SQ
 | error | runtime/projection/tool error | 明确错误和恢复动作。 |
 
 Block 使用 `itemId/callId + ordinal` 作为稳定 key。delta 原地更新对应 row；完成后执行完整 Markdown/代码块后处理。不得对整个 feed 使用 `replaceChildren()`。
+
+### 连续工具折叠
+
+2026-08-01 working tree 以 clean-room 方式借鉴 Cherry Studio 的 Block 分组机制，在 Renderer-only
+timeline adapter 中增加连续工具折叠：
+
+- 只聚合同一显式 `turnId` 内、时间线上相邻的两个及以上 Tool Part；message、reasoning、error、
+  approval 或不同 Turn 都会打断分组；没有 Turn identity 的工具永不参与聚合；
+- 分组只是临时展示 Part，不写入 SQLite，不创建新的 Codex Item，也不改变原始 `toolCallId`；外层稳定
+  key 使用第一个真实 `toolCallId`，组内每张卡继续按自身 `toolCallId` keyed patch；
+- 折叠标题在运行时显示最新等待中/执行中的工具、状态和累计耗时；全部终态后显示工具数量及失败/取消
+  摘要；当前工具取消入口可在折叠标题直接操作；审批仍由全局 Interaction Center 展示和响应；
+- 展开后保留每个工具原有的参数、结果、资源、warning、异步任务和单卡详情折叠；列表最大高度 300px，
+  展开时将当前活动工具滚入视口；
+- 单个工具继续直接显示。具体分组的展开状态只属于本次 Renderer 生命周期，不进入 transcript、
+  localStorage 或 Projection SQLite。
+
+该机制只降低长任务卡片密度，不能改变 `assistant -> tool -> assistant` 的真实顺序，也不能跨正文把不连续
+的工具合并成伪造的批次。
 
 ### VCP marker 净化
 
@@ -133,6 +162,11 @@ R4.2 优先复用 vcp-code `vcp-content.ts` 的 `VCP_DYNAMIC_FOLD`、`VCPINFO` d
 - 切换 Session 不隐藏审批。
 - Workbench 关闭、请求过期或 Runtime crash 时 fail-closed。
 
+R4.2 增加统一 Interaction Center：`requestUserInput` 支持多问题、选项/其他答案、文本和 password；
+permission 只允许精确批准 Codex 请求的 profile，scope 限于 turn/session；MCP elicitation 支持 typed form、
+OpenAI/opaque JSON form 和 URL 模式。URL 必须由用户显式打开，打开链接不会自动接受请求。交互 payload
+只在 Main 内存存在，按 `source + requestId` exactly-once 响应，秘密与答案不落 SQLite/localStorage。
+
 ## 通知与观察中心
 
 R5.3 借鉴 vcp-code `VcpInfoNotifications` 和 ExtensionState 的 200 条 bounded ring、未读水位及 typed status，但不复制 `VcpCapsule` 视觉。Main/Rust Bridge 先完成限长、去重、脱敏和分类，Renderer 只维护最近 N 条临时 observation projection：
@@ -180,20 +214,44 @@ Tool Block 仍保留 Agent 专用结构化 adapter 与 `agent-chat-tool-activity
 拒绝迟到的 A 对账覆盖 B 选择或新的 Item patch。已通过 `npm run test:agent-workbench-store`、
 `npm run test:agent-workbench` 与 `npm run check:agent-runtime`。这证明 hermetic 行为，不是 10 Session 性能录制或真实 ToolBox 验收。
 
+R4.2 hermetic 已完成：Activity 外壳稳定挂载；Plan、Diff、Usage、Compaction、审批和 observation 进入
+分 Tab 投影；每个 Tab 独立未读；Activity 支持搜索、来源/类型筛选，100 条临时 ring；连接页只显示
+Codex App Server、Projection SQLite、VCPToolBox Bridge。SQLite 冷启动可恢复 Plan、usage provenance 和
+compaction 摘要，Plan 不再重复成普通气泡。真实 MCP/permission 请求和视觉人工验收仍属 experimental。
+
+R4.3 开始按 OpenCode 的信息架构收口右侧面板，但只 clean-room 借鉴机制，不复制其组件代码：
+
+- 产品入口当前只保留一行“上下文 / 通知 / 审批”Tab，不再显示 Inspector、Activity Center 分组标题，
+  也隐藏尚无可靠产品数据来源的 Plan、Changes 和内部 Diagnostics；各 panel DOM 在 Workbench mount
+  后保持稳定，切换 Tab 不替换 panel identity；
+- Header 使用 Context 水位环作为入口。百分比、used/limit 和 tooltip 只消费带来源的 usage；未知时显示
+  空水位，不伪造 token 或费用；
+- Context 展示 Session、provider、model、消息计数、时间、input/output/reasoning/cache read/cache write、
+  usage provenance 和基于可见 Projection 的估算构成；估算构成不会写回 SQLite，也不冒充 Codex usage；
+- Agent instruction 可在 Context 中只读展开。请求/Token safety budget 已迁回 Agent Settings，并明确只对
+  新 Session 生效；
+- 1440px 使用最大 420px 面板，1100px 以下以最大 380px overlay 展示，避免压缩聊天正文；
+- Session 生命周期通知的持久索引、Plan composer dock、Diff 文件导航尚未完成。无 Thread identity 的
+  VCPLog/VCPInfo 继续只存在于 100 条内存 ring，不能为了模仿 OpenCode 而写入 Session 历史。
+
+`toolbox-only` 产品 UI 暂时隐藏“变更”Tab。当前底层 diff model 只接受 Codex 原生 `fileChange`，而真实
+`vcp_invoke(FileOperator.WriteFile)` 在 Projection 中是 `dynamicToolCall`，ToolBox 成功响应只保留文本，
+没有可靠最终路径或 before/after patch。Projection 与只读 Inspector 代码继续保留；只有 VChat Bridge
+能够提供结构化、可验证的 mutation receipt 后才重新开放，禁止从工具参数或“写入成功”文本猜 diff。
+
 仍未完成：
 
-- Session 目录脱离 Runtime start、canonical Agent identity 迁移和 Agent 点击性能门槛；
-- 选中 Session 后的有界 Thread warm 与首发 warm-promise 复用；
-- 首发占位的头像、完整消息骨架、主聊天流光和无闪烁真实 Item 接管；
-- 主聊天视觉体系下的紧凑 Tool Activity 卡；
 - 全面清理 Rust Topic/lease/takeover/compact/queue 文案和入口；
 - 将安全的 Agent 转发 adapter 接入不依赖主聊天 history identity 的目标选择流程；
-- Codex native/VCP tool Block registry；
-- usage、资源、warning、VCPInfo 展示；
-- Session UI reducer、transition fixture、bounded observation ring 和未读游标；
+- archive、pin、restore 与 Session-scoped 草稿/附件/滚动状态的完整流程；
+- Plan/Compaction/Unknown 的主时间线专用卡与 attachment/resource/warning 的 Electron 视觉验收；
+- Codex requestUserInput、permissions、MCP elicitation 的真实上游触发验收；
+- Activity 非交互卡的完整 keyed patch 性能门槛；
+- Session completed/error/approval-needed 的持久通知索引、severity unseen 和点击跳转；
+- composer 上方的结构化 Plan/Todo dock，以及 Diff 文件选择/导航；
 - vcp-code marker fixture 到 `AgentBlock[]` 的受控移植及 TOOL_REQUEST warning-only gate；
 - 1440×900/1024×720 深浅主题视觉截图与差异清单；
 - 长流性能、每帧 patch 上限和非底部 scroll trace；
 - Electron 关闭重开/crash smoke、截图、scroll trace 和真实双 Thread 验收。
 
-因此当前 Workbench 只能标记为 **hermetic integration in progress**，不能标记为 Cherry 等价体验或产品完成。
+后续能力与验收顺序统一按 GUI-R0–R6 执行。当前 Workbench 只能标记为 **hermetic integration in progress**，不能标记为 Cherry 等价体验或产品完成。
