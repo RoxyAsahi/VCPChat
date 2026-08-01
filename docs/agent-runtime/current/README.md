@@ -1,45 +1,81 @@
-# Rust Agent Runtime: current source of truth
+# Codex Agent Runtime 当前真源
 
-Last updated: 2026-07-31. Active branch: `codex/vcpchat-rust-agent-origin-sync`.
+本目录描述 `codex/vcpchat-codex-app-server` 分支的唯一正式目标路径。当前产品状态为 **experimental**。在 Nova、VCPToolBox、并发 Thread、审批、取消和 Electron Workbench 的 live gate 全部通过前，不标记产品可用。
 
-The supported GUI path is a black-box runtime integration:
+## 当前结论
+
+路线没有偏离“GUI 接入黑盒 Agent Runtime”：
 
 ```text
-Agent Workbench Renderer -> preload allowlist -> Electron Main transport
-  -> vcp-agentd --direct -> Rust Host/Core -> VCPToolBox
+VChat Workbench
+  -> Electron Main
+     -> codex app-server                 执行、上下文、Turn、恢复权威
+     -> codex-agent-projection.sqlite    完整、持久的 UI 展示投影
+     -> loopback Responses adapter       VChat-owned Responses <-> Chat 兼容层
+     -> vcp-toolbox-bridge.exe           VCPToolBox 协议适配
+        -> /v1/human/tool
+        -> /v1/interrupt
+        -> VCPLog / VCPInfo / backend approval
 ```
 
-`vcp-agentd` protocol revision **1.7** is one control process supervising up to
-eight independent Topic Hosts. A Topic has at most one writer lease and one
-active Turn; different Topics can run concurrently. `selectedTopic` is only a
-Renderer view. It does not select, stop, or otherwise replace another runtime.
+VChat 不 fork、不 vendor Codex，也不读取或修改 Codex rollout。旧 Rust daemon、Rust Topic、Pi、`vcp_delegate`、SQLite Runtime Repository 和多 Driver 仅保留在 `../history/rust/` 与 `../history/pi/`，不在本分支恢复或迁移。
 
-Rust Topic data in `AppData/AgentRuntimeData` is the sole durable Agent source.
-Renderer keeps an ephemeral snapshot cache and local UI projection only;
-Electron Main only owns process supervision, framed transport, request waiters,
-and short-lived runtime identities. VCPToolBox remains the authority for
-models, dynamic prompts, plugins, tools, markers, and backend approvals.
+## 截止 2026-07-31 的完成度
 
-Current documents:
+| 区域 | 当前状态 | 说明 |
+|---|---|---|
+| R0 分支与基线 | 已完成 | Rust R3-M 已在 `d441675a` checkpoint；Codex 分支和独立工作树已建立；旧文档已归档。 |
+| App Server transport | working-tree pass | JSONL、initialize、waiter、server request、退出清理已有测试；本机 `codex-cli 0.124.0` 已真实启动 App Server 并完成 Thread start/read。 |
+| Projection SQLite | working-tree pass | WAL、迁移、Session/Message/Block、delta、权威 reconcile 清理、orphan 基础路径已有测试；SQLite 测试与产品统一使用 Electron ABI。 |
+| Runtime Manager | working-tree live pass，未形成提交收据 | Agent `systemPrompt -> baseInstructions`、旧 placeholder 快照安全迁移、Thread start/read/fork、Turn start/steer/interrupt 与 resume 已接线；真实 Nova 身份 gate 已通过。 |
+| ToolBox bridge 进程 | working-tree pass | Rust bridge 可构建、ready、bounded JSONL、shutdown；`/v1/human/tool`、interrupt、VCPLog/VCPInfo 观察代码路径存在。 |
+| Workbench 兼容接线 | JSDOM pass，仍在迁移 | SQLite snapshot 和 keyed delta 已接入现有 Agent feed；仍有 Rust Topic 文案、动作和 Electron 流程需要清理。 |
+| ToolBox backend approval | implemented，未 live 验证 | Bridge 已有独立 approval ID、TTL、replay 去重、双向响应和关闭 fail-closed；尚未连接真实 ToolBox 验证补发与恰好一次响应。 |
+| VCPInfo/VCPLog 展示 | implemented，未 live 验证 | 单连接观察、类型分类、限长脱敏和 Workbench 全局卡片已接线；尚缺真实通知、重连和完整内容净化验收。 |
+| VChat Responses adapter | working-tree pass | 回环 capability、Responses → Chat、function output 历史与流式参数聚合已有 fixture；真实 App Server 请求经 adapter 后模型可见工具集合严格为 `[vcp_invoke]`。 |
+| Nova / VCP dynamic tool | Nova live pass；工具 pending | 未修改 ToolBox 上的 Nova 身份、sentinel、restart/resume、fork、interrupt 已通过；DistributedServer `FileOperator` 正式 live gate 仍待执行。 |
+| Electron Codex smoke | working-tree pass | preload/IPC、Session/Thread、projection-only read、Runtime identity 与默认 Fork renderer 已通过。 |
+| 产品可用 | 否 | live gate 未通过。 |
 
-1. [daemon-protocol.md](daemon-protocol.md): v1.7 framed command/event contract.
-2. [topic-and-recovery.md](topic-and-recovery.md): durable Topic, lease, recovery, and continuation rules.
-3. [agent-workbench-state.md](agent-workbench-state.md): Renderer/Main/Rust state ownership.
-4. [delivery-plan.md](delivery-plan.md): current gates and non-completed work.
+`npm run test:codex-nova-live` 与 `npm run test:codex-toolbox-live` 均是显式 live gate；它们必须设置 `VCP_CODEX_LIVE=1`、`VCP_TOOLBOX_URL` 和 `VCP_TOOLBOX_API_KEY`，默认 CI 不执行。后者还要求 VChat 的 DistributedServer 已连接 ToolBox 并注册 `FileOperator`；仅 ToolBox 本机插件不能替代这条分布式能力链路。
 
-Pi, Driver API, `vcp_delegate`, Agent SQLite/submodule routes, and historical
-single-attachment behavior are not current product paths. They only belong in
-`docs/agent-runtime/history/` and may not be used as implementation authority.
+## 文档导航
 
-**Current hermetic evidence, not product completion**: 2026-07-31, Rust build
-revision `a08bd985cd919d5bcb4b1969194c5ff01d7677947a8923c479efc6ef3fc74519`.
-`node scripts/test-rust-protocol-fixture.mjs`, `npm run test:rust-agent-runtime`,
-`npm run test:agent-workbench-store`, `npm run test:agent-workbench`,
-`npm run test:agent-workbench-timeline`, `npm run build:daemon`,
-`npm run test:rust-daemon-smoke`, `npm run test:rust-topic-takeover`,
-`npm run test:electron-gui-smoke`, `cargo test --manifest-path rust/Cargo.toml --workspace`,
-and `cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets -- -D warnings`
-passed. The matching opt-in live receipt,
-`VCP_AGENT_LIVE=1 npm run test:rust-stack:live`, passed two concurrent Nova
-Topics where A was cancelled without replay and B independently completed.
-These receipts do not mark the broader Agent product as complete.
+- [architecture.md](architecture.md)：进程、数据权威、并发与安全边界。
+- [identity-and-tool-surface.md](identity-and-tool-surface.md)：Nova 身份替换、旧 Session 迁移、ToolBox-only 工具 allowlist 与真实收据。
+- [app-server-protocol.md](app-server-protocol.md)：JSONL 生命周期、Thread/Turn/Item、审批和动态工具。
+- [projection-store.md](projection-store.md)：SQLite schema、事务、delta、对账和 orphan 恢复。
+- [toolbox-bridge.md](toolbox-bridge.md)：Nova、`vcp_invoke`、interrupt、VCPLog/VCPInfo。
+- [agent-workbench.md](agent-workbench.md)：Session 切换、Message/Block、动作与主聊天复用边界。
+- [workbench-experience-roadmap.md](workbench-experience-roadmap.md)：Session 目录、Runtime/Thread 预热、主聊天同构 loading/streaming 与工具卡收口路线图。
+- [reuse-register.md](reuse-register.md)：外部项目可复用模块、采用方式、许可证和禁止边界。
+- [delivery-plan.md](delivery-plan.md)：按依赖顺序拆分的长期施工计划。
+- [test-matrix.md](test-matrix.md)：门槛、当前证据、缺口与验证收据。
+
+## 状态词规则
+
+- `implemented`：代码路径存在，但不代表测试或真实环境可用。
+- `hermetic pass`：本地 fake/mock/临时数据库测试通过，不连接真实 ToolBox。
+- `working-tree pass`：测试在未提交工作树通过，只能作为施工证据，不能作为版本收据。
+- `verified`：完整收据齐全且对应已提交 VChat revision。
+- `live verified`：连接真实 Codex、Nova 和 ToolBox 后通过不可替代断言。
+- `product ready`：所有阻塞 gate 均为 `live verified`，且无 P0/P1 未关闭。
+
+## 验证收据规则
+
+每条 `verified` 或 `live verified` 必须记录：
+
+1. 精确命令；
+2. 运行模式和依赖；
+3. 日期与平台；
+4. VChat commit；
+5. Codex 版本和源码 revision；
+6. ToolBox revision；
+7. 关键断言与产物位置；
+8. 是否包含未提交改动。
+
+缺少任意字段时，只能记录为 probe、working-tree pass 或 experimental。
+
+## 复用优先规则
+
+开始实现 parser、WebSocket 重连、Session UI 状态机、通知中心或测试 harness 前，必须先检查 `reuse-register.md`。登记为“直接受控导入”或“最小抽取”的能力不得无理由重新实现；若决定不复用，必须在变更说明中记录不兼容证据。

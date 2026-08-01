@@ -13,10 +13,13 @@ const CHANNELS = Object.freeze({
     FLOWLOCK_RESPONSE: 'flowlock:response',
     DESKTOP_LAUNCH: 'desktop-launch-vchat-app',
     AGENT_RUNTIME_GET_STATUS: 'agent-runtime:get-status',
+    AGENT_RUNTIME_GET_PRESENTATION_MODE: 'agent-runtime:get-presentation-mode',
     AGENT_RUNTIME_START: 'agent-runtime:start',
     AGENT_RUNTIME_STOP: 'agent-runtime:stop',
     AGENT_RUNTIME_CREATE_TOPIC: 'agent-runtime:create-topic',
     AGENT_RUNTIME_CREATE_SESSION: 'agent-runtime:create-session',
+    AGENT_RUNTIME_ENSURE_SESSION_RUNTIME: 'agent-runtime:ensure-session-runtime',
+    AGENT_RUNTIME_FORK_SESSION: 'agent-runtime:fork-session',
     AGENT_RUNTIME_CLOSE_SESSION: 'agent-runtime:close-session',
     AGENT_RUNTIME_COMPACT_SESSION: 'agent-runtime:compact-session',
     AGENT_RUNTIME_LIST_TOPICS: 'agent-runtime:list-topics',
@@ -25,6 +28,7 @@ const CHANNELS = Object.freeze({
     AGENT_RUNTIME_GET_TOPIC_INDEX_STATUS: 'agent-runtime:get-topic-index-status',
     AGENT_RUNTIME_REBUILD_TOPIC_INDEX: 'agent-runtime:rebuild-topic-index',
     AGENT_RUNTIME_READ_TOPIC: 'agent-runtime:read-topic',
+    AGENT_RUNTIME_READ_PROJECTION: 'agent-runtime:read-projection',
     AGENT_RUNTIME_TAKEOVER_TOPIC: 'agent-runtime:takeover-topic',
     AGENT_RUNTIME_RENAME_TOPIC: 'agent-runtime:rename-topic',
     AGENT_RUNTIME_DELETE_TOPIC: 'agent-runtime:delete-topic',
@@ -100,6 +104,14 @@ const channelRegistry = new Map([
         responseSchema: { state: 'string', protocolVersion: 'number', worker: 'object?', attachment: 'object?' },
         supportsConcurrent: true,
     }],
+    [CHANNELS.AGENT_RUNTIME_GET_PRESENTATION_MODE, {
+        channelName: CHANNELS.AGENT_RUNTIME_GET_PRESENTATION_MODE,
+        channelType: CHANNEL_TYPES.QUERY,
+        owner: 'Agent Runtime',
+        requestSchema: null,
+        responseSchema: { mode: 'string' },
+        supportsConcurrent: true,
+    }],
     [CHANNELS.AGENT_RUNTIME_START, {
         channelName: CHANNELS.AGENT_RUNTIME_START,
         channelType: CHANNEL_TYPES.QUERY,
@@ -130,6 +142,14 @@ const channelRegistry = new Map([
         owner: 'Agent Runtime',
         requestSchema: { workspaceRoot: 'string?', model: 'string?', metadata: 'object?' },
         responseSchema: { sessionId: 'string', state: 'string' },
+        supportsConcurrent: true,
+    }],
+    [CHANNELS.AGENT_RUNTIME_ENSURE_SESSION_RUNTIME, {
+        channelName: CHANNELS.AGENT_RUNTIME_ENSURE_SESSION_RUNTIME,
+        channelType: CHANNEL_TYPES.QUERY,
+        owner: 'Agent Runtime',
+        requestSchema: { sessionId: 'string', reason: 'string?' },
+        responseSchema: { sessionId: 'string', threadId: 'string', state: 'string' },
         supportsConcurrent: true,
     }],
     [CHANNELS.AGENT_RUNTIME_START_TURN, {
@@ -184,10 +204,10 @@ const channelRegistry = new Map([
     }],
 ]);
 
-// Rust daemon control-plane queries.  Their detailed result shape is daemon
-// versioned; Electron validates IPC origin and forwards the opaque response
-// without recreating Pi-era business state in Main.
+// Agent runtime control-plane queries. Electron validates IPC origin and
+// forwards the runtime-owned response without creating a second transcript.
 for (const channel of [
+    CHANNELS.AGENT_RUNTIME_FORK_SESSION,
     CHANNELS.AGENT_RUNTIME_CLOSE_SESSION,
     CHANNELS.AGENT_RUNTIME_COMPACT_SESSION,
     CHANNELS.AGENT_RUNTIME_LIST_TOPICS,
@@ -196,6 +216,7 @@ for (const channel of [
     CHANNELS.AGENT_RUNTIME_GET_TOPIC_INDEX_STATUS,
     CHANNELS.AGENT_RUNTIME_REBUILD_TOPIC_INDEX,
     CHANNELS.AGENT_RUNTIME_READ_TOPIC,
+    CHANNELS.AGENT_RUNTIME_READ_PROJECTION,
     CHANNELS.AGENT_RUNTIME_TAKEOVER_TOPIC,
     CHANNELS.AGENT_RUNTIME_RENAME_TOPIC,
     CHANNELS.AGENT_RUNTIME_DELETE_TOPIC,
@@ -210,9 +231,9 @@ for (const channel of [
     channelRegistry.set(channel, {
         channelName: channel,
         channelType: CHANNEL_TYPES.QUERY,
-        owner: 'Rust Agent daemon',
-        requestSchema: 'daemon-command-payload?',
-        responseSchema: 'daemon-control-result',
+        owner: 'Agent Runtime',
+        requestSchema: 'runtime-command-payload?',
+        responseSchema: 'runtime-control-result',
         supportsConcurrent: true,
     });
 }

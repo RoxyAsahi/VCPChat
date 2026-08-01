@@ -56,7 +56,7 @@ deliveryStore.addPendingUserMessage({ turnId: 'delivery-turn', prompt: '请先�
 assert.deepEqual(deliveryStore.getState().messages, [{
     id: 'pending-user:delivery-turn', turnId: 'delivery-turn', role: 'user',
     content: '请先显示我，再等待 Rust 确认', attachments: [], state: 'pending', deliveryState: 'sending',
-    deliveryDetail: '正在等待 Rust Runtime 确认…', createdAt: 123,
+    deliveryDetail: '正在等待 Codex App Server 确认…', createdAt: 123,
     firstSequence: null, lastSequence: null,
 }]);
 deliveryStore.dispatch({
@@ -318,5 +318,174 @@ assert.equal(previewCalls[0][1].resume, 'preview-topic');
 assert.equal(previewCalls[1][0], 'turn');
 assert.equal(previewCalls[1][1].sessionId, 'preview-session');
 preview.dispose();
+
+// Codex selection warms its Thread after the SQLite snapshot is visible. A
+// send during that warm window must await the same promise, never issue a
+// second thread/start or thread/resume request.
+const warmCalls = [];
+let resolveWarm;
+const warming = createWorkbenchController({
+    agentRuntimeGetStatus: async () => ({
+        state: 'ready', pendingApprovals: [],
+        runtimes: [{ sessionId: 'warm-session', topicId: 'warm-session', activity: 'idle' }],
+    }),
+    agentRuntimeReadProjection: async ({ topicId }) => ({
+        session: { sessionId: topicId, agentId: 'Nova', title: 'Warm' }, messages: [],
+    }),
+    agentRuntimeReadTopic: async ({ topicId }) => ({
+        session: { sessionId: topicId, agentId: 'Nova', title: 'Warm' }, messages: [],
+    }),
+    agentRuntimeEnsureSessionRuntime: (payload) => {
+        warmCalls.push(payload);
+        return new Promise((resolve) => { resolveWarm = resolve; });
+    },
+    agentRuntimeStartTurn: async (payload) => ({ ...payload, turnId: 'warm-turn' }),
+});
+await warming.previewTopic('warm-session', 'Nova', { title: 'Warm' });
+await Promise.resolve();
+assert.equal(warmCalls.length, 1, 'selection must begin one detached Session Thread warm');
+const warmSend = warming.startTurn('发送时复用预热');
+await Promise.resolve();
+assert.equal(warmCalls.length, 1, 'send must reuse the in-flight selection warm promise');
+resolveWarm({ sessionId: 'warm-session', topicId: 'warm-session', threadId: 'warm-thread' });
+const warmAccepted = await warmSend;
+assert.equal(warmAccepted.turnId, 'warm-turn');
+warming.dispose();
+
+// Codex cold-open has two distinct reads: projection-only SQLite is the
+// awaited navigation path, while App Server reconciliation is detached.  A
+// late reconciliation for A must not overwrite a newer selection B.
+const coldCalls = [];
+let resolveSqliteA;
+let resolveThreadA;
+let resolveThreadB;
+const cold = createWorkbenchController({
+    agentRuntimeReadProjection: ({ topicId }) => {
+        coldCalls.push(['sqlite', topicId]);
+        if (topicId === 'topic-a') return new Promise((resolve) => { resolveSqliteA = resolve; });
+        return Promise.resolve({
+            session: { agentId: 'Nova', title: 'SQLite B' },
+            messages: [{ messageId: 'sqlite-b', itemId: 'item-b', role: 'assistant', status: 'completed', blocks: [{ blockId: 'b:0', kind: 'message', content: { text: 'SQLite B' } }] }],
+        });
+    },
+    agentRuntimeReadTopic: ({ topicId }) => {
+        coldCalls.push(['thread', topicId]);
+        if (topicId === 'topic-a') return new Promise((resolve) => { resolveThreadA = resolve; });
+        return new Promise((resolve) => { resolveThreadB = resolve; });
+    },
+});
+const openingA = cold.previewTopic('topic-a', 'Nova', { title: 'A' });
+await new Promise((resolve) => setImmediate(resolve));
+assert.deepEqual(coldCalls, [['sqlite', 'topic-a']], 'cold navigation must not wait for thread/read');
+resolveSqliteA({
+    session: { agentId: 'Nova', title: 'SQLite A' },
+    messages: [{ messageId: 'sqlite-a', itemId: 'item-a', role: 'assistant', status: 'completed', blocks: [{ blockId: 'a:0', kind: 'message', content: { text: 'SQLite A' } }] }],
+});
+await openingA;
+assert.equal(cold.store.getState().messages[0].content, 'SQLite A', 'SQLite projection is the visible cold-open result');
+await new Promise((resolve) => setImmediate(resolve));
+assert.ok(coldCalls.some(([kind, topicId]) => kind === 'thread' && topicId === 'topic-a'), 'thread/read starts only after SQLite has rendered');
+await cold.previewTopic('topic-b', 'Nova', { title: 'B' });
+assert.equal(cold.store.getState().messages[0].content, 'SQLite B');
+resolveThreadA({
+    session: { agentId: 'Nova', title: 'stale Thread A' },
+    messages: [{ messageId: 'thread-a', itemId: 'item-a', role: 'assistant', status: 'completed', blocks: [{ blockId: 'a:0', kind: 'message', content: { text: 'must not replace B' } }] }],
+});
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(cold.store.getState().selectedTopic.topicId, 'topic-b');
+assert.equal(cold.store.getState().messages[0].content, 'SQLite B', 'late A reconciliation must not overwrite B');
+resolveThreadB({ session: { agentId: 'Nova', title: 'Thread B' }, messages: [] });
+cold.dispose();
+
+const hydrateCalls = [];
+let resolveHydrateSqlite;
+let resolveHydrateThread;
+const hydratedCodex = createWorkbenchController({
+    agentRuntimeReadProjection: () => {
+        hydrateCalls.push('sqlite');
+        return new Promise((resolve) => { resolveHydrateSqlite = resolve; });
+    },
+    agentRuntimeReadTopic: () => {
+        hydrateCalls.push('thread');
+        return new Promise((resolve) => { resolveHydrateThread = resolve; });
+    },
+});
+const openingAttached = hydratedCodex.hydrateTopic('attached-topic', {
+    sessionId: 'attached-session', topicId: 'attached-topic', agentId: 'Nova', title: 'Runtime shell', state: 'idle',
+});
+await new Promise((resolve) => setImmediate(resolve));
+assert.deepEqual(hydrateCalls, ['sqlite'], 'an attached Codex Session must also open from SQLite before thread/read');
+resolveHydrateSqlite({
+    session: { agentId: 'Nova', title: 'SQLite attached' },
+    messages: [{ messageId: 'attached-message', itemId: 'attached-item', role: 'assistant', status: 'completed', blocks: [{ blockId: 'attached:0', kind: 'message', content: { text: 'attached SQLite projection' } }] }],
+});
+await openingAttached;
+assert.equal(hydratedCodex.store.getState().messages[0].content, 'attached SQLite projection');
+await new Promise((resolve) => setImmediate(resolve));
+assert.deepEqual(hydrateCalls, ['sqlite', 'thread']);
+resolveHydrateThread({ session: { agentId: 'Nova', title: 'Thread attached' }, messages: [] });
+hydratedCodex.dispose();
+
+let liveGuardEvent;
+let resolveLiveGuardThread;
+const liveGuard = createWorkbenchController({
+    agentRuntimeReadProjection: async () => ({
+        session: { agentId: 'Nova', title: 'SQLite live guard' },
+        messages: [{ messageId: 'sqlite-guard', itemId: 'item-guard', role: 'assistant', status: 'completed', blocks: [{ blockId: 'guard:0', kind: 'message', content: { text: 'SQLite base' } }] }],
+    }),
+    agentRuntimeReadTopic: async () => new Promise((resolve) => { resolveLiveGuardThread = resolve; }),
+    onAgentRuntimeEvent(callback) { liveGuardEvent = callback; return () => {}; },
+});
+liveGuard.subscribeRuntime();
+await liveGuard.previewTopic('live-guard-topic', 'Nova');
+liveGuardEvent({
+    runtime: 'codex', type: 'projection.updated', topicId: 'live-guard-topic', sessionId: 'live-guard-session',
+    threadId: 'thread-live-guard', turnId: 'turn-live-guard', activity: 'running',
+    projectionMessage: {
+        messageId: 'live-guard-message', itemId: 'live-guard-item', turnId: 'turn-live-guard', role: 'assistant', status: 'inProgress',
+        blocks: [{ blockId: 'live-guard:0', kind: 'message', content: { text: 'live delta must survive' } }],
+    },
+});
+resolveLiveGuardThread({
+    session: { agentId: 'Nova', title: 'stale thread result' },
+    messages: [{ messageId: 'stale-guard-message', itemId: 'stale-guard-item', role: 'assistant', status: 'completed', blocks: [{ blockId: 'stale-guard:0', kind: 'message', content: { text: 'must not replace live delta' } }] }],
+});
+await new Promise((resolve) => setImmediate(resolve));
+assert.ok(liveGuard.store.getState().messages.some((message) => message.content === 'live delta must survive'),
+    'a late thread/read snapshot must not overwrite a newer live projection patch');
+assert.equal(liveGuard.store.getState().messages.some((message) => message.content === 'must not replace live delta'), false);
+liveGuard.dispose();
+
+// Codex emits the durable user item asynchronously. It must reconcile the
+// renderer-only pending row by turn id instead of leaving two identical user
+// messages in the timeline.
+let duplicateGuardEvent;
+const duplicateGuard = createWorkbenchController({
+    agentRuntimeStartTurn: async () => ({ turnId: 'codex-turn-1' }),
+    onAgentRuntimeEvent(callback) { duplicateGuardEvent = callback; return () => {}; },
+});
+duplicateGuard.store.setState({
+    selectedTopic: { topicId: 'codex-topic', mode: 'attached' },
+    attachment: { sessionId: 'codex-topic', topicId: 'codex-topic' },
+});
+duplicateGuard.subscribeRuntime();
+await duplicateGuard.startTurn('只显示一次');
+assert.equal(duplicateGuard.store.getState().messages.filter((message) => message.role === 'user').length, 1,
+    'turn acceptance may show one temporary user row');
+duplicateGuardEvent({
+    runtime: 'codex', type: 'projection.updated', topicId: 'codex-topic', sessionId: 'codex-topic',
+    turnId: 'codex-turn-1', activity: 'running',
+    projectionMessage: {
+        messageId: 'durable-user-message', itemId: 'durable-user-item', turnId: 'codex-turn-1',
+        role: 'user', status: 'completed',
+        blocks: [{ blockId: 'durable-user-block', kind: 'message', content: { parts: [{ text: '只显示一次' }] } }],
+    },
+});
+const reconciledUserMessages = duplicateGuard.store.getState().messages.filter((message) => message.role === 'user');
+assert.equal(reconciledUserMessages.length, 1,
+    'the App Server user item must replace—not append to—the temporary row');
+assert.equal(reconciledUserMessages[0].id, 'durable-user-block');
+assert.equal(reconciledUserMessages[0].deliveryState, 'confirmed');
+duplicateGuard.dispose();
 
 console.log('Agent Workbench store/reducer/controller projection tests passed.');

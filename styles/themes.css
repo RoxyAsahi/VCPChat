@@ -1,62 +1,60 @@
 /*
- * styles/themes/themes星渊雪境.css
- * Curated by Coco for Professor Ryan
- * Theme Name: Star Abyss & Snow Realm (星渊雪境)
- * Contrast Theme: Deep space darkness vs. Cute snowy illustration.
+ * styles/themes/themesEva.css
+ * Theme Name: Eva (EVA)
+ * Inspired by EVA, with colors from 月影春信
  */
 
-/* * =================================================================
- * Dark Theme (Default): Star Abyss (星渊之暗)
- * Inspired by the deep space black hole image.
- * Emphasizes dark contrast with an accent of cosmic orange/gold.
- * =================================================================
- */
+/* =================================================================
+ * Dark Theme: Eva Dark
+ * ================================================================= */
 :root {
-    /* --- Wallpaper Interface --- */
-    --chat-wallpaper-dark: url('../assets/wallpaper/themes_star_abyss_dark.jpg');
+    /* --- Wallpaper --- */
+    --chat-wallpaper-dark: url('../assets/wallpaper/eva-dark.png');
 
     /* --- Base Colors --- */
-    --primary-bg: #101014;      /* 主背景 - 极深黑 */
-    --secondary-bg: #1a1a1e;    /* 侧边栏/面板背景 */
-    --tertiary-bg: #0d0d10;     /* 聊天区背景 */
-    --accent-bg: #28282c;       /* 悬停/选中背景 */
-    --border-color: #3a3a3e;    /* 边框颜色 */
-    --input-bg: #1e1e22;        /* 输入框背景 */
-    --panel-bg-dark: rgba(26, 26, 30, 0.75); /* 面板磨砂玻璃 */
+    --primary-bg: #0f172a;      /* 深邃蓝黑 */
+    --secondary-bg: #1e293b;    /* 侧边栏 */
+    --tertiary-bg: #020617;     /* 聊天区底色 */
+    --accent-bg: #334155;
+    --border-color: rgba(233, 196, 106, 0.4); /* 琥珀月金边框 */
+    --input-bg: rgba(15, 23, 42, 0.8);
+
+    --panel-bg-dark: rgba(15, 23, 42, 0.75);
 
     /* --- Text Colors --- */
-    --primary-text: #e0e0e0;    /* 主要文字 - 浅灰 */
-    --secondary-text: #a4a4a4;  /* 次要/标题文字 - 中灰 */
-    --highlight-text: #FFB74D;  /* 高亮文字 - 柔和橙色 (强调色) */
-    --text-on-accent: #ffffff;
-    --placeholder-text: #6a6a6e;
-    --quoted-text: #5D9CEC;     /* 引用文本颜色 - 柔和蓝 */
-    --user-text: #ffffff;       /* 用户气泡文字 */
-    --agent-text: #e0e0e0;      /* Agent气泡文字 */
+    --primary-text: #f1f5f9;    /* 极浅灰白 */
+    --secondary-text: #94a3b8;  /* 冷灰蓝 */
+    --highlight-text: #E9C46A;  /* 琥珀月金 */
+    --text-on-accent: #0f172a;
+    --placeholder-text: #475569;
+    --quoted-text: #FDE68A;
+    --user-text: #f1f5f9;
+    --agent-text: #f1f5f9;
 
-    /* --- Bubble Colors (Frosted Glass Ready) --- */
-    --user-bubble-bg: rgba(255, 183, 77, 0.15); /* 用户气泡 - 柔和橙色 (高对比度) - 半透明 */
-    --assistant-bubble-bg: rgba(255, 255, 255, 0.08); /* AI气泡 - 极浅白 - 半透明 */
+    /* --- Bubble Colors (Frosted Glass) --- */
+    --user-bubble-bg: rgba(253, 230, 138, 0.15); /* 用户气泡：淡金光影 */
+    --assistant-bubble-bg: rgba(30, 41, 59, 0.4);  /* AI气泡：深海磨砂 */
 
     /* --- UI Element Colors --- */
-    --button-bg: #FFB74D;           /* 按钮背景 */
-    --button-hover-bg: #ffaa33;      /* 按钮悬停 */
-    --danger-color: #e57373;
-    --success-color: #66bb6a;
-    --tool-bubble-bg: rgba(58, 58, 62, 0.15);
-    --tool-bubble-border: #FFB74D;
-
-    /* --- Shimmer Effect --- */
-    --shimmer-color-transparent: rgba(255, 183, 77, 0.2);
-    --shimmer-color-highlight: rgba(255, 183, 77, 0.6);
-
-    --panel-text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --button-bg: #E9C46A;
+    --button-hover-bg: #D4A373;
+    --danger-color: #f87171;
+    --success-color: #4ade80;
+    --notification-bg: #1e293b;
+    --notification-border: #FDE68A;
+    --tool-bubble-bg: rgba(253, 230, 138, 0.05);
+    --tool-bubble-border: #FDE68A;
 
     /* --- Scrollbar --- */
-    --scrollbar-track: rgba(255, 255, 255, 0.15);
-    --scrollbar-thumb: rgba(255, 183, 77, 0.6);
-    --scrollbar-thumb-hover: rgba(255, 183, 77, 0.8);
+    --scrollbar-track: rgba(15, 23, 42, 0.3);
+    --scrollbar-thumb: rgba(253, 230, 138, 0.3);
+    --scrollbar-thumb-hover: rgba(253, 230, 138, 0.5);
 
+    /* --- Shimmer Effect --- */
+    --shimmer-color-transparent: rgba(253, 230, 138, 0.1);
+    --shimmer-color-highlight: rgba(253, 230, 138, 0.3);
+
+    --panel-text-shadow: none;
     --panel-bg: var(--panel-bg-dark);
 }
 
@@ -67,73 +65,66 @@ body {
     background-attachment: fixed;
 }
 
-/* * =================================================================
- * Light Theme: Snow Realm (雪境之光)
- * Inspired by the clean, light snowy mountain illustration.
- * Emphasizes high contrast, clean white, and a cool blue accent.
- * =================================================================
- */
+/* =================================================================
+ * Light Theme: Eva Light
+ * ================================================================= */
 body.light-theme {
-    /* Wallpaper and background properties */
+    /* --- Wallpaper --- */
+    --chat-wallpaper-light: url('../assets/wallpaper/eva-light.jpg');
     background-image: var(--chat-wallpaper-light);
-    background-size: cover;
-    background-position: center;
-    background-attachment: fixed;
-    /* --- Wallpaper Interface --- */
-    --chat-wallpaper-light: url('../assets/wallpaper/themes_snow_realm_light.jpg');
 
-    /* --- Base Colors --- */
-    --primary-bg: #f4f6f8;      /* 主背景 - 浅灰蓝 */
-    --secondary-bg: #ffffff;    /* 侧边栏 - 白色 */
-    --tertiary-bg: #e9edf0;     /* 聊天区 - 浅灰 */
-    --accent-bg: #e0e6eb;       /* 悬停/选中背景 */
-    --border-color: #e0e6eb;
-    --input-bg: #ffffff;
-    --panel-bg-light: rgba(255, 255, 255, 0.9); /* 浅色模式面板高不透明度 */
+    /* --- Base Colors (红白EVA风格) --- */
+    --primary-bg: #fafafa;      /* 纯白 */
+    --secondary-bg: #ffffff;
+    --tertiary-bg: #f5f5f5;
+    --accent-bg: #ffeaea;       /* 淡红背景 */
+    --border-color: rgba(255, 62, 95, 0.3); /* EVA红边框 */
+    --input-bg: rgba(255, 255, 255, 0.95);
+
+    --panel-bg-light: rgba(255, 255, 255, 0.6); /* 高透明度 */
 
     /* --- Text Colors --- */
-    --primary-text: #2c3e50;    /* 主要文字 - 深灰蓝 */
-    --secondary-text: #5a6f80;  /* 次要/标题文字 - 中灰蓝 */
-    --highlight-text: #5D9CEC;  /* 高亮文字 - 清爽蓝 (强调色) */
+    --primary-text: #2d2d30;    /* 深灰 */
+    --secondary-text: #6a6a70;  /* 中灰 - 图标颜色 */
+    --highlight-text: #ff3e5f;  /* EVA红 */
     --text-on-accent: #ffffff;
-    --placeholder-text: #a0aab3;
-    --quoted-text: #007bff;
-    --user-text: #2c3e50;       /* 用户气泡文字 */
-    --agent-text: #2c3e50;      /* Agent气泡文字 */
+    --placeholder-text: #a0a0a8;
+    --quoted-text: #ff3e5f;
+    --user-text: #2d2d30;
+    --agent-text: #2d2d30;
 
     /* --- Bubble Colors --- */
-    /* 用户气泡：浅蓝透明度低 */
-    --user-bubble-bg: rgba(93, 156, 236, 0.1);
-    /* AI气泡：高不透明度白色，以确保在插画背景上的可读性 */
-    --assistant-bubble-bg: rgba(255, 255, 255, 0.8);
+    --user-bubble-bg: rgba(255, 62, 95, 0.12);    /* 淡红 */
+    --assistant-bubble-bg: rgba(255, 255, 255, 0.5); /* 半透明白 */
 
     /* --- UI Element Colors --- */
-    --button-bg: #5D9CEC;           /* 按钮 - 清爽蓝 */
-    --button-hover-bg: #4a89dc;     /* 按钮悬停 */
-    --danger-color: #e74c3c;
-    --success-color: #4caf50;
-    --tool-bubble-bg: rgba(224, 230, 235, 0.5); /* 中等透明度浅灰 */
-    --tool-bubble-border: #5D9CEC;
-
-    /* --- Shimmer Effect --- */
-    --shimmer-color-transparent: rgba(44, 62, 80, 0.08);
-    --shimmer-color-highlight: rgba(44, 62, 80, 0.15);
-
-    /* --- Text Shadow for Frosted Panels --- */
-    --panel-text-shadow: none;
+    --button-bg: #ff3e5f;
+    --button-hover-bg: #ff1f45;
+    --danger-color: #ef4444;
+    --success-color: #22c55e;
+    --notification-bg: #ffffff;
+    --notification-border: #ff3e5f;
+    --tool-bubble-bg: rgba(255, 62, 95, 0.08);
+    --tool-bubble-border: #ff3e5f;
 
     /* --- Scrollbar --- */
-    --scrollbar-track: rgba(0, 0, 0, 0.1);
-    --scrollbar-thumb: rgba(93, 156, 236, 0.6);
-    --scrollbar-thumb-hover: rgba(93, 156, 236, 0.8);
+    --scrollbar-track: rgba(0, 0, 0, 0.08);
+    --scrollbar-thumb: rgba(255, 62, 95, 0.4);
+    --scrollbar-thumb-hover: rgba(255, 62, 95, 0.6);
+
+    /* --- Shimmer Effect --- */
+    --shimmer-color-transparent: rgba(255, 62, 95, 0.08);
+    --shimmer-color-highlight: rgba(255, 62, 95, 0.2);
+
+    --panel-text-shadow: none;
 
     --panel-bg: var(--panel-bg-light);
 }
 
-/* 强制应用磨砂玻璃效果，因为主题文件示例里没有这部分，可可自己加上！ */
+/* --- 增强磨砂感 --- */
 .message-bubble {
-    backdrop-filter: blur(8px) saturate(120%);
-    -webkit-backdrop-filter: blur(8px) saturate(120%);
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(10px) saturate(110%);
+    -webkit-backdrop-filter: blur(10px) saturate(110%);
+    border: 1px solid var(--border-color);
+    box-shadow: none;
 }

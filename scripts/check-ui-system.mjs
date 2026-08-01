@@ -49,9 +49,20 @@ for (const file of filesIn(styleDir, '.css')) {
 const componentCss = fs.readFileSync(path.join(styleDir, 'components.css'), 'utf8');
 if (!componentCss.includes(':focus-visible')) report(path.join(styleDir, 'components.css'), 'missing focus-visible rules');
 
+const inlineStyleCompatibilityAllowlist = new Set([
+    // Audited fork of the legacy main-chat renderer. Dynamic avatar colors,
+    // Mermaid transforms and media sizing are part of the golden parity
+    // contract; FORK_RECEIPT.md pins its exact source and drift gate.
+    path.join(moduleDir, 'agent-presentation', 'fork', 'agentMessageRenderer.js'),
+    // The shared legacy context-menu CSS positions the popup dynamically.
+    path.join(moduleDir, 'agent-presentation', 'context-menu.js'),
+]);
+
 for (const file of filesIn(moduleDir, '.js')) {
     const source = fs.readFileSync(file, 'utf8');
-    if (/\bstyle\s*=|\.style\./.test(source)) report(file, 'contains inline style mutation');
+    if (/\bstyle\s*=|\.style\./.test(source) && !inlineStyleCompatibilityAllowlist.has(file)) {
+        report(file, 'contains inline style mutation');
+    }
 }
 
 const runtimeFile = path.join(moduleDir, 'vcp-ui.js');

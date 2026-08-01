@@ -331,8 +331,8 @@ async function performQuitCleanup() {
             }
         }
 
-        // The Rust daemon owns Agent state. Stop it before the Electron
-        // process releases the shared application resources.
+        // The Agent runtime owns process state. Stop it before Electron
+        // releases shared application resources.
         await agentRuntimeHandlers.shutdown();
 
         if (chatDataService) {
@@ -376,9 +376,13 @@ function createWindow({ deferLoad = false } = {}) {
 
     // 拦截主窗口内的直接导航（防止在应用内打开外部网页）
     mainWindow.webContents.on('will-navigate', (event, url) => {
-        if (url !== mainWindow.webContents.getURL() && (url.startsWith('http:') || url.startsWith('https:'))) {
-            event.preventDefault();
-            shell.openExternal(url);
+        if (url === mainWindow.webContents.getURL()) return;
+
+        event.preventDefault();
+        if (/^(?:https?:|file:|magnet:)/i.test(url)) {
+            shell.openExternal(url).catch((error) => console.error('[Main] Failed to open external navigation:', error));
+        } else {
+            console.warn('[Main] Blocked unexpected main-window navigation:', url);
         }
     });
 
@@ -645,11 +649,12 @@ if (!gotTheLock) {
         // 全局处理所有窗口的新窗口打开请求，确保外部链接在系统浏览器中打开
         app.on('web-contents-created', (event, contents) => {
             contents.setWindowOpenHandler(({ url }) => {
-                if (url.startsWith('http:') || url.startsWith('https:')) {
-                    shell.openExternal(url);
-                    return { action: 'deny' };
+                if (/^(?:https?:|file:|magnet:)/i.test(url)) {
+                    shell.openExternal(url).catch((error) => console.error('[Main] Failed to open new-window URL:', error));
+                } else {
+                    console.warn('[Main] Blocked unexpected new-window URL:', url);
                 }
-                return { action: 'allow' };
+                return { action: 'deny' };
             });
         });
 

@@ -1,0 +1,22 @@
+{
+  "sourceCommit": "d441675a2b11702b47e6e9269bf3ce6936258a9f",
+  "sourceSha256": "48dc26601e48698626310c5d2230fccc09eaa418a78561e75a67717b6cce06a3",
+  "requiredCapabilities": [
+    "renderMessage",
+    "parseFullMarkdown",
+    "renderMermaidDiagrams",
+    "renderAttachments",
+    "renderPostProcessedHtml",
+    "finalizeStreamedMessage"
+  ],
+  "forbiddenDependencyCeilings": {
+    "currentChatHistoryRef": 0,
+    "currentSelectedItemRef": 0,
+    "currentTopicIdRef": 0,
+    "saveChatHistory": 0,
+    "streamManager": 0,
+    "contextMenu": 0,
+    "mainRendererReferences": 0
+  },
+  "exitRequirement": "Satisfied: every forbidden dependency count is zero."
+}

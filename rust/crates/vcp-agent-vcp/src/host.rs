@@ -6,7 +6,7 @@
 //! contract without inventing an MCP registry, local capability executor, or
 //! a second settings store.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, time::Instant};
 
 use futures_util::{SinkExt, StreamExt};
 use reqwest::{Client, header};
@@ -58,6 +58,7 @@ pub enum ToolboxHostError {
 pub struct ToolboxConnection {
     base_url: Url,
     api_key: String,
+    websocket_endpoint_override: Option<Url>,
 }
 
 impl ToolboxConnection {
@@ -67,6 +68,8 @@ impl ToolboxConnection {
         if !matches!(base_url.scheme(), "http" | "https") || base_url.host_str().is_none() {
             return Err(ToolboxHostError::InvalidServerScheme);
         }
+        let websocket_endpoint_override =
+            is_complete_websocket_channel(&base_url).then_some(base_url.clone());
         let mut normalized = base_url;
         normalized.set_path("");
         normalized.set_query(None);
@@ -74,6 +77,7 @@ impl ToolboxConnection {
         Ok(Self {
             base_url: normalized,
             api_key: api_key.into(),
+            websocket_endpoint_override,
         })
     }
 
@@ -94,6 +98,13 @@ impl ToolboxConnection {
     fn authorization(&self) -> String {
         format!("Bearer {}", self.api_key)
     }
+}
+
+fn is_complete_websocket_channel(url: &Url) -> bool {
+    let path = url.path().trim_end_matches('/').to_ascii_lowercase();
+    ["/vcplog", "/vcpinfo", "/vcp-distributed-server"]
+        .iter()
+        .any(|channel| path == *channel || path.starts_with(&format!("{channel}/vcp_key=")))
 }
 
 pub fn normalize_toolbox_base_url(server_url: &str) -> Result<String, ToolboxHostError> {
@@ -337,13 +348,21 @@ impl DirectToolboxHost {
     pub async fn observe_websocket(
         &self,
         channel: ToolboxWsChannel,
+        on_event: impl FnMut(ToolboxWsEvent),
+    ) -> Result<(), ToolboxHostError> {
+        self.observe_websocket_with_status(channel, |_| {}, on_event)
+            .await
+    }
+
+    pub async fn observe_websocket_with_status(
+        &self,
+        channel: ToolboxWsChannel,
+        mut on_connected: impl FnMut(ToolboxWsConnectionStatus),
         mut on_event: impl FnMut(ToolboxWsEvent),
     ) -> Result<(), ToolboxHostError> {
-        let endpoints = websocket_endpoints(&self.connection)?;
-        let endpoint = endpoints
-            .get(&channel)
-            .ok_or(ToolboxHostError::InvalidServerUrl)?;
-        let (mut socket, _) = connect_toolbox_websocket(endpoint).await?;
+        let (mut socket, status) =
+            open_websocket_with_fallback(&self.connection, channel, None).await?;
+        on_connected(status);
         while let Some(message) = socket.next().await {
             match message.map_err(|error| ToolboxHostError::WebSocket(error.to_string()))? {
                 Message::Text(text) => dispatch_ws_payload(channel, &text, &mut on_event),
@@ -368,17 +387,26 @@ impl DirectToolboxHost {
         &self,
         device_name: &str,
         responses: &mut mpsc::Receiver<ToolboxApprovalResponse>,
+        on_event: impl FnMut(ToolboxWsEvent),
+    ) -> Result<(), ToolboxHostError> {
+        self.run_log_websocket_with_status(device_name, responses, |_| {}, on_event)
+            .await
+    }
+
+    pub async fn run_log_websocket_with_status(
+        &self,
+        device_name: &str,
+        responses: &mut mpsc::Receiver<ToolboxApprovalResponse>,
+        mut on_connected: impl FnMut(ToolboxWsConnectionStatus),
         mut on_event: impl FnMut(ToolboxWsEvent),
     ) -> Result<(), ToolboxHostError> {
-        let endpoints = websocket_endpoints(&self.connection)?;
-        let mut endpoint = endpoints
-            .get(&ToolboxWsChannel::Log)
-            .cloned()
-            .ok_or(ToolboxHostError::InvalidServerUrl)?;
-        endpoint
-            .query_pairs_mut()
-            .append_pair("deviceName", device_name);
-        let (mut socket, _) = connect_toolbox_websocket(&endpoint).await?;
+        let (mut socket, status) = open_websocket_with_fallback(
+            &self.connection,
+            ToolboxWsChannel::Log,
+            Some(device_name),
+        )
+        .await?;
+        on_connected(status);
         let mut terminal_error = None;
         loop {
             tokio::select! {
@@ -621,33 +649,190 @@ pub enum ToolboxWsChannel {
     Distributed,
 }
 
-pub fn websocket_endpoints(
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ToolboxWsConnectionStatus {
+    pub channel: ToolboxWsChannel,
+    /// Credential-free endpoint suitable for structured diagnostics/UI.
+    pub endpoint: String,
+    pub latency_ms: u64,
+}
+
+/// Returns the legacy primary endpoint, the historical alternate endpoint,
+/// and the query-channel form used by newer ToolBox deployments.  Only this
+/// bounded candidate set is attempted; no endpoint is guessed from logs.
+pub fn websocket_endpoint_candidates(
     connection: &ToolboxConnection,
-) -> Result<BTreeMap<ToolboxWsChannel, Url>, ToolboxHostError> {
-    let mut base = connection.base_url.clone();
-    let scheme = match base.scheme() {
-        "https" => "wss",
-        "http" => "ws",
-        _ => return Err(ToolboxHostError::InvalidServerScheme),
-    };
-    base.set_scheme(scheme)
-        .map_err(|_| ToolboxHostError::InvalidServerScheme)?;
+    channel: ToolboxWsChannel,
+) -> Result<Vec<Url>, ToolboxHostError> {
+    if let Some(override_url) = &connection.websocket_endpoint_override {
+        return Ok(vec![to_websocket_url(override_url.clone())?]);
+    }
+    let base = websocket_base_url(connection)?;
     let suffix = if connection.has_api_key() {
         format!("/VCP_Key={}", encode_uri_component(&connection.api_key))
     } else {
         String::new()
     };
-    let mut endpoints = BTreeMap::new();
-    for (channel, path) in [
-        (ToolboxWsChannel::Log, "VCPlog"),
-        (ToolboxWsChannel::Info, "vcpinfo"),
-        (ToolboxWsChannel::Distributed, "vcp-distributed-server"),
-    ] {
+    let (primary, fallback) = match channel {
+        ToolboxWsChannel::Log => ("VCPlog", "vcpinfo"),
+        ToolboxWsChannel::Info => ("vcpinfo", "VCPlog"),
+        ToolboxWsChannel::Distributed => ("vcp-distributed-server", "vcp-distributed-server"),
+    };
+    let mut candidates = Vec::new();
+    for path in [primary, fallback] {
         let mut endpoint = base.clone();
         endpoint.set_path(&format!("/{path}{suffix}"));
+        if !candidates
+            .iter()
+            .any(|existing: &Url| existing == &endpoint)
+        {
+            candidates.push(endpoint);
+        }
+    }
+    if channel != ToolboxWsChannel::Distributed {
+        let mut query_endpoint = base;
+        query_endpoint.set_path("/");
+        query_endpoint.query_pairs_mut().append_pair(
+            "channel",
+            match channel {
+                ToolboxWsChannel::Log => "log",
+                ToolboxWsChannel::Info => "info",
+                ToolboxWsChannel::Distributed => unreachable!(),
+            },
+        );
+        if connection.has_api_key() {
+            query_endpoint
+                .query_pairs_mut()
+                .append_pair("key", &connection.api_key);
+        }
+        if !candidates
+            .iter()
+            .any(|existing| existing == &query_endpoint)
+        {
+            candidates.push(query_endpoint);
+        }
+    }
+    Ok(candidates)
+}
+
+pub fn websocket_endpoints(
+    connection: &ToolboxConnection,
+) -> Result<BTreeMap<ToolboxWsChannel, Url>, ToolboxHostError> {
+    let mut endpoints = BTreeMap::new();
+    for channel in [
+        ToolboxWsChannel::Log,
+        ToolboxWsChannel::Info,
+        ToolboxWsChannel::Distributed,
+    ] {
+        let endpoint = websocket_endpoint_candidates(connection, channel)?
+            .into_iter()
+            .next()
+            .ok_or(ToolboxHostError::InvalidServerUrl)?;
         endpoints.insert(channel, endpoint);
     }
     Ok(endpoints)
+}
+
+fn websocket_base_url(connection: &ToolboxConnection) -> Result<Url, ToolboxHostError> {
+    to_websocket_url(connection.base_url.clone())
+}
+
+fn to_websocket_url(mut url: Url) -> Result<Url, ToolboxHostError> {
+    let scheme = match url.scheme() {
+        "https" | "wss" => "wss",
+        "http" | "ws" => "ws",
+        _ => return Err(ToolboxHostError::InvalidServerScheme),
+    };
+    url.set_scheme(scheme)
+        .map_err(|_| ToolboxHostError::InvalidServerScheme)?;
+    Ok(url)
+}
+
+async fn open_websocket_with_fallback(
+    connection: &ToolboxConnection,
+    channel: ToolboxWsChannel,
+    device_name: Option<&str>,
+) -> Result<
+    (
+        tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
+        ToolboxWsConnectionStatus,
+    ),
+    ToolboxHostError,
+> {
+    let candidates = websocket_endpoint_candidates(connection, channel)?;
+    let mut last_error = None;
+    for mut endpoint in candidates {
+        if let Some(device_name) = device_name {
+            endpoint
+                .query_pairs_mut()
+                .append_pair("deviceName", device_name);
+        }
+        let started = Instant::now();
+        match connect_toolbox_websocket(&endpoint).await {
+            Ok((socket, _)) => {
+                let latency_ms = started.elapsed().as_millis().min(u64::MAX as u128) as u64;
+                return Ok((
+                    socket,
+                    ToolboxWsConnectionStatus {
+                        channel,
+                        endpoint: redact_websocket_endpoint(&endpoint),
+                        latency_ms,
+                    },
+                ));
+            }
+            Err(error) => {
+                last_error = Some(redact_websocket_error(
+                    error.to_string(),
+                    &connection.api_key,
+                ))
+            }
+        }
+    }
+    Err(ToolboxHostError::WebSocket(last_error.unwrap_or_else(
+        || "no VCPToolBox WebSocket endpoint candidates".to_string(),
+    )))
+}
+
+fn redact_websocket_endpoint(endpoint: &Url) -> String {
+    let mut safe = endpoint.clone();
+    let path = safe
+        .path()
+        .split('/')
+        .map(|segment| {
+            if segment.starts_with("VCP_Key=") {
+                "VCP_Key=[redacted]"
+            } else {
+                segment
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("/");
+    safe.set_path(&path);
+    let query = safe
+        .query_pairs()
+        .filter(|(key, _)| key != "key" && key != "deviceName")
+        .map(|(key, value)| (key.into_owned(), value.into_owned()))
+        .collect::<Vec<_>>();
+    safe.set_query(None);
+    if !query.is_empty() {
+        safe.query_pairs_mut().extend_pairs(
+            query
+                .iter()
+                .map(|(key, value)| (key.as_str(), value.as_str())),
+        );
+    }
+    safe.to_string()
+}
+
+fn redact_websocket_error(message: String, api_key: &str) -> String {
+    let mut safe = message.replace(api_key, "[redacted]");
+    let encoded = encode_uri_component(api_key);
+    if !encoded.is_empty() {
+        safe = safe.replace(&encoded, "[redacted]");
+    }
+    truncate(&safe, 1_000)
 }
 
 // `url::form_urlencoded` follows HTML form semantics and turns spaces into
@@ -786,7 +971,7 @@ fn normalize_log_entries(value: Value) -> Vec<ToolboxLogEntry> {
 mod tests {
     use super::*;
     use std::sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     };
 
@@ -837,6 +1022,97 @@ mod tests {
             log.as_str(),
             "ws://localhost:6005/VCPlog/VCP_Key=a%20b?deviceName=vcp-agent-rust"
         );
+    }
+
+    #[test]
+    fn websocket_candidates_preserve_legacy_fallback_query_and_redaction() {
+        let connection =
+            ToolboxConnection::new("https://toolbox.example.test/prefix", "a b").unwrap();
+        let candidates = websocket_endpoint_candidates(&connection, ToolboxWsChannel::Log).unwrap();
+        assert_eq!(candidates.len(), 3);
+        assert_eq!(
+            candidates[0].as_str(),
+            "wss://toolbox.example.test/VCPlog/VCP_Key=a%20b"
+        );
+        assert_eq!(
+            candidates[1].as_str(),
+            "wss://toolbox.example.test/vcpinfo/VCP_Key=a%20b"
+        );
+        assert_eq!(
+            candidates[2].as_str(),
+            "wss://toolbox.example.test/?channel=log&key=a+b"
+        );
+        assert!(!redact_websocket_endpoint(&candidates[0]).contains("a%20b"));
+        assert!(!redact_websocket_endpoint(&candidates[2]).contains("key="));
+
+        let explicit = ToolboxConnection::new(
+            "https://toolbox.example.test/vcpinfo/VCP_Key=already-there",
+            "ignored",
+        )
+        .unwrap();
+        let explicit_candidates =
+            websocket_endpoint_candidates(&explicit, ToolboxWsChannel::Info).unwrap();
+        assert_eq!(explicit_candidates.len(), 1);
+        assert_eq!(
+            explicit_candidates[0].as_str(),
+            "wss://toolbox.example.test/vcpinfo/VCP_Key=already-there"
+        );
+    }
+
+    #[tokio::test]
+    async fn websocket_observer_falls_back_and_reports_redacted_latency_status() {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind websocket fallback fixture");
+        let address = listener.local_addr().expect("fixture address");
+        let server = tokio::spawn(async move {
+            let (mut first, _) = listener.accept().await.expect("accept primary candidate");
+            let mut request = vec![0_u8; 4096];
+            let count = first
+                .read(&mut request)
+                .await
+                .expect("read primary handshake");
+            let request = String::from_utf8_lossy(&request[..count]);
+            assert!(request.starts_with("GET /VCPlog/VCP_Key=fixture-key HTTP/1.1"));
+            first
+                .write_all(
+                    b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                )
+                .await
+                .expect("reject primary endpoint");
+
+            let (stream, _) = listener.accept().await.expect("accept fallback candidate");
+            let mut socket = accept_async(stream)
+                .await
+                .expect("upgrade fallback endpoint");
+            socket.close(None).await.expect("close fallback websocket");
+        });
+        let endpoint = format!("http://{address}");
+        let host =
+            DirectToolboxHost::new(ToolboxConnection::new(&endpoint, "fixture-key").unwrap())
+                .unwrap();
+        let statuses = Arc::new(Mutex::new(Vec::new()));
+        let observed_statuses = Arc::clone(&statuses);
+        let result = timeout(
+            Duration::from_secs(2),
+            host.observe_websocket_with_status(
+                ToolboxWsChannel::Log,
+                move |status| observed_statuses.lock().unwrap().push(status),
+                |_| {},
+            ),
+        )
+        .await
+        .expect("fallback observer timed out");
+        assert!(
+            result.is_ok(),
+            "fallback observer must end cleanly: {result:?}"
+        );
+        server.await.expect("fallback server task");
+        let statuses = statuses.lock().unwrap();
+        assert_eq!(statuses.len(), 1);
+        assert_eq!(statuses[0].channel, ToolboxWsChannel::Log);
+        assert!(statuses[0].endpoint.contains("/vcpinfo/VCP_Key=[redacted]"));
+        assert!(!statuses[0].endpoint.contains("fixture-key"));
     }
 
     #[test]

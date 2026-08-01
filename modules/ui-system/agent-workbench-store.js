@@ -121,13 +121,13 @@ function reduceEvent(current, event) {
         next.runtime = { ...next.runtime, state: 'failed', lastError: event.payload || null };
         // The daemon may have accepted a frame just before its pipe broke.
         // Do not mark it as failed or replay it: its durable outcome is only
-        // knowable from the next Rust Topic snapshot after reconnect.
+        // knowable from the next Codex Thread reconciliation after reconnect.
         next.messages = next.messages.map((message) => (
             message.role === 'user' && message.deliveryState === 'sending'
                 ? {
                     ...message,
                     deliveryState: 'unconfirmed',
-                    deliveryDetail: '连接中断，消息是否已写入将由重新连接后的 Topic 快照确认。',
+                    deliveryDetail: '连接中断，消息是否已写入将由重新连接后的 Codex Thread 对账确认。',
                 }
                 : message
         ));
@@ -337,7 +337,7 @@ function reduceEvent(current, event) {
                 attachmentUnavailable ? 'failed' : 'interrupted',
                 attachmentUnavailable
                     ? '附件文件不可用或已损坏；请重新选择附件后重试。'
-                    : '任务已中断；为避免重复执行，Rust Runtime 不会自动重放此消息。',
+                    : '任务已中断；为避免重复执行，Codex Runtime 不会自动重放此消息。',
             );
         }
         if (event.type !== 'turn.completed') {
@@ -382,7 +382,7 @@ function createWorkbenchStore(initial = createInitialState()) {
                     attachments: Array.isArray(attachments) ? attachments.map((item) => ({ ...item })) : [],
                     state: 'pending',
                     deliveryState: 'sending',
-                    deliveryDetail: '正在等待 Rust Runtime 确认…',
+                    deliveryDetail: '正在等待 Codex App Server 确认…',
                     createdAt,
                     firstSequence: null,
                     lastSequence: null,
@@ -457,7 +457,7 @@ function deriveWorkbenchViewState(state = {}) {
     const runtime = state.runtime || {};
     const attachment = state.attachment;
     const hasAttachment = Boolean(attachment && attachment.sessionId);
-    // A Rust snapshot preview is intentionally not a writable attachment,
+    // A projection preview is intentionally not a writable runtime identity,
     // but it is still an idle, send-capable view while the control daemon is
     // ready. The first send will acquire the attachment atomically; treating
     // this as disconnected made the composer unusable until an obsolete
@@ -480,7 +480,7 @@ function deriveWorkbenchViewState(state = {}) {
     if (runtime.state === 'unknown' || runtime.state === 'stopped' || (!hasAttachment && !hasIdlePreview)) return 'disconnected';
     if (hasApproval) return 'awaiting-approval';
     if (hasTurn) return 'running';
-    // Rust daemon attachments are explicitly `idle` once their create-session
+    // Codex runtime compatibility attachments are explicitly `idle` once their create-session
     // ACK has completed.  Treat it as the writable steady state; only actual
     // transitional/terminal states may keep the composer in "starting".
     if (attachment && attachment.state

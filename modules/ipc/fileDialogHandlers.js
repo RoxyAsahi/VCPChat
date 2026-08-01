@@ -220,13 +220,24 @@ function initialize(mainWindow, context) {
     });
 
     ipcMain.on('open-external-link', (event, url) => {
-        if (url && (url.startsWith('http:') || url.startsWith('https:') || url.startsWith('file:') || url.startsWith('magnet:'))) {
-            shell.openExternal(url).catch(err => {
-                console.error('Failed to open external link:', err);
-            });
-        } else {
-            console.warn(`[Main Process] Received request to open non-standard link externally, ignoring: ${url}`);
+        if (typeof url !== 'string' || !url) {
+            console.warn('[Main Process] Received an empty external link request.');
+            return;
         }
+
+        if (/^(?:[a-z]:[\\/]|\\\\)/i.test(url)) {
+            shell.openPath(url).then((errorMessage) => {
+                if (errorMessage) console.error('Failed to open local path:', errorMessage);
+            }).catch((error) => console.error('Failed to open local path:', error));
+            return;
+        }
+
+        if (/^(?:https?:|file:|magnet:)/i.test(url)) {
+            shell.openExternal(url).catch((error) => console.error('Failed to open external link:', error));
+            return;
+        }
+
+        console.warn(`[Main Process] Received request to open unsupported link, ignoring: ${url}`);
     });
 
     ipcMain.on('show-image-context-menu', (event, imageUrl) => {

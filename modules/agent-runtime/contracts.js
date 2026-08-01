@@ -25,11 +25,14 @@ const LIMITS = Object.freeze({
 });
 
 const IPC_CHANNELS = Object.freeze({
+    GET_PRESENTATION_MODE: 'agent-runtime:get-presentation-mode',
     GET_STATUS: 'agent-runtime:get-status',
     START: 'agent-runtime:start',
     STOP: 'agent-runtime:stop',
     CREATE_TOPIC: 'agent-runtime:create-topic',
     CREATE_SESSION: 'agent-runtime:create-session',
+    ENSURE_SESSION_RUNTIME: 'agent-runtime:ensure-session-runtime',
+    FORK_SESSION: 'agent-runtime:fork-session',
     CLOSE_SESSION: 'agent-runtime:close-session',
     COMPACT_SESSION: 'agent-runtime:compact-session',
     LIST_TOPICS: 'agent-runtime:list-topics',
@@ -38,6 +41,7 @@ const IPC_CHANNELS = Object.freeze({
     GET_TOPIC_INDEX_STATUS: 'agent-runtime:get-topic-index-status',
     REBUILD_TOPIC_INDEX: 'agent-runtime:rebuild-topic-index',
     READ_TOPIC: 'agent-runtime:read-topic',
+    READ_PROJECTION: 'agent-runtime:read-projection',
     TAKEOVER_TOPIC: 'agent-runtime:takeover-topic',
     RENAME_TOPIC: 'agent-runtime:rename-topic',
     DELETE_TOPIC: 'agent-runtime:delete-topic',

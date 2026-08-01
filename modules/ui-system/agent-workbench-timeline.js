@@ -1,8 +1,8 @@
-// Renderer-only timeline adapter for the Rust Agent Workbench.
+// Renderer-only timeline adapter for the Agent Workbench.
 //
-// Rust remains the owner of Topic history, tool state, ordering and every
-// durable identifier.  This module only turns the already-projected store
-// state into stable display parts and reconciles their DOM nodes in place.
+// Codex remains the execution/context authority and SQLite owns the durable UI
+// projection. This module only turns projected state into stable display parts
+// and reconciles their DOM nodes in place.
 
 function sequenceOf(value) {
     const sequence = Number(value);
@@ -15,7 +15,7 @@ function timestampOf(value) {
 }
 
 function timelinePartKey(part) {
-    if (part.kind === 'message') return `message:${part.messageId}`;
+    if (part.kind === 'message') return `message:${part.messageId || part.presentationKey || part.id}`;
     if (part.kind === 'tool') return `tool:${part.toolCallId}`;
     return `${part.kind}:${part.id}`;
 }

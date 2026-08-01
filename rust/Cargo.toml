@@ -8,6 +8,7 @@ members = [
     "crates/vcp-agent-cli",
     "crates/vcp-shadow-index",
     "crates/vcp-agentd",
+    "crates/vcp-toolbox-bridge",
     "crates/vcp-grok-compaction",
     "crates/vcp-grok-crash-handler",
     "crates/vcp-grok-interjection",

@@ -9,8 +9,9 @@ pub mod host;
 #[cfg(feature = "direct-host")]
 pub use host::{
     DirectToolboxHost, SseDecoder, ToolboxApprovalResponse, ToolboxConnection, ToolboxHostError,
-    ToolboxLogEntry, ToolboxSseEvent, ToolboxToolResult, ToolboxWsChannel, ToolboxWsEvent,
-    normalize_toolbox_base_url, websocket_endpoints,
+    ToolboxLogEntry, ToolboxSseEvent, ToolboxToolResult, ToolboxWsChannel,
+    ToolboxWsConnectionStatus, ToolboxWsEvent, normalize_toolbox_base_url,
+    websocket_endpoint_candidates, websocket_endpoints,
 };
 
 use serde_json::{Map, Value, json};

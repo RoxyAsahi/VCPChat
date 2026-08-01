@@ -1,19 +1,26 @@
 import { createWorkbenchStore } from './agent-workbench-store.js';
 
-// The Workbench deliberately has no Main-process transcript cache.  A live
-// session is only an attachment to a durable Rust Topic; renderer reloads and
-// compaction rebuild the projection from `read-topic`.
+// The Workbench deliberately has no Main-process transcript cache. SQLite is
+// the durable presentation projection while Codex Thread Store remains the
+// execution/context authority.
 function createWorkbenchController(runtimeApi) {
     const store = createWorkbenchStore();
     let unsubscribeRuntime = null;
     let selectionVersion = 0;
     let snapshotBarrier = null;
-    // Renderer-only, bounded cache. Rust remains the durable Topic source;
-    // this only prevents a visible flash while `read-topic` revalidates.
+    // Renderer-only, bounded cache. SQLite is the durable presentation source;
+    // this only prevents a visible flash while a background `thread/read`
+    // revalidates the projection.
     const snapshotCache = new Map();
     const MAX_SNAPSHOT_CACHE_ENTRIES = 16;
     const MAX_SNAPSHOT_CACHE_BYTES = 16 * 1024 * 1024;
     let snapshotCacheBytes = 0;
+    // A `thread/read` reply is allowed to replace a local SQLite projection
+    // only when no newer live item patch for that Session has reached the
+    // renderer.  SelectionVersion handles A -> B navigation; this counter
+    // handles live A deltas arriving while A's reconcile is in flight.
+    const liveProjectionRevision = new Map();
+    const sessionWarmPromises = new Map();
 
     function requireApi(name) {
         if (typeof runtimeApi[name] !== 'function') throw new Error(`Runtime API unavailable: ${name}`);
@@ -61,6 +68,7 @@ function createWorkbenchController(runtimeApi) {
         const projection = {
             runtime: {
                 state: status?.state || 'unknown',
+                runtime: status?.runtime || 'unknown',
                 worker: status?.worker || null,
                 lastError: status?.lastError || null,
             },
@@ -124,10 +132,169 @@ function createWorkbenchController(runtimeApi) {
         return { messages, tools };
     }
 
+    function hasApi(name) {
+        return typeof runtimeApi[name] === 'function';
+    }
+
+    function readLocalProjection(payload) {
+        // Codex uses the dedicated SQLite-only IPC.  The fallback keeps the
+        // archived Rust controller tests and compatibility runtime working,
+        // but it is deliberately not used by the Codex product path.
+        return hasApi('agentRuntimeReadProjection')
+            ? runtimeApi.agentRuntimeReadProjection(payload)
+            : requireApi('agentRuntimeReadTopic')(payload);
+    }
+
+    function ensureSessionRuntime(sessionId, reason = 'selection') {
+        const id = String(sessionId || '').trim();
+        if (!id) return Promise.reject(new Error('Session runtime warm requires sessionId'));
+        if (sessionWarmPromises.has(id)) return sessionWarmPromises.get(id);
+        if (!hasApi('agentRuntimeEnsureSessionRuntime') && reason !== 'send') {
+            return Promise.resolve(null);
+        }
+        const call = hasApi('agentRuntimeEnsureSessionRuntime')
+            ? runtimeApi.agentRuntimeEnsureSessionRuntime({ sessionId: id, reason })
+            : requireApi('agentRuntimeCreateSession')({ resume: id });
+        const promise = Promise.resolve(call)
+            .then(async (runtime) => {
+                await refreshStatus().catch(() => null);
+                return runtime;
+            })
+            .finally(() => sessionWarmPromises.delete(id));
+        sessionWarmPromises.set(id, promise);
+        return promise;
+    }
+
+    function warmSelectedSession(sessionId) {
+        void ensureSessionRuntime(sessionId, 'selection').catch((error) => {
+            const current = store.getState();
+            if (current.selectedTopic?.topicId !== sessionId) return;
+            store.setState({ notice: {
+                level: 'warning',
+                text: `会话后台预热失败；发送时将重试：${error.message}`,
+            } });
+        });
+    }
+
+    function codexSnapshotToProjection(snapshot) {
+        if (!Array.isArray(snapshot?.messages)) return historyToProjection(snapshot?.history);
+        const messages = [];
+        const tools = new Map();
+        for (const entry of snapshot.messages) {
+            for (const block of entry.blocks || []) {
+                const blockId = block.blockId || `${entry.messageId}:${block.ordinal || 0}`;
+                if (block.kind === 'tool') {
+                    const item = block.content?.item || {};
+                    tools.set(entry.itemId, {
+                        toolCallId: entry.itemId,
+                        turnId: entry.turnId || null,
+                        name: item.tool || item.command || item.type || 'codex_tool',
+                        state: entry.status === 'completed' ? 'completed'
+                            : entry.status === 'failed' ? 'failed' : 'running',
+                        payload: block.content || {},
+                        events: [],
+                        firstSequence: null,
+                        lastSequence: null,
+                        firstTimestamp: entry.createdAt || 0,
+                        lastTimestamp: entry.updatedAt || entry.createdAt || 0,
+                        snapshotOrdinal: entry.sourceOrder || null,
+                    });
+                    continue;
+                }
+                const parts = Array.isArray(block.content?.parts) ? block.content.parts : [];
+                const summary = Array.isArray(block.content?.summary) ? block.content.summary : [];
+                const content = block.content?.text
+                    || parts.map((part) => part?.text || '').join('')
+                    || summary.map((part) => typeof part === 'string' ? part : part?.text || '').join('')
+                    || '';
+                messages.push({
+                    id: blockId,
+                    messageId: entry.messageId,
+                    itemId: entry.itemId,
+                    turnId: entry.turnId || null,
+                    role: entry.role === 'user' ? 'user' : entry.role === 'system' ? 'system' : 'assistant',
+                    content,
+                    state: entry.status === 'completed' ? 'complete' : entry.status,
+                    isReasoning: block.kind === 'reasoning',
+                    createdAt: entry.createdAt || 0,
+                    firstSequence: null,
+                    lastSequence: null,
+                    snapshotOrdinal: entry.sourceOrder || null,
+                });
+            }
+        }
+        return { messages, tools };
+    }
+
+    function applyCodexProjectionMessage(entry) {
+        if (!entry) return;
+        const patch = codexSnapshotToProjection({ messages: [entry] });
+        const current = store.getState();
+        const messages = [...current.messages];
+        for (const candidate of patch.messages) {
+            const durableIndex = messages.findIndex((message) => message.id === candidate.id);
+            // `turn/start` is allowed to render a clearly-labelled temporary
+            // user row before App Server has emitted its authoritative item.
+            // Once that item arrives it must *replace* the temporary row.  A
+            // Codex item id is intentionally not guessed by the Renderer, so
+            // the only safe bridge identity is the turn id supplied by both
+            // the command ACK and the item notification.
+            const pendingIndex = durableIndex < 0 && candidate.role === 'user' && candidate.turnId
+                ? messages.findIndex((message) => (
+                    message.role === 'user'
+                    && message.turnId === candidate.turnId
+                    && String(message.id || '').startsWith('pending-user:')
+                ))
+                : -1;
+            if (durableIndex >= 0) {
+                messages[durableIndex] = { ...messages[durableIndex], ...candidate };
+            } else if (pendingIndex >= 0) {
+                messages[pendingIndex] = {
+                    ...messages[pendingIndex],
+                    ...candidate,
+                    state: candidate.state === 'inProgress' ? 'pending' : candidate.state,
+                    deliveryState: 'confirmed',
+                    deliveryDetail: '',
+                };
+            } else {
+                messages.push(candidate);
+            }
+        }
+        const tools = new Map(current.tools);
+        for (const [toolCallId, tool] of patch.tools) {
+            tools.set(toolCallId, { ...(tools.get(toolCallId) || {}), ...tool });
+        }
+        store.setState({ messages, tools });
+    }
+
+    function applyCodexRuntimeEvent(event) {
+        const current = store.getState();
+        const runtimes = [...(current.activeRuntimes || [])];
+        const index = runtimes.findIndex((runtime) => runtime.sessionId === event.sessionId);
+        if (index >= 0) {
+            runtimes[index] = {
+                ...runtimes[index],
+                activity: event.activity || runtimes[index].activity,
+                activeTurnId: event.activity === 'running'
+                    ? (event.turnId || runtimes[index].activeTurnId)
+                    : null,
+            };
+        }
+        const selected = event.topicId === current.selectedTopic?.topicId;
+        store.setState({
+            activeRuntimes: runtimes,
+            ...(selected ? { activeTurnId: event.activity === 'running' ? event.turnId : null } : {}),
+        });
+        if (event.projectionMessage && event.topicId) {
+            liveProjectionRevision.set(event.topicId, (liveProjectionRevision.get(event.topicId) || 0) + 1);
+        }
+        if (selected && event.projectionMessage) applyCodexProjectionMessage(event.projectionMessage);
+    }
+
     function cacheSnapshot(topicId, snapshot) {
         if (!topicId || !snapshot) return;
-        const projection = historyToProjection(snapshot.history);
-        const bytes = Math.min(MAX_SNAPSHOT_CACHE_BYTES, JSON.stringify(snapshot.history || []).length * 2);
+        const projection = codexSnapshotToProjection(snapshot);
+        const bytes = Math.min(MAX_SNAPSHOT_CACHE_BYTES, JSON.stringify(snapshot.messages || snapshot.history || []).length * 2);
         const existing = snapshotCache.get(topicId);
         if (existing) snapshotCacheBytes -= existing.bytes;
         snapshotCache.set(topicId, { projection, snapshotSequence: Number(snapshot.snapshotSequence) || 0, bytes });
@@ -206,49 +373,94 @@ function createWorkbenchController(runtimeApi) {
         }
     }
 
+    function applyHydratedSnapshot(topicId, snapshot, attachment, agentId) {
+        const current = store.getState();
+        const active = attachment || runtimeForTopic(topicId, current);
+        // `read-topic` / `read-projection` is the durable metadata source
+        // after a reload. Main's runtime status intentionally has only a
+        // small identity shell, never a transcript cache.
+        const durableState = snapshot?.session && typeof snapshot.session === 'object'
+            ? snapshot.session
+            : snapshot?.state && typeof snapshot.state === 'object' ? snapshot.state : {};
+        const durableAgentId = typeof snapshot?.session?.agentId === 'string' && snapshot.session.agentId.trim()
+            ? snapshot.session.agentId
+            : typeof snapshot?.agentId === 'string' && snapshot.agentId.trim() ? snapshot.agentId
+                : agentId || active?.agentId || null;
+        const nextAttachment = active ? {
+            ...active,
+            topicId,
+            title: typeof durableState.title === 'string' && durableState.title.trim()
+                ? durableState.title : active.title,
+            model: typeof durableState.model === 'string' && durableState.model.trim()
+                ? durableState.model : active.model,
+            workspaceRoot: typeof durableState.workspaceRef === 'string' && durableState.workspaceRef.trim()
+                ? durableState.workspaceRef : active.workspaceRoot,
+            agentId: durableAgentId || active.agentId,
+            configSnapshot: durableState.configSnapshot || active.configSnapshot || null,
+        } : null;
+        store.setAttachment(nextAttachment);
+        const projection = codexSnapshotToProjection(snapshot);
+        cacheSnapshot(topicId, snapshot);
+        store.setState({
+            ...projection,
+            selectedTopic: {
+                topicId,
+                agentId: durableAgentId,
+                title: nextAttachment?.title || '',
+                model: nextAttachment?.model || '',
+                workspaceRoot: nextAttachment?.workspaceRoot || '',
+                configSnapshot: durableState.configSnapshot || null,
+                mode: nextAttachment ? 'attached' : 'preview',
+            },
+            backgroundAttachment: null,
+        });
+        return nextAttachment;
+    }
+
+    async function reconcileHydratedTopic(topicId, attachment, agentId, version, revisionAtStart) {
+        try {
+            const snapshot = await requireApi('agentRuntimeReadTopic')(topicPayload({ topicId }, agentId));
+            const current = store.getState();
+            if (version !== selectionVersion || current.selectedTopic?.topicId !== topicId) return null;
+            if ((liveProjectionRevision.get(topicId) || 0) !== revisionAtStart) return null;
+            applyHydratedSnapshot(topicId, snapshot, attachment || runtimeForTopic(topicId), agentId);
+            return snapshot;
+        } catch (_error) {
+            // The SQLite projection remains visible; Main records a sync
+            // error and only a confirmed Thread-not-found becomes orphaned.
+            return null;
+        }
+    }
+
     async function hydrateTopic(topicId, attachment = null, existingBarrier = null, agentId = undefined) {
         if (!topicId) return null;
         const version = ++selectionVersion;
         const barrier = existingBarrier || beginSnapshotBarrier();
+        if (hasApi('agentRuntimeReadProjection')) {
+            try {
+                const localSnapshot = await readLocalProjection(topicPayload({ topicId }, agentId));
+                if (version !== selectionVersion) {
+                    releaseSnapshotBarrier(barrier, null, attachment || runtimeForTopic(topicId));
+                    return null;
+                }
+                const nextAttachment = applyHydratedSnapshot(topicId, localSnapshot, attachment, agentId);
+                releaseSnapshotBarrier(barrier, localSnapshot, nextAttachment);
+                warmSelectedSession(topicId);
+                const revisionAtStart = liveProjectionRevision.get(topicId) || 0;
+                void reconcileHydratedTopic(topicId, attachment, agentId, version, revisionAtStart);
+                return localSnapshot;
+            } catch (error) {
+                releaseSnapshotBarrier(barrier, null, attachment || runtimeForTopic(topicId));
+                throw error;
+            }
+        }
         try {
             const snapshot = await requireApi('agentRuntimeReadTopic')(topicPayload({ topicId }, agentId));
-            if (version !== selectionVersion) return null;
-            const current = store.getState();
-            const active = attachment || runtimeForTopic(topicId, current);
-            // `read-topic` is the durable metadata source after a reload or
-            // takeover. Main's attachment is deliberately small and can have
-            // only a fallback title; promote only non-sensitive Topic fields
-            // from the Rust snapshot instead of keeping a stale shell label.
-            const durableState = snapshot?.state && typeof snapshot.state === 'object' ? snapshot.state : {};
-            const durableAgentId = typeof snapshot?.agentId === 'string' && snapshot.agentId.trim()
-                ? snapshot.agentId
-                : agentId || active?.agentId || null;
-            const nextAttachment = active ? {
-                ...active,
-                topicId,
-                title: typeof durableState.title === 'string' && durableState.title.trim()
-                    ? durableState.title : active.title,
-                model: typeof durableState.model === 'string' && durableState.model.trim()
-                    ? durableState.model : active.model,
-                workspaceRoot: typeof durableState.workspaceRef === 'string' && durableState.workspaceRef.trim()
-                    ? durableState.workspaceRef : active.workspaceRoot,
-                agentId: durableAgentId || active.agentId,
-            } : null;
-            store.setAttachment(nextAttachment);
-            const projection = historyToProjection(snapshot?.history);
-            cacheSnapshot(topicId, snapshot);
-            store.setState({
-                ...projection,
-                selectedTopic: {
-                    topicId,
-                    agentId: durableAgentId,
-                    title: nextAttachment?.title || '',
-                    model: nextAttachment?.model || '',
-                    workspaceRoot: nextAttachment?.workspaceRoot || '',
-                    mode: nextAttachment ? 'attached' : 'preview',
-                },
-                backgroundAttachment: null,
-            });
+            if (version !== selectionVersion) {
+                releaseSnapshotBarrier(barrier, null, attachment || runtimeForTopic(topicId));
+                return null;
+            }
+            const nextAttachment = applyHydratedSnapshot(topicId, snapshot, attachment, agentId);
             releaseSnapshotBarrier(barrier, snapshot, nextAttachment);
             return snapshot;
         } catch (error) {
@@ -264,6 +476,7 @@ function createWorkbenchController(runtimeApi) {
     async function previewTopic(topicId, agentId = undefined, metadata = {}) {
         if (!topicId) return null;
         const version = ++selectionVersion;
+        const barrier = beginSnapshotBarrier();
         const selectedTopic = {
             topicId,
             agentId: agentId || metadata.agentId || null,
@@ -274,25 +487,30 @@ function createWorkbenchController(runtimeApi) {
         };
         const cached = cachedProjection(topicId);
         if (cached) applyPreviewProjection(cached, selectedTopic);
-        const snapshot = await requireApi('agentRuntimeReadTopic')(topicPayload({ topicId }, agentId));
-        if (version !== selectionVersion) return null;
-        const durableAgentId = typeof snapshot?.agentId === 'string' && snapshot.agentId.trim()
-            ? snapshot.agentId
-            : selectedTopic.agentId;
-        const durableState = snapshot?.state && typeof snapshot.state === 'object' ? snapshot.state : {};
-        const resolvedTopic = {
-            ...selectedTopic,
-            agentId: durableAgentId,
-            title: typeof durableState.title === 'string' && durableState.title.trim()
-                ? durableState.title : selectedTopic.title,
-            model: typeof durableState.model === 'string' && durableState.model.trim()
-                ? durableState.model : selectedTopic.model,
-            workspaceRoot: typeof durableState.workspaceRef === 'string' && durableState.workspaceRef.trim()
-                ? durableState.workspaceRef : selectedTopic.workspaceRoot,
-        };
-        cacheSnapshot(topicId, snapshot);
-        applyPreviewProjection(historyToProjection(snapshot?.history), resolvedTopic);
-        return snapshot;
+        let localSnapshot;
+        try {
+            // This is the only awaited cold-open read in the Codex path. It
+            // is a local SQLite query and must not request a Codex Thread.
+            localSnapshot = await readLocalProjection(topicPayload({ topicId }, agentId));
+            if (version !== selectionVersion) {
+                releaseSnapshotBarrier(barrier, null, runtimeForTopic(topicId));
+                return null;
+            }
+            const resolvedTopic = resolvePreviewTopic(localSnapshot, selectedTopic);
+            cacheSnapshot(topicId, localSnapshot);
+            applyPreviewProjection(codexSnapshotToProjection(localSnapshot), resolvedTopic);
+            releaseSnapshotBarrier(barrier, localSnapshot, runtimeForTopic(topicId));
+            warmSelectedSession(topicId);
+            // Deliberately detached: navigation is complete before App Server
+            // reconciliation begins. The guards in reconcilePreviewTopic make
+            // an A response harmless after the user selects B.
+            const revisionAtStart = liveProjectionRevision.get(topicId) || 0;
+            void reconcilePreviewTopic(topicId, agentId, resolvedTopic, version, revisionAtStart);
+            return localSnapshot;
+        } catch (error) {
+            releaseSnapshotBarrier(barrier, null, runtimeForTopic(topicId));
+            throw error;
+        }
     }
 
     async function startRuntime() {
@@ -331,13 +549,64 @@ function createWorkbenchController(runtimeApi) {
         const topic = await requireApi('agentRuntimeCreateTopic')(options);
         const topicId = String(topic?.topicId || '').trim();
         const agentId = String(topic?.agentId || options.agent || options.agentId || '').trim();
-        if (!topicId || !agentId) throw new Error('Rust Runtime 未返回新 Topic 的完整身份');
+        if (!topicId || !agentId) throw new Error('Codex Runtime 未返回新会话的完整身份');
         await previewTopic(topicId, agentId, {
             title: topic.title || '',
             model: topic.model || '',
             workspaceRoot: topic.workspaceRoot || '',
         });
         return { ...topic, topicId, agentId };
+    }
+
+    function resolvePreviewTopic(snapshot, selectedTopic) {
+        const durableAgentId = typeof snapshot?.session?.agentId === 'string' && snapshot.session.agentId.trim()
+            ? snapshot.session.agentId
+            : typeof snapshot?.agentId === 'string' && snapshot.agentId.trim() ? snapshot.agentId
+                : selectedTopic.agentId;
+        const durableState = snapshot?.session && typeof snapshot.session === 'object'
+            ? snapshot.session
+            : snapshot?.state && typeof snapshot.state === 'object' ? snapshot.state : {};
+        return {
+            ...selectedTopic,
+            agentId: durableAgentId,
+            title: typeof durableState.title === 'string' && durableState.title.trim()
+                ? durableState.title : selectedTopic.title,
+            model: typeof durableState.model === 'string' && durableState.model.trim()
+                ? durableState.model : selectedTopic.model,
+            workspaceRoot: typeof durableState.workspaceRef === 'string' && durableState.workspaceRef.trim()
+                ? durableState.workspaceRef : selectedTopic.workspaceRoot,
+            configSnapshot: durableState.configSnapshot || null,
+        };
+    }
+
+    async function reconcilePreviewTopic(topicId, agentId, selectedTopic, version, revisionAtStart) {
+        try {
+            const snapshot = await requireApi('agentRuntimeReadTopic')(topicPayload({ topicId }, agentId));
+            const current = store.getState();
+            if (version !== selectionVersion || current.selectedTopic?.topicId !== topicId) return null;
+            // Do not let an older `thread/read` snapshot erase a delta/tool
+            // patch that arrived after reconciliation began.  The next view
+            // entry will perform a fresh SQLite read and reconcile again.
+            if ((liveProjectionRevision.get(topicId) || 0) !== revisionAtStart) return null;
+            cacheSnapshot(topicId, snapshot);
+            applyPreviewProjection(codexSnapshotToProjection(snapshot), resolvePreviewTopic(snapshot, selectedTopic));
+            return snapshot;
+        } catch (_error) {
+            // A background sync failure preserves the SQLite projection. Main
+            // records the sync error; only an explicit Thread-not-found may
+            // make the Session orphaned.
+            return null;
+        }
+    }
+
+    async function forkSession({ sessionId, turnId, title } = {}) {
+        const sourceSessionId = sessionId || selectedRuntime()?.sessionId || store.getState().selectedTopic?.topicId;
+        if (!sourceSessionId) throw new Error('请先选择要创建分支的会话');
+        const fork = await requireApi('agentRuntimeForkSession')({ sessionId: sourceSessionId, turnId, title });
+        const topicId = fork?.topicId || fork?.sessionId;
+        if (!topicId) throw new Error('Codex thread/fork 未返回新会话身份');
+        await previewTopic(topicId, fork.agentId, fork);
+        return fork;
     }
 
     async function compactSession(sessionId, instructions) {
@@ -362,7 +631,7 @@ function createWorkbenchController(runtimeApi) {
     const deleteTopic = (topicId, agentId = undefined) => requireApi('agentRuntimeDeleteTopic')(topicPayload({ topicId }, agentId));
     const listInteractionQueue = () => {
         const runtime = selectedRuntime();
-        if (!runtime) throw new Error('当前 Topic 没有运行中的 Rust Runtime');
+        if (!runtime) throw new Error('当前会话没有运行中的 Codex Thread');
         return requireApi('agentRuntimeListInteractionQueue')({ sessionId: runtime.sessionId });
     };
     const replaceInteractionQueue = (interactions) => {
@@ -372,11 +641,26 @@ function createWorkbenchController(runtimeApi) {
     };
     const clearInteractionQueue = () => {
         const runtime = selectedRuntime();
-        if (!runtime) throw new Error('当前 Topic 没有运行中的 Rust Runtime');
+        if (!runtime) throw new Error('当前会话没有运行中的 Codex Thread');
         return requireApi('agentRuntimeClearInteractionQueue')({ sessionId: runtime.sessionId });
     };
     const getWorkbenchSettings = () => requireApi('agentRuntimeGetWorkbenchSettings')();
-    const updateWorkbenchSettings = (settings) => requireApi('agentRuntimeUpdateWorkbenchSettings')(settings);
+    async function updateWorkbenchSettings(settings) {
+        const result = await requireApi('agentRuntimeUpdateWorkbenchSettings')(settings);
+        const savedSession = result?.session;
+        const current = store.getState();
+        if (savedSession?.sessionId && current.selectedTopic?.topicId === savedSession.sessionId) {
+            const configSnapshot = savedSession.configSnapshot || null;
+            const model = configSnapshot?.model || savedSession.model || current.selectedTopic.model || '';
+            store.setState({
+                selectedTopic: { ...current.selectedTopic, model, configSnapshot },
+                attachment: current.attachment?.sessionId === savedSession.sessionId
+                    ? { ...current.attachment, model, configSnapshot }
+                    : current.attachment,
+            });
+        }
+        return result;
+    }
     const selectAttachments = () => {
         const sessionId = selectedRuntime()?.sessionId;
         if (!sessionId) throw new Error('请先选择或新建 Session');
@@ -386,22 +670,15 @@ function createWorkbenchController(runtimeApi) {
     async function startTurn(prompt, attachments = []) {
         let current = store.getState();
         const selected = current.selectedTopic;
-        if (selected?.topicId && !selectedRuntime(current)) {
+        let runtime = selectedRuntime(current);
+        if (selected?.topicId && !runtime) {
             if (!selected.agentId) {
-                throw new Error('当前 Topic 缺少 Rust 确认的 Agent 身份，不能猜测并发送。请重新从会话列表打开它。');
+                throw new Error('当前会话缺少持久化的助手身份，不能猜测并发送。请重新从会话列表打开它。');
             }
-            // Runtime activation happens only at send time. The v1.7 daemon
-            // creates/reuses this Topic Host without touching other Topics.
-            await createSession({
-                resume: selected.topicId,
-                agent: selected.agentId || undefined,
-                model: selected.model || undefined,
-                workspaceRoot: selected.workspaceRoot || undefined,
-                title: selected.title || undefined,
-            });
+            runtime = await ensureSessionRuntime(selected.topicId, 'send');
             current = store.getState();
         }
-        const sessionId = selectedRuntime(current)?.sessionId;
+        const sessionId = runtime?.sessionId || selectedRuntime(current)?.sessionId || selected?.topicId;
         if (!sessionId) throw new Error('请先选择或新建 Session');
         // ACK means the daemon accepted this command, not that a durable
         // Topic checkpoint already exists.  Project a renderer-only pending
@@ -410,6 +687,9 @@ function createWorkbenchController(runtimeApi) {
         // the daemon event identity.  If the pipe breaks first, the item is
         // explicitly unconfirmed and is never automatically replayed.
         const accepted = await requireApi('agentRuntimeStartTurn')({ sessionId, prompt, attachments });
+        // Keep activeTurnId authoritative: it is established by the daemon's
+        // turn.started/projection event, while the Workbench owns a separate
+        // ephemeral startup indicator for the ACK-to-first-event gap.
         store.addPendingUserMessage({ turnId: accepted?.turnId, prompt, attachments });
         return accepted;
     }
@@ -453,6 +733,7 @@ function createWorkbenchController(runtimeApi) {
         const result = await requireApi('agentRuntimeRespondApproval')({
             approvalId: approval.approvalId,
             decision,
+            ...(approval.scope ? { scope: approval.scope } : {}),
             sessionId: approval.sessionId,
             turnId: approval.turnId,
             toolCallId: approval.toolCallId,
@@ -501,6 +782,10 @@ function createWorkbenchController(runtimeApi) {
                     return;
                 }
                 const current = store.getState();
+                if (event?.runtime === 'codex' && event?.type === 'projection.updated') {
+                    applyCodexRuntimeEvent(event);
+                    return;
+                }
                 projectRuntimeActivity(event);
                 const selectedTopicId = current.selectedTopic?.topicId;
                 const isApproval = event?.type?.startsWith('approval.');
@@ -527,7 +812,7 @@ function createWorkbenchController(runtimeApi) {
 
     return {
         store, initialize, subscribeRuntime, dispose, refreshStatus, startRuntime, stopRuntime,
-        createSession, createTopic, compactSession, hydrateTopic, previewTopic,
+        createSession, createTopic, forkSession, compactSession, hydrateTopic, previewTopic, ensureSessionRuntime,
         listTopics, searchTopics, searchTopicMessages, getTopicIndexStatus, rebuildTopicIndex,
         readTopic, takeoverTopic, renameTopic, deleteTopic,
         listInteractionQueue, replaceInteractionQueue, clearInteractionQueue,

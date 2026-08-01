@@ -1,0 +1,501 @@
+import assert from 'node:assert/strict';
+import os from 'node:os';
+import path from 'node:path';
+import fs from 'node:fs';
+import { EventEmitter } from 'node:events';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const { CodexRuntimeManager, vcpInvokeTool } = require('../modules/codex-runtime/runtimeManager.js');
+const { AgentProjectionRepository } = require('../modules/codex-runtime/projection');
+
+class FakeTransport extends EventEmitter {
+    constructor() {
+        super();
+        this.status = { running: false, ready: false, pid: 77 };
+        this.calls = [];
+        this.responses = [];
+        this.startCount = 0;
+    }
+    async start() { this.startCount += 1; this.status = { ...this.status, running: true, ready: true }; }
+    async stop() { this.status = { ...this.status, running: false, ready: false }; }
+    async request(method, params) {
+        this.calls.push({ method, params });
+        if (method === 'thread/start') {
+            this.threadCounter = (this.threadCounter || 0) + 1;
+            return { thread: { id: this.threadCounter === 1 ? 'thr_test' : `thr_test_${this.threadCounter}` } };
+        }
+        if (method === 'thread/resume') return { thread: { id: params.threadId, status: { type: 'idle' } } };
+        if (method === 'turn/start') return { turn: { id: 'turn_test' } };
+        if (method === 'thread/read' && this.readError) throw this.readError;
+        if (method === 'thread/read') return {
+            thread: {
+                id: 'thr_test',
+                turns: [{
+                    id: 'turn_test',
+                    items: [{ id: 'item_a', type: 'agentMessage', text: 'done', status: 'completed' }],
+                }],
+            },
+        };
+        if (method === 'thread/fork') return { thread: { id: 'thr_fork' } };
+        return {};
+    }
+    respond(id, result) { this.responses.push({ id, result }); }
+    respondError(id, code, message) { this.responses.push({ id, error: { code, message } }); }
+}
+
+const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vcp-codex-manager-'));
+assert.equal(vcpInvokeTool().inputSchema.properties.arguments.additionalProperties, true,
+    'the generic VCP argument envelope must remain open after Codex normalizes DynamicTool schemas');
+
+// UX-R1/R2: the durable Session catalog is a SQLite concern, not an App
+// Server lifecycle concern. Legacy display names are migrated once to the
+// shared Agent folder identity, and selection/send share one Thread warm.
+const fastRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'vcp-codex-fast-catalog-'));
+const fastAgents = path.join(fastRoot, 'Agents');
+fs.mkdirSync(path.join(fastAgents, '_Agent_Nova'), { recursive: true });
+fs.writeFileSync(path.join(fastAgents, '_Agent_Nova', 'config.json'), JSON.stringify({
+    name: 'Nova', systemPrompt: '{{Nova}}',
+}));
+const fastTransport = new FakeTransport();
+const fastManager = new CodexRuntimeManager({
+    projectRoot: fastRoot,
+    settingsPath: path.join(fastRoot, 'settings.json'),
+    agentsDir: fastAgents,
+    getSettings: () => ({}),
+    transportFactory: () => fastTransport,
+    repositoryFactory: () => new AgentProjectionRepository({ databasePath: path.join(fastRoot, 'projection.sqlite') }),
+});
+fastManager.ensureProjectionStore().saveSession({
+    sessionId: 'legacy-nova-session', agentId: 'Nova', title: 'Legacy Nova', state: 'created',
+    workspaceRoot: fastRoot, configSnapshot: { agentName: 'Nova', baseInstructions: '{{Nova}}' },
+});
+const fastListStartedAt = performance.now();
+const fastTopics = await fastManager.listTopics({ agentId: '_Agent_Nova' });
+assert.ok(performance.now() - fastListStartedAt < 150,
+    'a cold local SQLite Session list must remain inside the UX-R1 150ms gate');
+assert.equal(fastTransport.startCount, 0, 'listing SQLite Sessions must not start Codex App Server');
+assert.equal(fastTopics.length, 1);
+assert.equal(fastTopics[0].agentCatalogId, '_Agent_Nova');
+assert.equal(fastTopics[0].agentId, '_Agent_Nova', 'legacy Agent display name must migrate to canonical catalog id');
+for (let index = 1; index < 50; index += 1) {
+    fastManager.repository.saveSession({
+        sessionId: `nova-session-${index}`, agentId: '_Agent_Nova', agentCatalogId: '_Agent_Nova',
+        agentNameSnapshot: 'Nova', title: `Nova ${index}`, state: 'created', workspaceRoot: fastRoot,
+        configSnapshot: { agentName: 'Nova', baseInstructions: '{{Nova}}' },
+    });
+}
+const listDurations = [];
+for (let sample = 0; sample < 30; sample += 1) {
+    const sampleStartedAt = performance.now();
+    const listed = await fastManager.listTopics({ agentId: '_Agent_Nova' });
+    listDurations.push(performance.now() - sampleStartedAt);
+    assert.equal(listed.length, 50);
+}
+listDurations.sort((left, right) => left - right);
+assert.ok(listDurations[Math.ceil(listDurations.length * 0.95) - 1] < 150,
+    '50-Session SQLite list P95 must remain below the UX-R1 150ms gate');
+await fastManager.readTopic({ sessionId: 'legacy-nova-session', reconcile: false });
+assert.equal(fastTransport.startCount, 0, 'projection-only read must remain available with no App Server process');
+const [warmA, warmB] = await Promise.all([
+    fastManager.ensureSessionRuntime({ sessionId: 'legacy-nova-session', reason: 'selection' }),
+    fastManager.ensureSessionRuntime({ sessionId: 'legacy-nova-session', reason: 'send' }),
+]);
+assert.equal(warmA.threadId, warmB.threadId);
+assert.equal(fastTransport.calls.filter((call) => call.method === 'thread/start').length, 1,
+    'selection warm and immediate send must share one Session warm promise');
+const warmTopicB = await fastManager.createTopic({ agentId: '_Agent_Nova', title: 'Warm B', systemPrompt: '{{Nova}}' });
+const warmTopicC = await fastManager.createTopic({ agentId: '_Agent_Nova', title: 'Warm C', systemPrompt: '{{Nova}}' });
+await fastManager.ensureSessionRuntime({ sessionId: warmTopicB.sessionId, reason: 'selection' });
+await fastManager.ensureSessionRuntime({ sessionId: warmTopicC.sessionId, reason: 'selection' });
+assert.equal(fastManager.idleWarmSessions.size, 2, 'proactive idle Thread warm set must remain bounded at two Sessions');
+assert.equal(fastManager.resumedThreadIds.has(warmA.threadId), false,
+    'LRU eviction must remove the oldest Session from VChat\'s warm/resume set');
+await fastManager.stop();
+fs.rmSync(fastRoot, { recursive: true, force: true });
+const fake = new FakeTransport();
+const uiEvents = [];
+const manager = new CodexRuntimeManager({
+    projectRoot: root,
+    settingsPath: path.join(root, 'settings.json'),
+    getSettings: () => ({}),
+    transportFactory: () => fake,
+    repositoryFactory: () => new AgentProjectionRepository({ databasePath: path.join(root, 'projection.sqlite') }),
+    sendEvent: (event) => uiEvents.push(event),
+});
+
+// The Codex provider must target VChat's loopback compatibility adapter, not
+// ToolBox's optional /v1/responses implementation.  The upstream ToolBox key
+// stays in the adapter and bridge; the App Server receives only a disposable
+// local capability value.
+const providerTransport = new FakeTransport();
+let providerTransportConfig = null;
+let adapterStopped = false;
+const localAdapter = {
+    capability: 'test-loopback-capability',
+    baseUrl: 'http://127.0.0.1:49152/v1/test-loopback-capability',
+    async start() { return this.baseUrl; },
+    async stop() { adapterStopped = true; },
+};
+const providerManager = new CodexRuntimeManager({
+    projectRoot: root,
+    settingsPath: path.join(root, 'provider-settings.json'),
+    getSettings: () => ({ vcpServerUrl: 'http://toolbox.invalid:6005', vcpApiKey: 'upstream-key-not-for-codex' }),
+    transportFactory: (config) => { providerTransportConfig = config; return providerTransport; },
+    responsesAdapterFactory: (config) => {
+        assert.equal(config.toolboxUrl, 'http://toolbox.invalid:6005');
+        assert.equal(config.toolboxApiKey, 'upstream-key-not-for-codex');
+        return localAdapter;
+    },
+    repositoryFactory: () => new AgentProjectionRepository({ databasePath: path.join(root, 'provider-projection.sqlite') }),
+});
+providerManager.bridge = { async start() {}, async stop() {} };
+await providerManager.start();
+const providerTopic = await providerManager.createTopic({ title: 'Adapter provider' });
+await providerManager.createSession({ resume: providerTopic.topicId });
+const providerStart = providerTransport.calls.find((call) => call.method === 'thread/start');
+assert.equal(providerStart.params.config['model_providers.vcp_toolbox.base_url'], localAdapter.baseUrl);
+assert.equal(providerStart.params.config['model_providers.vcp_toolbox.env_key'], 'VCP_CODEX_RESPONSES_ADAPTER_CAPABILITY');
+assert.equal(providerTransportConfig.env.VCP_CODEX_RESPONSES_ADAPTER_CAPABILITY, localAdapter.capability);
+assert.equal('VCP_TOOLBOX_API_KEY' in providerTransportConfig.env, false);
+assert.deepEqual(providerTransportConfig.unsetEnv, ['VCP_TOOLBOX_API_KEY', 'VCP_TOOLBOX_URL']);
+assert.deepEqual(providerStart.params.environments, [],
+    'ToolBox-backed Sessions must not expose a Codex filesystem/shell execution environment');
+assert.equal(providerStart.params.config['tools.update_plan.enabled'], false);
+assert.equal(providerStart.params.config['tools.experimental_request_user_input.enabled'], false);
+assert.equal(providerStart.params.config['features.collab'], false);
+assert.equal(providerStart.params.config['features.multi_agent_v2'], false);
+assert.equal(providerStart.params.config.web_search, 'disabled');
+assert.deepEqual(providerStart.params.config.mcp_servers, {});
+assert.deepEqual(providerStart.params.dynamicTools.map((tool) => tool.name), ['vcp_invoke']);
+await providerManager.stop();
+assert.equal(adapterStopped, true, 'stopping the runtime must close the loopback adapter');
+
+// Changing VChat's ToolBox settings is a security boundary: the old bridge
+// must be stopped, its pending backend approvals fail closed, and the stable
+// loopback adapter must receive only the new upstream configuration.  This is
+// deliberately a Main-only test; no key is projected to UI/SQLite.
+const reconfigureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'vcp-codex-reconfigure-'));
+const bridgeDir = path.join(reconfigureRoot, 'rust', 'target', 'release');
+fs.mkdirSync(bridgeDir, { recursive: true });
+fs.writeFileSync(path.join(bridgeDir, process.platform === 'win32' ? 'vcp-toolbox-bridge.exe' : 'vcp-toolbox-bridge'), 'fixture');
+let changingSettings = { vcpServerUrl: 'http://toolbox-one.invalid:6005', vcpApiKey: 'first-key' };
+const adapterChanges = [];
+const mutableAdapter = {
+    capability: 'stable-loopback-capability',
+    baseUrl: 'http://127.0.0.1:49153/v1/stable-loopback-capability',
+    async start() { return this.baseUrl; },
+    async stop() { this.stopped = true; },
+    reconfigure(config) { adapterChanges.push(config); },
+};
+const bridges = [];
+const reconfigureManager = new CodexRuntimeManager({
+    projectRoot: reconfigureRoot,
+    settingsPath: path.join(reconfigureRoot, 'settings.json'),
+    getSettings: () => changingSettings,
+    transportFactory: () => new FakeTransport(),
+    responsesAdapterFactory: () => mutableAdapter,
+    bridgeFactory: () => {
+        const bridge = {
+            started: 0,
+            stopped: 0,
+            approvalResponses: [],
+            async start() { this.started += 1; },
+            async stop() { this.stopped += 1; },
+            async interrupt() { return { interrupted: true }; },
+            async respondApproval(value) { this.approvalResponses.push(value); return { written: true }; },
+            on() {},
+        };
+        bridges.push(bridge);
+        return bridge;
+    },
+    repositoryFactory: () => new AgentProjectionRepository({ databasePath: path.join(reconfigureRoot, 'projection.sqlite') }),
+});
+await reconfigureManager.start();
+const firstBridge = reconfigureManager.bridge;
+reconfigureManager._handleBridgeEvent({
+    channel: 'backend-approval',
+    event: { requestId: 'settings-change-approval', expiresAtMs: Date.now() + 30_000, data: { toolName: 'FileOperator' } },
+});
+changingSettings = { vcpServerUrl: 'http://toolbox-two.invalid:6005', vcpApiKey: 'second-key' };
+await reconfigureManager.refreshToolboxConfiguration(changingSettings);
+assert.equal(firstBridge.stopped, 1, 'old ToolBox bridge must stop before reconnecting');
+assert.equal(firstBridge.approvalResponses[0].requestId, 'settings-change-approval');
+assert.equal(firstBridge.approvalResponses[0].approved, false, 'old backend approval must fail closed');
+assert.equal(bridges.length, 2, 'new settings must start a new bridge process boundary');
+assert.equal(reconfigureManager.bridge, bridges[1]);
+assert.deepEqual(adapterChanges, [{ toolboxUrl: changingSettings.vcpServerUrl, toolboxApiKey: changingSettings.vcpApiKey }]);
+assert.equal(reconfigureManager.toolboxApprovals.size, 0);
+await reconfigureManager.stop();
+fs.rmSync(reconfigureRoot, { recursive: true, force: true });
+await manager.start();
+await manager.setWorkbenchPresence(true);
+const topic = await manager.createTopic({ agentId: 'Nova', title: 'Test', model: 'Nova', systemPrompt: '{{Nova}}' });
+const session = await manager.createSession({ topicId: topic.topicId });
+assert.equal(session.threadId, 'thr_test');
+const resumed = await manager.createSession({ resume: topic.topicId });
+assert.equal(resumed.sessionId, session.sessionId, 'resume must reuse the VChat Session instead of creating another one');
+assert.equal(fake.calls.filter((call) => call.method === 'thread/start').length, 1);
+// The generic personality only shapes how Codex phrases the default template;
+// VChat's persona identity must arrive as `baseInstructions` so Codex replaces
+// its built-in "You are Codex" system prompt instead of appending a hint.
+// The Agent catalog's `systemPrompt` (e.g. `{{Nova}}`, expanded by VCPToolBox)
+// maps to `baseInstructions`, never to the appending `developerInstructions`.
+const baseInstructionsTopic = await manager.createTopic({
+    agentId: 'Nova',
+    title: 'Persona',
+    systemPrompt: '{{Nova}}',
+    developerInstructions: 'extra hint',
+});
+await manager.createSession({ topicId: baseInstructionsTopic.topicId });
+const personaStart = fake.calls.find((call) => call.method === 'thread/start'
+    && call.params.developerInstructions === 'extra hint');
+assert.equal(personaStart.params.baseInstructions, '{{Nova}}',
+    'systemPrompt must map to baseInstructions so VCPToolBox expands the Nova identity and replaces Codex');
+assert.equal(personaStart.params.developerInstructions, 'extra hint',
+    'an explicit developerInstructions still appends as a separate hint');
+assert.equal(personaStart.params.personality, 'pragmatic');
+// An explicit `baseInstructions` wins over `systemPrompt` when both are given.
+const explicitBaseTopic = await manager.createTopic({
+    agentId: 'Nova',
+    title: 'Explicit base',
+    baseInstructions: 'You are Nova, VChat\'s coding agent.',
+    systemPrompt: '{{Nova}}',
+});
+await manager.createSession({ topicId: explicitBaseTopic.topicId });
+const explicitBaseStart = fake.calls.find((call) => call.method === 'thread/start'
+    && call.params.baseInstructions === 'You are Nova, VChat\'s coding agent.');
+assert.ok(explicitBaseStart, 'explicit baseInstructions must override the catalog systemPrompt');
+
+// Repair only the known historical bug where an Agent placeholder was stored
+// as an appending developer instruction. Arbitrary developer instructions are
+// intentional data and must never be silently promoted to system identity.
+const legacyNow = Date.now();
+manager.repository.saveSession({
+    sessionId: 'session_legacy_identity',
+    threadId: 'thr_legacy_identity',
+    agentId: 'Nova',
+    title: 'Legacy identity',
+    workspaceRoot: root,
+    state: 'ready',
+    configSnapshot: { provider: 'vcp_toolbox', baseInstructions: '', developerInstructions: '{{Nova}}' },
+    createdAt: legacyNow,
+    updatedAt: legacyNow,
+});
+await manager.createSession({ sessionId: 'session_legacy_identity' });
+const repairedLegacy = manager.repository.getSession('session_legacy_identity').configSnapshot;
+assert.equal(repairedLegacy.baseInstructions, '{{Nova}}');
+assert.equal(repairedLegacy.developerInstructions, '');
+assert.equal(repairedLegacy.identityMigrationVersion, 1);
+assert.equal(repairedLegacy.executionProfile, 'codex-native-legacy',
+    'an existing Thread must not be mislabeled as ToolBox-only because its original environment cannot be revoked on resume');
+
+manager.repository.saveSession({
+    sessionId: 'session_custom_developer',
+    threadId: 'thr_custom_developer',
+    agentId: 'Nova',
+    title: 'Custom developer hint',
+    workspaceRoot: root,
+    state: 'ready',
+    configSnapshot: { provider: 'vcp_toolbox', baseInstructions: '', developerInstructions: 'Keep answers concise.' },
+    createdAt: legacyNow,
+    updatedAt: legacyNow,
+});
+await manager.createSession({ sessionId: 'session_custom_developer' });
+const customDeveloper = manager.repository.getSession('session_custom_developer').configSnapshot;
+assert.equal(customDeveloper.baseInstructions || '', '');
+assert.equal(customDeveloper.developerInstructions, 'Keep answers concise.');
+const updatedPolicy = await manager.updateWorkbenchSettings({
+    sessionId: session.sessionId,
+    permissionMode: 'always-approve',
+});
+assert.equal(updatedPolicy.session.sessionId, session.sessionId,
+    'saving an approval policy must update the currently selected VChat Session');
+assert.equal(manager.repository.getSession(session.sessionId).configSnapshot.approvalPolicy, 'never',
+    'the current Session policy must be durable in the projection store');
+assert.equal(manager.repository.getSession(session.sessionId).configSnapshot.permissionMode, 'always-approve',
+    'the user-facing permission mode must be durable separately from Codex protocol policy');
+const updatedModel = await manager.updateWorkbenchSettings({
+    sessionId: session.sessionId,
+    model: 'gpt-5.6-luna',
+});
+assert.equal(updatedModel.settings.model, 'gpt-5.6-luna',
+    'saving a model must return the effective Session model');
+assert.equal(manager.repository.getSession(session.sessionId).configSnapshot.model, 'gpt-5.6-luna',
+    'the current Session model must be durable in its frozen config snapshot');
+assert.equal(manager.repository.getSession(session.sessionId).configSnapshot.permissionMode, 'always-approve',
+    'a model-only save must preserve the current Session approval policy');
+// A fresh App Server process has no in-memory subscription for the persisted
+// VChat Session. Simulate that boundary: the next write must reopen exactly
+// the saved Codex Thread, never create a replacement Thread.
+manager.resumedThreadIds.clear();
+const resumedAfterRestart = await manager.createSession({ resume: topic.topicId });
+assert.equal(resumedAfterRestart.threadId, 'thr_test');
+assert.equal(fake.calls.filter((call) => call.method === 'thread/start').length, 3,
+    'only the original and two persona Sessions start Threads; every resume reopens the saved one');
+const resumeCall = fake.calls.find((call) => call.method === 'thread/resume' && call.params.threadId === 'thr_test');
+assert.deepEqual({ threadId: resumeCall.params.threadId, excludeTurns: resumeCall.params.excludeTurns }, {
+    threadId: 'thr_test', excludeTurns: true,
+});
+const turn = await manager.startTurn({ sessionId: session.sessionId, prompt: 'hello' });
+assert.equal(turn.turnId, 'turn_test');
+assert.deepEqual(fake.calls.find((call) => call.method === 'turn/start').params.input, [
+    { type: 'text', text: 'hello', text_elements: [] },
+]);
+assert.equal(fake.calls.find((call) => call.method === 'turn/start').params.approvalPolicy, 'never',
+    'the next Turn must receive the current Session approval policy without restarting its Thread');
+fake.emit('notification', {
+    method: 'item/started',
+    params: { threadId: 'thr_test', turnId: 'turn_test', item: { id: 'item_a', type: 'agentMessage', text: '' } },
+});
+fake.emit('notification', {
+    method: 'item/agentMessage/delta',
+    params: { threadId: 'thr_test', turnId: 'turn_test', itemId: 'item_a', delta: 'partial' },
+});
+assert.equal(uiEvents.at(-1).projectionMessage.blocks[0].content.text, 'partial');
+fake.emit('notification', {
+    method: 'item/completed',
+    params: { threadId: 'thr_test', turnId: 'turn_test', item: { id: 'item_a', type: 'agentMessage', text: 'done' } },
+});
+const projection = await manager.readTopic({ topicId: session.sessionId });
+assert.equal(projection.messages[0].blocks[0].content.text, 'done');
+fake.readError = new Error('temporary App Server transport failure');
+const temporaryFailureProjection = await manager.readTopic({ topicId: session.sessionId });
+assert.equal(temporaryFailureProjection.session.orphaned, false,
+    'a temporary read failure must preserve a writable Session instead of inventing an orphan');
+assert.match(temporaryFailureProjection.projection.lastError, /temporary App Server transport failure/);
+fake.readError = new Error('No rollout found for thread thr_test');
+const missingThreadProjection = await manager.readTopic({ topicId: session.sessionId });
+assert.equal(missingThreadProjection.session.orphaned, true,
+    'only an explicit missing Codex Thread may mark the local Session orphaned');
+fake.readError = null;
+manager.resumedThreadIds.clear();
+await manager.createSession({ sessionId: session.sessionId });
+assert.equal(manager.repository.getSession(session.sessionId).orphaned, false,
+    'a successful explicit resume clears a previously stale orphan marker');
+const fork = await manager.forkSession({ sessionId: session.sessionId, turnId: 'turn_test' });
+assert.equal(fork.threadId, 'thr_fork');
+assert.equal(manager.getStatus().runtimes.some((runtime) => runtime.topicId === session.sessionId), true);
+fake.emit('server-request', {
+    id: 'req_approval',
+    method: 'item/commandExecution/requestApproval',
+    params: { threadId: 'thr_test', turnId: 'turn_test', itemId: 'cmd_a', command: 'Get-Location' },
+});
+assert.equal(uiEvents.at(-1).type, 'approval.requested');
+assert.equal(uiEvents.at(-1).payload.approval.scope, 'codex-native');
+await manager.respondApproval({ approvalId: 'req_approval', decision: 'allow' });
+assert.deepEqual(fake.responses.at(-1), { id: 'req_approval', result: { decision: 'accept' } });
+fake.emit('server-request', { id: 'req_tool', method: 'item/tool/call', params: { callId: 'call_a' } });
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(fake.responses.at(-1).error.code, -32001);
+assert.equal(uiEvents.filter((event) => event.type === 'approval.requested').length, 1,
+    'dynamic tools must not be misrepresented as native Codex approvals');
+const toolboxDecisions = [];
+const toolboxInvocations = [];
+const toolboxInterrupts = [];
+manager.bridge = {
+    invoke: async (payload) => {
+        toolboxInvocations.push(payload);
+        return { result: { ok: true, output: `completed ${payload.toolName}` } };
+    },
+    respondApproval: async (payload) => {
+        toolboxDecisions.push(payload);
+        return { written: true };
+    },
+    interrupt: async (requestId) => {
+        toolboxInterrupts.push(requestId);
+        return { interrupted: true };
+    },
+    stop: async () => {},
+};
+fake.emit('server-request', {
+    id: 'req_vcp_invoke',
+    method: 'item/tool/call',
+    params: {
+        threadId: 'thr_test', turnId: 'turn_test', callId: 'call_file_1',
+        tool: 'vcp_invoke',
+        arguments: { tool: 'FileOperator', arguments: { action: 'read', path: 'package.json' } },
+    },
+});
+await new Promise((resolve) => setImmediate(resolve));
+assert.deepEqual(toolboxInvocations, [{
+    requestId: 'codex:thr_test:turn_test:call_file_1',
+    toolName: 'FileOperator',
+    arguments: { action: 'read', path: 'package.json' },
+}], 'bridge must receive the inner ToolBox target rather than the vcp_invoke wrapper');
+assert.deepEqual(fake.responses.at(-1), {
+    id: 'req_vcp_invoke',
+    result: {
+        contentItems: [{ type: 'inputText', text: 'completed FileOperator' }],
+        success: true,
+    },
+});
+for (const [id, params] of [
+    ['req_wrong_wrapper', {
+        threadId: 'thr_test', turnId: 'turn_test', callId: 'call_bad_wrapper', tool: 'other_tool',
+        arguments: { tool: 'FileOperator', arguments: {} },
+    }],
+    ['req_missing_target', {
+        threadId: 'thr_test', turnId: 'turn_test', callId: 'call_missing_target', tool: 'vcp_invoke',
+        arguments: { arguments: {} },
+    }],
+    ['req_array_arguments', {
+        threadId: 'thr_test', turnId: 'turn_test', callId: 'call_array_arguments', tool: 'vcp_invoke',
+        arguments: { tool: 'FileOperator', arguments: [] },
+    }],
+]) {
+    fake.emit('server-request', { id, method: 'item/tool/call', params });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(fake.responses.at(-1).id, id);
+    assert.equal(fake.responses.at(-1).result.success, false);
+}
+assert.equal(toolboxInvocations.length, 1, 'malformed dynamic-tool envelopes must fail before reaching ToolBox');
+manager._handleBridgeEvent({
+    channel: 'backend-approval',
+    event: { requestId: 'toolbox-approval-1', expiresAtMs: Date.now() + 30_000, data: { toolName: 'PowerShellExecutor' } },
+});
+assert.equal(uiEvents.at(-1).payload.approval.scope, 'toolbox');
+await manager.respondApproval({ approvalId: 'toolbox-approval-1', scope: 'toolbox', decision: 'deny' });
+assert.equal(toolboxDecisions[0].approved, false);
+manager._handleBridgeEvent({
+    channel: 'info',
+    event: { type: 'RAG_RETRIEVAL_DETAILS', apiKey: 'must-not-leak', detail: 'x'.repeat(20_000) },
+});
+assert.equal(uiEvents.at(-1).payload.kind, 'rag-retrieval');
+assert.equal(uiEvents.at(-1).payload.value.apiKey, '[redacted]');
+assert.equal(uiEvents.at(-1).payload.value.detail.length, 16_384);
+// A crashed App Server has no valid JSON-RPC response channel. All native
+// approvals, dynamic calls and ToolBox backend approvals must be cleared and
+// projected as fail-closed rather than lingering in a reopened Workbench.
+fake.emit('server-request', {
+    id: 'req_crash_native', method: 'item/fileChange/requestApproval',
+    params: { threadId: 'thr_test', turnId: 'turn_test', itemId: 'file_crash' },
+});
+manager._handleBridgeEvent({
+    channel: 'backend-approval',
+    event: { requestId: 'toolbox-crash-approval', expiresAtMs: Date.now() + 30_000, data: { toolName: 'PowerShellExecutor' } },
+});
+let rejectCrashInvoke;
+manager.bridge.invoke = () => new Promise((_resolve, reject) => { rejectCrashInvoke = reject; });
+fake.emit('server-request', {
+    id: 'req_crash_dynamic', method: 'item/tool/call',
+    params: {
+        threadId: 'thr_test', turnId: 'turn_test', callId: 'call_crash', tool: 'vcp_invoke',
+        arguments: { tool: 'FileOperator', arguments: { action: 'read', path: 'package.json' } },
+    },
+});
+await new Promise((resolve) => setImmediate(resolve));
+fake.emit('exit', new Error('simulated App Server crash'));
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(manager.getStatus().state, 'crashed');
+assert.equal(manager.serverRequests.size, 0, 'crash must clear native and dynamic server requests');
+assert.equal(manager.dynamicCalls.size, 0, 'crash must clear dynamic-call routing identity');
+assert.equal(manager.toolboxApprovals.size, 0, 'crash must fail-close ToolBox backend approvals');
+assert.deepEqual(toolboxInterrupts, ['codex:thr_test:turn_test:call_crash']);
+assert.ok(toolboxDecisions.some((decision) => decision.requestId === 'toolbox-crash-approval' && decision.approved === false));
+assert.ok(uiEvents.some((event) => event.type === 'approval.resolved'
+    && event.approvalId === 'req_crash_native' && event.payload.reason === 'Codex App Server crashed'));
+rejectCrashInvoke(new Error('bridge interrupted after crash'));
+await manager.stop();
+fs.rmSync(root, { recursive: true, force: true });
+console.log('Codex runtime manager tests passed.');

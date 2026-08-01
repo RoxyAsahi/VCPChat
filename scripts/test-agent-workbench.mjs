@@ -80,7 +80,7 @@ window.chatAPI = {
     // Agent Workbench request to the ToolBox model endpoint.
     getCachedModels: async () => {
         await new Promise((resolve) => setTimeout(resolve, 250));
-        return [{ id: 'gpt-5.6-terra' }];
+        return [{ id: 'gpt-5.6-terra' }, { id: 'gpt-5.6-luna' }];
     },
     agentRuntimeGetStatus: async () => ({ state: runtimeStatus, worker: null, pendingApprovals: [] }),
     agentRuntimeStart: async () => { runtimeStatus = 'ready'; runtimeTransitions.push('start'); return { state: 'ready' }; },
@@ -115,6 +115,15 @@ window.chatAPI = {
         if (topicId === 'topic-empty-checkpoint') throw new Error('Agent Topic has no checkpoint');
         return {
             topicId,
+            ...(topicId === 'topic-archived' ? {
+                session: {
+                    agentId: 'Nova',
+                    configSnapshot: {
+                        developerInstructions: '冻结的 Nova 指令',
+                        approvalPolicy: 'on-request',
+                    },
+                },
+            } : {}),
             readOnly: true,
             history: [{ messageId: 'msg_saved', turnId: 'turn_saved', role: 'assistant', content: 'restored answer', timestamp: 1 }],
         };
@@ -173,9 +182,17 @@ window.chatAPI = {
         savedWorkbenchSettings.push(payload);
         return {
             restartRequired: true,
+            session: payload.sessionId ? {
+                sessionId: payload.sessionId,
+                configSnapshot: {
+                    approvalPolicy: payload.permissionMode === 'always-approve' ? 'never' : 'on-request',
+                    ...(payload.model ? { model: payload.model } : {}),
+                },
+            } : null,
             settings: {
                 budget: payload.budget || { maxRequestsPerTurn: 8, maxTokensPerTurn: 120000 },
                 permissionMode: payload.permissionMode || 'ask',
+                ...(payload.model ? { model: payload.model } : {}),
             },
         };
     },
@@ -504,8 +521,15 @@ host.querySelector('.agent-chat-send-button').click();
 await new Promise((resolve) => setTimeout(resolve, 30));
 assert.deepEqual(startedTurns[0], { sessionId: 'sess_test', prompt: '', attachments: [importedAttachment] },
     'an attachment-only turn must pass the descriptor to Rust rather than stringify it into text');
+assert.ok(host.querySelector('.agent-chat-turn-starting .thinking-indicator'),
+    'the Workbench must show the main-chat thinking animation before the first Codex item notification');
 assert.equal(host.querySelector('.agent-chat-composer-attachments')?.childElementCount || 0, 0,
     'accepted descriptors leave the transient composer tray after they are submitted');
+// The ACK-to-first-event gap now has an explicit renderer-only thinking row;
+// close the synthetic attachment turn before exercising the next composer
+// interaction so the fixture mirrors Codex's terminal notification.
+emitDaemonEvent({ sessionId: 'sess_test', turnId: 'attachment_turn', type: 'turn.completed' });
+await new Promise((resolve) => setTimeout(resolve, 30));
 selectedAttachments = [importedVideoAttachment];
 attachButton.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
@@ -662,7 +686,7 @@ await new Promise((resolve) => setTimeout(resolve, 650));
 assert.equal(approvalResponses.length, 0,
     'Renderer must not manufacture a deny when the Rust Host-owned deadline expires');
 assert.match(localApproval.querySelector('.agent-chat-approval-countdown').textContent,
-    /等待 Rust Runtime/);
+    /等待 (Rust Runtime|Codex App Server)/);
 
 // A fresh approval with a real future deadline proves the visible actions use
 // the complete Rust-owned four-part binding; the renderer never invents an
@@ -941,10 +965,35 @@ permissionSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
 const savePermission = [...host.querySelectorAll('.agent-chat-settings-pane button')]
     .find((button) => button.textContent === '保存本地审批策略');
 assert.ok(savePermission, 'the local approval policy must have an explicit save action');
+const promptPreview = host.querySelector('.agent-chat-settings-pane textarea[readonly]');
+assert.equal(promptPreview?.value, '冻结的 Nova 指令',
+    'settings must show the selected Session frozen developer instructions before the Agent fallback prompt');
 savePermission.click();
 await new Promise((resolve) => setTimeout(resolve, 0));
 assert.equal(savedWorkbenchSettings.at(-1)?.permissionMode, 'always-approve',
     'saving YOLO must only persist the narrowed Rust Host permissionMode setting');
+assert.equal(savedWorkbenchSettings.at(-1)?.sessionId, 'topic-archived',
+    'saving a selected Topic policy must target that current Session rather than only a future Session');
+assert.equal([...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field select')]
+    .find((control) => [...control.options].some((option) => option.value === 'always-approve'))?.value, 'always-approve',
+    'the selected Session must retain its newly saved policy after the settings pane rerenders');
+assert.match(host.querySelector('.agent-chat-header-permissions')?.getAttribute('aria-label') || '', /YOLO/,
+    'the header permission indicator must read the selected Session policy, not the global default');
+const modelSelect = [...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field select')]
+    .find((control) => [...control.options].some((option) => option.value === 'gpt-5.6-luna'));
+assert.ok(modelSelect, 'settings must expose the shared model catalog for the current Session');
+modelSelect.value = 'gpt-5.6-luna';
+modelSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
+const saveModel = [...host.querySelectorAll('.agent-chat-settings-pane button')]
+    .find((button) => button.textContent === '保存当前模型');
+assert.ok(saveModel, 'the current Session model must have an explicit save action');
+saveModel.click();
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.equal(savedWorkbenchSettings.at(-1)?.model, 'gpt-5.6-luna',
+    'saving a model must target the selected Session instead of changing only a page-local selector');
+assert.equal([...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field select')]
+    .find((control) => [...control.options].some((option) => option.value === 'gpt-5.6-luna'))?.value, 'gpt-5.6-luna',
+    'the selected Session must retain its newly saved model after the settings pane rerenders');
 
 dispose();
 assert.equal(unsubscribeCalls, 1, 'Workbench unmount must release runtime event subscription');

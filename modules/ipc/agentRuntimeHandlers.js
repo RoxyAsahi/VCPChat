@@ -2,13 +2,15 @@
 
 const { ipcMain, BrowserWindow, dialog } = require('electron');
 const path = require('path');
-const { RustAgentRuntimeManager } = require('../agent-runtime/rustRuntimeManager');
+const { CodexRuntimeManager } = require('../codex-runtime/runtimeManager');
 const { IPC_CHANNELS } = require('../agent-runtime/contracts');
 const { AgentRuntimeError } = require('../agent-runtime/errors');
 
 let manager = null;
 let cachedSettings = {};
 const workbenchSenders = new Set();
+let settingsManagerWithListener = null;
+let settingsUpdatedListener = null;
 
 function isMainHtmlWindow(window) {
     if (!window || window.isDestroyed()) return false;
@@ -38,12 +40,20 @@ async function refreshSettings(settingsManager) {
 }
 
 function removeHandlers() {
+    if (settingsManagerWithListener && settingsUpdatedListener) {
+        settingsManagerWithListener.off?.('settings-updated', settingsUpdatedListener);
+    }
+    settingsManagerWithListener = null;
+    settingsUpdatedListener = null;
     for (const channel of [
+        IPC_CHANNELS.GET_PRESENTATION_MODE,
         IPC_CHANNELS.GET_STATUS,
         IPC_CHANNELS.START,
         IPC_CHANNELS.STOP,
         IPC_CHANNELS.CREATE_TOPIC,
-        IPC_CHANNELS.CREATE_SESSION,
+         IPC_CHANNELS.CREATE_SESSION,
+         IPC_CHANNELS.ENSURE_SESSION_RUNTIME,
+        IPC_CHANNELS.FORK_SESSION,
         IPC_CHANNELS.CLOSE_SESSION,
         IPC_CHANNELS.COMPACT_SESSION,
         IPC_CHANNELS.LIST_TOPICS,
@@ -52,6 +62,7 @@ function removeHandlers() {
         IPC_CHANNELS.GET_TOPIC_INDEX_STATUS,
         IPC_CHANNELS.REBUILD_TOPIC_INDEX,
         IPC_CHANNELS.READ_TOPIC,
+        IPC_CHANNELS.READ_PROJECTION,
         IPC_CHANNELS.TAKEOVER_TOPIC,
         IPC_CHANNELS.RENAME_TOPIC,
         IPC_CHANNELS.DELETE_TOPIC,
@@ -76,7 +87,7 @@ function removeHandlers() {
 function initialize(options) {
     const { settingsManager, projectRoot } = options;
     removeHandlers();
-    manager = new RustAgentRuntimeManager({
+    manager = new CodexRuntimeManager({
         projectRoot,
         settingsPath: settingsManager.settingsPath || path.join(projectRoot, 'AppData', 'settings.json'),
         // In a packaged Electron app settings live under userData, not inside
@@ -84,6 +95,7 @@ function initialize(options) {
         // the daemon can use the exact same layout in development and release.
         agentsDir: path.join(path.dirname(settingsManager.settingsPath || path.join(projectRoot, 'AppData', 'settings.json')), 'Agents'),
         getSettings: () => cachedSettings,
+        setSettings: (updater) => settingsManager.updateSettings(updater),
         hasUi: () => workbenchSenders.size > 0 && Boolean(getMainWindow()),
         sendEvent: (event) => {
             for (const window of BrowserWindow.getAllWindows()) {
@@ -97,20 +109,41 @@ function initialize(options) {
     const guard = async (event, fn) => {
         assertMainWindowSender(event);
         await refreshSettings(settingsManager);
+        await manager?.refreshToolboxConfiguration(cachedSettings);
         return fn();
     };
+
+    // Standard VChat settings writes emit this event.  Reconfigure at the
+    // Main boundary immediately rather than waiting for the next Workbench
+    // click; credentials never travel through Renderer IPC.
+    settingsUpdatedListener = (settings) => {
+        cachedSettings = settings || {};
+        void manager?.refreshToolboxConfiguration(cachedSettings).catch((error) => {
+            console.warn('[AgentRuntime] Could not refresh ToolBox connection:', error.message);
+        });
+    };
+    settingsManager.on?.('settings-updated', settingsUpdatedListener);
+    settingsManagerWithListener = settingsManager;
+
+    ipcMain.handle(IPC_CHANNELS.GET_PRESENTATION_MODE, (event) => guard(event, () => ({
+        mode: String(process.env.VCP_AGENT_PRESENTATION_RENDERER || '').toLowerCase() === 'legacy'
+            ? 'legacy'
+            : 'fork',
+    })));
 
     ipcMain.handle(IPC_CHANNELS.GET_STATUS, (event) => guard(event, () => manager.getStatus()));
     ipcMain.handle(IPC_CHANNELS.START, (event) => guard(event, () => manager.start()));
     ipcMain.handle(IPC_CHANNELS.STOP, (event) => guard(event, () => manager.stop()));
     ipcMain.handle(IPC_CHANNELS.CREATE_TOPIC, (event, payload) => guard(event, () => manager.createTopic(payload || {})));
     ipcMain.handle(IPC_CHANNELS.CREATE_SESSION, (event, payload) => guard(event, () => manager.createSession(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.ENSURE_SESSION_RUNTIME, (event, payload) => guard(event, () => manager.ensureSessionRuntime(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.FORK_SESSION, (event, payload) => guard(event, () => manager.forkSession(payload || {})));
     ipcMain.handle(IPC_CHANNELS.CLOSE_SESSION, (event, payload) => guard(event, () => manager.closeSession(payload || {})));
     ipcMain.handle(IPC_CHANNELS.COMPACT_SESSION, (event, payload) => guard(event, () => manager.compactSession(payload || {})));
     ipcMain.handle(IPC_CHANNELS.LIST_TOPICS, (event, payload) => guard(event, async () => {
         const topics = await manager.listTopics(payload || {});
         const topicList = Array.isArray(topics) ? topics : topics?.topics || [];
-        const attachedTopicId = manager?.getAttachedTopicId() || null;
+        const attachedTopicId = null;
         const enriched = topicList.map((topic) => (
             attachedTopicId && topic.id === attachedTopicId
                 ? { ...topic, locallyAttached: true }
@@ -123,6 +156,7 @@ function initialize(options) {
     ipcMain.handle(IPC_CHANNELS.GET_TOPIC_INDEX_STATUS, (event) => guard(event, () => manager.getTopicIndexStatus()));
     ipcMain.handle(IPC_CHANNELS.REBUILD_TOPIC_INDEX, (event) => guard(event, () => manager.rebuildTopicIndex()));
     ipcMain.handle(IPC_CHANNELS.READ_TOPIC, (event, payload) => guard(event, () => manager.readTopic(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.READ_PROJECTION, (event, payload) => guard(event, () => manager.readTopic({ ...(payload || {}), reconcile: false })));
     ipcMain.handle(IPC_CHANNELS.TAKEOVER_TOPIC, (event, payload) => guard(event, () => manager.takeoverTopic(payload || {})));
     ipcMain.handle(IPC_CHANNELS.RENAME_TOPIC, (event, payload) => guard(event, () => manager.renameTopic(payload || {})));
     ipcMain.handle(IPC_CHANNELS.DELETE_TOPIC, (event, payload) => guard(event, () => manager.deleteTopic(payload || {})));
