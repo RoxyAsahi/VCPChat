@@ -1,6 +1,6 @@
 # Workbench Presentation 并行施工线
 
-状态：Full Fork 已默认接入正式 Workbench；仍处于 working-tree / experimental，尚缺视觉与 live 产品门槛。
+状态：Full Fork 已默认接入正式 Workbench 并进入 `29c2068a`；产品仍为 experimental，尚缺视觉与 live 门槛。
 
 ## 目的
 
@@ -62,7 +62,7 @@ npm run test:electron-codex-smoke
 $env:VCP_AGENT_PRESENTATION_RENDERER='legacy'; npm run test:electron-codex-smoke
 ```
 
-Working-tree 收据（2026-07-31，VChat 基线 `d441675a`，未提交）：JSDOM Full Fork receipt、forbidden dependency、golden DOM、action adapter、keyed patch 与 Workbench mount 均通过；真实 Electron 以 `fork` 和 `legacy` 两种模式从内部应用启动器挂载 Workbench，并断言 Main/preload 模式值、sidebar/feed/composer DOM 和错误窗口。当前主题仍引用缺失的 `themes_snow_realm_light.jpg`，Electron smoke 仅对这一个精确的既有 shell 资源作基线隔离，其他 request/console/page error 继续 fail-closed。
+Checkpoint 收据（VChat `29c2068a`）：JSDOM Full Fork receipt、forbidden dependency、golden DOM、action adapter、keyed patch 与 Workbench mount 均通过；真实 Electron 以 `fork` 和 `legacy` 两种模式从内部应用启动器挂载 Workbench，并断言 Main/preload 模式值、sidebar/feed/composer DOM 和错误窗口。当前主题仍引用缺失的 `themes_snow_realm_light.jpg`，Electron smoke 仅对这一个精确的既有 shell 资源作基线隔离，其他 request/console/page error 继续 fail-closed。
 
 结构化 Block 迁移收据：`scripts/test-agent-presentation-blocks.mjs` 验证 running→completed 不替换 Tool 根节点、清除终态取消按钮、展开详情读取最新 payload、args/result/resources/warnings/task、审批恰好一次、marker 展开和未知 Block fail-safe。该测试已进入 `test:agent-presentation` 与 `test:codex-stack:real`。
 

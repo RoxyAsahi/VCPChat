@@ -20,21 +20,21 @@ VChat Workbench
 
 VChat 不 fork、不 vendor Codex，也不读取或修改 Codex rollout。旧 Rust daemon、Rust Topic、Pi、`vcp_delegate`、SQLite Runtime Repository 和多 Driver 仅保留在 `../history/rust/` 与 `../history/pi/`，不在本分支恢复或迁移。
 
-## 截止 2026-07-31 的完成度
+## 截止 2026-08-01 的完成度
 
 | 区域 | 当前状态 | 说明 |
 |---|---|---|
-| R0 分支与基线 | 已完成 | Rust R3-M 已在 `d441675a` checkpoint；Codex 分支和独立工作树已建立；旧文档已归档。 |
-| App Server transport | working-tree pass | JSONL、initialize、waiter、server request、退出清理已有测试；本机 `codex-cli 0.124.0` 已真实启动 App Server 并完成 Thread start/read。 |
-| Projection SQLite | working-tree pass | WAL、迁移、Session/Message/Block、delta、权威 reconcile 清理、orphan 基础路径已有测试；SQLite 测试与产品统一使用 Electron ABI。 |
-| Runtime Manager | working-tree live pass，未形成提交收据 | Agent `systemPrompt -> baseInstructions`、旧 placeholder 快照安全迁移、Thread start/read/fork、Turn start/steer/interrupt 与 resume 已接线；真实 Nova 身份 gate 已通过。 |
-| ToolBox bridge 进程 | working-tree pass | Rust bridge 可构建、ready、bounded JSONL、shutdown；`/v1/human/tool`、interrupt、VCPLog/VCPInfo 观察代码路径存在。 |
-| Workbench 兼容接线 | JSDOM pass，仍在迁移 | SQLite snapshot 和 keyed delta 已接入现有 Agent feed；仍有 Rust Topic 文案、动作和 Electron 流程需要清理。 |
+| R0 分支与基线 | 已完成 | Rust R3-M 位于 `d441675a`；Codex App Server 首个功能 checkpoint 为 `29c2068a`；旧文档已归档。 |
+| App Server transport | checkpoint pass | JSONL、initialize、waiter、server request、退出清理已有测试；本机 `codex-cli 0.124.0` 已真实启动 App Server 并完成 Thread start/read。 |
+| Projection SQLite | checkpoint pass | WAL、迁移、Session/Message/Block、delta、权威 reconcile 清理、orphan 基础路径已有测试；SQLite 测试与产品统一使用 Electron ABI。 |
+| Runtime Manager | checkpoint pass；历史 Nova live pass | Agent `systemPrompt -> baseInstructions`、旧 placeholder 快照安全迁移、Thread start/read/fork、Turn start/steer/interrupt 与 resume 已接线；真实 Nova 身份 gate 仍是 2026-07-31 working-tree live 收据，尚未在 checkpoint 后重跑。 |
+| ToolBox bridge 进程 | checkpoint pass | Rust bridge 可构建、ready、bounded JSONL、shutdown；`/v1/human/tool`、interrupt、VCPLog/VCPInfo 观察代码路径存在。 |
+| Workbench 兼容接线 | checkpoint pass，仍在迁移 | SQLite snapshot、keyed delta、Full Fork Message 与结构化 Block 已进入 `29c2068a`；仍有 Rust Topic 兼容文案和完整 Electron 富消息流程需要清理。 |
 | ToolBox backend approval | implemented，未 live 验证 | Bridge 已有独立 approval ID、TTL、replay 去重、双向响应和关闭 fail-closed；尚未连接真实 ToolBox 验证补发与恰好一次响应。 |
 | VCPInfo/VCPLog 展示 | implemented，未 live 验证 | 单连接观察、类型分类、限长脱敏和 Workbench 全局卡片已接线；尚缺真实通知、重连和完整内容净化验收。 |
-| VChat Responses adapter | working-tree pass | 回环 capability、Responses → Chat、function output 历史与流式参数聚合已有 fixture；真实 App Server 请求经 adapter 后模型可见工具集合严格为 `[vcp_invoke]`。 |
+| VChat Responses adapter | checkpoint pass | 回环 capability、Responses → Chat、function output 历史与流式参数聚合已有 fixture；真实 App Server 请求经 adapter 后模型可见工具集合严格为 `[vcp_invoke]`。 |
 | Nova / VCP dynamic tool | Nova live pass；工具 pending | 未修改 ToolBox 上的 Nova 身份、sentinel、restart/resume、fork、interrupt 已通过；DistributedServer `FileOperator` 正式 live gate 仍待执行。 |
-| Electron Codex smoke | working-tree pass | preload/IPC、Session/Thread、projection-only read、Runtime identity 与默认 Fork renderer 已通过。 |
+| Electron Codex smoke | checkpoint pass | preload/IPC、Session/Thread、projection-only read、Runtime identity 与默认 Fork renderer 已通过。 |
 | 产品可用 | 否 | live gate 未通过。 |
 
 `npm run test:codex-nova-live` 与 `npm run test:codex-toolbox-live` 均是显式 live gate；它们必须设置 `VCP_CODEX_LIVE=1`、`VCP_TOOLBOX_URL` 和 `VCP_TOOLBOX_API_KEY`，默认 CI 不执行。后者还要求 VChat 的 DistributedServer 已连接 ToolBox 并注册 `FileOperator`；仅 ToolBox 本机插件不能替代这条分布式能力链路。
@@ -57,6 +57,7 @@ VChat 不 fork、不 vendor Codex，也不读取或修改 Codex rollout。旧 Ru
 - `implemented`：代码路径存在，但不代表测试或真实环境可用。
 - `hermetic pass`：本地 fake/mock/临时数据库测试通过，不连接真实 ToolBox。
 - `working-tree pass`：测试在未提交工作树通过，只能作为施工证据，不能作为版本收据。
+- `checkpoint pass`：测试对应一个已提交 revision，但仍可能只是 hermetic/local gate，不等于 live verified。
 - `verified`：完整收据齐全且对应已提交 VChat revision。
 - `live verified`：连接真实 Codex、Nova 和 ToolBox 后通过不可替代断言。
 - `product ready`：所有阻塞 gate 均为 `live verified`，且无 P0/P1 未关闭。

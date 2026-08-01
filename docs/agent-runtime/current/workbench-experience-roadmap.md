@@ -1,6 +1,6 @@
 # Agent Workbench 体验收口路线图
 
-状态：2026-07-31 UX-R0–R4 已在当前 working tree 实现并通过 hermetic/DOM/Electron smoke；UX-R5 的
+状态：UX-R0–R4 已进入 `29c2068a` 并通过 hermetic/DOM/Electron smoke；UX-R5 的
 富消息截图、真实性能录制和人工视觉验收仍待完成。视觉基线是 VChat 主聊天；Cherry 只作为“视图选择
 与 Runtime 恢复分离”的机制参考，不复制其代码或数据层。
 
@@ -229,7 +229,7 @@ Tool call
 
 该顺序避免先美化一个仍会错误隐藏 Session、首发仍被 Thread 冷启动阻塞的页面。
 
-## 2026-07-31 working-tree 实现收据
+## UX-R0–R4 checkpoint 实现收据
 
 - UX-R0：Renderer 记录 `agent-click/session-cache-painted/projection-list-returned/turn-start-ack/
   first-assistant-item/first-visible-delta`；Main 记录 `runtime-process-ready/thread-warm-started/completed`。
@@ -247,4 +247,5 @@ Tool call
 - 验证命令：`npm run test:codex-runtime-manager`、`npm run test:codex-projection-store`、
   `npm run test:agent-presentation`、`npm run test:agent-workbench-store`、`npm run test:agent-workbench`、
   `npm run check:ui-system`、`npm run check:agent-runtime`、`npm run test:electron-codex-smoke`。
-- 模式：Windows x64 working tree，Codex App Server hermetic/local；尚未升级为干净 commit 级 verified。
+- 模式：Windows x64，VChat checkpoint `29c2068a`，Codex App Server hermetic/local；真实富消息视觉和
+  ToolBox 产品门槛仍未升级为 live verified。

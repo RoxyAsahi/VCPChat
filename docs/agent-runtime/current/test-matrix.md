@@ -1,6 +1,7 @@
 # 验收矩阵与收据
 
-更新时间：2026-07-31。当前 VChat HEAD 为 `d441675a`，但 Codex 接入改动尚未提交，因此今天的通过项统一标为 **working-tree pass**，不是版本级 `verified`。
+更新时间：2026-08-01。Codex App Server 功能 checkpoint 为 `29c2068a`。2026-07-31 的 live 项仍是
+历史 working-tree 收据；没有在 checkpoint 后重跑的真实 ToolBox 场景不得升级为 `live verified`。
 
 参考版本：Codex CLI `0.124.0`，Codex source `f0c30e528a54bdf0fa9a4d52ff74b34383434811`，ToolBox `324a659f`。正式路径不得依赖 ToolBox 的未提交 `protocolBridge` 改动。
 
@@ -101,7 +102,27 @@ npm run test:electron-codex-smoke     PASS (runtime=codex-app-server, presentati
 - 真实 Electron preload/IPC 创建 VChat Session 和 Codex Thread，projection-only read 不把空 Thread 误标 orphaned。
 - VChat adapter fixture 保留 function-call 与 function-call-output 历史；真实 Nova 身份/文本链已另行通过，仍不能替代 DistributedServer 动态工具验收。
 
-该记录不能升级为版本级 `verified`，原因是 VChat Codex 改动尚未形成 commit。Nova 身份/文本链可记为 working-tree live pass；整个产品仍不能标记 live verified，因为动态工具、并发、取消与审批门槛未全部完成。
+该记录中的 hermetic/local 实现已进入 `29c2068a`；Nova 身份/文本链仍只保留为 2026-07-31
+working-tree live pass。整个产品不能标记 live verified，因为动态工具、并发、取消与审批门槛未全部完成。
+
+## 2026-08-01 checkpoint 收据
+
+功能 revision：`29c2068a`（`feat(agent): integrate Codex App Server workbench`）。提交前对完全相同的
+暂存内容执行并通过：
+
+```text
+npm run test:codex-stack
+npm run test:codex-app-server-real
+npm run test:codex-app-server-adapter-real
+npm run test:electron-codex-smoke
+npm run check:agent-runtime
+npm run check:ui-system
+git diff --cached --check
+```
+
+该收据将 transport、Projection、Runtime Manager、Responses adapter、Bridge process、Presentation、
+Workbench 与 Electron shell 提升为 checkpoint pass。它不覆盖真实 `FileOperator`、双 streaming Thread、
+真实审批、富消息视觉或 ToolBox replay/reconnect。
 
 ## 正式收据模板
 

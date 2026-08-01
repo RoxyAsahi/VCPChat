@@ -166,7 +166,7 @@ Full Fork 已清除 `currentChatHistoryRef`、`currentSelectedItemRef`、`curren
 - 设置页模型保存按 Cherry 的 Session-scoped 机制写入当前 `configSnapshot.model`；模型-only 更新保留原审批策略。无选中 Session 时才更新新 Session 默认模型。
 - 当前实际 Message renderer：`VCP_AGENT_PRESENTATION_RENDERER` 未设置时为 `fork`，入口是 `createAgentMessagePresentation()` -> `agent-presentation/fork/agentMessageRenderer.js`；`legacy` 仅为显式回退。
 
-验证收据（working tree，未提交）：`npm run test:agent-workbench`、`npm run test:codex-runtime-manager`、`npm run test:agent-presentation`、`npm run test:codex-projection-store`、`npm run check:agent-runtime`、`npm run check:ui-system`、`npm run test:electron-codex-smoke`（2026-07-31，Codex App Server hermetic；真实 Nova/ToolBox 长任务仍不由这些命令覆盖）。
+checkpoint 收据：以上实现进入 `29c2068a`；`npm run test:agent-workbench`、`npm run test:codex-runtime-manager`、`npm run test:agent-presentation`、`npm run test:codex-projection-store`、`npm run check:agent-runtime`、`npm run check:ui-system`、`npm run test:electron-codex-smoke` 已对同一内容通过。真实 Nova/ToolBox 长任务仍不由这些命令覆盖。
 
 结构化 Agent Block 已从 Workbench 页面迁入 `agent-presentation/blocks/`。Tool、Approval、ToolBox/VCP observation、marker、error 和 unknown fallback 由统一 registry 创建；Workbench 只提供取消和审批动作。Fork/legacy 灰度仅影响 Message renderer，不再产生第二套工具或审批卡。Tool patch 保留根 DOM，在 terminal 状态移除取消动作，并在展开状态使用最新 Projection payload 重建详情。
 
@@ -174,7 +174,7 @@ Tool Block 仍保留 Agent 专用结构化 adapter 与 `agent-chat-tool-activity
 详情已复用主聊天 `vcp-tool-call-summary-bubble`、`vcp-tool-use-bubble`、`vcp-tool-result-bubble` 与 UI token；
 这不会让 DOM 解析 ToolBox 语义，也不会改变调用路由。UX-R5 仍需真实富结果截图与人工密度验收。
 
-**Working-tree 验收收据（2026-07-31，VChat 基线 `d441675a`，未提交）**：`previewTopic()` 和已存在 runtime 行使用
+**Checkpoint 验收收据（VChat `29c2068a`）**：`previewTopic()` 和已存在 runtime 行使用
 `agent-runtime:read-projection` 作为唯一 awaited 冷打开步骤；随后才 detached 调用
 `agent-runtime:read-topic` / Codex `thread/read`。Renderer 同时以 selection generation 和每 Topic live projection revision
 拒绝迟到的 A 对账覆盖 B 选择或新的 Item patch。已通过 `npm run test:agent-workbench-store`、

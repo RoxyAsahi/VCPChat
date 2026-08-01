@@ -13,7 +13,7 @@
 - [x] 将旧 Rust daemon current 文档归档到 `history/rust/`。
 - [x] 保留 `history/pi/`，不恢复 Pi、多 Driver 或旧 Runtime Repository。
 - [x] 建立本目录当前真源文档与复用登记表。
-- [ ] 将当前 Codex working tree 形成首个可审查 checkpoint commit。
+- [x] 将 Codex Runtime、Projection、Bridge、Workbench、测试和文档形成首个可审查 checkpoint：`29c2068a`。
 
 退出门槛：工作树无构建产物；文档、代码、测试脚本进入同一提交；`git status` 中不存在误纳入的数据库、API Key、`node_modules` 或 `rust/target*`。
 

@@ -1,7 +1,8 @@
 # Agent 身份与模型工具面
 
-状态：2026-07-31 working-tree live pass。VChat HEAD `d441675a`，Codex CLI `0.124.0` / source
-`f0c30e528a`，ToolBox `324a659f`。Codex 接入改动尚未提交，因此本页不是版本级 verified 收据。
+状态：实现已进入 VChat checkpoint `29c2068a`。2026-07-31 的 Nova live 测试运行于此前 working tree，
+Codex CLI `0.124.0` / source `f0c30e528a`，ToolBox `324a659f`；checkpoint 后尚未重跑，因此本页仍不是
+`live verified` 收据。
 
 ## 问题与根因
 
