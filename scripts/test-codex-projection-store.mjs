@@ -6,8 +6,23 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const { AgentProjectionRepository, CodexProjectionProjector } = require('../modules/codex-runtime/projection/index.js');
+const { migrate } = require('../modules/codex-runtime/projection/migrations.js');
 const Database = require('better-sqlite3');
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vcp-codex-projection-'));
+
+const quickCheckDatabase = new Database(':memory:');
+const quickCheckFailure = new Proxy(quickCheckDatabase, {
+    get(target, property) {
+        if (property === 'pragma') return (statement, options) => (
+            statement === 'quick_check' ? 'fixture-corrupt' : target.pragma(statement, options)
+        );
+        const value = target[property];
+        return typeof value === 'function' ? value.bind(target) : value;
+    },
+});
+assert.throws(() => migrate(quickCheckFailure), /quick_check failed: fixture-corrupt/,
+    'projection startup must fail before schema mutation when SQLite quick_check is not ok');
+quickCheckDatabase.close();
 
 const migrationDb = new Database(path.join(root, 'projection-v5.sqlite'));
 migrationDb.exec(`
@@ -248,5 +263,24 @@ assert.equal(migratedFromDisk.schemaVersion, 7);
 migratedFromDisk.close();
 assert.equal(fs.existsSync(`${backupDatabasePath}.schema-6.bak`), true,
     'an on-disk schema migration must create a versioned backup before mutation');
+const foreignKeyDatabasePath = path.join(root, 'projection-foreign-key.sqlite');
+const foreignKeySeed = new AgentProjectionRepository({ databasePath: foreignKeyDatabasePath });
+foreignKeySeed.close();
+const foreignKeyDatabase = new Database(foreignKeyDatabasePath);
+foreignKeyDatabase.pragma('foreign_keys = OFF');
+foreignKeyDatabase.prepare(`
+    INSERT INTO agent_messages (
+        message_id, session_id, codex_thread_id, codex_turn_id, codex_item_id,
+        role, status, source_order, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`).run('orphan-message', 'missing-session', 'missing-thread', null, 'orphan-item',
+    'assistant', 'completed', 1, Date.now(), Date.now());
+foreignKeyDatabase.close();
+assert.throws(() => new AgentProjectionRepository({ databasePath: foreignKeyDatabasePath }), /foreign_key_check failed/,
+    'writable startup must reject a database with broken Session ownership');
+assert.throws(() => new AgentProjectionRepository({
+    databasePath: foreignKeyDatabasePath, readOnly: true, degradedReason: 'fixture',
+}), /foreign_key_check failed in read-only mode/,
+'read-only degraded mode must not silently expose an integrity-broken projection');
 fs.rmSync(root, { recursive: true, force: true });
 console.log('Codex projection store tests passed.');

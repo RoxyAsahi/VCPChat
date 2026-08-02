@@ -47,14 +47,25 @@ class AgentProjectionRepository {
         this.readOnly = options.readOnly === true;
         this.degradedReason = options.degradedReason || null;
         this.db = options.db || new Database(this.databasePath, this.readOnly ? { readonly: true, fileMustExist: true } : undefined);
-        if (this.readOnly) {
-            this.db.pragma('query_only = ON');
-            this.db.pragma('busy_timeout = 5000');
-            this.schemaVersion = Number(this.db.prepare('SELECT version FROM projection_schema LIMIT 1').get()?.version || 0);
-        } else {
-            this.schemaVersion = migrate(this.db, { databasePath: options.db ? null : this.databasePath });
+        try {
+            if (this.readOnly) {
+                this.db.pragma('query_only = ON');
+                this.db.pragma('busy_timeout = 5000');
+                const quickCheck = this.db.pragma('quick_check', { simple: true });
+                if (quickCheck !== 'ok') throw new Error(`Agent projection quick_check failed in read-only mode: ${quickCheck}`);
+                const foreignKeyErrors = this.db.pragma('foreign_key_check');
+                if (foreignKeyErrors.length) throw new Error('Agent projection foreign_key_check failed in read-only mode');
+                this.schemaVersion = Number(this.db.prepare('SELECT version FROM projection_schema LIMIT 1').get()?.version || 0);
+            } else {
+                this.schemaVersion = migrate(this.db, { databasePath: options.db ? null : this.databasePath });
+            }
+            this._prepare();
+        } catch (error) {
+            if (!options.db) {
+                try { this.db.close(); } catch {}
+            }
+            throw error;
         }
-        this._prepare();
     }
 
     assertWritable() {

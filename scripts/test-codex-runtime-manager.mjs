@@ -603,6 +603,7 @@ await manager._recoverPendingInputsForSession(lifecycleSession);
 assert.equal(manager.repository.listPendingInputs(lifecycleSession.sessionId)
     .some((entry) => entry.inputId === crashWindowInput.inputId), false,
 'thread/read confirmation must clear an accepted crash-window input without replaying it');
+manager.threadStates.set(lifecycleSession.threadId, { activity: 'idle', activeTurnId: null });
 manager.repository.enqueuePendingInput(lifecycleSession.sessionId, {
     dedupeKey: 'unconfirmed-after-crash', prompt: 'do not guess whether to resend',
 });
@@ -617,6 +618,47 @@ const startsBeforeUncertainDrain = fake.calls.filter((call) => call.method === '
 await manager._drainFollowUpQueue(lifecycleSession);
 assert.equal(fake.calls.filter((call) => call.method === 'turn/start').length, startsBeforeUncertainDrain,
     'an uncertain input must wait for an explicit user decision and never auto-replay');
+manager.repository.enqueuePendingInput(lifecycleSession.sessionId, {
+    dedupeKey: 'crash-before-turn-rpc', prompt: 'never reached the transport',
+});
+const beforeRpcInput = manager.repository.listPendingInputs(lifecycleSession.sessionId)
+    .find((entry) => entry.dedupeKey === 'crash-before-turn-rpc');
+const startsBeforeRpcCrash = fake.calls.filter((call) => call.method === 'turn/start').length;
+manager.faultInjection.beforePendingInputRpc = async () => {
+    const error = new Error('simulated crash before turn/start RPC');
+    error.simulateProcessCrash = true;
+    throw error;
+};
+await assert.rejects(() => manager._drainFollowUpQueue(lifecycleSession), /before turn\/start RPC/);
+assert.equal(fake.calls.filter((call) => call.method === 'turn/start').length, startsBeforeRpcCrash,
+    'a crash before the RPC boundary must not dispatch a Turn');
+assert.equal(manager.repository.listPendingInputs(lifecycleSession.sessionId)
+    .find((entry) => entry.inputId === beforeRpcInput.inputId)?.state, 'dispatching');
+manager.faultInjection.beforePendingInputRpc = null;
+fake.readResult = { thread: { id: lifecycleSession.threadId, turns: [] } };
+await manager._recoverPendingInputsForSession(lifecycleSession);
+assert.equal(manager.repository.listPendingInputs(lifecycleSession.sessionId)
+    .find((entry) => entry.inputId === beforeRpcInput.inputId)?.state, 'uncertain',
+    'a crash-window input missing from thread/read must require an explicit resend decision');
+
+manager.threadStates.set(lifecycleSession.threadId, { activity: 'idle', activeTurnId: null });
+manager.repository.enqueuePendingInput(lifecycleSession.sessionId, {
+    dedupeKey: 'transport-exit-during-turn-rpc', prompt: 'ambiguous transport failure',
+});
+const originalFakeRequest = fake.request.bind(fake);
+fake.request = async (method, params) => {
+    if (method === 'turn/start' && params.input?.[0]?.text === 'ambiguous transport failure') {
+        const error = new Error('transport exited while awaiting turn/start ACK');
+        error.code = 'PROCESS_EXITED';
+        throw error;
+    }
+    return originalFakeRequest(method, params);
+};
+await manager._drainFollowUpQueue(lifecycleSession);
+assert.equal(manager.repository.listPendingInputs(lifecycleSession.sessionId)
+    .find((entry) => entry.dedupeKey === 'transport-exit-during-turn-rpc')?.state, 'uncertain',
+    'an ambiguous transport failure must not be downgraded to a retryable failed input');
+fake.request = originalFakeRequest;
 fake.readResult = null;
 const approvalSession = manager.repository.getSession(session.sessionId);
 manager.repository.saveSession({
@@ -754,6 +796,22 @@ const blockedPending = manager.repository.enqueuePendingInput(blockedDeleteSessi
 manager.repository.updatePendingInput(blockedPending.input_id, { state: 'uncertain' });
 await assert.rejects(() => manager.permanentlyDeleteSession({ sessionId: blockedDeleteSession.sessionId }),
     (error) => error.code === 'SESSION_HAS_PENDING_INPUT');
+const approvalBlockedTopic = await manager.createTopic({
+    agentId: 'Nova', title: 'Approval blocked delete fixture', systemPrompt: '{{NovaV2}}',
+});
+const approvalBlockedSession = await manager.createSession({ sessionId: approvalBlockedTopic.sessionId });
+await manager.archiveSession({ sessionId: approvalBlockedSession.sessionId });
+manager._handleBridgeEvent({
+    channel: 'backend-approval',
+    event: { requestId: 'toolbox-delete-blocker', expiresAtMs: Date.now() + 30_000, data: { toolName: 'PowerShellExecutor' } },
+});
+await assert.rejects(() => manager.permanentlyDeleteSession({ sessionId: approvalBlockedSession.sessionId }),
+    (error) => error.code === 'SESSION_HAS_PENDING_APPROVAL');
+await manager.respondApproval({
+    approvalId: 'toolbox-delete-blocker', scope: 'toolbox', decision: 'deny',
+    generation: manager.toolboxApprovals.get('toolbox-delete-blocker').generation,
+});
+assert.equal((await manager.permanentlyDeleteSession({ sessionId: approvalBlockedSession.sessionId })).deleted, true);
 // A crashed App Server has no valid JSON-RPC response channel. All native
 // approvals, dynamic calls and ToolBox backend approvals must be cleared and
 // projected as fail-closed rather than lingering in a reopened Workbench.
@@ -842,6 +900,81 @@ assert.equal(sagaManager.listRecoveryOperations().some((operation) => operation.
 assert.equal(uncertainStartAttempts, 1, 'manual binding must not create a replacement Thread');
 await sagaManager.stop();
 fs.rmSync(sagaRoot, { recursive: true, force: true });
+
+// Known-Thread lifecycle operations are idempotent Saga recoveries. A crash
+// after the remote ACK leaves `remote-applied`; the next App Server generation
+// retries/finalizes only that known Thread operation and never creates a Turn
+// or replacement Thread.
+const lifecycleSagaRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'vcp-codex-lifecycle-saga-'));
+const lifecycleDatabase = path.join(lifecycleSagaRoot, 'codex-agent-projection.sqlite');
+const makeLifecycleManager = (transport, faultInjection = {}) => new CodexRuntimeManager({
+    projectRoot: lifecycleSagaRoot,
+    settingsPath: path.join(lifecycleSagaRoot, 'settings.json'),
+    getSettings: () => ({}),
+    transportFactory: () => transport,
+    faultInjection,
+    repositoryFactory: () => new AgentProjectionRepository({ databasePath: lifecycleDatabase }),
+});
+const archiveTransport = new FakeTransport();
+const archiveManager = makeLifecycleManager(archiveTransport, {
+    afterArchiveRemoteApplied: async () => {
+        const error = new Error('simulated crash after archive ACK');
+        error.simulateProcessCrash = true;
+        throw error;
+    },
+});
+const lifecycleSagaTopic = await archiveManager.createTopic({ agentId: 'Nova', title: 'Lifecycle Saga', systemPrompt: '{{Nova}}' });
+const lifecycleSagaSession = await archiveManager.createSession({ sessionId: lifecycleSagaTopic.sessionId });
+await assert.rejects(() => archiveManager.archiveSession({ sessionId: lifecycleSagaSession.sessionId }), /after archive ACK/);
+assert.equal(archiveManager.repository.getSession(lifecycleSagaSession.sessionId).archivedAt, null);
+assert.ok(archiveManager.listRecoveryOperations().some((operation) => operation.kind === 'thread-archive'
+    && operation.state === 'remote-applied'));
+await archiveManager.stop();
+
+const unarchiveTransport = new FakeTransport();
+const unarchiveManager = makeLifecycleManager(unarchiveTransport, {
+    afterUnarchiveRemoteApplied: async () => {
+        const error = new Error('simulated crash after unarchive ACK');
+        error.simulateProcessCrash = true;
+        throw error;
+    },
+});
+await unarchiveManager.start();
+assert.ok(unarchiveManager.repository.getSession(lifecycleSagaSession.sessionId).archivedAt,
+    'startup must finalize a remote-applied archive in SQLite');
+await assert.rejects(() => unarchiveManager.restoreSession({ sessionId: lifecycleSagaSession.sessionId }), /after unarchive ACK/);
+assert.ok(unarchiveManager.repository.getSession(lifecycleSagaSession.sessionId).archivedAt,
+    'the local unarchive commit must remain pending after the injected crash');
+await unarchiveManager.stop();
+
+const deleteTransport = new FakeTransport();
+const deleteManager = makeLifecycleManager(deleteTransport, {
+    afterDeleteRemoteApplied: async () => {
+        const error = new Error('simulated crash after delete ACK');
+        error.simulateProcessCrash = true;
+        throw error;
+    },
+});
+await deleteManager.start();
+assert.equal(deleteManager.repository.getSession(lifecycleSagaSession.sessionId).archivedAt, null,
+    'startup must finalize a remote-applied unarchive in SQLite');
+await deleteManager.archiveSession({ sessionId: lifecycleSagaSession.sessionId });
+await assert.rejects(() => deleteManager.permanentlyDeleteSession({ sessionId: lifecycleSagaSession.sessionId }), /after delete ACK/);
+assert.ok(deleteManager.repository.getSession(lifecycleSagaSession.sessionId),
+    'the SQLite Session must survive until delete recovery commits locally');
+await deleteManager.stop();
+
+const recoveredDeleteTransport = new FakeTransport();
+const recoveredDeleteManager = makeLifecycleManager(recoveredDeleteTransport);
+await recoveredDeleteManager.start();
+assert.equal(recoveredDeleteManager.repository.getSession(lifecycleSagaSession.sessionId), null,
+    'startup must finalize a remote-applied permanent delete without creating a replacement Thread');
+assert.equal(recoveredDeleteTransport.calls.some((call) => call.method === 'thread/start'), false,
+    'known-Thread Saga recovery must not create a new Thread');
+assert.equal(recoveredDeleteTransport.calls.some((call) => call.method === 'turn/start'), false,
+    'known-Thread Saga recovery must never replay a Turn');
+await recoveredDeleteManager.stop();
+fs.rmSync(lifecycleSagaRoot, { recursive: true, force: true });
 
 // If writable startup fails but the existing database can be opened, Main
 // degrades to read-only projection access and rejects every mutation.

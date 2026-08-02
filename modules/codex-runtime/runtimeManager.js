@@ -102,6 +102,7 @@ class CodexRuntimeManager extends EventEmitter {
         this.runtimeStartFailures = 0;
         this.runtimeRetryAfter = 0;
         this.faultInjection = options.faultInjection || {};
+        this.knownOperationRecoveryPromise = null;
     }
 
     getStatus() {
@@ -167,6 +168,7 @@ class CodexRuntimeManager extends EventEmitter {
             try {
                 await this.transport.start();
                 await this._ensureBridge();
+                await this._recoverKnownThreadOperations();
                 this.toolboxConfigFingerprint = toolboxConfigFingerprint(settings);
                 this.state = 'ready';
                 this.runtimeStartFailures = 0;
@@ -193,8 +195,17 @@ class CodexRuntimeManager extends EventEmitter {
     ensureProjectionStore() {
         if (!this.repository) {
             const databasePath = path.join(path.dirname(this.settingsPath), 'codex-agent-projection.sqlite');
+            const forceReadOnly = process.env.VCPCHAT_E2E_TEST === '1'
+                && process.env.VCPCHAT_E2E_FORCE_AGENT_PROJECTION_READ_ONLY === '1';
+            if (forceReadOnly) {
+                this.repository = this.repositoryFactory({
+                    databasePath,
+                    readOnly: true,
+                    degradedReason: 'E2E forced read-only projection mode',
+                });
+            }
             try {
-                this.repository = this.repositoryFactory({ databasePath });
+                this.repository = this.repository || this.repositoryFactory({ databasePath });
             } catch (error) {
                 if (!fs.existsSync(databasePath)) throw error;
                 this.repository = this.repositoryFactory({
@@ -735,18 +746,22 @@ class CodexRuntimeManager extends EventEmitter {
         const session = this.repository.getSession(idValue);
         if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
         this._assertLifecycleIdle(session);
+        if (session.threadId) await this.start();
         const operation = this.repository.createOperation({ sessionId: idValue, kind: 'thread-archive', threadId: session.threadId });
         try {
             this.repository.updateOperation(operation.operationId, { state: 'dispatching' });
             if (session.threadId) {
-                await this.start();
                 await this.transport.request('thread/archive', { threadId: session.threadId });
             }
             this.repository.updateOperation(operation.operationId, { state: 'remote-applied', threadId: session.threadId });
         } catch (error) {
-            this.repository.updateOperation(operation.operationId, { state: 'uncertain', lastError: error?.message || String(error) });
+            this.repository.updateOperation(operation.operationId, {
+                state: isUncertainRemoteMutation(error) ? 'uncertain' : 'failed',
+                lastError: error?.message || String(error),
+            });
             throw error;
         }
+        await this.faultInjection.afterArchiveRemoteApplied?.({ operation, session });
         const archived = this.repository.archiveSession(idValue);
         this.repository.updateOperation(operation.operationId, { state: 'completed', threadId: session.threadId });
         return { sessionId: idValue, threadId: session.threadId, archived: true, session: compatibilitySession(archived) };
@@ -760,11 +775,11 @@ class CodexRuntimeManager extends EventEmitter {
         const session = this.repository.getSession(idValue);
         if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
         if (!session.archivedAt) return { sessionId: idValue, threadId: session.threadId, restored: false, session: compatibilitySession(session) };
+        if (session.threadId) await this.start();
         const operation = this.repository.createOperation({ sessionId: idValue, kind: 'thread-unarchive', threadId: session.threadId });
         try {
             this.repository.updateOperation(operation.operationId, { state: 'dispatching' });
             if (session.threadId) {
-                await this.start();
                 const result = await this.transport.request('thread/unarchive', { threadId: session.threadId });
                 const returnedThreadId = String(result?.thread?.id || session.threadId);
                 if (returnedThreadId !== session.threadId) {
@@ -773,9 +788,13 @@ class CodexRuntimeManager extends EventEmitter {
             }
             this.repository.updateOperation(operation.operationId, { state: 'remote-applied', threadId: session.threadId });
         } catch (error) {
-            this.repository.updateOperation(operation.operationId, { state: 'uncertain', lastError: error?.message || String(error) });
+            this.repository.updateOperation(operation.operationId, {
+                state: isUncertainRemoteMutation(error) ? 'uncertain' : 'failed',
+                lastError: error?.message || String(error),
+            });
             throw error;
         }
+        await this.faultInjection.afterUnarchiveRemoteApplied?.({ operation, session });
         const restored = this.repository.unarchiveSession(idValue);
         this.repository.updateOperation(operation.operationId, { state: 'completed', threadId: session.threadId });
         return { sessionId: idValue, threadId: restored.threadId, restored: true, session: compatibilitySession(restored) };
@@ -853,6 +872,80 @@ class CodexRuntimeManager extends EventEmitter {
     listRecoveryOperations() {
         this.ensureProjectionStore();
         return this.repository.listRecoverableOperations();
+    }
+    async _recoverKnownThreadOperations() {
+        if (this.repository?.readOnly) return { recovered: 0, remaining: 0 };
+        if (this.knownOperationRecoveryPromise) return this.knownOperationRecoveryPromise;
+        const promise = (async () => {
+            const recoverable = this.repository.listRecoverableOperations()
+                .filter((operation) => ['thread-archive', 'thread-unarchive', 'thread-delete'].includes(operation.kind))
+                .filter((operation) => ['prepared', 'dispatching', 'remote-applied', 'uncertain'].includes(operation.state));
+            let recovered = 0;
+            for (const operation of recoverable) {
+                try {
+                    if (await this._recoverKnownThreadOperation(operation)) recovered += 1;
+                } catch (error) {
+                    this.lastError = serializeError(error);
+                    this._diagnostic('known-operation-recovery-failed', {
+                        operationId: operation.operationId,
+                        kind: operation.kind,
+                        error: error?.message || String(error),
+                    });
+                }
+            }
+            return {
+                recovered,
+                remaining: this.repository.listRecoverableOperations()
+                    .filter((operation) => ['thread-archive', 'thread-unarchive', 'thread-delete'].includes(operation.kind))
+                    .length,
+            };
+        })().finally(() => { this.knownOperationRecoveryPromise = null; });
+        this.knownOperationRecoveryPromise = promise;
+        return promise;
+    }
+    async _recoverKnownThreadOperation(input) {
+        let operation = this.repository.getOperation(input.operationId);
+        if (!operation || !['thread-archive', 'thread-unarchive', 'thread-delete'].includes(operation.kind)) return false;
+        if (operation.state !== 'remote-applied') {
+            this.repository.updateOperation(operation.operationId, { state: 'dispatching', lastError: null });
+            try {
+                if (operation.threadId) {
+                    const method = operation.kind === 'thread-archive' ? 'thread/archive'
+                        : operation.kind === 'thread-unarchive' ? 'thread/unarchive'
+                            : 'thread/delete';
+                    try {
+                        await this.transport.request(method, { threadId: operation.threadId });
+                    } catch (error) {
+                        if (operation.kind !== 'thread-delete' || !isConfirmedThreadNotFound(error)) throw error;
+                    }
+                }
+                operation = this.repository.updateOperation(operation.operationId, {
+                    state: 'remote-applied', threadId: operation.threadId, lastError: null,
+                });
+            } catch (error) {
+                this.repository.updateOperation(operation.operationId, {
+                    state: isUncertainRemoteMutation(error) ? 'uncertain' : 'failed',
+                    lastError: error?.message || String(error),
+                });
+                return false;
+            }
+        }
+        const session = operation.sessionId ? this.repository.getSession(operation.sessionId) : null;
+        let payload = operation.payload || {};
+        if (operation.kind === 'thread-archive') {
+            if (!session) throw new CodexAppServerError('RECOVERY_TARGET_CHANGED', 'Archive recovery Session no longer exists');
+            this.repository.archiveSession(session.sessionId);
+        } else if (operation.kind === 'thread-unarchive') {
+            if (!session) throw new CodexAppServerError('RECOVERY_TARGET_CHANGED', 'Unarchive recovery Session no longer exists');
+            this.repository.unarchiveSession(session.sessionId);
+        } else if (session) {
+            const receipt = this.repository.permanentlyDeleteSession(session.sessionId, operation.threadId);
+            payload = { ...payload, deletionReceiptId: receipt.receiptId };
+        }
+        this.repository.updateOperation(operation.operationId, {
+            state: 'completed', threadId: operation.threadId, payload, lastError: null,
+        });
+        return true;
     }
     async _listStoredThreads(archived) {
         const threads = [];
@@ -988,16 +1081,19 @@ class CodexRuntimeManager extends EventEmitter {
         if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
         if (!session.archivedAt) throw new CodexAppServerError('SESSION_NOT_ARCHIVED', 'Archive the Session before permanently deleting it');
         this._assertLifecycleIdle(session);
+        if (this.toolboxApprovals.size) {
+            throw new CodexAppServerError('SESSION_HAS_PENDING_APPROVAL', 'Resolve pending ToolBox approval before permanent deletion');
+        }
         const blockingInput = this.repository.listPendingInputs(idValue)
             .find((entry) => ['queued', 'dispatching', 'accepted', 'uncertain'].includes(entry.state));
         if (blockingInput) throw new CodexAppServerError('SESSION_HAS_PENDING_INPUT', 'Resolve queued or uncertain input before permanent deletion');
+        if (session.threadId) await this.start();
         const operation = this.repository.createOperation({
             sessionId: idValue, kind: 'thread-delete', threadId: session.threadId,
         });
         try {
             this.repository.updateOperation(operation.operationId, { state: 'dispatching' });
             if (session.threadId) {
-                await this.start();
                 try {
                     await this.transport.request('thread/delete', { threadId: session.threadId });
                 } catch (error) {
@@ -1005,18 +1101,20 @@ class CodexRuntimeManager extends EventEmitter {
                 }
             }
             this.repository.updateOperation(operation.operationId, { state: 'remote-applied', threadId: session.threadId });
-            const receipt = this.repository.permanentlyDeleteSession(idValue, session.threadId);
-            this.repository.updateOperation(operation.operationId, {
-                state: 'completed', threadId: session.threadId,
-                payload: { deletionReceiptId: receipt.receiptId },
-            });
-            return { deleted: true, receipt };
         } catch (error) {
             this.repository.updateOperation(operation.operationId, {
-                state: 'uncertain', lastError: error?.message || String(error),
+                state: isUncertainRemoteMutation(error) ? 'uncertain' : 'failed',
+                lastError: error?.message || String(error),
             });
             throw error;
         }
+        await this.faultInjection.afterDeleteRemoteApplied?.({ operation, session });
+        const receipt = this.repository.permanentlyDeleteSession(idValue, session.threadId);
+        this.repository.updateOperation(operation.operationId, {
+            state: 'completed', threadId: session.threadId,
+            payload: { deletionReceiptId: receipt.receiptId },
+        });
+        return { deleted: true, receipt };
     }
     exportSession({ sessionId, topicId, format = 'markdown' } = {}) {
         this.ensureProjectionStore();
@@ -2137,6 +2235,7 @@ class CodexRuntimeManager extends EventEmitter {
                 lastError: null,
             });
             try {
+                await this.faultInjection.beforePendingInputRpc?.({ session, pendingInput: next });
                 const accepted = await this._startTurnWithGuard({
                     sessionId: session.sessionId,
                     prompt: next.prompt,
@@ -2162,7 +2261,8 @@ class CodexRuntimeManager extends EventEmitter {
             } catch (error) {
                 if (error?.simulateProcessCrash === true) throw error;
                 this.repository.updatePendingInput(next.inputId, {
-                    state: 'failed', lastError: error?.message || String(error),
+                    state: isUncertainRemoteMutation(error) ? 'uncertain' : 'failed',
+                    lastError: error?.message || String(error),
                 });
                 this._sendUiEvent({
                     type: 'input.queue.failed',
