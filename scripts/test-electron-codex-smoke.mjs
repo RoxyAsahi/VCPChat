@@ -38,12 +38,18 @@ const appData = await fs.mkdtemp(path.join(os.tmpdir(), 'vcpchat-codex-electron-
 await fs.writeFile(path.join(appData, 'settings.json'), JSON.stringify({
     uiMode: 'next',
     enableDistributedServer: false,
+    ChatDataServiceEnabled: false,
 }), 'utf8');
 const port = await freePort();
 const stderr = { value: '' };
 const rendererErrors = [];
 const failedRequests = [];
-const child = spawn(electron, ['.', '--allow-multiple-instances', `--remote-debugging-port=${port}`], {
+const child = spawn(electron, [
+    `--user-data-dir=${appData}`,
+    `--remote-debugging-port=${port}`,
+    '.',
+    '--allow-multiple-instances',
+], {
     cwd: root,
     env: { ...process.env, VCPCHAT_APP_DATA_DIR: appData, VCPCHAT_E2E_TEST: '1' },
     stdio: ['ignore', 'ignore', 'pipe'],

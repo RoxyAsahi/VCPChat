@@ -49,7 +49,12 @@ async function waitFor(predicate, message) {
 async function launch(appData, launcherPath, statePath, extraEnv = {}) {
     const port = await freePort();
     const stderr = { value: '' };
-    const child = spawn(electron, ['.', '--allow-multiple-instances', `--remote-debugging-port=${port}`], {
+    const child = spawn(electron, [
+        `--user-data-dir=${appData}`,
+        `--remote-debugging-port=${port}`,
+        '.',
+        '--allow-multiple-instances',
+    ], {
         cwd: root,
         env: {
             ...process.env,
@@ -99,6 +104,7 @@ if (process.platform === 'win32') {
 await fs.writeFile(path.join(appData, 'settings.json'), JSON.stringify({
     uiMode: 'next',
     enableDistributedServer: false,
+    ChatDataServiceEnabled: false,
     agentRuntime: { codex: { executable: launcherPath, model: 'fixture-model' } },
 }), 'utf8');
 

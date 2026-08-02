@@ -14,6 +14,9 @@ const CHANNELS = Object.freeze({
     DESKTOP_LAUNCH: 'desktop-launch-vchat-app',
     AGENT_RUNTIME_GET_STATUS: 'agent-runtime:get-status',
     AGENT_RUNTIME_GET_PRESENTATION_MODE: 'agent-runtime:get-presentation-mode',
+    AGENT_RUNTIME_LIST_AGENT_PROFILES: 'agent-runtime:list-agent-profiles',
+    AGENT_RUNTIME_SAVE_AGENT_PROFILE: 'agent-runtime:save-agent-profile',
+    AGENT_RUNTIME_SAVE_AGENT_AVATAR: 'agent-runtime:save-agent-avatar',
     AGENT_RUNTIME_START: 'agent-runtime:start',
     AGENT_RUNTIME_STOP: 'agent-runtime:stop',
     AGENT_RUNTIME_CREATE_TOPIC: 'agent-runtime:create-topic',
@@ -54,7 +57,22 @@ const CHANNELS = Object.freeze({
     AGENT_RUNTIME_RESPOND_INTERACTION: 'agent-runtime:respond-interaction',
     AGENT_RUNTIME_SET_WORKBENCH_PRESENCE: 'agent-runtime:set-workbench-presence',
     AGENT_RUNTIME_EVENT: 'agent-runtime:event',
+    AGENT_WORKSPACE_LIST_DIRECTORY: 'agent-workspace:list-directory',
+    AGENT_WORKSPACE_READ_PREVIEW: 'agent-workspace:read-preview',
+    AGENT_WORKSPACE_SEARCH_FILES: 'agent-workspace:search-files',
+    AGENT_WORKSPACE_STAT_PATH: 'agent-workspace:stat-path',
+    AGENT_WORKSPACE_PERFORM_PATH_ACTION: 'agent-workspace:perform-path-action',
+    AGENT_WORKSPACE_CANCEL: 'agent-workspace:cancel',
 });
+
+const AGENT_CHANNELS = Object.freeze(Object.fromEntries([
+    ...Object.entries(CHANNELS)
+        .filter(([name]) => name.startsWith('AGENT_RUNTIME_'))
+        .map(([name, channel]) => [name.slice('AGENT_RUNTIME_'.length), channel]),
+    ...Object.entries(CHANNELS)
+        .filter(([name]) => name.startsWith('AGENT_WORKSPACE_'))
+        .map(([name, channel]) => [name.slice('AGENT_'.length), channel]),
+]));
 
 const channelRegistry = new Map([
     [CHANNELS.WINDOW_READY, {
@@ -110,7 +128,10 @@ const channelRegistry = new Map([
         channelType: CHANNEL_TYPES.QUERY,
         owner: 'Agent Runtime',
         requestSchema: null,
-        responseSchema: { state: 'string', protocolVersion: 'number', worker: 'object?', attachment: 'object?' },
+        responseSchema: {
+            state: 'string', runtime: 'string', protocol: 'string', worker: 'object?',
+            sessions: 'array', runtimes: 'array', storage: 'object', capabilities: 'object',
+        },
         supportsConcurrent: true,
     }],
     [CHANNELS.AGENT_RUNTIME_GET_PRESENTATION_MODE, {
@@ -236,6 +257,9 @@ for (const channel of [
     CHANNELS.AGENT_RUNTIME_REBUILD_TOPIC_INDEX,
     CHANNELS.AGENT_RUNTIME_READ_TOPIC,
     CHANNELS.AGENT_RUNTIME_READ_PROJECTION,
+    CHANNELS.AGENT_RUNTIME_LIST_AGENT_PROFILES,
+    CHANNELS.AGENT_RUNTIME_SAVE_AGENT_PROFILE,
+    CHANNELS.AGENT_RUNTIME_SAVE_AGENT_AVATAR,
     CHANNELS.AGENT_RUNTIME_APPLY_AGENT_PROFILE,
     CHANNELS.AGENT_RUNTIME_RENAME_TOPIC,
     CHANNELS.AGENT_RUNTIME_DELETE_TOPIC,
@@ -252,6 +276,12 @@ for (const channel of [
     CHANNELS.AGENT_RUNTIME_UPDATE_WORKBENCH_SETTINGS,
     CHANNELS.AGENT_RUNTIME_STEER_TURN,
     CHANNELS.AGENT_RUNTIME_FOLLOW_UP_TURN,
+    CHANNELS.AGENT_WORKSPACE_LIST_DIRECTORY,
+    CHANNELS.AGENT_WORKSPACE_READ_PREVIEW,
+    CHANNELS.AGENT_WORKSPACE_SEARCH_FILES,
+    CHANNELS.AGENT_WORKSPACE_STAT_PATH,
+    CHANNELS.AGENT_WORKSPACE_PERFORM_PATH_ACTION,
+    CHANNELS.AGENT_WORKSPACE_CANCEL,
 ]) {
     channelRegistry.set(channel, {
         channelName: channel,
@@ -273,6 +303,7 @@ function listChannels() {
 
 module.exports = {
     CHANNELS,
+    AGENT_CHANNELS,
     CHANNEL_TYPES,
     getChannelMeta,
     listChannels,

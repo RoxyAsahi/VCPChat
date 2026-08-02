@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { pathToFileURL } = require('url');
-const { canonicalizeWorkspaceRoot, resolveInsideRoot } = require('../agent-runtime/workspacePolicy');
+const { canonicalizeWorkspaceRoot, resolveInsideRoot } = require('./workspacePolicy');
 
 const DEFAULT_LIMITS = Object.freeze({
     maxDirectoryEntries: 1000,

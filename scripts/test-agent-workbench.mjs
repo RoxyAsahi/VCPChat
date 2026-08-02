@@ -745,8 +745,11 @@ host.querySelector('.agent-chat-send-button').click();
 await new Promise((resolve) => setTimeout(resolve, 30));
 assert.deepEqual(startedTurns[0], { sessionId: 'topic-in-use', prompt: '', attachments: [importedAttachment] },
     'an attachment-only turn must pass the descriptor to Main rather than stringify it into text');
-assert.ok(await waitFor(() => host.querySelector('.agent-chat-turn-starting .thinking-indicator')),
-    'the Workbench must show the main-chat thinking animation before the first Codex item notification');
+const thinkingRow = await waitFor(() => host.querySelector('.agent-chat-turn-starting'), 3_000);
+assert.ok(thinkingRow,
+    `the Workbench must show a thinking row before the first Codex item notification: ${host.querySelector('.agent-chat-feed-items')?.innerHTML || ''}`);
+assert.ok(thinkingRow.querySelector('.thinking-indicator'),
+    `the pre-item thinking row must use the main-chat thinking animation: ${thinkingRow.innerHTML}`);
 assert.equal(host.querySelector('.agent-chat-composer-attachments')?.childElementCount || 0, 0,
     'accepted descriptors leave the transient composer tray after they are submitted');
 // The ACK-to-first-event gap now has an explicit renderer-only thinking row;

@@ -1,12 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const require = createRequire(import.meta.url);
 const requiredFiles = [
     'modules/codex-runtime/appServerTransport.js',
     'modules/codex-runtime/runtimeManager.js',
     'modules/codex-runtime/workspaceService.js',
+    'modules/codex-runtime/workspacePolicy.js',
     'modules/codex-runtime/toolboxBridgeTransport.js',
     'modules/codex-runtime/toolboxResponsesAdapter.js',
     'modules/codex-runtime/projection/repository.js',
@@ -39,6 +42,10 @@ for (const relative of requiredFiles) {
 const handlers = fs.readFileSync(path.join(root, 'modules/ipc/agentRuntimeHandlers.js'), 'utf8');
 if (!handlers.includes('CodexRuntimeManager')) errors.push('IPC handlers must use CodexRuntimeManager');
 if (handlers.includes('RustAgentRuntimeManager')) errors.push('IPC handlers must not use RustAgentRuntimeManager');
+if (handlers.includes("../agent-runtime/")) errors.push('Codex IPC handlers must not import archived Agent Runtime modules');
+if (handlers.includes('locallyAttached') || handlers.includes('attachedTopicId')) {
+    errors.push('Codex Session listing must not infer a global attachment');
+}
 
 const preload = fs.readFileSync(path.join(root, 'preloads/chat.js'), 'utf8');
 for (const method of [
@@ -60,6 +67,10 @@ const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 
 if (packageJson.build?.extraResources?.some((item) => String(item.from).includes('vcp-agentd'))) {
     errors.push('Codex product packaging must not ship the old vcp-agentd daemon');
 }
+if (packageJson.build?.files?.includes('agent-runtime/**/*')
+    || !packageJson.build?.files?.includes('!modules/agent-runtime/**/*')) {
+    errors.push('Codex product packaging must exclude archived Pi/Rust runtime sources');
+}
 if (!packageJson.build?.extraResources?.some((item) => String(item.from).includes('vcp-toolbox-bridge'))) {
     errors.push('Codex product packaging must include vcp-toolbox-bridge');
 }
@@ -67,6 +78,35 @@ if (!packageJson.scripts?.['test:codex-stack']) errors.push('package scripts mus
 if (!packageJson.scripts?.['test:codex-toolbox-responses-adapter']) errors.push('package scripts must define the VChat-owned Responses adapter test');
 if (packageJson.devDependencies?.['@openai/codex'] !== '0.146.0') {
     errors.push('Codex App Server must be pinned exactly to @openai/codex 0.146.0');
+}
+for (const scriptName of [
+    'build:daemon', 'start:rust-dev', 'test:rust-stack', 'check:rust-agent-runtime',
+    'probe:agent-runtime', 'test:agent-runtime:live', 'test:agent-runtime:live-long',
+]) {
+    if (packageJson.scripts?.[scriptName]) errors.push(`archived runtime script remains active: ${scriptName}`);
+}
+
+const ipcContracts = require(path.join(root, 'modules/ipc/ipcContracts.js'));
+for (const [, key] of handlers.matchAll(/IPC_CHANNELS\.([A-Z_]+)/g)) {
+    if (typeof ipcContracts.AGENT_CHANNELS[key] !== 'string') {
+        errors.push(`Agent IPC handler references undefined central channel: ${key}`);
+    }
+}
+for (const channel of [
+    ipcContracts.CHANNELS.AGENT_WORKSPACE_LIST_DIRECTORY,
+    ipcContracts.CHANNELS.AGENT_WORKSPACE_READ_PREVIEW,
+    ipcContracts.CHANNELS.AGENT_WORKSPACE_SEARCH_FILES,
+    ipcContracts.CHANNELS.AGENT_WORKSPACE_STAT_PATH,
+    ipcContracts.CHANNELS.AGENT_WORKSPACE_PERFORM_PATH_ACTION,
+    ipcContracts.CHANNELS.AGENT_WORKSPACE_CANCEL,
+]) {
+    if (!ipcContracts.getChannelMeta(channel)) errors.push(`IPC registry missing Agent Workspace channel: ${channel}`);
+}
+if (Object.prototype.hasOwnProperty.call(
+    ipcContracts.getChannelMeta(ipcContracts.CHANNELS.AGENT_RUNTIME_GET_STATUS)?.responseSchema || {},
+    'attachment',
+)) {
+    errors.push('Codex Runtime status contract must not expose a global attachment');
 }
 
 const currentDocs = fs.readdirSync(path.join(root, 'docs/agent-runtime/current'));

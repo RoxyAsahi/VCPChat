@@ -132,6 +132,11 @@ const PROJECT_ROOT = __dirname; // __dirname is the directory of main.js
 // AppData layout, while installed builds use Electron's writable user-data
 // directory for settings, Agents and Agent Topics.
 const isolatedAppDataRoot = process.env.VCPCHAT_APP_DATA_DIR?.trim();
+if (isolatedAppDataRoot) {
+    // Hermetic Electron runs must not share Chromium's user-data lock, cache,
+    // or storage partitions with the user's live VChat process.
+    app.setPath('userData', path.resolve(isolatedAppDataRoot));
+}
 const APP_DATA_ROOT_IN_PROJECT = isolatedAppDataRoot
     ? path.resolve(isolatedAppDataRoot)
     : app.isPackaged

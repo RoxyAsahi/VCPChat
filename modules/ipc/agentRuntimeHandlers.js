@@ -5,8 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { CodexRuntimeManager } = require('../codex-runtime/runtimeManager');
 const { AgentWorkspaceService } = require('../codex-runtime/workspaceService');
-const { IPC_CHANNELS } = require('../agent-runtime/contracts');
-const { AgentRuntimeError } = require('../agent-runtime/errors');
+const { AGENT_CHANNELS: IPC_CHANNELS } = require('./ipcContracts');
 
 let manager = null;
 let workspaceService = null;
@@ -28,7 +27,9 @@ function getMainWindow() {
 function assertMainWindowSender(event) {
     const senderWindow = BrowserWindow.fromWebContents(event.sender);
     if (!isMainHtmlWindow(senderWindow)) {
-        throw new AgentRuntimeError('UNAUTHORIZED_SENDER', 'Agent runtime IPC is restricted to main windows');
+        const error = new Error('Agent runtime IPC is restricted to main windows');
+        error.code = 'UNAUTHORIZED_SENDER';
+        throw error;
     }
     return senderWindow;
 }
@@ -203,15 +204,7 @@ function initialize(options) {
     ipcMain.handle(IPC_CHANNELS.SET_SESSION_PINNED, (event, payload) => projectionGuard(event, () => manager.setSessionPinned(payload || {})));
     ipcMain.handle(IPC_CHANNELS.COMPACT_SESSION, (event, payload) => runtimeGuard(event, () => manager.compactSession(payload || {})));
     ipcMain.handle(IPC_CHANNELS.LIST_TOPICS, (event, payload) => projectionGuard(event, async () => {
-        const topics = await manager.listTopics(payload || {});
-        const topicList = Array.isArray(topics) ? topics : topics?.topics || [];
-        const attachedTopicId = null;
-        const enriched = topicList.map((topic) => (
-            attachedTopicId && topic.id === attachedTopicId
-                ? { ...topic, locallyAttached: true }
-                : topic
-        ));
-        return Array.isArray(topics) ? enriched : { ...topics, topics: enriched };
+        return manager.listTopics(payload || {});
     }));
     ipcMain.handle(IPC_CHANNELS.SEARCH_TOPICS, (event, payload) => projectionGuard(event, () => manager.searchTopics(payload || {})));
     ipcMain.handle(IPC_CHANNELS.SEARCH_TOPIC_MESSAGES, (event, payload) => projectionGuard(event, () => manager.searchTopicMessages(payload || {})));
@@ -247,7 +240,7 @@ function initialize(options) {
     ipcMain.handle(IPC_CHANNELS.SELECT_ATTACHMENTS, (event, payload) => projectionGuard(event, async () => {
         const mainWindow = assertMainWindowSender(event);
         const sessionId = String(payload?.sessionId || '').trim();
-        if (!sessionId) throw new Error('Agent attachment selection requires sessionId');
+        if (!sessionId) throw new Error('Agent media selection requires sessionId');
         const result = await dialog.showOpenDialog(mainWindow, {
             title: '选择 Agent 媒体附件',
             properties: ['openFile', 'multiSelections'],

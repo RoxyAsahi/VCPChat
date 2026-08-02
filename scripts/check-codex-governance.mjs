@@ -74,6 +74,11 @@ if (!String(packageJson.scripts?.['test:e2e'] || '').includes('test:codex-stack'
 }
 if (packageJson.devDependencies?.['@openai/codex'] !== '0.146.0') errors.push('@openai/codex must remain pinned to 0.146.0');
 
+const archivedRustWorkflow = fs.readFileSync(path.join(root, '.github/workflows/rust_agent_runtime.yml'), 'utf8');
+if (/^\s{2}(push|pull_request):/m.test(archivedRustWorkflow)) {
+    errors.push('archived Rust workflow must be manual-only on the Codex branch');
+}
+
 const ipcContracts = require(path.join(root, 'modules/ipc/ipcContracts.js'));
 for (const channel of [
     ipcContracts.CHANNELS.AGENT_RUNTIME_LIST_RECOVERY_CANDIDATES,

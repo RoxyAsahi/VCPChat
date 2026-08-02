@@ -1,41 +1,7 @@
-name: Rust Agent Runtime
+name: Archived Rust Agent Runtime
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - "rust/**"
-      - "rust-tui/**"
-      - "modules/agent-runtime/**"
-      - "modules/ipc/agentRuntimeHandlers.js"
-      - "modules/ui-system/agent-workbench*.js"
-      - "preloads/**"
-      - "scripts/*rust*"
-      - "scripts/*agent-workbench*"
-      - "docs/agent-runtime/current/**"
-      - "package.json"
-      - "rust-toolchain.toml"
-      - "rustfmt.toml"
-      - "clippy.toml"
-      - ".cargo/config.toml"
-      - ".github/workflows/rust_agent_runtime.yml"
-  pull_request:
-    paths:
-      - "rust/**"
-      - "rust-tui/**"
-      - "modules/agent-runtime/**"
-      - "modules/ipc/agentRuntimeHandlers.js"
-      - "modules/ui-system/agent-workbench*.js"
-      - "preloads/**"
-      - "scripts/*rust*"
-      - "scripts/*agent-workbench*"
-      - "docs/agent-runtime/current/**"
-      - "package.json"
-      - "rust-toolchain.toml"
-      - "rustfmt.toml"
-      - "clippy.toml"
-      - ".cargo/config.toml"
-      - ".github/workflows/rust_agent_runtime.yml"
 
 concurrency:
   group: rust-agent-${{ github.ref }}
@@ -62,16 +28,16 @@ jobs:
           node-version: 22
 
       - name: Validate machine-readable readiness files
-        run: npm run check:rust-readiness
+        run: npm run archive:rust:check-readiness
 
       - name: Rustfmt and Clippy
-        run: npm run check:rust-quality
+        run: npm run archive:rust:check-quality
 
       - name: Rust workspace tests
-        run: npm run test:rust-unit
+        run: npm run archive:rust:test-unit
 
       - name: Protocol and adapter contracts
-        run: npm run check:rust-agent-runtime
+        run: npm run archive:rust:check-runtime
 
   hermetic-stack:
     name: Windows daemon and Electron hermetic stack
@@ -98,7 +64,7 @@ jobs:
         run: npm ci
 
       - name: Run Rust GUI stack without a live ToolBox
-        run: npm run test:rust-stack
+        run: npm run archive:rust:test-stack
 
   windows-distribution:
     name: Windows release-dist artifacts
@@ -119,16 +85,16 @@ jobs:
           node-version: 22
 
       - name: Build daemon distribution profile
-        run: npm run build:daemon:dist
+        run: npm run archive:rust:build-daemon-dist
 
       - name: Build TUI distribution profile and enforce size budget
-        run: npm run build:tui:dist
+        run: npm run archive:rust:build-tui-dist
 
       - name: Smoke release-dist daemon
         shell: pwsh
         run: |
           $env:VCP_AGENT_RUST_DAEMON_PATH = "$PWD\rust\target\release-dist\vcp-agentd.exe"
-          npm run test:rust-daemon-smoke
+          npm run archive:rust:test-daemon-smoke
 
       - name: Smoke release-dist TUI
         shell: pwsh
