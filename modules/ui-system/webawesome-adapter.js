@@ -39,12 +39,26 @@ async function loadComponents(tags) {
     }
     const normalized = [...new Set(tags.map(tag => String(tag).toLowerCase()))];
     const missing = normalized.filter(tag => !loaded.has(tag));
-    await Promise.all(
-        missing.map(tag =>
-            import(`${VENDOR_COMPONENT_BASE}${tag}/${tag}.js`)
-                .then(module => loaded.set(tag, module))
-        )
-    );
+    try {
+        await Promise.all(
+            missing.map(tag =>
+                import(`${VENDOR_COMPONENT_BASE}${tag}/${tag}.js`)
+                    .then(module => loaded.set(tag, module))
+            )
+        );
+    } catch (error) {
+        // Deterministic fallback contract: a failed preload leaves every tag
+        // undefined, so VCPUI factories take the native DOM path — there is no
+        // partial/random state. Observability is provided through the
+        // vcp-webawesome-failed event (dispatched by the preloader).
+        window.dispatchEvent(new CustomEvent('vcp-webawesome-failed', {
+            detail: { tags: normalized, error: String(error?.message || error) },
+        }));
+        throw error;
+    }
+    window.dispatchEvent(new CustomEvent('vcp-webawesome-loaded', {
+        detail: { tags: normalized },
+    }));
     return normalized;
 }
 
@@ -83,6 +97,13 @@ function isDefined(tag) {
     const normalized = String(tag).toLowerCase();
     return typeof customElements !== 'undefined'
         && Boolean(customElements.get(`wa-${normalized}`));
+}
+
+// True once the bundle for `tag` has been fetched in this session, whether or
+// not the custom element is defined yet (bundle import registers it). This is
+// the deterministic preload state the runtime bootstrap reports on.
+function isLoaded(tag) {
+    return loaded.has(String(tag).toLowerCase());
 }
 
 // Re-dispatches a Web Awesome event as a VCP event on the same element, so
@@ -159,6 +180,7 @@ window.VCPWebAwesome = Object.freeze({
     create,
     on,
     isDefined,
+    isLoaded,
     translateEvent,
     mountScope,
     awaitUpdate,
@@ -175,6 +197,7 @@ export default {
     create,
     on,
     isDefined,
+    isLoaded,
     translateEvent,
     mountScope,
     awaitUpdate,

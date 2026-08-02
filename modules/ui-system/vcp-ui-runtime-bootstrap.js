@@ -30,25 +30,33 @@ if (document.documentElement.dataset.uiMode) {
 }
 
 // In next mode the page opts into Web Awesome as the behavior/a11y kernel for
-// the core controls it builds through VCPUI.create (Select/Tabs/Modal/Tooltip).
-// The bundles load lazily here, so classic pages never fetch them and the
-// main renderer keeps Web Awesome out of its boot path.
+// the core controls it builds through VCPUI.create (Button, IconButton, Input,
+// Textarea, Select, Checkbox, Switch, Card, Tabs, Dialog, Tooltip). The bundles
+// load lazily here, so classic pages never fetch them and the main renderer
+// keeps Web Awesome out of its boot path.
 //
 // Timing contract: `vcp-ui-runtime-ready` is dispatched from a DOMContentLoaded
 // listener AFTER the Web Awesome bundles have resolved (or failed). DOMContentLoaded
 // fires after every page script (classic + module) has run, and page ready
 // listeners are attached before this dispatch, so a page that builds its
-// next-UI tree in the `vcp-ui-runtime-ready` listener always sees
-// VCPUI.create('Select'|'Tabs'|'Modal'|'Tooltip') produce Web Awesome-backed
-// elements. In contexts without the preload (main renderer, classic mode)
-// VCPUI factories fall back to native DOM.
+// next-UI tree in the `vcp-ui-runtime-ready` listener always sees the same
+// kernel: Web Awesome-backed elements when the preload succeeded, native DOM
+// otherwise.
+//
+// Deterministic fallback (no random state): the adapter marks a tag as "loaded"
+// only after its bundle resolved. If the preload rejects, `loadComponents`
+// dispatches `vcp-webawesome-failed` and every tag stays undefined, so every
+// VCPUI factory takes the native DOM path. VCPUI.create is the only switch; it
+// checks `customElements.get('wa-<tag>')` per call, never a cached "maybe".
+let waPreloaded = false;
 let waReady = Promise.resolve();
 if (document.documentElement.dataset.uiMode === 'next' && window.VCPWebAwesome) {
     waReady = window.VCPWebAwesome.loadComponents([
-        'button', 'card', 'input', 'select', 'option',
-        'tab', 'tab-panel', 'tab-group', 'dialog', 'tooltip',
+        'button', 'card', 'input', 'textarea', 'select', 'option',
+        'checkbox', 'switch', 'tab', 'tab-panel', 'tab-group', 'dialog', 'tooltip',
     ])
-        .catch(error => console.warn('[VCPUI Runtime] Web Awesome preload failed:', error));
+        .then(tags => { waPreloaded = tags.length > 0; })
+        .catch(error => console.warn('[VCPUI Runtime] Web Awesome preload failed, using native controls:', error));
 }
 await waReady;
 
@@ -56,7 +64,12 @@ await waReady;
 // phase, before page DOMContentLoaded handlers attach their ready listeners).
 function dispatchRuntimeReady() {
     window.dispatchEvent(new CustomEvent('vcp-ui-runtime-ready', {
-        detail: { mode: document.documentElement.dataset.uiMode || 'classic' },
+        detail: {
+            mode: document.documentElement.dataset.uiMode || 'classic',
+            waKernel: waPreloaded && document.documentElement.dataset.uiMode === 'next'
+                ? 'web-awesome'
+                : 'native',
+        },
     }));
 }
 if (document.readyState === 'complete') {
