@@ -228,7 +228,7 @@ class AgentWorkspaceService {
         };
         if (IMAGE_MIME[extension]) {
             if (stat.size > this.limits.maxImageBytes) return { ...base, kind: 'image', mimeType: IMAGE_MIME[extension], truncated: true };
-            const buffer = await fs.promises.readFile(context.absolutePath);
+            const buffer = await fs.promises.readFile(context.absolutePath, { signal });
             this._throwIfAborted(signal);
             return { ...base, kind: 'image', mimeType: IMAGE_MIME[extension], dataUrl: `data:${IMAGE_MIME[extension]};base64,${buffer.toString('base64')}`, truncated: false };
         }

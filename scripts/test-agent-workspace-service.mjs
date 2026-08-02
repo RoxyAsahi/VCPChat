@@ -78,8 +78,13 @@ try {
     const delayedReads = [];
     let activeReads = 0;
     let maxActiveReads = 0;
+    let trackTimedTraversal = false;
+    let timedTraversalReadsAfterRoot = 0;
     fs.promises.readdir = async (...args) => {
-        if (path.resolve(String(args[0])) !== path.resolve(tempRoot)) return originalReaddir(...args);
+        if (path.resolve(String(args[0])) !== path.resolve(tempRoot)) {
+            if (trackTimedTraversal) timedTraversalReadsAfterRoot += 1;
+            return originalReaddir(...args);
+        }
         activeReads += 1;
         maxActiveReads = Math.max(maxActiveReads, activeReads);
         await new Promise((resolve) => delayedReads.push(resolve));
@@ -103,6 +108,9 @@ try {
         const secondSearch = cancellable.searchFiles({ sessionId: 'session-a', requestId: 'search-two', query: 'README', limit: 1 });
         await new Promise((resolve) => setTimeout(resolve, 20));
         assert.equal(delayedReads.length, 1, 'the search scheduler must not exceed its configured concurrency');
+        assert.throws(() => cancellable.cancel({ sessionId: 'session-b', requestId: 'search-one' }),
+            (error) => error.code === 'WORKSPACE_SESSION_MISMATCH',
+            'one Session must not cancel another Session workspace request');
         assert.deepEqual(cancellable.cancel({ sessionId: 'session-a', requestId: 'search-one' }), {
             cancelled: true, requestId: 'search-one',
         });
@@ -117,14 +125,54 @@ try {
             getSession: (sessionId) => sessionId === 'session-a' ? { sessionId, workspaceRoot: tempRoot } : null,
             limits: { maxConcurrentSearches: 1, operationTimeoutMs: 10 },
         });
+        trackTimedTraversal = true;
         const timedSearch = timed.searchFiles({ sessionId: 'session-a', requestId: 'search-timeout', query: 'README', limit: 1 });
         await waitForDelayedRead();
         await new Promise((resolve) => setTimeout(resolve, 25));
         delayedReads.shift()();
         await assert.rejects(timedSearch, (error) => error.code === 'WORKSPACE_TIMEOUT');
+        trackTimedTraversal = false;
         assert.equal(timed.operations.size, 0, 'a timed-out traversal must release its operation record');
+        assert.equal(timedTraversalReadsAfterRoot, 0,
+            'a timed-out traversal must stop after the in-flight directory read returns');
     } finally {
         fs.promises.readdir = originalReaddir;
+    }
+
+    const originalOpen = fs.promises.open;
+    let releasePreviewRead;
+    let previewReadEntered = false;
+    let previewHandleClosed = 0;
+    fs.promises.open = async (...args) => {
+        if (path.resolve(String(args[0])) !== path.resolve(path.join(tempRoot, 'README.md'))) return originalOpen(...args);
+        return {
+            async read(buffer) {
+                previewReadEntered = true;
+                await new Promise((resolve) => { releasePreviewRead = resolve; });
+                Buffer.from('# Workspace\nhello\n').copy(buffer);
+                return { bytesRead: Math.min(buffer.length, 18), buffer };
+            },
+            async close() { previewHandleClosed += 1; },
+        };
+    };
+    try {
+        const timedPreviewService = new AgentWorkspaceService({
+            getSession: (sessionId) => sessionId === 'session-a' ? { sessionId, workspaceRoot: tempRoot } : null,
+            limits: { maxPreviewBytes: 64, operationTimeoutMs: 10 },
+        });
+        const timedPreview = timedPreviewService.readPreview({
+            sessionId: 'session-a', requestId: 'preview-timeout', relativePath: 'README.md',
+        });
+        const previewDeadline = Date.now() + 2_000;
+        while (!previewReadEntered && Date.now() < previewDeadline) await new Promise((resolve) => setTimeout(resolve, 5));
+        assert.equal(previewReadEntered, true, 'preview fixture must enter the delayed file read');
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        releasePreviewRead();
+        await assert.rejects(timedPreview, (error) => error.code === 'WORKSPACE_TIMEOUT');
+        assert.equal(previewHandleClosed, 1, 'a timed-out preview must close its file handle exactly once');
+        assert.equal(timedPreviewService.operations.size, 0);
+    } finally {
+        fs.promises.open = originalOpen;
     }
 
     await service.performPathAction({ sessionId: 'session-a', workspaceRevision: first.workspaceRevision, relativePath: 'README.md', action: 'copy-relative-path' });
