@@ -216,4 +216,5 @@
 - [x] R8: Runtime generation、InteractionRegistry 有界清理、按需重启、持久输入状态机与 pre-RPC/ACK crash fault injection。
 - [x] R9: 权威 reconcile、mutation generation barrier、Saga 日志、known-Thread lifecycle recovery、SQLite integrity/backup/read-only degraded。
 - [x] R10: 归档/永久删除/导出、Workspace Abort/cancel、Renderer 独立 ADR、Windows CI 与机器治理检查。
-- [~] Hermetic 聚合与真实 ToolBox release gate：聚合命令必须在最终文档 commit 上重跑；`deepseek-v4-flash` 双 Thread 长任务仍需单独 live 收据。
+- [x] R7-R10 committed hermetic 聚合已在功能 revision `261d11ba` 通过；2026-08-02 使用 `deepseek-v4-flash` 完成单 App Server 双 Thread 并发、取消隔离、Projection 隔离，以及 `vcp_invoke -> FileOperator.ReadFile -> Projection` 真实 gate。首次 FileOperator 调用因运行中的 ToolBox 未注册分布式节点而 fail-closed；启动仓库自带临时节点完成注册后通过，未修改 VCPToolBox。
+- [ ] 整体产品 release gate 仍需真实 Codex native approval、ToolBox backend approval replay/恰好一次、VCPInfo/VCPLog reconnect/replay，以及 Electron 富消息与性能验收；R7-R10 的 `live` 收据不得解释为 `product ready`。

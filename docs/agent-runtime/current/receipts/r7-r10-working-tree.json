@@ -1,30 +1,66 @@
 {
-  "status": "implemented",
+  "status": "live",
   "codexProtocol": "0.146",
   "scope": ["R7", "R8", "R9", "R10"],
   "toolboxModified": false,
-  "liveVerified": false,
-  "verifiedCommit": null,
-  "verifiedAt": null,
+  "liveVerified": true,
+  "verifiedCommit": "261d11ba7577125867a236033a13be58d94ae72d",
+  "verifiedAt": "2026-08-02T21:32:49+02:00",
+  "environment": {
+    "platform": "Windows x64",
+    "toolboxUrl": "http://localhost:6005",
+    "toolboxRevision": "024f8780a0452d0cab5729407a2a9bfc39c8d35b",
+    "model": "deepseek-v4-flash",
+    "baseInstructions": "{{Nova}}"
+  },
   "commands": [
-    "npm run check:codex-schema",
-    "npm run check:codex-governance",
-    "npm run check:agent-runtime",
-    "npm run test:codex-stack",
-    "npm run test:electron-codex-recovery",
+    "npm run test:codex-reliability",
+    "npm run check:ui-system",
+    "npm run test:codex-ci",
     "npm run test:electron-codex-smoke",
-    "npm run check:ui-system"
+    "VCP_CODEX_LIVE=1 npm run test:codex-concurrent-live",
+    "VCP_CODEX_LIVE=1 npm run test:codex-toolbox-live"
   ],
   "results": {
-    "codexCi": "pending final committed HEAD rerun",
-    "electronCodexSmoke": "pending final committed HEAD rerun",
+    "codexReliability": "passed",
+    "codexCi": "passed",
+    "uiSystem": "passed",
+    "electronCodexSmoke": "passed",
     "electronRecovery": {
-      "sqliteReadableAfterCrash": null,
-      "demandRestart": null,
+      "sessions": 4,
+      "concurrentRunningSessions": 2,
+      "rendererReloadPreservedSessions": true,
+      "demandRestart": true,
+      "lifecycleArchiveRestoreDelete": true,
       "replayedTurns": 0,
-      "replayedInteractions": 0
+      "replayedInteractions": 0,
+      "sqliteReadOnlyDegraded": true,
+      "projectionReadable": true,
+      "mutationsRejected": 2,
+      "appServerStartedInDegradedMode": false
+    },
+    "concurrentLive": {
+      "durationSeconds": 22.5,
+      "singleAppServerPid": true,
+      "concurrentStreaming": "passed",
+      "cancelIsolation": "passed",
+      "projectionIsolation": "passed"
+    },
+    "toolboxLive": {
+      "durationSeconds": 23.8,
+      "tool": "FileOperator",
+      "operation": "ReadFile",
+      "dynamicCall": "passed",
+      "bridgeCompleted": "passed",
+      "projection": "passed",
+      "registrationNote": "The first attempt failed because the running ToolBox had no FileOperator registration. A temporary repository-provided DistributedServer node was started with ALLOWED_DIRECTORIES limited to the VChat worktree; after it registered, the unchanged ToolBox and unchanged VChat code passed. The temporary node was stopped after the gate."
     }
   },
-  "knownGate": "Final aggregate commands and current-HEAD live ToolBox dual-Thread gate are pending.",
-  "note": "Implementation checkpoint only. Do not promote until the commands above pass on a committed HEAD."
+  "remainingProductGates": [
+    "real Codex native approval allow/deny/close",
+    "ToolBox backend approval replay and exactly-once response",
+    "VCPInfo/VCPLog reconnect and replay",
+    "rich Electron message, tool, approval, diff, and performance acceptance"
+  ],
+  "note": "R7-R10 implementation, committed hermetic gates, real dual-Thread Nova concurrency, cancellation isolation, and the vcp_invoke FileOperator path are verified. This is not a product-complete receipt."
 }

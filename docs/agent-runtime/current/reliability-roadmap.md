@@ -1,6 +1,6 @@
 # Codex Agent Reliability Roadmap
 
-Status: **implemented** (committed; final aggregate receipt pending)
+Status: **live** for the R7-R10 reliability scope; **not product complete**
 
 This document is the source of truth for R7-R10. Codex App Server remains a pinned `0.146.x` black box and the only enabled execution profile is `toolbox-only`. VCPToolBox is not modified.
 
@@ -47,6 +47,15 @@ This document is the source of truth for R7-R10. Codex App Server remains a pinn
 - Agent Renderer is an independent product implementation. Main-chat and Agent share security/golden fixtures only.
 - Electron recovery covers concurrent Session identity, Renderer reload, demand restart, archive/restore/permanent delete, pending-interaction blocking, and forced read-only degraded mode.
 - Real ToolBox/Nova tests remain a manual release gate and must never run in credential-free CI.
+
+## Verification Receipt
+
+- Functional revision: `261d11ba7577125867a236033a13be58d94ae72d`.
+- Committed gates passed: `test:codex-reliability`, `check:ui-system`, `test:codex-ci`, and `test:electron-codex-smoke`.
+- On 2026-08-02, `deepseek-v4-flash` passed the real two-Thread gate in one App Server process: both Turns ran concurrently, interrupting A did not affect B, and the two SQLite projections remained isolated.
+- The real `vcp_invoke -> FileOperator.ReadFile -> bridge -> Projection` gate passed after a repository-provided DistributedServer node registered FileOperator. The first attempt correctly failed with `Plugin "FileOperator" not found`; no VCPToolBox source or configuration was changed.
+- The machine-readable details are in [r7-r10-working-tree.json](receipts/r7-r10-working-tree.json).
+- Native Codex approval, ToolBox backend approval replay/exactly-once, VCPInfo/VCPLog reconnect/replay, and rich Electron visual/performance acceptance remain product gates.
 
 ## Authority Boundary
 
