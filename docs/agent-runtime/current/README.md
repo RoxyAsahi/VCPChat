@@ -67,6 +67,9 @@ ToolBox backend approval 和富消息 Electron live gate 仍待，因此产品�
 - [gui-reuse-implementation-plan.md](gui-reuse-implementation-plan.md)：OpenCode、CodexMonitor、DeepChat、Harnss 等候选的具体文件映射、当前完成度和施工顺序。
 - [delivery-plan.md](delivery-plan.md)：按依赖顺序拆分的长期施工计划。
 - [test-matrix.md](test-matrix.md)：门槛、当前证据、缺口与验证收据。
+- [reliability-roadmap.md](reliability-roadmap.md)：R7-R10 配置、Runtime、Projection、隐私与治理合同。
+- [ADR-007](adr/ADR-007-codex-sqlite-saga.md)：Codex/SQLite Saga 与 uncertain 边界。
+- [ADR-008](adr/ADR-008-agent-renderer-independence.md)：Agent Renderer 独立演进与模块拆分边界。
 
 Workbench 当前已完成 SQLite 快路径、canonical Agent identity、Thread warm、Full Fork Message renderer、首发 thinking/streaming 骨架与基础 Block registry。下一阶段不重复 UX-R0–R4，而按 GUI-R0–R6 补齐协议能力矩阵、Session 状态机、完整 Composer、规范 Block、审批/交互中心、Inspector 和真实视觉性能门槛。当前正式执行 profile 仍只有 `toolbox-only`；App Server 支持但 VChat 未启用的能力不得直接暴露为 GUI 开关。
 

@@ -286,3 +286,12 @@ Known residual risk:
 ## 外部复用收据
 
 R4.1、R4.2、R5.1、R5.3 的 gate 除测试通过外，还必须记录：来源文件和 revision、采用方式、与上游差异、被删除的危险能力、License/NOTICE 处理和未复用部分的理由。缺少任一项时只能标记 `implemented`，不能标记 `verified`。
+## R7-R10 Reliability Gates
+
+| Gate | Direct assertions | Command | Status |
+| --- | --- | --- | --- |
+| Runtime/Input/Saga | generation reuse、pre-RPC crash、ACK crash、ambiguous transport、known-Thread archive/unarchive/delete recovery、start uncertain no replay | `npm run test:codex-runtime-manager` | committed pass |
+| Projection startup/reconcile | stale Item/Block deletion、empty/null clear、sparse preservation、generation barrier、quick_check、foreign-key、migration backup、read-only integrity | `npm run test:codex-projection-store` | committed pass |
+| Workspace | 10k fixture、search concurrency、cross-Session cancel rejection、timeout traversal stop、preview handle close | `npm run test:agent-workspace-service` | committed pass |
+| Electron recovery | two concurrent Sessions、identity isolation、Renderer reload、kill/restart/resume、archive/restore/delete、pending interaction、read-only degraded | `npm run test:electron-codex-recovery` | committed pass |
+| Governance/UI | pinned 0.146 schema、ownership/ADR/receipt、no global refs、scoped CSS/no inline mutation | `npm run check:codex-governance`、`npm run check:ui-system` | committed pass |

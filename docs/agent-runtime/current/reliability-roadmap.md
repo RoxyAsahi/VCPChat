@@ -1,6 +1,6 @@
 # Codex Agent Reliability Roadmap
 
-Status: **implemented** (working tree, not yet hermetic receipt)
+Status: **implemented** (committed; final aggregate receipt pending)
 
 This document is the source of truth for R7-R10. Codex App Server remains a pinned `0.146.x` black box and the only enabled execution profile is `toolbox-only`. VCPToolBox is not modified.
 
@@ -21,6 +21,7 @@ This document is the source of truth for R7-R10. Codex App Server remains a pinn
 - Terminal interaction records have TTL and capacity bounds and are cleared fail-closed on stop/crash/authority change.
 - Follow-up input states are `queued`, `dispatching`, `accepted`, `uncertain`, or `failed`.
 - Only `queued` input is automatically dispatched. A crash-window `dispatching` input is verified with `thread/read`; it is never automatically replayed.
+- Fault injection covers crash before `turn/start`, lost transport during RPC, and ACK before SQLite acceptance commit. Ambiguous transport loss becomes `uncertain`, never retryable `failed`.
 - Restart is demand-driven with bounded backoff. Interrupted Turns are not replayed.
 - Opening Workbench or selecting a Session never eagerly starts App Server; first send or an explicit recovery scan is runtime-required.
 
@@ -30,7 +31,9 @@ This document is the source of truth for R7-R10. Codex App Server remains a pinn
 - Explicit empty/null snapshot fields can clear old content. Omitted optional fields preserve newer live data.
 - Reconciliation uses a mutation generation barrier and retries a bounded number of times.
 - Thread start/fork/archive/unarchive/delete use `agent_operations` states: `prepared`, `dispatching`, `remote-applied`, `completed`, `uncertain`, `failed`.
+- Known-Thread archive/unarchive/delete operations resume idempotently on the next App Server generation; start/fork remain explicit human recovery because an unreturned Thread ID is not safe to guess.
 - SQLite failure may enter read-only degraded mode. Lists, projection reads, and export remain available; mutations are rejected.
+- Writable and read-only startup both run integrity checks; constructor failures close SQLite handles before fallback or shutdown.
 - Saga reports split state. It does not claim cross-process ACID.
 - Uncertain start/fork recovery uses explicit `thread/list` candidates. Only a user-confirmed bind/delete action resolves the Saga.
 
@@ -42,6 +45,7 @@ This document is the source of truth for R7-R10. Codex App Server remains a pinn
 - Archived Sessions remain projection-only, composer-disabled, and can be restored, exported, or permanently deleted under the safety preconditions.
 - Workspace operations use bounded general/search schedulers and cancellable request IDs.
 - Agent Renderer is an independent product implementation. Main-chat and Agent share security/golden fixtures only.
+- Electron recovery covers concurrent Session identity, Renderer reload, demand restart, archive/restore/permanent delete, pending-interaction blocking, and forced read-only degraded mode.
 - Real ToolBox/Nova tests remain a manual release gate and must never run in credential-free CI.
 
 ## Authority Boundary

@@ -11,6 +11,7 @@ const required = [
     'docs/agent-runtime/current/risk-register.md',
     'docs/agent-runtime/current/ownership.md',
     'docs/agent-runtime/current/adr/ADR-007-codex-sqlite-saga.md',
+    'docs/agent-runtime/current/adr/ADR-008-agent-renderer-independence.md',
     'docs/agent-runtime/current/receipts/r7-r10-working-tree.json',
     '.github/workflows/codex_agent_windows.yml',
 ];
@@ -34,6 +35,17 @@ const rendererFiles = [
     'modules/ui-system/agent-workbench-controller.js',
     'modules/ui-system/agent-workbench.js',
 ];
+const rendererBoundaryFiles = [
+    'modules/ui-system/agent-presentation/renderer.js',
+    'modules/ui-system/agent-presentation/markdown-stream.js',
+    'modules/ui-system/agent-presentation/blocks/tool.js',
+    'modules/ui-system/agent-presentation/blocks/approval.js',
+    'modules/ui-system/agent-session-dock.js',
+    'modules/ui-system/agent-workspace-model.js',
+];
+for (const relative of rendererBoundaryFiles) {
+    if (!fs.existsSync(path.join(root, relative))) errors.push(`missing Agent renderer boundary module: ${relative}`);
+}
 const forbiddenGlobalRefs = [
     'currentChatHistoryRef', 'currentSelectedItemRef', 'currentTopicIdRef', 'saveChatHistory',
 ];
@@ -43,6 +55,14 @@ for (const relative of rendererFiles) {
     for (const token of forbiddenGlobalRefs) {
         if (source.includes(token)) errors.push(`${relative} reads forbidden main-chat global ${token}`);
     }
+}
+const workbenchLineCount = fs.readFileSync(path.join(root, 'modules/ui-system/agent-workbench.js'), 'utf8').split(/\r?\n/).length;
+if (workbenchLineCount > 4400) errors.push(`agent-workbench.js exceeds composition-root ceiling: ${workbenchLineCount} lines`);
+const forkLineCount = fs.readFileSync(path.join(root, 'modules/ui-system/agent-presentation/fork/agentMessageRenderer.js'), 'utf8').split(/\r?\n/).length;
+if (forkLineCount > 3500) errors.push(`agentMessageRenderer.js exceeds independent renderer ceiling: ${forkLineCount} lines`);
+const forkReceipt = fs.readFileSync(path.join(root, 'modules/ui-system/agent-presentation/fork/FORK_RECEIPT.md'), 'utf8');
+if (!forkReceipt.includes('独立演进策略') || !forkReceipt.includes('不再要求跟随主聊天 renderer 逐行同步')) {
+    errors.push('Agent renderer receipt must declare independent evolution rather than manual synchronization');
 }
 
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));

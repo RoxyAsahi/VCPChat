@@ -210,3 +210,10 @@
 9. GUI-R5：当前 Context/Usage Inspector 与分组 Activity Center 已接线；补 Session 生命周期通知索引、Plan dock和非交互卡 keyed patch。引入 `@pierre/diffs` 前执行 release-size gate。
 10. R4/R6 live：始终使用未修改 ToolBox，重跑动态 `FileOperator`、双 Thread、取消隔离、backend approval、VCPInfo reconnect/replay 和 Electron 富消息/性能门槛。
 11. 所有端口附来源 revision、许可证、行为差异和测试收据；所有 hermetic/live 收据与 worktree 状态一致后再形成 checkpoint。在此之前始终保持 experimental。
+## R7-R10 Reliability and Governance
+
+- [x] R7: Agent Profile/Session snapshot、CAS、projection-only IPC、ToolBox latest-wins 与 Session-keyed Renderer state。
+- [x] R8: Runtime generation、InteractionRegistry 有界清理、按需重启、持久输入状态机与 pre-RPC/ACK crash fault injection。
+- [x] R9: 权威 reconcile、mutation generation barrier、Saga 日志、known-Thread lifecycle recovery、SQLite integrity/backup/read-only degraded。
+- [x] R10: 归档/永久删除/导出、Workspace Abort/cancel、Renderer 独立 ADR、Windows CI 与机器治理检查。
+- [~] Hermetic 聚合与真实 ToolBox release gate：聚合命令必须在最终文档 commit 上重跑；`deepseek-v4-flash` 双 Thread 长任务仍需单独 live 收据。
