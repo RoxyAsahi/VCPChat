@@ -16,6 +16,38 @@ let currentSettings = {};
 let currentEditingPlugin = null;
 let currentEditingManifest = null;
 
+// next 模式演示层状态：VCPUI 刷新按钮控制器（用于 loading 同步）。
+let nextRefreshController = null;
+
+function isNextUiMode() {
+    return document.documentElement.dataset.uiMode === 'next'
+        && window.VCPUiModeController?.getCurrentMode() === 'next';
+}
+
+// 稳定 keyed 协调：按 key 增量更新容器子节点，复用已有 DOM，避免整页 innerHTML 重建。
+function reconcileByKey(container, items, keyFn, createFn) {
+    const current = new Map();
+    for (const child of container.children) {
+        if (child.dataset?.key) current.set(child.dataset.key, child);
+    }
+    const seen = new Set();
+    const fragment = document.createDocumentFragment();
+    items.forEach(item => {
+        const key = keyFn(item);
+        seen.add(key);
+        let element = current.get(key);
+        if (!element) {
+            element = createFn(item, key);
+            element.dataset.key = key;
+        }
+        fragment.appendChild(element);
+    });
+    for (const [key, element] of current) {
+        if (!seen.has(key)) element.remove();
+    }
+    container.replaceChildren(fragment);
+}
+
 const els = {
     refreshBtn: document.getElementById('refresh-btn'),
     minimizeBtn: document.getElementById('minimize-btn'),
@@ -150,7 +182,11 @@ async function refreshPlugins() {
         renderPlugins();
         showToast(`已扫描 ${allPlugins.length} 个插件`, 'success');
     } catch (error) {
-        els.pluginGroups.innerHTML = `<div class="empty-state glass">扫描插件失败：${escapeHtml(error.message)}</div>`;
+        if (isNextUiMode()) {
+            renderNextError(`扫描插件失败：${escapeHtml(error.message)}`, refreshPlugins);
+        } else {
+            els.pluginGroups.innerHTML = `<div class="empty-state glass">扫描插件失败：${escapeHtml(error.message)}</div>`;
+        }
         showToast(`扫描插件失败：${error.message}`, 'error');
     } finally {
         setLoading(false);
@@ -158,6 +194,11 @@ async function refreshPlugins() {
 }
 
 function setLoading(isLoading) {
+    if (isNextUiMode()) {
+        nextRefreshController?.update({ loading: isLoading });
+        if (isLoading) renderNextLoading();
+        return;
+    }
     if (!els.refreshBtn) return;
     els.refreshBtn.style.opacity = isLoading ? '0.45' : '';
     els.refreshBtn.disabled = isLoading;
@@ -225,6 +266,11 @@ function getFilteredPlugins() {
 function renderPlugins() {
     renderSummary();
 
+    if (isNextUiMode()) {
+        renderPluginGroupsNext();
+        return;
+    }
+
     const filtered = getFilteredPlugins();
     if (!filtered.length) {
         els.pluginGroups.innerHTML = '<div class="empty-state glass">没有匹配当前筛选条件的插件。</div>';
@@ -243,26 +289,205 @@ function renderPlugins() {
     els.pluginGroups.innerHTML = groupOrder.map(type => renderPluginGroup(type, grouped.get(type))).join('');
 }
 
+// --- next 模式：keyed 分组与行渲染（增量更新，不整页 innerHTML） ---
+function renderPluginGroupsNext() {
+    const V = window.VCPUI;
+    const filtered = getFilteredPlugins();
+
+    if (!filtered.length) {
+        const host = els.pluginGroups;
+        host.replaceChildren();
+        const empty = V.create('EmptyState', {
+            icon: 'search_off',
+            title: '没有匹配当前筛选条件的插件',
+            description: '尝试调整搜索词或切换类型 / 状态筛选。',
+            actions: [],
+        });
+        host.append(empty.element);
+        return;
+    }
+
+    const grouped = new Map();
+    for (const plugin of filtered) {
+        const primaryType = getPrimaryType(plugin);
+        const key = PLUGIN_TYPES.includes(primaryType) ? primaryType : 'unknown';
+        if (!grouped.has(key)) grouped.set(key, []);
+        grouped.get(key).push(plugin);
+    }
+    const groupOrder = [...PLUGIN_TYPES, 'unknown'].filter(type => grouped.has(type));
+
+    const host = els.pluginGroups;
+    let list = host.querySelector('.vcp-ui-plugin-groups');
+    if (!list) {
+        list = document.createElement('div');
+        list.className = 'vcp-ui-plugin-groups';
+        host.replaceChildren(list);
+    }
+
+    reconcileByKey(
+        list,
+        groupOrder.map(type => ({ type, plugins: grouped.get(type) })),
+        item => `group:${item.type}`,
+        item => buildGroupSection(item.type)
+    );
+
+    groupOrder.forEach(type => {
+        const section = list.querySelector(`[data-key="group:${type}"]`);
+        if (!section) return;
+        const count = section.querySelector('.vcp-ui-plugin-group-count');
+        if (count) count.textContent = `${grouped.get(type).length} 个插件`;
+        const rows = section.querySelector('.vcp-ui-plugin-rows');
+        reconcileByKey(rows, grouped.get(type), plugin => plugin.folderName, buildPluginRow);
+    });
+}
+
+function buildGroupSection(type) {
+    const section = document.createElement('section');
+    section.className = 'vcp-ui-plugin-group';
+    const header = document.createElement('header');
+    header.className = 'vcp-ui-plugin-group-header';
+    const title = document.createElement('h2');
+    title.textContent = TYPE_LABELS[type] || type;
+    const count = document.createElement('span');
+    count.className = 'vcp-ui-plugin-group-count';
+    const rows = document.createElement('div');
+    rows.className = 'vcp-ui-plugin-rows';
+    header.append(title, count);
+    section.append(header, rows);
+    return section;
+}
+
+function buildPluginRow(plugin) {
+    const manifest = plugin.manifest || {};
+    const name = manifest.displayName || manifest.name || plugin.folderName;
+    const types = getPluginTypes(plugin);
+    const commands = getCommands(plugin);
+
+    const row = document.createElement('div');
+    row.className = 'vcp-ui-plugin-row';
+    row.dataset.state = plugin.parseError ? 'invalid' : plugin.enabled ? 'enabled' : 'disabled';
+    row.tabIndex = 0;
+    row.setAttribute('role', 'button');
+    row.setAttribute('aria-label', `编辑插件 ${name}`);
+    row.addEventListener('click', () => openPluginModal(plugin.folderName));
+    row.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openPluginModal(plugin.folderName);
+        }
+    });
+
+    const main = document.createElement('div');
+    main.className = 'vcp-ui-plugin-row-main';
+    const title = document.createElement('strong');
+    title.className = 'vcp-ui-plugin-row-name';
+    title.textContent = name;
+    const folder = document.createElement('span');
+    folder.className = 'vcp-ui-plugin-row-folder';
+    folder.textContent = plugin.folderName;
+    main.append(title, folder);
+
+    const badges = document.createElement('div');
+    badges.className = 'vcp-ui-plugin-row-badges';
+    const state = document.createElement('span');
+    if (plugin.parseError) {
+        state.className = 'vcp-ui-plugin-state is-invalid';
+        state.textContent = '异常';
+    } else {
+        state.className = `vcp-ui-plugin-state is-${plugin.enabled ? 'enabled' : 'disabled'}`;
+        state.textContent = plugin.enabled ? '已启用' : '已禁用';
+    }
+    badges.append(state);
+    types.forEach(type => {
+        const typeBadge = document.createElement('span');
+        typeBadge.className = 'vcp-ui-plugin-type';
+        typeBadge.textContent = type;
+        badges.append(typeBadge);
+    });
+
+    const meta = document.createElement('div');
+    meta.className = 'vcp-ui-plugin-row-meta';
+    const parts = [];
+    if (manifest.version) parts.push(`v${manifest.version}`);
+    if (manifest.author) parts.push(manifest.author);
+    parts.push(commands.length ? `${commands.length} 个命令` : '无 invocationCommands');
+    if (plugin.hasConfigEnv) parts.push('含 config.env');
+    meta.textContent = parts.join(' · ');
+
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.className = 'vcp-ui-plugin-row-open';
+    edit.textContent = '编辑';
+    edit.setAttribute('aria-label', `编辑 ${name}`);
+    edit.addEventListener('click', event => {
+        event.stopPropagation();
+        openPluginModal(plugin.folderName);
+    });
+
+    row.append(main, badges, meta, edit);
+    return row;
+}
+
+function renderNextLoading() {
+    const V = window.VCPUI;
+    const host = els.pluginGroups;
+    host.replaceChildren();
+    const skeleton = V.create('Skeleton', { variant: 'text', lines: 4 });
+    host.append(skeleton.element);
+}
+
+function renderNextError(message, retry) {
+    const V = window.VCPUI;
+    const host = els.pluginGroups;
+    host.replaceChildren();
+    const alert = V.create('Alert', { title: '加载失败', message, variant: 'danger' });
+    const retryBtn = V.create('Button', { label: '重试', variant: 'secondary', icon: 'refresh' });
+    retryBtn.element.addEventListener('click', () => retry?.());
+    const box = document.createElement('div');
+    box.className = 'vcp-ui-plugin-error-box';
+    box.append(alert.element, retryBtn.element);
+    host.append(box);
+}
+
 function renderSummary() {
     const enabled = allPlugins.filter(p => p.enabled && !p.parseError).length;
     const disabled = allPlugins.filter(p => !p.enabled && !p.parseError).length;
     const invalid = allPlugins.filter(p => p.parseError).length;
     const commands = allPlugins.reduce((sum, p) => sum + getCommands(p).length, 0);
     const withEnv = allPlugins.filter(p => p.hasConfigEnv).length;
-
-    els.summaryDashboard.innerHTML = [
+    const stats = [
         ['总插件', allPlugins.length],
         ['已启用', enabled],
         ['已禁用', disabled],
         ['异常', invalid],
         ['命令数', commands],
         ['含 config.env', withEnv]
-    ].map(([label, value]) => `
+    ];
+
+    if (isNextUiMode()) {
+        renderSummaryNext(stats);
+        return;
+    }
+
+    els.summaryDashboard.innerHTML = stats.map(([label, value]) => `
         <div class="summary-card">
             <strong>${value}</strong>
             <span>${label}</span>
         </div>
     `).join('');
+}
+
+function renderSummaryNext(stats) {
+    const V = window.VCPUI;
+    const host = els.summaryDashboard;
+    host.replaceChildren();
+    stats.forEach(([label, value]) => {
+        const badge = V.create('Badge', {
+            label: `${label} ${value}`,
+            variant: label === '异常' && value > 0 ? 'danger' : 'neutral',
+        });
+        host.append(badge.element);
+    });
 }
 
 function renderPluginGroup(type, plugins) {
@@ -535,8 +760,6 @@ function buildNextPlugin() {
         onClose: () => api?.closeWindow?.(),
     });
 
-    if (els.refreshBtn) shell.update({ actions: [els.refreshBtn] });
-
     const body = document.createElement('div');
     body.className = 'vcp-ui-plugin-body';
     while (app.firstChild) body.append(app.firstChild);
@@ -553,11 +776,39 @@ function buildNextPlugin() {
         try { V.enhance(kind, control); } catch (error) { console.warn('[Plugin] enhance control:', error); }
     });
 
-    // Tooltip 通过 VCPUI.create('Tooltip') 创建（由 VCPUI 委托 Web Awesome）。
-    [els.refreshBtn, els.saveServerToggleBtn].forEach(btn => {
-        if (!btn) return;
-        const tip = V.create('Tooltip', { trigger: btn, content: btn.title || btn.getAttribute('aria-label') || '操作', placement: 'top' });
-        document.body.append(tip.element);
+    deepenNextPlugin(V);
+}
+
+// --- 新版 UI：深加工 —— VCPUI 管理工具栏 + 紧凑 keyed 列表 ---
+function deepenNextPlugin(V) {
+    // 移除营销式 hero 大标题卡片与旧 glass 工具栏，替换为 VCPUI 工具栏。
+    document.querySelector('.hero-card')?.remove();
+    const oldToolbar = document.querySelector('.toolbar');
+    const body = document.querySelector('.vcp-ui-plugin-body');
+
+    const refresh = V.create('IconButton', { icon: 'refresh', label: '刷新插件', title: '刷新插件', size: 'sm' });
+    refresh.element.addEventListener('click', refreshPlugins);
+    nextRefreshController = refresh;
+
+    const toolbar = V.create('Toolbar', {
+        label: '插件筛选工具栏',
+        start: [els.searchInput, els.typeFilter, els.stateFilter].filter(Boolean),
+        end: [refresh.element],
     });
+
+    if (body) body.prepend(toolbar.element);
+    oldToolbar?.remove();
+
+    // Tooltip 通过 VCPUI.create('Tooltip') 创建（由 VCPUI 委托 Web Awesome）。
+    [els.saveServerToggleBtn, refresh.element, els.refreshBtn].forEach(btn => {
+        if (!btn || !btn.isConnected) return;
+        try {
+            const tip = V.create('Tooltip', { trigger: btn, content: btn.title || btn.getAttribute('aria-label') || '操作', placement: 'top' });
+            document.body.append(tip.element);
+        } catch (error) { /* ignore */ }
+    });
+
+    // 切到 next 渲染管线后立即重绘（keyed 增量更新）。
+    renderPlugins();
 }
 window.addEventListener('vcp-ui-runtime-ready', buildNextPlugin);
