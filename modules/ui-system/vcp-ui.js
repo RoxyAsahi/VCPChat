@@ -473,6 +473,124 @@ function waFocus(controller, wa) {
     return controller;
 }
 
+function nextFrame(callback) {
+    if (typeof requestAnimationFrame === 'function') return requestAnimationFrame(callback);
+    return setTimeout(callback, 16);
+}
+
+// Legacy callers of Input/Textarea/Select reach the control through
+// `element.querySelector('input'|'textarea'|'select')` and then read/write
+// `.value` (and sometimes `.options`/`.selectedIndex`). A Web Awesome control
+// keeps its native input inside a shadow root, so those paths would silently
+// return null and crash. This bridge keeps them working:
+//   - `querySelector`/`querySelectorAll` first search the light DOM, then the
+//     WA shadow root (the real internal control once connected), then fall back
+//     to a detached native shim.
+//   - the shim is a real `<input>`/`<textarea>`/`<select>` element, so `.value`,
+//     `.options`, `.selectedIndex`, `.addEventListener(...)` and `.disabled` /
+//     `.required` / `.readOnly` never throw even before the WA element is
+//     connected; `.value`/`.disabled`/`.required`/`.readOnly` forward to the
+//     WA control, and WA `input`/`change` events are relayed onto the shim.
+function bridgeNativeControl(wa, kind) {
+    const tag = kind === 'textarea' ? 'textarea' : kind === 'select' ? 'select' : 'input';
+    const shim = document.createElement(tag);
+    if (kind === 'input') shim.type = 'text';
+    if (kind === 'textarea') shim.rows = 4;
+    shim.className = 'vcp-ui-native-bridge';
+    shim.setAttribute('tabindex', '-1');
+    shim.setAttribute('aria-hidden', 'true');
+
+    Object.defineProperty(shim, 'value', {
+        configurable: true,
+        get() {
+            const value = wa.value;
+            return value == null ? '' : String(value);
+        },
+        set(next) {
+            wa.value = next == null ? '' : String(next);
+        }
+    });
+    ['disabled', 'required'].forEach(property => {
+        Object.defineProperty(shim, property, {
+            configurable: true,
+            get: () => Boolean(wa[property]),
+            set: next => { wa[property] = Boolean(next); }
+        });
+    });
+    if (kind !== 'select') {
+        Object.defineProperty(shim, 'readOnly', {
+            configurable: true,
+            get: () => Boolean(wa.readonly),
+            set: next => { wa.readonly = Boolean(next); }
+        });
+    }
+    if (kind === 'select') {
+        const options = () => [...wa.querySelectorAll('wa-option')];
+        Object.defineProperty(shim, 'options', {
+            configurable: true,
+            get: options
+        });
+        Object.defineProperty(shim, 'selectedIndex', {
+            configurable: true,
+            get() {
+                const value = wa.value;
+                return options().findIndex(option => String(option.value) === String(value));
+            },
+            set(index) {
+                const option = options()[Number(index)];
+                if (option) wa.value = option.value;
+            }
+        });
+    }
+    ['input', 'change'].forEach(type => {
+        wa.addEventListener(type, () => {
+            shim.dispatchEvent(new Event(type, { bubbles: true }));
+        });
+    });
+
+    const matchesControl = selector => new RegExp(`(^|[\\s,>+~])${tag}([\\s,>+~]|$)`, 'i').test(selector);
+    const originalQuery = wa.querySelector.bind(wa);
+    const originalQueryAll = wa.querySelectorAll.bind(wa);
+    wa.querySelector = selector => {
+        const hit = originalQuery(selector);
+        if (hit) return hit;
+        const shadow = wa.shadowRoot?.querySelector(selector);
+        if (shadow) return shadow;
+        return matchesControl(selector) ? shim : null;
+    };
+    wa.querySelectorAll = selector => {
+        const hits = originalQueryAll(selector);
+        if (hits.length) return hits;
+        const shadow = wa.shadowRoot?.querySelectorAll(selector);
+        if (shadow?.length) return shadow;
+        return matchesControl(selector) ? [shim] : hits;
+    };
+    return shim;
+}
+
+// Checkbox/Switch keep their native toggle inside the WA shadow root. The WA
+// element itself exposes `.checked`, and legacy `querySelector('input[...]')`
+// paths are bridged to the real internal checkbox input.
+function bridgeCheckedControl(wa) {
+    const matchesInput = selector => /(^|[\s,>+~])input([\s,>+~]|$)/i.test(selector);
+    const originalQuery = wa.querySelector.bind(wa);
+    const originalQueryAll = wa.querySelectorAll.bind(wa);
+    wa.querySelector = selector => {
+        const hit = originalQuery(selector);
+        if (hit) return hit;
+        const shadow = wa.shadowRoot?.querySelector(selector);
+        if (shadow) return shadow;
+        return matchesInput(selector) ? wa.input ?? null : null;
+    };
+    wa.querySelectorAll = selector => {
+        const hits = originalQueryAll(selector);
+        if (hits.length) return hits;
+        const shadow = wa.shadowRoot?.querySelectorAll(selector);
+        if (shadow?.length) return shadow;
+        return matchesInput(selector) && wa.input ? [wa.input] : hits;
+    };
+}
+
 function buttonFactory(options = {}) {
     const wa = waControl('button', {});
     if (wa) {
@@ -521,6 +639,31 @@ function buttonFactory(options = {}) {
 }
 
 function iconButtonFactory(options = {}) {
+    const wa = waControl('button', {});
+    if (wa) {
+        wa.className = 'vcp-ui-icon-button vcp-ui-wa-icon-button';
+        const state = { icon: 'more_horiz', label: '', variant: 'ghost', size: 'md', ...options };
+        const controller = makeController(wa, state, current => {
+            if (!current.label) devWarn('IconButton requires a non-empty aria-label.');
+            const variants = { ghost: 'neutral', secondary: 'neutral', outline: 'neutral', danger: 'danger' };
+            const appearances = { ghost: 'plain', secondary: 'filled', outline: 'outlined', danger: 'plain' };
+            setCommon(wa, current, ['ghost', 'secondary', 'outline', 'danger'], ['sm', 'md']);
+            wa.setAttribute('variant', variants[current.variant] || 'neutral');
+            wa.setAttribute('appearance', appearances[current.variant] || 'plain');
+            waSize(wa, current.size, ['sm', 'md'], { sm: 'small', md: 'medium' });
+            wa.disabled = Boolean(current.disabled);
+            wa.loading = Boolean(current.loading);
+            wa.setAttribute('aria-label', current.label || 'Icon button');
+            wa.setAttribute('aria-pressed', String(Boolean(current.active)));
+            wa.setAttribute('title', current.title || current.label || '');
+            wa.replaceChildren();
+            const start = document.createElement('span');
+            start.slot = 'start';
+            start.append(icon(current.icon));
+            wa.append(start);
+        });
+        return waFocus(controller, wa);
+    }
     const element = document.createElement('button');
     element.type = 'button';
     element.className = 'vcp-ui-icon-button';
@@ -537,9 +680,11 @@ function iconButtonFactory(options = {}) {
 }
 
 function textControlFactory(kind, options = {}) {
-    const wa = kind === 'input' ? waControl('input', {}) : null;
+    const wa = kind === 'input' ? waControl('input', {}) : waControl('textarea', {});
     if (wa) {
-        wa.className = 'vcp-ui-input vcp-ui-wa-input';
+        wa.className = kind === 'input'
+            ? 'vcp-ui-input vcp-ui-wa-input'
+            : 'vcp-ui-textarea vcp-ui-wa-textarea';
         const state = { size: 'md', value: '', ...options };
         const controller = makeController(wa, state, current => {
             waSize(wa, current.size);
@@ -547,7 +692,12 @@ function textControlFactory(kind, options = {}) {
             wa.readonly = Boolean(current.readonly);
             wa.required = Boolean(current.required);
             wa.placeholder = current.placeholder || '';
-            wa.type = current.type || 'text';
+            if (kind === 'textarea') {
+                wa.rows = Number(current.rows) || 4;
+                wa.resize = current.resize || 'vertical';
+            } else {
+                wa.type = current.type || 'text';
+            }
             wa.value = String(current.value ?? '');
             wa.replaceChildren();
             if (current.leadingIcon) {
@@ -566,6 +716,7 @@ function textControlFactory(kind, options = {}) {
             else wa.removeAttribute('aria-invalid');
         });
         controller._listen(wa, 'input', () => { state.value = wa.value; });
+        bridgeNativeControl(wa, kind);
         return waFocus(controller, wa);
     }
     const wrapper = document.createElement('span');
@@ -600,6 +751,9 @@ function selectFactory(options = {}) {
         const controller = makeController(wa, state, current => {
             waSize(wa, current.size);
             wa.disabled = Boolean(current.disabled);
+            wa.required = Boolean(current.required);
+            if (current.placeholder) wa.placeholder = current.placeholder;
+            else wa.removeAttribute('placeholder');
             if (current.invalid) wa.setAttribute('aria-invalid', 'true');
             else wa.removeAttribute('aria-invalid');
             wa.replaceChildren();
@@ -621,6 +775,7 @@ function selectFactory(options = {}) {
             if (current.value !== undefined) wa.value = String(current.value);
         });
         controller._listen(wa, 'change', () => emit(wa, 'change'));
+        bridgeNativeControl(wa, 'select');
         waFocus(controller, wa);
         return controller;
     }
@@ -648,6 +803,29 @@ function selectFactory(options = {}) {
 }
 
 function checkboxFactory(options = {}) {
+    const wa = waControl('checkbox', {});
+    if (wa) {
+        wa.className = 'vcp-ui-checkbox vcp-ui-wa-checkbox';
+        const state = { label: 'Checkbox', checked: false, indeterminate: false, ...options };
+        const controller = makeController(wa, state, current => {
+            wa.checked = Boolean(current.checked);
+            wa.indeterminate = Boolean(current.indeterminate);
+            wa.disabled = Boolean(current.disabled);
+            wa.required = Boolean(current.required);
+            wa.value = String(current.value ?? 'on');
+            wa.replaceChildren();
+            const label = document.createElement('span');
+            label.textContent = current.label;
+            wa.append(label);
+        });
+        controller._listen(wa, 'change', () => {
+            state.checked = wa.checked;
+            state.indeterminate = false;
+            controller.update();
+        });
+        bridgeCheckedControl(wa);
+        return waFocus(controller, wa);
+    }
     const element = document.createElement('label');
     element.className = 'vcp-ui-checkbox';
     const input = document.createElement('input');
@@ -671,11 +849,35 @@ function checkboxFactory(options = {}) {
         state.checked = input.checked;
         state.indeterminate = false;
         controller.update();
+        emit(element, 'change');
     });
     return controller;
 }
 
 function switchFactory(options = {}) {
+    const wa = waControl('switch', {});
+    if (wa) {
+        wa.className = 'vcp-ui-switch vcp-ui-wa-switch';
+        const state = { label: 'Switch', checked: false, size: 'md', ...options };
+        const controller = makeController(wa, state, current => {
+            waSize(wa, current.size, ['sm', 'md'], { sm: 'small', md: 'medium' });
+            wa.checked = Boolean(current.checked);
+            wa.disabled = Boolean(current.disabled);
+            wa.required = Boolean(current.required);
+            wa.value = String(current.value ?? 'on');
+            wa.replaceChildren();
+            const label = document.createElement('span');
+            label.className = 'vcp-ui-switch-label';
+            label.textContent = current.label;
+            wa.append(label);
+        });
+        controller._listen(wa, 'change', () => {
+            state.checked = wa.checked;
+            controller.update();
+        });
+        bridgeCheckedControl(wa);
+        return waFocus(controller, wa);
+    }
     const element = document.createElement('button');
     element.type = 'button';
     element.className = 'vcp-ui-switch';
@@ -789,6 +991,7 @@ function cardFactory(options = {}) {
         const state = { title: '', description: '', variant: options.interactive ? 'interactive' : 'default', ...options };
         return makeController(wa, state, current => {
             wa.dataset.variant = normalize(current.variant, ['default', 'outlined', 'interactive', 'selected'], 'default', 'variant');
+            wa.appearance = wa.dataset.variant === 'outlined' ? 'outlined' : 'filled';
             if (current.interactive || options.interactive) wa.setAttribute('aria-pressed', String(wa.dataset.variant === 'selected'));
             wa.replaceChildren();
             const body = document.createElement('div');
@@ -843,7 +1046,7 @@ function tabsFactory(options = {}) {
                 panel.setAttribute('name', item.value);
                 wa.append(panel);
             });
-            if (current.value) wa.setAttribute('active-tab', current.value);
+            if (current.value) wa.active = String(current.value);
         });
         controller._listen(wa, 'wa-tab-show', event => {
             if (event.detail?.name !== undefined) state.value = event.detail.name;
@@ -1230,7 +1433,7 @@ function modalFactory(options = {}) {
                     wa.open = true;
                     return;
                 }
-                if (frames++ < 60) requestAnimationFrame(ensureOpen);
+                if (frames++ < 60) nextFrame(ensureOpen);
             };
             queueMicrotask(ensureOpen);
         });
