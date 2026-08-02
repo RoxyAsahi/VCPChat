@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VCP 灵视中心 | Ether Observer</title>
     <link rel="stylesheet" href="../styles/themes.css">
+    <link rel="stylesheet" href="../styles/ui-system/runtime.css">
 
     <!-- Pretext 文本布局引擎 -->
     <script src="../modules/renderer/pretext.bundle.js"></script>
@@ -3738,6 +3739,27 @@
           updateScrollTopButtonVisibility();
         }
       });
+    </script>
+    <script type="module" src="../modules/ui-system/vcp-ui-runtime-bootstrap.js"></script>
+    <script>
+        // 新版 UI：真实重建（AppPageShell + VCPUI 控件 + Web Awesome，业务页仅经 VCPUI）。
+        function buildNextRag() {
+            window.VCPPageRebuild.rebuild({
+                title: 'VCP 监听',
+                containerSelector: '.main-wrapper',
+                navSelector: '#custom-title-bar',
+                windowControls: true,
+                onMinimize: function () { try { window.electronAPI.minimizeWindow(); } catch (e) {} },
+                onMaximize: function () { try { window.electronAPI.maximizeWindow(); } catch (e) {} },
+                onClose: function () { try { window.electronAPI.closeWindow(); } catch (e) { window.close(); } },
+                enhanceSelectors: {
+                    input: ['input:is(:not([type]),[type="text"],[type="search"])'],
+                    select: ['select']
+                },
+                tooltipSelectors: ['rag-pause-btn', 'rag-clear-btn']
+            });
+        }
+        window.addEventListener('vcp-ui-runtime-ready', buildNextRag);
     </script>
   </body>
 </html>

@@ -436,5 +436,66 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    // --- 新版 UI：真实重建页面结构（AppPageShell + VCPUI 控件 + Web Awesome） ---
+    // 经典模式保持原 DOM/CSS；next 模式将既有业务节点移入 VCPUI 外壳并增强，
+    // 业务逻辑（流式翻译/复制/设置保存）继续操作同一批元素，无需重写。
+    function buildNextTranslator() {
+        if (!window.VCPUI) return;
+        if (window.VCPUiModeController?.getCurrentMode() !== 'next') return;
+        if (document.body.classList.contains('vcp-ui-scope')) return;
+
+        const V = window.VCPUI;
+        const container = document.querySelector('.translator-container');
+        if (!container) return;
+        document.body.classList.add('vcp-ui-scope');
+
+        const shell = V.create('AppPageShell', {
+            title: '翻译助手',
+            windowControls: true,
+            onMinimize: () => api?.minimizeWindow?.(),
+            onClose: () => api?.closeWindow?.(),
+        });
+
+        // 设置入口移入 shell 动作区。
+        const settingsBtn = document.getElementById('translator-settings-btn');
+        if (settingsBtn) shell.update({ actions: [settingsBtn] });
+
+        // 原容器内容移入 shell 内容区，避免双标题。
+        const header = container.querySelector('.translator-header');
+        header?.querySelector('h2')?.remove();
+        const body = document.createElement('div');
+        body.className = 'vcp-ui-translator-body';
+        while (container.firstChild) body.append(container.firstChild);
+        shell.update({ content: body });
+
+        // 移除旧标题栏（AppPageShell 提供窗口控制）；清空已搬空的容器。
+        document.getElementById('custom-title-bar')?.remove();
+        container.remove();
+        document.body.append(shell.element);
+
+        // 控件增强（VCPUI.enhance 保留原生 .value/.options 供业务逻辑使用）。
+        document.querySelectorAll('.translator-controls select').forEach(select => {
+            try { V.enhance('Select', select); } catch (error) { console.warn('[Translator] enhance select:', error); }
+        });
+        document.querySelectorAll('.translator-controls input[type="text"]').forEach(input => {
+            try { V.enhance('Input', input); } catch (error) { console.warn('[Translator] enhance input:', error); }
+        });
+        document.querySelectorAll('.translator-main textarea').forEach(textarea => {
+            try { V.enhance('Textarea', textarea); } catch (error) { console.warn('[Translator] enhance textarea:', error); }
+        });
+        document.querySelectorAll('#settingsModal input[type="text"]').forEach(input => {
+            try { V.enhance('Input', input); } catch (error) { console.warn('[Translator] enhance input:', error); }
+        });
+
+        // Tooltip 通过 VCPUI.create('Tooltip') 创建（由 VCPUI 委托 Web Awesome）。
+        ['copyBtn', 'translateBtn', 'translator-settings-btn'].forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const tip = V.create('Tooltip', { trigger: el, content: el.getAttribute('aria-label') || el.title || id, placement: 'top' });
+            document.body.append(tip.element);
+        });
+    }
+    window.addEventListener('vcp-ui-runtime-ready', buildNextTranslator);
+
     initialize();
 });

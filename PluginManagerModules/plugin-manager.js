@@ -483,6 +483,10 @@ async function openCurrentPluginFolder() {
 }
 
 function showToast(message, type = 'success') {
+    if (window.VCPUiModeController?.getCurrentMode() === 'next' && window.VCPUI) {
+        window.VCPUI.feedback.toast(message, { variant: type === 'error' ? 'error' : type === 'warning' ? 'warning' : 'success' });
+        return;
+    }
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.textContent = message;
@@ -510,3 +514,50 @@ function escapeHtml(value) {
 function escapeAttr(value) {
     return escapeHtml(value).replace(/`/g, '&#096;');
 }
+// --- 新版 UI：真实重建页面结构（AppPageShell + VCPUI 控件 + Web Awesome） ---
+// 经典模式保持原 DOM/CSS；next 模式将既有业务节点移入 VCPUI 外壳并增强，
+// 提示改用 VCPUI.feedback；插件编辑 Modal 保留为专用编辑器。
+function buildNextPlugin() {
+    if (!window.VCPUI) return;
+    if (window.VCPUiModeController?.getCurrentMode() !== 'next') return;
+    if (document.body.classList.contains('vcp-ui-scope')) return;
+
+    const V = window.VCPUI;
+    const app = document.querySelector('.app-container');
+    if (!app) return;
+    document.body.classList.add('vcp-ui-scope');
+
+    const shell = V.create('AppPageShell', {
+        title: '插件管理器',
+        windowControls: true,
+        onMinimize: () => api?.minimizeWindow?.(),
+        onMaximize: () => api?.maximizeWindow?.(),
+        onClose: () => api?.closeWindow?.(),
+    });
+
+    if (els.refreshBtn) shell.update({ actions: [els.refreshBtn] });
+
+    const body = document.createElement('div');
+    body.className = 'vcp-ui-plugin-body';
+    while (app.firstChild) body.append(app.firstChild);
+    shell.update({ content: body });
+
+    document.getElementById('top-nav-bar')?.remove();
+    app.remove();
+    document.body.append(shell.element);
+
+    // 控件增强（保留原生 .value 供业务逻辑使用）。
+    [els.searchInput, els.typeFilter, els.stateFilter].forEach(control => {
+        if (!control) return;
+        const kind = control.tagName === 'SELECT' ? 'Select' : 'Input';
+        try { V.enhance(kind, control); } catch (error) { console.warn('[Plugin] enhance control:', error); }
+    });
+
+    // Tooltip 通过 VCPUI.create('Tooltip') 创建（由 VCPUI 委托 Web Awesome）。
+    [els.refreshBtn, els.saveServerToggleBtn].forEach(btn => {
+        if (!btn) return;
+        const tip = V.create('Tooltip', { trigger: btn, content: btn.title || btn.getAttribute('aria-label') || '操作', placement: 'top' });
+        document.body.append(tip.element);
+    });
+}
+window.addEventListener('vcp-ui-runtime-ready', buildNextPlugin);

@@ -58,3 +58,6 @@ loudness_cache.db-shm
 **/.codex/
 
 /开发文档/
+
+# Electron renderer-ready marker written by UI smoke tests
+/.vcp_ready

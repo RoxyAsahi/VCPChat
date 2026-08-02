@@ -1,16 +1,32 @@
 // Web Awesome's standard ESM build contains bare Lit imports. VCPChat's
 // no-bundler renderer uses the package's equivalent self-contained build.
-import '../../node_modules/@awesome.me/webawesome/dist-cdn/components/button/button.js';
-import '../../node_modules/@awesome.me/webawesome/dist-cdn/components/dialog/dialog.js';
-import '../../node_modules/@awesome.me/webawesome/dist-cdn/components/input/input.js';
-import '../../node_modules/@awesome.me/webawesome/dist-cdn/components/option/option.js';
-import '../../node_modules/@awesome.me/webawesome/dist-cdn/components/select/select.js';
-import '../../node_modules/@awesome.me/webawesome/dist-cdn/components/tooltip/tooltip.js';
-
-const THEME_URL = new URL(
-    '../../node_modules/@awesome.me/webawesome/dist-cdn/styles/themes/default.css',
+// The dist-cdn assets are vendored into vendor/webawesome so the installer
+// never depends on node_modules layout for a third-party runtime.
+//
+// The components are NOT imported at module-eval time. Registering them is a
+// side effect (customElements.define + Lit engine init), so it only happens
+// when the showcase actually mounts the comparison section, and only in
+// html[data-ui-mode="next"]. Classic mode and normal app boot never fetch a
+// byte of the Web Awesome runtime.
+const VENDOR_WEB_AWESOME_BASE = new URL(
+    '../../vendor/webawesome/dist-cdn/components/',
     import.meta.url
 ).href;
+
+const THEME_URL = new URL(
+    '../../vendor/webawesome/dist-cdn/styles/themes/default.css',
+    import.meta.url
+).href;
+
+const WEB_AWESOME_COMPONENTS = ['button', 'dialog', 'input', 'option', 'select', 'tooltip'];
+
+async function loadWebAwesomeComponents() {
+    await Promise.all(
+        WEB_AWESOME_COMPONENTS.map(tag =>
+            import(`${VENDOR_WEB_AWESOME_BASE}${tag}/${tag}.js`)
+        )
+    );
+}
 
 function createElement(tagName, attributes = {}, text = '') {
     const element = document.createElement(tagName);
@@ -69,8 +85,12 @@ function createWebAwesomeButton(label, attributes = {}) {
 }
 
 export function mountWebAwesomeComparison(host, { create, on }) {
-    const disposeTheme = loadTheme();
-    const disposers = [disposeTheme];
+    if (document.documentElement.dataset.uiMode !== 'next') {
+        host.append(createElement('p', { class: 'vcp-ui-wa-error' }, 'Web Awesome 对照仅在 新版 UI 模式下可用。'));
+        return () => host.replaceChildren();
+    }
+
+    const disposers = [];
     const root = createElement('div', { class: 'vcp-ui-wa-comparison wa-dark' });
     const intro = createElement('div', { class: 'vcp-ui-wa-intro' });
     intro.append(
@@ -110,17 +130,6 @@ export function mountWebAwesomeComparison(host, { create, on }) {
     current.body.append(vcpButtonRow);
     vcpColumn.append(current.card);
 
-    current = sample('Button', '相同状态由 Web Awesome 管理，视觉由 VCPChat 覆盖。');
-    const waButtonRow = createElement('div', { class: 'vcp-ui-wa-control-row' });
-    waButtonRow.append(
-        createWebAwesomeButton('保存更改', { variant: 'brand', appearance: 'accent' }),
-        createWebAwesomeButton('稍后处理', { appearance: 'outlined' }),
-        createWebAwesomeButton('处理中', { variant: 'brand', loading: true }),
-        createWebAwesomeButton('不可用', { disabled: true })
-    );
-    current.body.append(waButtonRow);
-    waColumn.append(current.card);
-
     current = sample('Input', '默认、校验失败和禁用状态。');
     const vcpInputStack = createElement('div', { class: 'vcp-ui-wa-control-stack' });
     vcpInputStack.append(
@@ -130,16 +139,6 @@ export function mountWebAwesomeComparison(host, { create, on }) {
     );
     current.body.append(vcpInputStack);
     vcpColumn.append(current.card);
-
-    current = sample('Input', '保留原生表单关联、焦点与校验行为。');
-    const waInputStack = createElement('div', { class: 'vcp-ui-wa-control-stack' });
-    waInputStack.append(
-        createElement('wa-input', { placeholder: '搜索组件', size: 'small', appearance: 'outlined' }),
-        createElement('wa-input', { value: '格式不正确', size: 'small', appearance: 'outlined', 'data-invalid-demo': true }),
-        createElement('wa-input', { placeholder: '不可用', size: 'small', appearance: 'outlined', disabled: true })
-    );
-    current.body.append(waInputStack);
-    waColumn.append(current.card);
 
     const options = [
         { label: '自动', value: 'auto' },
@@ -155,31 +154,10 @@ export function mountWebAwesomeComparison(host, { create, on }) {
     current.body.append(vcpSelectStack);
     vcpColumn.append(current.card);
 
-    current = sample('Select', '下拉定位、键盘导航和表单值由组件内核处理。');
-    const waSelectStack = createElement('div', { class: 'vcp-ui-wa-control-stack' });
-    const waSelect = createElement('wa-select', { value: 'auto', size: 'small', appearance: 'outlined' });
-    const waSelectDisabled = createElement('wa-select', { value: 'auto', size: 'small', appearance: 'outlined', disabled: true });
-    options.forEach(option => {
-        waSelect.append(createElement('wa-option', { value: option.value }, option.label));
-        waSelectDisabled.append(createElement('wa-option', { value: option.value }, option.label));
-    });
-    waSelectStack.append(waSelect, waSelectDisabled);
-    current.body.append(waSelectStack);
-    waColumn.append(current.card);
-
     current = sample('Tooltip', '悬停或键盘聚焦图标按钮。');
     const vcpTooltipTrigger = create('IconButton', { icon: 'content_copy', label: '复制链接', variant: 'outline' });
     current.body.append(create('Tooltip', { trigger: vcpTooltipTrigger, content: '复制当前页面链接', placement: 'right' }).element);
     vcpColumn.append(current.card);
-
-    current = sample('Tooltip', '浮层定位和 aria 关联由 Web Awesome 管理。');
-    const waTooltipTrigger = createWebAwesomeButton('复制链接', { appearance: 'outlined' });
-    const waTooltip = createElement('wa-tooltip', { placement: 'right', 'show-delay': 120 }, '复制当前页面链接');
-    const tooltipId = `wa-tooltip-trigger-${crypto.randomUUID()}`;
-    waTooltipTrigger.id = tooltipId;
-    waTooltip.setAttribute('for', tooltipId);
-    current.body.append(waTooltipTrigger, waTooltip);
-    waColumn.append(current.card);
 
     current = sample('Dialog', 'VCPUI Modal 保持当前产品的焦点和动作语义。');
     const vcpDialogTrigger = create('Button', { label: '打开对话框', size: 'sm', variant: 'outline' });
@@ -193,27 +171,89 @@ export function mountWebAwesomeComparison(host, { create, on }) {
     current.body.append(vcpDialogTrigger.element);
     vcpColumn.append(current.card);
 
-    current = sample('Dialog', 'Web Awesome 提供原生 dialog、焦点陷阱与 Escape 行为。');
-    const waDialogTrigger = createWebAwesomeButton('打开对话框', { appearance: 'outlined' });
-    const waDialog = createElement('wa-dialog', { label: '确认设置', 'light-dismiss': true, 'with-footer': true });
-    waDialog.append(
-        createElement('p', {}, '这是 Web Awesome 的交互内核，外观已经映射到 VCPChat token。'),
-        createWebAwesomeButton('取消', { slot: 'footer', appearance: 'plain', 'data-dialog-close': true }),
-        createWebAwesomeButton('完成', { slot: 'footer', variant: 'brand', appearance: 'accent', 'data-dialog-close': true })
-    );
-    on(waDialogTrigger, 'click', () => { waDialog.open = true; });
-    waDialog.querySelectorAll('[data-dialog-close]').forEach(button => {
-        on(button, 'click', () => { waDialog.open = false; });
-    });
-    current.body.append(waDialogTrigger, waDialog);
-    waColumn.append(current.card);
-
     host.append(root);
-    Promise.all(['wa-button', 'wa-input', 'wa-select', 'wa-tooltip', 'wa-dialog'].map(tag => customElements.whenDefined(tag)))
-        .then(() => root.dataset.ready = 'true');
 
-    return () => {
+    const disposeTheme = loadTheme();
+    disposers.push(disposeTheme);
+
+    let disposed = false;
+    const teardown = () => {
+        if (disposed) return;
+        disposed = true;
         disposers.reverse().forEach(dispose => dispose());
         root.remove();
     };
+
+    loadWebAwesomeComponents()
+        .then(() => {
+            if (disposed) return;
+
+            current = sample('Button', '相同状态由 Web Awesome 管理，视觉由 VCPChat 覆盖。');
+            const waButtonRow = createElement('div', { class: 'vcp-ui-wa-control-row' });
+            waButtonRow.append(
+                createWebAwesomeButton('保存更改', { variant: 'brand', appearance: 'accent' }),
+                createWebAwesomeButton('稍后处理', { appearance: 'outlined' }),
+                createWebAwesomeButton('处理中', { variant: 'brand', loading: true }),
+                createWebAwesomeButton('不可用', { disabled: true })
+            );
+            current.body.append(waButtonRow);
+            waColumn.append(current.card);
+
+            current = sample('Input', '保留原生表单关联、焦点与校验行为。');
+            const waInputStack = createElement('div', { class: 'vcp-ui-wa-control-stack' });
+            waInputStack.append(
+                createElement('wa-input', { placeholder: '搜索组件', size: 'small', appearance: 'outlined' }),
+                createElement('wa-input', { value: '格式不正确', size: 'small', appearance: 'outlined', 'data-invalid-demo': true }),
+                createElement('wa-input', { placeholder: '不可用', size: 'small', appearance: 'outlined', disabled: true })
+            );
+            current.body.append(waInputStack);
+            waColumn.append(current.card);
+
+            current = sample('Select', '下拉定位、键盘导航和表单值由组件内核处理。');
+            const waSelectStack = createElement('div', { class: 'vcp-ui-wa-control-stack' });
+            const waSelect = createElement('wa-select', { value: 'auto', size: 'small', appearance: 'outlined' });
+            const waSelectDisabled = createElement('wa-select', { value: 'auto', size: 'small', appearance: 'outlined', disabled: true });
+            options.forEach(option => {
+                waSelect.append(createElement('wa-option', { value: option.value }, option.label));
+                waSelectDisabled.append(createElement('wa-option', { value: option.value }, option.label));
+            });
+            waSelectStack.append(waSelect, waSelectDisabled);
+            current.body.append(waSelectStack);
+            waColumn.append(current.card);
+
+            current = sample('Tooltip', '浮层定位和 aria 关联由 Web Awesome 管理。');
+            const waTooltipTrigger = createWebAwesomeButton('复制链接', { appearance: 'outlined' });
+            const waTooltip = createElement('wa-tooltip', { placement: 'right', 'show-delay': 120 }, '复制当前页面链接');
+            const tooltipId = `wa-tooltip-trigger-${crypto.randomUUID()}`;
+            waTooltipTrigger.id = tooltipId;
+            waTooltip.setAttribute('for', tooltipId);
+            current.body.append(waTooltipTrigger, waTooltip);
+            waColumn.append(current.card);
+
+            current = sample('Dialog', 'Web Awesome 提供原生 dialog、焦点陷阱与 Escape 行为。');
+            const waDialogTrigger = createWebAwesomeButton('打开对话框', { appearance: 'outlined' });
+            const waDialog = createElement('wa-dialog', { label: '确认设置', 'light-dismiss': true, 'with-footer': true });
+            waDialog.append(
+                createElement('p', {}, '这是 Web Awesome 的交互内核，外观已经映射到 VCPChat token。'),
+                createWebAwesomeButton('取消', { slot: 'footer', appearance: 'plain', 'data-dialog-close': true }),
+                createWebAwesomeButton('完成', { slot: 'footer', variant: 'brand', appearance: 'accent', 'data-dialog-close': true })
+            );
+            on(waDialogTrigger, 'click', () => { waDialog.open = true; });
+            waDialog.querySelectorAll('[data-dialog-close]').forEach(button => {
+                on(button, 'click', () => { waDialog.open = false; });
+            });
+            current.body.append(waDialogTrigger, waDialog);
+            waColumn.append(current.card);
+
+            Promise.all(['wa-button', 'wa-input', 'wa-select', 'wa-tooltip', 'wa-dialog'].map(tag => customElements.whenDefined(tag)))
+                .then(() => root.dataset.ready = 'true');
+        })
+        .catch(() => {
+            if (disposed) return;
+            root.dataset.ready = 'error';
+            const errorNote = createElement('p', { class: 'vcp-ui-wa-error' }, 'Web Awesome 资源加载失败，请检查 vendor/webawesome 是否完整。');
+            root.append(errorNote);
+        });
+
+    return teardown;
 }

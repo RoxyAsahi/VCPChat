@@ -844,3 +844,23 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
 });
+
+// --- 新版 UI：真实重建页面结构（AppPageShell + VCPUI 控件 + Web Awesome） ---
+function buildNextCanvas() {
+    window.VCPPageRebuild.rebuild({
+        title: '协同 Canvas',
+        containerSelector: '.editor-container',
+        navSelector: '#custom-title-bar',
+        actionSelectors: ['#view-diff-btn'],
+        onMinimize: () => api?.minimizeWindow?.(),
+        onMaximize: () => api?.maximizeWindow?.(),
+        onClose: () => (api?.closeWindow ? api.closeWindow() : window.close()),
+        enhanceSelectors: {
+            input: ['input:is(:not([type]),[type="text"],[type="number"],[type="search"],[type="url"],[type="email"],[type="password"])'],
+            select: ['select'],
+            textarea: ['textarea']
+        },
+        tooltipSelectors: ['#view-diff-btn', '#run-py-btn', '#render-md-btn', '#render-html-btn', '#toggle-wrap-btn', '#rename-btn', '#copy-btn', '#delete-btn']
+    });
+}
+window.addEventListener('vcp-ui-runtime-ready', buildNextCanvas);

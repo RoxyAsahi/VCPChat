@@ -1,6 +1,6 @@
 # VCPChat 应用页面与全局设置 Web Awesome 全量重构计划
 
-> 状态：规划中，尚未开始业务页面迁移  
+> 状态：in progress（R5.0 基础设施已完成并通过门禁；R5.1 全局设置已增强；R5.2–R5.6 分批进行中）  
 > 基线日期：2026-08-01  
 > 适用分支：`codex/vcpchat-codex-app-server`  
 > 当前试验：UI 组件库中的“WA 对照”已完成真实 Electron 渲染验证，但不能据此宣称业务页面已迁移。
@@ -296,3 +296,62 @@
 7. 主聊天、Agent、排除应用和经典 UI 没有行为回归。
 
 在上述条件满足前，文档状态只能是 `planned`、`in progress` 或 `partial`，不得使用“重构完成”或“产品可用”。
+
+
+## 进度记录
+
+### R5.0 基础设施 — 已完成（2026-08-01）
+- Web Awesome 3.11.0 `dist-cdn` 已 vendor 到 `vendor/webawesome/`，脱离 node_modules 布局；`check-ui-system` 与 `pack:check` 校验版本 3.11.0 与打包资源。
+- `webawesome-comparison.js` 改为动态 `import()` 加载 vendored 组件，仅 `html[data-ui-mode="next"]` 且组件库打开时注册；启动零 WA 资源请求（真实 Electron 验证）。
+- 新增 `WebAwesomeAdapter`（`modules/ui-system/webawesome-adapter.js`）：lazy 组件加载、prop/事件翻译、`updateComplete`、refcount 主题、`destroy()`；契约测试通过。
+- 新增 `UiModeController`（`modules/ui-system/ui-mode-controller.js`）：内嵌/独立/子应用统一 mode 初始化·订阅·幂等 mount·teardown；主进程向内嵌页下发 `?uiMode=`；契约测试通过。
+- **核心控件 WA 化**：VCPUI `Select/Tabs/Tooltip/Modal` 在组件预加载后由 Web Awesome 提供行为内核（保持 `element/update/focus/destroy` 公共契约与事件）；真实 Electron 验证 value/open/close/destroy。
+- VCPUI 新增 `AppPageShell` / `WindowControls` / `AsyncBoundary`（candidate，已入清单与组件库）。
+- 新增 `npm run check:ui-applications`：业务目录禁 `<wa-*>`、裸 `--wa-*`、CDN、未登记 `::part()`、以及直接引用 `VCPWebAwesome`。
+- 新增 `scripts/check-webawesome-pack.mjs`（`pack:check`）打包资源 smoke。
+- 新增 `scripts/test-electron-ui-apps-smoke.mjs`（`test:electron-ui-apps`）真实 Electron 逐页验证。
+
+### 架构边界契约（2026-08-02 收紧）
+业务页面**只允许依赖 VCPUI**，Web Awesome 是内部实现细节：
+```text
+业务页面 → VCPUI / VCPPageRebuild → WebAwesomeAdapter → Web Awesome
+```
+- 业务页禁止出现 `<wa-*>`、裸 `--wa-*`、`VCPWebAwesome`、CDN、未登记 `::part()`（`check-ui-applications` 强制）。
+- Tooltip 一律 `VCPUI.create('Tooltip')`；页面重建统一经 `VCPPageRebuild.rebuild` 或 VCPUI API。
+- 时序契约：`vcp-ui-runtime-bootstrap.js` 先 `await` WA 组件预载完成再派发 `vcp-ui-runtime-ready`；页面只在 ready 后构建，因此 `VCPUI.create('Select'|'Tabs'|'Modal'|'Tooltip')` 必然 WA-backed，未预载的主渲染器/经典模式回落原生 DOM。
+
+### R5.1 全局设置 — 增强完成（2026-08-01），结构重构未完成
+- `settings-bridge.js` 新增 `#globalSettingsForm` 增强路径（Input/Textarea/Select/Range/Switch/Field + SettingsActionBar 保存栏 + 设置搜索）。
+- 保存栏接受 `.global-settings-footer`，脏/保存/错误状态沿用 `vcp-settings-save-result`。
+- 真实 Electron 验证增强、搜索、脏/保存态、切经典清理。
+- 尚未：`styles/setting/*` 迁移 token、分类导航改 VCPUI Tabs/List、逐分类真实保存回归。
+
+### R5.2–R5.5 页面状态（诚实记录，2026-08-02）
+
+**已真正重建（next 模式由 VCPUI 重建结构，业务页仅经 VCPUI；Electron 逐页验证便签/翻译/日志）**
+| 页面 | 重建内容 |
+|---|---|
+| 便签 notemini | AppPageShell + VCPUI Input/Textarea + WindowControls（内嵌隐藏）+ VCPUI Tooltip；CSS Token 化 |
+| 翻译 translator | AppPageShell + 控件增强 + VCPUI Tooltip；业务节点移入外壳，流式逻辑不变 |
+| 日志 log | AppPageShell + 控件增强 + VCPUI Tooltip；清空确认/提示改用 VCPUI.feedback；自定义 modal/toast DOM 移除 |
+| 插件 plugin-manager | AppPageShell + 控件增强 + VCPUI Tooltip；提示改用 VCPUI.feedback |
+| 任务 task | AppPageShell + 控件增强 + VCPUI Tooltip |
+| 笔记 notes | AppPageShell + 控件增强 + VCPUI Tooltip |
+| 记忆 memo | AppPageShell + 控件增强 + VCPUI Tooltip |
+| 论坛 forum | AppPageShell + 控件增强 + VCPUI Tooltip |
+| 协同 canvas | AppPageShell + 控件增强 + VCPUI Tooltip（CodeMirror/diff 保留） |
+| 监听 RAG | AppPageShell + 控件增强 + VCPUI Tooltip（实时视图保留） |
+| 工具 ToolBox | AppPageShell（自定义实现）+ VCPUI Tooltip；Workflow 画布保留 |
+| 数据 VchatManager | AppPageShell + 控件增强 + VCPUI Tooltip |
+
+以上 12 页均由 `test-page-runtime` 强制「业务页仅经 VCPUI、禁 VCPWebAwesome」。
+
+**未接入**：骰子（本地 HTTP 服务下 runtime 引用待解决）。
+
+### 剩余（未完成，不得标记 completed）
+- 骰子 runtime 引用方案 + 重建。
+- 全页 embedded/standalone 逐页行为回归扩展（当前 Electron smoke 覆盖便签/翻译/日志 + WA 核心控件）。
+- 全局设置结构重构（`styles/setting/*` 迁移 token、分类导航改 VCPUI Tabs/List、逐分类真实保存回归）。
+- 各页 embedded/standalone 逐页行为回归（`test-page-electron-smoke` 扩展到全部页面）。
+- R5.6 旧样式退役、迁移覆盖率报告、打包后真实资源解析 smoke 驱动。
+

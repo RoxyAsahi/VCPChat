@@ -115,7 +115,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- 函数定义 ---
 
     function renderToolGrid() {
-        toolGrid.innerHTML = '';
+        toolGrid.replaceChildren();
 
         // 读取收藏列表
         let favorites = [];
@@ -126,55 +126,34 @@ document.addEventListener('DOMContentLoaded', async () => {
         //搜索栏容器
         const searchBar = document.createElement('div');
         searchBar.className = 'tool-search-bar';
-        searchBar.style.cssText = `
-            display: flex; gap: 10px; margin-bottom: 20px; align-items: center;
-            grid-column: 1 / -1;
-        `;
 
-        const searchInput = document.createElement('input');
-        searchInput.type = 'text';
-        searchInput.placeholder = '🔍 搜索工具...';
-        searchInput.className = 'tool-search-input';
-        searchInput.style.cssText = `
-            flex: 1; padding: 10px 14px; border-radius: 8px;
-            border: 1px solid var(--border-color);
-            background: var(--input-bg); color: var(--primary-text);
-            font-size: 14px; outline: none; transition: border-color 0.2s;
-        `;
-
-        const categorySelect = document.createElement('select');
-        categorySelect.className = 'tool-category-select';
-        categorySelect.style.cssText = `
-            padding: 10px 14px; border-radius: 8px;
-            border: 1px solid var(--border-color);
-            background: var(--input-bg); color: var(--primary-text);
-            font-size: 14px; cursor: pointer; min-width: 140px;
-        `;
-        const allOption = document.createElement('option');
-        allOption.value = '';
-        allOption.textContent = '全部分类';
-        categorySelect.appendChild(allOption);
-
-        // 收藏选项
-        const favOption = document.createElement('option');
-        favOption.value = '__favorites__';
-        favOption.textContent = '⭐ 收藏';
-        categorySelect.appendChild(favOption);
-
-        for (const cat of Object.keys(TOOL_CATEGORIES)) {
-            const opt = document.createElement('option');
-            opt.value = cat;
-            opt.textContent = cat;
-            categorySelect.appendChild(opt);
+        const useNextComponents = document.documentElement.dataset.uiMode === 'next' && window.VCPUI;
+        const searchController = useNextComponents ? window.VCPUI.create('Input', {
+            type: 'search', placeholder: '搜索工具', leadingIcon: 'search', size: 'md',
+        }) : null;
+        const searchInput = searchController?.element || document.createElement('input');
+        if (!searchController) {
+            searchInput.type = 'search';
+            searchInput.placeholder = '搜索工具';
         }
+        searchInput.classList.add('tool-search-input');
+
+        const categoryOptions = [
+            { value: '', label: '全部分类' },
+            { value: '__favorites__', label: '收藏' },
+            ...Object.keys(TOOL_CATEGORIES).map(category => ({ value: category, label: category })),
+        ];
+        const categoryController = useNextComponents ? window.VCPUI.create('Select', {
+            value: '', options: categoryOptions, size: 'md',
+        }) : null;
+        const categorySelect = categoryController?.element || document.createElement('select');
+        if (!categoryController) {
+            categoryOptions.forEach(item => categorySelect.add(new Option(item.label, item.value)));
+        }
+        categorySelect.classList.add('tool-category-select');
 
         const countBadge = document.createElement('span');
         countBadge.className = 'tool-count-badge';
-        countBadge.style.cssText = `
-            padding: 6px 12px; border-radius: 20px; font-size: 12px;
-            background: rgba(255,152,0,0.15); color: var(--highlight-text);
-            white-space: nowrap; font-weight: 600;
-        `;
         const totalTools = Object.keys(allTools).length;
         countBadge.textContent = `共${totalTools} 个`;
 
@@ -189,34 +168,52 @@ document.addEventListener('DOMContentLoaded', async () => {
             const category = getCategoryForTool(toolName);
             const isFav = favorites.includes(toolName);
 
-            const card = document.createElement('div');
-            card.className = 'tool-card';
+            const cardBody = document.createElement('div');
+            cardBody.className = 'tool-card-content';
+            const cardHeading = document.createElement('div');
+            cardHeading.className = 'tool-card-heading';
+            const title = document.createElement('h3');
+            title.textContent = tool.displayName;
+            const favorite = useNextComponents ? window.VCPUI.create('IconButton', {
+                icon: 'favorite', label: isFav ? `取消收藏 ${tool.displayName}` : `收藏 ${tool.displayName}`,
+                active: isFav, size: 'sm',
+            }) : null;
+            const star = favorite?.element || document.createElement('button');
+            star.type = 'button';
+            star.classList.add('fav-star');
+            if (!favorite) star.textContent = isFav ? '★' : '☆';
+            star.dataset.tool = toolName;
+            const description = document.createElement('p');
+            description.textContent = tool.description;
+            const categoryBadge = document.createElement('span');
+            categoryBadge.className = 'tool-category-badge';
+            categoryBadge.textContent = category;
+            cardHeading.append(title, star);
+            cardBody.append(cardHeading, description, categoryBadge);
+
+            const cardController = useNextComponents ? window.VCPUI.create('Card', {
+                interactive: true, variant: 'interactive', content: cardBody,
+            }) : null;
+            const card = cardController?.element || document.createElement('div');
+            card.classList.add('tool-card');
+            if (!cardController) card.append(cardBody);
             card.dataset.toolName = toolName;
             card.dataset.category = category;
             card.dataset.search = `${toolName} ${tool.displayName} ${tool.description} ${category}`.toLowerCase();
 
-            card.innerHTML = `
-                <div style="position: relative;">
-                    <span class="fav-star" data-tool="${toolName}" style="
-                        position: absolute; top: -8px; right: -8px;
-                        font-size: 18px; cursor: pointer; z-index: 2;
-                        filter: ${isFav ? 'none' : 'grayscale(1) opacity(0.3)'};
-                        transition: all 0.2s;
-                    ">${isFav ? '★' : '☆'}</span>
-                    <h3>${tool.displayName}</h3>
-                    <p>${tool.description}</p>
-                    <span style="display:inline-block; margin-top:8px; padding:2px 8px; border-radius:10px; font-size:11px; background:rgba(255,152,0,0.1); color:var(--highlight-text);">${category}</span>
-                </div>
-            `;
-
             //卡片点击 → 进入工具
             card.addEventListener('click', (e) => {
-                if (e.target.classList.contains('fav-star')) return;
+                if (e.target.closest?.('.fav-star')) return;
                 showToolDetail(toolName);
+            });
+            card.addEventListener('keydown', event => {
+                if ((event.key === 'Enter' || event.key === ' ') && !event.target.closest?.('.fav-star')) {
+                    event.preventDefault();
+                    showToolDetail(toolName);
+                }
             });
 
             // 星星点击 → 切换收藏
-            const star = card.querySelector('.fav-star');
             star.addEventListener('click', (e) => {
                 e.stopPropagation();
                 let favs = [];
@@ -225,29 +222,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const idx = favs.indexOf(toolName);
                 if (idx >= 0) {
                     favs.splice(idx, 1);
-                    star.textContent = '☆';
-                    star.style.filter = 'grayscale(1) opacity(0.3)';
                 } else {
                     favs.push(toolName);
-                    star.textContent = '★';
-                    star.style.filter = 'none';
                 }
+                const active = favs.includes(toolName);
+                if (favorite) favorite.update({ active, label: active ? `取消收藏 ${tool.displayName}` : `收藏 ${tool.displayName}` });
+                else star.textContent = active ? '★' : '☆';
                 localStorage.setItem('vcpht_favorites', JSON.stringify(favs));// 如果当前在收藏筛选模式，重新过滤
                 if (categorySelect.value === '__favorites__') {
                     filterCards();
-                }
-            });
-
-            // 星星hover效果
-            star.addEventListener('mouseenter', () => {
-                if (star.style.filter.includes('grayscale')) {
-                    star.style.filter = 'grayscale(0) opacity(0.7)';
-                }
-            });
-            star.addEventListener('mouseleave', () => {
-                const currentFavs = JSON.parse(localStorage.getItem('vcpht_favorites') || '[]');
-                if (!currentFavs.includes(toolName)) {
-                    star.style.filter = 'grayscale(1) opacity(0.3)';
                 }
             });
 
@@ -1483,13 +1466,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function initializeUI() {
-        document.getElementById('minimize-btn').addEventListener('click', () => {
+        document.getElementById('minimize-btn')?.addEventListener('click', () => {
             window.electronAPI.send('window-control','minimize');
         });
-        document.getElementById('maximize-btn').addEventListener('click', () => {
+        document.getElementById('maximize-btn')?.addEventListener('click', () => {
             window.electronAPI.send('window-control', 'maximize');
         });
-        document.getElementById('close-btn').addEventListener('click', () => {
+        document.getElementById('close-btn')?.addEventListener('click', () => {
             window.electronAPI.send('window-control', 'close');
         });
 
@@ -1579,6 +1562,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     initializeApp();
+    window.addEventListener('vcp-ui-runtime-ready', () => {
+        if (Object.keys(allTools).length > 0) renderToolGrid();
+    });
 
     // --- ComfyUI 集成功能 ---
     let comfyUIDrawer = null;
@@ -1721,3 +1707,105 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.closeComfyUISettings = closeComfyUISettings;
     window.openWorkflowEditor = openWorkflowEditor;
 });
+// --- 新版 UI 样板：业务页只依赖 VCPUI，Web Awesome 由 VCPUI 适配层管理。 ---
+let nextToolBoxShell = null;
+let nextToolBoxObserver = null;
+const enhancedNextControls = new WeakSet();
+const nextToolBoxControllers = [];
+
+function enhanceNextToolBoxControls(root = document) {
+    if (!window.VCPUI) return;
+    root.querySelectorAll?.('input:is(:not([type]),[type="text"],[type="number"],[type="search"],[type="url"],[type="email"],[type="password"]),select,textarea').forEach(element => {
+        if (enhancedNextControls.has(element)) return;
+        const kind = element.tagName === 'SELECT' ? 'Select' : element.tagName === 'TEXTAREA' ? 'Textarea' : 'Input';
+        try {
+            nextToolBoxControllers.push(window.VCPUI.enhance(kind, element));
+            enhancedNextControls.add(element);
+        } catch (error) {
+            console.warn('[NextUI] enhance:', error);
+        }
+    });
+}
+
+function addNextToolBoxTooltip(trigger, content) {
+    if (!trigger || !window.VCPUI) return;
+    const tooltip = window.VCPUI.create('Tooltip', { trigger, content, placement: 'bottom' });
+    nextToolBoxControllers.push(tooltip);
+    document.body.append(tooltip.element);
+}
+
+function buildNextToolBox() {
+    if (!window.VCPUI || nextToolBoxShell) return;
+    if (window.VCPUiModeController?.getCurrentMode() !== 'next') return;
+
+    const container = document.querySelector('.container');
+    const legacyTitleBar = document.querySelector('.title-bar');
+    const legacyHeader = container?.querySelector(':scope > header');
+    const mainContent = document.getElementById('main-content');
+    if (!container || !legacyHeader || !mainContent) return;
+
+    const toolTab = document.getElementById('tool-tab-btn');
+    const manageTab = document.getElementById('manage-tab-btn');
+    const legacyWorkflowButton = document.getElementById('workflow-btn');
+    const legacyThemeButton = document.getElementById('theme-toggle-btn');
+    const description = legacyHeader.querySelector('p');
+
+    document.body.classList.add('vcp-ui-scope', 'vcp-ui-human-toolbox');
+
+    const pageBody = document.createElement('div');
+    pageBody.className = 'vcp-ui-toolbox-body';
+
+    const intro = document.createElement('div');
+    intro.className = 'vcp-ui-toolbox-intro';
+    if (description) intro.append(description);
+
+    const navigation = document.createElement('nav');
+    navigation.className = 'vcp-ui-toolbox-navigation';
+    navigation.setAttribute('aria-label', '工具箱视图');
+    if (toolTab) navigation.append(toolTab);
+    if (manageTab) navigation.append(manageTab);
+
+    pageBody.append(intro, navigation, mainContent);
+
+    const workflowController = window.VCPUI.create('Button', {
+        label: '工作流编排', icon: 'workflow', variant: 'secondary', size: 'sm',
+    });
+    workflowController.element.id = 'workflow-btn-next';
+    workflowController.element.addEventListener('click', () => window.openWorkflowEditor?.());
+    const themeController = window.VCPUI.create('IconButton', {
+        icon: document.body.classList.contains('light-theme') ? 'dark_mode' : 'light_mode',
+        label: '切换深浅主题', size: 'sm',
+    });
+    themeController.element.id = 'theme-toggle-btn-next';
+    themeController.element.addEventListener('click', () => legacyThemeButton?.click());
+    nextToolBoxControllers.push(workflowController, themeController);
+    const actions = [workflowController.element, themeController.element];
+    nextToolBoxShell = window.VCPUI.create('AppPageShell', {
+        title: 'VCP 人类工具箱',
+        actions,
+        content: pageBody,
+        windowControls: true,
+        onMinimize: () => window.electronAPI.send('window-control', 'minimize'),
+        onMaximize: () => window.electronAPI.send('window-control', 'maximize'),
+        onClose: () => window.electronAPI.send('window-control', 'close'),
+    });
+
+    legacyTitleBar?.remove();
+    legacyHeader.remove();
+    container.remove();
+    document.body.append(nextToolBoxShell.element);
+
+    legacyWorkflowButton?.remove();
+    legacyThemeButton?.classList.add('vcp-ui-legacy-control-source');
+    addNextToolBoxTooltip(themeController.element, '切换深浅主题');
+    addNextToolBoxTooltip(workflowController.element, '打开工作流编排');
+
+    enhanceNextToolBoxControls(nextToolBoxShell.element);
+    nextToolBoxObserver = new MutationObserver(records => {
+        records.forEach(record => record.addedNodes.forEach(node => {
+            if (node.nodeType === Node.ELEMENT_NODE) enhanceNextToolBoxControls(node);
+        }));
+    });
+    nextToolBoxObserver.observe(mainContent, { childList: true, subtree: true });
+}
+window.addEventListener('vcp-ui-runtime-ready', buildNextToolBox);

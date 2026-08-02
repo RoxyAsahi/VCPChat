@@ -1288,3 +1288,23 @@ function escapeHtml(unsafe) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 }
+
+// --- 新版 UI：真实重建页面结构（AppPageShell + VCPUI 控件 + Web Awesome） ---
+function buildNextTask() {
+    window.VCPPageRebuild.rebuild({
+        title: '任务助手',
+        containerSelector: '.app-container',
+        navSelector: '#top-nav-bar',
+        actionSelectors: ['#settings-btn'],
+        onMinimize: () => api?.minimizeWindow?.(),
+        onMaximize: () => api?.maximizeWindow?.(),
+        onClose: () => (api?.closeWindow ? api.closeWindow() : window.close()),
+        enhanceSelectors: {
+            input: ['input:is(:not([type]),[type="text"],[type="number"],[type="search"],[type="url"],[type="email"],[type="password"])'],
+            select: ['select'],
+            textarea: ['textarea']
+        },
+        tooltipSelectors: ['#settings-btn', '#refresh-agents-btn', '#create-agent-btn', '#save-agents-btn', '#refresh-tasks-btn', '#create-task-btn', '#save-tasks-btn', '#refresh-delegations-btn']
+    });
+}
+window.addEventListener('vcp-ui-runtime-ready', buildNextTask);

@@ -1,3 +1,4 @@
+html[data-ui-mode="next"] .vcp-ui-scope[data-wa-scope],
 html[data-ui-mode="next"] .vcp-ui-scope .vcp-ui-wa-comparison.wa-light,
 html[data-ui-mode="next"] .vcp-ui-scope .vcp-ui-wa-comparison.wa-dark {
     --wa-font-family-body: inherit;
@@ -35,4 +36,16 @@ html[data-ui-mode="next"] .vcp-ui-scope .vcp-ui-wa-comparison.wa-dark {
     --wa-space-m: var(--vcp-ui-space-3);
     --wa-space-l: var(--vcp-ui-space-4);
     --wa-focus-ring-color: var(--vcp-ui-focus-ring);
+}
+html[data-ui-mode="next"] .vcp-ui-scope.vcp-ui-human-toolbox wa-card.tool-card::part(base) {
+    height: 100%;
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    box-shadow: none;
+}
+
+html[data-ui-mode="next"] .vcp-ui-scope.vcp-ui-human-toolbox wa-card.tool-card::part(body) {
+    height: 100%;
+    padding: 0;
 }

@@ -16,6 +16,7 @@ body {
     gap: 8px;
 }
 
+/* ================= 经典模式（legacy DOM）================= */
 #mini-title-bar {
     height: 34px;
     flex: 0 0 34px;
@@ -24,9 +25,9 @@ body {
     gap: 8px;
     padding: 0 8px 0 12px;
     background-color: var(--panel-bg);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--border-color);
     border-radius: 10px;
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+    box-shadow: 0 6px 24px var(--shadow-color, rgba(0, 0, 0, 0.18));
     backdrop-filter: blur(12px) saturate(150%);
     -webkit-backdrop-filter: blur(12px) saturate(150%);
     -webkit-app-region: drag;
@@ -79,8 +80,8 @@ body {
 }
 
 #closeMiniBtn:hover {
-    background-color: #e81123;
-    color: white;
+    background-color: var(--danger-color, #e81123);
+    color: var(--text-on-accent, #ffffff);
 }
 
 .mini-note-shell {
@@ -91,9 +92,9 @@ body {
     padding: 10px;
     gap: 8px;
     background-color: var(--panel-bg);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--border-color);
     border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 8px 32px var(--shadow-color, rgba(0, 0, 0, 0.2));
     backdrop-filter: blur(12px) saturate(150%);
     -webkit-backdrop-filter: blur(12px) saturate(150%);
 }
@@ -113,7 +114,7 @@ body {
 .mini-note-title:focus,
 .mini-note-content:focus {
     border-color: var(--highlight-text);
-    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.24);
+    box-shadow: 0 0 0 2px var(--focus-ring-color, rgba(52, 152, 219, 0.24));
 }
 
 .mini-note-title {
@@ -136,7 +137,7 @@ body {
 
 .mini-note-content {
     scrollbar-width: thin;
-    scrollbar-color: color-mix(in srgb, var(--highlight-text) 42%, transparent) transparent;
+    scrollbar-color: var(--scrollbar-thumb, rgba(52, 152, 219, 0.42)) transparent;
 }
 
 .mini-note-content::-webkit-scrollbar {
@@ -149,22 +150,7 @@ body {
 }
 
 .mini-note-content::-webkit-scrollbar-thumb {
-    background: linear-gradient(
-        180deg,
-        color-mix(in srgb, var(--highlight-text) 42%, transparent),
-        color-mix(in srgb, var(--secondary-text) 28%, transparent)
-    );
-    border: 2px solid transparent;
-    border-radius: 999px;
-    background-clip: padding-box;
-}
-
-.mini-note-content::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(
-        180deg,
-        color-mix(in srgb, var(--highlight-text) 58%, transparent),
-        color-mix(in srgb, var(--secondary-text) 42%, transparent)
-    );
+    background: var(--scrollbar-thumb, linear-gradient(180deg, rgba(52, 152, 219, 0.42), rgba(127, 127, 127, 0.28)));
     border: 2px solid transparent;
     border-radius: 999px;
     background-clip: padding-box;
@@ -176,5 +162,67 @@ body {
 
 body.light-theme .mini-note-title,
 body.light-theme .mini-note-content {
-    background-color: #f5f5f5;
+    background-color: var(--input-bg-light, #f5f5f5);
+}
+
+/* ================= 新版 UI（next 模式）=================
+   next 模式由 notemini.js 的 buildNextMiniNote 用 VCPUI 重建结构，
+   以下规则只对重建后的容器生效。 */
+html[data-ui-mode="next"] body.vcp-ui-scope {
+    padding: 0;
+    gap: 0;
+    background: var(--vcp-ui-bg-primary);
+    color: var(--vcp-ui-text-0);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-page-shell {
+    border-radius: 0;
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-mini-note-body {
+    min-width: 0;
+    min-height: 0;
+    flex: 1 1 auto;
+    padding: var(--vcp-ui-space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--vcp-ui-space-2);
+    box-sizing: border-box;
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-mini-note-body .vcp-ui-input-wrap,
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-mini-note-body .vcp-ui-textarea-wrap {
+    width: 100%;
+    box-sizing: border-box;
+    flex: 1 1 auto;
+    display: flex;
+    min-height: 0;
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-mini-note-body .vcp-ui-input-wrap {
+    flex: 0 0 auto;
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-mini-note-body input,
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-mini-note-body textarea {
+    width: 100%;
+    box-sizing: border-box;
+    flex: 1 1 auto;
+    font-family: inherit;
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-mini-note-body textarea {
+    resize: none;
+    line-height: 1.65;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-mini-note-status {
+    color: var(--vcp-ui-text-2);
+    font-size: var(--vcp-ui-font-caption);
+    white-space: nowrap;
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-mini-note-status.is-error {
+    color: var(--vcp-ui-danger);
 }

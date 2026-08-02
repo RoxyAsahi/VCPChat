@@ -2187,3 +2187,23 @@ function handleListDragEnd(e) {
 
     initializeApp();
 });
+
+// --- 新版 UI：真实重建页面结构（AppPageShell + VCPUI 控件 + Web Awesome） ---
+function buildNextNotes() {
+    window.VCPPageRebuild.rebuild({
+        title: '我的笔记',
+        containerSelector: '.container',
+        navSelector: '#custom-title-bar',
+        actionSelectors: ['#preview-toggle-btn'],
+        onMinimize: () => api?.minimizeWindow?.(),
+        onMaximize: () => api?.maximizeWindow?.(),
+        onClose: () => (api?.closeWindow ? api.closeWindow() : window.close()),
+        enhanceSelectors: {
+            input: ['input:is(:not([type]),[type="text"],[type="number"],[type="search"],[type="url"],[type="email"],[type="password"])'],
+            select: ['select'],
+            textarea: ['textarea']
+        },
+        tooltipSelectors: ['#preview-toggle-btn']
+    });
+}
+window.addEventListener('vcp-ui-runtime-ready', buildNextNotes);

@@ -70,7 +70,7 @@ const runtime = fs.readFileSync(runtimeFile, 'utf8');
 const registrations = [...runtime.matchAll(/\['([A-Za-z]+)',\s*[a-zA-Z]/g)].map(match => match[1]);
 const duplicateComponents = registrations.filter((name, index) => registrations.indexOf(name) !== index);
 if (duplicateComponents.length) report(runtimeFile, `duplicate component registrations: ${[...new Set(duplicateComponents)].join(', ')}`);
-const requiredComponents = ['Button', 'IconButton', 'Input', 'Textarea', 'Select', 'Range', 'Checkbox', 'Switch', 'Field', 'SettingsSection', 'SettingsActionBar', 'Badge', 'Alert', 'Card', 'Tabs', 'Toolbar', 'List', 'TableFrame', 'EmptyState', 'Divider', 'Tooltip', 'Skeleton', 'SegmentedControl', 'Pagination', 'ScrollArea', 'Modal', 'Toast', 'ConfirmDialog', 'InputDialog'];
+const requiredComponents = ['Button', 'IconButton', 'Input', 'Textarea', 'Select', 'Range', 'Checkbox', 'Switch', 'Field', 'SettingsSection', 'SettingsActionBar', 'Badge', 'Alert', 'Card', 'Tabs', 'Toolbar', 'List', 'TableFrame', 'EmptyState', 'Divider', 'Tooltip', 'Skeleton', 'SegmentedControl', 'Pagination', 'ScrollArea', 'Modal', 'Toast', 'ConfirmDialog', 'InputDialog', 'AppPageShell', 'WindowControls', 'AsyncBoundary'];
 requiredComponents.filter(name => !registrations.includes(name)).forEach(name => report(runtimeFile, `missing component registration: ${name}`));
 
 const manifestFile = path.join(moduleDir, 'component-manifest.js');
@@ -86,15 +86,19 @@ manifestNames.filter(name => !registrations.includes(name)).forEach(name => repo
 
 const webAwesomeComparisonFile = path.join(moduleDir, 'webawesome-comparison.js');
 const webAwesomeComparison = fs.readFileSync(webAwesomeComparisonFile, 'utf8');
-if (!webAwesomeComparison.includes('@awesome.me/webawesome/dist-cdn/components/')) {
-    report(webAwesomeComparisonFile, 'must use the self-contained dist-cdn build in the no-bundler renderer');
+if (!webAwesomeComparison.includes('vendor/webawesome/dist-cdn/components/')) {
+    report(webAwesomeComparisonFile, 'must load the self-contained vendored dist-cdn build in the no-bundler renderer');
+}
+if (webAwesomeComparison.includes('@awesome.me/webawesome')) {
+    report(webAwesomeComparisonFile, 'must not reference the node_modules copy; use the vendored vendor/webawesome build');
 }
 if (webAwesomeComparison.includes('@awesome.me/webawesome/dist/components/')) {
     report(webAwesomeComparisonFile, 'standard dist build contains bare Lit imports and breaks app registration');
 }
-const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-if (packageJson.dependencies?.['@awesome.me/webawesome'] !== '3.11.0') {
-    report(path.join(root, 'package.json'), 'Web Awesome showcase dependency must remain pinned to 3.11.0');
+const vendorWebAwesomePackage = path.join(root, 'vendor', 'webawesome', 'package.json');
+const vendoredVersion = JSON.parse(fs.readFileSync(vendorWebAwesomePackage, 'utf8')).version;
+if (vendoredVersion !== '3.11.0') {
+    report(vendorWebAwesomePackage, 'vendored Web Awesome must remain pinned to 3.11.0');
 }
 
 const mainHtmlFile = path.join(root, 'main.html');

@@ -34,6 +34,115 @@
         padding: 0;
     }
 
+    /* 设置导航：新版采用稳定列表外观，选中态使用弱强调背景。 */
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .global-settings-nav {
+        flex: 0 0 auto;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .settings-nav-list {
+        margin: 0;
+        padding: var(--vcp-ui-space-3) var(--vcp-ui-space-2);
+        display: grid;
+        gap: var(--vcp-ui-space-1);
+        list-style: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .settings-nav-item {
+        min-height: var(--vcp-ui-sidebar-row-height);
+        padding: 0 var(--vcp-ui-space-3);
+        display: flex;
+        align-items: center;
+        gap: var(--vcp-ui-space-2);
+        border-radius: var(--vcp-ui-sidebar-item-radius);
+        color: var(--vcp-ui-text-2);
+        background: transparent;
+        font-size: var(--vcp-ui-sidebar-font-size);
+        cursor: pointer;
+        transition: color var(--vcp-ui-transition-fast), background var(--vcp-ui-transition-fast);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .settings-nav-item:hover {
+        color: var(--vcp-ui-text-0);
+        background: var(--vcp-ui-fill-0);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .settings-nav-item.active {
+        color: var(--vcp-ui-text-0);
+        background: var(--vcp-ui-selection-bg);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .settings-nav-icon {
+        flex: 0 0 auto;
+        color: currentColor;
+    }
+
+    /* 设置搜索条：输入框、图标与定位提示使用新版表单控件观感。 */
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .vcp-ui-settings-search {
+        width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+        margin: 0 0 var(--vcp-ui-space-3);
+        padding: 0 var(--vcp-ui-space-3);
+        display: flex;
+        align-items: center;
+        gap: var(--vcp-ui-space-2);
+        border: 1px solid var(--vcp-ui-control-border);
+        border-radius: var(--vcp-ui-radius-md);
+        background: var(--vcp-ui-control-bg);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .vcp-ui-settings-search .vcp-ui-icon {
+        flex: 0 0 auto;
+        color: var(--vcp-ui-text-2);
+        font-size: var(--vcp-ui-icon-md);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .vcp-ui-settings-search input {
+        min-width: 0;
+        flex: 1 1 auto;
+        padding: var(--vcp-ui-space-2) 0;
+        border: 0;
+        outline: none;
+        color: var(--vcp-ui-text-0);
+        background: transparent;
+        font: inherit;
+    }
+
+    /* 保存栏：固定于内容区底部，配合 SettingsActionBar 的脏/保存/错误状态。 */
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .global-settings-footer {
+        margin: 0;
+        padding: var(--vcp-ui-space-3) var(--vcp-ui-space-4);
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: var(--vcp-ui-space-2);
+        border-top: 1px solid var(--vcp-ui-border);
+        background: var(--vcp-ui-bg-1);
+        flex: 0 0 auto;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .global-settings-footer button[type="submit"] {
+        min-height: var(--vcp-ui-control-md);
+        padding: 0 var(--vcp-ui-space-4);
+        border: 0;
+        border-radius: var(--vcp-ui-radius-sm);
+        color: var(--vcp-ui-on-accent);
+        background: var(--vcp-ui-accent);
+        font: inherit;
+        cursor: pointer;
+        transition: background var(--vcp-ui-transition-fast);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .global-settings-footer button[type="submit"]:hover {
+        background: var(--vcp-ui-accent-hover);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .global-settings-footer[data-state="saving"] button[type="submit"],
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .global-settings-footer[data-state="error"] button[type="submit"] {
+        cursor: progress;
+        opacity: 0.78;
+    }
+
     html[data-ui-mode="next"] .vcp-ui-scope#avatarCropperModal .avatar-cropper-modal-content {
         width: min(100%, var(--vcp-ui-modal-width));
     }

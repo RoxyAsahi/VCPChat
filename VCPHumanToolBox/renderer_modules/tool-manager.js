@@ -535,6 +535,44 @@ export class ToolManagerUI {
     }
 
     render() {
+        if (document.documentElement.dataset.uiMode === 'next' && window.VCPUI) {
+            this.container.replaceChildren();
+            const panel = document.createElement('div');
+            panel.className = 'tool-manager-panel';
+            const header = document.createElement('div');
+            header.className = 'tm-header';
+            const title = document.createElement('h3');
+            title.textContent = '插件管理';
+            const actions = document.createElement('div');
+            actions.className = 'tm-actions';
+            const search = window.VCPUI.create('Input', {
+                type: 'search', placeholder: '搜索工具', leadingIcon: 'search', size: 'md',
+            });
+            search.element.id = 'tm-global-search';
+            search.element.classList.add('tm-global-search-control');
+            const deleteButton = window.VCPUI.create('Button', {
+                label: '删除模式', icon: 'delete', variant: 'danger', size: 'sm',
+            });
+            deleteButton.element.id = 'tm-delete-mode-btn';
+            const importButton = window.VCPUI.create('Button', {
+                label: '导入插件', icon: 'download', variant: 'primary', size: 'sm',
+            });
+            importButton.element.id = 'tm-import-btn';
+            this.nextUiControllers = { search, deleteButton, importButton };
+            actions.append(search.element, deleteButton.element, importButton.element);
+            header.append(title, actions);
+            const content = document.createElement('div');
+            content.className = 'tm-content';
+            const list = document.createElement('div');
+            list.className = 'tm-user-tools-list';
+            list.id = 'tm-user-tools-list';
+            content.append(list);
+            panel.append(header, content);
+            this.container.append(panel);
+            this.renderUserToolsList();
+            this.attachEventListeners();
+            return;
+        }
         this.container.innerHTML = `
             <div class="tool-manager-panel">
                 <div class="tm-header">
@@ -603,7 +641,7 @@ export class ToolManagerUI {
     attachEventListeners() {
         // 🔧 修复：移除旧监听器，防止重复绑定
         const oldSearchInput = document.getElementById('tm-global-search');
-        if (oldSearchInput) {
+        if (oldSearchInput && document.documentElement.dataset.uiMode !== 'next') {
             oldSearchInput.replaceWith(oldSearchInput.cloneNode(true)); // 克隆新元素，清除所有旧事件
         }
 
@@ -624,8 +662,16 @@ export class ToolManagerUI {
         if (deleteModeBtn) {
             deleteModeBtn.addEventListener('click', () => {
                 this.deleteMode = !this.deleteMode;
-                deleteModeBtn.textContent = this.deleteMode ? '确认删除' : '删除模式';
-                deleteModeBtn.className = this.deleteMode ? 'tm-btn tm-btn-primary' : 'tm-btn tm-btn-danger';
+                if (this.nextUiControllers?.deleteButton) {
+                    this.nextUiControllers.deleteButton.update({
+                        label: this.deleteMode ? '确认删除' : '删除模式',
+                        icon: this.deleteMode ? 'check_circle' : 'delete',
+                        variant: this.deleteMode ? 'primary' : 'danger',
+                    });
+                } else {
+                    deleteModeBtn.textContent = this.deleteMode ? '确认删除' : '删除模式';
+                    deleteModeBtn.className = this.deleteMode ? 'tm-btn tm-btn-primary' : 'tm-btn tm-btn-danger';
+                }
                 if (this.deleteMode) {
                     this.renderUserToolsList();
                 } else {

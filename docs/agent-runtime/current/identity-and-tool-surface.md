@@ -18,7 +18,7 @@ source `e363b08c9175ac1cbe5893615dd2cb9ddf95043b`；真实 App Server adapter co
 ## 最终双层做法
 
 ```text
-Agent catalog systemPrompt
+Build Agent catalog (`CodexAgents/`) systemPrompt
   -> Session configSnapshot.baseInstructions
   -> thread/start 或 thread/resume
   -> 替换 Codex 内置身份
@@ -39,7 +39,7 @@ Codex Responses request（可能仍含原生工具 definitions）
 
 1. 显式 `baseInstructions` 优先；
 2. 否则使用 Renderer 传入的 Agent `systemPrompt`；
-3. Main 再以 `agentsDir` 中的真实 Agent config 作为权威补全；
+3. Main 再以独立 `CodexAgents/` 中的真实 Build Agent config 作为权威补全；主聊天 `Agents/` 不参与；
 4. 非 `codex` Agent 最终仍没有 `baseInstructions` 时，返回 `AGENT_IDENTITY_MISSING`，禁止带着
    Codex 默认身份启动；
 5. `developerInstructions` 仅保留为明确的附加指令，不再承担 Agent 身份。

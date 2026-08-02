@@ -55,8 +55,9 @@ idle -> creating -> streaming
 4. 后台 `thread/read` 对账。
 5. 新 snapshot 仅在 selection 仍匹配且 generation 更新时应用；发送复用同一 warm promise。
 
-当前实现已经将 Session 目录切到 projection-only SQLite 快路径：Main 负责 canonical Agent identity，
-schema v3 保存 `agentCatalogId/agentNameSnapshot`，旧 `Nova` 可受控迁移到唯一 folder ID；Renderer 不再
+当前实现已经将 Session 目录切到 projection-only SQLite 快路径：Main 负责 canonical Build Agent identity，
+Build profile 位于独立 `CodexAgents/`，不得读取或写入主聊天 `Agents/`。schema v3 保存
+`agentCatalogId/agentNameSnapshot`，旧 `Nova` 可受控迁移到 Build folder ID；Renderer 不再
 用原始字符串二次过滤。迁移规则和性能门槛见
 [workbench-experience-roadmap.md](workbench-experience-roadmap.md) UX-R1。
 

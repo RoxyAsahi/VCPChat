@@ -1846,3 +1846,23 @@ function formatDate(ts) {
         return String(ts);
     }
 }
+
+// --- 新版 UI：真实重建页面结构（AppPageShell + VCPUI 控件 + Web Awesome） ---
+function buildNextForum() {
+    window.VCPPageRebuild.rebuild({
+        title: 'VCP 论坛',
+        containerSelector: '.app-container',
+        navSelector: '#top-nav-bar',
+        actionSelectors: ['#create-post-btn'],
+        onMinimize: () => api?.minimizeWindow?.(),
+        onMaximize: () => api?.maximizeWindow?.(),
+        onClose: () => (api?.closeWindow ? api.closeWindow() : window.close()),
+        enhanceSelectors: {
+            input: ['input:is(:not([type]),[type="text"],[type="number"],[type="search"],[type="url"],[type="email"],[type="password"])'],
+            select: ['select'],
+            textarea: ['textarea']
+        },
+        tooltipSelectors: ['#create-post-btn', '#settings-btn', '#refresh-posts']
+    });
+}
+window.addEventListener('vcp-ui-runtime-ready', buildNextForum);

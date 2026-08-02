@@ -503,3 +503,94 @@ body {
     opacity: 0.6;
     cursor: not-allowed;
 }
+
+
+/* ============================================================
+   新版 UI（next 模式）覆写：仅在 html[data-ui-mode="next"] 生效。
+   经典模式不受影响；控件增强由 translator.js 的 initNextUi 完成。
+   ============================================================ */
+html[data-ui-mode="next"] body.vcp-ui-scope {
+    background: var(--vcp-ui-bg-primary);
+    color: var(--vcp-ui-text-0);
+    font-family: 'Noto Sans SC Variable', var(--vcp-chat-font-family, sans-serif);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope #custom-title-bar {
+    background: var(--vcp-ui-bg-1);
+    border-bottom: 1px solid var(--vcp-ui-border);
+    color: var(--vcp-ui-text-0);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope #custom-title-bar .window-control-btn {
+    color: var(--vcp-ui-text-2);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .translator-container {
+    color: var(--vcp-ui-text-0);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .translator-header h2 {
+    color: var(--vcp-ui-text-0);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .translator-controls select,
+html[data-ui-mode="next"] body.vcp-ui-scope .translator-controls input[type="text"] {
+    border-color: var(--vcp-ui-control-border);
+    border-radius: var(--vcp-ui-radius-sm);
+    background: var(--vcp-ui-control-bg);
+    color: var(--vcp-ui-text-0);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope #translateBtn {
+    min-height: var(--vcp-ui-control-md);
+    border: 0;
+    border-radius: var(--vcp-ui-radius-sm);
+    color: var(--vcp-ui-on-accent);
+    background: var(--vcp-ui-accent);
+    cursor: pointer;
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope #translateBtn:hover {
+    background: var(--vcp-ui-accent-hover);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .translator-main textarea {
+    border-color: var(--vcp-ui-border);
+    border-radius: var(--vcp-ui-radius-md);
+    background: var(--vcp-ui-bg-1);
+    color: var(--vcp-ui-text-0);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .settings-modal-panel {
+    border: 1px solid var(--vcp-ui-border);
+    border-radius: var(--vcp-ui-radius-card);
+    background: var(--vcp-ui-bg-1);
+    color: var(--vcp-ui-text-0);
+    box-shadow: var(--vcp-ui-shadow-lg);
+}
+
+
+/* next 模式：翻译助手使用 AppPageShell 外壳，业务节点移入内容区。 */
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-translator-body {
+    min-width: 0;
+    min-height: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    padding: var(--vcp-ui-space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--vcp-ui-space-3);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-translator-body .translator-header {
+    flex: 0 0 auto;
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-translator-body .translator-main {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-translator-body .translator-main .output-area {
+    position: relative;
+}

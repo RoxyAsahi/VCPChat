@@ -30,5 +30,8 @@ export const COMPONENT_MANIFEST = Object.freeze([
     candidate('Skeleton', 'foundation'),
     candidate('SegmentedControl', 'actions'),
     candidate('Pagination', 'data'),
-    candidate('ScrollArea', 'data')
+    candidate('ScrollArea', 'data'),
+    candidate('AppPageShell', 'application'),
+    candidate('WindowControls', 'application'),
+    candidate('AsyncBoundary', 'feedback')
 ]);

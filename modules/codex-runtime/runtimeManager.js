@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
+const { pathToFileURL } = require('url');
 const { EventEmitter } = require('events');
 const { CodexAppServerTransport, CodexAppServerError } = require('./appServerTransport');
 const { AgentProjectionRepository, CodexProjectionProjector } = require('./projection');
@@ -47,7 +48,7 @@ class CodexRuntimeManager extends EventEmitter {
         super();
         this.projectRoot = options.projectRoot || process.cwd();
         this.settingsPath = options.settingsPath || path.join(this.projectRoot, 'AppData', 'settings.json');
-        this.agentsDir = options.agentsDir || path.join(path.dirname(this.settingsPath), 'Agents');
+        this.agentsDir = options.agentsDir || path.join(path.dirname(this.settingsPath), 'CodexAgents');
         this.getSettings = options.getSettings || (() => ({}));
         this.sendEvent = options.sendEvent || (() => {});
         this.transportFactory = options.transportFactory || ((config) => new CodexAppServerTransport(config));
@@ -245,6 +246,51 @@ class CodexRuntimeManager extends EventEmitter {
             session = this.repository.getSession(created.sessionId);
         }
         return this.ensureSessionRuntime({ sessionId: session.sessionId, ...options });
+    }
+
+    listAgentProfiles() {
+        this.ensureProjectionStore();
+        this._ensureDefaultAgentProfile();
+        const profiles = this._agentCatalog().map((entry) => ({
+            id: entry.catalogId, name: entry.name,
+            model: entry.profile?.model || '',
+            systemPrompt: entry.profile?.systemPrompt || '',
+            avatarUrl: this._agentAvatarUrl(entry.catalogId),
+        }));
+        for (const session of this.repository.listSessions({ archived: false })) {
+            const idValue = session.agentCatalogId || session.agentId;
+            if (!idValue || profiles.some((profile) => sameIdentity(profile.id, idValue))) continue;
+            profiles.push({
+                id: idValue,
+                name: session.agentNameSnapshot || session.configSnapshot?.agentName || idValue,
+                model: session.configSnapshot?.model || '',
+                systemPrompt: session.configSnapshot?.baseInstructions || '',
+                avatarUrl: session.configSnapshot?.agentAvatar || '',
+            });
+        }
+        return profiles;
+    }
+
+    saveAgentAvatar({ agentId, avatarData } = {}) {
+        const idValue = String(agentId || '').trim();
+        if (!idValue || /[\\/:*?"<>|]/.test(idValue)) throw new CodexAppServerError('INVALID_INPUT', 'Invalid Build Agent identity');
+        const type = String(avatarData?.type || '').toLowerCase();
+        const extensions = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/gif': '.gif', 'image/webp': '.webp' };
+        const ext = extensions[type];
+        const bytes = Buffer.from(avatarData?.buffer || []);
+        if (!ext || bytes.length === 0 || bytes.length > 10 * 1024 * 1024) {
+            throw new CodexAppServerError('INVALID_INPUT', 'Invalid Build Agent avatar');
+        }
+        this._ensureDefaultAgentProfile();
+        const directory = path.join(this.agentsDir, idValue);
+        fs.mkdirSync(directory, { recursive: true });
+        for (const oldExt of Object.values(extensions)) {
+            const oldPath = path.join(directory, `avatar${oldExt}`);
+            if (fs.existsSync(oldPath)) fs.rmSync(oldPath);
+        }
+        const avatarPath = path.join(directory, `avatar${ext}`);
+        fs.writeFileSync(avatarPath, bytes);
+        return { success: true, avatarUrl: `${pathToFileURL(avatarPath).toString()}?t=${Date.now()}` };
     }
 
     async ensureSessionRuntime({ sessionId, topicId, reason = 'send', ...options } = {}) {
@@ -842,6 +888,7 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     _resolveAgentProfile(agentId) {
+        this._ensureDefaultAgentProfile();
         const wanted = String(agentId || '').trim();
         if (!wanted || !this.agentsDir || !fs.existsSync(this.agentsDir)) return null;
         const readConfig = (directory) => {
@@ -871,6 +918,7 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     _agentCatalog() {
+        this._ensureDefaultAgentProfile();
         if (!this.agentsDir || !fs.existsSync(this.agentsDir)) return [];
         const result = [];
         try {
@@ -888,6 +936,38 @@ class CodexRuntimeManager extends EventEmitter {
             return [];
         }
         return result;
+    }
+
+    _ensureDefaultAgentProfile() {
+        const directory = path.join(this.agentsDir, 'Nova');
+        const configPath = path.join(directory, 'config.json');
+        if (fs.existsSync(configPath)) return;
+        if (fs.existsSync(this.agentsDir)) {
+            try {
+                for (const entry of fs.readdirSync(this.agentsDir, { withFileTypes: true })) {
+                    if (!entry.isDirectory()) continue;
+                    try {
+                        const config = JSON.parse(fs.readFileSync(path.join(this.agentsDir, entry.name, 'config.json'), 'utf8'));
+                        if (sameIdentity(entry.name, 'Nova') || sameIdentity(config?.name, 'Nova')) return;
+                    } catch {
+                        // Invalid folders do not suppress the safe default.
+                    }
+                }
+            } catch {
+                // Directory creation below remains the fail-safe path.
+            }
+        }
+        fs.mkdirSync(directory, { recursive: true });
+        fs.writeFileSync(configPath, `${JSON.stringify({ name: 'Nova', systemPrompt: '{{Nova}}' }, null, 2)}\n`, 'utf8');
+    }
+
+    _agentAvatarUrl(agentId) {
+        const directory = path.join(this.agentsDir, String(agentId || ''));
+        for (const ext of ['.png', '.jpg', '.jpeg', '.gif', '.webp']) {
+            const avatarPath = path.join(directory, `avatar${ext}`);
+            if (fs.existsSync(avatarPath)) return pathToFileURL(avatarPath).toString();
+        }
+        return '';
     }
 
     _resolveCanonicalAgent(value, { failOnAmbiguous = false } = {}) {

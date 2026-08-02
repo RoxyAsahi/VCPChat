@@ -38,9 +38,9 @@ const { VCPUI } = window;
 const scope = document.querySelector('.vcp-ui-scope');
 assert.ok(VCPUI, 'VCPUI should be exposed on window');
 
-const expected = ['button', 'iconbutton', 'input', 'textarea', 'select', 'range', 'checkbox', 'switch', 'field', 'settingssection', 'settingsactionbar', 'badge', 'alert', 'card', 'tabs', 'toolbar', 'list', 'listitem', 'tableframe', 'emptystate', 'divider', 'tooltip', 'skeleton', 'segmentedcontrol', 'pagination', 'scrollarea', 'modal', 'toast', 'confirmdialog', 'inputdialog'];
+const expected = ['button', 'iconbutton', 'input', 'textarea', 'select', 'range', 'checkbox', 'switch', 'field', 'settingssection', 'settingsactionbar', 'badge', 'alert', 'card', 'tabs', 'toolbar', 'list', 'listitem', 'tableframe', 'emptystate', 'divider', 'tooltip', 'skeleton', 'segmentedcontrol', 'pagination', 'scrollarea', 'modal', 'toast', 'confirmdialog', 'inputdialog', 'apppageshell', 'windowcontrols', 'asyncboundary'];
 expected.forEach(name => assert.ok(VCPUI.components.includes(name), `missing public component ${name}`));
-assert.equal(VCPUI.manifest.length, 29);
+assert.equal(VCPUI.manifest.length, 32);
 assert.equal(VCPUI.getComponentMeta('ListItem').name, 'List');
 assert.equal(VCPUI.getComponentMeta('Button').status, 'stable');
 
@@ -164,6 +164,41 @@ dynamicGroupForm.innerHTML = '<textarea id="dynamicGroupPrompt"></textarea>';
 settingsHost.append(dynamicGroupForm);
 await new Promise(resolve => setTimeout(resolve, 0));
 assert.ok(document.getElementById('dynamicGroupPrompt').classList.contains('vcp-ui-native-textarea'));
+
+// Global settings modal is enhanced independently of the sidebar presentation
+// gate: controls, save bar and injected search only in next mode.
+const modalContainer = document.createElement('div');
+modalContainer.id = 'modal-container';
+const globalModal = document.createElement('div');
+globalModal.className = 'modal vcp-ui-scope';
+globalModal.id = 'globalSettingsModal';
+globalModal.innerHTML = `
+    <div class="global-settings-modal-content">
+        <div class="global-settings-content">
+            <form id="globalSettingsForm">
+                <input id="globalUserName" type="text">
+                <select id="globalSelect"><option>A</option><option>B</option></select>
+            </form>
+        </div>
+        <div class="global-settings-footer"><button type="submit" form="globalSettingsForm">保存全局设置</button></div>
+    </div>`;
+modalContainer.append(globalModal);
+scope.append(modalContainer);
+await import(`${pathToFileURL(`${process.cwd()}/modules/ui-system/settings-bridge.js`).href}?global-settings-contract-test=1`);
+window.VCPUISettingsBridge.refresh();
+await new Promise(resolve => setTimeout(resolve, 0));
+assert.ok(document.getElementById('globalUserName').classList.contains('vcp-ui-native-input'), 'global input enhanced');
+assert.ok(document.getElementById('globalSelect').classList.contains('vcp-ui-native-select'), 'global select enhanced');
+const globalFooter = globalModal.querySelector('.global-settings-footer');
+assert.ok(globalFooter.classList.contains('vcp-ui-settings-action-bar'), 'global save bar enhanced');
+assert.ok(globalModal.querySelector('.vcp-ui-settings-search'), 'settings search injected');
+document.getElementById('globalUserName').value = 'Changed';
+document.getElementById('globalUserName').dispatchEvent(new Event('input', { bubbles: true }));
+assert.equal(globalFooter.dataset.state, 'dirty', 'global save bar tracks dirty state');
+document.getElementById('globalSettingsForm').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+assert.equal(globalFooter.dataset.state, 'saving', 'global save bar tracks saving state');
+window.VCPUISettingsBridge.destroy();
+modalContainer.remove();
 
 document.documentElement.dataset.uiMode = 'classic';
 window.dispatchEvent(new CustomEvent('ui-mode-changed'));

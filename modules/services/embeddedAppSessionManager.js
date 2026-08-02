@@ -30,24 +30,41 @@ function toFileUrl(appRoot, relativePath, query = {}) {
     return url.toString();
 }
 
+// The UI mode is passed down to every embedded page so the child document can
+// set html[data-ui-mode] without guessing from the OS theme or a default. This
+// reuses the persisted settings file and does not add an IPC channel.
+async function readUiMode(appRoot) {
+    try {
+        const settingsPath = path.join(appRoot, 'AppData', 'settings.json');
+        if (await fs.pathExists(settingsPath)) {
+            const settings = await fs.readJson(settingsPath);
+            return settings.uiMode === 'next' ? 'next' : 'classic';
+        }
+    } catch (error) {
+        console.warn('[EmbeddedApps] Failed to read uiMode:', error.message);
+    }
+    return 'classic';
+}
+
 async function resolveDescriptor(appAction, appRoot) {
+    const uiMode = await readUiMode(appRoot);
     switch (appAction) {
         case 'open-notes-window':
-            return { url: toFileUrl(appRoot, 'Notemodules/notes.html') };
+            return { url: toFileUrl(appRoot, 'Notemodules/notes.html', { uiMode }) };
         case 'open-note-mini-window':
-            return { url: toFileUrl(appRoot, 'Notemodules/notemini.html') };
+            return { url: toFileUrl(appRoot, 'Notemodules/notemini.html', { uiMode }) };
         case 'open-memo-window':
-            return { url: toFileUrl(appRoot, 'Memomodules/memo.html') };
+            return { url: toFileUrl(appRoot, 'Memomodules/memo.html', { uiMode }) };
         case 'open-forum-window':
-            return { url: toFileUrl(appRoot, 'Forummodules/forum.html') };
+            return { url: toFileUrl(appRoot, 'Forummodules/forum.html', { uiMode }) };
         case 'open-log-window':
-            return { url: toFileUrl(appRoot, 'Logmodules/log.html') };
+            return { url: toFileUrl(appRoot, 'Logmodules/log.html', { uiMode }) };
         case 'open-themes-window':
-            return { url: toFileUrl(appRoot, 'Themesmodules/themes.html') };
+            return { url: toFileUrl(appRoot, 'Themesmodules/themes.html', { uiMode }) };
         case 'open-task-window':
-            return { url: toFileUrl(appRoot, 'Agenttaskmodules/task.html') };
+            return { url: toFileUrl(appRoot, 'Agenttaskmodules/task.html', { uiMode }) };
         case 'open-plugin-manager-window':
-            return { url: toFileUrl(appRoot, 'PluginManagerModules/plugin-manager.html') };
+            return { url: toFileUrl(appRoot, 'PluginManagerModules/plugin-manager.html', { uiMode }) };
         case 'open-translator-window': {
             let settings = {};
             try {
@@ -60,6 +77,7 @@ async function resolveDescriptor(appAction, appRoot) {
                 url: toFileUrl(appRoot, 'Translatormodules/translator.html', {
                     vcpServerUrl: settings.vcpServerUrl || '',
                     vcpApiKey: settings.vcpApiKey || '',
+                    uiMode,
                 }),
             };
         }

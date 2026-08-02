@@ -9,36 +9,13 @@ import {
 } from './agent-workbench-timeline.js';
 import { createAgentBlockPresentation, createAgentMessagePresentation } from './agent-presentation/index.js';
 
-// The Workbench is mounted before the shared Agent-directory IPC may finish
-// walking avatars/config files. Keep the built-in, ToolBox-compatible Nova
-// entry visible synchronously; the authoritative shared catalog replaces it
-// as soon as Main returns. This is a view fallback, never a second config
-// store and never persisted by the renderer.
+// Build Agent identities are independent from normal-chat Agents. Keep Nova
+// visible synchronously while the authoritative Build catalog loads.
 const NOVA_CATALOG_FALLBACK = Object.freeze({
     id: 'Nova', name: 'Nova', model: '', systemPrompt: '{{Nova}}', avatarUrl: null,
 });
 
-function seedSharedAgentCatalogFromShell() {
-    // The main VCPChat sidebar has normally already rendered its cached Agent
-    // directory by the time the internal Agent Workbench opens. Reuse that
-    // display metadata for first paint only; Main's `getAgents()` remains the
-    // sole authoritative configuration/catalog read and replaces this seed.
-    if (typeof document === 'undefined') return [{ ...NOVA_CATALOG_FALLBACK }];
-    const seen = new Set();
-    const seeded = [];
-    for (const row of document.querySelectorAll('#agentList li[data-item-type="agent"][data-item-id]')) {
-        const id = String(row.dataset.itemId || '').trim();
-        if (!id || seen.has(id.toLocaleLowerCase())) continue;
-        seen.add(id.toLocaleLowerCase());
-        const name = row.querySelector('.agent-name')?.textContent?.trim() || id;
-        const avatarUrl = row.querySelector('img.avatar')?.getAttribute('src') || null;
-        seeded.push({ id, name, model: '', systemPrompt: '', avatarUrl });
-    }
-    if (!seeded.some((agent) => String(agent.id).toLocaleLowerCase() === 'nova')) {
-        seeded.unshift({ ...NOVA_CATALOG_FALLBACK });
-    }
-    return seeded;
-}
+function seedBuildAgentCatalog() { return [{ ...NOVA_CATALOG_FALLBACK }]; }
 
 // This is deliberately a view over AgentRuntime, not a second chat/session
 // implementation. Session, message, tool, approval and runtime state all come
@@ -645,7 +622,7 @@ function mountWorkbench(container) {
     const state = {
         tab: 'agents',
         selectedAgent: 'Nova',
-        agentCatalog: seedSharedAgentCatalogFromShell(),
+        agentCatalog: seedBuildAgentCatalog(),
         agentSearch: '',
         modelCatalog: [],
         topics: [],
@@ -1081,11 +1058,8 @@ function mountWorkbench(container) {
     async function refreshControlPlane() {
         const request = ++controlPlaneRequest;
         const optional = (fn) => Promise.resolve().then(fn).catch(() => []);
-        // Match VCPChat's normal chat path: the shared Main-process Agent
-        // catalog is the source of Agent identity/configuration.  Do not start
-        // a Rust daemon merely to discover Agents, and do not call ToolBox's
-        // `/v1/models` from this page.
-        const sharedAgents = await optional(() => runtimeApi().getAgents?.());
+        // Build profiles are isolated from the normal-chat Agent directory.
+        const sharedAgents = await optional(() => runtimeApi().agentRuntimeListAgentProfiles?.());
         const normalizedAgents = Array.isArray(sharedAgents)
             ? sharedAgents.map((agent) => ({
                 id: agent.id || agent.name,
@@ -2012,7 +1986,7 @@ function mountWorkbench(container) {
             const avatarCopy = node('div', 'agent-chat-settings-avatar-copy');
             avatarCopy.append(
                 node('strong', 'agent-chat-setting-label', 'Agent 头像'),
-                node('span', 'agent-chat-setting-help', '与主聊天共用同一份 Agent 头像。PNG、JPEG、GIF 或 WebP。'),
+                node('span', 'agent-chat-setting-help', '仅用于 Build Agent，不影响主聊天助手。PNG、JPEG、GIF 或 WebP。'),
             );
             const avatarInput = document.createElement('input');
             avatarInput.type = 'file';
@@ -2030,10 +2004,9 @@ function mountWorkbench(container) {
                 state.avatarSaving = true;
                 renderSidebar();
                 try {
-                    const result = await runtimeApi().saveAvatar?.(targetAgentId, {
-                        name: file.name,
-                        type: file.type,
-                        buffer: await file.arrayBuffer(),
+                    const result = await runtimeApi().agentRuntimeSaveAgentAvatar?.({
+                        agentId: targetAgentId,
+                        avatarData: { name: file.name, type: file.type, buffer: await file.arrayBuffer() },
                     });
                     if (!result?.success) throw new Error(result?.error || '头像保存失败。');
                     const profile = state.agentCatalog.find((agent) => sameAgent(agent.id || agent.name, targetAgentId));

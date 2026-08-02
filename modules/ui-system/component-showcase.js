@@ -9,6 +9,7 @@ const CATEGORIES = [
     { id: 'navigation', label: '导航', icon: 'tab' },
     { id: 'data', label: '数据', icon: 'table' },
     { id: 'feedback', label: '反馈', icon: 'notifications' },
+    { id: 'application', label: '应用页面', icon: 'web' },
     { id: 'webawesome', label: 'WA 对照', icon: 'compare' }
 ];
 
@@ -401,6 +402,38 @@ function mountShowcase(container) {
         setTimeout(() => VCPUI.feedback.setLoading(false), 1200);
     });
     group.append(loadingTrigger.element);
+
+    categoryHeading('application', '应用页面', '独立页面与内嵌页面共用的壳层、窗口控制和异步状态边界。');
+
+    demo = section('AppPageShell', 'AppPageShell', '标题栏、动作区、滚动区与窗口控制；内嵌模式自动隐藏窗口按钮。');
+    const shell = create('AppPageShell', {
+        title: '应用标题',
+        actions: [
+            create('Button', { label: '刷新', variant: 'ghost', size: 'sm', icon: 'refresh' }),
+            create('Button', { label: '保存', size: 'sm', icon: 'check' })
+        ],
+        content: document.createTextNode('页面内容区随窗口缩放滚动。')
+    });
+    demo.append(shell.element);
+    const embeddedToggle = create('Button', { label: '切换内嵌模式', variant: 'outline', size: 'sm' });
+    on(embeddedToggle.element, 'click', () => shell.update({ embedded: !shell.element.dataset.embedded }));
+    group = row(demo, 'Mode');
+    group.append(embeddedToggle.element);
+
+    demo = section('WindowControls', 'WindowControls', '仅独立窗口渲染的最小化 / 最大化 / 关闭，内嵌态由外壳隐藏。');
+    demo.append(create('WindowControls', { onMinimize: () => VCPUI.feedback.toast('最小化'), onMaximize: () => VCPUI.feedback.toast('最大化'), onClose: () => VCPUI.feedback.toast('关闭') }).element);
+
+    demo = section('AsyncBoundary', 'AsyncBoundary', '统一的 loading / error / empty / 内容四态，避免内容区跳变。');
+    const boundary = create('AsyncBoundary', { status: 'idle', content: document.createTextNode('数据已就绪。') });
+    demo.append(boundary.element);
+    group = row(demo, 'States');
+    ['idle', 'loading', 'error', 'empty'].forEach(state => {
+        const trigger = create('Button', { label: state, variant: 'secondary', size: 'sm' });
+        on(trigger.element, 'click', () => {
+            boundary.update({ status: state, error: '服务器连接失败', empty: '没有可用数据' });
+        });
+        group.append(trigger.element);
+    });
 
     categoryHeading('webawesome', 'Web Awesome 对照', '验证成熟 Web Components 能否保留 VCPChat 的视觉身份，同时接管基础交互与无障碍细节。');
     const comparisonHost = document.createElement('section');

@@ -563,3 +563,19 @@
         text-align: left;
     }
 }
+
+
+/* Application page-pattern demos get a bounded stage so the shell and async
+   boundary are readable inside the showcase grid. */
+html[data-ui-mode="next"] .vcp-ui-scope .vcp-ui-showcase-demo .vcp-ui-page-shell {
+    height: 220px;
+    border: 1px solid var(--vcp-ui-border);
+    border-radius: var(--vcp-ui-radius-md);
+    overflow: hidden;
+}
+
+html[data-ui-mode="next"] .vcp-ui-scope .vcp-ui-showcase-demo .vcp-ui-async-boundary {
+    min-height: 96px;
+    border: 1px dashed var(--vcp-ui-border);
+    border-radius: var(--vcp-ui-radius-md);
+}

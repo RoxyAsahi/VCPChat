@@ -267,6 +267,17 @@ async function fetchLog({ incremental, silent }) {
 }
 
 function openClearConfirmModal() {
+    if (window.VCPUiModeController?.getCurrentMode() === 'next' && window.VCPUI) {
+        window.VCPUI.feedback.confirm({
+            title: '确认清空日志',
+            message: '确定要清空后端服务器日志吗？此操作不可撤销。',
+            danger: true,
+            confirmLabel: '清空日志',
+        }).then(accepted => {
+            if (accepted) clearServerLog();
+        });
+        return;
+    }
     if (!elements.confirmModal) {
         clearServerLog();
         return;
@@ -451,6 +462,10 @@ function setMeta(message) {
 }
 
 function showToast(message) {
+    if (window.VCPUiModeController?.getCurrentMode() === 'next' && window.VCPUI) {
+        window.VCPUI.feedback.toast(message, { variant: 'info' });
+        return;
+    }
     elements.toast.textContent = message;
     elements.toast.classList.add('active');
     clearTimeout(showToast.timer);
@@ -517,3 +532,54 @@ function debounce(fn, wait) {
         timer = setTimeout(() => fn(...args), wait);
     };
 }
+// --- 新版 UI：真实重建页面结构（AppPageShell + VCPUI 控件 + Web Awesome） ---
+// 经典模式保持原 DOM/CSS；next 模式将既有业务节点移入 VCPUI 外壳并增强，
+// 清空确认与提示改用 VCPUI.feedback（Modal/Toast）。
+function buildNextLog() {
+    if (!window.VCPUI) return;
+    if (window.VCPUiModeController?.getCurrentMode() !== 'next') return;
+    if (document.body.classList.contains('vcp-ui-scope')) return;
+
+    const V = window.VCPUI;
+    const app = document.querySelector('.log-app');
+    if (!app) return;
+    document.body.classList.add('vcp-ui-scope');
+
+    const shell = V.create('AppPageShell', {
+        title: 'VCP日志中心',
+        windowControls: true,
+        onMinimize: () => api?.minimizeWindow?.(),
+        onMaximize: () => api?.maximizeWindow?.(),
+        onClose: () => api?.closeWindow?.(),
+    });
+
+    // 动作按钮移入 shell 动作区（刷新/清空）。
+    const actions = [elements.refreshBtn, elements.clearBtn].filter(Boolean);
+    if (actions.length) shell.update({ actions });
+
+    // 业务主体移入 shell 内容区。
+    const body = document.createElement('div');
+    body.className = 'vcp-ui-log-body';
+    while (app.firstChild) body.append(app.firstChild);
+    shell.update({ content: body });
+
+    // 移除旧标题栏与自定义 modal/toast（next 模式改用 VCPUI.feedback）。
+    document.getElementById('top-nav-bar')?.remove();
+    document.getElementById('confirm-modal')?.remove();
+    document.getElementById('toast')?.remove();
+    app.remove();
+    document.body.append(shell.element);
+
+    // 控件增强（保留原生 .value 供业务逻辑使用）。
+    [elements.lineLimitInput, elements.filterInput].forEach(input => {
+        if (input) { try { V.enhance('Input', input); } catch (error) { console.warn('[Log] enhance input:', error); } }
+    });
+
+    // Tooltip 通过 VCPUI.create('Tooltip') 创建（由 VCPUI 委托 Web Awesome）。
+    [elements.refreshBtn, elements.clearBtn, elements.copyBtn, elements.orderBtn, elements.scrollTopBtn, elements.scrollBottomBtn].forEach(btn => {
+        if (!btn) return;
+        const tip = V.create('Tooltip', { trigger: btn, content: btn.title || btn.getAttribute('aria-label') || '操作', placement: 'top' });
+        document.body.append(tip.element);
+    });
+}
+window.addEventListener('vcp-ui-runtime-ready', buildNextLog);

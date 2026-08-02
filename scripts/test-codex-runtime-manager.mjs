@@ -123,6 +123,19 @@ const manager = new CodexRuntimeManager({
     repositoryFactory: () => new AgentProjectionRepository({ databasePath: path.join(root, 'projection.sqlite') }),
     sendEvent: (event) => uiEvents.push(event),
 });
+fs.mkdirSync(path.join(root, 'Agents', 'MainOnly'), { recursive: true });
+fs.writeFileSync(path.join(root, 'Agents', 'MainOnly', 'config.json'), JSON.stringify({ name: 'MainOnly' }));
+const buildProfiles = manager.listAgentProfiles();
+assert.ok(buildProfiles.some((profile) => profile.id === 'Nova'),
+    'the isolated Build catalog must initialize its own Nova profile');
+assert.equal(buildProfiles.some((profile) => profile.id === 'MainOnly'), false,
+    'normal-chat Agents must never appear in the Build Agent catalog');
+const savedBuildAvatar = manager.saveAgentAvatar({
+    agentId: 'Nova',
+    avatarData: { name: 'nova.png', type: 'image/png', buffer: new Uint8Array([1, 2, 3]) },
+});
+assert.match(savedBuildAvatar.avatarUrl, /CodexAgents\/Nova\/avatar\.png/i,
+    'Build avatars must be stored under CodexAgents rather than normal-chat Agents');
 
 // The Codex provider must target VChat's loopback compatibility adapter, not
 // ToolBox's optional /v1/responses implementation.  The upstream ToolBox key

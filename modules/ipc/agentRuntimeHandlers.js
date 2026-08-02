@@ -47,6 +47,8 @@ function removeHandlers() {
     settingsUpdatedListener = null;
     for (const channel of [
         IPC_CHANNELS.GET_PRESENTATION_MODE,
+        IPC_CHANNELS.LIST_AGENT_PROFILES,
+        IPC_CHANNELS.SAVE_AGENT_AVATAR,
         IPC_CHANNELS.GET_STATUS,
         IPC_CHANNELS.START,
         IPC_CHANNELS.STOP,
@@ -96,7 +98,7 @@ function initialize(options) {
         // In a packaged Electron app settings live under userData, not inside
         // app.asar.  Keep Agent catalog discovery beside that shared file so
         // the daemon can use the exact same layout in development and release.
-        agentsDir: path.join(path.dirname(settingsManager.settingsPath || path.join(projectRoot, 'AppData', 'settings.json')), 'Agents'),
+        agentsDir: path.join(path.dirname(settingsManager.settingsPath || path.join(projectRoot, 'AppData', 'settings.json')), 'CodexAgents'),
         getSettings: () => cachedSettings,
         setSettings: (updater) => settingsManager.updateSettings(updater),
         hasUi: () => workbenchSenders.size > 0 && Boolean(getMainWindow()),
@@ -133,6 +135,8 @@ function initialize(options) {
             ? 'legacy'
             : 'fork',
     })));
+    ipcMain.handle(IPC_CHANNELS.LIST_AGENT_PROFILES, (event) => guard(event, () => manager.listAgentProfiles()));
+    ipcMain.handle(IPC_CHANNELS.SAVE_AGENT_AVATAR, (event, payload) => guard(event, () => manager.saveAgentAvatar(payload || {})));
 
     ipcMain.handle(IPC_CHANNELS.GET_STATUS, (event) => guard(event, () => manager.getStatus()));
     ipcMain.handle(IPC_CHANNELS.START, (event) => guard(event, () => manager.start()));

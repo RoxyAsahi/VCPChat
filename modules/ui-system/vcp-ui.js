@@ -317,7 +317,7 @@ function fieldEnhancer(element, options = {}) {
 }
 
 function settingsActionBarEnhancer(element, options = {}, { removeOnDestroy = false } = {}) {
-    if (!element?.matches?.('.form-actions, .vcp-ui-settings-action-bar')) {
+    if (!element?.matches?.('.form-actions, .vcp-ui-settings-action-bar, .global-settings-footer')) {
         throw new TypeError('VCPUI SettingsActionBar enhancement received an incompatible element.');
     }
     const form = options.form || element.closest('form');
@@ -449,7 +449,60 @@ function setCommon(element, state, variants, sizes = ['sm', 'md', 'lg']) {
     element.classList.toggle('is-disabled', Boolean(state.disabled));
 }
 
+// Builds a Web Awesome-backed control when the component bundle has been lazily
+// registered (the consuming surface preloads it through VCPWebAwesome) and the
+// adapter is available in next mode. Falls back to null so factories use the
+// native DOM control; business pages keep the VCPUI API either way.
+function waControl(tag, attrs = {}) {
+    if (document.documentElement.dataset.uiMode !== 'next') return null;
+    if (!window.VCPWebAwesome?.isDefined?.(tag)) return null;
+    return window.VCPWebAwesome.create(tag, attrs);
+}
+
+function waSize(wa, value, sizes = ['sm', 'md', 'lg'], map = { sm: 'small', md: 'medium', lg: 'large' }) {
+    wa.setAttribute('size', map[normalize(value, sizes, 'md', 'size')] || 'medium');
+}
+
+function waFocus(controller, wa) {
+    const baseFocus = controller.focus.bind(controller);
+    controller.focus = () => {
+        if (typeof wa.focus === 'function') wa.focus();
+        else baseFocus();
+        return controller;
+    };
+    return controller;
+}
+
 function buttonFactory(options = {}) {
+    const wa = waControl('button', {});
+    if (wa) {
+        wa.className = 'vcp-ui-button vcp-ui-wa-button';
+        const state = { label: 'Button', variant: 'primary', size: 'md', ...options };
+        const controller = makeController(wa, state, current => {
+            const variants = {
+                primary: 'brand', secondary: 'neutral', outline: 'neutral', ghost: 'neutral',
+                danger: 'danger', link: 'neutral',
+            };
+            setCommon(wa, current, Object.keys(variants), ['sm', 'md', 'lg', 'xl']);
+            wa.setAttribute('variant', variants[current.variant] || 'brand');
+            wa.setAttribute('appearance', current.variant === 'ghost' || current.variant === 'link' ? 'plain' : current.variant === 'outline' ? 'outlined' : 'filled');
+            waSize(wa, current.size, ['sm', 'md', 'lg', 'xl'], { sm: 'small', md: 'medium', lg: 'large', xl: 'large' });
+            wa.disabled = Boolean(current.disabled || current.loading);
+            wa.loading = Boolean(current.loading);
+            wa.setAttribute('type', current.type || 'button');
+            wa.replaceChildren();
+            if (!current.loading && current.icon) {
+                const start = document.createElement('span');
+                start.slot = 'start';
+                start.append(icon(current.icon));
+                wa.append(start);
+            }
+            const label = document.createElement('span');
+            label.textContent = current.label;
+            wa.append(label);
+        });
+        return waFocus(controller, wa);
+    }
     const element = document.createElement('button');
     element.type = options.type || 'button';
     element.className = 'vcp-ui-button';
@@ -484,6 +537,37 @@ function iconButtonFactory(options = {}) {
 }
 
 function textControlFactory(kind, options = {}) {
+    const wa = kind === 'input' ? waControl('input', {}) : null;
+    if (wa) {
+        wa.className = 'vcp-ui-input vcp-ui-wa-input';
+        const state = { size: 'md', value: '', ...options };
+        const controller = makeController(wa, state, current => {
+            waSize(wa, current.size);
+            wa.disabled = Boolean(current.disabled);
+            wa.readonly = Boolean(current.readonly);
+            wa.required = Boolean(current.required);
+            wa.placeholder = current.placeholder || '';
+            wa.type = current.type || 'text';
+            wa.value = String(current.value ?? '');
+            wa.replaceChildren();
+            if (current.leadingIcon) {
+                const start = document.createElement('span');
+                start.slot = 'start';
+                start.append(icon(current.leadingIcon, 'vcp-ui-control-icon'));
+                wa.append(start);
+            }
+            if (current.trailingIcon) {
+                const end = document.createElement('span');
+                end.slot = 'end';
+                end.append(icon(current.trailingIcon, 'vcp-ui-control-icon'));
+                wa.append(end);
+            }
+            if (current.invalid) wa.setAttribute('aria-invalid', 'true');
+            else wa.removeAttribute('aria-invalid');
+        });
+        controller._listen(wa, 'input', () => { state.value = wa.value; });
+        return waFocus(controller, wa);
+    }
     const wrapper = document.createElement('span');
     wrapper.className = `vcp-ui-${kind}-wrap`;
     const control = document.createElement(kind === 'textarea' ? 'textarea' : 'input');
@@ -510,6 +594,36 @@ function textControlFactory(kind, options = {}) {
 }
 
 function selectFactory(options = {}) {
+    const wa = waControl('select', { value: options.value ?? '', disabled: options.disabled });
+    if (wa) {
+        const state = { size: 'md', options: [], value: '', placeholder: '', ...options };
+        const controller = makeController(wa, state, current => {
+            waSize(wa, current.size);
+            wa.disabled = Boolean(current.disabled);
+            if (current.invalid) wa.setAttribute('aria-invalid', 'true');
+            else wa.removeAttribute('aria-invalid');
+            wa.replaceChildren();
+            if (current.placeholder) {
+                const placeholder = document.createElement('wa-option');
+                placeholder.value = '';
+                placeholder.disabled = true;
+                placeholder.textContent = current.placeholder;
+                wa.append(placeholder);
+            }
+            (current.options || []).forEach(item => {
+                const normalized = typeof item === 'string' ? { label: item, value: item } : item;
+                const option = document.createElement('wa-option');
+                option.value = normalized.value;
+                option.disabled = Boolean(normalized.disabled);
+                option.textContent = normalized.label;
+                wa.append(option);
+            });
+            if (current.value !== undefined) wa.value = String(current.value);
+        });
+        controller._listen(wa, 'change', () => emit(wa, 'change'));
+        waFocus(controller, wa);
+        return controller;
+    }
     const element = document.createElement('select');
     element.className = 'vcp-ui-select';
     const state = { size: 'md', options: [], value: '', placeholder: '', ...options };
@@ -665,6 +779,36 @@ function alertFactory(options = {}) {
 }
 
 function cardFactory(options = {}) {
+    const wa = waControl('card', {});
+    if (wa) {
+        wa.className = 'vcp-ui-card vcp-ui-wa-card';
+        if (options.interactive) {
+            wa.setAttribute('role', 'button');
+            wa.tabIndex = 0;
+        }
+        const state = { title: '', description: '', variant: options.interactive ? 'interactive' : 'default', ...options };
+        return makeController(wa, state, current => {
+            wa.dataset.variant = normalize(current.variant, ['default', 'outlined', 'interactive', 'selected'], 'default', 'variant');
+            if (current.interactive || options.interactive) wa.setAttribute('aria-pressed', String(wa.dataset.variant === 'selected'));
+            wa.replaceChildren();
+            const body = document.createElement('div');
+            body.className = 'vcp-ui-card-body';
+            if (current.title) {
+                const title = document.createElement('strong');
+                title.className = 'vcp-ui-card-title';
+                title.textContent = current.title;
+                body.append(title);
+            }
+            if (current.description) {
+                const description = document.createElement('span');
+                description.className = 'vcp-ui-card-description';
+                description.textContent = current.description;
+                body.append(description);
+            }
+            if (current.content) appendContent(body, current.content);
+            wa.append(body);
+        });
+    }
     const element = document.createElement(options.interactive ? 'button' : 'section');
     if (element instanceof HTMLButtonElement) element.type = 'button';
     element.className = 'vcp-ui-card';
@@ -683,6 +827,30 @@ function cardFactory(options = {}) {
 }
 
 function tabsFactory(options = {}) {
+    const wa = waControl('tab-group', {});
+    if (wa) {
+        const state = { items: [], value: '', ...options };
+        const controller = makeController(wa, state, current => {
+            if (!current.value && current.items[0]) current.value = current.items[0].value;
+            wa.replaceChildren();
+            (current.items || []).forEach(item => {
+                const tab = document.createElement('wa-tab');
+                tab.setAttribute('panel', item.value);
+                if (item.disabled) tab.setAttribute('disabled', '');
+                tab.textContent = item.label;
+                wa.append(tab);
+                const panel = document.createElement('wa-tab-panel');
+                panel.setAttribute('name', item.value);
+                wa.append(panel);
+            });
+            if (current.value) wa.setAttribute('active-tab', current.value);
+        });
+        controller._listen(wa, 'wa-tab-show', event => {
+            if (event.detail?.name !== undefined) state.value = event.detail.name;
+            emit(wa, 'change');
+        });
+        return controller;
+    }
     const element = document.createElement('div');
     element.className = 'vcp-ui-tabs';
     element.setAttribute('role', 'tablist');
@@ -857,6 +1025,17 @@ function dividerFactory(options = {}) {
 }
 
 function tooltipFactory(options = {}) {
+    const trigger = options.trigger?.element || options.trigger;
+    const wa = waControl('tooltip');
+    if (wa && trigger) {
+        if (!trigger.id) trigger.id = `vcp-ui-wa-tip-${crypto.randomUUID()}`;
+        wa.setAttribute('for', trigger.id);
+        const state = { content: '', placement: 'top', open: false, ...options };
+        return makeController(wa, state, current => {
+            wa.setAttribute('placement', normalize(current.placement, ['top', 'right', 'bottom', 'left'], 'top', 'placement'));
+            wa.textContent = current.content;
+        });
+    }
     const element = document.createElement('span');
     element.className = 'vcp-ui-tooltip';
     const bubble = document.createElement('span');
@@ -864,23 +1043,23 @@ function tooltipFactory(options = {}) {
     bubble.id = `vcp-ui-tooltip-${crypto.randomUUID()}`;
     bubble.setAttribute('role', 'tooltip');
     const state = { content: '', placement: 'top', open: false, ...options };
-    let trigger = null;
+    let triggerNode = null;
     let controller;
     controller = makeController(element, state, (current, records) => {
         element.dataset.placement = normalize(current.placement, ['top', 'right', 'bottom', 'left'], 'top', 'placement');
         element.dataset.state = current.open ? 'open' : 'closed';
         const nextTrigger = current.trigger?.element || current.trigger;
-        if (nextTrigger && trigger !== nextTrigger) {
-            trigger = nextTrigger;
-            trigger.setAttribute('aria-describedby', bubble.id);
-            listen(records, trigger, 'mouseenter', () => controller.update({ open: true }));
-            listen(records, trigger, 'mouseleave', () => controller.update({ open: false }));
-            listen(records, trigger, 'focus', () => controller.update({ open: true }));
-            listen(records, trigger, 'blur', () => controller.update({ open: false }));
+        if (nextTrigger && triggerNode !== nextTrigger) {
+            triggerNode = nextTrigger;
+            triggerNode.setAttribute('aria-describedby', bubble.id);
+            listen(records, triggerNode, 'mouseenter', () => controller.update({ open: true }));
+            listen(records, triggerNode, 'mouseleave', () => controller.update({ open: false }));
+            listen(records, triggerNode, 'focus', () => controller.update({ open: true }));
+            listen(records, triggerNode, 'blur', () => controller.update({ open: false }));
         }
         bubble.textContent = current.content;
-        if (element.firstChild !== trigger || element.lastChild !== bubble) element.replaceChildren(trigger, bubble);
-    }, () => trigger?.removeAttribute('aria-describedby'));
+        if (element.firstChild !== triggerNode || element.lastChild !== bubble) element.replaceChildren(triggerNode, bubble);
+    }, () => triggerNode?.removeAttribute('aria-describedby'));
     return controller;
 }
 
@@ -1023,6 +1202,45 @@ function focusable(dialog) {
 }
 
 function modalFactory(options = {}) {
+    const wa = waControl('dialog', {});
+    if (wa) {
+        const previousFocus = document.activeElement;
+        const state = { title: 'Dialog', size: 'md', content: '', actions: [], closeOnBackdrop: true, ...options };
+        let controller;
+        const close = result => {
+            state.onClose?.(result);
+            wa.open = false;
+        };
+        controller = makeController(wa, state, current => {
+            wa.setAttribute('label', current.title);
+            if (current.closeOnBackdrop) wa.setAttribute('light-dismiss', '');
+            else wa.removeAttribute('light-dismiss');
+            wa.replaceChildren();
+            const body = document.createElement('div');
+            body.className = 'vcp-ui-modal-body';
+            appendContent(body, current.content);
+            wa.append(body);
+            const footer = document.createElement('div');
+            footer.setAttribute('slot', 'footer');
+            (current.actions || []).forEach(action => footer.append(action.element || action));
+            wa.append(footer);
+            let frames = 0;
+            const ensureOpen = () => {
+                if (wa.isConnected) {
+                    wa.open = true;
+                    return;
+                }
+                if (frames++ < 60) requestAnimationFrame(ensureOpen);
+            };
+            queueMicrotask(ensureOpen);
+        });
+        controller.close = close;
+        controller._listen(wa, 'wa-after-hide', () => {
+            controller.destroy();
+            if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
+        });
+        return controller;
+    }
     const overlay = document.createElement('div');
     overlay.className = 'vcp-ui-modal-overlay';
     const dialog = document.createElement('section');
@@ -1145,6 +1363,89 @@ function inputDialogFactory(options = {}) {
     return modal;
 }
 
+function windowControlsFactory(options = {}) {
+    const element = document.createElement('div');
+    element.className = 'vcp-ui-window-controls';
+    element.setAttribute('role', 'toolbar');
+    element.setAttribute('aria-label', '窗口控制');
+    const state = { onMinimize: null, onMaximize: null, onClose: null, ...options };
+    const minimize = iconButtonFactory({ icon: 'remove', label: '最小化窗口', size: 'sm', variant: 'ghost' });
+    const maximize = iconButtonFactory({ icon: 'crop_square', label: '最大化窗口', size: 'sm', variant: 'ghost' });
+    const close = iconButtonFactory({ icon: 'close', label: '关闭窗口', size: 'sm', variant: 'ghost' });
+    close.element.classList.add('vcp-ui-window-control-close');
+    const controller = makeController(element, state, current => {
+        element.replaceChildren(minimize.element, maximize.element, close.element);
+    });
+    minimize.element.addEventListener('click', () => state.onMinimize?.() ?? window.utilityAPI?.minimizeWindow?.());
+    maximize.element.addEventListener('click', () => state.onMaximize?.() ?? window.utilityAPI?.maximizeWindow?.());
+    close.element.addEventListener('click', () => state.onClose?.() ?? window.utilityAPI?.closeWindow?.());
+    return controller;
+}
+
+function appPageShellFactory(options = {}) {
+    const element = document.createElement('div');
+    element.className = 'vcp-ui-page-shell vcp-ui-scope';
+    const header = document.createElement('header');
+    header.className = 'vcp-ui-page-shell-header';
+    const title = document.createElement('h1');
+    title.className = 'vcp-ui-page-shell-title';
+    const actions = document.createElement('div');
+    actions.className = 'vcp-ui-page-shell-actions';
+    const content = document.createElement('div');
+    content.className = 'vcp-ui-page-shell-content';
+    header.append(title, actions);
+    element.append(header, content);
+    const embeddedDefault = document.documentElement.dataset.vcpEmbeddedApp === 'true'
+        || new URLSearchParams(window.location.search).has('vcpEmbedded');
+    const state = { title: '', actions: [], content: '', embedded: embeddedDefault, windowControls: true, onMinimize: null, onMaximize: null, onClose: null, ...options };
+    let windowControls;
+    const controller = makeController(element, state, current => {
+        element.dataset.embedded = String(Boolean(current.embedded));
+        if (current.title instanceof Node) appendContent(title, current.title);
+        else title.textContent = current.title || '';
+        actions.replaceChildren();
+        (current.actions || []).forEach(action => actions.append(action.element || action));
+        if (current.content !== undefined) appendContent(content, current.content);
+        if (!current.embedded && current.windowControls && !windowControls?.element.isConnected) {
+            windowControls = windowControlsFactory({
+                onMinimize: current.onMinimize,
+                onMaximize: current.onMaximize,
+                onClose: current.onClose,
+            });
+            header.append(windowControls.element);
+        } else if (current.embedded && windowControls) {
+            windowControls.destroy();
+            windowControls = null;
+        }
+    }, () => windowControls?.destroy());
+    return controller;
+}
+
+function asyncBoundaryFactory(options = {}) {
+    const element = document.createElement('div');
+    element.className = 'vcp-ui-async-boundary';
+    const state = { status: 'idle', content: '', error: '', empty: '', emptyIcon: 'inbox', emptyDescription: '', loadingLines: 3, retryLabel: '重试', onRetry: null, ...options };
+    const controller = makeController(element, state, current => {
+        element.dataset.status = current.status;
+        element.replaceChildren();
+        if (current.status === 'loading') {
+            const skeleton = skeletonFactory({ variant: 'text', lines: current.loadingLines });
+            element.append(skeleton.element);
+        } else if (current.status === 'error') {
+            const alert = alertFactory({ title: '加载失败', message: current.error || '发生错误', variant: 'danger' });
+            const retry = buttonFactory({ label: current.retryLabel, variant: 'secondary', icon: 'refresh' });
+            retry.element.addEventListener('click', () => current.onRetry?.());
+            element.append(alert.element, retry.element);
+        } else if (current.status === 'empty') {
+            const empty = emptyStateFactory({ icon: current.emptyIcon, title: current.empty || '暂无数据', description: current.emptyDescription });
+            element.append(empty.element);
+        } else if (current.content !== undefined && current.content !== null) {
+            appendContent(element, current.content);
+        }
+    });
+    return controller;
+}
+
 [
     ['Button', buttonFactory], ['IconButton', iconButtonFactory],
     ['Input', options => textControlFactory('input', options)],
@@ -1156,7 +1457,9 @@ function inputDialogFactory(options = {}) {
     ['TableFrame', tableFactory], ['EmptyState', emptyStateFactory], ['Divider', dividerFactory],
     ['Tooltip', tooltipFactory], ['Skeleton', skeletonFactory], ['SegmentedControl', segmentedControlFactory],
     ['Pagination', paginationFactory], ['ScrollArea', scrollAreaFactory], ['Modal', modalFactory],
-    ['Toast', toastFactory], ['ConfirmDialog', confirmFactory], ['InputDialog', inputDialogFactory]
+    ['Toast', toastFactory], ['ConfirmDialog', confirmFactory], ['InputDialog', inputDialogFactory],
+    ['AppPageShell', appPageShellFactory], ['WindowControls', windowControlsFactory],
+    ['AsyncBoundary', asyncBoundaryFactory]
 ].forEach(([name, factory]) => COMPONENTS.set(name.toLowerCase(), factory));
 
 ENHANCERS.set('input', (element, options) => nativeControlEnhancer(element, 'input', options));

@@ -13,6 +13,22 @@ const { registerComfyUIIpcHandlers } = require('./ComfyUImodules/comfyui-ipc');
 
 let mainWindow = null;
 
+function getSettingsPath() {
+    const configuredRoot = process.env.VCPCHAT_APP_DATA_DIR?.trim();
+    return path.join(configuredRoot ? path.resolve(configuredRoot) : path.join(__dirname, '..', 'AppData'), 'settings.json');
+}
+
+function readUiMode() {
+    try {
+        const settingsPath = getSettingsPath();
+        const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+        return settings.uiMode === 'next' ? 'next' : 'classic';
+    } catch (error) {
+        console.warn('[Main] Failed to resolve Human ToolBox UI mode:', error.message);
+        return 'classic';
+    }
+}
+
 function createWindow() {
     // 创建浏览器窗口。
     mainWindow = new BrowserWindow({
@@ -32,7 +48,9 @@ function createWindow() {
     });
 
     // 加载应用的 index.html
-    mainWindow.loadFile(path.join(__dirname, 'index.html'));
+    mainWindow.loadFile(path.join(__dirname, 'index.html'), {
+        query: { uiMode: readUiMode() },
+    });
 }
 // Electron会在初始化完成并且准备好创建浏览器窗口时调用这个方法
 app.whenReady().then(async () => {
@@ -367,8 +385,7 @@ function registerFileSystemHandlers() {
 
 // --- Settings IPC Handlers ---
 ipcMain.handle('vcp-ht-get-settings', async () => {
-    // 纠正路径以匹配原始应用程序结构
-    const settingsPath = path.join(app.getAppPath(), '..', 'AppData', 'settings.json');
+    const settingsPath = getSettingsPath();
     try {
         const settingsData = await fs.promises.readFile(settingsPath, 'utf8');
         return JSON.parse(settingsData);
@@ -380,8 +397,7 @@ ipcMain.handle('vcp-ht-get-settings', async () => {
 });
 
 ipcMain.handle('vcp-ht-save-settings', async (event, settings) => {
-    // 纠正路径以匹配原始应用程序结构
-    const settingsPath = path.join(app.getAppPath(), '..', 'AppData', 'settings.json');
+    const settingsPath = getSettingsPath();
     try {
         // 确保目录存在
         await fs.promises.mkdir(path.dirname(settingsPath), { recursive: true });

@@ -75,14 +75,14 @@ window.nextUiApps = {
 };
 window.chatAPI = {
     sendOpenExternalLink: (url) => { openedExternalLinks.push(url); },
-    getAgents: async () => {
+    agentRuntimeListAgentProfiles: async () => {
         await agentCatalogGate;
         return [
-            { id: 'Nova', name: 'Nova', avatarUrl: 'assets/nova-avatar.png', config: { model: 'gpt-5.6-terra', systemPrompt: '{{Nova}}' } },
-            { id: '123', name: '123', config: { model: 'gpt-5.6-terra' } },
+            { id: 'Nova', name: 'Nova', avatarUrl: 'assets/nova-avatar.png', model: 'gpt-5.6-terra', systemPrompt: '{{Nova}}' },
+            { id: '123', name: '123', model: 'gpt-5.6-terra' },
         ];
     },
-    saveAvatar: async (agentId, avatarData) => {
+    agentRuntimeSaveAgentAvatar: async ({ agentId, avatarData }) => {
         savedAvatars.push({ agentId, avatarData });
         return { success: true, avatarUrl: `file:///${agentId}-updated.png` };
     },
@@ -379,15 +379,15 @@ const assistantTab = [...host.querySelectorAll('.agent-chat-sidebar .sidebar-tab
 assert.ok(assistantTab, 'Assistant tab must be available');
 assistantTab.click();
 assert.ok([...host.querySelectorAll('.agent-chat-agent-row .agent-name')].some((node) => node.textContent === 'Nova'),
-    'a slow shared Agent-directory IPC must not leave the Assistant list blank before Nova renders');
-assert.ok([...host.querySelectorAll('.agent-chat-agent-row .agent-name')].some((node) => node.textContent === '123'),
-    'the Workbench must use the already-rendered VCPChat sidebar catalog for an immediate full Assistant-list first paint');
+    'a slow Build Agent profile IPC must not leave the Assistant list blank before Nova renders');
+assert.equal([...host.querySelectorAll('.agent-chat-agent-row .agent-name')].some((node) => node.textContent === '123'), false,
+    'the Workbench must not import a same-named Agent from the normal-chat sidebar');
 releaseAgentCatalog();
 await new Promise((resolve) => setTimeout(resolve, 30));
 const sessionsBeforeAgentBrowse = createdSessions.length;
 const secondaryAgent = [...host.querySelectorAll('.agent-chat-agent-row')]
     .find((row) => row.querySelector('.agent-name')?.textContent === '123');
-assert.ok(secondaryAgent, 'a second shared Agent must be selectable for Topic browsing');
+assert.ok(secondaryAgent, 'a second Build Agent profile must be selectable for Topic browsing');
 secondaryAgent.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
 assert.equal(host.querySelector('.sidebar-tab-button.active')?.textContent, '会话',
@@ -1262,7 +1262,7 @@ settingsTab.click();
 assert.ok(host.querySelector('.agent-chat-settings-pane .agent-chat-settings-form'),
     'settings must render inside a dedicated padded pane instead of placing fields against the sidebar edge');
 const avatarSettings = host.querySelector('.agent-chat-settings-avatar');
-assert.ok(avatarSettings, 'Agent settings must expose the shared main-chat avatar control');
+assert.ok(avatarSettings, 'Agent settings must expose the isolated Build Agent avatar control');
 assert.match(avatarSettings.querySelector('.agent-chat-settings-avatar-preview')?.src || '', /nova-avatar\.png/,
     'avatar preview must use the selected Agent catalog avatar');
 const avatarInput = avatarSettings.querySelector('input[type="file"]');
@@ -1271,7 +1271,7 @@ const avatarFile = { name: 'nova.png', type: 'image/png', arrayBuffer: async () 
 Object.defineProperty(avatarInput, 'files', { configurable: true, value: [avatarFile] });
 avatarInput.dispatchEvent(new window.Event('change', { bubbles: true }));
 await new Promise((resolve) => setTimeout(resolve, 30));
-assert.equal(savedAvatars.length, 1, 'selecting an avatar must save through the existing main-chat avatar IPC');
+assert.equal(savedAvatars.length, 1, 'selecting an avatar must save through the Build Agent profile IPC');
 assert.equal(savedAvatars[0].agentId, 'Nova', 'avatar save must target the selected Agent identity');
 assert.equal(savedAvatars[0].avatarData.name, 'nova.png');
 assert.equal(savedAvatars[0].avatarData.type, 'image/png');

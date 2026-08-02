@@ -906,3 +906,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     initialize();
 });
+// --- 新版 UI：真实重建（AppPageShell + VCPUI 控件 + Web Awesome，业务页仅经 VCPUI） ---
+function buildNextVchatManager() {
+    window.VCPPageRebuild.rebuild({
+        title: 'VChat Manager',
+        containerSelector: '#app',
+        windowControls: false,
+        enhanceSelectors: {
+            input: ['input:is(:not([type]),[type="text"],[type="number"],[type="search"],[type="url"],[type="email"],[type="password"])'],
+            select: ['select'],
+            textarea: ['textarea']
+        },
+        tooltipSelectors: ['consistency-check-btn', 'apply-fixes-btn', 'run-check-btn', 'theme-toggle']
+    });
+}
+window.addEventListener('vcp-ui-runtime-ready', buildNextVchatManager);
