@@ -579,3 +579,10 @@ html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-log-body .log-shell .vcp-ui-
         width: 100%;
     }
 }
+
+/* 窄屏：标题字号收紧，避免截断 */
+@media (max-width: 560px) {
+    html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-page-shell-title {
+        font-size: 14px;
+    }
+}

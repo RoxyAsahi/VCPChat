@@ -1271,3 +1271,9 @@ html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-forum-state {
 html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-forum-body .vcp-ui-toolbar[hidden] {
     display: none;
 }
+
+@media (max-width: 560px) {
+    html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-page-shell-title {
+        font-size: 14px;
+    }
+}

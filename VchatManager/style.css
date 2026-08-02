@@ -713,3 +713,9 @@ html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-topic-host .topics-list-item
 html[data-ui-mode="next"] body.vcp-ui-scope #tab-content.vcp-ui-state-visible .tab-panel {
     display: none;
 }
+
+@media (max-width: 560px) {
+    html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-page-shell-title {
+        font-size: 14px;
+    }
+}
