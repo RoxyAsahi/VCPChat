@@ -712,3 +712,52 @@ html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-canvas-body #external-change
     background: var(--vcp-ui-bg-2);
     border-color: var(--vcp-ui-border);
 }
+
+/* 窄屏（<=768px）：layout.css 的移动端 .sidebar 抽屉规则会把侧栏移出屏幕，
+   next 模式下恢复为常驻布局；收起右侧变动历史栏，压缩左侧目录栏。 */
+@media (max-width: 768px) {
+    html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-canvas-body #change-history-sidebar {
+        display: none;
+    }
+
+    html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-canvas-body .sidebar {
+        position: relative;
+        transform: none;
+        z-index: auto;
+        width: 170px;
+        min-width: 140px;
+        padding: 12px 10px;
+    }
+
+    html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-canvas-body .sidebar .vcp-ui-button {
+        width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+        justify-content: center;
+        padding-left: var(--vcp-ui-space-1);
+        padding-right: var(--vcp-ui-space-1);
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-canvas-body .resizer {
+        margin: 0 2px;
+    }
+
+    html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-canvas-body .editor-top-bar {
+        flex-wrap: wrap;
+        height: auto;
+        min-height: 40px;
+        padding: 6px 10px;
+        gap: 6px;
+    }
+
+    html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-canvas-body .editor-top-bar .vcp-ui-button {
+        flex: 0 1 auto;
+        min-width: 0;
+    }
+
+    html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-canvas-body .search-bar {
+        flex-wrap: wrap;
+    }
+}
