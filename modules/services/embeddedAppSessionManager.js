@@ -30,18 +30,31 @@ function toFileUrl(appRoot, relativePath, query = {}) {
     return url.toString();
 }
 
+// Settings candidates in priority order. The packaged app redirects its data
+// dir via VCPCHAT_APP_DATA_DIR (same knob main.js uses for the app's own data
+// root); embedded pages must follow it, otherwise they silently open in
+// classic even when the main renderer is in next mode.
+function settingsCandidates(appRoot) {
+    const candidates = [];
+    if (process.env.VCPCHAT_APP_DATA_DIR?.trim()) {
+        candidates.push(path.join(process.env.VCPCHAT_APP_DATA_DIR.trim(), 'settings.json'));
+    }
+    candidates.push(path.join(appRoot, 'AppData', 'settings.json'));
+    return candidates;
+}
+
 // The UI mode is passed down to every embedded page so the child document can
 // set html[data-ui-mode] without guessing from the OS theme or a default. This
 // reuses the persisted settings file and does not add an IPC channel.
 async function readUiMode(appRoot) {
-    try {
-        const settingsPath = path.join(appRoot, 'AppData', 'settings.json');
-        if (await fs.pathExists(settingsPath)) {
+    for (const settingsPath of settingsCandidates(appRoot)) {
+        try {
+            if (!(await fs.pathExists(settingsPath))) continue;
             const settings = await fs.readJson(settingsPath);
             return settings.uiMode === 'next' ? 'next' : 'classic';
+        } catch (error) {
+            console.warn('[EmbeddedApps] Failed to read uiMode:', error.message);
         }
-    } catch (error) {
-        console.warn('[EmbeddedApps] Failed to read uiMode:', error.message);
     }
     return 'classic';
 }
@@ -67,11 +80,15 @@ async function resolveDescriptor(appAction, appRoot) {
             return { url: toFileUrl(appRoot, 'PluginManagerModules/plugin-manager.html', { uiMode }) };
         case 'open-translator-window': {
             let settings = {};
-            try {
-                const settingsPath = path.join(appRoot, 'AppData', 'settings.json');
-                if (await fs.pathExists(settingsPath)) settings = await fs.readJson(settingsPath);
-            } catch (error) {
-                console.warn('[EmbeddedApps] Failed to read translator settings:', error.message);
+            for (const settingsPath of settingsCandidates(appRoot)) {
+                try {
+                    if (await fs.pathExists(settingsPath)) {
+                        settings = await fs.readJson(settingsPath);
+                        break;
+                    }
+                } catch (error) {
+                    console.warn('[EmbeddedApps] Failed to read translator settings:', error.message);
+                }
             }
             return {
                 url: toFileUrl(appRoot, 'Translatormodules/translator.html', {
