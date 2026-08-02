@@ -418,20 +418,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // --- 为复制按钮添加点击事件 ---
+    // next 模式：复制按钮由 VCPUI IconButton 接管，反馈改用 VCPUI.feedback（Toast）。
+    let nextCopyButton = null;
+    const showCopyFeedback = (message, isSuccess) => {
+        if (nextCopyButton && window.VCPUI?.feedback) {
+            window.VCPUI.feedback.toast(message, { variant: isSuccess ? 'success' : 'error' });
+            return;
+        }
+        copyBtn.innerHTML = `<span class="copy-feedback">${message}</span>`;
+        setTimeout(() => {
+            copyBtn.innerHTML = originalCopyBtnIcon;
+        }, 2000);
+    };
     copyBtn.addEventListener('click', () => {
         const textToCopy = translatedTextarea.value;
         if (textToCopy && !translatedTextarea.classList.contains('streaming')) {
             navigator.clipboard.writeText(textToCopy).then(() => {
-                copyBtn.innerHTML = '<span class="copy-feedback">已复制!</span>';
-                setTimeout(() => {
-                    copyBtn.innerHTML = originalCopyBtnIcon;
-                }, 2000);
+                showCopyFeedback('已复制!', true);
             }).catch(err => {
                 console.error('Could not copy text: ', err);
-                copyBtn.innerHTML = '<span class="copy-feedback">失败</span>';
-                 setTimeout(() => {
-                    copyBtn.innerHTML = originalCopyBtnIcon;
-                }, 2000);
+                showCopyFeedback('失败', false);
             });
         }
     });
@@ -439,6 +445,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- 新版 UI：真实重建页面结构（AppPageShell + VCPUI 控件 + Web Awesome） ---
     // 经典模式保持原 DOM/CSS；next 模式将既有业务节点移入 VCPUI 外壳并增强，
     // 业务逻辑（流式翻译/复制/设置保存）继续操作同一批元素，无需重写。
+    let nextSettingsModal = null;
     function buildNextTranslator() {
         if (!window.VCPUI) return;
         if (window.VCPUiModeController?.getCurrentMode() !== 'next') return;
@@ -456,9 +463,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             onClose: () => api?.closeWindow?.(),
         });
 
-        // 设置入口移入 shell 动作区。
-        const settingsBtn = document.getElementById('translator-settings-btn');
-        if (settingsBtn) shell.update({ actions: [settingsBtn] });
+        // 设置入口：换为 VCPUI IconButton（保留原点击逻辑：打开设置弹窗）。
+        const legacySettingsBtn = document.getElementById('translator-settings-btn');
+        let settingsAction = null;
+        if (legacySettingsBtn) {
+            settingsAction = V.create('IconButton', { icon: 'settings', label: '翻译设置', variant: 'ghost' });
+            settingsAction.element.title = '翻译设置';
+            settingsAction.element.addEventListener('click', () => legacySettingsBtn.click());
+            shell.update({ actions: [settingsAction.element] });
+        }
 
         // 原容器内容移入 shell 内容区，避免双标题。
         const header = container.querySelector('.translator-header');
@@ -483,15 +496,59 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.querySelectorAll('.translator-main textarea').forEach(textarea => {
             try { V.enhance('Textarea', textarea); } catch (error) { console.warn('[Translator] enhance textarea:', error); }
         });
-        document.querySelectorAll('#settingsModal input[type="text"]').forEach(input => {
-            try { V.enhance('Input', input); } catch (error) { console.warn('[Translator] enhance input:', error); }
-        });
+
+        // 翻译按钮 → VCPUI Button（保留原点击逻辑）。
+        let nextTranslate = null;
+        if (translateBtn && translateBtn.isConnected) {
+            nextTranslate = V.create('Button', { label: '翻译', icon: 'translate', variant: 'primary' });
+            nextTranslate.element.classList.add('vcp-ui-translator-translate');
+            nextTranslate.element.addEventListener('click', () => translateBtn.click());
+            translateBtn.replaceWith(nextTranslate.element);
+            translateBtn.dataset.nextUiReplaced = 'true';
+        }
+
+        // 复制按钮 → VCPUI IconButton（保留原点击逻辑；反馈走 VCPUI.feedback）。
+        if (copyBtn && copyBtn.isConnected) {
+            nextCopyButton = V.create('IconButton', { icon: 'copy', label: '复制译文', variant: 'secondary' });
+            nextCopyButton.element.classList.add('vcp-ui-translator-copy');
+            nextCopyButton.element.addEventListener('click', () => copyBtn.click());
+            copyBtn.replaceWith(nextCopyButton.element);
+            copyBtn.dataset.nextUiReplaced = 'true';
+        }
+
+        // 设置弹窗 → VCPUI Modal（内容沿用同一批表单元素，业务读写不变）。
+        const settingsFormBody = document.querySelector('.settings-modal-body');
+        if (settingsFormBody) {
+            document.getElementById('closeSettingsModalBtn')?.remove();
+            const footerButtons = [document.getElementById('resetSettingsBtn'), document.getElementById('saveSettingsBtn')].filter(Boolean);
+            const openNextSettings = () => {
+                nextSettingsModal?.close?.();
+                settingsFormBody.querySelectorAll('input[type="text"]').forEach(input => {
+                    try { V.enhance('Input', input); } catch (error) { console.warn('[Translator] enhance settings input:', error); }
+                });
+                nextSettingsModal = V.create('Modal', {
+                    title: '翻译设置',
+                    content: settingsFormBody,
+                    actions: footerButtons,
+                    closeOnBackdrop: true,
+                    onClose: () => settingsModal.classList.add('hidden'),
+                });
+                document.body.append(nextSettingsModal.element);
+            };
+            // 业务 openSettingsModal 仍会先执行（fillSettingsForm + 移除 hidden），
+            // 随后打开 VCPUI Modal；旧弹窗在 next 模式被 CSS 隐藏。
+            settingsTranslatorBtn.addEventListener('click', openNextSettings);
+            // 保存成功后的 setTimeout(closeSettingsModal, 500) 只是切回 hidden 类，
+            // 这里观察旧弹窗类名并同步关闭 VCPUI Modal。
+            const settingsObserver = new MutationObserver(() => {
+                if (settingsModal.classList.contains('hidden') && nextSettingsModal) nextSettingsModal.close?.();
+            });
+            settingsObserver.observe(settingsModal, { attributes: true, attributeFilter: ['class'] });
+        }
 
         // Tooltip 通过 VCPUI.create('Tooltip') 创建（由 VCPUI 委托 Web Awesome）。
-        ['copyBtn', 'translateBtn', 'translator-settings-btn'].forEach(id => {
-            const el = document.getElementById(id);
-            if (!el) return;
-            const tip = V.create('Tooltip', { trigger: el, content: el.getAttribute('aria-label') || el.title || id, placement: 'top' });
+        [settingsAction?.element, nextTranslate?.element, nextCopyButton?.element].filter(Boolean).forEach(el => {
+            const tip = V.create('Tooltip', { trigger: el, content: el.getAttribute('aria-label') || el.title || '操作', placement: 'top' });
             document.body.append(tip.element);
         });
     }
