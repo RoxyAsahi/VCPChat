@@ -613,21 +613,13 @@
        classic 模式继续使用 styles/setting/* 的原始样式，一个字节不动。
        ============================================================ */
     html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal {
-        /* 把 modal 子树里 legacy 变量映射到设计系统 token，使表单内联
-           `var(--secondary-text)` 等和 styles/setting 经典规则在 next 模式下
-           自动吃到 token 值，而不触碰 classic 全局变量。 */
+        /* 只在 modal 子树内把个别 legacy 变量映射到 token 值，使表单内联
+           `var(--text-secondary)` 与经典滚动条规则吃到 token。
+           注意：不能把 --secondary-bg/--primary-text/--border-color 等映射回
+           `--vcp-ui-*` 派生 token —— token 的 fallback 链本身就是这些 legacy
+           变量，映射会形成自定义属性环（guaranteed-invalid）。因此这些经典规则
+           在 next 模式下保持各自 theme 变量的原生解析，视觉上仍与设计系统一致。 */
         --text-secondary: var(--vcp-ui-text-2);
-        --primary-text: var(--vcp-ui-text-0);
-        --highlight-text: var(--vcp-ui-text-0);
-        --input-bg: var(--vcp-ui-bg-input);
-        --border-color: var(--vcp-ui-border);
-        --user-bubble-bg: var(--vcp-ui-accent);
-        --accent-bg: var(--vcp-ui-fill-1);
-        --button-bg: var(--vcp-ui-accent);
-        --button-hover-bg: var(--vcp-ui-accent-hover);
-        --secondary-bg: var(--vcp-ui-bg-1);
-        --tertiary-bg: var(--vcp-ui-bg-2);
-        --primary-bg: var(--vcp-ui-bg-0);
         --scrollbar-thumb: var(--vcp-ui-scrollbar-thumb);
         --scrollbar-thumb-hover: var(--vcp-ui-scrollbar-thumb-hover);
     }

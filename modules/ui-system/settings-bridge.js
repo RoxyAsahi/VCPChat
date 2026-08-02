@@ -184,7 +184,7 @@ function mountSettingsShell(root) {
         }));
         if (state.list) state.list.update({ items });
         else {
-            state.list = VCPUI.create('List', { items });
+            state.list = window.VCPUI.create('List', { items });
             state.listHost.replaceChildren(state.list.element);
         }
     };
