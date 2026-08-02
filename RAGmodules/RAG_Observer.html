@@ -1212,6 +1212,12 @@
         margin-bottom: 0;
       }
 
+      @media (max-width: 560px) {
+        html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-page-shell-title {
+          font-size: 14px;
+        }
+      }
+
       html[data-ui-mode="next"] body.vcp-ui-scope #infoContainer {
         flex: 1 1 auto;
         min-height: 0;
@@ -3815,6 +3821,13 @@
 
         // --- 新版 UI：深加工 —— VCPUI 管理工具栏 + 危险操作确认 + keyed 卡片 ---
         function deepenNextRag(V) {
+            // VCPPageRebuild 在 shell 挂载前多次 update 会重复创建 WindowControls，
+            // 这里去重，只保留最后一组（避免 480 窄屏下标题被挤压截断）。
+            const controlGroups = document.querySelectorAll('.vcp-ui-page-shell-header .vcp-ui-window-controls');
+            for (let index = 0; index < controlGroups.length - 1; index += 1) {
+                controlGroups[index].remove();
+            }
+
             const body = document.querySelector('.vcp-ui-page-body');
             const headerSection = document.querySelector('.header-section');
             const infoContainer = document.getElementById('infoContainer');

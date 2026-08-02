@@ -760,6 +760,9 @@ function buildNextPlugin() {
         onClose: () => api?.closeWindow?.(),
     });
 
+    // 先挂载到文档再 update，避免 AppPageShell 在未连接时重复创建 WindowControls。
+    document.body.append(shell.element);
+
     const body = document.createElement('div');
     body.className = 'vcp-ui-plugin-body';
     while (app.firstChild) body.append(app.firstChild);
@@ -767,7 +770,6 @@ function buildNextPlugin() {
 
     document.getElementById('top-nav-bar')?.remove();
     app.remove();
-    document.body.append(shell.element);
 
     // 控件增强（保留原生 .value 供业务逻辑使用）。
     [els.searchInput, els.typeFilter, els.stateFilter].forEach(control => {

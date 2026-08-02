@@ -657,6 +657,9 @@ function buildNextLog() {
         onClose: () => api?.closeWindow?.(),
     });
 
+    // 先挂载到文档再 update，避免 AppPageShell 在未连接时重复创建 WindowControls。
+    document.body.append(shell.element);
+
     // 动作按钮改为 VCPUI 组合：刷新（IconButton）+ 清空（danger Button，走 confirm）。
     const refresh = V.create('IconButton', { icon: 'refresh', label: '刷新日志', title: '刷新日志', size: 'sm' });
     refresh.element.addEventListener('click', async () => {
@@ -676,7 +679,6 @@ function buildNextLog() {
     document.getElementById('confirm-modal')?.remove();
     document.getElementById('toast')?.remove();
     app.remove();
-    document.body.append(shell.element);
 
     // 控件增强（保留原生 .value 供业务逻辑使用）。
     [elements.lineLimitInput, elements.filterInput].forEach(input => {

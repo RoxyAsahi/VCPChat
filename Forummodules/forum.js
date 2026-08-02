@@ -1981,11 +1981,13 @@ function buildNextForum() {
         onClose: () => (api?.closeWindow ? api.closeWindow() : window.close()),
     });
 
+    // 先挂载到文档再 update，避免 AppPageShell 在未连接时重复创建 WindowControls。
+    document.body.append(shell.element);
+
     const body = document.createElement('div');
     body.className = 'vcp-ui-forum-body';
     while (app.firstChild) body.append(app.firstChild);
     shell.update({ content: body });
-    document.body.append(shell.element);
 
     // 控件增强（保留原生 .value / 既有监听器）。
     [searchInput, boardFilter].forEach(control => {
