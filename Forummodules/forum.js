@@ -2022,6 +2022,8 @@ function deepenNextForum(V) {
     });
     nextForumToolbar = toolbar;
     if (body) body.prepend(toolbar.element);
+    // 初始按当前视图设置工具栏可见性（login 视图隐藏）。
+    toolbar.element.hidden = !forumView.classList.contains('active');
 
     // Tooltip 通过 VCPUI.create('Tooltip') 创建（由 VCPUI 委托 Web Awesome）。
     [refreshBtn, createPostBtn, settingsBtn].forEach(btn => {

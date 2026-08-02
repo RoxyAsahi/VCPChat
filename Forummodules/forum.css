@@ -1267,3 +1267,7 @@ html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-forum-state {
     gap: var(--vcp-ui-space-3);
     padding: var(--vcp-ui-space-6) var(--vcp-ui-space-3);
 }
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-forum-body .vcp-ui-toolbar[hidden] {
+    display: none;
+}

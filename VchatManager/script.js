@@ -29,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // next 模式演示层状态。
     let nextVchatToolbar = null;
+    let nextManagerStateEl = null;
 
     function isNextUiMode() {
         return document.documentElement.dataset.uiMode === 'next'
@@ -70,9 +71,12 @@ document.addEventListener('DOMContentLoaded', () => {
         return host;
     }
 
+    // next 模式状态区：渲染进 #tab-content，保留 #tabs 结构不被销毁。
     function renderMainStateNext(kind, payload) {
         const V = window.VCPUI;
-        mainContentEl.replaceChildren();
+        const tabContent = document.getElementById('tab-content');
+        nextManagerStateEl?.remove();
+        nextManagerStateEl = null;
         const wrap = document.createElement('div');
         wrap.className = 'vcp-ui-manager-state';
         if (kind === 'loading') {
@@ -88,7 +92,15 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (kind === 'empty') {
             wrap.append(V.create('EmptyState', { icon: 'inbox', title: payload, description: '选择一个 Agent 或群组查看聊天记录。' }).element);
         }
-        mainContentEl.append(wrap);
+        tabContent.append(wrap);
+        nextManagerStateEl = wrap;
+        tabContent.classList.add('vcp-ui-state-visible');
+    }
+
+    function clearManagerStateNext() {
+        nextManagerStateEl?.remove();
+        nextManagerStateEl = null;
+        document.getElementById('tab-content')?.classList.remove('vcp-ui-state-visible');
     }
 
     // --- Data Fetching and Initial Rendering ---
@@ -277,6 +289,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const sortedTopics = [...itemData.topics].sort((a, b) => b.createdAt - a.createdAt);
 
         if (isNextUiMode()) {
+            clearManagerStateNext();
             const host = ensureHost(chatHistoryEl, 'vcp-ui-topic-host');
             reconcileByKey(host, sortedTopics, topic => topic.id, (topic) => {
                 const topicItem = document.createElement('li');
@@ -309,11 +322,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadChatHistory(itemId, topicId) {
         if (isNextUiMode()) {
-            mainContentEl.replaceChildren();
-            const wrap = document.createElement('div');
-            wrap.className = 'vcp-ui-manager-state';
-            wrap.append(window.VCPUI.create('Skeleton', { variant: 'text', lines: 6 }).element);
-            mainContentEl.append(wrap);
+            renderMainStateNext('loading');
         } else {
             chatHistoryEl.innerHTML = `<p>Loading history for ${topicId}...</p>`;
         }
@@ -337,6 +346,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderChatHistory(history) {
         switchTab('chat-history');
         if (isNextUiMode()) {
+            clearManagerStateNext();
             const host = ensureHost(chatHistoryEl, 'vcp-ui-message-host');
             reconcileByKey(host, history, message => message.id, createMessageElement);
             return;
@@ -1059,6 +1069,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderMainStateNext('loading');
         }
         const data = await fetchData();
+        if (isNextUiMode()) clearManagerStateNext();
         if (data) {
             renderSidebar(data);
         }

@@ -29,6 +29,7 @@ let nextOrderButton = null;
 let nextPresetSelect = null;
 let nextEmptyEl = null;
 let nextLogLoadStarted = false;
+let nextLogInitError = null;
 
 function isNextUiMode() {
     return document.documentElement.dataset.uiMode === 'next'
@@ -214,7 +215,8 @@ async function initAuthAndServer() {
         const settings = await api?.loadSettings?.();
         if (!settings?.vcpServerUrl) {
             setStatus('未配置 VCP 服务器 URL');
-            if (isNextUiMode()) showLogErrorNext('未配置 VCP 服务器 URL，请先在主设置中配置。');
+            nextLogInitError = '未配置 VCP 服务器 URL，请先在主设置中配置。';
+            if (isNextUiMode()) showLogErrorNext(nextLogInitError);
             else showToast('请先在主设置中配置 VCP 服务器 URL');
             return;
         }
@@ -225,17 +227,20 @@ async function initAuthAndServer() {
         const forumConfig = await api?.loadForumConfig?.();
         if (!forumConfig?.username || !forumConfig?.password) {
             setStatus('缺少论坛管理员凭据');
-            if (isNextUiMode()) showLogErrorNext('未找到论坛模块登录配置，请先在论坛模块登录并保存凭据。');
+            nextLogInitError = '未找到论坛模块登录配置，请先在论坛模块登录并保存凭据。';
+            if (isNextUiMode()) showLogErrorNext(nextLogInitError);
             else showToast('未找到论坛模块登录配置，请先在论坛模块登录并保存凭据');
             return;
         }
 
+        nextLogInitError = null;
         apiAuthHeader = `Basic ${btoa(`${forumConfig.username}:${forumConfig.password}`)}`;
         setStatus('已连接配置，准备读取日志');
     } catch (error) {
         console.error('[LogCenter] Init failed:', error);
         setStatus(`初始化失败: ${error.message}`);
-        if (isNextUiMode()) showLogErrorNext(`初始化失败：${error.message}`);
+        nextLogInitError = `初始化失败：${error.message}`;
+        if (isNextUiMode()) showLogErrorNext(nextLogInitError);
         else showToast(`初始化失败: ${error.message}`);
     }
 }
@@ -408,8 +413,11 @@ function render() {
 function renderLogsNext() {
     const shouldStickBottom = isNearBottom();
     const visibleLines = getVisibleLines();
-    // 清除上一次的错误/骨架状态，再进入 keyed 行协调。
-    elements.lines.querySelector('.vcp-ui-log-error-box')?.remove();
+    const hasErrorBox = Boolean(elements.lines.querySelector('.vcp-ui-log-error-box'));
+    // 错误态在成功加载前保持粘性；仅在已有数据时清除。
+    if (hasErrorBox && allLines.length > 0) elements.lines.querySelector('.vcp-ui-log-error-box')?.remove();
+    if (!allLines.length && hasErrorBox) return;
+    // 清除上一次的骨架状态，再进入 keyed 行协调。
     const staleSkeleton = elements.lines.querySelector('.vcp-ui-skeleton');
     if (staleSkeleton && visibleLines.length) staleSkeleton.remove();
     reconcileByKey(elements.lines, visibleLines, line => line.id, buildLogRowNext);
@@ -684,15 +692,17 @@ function deepenNextLog(V, refreshButton, clearButton) {
     const body = document.querySelector('.vcp-ui-log-body');
     nextLogRender = true;
 
-    // 预筛选从 chip 按钮收敛为 VCPUI Select。
-    nextPresetSelect = V.create('Select', {
-        label: '预筛选',
-        options: [{ label: '全部', value: '' }, ...PRESET_FILTERS.map(preset => ({ label: preset, value: preset }))],
-        value: activePreset,
-        size: 'sm',
-    });
-    nextPresetSelect.element.addEventListener('change', () => {
-        activePreset = nextPresetSelect.element.value || '';
+    // 预筛选从 chip 按钮收敛为 VCPUI Select（原生 select + V.enhance，
+    // 规避 WA select 变更事件递归：见 vcp-ui.js selectFactory WA 分支）。
+    const presetSelect = document.createElement('select');
+    presetSelect.className = 'vcp-ui-preset-select';
+    presetSelect.setAttribute('aria-label', '预筛选');
+    presetSelect.add(new Option('全部', ''));
+    PRESET_FILTERS.forEach(preset => presetSelect.add(new Option(preset, preset)));
+    presetSelect.value = activePreset;
+    try { V.enhance('Select', presetSelect); } catch (error) { console.warn('[Log] enhance preset select:', error); }
+    presetSelect.addEventListener('change', () => {
+        activePreset = presetSelect.value || '';
         if (activePreset) {
             elements.filterInput.value = activePreset;
             currentFilter = activePreset;
@@ -703,6 +713,7 @@ function deepenNextLog(V, refreshButton, clearButton) {
         updatePresetButtons();
         render();
     });
+    nextPresetSelect = presetSelect;
 
     nextOrderButton = V.create('Button', {
         label: isReverseOrder ? '正序显示' : '倒序显示',
@@ -720,7 +731,7 @@ function deepenNextLog(V, refreshButton, clearButton) {
 
     const toolbar = V.create('Toolbar', {
         label: '日志工具栏',
-        start: [elements.filterInput, nextPresetSelect.element, elements.lineLimitInput],
+        start: [elements.filterInput, presetSelect, elements.lineLimitInput],
         end: [nextOrderButton.element, copy.element],
     });
 
@@ -736,7 +747,9 @@ function deepenNextLog(V, refreshButton, clearButton) {
         } catch (error) { /* ignore */ }
     });
 
-    render();
+    // 若 init 在模式解析前失败，这里补上错误态渲染。
+    if (nextLogInitError) showLogErrorNext(nextLogInitError);
+    else render();
 }
 
 // next 模式：首屏加载骨架屏与错误 Alert+重试。

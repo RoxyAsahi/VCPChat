@@ -3822,22 +3822,24 @@
             const statusPill = document.getElementById('connectionStatus');
             const settingsTrigger = document.querySelector('.settings-trigger');
 
-            const filterSelect = V.create('Select', {
-                label: '事件筛选',
-                options: [
-                    { label: '全部', value: 'all' },
-                    { label: 'RAG知识库', value: 'rag' },
-                    { label: '元思考链', value: 'chain' },
-                    { label: 'Agent会话', value: 'chat' },
-                    { label: '记忆检索', value: 'memo' },
-                    { label: 'Agent梦境', value: 'dream' },
-                    { label: '通知消息', value: 'notification' }
-                ],
-                value: currentFilter || 'all',
-                size: 'sm'
+            const filterSelect = document.createElement('select');
+            filterSelect.className = 'vcp-ui-rag-filter-select';
+            filterSelect.setAttribute('aria-label', '事件筛选');
+            [
+                ['全部', 'all'],
+                ['RAG知识库', 'rag'],
+                ['元思考链', 'chain'],
+                ['Agent会话', 'chat'],
+                ['记忆检索', 'memo'],
+                ['Agent梦境', 'dream'],
+                ['通知消息', 'notification']
+            ].forEach(function (entry) {
+                filterSelect.add(new Option(entry[0], entry[1]));
             });
-            filterSelect.element.addEventListener('change', function () {
-                applyFilterNext(filterSelect.element.value || 'all');
+            filterSelect.value = currentFilter || 'all';
+            try { V.enhance('Select', filterSelect); } catch (error) { console.warn('[RAG] enhance filter select:', error); }
+            filterSelect.addEventListener('change', function () {
+                applyFilterNext(filterSelect.value || 'all');
             });
 
             const clearBtn = V.create('Button', { label: '清空记录', variant: 'danger', size: 'sm', icon: 'delete' });
@@ -3845,7 +3847,7 @@
 
             const toolbar = V.create('Toolbar', {
                 label: '监听工具栏',
-                start: [statusPill, filterSelect.element].filter(Boolean),
+                start: [statusPill, filterSelect].filter(Boolean),
                 end: [settingsTrigger, clearBtn.element].filter(Boolean)
             });
 

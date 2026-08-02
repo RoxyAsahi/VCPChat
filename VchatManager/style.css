@@ -709,3 +709,7 @@ html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-topic-host .topics-list-item
 html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-topic-host .topics-list-item:hover {
     background: var(--vcp-ui-surface-strong);
 }
+
+html[data-ui-mode="next"] body.vcp-ui-scope #tab-content.vcp-ui-state-visible .tab-panel {
+    display: none;
+}
