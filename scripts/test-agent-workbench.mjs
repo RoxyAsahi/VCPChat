@@ -21,6 +21,7 @@ let registered = null;
 let unsubscribeCalls = 0;
 let eventCallback = null;
 let runtimeStatus = 'stopped';
+let activeRuntimeSession = null;
 const presenceCalls = [];
 const startedTurns = [];
 const importedAttachment = {
@@ -49,7 +50,8 @@ const savedWorkbenchSettings = [];
 const savedAvatars = [];
 const savedAgentProfiles = [];
 const runtimeTransitions = [];
-const takeoverRequests = [];
+const runtimeEnsures = [];
+const exportedSessions = [];
 let mainCreateProxyCalls = 0;
 let sharedCreateActionCalls = 0;
 let releaseAgentCatalog;
@@ -59,19 +61,23 @@ const buildAgentProfiles = [
 ];
 const agentCatalogGate = new Promise((resolve) => { releaseAgentCatalog = resolve; });
 let topicCatalog = [{
-    id: 'topic-restored', title: '可恢复的 Rust Topic', agentId: 'Nova',
+    id: 'topic-restored', title: '可恢复的 Codex Session', agentId: 'Nova',
     model: 'gpt-5.6-terra', workspaceRef: root, inUse: false,
 }, {
     id: 'topic-archived', title: '另一条持久 Topic', agentId: 'Nova',
     model: 'gpt-5.6-terra', workspaceRef: root, inUse: false,
 }, {
-    id: 'topic-in-use', title: '协作接管 Topic', agentId: 'Nova',
+    id: 'topic-in-use', title: '并行研究 Session', agentId: 'Nova',
     model: 'gpt-5.6-terra', workspaceRef: root, inUse: true,
 }];
 const secondaryTopicCatalog = [{
         id: 'topic-agent-123', title: '123 的既有 Topic', agentId: '123',
         model: 'gpt-5.6-terra', workspaceRef: root, inUse: false,
     }];
+const archivedTopicCatalog = [{
+    id: 'topic-permanent-archive', title: '已归档研究会话', agentId: 'Nova',
+    model: 'gpt-5.6-terra', workspaceRef: root, archivedAt: 1_700_000_000_000,
+}];
 const topicListRequests = [];
 const topicSearchRequests = [];
 window.nextUiApps = {
@@ -101,7 +107,12 @@ window.chatAPI = {
         await new Promise((resolve) => setTimeout(resolve, 250));
         return [{ id: 'gpt-5.6-terra' }, { id: 'gpt-5.6-luna' }];
     },
-    agentRuntimeGetStatus: async () => ({ state: runtimeStatus, worker: null, pendingApprovals: [] }),
+    agentRuntimeGetStatus: async () => ({
+        state: runtimeStatus,
+        worker: null,
+        pendingApprovals: [],
+        runtimes: activeRuntimeSession ? [activeRuntimeSession] : [],
+    }),
     agentWorkspaceListDirectory: async ({ sessionId, relativePath = '' }) => ({
         sessionId, workspaceRevision: 'workspace-revision-test', relativePath,
         entries: relativePath === '' ? [
@@ -141,16 +152,29 @@ window.chatAPI = {
     agentRuntimeCreateSession: async (payload) => {
         createdSessions.push(payload);
         const session = {
-            sessionId: 'sess_test', topicId: payload.resume || 'topic-new',
-            title: payload.title || '可恢复的 Rust Topic', state: 'created',
+            sessionId: 'topic-in-use', topicId: payload.resume || 'topic-new',
+            title: payload.title || '可恢复的 Codex Session', state: 'created',
             model: payload.model || 'gpt-5.6-terra', agentId: payload.agent || 'Nova',
             workspaceRoot: payload.workspaceRoot || root,
         };
         return session;
     },
+    agentRuntimeEnsureSessionRuntime: async ({ sessionId }) => {
+        runtimeEnsures.push(sessionId);
+        activeRuntimeSession = {
+            sessionId,
+            topicId: sessionId,
+            title: '并行研究 Session',
+            state: 'ready',
+            activity: 'idle',
+            agentId: 'Nova',
+            workspaceRoot: root,
+        };
+        return activeRuntimeSession;
+    },
     agentRuntimeCompactSession: async ({ sessionId }) => { compactedSessions.push(sessionId); return { ok: true }; },
     agentRuntimeReadTopic: async ({ topicId }) => {
-        if (topicId === 'topic-empty-checkpoint') throw new Error('Agent Topic has no checkpoint');
+        if (topicId === 'topic-missing-session') throw new Error('Agent Session was not found');
         if (topicId === 'topic-restored') return {
             topicId,
             readOnly: true,
@@ -220,8 +244,9 @@ window.chatAPI = {
         interactionResponses.push(payload);
         return { requestId: payload.requestId, resolved: true, kind: payload.kind };
     },
-    agentRuntimeListTopics: async ({ agentId } = {}) => {
+    agentRuntimeListTopics: async ({ agentId, archived = false } = {}) => {
         topicListRequests.push(agentId || 'Nova');
+        if (archived) return archivedTopicCatalog;
         return agentId === '123' ? secondaryTopicCatalog : topicCatalog;
     },
     agentRuntimeSearchTopics: async ({ query, agentId } = {}) => {
@@ -270,13 +295,14 @@ window.chatAPI = {
             },
         };
     },
-    agentRuntimeTakeoverTopic: async ({ topicId }) => {
-        takeoverRequests.push(topicId);
-        topicCatalog = topicCatalog.map((topic) => topic.id === topicId ? { ...topic, inUse: false } : topic);
-        return { ok: true, topicId };
-    },
     agentRuntimeRenameTopic: async ({ topicId, title }) => { renamedTopics.push({ topicId, title }); return { ok: true, topicId, title }; },
     agentRuntimeDeleteTopic: async ({ topicId }) => ({ ok: true, topicId }),
+    agentRuntimeRestoreSession: async ({ sessionId }) => ({ restored: true, sessionId }),
+    agentRuntimePermanentlyDeleteSession: async ({ sessionId }) => ({ deleted: true, sessionId }),
+    agentRuntimeExportSession: async (payload) => { exportedSessions.push(payload); return { exported: true }; },
+    agentRuntimeListRecoveryOperations: async () => [],
+    agentRuntimeListRecoveryCandidates: async () => ({ operations: [], threads: [] }),
+    agentRuntimeResolveRecoveryOperation: async () => ({ resolved: true }),
     agentRuntimeSetWorkbenchPresence: (mounted) => { presenceCalls.push(mounted); },
     onAgentRuntimeEvent(callback) {
         eventCallback = callback;
@@ -284,15 +310,15 @@ window.chatAPI = {
     },
 };
 
-let daemonEventNumber = 0;
+let runtimeEventNumber = 0;
 function emitDaemonEvent(event) {
-    daemonEventNumber += 1;
+    runtimeEventNumber += 1;
     eventCallback({
-        eventId: `daemon-event-${daemonEventNumber}`,
+        eventId: `runtime-event-${runtimeEventNumber}`,
         topicId: 'topic-in-use',
-        sequence: daemonEventNumber,
-        timestamp: 1_700_000_000_000 + daemonEventNumber,
-        runtime: 'rust',
+        sequence: runtimeEventNumber,
+        timestamp: 1_700_000_000_000 + runtimeEventNumber,
+        runtime: 'codex',
         ...event,
     });
 }
@@ -314,7 +340,7 @@ window.topTabManager = {
     openCreateDialog() { sharedCreateActionCalls += 1; },
 };
 // The Workbench uses its own Topic controls while routing their actions to
-// Rust-owned Agent Topics.  The only main-chat element below exists to retain
+// Codex-owned Agent Sessions.  The only main-chat element below exists to retain
 // the compatibility fallback for a partially initialized shell.
 const mainTopicToolbar = document.createElement('div');
 mainTopicToolbar.innerHTML = `
@@ -334,18 +360,18 @@ document.body.append(mainAgentList);
 window.prompt = () => '重命名后的 Topic';
 window.confirm = () => true;
 window.localStorage.setItem('vcpchat.agentWorkbench.lastTopic.v1', JSON.stringify({
-    topicId: 'topic-restored', title: '可恢复的 Rust Topic', agentId: 'Nova',
+    topicId: 'topic-restored', title: '可恢复的 Codex Session', agentId: 'Nova',
     model: 'gpt-5.6-terra', workspaceRoot: root,
 }));
 const dispose = registered.mount(host, {});
 await new Promise((resolve) => setTimeout(resolve, 100));
 assert.equal(createdSessions.length, 0,
-    'renderer reload must preview the saved Rust Topic without acquiring a writable Session');
+    'renderer reload must preview the saved Codex Session without acquiring a writable Session');
 assert.deepEqual(JSON.parse(window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1')), { topicId: 'topic-restored' },
     'localStorage must retain only the durable Topic pointer');
 assert.ok([...host.querySelectorAll('.message-item .md-content')]
     .some((node) => node.textContent.includes('restored answer')),
-    'a resumed Rust Topic must render its saved history rather than an empty feed');
+    'a restored Codex Session must render its saved history rather than an empty feed');
 const restoredReasoning = host.querySelector('[data-message-id="msg_reason_saved"] .agent-chat-reasoning-block');
 assert.ok(restoredReasoning, 'a SQLite-first cold mount must restore reasoning as a compact thought card');
 assert.equal(restoredReasoning.closest('.message-item')?.querySelector('.md-content')?.textContent?.trim() || '', '',
@@ -436,7 +462,7 @@ assert.equal(host.querySelector('.sidebar-tab-button.active')?.textContent, '会
     'selecting an Agent must open its Topic catalog without requiring New Topic');
 assert.ok([...host.querySelectorAll('.agent-chat-persisted-topic .topic-title-display')]
     .some((node) => node.textContent === '123 的既有 Topic'),
-    'the selected Agent history must render immediately from Rust Topic metadata');
+    'the selected Agent history must render immediately from SQLite Session metadata');
 assert.equal(createdSessions.length, sessionsBeforeAgentBrowse,
     'browsing an Agent history must not create an empty Agent Session');
 assert.equal(topicListRequests.at(-1), '123',
@@ -515,9 +541,9 @@ assert.deepEqual({
     workspaceRoot: createdTopics.at(-1).workspaceRoot,
 }, {
     title: '独立产品流程 Topic', agent: 'Nova', model: 'gpt-5.6-terra', workspaceRoot: root,
-}, 'new Agent Topics must pass the chosen shared Agent/model/workspace through Rust IPC');
-assert.equal(createdSessions.length, 0, 'creating a Topic must not replace or stop the current Rust attachment');
-assert.equal(host.querySelector('.agent-chat-message-input').disabled, false, 'a newly created Rust Topic preview must keep the composer send-capable');
+}, 'new Agent Topics must pass the chosen shared Agent/model/workspace through Codex Agent IPC');
+assert.equal(createdSessions.length, 0, 'creating a Session must not replace or stop another Session Runtime');
+assert.equal(host.querySelector('.agent-chat-message-input').disabled, false, 'a newly created Codex Session preview must keep the composer send-capable');
 const sessionTab = [...host.querySelectorAll('.agent-chat-sidebar .sidebar-tab-button')]
     .find((tab) => tab.textContent.trim() === '会话');
 assert.ok(sessionTab, 'Assistant and session tabs must both be available');
@@ -525,16 +551,16 @@ sessionTab.click();
 assert.ok(host.querySelector('.agent-chat-session-row'));
 assert.ok([...host.querySelectorAll('.agent-chat-session-row .topic-title-display')]
     .some((node) => node.textContent === '另一条持久 Topic'),
-    'the sidebar must render durable Rust Topics, not only the current in-memory session');
+    'the sidebar must render durable Codex Sessions, not only the current in-memory session');
 const stableTopicRow = host.querySelector('.agent-chat-persisted-topic[data-topic-id="topic-archived"]');
 const stableTopicScroll = host.querySelector('.agent-chat-sidebar .sidebar-list-scroll');
 stableTopicScroll.scrollTop = 37;
 sessionTab.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
 assert.strictEqual(host.querySelector('.agent-chat-persisted-topic[data-topic-id="topic-archived"]'), stableTopicRow,
-    'a background Rust Topic refresh must reconcile the existing sidebar row instead of rebuilding the list');
+    'a background Codex Session refresh must reconcile the existing sidebar row instead of rebuilding the list');
 assert.equal(host.querySelector('.agent-chat-sidebar .sidebar-list-scroll').scrollTop, 37,
-    'a background Rust Topic refresh must keep the sidebar reading anchor');
+    'a background Codex Session refresh must keep the sidebar reading anchor');
 const topicToolbar = host.querySelector('.topics-header-container .next-ui-topic-tools');
 assert.ok(topicToolbar, 'Agent sessions must use the same Topic toolbar shell as main chat');
 assert.ok(topicToolbar.querySelector('.next-ui-create-topic-trigger'), 'Agent sessions must expose a new Topic control');
@@ -547,12 +573,12 @@ assert.ok(topicSearch, 'Agent Topic search must expand from the shared Topic too
 topicSearch.value = '另一条';
 topicSearch.dispatchEvent(new window.Event('input', { bubbles: true }));
 assert.equal(host.querySelector('.agent-chat-persisted-topic[data-topic-id="topic-restored"]').hidden, true,
-    'expanded Topic search must filter durable Rust Topics');
+    'expanded Topic search must filter durable Codex Sessions');
 await new Promise((resolve) => setTimeout(resolve, 240));
 assert.deepEqual(topicSearchRequests.at(-1), { query: '另一条', agentId: 'Nova' },
-    'Topic search must cross the narrow daemon IPC instead of remaining a local DOM filter');
+    'Topic search must cross the narrow Agent IPC instead of remaining a local DOM filter');
 assert.ok(host.querySelector('.agent-chat-persisted-topic[data-topic-id="topic-archived"]'),
-    'daemon search hits must project back into the Topic list using their durable topicId');
+    'SQLite search hits must project back into the Topic list using their durable topicId');
 host.querySelector('.topics-header-container .next-ui-topic-search-close').click();
 assert.equal(host.querySelector('.topic-search-input')?.value || '', '', 'closing Topic search must clear its transient query');
 topicManage.click();
@@ -563,7 +589,7 @@ assert.ok(host.querySelector('.agent-chat-sidebar-content.is-managing .agent-cha
 const selectableTopic = host.querySelector('.agent-chat-persisted-topic[data-topic-id="topic-archived"]');
 selectableTopic.click();
 assert.match(host.querySelector('.agent-chat-topic-selection-count').textContent, /1/,
-    'management mode must select a Rust Topic rather than opening it');
+    'management mode must select a Codex Session rather than opening it');
 host.querySelector('.agent-chat-topic-manage-panel [aria-label="退出会话管理"]').click();
 assert.equal(host.querySelector('.agent-chat-sidebar-content').classList.contains('is-managing'), false,
     'exiting Topic management must discard renderer-only selection state');
@@ -584,73 +610,68 @@ assert.ok(renameTopicButton, 'Topic management menu must offer rename');
 renameTopicButton.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
 assert.deepEqual(renamedTopics, [{ topicId: 'topic-created-1', title: '重命名后的 Topic' }],
-    'Topic rename must use the narrow Rust Agent runtime IPC, not write renderer-side storage');
+    'Topic rename must use the narrow Codex Agent IPC, not write renderer-side storage');
 const persistedTopicRow = host.querySelector('.agent-chat-persisted-topic[data-topic-id="topic-restored"]');
 persistedTopicRow.dispatchEvent(new window.MouseEvent('contextmenu', {
     bubbles: true, cancelable: true, clientX: 32, clientY: 48,
 }));
 const rightClickTopicMenu = document.querySelector('.agent-chat-topic-context-menu');
-assert.ok(rightClickTopicMenu, 'right-clicking a free Rust Topic must open the same context menu');
+assert.ok(rightClickTopicMenu, 'right-clicking a free Codex Session must open the same context menu');
 assert.ok([...rightClickTopicMenu.querySelectorAll('[role="menuitem"]')]
-    .some((button) => button.textContent.includes('删除')),
-    'free Topics may expose destructive actions only through Rust-authoritative IPC');
+    .some((button) => button.textContent === '归档会话'),
+    'active Sessions must expose recoverable archive through the narrow Codex Agent IPC');
 document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 assert.equal(document.querySelector('.agent-chat-topic-context-menu'), null,
     'Escape must close the transient Topic menu rather than leaving a stale overlay');
+const archivedToggle = host.querySelector('[aria-label="查看归档会话"]');
+assert.ok(archivedToggle, 'the Session toolbar must expose archived history without mixing it into the active list');
+archivedToggle.click();
+await new Promise((resolve) => setTimeout(resolve, 30));
+const archivedRow = host.querySelector('.agent-chat-persisted-topic[data-topic-id="topic-permanent-archive"]');
+assert.ok(archivedRow, 'the archived view must come from the projection-only Session catalog');
+archivedRow.click();
+await new Promise((resolve) => setTimeout(resolve, 30));
+assert.equal(host.querySelector('.agent-chat-message-input').disabled, true,
+    'an archived Session may be read but cannot implicitly resume on selection');
+assert.equal(runtimeEnsures.length, 0, 'projection preview must not eagerly ensure a Codex runtime');
+archivedRow.dispatchEvent(new window.MouseEvent('contextmenu', {
+    bubbles: true, cancelable: true, clientX: 32, clientY: 48,
+}));
+const archivedMenu = document.querySelector('.agent-chat-topic-context-menu');
+assert.ok([...archivedMenu.querySelectorAll('[role="menuitem"]')].some((item) => item.textContent === '恢复会话'));
+assert.ok([...archivedMenu.querySelectorAll('[role="menuitem"]')].some((item) => item.textContent === '永久删除'));
+assert.ok([...archivedMenu.querySelectorAll('[role="menuitem"]')].some((item) => item.textContent === '导出 Markdown'));
+document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+host.querySelector('[aria-label="返回当前会话"]').click();
+await new Promise((resolve) => setTimeout(resolve, 30));
 const inUseTopicRow = [...host.querySelectorAll('.agent-chat-persisted-topic')]
-    .find((row) => row.querySelector('.topic-title-display')?.textContent === '协作接管 Topic');
-assert.ok(inUseTopicRow, 'a Topic held by another daemon must remain visible as a read-only row');
+    .find((row) => row.querySelector('.topic-title-display')?.textContent === '并行研究 Session');
+assert.ok(inUseTopicRow, 'legacy inUse metadata must not hide a durable Codex Session');
 assert.doesNotMatch(inUseTopicRow.textContent || '', /使用中|占用/,
-    'Topic lease state is a concurrency guard and must not leak into the ordinary sidebar row');
+    'obsolete concurrency metadata must not leak into the Codex Session row');
 inUseTopicRow.dispatchEvent(new window.MouseEvent('contextmenu', {
     bubbles: true, cancelable: true, clientX: 32, clientY: 48,
 }));
 const occupiedTopicMenu = document.querySelector('.agent-chat-topic-context-menu');
-assert.ok(occupiedTopicMenu, 'right-clicking an occupied Topic must expose its normal management menu');
+assert.ok(occupiedTopicMenu, 'right-clicking a legacy-marked Session must expose its normal management menu');
 assert.ok([...occupiedTopicMenu.querySelectorAll('[role="menuitem"]')]
     .some((button) => button.textContent === '打开会话'),
-    'an occupied Topic may only enter the same conflict flow as a normal open');
-assert.equal([...occupiedTopicMenu.querySelectorAll('[role="menuitem"]')]
-    .some((button) => /只读|checkpoint|接管|重命名|删除/.test(button.textContent)), false,
-    'occupied Topics must not expose destructive mutation actions while a Rust lease is active');
+    'legacy metadata must not replace the normal open action');
+assert.ok([...occupiedTopicMenu.querySelectorAll('[role="menuitem"]')]
+    .some((button) => button.textContent === '归档会话'),
+    'ordinary Session removal must be presented as recoverable archive');
 document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 inUseTopicRow.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
-const occupiedConflict = host.querySelector('.agent-chat-topic-conflict-dialog');
-assert.ok(occupiedConflict, 'opening an occupied Topic must show only the explicit conflict confirmation');
-assert.ok(occupiedConflict.closest('.agent-chat-main-column'),
-    'the occupied Topic confirmation must stay in the active conversation rather than becoming an app-wide overlay');
-assert.equal(host.querySelector('.agent-chat-topic-conflict-backdrop'), null,
-    'the occupied Topic confirmation must not hide the transcript behind a blocking backdrop');
-assert.equal(host.querySelector('.agent-chat-occupied-banner'), null,
-    'opening a Topic must never replace the current transcript with an inline read-only preview');
-assert.equal(host.querySelector('.agent-chat-topic-flow-dialog'), null,
-    'opening an occupied Topic must not expose checkpoint/lease product state');
-const differentFreeTopicRow = host.querySelector('.agent-chat-persisted-topic[data-topic-id="topic-archived"]');
-assert.ok(differentFreeTopicRow, 'a separate free Topic must remain selectable while an occupied Topic conflict is visible');
-differentFreeTopicRow.click();
-await new Promise((resolve) => setTimeout(resolve, 30));
 assert.equal(host.querySelector('.agent-chat-topic-conflict-dialog'), null,
-    'selecting a different Topic must dismiss the previous occupied-Topic decision instead of leaking it over the new preview');
-inUseTopicRow.click();
-await new Promise((resolve) => setTimeout(resolve, 30));
-const reopenedOccupiedConflict = host.querySelector('.agent-chat-topic-conflict-dialog');
-assert.ok(reopenedOccupiedConflict,
-    'returning to the occupied Topic must create a fresh conflict decision for that exact Topic only');
-const reopenedTakeoverButton = [...reopenedOccupiedConflict.querySelectorAll('button')]
-    .find((button) => button.textContent === '接管并继续');
-assert.ok(reopenedTakeoverButton, 'the reopened occupied Topic conflict must retain its explicit takeover action');
-reopenedTakeoverButton.click();
-await new Promise((resolve) => setTimeout(resolve, 650));
-assert.deepEqual(takeoverRequests, ['topic-in-use'], 'a user click must request cooperative Rust Topic takeover exactly once');
-assert.equal(createdSessions.at(-1).resume, 'topic-in-use',
-    'after the owner releases its lease, Workbench must attach to the durable Topic automatically');
+    'Codex Session selection must never open the retired runtime-conflict dialog');
+assert.equal(host.querySelector('.agent-chat-persisted-topic[data-topic-id="topic-in-use"]')?.classList.contains('active'), true,
+    'legacy inUse metadata must not prevent immediate SQLite projection selection');
 assert.ok(host.querySelector('.agent-chat-header-actions'), 'Tool and approval activity must remain reachable from the redesigned header');
 const compactButton = host.querySelector('.agent-chat-compact');
-assert.ok(compactButton && !compactButton.disabled, 'an active Rust Agent session must expose safe compaction');
-compactButton.click();
-await new Promise((resolve) => setTimeout(resolve, 0));
-assert.deepEqual(compactedSessions, ['sess_test'], 'compaction must use the narrow Rust runtime IPC');
+assert.ok(compactButton?.disabled,
+    'a projection-only Session preview must not infer an active runtime or enable compaction');
+assert.deepEqual(compactedSessions, [], 'preview selection must not invoke Codex thread compaction');
 assert.ok(host.querySelector('.agent-chat-message-input'), 'Agent prompt must use the shared main-chat textarea styling contract');
 assert.ok(host.querySelector('.agent-chat-composer .chat-input-actions'), 'Agent must reuse the main chat action row');
 assert.ok(host.querySelector('.agent-chat-send-button'), 'Agent must expose a real send/cancel control');
@@ -663,11 +684,11 @@ assert.ok(attachButton, 'the composer must expose a narrow attachment-selection 
 attachButton.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
 assert.match(host.querySelector('.agent-chat-composer-attachments')?.textContent || '', /设计图\.png/,
-    'the Renderer may preview a daemon descriptor but must not receive its source path or bytes');
+    'the Renderer may preview a Main descriptor but must not receive its source path or bytes');
 host.querySelector('.agent-chat-send-button').click();
 await new Promise((resolve) => setTimeout(resolve, 30));
-assert.deepEqual(startedTurns[0], { sessionId: 'sess_test', prompt: '', attachments: [importedAttachment] },
-    'an attachment-only turn must pass the descriptor to Rust rather than stringify it into text');
+assert.deepEqual(startedTurns[0], { sessionId: 'topic-in-use', prompt: '', attachments: [importedAttachment] },
+    'an attachment-only turn must pass the descriptor to Main rather than stringify it into text');
 assert.ok(host.querySelector('.agent-chat-turn-starting .thinking-indicator'),
     'the Workbench must show the main-chat thinking animation before the first Codex item notification');
 assert.equal(host.querySelector('.agent-chat-composer-attachments')?.childElementCount || 0, 0,
@@ -675,7 +696,7 @@ assert.equal(host.querySelector('.agent-chat-composer-attachments')?.childElemen
 // The ACK-to-first-event gap now has an explicit renderer-only thinking row;
 // close the synthetic attachment turn before exercising the next composer
 // interaction so the fixture mirrors Codex's terminal notification.
-emitDaemonEvent({ sessionId: 'sess_test', turnId: 'attachment_turn', type: 'turn.completed' });
+emitDaemonEvent({ sessionId: 'topic-in-use', turnId: 'attachment_turn', type: 'turn.completed' });
 await new Promise((resolve) => setTimeout(resolve, 30));
 selectedAttachments = [importedVideoAttachment];
 attachButton.click();
@@ -690,26 +711,28 @@ assert.equal(host.querySelector('.agent-chat-composer-attachments')?.childElemen
     'a queued media descriptor remains a renderer-only draft and can be removed before send');
 prompt.value = '请介绍一下自己';
 prompt.dispatchEvent(new window.Event('input', { bubbles: true }));
+assert.equal(host.querySelector('.agent-chat-send-button').disabled, false,
+    `a terminal event must re-enable the composer before the next Turn (placeholder: ${host.querySelector('.agent-chat-message-input')?.placeholder})`);
 host.querySelector('.agent-chat-send-button').click();
 await new Promise((resolve) => setTimeout(resolve, 30));
-assert.deepEqual(startedTurns[1], { sessionId: 'sess_test', prompt: '请介绍一下自己', attachments: [] }, 'Send must start a real Runtime turn, not save a local draft');
+assert.deepEqual(startedTurns[1], { sessionId: 'topic-in-use', prompt: '请介绍一下自己', attachments: [] }, 'Send must start a real Runtime turn, not save a local draft');
 assert.ok([...host.querySelectorAll('.message-item.user .md-content')]
     .some((node) => node.textContent.includes('请介绍一下自己')),
-    'an accepted start-turn ACK must project the user message before the first daemon event arrives');
+    'an accepted start-turn ACK must project the user message before the first runtime event arrives');
 assert.match(host.querySelector('.message-item.user')?.textContent || '', /发送中/,
     'the temporary local projection must disclose that durable confirmation is still pending');
 // A command ACK only confirms acceptance.  The Workbench must not infer a
-// running turn from it; only the daemon's authoritative event may establish
+// running Turn from it; only Codex's authoritative event may establish
 // the live turn used by steering and follow-up controls.
 emitDaemonEvent({
-    sessionId: 'sess_test', turnId: 'turn_test', sequence: 3,
+    sessionId: 'topic-in-use', turnId: 'turn_test', sequence: 3,
     messageId: 'msg_turn_test_user',
     type: 'turn.started', payload: { prompt: '请介绍一下自己' },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
 assert.ok([...host.querySelectorAll('.message-item.user .md-content')]
     .some((node) => node.textContent.includes('请介绍一下自己')),
-    'daemon turn.started must render the submitted user message immediately');
+    'Codex turn.started must render the submitted user message immediately');
 const activeSendButton = host.querySelector('.agent-chat-send-button');
 const activeRunStatus = host.querySelector('.agent-chat-run-status');
 assert.equal(activeRunStatus.hidden, false, 'an active Turn must expose a dedicated status rail above the composer');
@@ -719,10 +742,10 @@ const runStatusStop = activeRunStatus.querySelector('.agent-chat-run-status-stop
 assert.ok(runStatusStop, 'the running rail must expose an independent stop action');
 runStatusStop.click();
 await new Promise((resolve) => setTimeout(resolve, 0));
-assert.deepEqual(cancelledTurns, [{ sessionId: 'sess_test', turnId: 'turn_test' }],
+assert.deepEqual(cancelledTurns, [{ sessionId: 'topic-in-use', turnId: 'turn_test' }],
     'the status-rail stop action must cancel the authoritative active Turn');
 assert.equal(activeSendButton.querySelector('.vcp-ui-icon')?.textContent, 'stop',
-    'an active Rust turn must replace the send arrow with the main-chat stop icon');
+    'an active Codex turn must replace the send arrow with the main-chat stop icon');
 assert.equal(activeSendButton.getAttribute('aria-label'), '取消当前任务');
 assert.equal(activeSendButton.classList.contains('interrupt-mode'), true,
     'an empty composer during an active turn must use the shared interrupt visual state');
@@ -730,38 +753,38 @@ prompt.value = '完成后再列出风险';
 prompt.dispatchEvent(new window.Event('input', { bubbles: true }));
 host.querySelector('.agent-chat-send-button').click();
 await new Promise((resolve) => setTimeout(resolve, 0));
-assert.deepEqual(followUpTurns, [{ sessionId: 'sess_test', turnId: 'turn_test', prompt: '完成后再列出风险' }],
-    'while a turn is active, normal composer input must queue a Rust follow-up instead of cancelling the task');
+assert.deepEqual(followUpTurns, [{ sessionId: 'topic-in-use', turnId: 'turn_test', prompt: '完成后再列出风险' }],
+    'while a turn is active, normal composer input must queue a Codex follow-up instead of cancelling the task');
 prompt.value = '/steer 先检查风险';
 prompt.dispatchEvent(new window.Event('input', { bubbles: true }));
 host.querySelector('.agent-chat-send-button').click();
 await new Promise((resolve) => setTimeout(resolve, 0));
-assert.deepEqual(steeringTurns, [{ sessionId: 'sess_test', turnId: 'turn_test', prompt: '先检查风险' }],
+assert.deepEqual(steeringTurns, [{ sessionId: 'topic-in-use', turnId: 'turn_test', prompt: '先检查风险' }],
     'the explicit /steer prefix must insert immediate steering rather than a follow-up');
 await new Promise((resolve) => setTimeout(resolve, 30));
 const queueToggle = host.querySelector('.agent-chat-queue-toggle');
-assert.ok(queueToggle, 'the header must expose the Rust interaction queue');
+assert.ok(queueToggle, 'the header must expose the persisted interaction queue');
 queueToggle.click();
 assert.match(host.querySelector('.agent-chat-queue-popover').textContent, /完成后再列出风险/,
-    'the queue panel must render follow-up prompts from Rust state');
+    'the queue panel must render follow-up prompts from Main state');
 assert.match(host.querySelector('.agent-chat-queue-popover').textContent, /先检查风险/,
-    'the queue panel must distinguish steering prompts from Rust state');
+    'the queue panel must distinguish steering prompts from Main state');
 const removeQueueButton = [...host.querySelectorAll('.agent-chat-queue-item-actions button')]
     .find((button) => button.textContent === '移除');
-assert.ok(removeQueueButton, 'queue items must provide a safe remove operation when the daemon exposes replacement');
+assert.ok(removeQueueButton, 'queue items must provide a safe remove operation when Main exposes replacement');
 removeQueueButton.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
-assert.equal(replacedInteractionQueues.length, 1, 'removing one queue item must replace the daemon-owned queue snapshot once');
+assert.equal(replacedInteractionQueues.length, 1, 'removing one queue item must replace the Main-owned queue snapshot once');
 assert.equal(replacedInteractionQueues[0].length, 1, 'removing one queue item must preserve remaining interactions');
 emitDaemonEvent({
-    sessionId: 'sess_test', turnId: 'turn_test', sequence: 4,
+    sessionId: 'topic-in-use', turnId: 'turn_test', sequence: 4,
     type: 'context.usage',
     payload: { source: 'real', inputTokens: 12, outputTokens: 8, cacheWriteTokens: 2,
         totalTokens: 20, usedTokens: 20, contextWindow: 100, requests: 1 },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
 const usageToggle = host.querySelector('.agent-chat-usage-toggle');
-assert.ok(usageToggle, 'the header must expose Rust usage state');
+assert.ok(usageToggle, 'the header must expose Codex usage state');
 assert.equal(usageToggle.querySelector('.agent-chat-context-ring-core')?.textContent, '20',
     'the header must expose an always-visible OpenCode-style context percentage indicator');
 usageToggle.click();
@@ -780,7 +803,7 @@ assert.equal(host.querySelector('.agent-chat-activity-tab[data-tab="plan"]'), nu
 assert.equal(host.querySelector('.agent-chat-activity-tab[data-tab="connection"]'), null,
     'internal runtime diagnostics must not occupy a product-facing tab');
 assert.match(host.querySelector('.agent-chat-activity-usage').textContent, /Tokens/,
-    'usage panel must present the daemon-projected aggregate rather than a fake cost');
+    'usage panel must present the runtime-projected aggregate rather than a fake cost');
 assert.match(host.querySelector('.agent-chat-activity-usage').textContent, /20/,
     'usage panel must display total tokens from the runtime event');
 assert.equal(host.querySelector('.agent-chat-usage-budget'), null,
@@ -844,7 +867,7 @@ assert.equal(workspaceActions.at(-1)?.workspaceRevision, 'workspace-revision-tes
 host.querySelector('.agent-chat-activity-tab[data-tab="context"]').click();
 
 emitDaemonEvent({
-    sessionId: 'sess_test', turnId: 'turn_test', sequence: 5, type: 'toolbox.ws',
+    sessionId: 'topic-in-use', turnId: 'turn_test', sequence: 5, type: 'toolbox.ws',
     payload: {
         channel: 'Info', kind: 'notification',
         value: { message: 'ToolBox 只读通知 <img src=x>' },
@@ -870,7 +893,7 @@ host.querySelector('.agent-chat-activity-filters input[type="search"]').value = 
 host.querySelector('.agent-chat-activity-filters input[type="search"]')
     .dispatchEvent(new window.Event('input', { bubbles: true }));
 emitDaemonEvent({
-    sessionId: 'sess_test', turnId: 'turn_test', sequence: 6, type: 'toolbox.ws',
+    sessionId: 'topic-in-use', turnId: 'turn_test', sequence: 6, type: 'toolbox.ws',
     payload: {
         channel: 'Log', kind: 'backend-approval-request',
         value: { type: 'tool_approval_request', data: { requestId: 'approve-1', toolName: 'PowerShellExecutor', approvalTtlMs: 300000 } },
@@ -882,19 +905,17 @@ assert.ok(backendApprovalObservation, 'a ToolBox backend approval request needs 
 assert.match(backendApprovalObservation.textContent, /后端审核请求（未关联）/);
 assert.match(backendApprovalObservation.textContent, /PowerShellExecutor/);
 const backendActions = backendApprovalObservation.querySelectorAll('.agent-chat-approval-actions button');
-assert.equal(backendActions.length, 2, 'ToolBox backend approval must expose explicit deny/allow actions without an Agent tool binding');
-backendActions[0].click();
-await new Promise((resolve) => setTimeout(resolve, 0));
-assert.deepEqual(approvalResponses.at(-1), {
-    approvalId: 'approve-1', decision: 'deny', scope: 'toolbox',
-}, 'backend approval action must use the narrow IPC and only the ToolBox-owned request ID');
+assert.equal(backendActions.length, 0,
+    'unassociated VCPLog approval observations must remain read-only without an authority generation');
+assert.equal(approvalResponses.length, 0,
+    'a display-only ToolBox observation must never emit an approval response');
 approvalResponses.length = 0;
 emitDaemonEvent({
-    sessionId: 'sess_test', turnId: 'turn_test', toolCallId: 'tool-risk', sequence: 7,
+    sessionId: 'topic-in-use', turnId: 'turn_test', toolCallId: 'tool-risk', sequence: 7,
     type: 'approval.requested',
     payload: {
         approval: {
-            approvalId: 'approval-risk', sessionId: 'sess_test', turnId: 'turn_test', toolCallId: 'tool-risk',
+            approvalId: 'approval-risk', sessionId: 'topic-in-use', turnId: 'turn_test', toolCallId: 'tool-risk',
             toolName: 'PowerShellExecutorWithAnIntentionallyVeryLongIdentifierForNarrowLayouts',
             riskLevel: 'high', reason: '长参数必须在窄窗口安全折行',
             argumentSummary: 'a'.repeat(8_192), argumentsHash: 'bound-hash',
@@ -916,18 +937,18 @@ assert.equal(localApproval.querySelector('.agent-chat-approval-args').textConten
     'approval parameters must remain text rather than being dropped or interpreted as HTML');
 await new Promise((resolve) => setTimeout(resolve, 650));
 assert.equal(approvalResponses.length, 0,
-    'Renderer must not manufacture a deny when the Rust Host-owned deadline expires');
+    'Renderer must not manufacture a deny when the Codex-owned deadline expires');
 assert.match(localApproval.querySelector('.agent-chat-approval-countdown').textContent,
-    /等待 (Rust Runtime|Codex App Server)/);
+    /等待 Codex App Server/);
 
 // A fresh approval with a real future deadline proves the visible actions use
-// the complete Rust-owned four-part binding; the renderer never invents an
+// the complete Main-owned four-part binding; the renderer never invents an
 // unbound approval decision.
 emitDaemonEvent({
-    sessionId: 'sess_test', turnId: 'turn_test', toolCallId: 'tool-action', sequence: 8,
+    sessionId: 'topic-in-use', turnId: 'turn_test', toolCallId: 'tool-action', sequence: 8,
     type: 'approval.requested',
     payload: { approval: {
-        approvalId: 'approval-action', sessionId: 'sess_test', turnId: 'turn_test', toolCallId: 'tool-action',
+        approvalId: 'approval-action', sessionId: 'topic-in-use', turnId: 'turn_test', toolCallId: 'tool-action',
         toolName: 'FileOperator', riskLevel: 'medium', argumentsHash: 'bound-action-hash',
         expiresAtMs: Date.now() + 60_000,
     } },
@@ -939,12 +960,12 @@ assert.ok(actionableApproval, 'a new pending local approval must be rendered aft
 actionableApproval.querySelector('.agent-chat-approval-actions button.danger').click();
 await new Promise((resolve) => setTimeout(resolve, 0));
 assert.deepEqual(approvalResponses.at(-1), {
-    approvalId: 'approval-action', decision: 'deny', sessionId: 'sess_test', turnId: 'turn_test',
+    approvalId: 'approval-action', decision: 'deny', sessionId: 'topic-in-use', turnId: 'turn_test',
     toolCallId: 'tool-action', argumentsHash: 'bound-action-hash',
-}, 'the visible deny button must invoke the real narrowed approval IPC with its exact Rust binding');
+}, 'the visible deny button must invoke the narrow approval IPC with its exact Codex binding');
 
 emitDaemonEvent({
-    sessionId: 'sess_test', turnId: 'turn_test', sequence: 9, type: 'interaction.requested',
+    sessionId: 'topic-in-use', turnId: 'turn_test', sequence: 9, type: 'interaction.requested',
     payload: {
         source: 'codex-native', requestId: 'input-request-1', kind: 'user-input', state: 'pending',
         expiresAtMs: Date.now() + 60_000,
@@ -979,7 +1000,7 @@ assert.doesNotMatch(JSON.stringify({ ...window.localStorage }), /never-persist-t
     'secret interaction answers must never be written to localStorage');
 
 emitDaemonEvent({
-    sessionId: 'sess_test', turnId: 'turn_test', sequence: 10, type: 'interaction.requested',
+    sessionId: 'topic-in-use', turnId: 'turn_test', sequence: 10, type: 'interaction.requested',
     payload: { source: 'codex-native', requestId: 'permission-request-1', kind: 'permission', state: 'pending',
         payload: { cwd: root, permissions: { network: { enabled: true }, fileSystem: { read: [root], write: [] } } } },
 });
@@ -996,7 +1017,7 @@ assert.deepEqual(interactionResponses.at(-1), {
 });
 
 emitDaemonEvent({
-    sessionId: 'sess_test', turnId: 'turn_test', sequence: 11, type: 'interaction.requested',
+    sessionId: 'topic-in-use', turnId: 'turn_test', sequence: 11, type: 'interaction.requested',
     payload: { source: 'codex-native', requestId: 'mcp-form-1', kind: 'mcp-elicitation', state: 'pending',
         payload: { mode: 'form', requestedSchema: { type: 'object', required: ['name'], properties: {
             name: { type: 'string', title: '名称' }, enabled: { type: 'boolean', title: '启用' },
@@ -1014,7 +1035,7 @@ assert.deepEqual(interactionResponses.at(-1), {
 }, 'typed MCP elicitation must submit only the rendered structured fields');
 
 emitDaemonEvent({
-    sessionId: 'sess_test', turnId: 'turn_test', sequence: 12, type: 'interaction.requested',
+    sessionId: 'topic-in-use', turnId: 'turn_test', sequence: 12, type: 'interaction.requested',
     payload: { source: 'codex-native', requestId: 'mcp-url-1', kind: 'mcp-elicitation', state: 'pending',
         payload: { mode: 'url', url: 'https://example.com/authorize' } },
 });
@@ -1060,12 +1081,12 @@ emitDaemonEvent({
     },
 });
 emitDaemonEvent({
-    sessionId: 'sess_test', turnId: 'turn_live', messageId: 'msg_live', sequence: 2,
-    type: 'assistant.delta', payload: { text: 'live Rust delta' },
+    sessionId: 'topic-in-use', turnId: 'turn_live', messageId: 'msg_live', sequence: 2,
+    type: 'assistant.delta', payload: { text: 'live Codex delta' },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
 assert.equal(host.querySelector('.agent-wb-runtime-dock'), null, 'Runtime lifecycle controls must stay out of the Agent UI');
-assert.ok([...host.querySelectorAll('.message-item .md-content')].some((node) => node.textContent.includes('live Rust delta')), 'Runtime delta must render in the migrated chat shell');
+assert.ok([...host.querySelectorAll('.message-item .md-content')].some((node) => node.textContent.includes('live Codex delta')), 'Runtime delta must render in the migrated chat shell');
 assert.equal(host.querySelector('.agent-chat-status-chip')?.dataset.action, undefined,
     'the header runtime status must remain informative without opening a hidden diagnostics surface');
 assert.equal(host.querySelectorAll('.agent-chat-readiness-card').length, 0,
@@ -1079,7 +1100,7 @@ stableComposer.value = '保持中的草稿';
 stableComposer.dispatchEvent(new window.Event('input', { bubbles: true }));
 stableComposer.focus();
 emitDaemonEvent({
-    sessionId: 'sess_test', turnId: 'turn_live', messageId: 'msg_live', sequence: 3,
+    sessionId: 'topic-in-use', turnId: 'turn_live', messageId: 'msg_live', sequence: 3,
     type: 'assistant.delta', payload: { text: ' and another delta' },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
@@ -1091,11 +1112,11 @@ assert.equal(document.activeElement, stableComposer,
     'streaming deltas must preserve focused input');
 assert.equal(stableComposer.value, '保持中的草稿',
     'streaming deltas must preserve the user draft');
-assert.match(liveMessage.querySelector('.md-content').textContent, /live Rust delta and another delta/,
+assert.match(liveMessage.querySelector('.md-content').textContent, /live Codex delta and another delta/,
     'streaming deltas must append to the existing assistant message');
 
 emitDaemonEvent({
-    sessionId: 'sess_test', turnId: 'turn_live', messageId: 'msg_live', sequence: 4,
+    sessionId: 'topic-in-use', turnId: 'turn_live', messageId: 'msg_live', sequence: 4,
     type: 'reasoning.delta', payload: { text: 'Inspecting the VCPToolBox environment before choosing the next safe action.' },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
@@ -1134,7 +1155,7 @@ assert.equal(reasoningCard.querySelector('.vcp-thought-chain-bubble').classList.
     'the fallback thinking header must remain explicitly collapsible');
 reasoningCard.querySelector('.vcp-thought-chain-header').click();
 emitDaemonEvent({
-    sessionId: 'sess_test', turnId: 'turn_live', messageId: 'msg_live', sequence: 5,
+    sessionId: 'topic-in-use', turnId: 'turn_live', messageId: 'msg_live', sequence: 5,
     type: 'assistant.completed', payload: {},
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
@@ -1148,7 +1169,7 @@ const projectedEventTopicId = host.querySelector('.agent-chat-session-row.active
     || JSON.parse(window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1') || '{}').topicId;
 emitDaemonEvent({
     runtime: 'codex', type: 'projection.updated', method: 'item/completed',
-    sessionId: 'sess_test', topicId: projectedEventTopicId, threadId: 'thread_test', turnId: 'turn_projected',
+    sessionId: 'topic-in-use', topicId: projectedEventTopicId, threadId: 'thread_test', turnId: 'turn_projected',
     itemId: 'reason_projected', activity: 'idle',
     projectionMessage: {
         messageId: 'msg_reason_projected', itemId: 'reason_projected', turnId: 'turn_projected',
@@ -1167,18 +1188,18 @@ assert.equal(projectedReasoning.closest('.message-item')?.querySelector('.md-con
 
 // OpenCode's timeline model is the relevant interaction reference: a single
 // turn can include assistant text, a tool call, then more assistant text.  The
-// Workbench must preserve the daemon's sequence order instead of batching all
+// Workbench must preserve Main's sequence order instead of batching all
 // tools beside the first user message for that turn.
 emitDaemonEvent({
-    sessionId: 'sess_test', turnId: 'turn-order', messageId: 'msg-order-before', sequence: 20,
+    sessionId: 'topic-in-use', turnId: 'turn-order', messageId: 'msg-order-before', sequence: 20,
     type: 'assistant.started', payload: {},
 });
 emitDaemonEvent({
-    sessionId: 'sess_test', turnId: 'turn-order', toolCallId: 'tool-order', sequence: 21,
+    sessionId: 'topic-in-use', turnId: 'turn-order', toolCallId: 'tool-order', sequence: 21,
     type: 'tool.requested', payload: { toolName: 'vcp_invoke', argumentSummary: 'FileOperator.ReadFile package.json' },
 });
 emitDaemonEvent({
-    sessionId: 'sess_test', turnId: 'turn-order', messageId: 'msg-order-after', sequence: 22,
+    sessionId: 'topic-in-use', turnId: 'turn-order', messageId: 'msg-order-after', sequence: 22,
     type: 'assistant.started', payload: {},
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
@@ -1187,10 +1208,10 @@ const beforeIndex = sequenceParts.findIndex((element) => element.dataset.message
 const toolIndex = sequenceParts.findIndex((element) => element.dataset.toolCallId === 'tool-order');
 const afterIndex = sequenceParts.findIndex((element) => element.dataset.messageId === 'msg-order-after');
 assert.ok(beforeIndex >= 0 && beforeIndex < toolIndex && toolIndex < afterIndex,
-    'message → tool → message must retain daemon sequence order in the visible timeline');
+    'message → tool → message must retain runtime sequence order in the visible timeline');
 const requestedToolCard = host.querySelector('[data-tool-call-id="tool-order"]');
 emitDaemonEvent({
-    sessionId: 'sess_test', turnId: 'turn-order', toolCallId: 'tool-order', sequence: 23,
+    sessionId: 'topic-in-use', turnId: 'turn-order', toolCallId: 'tool-order', sequence: 23,
     type: 'tool.completed', payload: {
         toolName: 'vcp_invoke',
         outputSummary: 'FileOperator 已返回 package.json',
@@ -1203,25 +1224,25 @@ emitDaemonEvent({
 await new Promise((resolve) => setTimeout(resolve, 30));
 const completedToolCard = host.querySelector('[data-tool-call-id="tool-order"]');
 assert.strictEqual(completedToolCard, requestedToolCard,
-    'a terminal ToolBox update must patch its Rust toolCallId row instead of rebuilding the feed');
+    'a terminal ToolBox update must patch its Codex callId row instead of rebuilding the feed');
 assert.ok(completedToolCard?.querySelector('.agent-chat-tool-chevron'),
     'a terminal tool with a result must expose an explicit detail control');
 assert.equal(completedToolCard.querySelector('.agent-chat-tool-detail'), null,
     'collapsed long results must not eagerly mount Markdown/detail DOM for every completed tool');
 completedToolCard.querySelector('.agent-chat-tool-chevron').click();
 assert.ok(completedToolCard.querySelector('.agent-chat-tool-detail-result'),
-    'opening a completed tool must mount its preserved daemon result on demand');
+    'opening a completed tool must mount its preserved runtime result on demand');
 assert.equal(completedToolCard.querySelector('.agent-chat-tool-detail-result').textContent.length, 1_024);
 assert.match(completedToolCard.querySelector('.agent-chat-tool-resource-list').textContent, /package\.json/);
 assert.match(completedToolCard.querySelector('.agent-chat-tool-warning-list').textContent, /只读预览/);
 assert.match(completedToolCard.querySelector('.agent-chat-tool-task').textContent, /task-1/);
 
 emitDaemonEvent({
-    sessionId: 'sess_test', turnId: 'turn-tool-group', toolCallId: 'tool-group-a', sequence: 24,
+    sessionId: 'topic-in-use', turnId: 'turn-tool-group', toolCallId: 'tool-group-a', sequence: 24,
     type: 'tool.requested', payload: { toolName: 'FileOperator', argumentSummary: 'ReadFile README.md' },
 });
 emitDaemonEvent({
-    sessionId: 'sess_test', turnId: 'turn-tool-group', toolCallId: 'tool-group-b', sequence: 25,
+    sessionId: 'topic-in-use', turnId: 'turn-tool-group', toolCallId: 'tool-group-b', sequence: 25,
     type: 'tool.requested', payload: { toolName: 'DeepWikiVCP', argumentSummary: 'Inspect repository' },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
@@ -1236,7 +1257,7 @@ assert.equal(groupedTools.querySelector('.agent-chat-tool-group-body').hidden, f
     'the group header must reveal the preserved structured tool cards');
 const groupedFirstCard = groupedTools.querySelector('[data-tool-call-id="tool-group-a"]');
 emitDaemonEvent({
-    sessionId: 'sess_test', turnId: 'turn-tool-group', toolCallId: 'tool-group-a', sequence: 26,
+    sessionId: 'topic-in-use', turnId: 'turn-tool-group', toolCallId: 'tool-group-a', sequence: 26,
     type: 'tool.completed', payload: { toolName: 'FileOperator', outputSummary: 'README.md loaded' },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
@@ -1258,7 +1279,7 @@ Object.defineProperty(scrollContainer, 'clientHeight', { configurable: true, val
 Object.defineProperty(scrollContainer, 'scrollHeight', { configurable: true, value: 1_000 });
 scrollContainer.scrollTop = 320;
 emitDaemonEvent({
-    sessionId: 'sess_test', turnId: 'turn_test', sequence: 8, type: 'toolbox.ws',
+    sessionId: 'topic-in-use', turnId: 'turn_test', sequence: 8, type: 'toolbox.ws',
     payload: { channel: 'Log', kind: 'log', value: { message: 'older-reading-scroll-anchor' } },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
@@ -1276,7 +1297,7 @@ for (const [sequence, kind, value] of [
     [13, 'dream', { type: 'AGENT_DREAM_FINISHED', status: '已完成', agentName: 'Nova' }],
 ]) {
     emitDaemonEvent({
-        sessionId: 'sess_test', turnId: 'turn_test', sequence, type: 'toolbox.ws',
+        sessionId: 'topic-in-use', turnId: 'turn_test', sequence, type: 'toolbox.ws',
         payload: { channel: 'Info', kind, value },
     });
 }
@@ -1294,7 +1315,7 @@ assert.match(host.querySelector('.agent-chat-toolbox-ws-agent-preview .agent-cha
 assert.match(host.querySelector('.agent-chat-toolbox-ws-diary .agent-chat-toolbox-ws-detail').textContent, /日记已保存.*日记 A/);
 assert.match(host.querySelector('.agent-chat-toolbox-ws-dream .agent-chat-toolbox-ws-detail').textContent, /已完成.*Nova/);
 emitDaemonEvent({
-    sessionId: 'sess_test', turnId: 'turn_test', messageId: 'assistant-marker', sequence: 14,
+    sessionId: 'topic-in-use', turnId: 'turn_test', messageId: 'assistant-marker', sequence: 14,
     type: 'marker.observed',
     payload: { kind: 'dynamic-fold', summary: '动态上下文摘要', detail: '这段正文只应在用户主动展开时出现。' },
 });
@@ -1310,7 +1331,7 @@ assert.equal(host.querySelector('[data-message-id="assistant-marker"]'), null,
 // A new transcript Part while reading older output must not steal the anchor,
 // but must give the reader an explicit route back to the live edge.
 emitDaemonEvent({
-    sessionId: 'sess_test', turnId: 'turn-order', messageId: 'msg-reader-new', sequence: 24,
+    sessionId: 'topic-in-use', turnId: 'turn-order', messageId: 'msg-reader-new', sequence: 24,
     type: 'assistant.started', payload: {},
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
@@ -1325,21 +1346,21 @@ assert.equal(scrollContainer.scrollTop, scrollContainer.scrollHeight,
     'return-to-latest must intentionally move the reader to the live bottom edge');
 
 emitDaemonEvent({
-    sessionId: 'sess_test', type: 'runtime.crashed',
-    payload: { error: 'simulated daemon crash', recoverable: true },
+    sessionId: 'topic-in-use', type: 'runtime.crashed',
+    payload: { error: 'simulated App Server crash', recoverable: true },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
 const reconnect = host.querySelector('.agent-chat-status-chip[data-state="error"]');
 assert.equal(reconnect?.getAttribute('role'), 'button',
-    'a daemon crash must turn the compact header status into an explicit reconnect action');
+    'a App Server crash must turn the compact header status into an explicit reconnect action');
 assert.equal(host.querySelector('.agent-chat-activity-connection'), null,
     'runtime failure must not reopen the hidden Diagnostics surface');
 const sessionsBeforeRecovery = createdSessions.length;
 reconnect.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
-assert.deepEqual(runtimeTransitions.slice(-2), ['stop', 'start'], 'recovery must restart the Main-supervised daemon boundary');
+assert.deepEqual(runtimeTransitions.slice(-2), ['stop', 'start'], 'recovery must restart the Main-supervised App Server boundary');
 assert.equal(createdSessions.length, sessionsBeforeRecovery,
-    'recovery must restore a Rust snapshot without silently reacquiring a Topic lease or replaying a Turn');
+    'recovery must restore the SQLite projection without silently resuming a Session Runtime or replaying a Turn');
 
 const restoredTopicRow = [...host.querySelectorAll('.agent-chat-session-row')]
     .find((row) => row.dataset.topicId === 'topic-archived');
@@ -1352,7 +1373,7 @@ await new Promise((resolve) => setTimeout(resolve, 30));
 assert.equal(host.querySelector('.agent-chat-topic-flow-dialog'), null,
     'clicking an idle Topic row must not show a blocking restore dialog');
 assert.equal(createdSessions.length, sessionsBeforeTopicPreview,
-    'clicking a durable Topic must preview Rust persistence without acquiring a Session');
+    'clicking a durable Session must preview SQLite persistence without starting its Runtime');
 assert.strictEqual(host.querySelector('.agent-chat-session-row[data-topic-id="topic-archived"]'), restoredTopicRow,
     'preview selection must patch the existing sidebar row instead of rebuilding the session list');
 assert.equal(topicSidebar.scrollTop, 73,
@@ -1363,6 +1384,11 @@ const settingsTab = [...host.querySelectorAll('.agent-chat-sidebar .sidebar-tab-
 settingsTab.click();
 assert.ok(host.querySelector('.agent-chat-settings-pane .agent-chat-settings-form'),
     'settings must render inside a dedicated padded pane instead of placing fields against the sidebar edge');
+await new Promise((resolve) => setTimeout(resolve, 0));
+const recoverySection = host.querySelector('.agent-chat-recovery-section');
+assert.ok(recoverySection, 'settings must expose incomplete Saga recovery without hiding it in logs');
+assert.match(recoverySection.textContent, /没有需要人工处理的操作/);
+assert.ok([...recoverySection.querySelectorAll('button')].some((item) => item.textContent === '扫描未绑定 Thread'));
 const avatarSettings = host.querySelector('.agent-chat-settings-avatar');
 assert.ok(avatarSettings, 'Agent settings must expose the isolated Build Agent avatar control');
 assert.match(avatarSettings.querySelector('.agent-chat-settings-avatar-preview')?.src || '', /nova-avatar\.png/,
@@ -1412,7 +1438,7 @@ assert.equal(promptPreview?.value, '冻结的 Nova 指令',
     'settings must show the selected Session frozen developer instructions before the Agent fallback prompt');
 await new Promise((resolve) => setTimeout(resolve, 30));
 assert.equal(savedWorkbenchSettings.at(-1)?.permissionMode, 'always-approve',
-    'changing YOLO must automatically persist the narrowed Rust Host permissionMode setting');
+    'changing YOLO must automatically persist the narrowed Codex Session permissionMode setting');
 assert.equal(savedWorkbenchSettings.at(-1)?.sessionId, 'topic-archived',
     'saving a selected Topic policy must target that current Session rather than only a future Session');
 assert.equal([...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field select')]
@@ -1440,26 +1466,26 @@ assert.equal(unsubscribeCalls, 1, 'Workbench unmount must release runtime event 
 assert.deepEqual(presenceCalls, [true, false]);
 assert.equal(host.childElementCount, 0);
 
-window.localStorage.setItem('vcpchat.agentWorkbench.lastTopic.v1', JSON.stringify({ topicId: 'topic-empty-checkpoint' }));
-const emptyCheckpointDispose = registered.mount(host, {});
+window.localStorage.setItem('vcpchat.agentWorkbench.lastTopic.v1', JSON.stringify({ topicId: 'topic-missing-session' }));
+const missingSessionDispose = registered.mount(host, {});
 await new Promise((resolve) => setTimeout(resolve, 100));
 assert.ok(host.classList.contains('agent-workbench-root') && host.querySelector('.agent-chat-root.container'),
-    'an empty remembered Rust Topic must leave the Workbench usable instead of failing startup');
+    'a deleted remembered Session must leave the Workbench usable instead of failing startup');
 assert.equal(window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1'), null,
-    'a Topic without its first checkpoint must clear only the renderer convenience pointer');
+    'a missing Session must clear only the renderer convenience pointer');
 assert.equal([...host.querySelectorAll('.agent-chat-toast, .vcp-ui-toast')]
-    .some((toast) => /Agent Runtime 无法启动|has no checkpoint/.test(toast.textContent || '')), false,
-    'an empty remembered Topic must not surface as a Runtime startup error');
+    .some((toast) => /Agent 页面初始化失败|Session was not found/.test(toast.textContent || '')), false,
+    'a missing remembered Session must not surface as a page initialization error');
 assert.equal(host.querySelector('.agent-chat-toolbox-ws-backend-approval-request'), null,
     'global VCPLog/VCPInfo observations from the previous Workbench lifetime must not reappear as Session history');
-emptyCheckpointDispose();
-assert.equal(unsubscribeCalls, 2, 'empty Topic recovery mount must also release its runtime subscription');
+missingSessionDispose();
+assert.equal(unsubscribeCalls, 2, 'missing Session recovery mount must also release its runtime subscription');
 assert.deepEqual(presenceCalls, [true, false, true, false]);
 assert.equal(host.childElementCount, 0);
 
 console.log('Agent Workbench mount, event rendering, and unmount cleanup tests passed.');
 // JSDOM retains animation/timer handles after the internal app unmounts.
 // Close the synthetic window so this hermetic test can participate in the
-// chained Rust-stack gate instead of silently blocking later checks.
+// chained Codex-stack gate instead of silently blocking later checks.
 window.close();
 process.exit(0);

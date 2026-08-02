@@ -1,4 +1,4 @@
-import { createButton, createIcon, createNode, safeText } from './dom.js';
+import { createIcon, createNode, safeText } from './dom.js';
 
 const OBSERVATION_LABELS = Object.freeze({
     log: '运行日志',
@@ -113,7 +113,7 @@ function createExpandableObservationCard(document, options) {
     return card;
 }
 
-function createToolboxObservationCard(document, observation, onBackendApproval) {
+function createToolboxObservationCard(document, observation) {
     const value = projectToolboxObservation(observation);
     const icon = value.kind === 'distributed-observation' ? 'hub'
         : value.kind === 'backend-approval-request' ? 'admin_panel_settings' : 'info';
@@ -127,27 +127,9 @@ function createToolboxObservationCard(document, observation, onBackendApproval) 
     });
     card.dataset.toolboxChannel = value.channel;
     card.dataset.toolboxKind = value.kind;
-    if (value.kind === 'backend-approval-request') {
-        const raw = observation?.value && typeof observation.value === 'object' ? observation.value : {};
-        const data = raw.data && typeof raw.data === 'object' ? raw.data : raw;
-        const approvalId = typeof data.requestId === 'string' ? data.requestId : '';
-        if (approvalId) {
-            const actions = createNode(document, 'div', 'agent-chat-approval-actions');
-            const deny = createButton(document, '拒绝', 'danger');
-            const allow = createButton(document, '允许一次', 'secondary');
-            const decide = (decision) => {
-                if (card.dataset.deciding === 'true') return;
-                card.dataset.deciding = 'true';
-                deny.disabled = true;
-                allow.disabled = true;
-                onBackendApproval?.(approvalId, decision);
-            };
-            deny.addEventListener('click', () => decide('deny'));
-            allow.addEventListener('click', () => decide('allow'));
-            actions.append(deny, allow);
-            card.append(actions);
-        }
-    }
+    // VCPLog observations are display-only and do not carry the authority
+    // generation required to answer an approval. The global approval center
+    // renders the authoritative `approval.requested` event instead.
     return card;
 }
 

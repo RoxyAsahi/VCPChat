@@ -36,31 +36,29 @@ function createWorkbenchController(runtimeApi) {
 
     function runtimeForTopic(topicId, state = store.getState()) {
         if (!topicId) return null;
-        return (Array.isArray(state.activeRuntimes) ? state.activeRuntimes : [])
-            .find((runtime) => runtime?.topicId === topicId) || null;
+        if (!(state.activeRuntimes instanceof Map)) return null;
+        return state.activeRuntimes.get(topicId)
+            || [...state.activeRuntimes.values()].find((runtime) => runtime?.topicId === topicId)
+            || null;
     }
 
     function selectedRuntime(state = store.getState()) {
-        return runtimeForTopic(state.selectedTopic?.topicId, state)
-            // Transitional bootstrap compatibility only: the pointer is set
-            // by a selected-topic hydration, never used to find another Host.
-            || state.attachment || null;
+        return runtimeForTopic(state.selectedSessionId || state.selectedTopic?.topicId, state);
     }
 
     function projectRuntimeActivity(event) {
         if (!event?.topicId || !event?.sessionId) return;
         const current = store.getState();
-        const index = (current.activeRuntimes || []).findIndex((runtime) => (
-            runtime.topicId === event.topicId && runtime.sessionId === event.sessionId
-        ));
-        if (index < 0) return;
+        const activeRuntimes = new Map(current.activeRuntimes);
+        const key = activeRuntimes.has(event.sessionId) ? event.sessionId : event.topicId;
+        const runtime = activeRuntimes.get(key);
+        if (!runtime) return;
         let activity = null;
         if (event.type === 'turn.started') activity = 'running';
         else if (event.type === 'approval.requested') activity = 'awaiting-approval';
         else if (['turn.completed', 'turn.failed', 'turn.cancelled'].includes(event.type)) activity = 'idle';
         if (!activity) return;
-        const activeRuntimes = [...current.activeRuntimes];
-        activeRuntimes[index] = { ...activeRuntimes[index], activity, activeTurnId: activity === 'running' ? event.turnId : null };
+        activeRuntimes.set(key, { ...runtime, activity, activeTurnId: activity === 'running' ? event.turnId : null });
         store.setState({ activeRuntimes });
     }
 
@@ -73,13 +71,14 @@ function createWorkbenchController(runtimeApi) {
                 worker: status?.worker || null,
                 lastError: status?.lastError || null,
             },
-            activeRuntimes: Array.isArray(status?.runtimes) ? status.runtimes : [],
+            activeRuntimes: new Map((Array.isArray(status?.runtimes) ? status.runtimes : [])
+                .map((runtime) => [runtime.sessionId || runtime.topicId, runtime])),
             sessionUi: reconcileAgentSessionUiState(
                 store.getState().sessionUi,
                 Array.isArray(status?.sessions) ? status.sessions : [],
             ),
         };
-        // Approvals are a Renderer-only live projection. Rust events add and
+        // Approvals are a Renderer-only live projection. Runtime events add and
         // remove them; Main must never manufacture an empty list that erases
         // a visible approval during an unrelated status refresh.
         // These lists are independently optional during restart/compatibility
@@ -132,7 +131,7 @@ function createWorkbenchController(runtimeApi) {
                 createdAt: entry?.createdAt || entry?.timestamp || 0,
                 // Checkpoints may predate v1.2 sequence fields.  Keep such
                 // entries in their durable snapshot order; only live events
-                // receive daemon sequence ordering.
+                // receive Main-projected event ordering.
                 firstSequence: Number.isFinite(Number(entry?.firstSequence)) ? Number(entry.firstSequence) : null,
                 lastSequence: Number.isFinite(Number(entry?.lastSequence)) ? Number(entry.lastSequence) : null,
                 snapshotOrdinal: Number.isFinite(Number(entry?.snapshotOrdinal)) ? Number(entry.snapshotOrdinal) : null,
@@ -147,7 +146,7 @@ function createWorkbenchController(runtimeApi) {
 
     function readLocalProjection(payload) {
         // Codex uses the dedicated SQLite-only IPC.  The fallback keeps the
-        // archived Rust controller tests and compatibility runtime working,
+        // archived controller tests and compatibility runtimes working,
         // but it is deliberately not used by the Codex product path.
         return hasApi('agentRuntimeReadProjection')
             ? runtimeApi.agentRuntimeReadProjection(payload)
@@ -166,23 +165,28 @@ function createWorkbenchController(runtimeApi) {
             : requireApi('agentRuntimeCreateSession')({ resume: id });
         const promise = Promise.resolve(call)
             .then(async (runtime) => {
+                if (runtime?.sessionId) {
+                    const current = store.getState();
+                    const activeRuntimes = new Map(current.activeRuntimes);
+                    activeRuntimes.set(runtime.sessionId, {
+                        ...activeRuntimes.get(runtime.sessionId),
+                        ...runtime,
+                        sessionId: runtime.sessionId,
+                        topicId: runtime.topicId || runtime.sessionId,
+                    });
+                    store.setState({
+                        activeRuntimes,
+                        selectedTopic: current.selectedTopic?.topicId === runtime.sessionId
+                            ? { ...current.selectedTopic, mode: 'runtime-active' }
+                            : current.selectedTopic,
+                    });
+                }
                 await refreshStatus().catch(() => null);
                 return runtime;
             })
             .finally(() => sessionWarmPromises.delete(id));
         sessionWarmPromises.set(id, promise);
         return promise;
-    }
-
-    function warmSelectedSession(sessionId) {
-        void ensureSessionRuntime(sessionId, 'selection').catch((error) => {
-            const current = store.getState();
-            if (current.selectedTopic?.topicId !== sessionId) return;
-            store.setState({ notice: {
-                level: 'warning',
-                text: `会话后台预热失败；发送时将重试：${error.message}`,
-            } });
-        });
     }
 
     function codexSnapshotToProjection(snapshot) {
@@ -392,16 +396,16 @@ function createWorkbenchController(runtimeApi) {
 
     function applyCodexRuntimeEvent(event) {
         const current = store.getState();
-        const runtimes = [...(current.activeRuntimes || [])];
-        const index = runtimes.findIndex((runtime) => runtime.sessionId === event.sessionId);
-        if (index >= 0) {
-            runtimes[index] = {
-                ...runtimes[index],
-                activity: event.activity || runtimes[index].activity,
+        const runtimes = new Map(current.activeRuntimes);
+        const runtime = runtimes.get(event.sessionId);
+        if (runtime) {
+            runtimes.set(event.sessionId, {
+                ...runtime,
+                activity: event.activity || runtime.activity,
                 activeTurnId: event.activity === 'running'
-                    ? (event.turnId || runtimes[index].activeTurnId)
+                    ? (event.turnId || runtime.activeTurnId)
                     : null,
-            };
+            });
         }
         const selected = event.topicId === current.selectedTopic?.topicId;
         store.setState({
@@ -455,17 +459,17 @@ function createWorkbenchController(runtimeApi) {
 
     function applyPreviewProjection(projection, selectedTopic) {
         const current = store.getState();
-        const runtime = runtimeForTopic(selectedTopic.topicId, current);
+        const selectedSessionId = projection?.session?.sessionId || selectedTopic.sessionId || selectedTopic.topicId;
+        const sessionSnapshots = new Map(current.sessionSnapshots);
+        sessionSnapshots.set(selectedTopic.topicId, projection);
         store.setState({
             ...projection,
             selectedTopic,
-            // This compatibility pointer is scoped to the currently viewed
-            // Topic only. It must never stand for a daemon-global attachment.
-            attachment: runtime ? { ...runtime } : null,
+            selectedSessionId,
+            sessionSnapshots,
             activeTurnId: null,
             context: projection.context || current.context,
             plan: projection.plan || null,
-            backgroundAttachment: null,
         });
     }
 
@@ -486,17 +490,17 @@ function createWorkbenchController(runtimeApi) {
     function releaseSnapshotBarrier(barrier, snapshot, runtime) {
         if (snapshotBarrier !== barrier) return;
         snapshotBarrier = null;
-        // `snapshotSequence` is supplied with read-topic by the daemon. It is
+        // `snapshotSequence` is supplied with the projection snapshot. It is
         // the durable-snapshot waterline: stale buffered events are never
         // replayed by JS after a reload, switch or reconnect.
         const minimumSequence = Number(snapshot?.snapshotSequence);
         for (const event of barrier.events) {
-            // Runtime diagnostics are daemon-global rather than a Topic
-            // transcript mutation.  The first attachment can legitimately be
-            // absent while the control transport is being created, so routing
-            // these through the attachment-only snapshot filter would drop
+            // Runtime diagnostics are process-global rather than a Session
+            // transcript mutation. A selected Session Runtime can legitimately
+            // be absent while the control transport is being created, so a
+            // Session-identity snapshot filter would otherwise drop
             // the asynchronous ToolBox readiness result and leave the UI at
-            // a permanent “checking” state. They remain daemon-authored and
+            // a permanent “checking” state. They remain Main-authored and
             // reducer-owned; this is not a Main/Renderer probe or inference.
             if (event?.type?.startsWith('runtime.')) {
                 store.dispatch(event);
@@ -512,9 +516,9 @@ function createWorkbenchController(runtimeApi) {
         }
     }
 
-    function applyHydratedSnapshot(topicId, snapshot, attachment, agentId) {
+    function applyHydratedSnapshot(topicId, snapshot, runtimeHint, agentId) {
         const current = store.getState();
-        const active = attachment || runtimeForTopic(topicId, current);
+        const active = runtimeHint || runtimeForTopic(topicId, current);
         // `read-topic` / `read-projection` is the durable metadata source
         // after a reload. Main's runtime status intentionally has only a
         // small identity shell, never a transcript cache.
@@ -525,7 +529,7 @@ function createWorkbenchController(runtimeApi) {
             ? snapshot.session.agentId
             : typeof snapshot?.agentId === 'string' && snapshot.agentId.trim() ? snapshot.agentId
                 : agentId || active?.agentId || null;
-        const nextAttachment = active ? {
+        const nextRuntime = active ? {
             ...active,
             topicId,
             title: typeof durableState.title === 'string' && durableState.title.trim()
@@ -537,32 +541,41 @@ function createWorkbenchController(runtimeApi) {
             agentId: durableAgentId || active.agentId,
             configSnapshot: durableState.configSnapshot || active.configSnapshot || null,
         } : null;
-        store.setAttachment(nextAttachment);
+        const activeRuntimes = new Map(current.activeRuntimes);
+        if (nextRuntime) activeRuntimes.set(nextRuntime.sessionId || topicId, nextRuntime);
         const projection = codexSnapshotToProjection(snapshot);
         cacheSnapshot(topicId, snapshot);
+        const sessionSnapshots = new Map(current.sessionSnapshots);
+        sessionSnapshots.set(topicId, projection);
+        const selectedSessionId = durableState.sessionId || nextRuntime?.sessionId || topicId;
         store.setState({
             ...projection,
+            selectedSessionId,
+            sessionSnapshots,
+            activeRuntimes,
             selectedTopic: {
                 topicId,
+                sessionId: selectedSessionId,
                 agentId: durableAgentId,
-                title: nextAttachment?.title || '',
-                model: nextAttachment?.model || '',
-                workspaceRoot: nextAttachment?.workspaceRoot || '',
+                title: nextRuntime?.title || durableState.title || '',
+                model: nextRuntime?.model || durableState.configSnapshot?.model || '',
+                workspaceRoot: nextRuntime?.workspaceRoot || durableState.workspaceRoot || '',
                 configSnapshot: durableState.configSnapshot || null,
-                mode: nextAttachment ? 'attached' : 'preview',
+                configRevision: Number(durableState.configRevision || 1),
+                archivedAt: durableState.archivedAt || null,
+                mode: nextRuntime ? 'runtime-active' : 'preview',
             },
-            backgroundAttachment: null,
         });
-        return nextAttachment;
+        return nextRuntime;
     }
 
-    async function reconcileHydratedTopic(topicId, attachment, agentId, version, revisionAtStart) {
+    async function reconcileHydratedTopic(topicId, runtimeHint, agentId, version, revisionAtStart) {
         try {
             const snapshot = await requireApi('agentRuntimeReadTopic')(topicPayload({ topicId }, agentId));
             const current = store.getState();
             if (version !== selectionVersion || current.selectedTopic?.topicId !== topicId) return null;
             if ((liveProjectionRevision.get(topicId) || 0) !== revisionAtStart) return null;
-            applyHydratedSnapshot(topicId, snapshot, attachment || runtimeForTopic(topicId), agentId);
+            applyHydratedSnapshot(topicId, snapshot, runtimeHint || runtimeForTopic(topicId), agentId);
             return snapshot;
         } catch (_error) {
             // The SQLite projection remains visible; Main records a sync
@@ -571,7 +584,7 @@ function createWorkbenchController(runtimeApi) {
         }
     }
 
-    async function hydrateTopic(topicId, attachment = null, existingBarrier = null, agentId = undefined) {
+    async function hydrateTopic(topicId, runtimeHint = null, existingBarrier = null, agentId = undefined) {
         if (!topicId) return null;
         const version = ++selectionVersion;
         const barrier = existingBarrier || beginSnapshotBarrier();
@@ -579,39 +592,36 @@ function createWorkbenchController(runtimeApi) {
             try {
                 const localSnapshot = await readLocalProjection(topicPayload({ topicId }, agentId));
                 if (version !== selectionVersion) {
-                    releaseSnapshotBarrier(barrier, null, attachment || runtimeForTopic(topicId));
+                    releaseSnapshotBarrier(barrier, null, runtimeHint || runtimeForTopic(topicId));
                     return null;
                 }
-                const nextAttachment = applyHydratedSnapshot(topicId, localSnapshot, attachment, agentId);
-                releaseSnapshotBarrier(barrier, localSnapshot, nextAttachment);
-                warmSelectedSession(topicId);
+                const nextRuntime = applyHydratedSnapshot(topicId, localSnapshot, runtimeHint, agentId);
+                releaseSnapshotBarrier(barrier, localSnapshot, nextRuntime);
                 const revisionAtStart = liveProjectionRevision.get(topicId) || 0;
-                void reconcileHydratedTopic(topicId, attachment, agentId, version, revisionAtStart);
+                void reconcileHydratedTopic(topicId, runtimeHint, agentId, version, revisionAtStart);
                 return localSnapshot;
             } catch (error) {
-                releaseSnapshotBarrier(barrier, null, attachment || runtimeForTopic(topicId));
+                releaseSnapshotBarrier(barrier, null, runtimeHint || runtimeForTopic(topicId));
                 throw error;
             }
         }
         try {
             const snapshot = await requireApi('agentRuntimeReadTopic')(topicPayload({ topicId }, agentId));
             if (version !== selectionVersion) {
-                releaseSnapshotBarrier(barrier, null, attachment || runtimeForTopic(topicId));
+                releaseSnapshotBarrier(barrier, null, runtimeHint || runtimeForTopic(topicId));
                 return null;
             }
-            const nextAttachment = applyHydratedSnapshot(topicId, snapshot, attachment, agentId);
-            releaseSnapshotBarrier(barrier, snapshot, nextAttachment);
+            const nextRuntime = applyHydratedSnapshot(topicId, snapshot, runtimeHint, agentId);
+            releaseSnapshotBarrier(barrier, snapshot, nextRuntime);
             return snapshot;
         } catch (error) {
-            releaseSnapshotBarrier(barrier, null, store.getState().attachment);
+            releaseSnapshotBarrier(barrier, null, runtimeForTopic(topicId));
             throw error;
         }
     }
 
-    // Read-only preview of a Topic owned by another client.  Reads the durable
-    // checkpoint WITHOUT claiming its session lease, so the other live client
-    // is never disturbed.  The renderer shows a read-only banner and requires
-    // an explicit takeover before any write is allowed.
+    // View selection reads the durable SQLite projection first. It does not
+    // resume, stop, or otherwise mutate any Codex Thread.
     async function previewTopic(topicId, agentId = undefined, metadata = {}) {
         if (!topicId) return null;
         const version = ++selectionVersion;
@@ -622,6 +632,7 @@ function createWorkbenchController(runtimeApi) {
             model: metadata.model || '',
             workspaceRoot: metadata.workspaceRef || metadata.workspaceRoot || '',
             title: metadata.title || '',
+            archivedAt: metadata.archivedAt || null,
             mode: 'preview',
         };
         const cached = cachedProjection(topicId);
@@ -639,7 +650,6 @@ function createWorkbenchController(runtimeApi) {
             cacheSnapshot(topicId, localSnapshot);
             applyPreviewProjection(codexSnapshotToProjection(localSnapshot), resolvedTopic);
             releaseSnapshotBarrier(barrier, localSnapshot, runtimeForTopic(topicId));
-            warmSelectedSession(topicId);
             // Deliberately detached: navigation is complete before App Server
             // reconciliation begins. The guards in reconcilePreviewTopic make
             // an A response harmless after the user selects B.
@@ -667,21 +677,20 @@ function createWorkbenchController(runtimeApi) {
 
     async function createSession(options = {}) {
         const barrier = beginSnapshotBarrier();
-        // Main maps this compatibility API to v1.7 ensure-topic-runtime. It
-        // starts only the selected Topic Host and never replaces other Hosts.
-        const attachment = await requireApi('agentRuntimeCreateSession')(options);
-        store.setAttachment(attachment);
+        // This compatibility API creates or resumes one Session without
+        // changing any other Session Runtime.
+        const createdSession = await requireApi('agentRuntimeCreateSession')(options);
         await refreshStatus();
-        if (attachment.topicId) {
+        if (createdSession.topicId) {
             try {
-                await hydrateTopic(attachment.topicId, attachment, barrier, attachment.agentId);
+                await hydrateTopic(createdSession.topicId, createdSession, barrier, createdSession.agentId);
             } catch {
-                releaseSnapshotBarrier(barrier, null, attachment);
+                releaseSnapshotBarrier(barrier, null, createdSession);
             }
         } else {
-            releaseSnapshotBarrier(barrier, null, attachment);
+            releaseSnapshotBarrier(barrier, null, createdSession);
         }
-        return attachment;
+        return createdSession;
     }
 
     async function createTopic(options = {}) {
@@ -715,6 +724,8 @@ function createWorkbenchController(runtimeApi) {
             workspaceRoot: typeof durableState.workspaceRef === 'string' && durableState.workspaceRef.trim()
                 ? durableState.workspaceRef : selectedTopic.workspaceRoot,
             configSnapshot: durableState.configSnapshot || null,
+            configRevision: Number(durableState.configRevision || selectedTopic.configRevision || 1),
+            archivedAt: durableState.archivedAt || selectedTopic.archivedAt || null,
         };
     }
 
@@ -752,9 +763,8 @@ function createWorkbenchController(runtimeApi) {
         store.setState({ context: { ...store.getState().context, compacting: true, summary: '' } });
         try {
             const result = await requireApi('agentRuntimeCompactSession')({ sessionId, instructions: instructions || undefined });
-            // Codex returns its reconciled projection snapshot with sessionId;
-            // the Rust compatibility runtime may also return sessionId but its
-            // preview flow remains topicId-based and must not be disturbed.
+            // Codex returns its reconciled projection snapshot with sessionId.
+            // Keep the topicId fallback only for the compatibility IPC shape.
             const refreshedTopicId = result?.topicId || (result?.snapshot ? (result?.sessionId || sessionId) : null);
             if (refreshedTopicId) await hydrateTopic(refreshedTopicId);
             return result;
@@ -763,17 +773,23 @@ function createWorkbenchController(runtimeApi) {
         }
     }
 
-    const listTopics = (agentId = undefined) => requireApi('agentRuntimeListTopics')(topicPayload({}, agentId));
+    const listTopics = (agentId = undefined, options = {}) => requireApi('agentRuntimeListTopics')(topicPayload(options, agentId));
     const searchTopics = (query, agentId = undefined, limit = 20) => requireApi('agentRuntimeSearchTopics')(topicPayload({ query, limit }, agentId));
     const searchTopicMessages = (query, topicId, agentId = undefined, limit = 50) => requireApi('agentRuntimeSearchTopicMessages')(topicPayload({ query, topicId, limit }, agentId));
     const getTopicIndexStatus = () => requireApi('agentRuntimeGetTopicIndexStatus')();
     const rebuildTopicIndex = () => requireApi('agentRuntimeRebuildTopicIndex')();
     const readTopic = (topicId, agentId = undefined) => requireApi('agentRuntimeReadTopic')(topicPayload({ topicId }, agentId));
-    const takeoverTopic = (topicId, agentId = undefined) => requireApi('agentRuntimeTakeoverTopic')(topicPayload({ topicId }, agentId));
     const renameTopic = (topicId, title, agentId = undefined) => requireApi('agentRuntimeRenameTopic')(topicPayload({ topicId, title }, agentId));
     const deleteTopic = (topicId, agentId = undefined) => requireApi('agentRuntimeDeleteTopic')(topicPayload({ topicId }, agentId));
     const archiveSession = (sessionId) => requireApi('agentRuntimeCloseSession')({ sessionId });
     const restoreSession = (sessionId) => requireApi('agentRuntimeRestoreSession')({ sessionId });
+    const permanentlyDeleteSession = (sessionId) => requireApi('agentRuntimePermanentlyDeleteSession')({ sessionId });
+    const exportSession = (sessionId, format = 'markdown') => requireApi('agentRuntimeExportSession')({ sessionId, format });
+    const listRecoveryOperations = () => requireApi('agentRuntimeListRecoveryOperations')();
+    const listRecoveryCandidates = () => requireApi('agentRuntimeListRecoveryCandidates')();
+    const resolveRecoveryOperation = (operationId, action, threadId) => requireApi('agentRuntimeResolveRecoveryOperation')({
+        operationId, action, threadId,
+    });
     const setSessionPinned = (sessionId, pinned) => requireApi('agentRuntimeSetSessionPinned')({ sessionId, pinned });
     const listInteractionQueue = () => {
         const runtime = selectedRuntime();
@@ -799,16 +815,38 @@ function createWorkbenchController(runtimeApi) {
             const configSnapshot = savedSession.configSnapshot || null;
             const model = configSnapshot?.model || savedSession.model || current.selectedTopic.model || '';
             store.setState({
-                selectedTopic: { ...current.selectedTopic, model, configSnapshot },
-                attachment: current.attachment?.sessionId === savedSession.sessionId
-                    ? { ...current.attachment, model, configSnapshot }
-                    : current.attachment,
+                selectedTopic: {
+                    ...current.selectedTopic,
+                    model,
+                    configSnapshot,
+                    configRevision: savedSession.configRevision || current.selectedTopic.configRevision,
+                },
             });
         }
         return result;
     }
+    async function applyAgentProfile(settings) {
+        const result = await requireApi('agentRuntimeApplyAgentProfile')(settings);
+        if (result?.session?.sessionId && result.applied) {
+            const current = store.getState();
+            if (current.selectedTopic?.topicId === result.session.sessionId) {
+                store.setState({
+                    selectedTopic: {
+                        ...current.selectedTopic,
+                        configSnapshot: result.session.configSnapshot,
+                        configRevision: result.session.configRevision,
+                        workspaceRoot: result.session.workspaceRoot,
+                        workspaceRef: result.session.workspaceRoot,
+                        model: result.session.configSnapshot?.model || current.selectedTopic.model,
+                    },
+                });
+            }
+        }
+        return result;
+    }
     const selectAttachments = () => {
-        const sessionId = selectedRuntime()?.sessionId;
+        const current = store.getState();
+        const sessionId = current.selectedSessionId || current.selectedTopic?.topicId;
         if (!sessionId) throw new Error('请先选择或新建 Session');
         return requireApi('agentRuntimeSelectAttachments')({ sessionId });
     };
@@ -826,14 +864,14 @@ function createWorkbenchController(runtimeApi) {
         }
         const sessionId = runtime?.sessionId || selectedRuntime(current)?.sessionId || selected?.topicId;
         if (!sessionId) throw new Error('请先选择或新建 Session');
-        // ACK means the daemon accepted this command, not that a durable
-        // Topic checkpoint already exists.  Project a renderer-only pending
+        // ACK means Codex accepted this command, not that the durable SQLite
+        // projection already contains its Item. Project a renderer-only pending
         // item immediately so the user never sends into an apparently empty
         // conversation; `turn.started`/`user.message` later replaces it with
-        // the daemon event identity.  If the pipe breaks first, the item is
+        // the App Server event identity. If the pipe breaks first, the item is
         // explicitly unconfirmed and is never automatically replayed.
         const accepted = await requireApi('agentRuntimeStartTurn')({ sessionId, prompt, attachments });
-        // Keep activeTurnId authoritative: it is established by the daemon's
+        // Keep activeTurnId authoritative: it is established by Codex's
         // turn.started/projection event, while the Workbench owns a separate
         // ephemeral startup indicator for the ACK-to-first-event gap.
         store.addPendingUserMessage({ turnId: accepted?.turnId, prompt, attachments });
@@ -857,7 +895,7 @@ function createWorkbenchController(runtimeApi) {
         if (typeof cancelToolApi === 'function') {
             return cancelToolApi.call(runtimeApi, { sessionId, toolCallId });
         }
-        if (!turnId) throw new Error('该工具事件缺少 daemon turnId，不能猜测并取消其他任务');
+        if (!turnId) throw new Error('该工具事件缺少 Codex turnId，不能猜测并取消其他任务');
         return requireApi('agentRuntimeCancelTurn')({ sessionId, turnId });
     }
 
@@ -884,6 +922,7 @@ function createWorkbenchController(runtimeApi) {
             turnId: approval.turnId,
             toolCallId: approval.toolCallId,
             argumentsHash: approval.argumentsHash,
+            ...(Number.isFinite(Number(approval.generation)) ? { generation: Number(approval.generation) } : {}),
         });
         const key = `${approval.scope || approval.source || 'codex-native'}:${approval.approvalId}`;
         store.setState({ approvals: store.getState().approvals.filter((item) => (
@@ -898,15 +937,17 @@ function createWorkbenchController(runtimeApi) {
             requestId: interaction.requestId,
             kind: interaction.kind,
             response,
+            ...(Number.isFinite(Number(interaction.generation)) ? { generation: Number(interaction.generation) } : {}),
         });
     }
 
-    async function respondToolboxApproval(approvalId, decision) {
+    async function respondToolboxApproval(approvalId, decision, generation) {
         if (!approvalId) throw new Error('ToolBox 后端审批缺少 requestId');
         return requireApi('agentRuntimeRespondApproval')({
             approvalId,
             decision,
             scope: 'toolbox',
+            ...(Number.isFinite(Number(generation)) ? { generation: Number(generation) } : {}),
         });
     }
 
@@ -915,10 +956,11 @@ function createWorkbenchController(runtimeApi) {
     const workspaceSearchFiles = (payload) => requireApi('agentWorkspaceSearchFiles')(payload);
     const workspaceStatPath = (payload) => requireApi('agentWorkspaceStatPath')(payload);
     const workspacePerformPathAction = (payload) => requireApi('agentWorkspacePerformPathAction')(payload);
+    const workspaceCancel = (payload) => requireApi('agentWorkspaceCancel')(payload);
 
     async function initialize() {
-        // Subscribe before reading the Rust checkpoint.  The barrier belongs
-        // to the Renderer and buffers any live daemon frame that arrives
+        // Subscribe before reading the SQLite projection. The barrier belongs
+        // to the Renderer and buffers any live Runtime frame that arrives
         // while `read-topic` establishes the durable snapshot waterline.
         const barrier = beginSnapshotBarrier();
         subscribeRuntime();
@@ -927,7 +969,7 @@ function createWorkbenchController(runtimeApi) {
         // Ctrl+R restores only an actual selected runtime. A list of active
         // Topic Hosts is not a request to pick one or replay its transcript.
         const selected = store.getState().selectedTopic;
-        const runtime = selectedRuntime() || status?.attachment || null;
+        const runtime = selectedRuntime();
         const topicId = selected?.topicId || runtime?.topicId || null;
         if (topicId && runtime) {
             await hydrateTopic(topicId, runtime, barrier, selected?.agentId || runtime.agentId);
@@ -954,10 +996,10 @@ function createWorkbenchController(runtimeApi) {
                 projectRuntimeActivity(event);
                 const selectedTopicId = current.selectedTopic?.topicId;
                 const isApproval = event?.type?.startsWith('approval.');
-                const isDaemonGlobal = event?.type?.startsWith('runtime.') || event?.type === 'toolbox.ws';
-                if (!isApproval && !isDaemonGlobal && event?.topicId && selectedTopicId && event.topicId !== selectedTopicId) {
+                const isProcessGlobal = event?.type?.startsWith('runtime.') || event?.type === 'toolbox.ws';
+                if (!isApproval && !isProcessGlobal && event?.topicId && selectedTopicId && event.topicId !== selectedTopicId) {
                     // Do not retain another Topic's transcript. Its sidebar
-                    // badge derives from the daemon's active runtime Map.
+                    // badge derives from the identity-keyed active runtime Map.
                     // A debounced status pull is sufficient and cannot lock
                     // the current Topic's composer.
                     void refreshStatus().catch(() => {});
@@ -979,13 +1021,15 @@ function createWorkbenchController(runtimeApi) {
         store, initialize, subscribeRuntime, dispose, refreshStatus, startRuntime, stopRuntime,
         createSession, createTopic, forkSession, compactSession, hydrateTopic, previewTopic, ensureSessionRuntime,
         listTopics, searchTopics, searchTopicMessages, getTopicIndexStatus, rebuildTopicIndex,
-        readTopic, takeoverTopic, renameTopic, deleteTopic, archiveSession, restoreSession, setSessionPinned,
+        readTopic, renameTopic, deleteTopic, archiveSession, restoreSession, permanentlyDeleteSession,
+        exportSession, listRecoveryOperations, listRecoveryCandidates, resolveRecoveryOperation, setSessionPinned,
         listInteractionQueue, replaceInteractionQueue, clearInteractionQueue,
-        getWorkbenchSettings, updateWorkbenchSettings, selectAttachments,
+        getWorkbenchSettings, updateWorkbenchSettings, applyAgentProfile, selectAttachments,
         startTurn, steerTurn, followUpTurn, cancelTurn, cancelTool, respondApproval, respondInteraction,
         respondToolboxApproval,
         workspaceListDirectory, workspaceReadPreview, workspaceSearchFiles,
         workspaceStatPath, workspacePerformPathAction,
+        workspaceCancel,
     };
 }
 

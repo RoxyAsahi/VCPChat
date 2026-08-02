@@ -13,6 +13,8 @@ const DEFAULT_LIMITS = Object.freeze({
     maxSearchResults: 200,
     maxSearchEntries: 20_000,
     operationTimeoutMs: 10_000,
+    maxConcurrentOperations: 4,
+    maxConcurrentSearches: 2,
 });
 
 const TEXT_EXTENSIONS = new Set([
@@ -66,15 +68,30 @@ function revisionForRoot(root) {
     return crypto.createHash('sha256').update(root).digest('hex').slice(0, 16);
 }
 
-function withTimeout(promise, timeoutMs) {
-    let timer;
-    return Promise.race([
-        promise,
-        new Promise((_, reject) => {
-            timer = setTimeout(() => reject(workspaceError('WORKSPACE_TIMEOUT', 'Workspace operation timed out')), timeoutMs);
-            timer.unref?.();
-        }),
-    ]).finally(() => clearTimeout(timer));
+class BoundedScheduler {
+    constructor(limit) {
+        this.limit = Math.max(1, Number(limit) || 1);
+        this.active = 0;
+        this.queue = [];
+    }
+
+    run(task) {
+        return new Promise((resolve, reject) => {
+            this.queue.push({ task, resolve, reject });
+            this._drain();
+        });
+    }
+
+    _drain() {
+        while (this.active < this.limit && this.queue.length) {
+            const entry = this.queue.shift();
+            this.active += 1;
+            Promise.resolve().then(entry.task).then(entry.resolve, entry.reject).finally(() => {
+                this.active -= 1;
+                this._drain();
+            });
+        }
+    }
 }
 
 class AgentWorkspaceService {
@@ -85,6 +102,43 @@ class AgentWorkspaceService {
         this.clipboard = options.clipboard || null;
         this.confirmOpen = options.confirmOpen || (async () => false);
         this.limits = { ...DEFAULT_LIMITS, ...(options.limits || {}) };
+        this.scheduler = new BoundedScheduler(this.limits.maxConcurrentOperations);
+        this.searchScheduler = new BoundedScheduler(this.limits.maxConcurrentSearches);
+        this.operations = new Map();
+    }
+
+    _throwIfAborted(signal) {
+        if (signal?.aborted) throw signal.reason || workspaceError('WORKSPACE_CANCELLED', 'Workspace operation was cancelled');
+    }
+
+    _run(payload, kind, task) {
+        const requestId = String(payload?.requestId || crypto.randomUUID());
+        if (this.operations.has(requestId)) throw workspaceError('WORKSPACE_REQUEST_DUPLICATE', 'Workspace requestId is already active');
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(workspaceError('WORKSPACE_TIMEOUT', 'Workspace operation timed out')),
+            this.limits.operationTimeoutMs);
+        timeout.unref?.();
+        const scheduler = kind === 'search' ? this.searchScheduler : this.scheduler;
+        const operation = scheduler.run(async () => {
+            this._throwIfAborted(controller.signal);
+            return task(controller.signal);
+        }).finally(() => {
+            clearTimeout(timeout);
+            this.operations.delete(requestId);
+        });
+        this.operations.set(requestId, { requestId, sessionId: String(payload?.sessionId || ''), controller, operation });
+        return operation;
+    }
+
+    cancel(payload = {}) {
+        const requestId = String(payload.requestId || '').trim();
+        const operation = this.operations.get(requestId);
+        if (!operation) return { cancelled: false, requestId };
+        if (payload.sessionId && String(payload.sessionId) !== operation.sessionId) {
+            throw workspaceError('WORKSPACE_SESSION_MISMATCH', 'Workspace cancellation belongs to another Session');
+        }
+        operation.controller.abort(workspaceError('WORKSPACE_CANCELLED', 'Workspace operation was cancelled'));
+        return { cancelled: true, requestId };
     }
 
     _context(payload = {}) {
@@ -103,17 +157,20 @@ class AgentWorkspaceService {
     }
 
     async listDirectory(payload = {}) {
-        return withTimeout(this._listDirectory(payload), this.limits.operationTimeoutMs);
+        return this._run(payload, 'general', (signal) => this._listDirectory(payload, signal));
     }
 
-    async _listDirectory(payload) {
+    async _listDirectory(payload, signal) {
         const context = this._context(payload);
+        this._throwIfAborted(signal);
         const stat = await fs.promises.stat(context.absolutePath);
+        this._throwIfAborted(signal);
         if (!stat.isDirectory()) throw workspaceError('WORKSPACE_NOT_DIRECTORY', 'Workspace path is not a directory');
         const offset = Math.max(0, Number.parseInt(payload.cursor || '0', 10) || 0);
         const requestedLimit = Number(payload.limit) || this.limits.maxDirectoryEntries;
         const limit = Math.min(Math.max(1, requestedLimit), this.limits.maxDirectoryEntries);
         const dirents = await fs.promises.readdir(context.absolutePath, { withFileTypes: true });
+        this._throwIfAborted(signal);
         const entries = dirents.map((entry) => ({
             name: entry.name,
             kind: entry.isDirectory() ? 'directory' : entry.isFile() ? 'file' : entry.isSymbolicLink() ? 'symlink' : 'other',
@@ -134,24 +191,29 @@ class AgentWorkspaceService {
     }
 
     async statPath(payload = {}) {
-        const context = this._context(payload);
-        const stat = await fs.promises.stat(context.absolutePath);
-        return {
-            sessionId: context.sessionId,
-            workspaceRevision: context.workspaceRevision,
-            relativePath: context.relativePath,
-            kind: stat.isDirectory() ? 'directory' : stat.isFile() ? 'file' : 'other',
-            byteLen: stat.size,
-            modifiedAt: stat.mtime.toISOString(),
-        };
+        return this._run(payload, 'general', async (signal) => {
+            const context = this._context(payload);
+            this._throwIfAborted(signal);
+            const stat = await fs.promises.stat(context.absolutePath);
+            this._throwIfAborted(signal);
+            return {
+                sessionId: context.sessionId,
+                workspaceRevision: context.workspaceRevision,
+                relativePath: context.relativePath,
+                kind: stat.isDirectory() ? 'directory' : stat.isFile() ? 'file' : 'other',
+                byteLen: stat.size,
+                modifiedAt: stat.mtime.toISOString(),
+            };
+        });
     }
 
     async readPreview(payload = {}) {
-        return withTimeout(this._readPreview(payload), this.limits.operationTimeoutMs);
+        return this._run(payload, 'general', (signal) => this._readPreview(payload, signal));
     }
 
-    async _readPreview(payload) {
+    async _readPreview(payload, signal) {
         const context = this._context(payload);
+        this._throwIfAborted(signal);
         if (!context.relativePath) throw workspaceError('WORKSPACE_PATH_REQUIRED', 'Select a file to preview');
         const stat = await fs.promises.stat(context.absolutePath);
         if (!stat.isFile()) throw workspaceError('WORKSPACE_NOT_FILE', 'Workspace path is not a file');
@@ -167,6 +229,7 @@ class AgentWorkspaceService {
         if (IMAGE_MIME[extension]) {
             if (stat.size > this.limits.maxImageBytes) return { ...base, kind: 'image', mimeType: IMAGE_MIME[extension], truncated: true };
             const buffer = await fs.promises.readFile(context.absolutePath);
+            this._throwIfAborted(signal);
             return { ...base, kind: 'image', mimeType: IMAGE_MIME[extension], dataUrl: `data:${IMAGE_MIME[extension]};base64,${buffer.toString('base64')}`, truncated: false };
         }
         if (MEDIA_MIME[extension]) return { ...base, kind: 'media', mimeType: MEDIA_MIME[extension] };
@@ -176,6 +239,7 @@ class AgentWorkspaceService {
         try {
             buffer = Buffer.alloc(sampleSize);
             const result = await file.read(buffer, 0, sampleSize, 0);
+            this._throwIfAborted(signal);
             buffer = buffer.subarray(0, result.bytesRead);
         } finally {
             await file.close();
@@ -194,22 +258,25 @@ class AgentWorkspaceService {
     }
 
     async searchFiles(payload = {}) {
-        return withTimeout(this._searchFiles(payload), this.limits.operationTimeoutMs);
+        return this._run(payload, 'search', (signal) => this._searchFiles(payload, signal));
     }
 
-    async _searchFiles(payload) {
+    async _searchFiles(payload, signal) {
         const context = this._context({ ...payload, relativePath: '' });
         const query = String(payload.query || '').trim().toLocaleLowerCase();
         if (!query) return { sessionId: context.sessionId, workspaceRevision: context.workspaceRevision, query, entries: [], truncated: false };
         const limit = Math.min(Math.max(1, Number(payload.limit) || 50), this.limits.maxSearchResults);
         const results = [];
         const queue = [context.root];
+        let queueIndex = 0;
         let visited = 0;
-        while (queue.length && results.length < limit && visited < this.limits.maxSearchEntries) {
-            const directory = queue.shift();
+        while (queueIndex < queue.length && results.length < limit && visited < this.limits.maxSearchEntries) {
+            this._throwIfAborted(signal);
+            const directory = queue[queueIndex++];
             let entries;
             try { entries = await fs.promises.readdir(directory, { withFileTypes: true }); }
             catch { continue; }
+            this._throwIfAborted(signal);
             entries.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
             for (const entry of entries) {
                 visited += 1;

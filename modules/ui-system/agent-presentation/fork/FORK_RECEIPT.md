@@ -30,8 +30,10 @@
 - `currentChatHistoryRef`、`currentSelectedItemRef`、`currentTopicIdRef`、`saveChatHistory`、主聊天 `streamManager`、主聊天 context menu 和隐式助手身份必须逐步替换为显式 Agent adapter；在替换完成前不得接入正式 Workbench。
 - 编辑、重试、分支和取消最终必须调用 Codex action adapter，不能直接修改 Projection SQLite 来伪造上下文。
 
-## 同步策略
+## 独立演进策略
 
-主聊天 renderer 后续变更不自动复制。每次同步都必须记录：来源 commit、涉及的纯展示函数、Agent 行为差异、对照测试和截图收据。
+该 Fork 已成为 Agent 专用产品实现，不再要求跟随主聊天 renderer 逐行同步。来源 commit 和初始机械裁剪继续保留用于许可证、来源和安全审计；后续两侧只共享恶意 Markdown、链接、图片、代码复制、XSS 与视觉 golden 测试语料，不共享运行时代码，也不因主聊天新增功能而自动复制实现。
+
+Agent 模块不得读取 `currentChatHistoryRef`、`currentSelectedItemRef`、`currentTopicIdRef`、`saveChatHistory` 或主聊天 `streamManager`。新增能力必须通过显式 Session context 和 Agent action adapter 接入。
 
 2026-08-02 同步审查：上游加入主聊天音频播放器和 Python 附件的安全文本打开路径。两项不进入 Agent fork：当前 Codex/ToolBox 投影没有可信音频资源描述，而 Agent 文件动作必须经 `WorkspacePathRef` 与 Main-only workspace service，不能回退到主聊天的任意 `file:` 路径入口。来源哈希已更新；Agent 的现有 Markdown、代码、表格、链接、图片、reasoning 与工具投影能力不变。

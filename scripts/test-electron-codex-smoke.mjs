@@ -230,9 +230,13 @@ try {
     assert.equal(inspector.hasProgressRing, true, 'the header must render a stable context progress ring');
     assert.ok(inspector.panelWidth > 0 && inspector.panelWidth <= inspector.viewportWidth,
         `Agent information panel must fit the viewport: ${JSON.stringify(inspector)}`);
-    const notificationLayout = await page.evaluate(() => {
+    const notificationLayout = await page.evaluate(async () => {
         const host = document.querySelector('#nextUiInternalAppHost');
-        host?.querySelector('.agent-chat-activity-tab[data-tab="notifications"]')?.click();
+        host?.querySelector('.agent-chat-dock-add')?.click();
+        const notificationCommand = [...(host?.querySelectorAll('.agent-chat-dock-menu-item') || [])]
+            .find((item) => item.textContent.includes('通知'));
+        notificationCommand?.click();
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         const panel = host?.querySelector('[data-activity-panel="notifications"]');
         const list = panel?.querySelector('.agent-chat-activity-list');
         if (!panel || !list) return null;

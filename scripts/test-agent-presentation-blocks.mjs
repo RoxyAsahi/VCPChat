@@ -183,9 +183,10 @@ const toolbox = presentation.createToolboxObservation({
     value: { requestId: 'toolbox-approval-1', toolName: 'PowerShellExecutor', approvalTtlMs: 60_000 },
 });
 assert.match(toolbox.textContent, /未关联/);
-toolbox.querySelector('.agent-chat-approval-actions .danger').dispatchEvent(new MouseEvent('click', { bubbles: true }));
-toolbox.querySelector('.agent-chat-approval-actions .secondary').dispatchEvent(new MouseEvent('click', { bubbles: true }));
-assert.deepEqual(backendDecisions, [['toolbox-approval-1', 'deny']], 'ToolBox approval action must be exactly once');
+assert.equal(toolbox.querySelector('.agent-chat-approval-actions'), null,
+    'VCPLog observations must stay display-only because they lack the Runtime generation required to answer safely');
+assert.deepEqual(backendDecisions, [],
+    'only the authoritative approval.requested projection may answer a ToolBox backend approval');
 
 const marker = presentation.createMarkerObservation({ kind: 'dynamic-fold', summary: '摘要', detail: '完整内容' });
 marker.querySelector('.agent-chat-toolbox-ws-summary').dispatchEvent(new MouseEvent('click', { bubbles: true }));

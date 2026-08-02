@@ -15,18 +15,15 @@ const SESSION_EVENT_TYPES = new Set([
 function createInitialState() {
     return {
         runtime: { state: 'unknown', worker: null, lastError: null },
-        // `attachment` is a compatibility pointer for the displayed Topic.
-        // The daemon may concurrently own several Topic runtimes; their
-        // identities remain renderer-only live state and never transcripts.
-        attachment: null,
-        activeRuntimes: [],
+        selectedSessionId: null,
+        sessionSnapshots: new Map(),
+        activeRuntimes: new Map(),
         // A displayed Topic can be a read-only snapshot while several other
         // Topic runtimes keep working. This is never a global composer lock.
         selectedTopic: null,
         // Codex Thread lifecycle is identity-keyed renderer state. It never
         // derives activity from the selected sidebar row.
         sessionUi: createAgentSessionUiState(),
-        backgroundAttachment: null,
         messages: [],
         tools: new Map(),
         approvals: [],
@@ -35,7 +32,7 @@ function createInitialState() {
         // Main so the Renderer cannot accidentally approve an unsupported
         // Codex capability.
         interactions: [],
-        // Rust Host already bounds and redacts these read-only ToolBox
+        // Main already bounds and redacts these read-only ToolBox
         // observations. Keep a second, smaller UI window so log traffic can
         // never grow a renderer-side transcript or become an execution path.
         toolboxWs: [],
@@ -47,7 +44,7 @@ function createInitialState() {
         // It is deliberately not transcript state and is cleared on open.
         activityUnread: 0,
         activityUnreadByTab: { activity: 0, approvals: 0, plan: 0, changes: 0, usage: 0, connection: 0 },
-        // Rust emits these four non-sensitive readiness facts. The Renderer
+        // Main emits these non-sensitive readiness facts. The Renderer
         // is a pure projection and must never probe ToolBox itself.
         readiness: {},
         context: { usedTokens: 0, contextWindow: 0, percentage: 0, compacting: false, summary: '' },
@@ -113,7 +110,7 @@ function confirmUserMessage(messages, event) {
         deliveryState: 'confirmed',
         deliveryDetail: '',
         createdAt: event.timestamp || (index >= 0 ? messages[index].createdAt : 0),
-        // Timeline order comes from the daemon, never from the Renderer clock
+        // Timeline order comes from Main's event projection, never from the Renderer clock
         // or an inferred active turn.  A turn.started/user.message event is
         // the authoritative moment a pending UI delivery becomes durable.
         firstSequence: eventSequence(event) ?? (index >= 0 ? messages[index].firstSequence : null),
@@ -145,11 +142,11 @@ function reduceEvent(current, event) {
         return next;
     }
     if (event.type === 'runtime.crashed') {
-        // Recovery is deliberately user-driven: a daemon crash must not leave
+        // Recovery is deliberately user-driven: an App Server crash must not leave
         // the composer in a passive "reconnecting" limbo or replay an
         // interrupted turn.  Render the explicit reconnect action instead.
         next.runtime = { ...next.runtime, state: 'failed', lastError: event.payload || null };
-        // The daemon may have accepted a frame just before its pipe broke.
+        // App Server may have accepted a request just before its pipe broke.
         // Do not mark it as failed or replay it: its durable outcome is only
         // knowable from the next Codex Thread reconciliation after reconnect.
         next.messages = next.messages.map((message) => (
@@ -172,19 +169,21 @@ function reduceEvent(current, event) {
         return next;
     }
     if (event.type === 'session.created') {
-        if (next.attachment?.sessionId === event.sessionId) {
-            next.attachment = { ...next.attachment, state: 'created', ...(event.payload || {}) };
-        }
+        const runtimes = new Map(next.activeRuntimes);
+        const current = runtimes.get(event.sessionId) || { sessionId: event.sessionId, topicId: event.topicId || event.sessionId };
+        runtimes.set(event.sessionId, { ...current, state: 'created', ...(event.payload || {}) });
+        next.activeRuntimes = runtimes;
         return next;
     }
     if (event.type === 'session.state_changed' || event.type === 'session.closed') {
-        if (next.attachment?.sessionId === event.sessionId) {
-            next.attachment = {
-                ...next.attachment,
-                ...(event.payload || {}),
-                state: event.type === 'session.closed' ? 'closed' : event.payload?.state,
-            };
-        }
+        const runtimes = new Map(next.activeRuntimes);
+        const current = runtimes.get(event.sessionId);
+        if (current) runtimes.set(event.sessionId, {
+            ...current,
+            ...(event.payload || {}),
+            state: event.type === 'session.closed' ? 'closed' : event.payload?.state,
+        });
+        next.activeRuntimes = runtimes;
         return next;
     }
     if (event.type === 'turn.started') {
@@ -268,7 +267,7 @@ function reduceEvent(current, event) {
             tools.set(toolCallId, {
                 ...previous,
                 // A tool event without turnId remains explicitly unassociated.
-                // Never borrow a previous turn after a delayed daemon frame.
+                // Never borrow a previous Turn after a delayed Runtime frame.
                 turnId: event.turnId || null,
                 name: event.payload?.toolName || previous.name || 'tool',
                 state: event.type.slice('tool.'.length),
@@ -467,16 +466,15 @@ function createWorkbenchStore(initial = createInitialState()) {
             // The fallback preserves the narrow unit-test/legacy bootstrap
             // shape before the first snapshot installs selectedTopic. Normal
             // Workbench routing always uses selectedTopic.
-            const selectedTopicId = state.selectedTopic?.topicId || state.attachment?.topicId || null;
+            const selectedSessionId = state.selectedSessionId || null;
+            const selectedTopicId = state.selectedTopic?.topicId || selectedSessionId;
             // Only the visible Topic may change this live transcript. Local
             // approvals are global Activity state and retain their complete
-            // daemon identities when the user switches Topics.
+            // complete identities when the user switches Sessions.
             if (!isRuntimeEvent && !isSessionEvent && !isApproval && !isInteraction
-                && (!selectedTopicId || event.topicId !== selectedTopicId)) {
-                return state;
-            }
-            if (!isRuntimeEvent && !isSessionEvent && !isApproval && !isInteraction
-                && state.attachment?.sessionId && event.sessionId !== state.attachment.sessionId) {
+                && (!selectedSessionId || (event.sessionId
+                    ? event.sessionId !== selectedSessionId
+                    : event.topicId !== selectedTopicId))) {
                 return state;
             }
             const key = eventKey(event);
@@ -486,11 +484,13 @@ function createWorkbenchStore(initial = createInitialState()) {
             notify(event);
             return state;
         },
-        setAttachment(attachment) {
+        selectSession(session) {
             seenEvents.clear();
+            const sessionId = session?.sessionId || session?.topicId || null;
             state = {
                 ...state,
-                attachment: attachment ? { ...attachment } : null,
+                selectedSessionId: sessionId,
+                selectedTopic: session ? { ...session, topicId: session.topicId || sessionId } : null,
                 messages: [],
                 tools: new Map(),
                 approvals: [],
@@ -523,20 +523,20 @@ function createWorkbenchStore(initial = createInitialState()) {
  */
 function deriveWorkbenchViewState(state = {}) {
     const runtime = state.runtime || {};
-    const attachment = state.attachment;
-    const hasAttachment = Boolean(attachment && attachment.sessionId);
-    // A projection preview is intentionally not a writable runtime identity,
-    // but it is still an idle, send-capable view while the control daemon is
-    // ready. The first send will acquire the attachment atomically; treating
-    // this as disconnected made the composer unusable until an obsolete
-    // eager-resume path had recreated the very lease preview is meant to
-    // avoid.
+    const selectedSessionId = state.selectedSessionId || state.selectedTopic?.topicId || null;
+    const selectedRuntime = selectedSessionId && state.activeRuntimes instanceof Map
+        ? state.activeRuntimes.get(selectedSessionId) : null;
+    const hasSession = Boolean(selectedSessionId);
+    // A projection preview is intentionally not a writable Runtime identity,
+    // but it remains send-capable while App Server is stopped: the first send
+    // performs the demand-driven start. Browsing SQLite history must never be
+    // coupled to process startup.
     const hasIdlePreview = Boolean(
         state.selectedTopic?.mode === 'preview'
         && state.selectedTopic?.topicId
     );
     const hasTurn = Boolean(state.activeTurnId);
-    const selectedTopicId = state.selectedTopic?.topicId || attachment?.topicId || null;
+    const selectedTopicId = selectedSessionId;
     // Local approvals stay visible in the global Activity center, but only
     // their owning Topic is paused. A pending approval in Topic A must not
     // stop the user from starting an independent Topic B turn.
@@ -545,14 +545,14 @@ function deriveWorkbenchViewState(state = {}) {
 
     if (runtime.state === 'failed') return 'error';
     if (state.recovering || runtime.state === 'degraded') return 'reconnecting';
-    if (runtime.state === 'unknown' || runtime.state === 'stopped' || (!hasAttachment && !hasIdlePreview)) return 'disconnected';
+    if ((runtime.state === 'unknown' || runtime.state === 'stopped') && !hasIdlePreview) return 'disconnected';
+    if (!hasSession && !hasIdlePreview) return 'disconnected';
     if (hasApproval) return 'awaiting-approval';
     if (hasTurn) return 'running';
-    // Codex runtime compatibility attachments are explicitly `idle` once their create-session
-    // ACK has completed.  Treat it as the writable steady state; only actual
+    // A Codex Session Runtime is explicitly `idle` once ensure-session-runtime
+    // has completed. Treat it as the writable steady state; only actual
     // transitional/terminal states may keep the composer in "starting".
-    if (attachment && attachment.state
-        && !['created', 'ready', 'idle'].includes(attachment.state)) {
+    if (selectedRuntime?.state && !['created', 'ready', 'idle'].includes(selectedRuntime.state)) {
         return 'starting';
     }
     return 'idle';

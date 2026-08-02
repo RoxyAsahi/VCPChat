@@ -11,16 +11,17 @@ function dispatch(event) {
         eventId: `event-${eventNumber}`,
         topicId: 'topic-1',
         timestamp: 1_700_000_000_000 + eventNumber,
-        runtime: 'rust',
+        runtime: 'codex',
         ...event,
     });
 }
 
-// R2: an attachment is transient UI state; Topic history is separately read
-// from Rust. The store no longer has a session list or artifact cache.
-store.setAttachment({ sessionId: 's1', topicId: 'topic-1', state: 'idle' });
+// Selection and runtime ownership are separate: the selected Session controls
+// only the visible projection, while activeRuntimes owns process state.
+store.selectSession({ sessionId: 's1', topicId: 'topic-1', state: 'idle' });
+store.setState({ activeRuntimes: new Map([['s1', { sessionId: 's1', topicId: 'topic-1', state: 'idle' }]]) });
 store.setState({ runtime: { state: 'ready', worker: null, lastError: null } });
-assert.equal(deriveWorkbenchViewState(store.getState()), 'idle', 'a daemon-created idle attachment must enable the composer');
+assert.equal(deriveWorkbenchViewState(store.getState()), 'idle', 'an idle Session Runtime must enable the composer');
 assert.equal('sessions' in store.getState(), false);
 assert.equal('artifacts' in store.getState(), false);
 
@@ -30,7 +31,7 @@ previewOnlyStore.setState({
     selectedTopic: { topicId: 'preview-only-topic', mode: 'preview' },
 });
 assert.equal(deriveWorkbenchViewState(previewOnlyStore.getState()), 'idle',
-    'a ready control daemon must keep an idle Topic preview send-capable until send-time attachment');
+    'a ready control process must keep an idle Session preview send-capable until send-time runtime startup');
 
 const concurrentApprovalStore = createWorkbenchStore();
 concurrentApprovalStore.setState({
@@ -41,14 +42,15 @@ concurrentApprovalStore.setState({
 assert.equal(deriveWorkbenchViewState(concurrentApprovalStore.getState()), 'idle',
     'a local approval in Topic A must not disable Topic B composer');
 concurrentApprovalStore.setState({
-    selectedTopic: { topicId: 'topic-a', mode: 'attached' },
-    attachment: { sessionId: 'session-a', topicId: 'topic-a', state: 'idle' },
+    selectedSessionId: 'topic-a',
+    selectedTopic: { topicId: 'topic-a', mode: 'runtime-active' },
+    activeRuntimes: new Map([['session-a', { sessionId: 'session-a', topicId: 'topic-a', state: 'idle' }]]),
 });
 assert.equal(deriveWorkbenchViewState(concurrentApprovalStore.getState()), 'awaiting-approval',
-    'the approval-owning Topic must remain paused until Rust resolves it');
+    'the approval-owning Session must remain paused until Codex resolves it');
 
 const usageStore = createWorkbenchStore();
-usageStore.setAttachment({ sessionId: 'usage-session', topicId: 'usage-topic', state: 'idle' });
+usageStore.selectSession({ sessionId: 'usage-session', topicId: 'usage-topic', state: 'idle' });
 usageStore.dispatch({ eventId: 'usage-unknown', sequence: 1, timestamp: 1, sessionId: 'usage-session', topicId: 'usage-topic', type: 'context.usage', runtime: 'codex', payload: { totalTokens: 123 } });
 assert.equal(usageStore.getState().context.source, 'unknown');
 assert.equal(usageStore.getState().context.usageAvailable, false,
@@ -58,13 +60,13 @@ assert.equal(usageStore.getState().context.usageAvailable, true);
 assert.equal(usageStore.getState().context.source, 'estimated');
 
 const activityStore = createWorkbenchStore();
-activityStore.setAttachment({ sessionId: 'activity-session', topicId: 'activity-topic', state: 'idle' });
+activityStore.selectSession({ sessionId: 'activity-session', topicId: 'activity-topic', state: 'idle' });
 activityStore.dispatch({ eventId: 'activity-1', sequence: 1, timestamp: 1, sessionId: 'activity-session', topicId: 'activity-topic', type: 'toolbox.ws', runtime: 'codex', payload: { kind: 'notification', value: 'one' } });
 activityStore.dispatch({ eventId: 'activity-2', sequence: 2, timestamp: 2, sessionId: 'activity-session', topicId: 'activity-topic', type: 'marker.observed', runtime: 'codex', payload: { kind: 'vcpinfo', summary: 'two' } });
 assert.equal(activityStore.getState().activityUnread, 2, 'activity observations must increment a bounded Renderer-only unread cursor');
 
 const compactStore = createWorkbenchStore();
-compactStore.setAttachment({ sessionId: 'compact-session', topicId: 'compact-topic', state: 'idle' });
+compactStore.selectSession({ sessionId: 'compact-session', topicId: 'compact-topic', state: 'idle' });
 compactStore.dispatch({ eventId: 'compact-start', sequence: 1, timestamp: 1, sessionId: 'compact-session', topicId: 'compact-topic', type: 'compaction.started', runtime: 'codex', payload: {} });
 assert.equal(compactStore.getState().context.compacting, true,
     'Codex runtime compaction.started must drive the Workbench state rather than only legacy context.compaction.* names');
@@ -72,43 +74,43 @@ compactStore.dispatch({ eventId: 'compact-done', sequence: 2, timestamp: 2, sess
 assert.deepEqual(compactStore.getState().context.compactionState, 'completed');
 
 // R3-C: the Renderer may show an accepted command immediately, but it must
-// replace that temporary projection with the daemon's event identity rather
+// replace that temporary projection with the Runtime event identity rather
 // than grow a second transcript or guess a durable message id.
 const deliveryStore = createWorkbenchStore();
-deliveryStore.setAttachment({ sessionId: 'delivery-session', topicId: 'delivery-topic', state: 'idle' });
-deliveryStore.addPendingUserMessage({ turnId: 'delivery-turn', prompt: '请先显示我，再等待 Rust 确认', createdAt: 123 });
+deliveryStore.selectSession({ sessionId: 'delivery-session', topicId: 'delivery-topic', state: 'idle' });
+deliveryStore.addPendingUserMessage({ turnId: 'delivery-turn', prompt: '请先显示我，再等待 Codex 确认', createdAt: 123 });
 assert.deepEqual(deliveryStore.getState().messages, [{
     id: 'pending-user:delivery-turn', turnId: 'delivery-turn', role: 'user',
-    content: '请先显示我，再等待 Rust 确认', attachments: [], state: 'pending', deliveryState: 'sending',
+    content: '请先显示我，再等待 Codex 确认', attachments: [], state: 'pending', deliveryState: 'sending',
     deliveryDetail: '正在等待 Codex App Server 确认…', createdAt: 123,
     firstSequence: null, lastSequence: null,
 }]);
 deliveryStore.dispatch({
-    eventId: 'daemon-turn-started', sequence: 1, timestamp: 124, runtime: 'rust',
+    eventId: 'runtime-turn-started', sequence: 1, timestamp: 124, runtime: 'codex',
     sessionId: 'delivery-session', topicId: 'delivery-topic', turnId: 'delivery-turn',
     messageId: 'msg_delivery-turn_user',
-    type: 'turn.started', payload: { prompt: '请先显示我，再等待 Rust 确认' },
+    type: 'turn.started', payload: { prompt: '请先显示我，再等待 Codex 确认' },
 });
 assert.deepEqual(deliveryStore.getState().messages, [{
     id: 'msg_delivery-turn_user', messageId: 'msg_delivery-turn_user', turnId: 'delivery-turn', role: 'user',
-    content: '请先显示我，再等待 Rust 确认', attachments: [], state: 'complete', deliveryState: 'confirmed',
+    content: '请先显示我，再等待 Codex 确认', attachments: [], state: 'complete', deliveryState: 'confirmed',
     deliveryDetail: '', createdAt: 124,
     firstSequence: 1, lastSequence: 1,
 }], 'turn.started must confirm and replace the temporary user item');
-deliveryStore.addPendingUserMessage({ turnId: 'delivery-crash', prompt: '可能已经到达 daemon', createdAt: 125 });
+deliveryStore.addPendingUserMessage({ turnId: 'delivery-crash', prompt: '可能已经到达 App Server', createdAt: 125 });
 deliveryStore.dispatch({
-    eventId: 'daemon-crashed', sequence: 2, timestamp: 126, runtime: 'rust', sessionId: 'runtime',
+    eventId: 'runtime-crashed', sequence: 2, timestamp: 126, runtime: 'codex', sessionId: 'runtime',
     topicId: 'runtime', type: 'runtime.crashed', payload: { error: 'pipe closed' },
 });
 assert.equal(deliveryStore.getState().messages.at(-1).deliveryState, 'unconfirmed',
     'a broken pipe must not claim failure or auto-replay a command whose durable outcome is unknown');
 const missingAssetStore = createWorkbenchStore();
-missingAssetStore.setAttachment({ sessionId: 'asset-session', topicId: 'asset-topic', state: 'idle' });
+missingAssetStore.selectSession({ sessionId: 'asset-session', topicId: 'asset-topic', state: 'idle' });
 missingAssetStore.addPendingUserMessage({
     turnId: 'asset-turn', prompt: '', attachments: [{ id: 'attachment-missing', displayName: '缺失.png' }], createdAt: 126,
 });
 missingAssetStore.dispatch({
-    eventId: 'asset-missing', sequence: 1, timestamp: 127, runtime: 'rust',
+    eventId: 'asset-missing', sequence: 1, timestamp: 127, runtime: 'codex',
     sessionId: 'asset-session', topicId: 'asset-topic', turnId: 'asset-turn',
     type: 'turn.failed',
     payload: { code: 'attachment-unavailable', error: '附件文件不可用或已损坏；请重新选择附件后再发送。' },
@@ -117,17 +119,17 @@ assert.equal(missingAssetStore.getState().messages[0].deliveryState, 'failed',
     'a missing durable attachment must be distinct from an interrupted model turn');
 assert.match(missingAssetStore.getState().messages[0].deliveryDetail, /重新选择附件/);
 deliveryStore.dispatch({
-    eventId: 'assistant-part-one', sequence: 3, timestamp: 127, runtime: 'rust',
+    eventId: 'assistant-part-one', sequence: 3, timestamp: 127, runtime: 'codex',
     sessionId: 'delivery-session', topicId: 'delivery-topic', turnId: 'delivery-turn',
     messageId: 'assistant-part-one', type: 'assistant.started', payload: {},
 });
 deliveryStore.dispatch({
-    eventId: 'assistant-part-two', sequence: 4, timestamp: 128, runtime: 'rust',
+    eventId: 'assistant-part-two', sequence: 4, timestamp: 128, runtime: 'codex',
     sessionId: 'delivery-session', topicId: 'delivery-topic', turnId: 'delivery-turn',
     messageId: 'assistant-part-two', type: 'assistant.started', payload: {},
 });
 assert.equal(deliveryStore.getState().messages.filter((message) => message.role === 'assistant').length, 2,
-    'distinct daemon message ids in one turn must remain distinct timeline items');
+    'distinct Runtime message ids in one turn must remain distinct timeline items');
 
 dispatch({ type: 'session.created', sessionId: 's1', sequence: 1, payload: { model: 'm1' } });
 dispatch({ type: 'turn.started', sessionId: 's1', turnId: 't1', messageId: 'msg_t1_user', sequence: 2, payload: { prompt: 'hello' } });
@@ -142,7 +144,7 @@ const tool = projectTool(store.getState().tools.get('tc1'));
 assert.equal(tool.name, 'vcp_invoke');
 assert.equal(tool.state, 'completed');
 assert.equal(tool.eventCount, 2);
-assert.equal(store.getState().tools.get('tc1').firstSequence, 6, 'tool timeline position must come from the first daemon event');
+assert.equal(store.getState().tools.get('tc1').firstSequence, 6, 'tool timeline position must come from the first Runtime event');
 assert.equal(store.getState().tools.get('tc1').lastSequence, 7, 'tool updates must not rewrite the first timeline position');
 
 dispatch({ type: 'approval.requested', sessionId: 's1', turnId: 't1', toolCallId: 'tool-1', approvalId: 'a1', sequence: 8, payload: { approval: { approvalId: 'a1', toolName: 'vcp_invoke', argumentsHash: 'hash-1', expiresAtMs: 1234 } } });
@@ -157,7 +159,7 @@ assert.equal(store.getState().approvals.length, 0);
 dispatch({ type: 'context.usage', sessionId: 's1', sequence: 10, payload: { usedTokens: 500, contextWindow: 1000 } });
 assert.equal(store.getState().context.percentage, 50);
 dispatch({ type: 'context.compaction.started', sessionId: 's1', turnId: 't1', sequence: 11, payload: {} });
-assert.equal(store.getState().context.compacting, true, 'store must use the daemon dot-form compaction event name');
+assert.equal(store.getState().context.compacting, true, 'store must use the Runtime dot-form compaction event name');
 dispatch({ type: 'context.compaction.completed', sessionId: 's1', turnId: 't1', sequence: 12, payload: { summary: 'checkpoint' } });
 assert.equal(store.getState().context.compacting, false);
 assert.equal(store.getState().context.summary, 'checkpoint');
@@ -172,14 +174,14 @@ assert.deepEqual(store.getState().markerObservations, [{
 }], 'marker observations must remain a separate ephemeral projection, never a message/tool/Topic record');
 dispatch({ type: 'runtime.readiness', sessionId: 'runtime', sequence: 13, payload: {
     server: { state: 'configured', detail: 'shared settings' },
-    toolbox: { state: 'checking', detail: 'daemon probe' },
+    toolbox: { state: 'checking', detail: 'Main readiness check' },
 } });
 dispatch({ type: 'runtime.readiness', sessionId: 'runtime', sequence: 14, payload: {
     toolbox: { state: 'ready', detail: 'authenticated probe' },
     capability: { state: 'unknown', detail: 'awaiting VCPLog' },
 } });
-assert.equal(store.getState().readiness.server.state, 'configured', 'readiness must be daemon-projected instead of renderer-probed');
-assert.equal(store.getState().readiness.toolbox.state, 'ready', 'incremental daemon readiness must merge by subsystem');
+assert.equal(store.getState().readiness.server.state, 'configured', 'readiness must be Main-projected instead of renderer-probed');
+assert.equal(store.getState().readiness.toolbox.state, 'ready', 'incremental Runtime readiness must merge by subsystem');
 assert.equal(store.getState().readiness.capability.state, 'unknown', 'capability status must not be guessed from an absent node event');
 const interruptProjection = {
     messageCount: store.getState().messages.length,
@@ -197,12 +199,12 @@ assert.deepEqual({
 }, interruptProjection, 'interrupt receipts are transport diagnostics and must not create transcript/tool/UI state');
 
 const messageCount = store.getState().messages.length;
-store.dispatch({ eventId: 'event-5', type: 'assistant.delta', sessionId: 's1', topicId: 'topic-1', turnId: 't1', messageId: 'assistant-1', sequence: 5, timestamp: 1_700_000_000_005, runtime: 'rust', payload: { text: 'lo' } });
+store.dispatch({ eventId: 'event-5', type: 'assistant.delta', sessionId: 's1', topicId: 'topic-1', turnId: 't1', messageId: 'assistant-1', sequence: 5, timestamp: 1_700_000_000_005, runtime: 'codex', payload: { text: 'lo' } });
 assert.equal(store.getState().messages.length, messageCount, 'eventId is the only replay key');
 dispatch({ type: 'assistant.delta', sessionId: 'other', turnId: 't2', messageId: 'assistant-2', sequence: 13, payload: { text: 'ignore' } });
 assert.equal(store.getState().messages.length, messageCount, 'events from inactive sessions must be filtered');
-store.dispatch({ type: 'assistant.delta', sessionId: 's1', topicId: 'topic-1', turnId: 't1', sequence: 14, timestamp: 1_700_000_000_014, runtime: 'rust', payload: { text: 'invalid' } });
-assert.equal(store.getState().messages.length, messageCount, 'missing daemon event identity is fail-closed');
+store.dispatch({ type: 'assistant.delta', sessionId: 's1', topicId: 'topic-1', turnId: 't1', sequence: 14, timestamp: 1_700_000_000_014, runtime: 'codex', payload: { text: 'invalid' } });
+assert.equal(store.getState().messages.length, messageCount, 'missing Runtime event identity is fail-closed');
 
 const calls = [];
 let liveEvent;
@@ -214,7 +216,7 @@ const pendingInteraction = {
 const controller = createWorkbenchController({
     agentRuntimeGetStatus: async () => ({
         state: 'ready',
-        attachment: { sessionId: 'restored', topicId: 'topic-restored', state: 'idle' },
+        runtimes: [{ sessionId: 'restored', topicId: 'topic-restored', state: 'idle' }],
         pendingInteractions: [pendingInteraction],
     }),
     agentRuntimeReadTopic: async (payload) => {
@@ -224,27 +226,28 @@ const controller = createWorkbenchController({
     agentRuntimeSetWorkbenchPresence() {},
     onAgentRuntimeEvent(callback) { liveEvent = callback; return () => {}; },
 });
+controller.store.selectSession({ sessionId: 'restored', topicId: 'topic-restored', state: 'idle' });
 const initializing = controller.initialize();
 await new Promise((resolve) => setImmediate(resolve));
 assert.deepEqual(controller.store.getState().interactions, [pendingInteraction],
     'Activity Center must receive Main-owned interaction identities independently of approval cards');
-assert.equal(typeof liveEvent, 'function', 'Renderer must subscribe before it starts reading a Rust Topic snapshot');
+assert.equal(typeof liveEvent, 'function', 'Renderer must subscribe before it starts reading a Session projection');
 assert.deepEqual(calls.find(([name]) => name === 'topic')[1], { topicId: 'topic-restored' });
 liveEvent({
-    eventId: 'initial-live-event', sequence: 5, timestamp: 5, runtime: 'rust',
+    eventId: 'initial-live-event', sequence: 5, timestamp: 5, runtime: 'codex',
     sessionId: 'restored', topicId: 'topic-restored', turnId: 'turn-restored',
     messageId: 'assistant-live', type: 'assistant.delta', payload: { text: 'snapshot 期间的 live delta' },
 });
 liveEvent({
-    eventId: 'initial-readiness-event', sequence: 6, timestamp: 6, runtime: 'rust',
+    eventId: 'initial-readiness-event', sequence: 6, timestamp: 6, runtime: 'codex',
     sessionId: 'restored', topicId: 'topic-restored', type: 'runtime.readiness',
-    payload: { toolbox: { state: 'unavailable', detail: 'daemon probe settled during snapshot' } },
+    payload: { toolbox: { state: 'unavailable', detail: 'Main readiness settled during snapshot' } },
 });
 resolveInitialRead({
     topicId: 'topic-restored', snapshotSequence: 4,
-    state: { title: '恢复的 Rust Topic 标题', model: 'gpt-5.6-terra', workspaceRef: 'C:\\workspace\\restored' },
+    state: { title: '恢复的 Codex Session 标题', model: 'gpt-5.6-terra', workspaceRef: 'C:\\workspace\\restored' },
     history: [
-        { id: 'history-1', role: 'assistant', content: '来自 Rust Topic', snapshotOrdinal: 0 },
+        { id: 'history-1', role: 'assistant', content: '来自 Codex Session', snapshotOrdinal: 0 },
         {
             id: 'tool-call-restored', role: 'tool', toolCallId: 'call-restored', toolName: 'FileOperator',
             state: 'completed', timestamp: 2, snapshotOrdinal: 1,
@@ -257,20 +260,20 @@ resolveInitialRead({
     ],
 });
 await initializing;
-assert.equal(controller.store.getState().messages[0].content, '来自 Rust Topic');
-assert.equal(controller.store.getState().attachment.title, '恢复的 Rust Topic 标题',
-    'snapshot-first hydration must promote the durable Topic title over Main\'s fallback attachment label');
-assert.equal(controller.store.getState().attachment.workspaceRoot, 'C:\\workspace\\restored');
+assert.equal(controller.store.getState().messages[0].content, '来自 Codex Session');
+assert.equal(controller.store.getState().selectedTopic.title, '恢复的 Codex Session 标题',
+    'snapshot-first hydration must promote durable metadata into the selected Session projection');
+assert.equal(controller.store.getState().selectedTopic.workspaceRoot, 'C:\\workspace\\restored');
 const restoredTool = controller.store.getState().tools.get('call-restored');
-assert.equal(restoredTool?.name, 'FileOperator', 'read-topic must rebuild tool artifacts from the Rust snapshot');
+assert.equal(restoredTool?.name, 'FileOperator', 'read-topic must rebuild tool artifacts from the Codex projection');
 assert.equal(restoredTool?.payload.resources[0].name, 'package.json');
 assert.equal(restoredTool?.snapshotOrdinal, 1);
 assert.ok(controller.store.getState().messages.some((message) => message.id === 'assistant-live'),
     'a live event arriving during initial read-topic must be buffered and projected after the snapshot');
 assert.equal(controller.store.getState().readiness.toolbox.state, 'unavailable',
-    'daemon-global readiness must survive an attachment-less snapshot barrier instead of remaining at checking');
-// A daemon crash is global, not a transcript event. It must still reach the
-// currently previewed Topic when the writable attachment has a different
+    'process-global readiness must survive a Session-less snapshot barrier instead of remaining at checking');
+// An App Server crash is global, not a transcript event. It must still reach the
+// currently previewed Session when an active Runtime has a different
 // identity, otherwise the user sees a silently disabled composer with no
 // reconnect affordance.
 controller.store.setState({ selectedTopic: { topicId: 'previewed-other-topic', mode: 'preview' } });
@@ -279,7 +282,7 @@ liveEvent({
     sessionId: 'runtime', topicId: 'topic-restored', type: 'runtime.crashed', payload: { error: 'pipe closed' },
 });
 assert.equal(controller.store.getState().runtime.state, 'failed',
-    'daemon-global crash diagnostics must not be discarded as a foreign Topic event');
+    'process-global crash diagnostics must not be discarded as a foreign Session event');
 controller.store.setState({ approvals: [{ approvalId: 'approval-live', toolName: 'PowerShellExecutor' }] });
 await controller.refreshStatus();
 assert.equal(controller.store.getState().approvals.length, 1,
@@ -287,7 +290,7 @@ assert.equal(controller.store.getState().approvals.length, 1,
 controller.dispose();
 
 // A switch/reconnect runs as a snapshot transaction. Events that arrive while
-// read-topic is in flight are buffered; only events newer than the daemon's
+// read-topic is in flight are buffered; only events newer than the projection
 // snapshot waterline are applied after the durable history is installed.
 let deferredRead;
 let switchEvent;
@@ -298,11 +301,11 @@ const switching = createWorkbenchController({
     onAgentRuntimeEvent(callback) { switchEvent = callback; return () => {}; },
 });
 switching.subscribeRuntime();
-const attachment = { sessionId: 'switch-session', topicId: 'switch-topic', state: 'idle' };
-const hydrating = switching.hydrateTopic(attachment.topicId, attachment);
-switchEvent({ eventId: 'old-event', sequence: 4, timestamp: 4, runtime: 'rust', sessionId: attachment.sessionId, topicId: attachment.topicId, turnId: 'turn-1', messageId: 'old-message', type: 'assistant.delta', payload: { text: 'stale' } });
-switchEvent({ eventId: 'new-event', sequence: 5, timestamp: 5, runtime: 'rust', sessionId: attachment.sessionId, topicId: attachment.topicId, turnId: 'turn-1', messageId: 'new-message', type: 'assistant.delta', payload: { text: 'live' } });
-deferredRead({ topicId: attachment.topicId, snapshotSequence: 4, history: [{ id: 'checkpoint-message', role: 'assistant', content: 'checkpoint' }] });
+const sessionRuntime = { sessionId: 'switch-session', topicId: 'switch-topic', state: 'idle' };
+const hydrating = switching.hydrateTopic(sessionRuntime.topicId, sessionRuntime);
+switchEvent({ eventId: 'old-event', sequence: 4, timestamp: 4, runtime: 'codex', sessionId: sessionRuntime.sessionId, topicId: sessionRuntime.topicId, turnId: 'turn-1', messageId: 'old-message', type: 'assistant.delta', payload: { text: 'stale' } });
+switchEvent({ eventId: 'new-event', sequence: 5, timestamp: 5, runtime: 'codex', sessionId: sessionRuntime.sessionId, topicId: sessionRuntime.topicId, turnId: 'turn-1', messageId: 'new-message', type: 'assistant.delta', payload: { text: 'live' } });
+deferredRead({ topicId: sessionRuntime.topicId, snapshotSequence: 4, history: [{ id: 'checkpoint-message', role: 'assistant', content: 'checkpoint' }] });
 await hydrating;
 assert.ok(switching.store.getState().messages.some((message) => message.content === 'checkpoint'), 'snapshot must become the base projection');
 assert.ok(switching.store.getState().messages.some((message) => message.id === 'new-message'), 'newer buffered events must follow the snapshot');
@@ -310,7 +313,7 @@ assert.equal(switching.store.getState().messages.some((message) => message.id ==
 switching.dispose();
 
 // A fresh Topic is a valid no-checkpoint state.  The renderer must still own
-// the live Rust attachment (and therefore enable its composer) when the first
+// the live Session identity when the first
 // read-topic call says that no snapshot has been committed yet.
 const fresh = createWorkbenchController({
     agentRuntimeGetStatus: async () => ({ state: 'ready', pendingApprovals: [] }),
@@ -318,20 +321,19 @@ const fresh = createWorkbenchController({
     agentRuntimeReadTopic: async () => { throw new Error('Topic has no checkpoint yet'); },
 });
 await fresh.createSession();
-assert.deepEqual(fresh.store.getState().attachment, {
-    sessionId: 'fresh-session', topicId: 'fresh-topic', state: 'idle',
-}, 'a fresh Topic must retain the daemon attachment when no snapshot exists');
+assert.equal(fresh.store.getState().selectedSessionId, null,
+    'a failed first snapshot must not invent a selected writable Session');
 assert.deepEqual(fresh.store.getState().messages, [], 'a fresh Topic must not receive a fabricated JS transcript');
 fresh.dispose();
 
 // Cherry-style selection is snapshot-only.  The first send is the sole point
-// where the controller asks Main/Rust to obtain a writable attachment.
+// where the controller asks Main to start or resume the selected Runtime.
 const previewCalls = [];
 const preview = createWorkbenchController({
     agentRuntimeGetStatus: async () => ({ state: 'ready', pendingApprovals: [] }),
     agentRuntimeReadTopic: async ({ topicId }) => ({ topicId, snapshotSequence: 0, history: [{ id: 'preview-history', role: 'assistant', content: 'preview only' }] }),
     agentRuntimeCreateSession: async (payload) => {
-        previewCalls.push(['attach', payload]);
+        previewCalls.push(['runtime', payload]);
         return { sessionId: 'preview-session', topicId: payload.resume, state: 'idle' };
     },
     agentRuntimeStartTurn: async (payload) => {
@@ -340,19 +342,18 @@ const preview = createWorkbenchController({
     },
 });
 await preview.previewTopic('preview-topic', 'Nova', { title: 'Preview', model: 'gpt-5.6-terra' });
-assert.equal(previewCalls.length, 0, 'selecting a Topic must not acquire a writable Rust attachment');
+assert.equal(previewCalls.length, 0, 'selecting a Session must not start its Runtime');
 assert.equal(preview.store.getState().selectedTopic.mode, 'preview');
 assert.equal(preview.store.getState().messages[0].content, 'preview only');
 await preview.startTurn('继续这个任务');
-assert.equal(previewCalls[0][0], 'attach', 'first send must acquire the selected Topic before issuing a turn');
+assert.equal(previewCalls[0][0], 'runtime', 'first send must start the selected Session Runtime before issuing a turn');
 assert.equal(previewCalls[0][1].resume, 'preview-topic');
 assert.equal(previewCalls[1][0], 'turn');
 assert.equal(previewCalls[1][1].sessionId, 'preview-session');
 preview.dispose();
 
-// Codex selection warms its Thread after the SQLite snapshot is visible. A
-// send during that warm window must await the same promise, never issue a
-// second thread/start or thread/resume request.
+// Codex selection remains projection-only. The first send begins exactly one
+// demand-driven Thread ensure and awaits it before turn/start.
 const warmCalls = [];
 let resolveWarm;
 const warming = createWorkbenchController({
@@ -374,10 +375,10 @@ const warming = createWorkbenchController({
 });
 await warming.previewTopic('warm-session', 'Nova', { title: 'Warm' });
 await Promise.resolve();
-assert.equal(warmCalls.length, 1, 'selection must begin one detached Session Thread warm');
-const warmSend = warming.startTurn('发送时复用预热');
+assert.equal(warmCalls.length, 0, 'selection must not start or resume a Codex Thread');
+const warmSend = warming.startTurn('发送时按需启动');
 await Promise.resolve();
-assert.equal(warmCalls.length, 1, 'send must reuse the in-flight selection warm promise');
+assert.equal(warmCalls.length, 1, 'send must begin one demand-driven Session Runtime ensure');
 resolveWarm({ sessionId: 'warm-session', topicId: 'warm-session', threadId: 'warm-thread' });
 const warmAccepted = await warmSend;
 assert.equal(warmAccepted.turnId, 'warm-turn');
@@ -496,8 +497,9 @@ const duplicateGuard = createWorkbenchController({
     onAgentRuntimeEvent(callback) { duplicateGuardEvent = callback; return () => {}; },
 });
 duplicateGuard.store.setState({
-    selectedTopic: { topicId: 'codex-topic', mode: 'attached' },
-    attachment: { sessionId: 'codex-topic', topicId: 'codex-topic' },
+    selectedSessionId: 'codex-topic',
+    selectedTopic: { topicId: 'codex-topic', mode: 'runtime-active' },
+    activeRuntimes: new Map([['codex-topic', { sessionId: 'codex-topic', topicId: 'codex-topic', state: 'idle' }]]),
 });
 duplicateGuard.subscribeRuntime();
 await duplicateGuard.startTurn('只显示一次');

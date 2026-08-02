@@ -71,6 +71,62 @@ try {
     assert.deepEqual(largeSearch.entries.map((entry) => entry.relativePath), ['large/needle-9999.txt']);
     assert.ok(performance.now() - stressStart < 30_000, '10k workspace fixture must remain within the bounded operation budget');
 
+    // Search work is cooperatively abortable and uses a scheduler independent
+    // from directory/preview operations. Delay the real root read so both the
+    // concurrency ceiling and cancellation path are deterministic.
+    const originalReaddir = fs.promises.readdir;
+    const delayedReads = [];
+    let activeReads = 0;
+    let maxActiveReads = 0;
+    fs.promises.readdir = async (...args) => {
+        if (path.resolve(String(args[0])) !== path.resolve(tempRoot)) return originalReaddir(...args);
+        activeReads += 1;
+        maxActiveReads = Math.max(maxActiveReads, activeReads);
+        await new Promise((resolve) => delayedReads.push(resolve));
+        try { return await originalReaddir(...args); }
+        finally { activeReads -= 1; }
+    };
+    const waitForDelayedRead = async (count = 1) => {
+        const deadline = Date.now() + 2_000;
+        while (delayedReads.length < count && Date.now() < deadline) {
+            await new Promise((resolve) => setTimeout(resolve, 5));
+        }
+        assert.ok(delayedReads.length >= count, 'workspace fixture read did not enter the delayed section');
+    };
+    try {
+        const cancellable = new AgentWorkspaceService({
+            getSession: (sessionId) => sessionId === 'session-a' ? { sessionId, workspaceRoot: tempRoot } : null,
+            limits: { maxConcurrentSearches: 1, operationTimeoutMs: 5_000 },
+        });
+        const firstSearch = cancellable.searchFiles({ sessionId: 'session-a', requestId: 'search-one', query: 'README', limit: 1 });
+        await waitForDelayedRead();
+        const secondSearch = cancellable.searchFiles({ sessionId: 'session-a', requestId: 'search-two', query: 'README', limit: 1 });
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        assert.equal(delayedReads.length, 1, 'the search scheduler must not exceed its configured concurrency');
+        assert.deepEqual(cancellable.cancel({ sessionId: 'session-a', requestId: 'search-one' }), {
+            cancelled: true, requestId: 'search-one',
+        });
+        delayedReads.shift()();
+        await assert.rejects(firstSearch, (error) => error.code === 'WORKSPACE_CANCELLED');
+        await waitForDelayedRead();
+        assert.equal(maxActiveReads, 1, 'cancelled search cleanup must release the scheduler before the next search starts');
+        delayedReads.shift()();
+        assert.deepEqual((await secondSearch).entries.map((entry) => entry.relativePath), ['README.md']);
+
+        const timed = new AgentWorkspaceService({
+            getSession: (sessionId) => sessionId === 'session-a' ? { sessionId, workspaceRoot: tempRoot } : null,
+            limits: { maxConcurrentSearches: 1, operationTimeoutMs: 10 },
+        });
+        const timedSearch = timed.searchFiles({ sessionId: 'session-a', requestId: 'search-timeout', query: 'README', limit: 1 });
+        await waitForDelayedRead();
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        delayedReads.shift()();
+        await assert.rejects(timedSearch, (error) => error.code === 'WORKSPACE_TIMEOUT');
+        assert.equal(timed.operations.size, 0, 'a timed-out traversal must release its operation record');
+    } finally {
+        fs.promises.readdir = originalReaddir;
+    }
+
     await service.performPathAction({ sessionId: 'session-a', workspaceRevision: first.workspaceRevision, relativePath: 'README.md', action: 'copy-relative-path' });
     await service.performPathAction({ sessionId: 'session-a', workspaceRevision: first.workspaceRevision, relativePath: 'README.md', action: 'reveal-in-explorer' });
     assert.deepEqual(clipboardWrites, ['README.md']);

@@ -27,8 +27,6 @@ const runtimeApi = () => window.chatAPI || window.electronAPI || {};
 // VChat Agent Session to display after Ctrl+R; transcript data stays in SQLite
 // and execution context stays in the Codex Thread Store.
 const LAST_TOPIC_STORAGE_KEY = 'vcpchat.agentWorkbench.lastTopic.v1';
-const TOPIC_TAKEOVER_POLL_INTERVAL_MS = 500;
-const TOPIC_TAKEOVER_TIMEOUT_MS = 30_000;
 
 function cssEscape(value) {
     if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(String(value));
@@ -88,7 +86,7 @@ function icon(name, label) {
 function proxyMainButton(id) {
     // The Agent Workbench is a separate product page.  The only shared piece
     // here is the VCPChat Agent/Group configuration flow, which belongs to
-    // main chat rather than Rust Topics.  Ask the owning module to open it
+    // main chat rather than Codex Sessions. Ask the owning module to open it
     // directly: a synthetic click can silently hit a replaced sidebar button
     // whose original event listener is no longer attached after a UI redraw.
     if (id === 'nextUiCreateItemBtn' && typeof window.topTabManager?.openCreateDialog === 'function') {
@@ -140,7 +138,6 @@ function vectorIcon(name, label) {
         edit: [['path', { d: 'M12 20h9' }], ['path', { d: 'M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z' }]],
         copy: [['rect', { x: '9', y: '9', width: '11', height: '11', rx: '1' }], ['path', { d: 'M15 9V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h4' }]],
         view: [['path', { d: 'M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6' }], ['circle', { cx: '12', cy: '12', r: '2.5' }]],
-        takeover: [['path', { d: 'M7 7h12l-3-3' }], ['path', { d: 'm19 7-3 3' }], ['path', { d: 'M17 17H5l3 3' }], ['path', { d: 'm5 17 3-3' }]],
         delete: [['path', { d: 'M4 7h16' }], ['path', { d: 'M9 7V4h6v3' }], ['path', { d: 'm6 7 1 13h10l1-13' }], ['path', { d: 'M10 11v5' }], ['path', { d: 'M14 11v5' }]],
         close: [['path', { d: 'm7 7 10 10' }], ['path', { d: 'm17 7-10 10' }]],
     };
@@ -536,7 +533,7 @@ function createMessage(message) {
     heading.append(node('div', 'sender-name', role === 'user' ? '你' : 'Nova'), node('div', 'message-timestamp', formatTime(item.createdAt)));
     const content = node('div', 'md-content');
     if (item.content && item.state === 'streaming') {
-        // Streaming text is patched as text until the daemon closes the
+        // Streaming text is patched as text until Codex closes the
         // message.  This avoids reparsing an ever-growing Markdown document
         // on every delta while leaving final rendering to the shared bridge.
         content.textContent = item.content;
@@ -635,6 +632,8 @@ function mountWorkbench(container) {
         modelCatalog: [],
         topics: [],
         topicsByAgent: new Map(),
+        archivedTopicsByAgent: new Map(),
+        showArchivedTopics: false,
         topicListLoading: false,
         topicSearch: '',
         topicSearchResults: [],
@@ -649,6 +648,10 @@ function mountWorkbench(container) {
         budgetSaving: false,
         settingsSaveState: 'idle',
         settingsSaveMessage: '',
+        recoveryOperations: [],
+        recoveryThreads: [],
+        recoveryLoading: false,
+        recoveryError: '',
         // This is deliberately local-client policy only.  It never changes
         // VCPToolBox's independent backend approval policy.
         permissionMode: 'ask',
@@ -679,6 +682,9 @@ function mountWorkbench(container) {
             workspaceRevision: '',
             model: createWorkspaceTreeModel(),
             inflight: new Map(),
+            inflightRequestIds: new Map(),
+            previewRequestId: '',
+            searchRequestId: '',
             error: '',
             preview: null,
             previewLoading: false,
@@ -692,14 +698,12 @@ function mountWorkbench(container) {
         prompt: '',
         pendingAttachments: [],
         rememberedTopic: loadRememberedTopic(),
-        takeoverTopicId: null,
-        topicConflict: null,
         // A purely visual reading aid.  It records neither transcript content
-        // nor daemon state; it only lets a reader return to the live edge
+        // nor Runtime state; it only lets a reader return to the live edge
         // after intentionally browsing older timeline Parts.
         followingFeed: true,
         unreadTimelineCount: 0,
-        // Keyed by Rust-owned messageId/toolCallId.  This is a DOM cache only;
+        // Keyed by Codex-owned messageId/toolCallId. This is a DOM cache only;
         // it never contains a transcript beyond the current renderer view.
         timelineRows: new Map(),
         presentationMode: 'fork',
@@ -707,25 +711,25 @@ function mountWorkbench(container) {
         // and is never written to SQLite; it exists so first-send startup is
         // visibly busy while thread/start is still in flight.
         turnStart: null,
-        // The session sidebar is a stable DOM shell while its normal Topic
-        // list is visible. Rust refreshes patch its rows in place so a
+        // The Session sidebar is a stable DOM shell while its normal list is
+        // visible. Projection refreshes patch its rows in place so a
         // background catalog read cannot discard the reader's scroll anchor,
         // search control or selected row.
         sessionSidebar: null,
-        // This is deliberately a transient UI flow, not a second Topic
-        // store.  Rust remains the source of the Topic metadata/checkpoint;
+        // This is deliberately a transient UI flow, not a second Session
+        // store. SQLite remains the durable source of the Session projection;
         // the renderer only keeps the currently-open form and a small
         // read-only snapshot summary while the dialog is visible.
         topicFlow: null,
         // A document-level popover is intentionally transient. It is never
-        // used as Topic state: Rust remains the owner of Topic metadata,
-        // leases and mutations.
+        // used as Session state: SQLite owns display metadata while Codex owns
+        // Thread execution and mutations.
         topicContextMenu: null,
         uxTimings: new Map(),
         turnStartedAt: new Map(),
         disposed: false,
     };
-    const pendingRender = { shell: false, header: false, feed: false, composer: false, activity: false, conflict: false };
+    const pendingRender = { shell: false, header: false, feed: false, composer: false, activity: false };
     let renderFrame = null;
     // Control-plane replies can arrive after a user picked another Agent.
     // Keep the latest selection authoritative; an older Topic list must not
@@ -735,6 +739,7 @@ function mountWorkbench(container) {
     let topicSearchRequest = 0;
     let topicSearchTimer = null;
     let workspaceSearchTimer = null;
+    let workspaceRequestSequence = 0;
     let topicMenuInstance = 0;
     let runStatusTimer = null;
 
@@ -743,8 +748,6 @@ function mountWorkbench(container) {
     // comes exclusively from Main and never becomes persisted Renderer state.
     root.dataset.presentationRenderer = state.presentationMode;
     const topicFlowLayer = node('div', 'vcp-ui-scope agent-chat-topic-flow-layer');
-    const topicConflictLayer = node('div', 'vcp-ui-scope agent-chat-topic-conflict-layer');
-    topicConflictLayer.hidden = true;
     const sidebar = node('aside', 'sidebar active vcp-ui-scope agent-chat-sidebar');
     const main = node('main', 'main-content agent-chat-main-content agent-chat-pane');
     const feed = node('div', 'chat-messages-container vcp-ui-scope agent-chat-messages-container');
@@ -844,10 +847,7 @@ function mountWorkbench(container) {
         event.preventDefault();
         applyActivityPanelWidth(state.activityPanelWidth + (event.key === 'ArrowLeft' ? 20 : -20));
     });
-    // A Topic collision is an in-context decision, not a blocking app-wide
-    // modal. Keep the existing transcript and composer visible behind the
-    // compact card so opening a busy Topic never feels like the page broke.
-    mainColumn.append(header, topicConflictLayer, feed, jumpToLatest, composer);
+    mainColumn.append(header, feed, jumpToLatest, composer);
     main.append(mainColumn, activitySplitter, activityPanel);
     root.append(sidebar, main);
     container.classList.add('agent-workbench-root', 'agent-chat-root');
@@ -856,7 +856,7 @@ function mountWorkbench(container) {
     const run = async (work) => {
         try { await work(); } catch (error) {
             // Browser DevTools otherwise renders an Error object as an opaque
-            // `JSHandle@error`, which hides a daemon/control-plane failure
+            // `JSHandle@error`, which hides a Runtime/control-plane failure
             // from both users and Electron smoke diagnostics.
             console.error('[Agent Workbench]', error?.stack || error?.message || String(error));
             notify(error?.message || String(error), 'error');
@@ -875,7 +875,7 @@ function mountWorkbench(container) {
         postRender,
         actions: {
             cancelTool: (tool) => run(() => controller.cancelTool(tool.toolCallId, tool.turnId)),
-            respondToolboxApproval: (approvalId, decision) => run(() => controller.respondToolboxApproval(approvalId, decision)),
+            respondToolboxApproval: (approvalId, decision, approval) => run(() => controller.respondToolboxApproval(approvalId, decision, approval?.generation)),
             openWorkspacePath: (relativePath, action = 'preview') => run(() => openWorkspaceSourcePath(relativePath, 'tool', action)),
         },
     });
@@ -895,10 +895,11 @@ function mountWorkbench(container) {
     function presentationSessionContext() {
         const current = store.getState();
         const profile = selectedAgentProfile() || {};
-        const selected = current.selectedTopic || current.attachment || {};
+        const selected = current.selectedTopic || {};
+        const runtime = activeSession();
         return {
-            sessionId: current.attachment?.sessionId || selected.topicId || null,
-            threadId: current.attachment?.threadId || selected.threadId || null,
+            sessionId: current.selectedSessionId || selected.topicId || null,
+            threadId: runtime?.threadId || selected.threadId || null,
             participant: {
                 id: selected.agentId || profile.id || state.selectedAgent,
                 name: profile.name || selected.agentName || selected.agentId || state.selectedAgent || 'Nova',
@@ -974,7 +975,7 @@ function mountWorkbench(container) {
     fullPresentation.bindInteractions();
 
     // One renderer-only ticker keeps Host-owned deadlines visible. It never
-    // resolves an approval; the daemon's approval.resolved event is the sole
+    // resolves an approval; Main's approval.resolved event is the sole
     // authoritative terminal transition.
     const approvalRegistry = new Map();
     let approvalTicker = null;
@@ -1014,14 +1015,16 @@ function mountWorkbench(container) {
     }
 
     function activeSession() {
-        return store.getState().attachment || null;
+        const current = store.getState();
+        const sessionId = current.selectedSessionId || current.selectedTopic?.topicId;
+        return sessionId && current.activeRuntimes instanceof Map
+            ? current.activeRuntimes.get(sessionId) || null
+            : null;
     }
 
     function syncPermissionModeFromSelectedSession() {
         const current = store.getState();
-        const snapshot = current.selectedTopic?.configSnapshot
-            || current.attachment?.configSnapshot
-            || null;
+        const snapshot = current.selectedTopic?.configSnapshot || null;
         if (!snapshot || !Object.prototype.hasOwnProperty.call(snapshot, 'approvalPolicy')) return;
         // The selected Session snapshot is the same source that Main passes
         // to Codex on the next turn. The page-level value is only a default
@@ -1032,14 +1035,12 @@ function mountWorkbench(container) {
 
     function syncModelFromSelectedSession() {
         const current = store.getState();
-        const selectedSessionId = current.selectedTopic?.topicId || current.attachment?.sessionId || '';
+        const selectedSessionId = current.selectedSessionId || current.selectedTopic?.topicId || '';
         if (state.modelDraftSessionId !== selectedSessionId) {
             state.modelDraftSessionId = selectedSessionId;
             state.modelDraft = null;
         }
-        const snapshot = current.selectedTopic?.configSnapshot
-            || current.attachment?.configSnapshot
-            || null;
+        const snapshot = current.selectedTopic?.configSnapshot || null;
         const selectedModel = typeof snapshot?.model === 'string' ? snapshot.model.trim() : '';
         if (selectedModel && state.modelDraft === null) state.model = selectedModel;
     }
@@ -1049,12 +1050,10 @@ function mountWorkbench(container) {
             === String(right || '').trim().toLocaleLowerCase();
     }
 
-    function isEmptyTopicCheckpointError(error) {
-        // A Topic directory is created before its first safe checkpoint. Rust
-        // correctly refuses `read-topic` for that empty history; on a later
-        // renderer reload the local convenience pointer must not turn this
-        // valid state into a Runtime-start failure notification.
-        return /Agent Topic has no checkpoint/i.test(String(error?.message || error || ''));
+    function isMissingRememberedSessionError(error) {
+        // The pointer is only a convenience preference. A Session may have
+        // been permanently deleted since the previous Renderer lifetime.
+        return /(?:Session was not found|NOT_FOUND)/i.test(String(error?.message || error || ''));
     }
 
     function selectedAgentProfile() {
@@ -1088,10 +1087,11 @@ function mountWorkbench(container) {
         return now;
     }
 
-    async function refreshTopicsForAgent(agentId) {
+    async function refreshTopicsForAgent(agentId, archived = state.showArchivedTopics) {
         const selectedAgentId = String(agentId || state.selectedAgent || 'Nova').trim();
         const key = agentCacheKey(selectedAgentId);
-        const cached = state.topicsByAgent.get(key);
+        const cache = archived ? state.archivedTopicsByAgent : state.topicsByAgent;
+        const cached = cache.get(key);
         state.topics = Array.isArray(cached) ? cached : [];
         state.topicListLoading = !cached;
         queueRender({ shell: true, header: true, composer: true });
@@ -1103,12 +1103,12 @@ function mountWorkbench(container) {
         }
         const request = ++topicCatalogRequest;
         try {
-            const topics = await controller.listTopics(selectedAgentId);
+            const topics = await controller.listTopics(selectedAgentId, { archived });
             if (state.disposed || request !== topicCatalogRequest || !sameAgent(selectedAgentId, state.selectedAgent)) return;
             const received = Array.isArray(topics) ? topics : topics?.topics || [];
             // Main has already resolved canonical Agent identity. Renderer
             // must not repeat legacy name/folder-id guessing here.
-            state.topicsByAgent.set(key, received);
+            cache.set(key, received);
             state.topics = received;
             uxMark('projection-list-returned', selectedAgentId, state.uxTimings.get(`agent-click:${key}`) || null);
             const clickedAt = state.uxTimings.get(`agent-click:${key}`) || null;
@@ -1169,21 +1169,22 @@ function mountWorkbench(container) {
             queueRender({ shell: true, header: true, composer: true });
         });
 
-        // Topics and the steering queue are VCPAgent-specific Rust state.
-        // Load them after the base VCPChat Agent surface is visible so a
-        // transient daemon or ToolBox issue cannot blank the entire page.
+        // Sessions and the follow-up queue are Codex Agent state. Load them
+        // after the base VCPChat Agent surface is visible so a
+        // transient App Server or ToolBox issue cannot blank the entire page.
         const [topics, queue, workbenchSettings] = await Promise.all([
-            optional(() => controller.listTopics(selectedAgentId)),
+            optional(() => controller.listTopics(selectedAgentId, { archived: state.showArchivedTopics })),
             optional(() => controller.listInteractionQueue()),
             optional(() => controller.getWorkbenchSettings()),
         ]);
         if (state.disposed || request !== controlPlaneRequest || !sameAgent(selectedAgentId, state.selectedAgent)) return;
         const receivedTopics = Array.isArray(topics) ? topics : topics?.topics || [];
-        // Rust returns Agent-scoped Topic metadata. Retain this defensive
-        // filter so an old/stale daemon result cannot leak another Agent's
+        // Main returns Agent-scoped Session metadata. Retain this defensive
+        // filter so an old/stale Main result cannot leak another Agent's
         // history into the current sidebar.
         state.topics = receivedTopics;
-        state.topicsByAgent.set(agentCacheKey(selectedAgentId), receivedTopics);
+        (state.showArchivedTopics ? state.archivedTopicsByAgent : state.topicsByAgent)
+            .set(agentCacheKey(selectedAgentId), receivedTopics);
         state.topicListLoading = false;
         state.queue = Array.isArray(queue) ? queue : queue?.items || queue?.queue || [];
         if (workbenchSettings && typeof workbenchSettings === 'object') {
@@ -1206,8 +1207,29 @@ function mountWorkbench(container) {
         queueRender({ shell: true, header: true, composer: true });
     }
 
+    async function refreshRecoveryOperations({ scanThreads = false } = {}) {
+        state.recoveryLoading = true;
+        state.recoveryError = '';
+        renderSidebar();
+        try {
+            if (scanThreads) {
+                const result = await controller.listRecoveryCandidates();
+                state.recoveryOperations = Array.isArray(result?.operations) ? result.operations : [];
+                state.recoveryThreads = Array.isArray(result?.threads) ? result.threads : [];
+            } else {
+                const operations = await controller.listRecoveryOperations();
+                state.recoveryOperations = Array.isArray(operations) ? operations : [];
+                state.recoveryThreads = [];
+            }
+        } catch (error) {
+            state.recoveryError = error?.message || String(error);
+        } finally {
+            state.recoveryLoading = false;
+            if (!state.disposed) renderSidebar();
+        }
+    }
+
     async function createSession(overrides = {}) {
-        state.topicConflict = null;
         state.pendingAttachments = [];
         const runtimeState = store.getState().runtime.state;
         if (runtimeState === 'stopped' || runtimeState === 'unknown') {
@@ -1230,7 +1252,6 @@ function mountWorkbench(container) {
     }
 
     async function createTopic(overrides = {}) {
-        state.topicConflict = null;
         state.pendingAttachments = [];
         const runtimeState = store.getState().runtime.state;
         if (runtimeState === 'stopped' || runtimeState === 'unknown') {
@@ -1286,68 +1307,10 @@ function mountWorkbench(container) {
         queueRender({ topicFlow: true });
     }
 
-    async function requestTopicTakeover(topic) {
-        if (!topic?.id || state.takeoverTopicId) return;
-        state.takeoverTopicId = topic.id;
-        queueRender({ shell: true, header: true, composer: true });
-        try {
-            await controller.takeoverTopic(topic.id, topic.agentId);
-            notify('已请求当前 Topic 持有者安全释放会话，正在等待 checkpoint…');
-            const deadline = Date.now() + TOPIC_TAKEOVER_TIMEOUT_MS;
-            while (!state.disposed && Date.now() < deadline) {
-                await new Promise((resolve) => setTimeout(resolve, TOPIC_TAKEOVER_POLL_INTERVAL_MS));
-                await refreshControlPlane();
-                const released = state.topics.find((item) => item.id === topic.id);
-                if (released && !released.inUse) {
-                    await createSession({
-                        resume: released.id,
-                        title: released.title,
-                        model: released.model,
-                        agent: released.agentId,
-                        workspaceRoot: released.workspaceRef,
-                    });
-                    notify('Topic 已安全接管，并恢复到最近的 checkpoint。', 'success');
-                    return true;
-                }
-            }
-            if (!state.disposed) throw new Error('等待 Topic 持有者释放超时；其 lease 仍有效，请稍后重试。');
-        } finally {
-            state.takeoverTopicId = null;
-            queueRender({ shell: true, header: true, composer: true, conflict: true });
-        }
-    }
-
-    function openTopicConflict(topic) {
-        if (!topic?.id || state.takeoverTopicId) return;
-        if (store.getState().runtime?.runtime === 'codex-app-server') {
-            void run(() => controller.previewTopic(topic.id, topic.agentId, topic));
-            return;
-        }
-        state.topicConflict = { topic, takingOver: false, error: null };
-        queueRender({ conflict: true });
-    }
-
-    function clearTopicConflictForSelection(topicId) {
-        const conflict = state.topicConflict;
-        // A conflict is an explicit decision for one Topic only. Browsing a
-        // different Rust snapshot must never leave the old dialog floating
-        // above unrelated history. An in-flight cooperative takeover remains
-        // visible until Rust reaches its safe terminal result.
-        if (!conflict || conflict.takingOver || conflict.topic?.id === topicId) return;
-        state.topicConflict = null;
-        queueRender({ conflict: true });
-    }
-
-    function closeTopicConflict() {
-        if (state.topicConflict?.takingOver) return;
-        state.topicConflict = null;
-        queueRender({ conflict: true });
-    }
-
-    async function recoverDaemon() {
-        // Recovery is intentionally user-driven.  A daemon crash must never
-        // replay an interrupted model/tool turn or silently reacquire a
-        // writable lease; restore only the durable preview snapshot.
+    async function recoverRuntime() {
+        // Recovery is intentionally user-driven. An App Server crash must
+        // never replay an interrupted model/tool Turn; restore only SQLite's
+        // durable preview after the process restarts.
         if (state.recovering) return;
         state.recovering = true;
         queueRender({ header: true, composer: true });
@@ -1357,10 +1320,10 @@ function mountWorkbench(container) {
             await controller.startRuntime();
             if (previous?.topicId) {
                 await controller.previewTopic(previous.topicId, previous.agentId, previous);
-                notify('Rust Agent 已重新连接，并显示最近的安全 Topic checkpoint。中断的 Turn 不会重放。', 'success');
+                notify('Codex App Server 已重新连接，并显示最近的 SQLite 投影。中断的 Turn 不会重放。', 'success');
             } else {
                 await refreshControlPlane();
-                notify('Rust Agent 已重新连接。请新建一个 Agent 会话。', 'success');
+                notify('Codex App Server 已重新连接。请新建一个 Agent 会话。', 'success');
             }
         } finally {
             state.recovering = false;
@@ -1404,7 +1367,7 @@ function mountWorkbench(container) {
             await navigator.clipboard.writeText(topicId);
             notify('Topic ID 已复制。', 'success');
         } catch {
-            // This copies only a durable identifier supplied by Rust; it is
+            // This copies only a durable identifier supplied by Main; it is
             // not a transcript or a second renderer-side Topic store.
             const temporary = document.createElement('textarea');
             temporary.value = topicId;
@@ -1421,7 +1384,7 @@ function mountWorkbench(container) {
 
     function addTopicContextMenuItem(menu, iconName, label, action, { danger = false } = {}) {
         // Deliberately reuse the main-chat DOM primitives. The callbacks stay
-        // Agent-specific and go through Rust, but the visual contract (size,
+        // Agent-specific and go through narrow IPC, but the visual contract (size,
         // font, icon spacing, theme and hover state) is the exact same shared
         // `.context-menu` / `.context-menu-item` implementation.
         const item = node('div', `context-menu-item agent-chat-topic-context-menu-item${danger ? ' danger-item' : ''}`);
@@ -1473,16 +1436,15 @@ function mountWorkbench(container) {
         menu.setAttribute('aria-label', `管理 Topic：${topic.title || topic.id}`);
         menu.hidden = true;
 
-        if (topic.inUse && !live) {
-            addTopicContextMenuItem(menu, 'folder-open', '打开会话', async () => openTopicConflict(topic));
-        } else if (live) {
+        const archived = Boolean(topic.archivedAt);
+        if (live) {
             addTopicContextMenuItem(menu, 'folder-open', '打开当前会话', async () => controller.hydrateTopic(topic.id, null, null, topic.agentId));
         } else {
-            addTopicContextMenuItem(menu, 'folder-open', '打开会话', async () => {
+            addTopicContextMenuItem(menu, 'folder-open', archived ? '查看归档会话' : '打开会话', async () => {
                 await controller.previewTopic(topic.id, topic.agentId, topic);
                 rememberTopic({ topicId: topic.id });
             });
-            addTopicContextMenuItem(menu, 'edit', '重命名', async () => {
+            if (!archived) addTopicContextMenuItem(menu, 'edit', '重命名', async () => {
                 const title = window.prompt?.('重命名 Agent Topic', topic.title || '');
                 if (title === null || title === undefined || title.trim() === (topic.title || '').trim()) return;
                 await controller.renameTopic(topic.id, title, topic.agentId);
@@ -1491,16 +1453,34 @@ function mountWorkbench(container) {
                 notify('Agent Topic 已重命名。', 'success');
             });
         }
-        if (topic.inUse || live) addTopicContextMenuItem(menu, 'copy', '复制 Topic ID', async () => copyTopicId(topic.id));
-        else addTopicContextMenuItem(menu, 'copy', '复制 Topic ID', async () => copyTopicId(topic.id));
-        if (!topic.inUse && !live) {
-            addTopicContextMenuItem(menu, 'trash-alt', '删除此话题', async () => {
-                const confirmed = window.confirm?.(`确定删除「${topic.title || topic.id}」吗？此操作不能恢复。`);
+        addTopicContextMenuItem(menu, 'copy', '复制 Topic ID', async () => copyTopicId(topic.id));
+        if (!live) addTopicContextMenuItem(menu, 'file-export', '导出 Markdown', async () => {
+            const result = await controller.exportSession(topic.id, 'markdown');
+            if (result?.exported) notify('Agent 会话已导出。', 'success');
+        });
+        if (!live && !archived) {
+            addTopicContextMenuItem(menu, 'archive', '归档会话', async () => {
+                const confirmed = window.confirm?.(`确定归档「${topic.title || topic.id}」吗？之后可从归档会话中恢复。`);
                 if (!confirmed) return;
                 await controller.deleteTopic(topic.id, topic.agentId);
                 forgetTopic(topic.id);
                 await refreshControlPlane();
-                notify('Agent Topic 已删除。', 'success');
+                notify('Agent 会话已归档。', 'success');
+            });
+        } else if (!live && archived) {
+            addTopicContextMenuItem(menu, 'undo', '恢复会话', async () => {
+                await controller.restoreSession(topic.id);
+                forgetTopic(topic.id);
+                await refreshControlPlane();
+                notify('Agent 会话已恢复。', 'success');
+            });
+            addTopicContextMenuItem(menu, 'trash', '永久删除', async () => {
+                const confirmed = window.confirm?.(`永久删除「${topic.title || topic.id}」及其本地投影吗？此操作不可恢复。`);
+                if (!confirmed) return;
+                await controller.permanentlyDeleteSession(topic.id);
+                forgetTopic(topic.id);
+                await refreshControlPlane();
+                notify('Agent 会话已永久删除。', 'success');
             }, { danger: true });
         }
 
@@ -1542,11 +1522,10 @@ function mountWorkbench(container) {
 
     function sessionSidebarEntries() {
         const current = store.getState();
-        const attachment = current.attachment;
-        // Every daemon-reported runtime is a separate Topic Host. Scope them
-        // by Rust-confirmed Agent identity; never reuse the selected Topic's
-        // metadata as a fallback, which was the Nova/123 cross-routing bug.
-        const liveSessions = (Array.isArray(current.activeRuntimes) ? current.activeRuntimes : [])
+        // Scope every active Thread by its durable Agent identity. Never reuse
+        // the selected Session metadata as a fallback across runtimes.
+        const liveSessions = (state.showArchivedTopics ? []
+            : (current.activeRuntimes instanceof Map ? [...current.activeRuntimes.values()] : []))
             .filter((runtime) => sameAgent(runtime.agentId, state.selectedAgent))
             .map((runtime) => projectSession({
                 ...(state.topics.find((topic) => topic.id === runtime.topicId) || {}),
@@ -1554,10 +1533,9 @@ function mountWorkbench(container) {
             }));
         const liveTopicIds = new Set(liveSessions.map((session) => session.topicId).filter(Boolean));
         return {
-            attachment,
             liveSessions,
             persistedTopics: state.topics.filter((topic) => !liveTopicIds.has(topic.id)),
-            selectedTopicId: store.getState().selectedTopic?.topicId || attachment?.topicId || null,
+            selectedTopicId: current.selectedSessionId || current.selectedTopic?.topicId || null,
         };
     }
 
@@ -1565,7 +1543,7 @@ function mountWorkbench(container) {
         const shell = state.sessionSidebar;
         if (!shell || shell.agentId !== state.selectedAgent || state.tab !== 'sessions'
             || state.topicManaging || state.topicSearchOpen || state.topicSearch.trim()) return false;
-        const { attachment, liveSessions, persistedTopics, selectedTopicId } = sessionSidebarEntries();
+        const { liveSessions, persistedTopics, selectedTopicId } = sessionSidebarEntries();
         const desired = [
             ...liveSessions.map((session) => ({ id: session.topicId, live: true, value: session })),
             ...persistedTopics.map((topic) => ({ id: topic.id, live: false, value: topic })),
@@ -1578,18 +1556,12 @@ function mountWorkbench(container) {
             return false;
         }
 
-        // A transition to an externally held lease changes the permitted click
-        // path. Rebuild that rare row shell so its event handler is updated;
-        // normal metadata/status refreshes remain keyed and allocation-free.
-        if (desired.some((entry, index) => Boolean(rows[index].dataset.topicInUse === 'true') !== Boolean(entry.value.inUse))) return false;
-
         for (const [index, entry] of desired.entries()) {
             const row = rows[index];
             const active = entry.id === selectedTopicId;
             row.classList.toggle('active', active);
             row.classList.toggle('active-topic-glowing', active);
             row.dataset.topicSearch = `${entry.value.title || entry.id} ${entry.value.model || ''}`.toLocaleLowerCase();
-            row.dataset.topicInUse = String(Boolean(entry.value.inUse));
             const title = row.querySelector('.topic-title-display');
             if (title) title.textContent = entry.value.title || entry.id;
             if (entry.live) {
@@ -1605,8 +1577,17 @@ function mountWorkbench(container) {
     function persistWorkbenchSettings(payload, selectedSession, successMessage) {
         state.settingsSaveState = 'saving';
         state.settingsSaveMessage = '正在自动保存…';
-        const request = { ...payload, ...(selectedSession ? { sessionId: selectedSession } : {}) };
         const operation = settingsSaveQueue.then(async () => {
+            const selectedProjection = store.getState().selectedTopic;
+            const request = {
+                ...payload,
+                ...(selectedSession ? {
+                    sessionId: selectedSession,
+                    expectedConfigRevision: selectedProjection?.topicId === selectedSession
+                        ? Number(selectedProjection.configRevision || 1)
+                        : 1,
+                } : {}),
+            };
             const saved = await controller.updateWorkbenchSettings(request);
             if (Object.prototype.hasOwnProperty.call(payload, 'permissionMode')) {
                 state.permissionMode = saved?.settings?.permissionMode === 'always-approve' ? 'always-approve' : 'ask';
@@ -1625,17 +1606,11 @@ function mountWorkbench(container) {
                         ? {
                             ...currentProjection.selectedTopic,
                             configSnapshot: saved.session.configSnapshot,
+                            configRevision: saved.session.configRevision,
                             workspaceRef: saved.session.workspaceRoot || currentProjection.selectedTopic.workspaceRef,
                             workspaceRoot: saved.session.workspaceRoot || currentProjection.selectedTopic.workspaceRoot,
                         }
                         : currentProjection.selectedTopic,
-                    attachment: currentProjection.attachment?.sessionId === selectedSession
-                        ? {
-                            ...currentProjection.attachment,
-                            configSnapshot: saved.session.configSnapshot,
-                            workspaceRoot: saved.session.workspaceRoot || currentProjection.attachment.workspaceRoot,
-                        }
-                        : currentProjection.attachment,
                 });
             }
             state.settingsSaveState = 'saved';
@@ -1689,10 +1664,11 @@ function mountWorkbench(container) {
                     topicSearchRequest += 1;
                 }
                 renderSidebar();
-                // Topic metadata is owned by Rust and may have changed while
+                // Session projection metadata may have changed while
                 // this page was hidden. Opening the tab never creates a
                 // Session; it simply refreshes the selected Agent's history.
                 if (id === 'sessions') run(() => refreshControlPlane());
+                else if (id === 'settings') void refreshRecoveryOperations();
             });
             tabs.append(tab);
         }
@@ -1702,10 +1678,11 @@ function mountWorkbench(container) {
             const tools = node('div', 'next-ui-topic-tools');
             // Keep the Topic toolbar structurally identical to the main
             // chat's Topic toolbar. The callbacks deliberately stay local to
-            // the Workbench: Agent Topics are Rust-daemon-owned objects.
+            // the Workbench: Agent Sessions are SQLite/Codex-owned objects.
             const add = visualActionButton('add', '新建会话', 'next-ui-create-topic-trigger', '新建会话');
             add.addEventListener('click', openNewTopicFlow);
             const manage = visualActionButton('checklist', '管理会话', 'next-ui-topic-icon-trigger');
+            manage.disabled = state.showArchivedTopics;
             manage.addEventListener('click', () => {
                 closeTopicContextMenu();
                 state.topicManaging = !state.topicManaging;
@@ -1716,7 +1693,20 @@ function mountWorkbench(container) {
             manage.setAttribute('aria-pressed', String(state.topicManaging));
             const searchTrigger = visualActionButton('search', '搜索会话', 'next-ui-topic-icon-trigger');
             searchTrigger.setAttribute('aria-expanded', String(state.topicSearchOpen));
-            tools.append(add, manage, searchTrigger);
+            const archiveToggle = visualActionButton('archive', state.showArchivedTopics ? '返回当前会话' : '查看归档会话', 'next-ui-topic-icon-trigger');
+            archiveToggle.setAttribute('aria-pressed', String(state.showArchivedTopics));
+            archiveToggle.addEventListener('click', () => {
+                closeTopicContextMenu();
+                state.showArchivedTopics = !state.showArchivedTopics;
+                state.topicManaging = false;
+                state.topicSelectedIds.clear();
+                state.topicSearchOpen = false;
+                state.topicSearch = '';
+                state.topicSearchResults = [];
+                renderSidebar();
+                run(() => refreshTopicsForAgent(state.selectedAgent, state.showArchivedTopics));
+            });
+            tools.append(add, manage, searchTrigger, archiveToggle);
 
             const { panel: searchPanel, input: search, close: closeSearch } = createSidebarSearchPanel(
                 'agentWorkbenchTopicSearchInput', '搜索 Agent 会话', '搜索会话...',
@@ -1775,7 +1765,9 @@ function mountWorkbench(container) {
                         list.append(node('li', 'topic-item agent-chat-session-row agent-chat-session-skeleton', ''));
                     }
                 } else {
-                    list.append(node('li', 'agent-chat-empty-list', `${state.selectedAgent || '当前 Agent'} 还没有会话。创建一个会话后即可开始。`));
+                    list.append(node('li', 'agent-chat-empty-list', state.showArchivedTopics
+                        ? `${state.selectedAgent || '当前 Agent'} 没有已归档会话。`
+                        : `${state.selectedAgent || '当前 Agent'} 还没有会话。创建一个会话后即可开始。`));
                 }
             }
             for (const session of liveSessions) {
@@ -1803,9 +1795,8 @@ function mountWorkbench(container) {
                     : session.activity === 'running' ? '●'
                         : session.activity === 'awaiting-approval' ? '!' : '');
                 row.append(avatar, title, count);
-                // The row is a live attachment, not a durable GUI Session.
-                // Rebuild only from the Rust Topic snapshot; Main has no
-                // message/event ring to select from.
+                // The row represents a live Session Runtime. Its transcript is
+                // still rebuilt only from the durable Session projection.
                 row.addEventListener('click', () => run(() => controller.hydrateTopic(session.topicId, session, null, session.agentId)));
                 if (!state.topicManaging && session.topicId) {
                     appendTopicActions(row, {
@@ -1819,11 +1810,10 @@ function mountWorkbench(container) {
                 }
                 list.append(row);
             }
-            // Old conversations are Topics, not abandoned in-memory GUI
-            // sessions.  Render them with the same main-chat row contract and
-            // resume the bounded Rust checkpoint when selected.
+            // Persisted Sessions render with the same main-chat row contract.
+            // Selection changes only the SQLite projection being viewed.
             for (const topic of persistedTopics) {
-                const selectable = !topic.inUse;
+                const selectable = true;
                 const selected = state.topicSelectedIds.has(topic.id);
                 const active = topic.id === selectedTopicId;
                 const row = node('li', `topic-item agent-chat-session-row agent-chat-persisted-topic${selected ? ' selected' : ''}${active ? ' active active-topic-glowing' : ''}`);
@@ -1831,7 +1821,6 @@ function mountWorkbench(container) {
                 row.dataset.itemId = topic.agentId || state.selectedAgent || 'Nova';
                 row.dataset.itemType = 'agent-topic';
                 row.dataset.topicId = topic.id;
-                row.dataset.topicInUse = String(Boolean(topic.inUse));
                 row.dataset.topicSearch = `${topic.title || topic.id} ${topic.model || ''}`.toLocaleLowerCase();
                 const avatar = document.createElement('img');
                 avatar.className = 'avatar';
@@ -1841,10 +1830,6 @@ function mountWorkbench(container) {
                 avatar.alt = `${topic.agentId || 'Nova'} - ${topic.title || topic.id}`;
                 avatar.onerror = () => { avatar.src = 'assets/default_avatar.png'; };
                 const title = node('span', 'topic-title-display', topic.title || topic.id);
-                // A Topic lease is a concurrency guard, not sidebar content.
-                // Keep normal rows visually identical to VCPChat history;
-                // only a click on a genuinely external lease may surface the
-                // explicit conflict/takeover flow.
                 const status = topic.searchHit ? node('span', 'message-count', '匹配') : null;
                 if (topic.searchHit?.snippet) row.title = topic.searchHit.snippet;
                 row.append(avatar, title);
@@ -1864,20 +1849,8 @@ function mountWorkbench(container) {
                         renderSidebar();
                         return;
                     }
-                    if (topic.locallyAttached) return;
-                    // Topic selection is a Rust snapshot read, not a Session
-                    // resume.  The daemon stays attached to its current
-                    // writer until this Topic actually receives a new turn.
-                    clearTopicConflictForSelection(topic.id);
-                    if (!topic.inUse) {
-                        await controller.previewTopic(topic.id, topic.agentId, topic);
-                        rememberTopic({ topicId: topic.id });
-                    } else {
-                        // Never replace the current attachment/transcript with
-                        // a read-only preview. A real collision is the only
-                        // exceptional UI path and requires explicit takeover.
-                        openTopicConflict(topic);
-                    }
+                    await controller.previewTopic(topic.id, topic.agentId, topic);
+                    rememberTopic({ topicId: topic.id });
                 }));
                 if (!state.topicManaging) appendTopicActions(row, topic);
                 list.append(row);
@@ -1928,7 +1901,7 @@ function mountWorkbench(container) {
             applyTopicFilter();
             const scroll = node('div', 'sidebar-list-scroll');
             scroll.append(list);
-            if (state.topicSearchLoading) scroll.prepend(node('div', 'agent-chat-empty-list', '正在搜索 Rust Agent 索引…'));
+            if (state.topicSearchLoading) scroll.prepend(node('div', 'agent-chat-empty-list', '正在搜索 Agent 会话…'));
             else if (state.topicSearchError) scroll.prepend(node('div', 'agent-chat-empty-list', `索引搜索不可用：${state.topicSearchError}`));
             else if (state.topicSearch.trim() && !persistedTopics.length) scroll.prepend(node('div', 'agent-chat-empty-list', '没有匹配的 Agent Topic。'));
             content.append(scroll);
@@ -1938,8 +1911,8 @@ function mountWorkbench(container) {
                 panel.setAttribute('aria-hidden', 'false');
                 const selection = node('div', 'next-ui-topic-manage-selection');
                 const selectAll = button('', 'next-ui-topic-manage-button');
-                selectAll.title = '全选可删除会话';
-                selectAll.setAttribute('aria-label', '全选可删除会话');
+                selectAll.title = '全选可归档会话';
+                selectAll.setAttribute('aria-label', '全选可归档会话');
                 const visibleSelectableIds = [...list.querySelectorAll('.agent-chat-persisted-topic[data-topic-id]')]
                     .filter((row) => !row.hidden && !state.topics.find((topic) => topic.id === row.dataset.topicId)?.inUse)
                     .map((row) => row.dataset.topicId);
@@ -1956,14 +1929,14 @@ function mountWorkbench(container) {
                 selection.append(selectAll, selectionCount);
                 const actions = node('div', 'next-ui-topic-manage-actions');
                 const removeSelected = button('', 'next-ui-topic-manage-button danger');
-                removeSelected.title = '删除所选会话';
-                removeSelected.setAttribute('aria-label', '删除所选会话');
+                removeSelected.title = '归档所选会话';
+                removeSelected.setAttribute('aria-label', '归档所选会话');
                 removeSelected.disabled = state.topicSelectedIds.size === 0;
                 removeSelected.append(...icon('delete'));
                 removeSelected.addEventListener('click', () => run(async () => {
-                    const selectedTopics = persistedTopics.filter((topic) => state.topicSelectedIds.has(topic.id) && !topic.inUse);
+                    const selectedTopics = persistedTopics.filter((topic) => state.topicSelectedIds.has(topic.id));
                     if (!selectedTopics.length) return;
-                    const confirmed = window.confirm?.(`确定删除选中的 ${selectedTopics.length} 个 Agent Topic 吗？此操作不能恢复。`);
+                    const confirmed = window.confirm?.(`确定归档选中的 ${selectedTopics.length} 个 Agent 会话吗？`);
                     if (!confirmed) return;
                     for (const topic of selectedTopics) {
                         await controller.deleteTopic(topic.id, topic.agentId);
@@ -1972,7 +1945,7 @@ function mountWorkbench(container) {
                     state.topicSelectedIds.clear();
                     state.topicManaging = false;
                     await refreshTopicsForAgent(agentId);
-                    notify(`已删除 ${selectedTopics.length} 个 Agent Topic。`, 'success');
+                    notify(`已归档 ${selectedTopics.length} 个 Agent 会话。`, 'success');
                 }));
                 const exit = button('', 'next-ui-topic-manage-button');
                 exit.title = '退出管理';
@@ -2050,8 +2023,8 @@ function mountWorkbench(container) {
                     state.uxTimings.set(`agent-click:${agentCacheKey(agentId)}`, uxMark('agent-click', agentId));
                     selectAgent(agentId);
                     // Selecting an Agent is a browse action, not an implicit
-                    // create-session action. Go straight to its durable Rust
-                    // Topic catalog so prior history is visible immediately.
+                    // create-session action. Go straight to its durable SQLite
+                    // Session catalog so prior history is visible immediately.
                     state.tab = 'sessions';
                     state.topicManaging = false;
                     state.topicSelectedIds.clear();
@@ -2069,9 +2042,9 @@ function mountWorkbench(container) {
         } else {
             const settingsPane = node('div', 'agent-chat-settings-pane');
             const settingsForm = node('div', 'agent-chat-settings-form');
-            const selectedSession = store.getState().selectedTopic?.topicId || activeSession()?.sessionId || '';
+            const selectedSession = store.getState().selectedSessionId || store.getState().selectedTopic?.topicId || '';
             const selectedProjection = store.getState().selectedTopic;
-            const selectedRuntime = store.getState().attachment;
+            const selectedRuntime = activeSession();
             const selectedSnapshot = selectedRuntime?.configSnapshot || selectedProjection?.configSnapshot || null;
             const selectedWorkspace = selectedProjection?.workspaceRef || selectedProjection?.workspaceRoot
                 || (selectedRuntime?.sessionId === selectedSession ? selectedRuntime.workspaceRoot : '')
@@ -2206,6 +2179,44 @@ function mountWorkbench(container) {
             prompt.setAttribute('aria-label', '当前 Agent 提示词');
             promptField.append(prompt);
             settingsForm.append(promptField);
+            if (selectedSession && selectedSnapshot?.profileId) {
+                const applyProfile = button('应用 Profile 最新配置', 'secondary agent-chat-settings-save');
+                applyProfile.addEventListener('click', () => run(async () => {
+                    const current = store.getState().selectedTopic;
+                    const expectedConfigRevision = Number(current?.configRevision || 1);
+                    const preview = await controller.applyAgentProfile({
+                        sessionId: selectedSession,
+                        expectedConfigRevision,
+                        previewOnly: true,
+                    });
+                    if (!preview?.differences?.length) {
+                        notify('当前 Session 已使用 Profile 最新配置。', 'success');
+                        return;
+                    }
+                    const labels = {
+                        systemPrompt: '提示词', workspaceRoot: '工作目录', model: '模型',
+                        permissionMode: '权限模式', profileRevision: 'Profile revision',
+                    };
+                    const detail = preview.differences.map((item) => `${labels[item.field] || item.field}: ${item.current ?? '空'} → ${item.next ?? '空'}`).join('\n');
+                    const action = preview.requiresNewSession
+                        ? '提示词或工作目录属于 Thread 身份，应用后将创建新 Session。'
+                        : '模型和权限将从下一次 Turn 生效。';
+                    if (!window.confirm?.(`${action}\n\n${detail}`)) return;
+                    const applied = await controller.applyAgentProfile({
+                        sessionId: selectedSession,
+                        expectedConfigRevision,
+                        createNewSession: preview.requiresNewSession,
+                    });
+                    if (applied?.createdNewSession && applied.session?.sessionId) {
+                        await controller.previewTopic(applied.session.sessionId, applied.session.agentId, applied.session);
+                        notify('已按 Profile 最新身份创建新 Session。', 'success');
+                    } else {
+                        notify('已应用 Profile 最新配置。', 'success');
+                    }
+                    renderSidebar();
+                }));
+                settingsForm.append(applyProfile);
+            }
             const permissionHint = node('p', 'agent-chat-settings-placeholder',
                 'YOLO 仅跳过 Codex 本地审批；VCPToolBox 的后端审批不会被关闭或绕过。');
             const budgetSection = node('section', 'agent-chat-settings-budget');
@@ -2243,12 +2254,73 @@ function mountWorkbench(container) {
                 budgetInput('累计 token', 'maxTokensPerTurn', state.budget.maxTokensPerTurn),
             );
             budgetSection.append(budgetHint, budgetFields);
+            const recoverySection = node('section', 'agent-chat-settings-budget agent-chat-recovery-section');
+            const recoveryHeader = node('div', 'agent-chat-settings-avatar-copy');
+            recoveryHeader.append(
+                node('strong', 'agent-chat-setting-label', '一致性恢复'),
+                node('span', 'agent-chat-setting-help', '仅显示未完成的跨存储操作；VChat 不会自动重放 Turn 或猜测 Thread 归属。'),
+            );
+            const scanRecovery = button(state.recoveryLoading ? '正在检查…' : '扫描未绑定 Thread', 'secondary agent-chat-settings-save');
+            scanRecovery.disabled = state.recoveryLoading;
+            scanRecovery.addEventListener('click', () => void refreshRecoveryOperations({ scanThreads: true }));
+            recoveryHeader.append(scanRecovery);
+            recoverySection.append(recoveryHeader);
+            if (state.recoveryError) {
+                recoverySection.append(node('p', 'agent-chat-settings-save-status is-error', state.recoveryError));
+            } else if (!state.recoveryOperations.length) {
+                recoverySection.append(node('p', 'agent-chat-settings-placeholder', state.recoveryLoading
+                    ? '正在读取 Saga 日志…' : '没有需要人工处理的操作。'));
+            } else {
+                for (const operation of state.recoveryOperations) {
+                    const card = node('div', 'agent-chat-setting-field agent-chat-recovery-operation');
+                    card.dataset.operationId = operation.operationId;
+                    card.append(node('span', 'agent-chat-setting-label', `${operation.kind} · ${operation.state}`));
+                    if (operation.lastError) card.append(node('span', 'agent-chat-setting-help', operation.lastError));
+                    const recoverable = operation.state === 'uncertain'
+                        && (operation.kind === 'thread-start' || operation.kind === 'thread-fork');
+                    if (recoverable && state.recoveryThreads.length) {
+                        const select = document.createElement('select');
+                        select.className = 'agent-chat-setting-input';
+                        select.setAttribute('aria-label', `为 ${operation.operationId} 选择未绑定 Thread`);
+                        for (const thread of state.recoveryThreads) {
+                            const option = document.createElement('option');
+                            option.value = thread.threadId;
+                            option.textContent = `${thread.title || thread.threadId}${thread.cwd ? ` · ${thread.cwd}` : ''}`;
+                            select.append(option);
+                        }
+                        const actions = node('div', 'agent-chat-settings-budget-fields');
+                        const bind = button('绑定到 VChat Session', 'primary agent-chat-settings-save');
+                        bind.addEventListener('click', () => run(async () => {
+                            if (!window.confirm?.('仅当你确认该 Codex Thread 就是这次未完成操作产生的结果时才绑定。继续吗？')) return;
+                            const result = await controller.resolveRecoveryOperation(operation.operationId, 'bind', select.value);
+                            if (result?.session?.sessionId) {
+                                state.showArchivedTopics = false;
+                                await controller.previewTopic(result.session.sessionId, result.session.agentId, result.session);
+                            }
+                            await Promise.all([refreshRecoveryOperations(), refreshTopicsForAgent(state.selectedAgent, false)]);
+                            notify('未绑定 Thread 已显式绑定。', 'success');
+                        }));
+                        const remove = button('删除未绑定 Thread', 'secondary agent-chat-settings-save');
+                        remove.addEventListener('click', () => run(async () => {
+                            if (!window.confirm?.('永久删除选中的未绑定 Codex Thread 吗？此操作不可恢复。')) return;
+                            await controller.resolveRecoveryOperation(operation.operationId, 'delete', select.value);
+                            await refreshRecoveryOperations({ scanThreads: true });
+                            notify('未绑定 Thread 已删除。', 'success');
+                        }));
+                        actions.append(bind, remove);
+                        card.append(select, actions);
+                    } else if (recoverable) {
+                        card.append(node('span', 'agent-chat-setting-help', '点击“扫描未绑定 Thread”后，可由用户明确选择绑定或删除。'));
+                    }
+                    recoverySection.append(card);
+                }
+            }
             const saveStatus = node('p', `agent-chat-settings-save-status is-${state.settingsSaveState}`,
                 state.settingsSaveMessage || '修改后自动保存');
             saveStatus.setAttribute('role', 'status');
             const save = button('用此配置新建会话', 'primary agent-chat-settings-save');
             save.addEventListener('click', openNewTopicFlow);
-            settingsForm.append(permissionHint, budgetSection, saveStatus, save);
+            settingsForm.append(permissionHint, budgetSection, recoverySection, saveStatus, save);
             settingsPane.append(settingsForm);
             content.append(settingsPane);
         }
@@ -2487,53 +2559,6 @@ function mountWorkbench(container) {
         queueMicrotask(() => dialog.focus());
     }
 
-    function renderTopicConflict() {
-        topicConflictLayer.replaceChildren();
-        const conflict = state.topicConflict;
-        topicConflictLayer.hidden = !conflict;
-        if (!conflict) return;
-
-        const { topic } = conflict;
-        const dialog = node('section', 'agent-chat-topic-conflict-dialog');
-        dialog.setAttribute('role', 'alert');
-        dialog.setAttribute('aria-labelledby', 'agentChatTopicConflictTitle');
-
-        const heading = node('div', 'agent-chat-topic-conflict-heading');
-        const icon = node('span', 'vcp-ui-icon agent-chat-topic-conflict-icon', 'sync_problem');
-        const title = node('h2', 'agent-chat-topic-conflict-title', '会话正在其他位置使用');
-        title.id = 'agentChatTopicConflictTitle';
-        heading.append(icon, title);
-        const description = node('p', 'agent-chat-topic-conflict-description',
-            conflict.takingOver
-                ? '正在安全接管，等待另一处会话释放。'
-                : `“${topic.title || topic.id}”正在另一处运行。`);
-        const actions = node('div', 'agent-chat-topic-conflict-actions');
-        const cancel = button('暂不接管', 'secondary');
-        cancel.disabled = conflict.takingOver;
-        cancel.addEventListener('click', closeTopicConflict);
-        const takeover = button(conflict.takingOver ? '正在接管…' : '接管并继续', 'primary');
-        takeover.disabled = conflict.takingOver;
-        takeover.addEventListener('click', () => run(async () => {
-            state.topicConflict = { ...conflict, takingOver: true, error: null };
-            queueRender({ conflict: true });
-            try {
-                if (await requestTopicTakeover(topic)) state.topicConflict = null;
-            } catch (error) {
-                if (state.topicConflict?.topic?.id === topic.id) {
-                    state.topicConflict = { ...state.topicConflict, takingOver: false, error: error?.message || String(error) };
-                }
-                throw error;
-            } finally {
-                queueRender({ conflict: true });
-            }
-        }));
-        actions.append(cancel, takeover);
-        dialog.append(heading, description);
-        if (conflict.error) dialog.append(node('p', 'agent-chat-topic-conflict-error', conflict.error));
-        dialog.append(actions);
-        topicConflictLayer.append(dialog);
-    }
-
     function renderHeader() {
         syncPermissionModeFromSelectedSession();
         header.replaceChildren();
@@ -2541,13 +2566,13 @@ function mountWorkbench(container) {
         const current = store.getState();
         const viewState = deriveWorkbenchViewState(current);
         const isCodexRuntime = current.runtime?.runtime === 'codex-app-server';
-        // `attachment` may continue a different Agent's background turn while
-        // the user reads a Rust snapshot here. Never let that hidden writer
-        // label masquerade as the selected Topic/Agent.
+        // Another Session Runtime may continue in the background while the
+        // user reads this SQLite projection. Header identity always comes from
+        // the selected Session, never an unrelated active Runtime.
         const selected = current.selectedTopic;
-        const selectedIsAttachment = selected?.topicId && selected.topicId === session?.topicId;
+        const selectedHasRuntime = selected?.topicId && selected.topicId === session?.topicId;
         const headingTitle = selected?.title
-            || (selectedIsAttachment ? session?.title : '')
+            || (selectedHasRuntime ? session?.title : '')
             || `与 ${selected?.agentId || state.selectedAgent || 'Nova'} 聊天中`;
         const left = node('h3', 'agent-chat-title', headingTitle);
         // R3 fixed lifecycle state chip — single source of truth for the
@@ -2560,7 +2585,7 @@ function mountWorkbench(container) {
             statusChip.setAttribute('role', 'button');
             statusChip.tabIndex = 0;
             statusChip.title = '点击重新连接';
-            const reconnect = () => run(recoverDaemon);
+            const reconnect = () => run(recoverRuntime);
             statusChip.addEventListener('click', reconnect);
             statusChip.addEventListener('keydown', (event) => {
                 if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -2698,7 +2723,7 @@ function mountWorkbench(container) {
     }
 
     function renderFeed() {
-        // Preserve a reader's position during control updates.  The daemon is
+        // Preserve a reader's position during control updates. Main is
         // the ordering authority; this renderer only reconciles keyed rows.
         const follow = isFollowingContainer(feed);
         const current = store.getState();
@@ -2714,13 +2739,13 @@ function mountWorkbench(container) {
             }
             state.timelineEmpty.textContent = text;
         };
-        if (!current.attachment?.sessionId && !current.selectedTopic?.topicId) {
+        if (!current.selectedSessionId && !current.selectedTopic?.topicId) {
             showEmpty('创建一个 Agent 会话，即可开始与 VCPToolBox 协作。');
             return;
         }
         const timeline = createAgentTimelineParts(current);
         if (state.turnStart) {
-            const selectedTopicId = current.selectedTopic?.topicId || current.attachment?.topicId || null;
+            const selectedTopicId = current.selectedSessionId || current.selectedTopic?.topicId || null;
             const alreadyHasAssistant = state.turnStart.turnId && current.messages.some((message) => (
                 message.role === 'assistant' && message.turnId === state.turnStart.turnId
             ));
@@ -2783,7 +2808,7 @@ function mountWorkbench(container) {
     }
 
     function selectedDockSessionId(current = store.getState()) {
-        return current.selectedTopic?.topicId || current.attachment?.sessionId || '';
+        return current.selectedSessionId || current.selectedTopic?.topicId || '';
     }
 
     function syncSessionDock(current = store.getState()) {
@@ -2884,8 +2909,8 @@ function mountWorkbench(container) {
     }
 
     // Surface the activity panel automatically on state transitions the user
-    // must notice: a daemon error, or the first pending approval arriving.
-    // Rust Host remains responsible for fail-closed expiry even while this
+    // must notice: a Runtime error, or the first pending approval arriving.
+    // Main remains responsible for fail-closed expiry even while this
     // panel is collapsed; the renderer ticker only refreshes visible labels.
     function maybeAutoOpenActivity() {
         const current = store.getState();
@@ -2920,7 +2945,7 @@ function mountWorkbench(container) {
             const message = String(rawError || 'Codex App Server 已中断').slice(0, 280);
             card.append(node('p', 'agent-chat-connection-message', message));
             const reconnect = button('重新连接', 'primary agent-chat-connection-reconnect');
-            reconnect.addEventListener('click', () => run(recoverDaemon));
+            reconnect.addEventListener('click', () => run(recoverRuntime));
             card.append(reconnect);
         } else if (viewState === 'reconnecting') {
             card.append(node('p', 'agent-chat-connection-message', '正在重新连接 Codex App Server，并从 Projection SQLite 对账会话展示…'));
@@ -2970,8 +2995,8 @@ function mountWorkbench(container) {
             : usage.source === 'estimated' ? '估算（ToolBox 未返回真实 usage）'
                 : '未知（未报告 usage）';
         const messages = current.messages || [];
-        const selected = current.selectedTopic || current.attachment || {};
-        const snapshot = selected.configSnapshot || current.attachment?.configSnapshot || {};
+        const selected = current.selectedTopic || {};
+        const snapshot = selected.configSnapshot || {};
         const prompt = snapshot.baseInstructions || snapshot.developerInstructions || '';
         const userCount = messages.filter((message) => message.role === 'user').length;
         const assistantCount = messages.filter((message) => message.role === 'assistant').length;
@@ -3000,7 +3025,7 @@ function mountWorkbench(container) {
             row.append(node('dt', '', label), node('dd', '', value || placeholder));
             identity.append(row);
         };
-        identityStat('会话', selected.title || selected.topicId || current.attachment?.sessionId);
+        identityStat('会话', selected.title || selected.topicId || current.selectedSessionId);
         identityStat('Provider', usage.provider);
         identityStat('模型', usage.model || selected.model || snapshot.model);
         identityStat('消息', `${messages.length}（用户 ${userCount} / 助手 ${assistantCount}）`);
@@ -3127,7 +3152,7 @@ function mountWorkbench(container) {
             summary.append(node('span', 'agent-chat-toolbox-ws-channel', `+${Number(change.additions) || 0} −${Number(change.deletions) || 0}`));
             const patch = node('pre', 'agent-chat-toolbox-ws-output', String(change.patch || '').slice(0, 131_072));
             patch.hidden = false;
-            const selectedSessionId = current.selectedTopic?.topicId || current.attachment?.sessionId || '';
+            const selectedSessionId = current.selectedSessionId || current.selectedTopic?.topicId || '';
             const workspaceRevision = state.workspaceBrowser.sessionId === selectedSessionId
                 ? state.workspaceBrowser.workspaceRevision : '';
             if (change.path && selectedSessionId && workspaceRevision) {
@@ -3150,10 +3175,10 @@ function mountWorkbench(container) {
     }
 
     function selectedWorkspaceIdentity(current = store.getState()) {
-        const selected = current.selectedTopic || current.attachment || {};
+        const selected = current.selectedTopic || {};
         return {
-            sessionId: selected.topicId || selected.sessionId || current.attachment?.sessionId || '',
-            workspaceRoot: selected.workspaceRef || selected.workspaceRoot || current.attachment?.workspaceRoot || '',
+            sessionId: current.selectedSessionId || selected.topicId || selected.sessionId || '',
+            workspaceRoot: selected.workspaceRef || selected.workspaceRoot || '',
         };
     }
 
@@ -3162,11 +3187,17 @@ function mountWorkbench(container) {
         const scope = `${identity.sessionId}:${identity.workspaceRoot}`;
         const browser = state.workspaceBrowser;
         if (browser.scope === scope) return identity;
+        for (const requestId of browser.inflightRequestIds.values()) cancelWorkspaceRequest(requestId, browser.sessionId);
+        cancelWorkspaceRequest(browser.previewRequestId, browser.sessionId);
+        cancelWorkspaceRequest(browser.searchRequestId, browser.sessionId);
         browser.scope = scope;
         browser.sessionId = identity.sessionId;
         browser.workspaceRevision = '';
         browser.model.reset(scope);
         browser.inflight.clear();
+        browser.inflightRequestIds.clear();
+        browser.previewRequestId = '';
+        browser.searchRequestId = '';
         browser.error = '';
         browser.preview = null;
         browser.previewLoading = false;
@@ -3174,6 +3205,16 @@ function mountWorkbench(container) {
         browser.searchResults = [];
         browser.selectedPath = '';
         return identity;
+    }
+
+    function nextWorkspaceRequestId(kind) {
+        workspaceRequestSequence += 1;
+        return `workspace:${kind}:${Date.now()}:${workspaceRequestSequence}`;
+    }
+
+    function cancelWorkspaceRequest(requestId, sessionId) {
+        if (!requestId) return;
+        try { void controller.workspaceCancel({ requestId, sessionId }).catch(() => null); } catch { /* optional preload in older shells */ }
     }
 
     async function loadWorkspaceDirectory(relativePath = '') {
@@ -3187,7 +3228,9 @@ function mountWorkbench(container) {
         browser.error = '';
         renderActivity();
         const scope = browser.scope;
+        const requestId = nextWorkspaceRequestId('directory');
         const request = controller.workspaceListDirectory({
+            requestId,
             sessionId: identity.sessionId,
             workspaceRevision: browser.workspaceRevision || undefined,
             relativePath: key,
@@ -3203,10 +3246,12 @@ function mountWorkbench(container) {
             if (browser.scope === scope) {
                 browser.model.setLoading(key, false);
                 browser.inflight.delete(key);
+                browser.inflightRequestIds.delete(key);
                 renderActivity();
             }
         });
         browser.inflight.set(key, request);
+        browser.inflightRequestIds.set(key, requestId);
         return request;
     }
 
@@ -3217,14 +3262,18 @@ function mountWorkbench(container) {
         browser.error = '';
         renderActivity();
         const scope = browser.scope;
+        cancelWorkspaceRequest(browser.previewRequestId, browser.sessionId);
+        const requestId = nextWorkspaceRequestId('preview');
+        browser.previewRequestId = requestId;
         try {
-            const preview = await controller.workspaceReadPreview(ref);
+            const preview = await controller.workspaceReadPreview({ ...ref, requestId });
             if (browser.scope === scope && browser.selectedPath === ref.relativePath) browser.preview = preview;
         } catch (error) {
             if (browser.scope === scope) browser.error = error?.message || String(error);
             throw error;
         } finally {
             if (browser.scope === scope) {
+                if (browser.previewRequestId === requestId) browser.previewRequestId = '';
                 browser.previewLoading = false;
                 renderActivity();
             }
@@ -3352,13 +3401,17 @@ function mountWorkbench(container) {
             clearTimeout(workspaceSearchTimer);
             workspaceSearchTimer = setTimeout(() => {
                 const query = browser.search.trim();
+                cancelWorkspaceRequest(browser.searchRequestId, browser.sessionId);
+                browser.searchRequestId = '';
                 if (!query) { browser.searchResults = []; browser.searchLoading = false; renderActivity(); return; }
                 browser.searchLoading = true; renderActivity();
                 const scope = browser.scope;
-                void controller.workspaceSearchFiles({ sessionId: browser.sessionId, workspaceRevision: browser.workspaceRevision || undefined, query, limit: 200 })
+                const requestId = nextWorkspaceRequestId('search');
+                browser.searchRequestId = requestId;
+                void controller.workspaceSearchFiles({ requestId, sessionId: browser.sessionId, workspaceRevision: browser.workspaceRevision || undefined, query, limit: 200 })
                     .then((result) => { if (browser.scope === scope && browser.search.trim() === query) { browser.workspaceRevision = result.workspaceRevision; browser.searchResults = result.entries || []; } })
                     .catch((error) => { if (browser.scope === scope) browser.error = error?.message || String(error); })
-                    .finally(() => { if (browser.scope === scope) { browser.searchLoading = false; renderActivity(); } });
+                    .finally(() => { if (browser.scope === scope && browser.searchRequestId === requestId) { browser.searchRequestId = ''; browser.searchLoading = false; renderActivity(); } });
             }, 180);
         });
         searchWrap.append(search);
@@ -3812,7 +3865,7 @@ function mountWorkbench(container) {
                 if (!state.workspaceBrowser.previewLoading) queueMicrotask(() => run(() => openWorkspacePreview(ref)));
             } else content.append(buildWorkspacePreview(state.workspaceBrowser));
         } else {
-            // This is a daemon-global observation feed, not a Topic feed;
+            // This is a process-global observation feed, not a Session feed;
             // backend approval cards may also be reached from Approvals.
             const ws = current.toolboxWs || [];
             const markers = current.markerObservations || [];
@@ -3900,14 +3953,11 @@ function mountWorkbench(container) {
             if (next.activity) renderActivity();
             if (next.composer) renderComposer();
             if (next.topicFlow) renderTopicFlow();
-            if (next.conflict) renderTopicConflict();
         });
     }
 
     function patchSidebarTopicSelection() {
-        const selectedTopicId = store.getState().selectedTopic?.topicId
-            || store.getState().attachment?.topicId
-            || null;
+        const selectedTopicId = store.getState().selectedSessionId || store.getState().selectedTopic?.topicId || null;
         for (const row of sidebar.querySelectorAll('.agent-chat-session-row[data-topic-id]')) {
             const active = Boolean(selectedTopicId && row.dataset.topicId === selectedTopicId);
             row.classList.toggle('active', active);
@@ -3921,7 +3971,10 @@ function mountWorkbench(container) {
         if (!pending) return;
         const turnId = pending.turnId;
         const eventTurnMatches = !event?.turnId || !turnId || event.turnId === turnId;
-        if (eventTurnMatches && event && (
+        const eventSessionMatches = !pending.topicId
+            || event?.topicId === pending.topicId
+            || event?.sessionId === pending.topicId;
+        if ((eventTurnMatches || eventSessionMatches) && event && (
             event.type === 'assistant.started'
             || event.type === 'assistant.delta'
             || event.type === 'reasoning.delta'
@@ -4096,10 +4149,11 @@ function mountWorkbench(container) {
         // approval — never while it is starting, reconnecting, or down.
         const previewReady = Boolean(current.selectedTopic?.mode === 'preview'
             && (viewState === 'idle' || viewState === 'running' || viewState === 'awaiting-approval'));
-        const composerReady = Boolean((current.attachment?.sessionId || previewReady)
+        const selectedArchived = Boolean(current.selectedTopic?.archivedAt);
+        const composerReady = Boolean(!selectedArchived && (current.selectedSessionId || previewReady)
             && (viewState === 'idle' || viewState === 'running' || viewState === 'awaiting-approval'));
         const hasActiveTurn = Boolean(current.activeTurnId);
-        // Once the daemon confirms the Turn via turn.started/projection, the
+        // Once Codex confirms the Turn via turn.started/projection, the
         // normal running composer is usable again (steer/follow-up/cancel).
         // The ephemeral thinking row can remain until the first assistant
         // item arrives.
@@ -4109,14 +4163,10 @@ function mountWorkbench(container) {
         input.value = state.prompt;
         input.disabled = !composerReady || isStartingTurn;
         sendButton.disabled = !composerReady || isStartingTurn;
-        // Attachment import is Host-owned; a preview has not acquired that
-        // Topic's attachment store yet, so it may send text but cannot add a
-        // file until it is safely switched on the first turn.
-        // Attachment selection remains available during the ACK-to-first-event
-        // gap; it only becomes unavailable once the daemon confirms a running
-        // Turn.  This keeps the draft tray usable without pretending the
-        // in-flight Turn can be edited or replayed.
-        attachButton.disabled = !composerReady || previewReady || hasActiveTurn || state.pendingAttachments.length >= 8;
+        // Attachment import is a Session-scoped Main operation and does not
+        // require resuming the Codex Thread. It remains available in a normal
+        // SQLite preview, but never for archived or actively running Sessions.
+        attachButton.disabled = !composerReady || hasActiveTurn || state.pendingAttachments.length >= 8;
         attachmentTray.replaceChildren();
         if (state.pendingAttachments.length) {
             attachmentTray.append(createAttachmentChips(state.pendingAttachments, (index) => {
@@ -4132,13 +4182,15 @@ function mountWorkbench(container) {
         sendButton.setAttribute('aria-label', interruptMode ? '取消当前任务' : '发送消息');
         const sendIcon = sendButton.querySelector('.vcp-ui-icon');
         if (sendIcon) sendIcon.textContent = interruptMode ? 'stop' : 'arrow_upward';
-        input.placeholder = isStartingTurn
+        input.placeholder = selectedArchived
+            ? '该会话已归档；恢复后才能继续发送。'
+            : isStartingTurn
             ? (state.turnStart?.phase === 'thinking' ? '正在思考…' : '正在启动 Agent…')
             : (viewState === 'reconnecting' || viewState === 'error')
-            ? '正在重新连接 Rust Agent…'
+            ? '正在重新连接 Codex App Server…'
             : previewReady
             ? '输入消息…（发送时启动此会话）'
-            : !current.attachment?.sessionId
+            : !current.selectedSessionId
             ? '请先创建 Agent 会话…'
             : viewState === 'starting'
             ? 'Agent Runtime 正在准备…'
@@ -4163,7 +4215,6 @@ function mountWorkbench(container) {
         renderActivity();
         renderComposer();
         renderTopicFlow();
-        renderTopicConflict();
     }
 
     input.addEventListener('input', () => { state.prompt = input.value; renderComposer(); });
@@ -4216,7 +4267,7 @@ function mountWorkbench(container) {
         }
         if (!prompt && !state.pendingAttachments.length) return;
         const attachments = state.pendingAttachments.map((item) => ({ ...item }));
-        const topicId = current.selectedTopic?.topicId || current.attachment?.topicId || null;
+        const topicId = current.selectedSessionId || current.selectedTopic?.topicId || null;
         state.turnStart = {
             topicId,
             prompt,
@@ -4227,7 +4278,7 @@ function mountWorkbench(container) {
             createdAt: Date.now(),
         };
         state.uxTimings.set(`turn-start:${topicId || 'new'}`, window.performance?.now?.() || Date.now());
-        // Paint before awaiting Topic attachment/thread startup.  This is the
+        // Paint before awaiting Session Runtime/thread startup. This is the
         // same immediate feedback users get in main chat, while remaining a
         // renderer-only placeholder until Codex returns a real Turn ID.
         renderFeed();
@@ -4243,8 +4294,8 @@ function mountWorkbench(container) {
                 state.turnStartedAt.set(accepted.turnId, state.turnStart?.startedAt || Date.now());
             }
             uxMark('turn-start-ack', accepted?.turnId, state.uxTimings.get(`turn-start:${topicId || 'new'}`) || null);
-            // Preserve the draft if attachment switching or turn acceptance
-            // fails.  The daemon is the only place that can confirm a turn.
+            // Preserve the draft if Runtime startup or Turn acceptance fails.
+            // Codex is the only place that can confirm a Turn.
             state.prompt = '';
             state.pendingAttachments = [];
             settleTurnStartIndicator();
@@ -4274,31 +4325,27 @@ function mountWorkbench(container) {
                 state.timelineRows.clear();
                 queueRender({ feed: true });
                 });
-            const runtime = store.getState().runtime;
-            if (runtime.state === 'stopped' || runtime.state === 'unknown') await controller.startRuntime();
-            // A renderer reload restores a durable Rust snapshot, not a
-            // writable attachment.  The first actual send performs the safe
-            // in-process attachment switch; this mirrors normal chat's
-            // instant view selection without reopening a runtime on click.
-            if (!store.getState().attachment?.sessionId && state.rememberedTopic?.topicId) {
+            // A renderer reload restores SQLite only. The first actual send
+            // starts or resumes the selected Codex Thread on demand.
+            if (!store.getState().selectedSessionId && state.rememberedTopic?.topicId) {
                 // Do not wait for model/catalog discovery before restoring
-                // the visible history.  Rust validates the durable Topic;
+                // the visible history. Main validates the durable Session;
                 // catalog data enriches the row in the background.
                 const topicId = state.rememberedTopic.topicId;
                 rememberTopic({ topicId });
                 try {
                     await controller.previewTopic(topicId);
                 } catch (error) {
-                    if (!isEmptyTopicCheckpointError(error)) throw error;
+                    if (!isMissingRememberedSessionError(error)) throw error;
                     // The pointer is not durable history. Forget only it;
-                    // Rust retains the empty Topic and will write its first
-                    // checkpoint normally after a future attachment/turn.
+                    // Main retains the empty Session and will write its first
+                    // projection normally after a future Turn.
                     forgetTopic(topicId);
                 }
             }
             await refreshControlPlane();
         })
-        .catch((error) => notify(`Agent Runtime 无法启动：${error?.message || error}`, 'error'));
+        .catch((error) => notify(`Agent 页面初始化失败：${error?.message || error}`, 'error'));
 
     return () => {
         state.disposed = true;
@@ -4313,7 +4360,6 @@ function mountWorkbench(container) {
         controller.dispose();
         root.remove();
         topicFlowLayer.remove();
-        topicConflictLayer.remove();
     };
 }
 
