@@ -158,9 +158,9 @@ try {
     const interruptedA = terminalWaiter(manager, sessionA.sessionId, sessionA.threadId, 'interrupted');
     const completedB = terminalWaiter(manager, sessionB.sessionId, sessionB.threadId, 'completed');
 
-    // A deliberately has enough requested output for the explicit interrupt to
-    // occur after both real turns have become active. B is short and carries
-    // a random result which can expose any cross-Thread projection leakage.
+    // Both Threads receive long-form work. A is interrupted only after both
+    // real Turns are active; B must still finish its independent long response
+    // and include a random sentinel that exposes any projection leakage.
     const [turnA, turnB] = await Promise.all([
         manager.startTurn({
             sessionId: sessionA.sessionId,
@@ -168,7 +168,12 @@ try {
         }),
         manager.startTurn({
             sessionId: sessionB.sessionId,
-            prompt: `Reply with this exact sentinel and no other text: ${sentinelB}`,
+            prompt: [
+                'Write a detailed Chinese reliability review in at least 12 numbered sections.',
+                'Cover Session identity, runtime generation, durable input recovery, SQLite reconciliation, Saga recovery, workspace cancellation, and renderer isolation.',
+                'Do not call tools. Finish the final section with this exact sentinel:',
+                sentinelB,
+            ].join('\n'),
         }),
     ]);
     assert.notEqual(turnA.turnId, turnB.turnId);
