@@ -15,6 +15,12 @@ try {
     fs.writeFileSync(path.join(tempRoot, 'src', 'zeta.js'), 'console.log("zeta");\n', 'utf8');
     fs.writeFileSync(path.join(tempRoot, 'src', 'alpha.js'), 'console.log("alpha");\n', 'utf8');
     fs.writeFileSync(path.join(tempRoot, 'binary.bin'), Buffer.from([0, 1, 2, 3]));
+    const largeDirectory = path.join(tempRoot, 'large');
+    fs.mkdirSync(largeDirectory);
+    for (let index = 0; index < 10_000; index += 1) {
+        const name = index === 9_999 ? 'needle-9999.txt' : `file-${String(index).padStart(5, '0')}.txt`;
+        fs.writeFileSync(path.join(largeDirectory, name), '');
+    }
     fs.writeFileSync(path.join(outsideRoot, 'secret.txt'), 'secret', 'utf8');
     try { fs.symlinkSync(outsideRoot, path.join(tempRoot, 'escape'), 'junction'); } catch {}
 
@@ -51,6 +57,19 @@ try {
 
     const search = await service.searchFiles({ sessionId: 'session-a', query: 'alpha' });
     assert.deepEqual(search.entries.map((entry) => entry.relativePath), ['src/alpha.js']);
+
+    const stressService = new AgentWorkspaceService({
+        getSession: (sessionId) => sessionId === 'session-a' ? { sessionId, workspaceRoot: tempRoot } : null,
+        limits: { maxDirectoryEntries: 1000, maxSearchResults: 20, maxSearchEntries: 20_000, operationTimeoutMs: 30_000 },
+    });
+    const stressStart = performance.now();
+    const largePage = await stressService.listDirectory({ sessionId: 'session-a', relativePath: 'large', limit: 1000 });
+    assert.equal(largePage.entries.length, 1000);
+    assert.equal(largePage.nextCursor, '1000');
+    assert.equal(largePage.truncated, true);
+    const largeSearch = await stressService.searchFiles({ sessionId: 'session-a', query: 'needle-9999', limit: 20 });
+    assert.deepEqual(largeSearch.entries.map((entry) => entry.relativePath), ['large/needle-9999.txt']);
+    assert.ok(performance.now() - stressStart < 30_000, '10k workspace fixture must remain within the bounded operation budget');
 
     await service.performPathAction({ sessionId: 'session-a', workspaceRevision: first.workspaceRevision, relativePath: 'README.md', action: 'copy-relative-path' });
     await service.performPathAction({ sessionId: 'session-a', workspaceRevision: first.workspaceRevision, relativePath: 'README.md', action: 'reveal-in-explorer' });
