@@ -101,6 +101,8 @@ function syncEphemeralTurnState(row, message) {
     const content = row.querySelector('.md-content');
     if (!content) return;
     const label = message.presentationPhase === 'starting' ? '正在启动 Agent…' : '思考中';
+    content.dataset.agentSourceText = label;
+    delete content.__agentMarkdownProjection;
     content.replaceChildren();
     const indicator = row.ownerDocument.createElement('span');
     indicator.className = 'thinking-indicator';
@@ -110,6 +112,11 @@ function syncEphemeralTurnState(row, message) {
     dots.textContent = '...';
     indicator.append(dots);
     content.append(indicator);
+}
+
+function disableDeferredMessageProcessing(row) {
+    delete row._vcp_process;
+    delete row._vcp_activateHeavy;
 }
 
 function syncStreamingReasoning(row, message, markedInstance) {
@@ -240,7 +247,8 @@ function createAgentMessagePresentation(options = {}) {
             syncStreamingReasoning(row, message, markedInstance);
             syncReasoningOnlyContent(row, message);
             row.dataset.agentPresentationKey = `${part.kind}:${part.id}`;
-            activateWhenConnected(targetWindow, row);
+            if (message.presentationRole) disableDeferredMessageProcessing(row);
+            else activateWhenConnected(targetWindow, row);
             return row;
         },
         patch(row, part) {
@@ -249,7 +257,7 @@ function createAgentMessagePresentation(options = {}) {
             const message = messageFromPart(part, resolveContext(part));
             if (message.isStreaming) {
                 const content = row.querySelector('.md-content');
-                if (content && content.dataset.agentSourceText !== message.content) {
+                if (!message.presentationRole && content && content.dataset.agentSourceText !== message.content) {
                     content.dataset.agentSourceText = message.content;
                     patchAgentStreamingMarkdown(content, message.content, markedInstance);
                 }
@@ -259,6 +267,7 @@ function createAgentMessagePresentation(options = {}) {
                 syncStreamingReasoning(row, message, markedInstance);
                 syncEphemeralTurnState(row, message);
                 syncReasoningOnlyContent(row, message);
+                if (message.presentationRole) disableDeferredMessageProcessing(row);
                 return row;
             }
             const replacement = renderMessage(message, true, false);
