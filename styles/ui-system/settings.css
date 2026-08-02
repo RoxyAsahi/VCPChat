@@ -604,4 +604,496 @@
         }
         }
     }
+
+    /* ============================================================
+       全局设置（Next UI）SettingsShell
+       next 模式下全局设置模态框用设计系统 token 重建为
+       「左栏（搜索 + VCPUI List 分类导航）| 内容区 | 底部固定保存栏」。
+       所有规则都限定在 html[data-ui-mode="next"] + .vcp-ui-scope 内，
+       classic 模式继续使用 styles/setting/* 的原始样式，一个字节不动。
+       ============================================================ */
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal {
+        /* 把 modal 子树里 legacy 变量映射到设计系统 token，使表单内联
+           `var(--secondary-text)` 等和 styles/setting 经典规则在 next 模式下
+           自动吃到 token 值，而不触碰 classic 全局变量。 */
+        --text-secondary: var(--vcp-ui-text-2);
+        --primary-text: var(--vcp-ui-text-0);
+        --highlight-text: var(--vcp-ui-text-0);
+        --input-bg: var(--vcp-ui-bg-input);
+        --border-color: var(--vcp-ui-border);
+        --user-bubble-bg: var(--vcp-ui-accent);
+        --accent-bg: var(--vcp-ui-fill-1);
+        --button-bg: var(--vcp-ui-accent);
+        --button-hover-bg: var(--vcp-ui-accent-hover);
+        --secondary-bg: var(--vcp-ui-bg-1);
+        --tertiary-bg: var(--vcp-ui-bg-2);
+        --primary-bg: var(--vcp-ui-bg-0);
+        --scrollbar-thumb: var(--vcp-ui-scrollbar-thumb);
+        --scrollbar-thumb-hover: var(--vcp-ui-scrollbar-thumb-hover);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .global-settings-modal-content {
+        background: var(--vcp-ui-bg-0);
+        color: var(--vcp-ui-text-0);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .global-settings-title {
+        color: var(--vcp-ui-text-0);
+        font-size: var(--vcp-ui-font-title);
+        font-weight: 600;
+        border-bottom: 1px solid var(--vcp-ui-border);
+    }
+
+    /* ---- shell grid: left rail | content | fixed save bar ---- */
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-settings-shell {
+        grid-template-columns: 228px minmax(0, 1fr);
+        grid-template-rows: 1fr auto;
+        gap: var(--vcp-ui-space-3);
+        padding: var(--vcp-ui-space-3);
+    }
+
+    /* ---- left rail ---- */
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .global-settings-nav {
+        grid-column: 1;
+        grid-row: 1;
+        display: flex;
+        flex-direction: column;
+        gap: var(--vcp-ui-space-2);
+        min-width: 0;
+        padding: var(--vcp-ui-space-2);
+        border: 1px solid var(--vcp-ui-border);
+        border-radius: var(--vcp-ui-radius-md);
+        background: var(--vcp-ui-bg-1);
+        overflow-y: auto;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-settings-search {
+        display: flex;
+        align-items: center;
+        gap: var(--vcp-ui-space-2);
+        min-height: var(--vcp-ui-control-md);
+        box-sizing: border-box;
+        padding: 0 var(--vcp-ui-space-2);
+        border: 1px solid var(--vcp-ui-control-border);
+        border-radius: var(--vcp-ui-radius-sm);
+        background: var(--vcp-ui-control-bg);
+        color: var(--vcp-ui-text-2);
+        flex-shrink: 0;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-settings-search .vcp-ui-icon {
+        width: var(--vcp-ui-icon-sm);
+        height: var(--vcp-ui-icon-sm);
+        color: var(--vcp-ui-text-2);
+        flex-shrink: 0;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-settings-search input[type="search"] {
+        min-width: 0;
+        flex: 1;
+        padding: 0;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        color: var(--vcp-ui-text-0);
+        font-family: "Noto Sans SC Variable", sans-serif;
+        font-size: var(--vcp-ui-font-helper);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-settings-search input[type="search"]::placeholder {
+        color: var(--vcp-ui-text-3);
+        opacity: 1;
+    }
+
+    /* ---- VCPUI List category navigation ---- */
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-nav-list {
+        display: flex;
+        flex-direction: column;
+        gap: var(--vcp-ui-space-1);
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-list {
+        display: flex;
+        flex-direction: column;
+        gap: var(--vcp-ui-space-1);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-list-item {
+        display: flex;
+        align-items: center;
+        gap: var(--vcp-ui-space-2);
+        width: 100%;
+        min-height: var(--vcp-ui-control-md);
+        box-sizing: border-box;
+        padding: 0 var(--vcp-ui-space-2);
+        border: 1px solid transparent;
+        border-radius: var(--vcp-ui-radius-sm);
+        color: var(--vcp-ui-text-1);
+        background: transparent;
+        text-align: left;
+        font-family: "Noto Sans SC Variable", sans-serif;
+        font-size: var(--vcp-ui-font-body);
+        cursor: pointer;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-list-item:hover {
+        color: var(--vcp-ui-text-0);
+        background: var(--vcp-ui-fill-1);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-list-item[data-state="selected"] {
+        color: var(--vcp-ui-text-0);
+        background: var(--vcp-ui-selection-bg);
+        border-color: var(--vcp-ui-border-strong);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-list-item .vcp-ui-icon {
+        width: var(--vcp-ui-icon-md);
+        height: var(--vcp-ui-icon-md);
+        color: var(--vcp-ui-text-2);
+        flex-shrink: 0;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-list-item[data-state="selected"] .vcp-ui-icon {
+        color: var(--vcp-ui-text-accent);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-list-copy {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-list-copy strong {
+        color: inherit;
+        font-size: var(--vcp-ui-font-helper);
+        font-weight: 500;
+    }
+
+    /* ---- content column ---- */
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .global-settings-content {
+        grid-column: 2;
+        grid-row: 1;
+        min-width: 0;
+        padding: var(--vcp-ui-space-3) var(--vcp-ui-space-4);
+        border: 1px solid var(--vcp-ui-border);
+        border-radius: var(--vcp-ui-radius-md);
+        background: var(--vcp-ui-bg-1);
+        overflow-y: auto;
+    }
+
+    /* ---- sections switch instantly in the shell (no legacy slide animation) ---- */
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-section {
+        display: none;
+        opacity: 1;
+        transform: none;
+        transition: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-section.active {
+        display: block;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-section-title {
+        margin: 0 0 var(--vcp-ui-space-4);
+        padding-bottom: var(--vcp-ui-space-2);
+        color: var(--vcp-ui-text-0);
+        font-size: var(--vcp-ui-font-body);
+        font-weight: 600;
+        border-bottom: 1px solid var(--vcp-ui-border);
+    }
+
+    /* ---- form typography ---- */
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-form-group label {
+        display: block;
+        margin-bottom: var(--vcp-ui-space-1);
+        color: var(--vcp-ui-text-1);
+        font-size: var(--vcp-ui-font-helper);
+        font-weight: 500;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-form-group small,
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .form-group small,
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .form-group-inline small {
+        color: var(--vcp-ui-text-3);
+        font-size: var(--vcp-ui-font-caption);
+        line-height: var(--vcp-ui-line-body);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-form-group {
+        margin-bottom: var(--vcp-ui-space-3);
+    }
+
+    /* ---- native controls (kept enhanced through VCPUI.enhance) ---- */
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm :is(input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="file"]), select, textarea) {
+        min-height: var(--vcp-ui-control-md);
+        box-sizing: border-box;
+        padding: 0 var(--vcp-ui-space-2);
+        border: 1px solid var(--vcp-ui-control-border);
+        border-radius: var(--vcp-ui-radius-sm);
+        color: var(--vcp-ui-text-0);
+        background: var(--vcp-ui-control-bg);
+        box-shadow: none;
+        font-family: "Noto Sans SC Variable", sans-serif;
+        font-size: var(--vcp-ui-font-helper);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm textarea {
+        padding: var(--vcp-ui-space-2);
+        min-height: 64px;
+        line-height: var(--vcp-ui-line-body);
+        resize: vertical;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm :is(input, select, textarea):focus-visible,
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm :is(input, select, textarea):focus {
+        border-color: var(--vcp-ui-control-focus);
+        box-shadow: 0 0 0 var(--vcp-ui-space-1) var(--vcp-ui-focus-ring);
+        outline: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm :is(input, select, textarea, button):focus-visible {
+        outline: 2px solid var(--vcp-ui-focus-ring);
+        outline-offset: 2px;
+    }
+
+    /* ---- switches ---- */
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm .switch .slider {
+        border: 1px solid var(--vcp-ui-control-border);
+        background: var(--vcp-ui-fill-1);
+        box-shadow: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm .switch input:checked + .slider {
+        border-color: var(--vcp-ui-accent);
+        background: var(--vcp-ui-accent);
+    }
+
+    /* ---- subsections (cards) ---- */
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-subsection {
+        margin-bottom: var(--vcp-ui-space-4);
+        padding: var(--vcp-ui-space-3) var(--vcp-ui-space-4);
+        border: 1px solid var(--vcp-ui-border);
+        border-radius: var(--vcp-ui-radius-md);
+        background: var(--vcp-ui-bg-1);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-subsection:last-child {
+        margin-bottom: 0;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-subsection-title {
+        color: var(--vcp-ui-text-0);
+        font-size: var(--vcp-ui-font-body);
+        font-weight: 600;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-subsection-description {
+        margin: 0;
+        color: var(--vcp-ui-text-3);
+        font-size: var(--vcp-ui-font-caption);
+        line-height: var(--vcp-ui-line-body);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-subsection-new {
+        box-shadow: inset var(--vcp-ui-space-1) 0 0 var(--vcp-ui-accent);
+    }
+
+    /* ---- dependent / nested panels ---- */
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-dependent-panel {
+        padding: var(--vcp-ui-space-3);
+        border: 1px dashed var(--vcp-ui-border);
+        border-radius: var(--vcp-ui-radius-md);
+        background: var(--vcp-ui-surface-soft);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-nested-panel {
+        margin-top: var(--vcp-ui-space-3);
+        padding-top: var(--vcp-ui-space-3);
+        border-top: 1px solid var(--vcp-ui-border);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .form-group-inline {
+        gap: var(--vcp-ui-space-3);
+    }
+
+    /* ---- chat presentation mode option cards ---- */
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .chat-presentation-mode-options {
+        gap: var(--vcp-ui-space-2);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .chat-presentation-mode-option {
+        gap: var(--vcp-ui-space-2);
+        margin: 0;
+        padding: var(--vcp-ui-space-3);
+        border: 1px solid var(--vcp-ui-border);
+        border-radius: var(--vcp-ui-radius-md);
+        background: var(--vcp-ui-bg-1);
+        cursor: pointer;
+        transition: border-color var(--vcp-ui-transition-fast), background-color var(--vcp-ui-transition-fast);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .chat-presentation-mode-option:hover {
+        border-color: var(--vcp-ui-border-strong);
+        background: var(--vcp-ui-fill-1);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .chat-presentation-mode-option:has(input:checked) {
+        border-color: var(--vcp-ui-border-strong);
+        background: var(--vcp-ui-selection-bg);
+        box-shadow: 0 0 0 1px var(--vcp-ui-selection-bg);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .chat-presentation-mode-option strong {
+        color: var(--vcp-ui-text-0);
+        font-size: var(--vcp-ui-font-body);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .chat-presentation-mode-option small {
+        color: var(--vcp-ui-text-3);
+        font-size: var(--vcp-ui-font-caption);
+    }
+
+    /* ---- scenario / font preview cards ---- */
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .scenario-preview-card {
+        min-height: 112px;
+        padding: var(--vcp-ui-space-3);
+        border: 1px solid var(--vcp-ui-border);
+        border-radius: var(--vcp-ui-radius-md);
+        background: var(--vcp-ui-bg-1);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .scenario-preview-title {
+        margin-bottom: var(--vcp-ui-space-2);
+        color: var(--vcp-ui-text-2);
+        font-size: var(--vcp-ui-font-caption);
+        font-weight: 700;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .scenario-preview-body {
+        color: var(--vcp-ui-text-0);
+        font-size: var(--vcp-ui-font-body);
+        line-height: var(--vcp-ui-line-body);
+    }
+
+    /* ---- composite inputs / inline buttons ---- */
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .model-input-container {
+        display: flex;
+        align-items: stretch;
+        gap: var(--vcp-ui-space-1);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .model-input-container > input {
+        min-width: 0;
+        flex: 1;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .network-path-input-group {
+        gap: var(--vcp-ui-space-2);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal :is(.small-button, .reset-colors-btn, #addNetworkPathBtn, #openTopicSummaryModelSelectBtn) {
+        min-height: var(--vcp-ui-control-md);
+        box-sizing: border-box;
+        padding: 0 var(--vcp-ui-space-3);
+        border: 1px solid var(--vcp-ui-control-border);
+        border-radius: var(--vcp-ui-radius-sm);
+        color: var(--vcp-ui-text-1);
+        background: var(--vcp-ui-fill-0);
+        font-family: "Noto Sans SC Variable", sans-serif;
+        font-size: var(--vcp-ui-font-helper);
+        font-weight: 500;
+        cursor: pointer;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal :is(.small-button, .reset-colors-btn, #addNetworkPathBtn, #openTopicSummaryModelSelectBtn):hover {
+        color: var(--vcp-ui-text-0);
+        background: var(--vcp-ui-fill-2);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .model-input-container > button {
+        width: var(--vcp-ui-control-md);
+        min-width: var(--vcp-ui-control-md);
+        padding: 0;
+    }
+
+    /* ---- avatar ---- */
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .agent-avatar-display {
+        border-radius: var(--vcp-ui-radius-md);
+    }
+
+    /* ---- fixed save bar ---- */
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .global-settings-footer {
+        grid-column: 2;
+        grid-row: 2;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: var(--vcp-ui-space-2);
+        padding: var(--vcp-ui-space-2) var(--vcp-ui-space-3);
+        border: 1px solid var(--vcp-ui-border);
+        border-radius: var(--vcp-ui-radius-md);
+        background: var(--vcp-ui-bg-1);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .global-settings-footer button[type="submit"] {
+        min-height: var(--vcp-ui-control-md);
+        padding: 0 var(--vcp-ui-space-4);
+        border: 1px solid var(--vcp-ui-accent);
+        border-radius: var(--vcp-ui-radius-sm);
+        color: var(--vcp-ui-on-accent);
+        background: var(--vcp-ui-accent);
+        font-family: "Noto Sans SC Variable", sans-serif;
+        font-size: var(--vcp-ui-font-helper);
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .global-settings-footer button[type="submit"]:hover {
+        border-color: var(--vcp-ui-accent-hover);
+        background: var(--vcp-ui-accent-hover);
+    }
+
+    /* ---- modal scrollbars ---- */
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal :is(.global-settings-content, .global-settings-nav)::-webkit-scrollbar {
+        width: var(--vcp-ui-scrollbar-size);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal :is(.global-settings-content, .global-settings-nav)::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal :is(.global-settings-content, .global-settings-nav)::-webkit-scrollbar-thumb {
+        background: var(--vcp-ui-scrollbar-thumb);
+        border-radius: var(--vcp-ui-radius-sm);
+    }
+
+    /* 700×500 审查窗口等窄视口仍保持双栏 shell（classic 的窄屏堆叠不适用）。 */
+    @media (max-width: 768px) {
+        html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-settings-shell {
+            display: grid;
+            grid-template-columns: 200px minmax(0, 1fr);
+            grid-template-rows: 1fr auto;
+            flex-direction: initial;
+            gap: var(--vcp-ui-space-2);
+            padding: var(--vcp-ui-space-2);
+        }
+
+        html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .global-settings-nav {
+            border: 1px solid var(--vcp-ui-border);
+            border-radius: var(--vcp-ui-radius-md);
+            border-right: 0;
+            max-height: none;
+        }
+
+        html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-nav-list {
+            flex-direction: column;
+            padding: 0;
+            gap: var(--vcp-ui-space-1);
+        }
+    }
 }
