@@ -50,6 +50,7 @@ function removeHandlers() {
     for (const channel of [
         IPC_CHANNELS.GET_PRESENTATION_MODE,
         IPC_CHANNELS.LIST_AGENT_PROFILES,
+        IPC_CHANNELS.SAVE_AGENT_PROFILE,
         IPC_CHANNELS.SAVE_AGENT_AVATAR,
         IPC_CHANNELS.GET_STATUS,
         IPC_CHANNELS.START,
@@ -168,6 +169,7 @@ function initialize(options) {
             : 'fork',
     })));
     ipcMain.handle(IPC_CHANNELS.LIST_AGENT_PROFILES, (event) => guard(event, () => manager.listAgentProfiles()));
+    ipcMain.handle(IPC_CHANNELS.SAVE_AGENT_PROFILE, (event, payload) => guard(event, () => manager.saveAgentProfile(payload || {})));
     ipcMain.handle(IPC_CHANNELS.SAVE_AGENT_AVATAR, (event, payload) => guard(event, () => manager.saveAgentAvatar(payload || {})));
 
     ipcMain.handle(IPC_CHANNELS.GET_STATUS, (event) => guard(event, () => manager.getStatus()));

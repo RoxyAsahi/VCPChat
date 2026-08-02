@@ -175,6 +175,7 @@
   10k 文件分页/搜索 fixture 已通过；真实交互性能录制、人工视觉和结构化 ToolBox 资源验收仍待。不得开启 Codex native
   Shell/file tools，不得从 ToolBox 文本猜路径或加入写/delete/apply/revert 能力。
 - [ ] **GUI-R6 视觉、性能与 live gate**：富消息截图、scroll anchor、10 Agent/50 Session、cold/warm latency、crash/restart、双 Thread 和真实 ToolBox。
+- [~] **R5-D Session Tool Dock**：浏览器式 keyed Tab strip、Session 隔离模型、顶层文件 Tab、最小 `sessionStorage` 恢复和 VChat 终端 launcher 已进入 working tree；`test:agent-session-dock` 与 Workbench JSDOM gate 已覆盖。Changes 仍只认 Codex `fileChange`，浏览器 launcher 因无可靠应用注册而隐藏。Electron 真实交互、多分辨率截图、20 文件 Tab 与 10k workspace 性能录制完成前不得标记 hermetic verified。详见 [session-tool-dock.md](session-tool-dock.md)。
 - [ ] assistant-ui 仅登记为未来 React island 的条件式评估；acp-ui 仅登记为未来 ACP profile 参考，本轮不得增加 React/Vue/Tauri/ACP 依赖。
 
 退出门槛：GUI 不按最新 Codex 源码猜能力，不显示无法执行的开关，不显示原始协议 JSON；所有交互按完整 identity 路由，并有 `test-matrix.md` 收据。

@@ -130,12 +130,34 @@ assert.ok(buildProfiles.some((profile) => profile.id === 'Nova'),
     'the isolated Build catalog must initialize its own Nova profile');
 assert.equal(buildProfiles.some((profile) => profile.id === 'MainOnly'), false,
     'normal-chat Agents must never appear in the Build Agent catalog');
+const savedBuildProfile = manager.saveAgentProfile({
+    name: 'Research Agent', systemPrompt: '{{Research}}', model: 'gpt-5.6-terra',
+});
+assert.equal(savedBuildProfile.profile.id, 'Research-Agent');
+assert.equal(manager.listAgentProfiles().some((profile) => profile.id === 'Research-Agent'), true,
+    'a saved Build Agent profile must immediately appear in the isolated catalog');
+assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'CodexAgents', 'Research-Agent', 'config.json'), 'utf8')).systemPrompt,
+    '{{Research}}', 'Build Agent creation must persist its prompt outside the normal-chat Agent directory');
+assert.throws(() => manager.saveAgentProfile({ name: 'Research Agent', systemPrompt: '{{Other}}' }), /already exists/);
 const savedBuildAvatar = manager.saveAgentAvatar({
     agentId: 'Nova',
     avatarData: { name: 'nova.png', type: 'image/png', buffer: new Uint8Array([1, 2, 3]) },
 });
 assert.match(savedBuildAvatar.avatarUrl, /CodexAgents\/Nova\/avatar\.png/i,
     'Build avatars must be stored under CodexAgents rather than normal-chat Agents');
+const workspaceTopic = await manager.createTopic({
+    agentId: 'Research-Agent', title: 'Workspace settings', workspaceRoot: root,
+});
+const nextWorkspace = path.join(root, 'next-workspace');
+fs.mkdirSync(nextWorkspace);
+const workspaceUpdate = await manager.updateWorkbenchSettings({
+    sessionId: workspaceTopic.sessionId, workspaceRoot: nextWorkspace,
+});
+assert.equal(workspaceUpdate.session.workspaceRoot, nextWorkspace,
+    'selected Session workspace changes must be durable rather than renderer-only');
+await assert.rejects(() => manager.updateWorkbenchSettings({
+    sessionId: workspaceTopic.sessionId, workspaceRoot: path.join(root, 'missing-workspace'),
+}), /does not exist/);
 
 // The Codex provider must target VChat's loopback compatibility adapter, not
 // ToolBox's optional /v1/responses implementation.  The upstream ToolBox key

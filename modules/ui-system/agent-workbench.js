@@ -9,6 +9,7 @@ import {
 } from './agent-workbench-timeline.js';
 import { createAgentBlockPresentation, createAgentMessagePresentation } from './agent-presentation/index.js';
 import { createWorkspacePathRef, createWorkspaceTreeModel, structuredWorkspacePaths } from './agent-workspace-model.js';
+import { createSessionDockModel } from './agent-session-dock.js';
 
 // Build Agent identities are independent from normal-chat Agents. Keep Nova
 // visible synchronously while the authoritative Build catalog loads.
@@ -646,6 +647,8 @@ function mountWorkbench(container) {
         queueOpen: false,
         budget: { maxRequestsPerTurn: null, maxTokensPerTurn: null },
         budgetSaving: false,
+        settingsSaveState: 'idle',
+        settingsSaveMessage: '',
         // This is deliberately local-client policy only.  It never changes
         // VCPToolBox's independent backend approval policy.
         permissionMode: 'ask',
@@ -658,7 +661,10 @@ function mountWorkbench(container) {
         modelDraftSessionId: null,
         recovering: false,
         activityOpen: false,
-        activityTab: 'activity',
+        activityPanelWidth: 420,
+        activityTab: 'notifications',
+        sessionDock: createSessionDockModel(window.sessionStorage),
+        dockMenuOpen: false,
         activitySearch: '',
         activitySourceFilter: 'all',
         activityKindFilter: 'all',
@@ -676,11 +682,11 @@ function mountWorkbench(container) {
             error: '',
             preview: null,
             previewLoading: false,
-            pinnedPaths: new Set(),
             search: '',
             searchResults: [],
             searchLoading: false,
             selectedPath: '',
+            splitPercent: 46,
         },
         model: 'gpt-5.6-terra',
         prompt: '',
@@ -785,28 +791,64 @@ function mountWorkbench(container) {
     feed.append(feedItems);
     const mainColumn = node('div', 'agent-chat-main-column');
     const activityPanel = node('aside', 'agent-chat-activity-panel agent-chat-activity-collapsed');
+    const activitySplitter = node('div', 'agent-chat-activity-splitter');
+    activitySplitter.tabIndex = 0;
+    activitySplitter.setAttribute('role', 'separator');
+    activitySplitter.setAttribute('aria-orientation', 'vertical');
+    activitySplitter.setAttribute('aria-label', '调整聊天区与会话信息面板宽度');
     activityPanel.id = 'agentChatActivityPanel';
     activityPanel.setAttribute('role', 'complementary');
     activityPanel.setAttribute('aria-label', 'Agent 活动面板');
     activityPanel.setAttribute('aria-hidden', 'true');
     activityPanel.setAttribute('inert', '');
     const activityInner = node('div', 'agent-chat-activity-inner');
-    const activityHeader = node('div', 'agent-chat-activity-header');
-    const activityTitle = node('strong', 'agent-chat-activity-title', '会话信息');
     const activityClose = iconButton('close', '关闭会话信息面板', 'agent-chat-activity-close');
     activityClose.addEventListener('click', () => setActivityOpen(false));
-    activityHeader.append(activityTitle, activityClose);
     const activityTabs = node('div', 'agent-chat-activity-tabs');
     activityTabs.setAttribute('role', 'tablist');
+    const activityTabTools = node('div', 'agent-chat-dock-tools');
+    const activityAdd = iconButton('add', '打开会话工具', 'agent-chat-dock-add');
+    activityAdd.setAttribute('aria-haspopup', 'menu');
+    activityAdd.setAttribute('aria-expanded', 'false');
+    activityTabTools.append(activityAdd, activityClose);
     const activityContent = node('div', 'agent-chat-activity-content');
     activityContent.setAttribute('role', 'presentation');
-    activityInner.append(activityHeader, activityTabs, activityContent);
+    const activityTabRow = node('div', 'agent-chat-dock-tab-row');
+    activityTabRow.append(activityTabs, activityTabTools);
+    activityInner.append(activityTabRow, activityContent);
     activityPanel.append(activityInner);
+    const applyActivityPanelWidth = (width) => {
+        state.activityPanelWidth = Math.round(Math.max(320, Math.min(760, width)) / 20) * 20;
+        [...activityPanel.classList].filter((name) => name.startsWith('agent-chat-activity-width-')).forEach((name) => activityPanel.classList.remove(name));
+        activityPanel.classList.add(`agent-chat-activity-width-${state.activityPanelWidth}`);
+        activitySplitter.setAttribute('aria-valuenow', String(state.activityPanelWidth));
+    };
+    applyActivityPanelWidth(state.activityPanelWidth);
+    activitySplitter.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        activitySplitter.setPointerCapture?.(event.pointerId);
+        const bounds = main.getBoundingClientRect();
+        const onMove = (moveEvent) => applyActivityPanelWidth(bounds.right - moveEvent.clientX);
+        const onUp = (upEvent) => {
+            activitySplitter.releasePointerCapture?.(upEvent.pointerId);
+            activitySplitter.removeEventListener('pointermove', onMove);
+            activitySplitter.removeEventListener('pointerup', onUp);
+            activitySplitter.removeEventListener('pointercancel', onUp);
+        };
+        activitySplitter.addEventListener('pointermove', onMove);
+        activitySplitter.addEventListener('pointerup', onUp);
+        activitySplitter.addEventListener('pointercancel', onUp);
+    });
+    activitySplitter.addEventListener('keydown', (event) => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        event.preventDefault();
+        applyActivityPanelWidth(state.activityPanelWidth + (event.key === 'ArrowLeft' ? 20 : -20));
+    });
     // A Topic collision is an in-context decision, not a blocking app-wide
     // modal. Keep the existing transcript and composer visible behind the
     // compact card so opening a busy Topic never feels like the page broke.
     mainColumn.append(header, topicConflictLayer, feed, jumpToLatest, composer);
-    main.append(mainColumn, activityPanel);
+    main.append(mainColumn, activitySplitter, activityPanel);
     root.append(sidebar, main);
     container.classList.add('agent-workbench-root', 'agent-chat-root');
     container.append(root, topicFlowLayer);
@@ -820,6 +862,8 @@ function mountWorkbench(container) {
             notify(error?.message || String(error), 'error');
         }
     };
+    let budgetAutosaveTimer = null;
+    let settingsSaveQueue = Promise.resolve();
     runStatusStop.addEventListener('click', () => run(async () => {
         runStatusStop.disabled = true;
         await controller.cancelTurn();
@@ -1231,6 +1275,17 @@ function mountWorkbench(container) {
         queueRender({ topicFlow: true });
     }
 
+    function openNewAgentFlow() {
+        state.topicFlow = {
+            kind: 'agent',
+            name: '',
+            systemPrompt: '',
+            model: state.model || '',
+            saving: false,
+        };
+        queueRender({ topicFlow: true });
+    }
+
     async function requestTopicTakeover(topic) {
         if (!topic?.id || state.takeoverTopicId) return;
         state.takeoverTopicId = topic.id;
@@ -1545,6 +1600,61 @@ function mountWorkbench(container) {
             }
         }
         return true;
+    }
+
+    function persistWorkbenchSettings(payload, selectedSession, successMessage) {
+        state.settingsSaveState = 'saving';
+        state.settingsSaveMessage = '正在自动保存…';
+        const request = { ...payload, ...(selectedSession ? { sessionId: selectedSession } : {}) };
+        const operation = settingsSaveQueue.then(async () => {
+            const saved = await controller.updateWorkbenchSettings(request);
+            if (Object.prototype.hasOwnProperty.call(payload, 'permissionMode')) {
+                state.permissionMode = saved?.settings?.permissionMode === 'always-approve' ? 'always-approve' : 'ask';
+            }
+            if (Object.prototype.hasOwnProperty.call(payload, 'model')) {
+                state.model = saved?.settings?.model || saved?.session?.configSnapshot?.model || payload.model;
+                state.modelDraft = null;
+            }
+            if (Object.prototype.hasOwnProperty.call(payload, 'budget')) {
+                state.budget = { ...state.budget, ...payload.budget };
+            }
+            if (selectedSession && saved?.session?.configSnapshot) {
+                const currentProjection = store.getState();
+                store.setState({
+                    selectedTopic: currentProjection.selectedTopic?.topicId === selectedSession
+                        ? {
+                            ...currentProjection.selectedTopic,
+                            configSnapshot: saved.session.configSnapshot,
+                            workspaceRef: saved.session.workspaceRoot || currentProjection.selectedTopic.workspaceRef,
+                            workspaceRoot: saved.session.workspaceRoot || currentProjection.selectedTopic.workspaceRoot,
+                        }
+                        : currentProjection.selectedTopic,
+                    attachment: currentProjection.attachment?.sessionId === selectedSession
+                        ? {
+                            ...currentProjection.attachment,
+                            configSnapshot: saved.session.configSnapshot,
+                            workspaceRoot: saved.session.workspaceRoot || currentProjection.attachment.workspaceRoot,
+                        }
+                        : currentProjection.attachment,
+                });
+            }
+            state.settingsSaveState = 'saved';
+            state.settingsSaveMessage = successMessage || '已自动保存';
+            return saved;
+        }).catch((error) => {
+            state.settingsSaveState = 'error';
+            state.settingsSaveMessage = error?.message || String(error);
+            notify(state.settingsSaveMessage, 'error');
+            return null;
+        }).finally(() => {
+            if (!state.disposed) {
+                renderSidebar();
+                renderHeader();
+            }
+        });
+        settingsSaveQueue = operation.catch(() => {});
+        renderSidebar();
+        return operation;
     }
 
     function renderSidebar() {
@@ -1883,11 +1993,8 @@ function mountWorkbench(container) {
         } else if (state.tab === 'agents') {
             const header = node('div', 'agents-header');
             const tools = node('div', 'next-ui-agent-tools');
-            const add = visualActionButton('add', '创建助手或群组', 'next-ui-create-item-trigger', '创建助手或群组');
-            // The assistant list is shared VCPChat configuration, not an
-            // Agent Topic list. Reuse the main-chat creation dialog instead
-            // of silently creating a Rust Topic from the wrong sidebar tab.
-            add.addEventListener('click', () => proxyMainButton('nextUiCreateItemBtn'));
+            const add = visualActionButton('add', '新建 Build Agent', 'next-ui-create-item-trigger', '新建 Build Agent');
+            add.addEventListener('click', openNewAgentFlow);
             const searchTrigger = visualActionButton('search', '搜索助手或群', 'next-ui-agent-search-trigger');
             searchTrigger.setAttribute('aria-expanded', String(Boolean(state.agentSearch)));
             tools.append(add, searchTrigger);
@@ -1966,6 +2073,9 @@ function mountWorkbench(container) {
             const selectedProjection = store.getState().selectedTopic;
             const selectedRuntime = store.getState().attachment;
             const selectedSnapshot = selectedRuntime?.configSnapshot || selectedProjection?.configSnapshot || null;
+            const selectedWorkspace = selectedProjection?.workspaceRef || selectedProjection?.workspaceRoot
+                || (selectedRuntime?.sessionId === selectedSession ? selectedRuntime.workspaceRoot : '')
+                || state.workspace;
             const selectedPermissionMode = selectedSnapshot?.permissionMode
                 || (selectedSnapshot?.approvalPolicy === 'never' ? 'always-approve'
                     : selectedSnapshot?.approvalPolicy ? 'ask' : state.permissionMode);
@@ -1984,8 +2094,8 @@ function mountWorkbench(container) {
                 || selectedAgentProfile()?.systemPrompt
                 || '';
             settingsPane.append(node('p', 'agent-chat-settings-placeholder', selectedSession
-                ? '保存审批策略会写入当前 Session，并从下一次 Turn 开始生效；正在运行的 Turn 不会被静默改写。真实凭据仍由 VCPChat 共享设置安全保存。'
-                : '未选择 Session 时，这些字段只会作为下一次新建 Session 的默认值；真实凭据仍由 VCPChat 共享设置安全保存。'));
+                ? '设置修改后自动保存到当前 Session，并从下一次 Turn 开始生效；正在运行的 Turn 不会被静默改写。'
+                : '设置修改后自动保存为新 Session 的默认值；真实凭据仍由 VCPChat 共享设置安全保存。'));
             const field = (label, value, onChange, options = null) => {
                 const wrap = node('label', 'agent-chat-setting-field');
                 wrap.append(node('span', 'agent-chat-setting-label', label));
@@ -2048,12 +2158,23 @@ function mountWorkbench(container) {
             avatarSection.append(avatarPreview, avatarCopy);
             settingsForm.append(avatarSection);
             settingsForm.append(
-                field('工作目录（可留空）', state.workspace, (value) => { state.workspace = value; }),
+                field('工作目录（可留空）', selectedWorkspace, (value) => {
+                    state.workspace = value;
+                    if (selectedSession) {
+                        void persistWorkbenchSettings({ workspaceRoot: value }, selectedSession, '已自动保存当前 Session 工作目录');
+                    } else {
+                        state.settingsSaveState = 'saved';
+                        state.settingsSaveMessage = '已作为新 Session 的页面默认目录';
+                        renderSidebar();
+                    }
+                }),
                 field('Agent', state.selectedAgent, (value) => { state.selectedAgent = value; }, state.agentCatalog.map((agent) => ({ value: agent.id || agent.name, label: agent.name || agent.id }))),
                 field('模型', selectedModel, (value) => {
                     state.model = value;
                     state.modelDraft = value;
                     state.modelDraftSessionId = selectedSession;
+                    void persistWorkbenchSettings({ model: String(value || '').trim() }, selectedSession,
+                        selectedSession ? `已自动保存模型：${value}` : `已自动保存默认模型：${value}`);
                 }, (() => {
                     const options = state.modelCatalog
                         .map((model) => typeof model === 'string'
@@ -2065,7 +2186,12 @@ function mountWorkbench(container) {
                     }
                     return options;
                 })()),
-                field('本地工具审批', selectedPermissionMode, (value) => { state.permissionMode = value === 'always-approve' ? 'always-approve' : 'ask'; }, [
+                field('本地工具审批', selectedPermissionMode, (value) => {
+                    const permissionMode = value === 'always-approve' ? 'always-approve' : 'ask';
+                    state.permissionMode = permissionMode;
+                    void persistWorkbenchSettings({ permissionMode }, selectedSession,
+                        permissionMode === 'always-approve' ? '已自动保存本地 YOLO' : '已自动保存逐次确认');
+                }, [
                     { value: 'ask', label: '每次确认（推荐）' },
                     { value: 'always-approve', label: 'YOLO：本地自动允许' },
                 ]),
@@ -2098,6 +2224,17 @@ function mountWorkbench(container) {
                 control.placeholder = '不限';
                 control.value = value == null ? '' : String(value);
                 control.disabled = state.budgetSaving;
+                control.addEventListener('input', () => {
+                    const next = {
+                        ...state.budget,
+                        [name]: String(control.value || '').trim() || null,
+                    };
+                    state.budget = next;
+                    clearTimeout(budgetAutosaveTimer);
+                    budgetAutosaveTimer = setTimeout(() => {
+                        void persistWorkbenchSettings({ budget: { ...state.budget } }, '', '已自动保存新 Session 安全预算');
+                    }, 500);
+                });
                 wrap.append(control);
                 return wrap;
             };
@@ -2105,89 +2242,13 @@ function mountWorkbench(container) {
                 budgetInput('模型请求数', 'maxRequestsPerTurn', state.budget.maxRequestsPerTurn),
                 budgetInput('累计 token', 'maxTokensPerTurn', state.budget.maxTokensPerTurn),
             );
-            const saveBudget = button(state.budgetSaving ? '正在保存预算…' : '保存安全预算', 'secondary agent-chat-settings-save');
-            saveBudget.disabled = state.budgetSaving;
-            saveBudget.addEventListener('click', () => run(async () => {
-                const requestInput = budgetFields.querySelector('[name="maxRequestsPerTurn"]');
-                const tokenInput = budgetFields.querySelector('[name="maxTokensPerTurn"]');
-                state.budgetSaving = true;
-                renderSidebar();
-                try {
-                    const saved = await controller.updateWorkbenchSettings({
-                        budget: {
-                            maxRequestsPerTurn: String(requestInput?.value || '').trim() || null,
-                            maxTokensPerTurn: String(tokenInput?.value || '').trim() || null,
-                        },
-                    });
-                    state.budget = saved?.settings?.budget || state.budget;
-                    notify('安全预算已保存，新建 Agent Session 后生效。', 'success');
-                } finally {
-                    state.budgetSaving = false;
-                    renderSidebar();
-                }
-            }));
-            budgetSection.append(budgetHint, budgetFields, saveBudget);
-            const savePermission = button(state.permissionSaving ? '正在保存…' : '保存本地审批策略', 'secondary agent-chat-settings-save');
-            savePermission.disabled = state.permissionSaving;
-            savePermission.addEventListener('click', () => run(async () => {
-                // Rendering the saving state rehydrates the durable snapshot.
-                // Capture the user's select value first so that old metadata
-                // cannot overwrite the requested update before IPC is sent.
-                const requestedPermissionMode = state.permissionMode;
-                state.permissionSaving = true;
-                renderSidebar();
-                try {
-                    const saved = await controller.updateWorkbenchSettings({
-                        permissionMode: requestedPermissionMode,
-                        ...(selectedSession ? { sessionId: selectedSession } : {}),
-                    });
-                    state.permissionMode = saved?.settings?.permissionMode === 'always-approve' ? 'always-approve' : 'ask';
-                    if (selectedSession && saved?.session?.configSnapshot) {
-                        const currentProjection = store.getState();
-                        store.setState({
-                            selectedTopic: currentProjection.selectedTopic?.topicId === selectedSession
-                                ? { ...currentProjection.selectedTopic, configSnapshot: saved.session.configSnapshot }
-                                : currentProjection.selectedTopic,
-                            attachment: currentProjection.attachment?.sessionId === selectedSession
-                                ? { ...currentProjection.attachment, configSnapshot: saved.session.configSnapshot }
-                                : currentProjection.attachment,
-                        });
-                    }
-                    notify(state.permissionMode === 'always-approve'
-                        ? `本地 YOLO 已保存${selectedSession ? '，当前 Session 的下一次 Turn 起生效' : ''}。ToolBox 后端审批仍独立。`
-                        : `已恢复逐次本地确认${selectedSession ? '，当前 Session 的下一次 Turn 起生效' : ''}。`, 'success');
-                } finally {
-                    state.permissionSaving = false;
-                    renderSidebar();
-                    renderHeader();
-                }
-            }));
-            const saveModel = button(state.modelSaving ? '正在保存模型…' : '保存当前模型', 'secondary agent-chat-settings-save');
-            saveModel.disabled = state.modelSaving || !selectedModel;
-            saveModel.addEventListener('click', () => run(async () => {
-                const requestedModel = String(state.modelDraft ?? selectedModel ?? '').trim();
-                if (!requestedModel) return;
-                state.modelSaving = true;
-                renderSidebar();
-                try {
-                    const saved = await controller.updateWorkbenchSettings({
-                        model: requestedModel,
-                        ...(selectedSession ? { sessionId: selectedSession } : {}),
-                    });
-                    state.model = saved?.settings?.model || saved?.session?.configSnapshot?.model || requestedModel;
-                    state.modelDraft = null;
-                    notify(selectedSession
-                        ? `模型已保存为 ${state.model}，从当前 Session 的下一次 Turn 起生效。`
-                        : `默认模型已保存为 ${state.model}，用于新建 Session。`, 'success');
-                } finally {
-                    state.modelSaving = false;
-                    renderSidebar();
-                    renderHeader();
-                }
-            }));
+            budgetSection.append(budgetHint, budgetFields);
+            const saveStatus = node('p', `agent-chat-settings-save-status is-${state.settingsSaveState}`,
+                state.settingsSaveMessage || '修改后自动保存');
+            saveStatus.setAttribute('role', 'status');
             const save = button('用此配置新建会话', 'primary agent-chat-settings-save');
             save.addEventListener('click', openNewTopicFlow);
-            settingsForm.append(permissionHint, savePermission, saveModel, budgetSection, save);
+            settingsForm.append(permissionHint, budgetSection, saveStatus, save);
             settingsPane.append(settingsForm);
             content.append(settingsPane);
         }
@@ -2335,6 +2396,90 @@ function mountWorkbench(container) {
                 actions,
             );
             dialog.append(title, description, context, form);
+        } else if (flow.kind === 'agent') {
+            const title = node('h2', 'agent-chat-topic-flow-title', '新建 Build Agent');
+            title.id = 'agentChatTopicFlowTitle';
+            const description = node('p', 'agent-chat-topic-flow-description',
+                '创建独立于主聊天助手目录的 Build Agent。提示词会冻结到以后新建的 Session。');
+            const form = node('form', 'agent-chat-topic-flow-form');
+            const field = (label, control) => {
+                const wrap = node('label', 'agent-chat-topic-flow-field');
+                wrap.append(node('span', 'agent-chat-topic-flow-label', label), control);
+                return wrap;
+            };
+            const nameInput = document.createElement('input');
+            nameInput.className = 'agent-chat-topic-flow-input';
+            nameInput.value = flow.name;
+            nameInput.maxLength = 80;
+            nameInput.required = true;
+            nameInput.setAttribute('aria-label', 'Build Agent 名称');
+            nameInput.addEventListener('input', () => { if (state.topicFlow?.kind === 'agent') state.topicFlow.name = nameInput.value; });
+            const promptInput = document.createElement('textarea');
+            promptInput.className = 'agent-chat-topic-flow-input agent-chat-setting-prompt';
+            promptInput.value = flow.systemPrompt;
+            promptInput.rows = 7;
+            promptInput.required = true;
+            promptInput.placeholder = '例如：{{Nova}}';
+            promptInput.setAttribute('aria-label', 'Build Agent 提示词');
+            promptInput.addEventListener('input', () => { if (state.topicFlow?.kind === 'agent') state.topicFlow.systemPrompt = promptInput.value; });
+            const modelInput = document.createElement('input');
+            modelInput.className = 'agent-chat-topic-flow-input';
+            modelInput.value = flow.model;
+            modelInput.setAttribute('aria-label', 'Build Agent 默认模型');
+            modelInput.setAttribute('list', 'agentChatAgentFlowModels');
+            modelInput.addEventListener('input', () => { if (state.topicFlow?.kind === 'agent') state.topicFlow.model = modelInput.value; });
+            const modelList = document.createElement('datalist');
+            modelList.id = 'agentChatAgentFlowModels';
+            for (const model of state.modelCatalog) {
+                const option = document.createElement('option');
+                option.value = model.id || model.name || String(model);
+                modelList.append(option);
+            }
+            const actions = node('div', 'agent-chat-topic-flow-actions');
+            const cancel = button('取消', 'secondary');
+            cancel.type = 'button';
+            cancel.disabled = flow.saving;
+            cancel.addEventListener('click', closeTopicFlow);
+            const submit = button(flow.saving ? '正在创建…' : '创建助手', 'primary');
+            submit.type = 'submit';
+            submit.disabled = flow.saving || !flow.name.trim() || !flow.systemPrompt.trim();
+            actions.append(cancel, submit);
+            form.append(
+                field('名称', nameInput),
+                field('提示词', promptInput),
+                field('默认模型（可留空）', modelInput),
+                modelList,
+                actions,
+            );
+            form.addEventListener('input', () => {
+                submit.disabled = Boolean(state.topicFlow?.saving) || !nameInput.value.trim() || !promptInput.value.trim();
+            });
+            form.addEventListener('submit', (event) => {
+                event.preventDefault();
+                run(async () => {
+                    if (!state.topicFlow || state.topicFlow.kind !== 'agent' || state.topicFlow.saving) return;
+                    const request = {
+                        name: state.topicFlow.name.trim(),
+                        systemPrompt: state.topicFlow.systemPrompt.trim(),
+                        model: state.topicFlow.model.trim() || undefined,
+                    };
+                    state.topicFlow = { ...state.topicFlow, saving: true };
+                    queueRender({ topicFlow: true });
+                    try {
+                        const result = await runtimeApi().agentRuntimeSaveAgentProfile?.(request);
+                        if (!result?.success || !result.profile?.id) throw new Error(result?.error || 'Build Agent 创建失败。');
+                        state.selectedAgent = result.profile.id;
+                        state.topicFlow = null;
+                        await refreshControlPlane();
+                        state.tab = 'agents';
+                        notify(`已创建 Build Agent「${result.profile.name || result.profile.id}」。`, 'success');
+                    } finally {
+                        if (state.topicFlow?.kind === 'agent') state.topicFlow = { ...state.topicFlow, saving: false };
+                        queueRender({ shell: true, header: true, composer: true, topicFlow: true });
+                    }
+                });
+            });
+            dialog.append(title, description, form);
         }
         topicFlowLayer.append(backdrop, dialog);
         // A microtask avoids stealing the click that opened the dialog while
@@ -2476,12 +2621,12 @@ function mountWorkbench(container) {
             ? `上下文 ${contextPct}% · ${Number(usage.usedTokens || 0).toLocaleString('zh-CN')} / ${Number(usage.contextWindow).toLocaleString('zh-CN')} tokens`
             : '查看上下文、用量与会话信息';
         usageButton.setAttribute('aria-label', usageButton.title);
-        const usageExpanded = state.activityOpen && state.activityTab === 'usage';
+        const usageExpanded = state.activityOpen && normalizeDockKind(state.activityTab) === 'context';
         usageButton.classList.toggle('is-active', usageExpanded);
         usageButton.setAttribute('aria-expanded', String(usageExpanded));
         usageButton.addEventListener('click', () => {
-            if (state.activityOpen && state.activityTab === 'usage') setActivityOpen(false);
-            else setActivityOpen(true, 'usage');
+            if (state.activityOpen && normalizeDockKind(state.activityTab) === 'context') setActivityOpen(false);
+            else setActivityOpen(true, 'context');
         });
         const compact = iconButton('compress', usage.compacting ? '正在安全压缩上下文' : '压缩当前 Agent 上下文', 'agent-chat-compact');
         if (compact) {
@@ -2633,11 +2778,84 @@ function mountWorkbench(container) {
         renderJumpToLatest();
     }
 
+    function normalizeDockKind(tab) {
+        return ({ usage: 'context', workspace: 'files', activity: 'notifications' })[tab] || tab || 'context';
+    }
+
+    function selectedDockSessionId(current = store.getState()) {
+        return current.selectedTopic?.topicId || current.attachment?.sessionId || '';
+    }
+
+    function syncSessionDock(current = store.getState()) {
+        state.sessionDock.setSession(selectedDockSessionId(current));
+        const snapshot = state.sessionDock.snapshot();
+        state.activityTab = snapshot.activeId;
+        return snapshot;
+    }
+
+    function openDockKind(kind) {
+        const normalized = normalizeDockKind(kind);
+        state.sessionDock.setSession(selectedDockSessionId());
+        state.sessionDock.openKind(normalized);
+        state.activityTab = state.sessionDock.snapshot().activeId;
+        state.dockMenuOpen = false;
+        setActivityOpen(true);
+    }
+
+    function buildDockMenu() {
+        const menu = node('div', 'agent-chat-dock-menu');
+        menu.setAttribute('role', 'menu');
+        const current = store.getState();
+        const changesAvailable = [...(current.tools instanceof Map ? current.tools.values() : [])]
+            .some((tool) => Array.isArray(tool?.payload?.changes?.files) && tool.payload.changes.files.length);
+        const commands = [
+            ['folder_open', '打开文件', () => openDockKind('files')],
+            ...(changesAvailable ? [['difference', '查看变更', () => openDockKind('changes')]] : []),
+            ['data_usage', '上下文', () => openDockKind('context')],
+            ['notifications', '通知', () => openDockKind('notifications')],
+            ['approval', '审批', () => openDockKind('approvals')],
+            ['terminal', '在 VChat 终端中打开', () => run(async () => {
+                const result = await runtimeApi().desktopLaunchVchatApp?.('open-powershell-executor-terminal');
+                if (result && result.success === false) throw new Error(result.error || '无法打开 VChat 终端。');
+                state.dockMenuOpen = false;
+                renderActivity();
+            })],
+        ];
+        for (const [symbol, label, action] of commands) {
+            const item = button('', 'agent-chat-dock-menu-item');
+            item.setAttribute('role', 'menuitem');
+            item.append(node('span', 'vcp-ui-icon', symbol), node('span', '', label));
+            item.addEventListener('click', action);
+            menu.append(item);
+        }
+        return menu;
+    }
+
+    activityAdd.addEventListener('click', (event) => {
+        event.stopPropagation();
+        state.dockMenuOpen = !state.dockMenuOpen;
+        activityAdd.setAttribute('aria-expanded', String(state.dockMenuOpen));
+        renderActivity();
+    });
+    const closeDockMenuOnOutsideClick = (event) => {
+        if (!state.dockMenuOpen || activityTabRow.contains(event.target)) return;
+        state.dockMenuOpen = false;
+        activityAdd.setAttribute('aria-expanded', 'false');
+        renderActivity();
+    };
+    document.addEventListener('click', closeDockMenuOnOutsideClick);
+
     function setActivityOpen(open, tab) {
-        if (open && tab) state.activityTab = tab;
+        if (open && tab) {
+            const normalized = normalizeDockKind(tab);
+            state.sessionDock.setSession(selectedDockSessionId());
+            state.sessionDock.openKind(normalized);
+            state.activityTab = state.sessionDock.snapshot().activeId;
+        }
         state.activityOpen = open;
-        if (open) clearActivityUnread(state.activityTab);
+        if (open) clearActivityUnread(normalizeDockKind(state.activityTab));
         if (open) {
+            activitySplitter.classList.add('is-active');
             activityPanel.classList.add('agent-chat-activity-open');
             activityPanel.classList.remove('agent-chat-activity-collapsed');
             activityPanel.removeAttribute('inert');
@@ -2652,10 +2870,13 @@ function mountWorkbench(container) {
     }
 
     function clearActivityUnread(tab) {
+        tab = normalizeDockKind(tab);
         const current = store.getState();
         const byTab = { ...(current.activityUnreadByTab || {}) };
-        if (!byTab[tab]) return;
+        const legacyTab = ({ context: 'usage', files: 'workspace', notifications: 'activity' })[tab];
+        if (!byTab[tab] && !(legacyTab && byTab[legacyTab])) return;
         byTab[tab] = 0;
+        if (legacyTab) byTab[legacyTab] = 0;
         store.setState({
             activityUnreadByTab: byTab,
             activityUnread: Object.values(byTab).reduce((sum, value) => sum + Number(value || 0), 0),
@@ -2871,6 +3092,8 @@ function mountWorkbench(container) {
             wrap.append(promptDetails);
         }
 
+        if (current.plan?.text) wrap.append(buildPlanInspector(current));
+
         return wrap;
     }
 
@@ -2913,7 +3136,7 @@ function mountWorkbench(container) {
                     const open = button('预览', 'secondary');
                     const reveal = button('定位', 'secondary');
                     const ref = createWorkspacePathRef({ sessionId: selectedSessionId, workspaceRevision, relativePath: change.path, source: 'diff' });
-                    open.addEventListener('click', () => run(() => openWorkspacePreview(ref)));
+                    open.addEventListener('click', () => run(() => openWorkspaceFileTab(ref)));
                     reveal.addEventListener('click', () => run(() => performWorkspaceAction(ref, 'reveal-in-explorer')));
                     actions.append(open, reveal);
                     item.append(summary, actions, patch);
@@ -2947,7 +3170,6 @@ function mountWorkbench(container) {
         browser.error = '';
         browser.preview = null;
         browser.previewLoading = false;
-        browser.pinnedPaths.clear();
         browser.search = '';
         browser.searchResults = [];
         browser.selectedPath = '';
@@ -3009,6 +3231,15 @@ function mountWorkbench(container) {
         }
     }
 
+    async function openWorkspaceFileTab(ref) {
+        state.sessionDock.setSession(selectedDockSessionId());
+        const snapshot = state.sessionDock.openFile(ref);
+        if (!snapshot) throw new Error('文件引用不属于当前会话或工作区版本已失效。');
+        state.activityTab = snapshot.activeId;
+        await openWorkspacePreview(ref);
+        setActivityOpen(true);
+    }
+
     async function performWorkspaceAction(ref, action) {
         const result = await controller.workspacePerformPathAction({ ...ref, action });
         if (action === 'preview' || action === 'open-in-vchat') state.workspaceBrowser.preview = result;
@@ -3025,22 +3256,26 @@ function mountWorkbench(container) {
             relativePath, source,
         });
         if (action === 'preview') {
-            setActivityOpen(true, 'workspace');
+            setActivityOpen(true, 'files');
             return openWorkspacePreview(ref);
         }
+        if (action === 'open-in-vchat') return openWorkspaceFileTab(ref);
         return performWorkspaceAction(ref, action);
     }
 
     function workspacePathActions(ref) {
         const actions = node('div', 'agent-workspace-path-actions');
-        for (const [action, label] of [
-            ['copy-relative-path', '复制路径'],
-            ['copy-absolute-path', '复制绝对路径'],
-            ['reveal-in-explorer', '资源管理器'],
-            ['open-with-system', '系统打开'],
+        for (const [action, label, iconName] of [
+            ['open-in-vchat', '在 VChat 中打开', 'tab'],
+            ['copy-relative-path', '复制相对路径', 'content_copy'],
+            ['copy-absolute-path', '复制绝对路径', 'file_copy'],
+            ['reveal-in-explorer', '在资源管理器中显示', 'folder_open'],
+            ['open-with-system', '使用系统程序打开', 'open_in_new'],
         ]) {
-            const control = button(label, 'secondary');
-            control.addEventListener('click', () => run(() => performWorkspaceAction(ref, action)));
+            const control = iconButton(iconName, label, 'agent-workspace-path-action');
+            control.addEventListener('click', () => run(() => action === 'open-in-vchat'
+                ? openWorkspaceFileTab(ref)
+                : performWorkspaceAction(ref, action)));
             actions.append(control);
         }
         return actions;
@@ -3048,38 +3283,40 @@ function mountWorkbench(container) {
 
     function buildWorkspacePreview(browser) {
         const host = node('section', 'agent-workspace-preview');
-        if (browser.pinnedPaths.size) {
-            const tabs = node('div', 'agent-workspace-preview-tabs');
-            for (const relativePath of browser.pinnedPaths) {
-                const tab = button(relativePath.split('/').pop(), 'agent-workspace-preview-tab');
-                tab.title = relativePath;
-                tab.classList.toggle('is-active', browser.selectedPath === relativePath);
-                tab.addEventListener('click', () => run(() => openWorkspacePreview(createWorkspacePathRef({
-                    sessionId: browser.sessionId, workspaceRevision: browser.workspaceRevision,
-                    relativePath, source: 'tree',
-                }))));
-                const close = node('span', 'vcp-ui-icon agent-workspace-preview-tab-close', 'close');
-                close.addEventListener('click', (event) => { event.stopPropagation(); browser.pinnedPaths.delete(relativePath); renderActivity(); });
-                tab.append(close);
-                tabs.append(tab);
-            }
-            host.append(tabs);
-        }
         if (browser.previewLoading) {
-            host.append(node('div', 'agent-chat-activity-empty', '正在读取预览…'));
+            const loading = node('div', 'agent-workspace-empty');
+            loading.append(node('span', 'vcp-ui-icon agent-workspace-empty-icon', 'hourglass_top'), node('span', '', '正在读取预览…'));
+            host.append(loading);
             return host;
         }
         const preview = browser.preview;
         if (!preview) {
-            host.append(node('div', 'agent-chat-activity-empty', '选择文件以预览。'));
+            const empty = node('div', 'agent-workspace-empty');
+            empty.append(
+                node('span', 'vcp-ui-icon agent-workspace-empty-icon', 'description'),
+                node('strong', '', '选择文件以预览'),
+                node('span', '', '双击文件可固定到顶部标签栏'),
+            );
+            host.append(empty);
             return host;
         }
-        host.append(node('div', 'agent-workspace-preview-header', preview.relativePath));
         const ref = createWorkspacePathRef({
             sessionId: preview.sessionId, workspaceRevision: preview.workspaceRevision,
             relativePath: preview.relativePath, kind: 'file', source: 'tree',
         });
-        host.append(workspacePathActions(ref));
+        const header = node('header', 'agent-workspace-preview-header');
+        const identity = node('div', 'agent-workspace-preview-identity');
+        identity.append(
+            node('span', 'vcp-ui-icon agent-workspace-preview-file-icon', 'draft'),
+            node('span', 'agent-workspace-preview-name', preview.displayName || preview.relativePath.split('/').pop()),
+            node('span', 'agent-workspace-preview-path', preview.relativePath),
+        );
+        const headerActions = workspacePathActions(ref);
+        const pin = iconButton('keep', '固定到顶部标签栏', 'agent-workspace-path-action');
+        pin.addEventListener('click', () => run(() => openWorkspaceFileTab(ref)));
+        headerActions.prepend(pin);
+        header.append(identity, headerActions);
+        host.append(header);
         if (preview.kind === 'text') {
             const pre = node('pre', 'agent-workspace-preview-text', preview.content || '');
             host.append(pre);
@@ -3088,6 +3325,7 @@ function mountWorkbench(container) {
             const image = document.createElement('img'); image.className = 'agent-workspace-preview-image'; image.src = preview.dataUrl; image.alt = preview.displayName;
             host.append(image);
         } else {
+            activitySplitter.classList.remove('is-active');
             host.append(node('div', 'agent-workspace-preview-note', `${preview.kind} · ${preview.mimeType || '未知类型'} · ${preview.byteLen} bytes`));
         }
         return host;
@@ -3101,6 +3339,11 @@ function mountWorkbench(container) {
             wrap.append(node('div', 'agent-chat-activity-empty', '当前会话没有可浏览的工作目录。'));
             return wrap;
         }
+        const toolbar = node('header', 'agent-workspace-toolbar');
+        const heading = node('div', 'agent-workspace-heading');
+        heading.append(node('span', 'vcp-ui-icon', 'account_tree'), node('strong', '', 'Workspace'));
+        const searchWrap = node('label', 'agent-workspace-search-wrap');
+        searchWrap.append(node('span', 'vcp-ui-icon', 'search'));
         const search = document.createElement('input');
         search.type = 'search'; search.className = 'agent-workspace-search'; search.placeholder = '搜索工作区文件'; search.value = browser.search;
         search.setAttribute('aria-label', '搜索工作区文件');
@@ -3118,23 +3361,35 @@ function mountWorkbench(container) {
                     .finally(() => { if (browser.scope === scope) { browser.searchLoading = false; renderActivity(); } });
             }, 180);
         });
-        wrap.append(search);
-        if (browser.error) wrap.append(node('div', 'agent-workspace-error', browser.error));
+        searchWrap.append(search);
+        toolbar.append(heading, searchWrap);
+        const explorerPane = node('section', 'agent-workspace-explorer-pane');
+        explorerPane.append(toolbar);
+        if (browser.error) explorerPane.append(node('div', 'agent-workspace-error', browser.error));
         const rows = browser.search.trim() ? browser.searchResults.map((entry) => ({ entry, depth: 0 })) : browser.model.flatten();
         const list = node('div', 'agent-workspace-tree');
         list.setAttribute('role', 'tree');
+        const treeMeta = node('div', 'agent-workspace-tree-meta');
+        treeMeta.append(
+            node('span', '', browser.search.trim() ? `搜索结果 · ${rows.length}` : `项目文件 · ${rows.length}`),
+            browser.model.isLoading('') ? node('span', 'agent-workspace-tree-loading', '读取中…') : node('span', '', ''),
+        );
+        list.append(treeMeta);
         if (browser.searchLoading) list.append(node('div', 'agent-chat-activity-empty', '正在搜索…'));
         for (const [index, { entry, depth }] of rows.slice(0, 5000).entries()) {
             const row = button('', 'agent-workspace-tree-row');
             row.dataset.workspacePath = entry.relativePath;
             row.dataset.workspaceIndex = String(index);
+            row.classList.toggle('is-selected', browser.selectedPath === entry.relativePath);
             row.setAttribute('role', 'treeitem');
             row.setAttribute('aria-level', String(depth + 1));
             const indentation = node('span', 'agent-workspace-tree-indent');
             for (let level = 0; level < Math.min(depth, 32); level += 1) indentation.append(node('span', 'agent-workspace-tree-indent-unit'));
             const directory = entry.kind === 'directory';
+            if (directory) row.append(node('span', 'vcp-ui-icon agent-workspace-tree-chevron', browser.model.isExpanded(entry.relativePath) ? 'expand_more' : 'chevron_right'));
+            else row.append(node('span', 'agent-workspace-tree-chevron', ''));
             row.append(indentation, node('span', 'vcp-ui-icon agent-workspace-tree-icon', directory
-                ? (browser.model.isExpanded(entry.relativePath) ? 'folder_open' : 'folder') : 'draft'));
+                ? (browser.model.isExpanded(entry.relativePath) ? 'folder_open' : 'folder') : 'description'));
             row.append(node('span', 'agent-workspace-tree-name', entry.name));
             if (directory) row.setAttribute('aria-expanded', String(browser.model.isExpanded(entry.relativePath)));
             row.addEventListener('click', () => run(async () => {
@@ -3148,7 +3403,12 @@ function mountWorkbench(container) {
                     await openWorkspacePreview(ref);
                 }
             }));
-            row.addEventListener('dblclick', () => { if (!directory) { browser.pinnedPaths.add(entry.relativePath); renderActivity(); } });
+            row.addEventListener('dblclick', () => {
+                if (!directory) run(() => openWorkspaceFileTab(createWorkspacePathRef({
+                    sessionId: browser.sessionId, workspaceRevision: browser.workspaceRevision,
+                    relativePath: entry.relativePath, source: 'tree',
+                })));
+            });
             list.append(row);
         }
         if (rows.length > 5000) list.append(node('div', 'agent-workspace-preview-note', '仅显示前 5000 项，请使用搜索缩小范围。'));
@@ -3160,7 +3420,45 @@ function mountWorkbench(container) {
             if (event.key === 'ArrowRight' && document.activeElement?.getAttribute('aria-expanded') === 'false') { event.preventDefault(); document.activeElement.click(); }
             if (event.key === 'ArrowLeft' && document.activeElement?.getAttribute('aria-expanded') === 'true') { event.preventDefault(); document.activeElement.click(); }
         });
-        wrap.append(list, buildWorkspacePreview(browser));
+        explorerPane.append(list);
+        const previewPane = buildWorkspacePreview(browser);
+        const divider = node('div', 'agent-workspace-splitter');
+        divider.tabIndex = 0;
+        divider.setAttribute('role', 'separator');
+        divider.setAttribute('aria-orientation', 'vertical');
+        divider.setAttribute('aria-label', '调整文件预览与目录树宽度');
+        const applySplit = (percent, allowCollapse = true) => {
+            browser.splitPercent = allowCollapse && percent >= 90
+                ? 100
+                : Math.round(Math.max(28, Math.min(88, percent)) / 2) * 2;
+            [...wrap.classList].filter((name) => name.startsWith('agent-workspace-split-')).forEach((name) => wrap.classList.remove(name));
+            wrap.classList.add(`agent-workspace-split-${browser.splitPercent}`);
+            divider.setAttribute('aria-valuenow', String(browser.splitPercent));
+        };
+        applySplit(browser.splitPercent);
+        divider.addEventListener('pointerdown', (event) => {
+            event.preventDefault();
+            divider.setPointerCapture?.(event.pointerId);
+            const bounds = wrap.getBoundingClientRect();
+            const onMove = (moveEvent) => applySplit(((moveEvent.clientX - bounds.left) / Math.max(1, bounds.width)) * 100);
+            const onUp = (upEvent) => {
+                divider.releasePointerCapture?.(upEvent.pointerId);
+                divider.removeEventListener('pointermove', onMove);
+                divider.removeEventListener('pointerup', onUp);
+                divider.removeEventListener('pointercancel', onUp);
+            };
+            divider.addEventListener('pointermove', onMove);
+            divider.addEventListener('pointerup', onUp);
+            divider.addEventListener('pointercancel', onUp);
+        });
+        divider.addEventListener('keydown', (event) => {
+            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+            event.preventDefault();
+            if (event.key === 'ArrowRight' && browser.splitPercent >= 88) applySplit(100);
+            else if (event.key === 'ArrowLeft' && browser.splitPercent === 100) applySplit(88, false);
+            else applySplit(browser.splitPercent + (event.key === 'ArrowRight' ? 2 : -2), false);
+        });
+        wrap.append(previewPane, divider, explorerPane);
         if (!browser.model.hasChildren('') && !browser.model.isLoading('')) queueMicrotask(() => run(() => loadWorkspaceDirectory('')));
         return wrap;
     }
@@ -3341,7 +3639,8 @@ function mountWorkbench(container) {
         if (state.disposed) return;
         const current = store.getState();
         const previousContent = state.activityTabPanels.get(state.activityTab);
-        const previousScrollTarget = state.activityTab === 'activity'
+        const previousActiveTab = state.sessionDock.snapshot().tabs.find((tab) => tab.id === state.activityTab);
+        const previousScrollTarget = previousActiveTab?.kind === 'notifications'
             ? previousContent?.querySelector('.agent-chat-activity-list')
             : previousContent;
         const scrollTop = previousScrollTarget?.scrollTop || 0;
@@ -3367,36 +3666,81 @@ function mountWorkbench(container) {
         ));
         const pendingApprovals = localApprovals.length + backendApprovals.length + passiveInteractions.length;
         const unread = current.activityUnreadByTab || {};
-        const tabDefs = [
-            { id: 'usage', label: '上下文' },
-            { id: 'workspace', label: '文件' },
-            { id: 'activity', label: '通知' },
-            { id: 'approvals', label: pendingApprovals ? `审批 (${pendingApprovals})` : '审批' },
-        ];
-        if (!tabDefs.some((tab) => tab.id === state.activityTab)) state.activityTab = 'usage';
+        syncSessionDock(current);
+        state.sessionDock.setBadge('notifications', Number(unread.notifications || unread.activity || 0));
+        state.sessionDock.setBadge('approvals', pendingApprovals);
+        const tabDefs = state.sessionDock.snapshot().tabs;
+        if (!tabDefs.some((tab) => tab.id === state.activityTab)) state.activityTab = 'context';
         const visibleTabIds = new Set(tabDefs.map(({ id }) => id));
         for (const [id, tab] of state.activityTabButtons) {
             if (visibleTabIds.has(id)) continue;
             tab.remove();
             state.activityTabButtons.delete(id);
         }
-        for (const { id, label } of tabDefs) {
-            const count = Number(unread[id] || 0);
+        for (const definition of tabDefs) {
+            const { id } = definition;
+            const count = Number(definition.badge || 0);
             let tab = state.activityTabButtons.get(id);
             if (!tab) {
                 tab = node('button', 'agent-chat-activity-tab');
                 tab.type = 'button';
                 tab.dataset.tab = id;
                 tab.setAttribute('role', 'tab');
-                tab.addEventListener('click', () => { state.activityTab = id; clearActivityUnread(id); renderActivity(); });
+                tab.addEventListener('click', (event) => {
+                    if (event.target.closest('.agent-chat-dock-tab-close')) return;
+                    state.sessionDock.activate(id);
+                    state.activityTab = id;
+                    clearActivityUnread(definition.kind);
+                    renderActivity();
+                });
+                tab.addEventListener('auxclick', (event) => {
+                    if (event.button !== 1 || !definition.closeable) return;
+                    event.preventDefault();
+                    state.sessionDock.close(id);
+                    state.activityTab = state.sessionDock.snapshot().activeId;
+                    renderActivity();
+                });
+                tab.addEventListener('keydown', (event) => {
+                    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+                    const tabs = state.sessionDock.snapshot().tabs;
+                    const index = tabs.findIndex((item) => item.id === id);
+                    const next = tabs[index + (event.key === 'ArrowRight' ? 1 : -1)];
+                    if (!next) return;
+                    event.preventDefault();
+                    state.sessionDock.activate(next.id);
+                    state.activityTab = next.id;
+                    renderActivity();
+                    queueMicrotask(() => state.activityTabButtons.get(next.id)?.focus());
+                });
                 state.activityTabButtons.set(id, tab);
             }
             activityTabs.append(tab);
-            tab.textContent = count ? `${label} · ${Math.min(99, count)}` : label;
+            tab.dataset.kind = definition.kind;
+            tab.classList.toggle('is-launcher', definition.kind === 'files');
+            tab.replaceChildren(node('span', 'vcp-ui-icon agent-chat-dock-tab-icon', definition.icon));
+            const label = node('span', 'agent-chat-dock-tab-label', definition.title);
+            tab.append(label);
+            tab.title = definition.kind === 'file' ? definition.relativePath : definition.title;
+            if (count) tab.append(node('span', 'agent-chat-dock-tab-badge', String(Math.min(99, count))));
+            if (definition.closeable) {
+                const close = node('span', 'agent-chat-dock-tab-close');
+                close.setAttribute('role', 'button');
+                close.setAttribute('aria-label', `关闭${definition.title}标签`);
+                close.append(node('span', 'vcp-ui-icon agent-chat-dock-tab-close-icon', 'close'));
+                close.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    state.sessionDock.close(id);
+                    state.activityTab = state.sessionDock.snapshot().activeId;
+                    renderActivity();
+                });
+                tab.append(close);
+            }
             tab.classList.toggle('is-active', state.activityTab === id);
             tab.setAttribute('aria-selected', String(state.activityTab === id));
         }
-        activityTabs.querySelectorAll('.agent-chat-activity-tab-group').forEach((group) => group.remove());
+        activityAdd.setAttribute('aria-expanded', String(state.dockMenuOpen));
+        activityTabRow.querySelector('.agent-chat-dock-menu')?.remove();
+        if (state.dockMenuOpen) activityTabRow.append(buildDockMenu());
 
         for (const [id, panel] of state.activityTabPanels) {
             if (visibleTabIds.has(id)) continue;
@@ -3418,10 +3762,12 @@ function mountWorkbench(container) {
         const content = state.activityTabPanels.get(state.activityTab);
         content.replaceChildren();
         const viewState = deriveWorkbenchViewState(current);
+        const activeDefinition = tabDefs.find((tab) => tab.id === state.activityTab) || tabDefs[0];
+        const activeKind = activeDefinition?.kind || 'context';
 
-        if (state.activityTab === 'connection') {
+        if (activeKind === 'connection') {
             content.append(buildConnectionPanel(current, viewState));
-        } else if (state.activityTab === 'approvals') {
+        } else if (activeKind === 'approvals') {
             if (!pendingApprovals) {
                 content.append(node('div', 'agent-chat-activity-empty', '没有待确认的审批。'));
             } else {
@@ -3444,14 +3790,27 @@ function mountWorkbench(container) {
                     content.append(existingInteractions.get(String(interaction.requestId)) || buildInteractionCard(interaction));
                 }
             }
-        } else if (state.activityTab === 'usage') {
+        } else if (activeKind === 'context') {
             content.append(buildUsagePanel(current));
-        } else if (state.activityTab === 'plan') {
+        } else if (activeKind === 'plan') {
             content.append(buildPlanInspector(current));
-        } else if (state.activityTab === 'changes') {
+        } else if (activeKind === 'changes') {
             content.append(buildChangeInspector(current));
-        } else if (state.activityTab === 'workspace') {
+        } else if (activeKind === 'files') {
             content.append(buildWorkspaceBrowser(current));
+        } else if (activeKind === 'file') {
+            syncWorkspaceScope(current);
+            const ref = createWorkspacePathRef({
+                sessionId: activeDefinition.sessionId,
+                workspaceRevision: activeDefinition.workspaceRevision,
+                relativePath: activeDefinition.relativePath,
+                source: 'tree',
+            });
+            if (state.workspaceBrowser.preview?.relativePath !== activeDefinition.relativePath
+                || state.workspaceBrowser.preview?.workspaceRevision !== activeDefinition.workspaceRevision) {
+                content.append(node('div', 'agent-chat-activity-empty', '正在读取文件…'));
+                if (!state.workspaceBrowser.previewLoading) queueMicrotask(() => run(() => openWorkspacePreview(ref)));
+            } else content.append(buildWorkspacePreview(state.workspaceBrowser));
         } else {
             // This is a daemon-global observation feed, not a Topic feed;
             // backend approval cards may also be reached from Approvals.
@@ -3508,7 +3867,7 @@ function mountWorkbench(container) {
         for (const details of content.querySelectorAll('details[data-activity-key]')) {
             if (openKeys.has(details.dataset.activityKey)) details.open = true;
         }
-        const scrollTarget = state.activityTab === 'activity'
+        const scrollTarget = activeKind === 'notifications'
             ? content.querySelector('.agent-chat-activity-list')
             : content;
         if (scrollTarget) scrollTarget.scrollTop = scrollTop;
@@ -3586,13 +3945,22 @@ function mountWorkbench(container) {
     }
 
     function renderForStoreEvent(event) {
+        if (event?.type === 'toolbox.ws' || event?.type === 'marker.observed') {
+            state.sessionDock.setSession(selectedDockSessionId());
+            state.sessionDock.ensureKind('notifications');
+        }
+        if (event?.type?.startsWith('approval.') || event?.type?.startsWith('interaction.')) {
+            state.sessionDock.setSession(selectedDockSessionId());
+            state.sessionDock.ensureKind('approvals');
+        }
         if (event?.type && state.activityOpen) {
-            const eventTab = event.type === 'toolbox.ws' || event.type === 'marker.observed' ? 'activity'
+            const eventTab = event.type === 'toolbox.ws' || event.type === 'marker.observed' ? 'notifications'
                 : event.type.startsWith('approval.') || event.type.startsWith('interaction.') ? 'approvals'
-                    : event.type === 'plan.updated' ? 'plan'
-                        : event.type === 'context.usage' || event.type.includes('compaction') ? 'usage'
+                    : event.type === 'plan.updated' ? 'context'
+                        : event.type === 'context.usage' || event.type.includes('compaction') ? 'context'
                             : null;
-            if (eventTab === state.activityTab) clearActivityUnread(eventTab);
+            const activeKind = state.sessionDock.snapshot().tabs.find((tab) => tab.id === state.activityTab)?.kind;
+            if (eventTab === activeKind) clearActivityUnread(eventTab);
         }
         if (event?.type === 'turn.started' && event.turnId) {
             const rawTimestamp = typeof event.timestamp === 'string' ? Date.parse(event.timestamp) : Number(event.timestamp);
@@ -3934,11 +4302,13 @@ function mountWorkbench(container) {
 
     return () => {
         state.disposed = true;
+        if (budgetAutosaveTimer !== null) clearTimeout(budgetAutosaveTimer);
         if (runStatusTimer !== null) clearInterval(runStatusTimer);
         closeTopicContextMenu();
         if (renderFrame !== null && typeof window.cancelAnimationFrame === 'function') window.cancelAnimationFrame(renderFrame);
         state.accountThemeObserver?.disconnect();
         fullPresentation.dispose();
+        document.removeEventListener('click', closeDockMenuOnOutsideClick);
         unsubscribe();
         controller.dispose();
         root.remove();

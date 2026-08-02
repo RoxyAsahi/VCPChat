@@ -256,3 +256,7 @@ R4.3 开始按 OpenCode 的信息架构收口右侧面板，但只 clean-room �
 - Electron 关闭重开/crash smoke、截图、scroll trace 和真实双 Thread 验收。
 
 后续能力与验收顺序统一按 GUI-R0–R6 执行。当前 Workbench 只能标记为 **hermetic integration in progress**，不能标记为 Cherry 等价体验或产品完成。
+
+## R5-D Session Tool Dock
+
+右侧固定 Context/Workspace/Activity/Approvals 按钮组已收敛为浏览器式 Session Tool Dock。`打开文件`保留为固定工具入口；上下文、通知、审批、权威 Changes 和文件预览均为可关闭内容 Tab，并可从既有入口恢复。固定文件预览提升为以 `sessionId + workspaceRevision + relativePath` 标识的顶层文件 Tab。详细边界、恢复白名单和验收见 [session-tool-dock.md](session-tool-dock.md)。Dock 只保存 Renderer 布局，不改变 Codex、Projection SQLite 或 ToolBox 权威关系。

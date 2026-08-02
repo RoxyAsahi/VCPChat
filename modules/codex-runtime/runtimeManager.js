@@ -271,6 +271,46 @@ class CodexRuntimeManager extends EventEmitter {
         return profiles;
     }
 
+    saveAgentProfile({ agentId, name, systemPrompt, model } = {}) {
+        this.ensureProjectionStore();
+        const displayName = String(name || '').trim();
+        const prompt = String(systemPrompt || '').trim();
+        const requestedId = String(agentId || '').trim();
+        const idValue = requestedId || displayName
+            .replace(/[\\/:*?"<>|]+/g, '-')
+            .replace(/\s+/g, '-')
+            .replace(/^-+|-+$/g, '');
+        if (!displayName || !idValue || idValue === '.' || idValue === '..' || /[\\/:*?"<>|]/.test(idValue)) {
+            throw new CodexAppServerError('INVALID_INPUT', 'Build Agent name is invalid');
+        }
+        if (!prompt) throw new CodexAppServerError('INVALID_INPUT', 'Build Agent system prompt is required');
+        const directIdentity = this._resolveCanonicalAgent(idValue, { failOnAmbiguous: true });
+        const namedIdentity = this._resolveCanonicalAgent(displayName, { failOnAmbiguous: true });
+        const existing = directIdentity?.profile ? directIdentity : namedIdentity?.profile ? namedIdentity : null;
+        if (existing && (!requestedId || !sameIdentity(existing.catalogId, requestedId))) {
+            throw new CodexAppServerError('ALREADY_EXISTS', `Build Agent ${displayName} already exists`);
+        }
+        const directory = path.join(this.agentsDir, idValue);
+        fs.mkdirSync(directory, { recursive: true });
+        const profile = {
+            name: displayName,
+            systemPrompt: prompt,
+            ...(String(model || '').trim() ? { model: String(model).trim() } : {}),
+        };
+        const configPath = path.join(directory, 'config.json');
+        const temporaryPath = `${configPath}.${process.pid}.${Date.now()}.tmp`;
+        fs.writeFileSync(temporaryPath, `${JSON.stringify(profile, null, 2)}\n`, 'utf8');
+        fs.renameSync(temporaryPath, configPath);
+        return {
+            success: true,
+            profile: {
+                id: idValue,
+                ...profile,
+                avatarUrl: this._agentAvatarUrl(idValue),
+            },
+        };
+    }
+
     saveAgentAvatar({ agentId, avatarData } = {}) {
         const idValue = String(agentId || '').trim();
         if (!idValue || /[\\/:*?"<>|]/.test(idValue)) throw new CodexAppServerError('INVALID_INPUT', 'Invalid Build Agent identity');
@@ -685,6 +725,16 @@ class CodexRuntimeManager extends EventEmitter {
             : null;
         const requestedModel = typeof settings.model === 'string' && settings.model.trim()
             ? settings.model.trim() : null;
+        const hasWorkspaceUpdate = Object.prototype.hasOwnProperty.call(settings, 'workspaceRoot');
+        let requestedWorkspaceRoot = null;
+        if (hasWorkspaceUpdate) {
+            requestedWorkspaceRoot = path.resolve(String(settings.workspaceRoot || '').trim() || this.projectRoot);
+            let workspaceStat = null;
+            try { workspaceStat = fs.statSync(requestedWorkspaceRoot); } catch { /* validated below */ }
+            if (!workspaceStat?.isDirectory()) {
+                throw new CodexAppServerError('INVALID_WORKSPACE', 'Workspace directory does not exist');
+            }
+        }
         const sessionId = String(settings.sessionId || settings.topicId || '').trim();
         let session = null;
         if (sessionId) {
@@ -703,6 +753,7 @@ class CodexRuntimeManager extends EventEmitter {
             );
             session = this.repository.saveSession({
                 ...current,
+                ...(hasWorkspaceUpdate ? { workspaceRoot: requestedWorkspaceRoot } : {}),
                 configSnapshot: {
                     ...(current.configSnapshot || {}),
                     permissionMode: permissionMode || currentPermissionMode,

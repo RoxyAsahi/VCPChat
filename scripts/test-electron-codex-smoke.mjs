@@ -171,6 +171,27 @@ try {
         hasFeed: true,
         hasComposer: true,
     });
+    await page.click('#nextUiInternalAppHost .agent-chat-composer-new');
+    await page.waitForSelector('#nextUiInternalAppHost .agent-chat-topic-flow-dialog', { visible: true, timeout: timeoutMs });
+    await page.waitForFunction(() => {
+        const dialog = document.querySelector('#nextUiInternalAppHost .agent-chat-topic-flow-dialog');
+        const sources = dialog?.querySelectorAll('select.vcp-ui-select-source').length || 0;
+        const proxies = dialog?.querySelectorAll('wa-select.vcp-ui-select-proxy').length || 0;
+        return sources >= 2 && proxies === sources;
+    }, { timeout: timeoutMs });
+    const agentSelectState = await page.evaluate(() => {
+        const dialog = document.querySelector('#nextUiInternalAppHost .agent-chat-topic-flow-dialog');
+        return {
+            sources: dialog?.querySelectorAll('select.vcp-ui-select-source').length || 0,
+            proxies: dialog?.querySelectorAll('wa-select.vcp-ui-select-proxy').length || 0,
+            visibleSources: [...(dialog?.querySelectorAll('select.vcp-ui-select-source') || [])]
+                .filter(select => !select.hidden && getComputedStyle(select).display !== 'none').length,
+        };
+    });
+    assert.equal(agentSelectState.proxies, agentSelectState.sources, `Agent Select proxy mismatch: ${JSON.stringify(agentSelectState)}`);
+    assert.equal(agentSelectState.visibleSources, 0, `Agent native Select must remain hidden: ${JSON.stringify(agentSelectState)}`);
+    await page.screenshot({ path: path.join(root, 'screenshots', 'agent-new-topic-selects.png') });
+    await page.keyboard.press('Escape');
     const knownThemeAssets = [
         'styles/assets/wallpaper/themes_snow_realm_light.jpg',
         'styles/assets/wallpaper/vcp_editorial_ink_light.jpg',
@@ -190,7 +211,7 @@ try {
     const inspector = await page.evaluate(() => {
         const host = document.querySelector('#nextUiInternalAppHost');
         const panel = host?.querySelector('.agent-chat-activity-panel');
-        const contextPanel = host?.querySelector('[data-activity-panel="usage"]');
+        const contextPanel = host?.querySelector('[data-activity-panel="context"]');
         const bounds = panel?.getBoundingClientRect();
         return {
             tabGroups: host?.querySelectorAll('.agent-chat-activity-tab-group').length || 0,
@@ -203,16 +224,16 @@ try {
         };
     });
     assert.equal(inspector.tabGroups, 0, 'Agent information panel tabs must share one compact row');
-    assert.deepEqual(inspector.visibleTabs, ['usage', 'workspace', 'activity', 'approvals'],
-        'the product-facing information panel must expose Context, read-only workspace, notifications, and approvals');
+    assert.deepEqual(inspector.visibleTabs, ['files', 'context'],
+        'the product-facing Dock must initially expose only the file launcher and Context tab');
     assert.equal(inspector.contextVisible, true, 'the header context indicator must open the Context inspector');
     assert.equal(inspector.hasProgressRing, true, 'the header must render a stable context progress ring');
     assert.ok(inspector.panelWidth > 0 && inspector.panelWidth <= inspector.viewportWidth,
         `Agent information panel must fit the viewport: ${JSON.stringify(inspector)}`);
     const notificationLayout = await page.evaluate(() => {
         const host = document.querySelector('#nextUiInternalAppHost');
-        host?.querySelector('.agent-chat-activity-tab[data-tab="activity"]')?.click();
-        const panel = host?.querySelector('[data-activity-panel="activity"]');
+        host?.querySelector('.agent-chat-activity-tab[data-tab="notifications"]')?.click();
+        const panel = host?.querySelector('[data-activity-panel="notifications"]');
         const list = panel?.querySelector('.agent-chat-activity-list');
         if (!panel || !list) return null;
         const fixtures = Array.from({ length: 14 }, (_, index) => {
@@ -242,7 +263,7 @@ try {
             bottomGap: Math.abs(activityBounds.bottom - listBounds.bottom),
         };
         fixtures.forEach((card) => card.remove());
-        host?.querySelector('.agent-chat-activity-tab[data-tab="usage"]')?.click();
+        host?.querySelector('.agent-chat-activity-tab[data-tab="context"]')?.click();
         return result;
     });
     assert.ok(notificationLayout

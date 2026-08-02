@@ -27,6 +27,7 @@ const LIMITS = Object.freeze({
 const IPC_CHANNELS = Object.freeze({
     GET_PRESENTATION_MODE: 'agent-runtime:get-presentation-mode',
     LIST_AGENT_PROFILES: 'agent-runtime:list-agent-profiles',
+    SAVE_AGENT_PROFILE: 'agent-runtime:save-agent-profile',
     SAVE_AGENT_AVATAR: 'agent-runtime:save-agent-avatar',
     GET_STATUS: 'agent-runtime:get-status',
     START: 'agent-runtime:start',

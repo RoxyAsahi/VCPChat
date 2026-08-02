@@ -121,6 +121,7 @@ function createCatalog(ops) {
         interruptVcpRequest: query((data) => ops.invoke('interrupt-vcp-request', data)),
         agentRuntimeGetPresentationMode: query(() => ops.invoke('agent-runtime:get-presentation-mode')),
         agentRuntimeListAgentProfiles: query(() => ops.invoke('agent-runtime:list-agent-profiles')),
+        agentRuntimeSaveAgentProfile: query((data) => ops.invoke('agent-runtime:save-agent-profile', data)),
         agentRuntimeSaveAgentAvatar: query((data) => ops.invoke('agent-runtime:save-agent-avatar', data)),
         agentRuntimeGetStatus: query(() => ops.invoke('agent-runtime:get-status')),
         agentRuntimeStart: query(() => ops.invoke('agent-runtime:start')),

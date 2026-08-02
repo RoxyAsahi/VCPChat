@@ -47,11 +47,16 @@ const openedExternalLinks = [];
 const workspaceActions = [];
 const savedWorkbenchSettings = [];
 const savedAvatars = [];
+const savedAgentProfiles = [];
 const runtimeTransitions = [];
 const takeoverRequests = [];
 let mainCreateProxyCalls = 0;
 let sharedCreateActionCalls = 0;
 let releaseAgentCatalog;
+const buildAgentProfiles = [
+    { id: 'Nova', name: 'Nova', avatarUrl: 'assets/nova-avatar.png', model: 'gpt-5.6-terra', systemPrompt: '{{Nova}}' },
+    { id: '123', name: '123', model: 'gpt-5.6-terra' },
+];
 const agentCatalogGate = new Promise((resolve) => { releaseAgentCatalog = resolve; });
 let topicCatalog = [{
     id: 'topic-restored', title: '可恢复的 Rust Topic', agentId: 'Nova',
@@ -78,10 +83,13 @@ window.chatAPI = {
     sendOpenExternalLink: (url) => { openedExternalLinks.push(url); },
     agentRuntimeListAgentProfiles: async () => {
         await agentCatalogGate;
-        return [
-            { id: 'Nova', name: 'Nova', avatarUrl: 'assets/nova-avatar.png', model: 'gpt-5.6-terra', systemPrompt: '{{Nova}}' },
-            { id: '123', name: '123', model: 'gpt-5.6-terra' },
-        ];
+        return buildAgentProfiles;
+    },
+    agentRuntimeSaveAgentProfile: async (profile) => {
+        const saved = { id: profile.name.replace(/\s+/g, '-'), ...profile };
+        savedAgentProfiles.push(saved);
+        buildAgentProfiles.push(saved);
+        return { success: true, profile: saved };
     },
     agentRuntimeSaveAgentAvatar: async ({ agentId, avatarData }) => {
         savedAvatars.push({ agentId, avatarData });
@@ -248,7 +256,9 @@ window.chatAPI = {
             restartRequired: true,
             session: payload.sessionId ? {
                 sessionId: payload.sessionId,
+                workspaceRoot: payload.workspaceRoot || root,
                 configSnapshot: {
+                    baseInstructions: '冻结的 Nova 指令',
                     approvalPolicy: payload.permissionMode === 'always-approve' ? 'never' : 'on-request',
                     ...(payload.model ? { model: payload.model } : {}),
                 },
@@ -372,11 +382,23 @@ assert.match(restoredToolCard.querySelector('.agent-chat-tool-detail')?.textCont
 assert.doesNotMatch(host.querySelector('.agent-chat-messages')?.textContent || '', /恢复计划/,
     'a durable Plan Item must not duplicate itself as a normal assistant bubble');
 host.querySelector('.agent-chat-header-activity')?.click();
+const activityPanelSplitter = host.querySelector('.agent-chat-activity-splitter[role="separator"]');
+const activityPanelElement = host.querySelector('.agent-chat-activity-panel');
+assert.ok(activityPanelSplitter?.classList.contains('is-active'),
+    'opening Session information must expose the chat/panel resize handle');
+assert.ok(activityPanelElement?.classList.contains('agent-chat-activity-width-420'),
+    'Session information must retain the original compact default width');
+activityPanelSplitter.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+assert.ok(activityPanelElement.classList.contains('agent-chat-activity-width-440'),
+    'moving the outer splitter left must widen Session information');
+activityPanelSplitter.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+assert.ok(activityPanelElement.classList.contains('agent-chat-activity-width-420'),
+    'moving the outer splitter right must restore the compact panel width');
 assert.equal(host.querySelector('.agent-chat-activity-tab[data-tab="plan"]'), null,
     'the toolbox-only product must hide Plan until collaboration mode is wired to turn/start');
 assert.equal(host.querySelector('.agent-chat-inspector-plan'), null,
-    'a durable Plan projection must remain internal while Plan mode is unavailable');
-host.querySelector('.agent-chat-activity-tab[data-tab="usage"]')?.click();
+    'the Context tab must not invent a Plan when the projection has no authoritative Plan item');
+host.querySelector('.agent-chat-activity-tab[data-tab="context"]')?.click();
 assert.match(host.querySelector('.agent-chat-activity-usage')?.textContent || '', /42/,
     'a cold SQLite projection must restore durable usage metrics');
 assert.match(host.querySelector('.agent-chat-activity-usage')?.textContent || '', /已恢复压缩摘要/,
@@ -429,15 +451,30 @@ assistantTab.click();
 const sharedCreate = host.querySelector('.next-ui-create-item-trigger');
 const agentSearchTrigger = host.querySelector('.next-ui-agent-search-trigger');
 assert.ok(sharedCreate && agentSearchTrigger, 'Agent assistant sidebar must reuse the main shared create-and-search controls');
-assert.match(sharedCreate.textContent, /创建助手或群组/);
+assert.match(sharedCreate.textContent, /新建 Build Agent/);
 sharedCreate.click();
-assert.equal(sharedCreateActionCalls, 1,
-    'Agent assistant creation must call the shared VCPChat create action, not a sidebar DOM proxy');
-assert.equal(mainCreateProxyCalls, 0,
-    'the shared creation action must not depend on the current main sidebar button instance');
-assert.equal(host.querySelector('.agent-chat-topic-flow-dialog'), null,
-    'creating an assistant must not accidentally create a Rust Agent Topic');
-agentSearchTrigger.click();
+await new Promise((resolve) => setTimeout(resolve, 30));
+const agentDialog = host.querySelector('.agent-chat-topic-flow-dialog');
+assert.ok(agentDialog, 'Build Agent creation must use an isolated Workbench dialog');
+agentDialog.querySelector('[aria-label="Build Agent 名称"]').value = 'Research Agent';
+agentDialog.querySelector('[aria-label="Build Agent 名称"]').dispatchEvent(new window.Event('input', { bubbles: true }));
+agentDialog.querySelector('[aria-label="Build Agent 提示词"]').value = '{{Research}}';
+agentDialog.querySelector('[aria-label="Build Agent 提示词"]').dispatchEvent(new window.Event('input', { bubbles: true }));
+agentDialog.querySelector('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+await new Promise((resolve) => setTimeout(resolve, 30));
+assert.equal(savedAgentProfiles.length, 1, 'Build Agent creation must persist through the isolated runtime profile IPC');
+assert.equal(savedAgentProfiles[0].systemPrompt, '{{Research}}');
+assert.ok([...host.querySelectorAll('.agent-chat-agent-row .agent-name')].some((item) => item.textContent === 'Research Agent'),
+    'a successfully created Build Agent must appear in the Build Agent list');
+assert.equal(sharedCreateActionCalls, 0, 'Build Agent creation must not write to the main-chat Agent directory');
+assert.equal(mainCreateProxyCalls, 0, 'Build Agent creation must not proxy the main-chat creation button');
+const recreatedNova = [...host.querySelectorAll('.agent-chat-agent-row')]
+    .find((row) => row.querySelector('.agent-name')?.textContent === 'Nova');
+recreatedNova.click();
+await new Promise((resolve) => setTimeout(resolve, 30));
+[...host.querySelectorAll('.agent-chat-sidebar .sidebar-tab-button')]
+    .find((tab) => tab.textContent.trim() === '助手').click();
+host.querySelector('.next-ui-agent-search-trigger').click();
 const agentSearch = host.querySelector('.agents-header .topic-search-input');
 assert.ok(agentSearch && host.querySelector('.agents-header.is-searching'),
     'the shared assistant search affordance must become interactive in the Agent projection');
@@ -732,8 +769,8 @@ await new Promise((resolve) => setTimeout(resolve, 30));
 assert.equal(host.querySelectorAll('.agent-chat-activity-tab-group').length, 0,
     'the remaining right-panel tabs must share one compact row');
 assert.deepEqual([...host.querySelectorAll('.agent-chat-activity-tabs > .agent-chat-activity-tab')]
-    .map((tab) => tab.dataset.tab), ['usage', 'workspace', 'activity', 'approvals'],
-    'Context, read-only workspace, notifications, and approvals must be directly visible');
+    .map((tab) => tab.dataset.tab), ['files', 'context'],
+    'the compact Dock must initially expose only the file launcher and active Context tab');
 assert.equal(host.querySelector('.agent-chat-activity-tab-group-label'), null,
     'the two tab rows must not spend visible space on redundant group headings');
 assert.equal(host.querySelector('.agent-chat-activity-tab[data-tab="changes"]'), null,
@@ -752,17 +789,32 @@ assert.match(host.querySelector('.agent-chat-context-stats')?.textContent || '',
     'the Context inspector must expose stable session metadata alongside token usage');
 assert.match(host.querySelector('.agent-chat-usage-stats')?.textContent || '', /缓存写入.*2/s,
     'the Context inspector must retain cache write usage when the provider reports it');
-const stableUsagePanel = host.querySelector('[data-activity-panel="usage"]');
+const stableUsagePanel = host.querySelector('[data-activity-panel="context"]');
 stableUsagePanel.scrollTop = 47;
-host.querySelector('.agent-chat-activity-tab[data-tab="activity"]').click();
-host.querySelector('.agent-chat-activity-tab[data-tab="usage"]').click();
-assert.strictEqual(host.querySelector('[data-activity-panel="usage"]'), stableUsagePanel,
+host.querySelector('.agent-chat-activity-tab[data-tab="files"]').click();
+host.querySelector('.agent-chat-activity-tab[data-tab="context"]').click();
+assert.strictEqual(host.querySelector('[data-activity-panel="context"]'), stableUsagePanel,
     'switching right-panel tabs must retain the Context panel DOM identity');
 assert.equal(stableUsagePanel.scrollTop, 47,
     'each right-panel tab must retain its own scroll position');
 
-host.querySelector('.agent-chat-activity-tab[data-tab="workspace"]').click();
+host.querySelector('.agent-chat-activity-tab[data-tab="files"]').click();
 await new Promise((resolve) => setTimeout(resolve, 30));
+const workspaceBrowser = host.querySelector('.agent-workspace-browser');
+const workspaceSplitter = host.querySelector('.agent-workspace-splitter[role="separator"]');
+assert.ok(workspaceBrowser && workspaceSplitter,
+    'Workspace must render as a resizable preview/tree split view');
+workspaceSplitter.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+assert.ok(workspaceBrowser.classList.contains('agent-workspace-split-48'),
+    'Workspace splitter keyboard controls must resize the preview pane without inline styles');
+for (let index = 0; index < 21; index += 1) {
+    workspaceSplitter.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+}
+assert.ok(workspaceBrowser.classList.contains('agent-workspace-split-100'),
+    'moving the Workspace splitter to the far right must collapse the tree into a single preview column');
+workspaceSplitter.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+assert.ok(workspaceBrowser.classList.contains('agent-workspace-split-88'),
+    'moving left from the collapsed edge must restore the Workspace tree');
 assert.deepEqual([...host.querySelectorAll('.agent-workspace-tree-row')].map((row) => row.dataset.workspacePath), ['src', 'README.md'],
     'Workspace tab must lazily render the selected Session root without exposing an arbitrary root input');
 host.querySelector('.agent-workspace-tree-row[data-workspace-path="src"]').click();
@@ -773,13 +825,23 @@ host.querySelector('.agent-workspace-tree-row[data-workspace-path="README.md"]')
 await new Promise((resolve) => setTimeout(resolve, 30));
 assert.match(host.querySelector('.agent-workspace-preview-text')?.textContent || '', /preview/,
     'selecting a file must show the bounded Main-provided preview');
-const copyRelative = [...host.querySelectorAll('.agent-workspace-path-actions button')]
-    .find((control) => control.textContent === '复制路径');
+host.querySelector('.agent-workspace-tree-row[data-workspace-path="README.md"]')
+    .dispatchEvent(new dom.window.MouseEvent('dblclick', { bubbles: true }));
+await new Promise((resolve) => setTimeout(resolve, 30));
+const fileDockTab = [...host.querySelectorAll('.agent-chat-activity-tab')]
+    .find((tab) => tab.title === 'README.md');
+assert.ok(fileDockTab && fileDockTab.dataset.tab.startsWith('file:'),
+    'double-clicking a Workspace file must promote it to a top-level Session Dock tab');
+assert.equal(host.querySelector('.agent-workspace-preview-tabs'), null,
+    'Workspace preview must not retain a nested duplicate tab strip');
+host.querySelector('.agent-chat-activity-tab[data-tab="files"]').click();
+const copyRelative = host.querySelector('.agent-workspace-path-actions button[aria-label="复制相对路径"]');
+assert.ok(copyRelative, 'Workspace preview must expose the copy-relative-path action by accessible name');
 copyRelative.click();
 await new Promise((resolve) => setTimeout(resolve, 10));
 assert.equal(workspaceActions.at(-1)?.action, 'copy-relative-path');
 assert.equal(workspaceActions.at(-1)?.workspaceRevision, 'workspace-revision-test');
-host.querySelector('.agent-chat-activity-tab[data-tab="usage"]').click();
+host.querySelector('.agent-chat-activity-tab[data-tab="context"]').click();
 
 emitDaemonEvent({
     sessionId: 'sess_test', turnId: 'turn_test', sequence: 5, type: 'toolbox.ws',
@@ -789,7 +851,7 @@ emitDaemonEvent({
     },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
-host.querySelector('.agent-chat-activity-tab[data-tab="activity"]')?.click();
+host.querySelector('.agent-chat-activity-tab[data-tab="notifications"]')?.click();
 await new Promise((resolve) => setTimeout(resolve, 0));
 const toolboxObservation = host.querySelector('.agent-chat-toolbox-ws-card');
 assert.ok(toolboxObservation, 'ToolBox WS observations must render in their own non-tool block');
@@ -970,19 +1032,19 @@ assert.deepEqual(interactionResponses.at(-1), {
     response: { action: 'accept', content: {} },
 });
 
-host.querySelector('.agent-chat-activity-tab[data-tab="activity"]')?.click();
+host.querySelector('.agent-chat-activity-tab[data-tab="notifications"]')?.click();
 host.querySelector('.agent-chat-activity-tab[data-tab="approvals"]')?.click();
 emitDaemonEvent({
     sessionId: 'runtime', sequence: 13, type: 'toolbox.ws',
     payload: { channel: 'Info', kind: 'notification', value: { message: 'one unread activity item' } },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
-assert.match(host.querySelector('.agent-chat-activity-tab[data-tab="activity"]')?.textContent || '', /通知 · 1/,
+assert.match(host.querySelector('.agent-chat-activity-tab[data-tab="notifications"]')?.textContent || '', /通知1/,
     'background Activity updates must increment only their own tab unread count');
 assert.doesNotMatch(host.querySelector('.agent-chat-activity-tab[data-tab="approvals"]')?.textContent || '', /·/,
     'the currently visible Activity tab must not accumulate unread state');
-host.querySelector('.agent-chat-activity-tab[data-tab="activity"]')?.click();
-assert.doesNotMatch(host.querySelector('.agent-chat-activity-tab[data-tab="activity"]')?.textContent || '', /·/,
+host.querySelector('.agent-chat-activity-tab[data-tab="notifications"]')?.click();
+assert.doesNotMatch(host.querySelector('.agent-chat-activity-tab[data-tab="notifications"]')?.textContent || '', /1/,
     'entering a tab must acknowledge only that tab unread count');
 
 runtimeStatus = 'ready';
@@ -1219,7 +1281,7 @@ for (const [sequence, kind, value] of [
     });
 }
 await new Promise((resolve) => setTimeout(resolve, 30));
-host.querySelector('.agent-chat-activity-tab[data-tab="activity"]')?.click();
+host.querySelector('.agent-chat-activity-tab[data-tab="notifications"]')?.click();
 assert.match(host.querySelector('.agent-chat-activity-note')?.textContent || '', /仅保留本次运行/,
     'global VCPLog and VCPInfo observations must be labelled as ephemeral rather than durable Session history');
 await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1317,33 +1379,40 @@ assert.equal(savedAvatars[0].avatarData.name, 'nova.png');
 assert.equal(savedAvatars[0].avatarData.type, 'image/png');
 assert.ok(savedAvatars[0].avatarData.buffer instanceof ArrayBuffer,
     'avatar save must pass binary data without persisting Base64 in renderer state');
+const workspaceSetting = [...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field')]
+    .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent.includes('工作目录'))
+    ?.querySelector('input');
+assert.ok(workspaceSetting, 'selected Session settings must expose its persisted workspace');
+workspaceSetting.value = `${root}\\updated`;
+workspaceSetting.dispatchEvent(new window.Event('change', { bubbles: true }));
+await new Promise((resolve) => setTimeout(resolve, 30));
+assert.ok(savedWorkbenchSettings.some((item) => item.sessionId === 'topic-archived'
+    && item.workspaceRoot === `${root}\\updated`),
+    'changing the workspace must persist it to the selected Session instead of keeping a renderer-only draft');
 const budgetSettings = host.querySelector('.agent-chat-settings-budget');
 assert.ok(budgetSettings, 'per-turn safety budgets must live in Agent settings rather than the usage inspector');
 assert.equal(budgetSettings.querySelector('[name="maxRequestsPerTurn"]').value, '8');
 assert.equal(budgetSettings.querySelector('[name="maxTokensPerTurn"]').value, '120000');
 budgetSettings.querySelector('[name="maxRequestsPerTurn"]').value = '12';
 budgetSettings.querySelector('[name="maxTokensPerTurn"]').value = '240000';
-[...budgetSettings.querySelectorAll('button')].find((item) => item.textContent.includes('保存安全预算')).click();
-await new Promise((resolve) => setTimeout(resolve, 30));
+budgetSettings.querySelector('[name="maxRequestsPerTurn"]').dispatchEvent(new window.Event('input', { bubbles: true }));
+budgetSettings.querySelector('[name="maxTokensPerTurn"]').dispatchEvent(new window.Event('input', { bubbles: true }));
+await new Promise((resolve) => setTimeout(resolve, 550));
 assert.ok(savedWorkbenchSettings.some((item) => item.budget?.maxRequestsPerTurn === '12'
     && item.budget?.maxTokensPerTurn === '240000'),
-    'budget save must use the narrow Agent settings IPC, never renderer storage');
+    'budget autosave must use the narrow Agent settings IPC, never renderer storage');
 assert.equal(host.querySelector('.agent-chat-settings-pane > .agent-chat-settings-placeholder') !== null, true);
 const permissionSelect = [...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field select')]
     .find((control) => [...control.options].some((option) => option.value === 'always-approve'));
 assert.ok(permissionSelect, 'Workbench settings must expose a visible local approval (YOLO) policy selector');
 permissionSelect.value = 'always-approve';
 permissionSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
-const savePermission = [...host.querySelectorAll('.agent-chat-settings-pane button')]
-    .find((button) => button.textContent === '保存本地审批策略');
-assert.ok(savePermission, 'the local approval policy must have an explicit save action');
 const promptPreview = host.querySelector('.agent-chat-settings-pane textarea[readonly]');
 assert.equal(promptPreview?.value, '冻结的 Nova 指令',
     'settings must show the selected Session frozen developer instructions before the Agent fallback prompt');
-savePermission.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
 assert.equal(savedWorkbenchSettings.at(-1)?.permissionMode, 'always-approve',
-    'saving YOLO must only persist the narrowed Rust Host permissionMode setting');
+    'changing YOLO must automatically persist the narrowed Rust Host permissionMode setting');
 assert.equal(savedWorkbenchSettings.at(-1)?.sessionId, 'topic-archived',
     'saving a selected Topic policy must target that current Session rather than only a future Session');
 assert.equal([...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field select')]
@@ -1356,13 +1425,12 @@ const modelSelect = [...host.querySelectorAll('.agent-chat-settings-pane .agent-
 assert.ok(modelSelect, 'settings must expose the shared model catalog for the current Session');
 modelSelect.value = 'gpt-5.6-luna';
 modelSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
-const saveModel = [...host.querySelectorAll('.agent-chat-settings-pane button')]
-    .find((button) => button.textContent === '保存当前模型');
-assert.ok(saveModel, 'the current Session model must have an explicit save action');
-saveModel.click();
-await new Promise((resolve) => setTimeout(resolve, 0));
+await new Promise((resolve) => setTimeout(resolve, 30));
 assert.equal(savedWorkbenchSettings.at(-1)?.model, 'gpt-5.6-luna',
-    'saving a model must target the selected Session instead of changing only a page-local selector');
+    'changing a model must automatically target the selected Session instead of changing only a page-local selector');
+assert.equal([...host.querySelectorAll('.agent-chat-settings-pane button')]
+    .some((button) => /^保存/.test(button.textContent.trim())), false,
+    'settings must not expose redundant save buttons after autosave is enabled');
 assert.equal([...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field select')]
     .find((control) => [...control.options].some((option) => option.value === 'gpt-5.6-luna'))?.value, 'gpt-5.6-luna',
     'the selected Session must retain its newly saved model after the settings pane rerenders');

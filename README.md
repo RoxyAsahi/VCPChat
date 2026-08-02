@@ -16,6 +16,8 @@
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/lioensky/VCPChat)
 
+> Codex Agent Workbench 当前提供浏览器式 Session Tool Dock：可在同一会话侧栏切换上下文、只读 Workspace、固定文件预览、权威文件变化、通知和审批。文件浏览由 Electron Main 的 Session-bound 安全服务提供，不会启用 Codex 原生 Shell/file/MCP，也不会把文件内容或绝对路径保存到 Renderer Web Storage。
+
 ## 🚀 引擎级抽象：30 行代码的奇迹
 
 VCPChat 的核心价值在于其极致的**抽象与集成能力**。
