@@ -172,7 +172,7 @@
   已实现并通过 hermetic + Electron smoke。详细合同见
   [workspace-browser-plan.md](workspace-browser-plan.md)。先复用 `workspacePolicy.js` 建立 Main-only
   只读服务和 `agent-workspace:*` 窄 IPC；工具卡、Diff、附件与文件树统一产生 `WorkspacePathRef`。
-  10k 文件性能录制、人工视觉和真实结构化 ToolBox 资源验收仍待。不得开启 Codex native
+  10k 文件分页/搜索 fixture 已通过；真实交互性能录制、人工视觉和结构化 ToolBox 资源验收仍待。不得开启 Codex native
   Shell/file tools，不得从 ToolBox 文本猜路径或加入写/delete/apply/revert 能力。
 - [ ] **GUI-R6 视觉、性能与 live gate**：富消息截图、scroll anchor、10 Agent/50 Session、cold/warm latency、crash/restart、双 Thread 和真实 ToolBox。
 - [ ] assistant-ui 仅登记为未来 React island 的条件式评估；acp-ui 仅登记为未来 ACP profile 参考，本轮不得增加 React/Vue/Tauri/ACP 依赖。

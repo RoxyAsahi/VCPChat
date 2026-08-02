@@ -118,7 +118,7 @@ Renderer：lazy expansion、request dedupe、稳定 row identity、搜索键盘�
 
 Electron：真实临时 workspace、10k 文件压力、Session/workspace 切换、reload/crash、reveal/open 的安全 mock 或可恢复动作，以及 SQLite/localStorage/transcript 无文件内容泄漏。
 
-WB-R0–R4 已达到 working-tree hermetic pass。WB-R5 的真实 Electron IPC/preview smoke 已通过；10k 文件性能录制、深浅主题人工截图和真实 ToolBox 结构化资源路径仍待，因此不得标记产品完成。
+WB-R0–R4 已达到 committed hermetic pass。WB-R5 的真实 Electron IPC/preview smoke 与 10k 文件分页/搜索压力 fixture 已通过；深浅主题人工截图、真实交互性能录制和 ToolBox 结构化资源路径仍待，因此不得标记产品完成。
 
 ## 明确禁止
 
