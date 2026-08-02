@@ -1,12 +1,14 @@
 'use strict';
 
-const { ipcMain, BrowserWindow, dialog } = require('electron');
+const { ipcMain, BrowserWindow, dialog, shell, clipboard } = require('electron');
 const path = require('path');
 const { CodexRuntimeManager } = require('../codex-runtime/runtimeManager');
+const { AgentWorkspaceService } = require('../codex-runtime/workspaceService');
 const { IPC_CHANNELS } = require('../agent-runtime/contracts');
 const { AgentRuntimeError } = require('../agent-runtime/errors');
 
 let manager = null;
+let workspaceService = null;
 let cachedSettings = {};
 const workbenchSenders = new Set();
 let settingsManagerWithListener = null;
@@ -82,6 +84,11 @@ function removeHandlers() {
         IPC_CHANNELS.CANCEL_TURN,
         IPC_CHANNELS.RESPOND_APPROVAL,
         IPC_CHANNELS.RESPOND_INTERACTION,
+        IPC_CHANNELS.WORKSPACE_LIST_DIRECTORY,
+        IPC_CHANNELS.WORKSPACE_READ_PREVIEW,
+        IPC_CHANNELS.WORKSPACE_SEARCH_FILES,
+        IPC_CHANNELS.WORKSPACE_STAT_PATH,
+        IPC_CHANNELS.WORKSPACE_PERFORM_PATH_ACTION,
     ]) {
         ipcMain.removeHandler(channel);
     }
@@ -110,11 +117,36 @@ function initialize(options) {
             }
         },
     });
+    workspaceService = new AgentWorkspaceService({
+        getSession: (sessionId) => manager?.repository?.getSession(sessionId) || null,
+        shell,
+        clipboard,
+        confirmOpen: async ({ relativePath }) => {
+            const window = getMainWindow();
+            if (!window) return false;
+            const result = await dialog.showMessageBox(window, {
+                type: 'warning',
+                buttons: ['取消', '仍然打开'],
+                defaultId: 0,
+                cancelId: 0,
+                title: '打开可能执行的文件',
+                message: '此文件可能执行本地代码。',
+                detail: relativePath,
+                noLink: true,
+            });
+            return result.response === 1;
+        },
+    });
 
     const guard = async (event, fn) => {
         assertMainWindowSender(event);
         await refreshSettings(settingsManager);
         await manager?.refreshToolboxConfiguration(cachedSettings);
+        return fn();
+    };
+    const workspaceGuard = (event, fn) => {
+        assertMainWindowSender(event);
+        if (!workspaceService) throw new AgentRuntimeError('WORKSPACE_UNAVAILABLE', 'Agent workspace service is unavailable');
         return fn();
     };
 
@@ -207,6 +239,11 @@ function initialize(options) {
     ipcMain.handle(IPC_CHANNELS.CANCEL_TURN, (event, payload) => guard(event, () => manager.cancelTurn(payload || {})));
     ipcMain.handle(IPC_CHANNELS.RESPOND_APPROVAL, (event, payload) => guard(event, () => manager.respondApproval(payload || {})));
     ipcMain.handle(IPC_CHANNELS.RESPOND_INTERACTION, (event, payload) => guard(event, () => manager.respondInteraction(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.WORKSPACE_LIST_DIRECTORY, (event, payload) => workspaceGuard(event, () => workspaceService.listDirectory(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.WORKSPACE_READ_PREVIEW, (event, payload) => workspaceGuard(event, () => workspaceService.readPreview(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.WORKSPACE_SEARCH_FILES, (event, payload) => workspaceGuard(event, () => workspaceService.searchFiles(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.WORKSPACE_STAT_PATH, (event, payload) => workspaceGuard(event, () => workspaceService.statPath(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.WORKSPACE_PERFORM_PATH_ACTION, (event, payload) => workspaceGuard(event, () => workspaceService.performPathAction(payload || {})));
     ipcMain.on(IPC_CHANNELS.SET_WORKBENCH_PRESENCE, (event, payload) => {
         const senderWindow = assertMainWindowSender(event);
         if (payload?.mounted === true) {
@@ -239,6 +276,7 @@ async function shutdown() {
         }
         manager = null;
     }
+    workspaceService = null;
     removeHandlers();
 }
 

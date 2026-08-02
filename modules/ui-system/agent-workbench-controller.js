@@ -910,6 +910,12 @@ function createWorkbenchController(runtimeApi) {
         });
     }
 
+    const workspaceListDirectory = (payload) => requireApi('agentWorkspaceListDirectory')(payload);
+    const workspaceReadPreview = (payload) => requireApi('agentWorkspaceReadPreview')(payload);
+    const workspaceSearchFiles = (payload) => requireApi('agentWorkspaceSearchFiles')(payload);
+    const workspaceStatPath = (payload) => requireApi('agentWorkspaceStatPath')(payload);
+    const workspacePerformPathAction = (payload) => requireApi('agentWorkspacePerformPathAction')(payload);
+
     async function initialize() {
         // Subscribe before reading the Rust checkpoint.  The barrier belongs
         // to the Renderer and buffers any live daemon frame that arrives
@@ -978,6 +984,8 @@ function createWorkbenchController(runtimeApi) {
         getWorkbenchSettings, updateWorkbenchSettings, selectAttachments,
         startTurn, steerTurn, followUpTurn, cancelTurn, cancelTool, respondApproval, respondInteraction,
         respondToolboxApproval,
+        workspaceListDirectory, workspaceReadPreview, workspaceSearchFiles,
+        workspaceStatPath, workspacePerformPathAction,
     };
 }
 

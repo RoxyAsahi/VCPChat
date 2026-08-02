@@ -63,6 +63,11 @@ const IPC_CHANNELS = Object.freeze({
     RESPOND_INTERACTION: 'agent-runtime:respond-interaction',
     SET_WORKBENCH_PRESENCE: 'agent-runtime:set-workbench-presence',
     EVENT: 'agent-runtime:event',
+    WORKSPACE_LIST_DIRECTORY: 'agent-workspace:list-directory',
+    WORKSPACE_READ_PREVIEW: 'agent-workspace:read-preview',
+    WORKSPACE_SEARCH_FILES: 'agent-workspace:search-files',
+    WORKSPACE_STAT_PATH: 'agent-workspace:stat-path',
+    WORKSPACE_PERFORM_PATH_ACTION: 'agent-workspace:perform-path-action',
 });
 
 const WORKER_MESSAGE_TYPES = Object.freeze({
