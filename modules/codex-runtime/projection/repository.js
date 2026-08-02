@@ -44,9 +44,24 @@ class AgentProjectionRepository {
         const Database = options.Database || require('better-sqlite3');
         this.databasePath = options.databasePath
             || path.join(options.userDataPath || process.cwd(), 'codex-agent-projection.sqlite');
-        this.db = options.db || new Database(this.databasePath);
-        this.schemaVersion = migrate(this.db);
+        this.readOnly = options.readOnly === true;
+        this.degradedReason = options.degradedReason || null;
+        this.db = options.db || new Database(this.databasePath, this.readOnly ? { readonly: true, fileMustExist: true } : undefined);
+        if (this.readOnly) {
+            this.db.pragma('query_only = ON');
+            this.db.pragma('busy_timeout = 5000');
+            this.schemaVersion = Number(this.db.prepare('SELECT version FROM projection_schema LIMIT 1').get()?.version || 0);
+        } else {
+            this.schemaVersion = migrate(this.db, { databasePath: options.db ? null : this.databasePath });
+        }
         this._prepare();
+    }
+
+    assertWritable() {
+        if (!this.readOnly) return;
+        const error = new Error('Agent projection database is in read-only degraded mode');
+        error.code = 'PROJECTION_READ_ONLY';
+        throw error;
     }
 
     _prepare() {
@@ -55,11 +70,11 @@ class AgentProjectionRepository {
                 INSERT INTO agent_sessions (
                     session_id, codex_thread_id, agent_id, agent_catalog_id, agent_name_snapshot,
                     title, workspace_root, state,
-                    config_snapshot_json, orphaned, pinned_at, created_at, updated_at, archived_at
+                    config_snapshot_json, config_revision, orphaned, pinned_at, created_at, updated_at, archived_at
                 ) VALUES (
                     @session_id, @codex_thread_id, @agent_id, @agent_catalog_id, @agent_name_snapshot,
                     @title, @workspace_root, @state,
-                    @config_snapshot_json, @orphaned, @pinned_at, @created_at, @updated_at, @archived_at
+                    @config_snapshot_json, @config_revision, @orphaned, @pinned_at, @created_at, @updated_at, @archived_at
                 ) ON CONFLICT(session_id) DO UPDATE SET
                     codex_thread_id = COALESCE(excluded.codex_thread_id, agent_sessions.codex_thread_id),
                     agent_id = excluded.agent_id,
@@ -69,6 +84,7 @@ class AgentProjectionRepository {
                     workspace_root = COALESCE(excluded.workspace_root, agent_sessions.workspace_root),
                     state = excluded.state,
                     config_snapshot_json = excluded.config_snapshot_json,
+                    config_revision = excluded.config_revision,
                     orphaned = excluded.orphaned,
                     pinned_at = excluded.pinned_at,
                     updated_at = excluded.updated_at,
@@ -105,6 +121,13 @@ class AgentProjectionRepository {
                     orphaned = 0, state = 'ready', updated_at = @now
                 WHERE session_id = @session_id
             `),
+            updateSessionConfigCas: this.db.prepare(`
+                UPDATE agent_sessions SET config_snapshot_json = @config_snapshot_json,
+                    config_revision = config_revision + 1,
+                    workspace_root = @workspace_root,
+                    updated_at = @now
+                WHERE session_id = @session_id AND config_revision = @expected_revision
+            `),
             getMessageByItem: this.db.prepare(`
                 SELECT * FROM agent_messages WHERE session_id = ? AND codex_item_id = ?
             `),
@@ -122,20 +145,26 @@ class AgentProjectionRepository {
             listMessages: this.db.prepare(`
                 SELECT * FROM agent_messages WHERE session_id = ? ORDER BY source_order, message_id
             `),
+            listMessageItems: this.db.prepare('SELECT codex_item_id FROM agent_messages WHERE session_id = ?'),
             deleteMessage: this.db.prepare(`
                 DELETE FROM agent_messages WHERE session_id = ? AND codex_item_id = ?
             `),
             upsertBlock: this.db.prepare(`
                 INSERT INTO agent_blocks (
-                    block_id, message_id, kind, status, ordinal, content_json, created_at, updated_at
+                    block_id, message_id, kind, status, ordinal, content_json, authority, created_at, updated_at
                 ) VALUES (
-                    @block_id, @message_id, @kind, @status, @ordinal, @content_json, @created_at, @updated_at
+                    @block_id, @message_id, @kind, @status, @ordinal, @content_json, @authority, @created_at, @updated_at
                 ) ON CONFLICT(message_id, ordinal) DO UPDATE SET
                     kind = excluded.kind, status = excluded.status,
-                    content_json = excluded.content_json, updated_at = excluded.updated_at
+                    content_json = excluded.content_json, authority = excluded.authority,
+                    updated_at = excluded.updated_at
             `),
             getBlock: this.db.prepare('SELECT * FROM agent_blocks WHERE message_id = ? AND ordinal = ?'),
             listBlocks: this.db.prepare('SELECT * FROM agent_blocks WHERE message_id = ? ORDER BY ordinal'),
+            deleteCodexBlocksExcept: this.db.prepare(`
+                DELETE FROM agent_blocks WHERE message_id = @message_id AND authority = 'codex'
+                    AND ordinal NOT IN (SELECT value FROM json_each(@ordinals_json))
+            `),
             getState: this.db.prepare('SELECT * FROM projection_state WHERE session_id = ?'),
             createState: this.db.prepare(`
                 INSERT OR IGNORE INTO projection_state(session_id, next_source_order, updated_at)
@@ -161,8 +190,13 @@ class AgentProjectionRepository {
                 WHERE session_id = @session_id
             `),
             insertPendingInput: this.db.prepare(`
-                INSERT OR IGNORE INTO agent_pending_inputs(input_id, session_id, dedupe_key, prompt, created_at)
-                VALUES (@input_id, @session_id, @dedupe_key, @prompt, @created_at)
+                INSERT OR IGNORE INTO agent_pending_inputs(
+                    input_id, session_id, dedupe_key, prompt, state, client_message_id,
+                    attempt_count, created_at, updated_at
+                ) VALUES (
+                    @input_id, @session_id, @dedupe_key, @prompt, 'queued', @client_message_id,
+                    0, @created_at, @created_at
+                )
             `),
             getPendingInputByKey: this.db.prepare(`
                 SELECT * FROM agent_pending_inputs WHERE session_id = ? AND dedupe_key = ?
@@ -171,6 +205,42 @@ class AgentProjectionRepository {
                 SELECT * FROM agent_pending_inputs WHERE session_id = ? ORDER BY created_at, input_id
             `),
             deletePendingInput: this.db.prepare('DELETE FROM agent_pending_inputs WHERE input_id = ?'),
+            updatePendingInput: this.db.prepare(`
+                UPDATE agent_pending_inputs SET state = @state,
+                    codex_turn_id = @codex_turn_id,
+                    attempt_count = @attempt_count,
+                    last_error = @last_error,
+                    updated_at = @updated_at
+                WHERE input_id = @input_id
+            `),
+            insertOperation: this.db.prepare(`
+                INSERT INTO agent_operations(
+                    operation_id, session_id, kind, state, codex_thread_id,
+                    payload_json, last_error, created_at, updated_at
+                ) VALUES (
+                    @operation_id, @session_id, @kind, @state, @codex_thread_id,
+                    @payload_json, @last_error, @created_at, @updated_at
+                )
+            `),
+            updateOperation: this.db.prepare(`
+                UPDATE agent_operations SET state = @state,
+                    codex_thread_id = COALESCE(@codex_thread_id, codex_thread_id),
+                    payload_json = @payload_json,
+                    last_error = @last_error,
+                    updated_at = @updated_at
+                WHERE operation_id = @operation_id
+            `),
+            getOperation: this.db.prepare('SELECT * FROM agent_operations WHERE operation_id = ?'),
+            listRecoverableOperations: this.db.prepare(`
+                SELECT * FROM agent_operations
+                WHERE state IN ('prepared', 'dispatching', 'remote-applied', 'uncertain', 'failed')
+                ORDER BY updated_at, operation_id
+            `),
+            deleteSession: this.db.prepare('DELETE FROM agent_sessions WHERE session_id = ?'),
+            insertDeletionReceipt: this.db.prepare(`
+                INSERT INTO agent_deletion_receipts(receipt_id, session_hash, codex_thread_hash, deleted_at)
+                VALUES (@receipt_id, @session_hash, @codex_thread_hash, @deleted_at)
+            `),
         };
         this.upsertItemTransaction = this.db.transaction((sessionId, record, block) => {
             this._upsertItem(sessionId, record, block);
@@ -181,9 +251,23 @@ class AgentProjectionRepository {
             if (Number.isInteger(expectedGeneration) && state?.mutation_generation !== expectedGeneration) {
                 return false;
             }
+            const incomingItemIds = new Set(entries.map((entry) => String(entry.record.itemId)));
+            for (const row of this.stmt.listMessageItems.all(sessionId)) {
+                if (!incomingItemIds.has(String(row.codex_item_id))) {
+                    this.stmt.deleteMessage.run(sessionId, row.codex_item_id);
+                }
+            }
             for (const entry of entries) {
                 const blocks = Array.isArray(entry.blocks) ? entry.blocks : [entry.block];
-                for (const block of blocks.filter(Boolean)) this._upsertItem(sessionId, entry.record, block);
+                const validBlocks = blocks.filter(Boolean);
+                for (const block of validBlocks) this._upsertItem(sessionId, entry.record, block, { authoritative: true });
+                if (entry.authoritativeOrdinals !== false) {
+                    const message = this.stmt.getMessageByItem.get(sessionId, entry.record.itemId);
+                    if (message) this.stmt.deleteCodexBlocksExcept.run({
+                        message_id: message.message_id,
+                        ordinals_json: JSON.stringify(validBlocks.map((block) => Number.isInteger(block.ordinal) ? block.ordinal : 0)),
+                    });
+                }
             }
             this.stmt.setReconciled.run({ session_id: sessionId, now: Date.now() });
             this.stmt.advanceGeneration.run({ session_id: sessionId, now: Date.now() });
@@ -204,6 +288,7 @@ class AgentProjectionRepository {
             workspace_root: session.workspaceRoot || null,
             state: session.state || 'ready',
             config_snapshot_json: json(session.configSnapshot || {}),
+            config_revision: Number.isInteger(session.configRevision) ? session.configRevision : 1,
             orphaned: session.orphaned ? 1 : 0,
             pinned_at: session.pinnedAt || null,
             created_at: session.createdAt || now,
@@ -212,6 +297,20 @@ class AgentProjectionRepository {
         });
         this.stmt.createState.run(sessionId, now);
         return this.getSession(sessionId);
+    }
+
+    updateSessionConfig(sessionId, expectedRevision, { configSnapshot, workspaceRoot }) {
+        const current = this.getSession(sessionId);
+        if (!current) return { updated: false, reason: 'not-found', session: null };
+        const result = this.stmt.updateSessionConfigCas.run({
+            session_id: String(sessionId),
+            expected_revision: Number(expectedRevision),
+            config_snapshot_json: json(configSnapshot || {}),
+            workspace_root: workspaceRoot || current.workspaceRoot || null,
+            now: Date.now(),
+        });
+        if (result.changes !== 1) return { updated: false, reason: 'conflict', session: this.getSession(sessionId) };
+        return { updated: true, session: this.getSession(sessionId) };
     }
 
     getSession(sessionId) {
@@ -251,6 +350,7 @@ class AgentProjectionRepository {
         return {
             session,
             messages,
+            storage: { readOnly: this.readOnly, degradedReason: this.degradedReason },
             projection: state ? {
                 lastReconciledAt: state.last_reconciled_at,
                 lastError: state.last_error,
@@ -311,7 +411,7 @@ class AgentProjectionRepository {
         return { applied, projection: this.readProjection(sessionId) };
     }
 
-    _upsertItem(sessionId, record, block) {
+    _upsertItem(sessionId, record, block, options = {}) {
         const session = this.stmt.getSession.get(sessionId);
         if (!session) throw new Error(`Unknown Agent projection session: ${sessionId}`);
         const now = Date.now();
@@ -342,7 +442,20 @@ class AgentProjectionRepository {
             const ordinal = Number.isInteger(block.ordinal) ? block.ordinal : 0;
             const existingBlock = this.stmt.getBlock.get(existing.message_id, ordinal);
             const existingContent = parseJson(existingBlock?.content_json, {});
-            const content = mergeProjectionContent(existingContent, block.content || {});
+            let content;
+            if (options.authoritative && block.replaceContent === true) {
+                content = block.content || {};
+            } else if (options.authoritative && Array.isArray(block.replaceFields)) {
+                content = { ...existingContent };
+                for (const field of block.replaceFields) {
+                    if (Object.prototype.hasOwnProperty.call(block.content || {}, field)) content[field] = block.content[field];
+                }
+                for (const [field, value] of Object.entries(block.content || {})) {
+                    if (!block.replaceFields.includes(field)) content[field] = mergeProjectionContent(content[field], value);
+                }
+            } else {
+                content = mergeProjectionContent(existingContent, block.content || {});
+            }
             this.stmt.upsertBlock.run({
                 block_id: block.blockId || existingBlock?.block_id || `block:${sessionId}:${record.itemId}:${ordinal}`,
                 message_id: existing.message_id,
@@ -350,6 +463,7 @@ class AgentProjectionRepository {
                 status: block.status || record.status || 'inProgress',
                 ordinal,
                 content_json: json(content),
+                authority: block.authority || existingBlock?.authority || 'codex',
                 created_at: existingBlock?.created_at || block.createdAt || now,
                 updated_at: now,
             });
@@ -382,6 +496,7 @@ class AgentProjectionRepository {
             status: block.status,
             ordinal,
             content_json: json(content),
+            authority: block.authority || 'codex',
             created_at: block.created_at,
             updated_at: Date.now(),
         });
@@ -435,12 +550,15 @@ class AgentProjectionRepository {
 
     enqueuePendingInput(sessionId, { dedupeKey, prompt }) {
         const inputId = `pending:${crypto.randomUUID()}`;
+        const clientMessageId = `client_msg:${crypto.randomUUID()}`;
+        const now = Date.now();
         this.stmt.insertPendingInput.run({
             input_id: inputId,
             session_id: sessionId,
             dedupe_key: String(dedupeKey),
             prompt: String(prompt),
-            created_at: Date.now(),
+            client_message_id: clientMessageId,
+            created_at: now,
         });
         return this.stmt.getPendingInputByKey.get(sessionId, String(dedupeKey));
     }
@@ -451,12 +569,92 @@ class AgentProjectionRepository {
             sessionId: row.session_id,
             dedupeKey: row.dedupe_key,
             prompt: row.prompt,
+            state: row.state,
+            clientMessageId: row.client_message_id,
+            turnId: row.codex_turn_id,
+            attemptCount: row.attempt_count,
+            updatedAt: row.updated_at,
+            lastError: row.last_error,
             createdAt: row.created_at,
         }));
     }
 
+    updatePendingInput(inputId, patch = {}) {
+        const row = this.db.prepare('SELECT * FROM agent_pending_inputs WHERE input_id = ?').get(String(inputId));
+        if (!row) return null;
+        this.stmt.updatePendingInput.run({
+            input_id: String(inputId),
+            state: patch.state || row.state,
+            codex_turn_id: Object.prototype.hasOwnProperty.call(patch, 'turnId') ? patch.turnId : row.codex_turn_id,
+            attempt_count: Number.isInteger(patch.attemptCount) ? patch.attemptCount : row.attempt_count,
+            last_error: Object.prototype.hasOwnProperty.call(patch, 'lastError') ? patch.lastError : row.last_error,
+            updated_at: Date.now(),
+        });
+        return this.listPendingInputs(row.session_id).find((entry) => entry.inputId === String(inputId)) || null;
+    }
+
     removePendingInput(inputId) {
         this.stmt.deletePendingInput.run(String(inputId));
+    }
+
+    createOperation({ operationId, sessionId = null, kind, state = 'prepared', threadId = null, payload = {} }) {
+        const now = Date.now();
+        const idValue = operationId || `operation:${crypto.randomUUID()}`;
+        this.stmt.insertOperation.run({
+            operation_id: idValue,
+            session_id: sessionId,
+            kind: String(kind),
+            state: String(state),
+            codex_thread_id: threadId,
+            payload_json: json(payload),
+            last_error: null,
+            created_at: now,
+            updated_at: now,
+        });
+        return this.getOperation(idValue);
+    }
+
+    updateOperation(operationId, patch = {}) {
+        const current = this.stmt.getOperation.get(String(operationId));
+        if (!current) return null;
+        this.stmt.updateOperation.run({
+            operation_id: String(operationId),
+            state: patch.state || current.state,
+            codex_thread_id: Object.prototype.hasOwnProperty.call(patch, 'threadId') ? patch.threadId : current.codex_thread_id,
+            payload_json: json(Object.prototype.hasOwnProperty.call(patch, 'payload') ? patch.payload : parseJson(current.payload_json, {})),
+            last_error: Object.prototype.hasOwnProperty.call(patch, 'lastError') ? patch.lastError : current.last_error,
+            updated_at: Date.now(),
+        });
+        return this.getOperation(operationId);
+    }
+
+    getOperation(operationId) {
+        const row = this.stmt.getOperation.get(String(operationId));
+        return row ? this._operation(row) : null;
+    }
+
+    listRecoverableOperations() {
+        return this.stmt.listRecoverableOperations.all().map((row) => this._operation(row));
+    }
+
+    permanentlyDeleteSession(sessionId, threadId = null) {
+        const now = Date.now();
+        const receipt = {
+            receiptId: `deletion:${crypto.randomUUID()}`,
+            sessionHash: crypto.createHash('sha256').update(String(sessionId)).digest('hex'),
+            threadHash: threadId ? crypto.createHash('sha256').update(String(threadId)).digest('hex') : null,
+            deletedAt: now,
+        };
+        this.db.transaction(() => {
+            this.stmt.deleteSession.run(String(sessionId));
+            this.stmt.insertDeletionReceipt.run({
+                receipt_id: receipt.receiptId,
+                session_hash: receipt.sessionHash,
+                codex_thread_hash: receipt.threadHash,
+                deleted_at: now,
+            });
+        })();
+        return receipt;
     }
 
     close() {
@@ -475,6 +673,7 @@ class AgentProjectionRepository {
             state: row.state,
             pinnedAt: row.pinned_at || null,
             configSnapshot: parseJson(row.config_snapshot_json, {}),
+            configRevision: Number(row.config_revision || 1),
             orphaned: row.orphaned === 1,
             createdAt: row.created_at,
             updatedAt: row.updated_at,
@@ -489,6 +688,21 @@ class AgentProjectionRepository {
             status: row.status,
             ordinal: row.ordinal,
             content: parseJson(row.content_json, {}),
+            authority: row.authority || 'codex',
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+        };
+    }
+
+    _operation(row) {
+        return {
+            operationId: row.operation_id,
+            sessionId: row.session_id || null,
+            kind: row.kind,
+            state: row.state,
+            threadId: row.codex_thread_id || null,
+            payload: parseJson(row.payload_json, {}),
+            lastError: row.last_error || null,
             createdAt: row.created_at,
             updatedAt: row.updated_at,
         };

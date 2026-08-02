@@ -2,6 +2,7 @@
 
 const { ipcMain, BrowserWindow, dialog, shell, clipboard } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { CodexRuntimeManager } = require('../codex-runtime/runtimeManager');
 const { AgentWorkspaceService } = require('../codex-runtime/workspaceService');
 const { IPC_CHANNELS } = require('../agent-runtime/contracts');
@@ -52,6 +53,7 @@ function removeHandlers() {
         IPC_CHANNELS.LIST_AGENT_PROFILES,
         IPC_CHANNELS.SAVE_AGENT_PROFILE,
         IPC_CHANNELS.SAVE_AGENT_AVATAR,
+        IPC_CHANNELS.APPLY_AGENT_PROFILE,
         IPC_CHANNELS.GET_STATUS,
         IPC_CHANNELS.START,
         IPC_CHANNELS.STOP,
@@ -70,9 +72,13 @@ function removeHandlers() {
         IPC_CHANNELS.REBUILD_TOPIC_INDEX,
         IPC_CHANNELS.READ_TOPIC,
         IPC_CHANNELS.READ_PROJECTION,
-        IPC_CHANNELS.TAKEOVER_TOPIC,
         IPC_CHANNELS.RENAME_TOPIC,
         IPC_CHANNELS.DELETE_TOPIC,
+        IPC_CHANNELS.PERMANENTLY_DELETE_SESSION,
+        IPC_CHANNELS.EXPORT_SESSION,
+        IPC_CHANNELS.LIST_RECOVERY_OPERATIONS,
+        IPC_CHANNELS.LIST_RECOVERY_CANDIDATES,
+        IPC_CHANNELS.RESOLVE_RECOVERY_OPERATION,
         IPC_CHANNELS.LIST_INTERACTION_QUEUE,
         IPC_CHANNELS.REPLACE_INTERACTION_QUEUE,
         IPC_CHANNELS.CLEAR_INTERACTION_QUEUE,
@@ -90,6 +96,7 @@ function removeHandlers() {
         IPC_CHANNELS.WORKSPACE_SEARCH_FILES,
         IPC_CHANNELS.WORKSPACE_STAT_PATH,
         IPC_CHANNELS.WORKSPACE_PERFORM_PATH_ACTION,
+        IPC_CHANNELS.WORKSPACE_CANCEL,
     ]) {
         ipcMain.removeHandler(channel);
     }
@@ -105,7 +112,7 @@ function initialize(options) {
         settingsPath: settingsManager.settingsPath || path.join(projectRoot, 'AppData', 'settings.json'),
         // In a packaged Electron app settings live under userData, not inside
         // app.asar.  Keep Agent catalog discovery beside that shared file so
-        // the daemon can use the exact same layout in development and release.
+        // the Codex Agent catalog uses the same layout in development and release.
         agentsDir: path.join(path.dirname(settingsManager.settingsPath || path.join(projectRoot, 'AppData', 'settings.json')), 'CodexAgents'),
         getSettings: () => cachedSettings,
         setSettings: (updater) => settingsManager.updateSettings(updater),
@@ -139,9 +146,19 @@ function initialize(options) {
         },
     });
 
-    const guard = async (event, fn) => {
+    const settingsReady = refreshSettings(settingsManager);
+    const projectionGuard = (event, fn) => {
         assertMainWindowSender(event);
-        await refreshSettings(settingsManager);
+        return fn();
+    };
+    const runtimeGuard = async (event, fn) => {
+        assertMainWindowSender(event);
+        await settingsReady;
+        return fn();
+    };
+    const toolboxGuard = async (event, fn) => {
+        assertMainWindowSender(event);
+        await settingsReady;
         await manager?.refreshToolboxConfiguration(cachedSettings);
         return fn();
     };
@@ -163,27 +180,28 @@ function initialize(options) {
     settingsManager.on?.('settings-updated', settingsUpdatedListener);
     settingsManagerWithListener = settingsManager;
 
-    ipcMain.handle(IPC_CHANNELS.GET_PRESENTATION_MODE, (event) => guard(event, () => ({
+    ipcMain.handle(IPC_CHANNELS.GET_PRESENTATION_MODE, (event) => projectionGuard(event, () => ({
         mode: String(process.env.VCP_AGENT_PRESENTATION_RENDERER || '').toLowerCase() === 'legacy'
             ? 'legacy'
             : 'fork',
     })));
-    ipcMain.handle(IPC_CHANNELS.LIST_AGENT_PROFILES, (event) => guard(event, () => manager.listAgentProfiles()));
-    ipcMain.handle(IPC_CHANNELS.SAVE_AGENT_PROFILE, (event, payload) => guard(event, () => manager.saveAgentProfile(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.SAVE_AGENT_AVATAR, (event, payload) => guard(event, () => manager.saveAgentAvatar(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.LIST_AGENT_PROFILES, (event) => projectionGuard(event, () => manager.listAgentProfiles()));
+    ipcMain.handle(IPC_CHANNELS.SAVE_AGENT_PROFILE, (event, payload) => projectionGuard(event, () => manager.saveAgentProfile(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.SAVE_AGENT_AVATAR, (event, payload) => projectionGuard(event, () => manager.saveAgentAvatar(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.APPLY_AGENT_PROFILE, (event, payload) => projectionGuard(event, () => manager.applyAgentProfileToSession(payload || {})));
 
-    ipcMain.handle(IPC_CHANNELS.GET_STATUS, (event) => guard(event, () => manager.getStatus()));
-    ipcMain.handle(IPC_CHANNELS.START, (event) => guard(event, () => manager.start()));
-    ipcMain.handle(IPC_CHANNELS.STOP, (event) => guard(event, () => manager.stop()));
-    ipcMain.handle(IPC_CHANNELS.CREATE_TOPIC, (event, payload) => guard(event, () => manager.createTopic(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.CREATE_SESSION, (event, payload) => guard(event, () => manager.createSession(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.ENSURE_SESSION_RUNTIME, (event, payload) => guard(event, () => manager.ensureSessionRuntime(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.FORK_SESSION, (event, payload) => guard(event, () => manager.forkSession(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.CLOSE_SESSION, (event, payload) => guard(event, () => manager.closeSession(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.RESTORE_SESSION, (event, payload) => guard(event, () => manager.restoreSession(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.SET_SESSION_PINNED, (event, payload) => guard(event, () => manager.setSessionPinned(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.COMPACT_SESSION, (event, payload) => guard(event, () => manager.compactSession(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.LIST_TOPICS, (event, payload) => guard(event, async () => {
+    ipcMain.handle(IPC_CHANNELS.GET_STATUS, (event) => projectionGuard(event, () => manager.getStatus()));
+    ipcMain.handle(IPC_CHANNELS.START, (event) => runtimeGuard(event, () => manager.start()));
+    ipcMain.handle(IPC_CHANNELS.STOP, (event) => runtimeGuard(event, () => manager.stop()));
+    ipcMain.handle(IPC_CHANNELS.CREATE_TOPIC, (event, payload) => projectionGuard(event, () => manager.createTopic(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.CREATE_SESSION, (event, payload) => toolboxGuard(event, () => manager.createSession(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.ENSURE_SESSION_RUNTIME, (event, payload) => toolboxGuard(event, () => manager.ensureSessionRuntime(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.FORK_SESSION, (event, payload) => runtimeGuard(event, () => manager.forkSession(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.CLOSE_SESSION, (event, payload) => runtimeGuard(event, () => manager.closeSession(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.RESTORE_SESSION, (event, payload) => runtimeGuard(event, () => manager.restoreSession(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.SET_SESSION_PINNED, (event, payload) => projectionGuard(event, () => manager.setSessionPinned(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.COMPACT_SESSION, (event, payload) => runtimeGuard(event, () => manager.compactSession(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.LIST_TOPICS, (event, payload) => projectionGuard(event, async () => {
         const topics = await manager.listTopics(payload || {});
         const topicList = Array.isArray(topics) ? topics : topics?.topics || [];
         const attachedTopicId = null;
@@ -194,21 +212,37 @@ function initialize(options) {
         ));
         return Array.isArray(topics) ? enriched : { ...topics, topics: enriched };
     }));
-    ipcMain.handle(IPC_CHANNELS.SEARCH_TOPICS, (event, payload) => guard(event, () => manager.searchTopics(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.SEARCH_TOPIC_MESSAGES, (event, payload) => guard(event, () => manager.searchTopicMessages(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.GET_TOPIC_INDEX_STATUS, (event) => guard(event, () => manager.getTopicIndexStatus()));
-    ipcMain.handle(IPC_CHANNELS.REBUILD_TOPIC_INDEX, (event) => guard(event, () => manager.rebuildTopicIndex()));
-    ipcMain.handle(IPC_CHANNELS.READ_TOPIC, (event, payload) => guard(event, () => manager.readTopic(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.READ_PROJECTION, (event, payload) => guard(event, () => manager.readTopic({ ...(payload || {}), reconcile: false })));
-    ipcMain.handle(IPC_CHANNELS.TAKEOVER_TOPIC, (event, payload) => guard(event, () => manager.takeoverTopic(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.RENAME_TOPIC, (event, payload) => guard(event, () => manager.renameTopic(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.DELETE_TOPIC, (event, payload) => guard(event, () => manager.deleteTopic(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.LIST_INTERACTION_QUEUE, (event) => guard(event, () => manager.listInteractionQueue()));
-    ipcMain.handle(IPC_CHANNELS.REPLACE_INTERACTION_QUEUE, (event, payload) => guard(event, () => manager.replaceInteractionQueue(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.CLEAR_INTERACTION_QUEUE, (event) => guard(event, () => manager.clearInteractionQueue()));
-    ipcMain.handle(IPC_CHANNELS.GET_WORKBENCH_SETTINGS, (event) => guard(event, () => manager.getWorkbenchSettings()));
-    ipcMain.handle(IPC_CHANNELS.UPDATE_WORKBENCH_SETTINGS, (event, payload) => guard(event, () => manager.updateWorkbenchSettings(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.SELECT_ATTACHMENTS, (event, payload) => guard(event, async () => {
+    ipcMain.handle(IPC_CHANNELS.SEARCH_TOPICS, (event, payload) => projectionGuard(event, () => manager.searchTopics(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.SEARCH_TOPIC_MESSAGES, (event, payload) => projectionGuard(event, () => manager.searchTopicMessages(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.GET_TOPIC_INDEX_STATUS, (event) => projectionGuard(event, () => manager.getTopicIndexStatus()));
+    ipcMain.handle(IPC_CHANNELS.REBUILD_TOPIC_INDEX, (event) => projectionGuard(event, () => manager.rebuildTopicIndex()));
+    ipcMain.handle(IPC_CHANNELS.READ_TOPIC, (event, payload) => runtimeGuard(event, () => manager.readTopic(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.READ_PROJECTION, (event, payload) => projectionGuard(event, () => manager.readTopic({ ...(payload || {}), reconcile: false })));
+    ipcMain.handle(IPC_CHANNELS.RENAME_TOPIC, (event, payload) => projectionGuard(event, () => manager.renameTopic(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.DELETE_TOPIC, (event, payload) => runtimeGuard(event, () => manager.deleteTopic(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.PERMANENTLY_DELETE_SESSION, (event, payload) => runtimeGuard(event, () => manager.permanentlyDeleteSession(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.LIST_RECOVERY_OPERATIONS, (event) => projectionGuard(event, () => manager.listRecoveryOperations()));
+    ipcMain.handle(IPC_CHANNELS.LIST_RECOVERY_CANDIDATES, (event) => runtimeGuard(event, () => manager.listRecoveryCandidates()));
+    ipcMain.handle(IPC_CHANNELS.RESOLVE_RECOVERY_OPERATION, (event, payload) => runtimeGuard(event, () => manager.resolveRecoveryOperation(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.EXPORT_SESSION, (event, payload) => projectionGuard(event, async () => {
+        const mainWindow = assertMainWindowSender(event);
+        const format = payload?.format === 'json' ? 'json' : 'markdown';
+        const exported = manager.exportSession({ ...(payload || {}), format });
+        const result = await dialog.showSaveDialog(mainWindow, {
+            title: '导出 Agent Session',
+            defaultPath: exported.fileName,
+            filters: [{ name: format === 'json' ? 'JSON' : 'Markdown', extensions: [format === 'json' ? 'json' : 'md'] }],
+        });
+        if (result.canceled || !result.filePath) return { exported: false };
+        await fs.promises.writeFile(result.filePath, exported.content, 'utf8');
+        return { exported: true, filePath: result.filePath, format };
+    }));
+    ipcMain.handle(IPC_CHANNELS.LIST_INTERACTION_QUEUE, (event) => projectionGuard(event, () => manager.listInteractionQueue()));
+    ipcMain.handle(IPC_CHANNELS.REPLACE_INTERACTION_QUEUE, (event, payload) => projectionGuard(event, () => manager.replaceInteractionQueue(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.CLEAR_INTERACTION_QUEUE, (event) => projectionGuard(event, () => manager.clearInteractionQueue()));
+    ipcMain.handle(IPC_CHANNELS.GET_WORKBENCH_SETTINGS, (event) => projectionGuard(event, () => manager.getWorkbenchSettings()));
+    ipcMain.handle(IPC_CHANNELS.UPDATE_WORKBENCH_SETTINGS, (event, payload) => projectionGuard(event, () => manager.updateWorkbenchSettings(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.SELECT_ATTACHMENTS, (event, payload) => projectionGuard(event, async () => {
         const mainWindow = assertMainWindowSender(event);
         const sessionId = String(payload?.sessionId || '').trim();
         if (!sessionId) throw new Error('Agent attachment selection requires sessionId');
@@ -235,17 +269,18 @@ function initialize(options) {
         }
         return { attachments, errors };
     }));
-    ipcMain.handle(IPC_CHANNELS.START_TURN, (event, payload) => guard(event, () => manager.startTurn(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.STEER_TURN, (event, payload) => guard(event, () => manager.steerTurn(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.FOLLOW_UP_TURN, (event, payload) => guard(event, () => manager.followUpTurn(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.CANCEL_TURN, (event, payload) => guard(event, () => manager.cancelTurn(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.RESPOND_APPROVAL, (event, payload) => guard(event, () => manager.respondApproval(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.RESPOND_INTERACTION, (event, payload) => guard(event, () => manager.respondInteraction(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.START_TURN, (event, payload) => toolboxGuard(event, () => manager.startTurn(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.STEER_TURN, (event, payload) => runtimeGuard(event, () => manager.steerTurn(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.FOLLOW_UP_TURN, (event, payload) => toolboxGuard(event, () => manager.followUpTurn(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.CANCEL_TURN, (event, payload) => runtimeGuard(event, () => manager.cancelTurn(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.RESPOND_APPROVAL, (event, payload) => runtimeGuard(event, () => manager.respondApproval(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.RESPOND_INTERACTION, (event, payload) => runtimeGuard(event, () => manager.respondInteraction(payload || {})));
     ipcMain.handle(IPC_CHANNELS.WORKSPACE_LIST_DIRECTORY, (event, payload) => workspaceGuard(event, () => workspaceService.listDirectory(payload || {})));
     ipcMain.handle(IPC_CHANNELS.WORKSPACE_READ_PREVIEW, (event, payload) => workspaceGuard(event, () => workspaceService.readPreview(payload || {})));
     ipcMain.handle(IPC_CHANNELS.WORKSPACE_SEARCH_FILES, (event, payload) => workspaceGuard(event, () => workspaceService.searchFiles(payload || {})));
     ipcMain.handle(IPC_CHANNELS.WORKSPACE_STAT_PATH, (event, payload) => workspaceGuard(event, () => workspaceService.statPath(payload || {})));
     ipcMain.handle(IPC_CHANNELS.WORKSPACE_PERFORM_PATH_ACTION, (event, payload) => workspaceGuard(event, () => workspaceService.performPathAction(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.WORKSPACE_CANCEL, (event, payload) => workspaceGuard(event, () => workspaceService.cancel(payload || {})));
     ipcMain.on(IPC_CHANNELS.SET_WORKBENCH_PRESENCE, (event, payload) => {
         const senderWindow = assertMainWindowSender(event);
         if (payload?.mounted === true) {
@@ -257,8 +292,8 @@ function initialize(options) {
         } else {
             workbenchSenders.delete(senderWindow.webContents.id);
         }
-        // Main forwards presence but never owns approval state. Rust rejects
-        // all pending local approvals once this becomes false.
+        // Main forwards presence but never owns approval state. RuntimeManager
+        // rejects all pending local approvals once this becomes false.
         void manager?.setWorkbenchPresence(workbenchSenders.size > 0).catch((error) => {
             console.warn('[AgentRuntime] Could not forward Workbench presence:', error.message);
         });

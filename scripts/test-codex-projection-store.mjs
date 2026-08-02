@@ -23,14 +23,14 @@ migrationDb.exec(`
     );
 `);
 const migratedRepository = new AgentProjectionRepository({ db: migrationDb });
-assert.equal(migratedRepository.schemaVersion, 6, 'schema 5 databases must migrate to schema 6');
+assert.equal(migratedRepository.schemaVersion, 7, 'schema 5 databases must migrate to schema 7');
 assert.ok(migrationDb.prepare("PRAGMA table_info('projection_state')").all()
     .some((column) => column.name === 'activity_json' && String(column.dflt_value).includes('{}')),
     'schema 5 migration must add the durable Activity projection column');
 migratedRepository.close();
 
 const repository = new AgentProjectionRepository({ databasePath: path.join(root, 'projection.sqlite') });
-assert.equal(repository.schemaVersion, 6);
+assert.equal(repository.schemaVersion, 7);
 repository.saveSession({
     sessionId: 'session_1',
     threadId: 'thr_1',
@@ -91,6 +91,15 @@ assert.equal(marked.blocks[1].content.marker.kind, 'protocol-warning');
 assert.doesNotMatch(marked.blocks[0].content.text, /PowerShellExecutor/,
     'marker tool names must not remain in normal assistant text');
 projector.projectNotification({
+    method: 'item/completed',
+    params: { threadId: 'thr_1', turnId: 'turn_1', item: {
+        id: 'marker_reconcile', type: 'agentMessage', status: 'completed',
+        text: 'visible<<<[TOOL_REQUEST]>>>{"tool":"FileOperator"}<<<[END_TOOL_REQUEST]>>>tail',
+    } },
+});
+assert.equal(repository.readProjection('session_1').messages
+    .find((message) => message.itemId === 'marker_reconcile').blocks.length, 2);
+projector.projectNotification({
     method: 'item/started',
     params: { threadId: 'thr_1', turnId: 'turn_1', item: { id: 'reason_1', type: 'reasoning', summary: [] } },
 });
@@ -123,6 +132,18 @@ const compaction = repository.readProjection('session_1').messages.find((message
 assert.equal(compaction.blocks[0].content.text, '正在整理本轮上下文。',
     'context compaction must project a bounded presentation summary instead of raw item JSON');
 projector.projectNotification({
+    method: 'item/completed',
+    params: { threadId: 'thr_1', turnId: 'turn_1', item: {
+        id: 'reason_clear', type: 'reasoning', status: 'completed', summary: ['old'], content: ['preserve-me'],
+    } },
+});
+projector.projectNotification({
+    method: 'item/completed',
+    params: { threadId: 'thr_1', turnId: 'turn_1', item: {
+        id: 'compact_clear', type: 'contextCompaction', status: 'completed', summary: 'old summary',
+    } },
+});
+projector.projectNotification({
     method: 'item/started',
     params: { threadId: 'thr_1', turnId: 'turn_1', item: {
         id: 'file_1', type: 'fileChange', status: 'inProgress',
@@ -146,15 +167,28 @@ projector.reconcileThread('session_1', {
     id: 'thr_1',
     turns: [{
         id: 'turn_1',
-        items: [{ id: 'item_1', type: 'agentMessage', text: 'authoritative text', status: 'completed' }],
+        items: [
+            { id: 'item_1', type: 'agentMessage', text: 'authoritative text', status: 'completed' },
+            { id: 'marker_reconcile', type: 'agentMessage', text: 'plain authoritative text', status: 'completed' },
+            { id: 'reason_clear', type: 'reasoning', status: 'completed', summary: [] },
+            { id: 'compact_clear', type: 'contextCompaction', status: null, summary: '' },
+        ],
     }],
 });
 const reconciled = repository.readProjection('session_1');
-assert.ok(reconciled.messages.some((message) => message.itemId === 'reason_1'),
-    'thread/read reconciliation must retain event-captured reasoning omitted by a sparse Codex Thread snapshot');
-assert.ok(reconciled.messages.some((message) => message.itemId === 'file_1'),
-    'thread/read reconciliation must retain durable tool and diff presentation items omitted by a sparse snapshot');
+assert.equal(reconciled.messages.some((message) => message.itemId === 'reason_1'), false,
+    'thread/read reconciliation must remove Codex items absent from the authoritative snapshot');
+assert.equal(reconciled.messages.some((message) => message.itemId === 'file_1'), false,
+    'thread/read reconciliation must remove stale tool and diff items absent from the authoritative snapshot');
 assert.equal(reconciled.messages.find((message) => message.itemId === 'item_1').blocks[0].content.text, 'authoritative text');
+assert.equal(reconciled.messages.find((message) => message.itemId === 'marker_reconcile').blocks.length, 1,
+    'authoritative reconciliation must delete stale Codex-owned Blocks absent from the snapshot');
+const clearedReasoning = reconciled.messages.find((message) => message.itemId === 'reason_clear').blocks[0].content;
+assert.deepEqual(clearedReasoning.summary, [], 'an explicit empty snapshot array must clear stale content');
+assert.deepEqual(clearedReasoning.content, ['preserve-me'], 'a snapshot-omitted optional field must preserve live content');
+const clearedCompaction = reconciled.messages.find((message) => message.itemId === 'compact_clear').blocks[0].content;
+assert.equal(clearedCompaction.text, '', 'an explicit empty compaction summary must clear stale text');
+assert.equal(clearedCompaction.phase, null, 'an explicit null compaction status must clear stale phase data');
 // A `thread/read` snapshot is obtained asynchronously. If a live Item lands
 // after the read began, reconciliation must not delete that newer projection.
 const generationBeforeStaleRead = repository.projectionGeneration('session_1');
@@ -191,13 +225,28 @@ repository.removePendingInput(pending.input_id);
 assert.equal(repository.listPendingInputs('session_1').length, 0);
 repository.close();
 const reopenedRepository = new AgentProjectionRepository({ databasePath: path.join(root, 'projection.sqlite') });
-const reopenedReasoning = reopenedRepository.readProjection('session_1').messages
-    .find((message) => message.itemId === 'reason_1');
-assert.equal(reopenedReasoning.blocks[0].content.text, 'first summary',
-    'reasoning must survive a real SQLite close and reopen');
-assert.equal(reopenedReasoning.blocks[1].content.text, 'second summary');
-assert.ok(reopenedRepository.readProjection('session_1').messages.some((message) => message.itemId === 'file_1'),
-    'tool and structured activity projection must survive a real SQLite close and reopen');
+const reopenedMessages = reopenedRepository.readProjection('session_1').messages;
+assert.equal(reopenedMessages.find((message) => message.itemId === 'item_1')?.blocks[0].content.text,
+    'authoritative text', 'the reconciled authoritative projection must survive a real SQLite close and reopen');
+assert.equal(reopenedMessages.some((message) => message.itemId === 'reason_1'), false);
 reopenedRepository.close();
+const readOnlyRepository = new AgentProjectionRepository({
+    databasePath: path.join(root, 'projection.sqlite'), readOnly: true, degradedReason: 'fixture write failure',
+});
+assert.equal(readOnlyRepository.readProjection('session_1').storage.readOnly, true,
+    'a degraded projection store must remain readable');
+assert.throws(() => readOnlyRepository.assertWritable(), (error) => error.code === 'PROJECTION_READ_ONLY');
+readOnlyRepository.close();
+const backupDatabasePath = path.join(root, 'projection-backup.sqlite');
+const backupSeed = new AgentProjectionRepository({ databasePath: backupDatabasePath });
+backupSeed.close();
+const downgraded = new Database(backupDatabasePath);
+downgraded.prepare('UPDATE projection_schema SET version = 6').run();
+downgraded.close();
+const migratedFromDisk = new AgentProjectionRepository({ databasePath: backupDatabasePath });
+assert.equal(migratedFromDisk.schemaVersion, 7);
+migratedFromDisk.close();
+assert.equal(fs.existsSync(`${backupDatabasePath}.schema-6.bak`), true,
+    'an on-disk schema migration must create a versioned backup before mutation');
 fs.rmSync(root, { recursive: true, force: true });
 console.log('Codex projection store tests passed.');

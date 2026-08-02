@@ -28,6 +28,7 @@ class FakeTransport extends EventEmitter {
         if (method === 'thread/resume') return { thread: { id: params.threadId, status: { type: 'idle' } } };
         if (method === 'turn/start') return { turn: { id: 'turn_test' } };
         if (method === 'thread/read' && this.readError) throw this.readError;
+        if (method === 'thread/read' && this.readResult) return this.readResult;
         if (method === 'thread/read') return {
             thread: {
                 id: 'thr_test',
@@ -151,12 +152,12 @@ const workspaceTopic = await manager.createTopic({
 const nextWorkspace = path.join(root, 'next-workspace');
 fs.mkdirSync(nextWorkspace);
 const workspaceUpdate = await manager.updateWorkbenchSettings({
-    sessionId: workspaceTopic.sessionId, workspaceRoot: nextWorkspace,
+    sessionId: workspaceTopic.sessionId, workspaceRoot: nextWorkspace, expectedConfigRevision: 1,
 });
 assert.equal(workspaceUpdate.session.workspaceRoot, nextWorkspace,
     'selected Session workspace changes must be durable rather than renderer-only');
 await assert.rejects(() => manager.updateWorkbenchSettings({
-    sessionId: workspaceTopic.sessionId, workspaceRoot: path.join(root, 'missing-workspace'),
+    sessionId: workspaceTopic.sessionId, workspaceRoot: path.join(root, 'missing-workspace'), expectedConfigRevision: 2,
 }), /does not exist/);
 
 // The Codex provider must target VChat's loopback compatibility adapter, not
@@ -224,12 +225,20 @@ fs.mkdirSync(bridgeDir, { recursive: true });
 fs.writeFileSync(path.join(bridgeDir, process.platform === 'win32' ? 'vcp-toolbox-bridge.exe' : 'vcp-toolbox-bridge'), 'fixture');
 let changingSettings = { vcpServerUrl: 'http://toolbox-one.invalid:6005', vcpApiKey: 'first-key' };
 const adapterChanges = [];
+let blockNextAdapterChange = false;
+let releaseBlockedAdapterChange = null;
 const mutableAdapter = {
     capability: 'stable-loopback-capability',
     baseUrl: 'http://127.0.0.1:49153/v1/stable-loopback-capability',
     async start() { return this.baseUrl; },
     async stop() { this.stopped = true; },
-    reconfigure(config) { adapterChanges.push(config); },
+    async reconfigure(config) {
+        adapterChanges.push(config);
+        if (blockNextAdapterChange) {
+            blockNextAdapterChange = false;
+            await new Promise((resolve) => { releaseBlockedAdapterChange = resolve; });
+        }
+    },
 };
 const bridges = [];
 const reconfigureManager = new CodexRuntimeManager({
@@ -261,13 +270,23 @@ reconfigureManager._handleBridgeEvent({
     event: { requestId: 'settings-change-approval', expiresAtMs: Date.now() + 30_000, data: { toolName: 'FileOperator' } },
 });
 changingSettings = { vcpServerUrl: 'http://toolbox-two.invalid:6005', vcpApiKey: 'second-key' };
-await reconfigureManager.refreshToolboxConfiguration(changingSettings);
+blockNextAdapterChange = true;
+const firstReconfiguration = reconfigureManager.refreshToolboxConfiguration(changingSettings);
+while (adapterChanges.length < 1) await new Promise((resolve) => setImmediate(resolve));
+changingSettings = { vcpServerUrl: 'http://toolbox-three.invalid:6005', vcpApiKey: 'third-key' };
+const latestReconfiguration = reconfigureManager.refreshToolboxConfiguration(changingSettings);
+releaseBlockedAdapterChange();
+await Promise.all([firstReconfiguration, latestReconfiguration]);
 assert.equal(firstBridge.stopped, 1, 'old ToolBox bridge must stop before reconnecting');
 assert.equal(firstBridge.approvalResponses[0].requestId, 'settings-change-approval');
 assert.equal(firstBridge.approvalResponses[0].approved, false, 'old backend approval must fail closed');
-assert.equal(bridges.length, 2, 'new settings must start a new bridge process boundary');
-assert.equal(reconfigureManager.bridge, bridges[1]);
-assert.deepEqual(adapterChanges, [{ toolboxUrl: changingSettings.vcpServerUrl, toolboxApiKey: changingSettings.vcpApiKey }]);
+assert.equal(bridges.length, 3, 'latest-wins reload must replace the bridge for every applied authority generation');
+assert.equal(bridges[1].stopped, 1, 'an intermediate bridge must stop before the newest settings become authoritative');
+assert.equal(reconfigureManager.bridge, bridges[2]);
+assert.deepEqual(adapterChanges, [
+    { toolboxUrl: 'http://toolbox-two.invalid:6005', toolboxApiKey: 'second-key' },
+    { toolboxUrl: changingSettings.vcpServerUrl, toolboxApiKey: changingSettings.vcpApiKey },
+], 'a settings update received during reload must drain to the latest fingerprint');
 assert.equal(reconfigureManager.toolboxApprovals.size, 0);
 await reconfigureManager.stop();
 fs.rmSync(reconfigureRoot, { recursive: true, force: true });
@@ -351,6 +370,7 @@ assert.equal(customDeveloper.developerInstructions, 'Keep answers concise.');
 const updatedPolicy = await manager.updateWorkbenchSettings({
     sessionId: session.sessionId,
     permissionMode: 'always-approve',
+    expectedConfigRevision: manager.repository.getSession(session.sessionId).configRevision,
 });
 assert.equal(updatedPolicy.session.sessionId, session.sessionId,
     'saving an approval policy must update the currently selected VChat Session');
@@ -361,6 +381,7 @@ assert.equal(manager.repository.getSession(session.sessionId).configSnapshot.per
 const updatedModel = await manager.updateWorkbenchSettings({
     sessionId: session.sessionId,
     model: 'gpt-5.6-luna',
+    expectedConfigRevision: manager.repository.getSession(session.sessionId).configRevision,
 });
 assert.equal(updatedModel.settings.model, 'gpt-5.6-luna',
     'saving a model must return the effective Session model');
@@ -368,6 +389,34 @@ assert.equal(manager.repository.getSession(session.sessionId).configSnapshot.mod
     'the current Session model must be durable in its frozen config snapshot');
 assert.equal(manager.repository.getSession(session.sessionId).configSnapshot.permissionMode, 'always-approve',
     'a model-only save must preserve the current Session approval policy');
+await assert.rejects(() => manager.updateWorkbenchSettings({
+    sessionId: session.sessionId,
+    model: 'stale-write-must-not-win',
+    expectedConfigRevision: updatedPolicy.session.configRevision,
+}), (error) => error.code === 'SESSION_CONFIG_CONFLICT',
+'a stale settings view must fail its compare-and-swap instead of overwriting newer Session config');
+const revisedNova = manager.saveAgentProfile({
+    agentId: 'Nova', name: 'Nova', systemPrompt: '{{NovaV2}}', model: 'profile-model-v2', permissionMode: 'ask',
+});
+assert.ok(revisedNova.profile.revision > Number(session.configSnapshot.profileRevision || 1));
+const profilePreview = await manager.applyAgentProfileToSession({
+    sessionId: session.sessionId,
+    expectedConfigRevision: manager.repository.getSession(session.sessionId).configRevision,
+    previewOnly: true,
+});
+assert.equal(profilePreview.requiresNewSession, true,
+    'a materialized Thread must not silently accept prompt identity changes from its Profile');
+assert.ok(profilePreview.identityChanges.includes('systemPrompt'));
+const profileFork = await manager.applyAgentProfileToSession({
+    sessionId: session.sessionId,
+    expectedConfigRevision: manager.repository.getSession(session.sessionId).configRevision,
+    createNewSession: true,
+});
+assert.equal(profileFork.createdNewSession, true);
+assert.equal(profileFork.session.threadId, null,
+    'applying identity-changing Profile fields must create a fresh unmaterialized Session');
+assert.equal(manager.repository.getSession(session.sessionId).configSnapshot.baseInstructions, '{{Nova}}',
+    'the original materialized Session must retain its frozen Profile snapshot');
 // A fresh App Server process has no in-memory subscription for the persisted
 // VChat Session. Simulate that boundary: the next write must reopen exactly
 // the saved Codex Thread, never create a replacement Thread.
@@ -482,6 +531,7 @@ assert.equal(uiEvents.at(-1).type, 'interaction.requested');
 assert.equal(uiEvents.at(-1).payload.kind, 'user-input');
 await manager.respondInteraction({
     source: 'codex-native', requestId: 'req_user_input', kind: 'user-input',
+    generation: manager.runtimeGeneration,
     response: { answers: { choice: { answers: ['Alpha'] }, unknown: { answers: ['ignored'] } } },
 });
 assert.deepEqual(fake.responses.at(-1), { id: 'req_user_input', result: { answers: { choice: { answers: ['Alpha'] } } } });
@@ -493,6 +543,7 @@ fake.emit('server-request', {
 });
 await manager.respondInteraction({
     source: 'codex-native', requestId: 'req_permissions', kind: 'permission',
+    generation: manager.runtimeGeneration,
     response: { decision: 'accept', scope: 'session', permissions: { network: { enabled: false } } },
 });
 assert.deepEqual(fake.responses.at(-1), { id: 'req_permissions', result: {
@@ -506,6 +557,7 @@ fake.emit('server-request', {
 });
 await manager.respondInteraction({
     source: 'codex-native', requestId: 'req_mcp', kind: 'mcp-elicitation',
+    generation: manager.runtimeGeneration,
     response: { action: 'accept', content: { name: 'Nova', count: 2, extra: 'ignored' } },
 });
 assert.deepEqual(fake.responses.at(-1), { id: 'req_mcp', result: {
@@ -523,6 +575,55 @@ fake.emit('notification', { method: 'turn/completed', params: { threadId: lifecy
 await new Promise((resolve) => setImmediate(resolve));
 assert.equal(manager.repository.listPendingInputs(lifecycleSession.sessionId).length, 0, 'a completed Turn must drain one durable follow-up');
 assert.ok(fake.calls.some((call) => call.method === 'turn/start' && call.params.input[0]?.text === 'run after current turn'));
+manager.threadStates.set(lifecycleSession.threadId, { activity: 'idle', activeTurnId: null });
+manager.repository.enqueuePendingInput(lifecycleSession.sessionId, {
+    dedupeKey: 'ack-before-sqlite-crash', prompt: 'accepted before local commit',
+});
+const crashWindowInput = manager.repository.listPendingInputs(lifecycleSession.sessionId)
+    .find((entry) => entry.dedupeKey === 'ack-before-sqlite-crash');
+manager.faultInjection.afterTurnAckBeforePendingCommit = async () => {
+    const error = new Error('simulated crash after turn/start ACK');
+    error.simulateProcessCrash = true;
+    throw error;
+};
+await assert.rejects(() => manager._drainFollowUpQueue(lifecycleSession), /simulated crash/);
+assert.equal(manager.repository.listPendingInputs(lifecycleSession.sessionId)
+    .find((entry) => entry.inputId === crashWindowInput.inputId)?.state, 'dispatching',
+'the ACK-before-SQLite crash window must retain a non-replayable dispatching record');
+manager.faultInjection.afterTurnAckBeforePendingCommit = null;
+fake.readResult = { thread: { id: lifecycleSession.threadId, turns: [{
+    id: 'turn-confirmed-after-crash',
+    items: [{
+        id: crashWindowInput.clientMessageId,
+        clientUserMessageId: crashWindowInput.clientMessageId,
+        type: 'userMessage',
+    }],
+}] } };
+await manager._recoverPendingInputsForSession(lifecycleSession);
+assert.equal(manager.repository.listPendingInputs(lifecycleSession.sessionId)
+    .some((entry) => entry.inputId === crashWindowInput.inputId), false,
+'thread/read confirmation must clear an accepted crash-window input without replaying it');
+manager.repository.enqueuePendingInput(lifecycleSession.sessionId, {
+    dedupeKey: 'unconfirmed-after-crash', prompt: 'do not guess whether to resend',
+});
+const uncertainInput = manager.repository.listPendingInputs(lifecycleSession.sessionId)
+    .find((entry) => entry.dedupeKey === 'unconfirmed-after-crash');
+manager.repository.updatePendingInput(uncertainInput.inputId, { state: 'dispatching', attemptCount: 1 });
+fake.readResult = { thread: { id: lifecycleSession.threadId, turns: [] } };
+await manager._recoverPendingInputsForSession(lifecycleSession);
+assert.equal(manager.repository.listPendingInputs(lifecycleSession.sessionId)
+    .find((entry) => entry.inputId === uncertainInput.inputId)?.state, 'uncertain');
+const startsBeforeUncertainDrain = fake.calls.filter((call) => call.method === 'turn/start').length;
+await manager._drainFollowUpQueue(lifecycleSession);
+assert.equal(fake.calls.filter((call) => call.method === 'turn/start').length, startsBeforeUncertainDrain,
+    'an uncertain input must wait for an explicit user decision and never auto-replay');
+fake.readResult = null;
+const approvalSession = manager.repository.getSession(session.sessionId);
+manager.repository.saveSession({
+    ...approvalSession,
+    configSnapshot: { ...approvalSession.configSnapshot, executionProfile: 'codex-native-legacy' },
+    updatedAt: Date.now(),
+});
 fake.emit('server-request', {
     id: 'req_approval',
     method: 'item/commandExecution/requestApproval',
@@ -530,10 +631,10 @@ fake.emit('server-request', {
 });
 assert.equal(uiEvents.at(-1).type, 'approval.requested');
 assert.equal(uiEvents.at(-1).payload.approval.scope, 'codex-native');
-await manager.respondApproval({ approvalId: 'req_approval', decision: 'allow' });
+await manager.respondApproval({ approvalId: 'req_approval', decision: 'allow', generation: manager.runtimeGeneration });
 assert.deepEqual(fake.responses.at(-1), { id: 'req_approval', result: { decision: 'accept' } });
 await assert.rejects(
-    () => manager.respondApproval({ approvalId: 'req_approval', decision: 'allow' }),
+    () => manager.respondApproval({ approvalId: 'req_approval', decision: 'allow', generation: manager.runtimeGeneration }),
     (error) => error.code === 'NOT_FOUND' || error.code === 'INTERACTION_ALREADY_RESOLVED',
     'a resolved Codex approval must never be replayed',
 );
@@ -607,7 +708,10 @@ manager._handleBridgeEvent({
     event: { requestId: 'toolbox-approval-1', expiresAtMs: Date.now() + 30_000, data: { toolName: 'PowerShellExecutor' } },
 });
 assert.equal(uiEvents.at(-1).payload.approval.scope, 'toolbox');
-await manager.respondApproval({ approvalId: 'toolbox-approval-1', scope: 'toolbox', decision: 'deny' });
+await manager.respondApproval({
+    approvalId: 'toolbox-approval-1', scope: 'toolbox', decision: 'deny',
+    generation: manager.toolboxApprovals.get('toolbox-approval-1').generation,
+});
 assert.equal(toolboxDecisions[0].approved, false);
 manager._handleBridgeEvent({
     channel: 'backend-approval',
@@ -622,6 +726,34 @@ manager._handleBridgeEvent({
 assert.equal(uiEvents.at(-1).payload.kind, 'rag-retrieval');
 assert.equal(uiEvents.at(-1).payload.value.apiKey, '[redacted]');
 assert.equal(uiEvents.at(-1).payload.value.detail.length, 16_384);
+const deletionTopic = await manager.createTopic({
+    agentId: 'Nova', title: 'Permanent delete fixture', systemPrompt: '{{NovaV2}}',
+});
+const deletionSession = await manager.createSession({ sessionId: deletionTopic.sessionId });
+await manager.archiveSession({ sessionId: deletionSession.sessionId });
+await assert.rejects(() => manager.startTurn({ sessionId: deletionSession.sessionId, prompt: 'must not resume' }),
+    (error) => error.code === 'SESSION_ARCHIVED',
+    'an archived Session must remain projection-only until the user explicitly restores it');
+const deletion = await manager.permanentlyDeleteSession({ sessionId: deletionSession.sessionId });
+assert.equal(deletion.deleted, true);
+assert.match(deletion.receipt.sessionHash, /^[0-9a-f]{64}$/);
+assert.match(deletion.receipt.threadHash, /^[0-9a-f]{64}$/);
+assert.equal(manager.repository.getSession(deletionSession.sessionId), null,
+    'permanent deletion must remove the SQLite Session projection');
+assert.ok(fake.calls.some((call) => call.method === 'thread/delete' && call.params.threadId === deletionSession.threadId));
+assert.doesNotMatch(JSON.stringify(deletion.receipt), new RegExp(deletionSession.sessionId),
+    'the retained deletion receipt must not contain raw Session identity');
+const blockedDeleteTopic = await manager.createTopic({
+    agentId: 'Nova', title: 'Blocked delete fixture', systemPrompt: '{{NovaV2}}',
+});
+const blockedDeleteSession = await manager.createSession({ sessionId: blockedDeleteTopic.sessionId });
+await manager.archiveSession({ sessionId: blockedDeleteSession.sessionId });
+const blockedPending = manager.repository.enqueuePendingInput(blockedDeleteSession.sessionId, {
+    dedupeKey: 'delete-blocked-uncertain', prompt: 'must be resolved first',
+});
+manager.repository.updatePendingInput(blockedPending.input_id, { state: 'uncertain' });
+await assert.rejects(() => manager.permanentlyDeleteSession({ sessionId: blockedDeleteSession.sessionId }),
+    (error) => error.code === 'SESSION_HAS_PENDING_INPUT');
 // A crashed App Server has no valid JSON-RPC response channel. All native
 // approvals, dynamic calls and ToolBox backend approvals must be cleared and
 // projected as fail-closed rather than lingering in a reopened Workbench.
@@ -656,4 +788,87 @@ assert.ok(uiEvents.some((event) => event.type === 'approval.resolved'
 rejectCrashInvoke(new Error('bridge interrupted after crash'));
 await manager.stop();
 fs.rmSync(root, { recursive: true, force: true });
+
+// A remote mutation whose acknowledgement is lost must be journaled as
+// uncertain. It is surfaced for repair and never retried as a second Thread.
+const sagaRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'vcp-codex-saga-'));
+const uncertainTransport = new FakeTransport();
+const uncertainRequest = uncertainTransport.request.bind(uncertainTransport);
+let uncertainStartAttempts = 0;
+uncertainTransport.request = async (method, params) => {
+    if (method === 'thread/start') {
+        uncertainStartAttempts += 1;
+        const error = new Error('connection lost after dispatch');
+        error.code = 'PROCESS_EXITED';
+        throw error;
+    }
+    if (method === 'thread/list') return {
+        data: params.archived ? [] : [{
+            id: 'thr_unbound_recovery', name: 'Recovered uncertain start', preview: 'repair me',
+            cwd: sagaRoot, modelProvider: 'vcp_toolbox', createdAt: 1, updatedAt: 2,
+        }],
+        nextCursor: null,
+    };
+    if (method === 'thread/read' && params.threadId === 'thr_unbound_recovery') return {
+        thread: { id: 'thr_unbound_recovery', name: 'Recovered uncertain start', cwd: sagaRoot, turns: [] },
+    };
+    return uncertainRequest(method, params);
+};
+const sagaManager = new CodexRuntimeManager({
+    projectRoot: sagaRoot,
+    settingsPath: path.join(sagaRoot, 'settings.json'),
+    getSettings: () => ({}),
+    transportFactory: () => uncertainTransport,
+    repositoryFactory: () => new AgentProjectionRepository({ databasePath: path.join(sagaRoot, 'codex-agent-projection.sqlite') }),
+});
+const uncertainTopic = await sagaManager.createTopic({ agentId: 'Nova', title: 'Uncertain start', systemPrompt: '{{Nova}}' });
+await assert.rejects(() => sagaManager.createSession({ sessionId: uncertainTopic.sessionId }), /connection lost/);
+const uncertainOperations = sagaManager.listRecoveryOperations();
+assert.ok(uncertainOperations.some((operation) => operation.kind === 'thread-start' && operation.state === 'uncertain'));
+assert.equal(uncertainStartAttempts, 1, 'an uncertain thread/start must never be automatically retried');
+const recoveryCandidates = await sagaManager.listRecoveryCandidates();
+assert.deepEqual(recoveryCandidates.threads.map((thread) => thread.threadId), ['thr_unbound_recovery'],
+    'recovery discovery must expose only Codex Threads that are not already bound to SQLite Sessions');
+const uncertainOperation = recoveryCandidates.operations.find((operation) => operation.kind === 'thread-start');
+const recovered = await sagaManager.resolveRecoveryOperation({
+    operationId: uncertainOperation.operationId,
+    action: 'bind',
+    threadId: 'thr_unbound_recovery',
+});
+assert.equal(recovered.session.threadId, 'thr_unbound_recovery');
+assert.equal(sagaManager.repository.getSession(uncertainTopic.sessionId).threadId, 'thr_unbound_recovery');
+assert.equal(sagaManager.listRecoveryOperations().some((operation) => operation.operationId === uncertainOperation.operationId), false,
+    'an explicitly bound recovery operation must leave the recoverable Saga queue');
+assert.equal(uncertainStartAttempts, 1, 'manual binding must not create a replacement Thread');
+await sagaManager.stop();
+fs.rmSync(sagaRoot, { recursive: true, force: true });
+
+// If writable startup fails but the existing database can be opened, Main
+// degrades to read-only projection access and rejects every mutation.
+const degradedRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'vcp-codex-degraded-'));
+const degradedDatabase = path.join(degradedRoot, 'codex-agent-projection.sqlite');
+const writableSeed = new AgentProjectionRepository({ databasePath: degradedDatabase });
+writableSeed.saveSession({
+    sessionId: 'degraded-session', agentId: 'Nova', title: 'Readable history', state: 'created',
+    workspaceRoot: degradedRoot, configSnapshot: { baseInstructions: '{{Nova}}' },
+});
+writableSeed.close();
+let repositoryAttempts = 0;
+const degradedManager = new CodexRuntimeManager({
+    projectRoot: degradedRoot,
+    settingsPath: path.join(degradedRoot, 'settings.json'),
+    getSettings: () => ({}),
+    repositoryFactory: (config) => {
+        repositoryAttempts += 1;
+        if (!config.readOnly) throw new Error('simulated writable database failure');
+        return new AgentProjectionRepository(config);
+    },
+});
+assert.equal((await degradedManager.listTopics())[0]?.sessionId, 'degraded-session');
+assert.equal(degradedManager.getStatus().storage.readOnly, true);
+await assert.rejects(() => degradedManager.createTopic({ title: 'must fail' }),
+    (error) => error.code === 'PROJECTION_READ_ONLY');
+assert.equal(repositoryAttempts, 2, 'degraded startup must attempt writable then read-only exactly once');
+await degradedManager.stop();
+fs.rmSync(degradedRoot, { recursive: true, force: true });
 console.log('Codex runtime manager tests passed.');

@@ -29,6 +29,7 @@ const IPC_CHANNELS = Object.freeze({
     LIST_AGENT_PROFILES: 'agent-runtime:list-agent-profiles',
     SAVE_AGENT_PROFILE: 'agent-runtime:save-agent-profile',
     SAVE_AGENT_AVATAR: 'agent-runtime:save-agent-avatar',
+    APPLY_AGENT_PROFILE: 'agent-runtime:apply-agent-profile',
     GET_STATUS: 'agent-runtime:get-status',
     START: 'agent-runtime:start',
     STOP: 'agent-runtime:stop',
@@ -47,9 +48,13 @@ const IPC_CHANNELS = Object.freeze({
     REBUILD_TOPIC_INDEX: 'agent-runtime:rebuild-topic-index',
     READ_TOPIC: 'agent-runtime:read-topic',
     READ_PROJECTION: 'agent-runtime:read-projection',
-    TAKEOVER_TOPIC: 'agent-runtime:takeover-topic',
     RENAME_TOPIC: 'agent-runtime:rename-topic',
     DELETE_TOPIC: 'agent-runtime:delete-topic',
+    PERMANENTLY_DELETE_SESSION: 'agent-runtime:permanently-delete-session',
+    EXPORT_SESSION: 'agent-runtime:export-session',
+    LIST_RECOVERY_OPERATIONS: 'agent-runtime:list-recovery-operations',
+    LIST_RECOVERY_CANDIDATES: 'agent-runtime:list-recovery-candidates',
+    RESOLVE_RECOVERY_OPERATION: 'agent-runtime:resolve-recovery-operation',
     LIST_INTERACTION_QUEUE: 'agent-runtime:list-interaction-queue',
     REPLACE_INTERACTION_QUEUE: 'agent-runtime:replace-interaction-queue',
     CLEAR_INTERACTION_QUEUE: 'agent-runtime:clear-interaction-queue',
@@ -69,6 +74,7 @@ const IPC_CHANNELS = Object.freeze({
     WORKSPACE_SEARCH_FILES: 'agent-workspace:search-files',
     WORKSPACE_STAT_PATH: 'agent-workspace:stat-path',
     WORKSPACE_PERFORM_PATH_ACTION: 'agent-workspace:perform-path-action',
+    WORKSPACE_CANCEL: 'agent-workspace:cancel',
 });
 
 const WORKER_MESSAGE_TYPES = Object.freeze({

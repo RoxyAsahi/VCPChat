@@ -84,6 +84,10 @@ class CodexRuntimeManager extends EventEmitter {
         this.intentionalStop = false;
         this.toolboxConfigFingerprint = null;
         this.toolboxReconfiguration = null;
+        this.toolboxRequestedSettings = null;
+        this.toolboxRequestedFingerprint = null;
+        this.toolboxRequestedGeneration = 0;
+        this.toolboxAppliedGeneration = 0;
         this.sessionWarmPromises = new Map();
         this.turnStartPromises = new Map();
         this.followUpDrainPromises = new Map();
@@ -93,6 +97,11 @@ class CodexRuntimeManager extends EventEmitter {
             ? Math.max(0, options.maxIdleWarmSessions) : 2;
         this.diagnosticClock = options.diagnosticClock || (() => performance.now());
         this.startPromise = null;
+        this.runtimeGeneration = 0;
+        this.toolboxAuthorityGeneration = 0;
+        this.runtimeStartFailures = 0;
+        this.runtimeRetryAfter = 0;
+        this.faultInjection = options.faultInjection || {};
     }
 
     getStatus() {
@@ -117,6 +126,10 @@ class CodexRuntimeManager extends EventEmitter {
             toolbox: {
                 configured: Boolean(this.getSettings()?.vcpServerUrl && this.getSettings()?.vcpApiKey),
             },
+            storage: this.repository ? {
+                readOnly: this.repository.readOnly === true,
+                degradedReason: this.repository.degradedReason || null,
+            } : { readOnly: false, degradedReason: null },
             capabilities: capabilityMatrix('toolbox-only'),
         };
     }
@@ -124,6 +137,11 @@ class CodexRuntimeManager extends EventEmitter {
     async start() {
         if (this.state === 'ready') return this.getStatus();
         if (this.startPromise) return this.startPromise;
+        if (Date.now() < this.runtimeRetryAfter) {
+            throw new CodexAppServerError('RUNTIME_RETRY_BACKOFF', 'Codex App Server restart is temporarily rate limited', {
+                retryAfterMs: this.runtimeRetryAfter - Date.now(),
+            });
+        }
         this.startPromise = (async () => {
             const startedAt = this.diagnosticClock();
             this.intentionalStop = false;
@@ -131,6 +149,8 @@ class CodexRuntimeManager extends EventEmitter {
             this.ensureProjectionStore();
             const settings = this.getSettings() || {};
             await this._ensureResponsesAdapter(settings);
+            this.runtimeGeneration += 1;
+            this.interactions.setGeneration('codex-native', this.runtimeGeneration);
             this.transport = this.transport || this.transportFactory({
                 cwd: this.projectRoot,
                 clientVersion: 'vcp-chat-codex-agent-0.1.0',
@@ -149,6 +169,8 @@ class CodexRuntimeManager extends EventEmitter {
                 await this._ensureBridge();
                 this.toolboxConfigFingerprint = toolboxConfigFingerprint(settings);
                 this.state = 'ready';
+                this.runtimeStartFailures = 0;
+                this.runtimeRetryAfter = 0;
                 this._diagnostic('runtime-process-ready', {
                     durationMs: this.diagnosticClock() - startedAt,
                 });
@@ -159,6 +181,8 @@ class CodexRuntimeManager extends EventEmitter {
                 await this.transport.stop().catch(() => null);
                 await this.responsesAdapter?.stop().catch(() => null);
                 this.responsesAdapter = null;
+                this.runtimeStartFailures += 1;
+                this.runtimeRetryAfter = Date.now() + Math.min(30_000, 500 * (2 ** Math.min(6, this.runtimeStartFailures - 1)));
                 throw error;
             }
             return this.getStatus();
@@ -168,12 +192,25 @@ class CodexRuntimeManager extends EventEmitter {
 
     ensureProjectionStore() {
         if (!this.repository) {
-            this.repository = this.repositoryFactory({
-                databasePath: path.join(path.dirname(this.settingsPath), 'codex-agent-projection.sqlite'),
-            });
+            const databasePath = path.join(path.dirname(this.settingsPath), 'codex-agent-projection.sqlite');
+            try {
+                this.repository = this.repositoryFactory({ databasePath });
+            } catch (error) {
+                if (!fs.existsSync(databasePath)) throw error;
+                this.repository = this.repositoryFactory({
+                    databasePath,
+                    readOnly: true,
+                    degradedReason: error?.message || String(error),
+                });
+                this.lastError = serializeError(error);
+            }
         }
         this.projector = this.projector || new CodexProjectionProjector(this.repository);
         return this.repository;
+    }
+
+    _assertProjectionWritable() {
+        this.ensureProjectionStore().assertWritable();
     }
 
     async stop() {
@@ -182,6 +219,8 @@ class CodexRuntimeManager extends EventEmitter {
         await this._failClosedNativeApprovals('VChat Agent Runtime stopped');
         await this._interruptDynamicCalls('VChat Agent Runtime stopped');
         await this._failClosedToolboxApprovals('VChat Agent Runtime stopped');
+        this.interactions.clear({ source: 'codex-native' });
+        this.interactions.clear({ source: 'toolbox' });
         await this.transport?.stop();
         await this.bridge?.stop();
         await this.responsesAdapter?.stop();
@@ -204,6 +243,10 @@ class CodexRuntimeManager extends EventEmitter {
         this.toolboxApprovals.clear();
         this.toolboxConfigFingerprint = null;
         this.toolboxReconfiguration = null;
+        this.toolboxRequestedSettings = null;
+        this.toolboxRequestedFingerprint = null;
+        this.toolboxRequestedGeneration = 0;
+        this.toolboxAppliedGeneration = 0;
         this.startPromise = null;
         this.state = 'stopped';
         return this.getStatus();
@@ -211,6 +254,7 @@ class CodexRuntimeManager extends EventEmitter {
 
     async createTopic(options = {}) {
         this.ensureProjectionStore();
+        this._assertProjectionWritable();
         const sessionId = id('session');
         const now = Date.now();
         const agentId = explicitAgent(options.agentId || options.agent) || 'codex';
@@ -222,15 +266,19 @@ class CodexRuntimeManager extends EventEmitter {
             );
         }
         const identity = this._resolveCanonicalAgent(agentId, { failOnAmbiguous: true });
+        const workspaceRoot = path.resolve(options.workspaceRoot
+            || identity?.profile?.workspaceRoot
+            || this.projectRoot);
         const session = this.repository.saveSession({
             sessionId,
             agentId: identity?.catalogId || agentId,
             agentCatalogId: identity?.catalogId || agentId,
             agentNameSnapshot: identity?.name || configSnapshot.agentName || agentId,
             title: String(options.title || 'Codex Agent').trim(),
-            workspaceRoot: path.resolve(options.workspaceRoot || this.projectRoot),
+            workspaceRoot,
             state: 'created',
             configSnapshot,
+            configRevision: 1,
             createdAt: now,
             updatedAt: now,
         });
@@ -253,8 +301,12 @@ class CodexRuntimeManager extends EventEmitter {
         this._ensureDefaultAgentProfile();
         const profiles = this._agentCatalog().map((entry) => ({
             id: entry.catalogId, name: entry.name,
+            revision: Number(entry.profile?.revision || 1),
             model: entry.profile?.model || '',
             systemPrompt: entry.profile?.systemPrompt || '',
+            workspaceRoot: entry.profile?.workspaceRoot || '',
+            permissionMode: normalizePermissionMode(entry.profile?.permissionMode),
+            executionProfile: 'toolbox-only',
             avatarUrl: this._agentAvatarUrl(entry.catalogId),
         }));
         for (const session of this.repository.listSessions({ archived: false })) {
@@ -263,16 +315,21 @@ class CodexRuntimeManager extends EventEmitter {
             profiles.push({
                 id: idValue,
                 name: session.agentNameSnapshot || session.configSnapshot?.agentName || idValue,
+                revision: Number(session.configSnapshot?.profileRevision || 1),
                 model: session.configSnapshot?.model || '',
                 systemPrompt: session.configSnapshot?.baseInstructions || '',
+                workspaceRoot: session.workspaceRoot || '',
+                permissionMode: normalizePermissionMode(session.configSnapshot?.permissionMode),
+                executionProfile: 'toolbox-only',
                 avatarUrl: session.configSnapshot?.agentAvatar || '',
             });
         }
         return profiles;
     }
 
-    saveAgentProfile({ agentId, name, systemPrompt, model } = {}) {
+    saveAgentProfile({ agentId, name, systemPrompt, model, workspaceRoot, permissionMode } = {}) {
         this.ensureProjectionStore();
+        this._assertProjectionWritable();
         const displayName = String(name || '').trim();
         const prompt = String(systemPrompt || '').trim();
         const requestedId = String(agentId || '').trim();
@@ -292,10 +349,23 @@ class CodexRuntimeManager extends EventEmitter {
         }
         const directory = path.join(this.agentsDir, idValue);
         fs.mkdirSync(directory, { recursive: true });
+        let normalizedWorkspace = '';
+        if (String(workspaceRoot || '').trim()) {
+            normalizedWorkspace = path.resolve(String(workspaceRoot).trim());
+            let stat = null;
+            try { stat = fs.statSync(normalizedWorkspace); } catch { /* validated below */ }
+            if (!stat?.isDirectory()) throw new CodexAppServerError('INVALID_WORKSPACE', 'Workspace directory does not exist');
+        }
+        const previousRevision = Number(existing?.profile?.revision || 0);
         const profile = {
             name: displayName,
             systemPrompt: prompt,
+            revision: previousRevision + 1,
+            executionProfile: 'toolbox-only',
+            permissionMode: normalizePermissionMode(permissionMode),
             ...(String(model || '').trim() ? { model: String(model).trim() } : {}),
+            ...(normalizedWorkspace ? { workspaceRoot: normalizedWorkspace } : {}),
+            updatedAt: Date.now(),
         };
         const configPath = path.join(directory, 'config.json');
         const temporaryPath = `${configPath}.${process.pid}.${Date.now()}.tmp`;
@@ -312,6 +382,7 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     saveAgentAvatar({ agentId, avatarData } = {}) {
+        this._assertProjectionWritable();
         const idValue = String(agentId || '').trim();
         if (!idValue || /[\\/:*?"<>|]/.test(idValue)) throw new CodexAppServerError('INVALID_INPUT', 'Invalid Build Agent identity');
         const type = String(avatarData?.type || '').toLowerCase();
@@ -333,8 +404,11 @@ class CodexRuntimeManager extends EventEmitter {
         return { success: true, avatarUrl: `${pathToFileURL(avatarPath).toString()}?t=${Date.now()}` };
     }
 
-    async ensureSessionRuntime({ sessionId, topicId, reason = 'send', ...options } = {}) {
+    async ensureSessionRuntime({
+        sessionId, topicId, reason = 'send', recoverPendingInputs = true, ...options
+    } = {}) {
         this.ensureProjectionStore();
+        this._assertProjectionWritable();
         const idValue = String(sessionId || topicId || '').trim();
         if (!idValue) throw new CodexAppServerError('INVALID_INPUT', 'Session runtime warm requires sessionId');
         if (this.sessionWarmPromises.has(idValue)) return this.sessionWarmPromises.get(idValue);
@@ -344,10 +418,14 @@ class CodexRuntimeManager extends EventEmitter {
             await this.start();
             let session = this.repository.getSession(idValue);
             if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
+            if (session.archivedAt) {
+                throw new CodexAppServerError('SESSION_ARCHIVED', 'Restore the archived Session before starting a Turn');
+            }
             session = this._repairSessionIdentity(this._repairSessionConfig(session));
             session = session.threadId
                 ? await this._resumeSession(session)
                 : await this._startThreadForSession(session, options);
+            if (recoverPendingInputs) await this._recoverPendingInputsForSession(session);
             this._rememberIdleWarmSession(session.sessionId);
             this._diagnostic('thread-warm-completed', {
                 sessionId: session.sessionId,
@@ -363,27 +441,45 @@ class CodexRuntimeManager extends EventEmitter {
     async _startThreadForSession(session, options = {}) {
         const config = session.configSnapshot || this._configSnapshot(options);
         const runtimeParams = this._runtimePolicyParams(config, { starting: true });
-        const result = await this.transport.request('thread/start', {
-            model: config.model || options.model,
-            ...runtimeParams,
-            cwd: session.workspaceRoot,
-            approvalPolicy: normalizeApprovalPolicy(config.permissionMode || config.approvalPolicy),
-            sandbox: normalizeSandboxMode(config.sandbox),
-            personality: config.personality || 'pragmatic',
-            ...(config.baseInstructions ? { baseInstructions: config.baseInstructions } : {}),
-            ...(config.developerInstructions ? { developerInstructions: config.developerInstructions } : {}),
-            dynamicTools: [vcpInvokeTool()],
+        const operation = this.repository.createOperation({
+            sessionId: session.sessionId,
+            kind: 'thread-start',
+            payload: { workspaceRoot: session.workspaceRoot, profileRevision: config.profileRevision || null },
         });
-        const threadId = result?.thread?.id;
-        if (!threadId) throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/start returned no thread id');
-        session = session.threadId
-            ? this.repository.replaceUnmaterializedThread(session.sessionId, threadId)
-            : this.repository.saveSession({
-                ...session,
-                threadId,
-                state: 'ready',
-                updatedAt: Date.now(),
+        let threadId;
+        try {
+            this.repository.updateOperation(operation.operationId, { state: 'dispatching' });
+            const result = await this.transport.request('thread/start', {
+                model: config.model || options.model,
+                ...runtimeParams,
+                cwd: session.workspaceRoot,
+                approvalPolicy: normalizeApprovalPolicy(config.permissionMode || config.approvalPolicy),
+                sandbox: normalizeSandboxMode(config.sandbox),
+                personality: config.personality || 'pragmatic',
+                ...(config.baseInstructions ? { baseInstructions: config.baseInstructions } : {}),
+                ...(config.developerInstructions ? { developerInstructions: config.developerInstructions } : {}),
+                dynamicTools: [vcpInvokeTool()],
             });
+            threadId = result?.thread?.id;
+            if (!threadId) throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/start returned no thread id');
+            this.repository.updateOperation(operation.operationId, { state: 'remote-applied', threadId });
+            session = session.threadId
+                ? this.repository.replaceUnmaterializedThread(session.sessionId, threadId)
+                : this.repository.saveSession({
+                    ...session,
+                    threadId,
+                    state: 'ready',
+                    updatedAt: Date.now(),
+                });
+            this.repository.updateOperation(operation.operationId, { state: 'completed', threadId });
+        } catch (error) {
+            this.repository.updateOperation(operation.operationId, {
+                state: isUncertainRemoteMutation(error) ? 'uncertain' : 'failed',
+                threadId: threadId || null,
+                lastError: error?.message || String(error),
+            });
+            throw error;
+        }
         this.threadStates.set(threadId, { activity: 'idle', activeTurnId: null });
         this.resumedThreadIds.add(threadId);
         return session;
@@ -396,7 +492,7 @@ class CodexRuntimeManager extends EventEmitter {
         if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
         session = this._repairSessionConfig(session);
         const localProjection = this.repository.readProjection(session.sessionId);
-        if (reconcile === false) {
+        if (reconcile === false || this.repository.readOnly) {
             this._diagnostic('projection-read-returned', {
                 sessionId: session.sessionId,
                 durationMs: this.diagnosticClock() - startedAt,
@@ -405,13 +501,17 @@ class CodexRuntimeManager extends EventEmitter {
         }
         await this.start();
         if (session.threadId && reconcile !== false) {
-            const generation = this.repository.projectionGeneration(session.sessionId);
             try {
-                const result = await this.transport.request('thread/read', {
-                    threadId: session.threadId,
-                    includeTurns: true,
-                });
-                this.projector.reconcileThread(session.sessionId, result.thread || result, generation);
+                let applied = false;
+                for (let attempt = 0; attempt < 3 && !applied; attempt += 1) {
+                    const generation = this.repository.projectionGeneration(session.sessionId);
+                    const result = await this.transport.request('thread/read', {
+                        threadId: session.threadId,
+                        includeTurns: true,
+                    });
+                    applied = this.projector.reconcileThread(session.sessionId, result.thread || result, generation).applied;
+                }
+                if (!applied) throw new CodexAppServerError('RECONCILE_GENERATION_CHANGED', 'Projection changed during reconciliation; retry later');
                 if (session.orphaned) this.repository.markOrphaned(session.sessionId, false);
             } catch (error) {
                 if (isConfirmedThreadNotFound(error) && hasDurableProjection(localProjection)) {
@@ -460,7 +560,15 @@ class CodexRuntimeManager extends EventEmitter {
         return topics;
     }
 
-    async startTurn({ sessionId, topicId, prompt, attachments = [] } = {}) {
+    async startTurn({ sessionId, topicId, prompt, attachments = [], clientUserMessageId } = {}) {
+        return this._startTurnWithGuard({
+            sessionId, topicId, prompt, attachments, clientUserMessageId, recoverPendingInputs: true,
+        });
+    }
+
+    async _startTurnWithGuard({
+        sessionId, topicId, prompt, attachments = [], clientUserMessageId, recoverPendingInputs,
+    } = {}) {
         const requestedSessionId = String(sessionId || topicId || '').trim();
         const text = String(prompt || '').trim();
         const requestKey = submissionDedupeKey(text, attachments);
@@ -469,7 +577,9 @@ class CodexRuntimeManager extends EventEmitter {
             if (existing.requestKey === requestKey) return existing.promise;
             throw new CodexAppServerError('SESSION_BUSY', 'A different message is already being submitted for this Session');
         }
-        const promise = this._startTurn({ sessionId: requestedSessionId, prompt: text, attachments });
+        const promise = this._startTurn({
+            sessionId: requestedSessionId, prompt: text, attachments, clientUserMessageId, recoverPendingInputs,
+        });
         this.turnStartPromises.set(requestedSessionId, { requestKey, promise });
         try {
             return await promise;
@@ -478,9 +588,11 @@ class CodexRuntimeManager extends EventEmitter {
         }
     }
 
-    async _startTurn({ sessionId, prompt, attachments = [] } = {}) {
+    async _startTurn({
+        sessionId, prompt, attachments = [], clientUserMessageId, recoverPendingInputs = true,
+    } = {}) {
         const startedAt = this.diagnosticClock();
-        const session = await this.ensureSessionRuntime({ sessionId, reason: 'send' });
+        const session = await this.ensureSessionRuntime({ sessionId, reason: 'send', recoverPendingInputs });
         const text = String(prompt || '').trim();
         if (!text && (!Array.isArray(attachments) || attachments.length === 0)) {
             throw new CodexAppServerError('INVALID_INPUT', 'Prompt or attachment must not be empty');
@@ -489,7 +601,7 @@ class CodexRuntimeManager extends EventEmitter {
         const input = buildTurnInput(text, attachments);
         const result = await this.transport.request('turn/start', {
             threadId: session.threadId,
-            clientUserMessageId: id('client_msg'),
+            clientUserMessageId: clientUserMessageId || id('client_msg'),
             input,
             cwd: session.workspaceRoot,
             model: session.configSnapshot?.model || undefined,
@@ -529,6 +641,7 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     async followUpTurn({ sessionId, topicId, prompt, attachments = [] } = {}) {
+        this._assertProjectionWritable();
         if (Array.isArray(attachments) && attachments.length) {
             throw new CodexAppServerError('QUEUE_ATTACHMENT_UNSUPPORTED', 'Queued follow-up attachments are not persisted; send them as a new turn instead');
         }
@@ -565,23 +678,46 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     async forkSession({ sessionId, topicId, turnId, title } = {}) {
+        this._assertProjectionWritable();
         const source = this.repository.getSession(sessionId || topicId);
         if (!source?.threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached');
-        const result = await this.transport.request('thread/fork', {
-            threadId: source.threadId,
-            ...(turnId ? { lastTurnId: turnId } : {}),
+        const targetSessionId = id('session');
+        const operation = this.repository.createOperation({
+            sessionId: source.sessionId, kind: 'thread-fork',
+            payload: { targetSessionId, sourceThreadId: source.threadId, lastTurnId: turnId || null },
         });
-        const threadId = result?.thread?.id;
-        if (!threadId) throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/fork returned no thread id');
-        return this.repository.saveSession({
-            sessionId: id('session'),
-            threadId,
-            agentId: source.agentId,
-            title: title || `${source.title || 'Codex Agent'} (branch)`,
-            workspaceRoot: source.workspaceRoot,
-            state: 'ready',
-            configSnapshot: source.configSnapshot,
-        });
+        let threadId;
+        try {
+            this.repository.updateOperation(operation.operationId, { state: 'dispatching' });
+            const result = await this.transport.request('thread/fork', {
+                threadId: source.threadId,
+                ...(turnId ? { lastTurnId: turnId } : {}),
+            });
+            threadId = result?.thread?.id;
+            if (!threadId) throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/fork returned no thread id');
+            this.repository.updateOperation(operation.operationId, { state: 'remote-applied', threadId });
+            const fork = this.repository.saveSession({
+                sessionId: targetSessionId,
+                threadId,
+                agentId: source.agentId,
+                agentCatalogId: source.agentCatalogId,
+                agentNameSnapshot: source.agentNameSnapshot,
+                title: title || `${source.title || 'Codex Agent'} (branch)`,
+                workspaceRoot: source.workspaceRoot,
+                state: 'ready',
+                configSnapshot: source.configSnapshot,
+                configRevision: source.configRevision,
+            });
+            this.repository.updateOperation(operation.operationId, { state: 'completed', threadId });
+            return fork;
+        } catch (error) {
+            this.repository.updateOperation(operation.operationId, {
+                state: isUncertainRemoteMutation(error) ? 'uncertain' : 'failed',
+                threadId: threadId || null,
+                lastError: error?.message || String(error),
+            });
+            throw error;
+        }
     }
 
     _assertLifecycleIdle(session) {
@@ -594,38 +730,59 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     async archiveSession({ sessionId, topicId } = {}) {
+        this._assertProjectionWritable();
         const idValue = sessionId || topicId;
         const session = this.repository.getSession(idValue);
         if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
         this._assertLifecycleIdle(session);
-        if (session.threadId) {
-            await this.start();
-            await this.transport.request('thread/archive', { threadId: session.threadId });
+        const operation = this.repository.createOperation({ sessionId: idValue, kind: 'thread-archive', threadId: session.threadId });
+        try {
+            this.repository.updateOperation(operation.operationId, { state: 'dispatching' });
+            if (session.threadId) {
+                await this.start();
+                await this.transport.request('thread/archive', { threadId: session.threadId });
+            }
+            this.repository.updateOperation(operation.operationId, { state: 'remote-applied', threadId: session.threadId });
+        } catch (error) {
+            this.repository.updateOperation(operation.operationId, { state: 'uncertain', lastError: error?.message || String(error) });
+            throw error;
         }
         const archived = this.repository.archiveSession(idValue);
+        this.repository.updateOperation(operation.operationId, { state: 'completed', threadId: session.threadId });
         return { sessionId: idValue, threadId: session.threadId, archived: true, session: compatibilitySession(archived) };
     }
 
     async closeSession(options = {}) { return this.archiveSession(options); }
 
     async restoreSession({ sessionId, topicId } = {}) {
+        this._assertProjectionWritable();
         const idValue = sessionId || topicId;
         const session = this.repository.getSession(idValue);
         if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
         if (!session.archivedAt) return { sessionId: idValue, threadId: session.threadId, restored: false, session: compatibilitySession(session) };
-        if (session.threadId) {
-            await this.start();
-            const result = await this.transport.request('thread/unarchive', { threadId: session.threadId });
-            const returnedThreadId = String(result?.thread?.id || session.threadId);
-            if (returnedThreadId !== session.threadId) {
-                throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/unarchive returned a mismatched thread id');
+        const operation = this.repository.createOperation({ sessionId: idValue, kind: 'thread-unarchive', threadId: session.threadId });
+        try {
+            this.repository.updateOperation(operation.operationId, { state: 'dispatching' });
+            if (session.threadId) {
+                await this.start();
+                const result = await this.transport.request('thread/unarchive', { threadId: session.threadId });
+                const returnedThreadId = String(result?.thread?.id || session.threadId);
+                if (returnedThreadId !== session.threadId) {
+                    throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/unarchive returned a mismatched thread id');
+                }
             }
+            this.repository.updateOperation(operation.operationId, { state: 'remote-applied', threadId: session.threadId });
+        } catch (error) {
+            this.repository.updateOperation(operation.operationId, { state: 'uncertain', lastError: error?.message || String(error) });
+            throw error;
         }
         const restored = this.repository.unarchiveSession(idValue);
+        this.repository.updateOperation(operation.operationId, { state: 'completed', threadId: session.threadId });
         return { sessionId: idValue, threadId: restored.threadId, restored: true, session: compatibilitySession(restored) };
     }
 
     async setSessionPinned({ sessionId, topicId, pinned } = {}) {
+        this._assertProjectionWritable();
         const idValue = sessionId || topicId;
         if (typeof pinned !== 'boolean') throw new CodexAppServerError('INVALID_INPUT', 'Session pin state must be boolean');
         const session = this.repository.getSession(idValue);
@@ -637,14 +794,10 @@ class CodexRuntimeManager extends EventEmitter {
     async setWorkbenchPresence(mounted = true) {
         this.workbenchMounted = mounted === true;
         if (!this.workbenchMounted) {
-            for (const [requestId, request] of [...this.serverRequests.entries()]) {
-                if (request.method === 'item/tool/call') continue;
-                const response = failClosedApprovalResponse(request.method);
-                if (response) this.transport?.respond(requestId, response);
-                else this.transport?.respondError(requestId, -32002, `Unsupported Codex server request: ${request.method}`);
-                this.serverRequests.delete(requestId);
-            }
+            await this._failClosedNativeApprovals('VChat Workbench closed');
+            this.interactions.clear({ source: 'codex-native' });
             await this._failClosedToolboxApprovals('VChat Workbench closed');
+            this.interactions.clear({ source: 'toolbox' });
         }
         return { mounted: this.workbenchMounted };
     }
@@ -689,14 +842,207 @@ class CodexRuntimeManager extends EventEmitter {
     async searchTopicMessages({ topicId, sessionId } = {}) { return this.readTopic({ topicId, sessionId }); }
     async getTopicIndexStatus() { return { available: false, source: 'codex-thread-store' }; }
     async rebuildTopicIndex() { return { available: false }; }
-    async takeoverTopic() { throw new CodexAppServerError('UNSUPPORTED', 'Codex Thread ownership is controlled by App Server'); }
     async renameTopic({ topicId, sessionId, title }) {
+        this._assertProjectionWritable();
         const session = this.repository.getSession(sessionId || topicId);
         if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
         this.repository.saveSession({ ...session, title: String(title || '').trim(), updatedAt: Date.now() });
         return this.repository.getSession(session.sessionId);
     }
     async deleteTopic({ topicId, sessionId }) { return this.archiveSession({ topicId, sessionId }); }
+    listRecoveryOperations() {
+        this.ensureProjectionStore();
+        return this.repository.listRecoverableOperations();
+    }
+    async _listStoredThreads(archived) {
+        const threads = [];
+        let cursor = null;
+        for (let page = 0; page < 20; page += 1) {
+            const result = await this.transport.request('thread/list', {
+                archived: archived === true,
+                cursor,
+                limit: 100,
+                useStateDbOnly: true,
+            });
+            const data = Array.isArray(result?.data) ? result.data : [];
+            threads.push(...data);
+            cursor = typeof result?.nextCursor === 'string' && result.nextCursor ? result.nextCursor : null;
+            if (!cursor) break;
+        }
+        return threads;
+    }
+    async listRecoveryCandidates() {
+        this.ensureProjectionStore();
+        const operations = this.repository.listRecoverableOperations()
+            .filter((operation) => operation.state === 'uncertain'
+                && (operation.kind === 'thread-start' || operation.kind === 'thread-fork'));
+        if (!operations.length) return { operations: [], threads: [] };
+        await this.start();
+        const [active, archived] = await Promise.all([
+            this._listStoredThreads(false),
+            this._listStoredThreads(true),
+        ]);
+        const boundThreadIds = new Set([
+            ...this.repository.listSessions({ archived: false }),
+            ...this.repository.listSessions({ archived: true }),
+        ].map((session) => session.threadId).filter(Boolean));
+        const seen = new Set();
+        const threads = [...active, ...archived]
+            .filter((thread) => thread?.id && !boundThreadIds.has(thread.id) && !seen.has(thread.id) && seen.add(thread.id))
+            .map((thread) => ({
+                threadId: thread.id,
+                title: thread.name || thread.preview || thread.id,
+                preview: thread.preview || '',
+                cwd: thread.cwd || '',
+                modelProvider: thread.modelProvider || '',
+                archived: archived.some((entry) => entry?.id === thread.id),
+                createdAt: Number(thread.createdAt || 0),
+                updatedAt: Number(thread.updatedAt || 0),
+            }));
+        return { operations, threads };
+    }
+    async resolveRecoveryOperation({ operationId, action, threadId } = {}) {
+        this._assertProjectionWritable();
+        const operation = this.repository.getOperation(String(operationId || ''));
+        if (!operation || operation.state !== 'uncertain'
+            || (operation.kind !== 'thread-start' && operation.kind !== 'thread-fork')) {
+            throw new CodexAppServerError('INVALID_RECOVERY_OPERATION', 'Only uncertain Thread start/fork operations can be resolved');
+        }
+        const selectedThreadId = String(threadId || '').trim();
+        if (!selectedThreadId) throw new CodexAppServerError('INVALID_INPUT', 'Recovery requires a Codex threadId');
+        await this.start();
+        const bound = [
+            ...this.repository.listSessions({ archived: false }),
+            ...this.repository.listSessions({ archived: true }),
+        ].find((session) => session.threadId === selectedThreadId);
+        if (bound) throw new CodexAppServerError('THREAD_ALREADY_BOUND', 'The selected Codex Thread already belongs to a VChat Session');
+
+        if (action === 'delete') {
+            try {
+                await this.transport.request('thread/delete', { threadId: selectedThreadId });
+            } catch (error) {
+                if (!isConfirmedThreadNotFound(error)) throw error;
+            }
+            this.repository.updateOperation(operation.operationId, {
+                state: 'completed',
+                threadId: selectedThreadId,
+                payload: { ...operation.payload, resolution: 'deleted-unbound-thread' },
+                lastError: null,
+            });
+            return { operationId: operation.operationId, resolved: true, action: 'delete', threadId: selectedThreadId };
+        }
+        if (action !== 'bind') throw new CodexAppServerError('INVALID_INPUT', 'Recovery action must be bind or delete');
+
+        const result = await this.transport.request('thread/read', { threadId: selectedThreadId, includeTurns: true });
+        const thread = result?.thread || result;
+        if (String(thread?.id || '') !== selectedThreadId) {
+            throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/read returned a mismatched Thread');
+        }
+        let session;
+        if (operation.kind === 'thread-start') {
+            session = this.repository.getSession(operation.sessionId);
+            if (!session || session.threadId) {
+                throw new CodexAppServerError('RECOVERY_TARGET_CHANGED', 'The VChat Session is missing or already materialized');
+            }
+            session = this.repository.replaceUnmaterializedThread(session.sessionId, selectedThreadId);
+        } else {
+            const source = this.repository.getSession(operation.sessionId);
+            const targetSessionId = String(operation.payload?.targetSessionId || '').trim();
+            if (!source || !targetSessionId || this.repository.getSession(targetSessionId)) {
+                throw new CodexAppServerError('RECOVERY_TARGET_CHANGED', 'The fork recovery target is no longer available');
+            }
+            session = this.repository.saveSession({
+                sessionId: targetSessionId,
+                threadId: selectedThreadId,
+                agentId: source.agentId,
+                agentCatalogId: source.agentCatalogId,
+                agentNameSnapshot: source.agentNameSnapshot,
+                title: thread.name || `${source.title || 'Codex Agent'} (recovered branch)`,
+                workspaceRoot: thread.cwd || source.workspaceRoot,
+                state: 'ready',
+                configSnapshot: source.configSnapshot,
+                configRevision: source.configRevision,
+            });
+        }
+        const generation = this.repository.projectionGeneration(session.sessionId);
+        this.projector.reconcileThread(session.sessionId, thread, generation);
+        this.repository.updateOperation(operation.operationId, {
+            state: 'completed',
+            threadId: selectedThreadId,
+            payload: { ...operation.payload, resolution: 'bound-thread', boundSessionId: session.sessionId },
+            lastError: null,
+        });
+        this.threadStates.set(selectedThreadId, { activity: 'idle', activeTurnId: null });
+        return {
+            operationId: operation.operationId,
+            resolved: true,
+            action: 'bind',
+            threadId: selectedThreadId,
+            session: compatibilitySession(session),
+        };
+    }
+    async permanentlyDeleteSession({ sessionId, topicId } = {}) {
+        this._assertProjectionWritable();
+        const idValue = String(sessionId || topicId || '').trim();
+        const session = this.repository.getSession(idValue);
+        if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
+        if (!session.archivedAt) throw new CodexAppServerError('SESSION_NOT_ARCHIVED', 'Archive the Session before permanently deleting it');
+        this._assertLifecycleIdle(session);
+        const blockingInput = this.repository.listPendingInputs(idValue)
+            .find((entry) => ['queued', 'dispatching', 'accepted', 'uncertain'].includes(entry.state));
+        if (blockingInput) throw new CodexAppServerError('SESSION_HAS_PENDING_INPUT', 'Resolve queued or uncertain input before permanent deletion');
+        const operation = this.repository.createOperation({
+            sessionId: idValue, kind: 'thread-delete', threadId: session.threadId,
+        });
+        try {
+            this.repository.updateOperation(operation.operationId, { state: 'dispatching' });
+            if (session.threadId) {
+                await this.start();
+                try {
+                    await this.transport.request('thread/delete', { threadId: session.threadId });
+                } catch (error) {
+                    if (!isConfirmedThreadNotFound(error)) throw error;
+                }
+            }
+            this.repository.updateOperation(operation.operationId, { state: 'remote-applied', threadId: session.threadId });
+            const receipt = this.repository.permanentlyDeleteSession(idValue, session.threadId);
+            this.repository.updateOperation(operation.operationId, {
+                state: 'completed', threadId: session.threadId,
+                payload: { deletionReceiptId: receipt.receiptId },
+            });
+            return { deleted: true, receipt };
+        } catch (error) {
+            this.repository.updateOperation(operation.operationId, {
+                state: 'uncertain', lastError: error?.message || String(error),
+            });
+            throw error;
+        }
+    }
+    exportSession({ sessionId, topicId, format = 'markdown' } = {}) {
+        this.ensureProjectionStore();
+        const idValue = String(sessionId || topicId || '').trim();
+        const projection = this.repository.readProjection(idValue);
+        if (!projection) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
+        const safeTitle = String(projection.session.title || 'agent-session').replace(/[\\/:*?"<>|]+/g, '-');
+        if (format === 'json') {
+            return { format, fileName: `${safeTitle}.json`, content: `${JSON.stringify(projection, null, 2)}\n` };
+        }
+        const lines = [`# ${projection.session.title || 'Agent Session'}`, ''];
+        for (const message of projection.messages) {
+            lines.push(`## ${message.role || 'unknown'}`, '');
+            for (const block of message.blocks || []) {
+                const content = block.content || {};
+                if (typeof content.text === 'string') lines.push(content.text);
+                else if (Array.isArray(content.parts)) {
+                    for (const part of content.parts) {
+                        if (typeof part?.text === 'string') lines.push(part.text);
+                    }
+                } else lines.push('```json', JSON.stringify(content, null, 2), '```');
+                lines.push('');
+            }
+        }
+        return { format: 'markdown', fileName: `${safeTitle}.md`, content: `${lines.join('\n').trim()}\n` };
+    }
     async listInteractionQueue() { return { items: [] }; }
     async replaceInteractionQueue() { return { items: [] }; }
     async clearInteractionQueue() { return { items: [] }; }
@@ -718,7 +1064,8 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     async updateWorkbenchSettings(settings = {}) {
-        await this.start();
+        this.ensureProjectionStore();
+        this._assertProjectionWritable();
         const hasPermissionUpdate = Object.prototype.hasOwnProperty.call(settings, 'permissionMode');
         const permissionMode = hasPermissionUpdate
             ? (settings.permissionMode === 'always-approve' ? 'always-approve' : 'ask')
@@ -740,29 +1087,35 @@ class CodexRuntimeManager extends EventEmitter {
         if (sessionId) {
             const current = this.repository.getSession(sessionId);
             if (!current) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
-            const threadState = current.threadId ? this.threadStates.get(current.threadId) : null;
-            const hasNativeApproval = current.threadId && [...this.serverRequests.values()]
-                .some((request) => request?.params?.threadId === current.threadId);
-            if (threadState?.activity === 'running' || hasNativeApproval) {
-                // Do not silently alter the policy that an in-flight Turn or
-                // pending approval was started under.
-                throw new CodexAppServerError('SESSION_BUSY', 'Finish or cancel the current turn before changing its approval mode');
+            const expectedRevision = Number(settings.expectedConfigRevision);
+            if (!Number.isInteger(expectedRevision) || expectedRevision < 1) {
+                throw new CodexAppServerError('SESSION_CONFIG_REVISION_REQUIRED', 'Session settings require expectedConfigRevision');
+            }
+            if (hasWorkspaceUpdate && current.threadId && requestedWorkspaceRoot !== current.workspaceRoot) {
+                throw new CodexAppServerError(
+                    'IDENTITY_CHANGE_REQUIRES_NEW_SESSION',
+                    'Workspace is part of the materialized Codex Thread identity; create a new Session to change it',
+                );
             }
             const currentPermissionMode = normalizePermissionMode(
                 current.configSnapshot?.permissionMode || current.configSnapshot?.approvalPolicy,
             );
-            session = this.repository.saveSession({
-                ...current,
-                ...(hasWorkspaceUpdate ? { workspaceRoot: requestedWorkspaceRoot } : {}),
+            const updated = this.repository.updateSessionConfig(sessionId, expectedRevision, {
+                workspaceRoot: hasWorkspaceUpdate ? requestedWorkspaceRoot : current.workspaceRoot,
                 configSnapshot: {
                     ...(current.configSnapshot || {}),
                     permissionMode: permissionMode || currentPermissionMode,
                     approvalPolicy: normalizeApprovalPolicy(permissionMode || currentPermissionMode),
                     ...(requestedModel ? { model: requestedModel } : {}),
                 },
-                updatedAt: Date.now(),
             });
-        } else if (requestedModel && this.setSettings) {
+            if (!updated.updated) {
+                throw new CodexAppServerError('SESSION_CONFIG_CONFLICT', 'Session settings changed in another view', {
+                    current: updated.session,
+                });
+            }
+            session = updated.session;
+        } else if ((requestedModel || hasPermissionUpdate) && this.setSettings) {
             // Keep the global setting path narrow: this is only the default
             // for future Sessions.  Existing Sessions always use their frozen
             // configSnapshot and are never silently rewritten.
@@ -772,7 +1125,8 @@ class CodexRuntimeManager extends EventEmitter {
                     ...(current?.agentRuntime || {}),
                     codex: {
                         ...(current?.agentRuntime?.codex || {}),
-                        model: requestedModel,
+                        ...(requestedModel ? { model: requestedModel } : {}),
+                        ...(hasPermissionUpdate ? { permissionMode } : {}),
                     },
                 },
             }));
@@ -788,6 +1142,75 @@ class CodexRuntimeManager extends EventEmitter {
             appliesTo: session ? 'next-turn' : 'new-sessions',
         };
     }
+
+    async applyAgentProfileToSession({
+        sessionId, expectedConfigRevision, previewOnly = false, createNewSession = false,
+    } = {}) {
+        this.ensureProjectionStore();
+        this._assertProjectionWritable();
+        const session = this.repository.getSession(String(sessionId || ''));
+        if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
+        const profile = this._resolveAgentProfile(session.agentCatalogId || session.agentId);
+        if (!profile) throw new CodexAppServerError('NOT_FOUND', 'Build Agent Profile was not found');
+        const differences = [];
+        const addDifference = (field, current, next, identity = false) => {
+            if (String(current ?? '') !== String(next ?? '')) differences.push({ field, current: current ?? null, next: next ?? null, identity });
+        };
+        addDifference('systemPrompt', session.configSnapshot?.baseInstructions || '', profile.systemPrompt || '', true);
+        const profileWorkspace = profile.workspaceRoot ? path.resolve(profile.workspaceRoot) : session.workspaceRoot;
+        addDifference('workspaceRoot', session.workspaceRoot || '', profileWorkspace || '', true);
+        addDifference('model', session.configSnapshot?.model || '', profile.model || session.configSnapshot?.model || '');
+        addDifference('permissionMode', normalizePermissionMode(session.configSnapshot?.permissionMode), normalizePermissionMode(profile.permissionMode));
+        addDifference('profileRevision', Number(session.configSnapshot?.profileRevision || 1), Number(profile.revision || 1));
+        const identityChanges = differences.filter((entry) => entry.identity).map((entry) => entry.field);
+        if (previewOnly) {
+            return {
+                applied: false,
+                requiresNewSession: Boolean(session.threadId && identityChanges.length),
+                identityChanges,
+                differences,
+                profile: { id: profile.id, revision: Number(profile.revision || 1) },
+            };
+        }
+        if (session.threadId && identityChanges.length) {
+            if (!createNewSession) return {
+                applied: false,
+                requiresNewSession: true,
+                identityChanges,
+                differences,
+                profile: { id: profile.id, revision: Number(profile.revision || 1) },
+            };
+            const created = await this.createTopic({
+                agentId: profile.id,
+                title: `${session.title || profile.name || 'Agent'}（Profile 更新）`,
+                workspaceRoot: profileWorkspace,
+                model: profile.model || session.configSnapshot?.model,
+                permissionMode: profile.permissionMode,
+                systemPrompt: profile.systemPrompt,
+            });
+            return { applied: false, createdNewSession: true, requiresNewSession: true, differences, session: created };
+        }
+        const permissionMode = normalizePermissionMode(profile.permissionMode);
+        const updated = this.repository.updateSessionConfig(session.sessionId, Number(expectedConfigRevision), {
+            workspaceRoot: profileWorkspace,
+            configSnapshot: {
+                ...(session.configSnapshot || {}),
+                profileId: profile.id,
+                profileRevision: Number(profile.revision || 1),
+                baseInstructions: profile.systemPrompt || '',
+                agentName: profile.name || session.agentNameSnapshot || '',
+                model: profile.model || session.configSnapshot?.model,
+                permissionMode,
+                approvalPolicy: normalizeApprovalPolicy(permissionMode),
+                provider: 'vcp_toolbox',
+                executionProfile: 'toolbox-only',
+            },
+        });
+        if (!updated.updated) throw new CodexAppServerError('SESSION_CONFIG_CONFLICT', 'Session settings changed in another view', {
+            current: updated.session,
+        });
+        return { applied: true, requiresNewSession: false, differences, session: compatibilitySession(updated.session) };
+    }
     async importAttachment({ sessionId, path: inputPath } = {}) {
         if (!this.repository.getSession(sessionId)) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
         const resolved = path.resolve(String(inputPath || ''));
@@ -796,7 +1219,7 @@ class CodexRuntimeManager extends EventEmitter {
         if (stat.size > 32 * 1024 * 1024) throw new CodexAppServerError('ATTACHMENT_TOO_LARGE', 'Attachment exceeds 32 MiB');
         return { attachment: attachmentDescriptor(resolved, stat.size) };
     }
-    async respondApproval({ requestId, approvalId, decision, scope, reason } = {}) {
+    async respondApproval({ requestId, approvalId, decision, scope, reason, generation } = {}) {
         const pendingId = String(requestId || approvalId || '');
         if (scope === 'toolbox' || this.toolboxApprovals.has(pendingId)) {
             const approval = this.toolboxApprovals.get(pendingId);
@@ -804,7 +1227,10 @@ class CodexRuntimeManager extends EventEmitter {
                 this.toolboxApprovals.delete(pendingId);
                 throw new CodexAppServerError('NOT_FOUND', 'ToolBox approval is no longer pending');
             }
-            if (!this.interactions.begin('toolbox', pendingId)) {
+            if (Number(generation) !== Number(approval.generation)) {
+                throw new CodexAppServerError('STALE_INTERACTION_GENERATION', 'ToolBox approval belongs to a different authority generation');
+            }
+            if (!this.interactions.begin('toolbox', pendingId, approval.generation)) {
                 throw new CodexAppServerError('INTERACTION_ALREADY_RESOLVED', 'ToolBox approval is already being answered');
             }
             let result;
@@ -815,15 +1241,15 @@ class CodexRuntimeManager extends EventEmitter {
                     reason,
                 });
             } catch (error) {
-                this.interactions.rollback('toolbox', pendingId);
+                this.interactions.rollback('toolbox', pendingId, approval.generation);
                 throw error;
             }
             if (!result?.written) {
-                this.interactions.rollback('toolbox', pendingId);
+                this.interactions.rollback('toolbox', pendingId, approval.generation);
                 throw new CodexAppServerError('TOOLBOX_APPROVAL_FAILED', result?.error || 'ToolBox approval response was not written');
             }
             this.toolboxApprovals.delete(pendingId);
-            this.interactions.complete('toolbox', pendingId);
+            this.interactions.complete('toolbox', pendingId, 'completed', approval.generation);
             this._sendUiEvent({
                 type: 'approval.resolved',
                 approvalId: pendingId,
@@ -835,10 +1261,13 @@ class CodexRuntimeManager extends EventEmitter {
             throw new CodexAppServerError('NOT_FOUND', 'Approval request is no longer pending');
         }
         const request = this.serverRequests.get(pendingId);
+        if (Number(generation) !== Number(request.runtimeGeneration)) {
+            throw new CodexAppServerError('STALE_INTERACTION_GENERATION', 'Codex approval belongs to a different runtime generation');
+        }
         if (!['item/commandExecution/requestApproval', 'item/fileChange/requestApproval'].includes(request.method)) {
             throw new CodexAppServerError('INTERACTION_KIND_MISMATCH', 'This request must be answered through respondInteraction');
         }
-        if (!this.interactions.begin('codex-native', pendingId)) {
+        if (!this.interactions.begin('codex-native', pendingId, request.runtimeGeneration)) {
             throw new CodexAppServerError('INTERACTION_ALREADY_RESOLVED', 'Codex approval is already being answered');
         }
         const response = approvalResponse(request.method, decision);
@@ -846,11 +1275,11 @@ class CodexRuntimeManager extends EventEmitter {
             if (response) this.transport.respond(pendingId, response);
             else this.transport.respondError(pendingId, -32002, `Unsupported Codex server request: ${request.method}`);
         } catch (error) {
-            this.interactions.rollback('codex-native', pendingId);
+            this.interactions.rollback('codex-native', pendingId, request.runtimeGeneration);
             throw error;
         }
         this.serverRequests.delete(pendingId);
-        this.interactions.complete('codex-native', pendingId);
+        this.interactions.complete('codex-native', pendingId, 'completed', request.runtimeGeneration);
         this._sendUiEvent({
             type: 'approval.resolved',
             topicId: approvalProjection(pendingId, request, this.repository).topicId,
@@ -861,18 +1290,21 @@ class CodexRuntimeManager extends EventEmitter {
         return { requestId: pendingId, resolved: true };
     }
 
-    async respondInteraction({ source = 'codex-native', requestId, kind, response = {} } = {}) {
+    async respondInteraction({ source = 'codex-native', requestId, kind, response = {}, generation } = {}) {
         const pendingId = String(requestId || '').trim();
         if (source !== 'codex-native') {
             throw new CodexAppServerError('INTERACTION_SOURCE_MISMATCH', 'Only Codex server requests use the interaction response channel');
         }
         const request = this.serverRequests.get(pendingId);
         if (!request) throw new CodexAppServerError('NOT_FOUND', 'Interaction request is no longer pending');
+        if (Number(generation) !== Number(request.runtimeGeneration)) {
+            throw new CodexAppServerError('STALE_INTERACTION_GENERATION', 'Codex interaction belongs to a different runtime generation');
+        }
         const policy = serverRequestPolicy(request.method, this._profileForRequest(request));
         if (policy.state !== 'supported' || policy.kind !== kind) {
             throw new CodexAppServerError('INTERACTION_KIND_MISMATCH', 'Interaction kind does not match the pending request');
         }
-        if (!this.interactions.begin(source, pendingId)) {
+        if (!this.interactions.begin(source, pendingId, request.runtimeGeneration)) {
             throw new CodexAppServerError('INTERACTION_ALREADY_RESOLVED', 'Interaction is already being answered');
         }
         let normalized;
@@ -880,12 +1312,12 @@ class CodexRuntimeManager extends EventEmitter {
             normalized = normalizeInteractionResponse(request, response);
             this.transport.respond(pendingId, normalized);
         } catch (error) {
-            this.interactions.rollback(source, pendingId);
+            this.interactions.rollback(source, pendingId, request.runtimeGeneration);
             throw error;
         }
         this._clearInteractionTimer(pendingId);
         this.serverRequests.delete(pendingId);
-        this.interactions.complete(source, pendingId);
+        this.interactions.complete(source, pendingId, 'completed', request.runtimeGeneration);
         const projection = approvalProjection(pendingId, request, this.repository);
         this._sendUiEvent({
             type: 'interaction.resolved',
@@ -915,14 +1347,17 @@ class CodexRuntimeManager extends EventEmitter {
         const toolboxConfigured = Boolean(settings.vcpServerUrl && settings.vcpApiKey);
         const agentId = explicitAgent(options.agentId || options.agent) || 'codex';
         const profile = this._resolveAgentProfile(agentId);
-        const provider = options.provider || (toolboxConfigured ? 'vcp_toolbox' : 'codex');
+        const provider = options.provider || (profile ? 'vcp_toolbox' : (toolboxConfigured ? 'vcp_toolbox' : 'codex'));
+        const permissionMode = normalizePermissionMode(
+            options.permissionMode || options.approvalPolicy || profile?.permissionMode,
+        );
         return {
             model: options.model || settings.agentRuntime?.codex?.model
                 || settings.agentRuntime?.tui?.defaultModel
                 || (toolboxConfigured ? 'Nova' : 'gpt-5.1-codex'),
             personality: options.personality || 'pragmatic',
-            permissionMode: normalizePermissionMode(options.permissionMode || options.approvalPolicy),
-            approvalPolicy: normalizeApprovalPolicy(options.permissionMode || options.approvalPolicy),
+            permissionMode,
+            approvalPolicy: normalizeApprovalPolicy(permissionMode),
             sandbox: normalizeSandboxMode(options.sandbox),
             // The Agent catalog's `systemPrompt` is the VChat identity (e.g.
             // `{{Nova}}`, expanded by VCPToolBox). It must replace Codex's
@@ -932,9 +1367,11 @@ class CodexRuntimeManager extends EventEmitter {
             developerInstructions: options.developerInstructions || '',
             agentName: options.agentName || options.name || profile?.name || '',
             agentAvatar: options.agentAvatar || options.avatar || '',
+            profileId: profile?.id || agentId,
+            profileRevision: Number(profile?.revision || 1),
             provider,
             executionProfile: options.executionProfile
-                || (provider === 'vcp_toolbox' ? 'toolbox-only' : 'codex-native'),
+                || (profile || provider === 'vcp_toolbox' ? 'toolbox-only' : 'codex-native'),
         };
     }
 
@@ -1009,7 +1446,10 @@ class CodexRuntimeManager extends EventEmitter {
             }
         }
         fs.mkdirSync(directory, { recursive: true });
-        fs.writeFileSync(configPath, `${JSON.stringify({ name: 'Nova', systemPrompt: '{{Nova}}' }, null, 2)}\n`, 'utf8');
+        fs.writeFileSync(configPath, `${JSON.stringify({
+            name: 'Nova', systemPrompt: '{{Nova}}', revision: 1,
+            executionProfile: 'toolbox-only', permissionMode: 'ask',
+        }, null, 2)}\n`, 'utf8');
     }
 
     _agentAvatarUrl(agentId) {
@@ -1037,6 +1477,7 @@ class CodexRuntimeManager extends EventEmitter {
 
     _repairSessionIdentity(session) {
         if (!session) return session;
+        if (this.repository?.readOnly) return session;
         const current = String(session.agentCatalogId || '').trim();
         const identity = this._resolveCanonicalAgent(current || session.agentId, { failOnAmbiguous: false });
         if (!identity || (!identity.profile && current)) return session;
@@ -1080,6 +1521,7 @@ class CodexRuntimeManager extends EventEmitter {
 
     _repairSessionConfig(session) {
         if (!session) return session;
+        if (this.repository?.readOnly) return session;
         const original = session.configSnapshot || {};
         const config = { ...original };
         const profile = this._resolveAgentProfile(session.agentId);
@@ -1203,35 +1645,73 @@ class CodexRuntimeManager extends EventEmitter {
     // before a new bridge process is allowed to connect.
     async refreshToolboxConfiguration(settings = this.getSettings() || {}) {
         const nextFingerprint = toolboxConfigFingerprint(settings);
-        if (nextFingerprint === this.toolboxConfigFingerprint) return this.getStatus();
-        if (this.toolboxReconfiguration) return this.toolboxReconfiguration;
-        this.toolboxReconfiguration = (async () => {
-            if (this.state !== 'ready') {
-                this.toolboxConfigFingerprint = nextFingerprint;
-                return this.getStatus();
-            }
-            const reason = 'VCPToolBox connection settings changed';
-            await this._failClosedToolboxApprovals(reason);
-            await this._interruptDynamicCalls(reason);
+        if (nextFingerprint === this.toolboxConfigFingerprint && !this.toolboxReconfiguration) return this.getStatus();
+        if (nextFingerprint !== this.toolboxRequestedFingerprint) {
+            this.toolboxRequestedSettings = { ...settings };
+            this.toolboxRequestedFingerprint = nextFingerprint;
+            this.toolboxRequestedGeneration += 1;
+        }
+        const targetGeneration = this.toolboxRequestedGeneration;
+        if (!this.toolboxReconfiguration) {
+            this.toolboxReconfiguration = this._drainToolboxConfiguration().finally(() => {
+                this.toolboxReconfiguration = null;
+            });
+        }
+        const result = await this.toolboxReconfiguration;
+        if (this.toolboxAppliedGeneration < targetGeneration) {
+            return this.refreshToolboxConfiguration(this.toolboxRequestedSettings || settings);
+        }
+        return result;
+    }
 
-            // Detach the old bridge before changing any credentials.  Its
+    async _drainToolboxConfiguration() {
+        let lastError = null;
+        while (this.toolboxAppliedGeneration < this.toolboxRequestedGeneration) {
+            const generation = this.toolboxRequestedGeneration;
+            const settings = this.toolboxRequestedSettings || {};
+            const fingerprint = this.toolboxRequestedFingerprint;
+            try {
+                await this._applyToolboxConfiguration(settings, fingerprint);
+                lastError = null;
+            } catch (error) {
+                lastError = error;
+            }
+            this.toolboxAppliedGeneration = generation;
+            if (generation === this.toolboxRequestedGeneration && lastError) throw lastError;
+        }
+        return this.getStatus();
+    }
+
+    async _applyToolboxConfiguration(settings, nextFingerprint) {
+        if (this.state !== 'ready') {
+            this.toolboxConfigFingerprint = nextFingerprint;
+            return this.getStatus();
+        }
+        const reason = 'VCPToolBox connection settings changed';
+        await this._failClosedToolboxApprovals(reason);
+        await this._interruptDynamicCalls(reason);
+        this.interactions.clear({ source: 'toolbox' });
+        this.toolboxAuthorityGeneration += 1;
+        this.interactions.setGeneration('toolbox', this.toolboxAuthorityGeneration);
+
+        // Detach the old bridge before changing any credentials.  Its
             // stop path closes observer sockets and rejects process waiters;
             // no invoke/interrupt can cross from the old host to the new one.
-            const oldBridge = this.bridge;
-            this.bridge = null;
-            await oldBridge?.stop().catch((error) => {
-                this.emit('diagnostic', `Could not stop old ToolBox bridge: ${error.message}`);
-            });
+        const oldBridge = this.bridge;
+        this.bridge = null;
+        await oldBridge?.stop().catch((error) => {
+            this.emit('diagnostic', `Could not stop old ToolBox bridge: ${error.message}`);
+        });
 
-            const configured = hasToolboxConfiguration(settings);
-            try {
+        const configured = hasToolboxConfiguration(settings);
+        try {
                 if (!configured) {
                     await this.responsesAdapter?.stop().catch(() => null);
                     this.responsesAdapter = null;
                 } else if (this.responsesAdapter?.reconfigure) {
                     // `reconfigure` validates before assigning, so a malformed
                     // URL/key cannot partially replace the current adapter.
-                    this.responsesAdapter.reconfigure({
+                    await this.responsesAdapter.reconfigure({
                         toolboxUrl: settings.vcpServerUrl,
                         toolboxApiKey: settings.vcpApiKey,
                     });
@@ -1246,9 +1726,9 @@ class CodexRuntimeManager extends EventEmitter {
                 this.toolboxConfigFingerprint = nextFingerprint;
                 this._sendUiEvent({
                     type: 'toolbox.connection.reconfigured',
-                    payload: { configured: true },
+                    payload: { configured },
                 });
-            } catch (error) {
+        } catch (error) {
                 // Never fall back to the old bridge after a failed update.
                 // For an invalid incoming config stop the adapter as well, so
                 // subsequent model turns cannot keep using old credentials.
@@ -1259,11 +1739,9 @@ class CodexRuntimeManager extends EventEmitter {
                     type: 'runtime.warning',
                     payload: { warning: 'VCPToolBox connection update failed; VCP tools are unavailable.' },
                 });
-                throw error;
-            }
-            return this.getStatus();
-        })().finally(() => { this.toolboxReconfiguration = null; });
-        return this.toolboxReconfiguration;
+            throw error;
+        }
+        return this.getStatus();
     }
 
     _wireTransport() {
@@ -1300,35 +1778,37 @@ class CodexRuntimeManager extends EventEmitter {
                 void this._handleDynamicToolCall(message);
                 return;
             }
-            const threadId = message?.params?.threadId || null;
+            const request = { ...message, runtimeGeneration: this.runtimeGeneration };
+            const threadId = request?.params?.threadId || null;
             const session = threadId ? this.repository?.getSessionByThread(threadId) : null;
             const profile = session?.configSnapshot?.executionProfile || 'toolbox-only';
-            const policy = serverRequestPolicy(message.method, profile);
+            const policy = serverRequestPolicy(request.method, profile);
             if (policy.state !== 'supported') {
-                this._failClosedServerRequest(message, policy.reason);
+                this._failClosedServerRequest(request, policy.reason);
                 return;
             }
             if (!this.workbenchMounted) {
-                this._failClosedServerRequest(message, 'VChat Workbench is closed');
+                this._failClosedServerRequest(request, 'VChat Workbench is closed');
                 return;
             }
             const queued = this.interactions.enqueue({
                 source: 'codex-native',
-                requestId: String(message.id),
+                requestId: String(request.id),
+                generation: request.runtimeGeneration,
                 sessionId: session?.sessionId || null,
                 threadId,
-                turnId: message?.params?.turnId || null,
+                turnId: request?.params?.turnId || null,
                 kind: policy.kind || 'approval',
-                method: message.method,
-                payload: sanitizeInteractionPayload(message.params),
-                expiresAtMs: interactionExpiry(message),
+                method: request.method,
+                payload: sanitizeInteractionPayload(request.params),
+                expiresAtMs: interactionExpiry(request),
             });
             if (!queued.accepted) return;
-            this.serverRequests.set(String(message.id), message);
+            this.serverRequests.set(String(request.id), request);
             if (policy.kind === 'native-approval' || policy.kind === 'legacy-native-approval') {
-                this._sendUiEvent(approvalEvent(String(message.id), message, this.repository));
+                this._sendUiEvent(approvalEvent(String(request.id), request, this.repository));
             } else {
-                const projection = approvalProjection(String(message.id), message, this.repository);
+                const projection = approvalProjection(String(request.id), request, this.repository);
                 this._sendUiEvent({
                     type: 'interaction.requested',
                     topicId: projection.topicId,
@@ -1341,11 +1821,11 @@ class CodexRuntimeManager extends EventEmitter {
             if (expiresAtMs) {
                 const delay = Math.max(0, expiresAtMs - Date.now());
                 const timer = setTimeout(() => {
-                    if (!this.serverRequests.has(String(message.id))) return;
-                    this._failClosedServerRequest(message, 'Interaction timed out');
+                    if (!this.serverRequests.has(String(request.id))) return;
+                    this._failClosedServerRequest(request, 'Interaction timed out');
                 }, delay);
                 timer.unref?.();
-                this.interactionTimers.set(String(message.id), timer);
+                this.interactionTimers.set(String(request.id), timer);
             }
         });
         this.transport.on('exit', (error) => {
@@ -1431,6 +1911,10 @@ class CodexRuntimeManager extends EventEmitter {
         await this._failClosedNativeApprovals('Codex App Server crashed', { respond: false });
         await this._interruptDynamicCalls('Codex App Server crashed');
         await this._failClosedToolboxApprovals('Codex App Server crashed');
+        this.interactions.clear({ source: 'codex-native' });
+        this.interactions.clear({ source: 'toolbox' });
+        this.transport = null;
+        this._transportWired = false;
         this.sendEvent({ runtime: 'codex', type: 'runtime.crashed', error: this.lastError });
         this.emit('event', { runtime: 'codex', type: 'runtime.crashed', error: this.lastError });
     }
@@ -1441,7 +1925,7 @@ class CodexRuntimeManager extends EventEmitter {
             if (request.method === 'item/tool/call') continue;
             this.serverRequests.delete(requestId);
             this._clearInteractionTimer(requestId);
-            this.interactions.complete('codex-native', requestId, 'expired');
+            this.interactions.complete('codex-native', requestId, 'expired', request.runtimeGeneration);
             if (respond) {
                 try {
                     this._failClosedServerRequest({ ...request, id: requestId }, reason);
@@ -1466,7 +1950,7 @@ class CodexRuntimeManager extends EventEmitter {
         else this.transport?.respondError(requestId, -32002, reason || `Unsupported Codex server request: ${message?.method || '(empty)'}`);
         this.serverRequests.delete(requestId);
         this._clearInteractionTimer(requestId);
-        this.interactions.complete('codex-native', requestId, 'rejected');
+        this.interactions.complete('codex-native', requestId, 'rejected', message.runtimeGeneration);
         this._sendUiEvent({
             type: 'interaction.rejected',
             topicId: approvalProjection(requestId, message, this.repository).topicId,
@@ -1554,8 +2038,20 @@ class CodexRuntimeManager extends EventEmitter {
 
     async _handleDynamicToolCall(message) {
         const params = message.params || {};
+        const transport = this.transport;
+        const runtimeGeneration = this.runtimeGeneration;
+        const respond = (result) => {
+            if (this.transport !== transport || this.runtimeGeneration !== runtimeGeneration) return false;
+            transport?.respond(message.id, result);
+            return true;
+        };
+        const respondError = (code, detail) => {
+            if (this.transport !== transport || this.runtimeGeneration !== runtimeGeneration) return false;
+            transport?.respondError(message.id, code, detail);
+            return true;
+        };
         if (!this.bridge) {
-            this.transport.respondError(message.id, -32001, 'vcp-toolbox-bridge is not connected');
+            respondError(-32001, 'vcp-toolbox-bridge is not connected');
             this.serverRequests.delete(String(message.id));
             return;
         }
@@ -1566,7 +2062,7 @@ class CodexRuntimeManager extends EventEmitter {
             // `tool` identifies the registered Codex dynamic tool.  It is not
             // the ToolBox target.  A malformed envelope must never reach the
             // bridge as an accidental `vcp_invoke` ToolBox invocation.
-            this.transport.respond(message.id, {
+            respond({
                 contentItems: [{ type: 'inputText', text: `Invalid vcp_invoke request: ${error.message}` }],
                 success: false,
             });
@@ -1589,12 +2085,12 @@ class CodexRuntimeManager extends EventEmitter {
                 arguments: invocation.targetArguments,
             });
             const toolboxResult = result.result || result;
-            this.transport.respond(message.id, {
+            respond({
                 contentItems: bridgeResultContentItems(toolboxResult),
                 success: toolboxResult.ok !== false && !toolboxResult.error,
             });
         } catch (error) {
-            this.transport.respond(message.id, {
+            respond({
                 contentItems: [{ type: 'inputText', text: `VCPToolBox bridge failed: ${error.message}` }],
                 success: false,
             });
@@ -1632,10 +2128,28 @@ class CodexRuntimeManager extends EventEmitter {
         const drain = (async () => {
             const state = this.threadStates.get(session.threadId);
             if (state?.activity === 'running') return null;
-            const [next] = this.repository.listPendingInputs(session.sessionId);
+            const next = this.repository.listPendingInputs(session.sessionId)
+                .find((entry) => entry.state === 'queued');
             if (!next) return null;
+            this.repository.updatePendingInput(next.inputId, {
+                state: 'dispatching',
+                attemptCount: next.attemptCount + 1,
+                lastError: null,
+            });
             try {
-                const accepted = await this.startTurn({ sessionId: session.sessionId, prompt: next.prompt });
+                const accepted = await this._startTurnWithGuard({
+                    sessionId: session.sessionId,
+                    prompt: next.prompt,
+                    clientUserMessageId: next.clientMessageId,
+                    // This row became `dispatching` in the current call. A
+                    // second recovery pass would mistake it for a prior crash
+                    // window before turn/start has even been dispatched.
+                    recoverPendingInputs: false,
+                });
+                await this.faultInjection.afterTurnAckBeforePendingCommit?.({ session, pendingInput: next, accepted });
+                this.repository.updatePendingInput(next.inputId, {
+                    state: 'accepted', turnId: accepted.turnId, lastError: null,
+                });
                 this.repository.removePendingInput(next.inputId);
                 this._sendUiEvent({
                     type: 'input.dequeued',
@@ -1646,6 +2160,10 @@ class CodexRuntimeManager extends EventEmitter {
                 });
                 return accepted;
             } catch (error) {
+                if (error?.simulateProcessCrash === true) throw error;
+                this.repository.updatePendingInput(next.inputId, {
+                    state: 'failed', lastError: error?.message || String(error),
+                });
                 this._sendUiEvent({
                     type: 'input.queue.failed',
                     topicId: session.sessionId,
@@ -1657,6 +2175,39 @@ class CodexRuntimeManager extends EventEmitter {
         })().finally(() => this.followUpDrainPromises.delete(session.sessionId));
         this.followUpDrainPromises.set(session.sessionId, drain);
         return drain;
+    }
+
+    async _recoverPendingInputsForSession(session) {
+        const pending = this.repository.listPendingInputs(session.sessionId)
+            .filter((entry) => ['dispatching', 'accepted'].includes(entry.state));
+        if (!pending.length || !session.threadId) return;
+        let thread;
+        try {
+            const result = await this.transport.request('thread/read', { threadId: session.threadId, includeTurns: true });
+            thread = result?.thread || result;
+        } catch (error) {
+            for (const entry of pending) this.repository.updatePendingInput(entry.inputId, {
+                state: 'uncertain', lastError: `Could not verify accepted input: ${error.message}`,
+            });
+            return;
+        }
+        const userItems = (thread?.turns || []).flatMap((turn) => (turn.items || []).map((item) => ({ turn, item })))
+            .filter(({ item }) => item?.type === 'userMessage');
+        for (const entry of pending) {
+            const match = userItems.find(({ item }) => [
+                item.id, item.clientUserMessageId, item.client_user_message_id,
+            ].some((value) => String(value || '') === String(entry.clientMessageId || '')));
+            if (match) {
+                this.repository.updatePendingInput(entry.inputId, {
+                    state: 'accepted', turnId: match.turn?.id || entry.turnId || null, lastError: null,
+                });
+                this.repository.removePendingInput(entry.inputId);
+            } else {
+                this.repository.updatePendingInput(entry.inputId, {
+                    state: 'uncertain', lastError: 'Codex Thread does not confirm whether this input was accepted',
+                });
+            }
+        }
     }
 
     _handleBridgeEvent(message) {
@@ -1674,9 +2225,11 @@ class CodexRuntimeManager extends EventEmitter {
                 replay: value?.replay === true,
                 toolName: value?.data?.toolName || null,
                 reason: value?.data?.reason || null,
+                generation: this.toolboxAuthorityGeneration,
             };
             const queued = this.interactions.enqueue({
                 source: 'toolbox', requestId, kind: 'backend-approval', expiresAtMs,
+                generation: this.toolboxAuthorityGeneration,
             });
             if (!queued.accepted) return;
             this.toolboxApprovals.set(requestId, approval);
@@ -1697,10 +2250,12 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     async _failClosedToolboxApprovals(reason) {
-        const approvals = [...this.toolboxApprovals.keys()];
+        const approvals = [...this.toolboxApprovals.values()];
         this.toolboxApprovals.clear();
-        for (const requestId of approvals) {
+        for (const approval of approvals) {
+            const requestId = approval.requestId;
             await this.bridge?.respondApproval({ requestId, approved: false, reason }).catch(() => null);
+            this.interactions.complete('toolbox', requestId, 'expired', approval.generation);
             this._sendUiEvent({
                 type: 'approval.resolved',
                 approvalId: requestId,
@@ -1926,6 +2481,7 @@ function approvalProjection(requestId, request, repository) {
         command: params.command || null,
         cwd: params.cwd || null,
         params,
+        generation: Number(request?.runtimeGeneration || 0),
     };
 }
 
@@ -1949,6 +2505,11 @@ function normalizeApprovalDecision(decision) {
     if (['always-allow', 'allow-session'].includes(value)) return 'acceptForSession';
     if (['cancelled', 'interrupt'].includes(value)) return 'cancel';
     return 'decline';
+}
+
+function isUncertainRemoteMutation(error) {
+    return ['REQUEST_TIMEOUT', 'PROCESS_EXITED', 'STOPPED', 'NOT_RUNNING', 'RUNTIME_CRASHED', 'STALE_GENERATION']
+        .includes(String(error?.code || ''));
 }
 
 function normalizeApprovalPolicy(value) {

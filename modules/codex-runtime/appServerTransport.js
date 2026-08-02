@@ -114,6 +114,7 @@ class CodexAppServerTransport extends EventEmitter {
         this.launch = null;
         this.initializeResult = null;
         this.version = null;
+        this.generation = 0;
     }
 
     get status() {
@@ -124,6 +125,7 @@ class CodexAppServerTransport extends EventEmitter {
             executable: this.launch?.source || null,
             version: this.version,
             pendingRequests: this.pending.size,
+            generation: this.generation,
         };
     }
 
@@ -132,6 +134,8 @@ class CodexAppServerTransport extends EventEmitter {
         if (this.child) throw new CodexAppServerError('START_IN_PROGRESS', 'Codex App Server is already starting');
 
         this.launch = resolveCodexLaunch(this.options);
+        this.generation += 1;
+        const generation = this.generation;
         this.stopping = false;
         const childEnv = { ...process.env, ...(this.options.env || {}) };
         for (const key of this.options.unsetEnv || []) delete childEnv[key];
@@ -201,12 +205,13 @@ class CodexAppServerTransport extends EventEmitter {
         }
         const id = options.id ?? this.nextRequestId++;
         const timeoutMs = options.timeoutMs || this.requestTimeoutMs;
+        const generation = this.generation;
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
                 this.pending.delete(String(id));
                 reject(new CodexAppServerError('REQUEST_TIMEOUT', `Codex request timed out: ${method}`, { method, id }));
             }, timeoutMs);
-            this.pending.set(String(id), { resolve, reject, timeout, method });
+            this.pending.set(String(id), { resolve, reject, timeout, method, generation });
             try {
                 this._write({ method, id, params });
             } catch (error) {
@@ -278,6 +283,12 @@ class CodexAppServerTransport extends EventEmitter {
             const pending = this.pending.get(String(message.id));
             if (!pending) {
                 this.emit('orphan-response', message);
+                return;
+            }
+            if (pending.generation !== this.generation) {
+                clearTimeout(pending.timeout);
+                this.pending.delete(String(message.id));
+                pending.reject(new CodexAppServerError('STALE_GENERATION', 'Codex response belongs to an old App Server generation'));
                 return;
             }
             clearTimeout(pending.timeout);

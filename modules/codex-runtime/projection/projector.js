@@ -26,12 +26,16 @@ function itemContent(item) {
         case 'reasoning': return { summary: item.summary || [], content: item.content || [] };
         case 'plan': return { text: item.text || '' };
         case 'contextCompaction': {
-            const summary = typeof item.summary === 'string' ? item.summary
-                : typeof item.message === 'string' ? item.message
-                    : item.status === 'failed' ? '上下文压缩失败。'
-                        : item.status === 'completed' ? '上下文压缩完成。'
-                            : '正在整理上下文。';
-            return { text: summary.slice(0, 2_000), phase: item.status || 'inProgress' };
+            const hasSummary = Object.prototype.hasOwnProperty.call(item, 'summary');
+            const hasMessage = Object.prototype.hasOwnProperty.call(item, 'message');
+            const hasStatus = Object.prototype.hasOwnProperty.call(item, 'status');
+            let summary;
+            if (hasSummary) summary = item.summary == null ? item.summary : String(item.summary).slice(0, 2_000);
+            else if (hasMessage) summary = item.message == null ? item.message : String(item.message).slice(0, 2_000);
+            else summary = item.status === 'failed' ? '上下文压缩失败。'
+                : item.status === 'completed' ? '上下文压缩完成。'
+                    : '正在整理上下文。';
+            return { text: summary, phase: hasStatus ? item.status : 'inProgress' };
         }
         case 'fileChange': return { changes: normalizeCodexFileChanges(item.changes), status: item.status || 'inProgress' };
         default: return { item };
@@ -81,7 +85,12 @@ class CodexProjectionProjector {
         const entries = [];
         for (const turn of thread?.turns || []) {
             for (const item of turn.items || []) {
-                const entry = this._itemEntry({ threadId: thread.id, turnId: turn.id, item }, true, sessionId);
+                const entry = this._itemEntry(
+                    { threadId: thread.id, turnId: turn.id, item },
+                    true,
+                    sessionId,
+                    { authoritative: true },
+                );
                 if (entry) entries.push(entry);
             }
         }
@@ -98,7 +107,7 @@ class CodexProjectionProjector {
         return true;
     }
 
-    _itemEntry(params, completed, knownSessionId) {
+    _itemEntry(params, completed, knownSessionId, options = {}) {
         const item = params.item;
         const threadId = params.threadId || params.thread?.id;
         if (!item?.id || !threadId) return null;
@@ -108,6 +117,13 @@ class CodexProjectionProjector {
         if (!session) return null;
         const [role, kind] = ITEM_KIND[item.type] || ['system', 'observation'];
         const status = completed ? (item.status || 'completed') : (item.status || 'inProgress');
+        const explicitFields = authoritativeContentFields(item);
+        const decorateBlock = (block) => ({
+            ...block,
+            authority: 'codex',
+            ...(options.authoritative && explicitFields.replaceContent ? { replaceContent: true } : {}),
+            ...(options.authoritative && explicitFields.replaceFields.length ? { replaceFields: explicitFields.replaceFields } : {}),
+        });
         return {
             sessionId: session.sessionId,
             record: {
@@ -117,17 +133,17 @@ class CodexProjectionProjector {
                 role,
                 status,
             },
-            block: {
+            block: decorateBlock({
                 kind,
                 status,
                 ordinal: 0,
                 content: itemContent(item),
-            },
+            }),
             blocks: (() => {
                 const content = itemContent(item);
-                const primary = { kind, status, ordinal: 0, content };
+                const primary = decorateBlock({ kind, status, ordinal: 0, content });
                 if (item.type !== 'agentMessage' || !Array.isArray(content.observations) || !content.observations.length) return [primary];
-                return [primary, ...content.observations.map((marker, ordinal) => ({
+                return [primary, ...content.observations.map((marker, ordinal) => decorateBlock({
                     kind: 'observation', status, ordinal: ordinal + 1,
                     content: { marker: { ...marker, source: 'vcp-marker' } },
                 }))];
@@ -150,6 +166,25 @@ class CodexProjectionProjector {
 
     _streamKey(threadId, itemId, ordinal, kind) {
         return `${kind}:${threadId || ''}:${itemId || ''}:${ordinal}`;
+    }
+}
+
+function authoritativeContentFields(item = {}) {
+    const has = (field) => Object.prototype.hasOwnProperty.call(item, field);
+    switch (item.type) {
+        case 'userMessage': return { replaceContent: has('content'), replaceFields: [] };
+        case 'agentMessage': return { replaceContent: has('text'), replaceFields: [] };
+        case 'reasoning': return { replaceContent: false, replaceFields: ['summary', 'content'].filter(has) };
+        case 'plan': return { replaceContent: false, replaceFields: has('text') ? ['text'] : [] };
+        case 'fileChange': return { replaceContent: false, replaceFields: ['changes', 'status'].filter(has) };
+        case 'contextCompaction': return {
+            replaceContent: false,
+            replaceFields: [
+                ...(has('summary') || has('message') ? ['text'] : []),
+                ...(has('status') ? ['phase'] : []),
+            ],
+        };
+        default: return { replaceContent: true, replaceFields: [] };
     }
 }
 
