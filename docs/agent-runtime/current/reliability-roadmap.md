@@ -8,7 +8,9 @@ This document is the source of truth for R7-R10. Codex App Server remains a pinn
 
 - `AgentProfile` is a template with a monotonically increasing revision.
 - `SessionConfigSnapshot` freezes profile identity at Session creation.
+- Profile avatar assets are immutable revisioned files. Updating an avatar advances the Profile revision; existing Sessions keep the avatar URL frozen in their snapshot.
 - Materialized Threads allow model and permission changes for the next Turn. Prompt and workspace changes create a new Session.
+- Before Thread materialization, prompt and workspace remain editable under Session config CAS. Agent identity is fixed once the Session exists.
 - Session setting writes use `expectedConfigRevision` compare-and-swap.
 - Projection-only IPC never starts App Server and never waits for ToolBox configuration.
 - ToolBox settings are applied by a latest-wins generation drain.
@@ -56,6 +58,13 @@ This document is the source of truth for R7-R10. Codex App Server remains a pinn
 - The real `vcp_invoke -> FileOperator.ReadFile -> bridge -> Projection` gate passed after a repository-provided DistributedServer node registered FileOperator. The first attempt correctly failed with `Plugin "FileOperator" not found`; no VCPToolBox source or configuration was changed.
 - The machine-readable details are in [r7-r10-working-tree.json](receipts/r7-r10-working-tree.json).
 - Native Codex approval, ToolBox backend approval replay/exactly-once, VCPInfo/VCPLog reconnect/replay, and rich Electron visual/performance acceptance remain product gates.
+
+### R7 profile identity follow-up
+
+The follow-up implementation freezes Profile name/avatar in `SessionConfigSnapshot`, versions avatar files by Profile revision,
+retains durable `threadId` in the Workbench projection, and makes pre-materialization Base Instructions editable under
+`expectedConfigRevision`. Materialized prompt/workspace and all existing Session Agent selectors are fail-closed in the UI and
+Runtime Manager. Its committed revision and command receipt are recorded in `test-matrix.md`; this section is not a product-ready claim.
 
 ## Authority Boundary
 

@@ -299,6 +299,28 @@ R4.1、R4.2、R5.1、R5.3 的 gate 除测试通过外，还必须记录：来源
 | Concurrent Nova release gate | one App Server PID、two running Threads、interrupt A、B completes、Projection isolation | `VCP_CODEX_LIVE=1 npm run test:codex-concurrent-live` | live pass, 2026-08-02 |
 | Dynamic ToolBox release gate | `vcp_invoke` unwrap、FileOperator ReadFile、Codex identity、bridge result、SQLite Projection | `VCP_CODEX_LIVE=1 npm run test:codex-toolbox-live` | live pass, 2026-08-02; requires a registered DistributedServer FileOperator node |
 
+### R7 Profile/Session identity follow-up
+
+Working-tree assertions added on 2026-08-02:
+
+- Profile avatar updates create immutable revisioned assets and advance the Profile revision.
+- Existing Sessions retain frozen name/avatar identity while newly created Sessions receive the latest Profile snapshot.
+- Pre-materialization Base Instructions update through Session CAS; materialized prompt/workspace changes fail closed.
+- Workbench autosave advances and reuses the current config revision, and the hydrated Session retains its durable Thread identity.
+
+Commands passed before the follow-up commit:
+
+```text
+npm run test:codex-runtime-manager
+npm run test:agent-workbench
+npm run test:codex-projection-store
+npm run test:agent-workbench-store
+npm run check:codex-governance
+git diff --check
+```
+
+This is a working-tree receipt until the corresponding commit hash is recorded.
+
 R7-R10 machine receipt: [r7-r10-working-tree.json](receipts/r7-r10-working-tree.json). The live ToolBox test initially
 failed with `Plugin "FileOperator" not found for tool call`, proving the bridge failed closed while no distributed node
 was registered. A temporary repository-provided node was then started with `ALLOWED_DIRECTORIES` restricted to the
