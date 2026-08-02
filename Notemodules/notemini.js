@@ -65,7 +65,14 @@ function buildNextMiniNote({ titleInput, contentInput, saveStatus, onSave, onClo
         statusEl: status,
         titleField,
         contentField,
-        focus: () => inputNode(titleField)?.focus(),
+        focus: () => {
+            const node = inputNode(titleField);
+            if (!node) return;
+            try { node.focus(); } catch (error) {
+                // wa-input focus before Web Awesome upgrade is complete.
+                setTimeout(() => { try { node.focus?.(); } catch (_) { /* ignore */ } }, 0);
+            }
+        },
     };
 }
 
