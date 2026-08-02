@@ -50,22 +50,24 @@ VChat Session (sessionId)
 ### Electron 启动
 
 1. Main 注册窄 IPC，但不立即读取旧 Rust Topics。
-2. 首次 Agent 请求时打开 Projection SQLite。
-3. 解析 Codex executable，启动长期 App Server。
-4. 完成 `initialize -> initialized`，验证能力。
-5. ToolBox 设置和 bridge binary 均存在时启动 bridge；否则明确标记 VCP tool unavailable。
+2. 首次 projection-only 请求时打开 Projection SQLite；列表和历史不启动 App Server。
+3. 首次 runtime-required 操作（通常是发送）才解析 Codex executable 并启动 App Server。
+4. 完成 `initialize -> initialized`，验证能力；首次发送随后 resume 目标 Thread。
+5. ToolBox 配置由 settings 事件在后台 latest-wins 更新；工具执行只等待目标配置 generation。
+6. ToolBox 设置和 bridge binary 均存在时启动 bridge；否则明确标记 VCP tool unavailable。
 
 ### Workbench 打开 Session
 
 1. Renderer 请求 projection-only snapshot。
 2. Main 立即读 SQLite 并返回。
 3. Renderer keyed render，不等待 Codex。
-4. Main 后台 `thread/read` 对账。
+4. 仅在 App Server 已运行时，Main 后台 `thread/read` 对账；否则等首次 runtime-required 操作再对账。
 5. live item notifications 事务写入 SQLite，再发送最小 projection patch。
 
 ### 退出与崩溃
 
 - App Server crash：拒绝所有 request waiter，标记 runtime crashed，不自动重放 Turn。
+- 下一次 runtime-required 操作按需重启；SQLite 列表、历史和导出始终不依赖重启成功。
 - Bridge crash：拒绝所有 dynamic call waiter，未决 VCP 审批 fail-closed。
 - Workbench 关闭：原生 Codex UI 审批和本地 VCP 审批 fail-closed；后台无审批 Thread 是否继续由明确策略决定。
 - Electron 退出：先关闭审批和 bridge，再停止 App Server 和 SQLite writer。
@@ -109,6 +111,13 @@ Bridge 不包含 Agent loop、Topic Store、本地 Shell、MCP、第二套插件
 - ToolBox API Key 只进入 Main 的 loopback adapter 与 bridge 子进程环境；Codex 只拿到一次性 loopback capability，不进入 Renderer、SQLite、日志或事件 payload。
 - 未知 server request、过期 approval、跨 Thread identity、重复 response 一律 fail-closed。
 - 旧 Rust daemon 不作为 fallback；Codex 不可用时显示明确错误。
+
+## Uncertain 操作恢复
+
+- `thread/start` / `thread/fork` 在远端可能成功但本地绑定未提交时进入 `uncertain`。
+- 恢复页通过固定 `0.146` `thread/list` schema 列出尚未绑定的 Thread。
+- 用户必须明确选择“绑定”或“删除”；VChat 不按标题、时间或当前 Session 自动猜测。
+- 绑定与删除都写回原 Saga，禁止自动重放 start/fork。
 
 身份覆盖、旧 Session 迁移和工具过滤的完整规则见
 [identity-and-tool-surface.md](identity-and-tool-surface.md)。

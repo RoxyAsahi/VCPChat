@@ -13,7 +13,7 @@ Agent 页面应获得与 VChat 主聊天一致的消息阅读和操作体验，�
 - Codex reasoning、工具、Plan、Diff、Usage、Compaction 以及具有 Session/Turn identity 的 VCP marker 属于 durable Session projection，必须在 SQLite-first 重开后恢复。
 - reasoning 的实时 `projection.updated` 与冷启动 `readProjection` 使用同一转换合同：标准 assistant 消息的正文为空，公开推理内容进入 `message.reasoning`，由 Full Fork Renderer 恢复为可展开的 `vcp-thought-chain-*` 卡片。
 - ToolBox Chat 仅将模型明确公开的 `reasoning_content` 或字符串 `reasoning` 转换为 Responses reasoning Item；隐藏 Chain-of-Thought 不读取、不推断、不持久化。没有公开 reasoning 的 Turn 只显示临时“思考中”状态，完成后不生成空推理卡。
-- `thread/read` 是后台对账来源，不得因为稀疏快照缺少某个展示 Item 就删除已经由事件写入 SQLite 的推理或工具记录；空的 completed payload 也不得覆盖已有流式内容。
+- `thread/read(includeTurns: true)` 返回的 Codex-owned Item 集合具有存在性权威：完整快照中消失的旧 Item/Block 会被事务删除。单个 Item 未返回的可选字段不具有清除语义；只有显式空字符串、空数组或 null 才能清除旧值。
 - 无可靠 Thread identity 的全局 VCPLog/VCPInfo 是 Renderer-only bounded observation，Activity Center 明确标注“仅本次运行”，不写入任一 Session transcript。
 
 ## Renderer 数据模型
@@ -50,10 +50,10 @@ idle -> creating -> streaming
 
 1. 立即更新 selected row。
 2. 从内存 LRU 或 projection-only SQLite read 显示 snapshot。
-3. snapshot 可见后，以 detached `ensure-session-runtime` 对当前 Session 做有界 `thread/start`/`thread/resume`
-   预热；该步骤不创建 Turn、不发送模型请求，也不停止其他 Thread。
-4. 后台 `thread/read` 对账。
-5. 新 snapshot 仅在 selection 仍匹配且 generation 更新时应用；发送复用同一 warm promise。
+3. 切换视图不调用 `ensure-session-runtime`，也不启动 App Server。
+4. App Server 已运行时可后台 `thread/read` 对账；未运行时保留 SQLite 投影。
+5. 首次发送才调用 `ensure-session-runtime`，等待目标 Thread resume 后再 `turn/start`。
+6. 新 snapshot 仅在 selection 仍匹配且 mutation generation 未变化时应用。
 
 当前实现已经将 Session 目录切到 projection-only SQLite 快路径：Main 负责 canonical Build Agent identity，
 Build profile 位于独立 `CodexAgents/`，不得读取或写入主聊天 `Agents/`。schema v3 保存
@@ -242,7 +242,7 @@ R4.3 开始按 OpenCode 的信息架构收口右侧面板，但只 clean-room �
 
 仍未完成：
 
-- 全面清理 Rust Topic/lease/takeover/compact/queue 文案和入口；
+- 清理历史兼容 API 中剩余的 Topic 命名，并保持媒体 attachment 语义不受影响；
 - 将安全的 Agent 转发 adapter 接入不依赖主聊天 history identity 的目标选择流程；
 - archive、pin、restore 与 Session-scoped 草稿/附件/滚动状态的完整流程；
 - Plan/Compaction/Unknown 的主时间线专用卡与 attachment/resource/warning 的 Electron 视觉验收；

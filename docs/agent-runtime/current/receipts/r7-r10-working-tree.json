@@ -1,0 +1,14 @@
+{
+  "status": "implemented",
+  "codexProtocol": "0.146",
+  "scope": ["R7", "R8", "R9", "R10"],
+  "toolboxModified": false,
+  "liveVerified": false,
+  "commands": [
+    "npm run test:codex-reliability",
+    "npm run test:electron-codex-recovery",
+    "npm run check:codex-governance",
+    "npm run test:codex-stack"
+  ],
+  "note": "Status may be promoted to hermetic only after these commands pass on the same commit."
+}

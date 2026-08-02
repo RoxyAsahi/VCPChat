@@ -1,0 +1,51 @@
+name: Codex Agent Windows
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "modules/codex-runtime/**"
+      - "modules/ipc/agentRuntimeHandlers.js"
+      - "modules/ui-system/agent-**"
+      - "preloads/**"
+      - "fixtures/codex-app-server/**"
+      - "scripts/*codex*"
+      - "scripts/*agent-workspace*"
+      - "scripts/*agent-workbench*"
+      - "docs/agent-runtime/current/**"
+      - "package.json"
+      - ".github/workflows/codex_agent_windows.yml"
+  pull_request:
+    paths:
+      - "modules/codex-runtime/**"
+      - "modules/ipc/agentRuntimeHandlers.js"
+      - "modules/ui-system/agent-**"
+      - "preloads/**"
+      - "fixtures/codex-app-server/**"
+      - "scripts/*codex*"
+      - "scripts/*agent-workspace*"
+      - "scripts/*agent-workbench*"
+      - "docs/agent-runtime/current/**"
+      - "package.json"
+      - ".github/workflows/codex_agent_windows.yml"
+
+concurrency:
+  group: codex-agent-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hermetic:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Codex Agent hermetic gate
+        run: npm run test:codex-ci
+
+# Live ToolBox/Nova credentials are intentionally absent. Real dual-Thread
+# long-task verification remains a manual release gate.
