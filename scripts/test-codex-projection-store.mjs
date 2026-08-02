@@ -178,6 +178,18 @@ projector.projectNotification({
 const plan = repository.readProjection('session_1').messages.find((message) => message.itemId === 'plan_1');
 assert.equal(plan.blocks[0].kind, 'observation');
 assert.equal(plan.blocks[0].content.text, '1. 收集证据\n2. 只读汇总');
+repository.upsertItem('session_1', {
+    threadId: 'thr_1', turnId: 'turn_local', itemId: 'local_observation', role: 'system', status: 'completed',
+}, {
+    kind: 'observation', status: 'completed', ordinal: 0, authority: 'vchat', content: { text: 'local-only' },
+});
+repository.upsertItem('session_1', {
+    threadId: 'thr_1', turnId: 'turn_mixed', itemId: 'mixed_observation', role: 'assistant', status: 'completed',
+}, [{
+    kind: 'message', status: 'completed', ordinal: 0, authority: 'codex', content: { text: 'stale codex content' },
+}, {
+    kind: 'observation', status: 'completed', ordinal: 1, authority: 'toolbox', content: { text: 'durable local observation' },
+}]);
 projector.reconcileThread('session_1', {
     id: 'thr_1',
     turns: [{
@@ -195,6 +207,15 @@ assert.equal(reconciled.messages.some((message) => message.itemId === 'reason_1'
     'thread/read reconciliation must remove Codex items absent from the authoritative snapshot');
 assert.equal(reconciled.messages.some((message) => message.itemId === 'file_1'), false,
     'thread/read reconciliation must remove stale tool and diff items absent from the authoritative snapshot');
+const localObservation = reconciled.messages.find((message) => message.itemId === 'local_observation');
+assert.equal(localObservation.blocks.length, 1,
+    'thread/read reconciliation must preserve local-only observations absent from the Codex snapshot');
+assert.equal(localObservation.blocks[0].authority, 'vchat');
+const mixedObservation = reconciled.messages.find((message) => message.itemId === 'mixed_observation');
+assert.equal(mixedObservation.blocks.length, 1,
+    'thread/read reconciliation must remove stale Codex Blocks without deleting local Blocks on the same Message');
+assert.equal(mixedObservation.blocks[0].authority, 'toolbox');
+assert.equal(mixedObservation.blocks[0].content.text, 'durable local observation');
 assert.equal(reconciled.messages.find((message) => message.itemId === 'item_1').blocks[0].content.text, 'authoritative text');
 assert.equal(reconciled.messages.find((message) => message.itemId === 'marker_reconcile').blocks.length, 1,
     'authoritative reconciliation must delete stale Codex-owned Blocks absent from the snapshot');

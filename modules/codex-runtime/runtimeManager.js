@@ -136,6 +136,7 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     async start() {
+        this._assertProjectionWritable();
         if (this.state === 'ready') return this.getStatus();
         if (this.startPromise) return this.startPromise;
         if (Date.now() < this.runtimeRetryAfter) {
@@ -168,6 +169,7 @@ class CodexRuntimeManager extends EventEmitter {
             try {
                 await this.transport.start();
                 await this._ensureBridge();
+                this._normalizeUnboundThreadOperations();
                 await this._recoverKnownThreadOperations();
                 this.toolboxConfigFingerprint = toolboxConfigFingerprint(settings);
                 this.state = 'ready';
@@ -297,6 +299,7 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     async createSession(options = {}) {
+        this._assertProjectionWritable();
         const requestedSessionId = options.sessionId || options.topicId || options.resume;
         this.ensureProjectionStore();
         let session = requestedSessionId ? this.repository.getSession(requestedSessionId) : null;
@@ -487,6 +490,7 @@ class CodexRuntimeManager extends EventEmitter {
             threadId = result?.thread?.id;
             if (!threadId) throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/start returned no thread id');
             this.repository.updateOperation(operation.operationId, { state: 'remote-applied', threadId });
+            await this.faultInjection.afterThreadStartRemoteApplied?.({ operation, session, threadId });
             session = session.threadId
                 ? this.repository.replaceUnmaterializedThread(session.sessionId, threadId)
                 : this.repository.saveSession({
@@ -498,7 +502,7 @@ class CodexRuntimeManager extends EventEmitter {
             this.repository.updateOperation(operation.operationId, { state: 'completed', threadId });
         } catch (error) {
             this.repository.updateOperation(operation.operationId, {
-                state: isUncertainRemoteMutation(error) ? 'uncertain' : 'failed',
+                state: (threadId || isUncertainRemoteMutation(error)) ? 'uncertain' : 'failed',
                 threadId: threadId || null,
                 lastError: error?.message || String(error),
             });
@@ -593,6 +597,7 @@ class CodexRuntimeManager extends EventEmitter {
     async _startTurnWithGuard({
         sessionId, topicId, prompt, attachments = [], clientUserMessageId, recoverPendingInputs,
     } = {}) {
+        this._assertProjectionWritable();
         const requestedSessionId = String(sessionId || topicId || '').trim();
         const text = String(prompt || '').trim();
         const requestKey = submissionDedupeKey(text, attachments);
@@ -615,6 +620,7 @@ class CodexRuntimeManager extends EventEmitter {
     async _startTurn({
         sessionId, prompt, attachments = [], clientUserMessageId, recoverPendingInputs = true,
     } = {}) {
+        this._assertProjectionWritable();
         const startedAt = this.diagnosticClock();
         const session = await this.ensureSessionRuntime({ sessionId, reason: 'send', recoverPendingInputs });
         const text = String(prompt || '').trim();
@@ -653,6 +659,7 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     async steerTurn({ sessionId, topicId, turnId, prompt } = {}) {
+        this._assertProjectionWritable();
         const session = this.repository.getSession(sessionId || topicId);
         if (!session?.threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached');
         const result = await this.transport.request('turn/steer', {
@@ -684,6 +691,7 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     async cancelTurn({ sessionId, topicId, turnId } = {}) {
+        this._assertProjectionWritable();
         const session = this.repository.getSession(sessionId || topicId);
         if (!session?.threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached');
         await this.transport.request('turn/interrupt', {
@@ -720,6 +728,7 @@ class CodexRuntimeManager extends EventEmitter {
             threadId = result?.thread?.id;
             if (!threadId) throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/fork returned no thread id');
             this.repository.updateOperation(operation.operationId, { state: 'remote-applied', threadId });
+            await this.faultInjection.afterThreadForkRemoteApplied?.({ operation, source, threadId, targetSessionId });
             const fork = this.repository.saveSession({
                 sessionId: targetSessionId,
                 threadId,
@@ -736,7 +745,7 @@ class CodexRuntimeManager extends EventEmitter {
             return fork;
         } catch (error) {
             this.repository.updateOperation(operation.operationId, {
-                state: isUncertainRemoteMutation(error) ? 'uncertain' : 'failed',
+                state: (threadId || isUncertainRemoteMutation(error)) ? 'uncertain' : 'failed',
                 threadId: threadId || null,
                 lastError: error?.message || String(error),
             });
@@ -834,6 +843,7 @@ class CodexRuntimeManager extends EventEmitter {
         return { mounted: this.workbenchMounted };
     }
     async compactSession({ sessionId, topicId, timeoutMs = 120_000 } = {}) {
+        this._assertProjectionWritable();
         const session = this.repository.getSession(sessionId || topicId);
         if (!session?.threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached');
         this._assertLifecycleIdle(session);
@@ -977,10 +987,26 @@ class CodexRuntimeManager extends EventEmitter {
         }
         return threads;
     }
+    _normalizeUnboundThreadOperations() {
+        for (const operation of this.repository.listRecoverableOperations()) {
+            if (operation.kind !== 'thread-start' && operation.kind !== 'thread-fork') continue;
+            if (operation.state === 'prepared') {
+                this.repository.updateOperation(operation.operationId, {
+                    state: 'failed',
+                    lastError: 'VChat restarted before the Codex Thread request was dispatched',
+                });
+            } else if (operation.state === 'dispatching') {
+                this.repository.updateOperation(operation.operationId, {
+                    state: 'uncertain',
+                    lastError: 'VChat restarted before the Codex Thread request outcome was recorded',
+                });
+            }
+        }
+    }
     async listRecoveryCandidates() {
         this.ensureProjectionStore();
         const operations = this.repository.listRecoverableOperations()
-            .filter((operation) => operation.state === 'uncertain'
+            .filter((operation) => ['uncertain', 'remote-applied'].includes(operation.state)
                 && (operation.kind === 'thread-start' || operation.kind === 'thread-fork'));
         if (!operations.length) return { operations: [], threads: [] };
         await this.start();
@@ -1010,12 +1036,15 @@ class CodexRuntimeManager extends EventEmitter {
     async resolveRecoveryOperation({ operationId, action, threadId } = {}) {
         this._assertProjectionWritable();
         const operation = this.repository.getOperation(String(operationId || ''));
-        if (!operation || operation.state !== 'uncertain'
+        if (!operation || !['uncertain', 'remote-applied'].includes(operation.state)
             || (operation.kind !== 'thread-start' && operation.kind !== 'thread-fork')) {
-            throw new CodexAppServerError('INVALID_RECOVERY_OPERATION', 'Only uncertain Thread start/fork operations can be resolved');
+            throw new CodexAppServerError('INVALID_RECOVERY_OPERATION', 'Only unresolved Thread start/fork operations can be resolved');
         }
         const selectedThreadId = String(threadId || '').trim();
         if (!selectedThreadId) throw new CodexAppServerError('INVALID_INPUT', 'Recovery requires a Codex threadId');
+        if (operation.threadId && operation.threadId !== selectedThreadId) {
+            throw new CodexAppServerError('RECOVERY_THREAD_MISMATCH', 'Recovery must use the Thread recorded by the acknowledged operation');
+        }
         await this.start();
         const bound = [
             ...this.repository.listSessions({ archived: false }),

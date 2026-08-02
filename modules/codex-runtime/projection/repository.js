@@ -157,7 +157,16 @@ class AgentProjectionRepository {
             listMessages: this.db.prepare(`
                 SELECT * FROM agent_messages WHERE session_id = ? ORDER BY source_order, message_id
             `),
-            listMessageItems: this.db.prepare('SELECT codex_item_id FROM agent_messages WHERE session_id = ?'),
+            listMessageAuthorities: this.db.prepare(`
+                SELECT messages.codex_item_id, messages.message_id,
+                    SUM(CASE WHEN blocks.authority = 'codex' THEN 1 ELSE 0 END) AS codex_block_count,
+                    SUM(CASE WHEN blocks.authority IS NOT NULL AND blocks.authority != 'codex' THEN 1 ELSE 0 END)
+                        AS local_block_count
+                FROM agent_messages AS messages
+                LEFT JOIN agent_blocks AS blocks ON blocks.message_id = messages.message_id
+                WHERE messages.session_id = ?
+                GROUP BY messages.codex_item_id, messages.message_id
+            `),
             deleteMessage: this.db.prepare(`
                 DELETE FROM agent_messages WHERE session_id = ? AND codex_item_id = ?
             `),
@@ -267,9 +276,16 @@ class AgentProjectionRepository {
                 return false;
             }
             const incomingItemIds = new Set(entries.map((entry) => String(entry.record.itemId)));
-            for (const row of this.stmt.listMessageItems.all(sessionId)) {
+            for (const row of this.stmt.listMessageAuthorities.all(sessionId)) {
                 if (!incomingItemIds.has(String(row.codex_item_id))) {
-                    this.stmt.deleteMessage.run(sessionId, row.codex_item_id);
+                    if (Number(row.local_block_count) > 0) {
+                        this.stmt.deleteCodexBlocksExcept.run({
+                            message_id: row.message_id,
+                            ordinals_json: '[]',
+                        });
+                    } else {
+                        this.stmt.deleteMessage.run(sessionId, row.codex_item_id);
+                    }
                 }
             }
             for (const entry of entries) {

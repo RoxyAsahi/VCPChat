@@ -2298,7 +2298,7 @@ function mountWorkbench(container) {
                     card.dataset.operationId = operation.operationId;
                     card.append(node('span', 'agent-chat-setting-label', `${operation.kind} · ${operation.state}`));
                     if (operation.lastError) card.append(node('span', 'agent-chat-setting-help', operation.lastError));
-                    const recoverable = operation.state === 'uncertain'
+                    const recoverable = ['uncertain', 'remote-applied'].includes(operation.state)
                         && (operation.kind === 'thread-start' || operation.kind === 'thread-fork');
                     if (recoverable && state.recoveryThreads.length) {
                         const select = document.createElement('select');
