@@ -714,6 +714,9 @@ function textControlFactory(kind, options = {}) {
             }
             if (current.invalid) wa.setAttribute('aria-invalid', 'true');
             else wa.removeAttribute('aria-invalid');
+            if (typeof wa.setCustomValidity === 'function') {
+                wa.setCustomValidity(current.invalid ? (current.invalidMessage || ' ') : '');
+            }
         });
         controller._listen(wa, 'input', () => { state.value = wa.value; });
         bridgeNativeControl(wa, kind);
@@ -756,6 +759,9 @@ function selectFactory(options = {}) {
             else wa.removeAttribute('placeholder');
             if (current.invalid) wa.setAttribute('aria-invalid', 'true');
             else wa.removeAttribute('aria-invalid');
+            if (typeof wa.setCustomValidity === 'function') {
+                wa.setCustomValidity(current.invalid ? (current.invalidMessage || ' ') : '');
+            }
             wa.replaceChildren();
             if (current.placeholder) {
                 const placeholder = document.createElement('wa-option');

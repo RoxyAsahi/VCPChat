@@ -49,3 +49,60 @@ html[data-ui-mode="next"] .vcp-ui-scope.vcp-ui-human-toolbox wa-card.tool-card::
     height: 100%;
     padding: 0;
 }
+
+/* --- VCPUI <-> Web Awesome component kernel integration ---
+   Business pages never see wa-*; these rules align the WA-backed controls that
+   VCPUI.create returns (next mode) with the shared VCP design tokens. */
+html[data-ui-mode="next"] .vcp-ui-scope wa-button.vcp-ui-wa-button {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+}
+html[data-ui-mode="next"] .vcp-ui-scope wa-button.vcp-ui-wa-button:hover,
+html[data-ui-mode="next"] .vcp-ui-scope wa-button.vcp-ui-wa-button:active {
+    background: transparent;
+    box-shadow: none;
+}
+html[data-ui-mode="next"] .vcp-ui-scope wa-button.vcp-ui-wa-button::part(base) {
+    border-radius: var(--vcp-ui-radius-control);
+    font-weight: 600;
+}
+html[data-ui-mode="next"] .vcp-ui-scope wa-button.vcp-ui-wa-button.is-block {
+    width: 100%;
+}
+
+html[data-ui-mode="next"] .vcp-ui-scope wa-button.vcp-ui-wa-icon-button {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    width: var(--vcp-ui-control-md);
+    height: var(--vcp-ui-control-md);
+}
+html[data-ui-mode="next"] .vcp-ui-scope wa-button.vcp-ui-wa-icon-button:hover,
+html[data-ui-mode="next"] .vcp-ui-scope wa-button.vcp-ui-wa-icon-button:active {
+    background: transparent;
+    box-shadow: none;
+}
+html[data-ui-mode="next"] .vcp-ui-scope wa-button.vcp-ui-wa-icon-button[data-size="sm"] {
+    width: var(--vcp-ui-control-sm);
+    height: var(--vcp-ui-control-sm);
+}
+
+html[data-ui-mode="next"] .vcp-ui-scope wa-input.vcp-ui-wa-input,
+html[data-ui-mode="next"] .vcp-ui-scope wa-textarea.vcp-ui-wa-textarea {
+    width: 100%;
+}
+
+html[data-ui-mode="next"] .vcp-ui-scope wa-checkbox.vcp-ui-wa-checkbox,
+html[data-ui-mode="next"] .vcp-ui-scope wa-switch.vcp-ui-wa-switch {
+    vertical-align: middle;
+}
+
+html[data-ui-mode="next"] .vcp-ui-scope wa-card.vcp-ui-wa-card {
+    padding: 0;
+}
+html[data-ui-mode="next"] .vcp-ui-scope wa-card.vcp-ui-wa-card::part(base) {
+    height: 100%;
+}
