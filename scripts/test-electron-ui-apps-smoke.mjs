@@ -37,7 +37,12 @@ import puppeteer from 'puppeteer';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const electron = path.join(root, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron');
-const timeoutMs = 45_000;
+// Generous wait for embedded page boot: the main renderer can block on a
+// model-fetch when the configured vcpServerUrl is unreachable (a normal dev
+// or smoke environment), which delays topTabManager readiness and therefore
+// the embedded-page open flow. 45s was flaky under concurrent Electron
+// instances on the same machine.
+const timeoutMs = 90_000;
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const captureDir = path.join(root, 'screenshots');
 
