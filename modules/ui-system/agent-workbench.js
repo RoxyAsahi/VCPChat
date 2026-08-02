@@ -8,6 +8,7 @@ import {
     reconcileAgentTimeline,
 } from './agent-workbench-timeline.js';
 import { createAgentBlockPresentation, createAgentMessagePresentation } from './agent-presentation/index.js';
+import { createWorkspacePathRef, createWorkspaceTreeModel, structuredWorkspacePaths } from './agent-workspace-model.js';
 
 // Build Agent identities are independent from normal-chat Agents. Keep Nova
 // visible synchronously while the authoritative Build catalog loads.
@@ -491,7 +492,7 @@ function attachmentMetadata(attachment) {
     return `${dimensions} · ${formatAttachmentSize(attachment?.byteLen)}`;
 }
 
-function createAttachmentChips(attachments, onRemove = null) {
+function createAttachmentChips(attachments, onRemove = null, onWorkspacePath = null) {
     const list = node('div', 'agent-chat-attachment-list');
     list.setAttribute('aria-label', '媒体附件');
     attachments.forEach((attachment, index) => {
@@ -503,6 +504,12 @@ function createAttachmentChips(attachments, onRemove = null) {
             node('span', 'agent-chat-attachment-meta', attachmentMetadata(attachment)),
         );
         chip.append(summary);
+        const relativePath = structuredWorkspacePaths(attachment, 1)[0];
+        if (relativePath && typeof onWorkspacePath === 'function') {
+            const open = visualActionButton('draft', `在工作区预览 ${relativePath}`, 'agent-chat-attachment-open-workspace');
+            open.addEventListener('click', () => onWorkspacePath(relativePath));
+            chip.append(open);
+        }
         if (onRemove) {
             const remove = visualActionButton('close', `移除 ${attachment.displayName || '附件'}`, 'agent-chat-attachment-remove');
             remove.addEventListener('click', () => onRemove(index));
@@ -540,7 +547,7 @@ function createMessage(message) {
         content.innerHTML = '<span class="agent-chat-thinking-placeholder">正在思考…</span>';
     }
     body.append(heading, content);
-    if (item.attachments?.length) body.append(createAttachmentChips(item.attachments));
+    if (item.attachments?.length) body.append(createAttachmentChips(item.attachments, null, (relativePath) => openWorkspaceSourcePath(relativePath, 'attachment')));
     if (item.reasoning) {
         const reasoningEl = node('div', 'agent-chat-reasoning-block');
         reasoningEl.innerHTML = renderReasoning(item.reasoning);
@@ -581,7 +588,7 @@ function patchMessage(row, message) {
     const body = row.querySelector('.details-and-bubble-wrapper');
     body?.querySelector('.agent-chat-attachment-list')?.remove();
     if (item.attachments?.length && body) {
-        const attachmentList = createAttachmentChips(item.attachments);
+        const attachmentList = createAttachmentChips(item.attachments, null, (relativePath) => openWorkspaceSourcePath(relativePath, 'attachment'));
         const reasoningBlock = body.querySelector('.agent-chat-reasoning-block');
         if (reasoningBlock) body.insertBefore(attachmentList, reasoningBlock);
         else body.append(attachmentList);
@@ -660,6 +667,21 @@ function mountWorkbench(container) {
         lastViewState: null,
         hadApprovals: false,
         workspace: '',
+        workspaceBrowser: {
+            scope: '',
+            sessionId: '',
+            workspaceRevision: '',
+            model: createWorkspaceTreeModel(),
+            inflight: new Map(),
+            error: '',
+            preview: null,
+            previewLoading: false,
+            pinnedPaths: new Set(),
+            search: '',
+            searchResults: [],
+            searchLoading: false,
+            selectedPath: '',
+        },
         model: 'gpt-5.6-terra',
         prompt: '',
         pendingAttachments: [],
@@ -706,6 +728,7 @@ function mountWorkbench(container) {
     let topicCatalogRequest = 0;
     let topicSearchRequest = 0;
     let topicSearchTimer = null;
+    let workspaceSearchTimer = null;
     let topicMenuInstance = 0;
     let runStatusTimer = null;
 
@@ -809,6 +832,7 @@ function mountWorkbench(container) {
         actions: {
             cancelTool: (tool) => run(() => controller.cancelTool(tool.toolCallId, tool.turnId)),
             respondToolboxApproval: (approvalId, decision) => run(() => controller.respondToolboxApproval(approvalId, decision)),
+            openWorkspacePath: (relativePath, action = 'preview') => run(() => openWorkspaceSourcePath(relativePath, 'tool', action)),
         },
     });
 
@@ -2880,9 +2904,264 @@ function mountWorkbench(container) {
             summary.append(node('span', 'agent-chat-toolbox-ws-channel', `+${Number(change.additions) || 0} −${Number(change.deletions) || 0}`));
             const patch = node('pre', 'agent-chat-toolbox-ws-output', String(change.patch || '').slice(0, 131_072));
             patch.hidden = false;
-            item.append(summary, patch);
+            const selectedSessionId = current.selectedTopic?.topicId || current.attachment?.sessionId || '';
+            const workspaceRevision = state.workspaceBrowser.sessionId === selectedSessionId
+                ? state.workspaceBrowser.workspaceRevision : '';
+            if (change.path && selectedSessionId && workspaceRevision) {
+                try {
+                    const actions = node('div', 'agent-workspace-path-actions');
+                    const open = button('预览', 'secondary');
+                    const reveal = button('定位', 'secondary');
+                    const ref = createWorkspacePathRef({ sessionId: selectedSessionId, workspaceRevision, relativePath: change.path, source: 'diff' });
+                    open.addEventListener('click', () => run(() => openWorkspacePreview(ref)));
+                    reveal.addEventListener('click', () => run(() => performWorkspaceAction(ref, 'reveal-in-explorer')));
+                    actions.append(open, reveal);
+                    item.append(summary, actions, patch);
+                } catch {
+                    item.append(summary, patch);
+                }
+            } else item.append(summary, patch);
             wrap.append(item);
         }
+        return wrap;
+    }
+
+    function selectedWorkspaceIdentity(current = store.getState()) {
+        const selected = current.selectedTopic || current.attachment || {};
+        return {
+            sessionId: selected.topicId || selected.sessionId || current.attachment?.sessionId || '',
+            workspaceRoot: selected.workspaceRef || selected.workspaceRoot || current.attachment?.workspaceRoot || '',
+        };
+    }
+
+    function syncWorkspaceScope(current = store.getState()) {
+        const identity = selectedWorkspaceIdentity(current);
+        const scope = `${identity.sessionId}:${identity.workspaceRoot}`;
+        const browser = state.workspaceBrowser;
+        if (browser.scope === scope) return identity;
+        browser.scope = scope;
+        browser.sessionId = identity.sessionId;
+        browser.workspaceRevision = '';
+        browser.model.reset(scope);
+        browser.inflight.clear();
+        browser.error = '';
+        browser.preview = null;
+        browser.previewLoading = false;
+        browser.pinnedPaths.clear();
+        browser.search = '';
+        browser.searchResults = [];
+        browser.selectedPath = '';
+        return identity;
+    }
+
+    async function loadWorkspaceDirectory(relativePath = '') {
+        const identity = syncWorkspaceScope();
+        const browser = state.workspaceBrowser;
+        if (!identity.sessionId || !identity.workspaceRoot) return;
+        const key = String(relativePath || '').replace(/\\/g, '/');
+        if (browser.model.hasChildren(key)) return;
+        if (browser.inflight.has(key)) return browser.inflight.get(key);
+        browser.model.setLoading(key, true);
+        browser.error = '';
+        renderActivity();
+        const scope = browser.scope;
+        const request = controller.workspaceListDirectory({
+            sessionId: identity.sessionId,
+            workspaceRevision: browser.workspaceRevision || undefined,
+            relativePath: key,
+            limit: 1000,
+        }).then((result) => {
+            if (browser.scope !== scope) return;
+            browser.workspaceRevision = result.workspaceRevision;
+            browser.model.setChildren(key, result.entries || []);
+        }).catch((error) => {
+            if (browser.scope === scope) browser.error = error?.message || String(error);
+            throw error;
+        }).finally(() => {
+            if (browser.scope === scope) {
+                browser.model.setLoading(key, false);
+                browser.inflight.delete(key);
+                renderActivity();
+            }
+        });
+        browser.inflight.set(key, request);
+        return request;
+    }
+
+    async function openWorkspacePreview(ref) {
+        const browser = state.workspaceBrowser;
+        browser.selectedPath = ref.relativePath;
+        browser.previewLoading = true;
+        browser.error = '';
+        renderActivity();
+        const scope = browser.scope;
+        try {
+            const preview = await controller.workspaceReadPreview(ref);
+            if (browser.scope === scope && browser.selectedPath === ref.relativePath) browser.preview = preview;
+        } catch (error) {
+            if (browser.scope === scope) browser.error = error?.message || String(error);
+            throw error;
+        } finally {
+            if (browser.scope === scope) {
+                browser.previewLoading = false;
+                renderActivity();
+            }
+        }
+    }
+
+    async function performWorkspaceAction(ref, action) {
+        const result = await controller.workspacePerformPathAction({ ...ref, action });
+        if (action === 'preview' || action === 'open-in-vchat') state.workspaceBrowser.preview = result;
+        if (action.startsWith('copy-')) notify(action === 'copy-relative-path' ? '已复制相对路径。' : '已复制绝对路径。', 'success');
+        return result;
+    }
+
+    async function openWorkspaceSourcePath(relativePath, source = 'tree', action = 'preview') {
+        syncWorkspaceScope();
+        if (!state.workspaceBrowser.workspaceRevision) await loadWorkspaceDirectory('');
+        const browser = state.workspaceBrowser;
+        const ref = createWorkspacePathRef({
+            sessionId: browser.sessionId, workspaceRevision: browser.workspaceRevision,
+            relativePath, source,
+        });
+        if (action === 'preview') {
+            setActivityOpen(true, 'workspace');
+            return openWorkspacePreview(ref);
+        }
+        return performWorkspaceAction(ref, action);
+    }
+
+    function workspacePathActions(ref) {
+        const actions = node('div', 'agent-workspace-path-actions');
+        for (const [action, label] of [
+            ['copy-relative-path', '复制路径'],
+            ['copy-absolute-path', '复制绝对路径'],
+            ['reveal-in-explorer', '资源管理器'],
+            ['open-with-system', '系统打开'],
+        ]) {
+            const control = button(label, 'secondary');
+            control.addEventListener('click', () => run(() => performWorkspaceAction(ref, action)));
+            actions.append(control);
+        }
+        return actions;
+    }
+
+    function buildWorkspacePreview(browser) {
+        const host = node('section', 'agent-workspace-preview');
+        if (browser.pinnedPaths.size) {
+            const tabs = node('div', 'agent-workspace-preview-tabs');
+            for (const relativePath of browser.pinnedPaths) {
+                const tab = button(relativePath.split('/').pop(), 'agent-workspace-preview-tab');
+                tab.title = relativePath;
+                tab.classList.toggle('is-active', browser.selectedPath === relativePath);
+                tab.addEventListener('click', () => run(() => openWorkspacePreview(createWorkspacePathRef({
+                    sessionId: browser.sessionId, workspaceRevision: browser.workspaceRevision,
+                    relativePath, source: 'tree',
+                }))));
+                const close = node('span', 'vcp-ui-icon agent-workspace-preview-tab-close', 'close');
+                close.addEventListener('click', (event) => { event.stopPropagation(); browser.pinnedPaths.delete(relativePath); renderActivity(); });
+                tab.append(close);
+                tabs.append(tab);
+            }
+            host.append(tabs);
+        }
+        if (browser.previewLoading) {
+            host.append(node('div', 'agent-chat-activity-empty', '正在读取预览…'));
+            return host;
+        }
+        const preview = browser.preview;
+        if (!preview) {
+            host.append(node('div', 'agent-chat-activity-empty', '选择文件以预览。'));
+            return host;
+        }
+        host.append(node('div', 'agent-workspace-preview-header', preview.relativePath));
+        const ref = createWorkspacePathRef({
+            sessionId: preview.sessionId, workspaceRevision: preview.workspaceRevision,
+            relativePath: preview.relativePath, kind: 'file', source: 'tree',
+        });
+        host.append(workspacePathActions(ref));
+        if (preview.kind === 'text') {
+            const pre = node('pre', 'agent-workspace-preview-text', preview.content || '');
+            host.append(pre);
+            if (preview.truncated) host.append(node('div', 'agent-workspace-preview-note', `已截断 · ${preview.byteLen} bytes`));
+        } else if (preview.kind === 'image' && preview.dataUrl) {
+            const image = document.createElement('img'); image.className = 'agent-workspace-preview-image'; image.src = preview.dataUrl; image.alt = preview.displayName;
+            host.append(image);
+        } else {
+            host.append(node('div', 'agent-workspace-preview-note', `${preview.kind} · ${preview.mimeType || '未知类型'} · ${preview.byteLen} bytes`));
+        }
+        return host;
+    }
+
+    function buildWorkspaceBrowser(current) {
+        const identity = syncWorkspaceScope(current);
+        const browser = state.workspaceBrowser;
+        const wrap = node('section', 'agent-workspace-browser');
+        if (!identity.sessionId || !identity.workspaceRoot) {
+            wrap.append(node('div', 'agent-chat-activity-empty', '当前会话没有可浏览的工作目录。'));
+            return wrap;
+        }
+        const search = document.createElement('input');
+        search.type = 'search'; search.className = 'agent-workspace-search'; search.placeholder = '搜索工作区文件'; search.value = browser.search;
+        search.setAttribute('aria-label', '搜索工作区文件');
+        search.addEventListener('input', () => {
+            browser.search = search.value;
+            clearTimeout(workspaceSearchTimer);
+            workspaceSearchTimer = setTimeout(() => {
+                const query = browser.search.trim();
+                if (!query) { browser.searchResults = []; browser.searchLoading = false; renderActivity(); return; }
+                browser.searchLoading = true; renderActivity();
+                const scope = browser.scope;
+                void controller.workspaceSearchFiles({ sessionId: browser.sessionId, workspaceRevision: browser.workspaceRevision || undefined, query, limit: 200 })
+                    .then((result) => { if (browser.scope === scope && browser.search.trim() === query) { browser.workspaceRevision = result.workspaceRevision; browser.searchResults = result.entries || []; } })
+                    .catch((error) => { if (browser.scope === scope) browser.error = error?.message || String(error); })
+                    .finally(() => { if (browser.scope === scope) { browser.searchLoading = false; renderActivity(); } });
+            }, 180);
+        });
+        wrap.append(search);
+        if (browser.error) wrap.append(node('div', 'agent-workspace-error', browser.error));
+        const rows = browser.search.trim() ? browser.searchResults.map((entry) => ({ entry, depth: 0 })) : browser.model.flatten();
+        const list = node('div', 'agent-workspace-tree');
+        list.setAttribute('role', 'tree');
+        if (browser.searchLoading) list.append(node('div', 'agent-chat-activity-empty', '正在搜索…'));
+        for (const [index, { entry, depth }] of rows.slice(0, 5000).entries()) {
+            const row = button('', 'agent-workspace-tree-row');
+            row.dataset.workspacePath = entry.relativePath;
+            row.dataset.workspaceIndex = String(index);
+            row.setAttribute('role', 'treeitem');
+            row.setAttribute('aria-level', String(depth + 1));
+            const indentation = node('span', 'agent-workspace-tree-indent');
+            for (let level = 0; level < Math.min(depth, 32); level += 1) indentation.append(node('span', 'agent-workspace-tree-indent-unit'));
+            const directory = entry.kind === 'directory';
+            row.append(indentation, node('span', 'vcp-ui-icon agent-workspace-tree-icon', directory
+                ? (browser.model.isExpanded(entry.relativePath) ? 'folder_open' : 'folder') : 'draft'));
+            row.append(node('span', 'agent-workspace-tree-name', entry.name));
+            if (directory) row.setAttribute('aria-expanded', String(browser.model.isExpanded(entry.relativePath)));
+            row.addEventListener('click', () => run(async () => {
+                if (directory) {
+                    const expanded = !browser.model.isExpanded(entry.relativePath);
+                    browser.model.setExpanded(entry.relativePath, expanded);
+                    if (expanded) await loadWorkspaceDirectory(entry.relativePath);
+                    else renderActivity();
+                } else {
+                    const ref = createWorkspacePathRef({ sessionId: browser.sessionId, workspaceRevision: browser.workspaceRevision, relativePath: entry.relativePath, source: 'tree' });
+                    await openWorkspacePreview(ref);
+                }
+            }));
+            row.addEventListener('dblclick', () => { if (!directory) { browser.pinnedPaths.add(entry.relativePath); renderActivity(); } });
+            list.append(row);
+        }
+        if (rows.length > 5000) list.append(node('div', 'agent-workspace-preview-note', '仅显示前 5000 项，请使用搜索缩小范围。'));
+        list.addEventListener('keydown', (event) => {
+            const visibleRows = [...list.querySelectorAll('.agent-workspace-tree-row')];
+            const currentIndex = visibleRows.indexOf(document.activeElement);
+            if (event.key === 'ArrowDown' && visibleRows[currentIndex + 1]) { event.preventDefault(); visibleRows[currentIndex + 1].focus(); }
+            if (event.key === 'ArrowUp' && visibleRows[currentIndex - 1]) { event.preventDefault(); visibleRows[currentIndex - 1].focus(); }
+            if (event.key === 'ArrowRight' && document.activeElement?.getAttribute('aria-expanded') === 'false') { event.preventDefault(); document.activeElement.click(); }
+            if (event.key === 'ArrowLeft' && document.activeElement?.getAttribute('aria-expanded') === 'true') { event.preventDefault(); document.activeElement.click(); }
+        });
+        wrap.append(list, buildWorkspacePreview(browser));
+        if (!browser.model.hasChildren('') && !browser.model.isLoading('')) queueMicrotask(() => run(() => loadWorkspaceDirectory('')));
         return wrap;
     }
 
@@ -3090,6 +3369,7 @@ function mountWorkbench(container) {
         const unread = current.activityUnreadByTab || {};
         const tabDefs = [
             { id: 'usage', label: '上下文' },
+            { id: 'workspace', label: '文件' },
             { id: 'activity', label: '通知' },
             { id: 'approvals', label: pendingApprovals ? `审批 (${pendingApprovals})` : '审批' },
         ];
@@ -3170,6 +3450,8 @@ function mountWorkbench(container) {
             content.append(buildPlanInspector(current));
         } else if (state.activityTab === 'changes') {
             content.append(buildChangeInspector(current));
+        } else if (state.activityTab === 'workspace') {
+            content.append(buildWorkspaceBrowser(current));
         } else {
             // This is a daemon-global observation feed, not a Topic feed;
             // backend approval cards may also be reached from Approvals.

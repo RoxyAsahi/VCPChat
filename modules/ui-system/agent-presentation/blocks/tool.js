@@ -1,6 +1,7 @@
 import { projectTool } from '../../agent-workbench-projections.js';
 import { projectVcpToolPresentation } from '../../agent-workbench-timeline.js';
 import { createIcon, createNode, safeText } from './dom.js';
+import { structuredWorkspacePaths } from '../../agent-workspace-model.js';
 
 const TERMINAL_STATES = new Set(['completed', 'failed', 'cancelled']);
 
@@ -130,6 +131,7 @@ function createToolBlockRenderer(options = {}) {
     const renderContent = options.renderContent || ((text) => safeText(text));
     const postRender = options.postRender || (() => {});
     const onCancel = options.onCancel;
+    const onWorkspacePath = options.onWorkspacePath;
 
     function mountDetail(card) {
         card.querySelector(':scope > .agent-chat-tool-detail, :scope > .agent-chat-tool-output')?.remove();
@@ -183,6 +185,22 @@ function createToolBlockRenderer(options = {}) {
         duration.textContent = first && last >= first ? `${Math.max(0, (last - first) / 1000).toFixed(1)}s` : '';
 
         const header = card.querySelector('.agent-chat-tool-header');
+        card.querySelector('.agent-chat-tool-path-actions')?.remove();
+        const workspacePaths = structuredWorkspacePaths(tool?.payload || tool);
+        if (workspacePaths.length && typeof onWorkspacePath === 'function') {
+            const pathActions = createNode(document, 'span', 'agent-chat-tool-path-actions');
+            for (const relativePath of workspacePaths.slice(0, 3)) {
+                const open = createNode(document, 'button', 'agent-chat-tool-path-action');
+                open.type = 'button';
+                open.title = `在工作区预览 ${relativePath}`;
+                open.setAttribute('aria-label', `在工作区预览 ${relativePath}`);
+                open.dataset.agentWorkspacePath = relativePath;
+                open.append(...createIcon(document, 'draft'));
+                open.addEventListener('click', (event) => { event.stopPropagation(); onWorkspacePath(relativePath, 'preview', tool); });
+                pathActions.append(open);
+            }
+            header.append(pathActions);
+        }
         let risk = card.querySelector('.agent-chat-tool-risk');
         const riskValue = value.riskLevel && value.riskLevel !== 'unknown' ? value.riskLevel : '';
         if (riskValue && !risk) {

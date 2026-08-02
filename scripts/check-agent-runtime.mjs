@@ -6,6 +6,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const requiredFiles = [
     'modules/codex-runtime/appServerTransport.js',
     'modules/codex-runtime/runtimeManager.js',
+    'modules/codex-runtime/workspaceService.js',
     'modules/codex-runtime/toolboxBridgeTransport.js',
     'modules/codex-runtime/toolboxResponsesAdapter.js',
     'modules/codex-runtime/projection/repository.js',
@@ -45,6 +46,8 @@ for (const method of [
     'agentRuntimeCreateSession', 'agentRuntimeEnsureSessionRuntime', 'agentRuntimeForkSession', 'agentRuntimeListTopics',
     'agentRuntimeReadTopic', 'agentRuntimeReadProjection', 'agentRuntimeStartTurn',
     'agentRuntimeCancelTurn', 'agentRuntimeRespondApproval', 'agentRuntimeSetWorkbenchPresence',
+    'agentWorkspaceListDirectory', 'agentWorkspaceReadPreview', 'agentWorkspaceSearchFiles',
+    'agentWorkspaceStatPath', 'agentWorkspacePerformPathAction',
     'onAgentRuntimeEvent',
 ]) {
     if (!preload.includes(method)) errors.push(`chat preload missing API: ${method}`);

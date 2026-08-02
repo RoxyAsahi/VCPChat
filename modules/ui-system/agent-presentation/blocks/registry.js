@@ -13,12 +13,14 @@ function createAgentBlockPresentation(options = {}) {
         renderContent: options.renderContent,
         postRender: options.postRender,
         onCancel: actions.cancelTool,
+        onWorkspacePath: actions.openWorkspacePath,
     });
     const toolGroup = createToolGroupRenderer({
         document,
         renderContent: options.renderContent,
         postRender: options.postRender,
         onCancel: actions.cancelTool,
+        onWorkspacePath: actions.openWorkspacePath,
     });
 
     return {

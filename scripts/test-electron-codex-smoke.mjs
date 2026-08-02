@@ -94,6 +94,12 @@ try {
         const projection = await api.agentRuntimeReadProjection({ sessionId: session.sessionId });
         const status = await api.agentRuntimeGetStatus();
         const presentation = await api.agentRuntimeGetPresentationMode();
+        const workspace = await api.agentWorkspaceListDirectory({ sessionId: session.sessionId, relativePath: '', limit: 1000 });
+        const packagePreview = await api.agentWorkspaceReadPreview({
+            sessionId: session.sessionId,
+            workspaceRevision: workspace.workspaceRevision,
+            relativePath: 'package.json',
+        });
         return {
             topicId: topic.topicId,
             sessionId: session.sessionId,
@@ -103,6 +109,10 @@ try {
             messageCount: projection.messages.length,
             orphaned: projection.session.orphaned,
             presentationMode: presentation.mode,
+            workspaceRevision: workspace.workspaceRevision,
+            workspaceHasPackage: workspace.entries.some((entry) => entry.relativePath === 'package.json'),
+            packagePreviewKind: packagePreview.kind,
+            packagePreviewHasName: packagePreview.content.includes('vcp-chat-desktop'),
         };
     });
     assert.equal(result.topicId, result.sessionId);
@@ -114,6 +124,10 @@ try {
         ? 'legacy'
         : 'fork';
     assert.equal(result.presentationMode, expectedPresentationMode);
+    assert.match(result.workspaceRevision, /^[0-9a-f]{16}$/);
+    assert.equal(result.workspaceHasPackage, true);
+    assert.equal(result.packagePreviewKind, 'text');
+    assert.equal(result.packagePreviewHasName, true);
 
     await page.waitForFunction(() => document.documentElement.dataset.uiMode === 'next', { timeout: timeoutMs });
     try {
@@ -189,8 +203,8 @@ try {
         };
     });
     assert.equal(inspector.tabGroups, 0, 'Agent information panel tabs must share one compact row');
-    assert.deepEqual(inspector.visibleTabs, ['usage', 'activity', 'approvals'],
-        'the product-facing information panel must expose only Context, notifications, and approvals');
+    assert.deepEqual(inspector.visibleTabs, ['usage', 'workspace', 'activity', 'approvals'],
+        'the product-facing information panel must expose Context, read-only workspace, notifications, and approvals');
     assert.equal(inspector.contextVisible, true, 'the header context indicator must open the Context inspector');
     assert.equal(inspector.hasProgressRing, true, 'the header must render a stable context progress ring');
     assert.ok(inspector.panelWidth > 0 && inspector.panelWidth <= inspector.viewportWidth,

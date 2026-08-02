@@ -44,6 +44,7 @@ const compactedSessions = [];
 const approvalResponses = [];
 const interactionResponses = [];
 const openedExternalLinks = [];
+const workspaceActions = [];
 const savedWorkbenchSettings = [];
 const savedAvatars = [];
 const runtimeTransitions = [];
@@ -93,6 +94,24 @@ window.chatAPI = {
         return [{ id: 'gpt-5.6-terra' }, { id: 'gpt-5.6-luna' }];
     },
     agentRuntimeGetStatus: async () => ({ state: runtimeStatus, worker: null, pendingApprovals: [] }),
+    agentWorkspaceListDirectory: async ({ sessionId, relativePath = '' }) => ({
+        sessionId, workspaceRevision: 'workspace-revision-test', relativePath,
+        entries: relativePath === '' ? [
+            { name: 'src', kind: 'directory', relativePath: 'src' },
+            { name: 'README.md', kind: 'file', relativePath: 'README.md' },
+        ] : [{ name: 'index.js', kind: 'file', relativePath: 'src/index.js' }],
+        nextCursor: null, truncated: false,
+    }),
+    agentWorkspaceReadPreview: async ({ sessionId, workspaceRevision, relativePath }) => ({
+        sessionId, workspaceRevision, relativePath, displayName: path.basename(relativePath),
+        kind: 'text', content: '# preview', byteLen: 9, lineCount: 1, truncated: false,
+    }),
+    agentWorkspaceSearchFiles: async ({ sessionId, workspaceRevision, query }) => ({
+        sessionId, workspaceRevision: workspaceRevision || 'workspace-revision-test', query,
+        entries: [{ name: 'README.md', kind: 'file', relativePath: 'README.md' }], truncated: false,
+    }),
+    agentWorkspaceStatPath: async ({ sessionId, workspaceRevision, relativePath }) => ({ sessionId, workspaceRevision, relativePath, kind: 'file' }),
+    agentWorkspacePerformPathAction: async (payload) => { workspaceActions.push(payload); return { ok: true, ...payload }; },
     agentRuntimeStart: async () => { runtimeStatus = 'ready'; runtimeTransitions.push('start'); return { state: 'ready' }; },
     agentRuntimeStop: async () => { runtimeStatus = 'stopped'; runtimeTransitions.push('stop'); return { state: 'stopped' }; },
     agentRuntimeCreateTopic: async (payload) => {
@@ -117,6 +136,7 @@ window.chatAPI = {
             sessionId: 'sess_test', topicId: payload.resume || 'topic-new',
             title: payload.title || '可恢复的 Rust Topic', state: 'created',
             model: payload.model || 'gpt-5.6-terra', agentId: payload.agent || 'Nova',
+            workspaceRoot: payload.workspaceRoot || root,
         };
         return session;
     },
@@ -712,8 +732,8 @@ await new Promise((resolve) => setTimeout(resolve, 30));
 assert.equal(host.querySelectorAll('.agent-chat-activity-tab-group').length, 0,
     'the remaining right-panel tabs must share one compact row');
 assert.deepEqual([...host.querySelectorAll('.agent-chat-activity-tabs > .agent-chat-activity-tab')]
-    .map((tab) => tab.dataset.tab), ['usage', 'activity', 'approvals'],
-    'Context, notifications, and approvals must be the only directly visible tabs');
+    .map((tab) => tab.dataset.tab), ['usage', 'workspace', 'activity', 'approvals'],
+    'Context, read-only workspace, notifications, and approvals must be directly visible');
 assert.equal(host.querySelector('.agent-chat-activity-tab-group-label'), null,
     'the two tab rows must not spend visible space on redundant group headings');
 assert.equal(host.querySelector('.agent-chat-activity-tab[data-tab="changes"]'), null,
@@ -740,6 +760,26 @@ assert.strictEqual(host.querySelector('[data-activity-panel="usage"]'), stableUs
     'switching right-panel tabs must retain the Context panel DOM identity');
 assert.equal(stableUsagePanel.scrollTop, 47,
     'each right-panel tab must retain its own scroll position');
+
+host.querySelector('.agent-chat-activity-tab[data-tab="workspace"]').click();
+await new Promise((resolve) => setTimeout(resolve, 30));
+assert.deepEqual([...host.querySelectorAll('.agent-workspace-tree-row')].map((row) => row.dataset.workspacePath), ['src', 'README.md'],
+    'Workspace tab must lazily render the selected Session root without exposing an arbitrary root input');
+host.querySelector('.agent-workspace-tree-row[data-workspace-path="src"]').click();
+await new Promise((resolve) => setTimeout(resolve, 30));
+assert.ok(host.querySelector('.agent-workspace-tree-row[data-workspace-path="src/index.js"]'),
+    'expanding a directory must load its children without rebuilding the Workbench shell');
+host.querySelector('.agent-workspace-tree-row[data-workspace-path="README.md"]').click();
+await new Promise((resolve) => setTimeout(resolve, 30));
+assert.match(host.querySelector('.agent-workspace-preview-text')?.textContent || '', /preview/,
+    'selecting a file must show the bounded Main-provided preview');
+const copyRelative = [...host.querySelectorAll('.agent-workspace-path-actions button')]
+    .find((control) => control.textContent === '复制路径');
+copyRelative.click();
+await new Promise((resolve) => setTimeout(resolve, 10));
+assert.equal(workspaceActions.at(-1)?.action, 'copy-relative-path');
+assert.equal(workspaceActions.at(-1)?.workspaceRevision, 'workspace-revision-test');
+host.querySelector('.agent-chat-activity-tab[data-tab="usage"]').click();
 
 emitDaemonEvent({
     sessionId: 'sess_test', turnId: 'turn_test', sequence: 5, type: 'toolbox.ws',
