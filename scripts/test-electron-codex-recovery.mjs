@@ -98,19 +98,90 @@ try {
         api.agentRuntimeSetWorkbenchPresence(true);
         const topicA = await api.agentRuntimeCreateTopic({ agentId: 'Nova', title: 'Recovery A', workspaceRoot: '.' });
         const topicB = await api.agentRuntimeCreateTopic({ agentId: 'Nova', title: 'Recovery B', workspaceRoot: '.' });
+        const lifecycleTopic = await api.agentRuntimeCreateTopic({ agentId: 'Nova', title: 'Lifecycle', workspaceRoot: '.' });
+        const approvalBlockedTopic = await api.agentRuntimeCreateTopic({ agentId: 'Nova', title: 'Approval blocked', workspaceRoot: '.' });
         const sessionA = await api.agentRuntimeCreateSession({ resume: topicA.topicId });
         const sessionB = await api.agentRuntimeCreateSession({ resume: topicB.topicId });
-        const turn = await api.agentRuntimeStartTurn({ sessionId: sessionA.sessionId, prompt: 'recovery fixture turn' });
-        return { sessionA, sessionB, turn };
+        const lifecycleSession = await api.agentRuntimeCreateSession({ resume: lifecycleTopic.topicId });
+        const approvalBlockedSession = await api.agentRuntimeCreateSession({ resume: approvalBlockedTopic.topicId });
+        const [turnA, turnB] = await Promise.all([
+            api.agentRuntimeStartTurn({ sessionId: sessionA.sessionId, prompt: 'parallel recovery A' }),
+            api.agentRuntimeStartTurn({ sessionId: sessionB.sessionId, prompt: 'parallel recovery B' }),
+        ]);
+        return { sessionA, sessionB, lifecycleSession, approvalBlockedSession, turnA, turnB };
     });
     assert.notEqual(seeded.sessionA.threadId, seeded.sessionB.threadId, 'two Sessions must own distinct Codex Threads');
 
     const beforeCrash = await waitFor(async () => page.evaluate(async () => {
         const status = await (window.chatAPI || window.electronAPI).agentRuntimeGetStatus();
-        return status.pendingInteractions?.length === 1 && status.worker?.pid ? status : null;
+        const running = status.runtimes?.filter((runtime) => runtime.activity === 'running') || [];
+        return status.pendingInteractions?.length === 2 && running.length === 2 && status.worker?.pid ? status : null;
     }), 'fixture interaction did not become pending before the crash');
+    assert.deepEqual(new Set(beforeCrash.runtimes.filter((runtime) => runtime.activity === 'running')
+        .map((runtime) => runtime.sessionId)), new Set([seeded.sessionA.sessionId, seeded.sessionB.sessionId]),
+    'two running Sessions must remain independently keyed by Session identity');
     const firstPid = Number(beforeCrash.worker.pid);
     assert.ok(firstPid > 0, 'App Server must expose a child PID');
+
+    const isolatedProjection = await page.evaluate(async ({ sessionA, sessionB }) => {
+        const api = window.chatAPI || window.electronAPI;
+        const [projectionA, projectionB] = await Promise.all([
+            api.agentRuntimeReadTopic({ sessionId: sessionA }),
+            api.agentRuntimeReadTopic({ sessionId: sessionB }),
+        ]);
+        return { projectionA, projectionB };
+    }, { sessionA: seeded.sessionA.sessionId, sessionB: seeded.sessionB.sessionId });
+    const projectionText = (projection) => JSON.stringify(projection.messages?.map((message) => message.blocks) || []);
+    assert.match(projectionText(isolatedProjection.projectionA), /parallel recovery A/);
+    assert.doesNotMatch(projectionText(isolatedProjection.projectionA), /parallel recovery B/);
+    assert.match(projectionText(isolatedProjection.projectionB), /parallel recovery B/);
+    assert.doesNotMatch(projectionText(isolatedProjection.projectionB), /parallel recovery A/);
+
+    const lifecycle = await page.evaluate(async ({ lifecycleSession, approvalBlockedSession }) => {
+        const api = window.chatAPI || window.electronAPI;
+        await api.agentRuntimeCloseSession({ sessionId: lifecycleSession });
+        const archivedOnce = await api.agentRuntimeListTopics({ archived: true });
+        await api.agentRuntimeRestoreSession({ sessionId: lifecycleSession });
+        const activeAgain = await api.agentRuntimeListTopics({});
+        await api.agentRuntimeCloseSession({ sessionId: lifecycleSession });
+        const deleted = await api.agentRuntimePermanentlyDeleteSession({ sessionId: lifecycleSession });
+
+        await api.agentRuntimeCloseSession({ sessionId: approvalBlockedSession });
+        await api.agentRuntimeReadTopic({ sessionId: approvalBlockedSession });
+        return {
+            archivedOnce: archivedOnce.some((entry) => entry.sessionId === lifecycleSession),
+            activeAgain: activeAgain.some((entry) => entry.sessionId === lifecycleSession),
+            deleted: deleted.deleted,
+        };
+    }, {
+        lifecycleSession: seeded.lifecycleSession.sessionId,
+        approvalBlockedSession: seeded.approvalBlockedSession.sessionId,
+    });
+    assert.deepEqual(lifecycle, { archivedOnce: true, activeAgain: true, deleted: true });
+    const archivedInteraction = await waitFor(async () => page.evaluate(async (sessionId) => {
+        const status = await (window.chatAPI || window.electronAPI).agentRuntimeGetStatus();
+        return status.pendingInteractions?.find((interaction) => interaction.sessionId === sessionId) || null;
+    }, seeded.approvalBlockedSession.sessionId), 'archived Session interaction was not routed to its Session');
+    const blockedDelete = await page.evaluate(async (sessionId) => {
+        try {
+            await (window.chatAPI || window.electronAPI).agentRuntimePermanentlyDeleteSession({ sessionId });
+            return null;
+        } catch (error) {
+            return { message: error?.message || String(error) };
+        }
+    }, seeded.approvalBlockedSession.sessionId);
+    assert.match(blockedDelete?.message || '', /SESSION_BUSY|interaction|Finish or cancel/i,
+        'permanent deletion must fail closed while the archived Session owns a pending interaction');
+    await page.evaluate(async (interaction) => (window.chatAPI || window.electronAPI).agentRuntimeRespondInteraction({
+        source: interaction.source,
+        requestId: interaction.requestId,
+        kind: interaction.kind,
+        generation: interaction.generation,
+        response: { answers: { confirm: { answers: [] } } },
+    }), archivedInteraction);
+    assert.equal(await page.evaluate(async (sessionId) => (
+        (window.chatAPI || window.electronAPI).agentRuntimePermanentlyDeleteSession({ sessionId })
+    ).then((result) => result.deleted), seeded.approvalBlockedSession.sessionId), true);
 
     process.kill(firstPid, 'SIGKILL');
     await waitFor(async () => page.evaluate(async () => {
@@ -139,6 +210,29 @@ try {
     assert.ok(localAfterCrash.topicIds.includes(seeded.sessionB.sessionId));
     assert.equal(localAfterCrash.pendingInteractions, 0, 'crash must fail-close and clear old-generation interactions');
 
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout: timeoutMs });
+    const afterRendererReload = await page.evaluate(async ({ sessionA, sessionB }) => {
+        const api = window.chatAPI || window.electronAPI;
+        const [projectionA, projectionB, topics, status] = await Promise.all([
+            api.agentRuntimeReadProjection({ sessionId: sessionA }),
+            api.agentRuntimeReadProjection({ sessionId: sessionB }),
+            api.agentRuntimeListTopics({}),
+            api.agentRuntimeGetStatus(),
+        ]);
+        return {
+            sessionA: projectionA.session.sessionId,
+            sessionB: projectionB.session.sessionId,
+            topicIds: topics.map((topic) => topic.sessionId),
+            state: status.state,
+        };
+    }, { sessionA: seeded.sessionA.sessionId, sessionB: seeded.sessionB.sessionId });
+    assert.equal(afterRendererReload.sessionA, seeded.sessionA.sessionId);
+    assert.equal(afterRendererReload.sessionB, seeded.sessionB.sessionId);
+    assert.ok(afterRendererReload.topicIds.includes(seeded.sessionA.sessionId));
+    assert.ok(afterRendererReload.topicIds.includes(seeded.sessionB.sessionId));
+    assert.equal(afterRendererReload.state, 'crashed', 'Renderer reload must not silently restart App Server');
+
     const recovered = await page.evaluate(async (sessionId) => {
         const api = window.chatAPI || window.electronAPI;
         const session = await api.agentRuntimeEnsureSessionRuntime({ sessionId, reason: 'recovery-test' });
@@ -151,15 +245,20 @@ try {
 
     const fixtureState = JSON.parse(await fs.readFile(statePath, 'utf8'));
     assert.equal(fixtureState.starts, 2, 'the Electron flow must start exactly one replacement App Server');
-    assert.equal(fixtureState.turnStarts, 1, 'restart/resume must not replay the accepted Turn');
+    assert.equal(fixtureState.turnStarts, 2, 'restart/resume must not replay either accepted Turn');
     assert.ok(fixtureState.resumes >= 1, 'the replacement App Server must receive thread/resume');
+    assert.ok(fixtureState.archives >= 3 && fixtureState.unarchives >= 1 && fixtureState.deletes >= 2,
+        'the Electron gate must exercise archive, restore and permanent delete against the fake App Server');
 
     await page.evaluate(async () => (window.chatAPI || window.electronAPI).agentRuntimeStop());
     console.log(JSON.stringify({
-        sessions: 2,
+        sessions: 4,
+        concurrentRunningSessions: 2,
         firstPid,
         recoveredPid: recovered.status.worker.pid,
         sqliteReadableAfterCrash: true,
+        rendererReloadPreservedSessions: true,
+        lifecycleArchiveRestoreDelete: true,
         demandRestart: true,
         replayedTurns: 0,
         replayedInteractions: 0,
@@ -181,4 +280,3 @@ try {
         }
     }
 }
-
