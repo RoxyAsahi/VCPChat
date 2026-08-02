@@ -1480,7 +1480,20 @@ async function refreshMemoList() {
 }
 
 // ========== 自定义弹窗函数 ==========
+const stripEmojiChars = (text) => (text || '').replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '').trim();
+function isMemoNextUi() {
+    return document.documentElement.dataset.uiMode === 'next' && Boolean(window.VCPUI?.feedback);
+}
 function customConfirm(message, title = '确认操作') {
+    if (isMemoNextUi()) {
+        return window.VCPUI.feedback.confirm({
+            title: stripEmojiChars(title),
+            message: stripEmojiChars(message),
+            confirmLabel: '确定',
+            cancelLabel: '取消',
+            danger: true,
+        });
+    }
     return new Promise((resolve) => {
         const modal = document.getElementById('custom-confirm-modal');
         const titleEl = document.getElementById('confirm-title');
@@ -1521,6 +1534,10 @@ function customConfirm(message, title = '确认操作') {
 }
 
 function customAlert(message, title = '提示') {
+    if (isMemoNextUi()) {
+        window.VCPUI.feedback.toast(stripEmojiChars(message), { variant: 'success' });
+        return Promise.resolve();
+    }
     return new Promise((resolve) => {
         const modal = document.getElementById('custom-alert-modal');
         const titleEl = document.getElementById('alert-title');
@@ -1618,21 +1635,211 @@ function debounce(func, wait) {
 }
 
 // --- 新版 UI：真实重建页面结构（AppPageShell + VCPUI 控件 + Web Awesome） ---
+// 经典模式保持原 DOM/CSS；next 模式把整个 app-layout（侧栏+内容区）移入 VCPUI
+// 外壳，把散落的 emoji/手绘 SVG/文字箭头统一换成 VCPUI + Lucide 图标按钮，
+// 确认/提示走 VCPUI.feedback，列表空状态用 VCPUI EmptyState。业务读写不变。
 function buildNextMemo() {
-    window.VCPPageRebuild.rebuild({
+    if (!window.VCPUI) return;
+    if (window.VCPUiModeController?.getCurrentMode() !== 'next') return;
+    if (document.body.classList.contains('vcp-ui-scope')) return;
+
+    const V = window.VCPUI;
+
+    // 先捕获 nav 内会被移除的元素（搜索框 / 搜索范围按钮）。
+    const search = document.getElementById('search-memos');
+    const scopeBtn = document.getElementById('search-scope-btn');
+
+    const shell = window.VCPPageRebuild.rebuild({
         title: '记忆工作台',
-        containerSelector: 'main.main-content',
+        containerSelector: '.app-layout',
         navSelector: '#top-nav-bar',
         actionSelectors: ['#create-memo-btn'],
         onMinimize: () => api?.minimizeWindow?.(),
         onMaximize: () => api?.maximizeWindow?.(),
         onClose: () => (api?.closeWindow ? api.closeWindow() : window.close()),
         enhanceSelectors: {
-            input: ['input:is(:not([type]),[type="text"],[type="number"],[type="search"],[type="url"],[type="email"],[type="password"])'],
+            input: ['input:is(:not([type]),[type="text"],[type="number"],[type="search"],[type="url"],[type="email"],[type="password"],input[type="date"])'],
             select: ['select'],
             textarea: ['textarea']
         },
-        tooltipSelectors: ['#create-memo-btn', '#search-scope-btn', '#refresh-folders-btn', '#manage-hidden-btn']
+        tooltipSelectors: []
+    });
+    if (!shell) return;
+
+    // 通用：文字按钮 → VCPUI Button（保留原点击逻辑；label 同步）。
+    const nextButton = (id, icon, fallbackLabel, variant = 'secondary', size = 'sm') => {
+        const original = document.getElementById(id);
+        if (!original || !original.isConnected) return null;
+        const button = V.create('Button', {
+            label: stripEmojiChars(original.textContent).replace(/^\+/, '').trim() || fallbackLabel,
+            icon,
+            variant,
+            size,
+        });
+        button.element.classList.add('vcp-ui-memo-action');
+        new MutationObserver(() => {
+            const text = stripEmojiChars(original.textContent).replace(/^\+/, '').trim();
+            if (text) button.update({ label: text });
+        }).observe(original, { childList: true, characterData: true, subtree: true });
+        button.element.addEventListener('click', () => original.click());
+        original.replaceWith(button.element);
+        original.dataset.nextUiReplaced = 'true';
+        return button;
+    };
+
+    // 通用：图标按钮 → VCPUI IconButton（保留原点击逻辑）。
+    const nextIconButton = (id, icon, label, extraClass = '') => {
+        const original = document.getElementById(id);
+        if (!original || !original.isConnected) return null;
+        const button = V.create('IconButton', { icon, label, variant: 'ghost' });
+        button.element.title = original.title || label;
+        button.element.classList.add('vcp-ui-memo-icon-btn', ...(extraClass ? [extraClass] : []));
+        button.element.addEventListener('click', () => original.click());
+        original.replaceWith(button.element);
+        original.dataset.nextUiReplaced = 'true';
+        return button;
+    };
+
+    // 通用：去掉标题/文本中的 emoji。
+    const cleanText = (selector) => {
+        const el = document.querySelector(selector);
+        if (el) el.textContent = stripEmojiChars(el.textContent) || el.textContent;
+    };
+
+    // ---- 搜索移入 shell 动作区（nav 被移除，搜索框在其中）----
+    if (search && search.isConnected) {
+        search.placeholder = (search.placeholder || '').replace(/🔍\s*/, '');
+        try { V.enhance('Input', search); } catch (error) { console.warn('[Memo] enhance search input:', error); }
+        const searchWrap = search.closest('.search-container');
+        if (searchWrap) searchWrap.remove();
+        const actionsHost = shell.element.querySelector('.vcp-ui-page-shell-actions');
+        if (actionsHost) {
+            actionsHost.prepend(search);
+            search.classList.add('vcp-ui-memo-search');
+        }
+    }
+
+    // ---- shell 动作区：搜索范围切换 + 新建日记 ----
+    if (scopeBtn) {
+        const scopeIcon = V.create('IconButton', { icon: 'folder', label: '当前范围：文件夹内', variant: 'ghost' });
+        scopeIcon.element.classList.add('vcp-ui-memo-icon-btn', 'vcp-ui-memo-scope');
+        scopeIcon.element.addEventListener('click', () => scopeBtn.click());
+        const syncScope = () => {
+            const title = scopeBtn.title || '';
+            const icon = title.includes('全局') ? 'globe' : title.includes('语义') ? 'brain' : 'folder';
+            scopeIcon.update({ icon, label: title || '搜索范围' });
+        };
+        syncScope();
+        new MutationObserver(syncScope).observe(scopeBtn, { attributes: true, attributeFilter: ['title'] });
+        const actionsHost = shell.element.querySelector('.vcp-ui-page-shell-actions');
+        if (actionsHost) actionsHost.append(scopeIcon.element);
+        scopeBtn.dataset.nextUiReplaced = 'true';
+    }
+    nextButton('create-memo-btn', 'add', '新建日记', 'primary');
+
+    // ---- 侧栏 ----
+    nextIconButton('refresh-folders-btn', 'refresh', '刷新文件夹');
+    nextButton('manage-hidden-btn', 'visibility', '管理隐藏文件夹');
+
+    // ---- 内容区头部 / 批量操作条 ----
+    nextButton('batch-edit-btn', 'checklist', '批量管理');
+    nextButton('batch-delete-btn', 'delete', '批量删除', 'danger');
+    nextButton('batch-workbench-btn', 'widgets', '进入工作台', 'primary');
+    nextIconButton('cancel-batch-btn', 'close', '取消批量选择');
+
+    // ---- 编辑器弹窗 ----
+    const togglePreview = document.getElementById('toggle-preview-btn');
+    if (togglePreview && togglePreview.isConnected) {
+        const previewIcon = V.create('IconButton', { icon: 'panel_right', label: '收纳渲染区', variant: 'ghost' });
+        previewIcon.element.title = togglePreview.title || '收纳渲染区';
+        previewIcon.element.classList.add('vcp-ui-memo-icon-btn');
+        previewIcon.element.addEventListener('click', () => togglePreview.click());
+        togglePreview.replaceWith(previewIcon.element);
+        togglePreview.dataset.nextUiReplaced = 'true';
+    }
+    nextIconButton('close-editor-btn', 'close', '关闭编辑器');
+    nextButton('delete-memo-btn', 'delete', '删除', 'danger');
+    nextButton('save-memo-btn', 'save', '保存修改', 'primary');
+
+    // ---- 新建日记弹窗 ----
+    cleanText('create-modal h2');
+    nextIconButton('close-create-modal-btn', 'close', '关闭新建日记');
+    nextButton('submit-new-memo-btn', 'send', '发布', 'primary');
+
+    // ---- 隐藏文件夹管理弹窗 ----
+    cleanText('hidden-folders-modal h2');
+    nextIconButton('close-hidden-modal-btn', 'close', '关闭隐藏文件夹管理');
+    nextButton('hidden-modal-ok-btn', 'check', '完成', 'primary');
+
+    // ---- 发布后处理弹窗 ----
+    cleanText('post-publish-modal h3');
+    nextButton('post-publish-keep-btn', 'push_pin', '保留原位 — 不做任何变动');
+    nextButton('post-publish-archive-btn', 'archive', '归档到「已整理」文件夹', 'primary');
+    nextButton('post-publish-delete-btn', 'delete', '删除原始日记（不可撤销）', 'danger');
+
+    // ---- 日记工作台弹窗 ----
+    cleanText('workbench-overlay h2');
+    nextButton('workbench-fullread-btn', 'book_open', '完整阅读');
+    nextIconButton('close-workbench-btn', 'close', '关闭工作台');
+    document.querySelectorAll('.workbench-reference-section .section-header span, .workbench-creation-section .section-header span').forEach(el => {
+        el.textContent = stripEmojiChars(el.textContent) || el.textContent;
+    });
+    nextButton('workbench-submit-btn', 'send', '发布整合日记', 'primary');
+
+    // ---- 神经联想网络 ----
+    nextIconButton('close-graph-btn', 'arrow_back', '退出联想视图');
+    nextIconButton('reset-graph-btn', 'my_location', '重置视角');
+    nextIconButton('zoom-in-btn', 'add', '放大');
+    nextIconButton('zoom-out-btn', 'remove', '缩小');
+    nextIconButton('close-panel-btn', 'close', '关闭节点详情');
+    nextButton('node-edit-btn', 'edit', '编辑内容');
+    nextButton('node-relink-btn', 'brain', '继续联想');
+    nextButton('node-delete-btn', 'delete', '删除', 'danger');
+    nextButton('node-add-workbench-btn', 'widgets', '加入工作台', 'primary');
+
+    // ---- 联想参数配置弹窗 ----
+    cleanText('assoc-config-modal h2');
+    nextIconButton('close-assoc-config-btn', 'close', '关闭联想参数配置');
+    nextButton('start-assoc-btn', 'hub', '开启视觉化联想', 'primary');
+
+    // ---- 空状态：日记网格 / 文件夹列表 ----
+    const patchGridEmpty = () => {
+        const hasRealChild = [...memoGridEl.children].some(child => !child.classList.contains('vcp-ui-memo-empty'));
+        const isEmpty = memoGridEl.children.length === 0 || !hasRealChild;
+        let empty = memoGridEl.querySelector('.vcp-ui-memo-empty');
+        if (isEmpty) {
+            if (!empty) {
+                empty = V.create('EmptyState', { icon: 'inbox', title: '暂无日记', description: '新建一篇日记开始记录。' });
+                empty.element.classList.add('vcp-ui-memo-empty');
+                memoGridEl.appendChild(empty.element);
+            }
+        } else if (empty) {
+            empty.remove();
+        }
+    };
+    patchGridEmpty();
+    new MutationObserver(patchGridEmpty).observe(memoGridEl, { childList: true, subtree: true });
+
+    const patchFolderEmpty = () => {
+        const isEmpty = folderListEl.children.length === 0;
+        let empty = folderListEl.querySelector('.vcp-ui-memo-folder-empty');
+        if (isEmpty) {
+            if (!empty) {
+                empty = V.create('EmptyState', { icon: 'folder_open', title: '暂无文件夹', description: '刷新或新建文件夹开始使用。' });
+                empty.element.classList.add('vcp-ui-memo-folder-empty');
+                folderListEl.appendChild(empty.element);
+            }
+        } else if (empty) {
+            empty.remove();
+        }
+    };
+    patchFolderEmpty();
+    new MutationObserver(patchFolderEmpty).observe(folderListEl, { childList: true, subtree: true });
+
+    // Tooltip 通过 VCPUI.create('Tooltip') 创建（由 VCPUI 委托 Web Awesome）。
+    document.querySelectorAll('.vcp-ui-memo-icon-btn, .vcp-ui-memo-action').forEach(el => {
+        const tip = V.create('Tooltip', { trigger: el, content: el.title || el.getAttribute('aria-label') || '操作', placement: 'top' });
+        document.body.append(tip.element);
     });
 }
 window.addEventListener('vcp-ui-runtime-ready', buildNextMemo);

@@ -1357,3 +1357,146 @@ body.light-theme .scope-toggle-btn.active {
 .workbench-reference-grid::-webkit-scrollbar {
     height: 6px;
 }
+/* ============================================================
+   新版 UI（next 模式）覆写：仅在 html[data-ui-mode="next"] 生效。
+   经典模式不受影响；布局与控件由 memo.js 的 buildNextMemo 完成。
+   ============================================================ */
+html[data-ui-mode="next"] body.vcp-ui-scope {
+    background: var(--vcp-ui-bg-primary);
+    color: var(--vcp-ui-text-0);
+    font-family: 'Noto Sans SC Variable', var(--vcp-chat-font-family, sans-serif);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-page-shell-content:has(.app-layout) {
+    overflow: hidden;
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .app-layout {
+    height: 100%;
+    min-height: 0;
+    margin-top: 0;
+    min-width: 0;
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .sidebar {
+    background: var(--vcp-ui-bg-1);
+    border-right-color: var(--vcp-ui-border);
+    color: var(--vcp-ui-text-0);
+    text-shadow: none;
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .sidebar-header,
+html[data-ui-mode="next"] body.vcp-ui-scope .sidebar-header span {
+    color: var(--vcp-ui-text-0);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .main-content {
+    color: var(--vcp-ui-text-0);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .content-header {
+    color: var(--vcp-ui-text-0);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .content-header .folder-title {
+    color: var(--vcp-ui-text-0);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .header-actions {
+    flex-wrap: wrap;
+}
+
+/* 搜索框与动作按钮在 shell 动作区。 */
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-memo-search {
+    width: 180px;
+    min-width: 120px;
+    border-color: var(--vcp-ui-control-border);
+    border-radius: var(--vcp-ui-radius-sm);
+    background: var(--vcp-ui-control-bg);
+    color: var(--vcp-ui-text-0);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-page-shell-actions .vcp-ui-icon-button {
+    color: var(--vcp-ui-text-2);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-page-shell-actions .vcp-ui-icon-button:hover {
+    color: var(--vcp-ui-text-0);
+    background: var(--vcp-ui-control-hover);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-memo-action,
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-memo-icon-btn {
+    min-height: var(--vcp-ui-control-sm);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-memo-icon-btn {
+    color: var(--vcp-ui-text-2);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-memo-icon-btn:hover {
+    color: var(--vcp-ui-text-0);
+    background: var(--vcp-ui-control-hover);
+}
+
+/* 批量操作条。 */
+html[data-ui-mode="next"] body.vcp-ui-scope #batch-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--vcp-ui-space-2);
+    background: var(--vcp-ui-bg-2);
+    border-color: var(--vcp-ui-border);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope #batch-actions span,
+html[data-ui-mode="next"] body.vcp-ui-scope #selected-count {
+    color: var(--vcp-ui-text-1);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .glass-input,
+html[data-ui-mode="next"] body.vcp-ui-scope input.glass-input,
+html[data-ui-mode="next"] body.vcp-ui-scope select.glass-input {
+    border-color: var(--vcp-ui-control-border);
+    border-radius: var(--vcp-ui-radius-sm);
+    background: var(--vcp-ui-control-bg);
+    color: var(--vcp-ui-text-0);
+}
+
+/* 空状态。 */
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-memo-empty,
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-memo-folder-empty {
+    padding: var(--vcp-ui-space-4);
+}
+
+/* 弹窗与覆盖层保持业务逻辑，仅统一配色。 */
+html[data-ui-mode="next"] body.vcp-ui-scope .editor-overlay,
+html[data-ui-mode="next"] body.vcp-ui-scope .modal,
+html[data-ui-mode="next"] body.vcp-ui-scope .workbench-overlay,
+html[data-ui-mode="next"] body.vcp-ui-scope .graph-overlay {
+    color: var(--vcp-ui-text-0);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .modal-glass-content,
+html[data-ui-mode="next"] body.vcp-ui-scope .editor-container,
+html[data-ui-mode="next"] body.vcp-ui-scope .workbench-container,
+html[data-ui-mode="next"] body.vcp-ui-scope .node-detail-panel {
+    color: var(--vcp-ui-text-0);
+    border-color: var(--vcp-ui-border);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .editor-textarea,
+html[data-ui-mode="next"] body.vcp-ui-scope .glass-input {
+    background: var(--vcp-ui-bg-1);
+    color: var(--vcp-ui-text-0);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .editor-header-actions .nav-icon-btn,
+html[data-ui-mode="next"] body.vcp-ui-scope .graph-controls .nav-icon-btn {
+    color: var(--vcp-ui-text-2);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-memo-empty,
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-memo-folder-empty {
+    display: flex;
+    flex-direction: column;
+}
