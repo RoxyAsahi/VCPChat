@@ -27,6 +27,70 @@ document.addEventListener('DOMContentLoaded', () => {
     let consistencyChecker = null;
     let lastCheckResults = null;
 
+    // next 模式演示层状态。
+    let nextVchatToolbar = null;
+
+    function isNextUiMode() {
+        return document.documentElement.dataset.uiMode === 'next'
+            && window.VCPUiModeController?.getCurrentMode() === 'next';
+    }
+
+    // 稳定 keyed 协调：按 key 增量更新容器子节点（复用已有 DOM，不整页 innerHTML）。
+    function reconcileByKey(container, items, keyFn, createFn) {
+        const current = new Map();
+        for (const child of container.children) {
+            if (child.dataset?.key) current.set(child.dataset.key, child);
+        }
+        const seen = new Set();
+        let prevSibling = null;
+        for (let index = items.length - 1; index >= 0; index -= 1) {
+            const key = keyFn(items[index]);
+            seen.add(key);
+            let element = current.get(key);
+            if (!element) {
+                element = createFn(items[index], key);
+                element.dataset.key = key;
+            }
+            if (prevSibling) container.insertBefore(element, prevSibling);
+            else container.appendChild(element);
+            prevSibling = element;
+        }
+        for (const [key, element] of current) {
+            if (!seen.has(key)) element.remove();
+        }
+    }
+
+    function ensureHost(parent, className) {
+        let host = parent.querySelector(`.${className}`);
+        if (!host) {
+            host = document.createElement('div');
+            host.className = className;
+            parent.append(host);
+        }
+        return host;
+    }
+
+    function renderMainStateNext(kind, payload) {
+        const V = window.VCPUI;
+        mainContentEl.replaceChildren();
+        const wrap = document.createElement('div');
+        wrap.className = 'vcp-ui-manager-state';
+        if (kind === 'loading') {
+            wrap.append(V.create('Skeleton', { variant: 'text', lines: 6 }).element);
+        } else if (kind === 'error') {
+            const alert = V.create('Alert', { title: '加载失败', message: payload, variant: 'danger' });
+            const retry = V.create('Button', { label: '重试', variant: 'secondary', icon: 'refresh' });
+            retry.element.addEventListener('click', async () => {
+                const data = await fetchData();
+                if (data) renderSidebar(data);
+            });
+            wrap.append(alert.element, retry.element);
+        } else if (kind === 'empty') {
+            wrap.append(V.create('EmptyState', { icon: 'inbox', title: payload, description: '选择一个 Agent 或群组查看聊天记录。' }).element);
+        }
+        mainContentEl.append(wrap);
+    }
+
     // --- Data Fetching and Initial Rendering ---
     async function fetchData() {
         try {
@@ -93,7 +157,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return { settings, agents, groups };
         } catch (error) {
             console.error("Error loading VChat data:", error);
-            mainContentEl.innerHTML = `<p style="color: red;">Error loading data: ${error.message}.</p>`;
+            if (isNextUiMode()) renderMainStateNext('error', error.message);
+            else mainContentEl.innerHTML = `<p style="color: red;">Error loading data: ${error.message}.</p>`;
             return null;
         }
     }
@@ -101,6 +166,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderSidebar(data) {
         if (!data) return;
         const { settings, agents, groups } = data;
+
+        if (isNextUiMode()) {
+            renderSidebarNext(settings, agents, groups);
+            return;
+        }
 
         agentsListEl.innerHTML = '<h3>Agents</h3>';
         groupsListEl.innerHTML = '<h3>Groups</h3>';
@@ -142,6 +212,54 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- next 模式：keyed 侧边栏列表 ---
+    function renderSidebarNext(settings, agents, groups) {
+        const order = (settings.combinedItemOrder && Array.isArray(settings.combinedItemOrder)) ? settings.combinedItemOrder : [];
+        const agentItems = order
+            .filter(item => item.type === 'agent' && agents[item.id])
+            .map(item => ({ type: 'agent', data: agents[item.id] }));
+        const groupItems = order
+            .filter(item => item.type === 'group' && groups[item.id])
+            .map(item => ({ type: 'group', data: groups[item.id] }));
+
+        if (agentItems.length === 0 && groupItems.length === 0) {
+            renderMainStateNext('empty', '没有找到 Agent 或群组');
+            return;
+        }
+
+        const renderList = (listEl, title, items) => {
+            if (!listEl.querySelector('h3')) {
+                const header = document.createElement('h3');
+                header.textContent = title;
+                listEl.prepend(header);
+            }
+            const host = ensureHost(listEl, 'vcp-ui-sidebar-host');
+            reconcileByKey(host, items, item => item.data.id, createSidebarItemNext);
+        };
+
+        renderList(agentsListEl, 'Agents', agentItems);
+        renderList(groupsListEl, 'Groups', groupItems);
+    }
+
+    function createSidebarItemNext(item) {
+        const { data } = item;
+        const row = document.createElement('div');
+        row.className = 'sidebar-item vcp-ui-sidebar-item';
+        row.dataset.id = data.id;
+        row.dataset.type = item.type;
+        const avatarSrc = `../${data.avatar}`;
+        const img = document.createElement('img');
+        img.className = 'avatar';
+        img.src = avatarSrc;
+        img.alt = data.name || 'Unknown';
+        img.onerror = () => { img.onerror = null; img.src = '../assets/default_avatar.png'; };
+        const label = document.createElement('span');
+        label.textContent = data.name || 'Unknown Agent';
+        row.append(img, label);
+        row.addEventListener('click', () => handleSidebarClick(data));
+        return row;
+    }
+
     function handleSidebarClick(itemData) {
         switchTab('chat-history');
         chatHistoryEl.innerHTML = '';
@@ -149,16 +267,32 @@ document.addEventListener('DOMContentLoaded', () => {
         currentHistory = [];
         currentHistoryPath = '';
 
-        if (!itemData || !itemData.topics) {
-            chatHistoryEl.innerHTML = '<p>No topics found for this item.</p>';
+        if (!itemData || !itemData.topics || itemData.topics.length === 0) {
+            if (isNextUiMode()) renderMainStateNext('empty', itemData ? '该 Agent/群组没有话题' : '没有找到话题');
+            else chatHistoryEl.innerHTML = '<p>No topics found for this item.</p>';
+            return;
+        }
+
+        // Sort topics by createdAt timestamp, newest first
+        const sortedTopics = [...itemData.topics].sort((a, b) => b.createdAt - a.createdAt);
+
+        if (isNextUiMode()) {
+            const host = ensureHost(chatHistoryEl, 'vcp-ui-topic-host');
+            reconcileByKey(host, sortedTopics, topic => topic.id, (topic) => {
+                const topicItem = document.createElement('li');
+                topicItem.className = 'topics-list-item';
+                topicItem.textContent = `${topic.name} (${topic.id})`;
+                topicItem.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    loadChatHistory(itemData.id, topic.id);
+                });
+                return topicItem;
+            });
             return;
         }
 
         const topicsList = document.createElement('ul');
         topicsList.classList.add('topics-list');
-        
-        // Sort topics by createdAt timestamp, newest first
-        const sortedTopics = [...itemData.topics].sort((a, b) => b.createdAt - a.createdAt);
 
         sortedTopics.forEach(topic => {
             const topicItem = document.createElement('li');
@@ -174,7 +308,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function loadChatHistory(itemId, topicId) {
-        chatHistoryEl.innerHTML = `<p>Loading history for ${topicId}...</p>`;
+        if (isNextUiMode()) {
+            mainContentEl.replaceChildren();
+            const wrap = document.createElement('div');
+            wrap.className = 'vcp-ui-manager-state';
+            wrap.append(window.VCPUI.create('Skeleton', { variant: 'text', lines: 6 }).element);
+            mainContentEl.append(wrap);
+        } else {
+            chatHistoryEl.innerHTML = `<p>Loading history for ${topicId}...</p>`;
+        }
         currentHistoryPath = `${AppDataPath}UserData/${itemId}/topics/${topicId}/history.json`;
         
         try {
@@ -186,13 +328,19 @@ document.addEventListener('DOMContentLoaded', () => {
             renderJsonEditor(currentHistory);
         } catch (error) {
             console.error(`Error loading history for ${itemId}/${topicId}:`, error);
-            chatHistoryEl.innerHTML = `<p style="color: red;">Could not load chat history: ${error.message}</p>`;
+            if (isNextUiMode()) renderMainStateNext('error', `无法加载聊天历史：${error.message}`);
+            else chatHistoryEl.innerHTML = `<p style="color: red;">Could not load chat history: ${error.message}</p>`;
             jsonEditorEl.innerHTML = '';
         }
     }
 
     function renderChatHistory(history) {
         switchTab('chat-history');
+        if (isNextUiMode()) {
+            const host = ensureHost(chatHistoryEl, 'vcp-ui-message-host');
+            reconcileByKey(host, history, message => message.id, createMessageElement);
+            return;
+        }
         chatHistoryEl.innerHTML = '<h3>Chat History</h3>';
         history.forEach(message => {
             const messageEl = createMessageElement(message);
@@ -834,7 +982,16 @@ document.addEventListener('DOMContentLoaded', () => {
             (hasOrphanedAgents ? `\n⚠ This will CREATE new agent config files for recovered agents.\n` : '') +
             `\nThis will modify agent/group config files.`;
         
-        if (!confirm(confirmMsg)) {
+        if (isNextUiMode() && window.VCPUI) {
+            const confirmed = await window.VCPUI.feedback.confirm({
+                title: '应用修复',
+                message: confirmMsg,
+                danger: true,
+                confirmLabel: '应用修复',
+                cancelLabel: '取消'
+            });
+            if (!confirmed) return;
+        } else if (!confirm(confirmMsg)) {
             return;
         }
         
@@ -898,16 +1055,75 @@ document.addEventListener('DOMContentLoaded', () => {
         setupResizer();
         setupSearch();
         setupConsistencyCheck();
+        if (isNextUiMode() && window.VCPUI) {
+            renderMainStateNext('loading');
+        }
         const data = await fetchData();
         if (data) {
             renderSidebar(data);
         }
     }
 
+    // --- 新版 UI：深加工（VChat Manager presentation only，不动 IPC/协议/数据权威） ---
+    function buildNextVchatManagerDeep() {
+        if (!isNextUiMode()) return;
+        const V = window.VCPUI;
+
+        // 管理工具栏：搜索 Input + 主题 / 一致性检查 Button（VCPUI 组合）。
+        const search = V.create('Input', {
+            placeholder: '搜索聊天历史 (Enter)',
+            leadingIcon: 'search',
+            size: 'sm'
+        });
+        search.element.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter') return;
+            const native = search.element.querySelector('input, textarea');
+            const value = (native?.value || '').trim();
+            if (value.length < 2) return;
+            searchModalEl.style.display = 'flex';
+            searchInputEl.value = value;
+            performSearch(value);
+        });
+
+        const themeBtn = document.getElementById('theme-toggle');
+        const consistencyBtn = document.getElementById('consistency-check-btn');
+        const theme = V.create('Button', { label: '切换主题', variant: 'secondary', size: 'sm', icon: 'dark_mode' });
+        theme.element.addEventListener('click', () => themeBtn?.click());
+        const consistency = V.create('Button', { label: '一致性检查', variant: 'secondary', size: 'sm', icon: 'fact_check' });
+        consistency.element.addEventListener('click', () => consistencyBtn?.click());
+
+        const toolbar = V.create('Toolbar', {
+            label: '数据管理工具栏',
+            start: [search.element],
+            end: [theme.element, consistency.element]
+        });
+        nextVchatToolbar = toolbar;
+        mainContentEl.prepend(toolbar.element);
+
+        // 原按钮保留但隐藏，以复用既有监听器；工具栏按钮触发其 click。
+        document.querySelector('.header-buttons')?.setAttribute('hidden', '');
+
+        // Tooltip 通过 VCPUI.create('Tooltip') 创建（由 VCPUI 委托 Web Awesome）。
+        [theme.element, consistency.element].forEach(btn => {
+            try {
+                const tip = V.create('Tooltip', { trigger: btn, content: btn.title || btn.getAttribute('aria-label') || '操作', placement: 'top' });
+                document.body.append(tip.element);
+            } catch (error) { /* ignore */ }
+        });
+
+        // 切到 next 渲染管线后重绘（keyed 侧边栏等）。
+        renderSidebar({ settings: allSettings, agents: allAgents, groups: allGroups });
+    }
+
+    window.addEventListener('vchat-manager-next-mounted', buildNextVchatManagerDeep);
+
     initialize();
 });
 // --- 新版 UI：真实重建（AppPageShell + VCPUI 控件 + Web Awesome，业务页仅经 VCPUI） ---
 function buildNextVchatManager() {
+    if (!window.VCPUI) return;
+    if (window.VCPUiModeController?.getCurrentMode() !== 'next') return;
+    if (document.body.classList.contains('vcp-ui-scope')) return;
     window.VCPPageRebuild.rebuild({
         title: 'VChat Manager',
         containerSelector: '#app',
@@ -916,8 +1132,8 @@ function buildNextVchatManager() {
             input: ['input:is(:not([type]),[type="text"],[type="number"],[type="search"],[type="url"],[type="email"],[type="password"])'],
             select: ['select'],
             textarea: ['textarea']
-        },
-        tooltipSelectors: ['consistency-check-btn', 'apply-fixes-btn', 'run-check-btn', 'theme-toggle']
+        }
     });
+    window.dispatchEvent(new CustomEvent('vchat-manager-next-mounted'));
 }
 window.addEventListener('vcp-ui-runtime-ready', buildNextVchatManager);
