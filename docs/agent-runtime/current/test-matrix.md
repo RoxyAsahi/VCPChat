@@ -1,7 +1,7 @@
 # 验收矩阵与收据
 
 更新时间：2026-08-03。Codex App Server 功能 checkpoint 为 `29c2068a`；R7-R10 功能 revision 为
-`c0143f64`，测试基线为 `ea4a2e73`，状态为 `live`。当前 revision 已重跑双 Thread 长任务/取消隔离、
+`c0143f64`，hermetic 基线为 `cc6496f4`，强化 live 基线为 `46e2ce41`，状态为 `live`。当前 revision 已重跑双 Thread 长任务/取消隔离、
 FileOperator、Nova 恢复链与 VCPLog/VCPInfo observer connect；原生审批、ToolBox 后端审批重放和富消息
 Electron gate 仍未完成，因此不是产品完成。
 
@@ -82,7 +82,7 @@ npm run test:codex-toolbox-live
 | Electron Codex smoke | hermetic Electron | preload/IPC、Session/Thread 创建、projection-only SQLite read、Runtime identity、Workspace list/preview、内部应用注册/挂载、Fork/legacy 模式与主要 DOM | working-tree pass | 2026-08-02：`npm run test:electron-codex-smoke` 通过；真实 Main/preload IPC 列出 Session workspace 并读取 `package.json` 预览。该命令不替代真实 Nova/ToolBox 长任务验收。 |
 | ToolBox model via adapter | explicit live Nova | 身份回答包含 Nova 且不含 Codex；随机 sentinel；公开 reasoning 持久投影；restart/resume、fork、interrupt | 0.146 live pass | 2026-08-03：测试基线 `ea4a2e73` 运行 `test:codex-nova-live`，耗时 49.6 s；身份、reasoning、sentinel、restart/resume、fork、interrupt 全部通过。Codex `0.146.0`；ToolBox HEAD `024f8780` 有用户既有改动，本次未修改 ToolBox。 |
 | VCP dynamic tool via adapter | live Nova + VChat DistributedServer | `item/tool/call -> bridge -> /v1/human/tool -> FileOperator`，结构化结果与 Projection | 0.146 live pass | 2026-08-03：测试基线 `ea4a2e73` 运行 `test:codex-toolbox-live`，耗时 24.8 s；FileOperator ReadFile 恰好调用一次，dynamicCall、bridgeCompleted 和 Projection 全部通过。临时 DistributedServer 节点在测试后关闭。 |
-| Concurrent Nova Thread + cancel isolation | explicit live Nova | 同一 App Server PID；A/B 均收到 `turn/started`；中断 A；A=`interrupted`、B=`completed`；两个 SQLite projection 不串线 | 0.146 live pass | 2026-08-03：测试基线 `ea4a2e73` 运行 `test:codex-concurrent-live`，耗时 20.4 s；A 请求 30 段工作区架构说明并在启动后中断，B 独立完成随机 sentinel；PID、取消和 Projection 隔离均通过。 |
+| Concurrent Nova Thread + cancel isolation | explicit live Nova | 同一 App Server PID；A/B 均为长任务并收到 `turn/started`；中断 A；A=`interrupted`、B=`completed`；两个 SQLite projection 不串线 | 0.146 live pass | 2026-08-03：强化测试 revision `46e2ce41` 运行 `test:codex-concurrent-live`，耗时 76.1 s；A 请求 30 段工作区架构说明并在启动后中断，B 完成 8,558 字符可靠性审查和随机 sentinel；PID、取消和 Projection 隔离均通过。 |
 | Native approval | real Codex | command/file approval 显示、allow/deny、close fail-closed | pending | fake manager 测试不能替代真实 Codex。 |
 | ToolBox backend approval | live ToolBox | 独立 approval id、TTL/replay、只响应一次 | implemented, pending live | Rust/manager 基础闭环与 replay 去重单测已通过；真实 VCPLog 未执行。 |
 | VCPInfo/VCPLog | live ToolBox | 限长、重连、去重、只读结构化卡片 | partial live | 2026-08-03：测试基线 `ea4a2e73` 运行 `VCP_CODEX_LIVE=1 npm run test:codex-toolbox-ws-live`，VCPLog/VCPInfo 双 observer connect+clean shutdown 通过；真实断线重连、replay、approval payload 和通知内容仍未执行。 |
@@ -298,7 +298,7 @@ R4.1、R4.2、R5.1、R5.3 的 gate 除测试通过外，还必须记录：来源
 | Electron recovery | two concurrent Sessions、identity isolation、Renderer reload、kill/restart/resume、archive/restore/delete、pending interaction、read-only degraded | `npm run test:electron-codex-recovery` | committed pass |
 | Governance/UI | pinned 0.146 schema、ownership/ADR/receipt、no global refs、scoped CSS/no inline mutation | `npm run check:codex-governance`、`npm run check:ui-system` | committed pass |
 | Central IPC/product boundary | every Handler channel defined、no global attachment status、Codex-owned Workspace policy、archived Runtime excluded from product | `npm run check:agent-runtime`、`npm run check:codex-governance` | committed pass (`d14f9a58`) |
-| Concurrent Nova release gate | one App Server PID、two running Threads、30-paragraph Turn A interrupted、B completes、Projection isolation | `VCP_CODEX_LIVE=1 npm run test:codex-concurrent-live` | live pass on tested revision `ea4a2e73` |
+| Concurrent Nova release gate | one App Server PID、two long running Threads、30-paragraph Turn A interrupted、B completes >= 1,200 assistant characters、Projection isolation | `VCP_CODEX_LIVE=1 npm run test:codex-concurrent-live` | live pass on tested revision `46e2ce41` (8,558 chars) |
 | Dynamic ToolBox release gate | `vcp_invoke` unwrap、exactly one FileOperator ReadFile、Codex identity、bridge result、SQLite Projection | `VCP_CODEX_LIVE=1 npm run test:codex-toolbox-live` | live pass on tested revision `ea4a2e73` |
 
 ### R7 Profile/Session identity follow-up

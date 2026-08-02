@@ -5,9 +5,10 @@
   "toolboxModified": false,
   "liveVerified": true,
   "productComplete": false,
-  "verifiedCommit": "ea4a2e73499b5541a557be7c08e38163da04746d",
+  "verifiedCommit": "46e2ce419f2727349bde473fdc55327f2ced1bf5",
   "functionalCommit": "c0143f64314863c0ef2dbb20ec5019d3860a7c9c",
-  "verifiedAt": "2026-08-03T00:06:29+02:00",
+  "hermeticCommit": "cc6496f4b236299b14e0d4b7997bd181c126a35e",
+  "verifiedAt": "2026-08-03T00:20:16+02:00",
   "environment": {
     "platform": "Windows x64",
     "electron": "41.7.1",
@@ -30,6 +31,11 @@
     "5x node scripts/test-agent-workbench.mjs",
     "git diff --check"
   ],
+  "commandRevisions": {
+    "hermeticAndUi": "cc6496f4b236299b14e0d4b7997bd181c126a35e",
+    "novaFileOperatorAndObservers": "ea4a2e73499b5541a557be7c08e38163da04746d",
+    "dualLongTaskConcurrency": "46e2ce419f2727349bde473fdc55327f2ced1bf5"
+  },
   "results": {
     "codexCi": "passed",
     "uiSystem": "passed",
@@ -54,10 +60,12 @@
     "live": {
       "novaIdentityReasoningResumeForkInterrupt": "passed in 49.6s",
       "concurrentThreads": 2,
-      "longTurnA": "started then explicitly interrupted",
-      "turnB": "completed",
+      "longTurnA": "30-paragraph task started then explicitly interrupted",
+      "longTurnB": "completed 12-section reliability task",
+      "completedLongResponseChars": 8558,
       "appServerPidStable": true,
       "projectionIsolation": true,
+      "concurrentLiveDurationSeconds": 76.1,
       "fileOperatorReadFileCalls": 1,
       "vcpInvokeUnwrap": true,
       "bridgeProjection": "passed in 24.8s",
