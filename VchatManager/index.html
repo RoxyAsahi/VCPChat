@@ -36,6 +36,17 @@
         </div>
     </div>
     <script src="consistency-checker.js"></script>
+    <script>
+        // 独立 Electron 子应用按本地偏好进入新版 UI（presentation only）。
+        // 默认保持 classic（行为与之前完全一致）；设置
+        // localStorage['vchat-manager-ui-mode'] = 'next' 后启用 next 模式。
+        try {
+            const persistedUiMode = localStorage.getItem('vchat-manager-ui-mode');
+            if (persistedUiMode === 'next' || persistedUiMode === 'classic') {
+                document.documentElement.dataset.uiMode = persistedUiMode;
+            }
+        } catch (e) { /* ignore */ }
+    </script>
     <script type="module" src="../modules/ui-system/vcp-ui-runtime-bootstrap.js"></script>
     <script src="script.js"></script>
     <!-- Search Modal -->
