@@ -1,7 +1,7 @@
 # 验收矩阵与收据
 
 更新时间：2026-08-02。Codex App Server 功能 checkpoint 为 `29c2068a`；当前 R7-R10 可靠性 revision 为
-`d14f9a58`，状态为 `hermetic`。旧 revision `261d11ba` 的双 Thread 并发/取消隔离与 FileOperator live
+`c0143f64`，状态为 `hermetic`。旧 revision `261d11ba` 的双 Thread 并发/取消隔离与 FileOperator live
 结果保留为历史证据，但尚未在当前 revision 重跑；原生审批、ToolBox 后端审批重放和富消息 Electron gate
 仍未完成，因此不是产品完成。
 
@@ -379,13 +379,15 @@ Machine receipt: [r9-follow-up.json](receipts/r9-follow-up.json).
 
 ### R10 reliability/governance follow-up
 
-Assertions committed on 2026-08-02 in `d14f9a589789f44bea76aa3fc11145a3013d3aed`:
+Assertions committed on 2026-08-02 in `d14f9a589789f44bea76aa3fc11145a3013d3aed` and
+`c0143f64314863c0ef2dbb20ec5019d3860a7c9c`:
 
 - Codex Agent IPC no longer imports archived Runtime contracts or exposes global attachment state.
 - Every `IPC_CHANNELS.*` Handler reference must resolve through the central registry; the gate caught and fixed missing Profile channels before release.
 - Workspace policy ownership moved to `modules/codex-runtime`, with archived imports reduced to a compatibility re-export.
 - Pi/Rust scripts and workflow are explicitly archived and excluded from Codex product packaging.
 - Electron recovery uses isolated Chromium `userData`, disables unrelated CDS startup, bounds debugger/IPC waits, and leaves no silent startup hang.
+- The pre-Turn thinking row remains a keyed main-chat skeleton after animation-frame/deferred processing; it is not replaced by plain Markdown text.
 
 Commands passed:
 
@@ -393,6 +395,7 @@ Commands passed:
 npm run test:codex-ci
 npm run test:electron-codex-smoke
 npm run check:ui-system
+5x node scripts/test-agent-workbench.mjs
 git diff --check
 ```
 

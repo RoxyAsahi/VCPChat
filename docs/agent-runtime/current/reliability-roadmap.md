@@ -1,6 +1,6 @@
 # Codex Agent Reliability Roadmap
 
-Status: **hermetic** for current revision `d14f9a58`; **not product complete**
+Status: **hermetic** for current revision `c0143f64`; **not product complete**
 
 This document is the source of truth for R7-R10. Codex App Server remains a pinned `0.146.x` black box and the only enabled execution profile is `toolbox-only`. VCPToolBox is not modified.
 
@@ -51,6 +51,7 @@ This document is the source of truth for R7-R10. Codex App Server remains a pinn
 - Workspace operations use bounded general/search schedulers and cancellable request IDs.
 - The maintained Workspace path policy lives under `modules/codex-runtime/`; archived Pi/Rust imports are compatibility re-exports only.
 - Agent Renderer is an independent product implementation. Main-chat and Agent share security/golden fixtures only.
+- Renderer-only pre-Turn rows disable deferred Markdown processing so the main-chat thinking skeleton cannot be overwritten after paint.
 - Agent IPC uses the central registry. Governance fails when any Handler references an undefined channel, and Runtime status has no global attachment field.
 - Archived Pi/Rust scripts are explicitly namespaced, excluded from Codex product packaging, and the Rust workflow is manual-only.
 - Electron recovery covers concurrent Session identity, Renderer reload, demand restart, archive/restore/permanent delete, pending-interaction blocking, and forced read-only degraded mode.
@@ -59,10 +60,10 @@ This document is the source of truth for R7-R10. Codex App Server remains a pinn
 
 ## Verification Receipt
 
-- Functional revision: `d14f9a589789f44bea76aa3fc11145a3013d3aed`.
+- Functional revision: `c0143f64314863c0ef2dbb20ec5019d3860a7c9c`.
 - Committed gates passed: `test:codex-ci`, `test:electron-codex-smoke`, `check:ui-system`, and `git diff --check`.
 - Historical live evidence exists on revision `261d11ba7577125867a236033a13be58d94ae72d`: `deepseek-v4-flash` passed two-Thread concurrency/cancel isolation and `vcp_invoke -> FileOperator.ReadFile -> bridge -> Projection` without modifying VCPToolBox.
-- That historical live evidence is not inherited by `d14f9a58`; current live status remains pending until the release gates are rerun on this revision.
+- That historical live evidence is not inherited by `c0143f64`; current live status remains pending until the release gates are rerun on this revision.
 - The machine-readable details are in [r7-r10-working-tree.json](receipts/r7-r10-working-tree.json).
 - Native Codex approval, ToolBox backend approval replay/exactly-once, VCPInfo/VCPLog reconnect/replay, and rich Electron visual/performance acceptance remain product gates.
 

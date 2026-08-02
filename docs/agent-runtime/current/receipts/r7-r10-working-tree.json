@@ -4,8 +4,8 @@
   "scope": ["R7", "R8", "R9", "R10"],
   "toolboxModified": false,
   "liveVerified": false,
-  "verifiedCommit": "d14f9a589789f44bea76aa3fc11145a3013d3aed",
-  "verifiedAt": "2026-08-02T23:42:59+02:00",
+  "verifiedCommit": "c0143f64314863c0ef2dbb20ec5019d3860a7c9c",
+  "verifiedAt": "2026-08-02T23:52:12+02:00",
   "environment": {
     "platform": "Windows x64",
     "electron": "41.7.1",
@@ -16,6 +16,7 @@
     "npm run test:codex-ci",
     "npm run test:electron-codex-smoke",
     "npm run check:ui-system",
+    "5x node scripts/test-agent-workbench.mjs",
     "git diff --check"
   ],
   "results": {
@@ -24,6 +25,7 @@
     "electronCodexSmoke": "passed",
     "centralIpcRegistry": "passed",
     "archivedRuntimeProductBoundary": "passed",
+    "preTurnThinkingAnimationStress": "passed 5/5",
     "electronRecovery": {
       "sessions": 4,
       "concurrentRunningSessions": 2,

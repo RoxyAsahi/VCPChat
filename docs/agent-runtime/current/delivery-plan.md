@@ -218,5 +218,6 @@
 - [x] R9 follow-up (`a13a3410`): local authority 不被 Codex snapshot 删除；只读降级在 transport 前拒绝全部 mutation；start/fork ACK 后故障保留 Thread ID 并只允许显式恢复，不自动重放。
 - [x] R10: 归档/永久删除/导出、Workspace Abort/cancel、Renderer 独立 ADR、Windows CI 与机器治理检查。
 - [x] R10 follow-up (`d14f9a58`): Workspace policy 归属 Codex Runtime；Agent IPC 完全转入中央合同并静态校验缺失 channel；删除全局 attachment/list 推断；旧 Pi/Rust npm 入口显式归档、产品打包排除旧 Runtime、Rust workflow 改为手动；Electron recovery/smoke 使用独立 `userData` 且不启动无关 CDS。
-- [x] 当前 revision `d14f9a58` 的 committed hermetic 聚合已通过。`261d11ba` 上的双 Thread/FileOperator live 收据仅作历史证据，不能自动升级当前 revision。
+- [x] Renderer race follow-up (`c0143f64`): pre-Turn thinking row 不再执行延迟 Markdown 后处理；`test:agent-workbench` 连续 5 次和完整 `test:codex-ci` 通过。
+- [x] 当前 revision `c0143f64` 的 committed hermetic 聚合已通过。`261d11ba` 上的双 Thread/FileOperator live 收据仅作历史证据，不能自动升级当前 revision。
 - [ ] 当前 revision 仍需重跑真实双 Thread/FileOperator；整体产品 release gate 还需 Codex native approval、ToolBox backend approval replay/恰好一次、VCPInfo/VCPLog reconnect/replay，以及 Electron 富消息与性能验收。
