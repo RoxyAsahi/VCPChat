@@ -1180,6 +1180,45 @@
         width: 16px;
         height: 16px;
       }
+
+      /* --- next 模式深加工：VCPUI 工具栏 + 监听信息流 --- */
+      html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-page-body {
+        min-width: 0;
+        min-height: 100%;
+        height: 100%;
+        box-sizing: border-box;
+        padding: var(--vcp-ui-space-2) var(--vcp-ui-space-3) var(--vcp-ui-space-3);
+        display: flex;
+        flex-direction: column;
+        gap: var(--vcp-ui-space-2);
+      }
+
+      html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-page-body .vcp-ui-toolbar {
+        flex: 0 0 auto;
+        flex-wrap: wrap;
+      }
+
+      html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-page-body .vcp-ui-toolbar .vcp-ui-toolbar-group {
+        flex-wrap: wrap;
+      }
+
+      html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-page-body .vcp-ui-toolbar select.vcp-ui-select,
+      html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-page-body .vcp-ui-toolbar wa-select {
+        width: auto;
+        min-width: 140px;
+      }
+
+      html[data-ui-mode="next"] body.vcp-ui-scope .status-pill {
+        margin-bottom: 0;
+      }
+
+      html[data-ui-mode="next"] body.vcp-ui-scope #infoContainer {
+        flex: 1 1 auto;
+        min-height: 0;
+        border: 1px solid var(--vcp-ui-border);
+        border-radius: var(--vcp-ui-radius-md);
+        background: var(--vcp-ui-bg-1);
+      }
     </style>
     <script src="../vendor/marked.min.js"></script>
     <script>
@@ -1582,6 +1621,7 @@
       const scrollToTopBtn = document.getElementById("scrollToTopBtn");
       let currentFilter = "all";
       let _cardCount = 0; // 跟踪当前卡片数量，避免频繁querySelectorAll
+      let _cardSeq = 0; // 稳定 keyed 卡片自增序号
 
       // --- Raw Data Store for Copy Button ---
       const _rawDataStore = new Map();
@@ -3520,6 +3560,12 @@
           _cardCount = 0;
         }
 
+        // 稳定 keyed 卡片：每次新卡赋予自增 key（支持增量协调，不做全量 innerHTML）。
+        if (!element.dataset.key) {
+          _cardSeq += 1;
+          element.dataset.key = "rag-card-" + _cardSeq;
+        }
+
         infoContainer.prepend(element);
         _cardCount++;
 
@@ -3743,7 +3789,14 @@
     <script type="module" src="../modules/ui-system/vcp-ui-runtime-bootstrap.js"></script>
     <script>
         // 新版 UI：真实重建（AppPageShell + VCPUI 控件 + Web Awesome，业务页仅经 VCPUI）。
+        function isNextUi() {
+            return document.documentElement.dataset.uiMode === 'next'
+                && window.VCPUI
+                && window.VCPUiModeController?.getCurrentMode() === 'next';
+        }
+
         function buildNextRag() {
+            if (!isNextUi()) return;
             window.VCPPageRebuild.rebuild({
                 title: 'VCP 监听',
                 containerSelector: '.main-wrapper',
@@ -3755,10 +3808,80 @@
                 enhanceSelectors: {
                     input: ['input:is(:not([type]),[type="text"],[type="search"])'],
                     select: ['select']
-                },
-                tooltipSelectors: ['rag-pause-btn', 'rag-clear-btn']
+                }
+            });
+            deepenNextRag(window.VCPUI);
+        }
+
+        // --- 新版 UI：深加工 —— VCPUI 管理工具栏 + 危险操作确认 + keyed 卡片 ---
+        function deepenNextRag(V) {
+            const body = document.querySelector('.vcp-ui-page-body');
+            const headerSection = document.querySelector('.header-section');
+            const infoContainer = document.getElementById('infoContainer');
+
+            const statusPill = document.getElementById('connectionStatus');
+            const settingsTrigger = document.querySelector('.settings-trigger');
+
+            const filterSelect = V.create('Select', {
+                label: '事件筛选',
+                options: [
+                    { label: '全部', value: 'all' },
+                    { label: 'RAG知识库', value: 'rag' },
+                    { label: '元思考链', value: 'chain' },
+                    { label: 'Agent会话', value: 'chat' },
+                    { label: '记忆检索', value: 'memo' },
+                    { label: 'Agent梦境', value: 'dream' },
+                    { label: '通知消息', value: 'notification' }
+                ],
+                value: currentFilter || 'all',
+                size: 'sm'
+            });
+            filterSelect.element.addEventListener('change', function () {
+                applyFilterNext(filterSelect.element.value || 'all');
+            });
+
+            const clearBtn = V.create('Button', { label: '清空记录', variant: 'danger', size: 'sm', icon: 'delete' });
+            clearBtn.element.addEventListener('click', requestClearLogsNext);
+
+            const toolbar = V.create('Toolbar', {
+                label: '监听工具栏',
+                start: [statusPill, filterSelect.element].filter(Boolean),
+                end: [settingsTrigger, clearBtn.element].filter(Boolean)
+            });
+
+            if (body) body.prepend(toolbar.element);
+            headerSection?.remove();
+
+            if (infoContainer) infoContainer.classList.add('vcp-ui-rag-feed');
+
+            [clearBtn.element, settingsTrigger].forEach(btn => {
+                if (!btn || !btn.isConnected) return;
+                try {
+                    const tip = V.create('Tooltip', { trigger: btn, content: btn.title || btn.getAttribute('aria-label') || '操作', placement: 'top' });
+                    document.body.append(tip.element);
+                } catch (error) { /* ignore */ }
             });
         }
+
+        function applyFilterNext(type) {
+            currentFilter = type;
+            const cards = document.querySelectorAll('.card-base');
+            cards.forEach(function (card) {
+                card.style.display = (type === 'all' || card.classList.contains('type-' + type)) ? 'block' : 'none';
+            });
+        }
+
+        function requestClearLogsNext() {
+            window.VCPUI.feedback.confirm({
+                title: '确认清空记录',
+                message: '确定要清空当前监听记录吗？此操作不可撤销。',
+                danger: true,
+                confirmLabel: '清空记录'
+            }).then(function (accepted) {
+                if (accepted) clearLogs();
+            });
+        }
+
         window.addEventListener('vcp-ui-runtime-ready', buildNextRag);
     </script>
   </body>
