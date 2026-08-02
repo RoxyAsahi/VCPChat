@@ -528,3 +528,54 @@ html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-log-body .log-shell {
     flex: 1 1 auto;
     min-height: 0;
 }
+
+/* --- next 模式深加工：VCPUI 工具栏 + keyed 行 + 状态区 --- */
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-log-body .vcp-ui-toolbar {
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-log-body .vcp-ui-toolbar .vcp-ui-toolbar-group {
+    flex-wrap: wrap;
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-log-body .vcp-ui-toolbar :is(.vcp-ui-input-wrap, .vcp-ui-native-input) {
+    width: 240px;
+    max-width: 100%;
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-log-body .vcp-ui-toolbar select.vcp-ui-select {
+    width: auto;
+    min-width: 120px;
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope #empty-state {
+    display: none;
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-log-body .log-shell .log-lines {
+    padding: var(--vcp-ui-space-1) 0;
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-log-body .log-shell .log-lines .log-row {
+    padding-left: var(--vcp-ui-space-3);
+    padding-right: var(--vcp-ui-space-3);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-log-error-box {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--vcp-ui-space-3);
+    padding: var(--vcp-ui-space-3);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-log-body .log-shell .vcp-ui-empty-state {
+    padding: var(--vcp-ui-space-6) var(--vcp-ui-space-3);
+}
+
+@media (max-width: 760px) {
+    html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-log-body .vcp-ui-toolbar :is(.vcp-ui-input-wrap, .vcp-ui-native-input) {
+        width: 100%;
+    }
+}
