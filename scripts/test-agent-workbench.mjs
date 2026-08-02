@@ -45,6 +45,7 @@ const approvalResponses = [];
 const interactionResponses = [];
 const openedExternalLinks = [];
 const savedWorkbenchSettings = [];
+const savedAvatars = [];
 const runtimeTransitions = [];
 const takeoverRequests = [];
 let mainCreateProxyCalls = 0;
@@ -77,9 +78,13 @@ window.chatAPI = {
     getAgents: async () => {
         await agentCatalogGate;
         return [
-            { id: 'Nova', name: 'Nova', config: { model: 'gpt-5.6-terra', systemPrompt: '{{Nova}}' } },
+            { id: 'Nova', name: 'Nova', avatarUrl: 'assets/nova-avatar.png', config: { model: 'gpt-5.6-terra', systemPrompt: '{{Nova}}' } },
             { id: '123', name: '123', config: { model: 'gpt-5.6-terra' } },
         ];
+    },
+    saveAvatar: async (agentId, avatarData) => {
+        savedAvatars.push({ agentId, avatarData });
+        return { success: true, avatarUrl: `file:///${agentId}-updated.png` };
     },
     // Match the main-chat contract: this is a Main-process cache, not an
     // Agent Workbench request to the ToolBox model endpoint.
@@ -1256,6 +1261,22 @@ const settingsTab = [...host.querySelectorAll('.agent-chat-sidebar .sidebar-tab-
 settingsTab.click();
 assert.ok(host.querySelector('.agent-chat-settings-pane .agent-chat-settings-form'),
     'settings must render inside a dedicated padded pane instead of placing fields against the sidebar edge');
+const avatarSettings = host.querySelector('.agent-chat-settings-avatar');
+assert.ok(avatarSettings, 'Agent settings must expose the shared main-chat avatar control');
+assert.match(avatarSettings.querySelector('.agent-chat-settings-avatar-preview')?.src || '', /nova-avatar\.png/,
+    'avatar preview must use the selected Agent catalog avatar');
+const avatarInput = avatarSettings.querySelector('input[type="file"]');
+const avatarBytes = new Uint8Array([1, 2, 3]).buffer;
+const avatarFile = { name: 'nova.png', type: 'image/png', arrayBuffer: async () => avatarBytes };
+Object.defineProperty(avatarInput, 'files', { configurable: true, value: [avatarFile] });
+avatarInput.dispatchEvent(new window.Event('change', { bubbles: true }));
+await new Promise((resolve) => setTimeout(resolve, 30));
+assert.equal(savedAvatars.length, 1, 'selecting an avatar must save through the existing main-chat avatar IPC');
+assert.equal(savedAvatars[0].agentId, 'Nova', 'avatar save must target the selected Agent identity');
+assert.equal(savedAvatars[0].avatarData.name, 'nova.png');
+assert.equal(savedAvatars[0].avatarData.type, 'image/png');
+assert.ok(savedAvatars[0].avatarData.buffer instanceof ArrayBuffer,
+    'avatar save must pass binary data without persisting Base64 in renderer state');
 const budgetSettings = host.querySelector('.agent-chat-settings-budget');
 assert.ok(budgetSettings, 'per-turn safety budgets must live in Agent settings rather than the usage inspector');
 assert.equal(budgetSettings.querySelector('[name="maxRequestsPerTurn"]').value, '8');

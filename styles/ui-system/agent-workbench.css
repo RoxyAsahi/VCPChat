@@ -597,6 +597,31 @@ html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .topic-list .agent-ch
         gap: var(--vcp-ui-space-3);
     }
 
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-settings-avatar {
+        display: grid;
+        grid-template-columns: 72px minmax(0, 1fr);
+        align-items: center;
+        gap: var(--vcp-ui-space-3);
+        padding-bottom: var(--vcp-ui-space-3);
+        border-bottom: 1px solid var(--vcp-ui-border-subtle);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-settings-avatar-preview {
+        width: 72px;
+        height: 72px;
+        border: 1px solid var(--vcp-ui-border-subtle);
+        border-radius: 50%;
+        object-fit: cover;
+        background: var(--vcp-ui-surface-2);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-settings-avatar-copy {
+        display: grid;
+        min-width: 0;
+        gap: var(--vcp-ui-space-2);
+        justify-items: start;
+    }
+
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-setting-field {
         display: grid;
         gap: var(--vcp-ui-space-1);

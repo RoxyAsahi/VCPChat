@@ -667,6 +667,7 @@ function mountWorkbench(container) {
         permissionMode: 'ask',
         permissionSaving: false,
         modelSaving: false,
+        avatarSaving: false,
         // Draft model value for the selected Session.  It is intentionally
         // kept separate from the durable configSnapshot until Save succeeds.
         modelDraft: null,
@@ -1013,6 +1014,11 @@ function mountWorkbench(container) {
 
     function selectedAgentProfile() {
         return state.agentCatalog.find((agent) => sameAgent(agent.id || agent.name, state.selectedAgent)) || null;
+    }
+
+    function agentAvatarUrl(agentId) {
+        return state.agentCatalog.find((agent) => sameAgent(agent.id || agent.name, agentId))?.avatarUrl
+            || 'assets/default_avatar.png';
     }
 
     function selectAgent(agentId) {
@@ -1680,7 +1686,7 @@ function mountWorkbench(container) {
                 avatar.className = 'avatar';
                 avatar.loading = 'lazy';
                 avatar.decoding = 'async';
-                avatar.src = 'assets/default_avatar.png';
+                avatar.src = agentAvatarUrl(session.agentId || state.selectedAgent);
                 avatar.alt = `${state.selectedAgent || 'Nova'} - ${session.title}`;
                 avatar.onerror = () => { avatar.src = 'assets/default_avatar.png'; };
                 const title = node('span', 'topic-title-display', session.title);
@@ -1723,7 +1729,7 @@ function mountWorkbench(container) {
                 avatar.className = 'avatar';
                 avatar.loading = 'lazy';
                 avatar.decoding = 'async';
-                avatar.src = 'assets/default_avatar.png';
+                avatar.src = agentAvatarUrl(topic.agentId || state.selectedAgent);
                 avatar.alt = `${topic.agentId || 'Nova'} - ${topic.title || topic.id}`;
                 avatar.onerror = () => { avatar.src = 'assets/default_avatar.png'; };
                 const title = node('span', 'topic-title-display', topic.title || topic.id);
@@ -1930,7 +1936,10 @@ function mountWorkbench(container) {
                 row.tabIndex = 0;
                 row.dataset.agentSearch = `${agent.name || ''} ${agentId || ''}`.toLocaleLowerCase();
                 const avatar = document.createElement('img');
-                avatar.className = 'avatar'; avatar.src = 'assets/default_avatar.png'; avatar.alt = '';
+                avatar.className = 'avatar';
+                avatar.src = agent.avatarUrl || 'assets/default_avatar.png';
+                avatar.alt = `${agent.name || agentId} 头像`;
+                avatar.onerror = () => { avatar.src = 'assets/default_avatar.png'; };
                 row.append(avatar, node('span', 'agent-name', agent.name || agentId));
                 row.addEventListener('click', () => run(async () => {
                     state.uxTimings.set(`agent-click:${agentCacheKey(agentId)}`, uxMark('agent-click', agentId));
@@ -1992,6 +2001,55 @@ function mountWorkbench(container) {
                 wrap.append(control);
                 return wrap;
             };
+            const avatarProfile = selectedAgentProfile();
+            const avatarAgentId = avatarProfile?.id || avatarProfile?.name || state.selectedAgent;
+            const avatarSection = node('section', 'agent-chat-settings-avatar');
+            const avatarPreview = document.createElement('img');
+            avatarPreview.className = 'agent-chat-settings-avatar-preview';
+            avatarPreview.src = avatarProfile?.avatarUrl || 'assets/default_avatar.png';
+            avatarPreview.alt = `${avatarProfile?.name || avatarAgentId || 'Agent'} 头像`;
+            avatarPreview.onerror = () => { avatarPreview.src = 'assets/default_avatar.png'; };
+            const avatarCopy = node('div', 'agent-chat-settings-avatar-copy');
+            avatarCopy.append(
+                node('strong', 'agent-chat-setting-label', 'Agent 头像'),
+                node('span', 'agent-chat-setting-help', '与主聊天共用同一份 Agent 头像。PNG、JPEG、GIF 或 WebP。'),
+            );
+            const avatarInput = document.createElement('input');
+            avatarInput.type = 'file';
+            avatarInput.accept = 'image/png,image/jpeg,image/gif,image/webp';
+            avatarInput.hidden = true;
+            avatarInput.setAttribute('aria-label', '选择 Agent 头像');
+            const chooseAvatar = button(state.avatarSaving ? '正在保存头像…' : '选择头像', 'secondary agent-chat-settings-save');
+            chooseAvatar.disabled = state.avatarSaving || !avatarAgentId;
+            chooseAvatar.addEventListener('click', () => avatarInput.click());
+            avatarInput.addEventListener('change', () => run(async () => {
+                const file = avatarInput.files?.[0];
+                if (!file || !avatarAgentId) return;
+                const targetAgentId = avatarAgentId;
+                const previousAvatarUrl = avatarProfile?.avatarUrl || 'assets/default_avatar.png';
+                state.avatarSaving = true;
+                renderSidebar();
+                try {
+                    const result = await runtimeApi().saveAvatar?.(targetAgentId, {
+                        name: file.name,
+                        type: file.type,
+                        buffer: await file.arrayBuffer(),
+                    });
+                    if (!result?.success) throw new Error(result?.error || '头像保存失败。');
+                    const profile = state.agentCatalog.find((agent) => sameAgent(agent.id || agent.name, targetAgentId));
+                    if (profile) profile.avatarUrl = result.avatarUrl || previousAvatarUrl;
+                    await refreshControlPlane();
+                    notify(`${profile?.name || targetAgentId} 的头像已更新。`, 'success');
+                } catch (error) {
+                    notify(error?.message || String(error), 'error');
+                } finally {
+                    state.avatarSaving = false;
+                    if (!state.disposed) renderSidebar();
+                }
+            }));
+            avatarCopy.append(chooseAvatar, avatarInput);
+            avatarSection.append(avatarPreview, avatarCopy);
+            settingsForm.append(avatarSection);
             settingsForm.append(
                 field('工作目录（可留空）', state.workspace, (value) => { state.workspace = value; }),
                 field('Agent', state.selectedAgent, (value) => { state.selectedAgent = value; }, state.agentCatalog.map((agent) => ({ value: agent.id || agent.name, label: agent.name || agent.id }))),
