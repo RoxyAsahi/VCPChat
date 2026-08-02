@@ -3,9 +3,9 @@
 ## 来源
 
 - 来源文件：`modules/messageRenderer.js`
-- VChat commit：`d441675a2b11702b47e6e9269bf3ce6936258a9f`
-- 源文件 SHA-256：`48dc26601e48698626310c5d2230fccc09eaa418a78561e75a67717b6cce06a3`
-- 源文件基线：3770 行，164695 字节（Windows working-tree 换行）
+- VChat commit：`ce0aaeb36d70bfcc44ead5422fa6b9dd87323e8f`
+- 源文件 SHA-256：`14cd9128fd51f0797d335de4b3d96da9f9d3a36c62fbdfe1168c2622400490c9`
+- 源文件基线：3451 行，177730 字节（Windows working-tree 换行）
 - Fork 文件：`agentMessageRenderer.js`
 
 首次建立副本时，源文件与 Fork 在统一为 LF 并移除结尾换行后逐字符相等。随后只执行以下机械变更：
@@ -33,3 +33,5 @@
 ## 同步策略
 
 主聊天 renderer 后续变更不自动复制。每次同步都必须记录：来源 commit、涉及的纯展示函数、Agent 行为差异、对照测试和截图收据。
+
+2026-08-02 同步审查：上游加入主聊天音频播放器和 Python 附件的安全文本打开路径。两项不进入 Agent fork：当前 Codex/ToolBox 投影没有可信音频资源描述，而 Agent 文件动作必须经 `WorkspacePathRef` 与 Main-only workspace service，不能回退到主聊天的任意 `file:` 路径入口。来源哈希已更新；Agent 的现有 Markdown、代码、表格、链接、图片、reasoning 与工具投影能力不变。

@@ -1,5 +1,7 @@
 // modules/ipc/fileDialogHandlers.js
 const { ipcMain, dialog, shell, clipboard, net, nativeImage, BrowserWindow, Menu, app } = require('electron');
+const { spawn } = require('child_process');
+const { fileURLToPath } = require('url');
 const fs = require('fs-extra');
 const path = require('path');
 const fileManager = require('../fileManager');
@@ -226,10 +228,27 @@ function initialize(mainWindow, context) {
         }
 
         if (/^(?:[a-z]:[\\/]|\\\\)/i.test(url)) {
+            if (path.extname(url).toLowerCase() === '.py') {
+                console.warn('[Main Process] Blocked Python file from generic system-associated opening:', url);
+                return;
+            }
             shell.openPath(url).then((errorMessage) => {
                 if (errorMessage) console.error('Failed to open local path:', errorMessage);
             }).catch((error) => console.error('Failed to open local path:', error));
             return;
+        }
+
+        if (url.toLowerCase().startsWith('file:')) {
+            try {
+                const localPath = fileURLToPath(url);
+                if (path.extname(localPath).toLowerCase() === '.py') {
+                    console.warn('[Main Process] Blocked Python file from generic system-associated opening:', localPath);
+                    return;
+                }
+            } catch (error) {
+                console.warn('[Main Process] Received invalid local file URL, ignoring:', url);
+                return;
+            }
         }
 
         if (/^(?:https?:|file:|magnet:)/i.test(url)) {
@@ -238,6 +257,45 @@ function initialize(mainWindow, context) {
         }
 
         console.warn(`[Main Process] Received request to open unsupported link, ignoring: ${url}`);
+    });
+
+    // Python attachments must never use the operating system file association: on Windows that can execute them.
+    ipcMain.handle('open-python-attachment-in-text-editor', async (event, fileUrl) => {
+        try {
+            if (process.platform !== 'win32') {
+                return { success: false, error: '当前安全文本编辑器接口仅支持 Windows。' };
+            }
+            if (typeof fileUrl !== 'string' || !fileUrl.toLowerCase().startsWith('file:')) {
+                return { success: false, error: '只允许打开本地 Python 附件。' };
+            }
+
+            let filePath;
+            try {
+                filePath = fileURLToPath(fileUrl);
+            } catch (error) {
+                return { success: false, error: '无效的本地附件地址。' };
+            }
+
+            if (path.extname(filePath).toLowerCase() !== '.py') {
+                return { success: false, error: '该接口只允许打开 .py 文件。' };
+            }
+
+            const stat = await fs.stat(filePath);
+            if (!stat.isFile()) {
+                return { success: false, error: '附件路径不是普通文件。' };
+            }
+
+            const editorProcess = spawn('notepad.exe', [filePath], {
+                detached: true,
+                stdio: 'ignore',
+                windowsHide: false
+            });
+            editorProcess.unref();
+            return { success: true };
+        } catch (error) {
+            console.error('[Main Process] Failed to open Python attachment in Notepad:', error);
+            return { success: false, error: error.message };
+        }
     });
 
     ipcMain.on('show-image-context-menu', (event, imageUrl) => {

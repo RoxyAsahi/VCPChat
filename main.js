@@ -47,6 +47,7 @@ const desktopHandlers = require('./modules/ipc/desktopHandlers'); // Import VCPd
 const desktopRemoteHandlers = require('./modules/ipc/desktopRemoteHandlers'); // Import desktop remote control handlers
 const tavernHandlers = require('./modules/ipc/tavernHandlers'); // Import VCPChatTarven (advanced reply) handlers
 const agentRuntimeHandlers = require('./modules/ipc/agentRuntimeHandlers'); // Import Agent Runtime (Pi/VCP bridge) handlers
+const loomManagerModule = require('./modules/loom/VCPLoomManager');
 const { PRELOAD_ROLES, resolveProjectPreload } = require('./modules/services/preloadPaths');
 const { createEmbeddedAppSessionManager } = require('./modules/services/embeddedAppSessionManager');
 const { ChatDataServiceFacade } = require('./modules/services/chatDataService');
@@ -180,6 +181,7 @@ let openChildWindows = [];
 let distributedServer = null; // To hold the distributed server instance
 let chatDataService = null; // Optional VCP-CDS shadow service.
 let appSettingsManager = null;
+let loomManager = null;
 let networkNotesTreeCache = null; // In-memory cache for the network notes
 let cachedModels = []; // Cache for models fetched from VCP server
 const NOTES_MODULE_DIR = path.join(APP_DATA_ROOT_IN_PROJECT, 'Notemodules');
@@ -341,6 +343,15 @@ async function performQuitCleanup() {
                 await chatDataService.stop();
             } finally {
                 chatDataService = null;
+            }
+        }
+
+        if (loomManager) {
+            console.log('[Main] Stopping VCP Loom...');
+            try {
+                await loomManager.shutdown();
+            } finally {
+                loomManager = null;
             }
         }
         await stopAudioEngine();
@@ -659,13 +670,17 @@ if (!gotTheLock) {
     app.whenReady().then(async () => { // Make the function async
         // 全局处理所有窗口的新窗口打开请求，确保外部链接在系统浏览器中打开
         app.on('web-contents-created', (event, contents) => {
-            contents.setWindowOpenHandler(({ url }) => {
-                if (/^(?:https?:|file:|magnet:)/i.test(url)) {
-                    shell.openExternal(url).catch((error) => console.error('[Main] Failed to open new-window URL:', error));
-                } else {
-                    console.warn('[Main] Blocked unexpected new-window URL:', url);
-                }
-                return { action: 'deny' };
+            setImmediate(() => {
+                // Loom owns WebContentsView navigation. Apply the VChat shell policy only to BrowserWindows.
+                if (contents.isDestroyed() || !BrowserWindow.fromWebContents(contents)) return;
+                contents.setWindowOpenHandler(({ url }) => {
+                    if (/^(?:https?:|file:|magnet:)/i.test(url)) {
+                        shell.openExternal(url).catch((error) => console.error('[Main] Failed to open new-window URL:', error));
+                    } else {
+                        console.warn('[Main] Blocked unexpected new-window URL:', url);
+                    }
+                    return { action: 'deny' };
+                });
             });
         });
 
@@ -1116,6 +1131,12 @@ if (!gotTheLock) {
             settingsManager: appSettingsManager,
             APP_DATA_ROOT_IN_PROJECT
         });
+        loomManager = await loomManagerModule.initialize({
+            projectRoot: PROJECT_ROOT,
+            appDataRoot: APP_DATA_ROOT_IN_PROJECT,
+            mainWindow,
+            openChildWindows
+        });
         embeddedAppSessions?.closeAll();
         embeddedAppSessions = createEmbeddedAppSessionManager({
             mainWindow,
@@ -1183,7 +1204,8 @@ if (!gotTheLock) {
                         handleCanvasControl: desktopRemoteHandlers.handleCanvasControl, // Inject the canvas control handler
                         handleFlowlockControl: desktopRemoteHandlers.handleFlowlockControl, // Inject the flowlock control handler
                         handleDesktopRemoteControl: desktopRemoteHandlers.handleDesktopRemoteControl, // Inject the desktop remote control handler
-                        chatDataService // Share the Electron-owned VCP-CDS facade with direct plugins.
+                        chatDataService, // Share the Electron-owned VCP-CDS facade with direct plugins.
+                        loomManager // Share the Electron-owned VCP Loom manager with direct plugins.
                     };
                     distributedServer = new DistributedServer(config);
                     await distributedServer.initialize();
