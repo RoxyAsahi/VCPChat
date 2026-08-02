@@ -91,7 +91,10 @@ const EMBEDDED_APPS = [
     },
     {
         id: 'open-plugin-manager-window', action: 'open-plugin-manager-window', name: '插件', key: 'plugin-manager.html',
-        shellTitle: '插件管理器', minWa: { 'wa-tooltip': 1 }, minHeaderRects: 1, minNativeEnhanced: 2,
+        shellTitle: '插件管理器', minWa: { 'wa-tooltip': 1 }, minHeaderRects: 0, minNativeEnhanced: 2,
+        // The C-group rebuild moved the management toolbar into the content
+        // area (Search/Input + selects + refresh), so the shell header holds
+        // only the title in embedded mode (no window controls either).
         legacySelector: '.app-container', bodyFocus: '.vcp-ui-page-shell-content input',
     },
     {
@@ -132,10 +135,10 @@ const NEXT_AUDIT_SCRIPT = () => {
         };
     };
     const headerControls = [...document.querySelectorAll(
-        '.vcp-ui-page-shell-header button, .vcp-ui-page-shell-header select, .vcp-ui-page-shell-header input, .vcp-ui-window-controls button'
+        '.vcp-ui-page-shell-header :is(button, select, input, wa-button, wa-select, wa-input), .vcp-ui-window-controls button'
     )].filter(el => el.getClientRects().length && getComputedStyle(el).display !== 'none');
     const rects = headerControls.map(visibleRect);
-    const focusable = [...document.querySelectorAll('.vcp-ui-page-shell-content input, .vcp-ui-page-shell-content textarea, .vcp-ui-page-shell-content select, .vcp-ui-page-shell-header button')]
+    const focusable = [...document.querySelectorAll('.vcp-ui-page-shell-content :is(input, textarea, select, wa-input, wa-select), .vcp-ui-page-shell-header :is(button, wa-button)')]
         .filter(el => !el.disabled && el.getClientRects().length && getComputedStyle(el).display !== 'none');
     return {
         uiMode: document.documentElement.dataset.uiMode,
