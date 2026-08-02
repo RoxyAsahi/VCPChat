@@ -7,6 +7,7 @@ const dom = new JSDOM('<!doctype html><html data-ui-mode="next"><body></body></h
 });
 globalThis.window = dom.window;
 globalThis.document = dom.window.document;
+globalThis.customElements = dom.window.customElements;
 globalThis.CustomEvent = dom.window.CustomEvent;
 globalThis.Event = dom.window.Event;
 globalThis.HTMLElement = dom.window.HTMLElement;
@@ -118,6 +119,98 @@ check('destroy clears theme ref-count nodes', () => {
     adapter.registerTheme();
     adapter.destroy();
     assert.equal(adapterWin.document.querySelector('link[data-webawesome-runtime-theme]'), null);
+});
+
+check('exposes isLoaded alongside isDefined', () => {
+    for (const api of [adapter, adapterWin.VCPWebAwesome]) {
+        assert.equal(typeof api.isLoaded, 'function', 'isLoaded must be exposed');
+        assert.equal(typeof api.isDefined, 'function', 'isDefined must be exposed');
+    }
+    assert.equal(adapter.isLoaded('never-loaded-tag'), false, 'never-loaded tag must report false');
+    assert.equal(adapter.isDefined('nonexistent-tag'), false, 'undefined tag must report false');
+});
+
+check('translateEvent re-dispatches a wa event as a VCP event', () => {
+    const element = adapterWin.document.createElement('wa-select');
+    let seen = null;
+    const off = adapter.translateEvent(element, 'wa-change', 'change', event => ({ value: event.detail?.value ?? 42 }));
+    element.addEventListener('change', event => { seen = event.detail; });
+    element.dispatchEvent(new adapterWin.window.CustomEvent('wa-change', { detail: { value: 'B' } }));
+    assert.deepEqual(seen, { value: 'B' });
+    off();
+    element.dispatchEvent(new adapterWin.window.CustomEvent('wa-change', { detail: { value: 'C' } }));
+    assert.deepEqual(seen, { value: 'B' }, 'unsubscribed translation must not fire');
+});
+
+check('mountScope applies tokens and theme together and releases both', () => {
+    adapterWin.document.documentElement.dataset.uiMode = 'next';
+    const root = scopeRoot();
+    const release = adapter.mountScope(root);
+    assert.equal(root.dataset.waScope, 'true');
+    assert.ok(adapterWin.document.querySelector('link[data-webawesome-runtime-theme]'), 'theme link created by mountScope');
+    release();
+    assert.equal(root.hasAttribute('data-wa-scope'), false);
+    assert.equal(adapterWin.document.querySelector('link[data-webawesome-runtime-theme]'), null, 'theme released with the scope');
+});
+
+check('awaitUpdate resolves through an updateComplete promise', async () => {
+    const element = adapterWin.document.createElement('div');
+    let release;
+    element.updateComplete = new Promise(resolve => { release = () => resolve(element); });
+    const pending = adapter.awaitUpdate(element);
+    let settled = false;
+    pending.then(() => { settled = true; });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(settled, false, 'must wait for updateComplete');
+    release();
+    assert.equal(await pending, element);
+});
+
+// Deterministic fallback contract: a failed preload must not leave partial
+// state — every tag stays undefined so VCPUI falls back to native DOM, and the
+// outcome is observable through exactly one of the load events.
+async function checkAsync(name, fn) {
+    try {
+        await fn();
+        console.log(`ok - ${name}`);
+    } catch (error) {
+        failures += 1;
+        console.error(`FAIL - ${name}\n    ${error.message}`);
+    }
+}
+
+await checkAsync('loadComponents failure is deterministic and observable', async () => {
+    adapterWin.document.documentElement.dataset.uiMode = 'next';
+    const events = [];
+    const onLoaded = event => events.push(['loaded', event.detail?.tags]);
+    const onFailed = event => events.push(['failed', event.detail?.tags]);
+    adapterWin.addEventListener('vcp-webawesome-loaded', onLoaded);
+    adapterWin.addEventListener('vcp-webawesome-failed', onFailed);
+    try {
+        await adapter.loadComponents(['button']);
+    } catch {
+        // Expected: the vendored browser ESM cannot be imported in Node/jsdom.
+    }
+    adapterWin.removeEventListener('vcp-webawesome-loaded', onLoaded);
+    adapterWin.removeEventListener('vcp-webawesome-failed', onFailed);
+    assert.equal(events.length, 1, 'exactly one load outcome event must fire');
+    if (events[0][0] === 'failed') {
+        assert.deepEqual(events[0][1], ['button']);
+        assert.equal(adapter.isLoaded('button'), false, 'failed preload must not mark tags as loaded');
+        assert.equal(adapter.isDefined('button'), false, 'failed preload must leave tags undefined (native fallback)');
+    }
+});
+
+await checkAsync('isDefined reflects custom element registration (the VCPUI switch)', async () => {
+    adapterWin.document.documentElement.dataset.uiMode = 'next';
+    class FakeWaButton extends adapterWin.HTMLElement {}
+    if (!adapterWin.customElements.get('wa-button')) {
+        adapterWin.customElements.define('wa-button', FakeWaButton);
+    }
+    assert.equal(adapter.isDefined('button'), true, 'registered wa-button must flip the gate');
+    const el = adapter.create('button', { disabled: true });
+    assert.equal(el.tagName.toLowerCase(), 'wa-button');
+    assert.equal(el.getAttribute('disabled'), '');
 });
 
 if (failures) {

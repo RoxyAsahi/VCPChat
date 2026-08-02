@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import fs from 'node:fs';
 import { webcrypto } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { JSDOM } from 'jsdom';
@@ -18,6 +20,7 @@ Object.assign(globalThis, {
     Option: dom.window.Option,
     HTMLElement: dom.window.HTMLElement,
     HTMLButtonElement: dom.window.HTMLButtonElement,
+    customElements: dom.window.customElements,
     ResizeObserver: class {
         observe() {}
         disconnect() {}
@@ -25,6 +28,9 @@ Object.assign(globalThis, {
 });
 
 if (!globalThis.crypto) globalThis.crypto = webcrypto;
+if (typeof globalThis.requestAnimationFrame !== 'function') {
+    globalThis.requestAnimationFrame = callback => setTimeout(callback, 16);
+}
 if (!dom.window.HTMLElement.prototype.scrollTo) {
     dom.window.HTMLElement.prototype.scrollTo = function scrollTo(options) {
         this.scrollTop = typeof options === 'number' ? options : options?.top || 0;
@@ -33,6 +39,8 @@ if (!dom.window.HTMLElement.prototype.scrollTo) {
 }
 
 await import(`${pathToFileURL(`${process.cwd()}/modules/ui-system/vcp-ui.js`).href}?contract-test=1`);
+await import(`${pathToFileURL(`${process.cwd()}/modules/ui-system/webawesome-adapter.js`).href}?wa-adapter-test=1`);
+assert.ok(window.VCPWebAwesome, 'WebAwesomeAdapter must be exposed on window');
 
 const { VCPUI } = window;
 const scope = document.querySelector('.vcp-ui-scope');
@@ -223,6 +231,125 @@ assert.equal(VCPUI.setDensity(scope, 'compact'), 'compact');
 assert.equal(VCPUI.getDensity(scope), 'compact');
 assert.equal(scope.dataset.density, 'compact');
 
+// --- Component behavior, native fallback kernel ---
+// Button: loading implies disabled + aria-busy; a disabled button swallows clicks.
+const behaviorButton = VCPUI.create('Button', { label: 'Save', loading: true });
+assert.equal(behaviorButton.element.disabled, true, 'loading button must be disabled');
+assert.equal(behaviorButton.element.getAttribute('aria-busy'), 'true');
+let behaviorButtonClicks = 0;
+behaviorButton.element.addEventListener('click', () => { behaviorButtonClicks += 1; });
+behaviorButton.element.click();
+assert.equal(behaviorButtonClicks, 0, 'disabled button must not emit click');
+behaviorButton.update({ loading: false, disabled: true });
+behaviorButton.element.click();
+assert.equal(behaviorButtonClicks, 0, 'disabled button must swallow clicks');
+behaviorButton.destroy();
+
+// IconButton: aria-label is required and stored.
+const behaviorIconButton = VCPUI.create('IconButton', { icon: 'close', label: '关闭' });
+assert.equal(behaviorIconButton.element.getAttribute('aria-label'), '关闭');
+assert.equal(behaviorIconButton.element.getAttribute('aria-pressed'), null);
+behaviorIconButton.destroy();
+
+// Input: disabled / readonly / required / invalid / value / focus.
+const behaviorInput = VCPUI.create('Input', { placeholder: 'Name', required: true, readonly: true, disabled: true, invalid: true });
+const behaviorInputControl = behaviorInput.element.querySelector('input');
+assert.equal(behaviorInputControl.disabled, true);
+assert.equal(behaviorInputControl.readOnly, true);
+assert.equal(behaviorInputControl.required, true);
+assert.equal(behaviorInputControl.getAttribute('aria-invalid'), 'true');
+behaviorInput.focus();
+behaviorInput.update({ value: 'x', invalid: false, disabled: false, readonly: false });
+assert.equal(behaviorInputControl.value, 'x');
+assert.equal(behaviorInputControl.getAttribute('aria-invalid'), 'false');
+behaviorInput.destroy();
+
+// Textarea: rows and resize are applied to the native control.
+const behaviorTextarea = VCPUI.create('Textarea', { rows: 6, resize: 'none' });
+assert.equal(behaviorTextarea.element.querySelector('textarea').rows, 6);
+assert.equal(behaviorTextarea.element.dataset.resize, 'none');
+behaviorTextarea.destroy();
+
+// Select: options render, value/disabled read back.
+const behaviorSelect = VCPUI.create('Select', { options: ['One', 'Two'], value: 'Two', disabled: true });
+assert.equal(behaviorSelect.element.querySelectorAll('option').length, 2);
+assert.equal(behaviorSelect.element.value, 'Two');
+assert.equal(behaviorSelect.element.disabled, true);
+behaviorSelect.update({ disabled: false, value: 'One' });
+assert.equal(behaviorSelect.element.value, 'One');
+behaviorSelect.destroy();
+
+// Checkbox: toggling the internal input reflects state and emits change.
+const behaviorCheckbox = VCPUI.create('Checkbox', { label: 'Agree' });
+const behaviorCheckboxInput = behaviorCheckbox.element.querySelector('input');
+let behaviorCheckboxChanges = 0;
+behaviorCheckbox.element.addEventListener('change', () => { behaviorCheckboxChanges += 1; });
+behaviorCheckboxInput.checked = true;
+behaviorCheckboxInput.dispatchEvent(new Event('change', { bubbles: true }));
+assert.equal(behaviorCheckbox.element.dataset.state, 'checked');
+assert.equal(behaviorCheckboxChanges, 1);
+behaviorCheckbox.destroy();
+
+// Switch: click toggles aria-checked and fires change; role is switch.
+const behaviorSwitch = VCPUI.create('Switch', { label: 'Toggle' });
+let behaviorSwitchChanges = 0;
+behaviorSwitch.element.addEventListener('change', () => { behaviorSwitchChanges += 1; });
+assert.equal(behaviorSwitch.element.getAttribute('role'), 'switch');
+behaviorSwitch.element.click();
+assert.equal(behaviorSwitch.element.getAttribute('aria-checked'), 'true');
+assert.equal(behaviorSwitchChanges, 1);
+behaviorSwitch.update({ checked: false });
+assert.equal(behaviorSwitch.element.getAttribute('aria-checked'), 'false');
+behaviorSwitch.destroy();
+
+// Tabs: roving tabindex + arrow-key navigation + change event.
+const behaviorTabs = VCPUI.create('Tabs', { items: [{ label: 'A', value: 'a' }, { label: 'B', value: 'b' }, { label: 'C', value: 'c' }] });
+const behaviorTabsEl = behaviorTabs.element;
+scope.append(behaviorTabsEl);
+const behaviorTabButtons = () => [...behaviorTabsEl.querySelectorAll('[role="tab"]')];
+assert.equal(behaviorTabButtons()[0].getAttribute('aria-selected'), 'true');
+assert.equal(behaviorTabButtons()[0].tabIndex, 0);
+assert.equal(behaviorTabButtons()[1].tabIndex, -1);
+behaviorTabButtons()[0].focus();
+behaviorTabButtons()[0].dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+let behaviorTabsCurrent = behaviorTabButtons();
+assert.equal(behaviorTabsCurrent[1].getAttribute('aria-selected'), 'true');
+assert.equal(behaviorTabsCurrent[1].tabIndex, 0);
+behaviorTabsCurrent[1].focus();
+behaviorTabsCurrent[1].dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
+behaviorTabsCurrent = behaviorTabButtons();
+assert.equal(behaviorTabsCurrent[0].getAttribute('aria-selected'), 'true');
+behaviorTabs.destroy();
+
+// Card (interactive): aria-pressed tracks the selected variant.
+const behaviorCard = VCPUI.create('Card', { title: 'T', description: 'D', interactive: true, variant: 'selected' });
+assert.equal(behaviorCard.element.getAttribute('aria-pressed'), 'true');
+behaviorCard.update({ variant: 'default' });
+assert.equal(behaviorCard.element.getAttribute('aria-pressed'), 'false');
+behaviorCard.destroy();
+
+// Tooltip: aria-describedby wiring and cleanup on destroy.
+const behaviorTipTrigger = VCPUI.create('Button', { label: 'Trigger' });
+const behaviorTooltip = VCPUI.create('Tooltip', { trigger: behaviorTipTrigger, content: 'Help', placement: 'right' });
+const behaviorBubbleId = behaviorTipTrigger.element.getAttribute('aria-describedby');
+assert.ok(behaviorBubbleId, 'tooltip trigger must get aria-describedby');
+behaviorTooltip.update({ open: true });
+assert.equal(behaviorTooltip.element.dataset.state, 'open');
+behaviorTooltip.destroy();
+assert.equal(behaviorTipTrigger.element.getAttribute('aria-describedby'), null, 'destroy must unlink aria-describedby');
+behaviorTipTrigger.destroy();
+
+// Modal: Escape closes the overlay.
+const behaviorFocusTarget = document.createElement('button');
+scope.append(behaviorFocusTarget);
+behaviorFocusTarget.focus();
+const behaviorModal = VCPUI.create('Modal', { title: 'Modal', content: document.createTextNode('Body') });
+scope.append(behaviorModal.element);
+assert.equal(behaviorModal.element.querySelector('.vcp-ui-modal').getAttribute('role'), 'dialog');
+behaviorModal.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+assert.ok(!behaviorModal.element.isConnected, 'Escape must close the modal');
+behaviorFocusTarget.remove();
+
 const switchControl = cases.find(controller => controller.element.classList.contains('vcp-ui-switch'));
 let switchChanges = 0;
 switchControl.element.addEventListener('change', () => { switchChanges += 1; });
@@ -253,5 +380,201 @@ assert.equal(document.querySelector('.vcp-ui-feedback-host'), null);
 
 cases.reverse().forEach(controller => controller.destroy());
 assert.equal(scope.querySelectorAll('[class^="vcp-ui-"]').length, 0);
+
+// --- Lucide semantic alias table validation ---
+// Every alias must resolve to a real icon in the vendored lucide UMD, and every
+// icon name VCPUI itself renders must resolve.
+const lucide = createRequire(import.meta.url)('../node_modules/lucide/dist/umd/lucide.min.js');
+const lucideIcons = new Set(Object.keys(lucide.icons || {}));
+const lucideAdapterSource = fs.readFileSync(`${process.cwd()}/modules/ui-system/lucide-adapter.js`, 'utf8');
+const lucideAliases = {};
+for (const match of lucideAdapterSource.matchAll(/"([a-z0-9_]+)": "([a-z0-9-]+)"/g)) lucideAliases[match[1]] = match[2];
+const resolveLucide = name => {
+    const target = lucideAliases[name] || name.replaceAll('_', '-');
+    return target.split('-').filter(Boolean).map(part => part[0].toUpperCase() + part.slice(1)).join('');
+};
+for (const [semantic, target] of Object.entries(lucideAliases)) {
+    assert.ok(lucideIcons.has(resolveLucide(semantic)), `lucide alias ${semantic} -> ${target} does not exist`);
+}
+const vcpUiSource = fs.readFileSync(`${process.cwd()}/modules/ui-system/vcp-ui.js`, 'utf8');
+const usedIconNames = [...new Set([...vcpUiSource.matchAll(/icon\('([a-z0-9_]+)'/g)].map(match => match[1]))];
+usedIconNames.forEach(name => {
+    assert.ok(lucideIcons.has(resolveLucide(name)), `icon name "${name}" used by VCPUI is not resolvable via lucide-adapter`);
+});
+console.log(`lucide aliases validated (${Object.keys(lucideAliases).length} aliases, ${usedIconNames.length} names used by VCPUI).`);
+
+// --- Web Awesome-backed kernel (stub custom elements) ---
+// Registers fake wa-* elements that satisfy the API surface VCPUI factories
+// rely on, then verifies the WA branches and the native-control compat bridges.
+function defineWaStubs() {
+    const { HTMLElement, customElements } = window;
+    const define = (tag, Class) => { if (!customElements.get(tag)) customElements.define(tag, Class); };
+    class WaBase extends HTMLElement {
+        get updateComplete() { return Promise.resolve(this); }
+        connectedCallback() {
+            if (!this.shadowRoot) this.attachShadow({ mode: 'open' });
+        }
+        focus() {}
+    }
+    class WaButton extends WaBase {
+        get disabled() { return this.hasAttribute('disabled'); }
+        set disabled(value) { this.toggleAttribute('disabled', Boolean(value)); }
+        get loading() { return this.hasAttribute('loading'); }
+        set loading(value) { this.toggleAttribute('loading', Boolean(value)); }
+    }
+    class WaValue extends WaBase {
+        get value() { return this.getAttribute('value') ?? ''; }
+        set value(next) { if (next == null) this.removeAttribute('value'); else this.setAttribute('value', String(next)); }
+        get disabled() { return this.hasAttribute('disabled'); }
+        set disabled(value) { this.toggleAttribute('disabled', Boolean(value)); }
+        get required() { return this.hasAttribute('required'); }
+        set required(value) { this.toggleAttribute('required', Boolean(value)); }
+        get readonly() { return this.hasAttribute('readonly'); }
+        set readonly(value) { this.toggleAttribute('readonly', Boolean(value)); }
+        setCustomValidity() {}
+    }
+    class WaInput extends WaValue {}
+    class WaTextarea extends WaValue {}
+    class WaOption extends WaBase {}
+    class WaSelect extends WaValue {}
+    class WaChecked extends WaBase {
+        get checked() { return this.hasAttribute('checked'); }
+        set checked(value) { this.toggleAttribute('checked', Boolean(value)); }
+        get disabled() { return this.hasAttribute('disabled'); }
+        set disabled(value) { this.toggleAttribute('disabled', Boolean(value)); }
+        get required() { return this.hasAttribute('required'); }
+        set required(value) { this.toggleAttribute('required', Boolean(value)); }
+        get value() { return this.getAttribute('value') ?? 'on'; }
+        set value(next) { this.setAttribute('value', String(next)); }
+        click() {
+            if (this.disabled) return;
+            this.checked = !this.checked;
+            this.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+            this.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+        }
+    }
+    class WaCheckbox extends WaChecked {
+        get indeterminate() { return this.hasAttribute('indeterminate'); }
+        set indeterminate(value) { this.toggleAttribute('indeterminate', Boolean(value)); }
+    }
+    class WaSwitch extends WaChecked {}
+    class WaCard extends WaBase {}
+    class WaTab extends WaBase {}
+    class WaTabPanel extends WaBase {}
+    class WaTabGroup extends WaBase {
+        get active() { return this.getAttribute('active') ?? ''; }
+        set active(value) { if (value == null) this.removeAttribute('active'); else this.setAttribute('active', String(value)); }
+    }
+    class WaDialog extends WaBase {
+        get open() { return this.hasAttribute('open'); }
+        set open(value) { this.toggleAttribute('open', Boolean(value)); }
+    }
+    class WaTooltip extends WaBase {}
+    define('wa-button', WaButton);
+    define('wa-card', WaCard);
+    define('wa-input', WaInput);
+    define('wa-textarea', WaTextarea);
+    define('wa-option', WaOption);
+    define('wa-select', WaSelect);
+    define('wa-checkbox', WaCheckbox);
+    define('wa-switch', WaSwitch);
+    define('wa-tab', WaTab);
+    define('wa-tab-panel', WaTabPanel);
+    define('wa-tab-group', WaTabGroup);
+    define('wa-dialog', WaDialog);
+    define('wa-tooltip', WaTooltip);
+}
+defineWaStubs();
+
+const waHost = document.createElement('main');
+waHost.className = 'vcp-ui-scope';
+document.body.append(waHost);
+
+const waButton = VCPUI.create('Button', { label: '保存', icon: 'save', variant: 'primary', loading: true });
+assert.equal(waButton.element.tagName.toLowerCase(), 'wa-button', 'Button must use wa-button in next mode');
+assert.equal(waButton.element.loading, true);
+assert.equal(waButton.element.disabled, true, 'loading implies disabled on wa-button');
+assert.equal(waButton.element.getAttribute('variant'), 'brand');
+waButton.update({ loading: false });
+assert.equal(waButton.element.disabled, false);
+
+const waIconButton = VCPUI.create('IconButton', { icon: 'close', label: '关闭', active: true });
+assert.equal(waIconButton.element.tagName.toLowerCase(), 'wa-button');
+assert.equal(waIconButton.element.getAttribute('aria-label'), '关闭');
+assert.equal(waIconButton.element.getAttribute('aria-pressed'), 'true');
+assert.equal(waIconButton.element.getAttribute('appearance'), 'plain');
+
+const waInput = VCPUI.create('Input', { value: 'hi', placeholder: 'Name', label: 'Name' });
+assert.equal(waInput.element.tagName.toLowerCase(), 'wa-input');
+const waInputNative = waInput.element.querySelector('input');
+assert.ok(waInputNative instanceof dom.window.HTMLInputElement, 'WA Input must expose a queryable input');
+assert.equal(waInputNative.value, 'hi');
+waInputNative.value = 'updated';
+assert.equal(waInput.element.value, 'updated', 'shim value write must forward to the WA control');
+let waInputRelays = 0;
+waInputNative.addEventListener('input', () => { waInputRelays += 1; });
+waInput.element.dispatchEvent(new Event('input', { bubbles: true }));
+assert.equal(waInputRelays, 1, 'WA input event must relay to the native shim');
+
+const waTextarea = VCPUI.create('Textarea', { value: 'body', rows: 6 });
+assert.equal(waTextarea.element.tagName.toLowerCase(), 'wa-textarea');
+assert.equal(waTextarea.element.rows, 6);
+const waTextareaNative = waTextarea.element.querySelector('textarea');
+assert.ok(waTextareaNative instanceof dom.window.HTMLTextAreaElement);
+assert.equal(waTextareaNative.value, 'body');
+
+const waSelect = VCPUI.create('Select', { options: ['A', 'B'], value: 'B' });
+assert.equal(waSelect.element.tagName.toLowerCase(), 'wa-select');
+assert.equal(waSelect.element.querySelectorAll('wa-option').length, 2);
+assert.equal(waSelect.element.value, 'B');
+assert.equal(waSelect.element.selectedIndex, 1);
+assert.equal(waSelect.element.options.length, 2);
+assert.equal(waSelect.element.querySelector('select').value, 'B');
+
+const waCheckbox = VCPUI.create('Checkbox', { label: '同意', checked: true });
+assert.equal(waCheckbox.element.tagName.toLowerCase(), 'wa-checkbox');
+assert.equal(waCheckbox.element.checked, true);
+waCheckbox.element.click();
+assert.equal(waCheckbox.element.checked, false, 'wa-checkbox click must toggle checked');
+
+const waSwitch = VCPUI.create('Switch', { label: '开关' });
+assert.equal(waSwitch.element.tagName.toLowerCase(), 'wa-switch');
+let waSwitchChanges = 0;
+waSwitch.element.addEventListener('change', () => { waSwitchChanges += 1; });
+waSwitch.element.click();
+assert.equal(waSwitch.element.checked, true, 'wa-switch click must toggle checked');
+assert.equal(waSwitchChanges, 1, 'wa-switch change must reach consumers');
+
+const waCard = VCPUI.create('Card', { title: 'Card', description: 'desc', interactive: true });
+assert.equal(waCard.element.tagName.toLowerCase(), 'wa-card');
+assert.equal(waCard.element.appearance, 'filled');
+waCard.update({ variant: 'outlined' });
+assert.equal(waCard.element.appearance, 'outlined', 'wa-card appearance must follow the variant');
+
+const waTabs = VCPUI.create('Tabs', { items: [{ label: 'A', value: 'a' }, { label: 'B', value: 'b' }], value: 'b' });
+assert.equal(waTabs.element.tagName.toLowerCase(), 'wa-tab-group');
+assert.equal(waTabs.element.active, 'b', 'wa-tab-group must reflect the active tab');
+let waTabChanges = 0;
+waTabs.element.addEventListener('change', () => { waTabChanges += 1; });
+waTabs.element.dispatchEvent(new CustomEvent('wa-tab-show', { detail: { name: 'a' }, bubbles: true }));
+assert.equal(waTabChanges, 1, 'wa-tab-show must be translated to change');
+
+const waModal = VCPUI.create('Modal', { title: 'Modal', content: document.createTextNode('Body') });
+assert.equal(waModal.element.tagName.toLowerCase(), 'wa-dialog');
+waHost.append(waModal.element);
+await new Promise(resolve => setTimeout(resolve, 40));
+assert.equal(waModal.element.open, true, 'wa-dialog must open once connected');
+waModal.close(null);
+assert.equal(waModal.element.open, false);
+
+const waTipTrigger = VCPUI.create('Button', { label: 'tip' });
+const waTooltip = VCPUI.create('Tooltip', { trigger: waTipTrigger, content: '提示', placement: 'top' });
+assert.equal(waTooltip.element.tagName.toLowerCase(), 'wa-tooltip');
+assert.ok(waTipTrigger.element.id, 'tooltip trigger must get an id');
+assert.equal(waTooltip.element.getAttribute('for'), waTipTrigger.element.id);
+
+[waButton, waIconButton, waInput, waTextarea, waSelect, waCheckbox, waSwitch, waCard, waTabs, waModal, waTooltip, waTipTrigger].forEach(controller => controller.destroy());
+assert.equal(waHost.querySelectorAll('[class^="vcp-ui-"]').length, 0, 'WA-backed controls must be removed on destroy');
+waHost.remove();
 
 console.log(`UI system contract tests passed (${expected.length} public component names).`);

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import postcss from 'postcss';
 import { JSDOM } from 'jsdom';
@@ -125,10 +126,36 @@ appIds.forEach((item, index) => {
     if (appIds.findIndex(candidate => candidate.id === item.id) !== index) report(item.file, `duplicate application id: ${item.id}`);
 });
 
+// Icon contract: the lucide-adapter semantic alias table must only reference
+// icons that exist in the vendored lucide UMD, and every icon name VCPUI
+// renders must be resolvable.
+const lucideAdapterFile = path.join(moduleDir, 'lucide-adapter.js');
+const lucideAdapterSource = fs.readFileSync(lucideAdapterFile, 'utf8');
+const aliases = {};
+for (const match of lucideAdapterSource.matchAll(/"([a-z0-9_]+)": "([a-z0-9-]+)"/g)) aliases[match[1]] = match[2];
+const require = createRequire(import.meta.url);
+const lucide = require('../node_modules/lucide/dist/umd/lucide.min.js');
+const lucideIcons = new Set(Object.keys(lucide.icons || {}));
+const resolveIconName = name => {
+    const target = aliases[name] || name.replaceAll('_', '-');
+    return target.split('-').filter(Boolean).map(part => part[0].toUpperCase() + part.slice(1)).join('');
+};
+Object.entries(aliases).forEach(([semantic, target]) => {
+    if (!lucideIcons.has(resolveIconName(semantic))) {
+        report(lucideAdapterFile, `lucide alias ${semantic} -> ${target} does not exist in the vendored lucide build`);
+    }
+});
+for (const match of fs.readFileSync(path.join(moduleDir, 'vcp-ui.js'), 'utf8').matchAll(/icon\('([a-z0-9_]+)'/g)) {
+    const name = match[1];
+    if (!lucideIcons.has(resolveIconName(name))) {
+        report(path.join(moduleDir, 'vcp-ui.js'), `icon name "${name}" is not resolvable through lucide-adapter`);
+    }
+}
+
 if (failures.length) {
     console.error('UI system guard failed:\n');
     failures.forEach(failure => console.error(`- ${failure}`));
     process.exit(1);
 }
 
-console.log(`UI system guard passed (${filesIn(styleDir, '.css').length} CSS files, ${filesIn(moduleDir, '.js').length} modules).`);
+console.log(`UI system guard passed (${filesIn(styleDir, '.css').length} CSS files, ${filesIn(moduleDir, '.js').length} modules, ${Object.keys(aliases).length} lucide aliases).`);

@@ -526,20 +526,30 @@ function bridgeNativeControl(wa, kind) {
     }
     if (kind === 'select') {
         const options = () => [...wa.querySelectorAll('wa-option')];
+        const findSelectedIndex = () => {
+            const value = wa.value;
+            return options().findIndex(option => String(option.value) === String(value));
+        };
+        const selectByIndex = index => {
+            const option = options()[Number(index)];
+            if (option) wa.value = option.value;
+        };
+        ['options', 'selectedIndex'].forEach(property => {
+            if (property in wa) return;
+            Object.defineProperty(wa, property, {
+                configurable: true,
+                get: property === 'options' ? options : findSelectedIndex,
+                set: property === 'options' ? undefined : selectByIndex
+            });
+        });
         Object.defineProperty(shim, 'options', {
             configurable: true,
             get: options
         });
         Object.defineProperty(shim, 'selectedIndex', {
             configurable: true,
-            get() {
-                const value = wa.value;
-                return options().findIndex(option => String(option.value) === String(value));
-            },
-            set(index) {
-                const option = options()[Number(index)];
-                if (option) wa.value = option.value;
-            }
+            get: findSelectedIndex,
+            set: selectByIndex
         });
     }
     ['input', 'change'].forEach(type => {
@@ -855,7 +865,6 @@ function checkboxFactory(options = {}) {
         state.checked = input.checked;
         state.indeterminate = false;
         controller.update();
-        emit(element, 'change');
     });
     return controller;
 }
