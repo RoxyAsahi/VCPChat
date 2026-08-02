@@ -258,11 +258,21 @@ async function auditNextPage(page, app, captureName, { expectEmbedded = true } =
     }
     if (app.bodyFocus) {
         const focusOk = await page.evaluate(() => {
-            const candidates = [...document.querySelectorAll('.vcp-ui-page-shell-content input, .vcp-ui-page-shell-content textarea, .vcp-ui-page-shell-content select')]
-                .filter(el => !el.disabled && el.getClientRects().length && getComputedStyle(el).display !== 'none');
+            // WA-backed controls (wa-input/wa-textarea/wa-select) hold their
+            // native input in shadow DOM; include them so a next-mode page
+            // whose controls were upgraded by the Web Awesome adapter still
+            // passes the focus check.
+            const candidates = [...document.querySelectorAll(
+                '.vcp-ui-page-shell-content input, .vcp-ui-page-shell-content textarea, .vcp-ui-page-shell-content select, ' +
+                '.vcp-ui-page-shell-content wa-input, .vcp-ui-page-shell-content wa-textarea, .vcp-ui-page-shell-content wa-select'
+            )].filter(el => !el.disabled && el.getClientRects().length && getComputedStyle(el).display !== 'none');
             if (!candidates.length) return { focused: false, reason: 'no visible control' };
             candidates[0].focus();
-            return { focused: document.activeElement === candidates[0], active: document.activeElement?.tagName || '' };
+            const active = document.activeElement;
+            const landed = active === candidates[0]
+                || candidates[0].contains(active)
+                || (candidates[0].shadowRoot && candidates[0].shadowRoot.contains(active));
+            return { focused: landed, active: active?.tagName || '' };
         });
         assert.ok(focusOk.focused, `${app.name} focus did not land on a body control: ${JSON.stringify(focusOk)}`);
     }
