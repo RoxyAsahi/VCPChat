@@ -846,21 +846,116 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // --- 新版 UI：真实重建页面结构（AppPageShell + VCPUI 控件 + Web Awesome） ---
+// 经典模式保持原 DOM/CSS；next 模式把整个 main-container 布局移入 VCPUI 外壳，
+// 编辑器顶栏动作、查找栏按钮、新建按钮换成 VCPUI 控件（保留原点击逻辑，
+// label/display 通过 MutationObserver 与业务逻辑同步）。
 function buildNextCanvas() {
-    window.VCPPageRebuild.rebuild({
+    if (!window.VCPUI) return;
+    if (window.VCPUiModeController?.getCurrentMode() !== 'next') return;
+    if (document.body.classList.contains('vcp-ui-scope')) return;
+
+    const V = window.VCPUI;
+    const container = document.querySelector('.main-container');
+    if (!container) return;
+    document.body.classList.add('vcp-ui-scope');
+
+    // 把带文字的按钮替换为 VCPUI Button：保留原点击逻辑；同步 label/display。
+    const replaceActionButton = (id, options) => {
+        const original = document.getElementById(id);
+        if (!original || !original.isConnected) return null;
+        const button = V.create('Button', options);
+        const syncLabel = () => {
+            const text = original.textContent.replace(/[→←↑↓×🗑➕💾📖]/g, '').trim();
+            if (text) button.update({ label: text });
+        };
+        syncLabel();
+        new MutationObserver(syncLabel).observe(original, { childList: true, characterData: true, subtree: true });
+        const styleObserver = new MutationObserver(() => {
+            button.element.style.display = original.style.display || '';
+        });
+        styleObserver.observe(original, { attributes: true, attributeFilter: ['style'] });
+        button.element.style.display = original.style.display || '';
+        button.element.addEventListener('click', () => original.click());
+        original.replaceWith(button.element);
+        original.dataset.nextUiReplaced = 'true';
+        return button;
+    };
+
+    // 把图标按钮替换为 VCPUI IconButton（保留原点击逻辑）。
+    const replaceIconButton = (id, icon, label) => {
+        const original = document.getElementById(id);
+        if (!original || !original.isConnected) return null;
+        const button = V.create('IconButton', { icon, label, variant: 'ghost' });
+        button.element.title = label;
+        button.element.classList.add('vcp-ui-canvas-search-btn');
+        button.element.addEventListener('click', () => original.click());
+        original.replaceWith(button.element);
+        original.dataset.nextUiReplaced = 'true';
+        return button;
+    };
+
+    const shell = V.create('AppPageShell', {
         title: '协同 Canvas',
-        containerSelector: '.editor-container',
-        navSelector: '#custom-title-bar',
-        actionSelectors: ['#view-diff-btn'],
+        windowControls: true,
         onMinimize: () => api?.minimizeWindow?.(),
         onMaximize: () => api?.maximizeWindow?.(),
         onClose: () => (api?.closeWindow ? api.closeWindow() : window.close()),
-        enhanceSelectors: {
-            input: ['input:is(:not([type]),[type="text"],[type="number"],[type="search"],[type="url"],[type="email"],[type="password"])'],
-            select: ['select'],
-            textarea: ['textarea']
-        },
-        tooltipSelectors: ['#view-diff-btn', '#run-py-btn', '#render-md-btn', '#render-html-btn', '#toggle-wrap-btn', '#rename-btn', '#copy-btn', '#delete-btn']
+    });
+
+    // 原布局移入 shell 内容区。
+    const body = document.createElement('div');
+    body.className = 'vcp-ui-page-body vcp-ui-canvas-body';
+    while (container.firstChild) body.append(container.firstChild);
+    shell.update({ content: body });
+
+    document.getElementById('custom-title-bar')?.remove();
+    container.remove();
+    document.body.append(shell.element);
+
+    // 搜索输入框增强（保留原生 .value 供业务逻辑使用）。
+    [document.getElementById('canvasSearchInput'), document.getElementById('editorSearchInput')].forEach(input => {
+        if (input) { try { V.enhance('Input', input); } catch (error) { console.warn('[Canvas] enhance input:', error); } }
+    });
+
+    // 编辑器查找栏图标按钮。
+    replaceIconButton('search-prev-btn', 'chevron_up', '上一个匹配');
+    replaceIconButton('search-next-btn', 'chevron_down', '下一个匹配');
+    replaceIconButton('search-close-btn', 'close', '关闭查找');
+
+    // 编辑器顶栏动作按钮与新建按钮。
+    replaceActionButton('run-py-btn', { label: '运行', icon: 'play_arrow', variant: 'secondary', size: 'sm' });
+    replaceActionButton('render-md-btn', { label: '渲染', icon: 'eye', variant: 'secondary', size: 'sm' });
+    replaceActionButton('render-html-btn', { label: '渲染', icon: 'globe', variant: 'secondary', size: 'sm' });
+    replaceActionButton('toggle-wrap-btn', { label: '自动换行', icon: 'wrap_text', variant: 'ghost', size: 'sm' });
+    replaceActionButton('newCanvasBtn', { label: '新建 Canvas', icon: 'add', variant: 'primary', size: 'sm' });
+
+    // 空状态：历史列表 / 变动列表为空时显示 VCPUI EmptyState。
+    const wireEmptyState = (listEl, emptyTitle, emptyDescription) => {
+        if (!listEl) return;
+        const patch = () => {
+            const isEmpty = listEl.children.length === 0;
+            listEl.classList.toggle('vcp-ui-canvas-empty-active', isEmpty);
+            let empty = listEl.querySelector('.vcp-ui-canvas-empty');
+            if (isEmpty) {
+                if (!empty) {
+                    empty = V.create('EmptyState', { icon: 'inbox', title: emptyTitle, description: emptyDescription });
+                    empty.element.classList.add('vcp-ui-canvas-empty');
+                    listEl.appendChild(empty.element);
+                }
+            } else if (empty) {
+                empty.remove();
+            }
+        };
+        patch();
+        new MutationObserver(patch).observe(listEl, { childList: true, subtree: true });
+    };
+    wireEmptyState(document.getElementById('historyList'), '暂无 Canvas 文件', '新建或打开一个文件开始协作。');
+    wireEmptyState(document.getElementById('changeHistoryList'), '暂无文档变动', '编辑保存后会在右侧显示变动记录。');
+
+    // Tooltip 通过 VCPUI.create('Tooltip') 创建（由 VCPUI 委托 Web Awesome）。
+    document.querySelectorAll('.vcp-ui-canvas-body .vcp-ui-button, .vcp-ui-canvas-body .vcp-ui-icon-button').forEach(el => {
+        const tip = V.create('Tooltip', { trigger: el, content: el.title || el.getAttribute('aria-label') || '操作', placement: 'top' });
+        document.body.append(tip.element);
     });
 }
 window.addEventListener('vcp-ui-runtime-ready', buildNextCanvas);
