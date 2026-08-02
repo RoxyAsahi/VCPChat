@@ -790,7 +790,12 @@ function selectFactory(options = {}) {
             });
             if (current.value !== undefined) wa.value = String(current.value);
         });
-        controller._listen(wa, 'change', () => emit(wa, 'change'));
+        controller._listen(wa, 'change', event => {
+            // Only relay the trusted Web Awesome change; the relayed Event we
+            // dispatch below would otherwise re-enter this listener forever
+            // (RangeError: call stack size exceeded).
+            if (event.isTrusted) emit(wa, 'change');
+        });
         bridgeNativeControl(wa, 'select');
         waFocus(controller, wa);
         return controller;
@@ -1624,15 +1629,19 @@ function appPageShellFactory(options = {}) {
         actions.replaceChildren();
         (current.actions || []).forEach(action => actions.append(action.element || action));
         if (current.content !== undefined) appendContent(content, current.content);
-        if (!current.embedded && current.windowControls && !windowControls?.element.isConnected) {
+        // Guard on the header's actual children, not element.isConnected:
+        // before the shell is mounted isConnected is false and repeated
+        // update() calls would stack duplicate WindowControls sets.
+        const hasWindowControls = Boolean(header.querySelector('.vcp-ui-window-controls'));
+        if (!current.embedded && current.windowControls && !hasWindowControls) {
             windowControls = windowControlsFactory({
                 onMinimize: current.onMinimize,
                 onMaximize: current.onMaximize,
                 onClose: current.onClose,
             });
             header.append(windowControls.element);
-        } else if (current.embedded && windowControls) {
-            windowControls.destroy();
+        } else if (current.embedded && hasWindowControls) {
+            windowControls?.destroy();
             windowControls = null;
         }
     }, () => windowControls?.destroy());
