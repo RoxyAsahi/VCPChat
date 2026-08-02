@@ -1,6 +1,6 @@
 # Codex Agent Risk Register
 
-Status: **hermetic**
+Status: **live** for R7-R10 controls; **not product complete**
 
 | ID | Severity | Risk | Control | Verification |
 | --- | --- | --- | --- | --- |

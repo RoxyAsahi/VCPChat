@@ -1,9 +1,9 @@
 # 验收矩阵与收据
 
-更新时间：2026-08-02。Codex App Server 功能 checkpoint 为 `29c2068a`；当前 R7-R10 可靠性 revision 为
-`c0143f64`，状态为 `hermetic`。旧 revision `261d11ba` 的双 Thread 并发/取消隔离与 FileOperator live
-结果保留为历史证据，但尚未在当前 revision 重跑；原生审批、ToolBox 后端审批重放和富消息 Electron gate
-仍未完成，因此不是产品完成。
+更新时间：2026-08-03。Codex App Server 功能 checkpoint 为 `29c2068a`；R7-R10 功能 revision 为
+`c0143f64`，测试基线为 `ea4a2e73`，状态为 `live`。当前 revision 已重跑双 Thread 长任务/取消隔离、
+FileOperator、Nova 恢复链与 VCPLog/VCPInfo observer connect；原生审批、ToolBox 后端审批重放和富消息
+Electron gate 仍未完成，因此不是产品完成。
 
 当前迁移目标：项目内 Codex CLI `0.146.0`，release tag `rust-v0.146.0`，source
 `e363b08c9175ac1cbe5893615dd2cb9ddf95043b`；全局 `0.124.0` 保持不变且不作为测试 executable。
@@ -80,12 +80,12 @@ npm run test:codex-toolbox-live
 | Observation center | Main + JSDOM | 200 条上限、未读游标、分类、去重、Session 切换保留、无 identity 时全局、原始大 JSON 不落库 | planned | 借鉴 vcp-code bounded ring，并按需抽取 Harnss notifications fixture；不复制 Capsule UI。 |
 | Real Codex Thread | project-pinned 0.146 App Server | 同一进程并发 start/read、Session/Thread identity 隔离、空 Thread 不误标 orphaned、空 Thread restart 安全重建 | working-tree pass | `npm run test:codex-app-server-real` 使用 `node_modules/.bin/codex.cmd` 0.146.0；真实 fork/interrupt 仍缺自动测试。 |
 | Electron Codex smoke | hermetic Electron | preload/IPC、Session/Thread 创建、projection-only SQLite read、Runtime identity、Workspace list/preview、内部应用注册/挂载、Fork/legacy 模式与主要 DOM | working-tree pass | 2026-08-02：`npm run test:electron-codex-smoke` 通过；真实 Main/preload IPC 列出 Session workspace 并读取 `package.json` 预览。该命令不替代真实 Nova/ToolBox 长任务验收。 |
-| ToolBox model via adapter | explicit live Nova | 身份回答包含 Nova 且不含 Codex；随机 sentinel；公开 reasoning 持久投影；restart/resume、fork、interrupt | 0.146 working-tree live pass | 2026-08-01：`VCP_CODEX_LIVE=1 VCP_TOOLBOX_URL=http://localhost:6005 VCP_TOOLBOX_API_KEY=123456 VCP_CODEX_LIVE_MODEL=deepseek-v4-flash VCP_CODEX_LIVE_BASE_INSTRUCTIONS={{Nova}} VCP_CODEX_LIVE_EXPECT_REASONING=1 VCP_CODEX_LIVE_TURN_TIMEOUT_MS=300000 npm run test:codex-nova-live`，耗时 49.3 s；全部断言通过。取消测试先等待同一 Turn 的真实 `turn/started`，不再把 RPC ACK 当 running。VChat HEAD `a3762a97` dirty；Codex `0.146.0` / `e363b08c...`；ToolBox HEAD `024f8780` 有用户既有未提交配置/UI 改动，本次未修改 ToolBox。 |
-| VCP dynamic tool via adapter | live Nova + VChat DistributedServer | `item/tool/call -> bridge -> /v1/human/tool -> FileOperator`，结构化结果与 Projection | 0.146 working-tree live pass | 2026-08-01：同一配置下运行 `npm run test:codex-toolbox-live`，耗时 37 s；`deepseek-v4-flash` 的 FileOperator ReadFile、dynamicCall、bridgeCompleted 和 projection 全部通过。 |
-| Concurrent Nova Thread + cancel isolation | explicit live Nova | 同一 App Server PID；A/B 均收到 `turn/started`；中断 A；A=`interrupted`、B=`completed`；两个 SQLite projection 不串线 | 0.146 working-tree live pass | 2026-08-01：`VCP_CODEX_LIVE_MODEL=deepseek-v4-flash VCP_CODEX_LIVE_TURN_TIMEOUT_MS=300000 npm run test:codex-concurrent-live`，耗时 25.8 s；PID 恒定，cancel isolation 与 projection isolation 均通过。 |
+| ToolBox model via adapter | explicit live Nova | 身份回答包含 Nova 且不含 Codex；随机 sentinel；公开 reasoning 持久投影；restart/resume、fork、interrupt | 0.146 live pass | 2026-08-03：测试基线 `ea4a2e73` 运行 `test:codex-nova-live`，耗时 49.6 s；身份、reasoning、sentinel、restart/resume、fork、interrupt 全部通过。Codex `0.146.0`；ToolBox HEAD `024f8780` 有用户既有改动，本次未修改 ToolBox。 |
+| VCP dynamic tool via adapter | live Nova + VChat DistributedServer | `item/tool/call -> bridge -> /v1/human/tool -> FileOperator`，结构化结果与 Projection | 0.146 live pass | 2026-08-03：测试基线 `ea4a2e73` 运行 `test:codex-toolbox-live`，耗时 24.8 s；FileOperator ReadFile 恰好调用一次，dynamicCall、bridgeCompleted 和 Projection 全部通过。临时 DistributedServer 节点在测试后关闭。 |
+| Concurrent Nova Thread + cancel isolation | explicit live Nova | 同一 App Server PID；A/B 均收到 `turn/started`；中断 A；A=`interrupted`、B=`completed`；两个 SQLite projection 不串线 | 0.146 live pass | 2026-08-03：测试基线 `ea4a2e73` 运行 `test:codex-concurrent-live`，耗时 20.4 s；A 请求 30 段工作区架构说明并在启动后中断，B 独立完成随机 sentinel；PID、取消和 Projection 隔离均通过。 |
 | Native approval | real Codex | command/file approval 显示、allow/deny、close fail-closed | pending | fake manager 测试不能替代真实 Codex。 |
 | ToolBox backend approval | live ToolBox | 独立 approval id、TTL/replay、只响应一次 | implemented, pending live | Rust/manager 基础闭环与 replay 去重单测已通过；真实 VCPLog 未执行。 |
-| VCPInfo/VCPLog | live ToolBox | 限长、重连、去重、只读结构化卡片 | partial live | 2026-08-01：Codex 0.146 工作树运行 `VCP_CODEX_LIVE=1 npm run test:codex-toolbox-ws-live`，VCPLog/VCPInfo 双 observer connect+clean shutdown 通过；真实断线重连、replay、approval payload 和通知内容仍未执行。 |
+| VCPInfo/VCPLog | live ToolBox | 限长、重连、去重、只读结构化卡片 | partial live | 2026-08-03：测试基线 `ea4a2e73` 运行 `VCP_CODEX_LIVE=1 npm run test:codex-toolbox-ws-live`，VCPLog/VCPInfo 双 observer connect+clean shutdown 通过；真实断线重连、replay、approval payload 和通知内容仍未执行。 |
 | UI parity/performance | Electron/manual | 主聊天视觉、长流、scroll anchor、10 Session 秒切 | partial working-tree pass | 1440×900/1024×720 深浅主题空 Session shell 截图已检查，无裁切/重叠；富消息截图、scroll trace 和性能收据仍缺。 |
 | Rich Electron GUI gate | Electron screenshot + trace + live runtime | 深浅主题富消息、diff、审批、工具、资源；10 Agent/50 Session；scroll anchor <= 2 px；cold/warm latency；双 streaming Thread | planned | GUI-R6；空 Session shell smoke 不能替代。 |
 
@@ -298,8 +298,8 @@ R4.1、R4.2、R5.1、R5.3 的 gate 除测试通过外，还必须记录：来源
 | Electron recovery | two concurrent Sessions、identity isolation、Renderer reload、kill/restart/resume、archive/restore/delete、pending interaction、read-only degraded | `npm run test:electron-codex-recovery` | committed pass |
 | Governance/UI | pinned 0.146 schema、ownership/ADR/receipt、no global refs、scoped CSS/no inline mutation | `npm run check:codex-governance`、`npm run check:ui-system` | committed pass |
 | Central IPC/product boundary | every Handler channel defined、no global attachment status、Codex-owned Workspace policy、archived Runtime excluded from product | `npm run check:agent-runtime`、`npm run check:codex-governance` | committed pass (`d14f9a58`) |
-| Concurrent Nova release gate | one App Server PID、two running Threads、interrupt A、B completes、Projection isolation | `VCP_CODEX_LIVE=1 npm run test:codex-concurrent-live` | historical live pass on `261d11ba`; current revision pending |
-| Dynamic ToolBox release gate | `vcp_invoke` unwrap、FileOperator ReadFile、Codex identity、bridge result、SQLite Projection | `VCP_CODEX_LIVE=1 npm run test:codex-toolbox-live` | historical live pass on `261d11ba`; current revision pending |
+| Concurrent Nova release gate | one App Server PID、two running Threads、30-paragraph Turn A interrupted、B completes、Projection isolation | `VCP_CODEX_LIVE=1 npm run test:codex-concurrent-live` | live pass on tested revision `ea4a2e73` |
+| Dynamic ToolBox release gate | `vcp_invoke` unwrap、exactly one FileOperator ReadFile、Codex identity、bridge result、SQLite Projection | `VCP_CODEX_LIVE=1 npm run test:codex-toolbox-live` | live pass on tested revision `ea4a2e73` |
 
 ### R7 Profile/Session identity follow-up
 
@@ -399,7 +399,6 @@ npm run check:ui-system
 git diff --check
 ```
 
-R7-R10 machine receipt: [r7-r10-working-tree.json](receipts/r7-r10-working-tree.json). The live ToolBox test initially
-failed with `Plugin "FileOperator" not found for tool call`, proving the bridge failed closed while no distributed node
-was registered. A temporary repository-provided node was then started with `ALLOWED_DIRECTORIES` restricted to the
-VChat worktree; the unchanged ToolBox and unchanged functional revision passed, and the temporary node was stopped.
+R7-R10 machine receipt: [r7-r10-working-tree.json](receipts/r7-r10-working-tree.json). On 2026-08-03 a temporary
+repository-provided DistributedServer node registered `FileOperator`, the current VChat revision passed the dynamic-tool
+gate against the existing ToolBox process, and the temporary node was stopped. The verification did not modify VCPToolBox.

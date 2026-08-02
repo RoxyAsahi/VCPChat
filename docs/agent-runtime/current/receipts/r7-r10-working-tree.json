@@ -1,21 +1,32 @@
 {
-  "status": "hermetic",
+  "status": "live",
   "codexProtocol": "0.146",
   "scope": ["R7", "R8", "R9", "R10"],
   "toolboxModified": false,
-  "liveVerified": false,
-  "verifiedCommit": "c0143f64314863c0ef2dbb20ec5019d3860a7c9c",
-  "verifiedAt": "2026-08-02T23:52:12+02:00",
+  "liveVerified": true,
+  "productComplete": false,
+  "verifiedCommit": "ea4a2e73499b5541a557be7c08e38163da04746d",
+  "functionalCommit": "c0143f64314863c0ef2dbb20ec5019d3860a7c9c",
+  "verifiedAt": "2026-08-03T00:06:29+02:00",
   "environment": {
     "platform": "Windows x64",
     "electron": "41.7.1",
     "codex": "0.146.0",
-    "executionProfile": "toolbox-only"
+    "executionProfile": "toolbox-only",
+    "model": "deepseek-v4-flash",
+    "toolboxUrl": "http://localhost:6005",
+    "toolboxRevision": "024f8780a0452d0cab5729407a2a9bfc39c8d35b",
+    "toolboxWorkingTree": "pre-existing user changes; verification made no ToolBox edits"
   },
   "commands": [
     "npm run test:codex-ci",
+    "npm run test:codex-reliability",
     "npm run test:electron-codex-smoke",
     "npm run check:ui-system",
+    "VCP_CODEX_LIVE=1 npm run test:codex-nova-live",
+    "VCP_CODEX_LIVE=1 npm run test:codex-concurrent-live",
+    "VCP_CODEX_LIVE=1 npm run test:codex-toolbox-live",
+    "VCP_CODEX_LIVE=1 npm run test:codex-toolbox-ws-live",
     "5x node scripts/test-agent-workbench.mjs",
     "git diff --check"
   ],
@@ -23,6 +34,7 @@
     "codexCi": "passed",
     "uiSystem": "passed",
     "electronCodexSmoke": "passed",
+    "codexReliability": "passed",
     "centralIpcRegistry": "passed",
     "archivedRuntimeProductBoundary": "passed",
     "preTurnThinkingAnimationStress": "passed 5/5",
@@ -38,6 +50,20 @@
       "projectionReadable": true,
       "mutationsRejected": 2,
       "appServerStartedInDegradedMode": false
+    },
+    "live": {
+      "novaIdentityReasoningResumeForkInterrupt": "passed in 49.6s",
+      "concurrentThreads": 2,
+      "longTurnA": "started then explicitly interrupted",
+      "turnB": "completed",
+      "appServerPidStable": true,
+      "projectionIsolation": true,
+      "fileOperatorReadFileCalls": 1,
+      "vcpInvokeUnwrap": true,
+      "bridgeProjection": "passed in 24.8s",
+      "vcpLogObserverConnected": true,
+      "vcpInfoObserverConnected": true,
+      "temporaryDistributedNodeStopped": true
     }
   },
   "historicalLiveEvidence": {
@@ -49,15 +75,13 @@
       "VCP_CODEX_LIVE=1 npm run test:codex-concurrent-live",
       "VCP_CODEX_LIVE=1 npm run test:codex-toolbox-live"
     ],
-    "result": "passed on the historical revision; not inherited by the current revision"
+    "result": "retained for audit only; current live status was proved independently on the tested revision"
   },
-  "remainingLiveGates": [
-    "rerun concurrent Nova Threads and cancellation isolation on the current revision",
-    "rerun vcp_invoke FileOperator on the current revision",
+  "remainingProductGates": [
     "real Codex native approval allow/deny/close",
     "ToolBox backend approval replay and exactly-once response",
     "VCPInfo/VCPLog reconnect and replay",
     "rich Electron message, tool, approval, diff, and performance acceptance"
   ],
-  "note": "R7-R10 are hermetically verified at the recorded commit. Historical live results are retained for audit only; this is not a current live or product-complete receipt."
+  "note": "R7-R10 are live verified at the tested revision. Historical live results remain for audit; product-wide approval, reconnect/replay, rich Electron, and performance gates are still pending."
 }

@@ -219,5 +219,6 @@
 - [x] R10: 归档/永久删除/导出、Workspace Abort/cancel、Renderer 独立 ADR、Windows CI 与机器治理检查。
 - [x] R10 follow-up (`d14f9a58`): Workspace policy 归属 Codex Runtime；Agent IPC 完全转入中央合同并静态校验缺失 channel；删除全局 attachment/list 推断；旧 Pi/Rust npm 入口显式归档、产品打包排除旧 Runtime、Rust workflow 改为手动；Electron recovery/smoke 使用独立 `userData` 且不启动无关 CDS。
 - [x] Renderer race follow-up (`c0143f64`): pre-Turn thinking row 不再执行延迟 Markdown 后处理；`test:agent-workbench` 连续 5 次和完整 `test:codex-ci` 通过。
-- [x] 当前 revision `c0143f64` 的 committed hermetic 聚合已通过。`261d11ba` 上的双 Thread/FileOperator live 收据仅作历史证据，不能自动升级当前 revision。
-- [ ] 当前 revision 仍需重跑真实双 Thread/FileOperator；整体产品 release gate 还需 Codex native approval、ToolBox backend approval replay/恰好一次、VCPInfo/VCPLog reconnect/replay，以及 Electron 富消息与性能验收。
+- [x] 测试 revision `ea4a2e73` 的 Windows hermetic 聚合与独立 reliability gate 已通过；功能 revision 保持 `c0143f64`。
+- [x] 当前 revision 的真实 Nova、双 Thread 长任务/取消隔离、FileOperator 单次调用与 VCPLog/VCPInfo observer connect 已通过，R7-R10 状态升级为 `live`。
+- [ ] 整体产品 release gate 仍需 Codex native approval、ToolBox backend approval replay/恰好一次、VCPInfo/VCPLog reconnect/replay，以及 Electron 富消息与性能验收；这些待办不回退 R7-R10 的完成状态。

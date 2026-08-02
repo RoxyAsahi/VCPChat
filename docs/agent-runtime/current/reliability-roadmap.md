@@ -1,6 +1,6 @@
 # Codex Agent Reliability Roadmap
 
-Status: **hermetic** for current revision `c0143f64`; **not product complete**
+Status: **live** for tested revision `ea4a2e73`; **not product complete**
 
 This document is the source of truth for R7-R10. Codex App Server remains a pinned `0.146.x` black box and the only enabled execution profile is `toolbox-only`. VCPToolBox is not modified.
 
@@ -61,9 +61,10 @@ This document is the source of truth for R7-R10. Codex App Server remains a pinn
 ## Verification Receipt
 
 - Functional revision: `c0143f64314863c0ef2dbb20ec5019d3860a7c9c`.
-- Committed gates passed: `test:codex-ci`, `test:electron-codex-smoke`, `check:ui-system`, and `git diff --check`.
+- Tested revision: `ea4a2e73499b5541a557be7c08e38163da04746d`.
+- Committed gates passed on Windows x64: `test:codex-ci`, `test:codex-reliability`, `test:electron-codex-smoke`, `check:ui-system`, and `git diff --check`.
 - Historical live evidence exists on revision `261d11ba7577125867a236033a13be58d94ae72d`: `deepseek-v4-flash` passed two-Thread concurrency/cancel isolation and `vcp_invoke -> FileOperator.ReadFile -> bridge -> Projection` without modifying VCPToolBox.
-- That historical live evidence is not inherited by `c0143f64`; current live status remains pending until the release gates are rerun on this revision.
+- Current live verification on `ea4a2e73` passed Nova identity/reasoning/restart/fork/interrupt, two concurrent Threads with one long Turn interrupted without affecting the other, exactly one `vcp_invoke -> FileOperator.ReadFile` call, Projection isolation, and VCPLog/VCPInfo observer connection. VCPToolBox was not modified by this work.
 - The machine-readable details are in [r7-r10-working-tree.json](receipts/r7-r10-working-tree.json).
 - Native Codex approval, ToolBox backend approval replay/exactly-once, VCPInfo/VCPLog reconnect/replay, and rich Electron visual/performance acceptance remain product gates.
 
