@@ -318,7 +318,7 @@ class CodexRuntimeManager extends EventEmitter {
             workspaceRoot: entry.profile?.workspaceRoot || '',
             permissionMode: normalizePermissionMode(entry.profile?.permissionMode),
             executionProfile: 'toolbox-only',
-            avatarUrl: this._agentAvatarUrl(entry.catalogId),
+            avatarUrl: this._agentAvatarUrl(entry.catalogId, entry.profile),
         }));
         for (const session of this.repository.listSessions({ archived: false })) {
             const idValue = session.agentCatalogId || session.agentId;
@@ -368,6 +368,7 @@ class CodexRuntimeManager extends EventEmitter {
             if (!stat?.isDirectory()) throw new CodexAppServerError('INVALID_WORKSPACE', 'Workspace directory does not exist');
         }
         const previousRevision = Number(existing?.profile?.revision || 0);
+        const avatarFile = safeAvatarFile(existing?.profile?.avatarFile);
         const profile = {
             name: displayName,
             systemPrompt: prompt,
@@ -376,6 +377,7 @@ class CodexRuntimeManager extends EventEmitter {
             permissionMode: normalizePermissionMode(permissionMode),
             ...(String(model || '').trim() ? { model: String(model).trim() } : {}),
             ...(normalizedWorkspace ? { workspaceRoot: normalizedWorkspace } : {}),
+            ...(avatarFile ? { avatarFile } : {}),
             updatedAt: Date.now(),
         };
         const configPath = path.join(directory, 'config.json');
@@ -393,6 +395,7 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     saveAgentAvatar({ agentId, avatarData } = {}) {
+        this.ensureProjectionStore();
         this._assertProjectionWritable();
         const idValue = String(agentId || '').trim();
         if (!idValue || /[\\/:*?"<>|]/.test(idValue)) throw new CodexAppServerError('INVALID_INPUT', 'Invalid Build Agent identity');
@@ -404,15 +407,25 @@ class CodexRuntimeManager extends EventEmitter {
             throw new CodexAppServerError('INVALID_INPUT', 'Invalid Build Agent avatar');
         }
         this._ensureDefaultAgentProfile();
-        const directory = path.join(this.agentsDir, idValue);
-        fs.mkdirSync(directory, { recursive: true });
-        for (const oldExt of Object.values(extensions)) {
-            const oldPath = path.join(directory, `avatar${oldExt}`);
-            if (fs.existsSync(oldPath)) fs.rmSync(oldPath);
+        const resolved = this._resolveAgentProfile(idValue);
+        if (!resolved || !sameIdentity(resolved.id, idValue)) {
+            throw new CodexAppServerError('NOT_FOUND', 'Build Agent Profile was not found');
         }
-        const avatarPath = path.join(directory, `avatar${ext}`);
-        fs.writeFileSync(avatarPath, bytes);
-        return { success: true, avatarUrl: `${pathToFileURL(avatarPath).toString()}?t=${Date.now()}` };
+        const revision = Number(resolved.revision || 1) + 1;
+        const avatarFile = `avatar-r${revision}${ext}`;
+        const directory = path.join(this.agentsDir, resolved.id);
+        const avatarPath = path.join(directory, avatarFile);
+        const avatarTemporaryPath = `${avatarPath}.${process.pid}.${Date.now()}.tmp`;
+        fs.writeFileSync(avatarTemporaryPath, bytes);
+        fs.renameSync(avatarTemporaryPath, avatarPath);
+        const configPath = path.join(directory, 'config.json');
+        const configTemporaryPath = `${configPath}.${process.pid}.${Date.now()}.tmp`;
+        const { id: _id, avatarUrl: _avatarUrl, ...stored } = resolved;
+        const profile = { ...stored, revision, avatarFile, updatedAt: Date.now() };
+        fs.writeFileSync(configTemporaryPath, `${JSON.stringify(profile, null, 2)}\n`, 'utf8');
+        fs.renameSync(configTemporaryPath, configPath);
+        const avatarUrl = pathToFileURL(avatarPath).toString();
+        return { success: true, revision, avatarUrl, profile: { id: resolved.id, ...profile, avatarUrl } };
     }
 
     async ensureSessionRuntime({
@@ -1170,6 +1183,8 @@ class CodexRuntimeManager extends EventEmitter {
             : null;
         const requestedModel = typeof settings.model === 'string' && settings.model.trim()
             ? settings.model.trim() : null;
+        const hasSystemPromptUpdate = Object.prototype.hasOwnProperty.call(settings, 'systemPrompt');
+        const requestedSystemPrompt = hasSystemPromptUpdate ? String(settings.systemPrompt || '').trim() : null;
         const hasWorkspaceUpdate = Object.prototype.hasOwnProperty.call(settings, 'workspaceRoot');
         let requestedWorkspaceRoot = null;
         if (hasWorkspaceUpdate) {
@@ -1195,6 +1210,16 @@ class CodexRuntimeManager extends EventEmitter {
                     'Workspace is part of the materialized Codex Thread identity; create a new Session to change it',
                 );
             }
+            if (hasSystemPromptUpdate && current.threadId
+                && requestedSystemPrompt !== String(current.configSnapshot?.baseInstructions || '')) {
+                throw new CodexAppServerError(
+                    'IDENTITY_CHANGE_REQUIRES_NEW_SESSION',
+                    'System prompt is part of the materialized Codex Thread identity; create a new Session to change it',
+                );
+            }
+            if (hasSystemPromptUpdate && !requestedSystemPrompt && !sameIdentity(current.agentId, 'codex')) {
+                throw new CodexAppServerError('AGENT_IDENTITY_MISSING', 'Build Agent Session requires a system prompt');
+            }
             const currentPermissionMode = normalizePermissionMode(
                 current.configSnapshot?.permissionMode || current.configSnapshot?.approvalPolicy,
             );
@@ -1205,6 +1230,7 @@ class CodexRuntimeManager extends EventEmitter {
                     permissionMode: permissionMode || currentPermissionMode,
                     approvalPolicy: normalizeApprovalPolicy(permissionMode || currentPermissionMode),
                     ...(requestedModel ? { model: requestedModel } : {}),
+                    ...(hasSystemPromptUpdate ? { baseInstructions: requestedSystemPrompt } : {}),
                 },
             });
             if (!updated.updated) {
@@ -1257,6 +1283,8 @@ class CodexRuntimeManager extends EventEmitter {
         addDifference('systemPrompt', session.configSnapshot?.baseInstructions || '', profile.systemPrompt || '', true);
         const profileWorkspace = profile.workspaceRoot ? path.resolve(profile.workspaceRoot) : session.workspaceRoot;
         addDifference('workspaceRoot', session.workspaceRoot || '', profileWorkspace || '', true);
+        addDifference('name', session.agentNameSnapshot || session.configSnapshot?.agentName || '', profile.name || '');
+        addDifference('avatar', session.configSnapshot?.agentAvatar || '', profile.avatarUrl || '');
         addDifference('model', session.configSnapshot?.model || '', profile.model || session.configSnapshot?.model || '');
         addDifference('permissionMode', normalizePermissionMode(session.configSnapshot?.permissionMode), normalizePermissionMode(profile.permissionMode));
         addDifference('profileRevision', Number(session.configSnapshot?.profileRevision || 1), Number(profile.revision || 1));
@@ -1291,12 +1319,14 @@ class CodexRuntimeManager extends EventEmitter {
         const permissionMode = normalizePermissionMode(profile.permissionMode);
         const updated = this.repository.updateSessionConfig(session.sessionId, Number(expectedConfigRevision), {
             workspaceRoot: profileWorkspace,
+            agentNameSnapshot: profile.name || session.agentNameSnapshot,
             configSnapshot: {
                 ...(session.configSnapshot || {}),
                 profileId: profile.id,
                 profileRevision: Number(profile.revision || 1),
                 baseInstructions: profile.systemPrompt || '',
                 agentName: profile.name || session.agentNameSnapshot || '',
+                agentAvatar: profile.avatarUrl || session.configSnapshot?.agentAvatar || '',
                 model: profile.model || session.configSnapshot?.model,
                 permissionMode,
                 approvalPolicy: normalizeApprovalPolicy(permissionMode),
@@ -1464,7 +1494,8 @@ class CodexRuntimeManager extends EventEmitter {
             baseInstructions: options.baseInstructions || options.systemPrompt || profile?.systemPrompt || '',
             developerInstructions: options.developerInstructions || '',
             agentName: options.agentName || options.name || profile?.name || '',
-            agentAvatar: options.agentAvatar || options.avatar || '',
+            agentAvatar: options.agentAvatar || options.avatar || profile?.avatarUrl
+                || this._agentAvatarUrl(profile?.id || agentId),
             profileId: profile?.id || agentId,
             profileRevision: Number(profile?.revision || 1),
             provider,
@@ -1487,14 +1518,14 @@ class CodexRuntimeManager extends EventEmitter {
         };
         if (!/[\\/:*?"<>|]/.test(wanted)) {
             const direct = readConfig(path.join(this.agentsDir, wanted));
-            if (direct) return { ...direct, id: wanted };
+            if (direct) return { ...direct, id: wanted, avatarUrl: this._agentAvatarUrl(wanted, direct) };
         }
         try {
             for (const entry of fs.readdirSync(this.agentsDir, { withFileTypes: true })) {
                 if (!entry.isDirectory()) continue;
                 const profile = readConfig(path.join(this.agentsDir, entry.name));
                 if (profile && (sameIdentity(entry.name, wanted) || sameIdentity(profile.name, wanted))) {
-                    return { ...profile, id: entry.name };
+                    return { ...profile, id: entry.name, avatarUrl: this._agentAvatarUrl(entry.name, profile) };
                 }
             }
         } catch {
@@ -1550,8 +1581,17 @@ class CodexRuntimeManager extends EventEmitter {
         }, null, 2)}\n`, 'utf8');
     }
 
-    _agentAvatarUrl(agentId) {
+    _agentAvatarUrl(agentId, profileConfig = null) {
         const directory = path.join(this.agentsDir, String(agentId || ''));
+        let configured = profileConfig;
+        if (!configured) {
+            try { configured = JSON.parse(fs.readFileSync(path.join(directory, 'config.json'), 'utf8')); } catch { configured = null; }
+        }
+        const avatarFile = safeAvatarFile(configured?.avatarFile);
+        if (avatarFile) {
+            const configuredPath = path.join(directory, avatarFile);
+            if (fs.existsSync(configuredPath)) return pathToFileURL(configuredPath).toString();
+        }
         for (const ext of ['.png', '.jpg', '.jpeg', '.gif', '.webp']) {
             const avatarPath = path.join(directory, `avatar${ext}`);
             if (fs.existsSync(avatarPath)) return pathToFileURL(avatarPath).toString();
@@ -2502,6 +2542,12 @@ function toolboxConfigFingerprint(settings) {
     const url = String(settings?.vcpServerUrl || '').trim();
     const key = String(settings?.vcpApiKey || '');
     return crypto.createHash('sha256').update(`${url}\u0000${key}`).digest('hex');
+}
+
+function safeAvatarFile(value) {
+    const file = String(value || '').trim();
+    if (!file || path.basename(file) !== file || !/^avatar-r\d+\.(?:png|jpe?g|gif|webp)$/i.test(file)) return '';
+    return file;
 }
 
 function compatibilitySession(session) {

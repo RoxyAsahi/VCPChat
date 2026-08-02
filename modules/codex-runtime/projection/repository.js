@@ -136,6 +136,7 @@ class AgentProjectionRepository {
                 UPDATE agent_sessions SET config_snapshot_json = @config_snapshot_json,
                     config_revision = config_revision + 1,
                     workspace_root = @workspace_root,
+                    agent_name_snapshot = @agent_name_snapshot,
                     updated_at = @now
                 WHERE session_id = @session_id AND config_revision = @expected_revision
             `),
@@ -310,7 +311,7 @@ class AgentProjectionRepository {
         return this.getSession(sessionId);
     }
 
-    updateSessionConfig(sessionId, expectedRevision, { configSnapshot, workspaceRoot }) {
+    updateSessionConfig(sessionId, expectedRevision, { configSnapshot, workspaceRoot, agentNameSnapshot }) {
         const current = this.getSession(sessionId);
         if (!current) return { updated: false, reason: 'not-found', session: null };
         const result = this.stmt.updateSessionConfigCas.run({
@@ -318,6 +319,7 @@ class AgentProjectionRepository {
             expected_revision: Number(expectedRevision),
             config_snapshot_json: json(configSnapshot || {}),
             workspace_root: workspaceRoot || current.workspaceRoot || null,
+            agent_name_snapshot: agentNameSnapshot || current.agentNameSnapshot || null,
             now: Date.now(),
         });
         if (result.changes !== 1) return { updated: false, reason: 'conflict', session: this.getSession(sessionId) };

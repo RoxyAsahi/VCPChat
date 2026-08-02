@@ -897,13 +897,14 @@ function mountWorkbench(container) {
         const profile = selectedAgentProfile() || {};
         const selected = current.selectedTopic || {};
         const runtime = activeSession();
+        const snapshot = runtime?.configSnapshot || selected.configSnapshot || {};
         return {
             sessionId: current.selectedSessionId || selected.topicId || null,
             threadId: runtime?.threadId || selected.threadId || null,
             participant: {
                 id: selected.agentId || profile.id || state.selectedAgent,
-                name: profile.name || selected.agentName || selected.agentId || state.selectedAgent || 'Nova',
-                avatarUrl: profile.avatarUrl || selected.avatarUrl || '',
+                name: snapshot.agentName || selected.agentName || profile.name || selected.agentId || state.selectedAgent || 'Nova',
+                avatarUrl: snapshot.agentAvatar || selected.avatarUrl || profile.avatarUrl || '',
                 colors: profile.colors || profile.config?.colors || {},
                 config: profile.config || profile,
             },
@@ -2046,6 +2047,9 @@ function mountWorkbench(container) {
             const selectedProjection = store.getState().selectedTopic;
             const selectedRuntime = activeSession();
             const selectedSnapshot = selectedRuntime?.configSnapshot || selectedProjection?.configSnapshot || null;
+            const selectedThreadId = selectedRuntime?.threadId || selectedProjection?.threadId
+                || selectedProjection?.session?.threadId || null;
+            const materializedSession = Boolean(selectedSession && selectedThreadId);
             const selectedWorkspace = selectedProjection?.workspaceRef || selectedProjection?.workspaceRoot
                 || (selectedRuntime?.sessionId === selectedSession ? selectedRuntime.workspaceRoot : '')
                 || state.workspace;
@@ -2069,11 +2073,13 @@ function mountWorkbench(container) {
             settingsPane.append(node('p', 'agent-chat-settings-placeholder', selectedSession
                 ? '设置修改后自动保存到当前 Session，并从下一次 Turn 开始生效；正在运行的 Turn 不会被静默改写。'
                 : '设置修改后自动保存为新 Session 的默认值；真实凭据仍由 VCPChat 共享设置安全保存。'));
-            const field = (label, value, onChange, options = null) => {
+            const field = (label, value, onChange, options = null, controlOptions = {}) => {
                 const wrap = node('label', 'agent-chat-setting-field');
                 wrap.append(node('span', 'agent-chat-setting-label', label));
                 const control = options ? document.createElement('select') : document.createElement('input');
                 control.className = 'agent-chat-setting-input';
+                control.disabled = controlOptions.disabled === true;
+                if (controlOptions.title) control.title = controlOptions.title;
                 if (!options) control.value = value;
                 if (options) for (const option of options) {
                     const item = document.createElement('option'); item.value = option.value; item.textContent = option.label; item.selected = option.value === value; control.append(item);
@@ -2140,8 +2146,14 @@ function mountWorkbench(container) {
                         state.settingsSaveMessage = '已作为新 Session 的页面默认目录';
                         renderSidebar();
                     }
+                }, null, {
+                    disabled: materializedSession,
+                    title: materializedSession ? '工作目录属于已创建 Codex Thread 的身份；请应用 Profile 并创建新 Session。' : '',
                 }),
-                field('Agent', state.selectedAgent, (value) => { state.selectedAgent = value; }, state.agentCatalog.map((agent) => ({ value: agent.id || agent.name, label: agent.name || agent.id }))),
+                field('Agent', state.selectedAgent, (value) => { state.selectedAgent = value; }, state.agentCatalog.map((agent) => ({ value: agent.id || agent.name, label: agent.name || agent.id })), {
+                    disabled: Boolean(selectedSession),
+                    title: selectedSession ? 'Agent Profile identity 在 Session 创建时冻结。' : '',
+                }),
                 field('模型', selectedModel, (value) => {
                     state.model = value;
                     state.modelDraft = value;
@@ -2170,13 +2182,22 @@ function mountWorkbench(container) {
                 ]),
             );
             const promptField = node('label', 'agent-chat-setting-field');
-            promptField.append(node('span', 'agent-chat-setting-label', selectedSession ? '当前 Session 的 Developer Instructions（冻结快照）' : '当前 Agent 的提示词'));
+            promptField.append(node('span', 'agent-chat-setting-label', materializedSession
+                ? '当前 Session 的 Base Instructions（冻结快照）'
+                : selectedSession ? '当前 Session 的 Base Instructions' : '当前 Agent 的提示词'));
             const prompt = document.createElement('textarea');
             prompt.className = 'agent-chat-setting-input agent-chat-setting-prompt';
-            prompt.readOnly = true;
+            prompt.readOnly = !selectedSession || materializedSession;
             prompt.rows = 5;
             prompt.value = agentPrompt || '此 Agent 未配置提示词。';
             prompt.setAttribute('aria-label', '当前 Agent 提示词');
+            if (!prompt.readOnly) {
+                prompt.addEventListener('change', () => {
+                    void persistWorkbenchSettings({ systemPrompt: prompt.value }, selectedSession, '已自动保存当前 Session 提示词');
+                });
+            } else if (materializedSession) {
+                prompt.title = '提示词属于已创建 Codex Thread 的身份；请应用 Profile 并创建新 Session。';
+            }
             promptField.append(prompt);
             settingsForm.append(promptField);
             if (selectedSession && selectedSnapshot?.profileId) {
@@ -2195,7 +2216,7 @@ function mountWorkbench(container) {
                     }
                     const labels = {
                         systemPrompt: '提示词', workspaceRoot: '工作目录', model: '模型',
-                        permissionMode: '权限模式', profileRevision: 'Profile revision',
+                        permissionMode: '权限模式', profileRevision: 'Profile revision', name: '名称', avatar: '头像',
                     };
                     const detail = preview.differences.map((item) => `${labels[item.field] || item.field}: ${item.current ?? '空'} → ${item.next ?? '空'}`).join('\n');
                     const action = preview.requiresNewSession

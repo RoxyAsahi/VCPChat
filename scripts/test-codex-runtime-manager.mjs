@@ -144,8 +144,24 @@ const savedBuildAvatar = manager.saveAgentAvatar({
     agentId: 'Nova',
     avatarData: { name: 'nova.png', type: 'image/png', buffer: new Uint8Array([1, 2, 3]) },
 });
-assert.match(savedBuildAvatar.avatarUrl, /CodexAgents\/Nova\/avatar\.png/i,
-    'Build avatars must be stored under CodexAgents rather than normal-chat Agents');
+assert.match(savedBuildAvatar.avatarUrl, /CodexAgents\/Nova\/avatar-r\d+\.png/i,
+    'Build avatars must be versioned under CodexAgents rather than overwriting normal-chat or prior Session assets');
+const avatarFrozenTopic = await manager.createTopic({ agentId: 'Nova', title: 'Avatar snapshot' });
+const firstAvatarSnapshot = manager.repository.getSession(avatarFrozenTopic.sessionId).configSnapshot.agentAvatar;
+assert.equal(firstAvatarSnapshot, savedBuildAvatar.avatarUrl,
+    'Session creation must freeze the current Profile avatar URL');
+const secondBuildAvatar = manager.saveAgentAvatar({
+    agentId: 'Nova',
+    avatarData: { name: 'nova.webp', type: 'image/webp', buffer: new Uint8Array([4, 5, 6]) },
+});
+assert.notEqual(secondBuildAvatar.avatarUrl, savedBuildAvatar.avatarUrl);
+assert.ok(secondBuildAvatar.revision > savedBuildAvatar.revision,
+    'avatar changes must advance the Agent Profile revision');
+assert.equal(manager.repository.getSession(avatarFrozenTopic.sessionId).configSnapshot.agentAvatar, firstAvatarSnapshot,
+    'updating a Profile avatar must not mutate an existing Session snapshot');
+const latestAvatarTopic = await manager.createTopic({ agentId: 'Nova', title: 'Latest avatar snapshot' });
+assert.equal(manager.repository.getSession(latestAvatarTopic.sessionId).configSnapshot.agentAvatar, secondBuildAvatar.avatarUrl,
+    'new Sessions must freeze the latest versioned Profile avatar');
 const workspaceTopic = await manager.createTopic({
     agentId: 'Research-Agent', title: 'Workspace settings', workspaceRoot: root,
 });
@@ -156,9 +172,28 @@ const workspaceUpdate = await manager.updateWorkbenchSettings({
 });
 assert.equal(workspaceUpdate.session.workspaceRoot, nextWorkspace,
     'selected Session workspace changes must be durable rather than renderer-only');
+const promptUpdate = await manager.updateWorkbenchSettings({
+    sessionId: workspaceTopic.sessionId,
+    systemPrompt: '{{ResearchSession}}',
+    expectedConfigRevision: workspaceUpdate.session.configRevision,
+});
+assert.equal(promptUpdate.session.configSnapshot.baseInstructions, '{{ResearchSession}}',
+    'an unmaterialized Session must allow its frozen Base Instructions to be edited with CAS');
 await assert.rejects(() => manager.updateWorkbenchSettings({
-    sessionId: workspaceTopic.sessionId, workspaceRoot: path.join(root, 'missing-workspace'), expectedConfigRevision: 2,
+    sessionId: workspaceTopic.sessionId, workspaceRoot: path.join(root, 'missing-workspace'),
+    expectedConfigRevision: promptUpdate.session.configRevision,
 }), /does not exist/);
+manager.repository.saveSession({
+    ...manager.repository.getSession(workspaceTopic.sessionId),
+    threadId: 'thr_materialized_identity',
+    updatedAt: Date.now(),
+});
+await assert.rejects(() => manager.updateWorkbenchSettings({
+    sessionId: workspaceTopic.sessionId,
+    systemPrompt: '{{MustFork}}',
+    expectedConfigRevision: promptUpdate.session.configRevision,
+}), (error) => error.code === 'IDENTITY_CHANGE_REQUIRES_NEW_SESSION',
+'a materialized Thread must reject in-place Base Instructions changes');
 
 // The Codex provider must target VChat's loopback compatibility adapter, not
 // ToolBox's optional /v1/responses implementation.  The upstream ToolBox key
@@ -395,10 +430,19 @@ await assert.rejects(() => manager.updateWorkbenchSettings({
     expectedConfigRevision: updatedPolicy.session.configRevision,
 }), (error) => error.code === 'SESSION_CONFIG_CONFLICT',
 'a stale settings view must fail its compare-and-swap instead of overwriting newer Session config');
+const materializedAvatarSnapshot = manager.repository.getSession(session.sessionId).configSnapshot.agentAvatar;
+const latestProfileAvatar = manager.saveAgentAvatar({
+    agentId: 'Nova',
+    avatarData: { name: 'nova-latest.png', type: 'image/png', buffer: new Uint8Array([7, 8, 9]) },
+});
+assert.equal(manager.repository.getSession(session.sessionId).configSnapshot.agentAvatar, materializedAvatarSnapshot,
+    'a materialized Session must not adopt a later Profile avatar implicitly');
 const revisedNova = manager.saveAgentProfile({
     agentId: 'Nova', name: 'Nova', systemPrompt: '{{NovaV2}}', model: 'profile-model-v2', permissionMode: 'ask',
 });
 assert.ok(revisedNova.profile.revision > Number(session.configSnapshot.profileRevision || 1));
+assert.equal(revisedNova.profile.avatarUrl, latestProfileAvatar.avatarUrl,
+    'saving other Profile fields must preserve the latest versioned avatar');
 const profilePreview = await manager.applyAgentProfileToSession({
     sessionId: session.sessionId,
     expectedConfigRevision: manager.repository.getSession(session.sessionId).configRevision,
@@ -407,6 +451,8 @@ const profilePreview = await manager.applyAgentProfileToSession({
 assert.equal(profilePreview.requiresNewSession, true,
     'a materialized Thread must not silently accept prompt identity changes from its Profile');
 assert.ok(profilePreview.identityChanges.includes('systemPrompt'));
+assert.ok(profilePreview.differences.some((difference) => difference.field === 'avatar'),
+    'Profile preview must disclose avatar drift instead of silently changing old Session presentation');
 const profileFork = await manager.applyAgentProfileToSession({
     sessionId: session.sessionId,
     expectedConfigRevision: manager.repository.getSession(session.sessionId).configRevision,
@@ -415,6 +461,8 @@ const profileFork = await manager.applyAgentProfileToSession({
 assert.equal(profileFork.createdNewSession, true);
 assert.equal(profileFork.session.threadId, null,
     'applying identity-changing Profile fields must create a fresh unmaterialized Session');
+assert.equal(manager.repository.getSession(profileFork.session.sessionId).configSnapshot.agentAvatar, latestProfileAvatar.avatarUrl,
+    'the new Session created from an updated Profile must freeze the latest avatar version');
 assert.equal(manager.repository.getSession(session.sessionId).configSnapshot.baseInstructions, '{{Nova}}',
     'the original materialized Session must retain its frozen Profile snapshot');
 // A fresh App Server process has no in-memory subscription for the persisted

@@ -556,6 +556,7 @@ function createWorkbenchController(runtimeApi) {
             selectedTopic: {
                 topicId,
                 sessionId: selectedSessionId,
+                threadId: durableState.threadId || nextRuntime?.threadId || null,
                 agentId: durableAgentId,
                 title: nextRuntime?.title || durableState.title || '',
                 model: nextRuntime?.model || durableState.configSnapshot?.model || '',

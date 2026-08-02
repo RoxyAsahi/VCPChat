@@ -47,6 +47,10 @@ const interactionResponses = [];
 const openedExternalLinks = [];
 const workspaceActions = [];
 const savedWorkbenchSettings = [];
+const sessionConfigRevisions = new Map([['topic-archived', 1]]);
+const sessionConfigSnapshots = new Map([['topic-archived', {
+    baseInstructions: '冻结的 Nova 指令', permissionMode: 'ask', approvalPolicy: 'on-request',
+}]]);
 const savedAvatars = [];
 const savedAgentProfiles = [];
 const runtimeTransitions = [];
@@ -167,6 +171,7 @@ window.chatAPI = {
             title: '并行研究 Session',
             state: 'ready',
             activity: 'idle',
+            threadId: 'thread-active',
             agentId: 'Nova',
             workspaceRoot: root,
         };
@@ -205,14 +210,32 @@ window.chatAPI = {
                 compaction: { state: 'completed', summary: '已恢复压缩摘要', error: '' },
             } },
         };
+        if (topicId === 'topic-in-use') return {
+            topicId,
+            session: {
+                sessionId: topicId,
+                threadId: 'thread-active',
+                agentId: 'Nova',
+                workspaceRoot: root,
+                configRevision: 1,
+                configSnapshot: {
+                    profileId: 'Nova',
+                    baseInstructions: '{{Nova}}',
+                    permissionMode: 'ask',
+                    approvalPolicy: 'on-request',
+                },
+            },
+            readOnly: false,
+            history: [],
+        };
         return {
             topicId,
             ...(topicId === 'topic-archived' ? {
                 session: {
                     agentId: 'Nova',
+                    configRevision: sessionConfigRevisions.get('topic-archived'),
                     configSnapshot: {
-                        developerInstructions: '冻结的 Nova 指令',
-                        approvalPolicy: 'on-request',
+                        ...sessionConfigSnapshots.get('topic-archived'),
                     },
                 },
             } : {}),
@@ -277,16 +300,33 @@ window.chatAPI = {
     }),
     agentRuntimeUpdateWorkbenchSettings: async (payload) => {
         savedWorkbenchSettings.push(payload);
+        let configRevision = null;
+        let configSnapshot = null;
+        if (payload.sessionId) {
+            const currentRevision = sessionConfigRevisions.get(payload.sessionId) || 1;
+            assert.equal(payload.expectedConfigRevision, currentRevision,
+                'settings autosave must serialize CAS writes with the latest Session config revision');
+            configRevision = currentRevision + 1;
+            sessionConfigRevisions.set(payload.sessionId, configRevision);
+            const currentSnapshot = sessionConfigSnapshots.get(payload.sessionId) || {};
+            configSnapshot = {
+                ...currentSnapshot,
+                ...(payload.systemPrompt !== undefined ? { baseInstructions: payload.systemPrompt } : {}),
+                ...(payload.permissionMode ? {
+                    permissionMode: payload.permissionMode,
+                    approvalPolicy: payload.permissionMode === 'always-approve' ? 'never' : 'on-request',
+                } : {}),
+                ...(payload.model ? { model: payload.model } : {}),
+            };
+            sessionConfigSnapshots.set(payload.sessionId, configSnapshot);
+        }
         return {
             restartRequired: true,
             session: payload.sessionId ? {
                 sessionId: payload.sessionId,
                 workspaceRoot: payload.workspaceRoot || root,
-                configSnapshot: {
-                    baseInstructions: '冻结的 Nova 指令',
-                    approvalPolicy: payload.permissionMode === 'always-approve' ? 'never' : 'on-request',
-                    ...(payload.model ? { model: payload.model } : {}),
-                },
+                configRevision,
+                configSnapshot,
             } : null,
             settings: {
                 budget: payload.budget || { maxRequestsPerTurn: 8, maxTokensPerTurn: 120000 },
@@ -1433,13 +1473,18 @@ const permissionSelect = [...host.querySelectorAll('.agent-chat-settings-pane .a
 assert.ok(permissionSelect, 'Workbench settings must expose a visible local approval (YOLO) policy selector');
 permissionSelect.value = 'always-approve';
 permissionSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
-const promptPreview = host.querySelector('.agent-chat-settings-pane textarea[readonly]');
-assert.equal(promptPreview?.value, '冻结的 Nova 指令',
-    'settings must show the selected Session frozen developer instructions before the Agent fallback prompt');
+const promptEditor = host.querySelector('.agent-chat-settings-pane textarea:not([readonly])');
+assert.equal(promptEditor?.value, '冻结的 Nova 指令',
+    'an unmaterialized Session must expose its frozen Base Instructions as an editable field');
+promptEditor.value = '{{SessionNova}}';
+promptEditor.dispatchEvent(new window.Event('change', { bubbles: true }));
 await new Promise((resolve) => setTimeout(resolve, 30));
-assert.equal(savedWorkbenchSettings.at(-1)?.permissionMode, 'always-approve',
+assert.equal(savedWorkbenchSettings.at(-1)?.systemPrompt, '{{SessionNova}}',
+    'editing an unmaterialized Session prompt must autosave through the Session CAS IPC');
+await new Promise((resolve) => setTimeout(resolve, 30));
+assert.ok(savedWorkbenchSettings.some((item) => item.permissionMode === 'always-approve'),
     'changing YOLO must automatically persist the narrowed Codex Session permissionMode setting');
-assert.equal(savedWorkbenchSettings.at(-1)?.sessionId, 'topic-archived',
+assert.ok(savedWorkbenchSettings.some((item) => item.permissionMode === 'always-approve' && item.sessionId === 'topic-archived'),
     'saving a selected Topic policy must target that current Session rather than only a future Session');
 assert.equal([...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field select')]
     .find((control) => [...control.options].some((option) => option.value === 'always-approve'))?.value, 'always-approve',
@@ -1460,6 +1505,28 @@ assert.equal([...host.querySelectorAll('.agent-chat-settings-pane button')]
 assert.equal([...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field select')]
     .find((control) => [...control.options].some((option) => option.value === 'gpt-5.6-luna'))?.value, 'gpt-5.6-luna',
     'the selected Session must retain its newly saved model after the settings pane rerenders');
+
+const materializedSessionsTab = [...host.querySelectorAll('.agent-chat-sidebar .sidebar-tab-button')]
+    .find((tab) => tab.textContent.trim() === '会话');
+materializedSessionsTab.click();
+host.querySelector('.agent-chat-session-row[data-topic-id="topic-in-use"]').click();
+await new Promise((resolve) => setTimeout(resolve, 30));
+const materializedSettingsTab = [...host.querySelectorAll('.agent-chat-sidebar .sidebar-tab-button')]
+    .find((tab) => tab.textContent.trim() === '设置');
+materializedSettingsTab.click();
+await new Promise((resolve) => setTimeout(resolve, 0));
+const materializedWorkspace = [...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field')]
+    .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent.includes('工作目录'))
+    ?.querySelector('input');
+const materializedAgent = [...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field')]
+    .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent === 'Agent')
+    ?.querySelector('select');
+assert.equal(materializedWorkspace?.disabled, true,
+    'a materialized Thread must lock workspace identity in the settings UI');
+assert.equal(materializedAgent?.disabled, true,
+    'a selected Session must lock its Agent Profile identity in the settings UI');
+assert.ok(host.querySelector('.agent-chat-settings-pane textarea[readonly]'),
+    'a materialized Thread must expose Base Instructions as a read-only frozen snapshot');
 
 dispose();
 assert.equal(unsubscribeCalls, 1, 'Workbench unmount must release runtime event subscription');
