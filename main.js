@@ -374,6 +374,17 @@ function createWindow({ deferLoad = false } = {}) {
         loadMainWindow();
     }
 
+    // Keep reload deterministic in the frameless shell. Relying on Electron's
+    // implicit menu accelerator routing allowed Ctrl+R to fall through to a
+    // window lifecycle command on some Windows builds.
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+        const modifier = process.platform === 'darwin' ? input.meta : input.control;
+        if (!modifier || input.alt || String(input.key || '').toLowerCase() !== 'r') return;
+        event.preventDefault();
+        if (input.shift) mainWindow.webContents.reloadIgnoringCache();
+        else mainWindow.webContents.reload();
+    });
+
     // 拦截主窗口内的直接导航（防止在应用内打开外部网页）
     mainWindow.webContents.on('will-navigate', (event, url) => {
         if (url === mainWindow.webContents.getURL()) return;
@@ -1098,7 +1109,7 @@ if (!gotTheLock) {
         themeHandlers.initialize({ mainWindow, openChildWindows, projectRoot: PROJECT_ROOT, APP_DATA_ROOT_IN_PROJECT, settingsManager: appSettingsManager });
         emoticonHandlers.initialize({ SETTINGS_FILE, APP_DATA_ROOT_IN_PROJECT });
         emoticonHandlers.setupEmoticonHandlers();
-        canvasHandlers.initialize({ mainWindow, openChildWindows, CANVAS_CACHE_DIR });
+        canvasHandlers.initialize({ mainWindow, openChildWindows, CANVAS_CACHE_DIR, SETTINGS_FILE });
         desktopHandlers.initialize({
             mainWindow,
             openChildWindows,

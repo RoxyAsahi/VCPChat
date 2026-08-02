@@ -10,7 +10,7 @@
                    img-src * data: file: blob:;
                    media-src * data: file:;
                    font-src *;
-                   connect-src * ws: wss:;">
+                   connect-src * ws: wss: data:;">
     <title>VCPChat</title>
     <link rel="stylesheet" href="vendor/fontawesome-v6/fontawesome-v6.css">
     <link rel="stylesheet" href="style.css">
@@ -152,7 +152,30 @@
     </header>
     <section id="nextUiLaunchpad" class="next-ui-launchpad vcp-ui-scope" data-density="comfortable" aria-hidden="true">
         <div class="next-ui-launchpad-inner">
-            <h1>应用</h1>
+            <div class="next-ui-empty-brand next-ui-launchpad-brand" role="img" aria-label="VCPChat">
+                <svg class="next-ui-empty-brand-svg" viewBox="0 0 900 190" aria-hidden="true">
+                    <defs>
+                        <linearGradient id="nextUiLaunchpadStaticStroke" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stop-color="var(--next-empty-flow-primary)"></stop>
+                            <stop offset="50%" stop-color="var(--next-empty-flow-primary)"></stop>
+                            <stop offset="50%" stop-color="var(--next-empty-flow-secondary)"></stop>
+                            <stop offset="100%" stop-color="var(--next-empty-flow-secondary)"></stop>
+                        </linearGradient>
+                        <filter id="nextUiLaunchpadLogoGlow" x="-20%" y="-40%" width="140%" height="180%">
+                            <feGaussianBlur stdDeviation="4" result="blur"></feGaussianBlur>
+                            <feComposite in="SourceGraphic" in2="blur" operator="over"></feComposite>
+                        </filter>
+                    </defs>
+                    <text x="50%" y="52%" text-anchor="middle" dominant-baseline="middle"
+                        class="next-ui-empty-brand-text next-ui-empty-brand-base">VCPCHAT</text>
+                    <text x="50%" y="52%" text-anchor="middle" dominant-baseline="middle"
+                        class="next-ui-empty-brand-text next-ui-empty-brand-flow next-ui-empty-brand-cyan"
+                        filter="url(#nextUiLaunchpadLogoGlow)">VCPCHAT</text>
+                    <text x="50%" y="52%" text-anchor="middle" dominant-baseline="middle"
+                        class="next-ui-empty-brand-text next-ui-empty-brand-flow next-ui-empty-brand-pink"
+                        filter="url(#nextUiLaunchpadLogoGlow)">VCPCHAT</text>
+                </svg>
+            </div>
             <div id="nextUiAppGrid" class="next-ui-app-grid"></div>
         </div>
     </section>
@@ -847,10 +870,10 @@
                             <svg class="next-ui-empty-brand-svg" viewBox="0 0 900 190" aria-hidden="true">
                                 <defs>
                                     <linearGradient id="nextUiEmptyStaticStroke" x1="0%" y1="0%" x2="100%" y2="0%">
-                                        <stop offset="0%" stop-color="#00f3ff"></stop>
-                                        <stop offset="50%" stop-color="#00f3ff"></stop>
-                                        <stop offset="50%" stop-color="#ff00ea"></stop>
-                                        <stop offset="100%" stop-color="#ff00ea"></stop>
+                                        <stop offset="0%" stop-color="var(--next-empty-flow-primary)"></stop>
+                                        <stop offset="50%" stop-color="var(--next-empty-flow-primary)"></stop>
+                                        <stop offset="50%" stop-color="var(--next-empty-flow-secondary)"></stop>
+                                        <stop offset="100%" stop-color="var(--next-empty-flow-secondary)"></stop>
                                     </linearGradient>
                                     <filter id="nextUiEmptyLogoGlow" x="-20%" y="-40%" width="140%" height="180%">
                                         <feGaussianBlur stdDeviation="4" result="blur"></feGaussianBlur>
@@ -2379,6 +2402,7 @@
     <script type="module" src="modules/ui-system/vcp-ui.js"></script>
     <script type="module" src="modules/ui-system/webawesome-adapter.js"></script>
     <script type="module" src="modules/ui-system/ui-mode-controller.js"></script>
+    <script type="module" src="modules/ui-system/vcp-main-ui-runtime.js"></script>
     <script type="module" src="modules/ui-system/settings-bridge.js"></script>
     <script type="module" src="modules/ui-system/next-ui-apps.js"></script>
     <script type="module" src="modules/ui-system/component-showcase.js"></script>

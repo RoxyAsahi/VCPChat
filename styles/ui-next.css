@@ -119,6 +119,14 @@ html[data-ui-mode="next"] body.next-ui-internal-app-open:has(.agent-chat-root) {
     --next-sidebar-width: 260px;
 }
 
+html[data-ui-mode="next"] body.next-ui-internal-app-open:has(
+    #nextUiInternalAppHost[data-active-app-id="vchat-app-notes"],
+    #nextUiInternalAppHost[data-active-app-id="vchat-app-translator"],
+    #nextUiInternalAppHost[data-active-app-id="vchat-app-memo"]
+) {
+    --next-sidebar-width: 260px;
+}
+
 html[data-ui-mode="next"] .next-ui-topbar {
     position: fixed;
     inset: 0 0 auto 0;
@@ -652,7 +660,14 @@ html[data-ui-mode="next"] body:not(.chat-presentation-panel):not(.chat-presentat
     display: none;
 }
 
-html[data-ui-mode="next"] .main-content.next-ui-empty-state-active .next-ui-empty-state {
+html[data-ui-mode="next"] .main-content {
+    --next-empty-flow-primary: var(--button-bg);
+    --next-empty-flow-secondary: hsl(from var(--button-bg) calc(h + 150) s l);
+    --next-empty-flow-glow-strong: color-mix(in srgb, var(--button-bg) 78%, transparent);
+    --next-empty-flow-glow-soft: color-mix(in srgb, var(--next-empty-flow-secondary) 42%, transparent);
+}
+
+html[data-ui-mode="next"] .main-content.next-ui-empty-state-active[data-chat-empty="true"] .next-ui-empty-state {
     position: absolute;
     inset: 0;
     z-index: 2;
@@ -662,11 +677,11 @@ html[data-ui-mode="next"] .main-content.next-ui-empty-state-active .next-ui-empt
     pointer-events: none;
 }
 
-html[data-ui-mode="next"] .main-content.next-ui-empty-state-active #chatMessages .welcome-bubble {
+html[data-ui-mode="next"] .main-content.next-ui-empty-state-active[data-chat-empty="true"] #chatMessages .welcome-bubble {
     display: none;
 }
 
-html[data-ui-mode="next"] .main-content.next-ui-empty-state-active #currentChatAgentName {
+html[data-ui-mode="next"] .main-content.next-ui-empty-state-active[data-chat-empty="true"][data-chat-empty-reason="no-selection"] #currentChatAgentName {
     opacity: 0;
 }
 
@@ -721,17 +736,17 @@ html[data-ui-mode="next"] .main-content.next-ui-empty-state-active #currentChatA
 }
 
 .next-ui-empty-brand-cyan {
-    stroke: #00f3ff;
+    stroke: var(--next-empty-flow-primary);
     filter:
-        drop-shadow(0 0 7px rgba(0, 243, 255, 0.88))
-        drop-shadow(0 0 16px rgba(0, 243, 255, 0.42));
+        drop-shadow(0 0 7px var(--next-empty-flow-glow-strong))
+        drop-shadow(0 0 16px var(--next-empty-flow-glow-soft));
 }
 
 .next-ui-empty-brand-pink {
-    stroke: #ff00ea;
+    stroke: var(--next-empty-flow-secondary);
     filter:
-        drop-shadow(0 0 7px rgba(255, 0, 234, 0.84))
-        drop-shadow(0 0 16px rgba(255, 0, 234, 0.38));
+        drop-shadow(0 0 7px var(--next-empty-flow-glow-strong))
+        drop-shadow(0 0 16px var(--next-empty-flow-glow-soft));
     animation-delay: -3.25s;
 }
 
@@ -756,11 +771,11 @@ html[data-ui-mode="next"] body.light-theme .next-ui-empty-brand-flow {
 }
 
 html[data-ui-mode="next"] body.light-theme .next-ui-empty-brand-cyan {
-    filter: drop-shadow(0 0 6px rgba(0, 231, 242, 0.56));
+    filter: drop-shadow(0 0 6px var(--next-empty-flow-glow-strong));
 }
 
 html[data-ui-mode="next"] body.light-theme .next-ui-empty-brand-pink {
-    filter: drop-shadow(0 0 6px rgba(255, 79, 216, 0.52));
+    filter: drop-shadow(0 0 6px var(--next-empty-flow-glow-soft));
 }
 
 @keyframes next-ui-empty-brand-flow {
@@ -829,6 +844,10 @@ html[data-ui-mode="next"] body.next-ui-internal-app-open .next-ui-launchpad {
 }
 
 html[data-ui-mode="next"] .next-ui-launchpad {
+    --next-empty-flow-primary: var(--button-bg);
+    --next-empty-flow-secondary: hsl(from var(--button-bg) calc(h + 150) s l);
+    --next-empty-flow-glow-strong: color-mix(in srgb, var(--button-bg) 78%, transparent);
+    --next-empty-flow-glow-soft: color-mix(in srgb, var(--next-empty-flow-secondary) 42%, transparent);
     position: fixed;
     inset: var(--next-topbar-height) 0 0;
     z-index: 1000;
@@ -860,17 +879,14 @@ html[data-ui-mode="next"] body.next-ui-launchpad-open .next-ui-launchpad {
 }
 
 .next-ui-launchpad-inner {
-    width: min(1120px, calc(100% - 72px));
+    width: min(1040px, calc(100% - 160px));
     margin: 0 auto;
-    padding: 72px 0 56px;
+    padding: 84px 0 72px;
 }
 
-.next-ui-launchpad h1 {
-    margin: 0 0 32px;
-    font-size: 22px;
-    line-height: 1.2;
-    font-weight: 650;
-    letter-spacing: 0;
+.next-ui-launchpad-brand {
+    width: min(460px, 64vw);
+    margin: 0 auto 58px;
 }
 
 .next-ui-app-grid {
@@ -946,7 +962,13 @@ html[data-ui-mode="next"] #vchatAppTray + * {
     }
 
     .next-ui-launchpad-inner {
-        width: calc(100% - 48px);
+        width: calc(100% - 72px);
+        padding-top: 68px;
+    }
+
+    .next-ui-launchpad-brand {
+        width: min(400px, 70vw);
+        margin-bottom: 44px;
     }
 }
 
@@ -962,6 +984,16 @@ html[data-ui-mode="next"] #vchatAppTray + * {
     .next-ui-app-grid {
         grid-template-columns: repeat(3, minmax(86px, 1fr));
         gap: 30px 18px;
+    }
+
+    .next-ui-launchpad-inner {
+        width: calc(100% - 36px);
+        padding-top: 48px;
+    }
+
+    .next-ui-launchpad-brand {
+        width: min(340px, 82vw);
+        margin-bottom: 34px;
     }
 
     .next-ui-empty-state-content {
@@ -993,13 +1025,13 @@ html[data-ui-mode="next"] #vchatAppTray + * {
         stroke: url("#nextUiEmptyStaticStroke");
         stroke-width: 4px;
         filter:
-            drop-shadow(0 0 6px rgba(0, 243, 255, 0.58))
-            drop-shadow(0 0 6px rgba(255, 0, 234, 0.52));
+            drop-shadow(0 0 6px var(--next-empty-flow-glow-strong))
+            drop-shadow(0 0 6px var(--next-empty-flow-glow-soft));
     }
 
     html[data-ui-mode="next"] body.light-theme .next-ui-empty-brand-base {
         filter:
-            drop-shadow(0 0 4px rgba(0, 243, 255, 0.28))
-            drop-shadow(0 0 4px rgba(255, 0, 234, 0.24));
+            drop-shadow(0 0 4px var(--next-empty-flow-glow-strong))
+            drop-shadow(0 0 4px var(--next-empty-flow-glow-soft));
     }
 }

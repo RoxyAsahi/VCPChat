@@ -1,12 +1,43 @@
 (() => {
     const APP_TONES = ['purple', 'green', 'pink', 'cyan', 'amber', 'charcoal', 'red', 'orange'];
+    const TAB_SESSION_KEY = 'vcpchat.nextUi.openTabs.v1';
     const views = new Map();
     let initialized = false;
     let activeViewId = 'home';
     let sidebarResizeObserver = null;
     let activeCreateModal = null;
     let embeddedStateDisposer = null;
+    let restoringTabs = false;
+    let pendingTabRestore = null;
     const suppressedTabClicks = new Set();
+
+    function readTabSession() {
+        try {
+            const parsed = JSON.parse(sessionStorage.getItem(TAB_SESSION_KEY) || 'null');
+            if (!parsed || !Array.isArray(parsed.tabs)) return null;
+            return {
+                activeViewId: typeof parsed.activeViewId === 'string' ? parsed.activeViewId : 'home',
+                tabs: parsed.tabs.filter(tab => tab && typeof tab.id === 'string' && (tab.kind === 'internal' || tab.kind === 'embedded')),
+            };
+        } catch {
+            return null;
+        }
+    }
+
+    function persistTabSession() {
+        if (restoringTabs) return;
+        try {
+            sessionStorage.setItem(TAB_SESSION_KEY, JSON.stringify({
+                activeViewId,
+                tabs: [...views.values()].map(view => ({
+                    kind: view.kind,
+                    id: view.kind === 'internal' ? view.app.id : view.app.id,
+                })),
+            }));
+        } catch {
+            // Tab restoration is a convenience; storage failure must not block navigation.
+        }
+    }
 
     function getDesktopApi() {
         return window.chatAPI || window.electronAPI;
@@ -124,11 +155,15 @@
         const addTabButton = document.getElementById('nextUiAddTabBtn');
         const launchpad = document.getElementById('nextUiLaunchpad');
         const host = document.getElementById('nextUiInternalAppHost');
+        const activeInternalView = isInternal ? views.get(activeViewId) : null;
         homeTab?.classList.toggle('active', isHome);
         homeTab?.setAttribute('aria-selected', String(isHome));
         launchpad?.setAttribute('aria-hidden', String(!isLaunchpad));
         host?.setAttribute('aria-hidden', String(!isInternal));
-        if (host) host.hidden = !isInternal;
+        if (host) {
+            host.hidden = !isInternal;
+            host.dataset.activeAppId = activeInternalView?.app?.id || '';
+        }
         addTabButton?.classList.toggle('active', isLaunchpad);
         addTabButton?.setAttribute('aria-selected', String(isLaunchpad));
         addTabButton?.setAttribute('aria-expanded', String(isLaunchpad));
@@ -145,6 +180,7 @@
         if (viewId !== 'home' && viewId !== 'launchpad' && !views.has(viewId)) viewId = 'home';
         activeViewId = viewId;
         updateVisibility();
+        persistTabSession();
     }
 
     function openLaunchpad() {
@@ -340,6 +376,40 @@
             const remaining = [...document.querySelectorAll('#nextUiDynamicTabs > .next-ui-tab')];
             const left = tabIndex > 0 ? remaining[tabIndex - 1] : null;
             setView(left?.dataset.viewId || 'home');
+        }
+        persistTabSession();
+    }
+
+    async function restoreTabSession() {
+        if (!pendingTabRestore || restoringTabs) return;
+        restoringTabs = true;
+        try {
+            const unresolved = [];
+            for (const descriptor of pendingTabRestore.tabs) {
+                if (descriptor.kind === 'internal') {
+                    if (!window.nextUiApps?.get(descriptor.id)) {
+                        unresolved.push(descriptor);
+                        continue;
+                    }
+                    openInternalApp(descriptor.id);
+                    continue;
+                }
+                const app = window.trayManager?.getApps?.().find(candidate => candidate.id === descriptor.id && candidate.embed);
+                if (!app) {
+                    unresolved.push(descriptor);
+                    continue;
+                }
+                await openEmbeddedApp(app);
+            }
+            const requestedActive = pendingTabRestore.activeViewId;
+            pendingTabRestore = unresolved.length ? { ...pendingTabRestore, tabs: unresolved } : null;
+            if (requestedActive === 'home' || requestedActive === 'launchpad' || views.has(requestedActive)) {
+                activeViewId = requestedActive;
+                updateVisibility();
+            }
+        } finally {
+            restoringTabs = false;
+            persistTabSession();
         }
     }
 
@@ -780,6 +850,7 @@
         setupAgentSearch();
         setupAccountMenu();
         setupEmbeddedAppState();
+        pendingTabRestore = readTabSession();
         document.getElementById('nextUiCreateItemBtn')?.addEventListener('click', openCreateDialog);
         document.getElementById('nextUiHomeTab')?.addEventListener('click', () => setView('home'));
         document.getElementById('nextUiAddTabBtn')?.addEventListener('click', openLaunchpad);
@@ -792,7 +863,10 @@
             proxyClick(restore && getComputedStyle(restore).display !== 'none' ? 'restore-btn' : 'maximize-btn');
         });
         document.getElementById('nextUiCloseBtn')?.addEventListener('click', () => proxyClick('close-btn'));
-        window.addEventListener('next-ui-apps-changed', renderApps);
+        window.addEventListener('next-ui-apps-changed', () => {
+            renderApps();
+            void restoreTabSession();
+        });
         window.addEventListener('vcp-ui-density-changed', event => {
             const density = event.detail?.density;
             if (!density) return;
@@ -805,6 +879,7 @@
                 closeAllInternalApps();
             }
         });
+        queueMicrotask(() => { void restoreTabSession(); });
     }
 
     // Internal applications may need to enter the shared VCPChat Agent/Group
