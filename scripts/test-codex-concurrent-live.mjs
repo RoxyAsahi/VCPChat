@@ -60,6 +60,14 @@ function transcript(snapshot) {
         .join('\n');
 }
 
+function assistantTranscript(snapshot) {
+    return (snapshot.messages || [])
+        .filter((message) => message?.role === 'assistant')
+        .flatMap((message) => message.blocks || [])
+        .map((block) => String(block?.content?.text || ''))
+        .join('\n');
+}
+
 function terminalWaiter(runtime, sessionId, threadId, expectedStatus) {
     return new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
@@ -191,14 +199,18 @@ try {
     ]);
     assert.equal(projectionA.session.threadId, sessionA.threadId);
     assert.equal(projectionB.session.threadId, sessionB.threadId);
+    const completedLongResponse = assistantTranscript(projectionB);
     assert.doesNotMatch(transcript(projectionA), new RegExp(sentinelB),
         'B output must never be projected into interrupted Thread A');
-    assert.match(transcript(projectionB), new RegExp(sentinelB),
+    assert.match(completedLongResponse, new RegExp(sentinelB),
         'Thread B must complete with its own sentinel after Thread A is interrupted');
+    assert.ok(completedLongResponse.length >= 1_200,
+        `Thread B must complete a substantive long response, received ${completedLongResponse.length} characters`);
     console.log(JSON.stringify({
         runtime: 'codex-app-server', model, pid: processPid,
         threadA: sessionA.threadId, threadB: sessionB.threadId,
         concurrentStreaming: 'passed', cancelIsolation: 'passed', projectionIsolation: 'passed',
+        completedLongResponseChars: completedLongResponse.length,
         responseIdentityShapes: responseIdentities,
     }));
 } finally {
