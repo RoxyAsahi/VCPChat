@@ -1980,12 +1980,14 @@ function buildNextForum() {
         onMaximize: () => api?.maximizeWindow?.(),
         onClose: () => (api?.closeWindow ? api.closeWindow() : window.close()),
     });
+    shell.element.classList.add('vcp-ui-integrated-shell');
 
     // 先挂载到文档再 update，避免 AppPageShell 在未连接时重复创建 WindowControls。
     document.body.append(shell.element);
 
     const body = document.createElement('div');
-    body.className = 'vcp-ui-forum-body';
+    body.className = 'vcp-ui-forum-body vcp-ui-integrated-layout vcp-ui-integrated-main';
+    body.dataset.layout = 'canvas';
     while (app.firstChild) body.append(app.firstChild);
     shell.update({ content: body });
 
@@ -2022,6 +2024,7 @@ function deepenNextForum(V) {
         start: [searchInput, boardFilter].filter(Boolean),
         end: [refreshBtn, createPostBtn, settingsBtn].filter(Boolean),
     });
+    toolbar.element.classList.add('vcp-ui-integrated-content-toolbar');
     nextForumToolbar = toolbar;
     if (body) body.prepend(toolbar.element);
     // 初始按当前视图设置工具栏可见性（login 视图隐藏）。

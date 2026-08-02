@@ -171,7 +171,7 @@ body.light-theme .mini-note-content {
 html[data-ui-mode="next"] body.vcp-ui-scope {
     padding: 0;
     gap: 0;
-    background: var(--vcp-ui-bg-primary);
+    background-color: var(--vcp-ui-bg-primary);
     color: var(--vcp-ui-text-0);
 }
 

@@ -21,6 +21,7 @@ let collapsedCategories = new Set(); // Set of collapsed category IDs
 let folderOrder = []; // Array of folder names for UI sorting
 let draggedFolder = null; // Currently dragged folder name
 let memoStartupBlocked = false;
+let memoStartupMessage = '';
 
 // ========== DOM 元素 ==========
 const folderListEl = document.getElementById('folder-list');
@@ -47,6 +48,7 @@ const newMemoContentInput = document.getElementById('new-memo-content');
 
 function blockStartup(message) {
     memoStartupBlocked = true;
+    memoStartupMessage = String(message || '记忆工作台初始化失败');
     currentFolder = '';
     currentFolderNameEl.textContent = '初始化未完成';
     folderListEl.innerHTML = `
@@ -59,6 +61,9 @@ function blockStartup(message) {
             ${escapeHtml(message)}
         </div>
     `;
+    if (window.VCPUI && document.body.classList.contains('vcp-ui-scope')) {
+        renderNextStartupBlockedState(window.VCPUI);
+    }
 }
 
 window.alert = (message) => {
@@ -1652,6 +1657,7 @@ function buildNextMemo() {
     const shell = window.VCPPageRebuild.rebuild({
         title: '记忆工作台',
         containerSelector: '.app-layout',
+        bodyClass: 'vcp-ui-page-body vcp-ui-memo-workbench',
         navSelector: '#top-nav-bar',
         actionSelectors: ['#create-memo-btn'],
         onMinimize: () => api?.minimizeWindow?.(),
@@ -1665,6 +1671,18 @@ function buildNextMemo() {
         tooltipSelectors: []
     });
     if (!shell) return;
+    shell.element.classList.add('vcp-ui-integrated-shell');
+    const workbench = shell.element.querySelector('.vcp-ui-memo-workbench');
+    workbench?.classList.add('vcp-ui-integrated-layout');
+    workbench?.setAttribute('data-layout', 'rail');
+    workbench?.querySelector(':scope > .sidebar')?.classList.add('vcp-ui-integrated-rail');
+    workbench?.querySelector(':scope > .main-content')?.classList.add('vcp-ui-integrated-main');
+    const isEmbedded = shell.element.dataset.embedded === 'true';
+    const embeddedTools = isEmbedded ? document.createElement('div') : null;
+    if (embeddedTools) {
+        embeddedTools.className = 'vcp-ui-integrated-content-toolbar vcp-ui-memo-embedded-tools';
+        workbench?.querySelector(':scope > .sidebar')?.prepend(embeddedTools);
+    }
 
     // 通用：文字按钮 → VCPUI Button（保留原点击逻辑；label 同步）。
     const nextButton = (id, icon, fallbackLabel, variant = 'secondary', size = 'sm') => {
@@ -1677,6 +1695,7 @@ function buildNextMemo() {
             size,
         });
         button.element.classList.add('vcp-ui-memo-action');
+        button.element.dataset.sourceId = id;
         new MutationObserver(() => {
             const text = stripEmojiChars(original.textContent).replace(/^\+/, '').trim();
             if (text) button.update({ label: text });
@@ -1694,6 +1713,7 @@ function buildNextMemo() {
         const button = V.create('IconButton', { icon, label, variant: 'ghost' });
         button.element.title = original.title || label;
         button.element.classList.add('vcp-ui-memo-icon-btn', ...(extraClass ? [extraClass] : []));
+        button.element.dataset.sourceId = id;
         button.element.addEventListener('click', () => original.click());
         original.replaceWith(button.element);
         original.dataset.nextUiReplaced = 'true';
@@ -1712,7 +1732,7 @@ function buildNextMemo() {
         try { V.enhance('Input', search); } catch (error) { console.warn('[Memo] enhance search input:', error); }
         const searchWrap = search.closest('.search-container');
         if (searchWrap) searchWrap.remove();
-        const actionsHost = shell.element.querySelector('.vcp-ui-page-shell-actions');
+        const actionsHost = embeddedTools || shell.element.querySelector('.vcp-ui-page-shell-actions');
         if (actionsHost) {
             actionsHost.prepend(search);
             search.classList.add('vcp-ui-memo-search');
@@ -1731,11 +1751,12 @@ function buildNextMemo() {
         };
         syncScope();
         new MutationObserver(syncScope).observe(scopeBtn, { attributes: true, attributeFilter: ['title'] });
-        const actionsHost = shell.element.querySelector('.vcp-ui-page-shell-actions');
+        const actionsHost = embeddedTools || shell.element.querySelector('.vcp-ui-page-shell-actions');
         if (actionsHost) actionsHost.append(scopeIcon.element);
         scopeBtn.dataset.nextUiReplaced = 'true';
     }
-    nextButton('create-memo-btn', 'add', '新建日记', 'primary');
+    const createMemo = nextButton('create-memo-btn', 'add', '新建日记', 'primary');
+    if (embeddedTools && createMemo?.element) embeddedTools.append(createMemo.element);
 
     // ---- 侧栏 ----
     nextIconButton('refresh-folders-btn', 'refresh', '刷新文件夹');
@@ -1836,10 +1857,63 @@ function buildNextMemo() {
     patchFolderEmpty();
     new MutationObserver(patchFolderEmpty).observe(folderListEl, { childList: true, subtree: true });
 
+    if (memoStartupBlocked) renderNextStartupBlockedState(V);
+
     // Tooltip 通过 VCPUI.create('Tooltip') 创建（由 VCPUI 委托 Web Awesome）。
     document.querySelectorAll('.vcp-ui-memo-icon-btn, .vcp-ui-memo-action').forEach(el => {
         const tip = V.create('Tooltip', { trigger: el, content: el.title || el.getAttribute('aria-label') || '操作', placement: 'top' });
         document.body.append(tip.element);
     });
+}
+
+function renderNextStartupBlockedState(V) {
+    if (!memoStartupBlocked || !V || document.documentElement.dataset.uiMode !== 'next') return;
+
+    currentFolderNameEl.textContent = '记忆尚未连接';
+    document.querySelector('.main-content')?.classList.add('vcp-ui-memo-is-blocked');
+
+    const sidebarNotice = V.create('Alert', {
+        variant: 'warning',
+        title: '需要论坛登录',
+        message: '登录论坛后即可读取日记文件夹。',
+    });
+    sidebarNotice.element.classList.add('vcp-ui-memo-sidebar-notice');
+    folderListEl.replaceChildren(sidebarNotice.element);
+
+    const openForum = V.create('Button', {
+        label: '打开论坛',
+        icon: 'forum',
+        variant: 'primary',
+    });
+    openForum.element.addEventListener('click', () => api?.openForumWindow?.());
+
+    const retry = V.create('Button', {
+        label: '重新检查',
+        icon: 'refresh',
+        variant: 'secondary',
+    });
+    retry.element.addEventListener('click', () => window.location.reload());
+
+    const empty = V.create('EmptyState', {
+        icon: 'database',
+        title: '完成初始化后开始管理记忆',
+        description: memoStartupMessage,
+        actions: [openForum.element, retry.element],
+    });
+    empty.element.classList.add('vcp-ui-memo-empty', 'vcp-ui-memo-startup-state');
+    memoGridEl.replaceChildren(empty.element);
+
+    const batchButton = document.querySelector('[data-source-id="batch-edit-btn"]');
+    if (batchButton) batchButton.hidden = true;
+
+    const createButton = document.querySelector('[data-source-id="create-memo-btn"]');
+    if (createButton) {
+        createButton.disabled = true;
+        createButton.title = '完成论坛登录后才能新建日记';
+    }
+    const memoSearch = document.getElementById('search-memos');
+    if (memoSearch) memoSearch.disabled = true;
+    const folderSearch = document.getElementById('folder-search-input');
+    if (folderSearch) folderSearch.disabled = true;
 }
 window.addEventListener('vcp-ui-runtime-ready', buildNextMemo);

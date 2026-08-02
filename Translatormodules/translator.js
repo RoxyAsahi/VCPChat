@@ -117,19 +117,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 从主进程加载 VCP 配置
     async function loadConfig() {
+        const query = new URLSearchParams(window.location.search);
+        const descriptorConfig = {
+            vcpServerUrl: query.get('vcpServerUrl') || '',
+            vcpApiKey: query.get('vcpApiKey') || ''
+        };
         try {
             const settings = await api.loadSettings();
-            if (settings.vcpServerUrl && settings.vcpApiKey) {
-                vcpServerUrl = settings.vcpServerUrl;
-                vcpApiKey = settings.vcpApiKey;
-                console.log('Translator config loaded successfully:', { vcpServerUrl, vcpApiKey });
+            vcpServerUrl = settings?.vcpServerUrl || descriptorConfig.vcpServerUrl;
+            vcpApiKey = settings?.vcpApiKey || descriptorConfig.vcpApiKey;
+            if (vcpServerUrl && vcpApiKey) {
+                console.log('Translator config loaded successfully:', { vcpServerUrl });
             } else {
-                console.error('Failed to load VCP config from settings.');
-                alert('无法从主程序加载翻译配置。');
+                console.warn('Translator VCP config is not available yet; translation remains disabled until configured.');
             }
         } catch (error) {
             console.error('Error loading settings via IPC:', error);
-            alert('加载配置时出错。');
+            vcpServerUrl = descriptorConfig.vcpServerUrl;
+            vcpApiKey = descriptorConfig.vcpApiKey;
         }
     }
 
@@ -462,6 +467,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             onMinimize: () => api?.minimizeWindow?.(),
             onClose: () => api?.closeWindow?.(),
         });
+        shell.element.classList.add('vcp-ui-translator-shell', 'vcp-ui-integrated-shell');
 
         // 设置入口：换为 VCPUI IconButton（保留原点击逻辑：打开设置弹窗）。
         const legacySettingsBtn = document.getElementById('translator-settings-btn');
@@ -470,8 +476,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             settingsAction = V.create('IconButton', { icon: 'settings', label: '翻译设置', variant: 'ghost' });
             settingsAction.element.title = '翻译设置';
             settingsAction.element.addEventListener('click', () => legacySettingsBtn.click());
-            shell.update({ actions: [settingsAction.element] });
         }
+        const shellTitle = document.createElement('span');
+        shellTitle.className = 'vcp-ui-translator-shell-title';
+        shellTitle.append(Object.assign(document.createElement('strong'), { textContent: '翻译助手' }));
+        if (settingsAction?.element) shellTitle.append(settingsAction.element);
+        const shellWorkspaceTitle = document.createElement('strong');
+        shellWorkspaceTitle.className = 'vcp-ui-translator-shell-workspace-title';
+        shellWorkspaceTitle.textContent = '翻译工作台';
+        shell.update({ title: shellTitle, actions: [shellWorkspaceTitle] });
 
         // 原容器内容移入 shell 内容区，避免双标题。
         const header = container.querySelector('.translator-header');
@@ -485,6 +498,62 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('custom-title-bar')?.remove();
         container.remove();
         document.body.append(shell.element);
+
+        const sourceTextarea = document.getElementById('sourceText');
+        const outputArea = body.querySelector('.output-area');
+        const translatorHeader = body.querySelector('.translator-header');
+        const translatorMain = body.querySelector('.translator-main');
+        const translatorControls = body.querySelector('.translator-controls');
+        if (translatorHeader && translatorMain && translatorControls) {
+            const layout = document.createElement('div');
+            layout.className = 'vcp-ui-translator-layout vcp-ui-integrated-layout';
+            layout.dataset.layout = 'rail';
+
+            translatorHeader.classList.add('vcp-ui-translator-sidebar', 'vcp-ui-integrated-rail');
+            if (settingsAction?.element) {
+                const sidebarTools = document.createElement('div');
+                sidebarTools.className = 'vcp-ui-translator-sidebar-tools';
+                sidebarTools.append(settingsAction.element);
+                translatorHeader.prepend(sidebarTools);
+            }
+
+            const controlLabels = new Map([
+                [modelSelect, '模型'],
+                [targetLanguageSelect, '目标语言'],
+                [customPromptVarInput, '自定义指令'],
+            ]);
+            for (const [control, labelText] of controlLabels) {
+                if (!control?.isConnected) continue;
+                const field = document.createElement('label');
+                field.className = 'vcp-ui-translator-field';
+                const label = document.createElement('span');
+                label.className = 'vcp-ui-translator-field-label';
+                label.textContent = labelText;
+                control.before(field);
+                field.append(label, control);
+            }
+
+            const workspace = document.createElement('section');
+            workspace.className = 'vcp-ui-translator-workspace vcp-ui-integrated-main';
+            translatorHeader.before(layout);
+            layout.append(translatorHeader, workspace);
+            workspace.append(translatorMain);
+        }
+        if (sourceTextarea && outputArea) {
+            const sourcePane = document.createElement('section');
+            sourcePane.className = 'vcp-ui-translation-pane vcp-ui-translation-source';
+            const sourceHeader = document.createElement('div');
+            sourceHeader.className = 'vcp-ui-translation-pane-header';
+            sourceHeader.textContent = '原文';
+            sourceTextarea.before(sourcePane);
+            sourcePane.append(sourceHeader, sourceTextarea);
+
+            outputArea.classList.add('vcp-ui-translation-pane', 'vcp-ui-translation-output');
+            const outputHeader = document.createElement('div');
+            outputHeader.className = 'vcp-ui-translation-pane-header';
+            outputHeader.textContent = '译文';
+            outputArea.prepend(outputHeader);
+        }
 
         // 控件增强（VCPUI.enhance 保留原生 .value/.options 供业务逻辑使用）。
         document.querySelectorAll('.translator-controls select').forEach(select => {

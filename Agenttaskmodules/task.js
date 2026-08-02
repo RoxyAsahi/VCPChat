@@ -1315,6 +1315,11 @@ function buildNextTask() {
         tooltipSelectors: ['#settings-btn', '#refresh-agents-btn', '#create-agent-btn', '#save-agents-btn', '#refresh-tasks-btn', '#create-task-btn', '#save-tasks-btn', '#refresh-delegations-btn']
     });
     if (!shell) return;
+    shell.element.classList.add('vcp-ui-integrated-shell');
+    const taskSurface = shell.element.querySelector('.vcp-ui-page-shell-content > .vcp-ui-page-body');
+    taskSurface?.classList.add('vcp-ui-integrated-layout', 'vcp-ui-integrated-main');
+    taskSurface?.setAttribute('data-layout', 'canvas');
+    const isEmbedded = shell.element.dataset.embedded === 'true';
 
     // 设置入口 → VCPUI IconButton（保留原点击逻辑）。
     const legacySettings = document.getElementById('settings-btn');
@@ -1324,6 +1329,12 @@ function buildNextTask() {
         iconBtn.element.addEventListener('click', () => legacySettings.click());
         legacySettings.replaceWith(iconBtn.element);
         legacySettings.dataset.nextUiReplaced = 'true';
+        if (isEmbedded && taskSurface) {
+            const toolbar = document.createElement('div');
+            toolbar.className = 'vcp-ui-integrated-content-toolbar vcp-ui-task-embedded-tools';
+            toolbar.append(iconBtn.element);
+            taskSurface.prepend(toolbar);
+        }
     }
 
     // 工具栏/弹窗文字按钮 → VCPUI Button（保留原点击逻辑；label/class 同步）。

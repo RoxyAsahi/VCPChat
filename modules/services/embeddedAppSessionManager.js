@@ -153,6 +153,10 @@ function createEmbeddedAppSessionManager({ mainWindow, launchStandalone }) {
                 devTools: true,
             },
         });
+        // Integrated pages paint only their own main surface. Keeping the
+        // native child view transparent lets the parent navigation material
+        // continue behind the embedded sidebar without color approximation.
+        view.setBackgroundColor?.('#00000000');
         const session = { action: appAction, view, bounds: { x: 0, y: 44, width: 1, height: 1 } };
         sessions.set(appAction, session);
         mainWindow.contentView.addChildView(view);

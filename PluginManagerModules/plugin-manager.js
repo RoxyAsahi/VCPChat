@@ -759,12 +759,14 @@ function buildNextPlugin() {
         onMaximize: () => api?.maximizeWindow?.(),
         onClose: () => api?.closeWindow?.(),
     });
+    shell.element.classList.add('vcp-ui-integrated-shell');
 
     // 先挂载到文档再 update，避免 AppPageShell 在未连接时重复创建 WindowControls。
     document.body.append(shell.element);
 
     const body = document.createElement('div');
-    body.className = 'vcp-ui-plugin-body';
+    body.className = 'vcp-ui-plugin-body vcp-ui-integrated-layout vcp-ui-integrated-main';
+    body.dataset.layout = 'canvas';
     while (app.firstChild) body.append(app.firstChild);
     shell.update({ content: body });
 
@@ -797,6 +799,7 @@ function deepenNextPlugin(V) {
         start: [els.searchInput, els.typeFilter, els.stateFilter].filter(Boolean),
         end: [refresh.element],
     });
+    toolbar.element.classList.add('vcp-ui-integrated-content-toolbar');
 
     if (body) body.prepend(toolbar.element);
     oldToolbar?.remove();

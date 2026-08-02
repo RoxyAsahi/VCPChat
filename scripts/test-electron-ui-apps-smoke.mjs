@@ -81,22 +81,22 @@ async function capture(page, name) {
 const EMBEDDED_APPS = [
     {
         id: 'open-note-mini-window', action: 'open-note-mini-window', name: '便签', key: 'notemini.html',
-        shellTitle: 'VCP 便签', minWa: { 'wa-input': 1 }, minHeaderRects: 0, minNativeEnhanced: 0,
+        shellTitle: 'VCP 便签', integrated: true, minWa: { 'wa-input': 1 }, minHeaderRects: 0, minNativeEnhanced: 0,
         legacySelector: '#mini-title-bar', bodyFocus: '.vcp-ui-page-shell-content input',
     },
     {
         id: 'open-translator-window', action: 'open-translator-window', name: '翻译', key: 'translator.html',
-        shellTitle: '翻译助手', minWa: { 'wa-tooltip': 1 }, minHeaderRects: 1, minNativeEnhanced: 2,
+        shellTitle: '翻译助手', integrated: true, minWa: { 'wa-tooltip': 1, 'wa-select': 2 }, minHeaderRects: 0, minNativeEnhanced: 2,
         legacySelector: '.translator-container', bodyFocus: '.vcp-ui-page-shell-content textarea',
     },
     {
         id: 'open-log-window', action: 'open-log-window', name: '日志', key: 'log.html',
-        shellTitle: 'VCP日志中心', minWa: { 'wa-tooltip': 1 }, minHeaderRects: 2, minNativeEnhanced: 1,
+        shellTitle: 'VCP日志中心', integrated: true, minWa: { 'wa-tooltip': 1, 'wa-select': 1 }, minHeaderRects: 0, minNativeEnhanced: 1,
         legacySelector: '.log-app', bodyFocus: '.vcp-ui-page-shell-content input',
     },
     {
         id: 'open-plugin-manager-window', action: 'open-plugin-manager-window', name: '插件', key: 'plugin-manager.html',
-        shellTitle: '插件管理器', minWa: { 'wa-tooltip': 1 }, minHeaderRects: 0, minNativeEnhanced: 2,
+        shellTitle: '插件管理器', integrated: true, minWa: { 'wa-tooltip': 1, 'wa-select': 2 }, minHeaderRects: 0, minNativeEnhanced: 2,
         // The C-group rebuild moved the management toolbar into the content
         // area (Search/Input + selects + refresh), so the shell header holds
         // only the title in embedded mode (no window controls either).
@@ -104,22 +104,22 @@ const EMBEDDED_APPS = [
     },
     {
         id: 'open-task-window', action: 'open-task-window', name: '任务', key: 'task.html',
-        shellTitle: '任务助手', minWa: { 'wa-tooltip': 1 }, minHeaderRects: 1, minNativeEnhanced: 0,
+        shellTitle: '任务助手', integrated: true, minWa: { 'wa-tooltip': 1 }, minHeaderRects: 0, minNativeEnhanced: 0,
         legacySelector: '.app-container', bodyFocus: null,
     },
     {
         id: 'open-notes-window', action: 'open-notes-window', name: '笔记', key: 'notes.html',
-        shellTitle: '我的笔记', minWa: { 'wa-tooltip': 1 }, minHeaderRects: 1, minNativeEnhanced: 1,
+        shellTitle: '我的笔记', integrated: true, minWa: { 'wa-tooltip': 1 }, minHeaderRects: 0, minNativeEnhanced: 1,
         legacySelector: '.container', bodyFocus: '.vcp-ui-page-shell-content input',
     },
     {
         id: 'open-memo-window', action: 'open-memo-window', name: '记忆', key: 'memo.html',
-        shellTitle: '记忆工作台', minWa: { 'wa-tooltip': 1 }, minHeaderRects: 1, minNativeEnhanced: 1,
+        shellTitle: '记忆工作台', integrated: true, minWa: { 'wa-tooltip': 1, 'wa-select': 1 }, minHeaderRects: 0, minNativeEnhanced: 1,
         legacySelector: 'main.main-content', bodyFocus: null,
     },
     {
         id: 'open-forum-window', action: 'open-forum-window', name: '论坛', key: 'forum.html',
-        shellTitle: 'VCP 论坛', minWa: { 'wa-tooltip': 1 }, minHeaderRects: 1, minNativeEnhanced: 1,
+        shellTitle: 'VCP 论坛', integrated: true, minWa: { 'wa-tooltip': 1, 'wa-select': 1 }, minHeaderRects: 0, minNativeEnhanced: 1,
         legacySelector: '.app-container', bodyFocus: '.vcp-ui-page-shell-content input',
     },
 ];
@@ -143,6 +143,7 @@ const NEXT_AUDIT_SCRIPT = () => {
         '.vcp-ui-page-shell-header :is(button, select, input, wa-button, wa-select, wa-input), .vcp-ui-window-controls button'
     )].filter(el => el.getClientRects().length && getComputedStyle(el).display !== 'none');
     const rects = headerControls.map(visibleRect);
+    const windowControlButtons = [...document.querySelectorAll('.vcp-ui-window-controls :is(button, wa-button)')];
     const focusable = [...document.querySelectorAll('.vcp-ui-page-shell-content :is(input, textarea, select, wa-input, wa-select), .vcp-ui-page-shell-header :is(button, wa-button)')]
         .filter(el => !el.disabled && el.getClientRects().length && getComputedStyle(el).display !== 'none');
     return {
@@ -152,6 +153,14 @@ const NEXT_AUDIT_SCRIPT = () => {
         bodyScope: document.body.classList.contains('vcp-ui-scope'),
         shellTitle: document.querySelector('.vcp-ui-page-shell-title')?.textContent?.trim() || '',
         shellEmbedded: document.querySelector('.vcp-ui-page-shell')?.dataset.embedded || '',
+        integratedShell: document.querySelector('.vcp-ui-page-shell')?.classList.contains('vcp-ui-integrated-shell') || false,
+        shellHeaderDisplay: getComputedStyle(document.querySelector('.vcp-ui-page-shell-header')).display,
+        integratedMain: (() => {
+            const main = document.querySelector('.vcp-ui-integrated-main');
+            if (!main) return null;
+            const style = getComputedStyle(main);
+            return { radius: style.borderTopLeftRadius, borderTop: style.borderTopStyle, visible: visibleRect(main).visible };
+        })(),
         vcpEmbeddedFlag: document.documentElement.dataset.vcpEmbeddedApp || '',
         wa: {
             'wa-button': document.querySelectorAll('wa-button').length,
@@ -166,11 +175,16 @@ const NEXT_AUDIT_SCRIPT = () => {
         overflowX: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
         overflowY: document.documentElement.scrollHeight > document.documentElement.clientHeight + 1,
         headerRects: rects,
+        windowControls: {
+            count: windowControlButtons.length,
+            allNoDrag: windowControlButtons.every(element => getComputedStyle(element).webkitAppRegion === 'no-drag'),
+        },
         headerOverlap: rects.some((a, i) => rects.some((b, j) => i < j && a.visible && b.visible
             && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top)),
         allHeaderVisible: rects.length > 0 && rects.every(r => r.visible),
         focusables: focusable.length,
         bodyTextLength: (document.querySelector('.vcp-ui-page-shell-content')?.textContent || '').trim().length,
+        bodyBackgroundColor: getComputedStyle(document.body).backgroundColor,
     };
 };
 
@@ -251,6 +265,12 @@ async function auditNextPage(page, app, captureName, { expectEmbedded = true } =
     assert.ok(state.hasShell, `${app.name} AppPageShell missing`);
     assert.equal(state.shellEmbedded, expectEmbedded ? 'true' : 'false', `${app.name} embedded flag wrong: ${JSON.stringify(state)}`);
     assert.equal(state.bodyScope, true, `${app.name} body not vcp-ui-scope`);
+    if (expectEmbedded && app.integrated) {
+        assert.equal(state.integratedShell, true, `${app.name} must use the shared integrated shell: ${JSON.stringify(state)}`);
+        assert.equal(state.shellHeaderDisplay, 'none', `${app.name} embedded duplicate header must be hidden: ${JSON.stringify(state)}`);
+        assert.ok(state.integratedMain?.visible, `${app.name} integrated main surface must be visible: ${JSON.stringify(state)}`);
+        assert.notEqual(state.integratedMain?.radius, '0px', `${app.name} integrated main surface needs the shared top-left radius: ${JSON.stringify(state)}`);
+    }
     if (app.shellTitle) assert.equal(state.shellTitle, app.shellTitle, `${app.name} shell title wrong: ${JSON.stringify(state)}`);
     for (const [tag, count] of Object.entries(app.minWa || {})) {
         assert.ok(state.wa[tag] >= count, `${app.name} needs >= ${count} <${tag}> but found ${state.wa[tag]}: ${JSON.stringify(state)}`);
@@ -259,7 +279,14 @@ async function auditNextPage(page, app, captureName, { expectEmbedded = true } =
         assert.ok(state.nativeEnhanced >= app.minNativeEnhanced, `${app.name} needs >= ${app.minNativeEnhanced} VCPUI-enhanced native controls but found ${state.nativeEnhanced}: ${JSON.stringify(state)}`);
     }
     assert.equal(state.overflowX, false, `${app.name} horizontal overflow: ${JSON.stringify(state)}`);
+    if (app.requireOpaqueBody) {
+        assert.notEqual(state.bodyBackgroundColor, 'rgba(0, 0, 0, 0)', `${app.name} root background must not expose Electron's black backing surface: ${JSON.stringify(state)}`);
+    }
     assert.ok(state.headerRects.length >= (app.minHeaderRects || 0), `${app.name} expected >= ${app.minHeaderRects || 0} header controls but found ${state.headerRects.length}: ${JSON.stringify(state)}`);
+    if (!expectEmbedded) {
+        assert.equal(state.windowControls.count, 3, `${app.name} must expose exactly three window controls: ${JSON.stringify(state)}`);
+        assert.equal(state.windowControls.allNoDrag, true, `${app.name} window controls are inside the draggable title region: ${JSON.stringify(state)}`);
+    }
     if (state.headerRects.length) {
         assert.ok(state.allHeaderVisible, `${app.name} header controls not all visible: ${JSON.stringify(state)}`);
         assert.equal(state.headerOverlap, false, `${app.name} header controls overlap: ${JSON.stringify(state)}`);
@@ -458,6 +485,18 @@ try {
     assert.ok(settingsState.footerClass.includes('vcp-ui-settings-action-bar'), `save bar not enhanced: ${settingsState.footerClass}`);
     assert.ok(settingsState.hasSearch, 'settings search not injected');
     assert.equal(settingsState.footerState, 'dirty', `save bar should be dirty after input: ${settingsState.footerState}`);
+    const settingsSelectState = await page.evaluate(() => {
+        const modal = document.getElementById('globalSettingsModal');
+        return {
+            native: modal?.querySelectorAll('select.vcp-ui-select-source').length || 0,
+            proxies: modal?.querySelectorAll('wa-select.vcp-ui-select-proxy').length || 0,
+            visibleNative: [...(modal?.querySelectorAll('select.vcp-ui-select-source') || [])]
+                .filter(select => !select.hidden && getComputedStyle(select).display !== 'none').length,
+        };
+    });
+    assert.ok(settingsSelectState.native > 0, `global settings Select sources missing: ${JSON.stringify(settingsSelectState)}`);
+    assert.equal(settingsSelectState.proxies, settingsSelectState.native, `global settings Select proxies mismatch: ${JSON.stringify(settingsSelectState)}`);
+    assert.equal(settingsSelectState.visibleNative, 0, `global settings native Select is still visible: ${JSON.stringify(settingsSelectState)}`);
     await capture(page, 'main-settings-next.png');
     // Focus lands on the first field inside the open modal.
     const settingsFocus = await page.evaluate(() => {
@@ -489,7 +528,7 @@ try {
 
     // 5. Standalone windows opened through the app's own launch path.
     for (const standalone of [
-        { action: 'open-canvas-window', key: 'canvas.html', name: '协同Canvas', shellTitle: '协同 Canvas', minWa: { 'wa-tooltip': 1 }, minNativeEnhanced: 1, legacy: '.editor-container' },
+        { action: 'open-canvas-window', key: 'canvas.html', name: '协同Canvas', shellTitle: '协同 Canvas', minWa: { 'wa-tooltip': 1 }, minNativeEnhanced: 1, legacy: '.editor-container', requireOpaqueBody: true },
         { action: 'open-rag-observer-window', key: 'RAG_Observer.html', name: '监听RAG', shellTitle: 'VCP 监听', minWa: { 'wa-tooltip': 0 }, minNativeEnhanced: 0, legacy: '.main-wrapper' },
     ]) {
         const label = `next:${standalone.name}`;
@@ -500,8 +539,8 @@ try {
         const errors = collectRealErrors(label);
         assert.equal(errors.length, 0, `${standalone.name} renderer errors:\n${errors.slice(0, 8).join('\n')}`);
         summary.push({ surface: standalone.name, mode: 'next', pass: true, lucide: 0, note: `独立窗口 shell 重建通过（wa-tooltip=${standalone.minWa['wa-tooltip']}+，native增强>=${standalone.minNativeEnhanced || 0}）` });
-        await standalonePage.evaluate(() => { try { window.close(); } catch { /* best effort */ } });
-        await sleep(300);
+        await standalonePage.click('.vcp-ui-window-control-close');
+        await ensureChildPageClosed(browser, standalone.key, Date.now() + timeoutMs, standalone.name);
     }
 
     // 6. Classic mode: embedded pages must keep the legacy DOM and never mount
@@ -592,12 +631,11 @@ try {
 }
 
 // ── 8. VchatManager standalone sub-app audit ───────────────────────────────
-// VchatManager is launched as its own Electron entry. It is registered as a
-// rebuilt page (runtime bootstrap included) but, at the audit baseline, its
-// main.js neither passes a uiMode query nor exposes loadSettings, so the
-// document always resolves to classic (see defect D-03 in docs/ui-visual-audit-2026-08-02.md).
+// VchatManager is launched as its own Electron entry. Its main process reads
+// the shared settings file and passes uiMode explicitly to the renderer.
 {
     const vchatManagerAppData = await fs.mkdtemp(path.join(os.tmpdir(), 'vcpchat-vchatmanager-'));
+    await fs.writeFile(path.join(vchatManagerAppData, 'settings.json'), JSON.stringify(nextSettings), 'utf8');
     const subPort = await freePort();
     const subStderr = { value: '' };
     const subChild = spawn(electron, ['VchatManager', `--remote-debugging-port=${subPort}`], {
@@ -638,14 +676,15 @@ try {
             bodyTextLength: (document.body?.textContent || '').trim().length,
         }));
         await capture(subPage, 'next-VchatManager.png');
+        assert.equal(vmState.uiMode, 'next', `VchatManager must inherit next mode: ${JSON.stringify(vmState)}`);
+        assert.equal(vmState.controllerMode, 'next', `VchatManager controller mode mismatch: ${JSON.stringify(vmState)}`);
+        assert.equal(vmState.hasShell, true, `VchatManager next shell missing: ${JSON.stringify(vmState)}`);
+        assert.equal(vmState.bodyScope, true, `VchatManager next scope missing: ${JSON.stringify(vmState)}`);
         summary.push({
-            surface: '数据VchatManager', mode: vmState.uiMode, pass: false,
+            surface: '数据VchatManager', mode: vmState.uiMode, pass: true,
             lucide: 0,
-            note: `uiMode=${vmState.uiMode}，无 ?uiMode 参数且无 loadSettings（api=${vmState.hasAPI}，loadSettings=${vmState.hasLoadSettings}），next 重建从未触发 → 缺陷 D-03`,
+            note: `共享 settings uiMode 已传入（api=${vmState.hasAPI}，shell=${vmState.hasShell}）`,
         });
-        if (vmState.uiMode === 'classic' || !vmState.hasShell) {
-            console.warn(`[VchatManager] next-mode wiring missing at baseline: uiMode=${vmState.uiMode}, shell=${vmState.hasShell}, loadSettings=${vmState.hasLoadSettings} (see defect D-03)`);
-        }
         assert.equal(subErrors.length, 0, `VchatManager renderer errors:\n${subErrors.slice(0, 8).join('\n')}`);
     } catch (error) {
         console.error(`VchatManager audit failed:\n${error?.stack || error}`);

@@ -40,6 +40,15 @@ function buildNextMiniNote({ titleInput, contentInput, saveStatus, onSave, onClo
         onClose: onClose,
         content: body,
     });
+    shell.element.classList.add('vcp-ui-integrated-shell');
+    body.classList.add('vcp-ui-integrated-layout', 'vcp-ui-integrated-main');
+    body.dataset.layout = 'canvas';
+    if (shell.element.dataset.embedded === 'true') {
+        const toolbar = document.createElement('div');
+        toolbar.className = 'vcp-ui-integrated-content-toolbar vcp-ui-mini-note-toolbar';
+        toolbar.append(status);
+        body.prepend(toolbar);
+    }
 
     document.body.replaceChildren(shell.element);
     document.body.classList.add('vcp-ui-scope');

@@ -2222,6 +2222,7 @@ function buildNextNotes() {
     const shell = window.VCPPageRebuild.rebuild({
         title: '我的笔记',
         containerSelector: '.container',
+        bodyClass: 'vcp-ui-page-body vcp-ui-notes-workbench',
         navSelector: '#custom-title-bar',
         actionSelectors: ['#preview-toggle-btn'],
         onMinimize: () => api?.minimizeWindow?.(),
@@ -2235,6 +2236,25 @@ function buildNextNotes() {
         tooltipSelectors: ['#preview-toggle-btn']
     });
     if (!shell) return;
+    shell.element.classList.add('vcp-ui-notes-shell', 'vcp-ui-integrated-shell');
+    const notesWorkbench = shell.element.querySelector('.vcp-ui-notes-workbench');
+    notesWorkbench?.classList.add('vcp-ui-integrated-layout');
+    notesWorkbench?.setAttribute('data-layout', 'rail');
+    notesWorkbench?.querySelector(':scope > .sidebar')?.classList.add('vcp-ui-integrated-rail');
+    notesWorkbench?.querySelector(':scope > .main-content')?.classList.add('vcp-ui-integrated-main');
+
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput?.isConnected && !searchInput.closest('.vcp-ui-notes-search')) {
+        const searchField = document.createElement('div');
+        searchField.className = 'vcp-ui-notes-search';
+        const searchIcon = document.createElement('span');
+        searchIcon.className = 'vcp-ui-icon vcp-ui-notes-search-icon';
+        searchIcon.setAttribute('aria-hidden', 'true');
+        searchIcon.textContent = 'search';
+        searchInput.before(searchField);
+        searchField.append(searchIcon, searchInput);
+        queueMicrotask(() => window.VCPIcons?.set?.(searchIcon, 'search'));
+    }
 
     // 把图标按钮替换为 VCPUI IconButton（保留原点击逻辑）。
     const replaceIconButton = (id, icon, label) => {
@@ -2274,7 +2294,10 @@ function buildNextNotes() {
     };
 
     // 预览切换按钮（shell 动作区）。
-    replaceIconButton('preview-toggle-btn', 'panel_right', '切换预览区');
+    const previewToggle = replaceIconButton('preview-toggle-btn', 'panel_right', '切换预览区');
+    if (previewToggle?.element) {
+        document.querySelector('.note-actions')?.prepend(previewToggle.element);
+    }
 
     // 编辑器查找栏按钮。
     replaceIconButton('editorFindPrev', 'chevron_up', '上一个匹配');

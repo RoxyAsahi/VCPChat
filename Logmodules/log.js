@@ -656,6 +656,7 @@ function buildNextLog() {
         onMaximize: () => api?.maximizeWindow?.(),
         onClose: () => api?.closeWindow?.(),
     });
+    shell.element.classList.add('vcp-ui-integrated-shell');
 
     // 先挂载到文档再 update，避免 AppPageShell 在未连接时重复创建 WindowControls。
     document.body.append(shell.element);
@@ -667,10 +668,12 @@ function buildNextLog() {
     });
     const clear = V.create('Button', { label: '清空日志', variant: 'danger', size: 'sm' });
     clear.element.addEventListener('click', openClearConfirmModal);
-    shell.update({ actions: [refresh.element, clear.element] });
+    const isEmbedded = shell.element.dataset.embedded === 'true';
+    if (!isEmbedded) shell.update({ actions: [refresh.element, clear.element] });
 
     const body = document.createElement('div');
-    body.className = 'vcp-ui-log-body';
+    body.className = 'vcp-ui-log-body vcp-ui-integrated-layout';
+    body.dataset.layout = 'canvas';
     while (app.firstChild) body.append(app.firstChild);
     shell.update({ content: body });
 
@@ -685,17 +688,18 @@ function buildNextLog() {
         if (input) { try { V.enhance('Input', input); } catch (error) { console.warn('[Log] enhance input:', error); } }
     });
 
-    deepenNextLog(V, refresh, clear);
+    body.classList.add('vcp-ui-integrated-main');
+    deepenNextLog(V, refresh, clear, isEmbedded);
 }
 
 // --- 新版 UI：深加工 —— VCPUI 管理工具栏 + keyed 行渲染 ---
-function deepenNextLog(V, refreshButton, clearButton) {
+function deepenNextLog(V, refreshButton, clearButton, isEmbedded) {
     const oldControlPanel = document.querySelector('.control-panel');
     const body = document.querySelector('.vcp-ui-log-body');
     nextLogRender = true;
 
-    // 预筛选从 chip 按钮收敛为 VCPUI Select（原生 select + V.enhance，
-    // 规避 WA select 变更事件递归：见 vcp-ui.js selectFactory WA 分支）。
+    // 预筛选从 chip 按钮收敛为 VCPUI Select；next mode 由 Select Proxy
+    // 显示 Web Awesome 控件，原生 select 继续承载既有业务监听器。
     const presetSelect = document.createElement('select');
     presetSelect.className = 'vcp-ui-preset-select';
     presetSelect.setAttribute('aria-label', '预筛选');
@@ -731,11 +735,14 @@ function deepenNextLog(V, refreshButton, clearButton) {
     const copy = V.create('Button', { label: '复制可见', variant: 'secondary', size: 'sm', icon: 'content_copy' });
     copy.element.addEventListener('click', copyVisibleLogs);
 
+    const toolbarEnd = [nextOrderButton.element, copy.element];
+    if (isEmbedded) toolbarEnd.push(refreshButton.element, clearButton.element);
     const toolbar = V.create('Toolbar', {
         label: '日志工具栏',
         start: [elements.filterInput, presetSelect, elements.lineLimitInput],
-        end: [nextOrderButton.element, copy.element],
+        end: toolbarEnd,
     });
+    toolbar.element.classList.add('vcp-ui-integrated-content-toolbar');
 
     if (body) body.prepend(toolbar.element);
     oldControlPanel?.remove();
