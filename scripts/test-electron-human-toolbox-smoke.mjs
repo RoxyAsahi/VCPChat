@@ -12,6 +12,14 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const electron = path.join(root, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron');
 const timeoutMs = 30_000;
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+const captureDir = path.join(root, 'screenshots');
+
+async function capture(page, name) {
+    await fs.mkdir(captureDir, { recursive: true });
+    const filePath = path.join(captureDir, name);
+    await page.screenshot({ path: filePath, fullPage: true });
+    return filePath;
+}
 
 async function freePort() {
     const server = net.createServer();
@@ -98,16 +106,54 @@ try {
     assert.ok(gridState.waInputs >= 1, `search is not Web Awesome-backed: ${JSON.stringify(gridState)}`);
     assert.equal(gridState.workflowVisible, true, `workflow action is hidden: ${JSON.stringify(gridState)}`);
     assert.ok(gridState.lucideIcons >= 2, `Lucide icons missing: ${JSON.stringify(gridState)}`);
+
+    // Focus + keyboard main flow: the search control takes focus and Tab moves.
+    const searchFocused = await page.evaluate(() => {
+        const search = document.querySelector('wa-input.tool-search-input');
+        if (!search) return { focused: false };
+        search.focus();
+        const active = document.activeElement;
+        const inShadow = active?.shadowRoot?.contains(search) || active === search;
+        return { focused: inShadow || active === search, activeTag: active?.tagName || '' };
+    });
+    assert.ok(searchFocused.focused, `search input did not take focus: ${JSON.stringify(searchFocused)}`);
+    await page.keyboard.press('Tab');
+    const tabMoved = await page.evaluate(() => {
+        const active = document.activeElement;
+        const search = document.querySelector('wa-input.tool-search-input');
+        return document.activeElement !== search && document.activeElement !== search?.shadowRoot?.activeElement;
+    });
+    assert.equal(tabMoved, true, 'Tab did not move focus away from the search input');
+
+    // Empty state: a non-matching query hides every card and the badge reports 0.
+    await page.evaluate(() => {
+        const search = document.querySelector('wa-input.tool-search-input');
+        search.value = 'zzz-no-match-query-zzz';
+        search.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+    });
+    await sleep(150);
+    const emptyState = await page.evaluate(() => ({
+        visibleCards: [...document.querySelectorAll('.tool-card')].filter(card => getComputedStyle(card).display !== 'none').length,
+        badge: document.querySelector('.tool-count-badge')?.textContent || '',
+    }));
+    assert.equal(emptyState.visibleCards, 0, `empty-state query should hide all cards: ${JSON.stringify(emptyState)}`);
+    assert.match(emptyState.badge, /匹配\s*0/, `empty-state badge should report 0 matches: ${JSON.stringify(emptyState)}`);
+    await capture(page, 'human-toolbox-empty.png');
+    // Clear the filter.
+    await page.evaluate(() => {
+        const search = document.querySelector('wa-input.tool-search-input');
+        search.value = '';
+        search.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+    });
+    await sleep(150);
+    assert.equal(await page.$eval('.tool-count-badge', el => el.textContent.trim().startsWith('共')), true, 'search filter did not clear');
     await page.evaluate(() => {
         window.__workflowSmokeClicks = 0;
         window.openWorkflowEditor = () => { window.__workflowSmokeClicks += 1; };
     });
     await page.$eval('#workflow-btn-next', element => element.click());
     assert.equal(await page.evaluate(() => window.__workflowSmokeClicks), 1, 'workflow action is not wired');
-    if (process.env.VCP_UI_CAPTURE_DIR) {
-        await fs.mkdir(process.env.VCP_UI_CAPTURE_DIR, { recursive: true });
-        await page.screenshot({ path: path.join(process.env.VCP_UI_CAPTURE_DIR, 'human-toolbox-tools.png'), fullPage: true });
-    }
+    await capture(page, 'human-toolbox-tools.png');
 
     await page.$eval('.tool-card', element => element.click());
     await page.waitForFunction(() => getComputedStyle(document.getElementById('tool-detail-view')).display === 'block');
@@ -118,6 +164,29 @@ try {
     }));
     assert.ok(detailState.title, `tool detail title missing: ${JSON.stringify(detailState)}`);
     assert.ok(detailState.controls > 0 && detailState.enhanced > 0, `dynamic form controls were not enhanced: ${JSON.stringify(detailState)}`);
+    await capture(page, 'human-toolbox-detail.png');
+
+    // Long text in a form textarea must not break the page layout.
+    const longText = await page.evaluate(() => {
+        const target = document.querySelector('#tool-form textarea');
+        if (!target) return { applied: false };
+        target.value = '长文本'.repeat(800);
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+        const ta = target.closest('.vcp-ui-textarea-wrap') || target;
+        const rect = target.getBoundingClientRect();
+        return {
+            applied: true,
+            scrollable: target.scrollHeight > target.clientHeight + 1,
+            pageOverflowX: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+            formOverflowX: document.getElementById('tool-form').scrollWidth > document.getElementById('tool-form').clientWidth + 1,
+            taHeight: Math.round(rect.height),
+        };
+    });
+    if (longText.applied) {
+        assert.equal(longText.pageOverflowX, false, `page overflows horizontally after long text: ${JSON.stringify(longText)}`);
+        assert.equal(longText.formOverflowX, false, `tool form overflows after long text: ${JSON.stringify(longText)}`);
+        assert.ok(longText.scrollable, `textarea should scroll with long text: ${JSON.stringify(longText)}`);
+    }
 
     await page.$eval('#back-to-grid-btn', element => element.click());
     await page.$eval('#manage-tab-btn', element => element.click());
@@ -138,9 +207,7 @@ try {
     });
     assert.deepEqual(manageState.tags, ['WA-INPUT', 'WA-BUTTON', 'WA-BUTTON'], `manager controls are not Web Awesome-backed: ${JSON.stringify(manageState)}`);
     assert.ok(manageState.visible && manageState.aligned && !manageState.overlap, `manager toolbar layout invalid: ${JSON.stringify(manageState)}`);
-    if (process.env.VCP_UI_CAPTURE_DIR) {
-        await page.screenshot({ path: path.join(process.env.VCP_UI_CAPTURE_DIR, 'human-toolbox-manage.png'), fullPage: true });
-    }
+    await capture(page, 'human-toolbox-manage.png');
 
     await page.setViewport({ width: 680, height: 760, deviceScaleFactor: 1 });
     await page.$eval('#tool-tab-btn', element => element.click());
@@ -149,12 +216,10 @@ try {
         cards: document.querySelectorAll('.tool-card').length,
     }));
     assert.equal(narrowState.overflowX, false, `narrow layout overflows: ${JSON.stringify(narrowState)}`);
-    if (process.env.VCP_UI_CAPTURE_DIR) {
-        await page.screenshot({ path: path.join(process.env.VCP_UI_CAPTURE_DIR, 'human-toolbox-narrow.png'), fullPage: true });
-    }
+    await capture(page, 'human-toolbox-narrow.png');
     assert.equal(rendererErrors.length, 0, `renderer errors:\n${rendererErrors.join('\n')}`);
 
-    console.log(`Electron Human ToolBox smoke passed (${gridState.cards} tools, detail/manage/narrow verified).`);
+    console.log(`Electron Human ToolBox smoke passed (${gridState.cards} tools, focus/keyboard/empty/long-text/detail/manage/narrow verified).`);
 } catch (error) {
     console.error(`Electron Human ToolBox smoke failed:\n${error?.stack || error}`);
     process.exitCode = 1;

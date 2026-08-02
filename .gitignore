@@ -61,3 +61,7 @@ loudness_cache.db-shm
 
 # Electron renderer-ready marker written by UI smoke tests
 /.vcp_ready
+
+# UI QA screenshots captured by test-electron-*-smoke.mjs (referenced from
+# docs/ui-visual-audit-*.md; never commit binary baselines)
+/screenshots/

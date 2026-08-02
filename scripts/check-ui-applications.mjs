@@ -40,6 +40,15 @@ const CDN_HOSTS = [
 ];
 const CDN_SCHEMES = [/^https?:[/\\]{2}/i];
 
+// Lucide is part of the design-system icon layer. It enters only through the
+// two sanctioned entry points (the main renderer and the Human ToolBox); a
+// business page must reach icons through VCPUI (material-symbols fallback or
+// the adapter), never by loading the lucide runtime itself.
+const LUCIDE_SANCTIONED_ENTRIES = new Set([
+    path.normalize('main.html'),
+    path.normalize('VCPHumanToolBox/index.html'),
+]);
+
 const failures = [];
 
 function filesIn(directory) {
@@ -52,42 +61,48 @@ function filesIn(directory) {
 }
 
 function scanFile(file, source) {
+    const relative = path.relative(root, file);
     // <wa-*/> custom elements (also catches self-closing and multi-line tags).
     for (const match of source.matchAll(/<(\/)?\s*wa-[\w-]+/g)) {
-        failures.push(`${path.relative(root, file)}: direct <${match[0].slice(1)}> usage is only allowed inside the WebAwesomeAdapter or showcase`);
+        failures.push(`${relative}: direct <${match[0].slice(1)}> usage is only allowed inside the WebAwesomeAdapter or showcase`);
         if (failures.length > 60) return;
     }
     // Bare --wa-* design tokens.
     for (const match of source.matchAll(/--wa-[\w-]+/g)) {
-        failures.push(`${path.relative(root, file)}: bare --wa-* token (${match[0]}) must be mapped in styles/ui-system/webawesome-adapter.css`);
+        failures.push(`${relative}: bare --wa-* token (${match[0]}) must be mapped in styles/ui-system/webawesome-adapter.css`);
         if (failures.length > 60) return;
     }
     // Third-party package references.
     if (/@awesome\.me\/webawesome/.test(source)) {
-        failures.push(`${path.relative(root, file)}: must not reference the Web Awesome package; use VCPUI/WebAwesomeAdapter instead`);
+        failures.push(`${relative}: must not reference the Web Awesome package; use VCPUI/WebAwesomeAdapter instead`);
     }
     // The adapter global is an internal implementation detail. Business pages
     // must reach Web Awesome only through VCPUI.
     if (/VCPWebAwesome/.test(source)) {
-        failures.push(`${path.relative(root, file)}: must not reference VCPWebAwesome directly; use VCPUI (业务 → VCPUI → WebAwesomeAdapter)`);
+        failures.push(`${relative}: must not reference VCPWebAwesome directly; use VCPUI (业务 → VCPUI → WebAwesomeAdapter)`);
+    }
+    // Lucide runtime references are only allowed in the sanctioned entries.
+    if (!LUCIDE_SANCTIONED_ENTRIES.has(path.normalize(relative))
+        && (/(?:lucide\/dist|window\.lucide|import\([^)]*lucide|lucide\.createElement)/.test(source))) {
+        failures.push(`${relative}: must not load or reference the lucide runtime directly; icons flow through VCPUI (main.html / VCPHumanToolBox are the only sanctioned entries)`);
     }
     // Public CDN URLs (https/http hosts that are not the app itself).
     for (const match of source.matchAll(/(https?:)?[/\\]{2}[\w.-]*(unpkg|jsdelivr|cdnjs|esm\.sh)[^\s"'`)]*/gi)) {
-        failures.push(`${path.relative(root, file)}: public CDN URL "${match[0]}" is forbidden`);
+        failures.push(`${relative}: public CDN URL "${match[0]}" is forbidden`);
     }
     for (const line of source.split(/\r?\n/)) {
         const urlMatch = line.match(/(https?:[/\\]{2}[^\s"'`)]+)/);
         if (!urlMatch) continue;
         if (CDN_HOSTS.some(re => re.test(urlMatch[1]))) {
-            failures.push(`${path.relative(root, file)}: public CDN URL "${urlMatch[1]}" is forbidden`);
+            failures.push(`${relative}: public CDN URL "${urlMatch[1]}" is forbidden`);
         }
         if (/^https?:/i.test(line.trim()) && /@awesome\.me/i.test(line)) {
-            failures.push(`${path.relative(root, file)}: Web Awesome must load from the vendored vendor/webawesome copy, not a CDN`);
+            failures.push(`${relative}: Web Awesome must load from the vendored vendor/webawesome copy, not a CDN`);
         }
     }
     // Unregistered ::part() usage (parts are only registered in the adapter stylesheet).
     if (source.includes('::part(')) {
-        failures.push(`${path.relative(root, file)}: ::part() styling must live only in styles/ui-system/webawesome-adapter.css`);
+        failures.push(`${relative}: ::part() styling must live only in styles/ui-system/webawesome-adapter.css`);
     }
 }
 
