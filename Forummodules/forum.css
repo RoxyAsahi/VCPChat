@@ -1202,3 +1202,68 @@ body.light-theme .emoticon-panel {
     overflow-y: hidden;
     padding: 0.5em 0;
 }
+
+/* --- next 模式深加工：VCPUI 工具栏 + keyed 瀑布流 + 状态区 --- */
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-forum-body {
+    min-width: 0;
+    min-height: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    padding: var(--vcp-ui-space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--vcp-ui-space-2);
+    overflow-y: auto;
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-forum-body .vcp-ui-toolbar {
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-forum-body .vcp-ui-toolbar .vcp-ui-toolbar-group {
+    flex-wrap: wrap;
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-forum-body .vcp-ui-toolbar input.vcp-ui-native-input,
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-forum-body .vcp-ui-toolbar .vcp-ui-input-wrap {
+    width: 240px;
+    max-width: 100%;
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-forum-body .vcp-ui-toolbar select.vcp-ui-select {
+    width: auto;
+    min-width: 140px;
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .view-container {
+    display: none;
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .view-container.active {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope #forum-view {
+    overflow-y: auto;
+    padding-bottom: var(--vcp-ui-space-4);
+}
+
+/* 帖子卡片在 next 模式保持紧凑：弱化玻璃装饰，信息密度优先 */
+html[data-ui-mode="next"] body.vcp-ui-scope .post-card {
+    background: var(--vcp-ui-surface-soft);
+    border: 1px solid var(--vcp-ui-border);
+    box-shadow: none;
+    backdrop-filter: none;
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-forum-state {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--vcp-ui-space-3);
+    padding: var(--vcp-ui-space-6) var(--vcp-ui-space-3);
+}

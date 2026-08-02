@@ -19,6 +19,83 @@ let agentsList = []; // List of all agents with their names
 let emoticonLibrary = []; // Emoticon library for URL fixing
 let lastRenderedPostKeys = '';
 
+// next 模式演示层状态。
+let nextForumRender = false;
+let nextForumToolbar = null;
+
+function isNextUiMode() {
+    return document.documentElement.dataset.uiMode === 'next'
+        && window.VCPUiModeController?.getCurrentMode() === 'next';
+}
+
+// 稳定 keyed 协调：按 key 增量更新容器子节点（复用已有 DOM，不整页 innerHTML）。
+function reconcileByKey(container, items, keyFn, createFn) {
+    const current = new Map();
+    for (const child of container.children) {
+        if (child.dataset?.key) current.set(child.dataset.key, child);
+    }
+    const seen = new Set();
+    let prevSibling = null;
+    for (let index = items.length - 1; index >= 0; index -= 1) {
+        const key = keyFn(items[index]);
+        seen.add(key);
+        let element = current.get(key);
+        if (!element) {
+            element = createFn(items[index], key);
+            element.dataset.key = key;
+        }
+        if (prevSibling) container.insertBefore(element, prevSibling);
+        else container.appendChild(element);
+        prevSibling = element;
+    }
+    for (const [key, element] of current) {
+        if (!seen.has(key)) element.remove();
+    }
+}
+
+function clearForumStateNodes() {
+    masonryContainer?.querySelectorAll('[data-forum-state]').forEach(node => node.remove());
+}
+
+function renderForumState(title, description, icon = 'inbox', retry = null) {
+    const V = window.VCPUI;
+    clearForumStateNodes();
+    const wrap = document.createElement('div');
+    wrap.className = 'vcp-ui-forum-state';
+    wrap.dataset.forumState = 'state';
+    const empty = V.create('EmptyState', { icon, title, description });
+    wrap.append(empty.element);
+    if (retry) {
+        const retryBtn = V.create('Button', { label: '重试', variant: 'secondary', icon: 'refresh' });
+        retryBtn.element.addEventListener('click', () => retry());
+        wrap.append(retryBtn.element);
+    }
+    masonryContainer.append(wrap);
+}
+
+function renderForumLoading() {
+    const V = window.VCPUI;
+    clearForumStateNodes();
+    const wrap = document.createElement('div');
+    wrap.className = 'vcp-ui-forum-state';
+    wrap.dataset.forumState = 'state';
+    wrap.append(V.create('Skeleton', { variant: 'text', lines: 4 }).element);
+    masonryContainer.append(wrap);
+}
+
+function renderForumError(message) {
+    const V = window.VCPUI;
+    clearForumStateNodes();
+    const wrap = document.createElement('div');
+    wrap.className = 'vcp-ui-forum-state';
+    wrap.dataset.forumState = 'state';
+    const alert = V.create('Alert', { title: '加载失败', message, variant: 'danger' });
+    const retry = V.create('Button', { label: '重试', variant: 'secondary', icon: 'refresh' });
+    retry.element.addEventListener('click', () => loadPosts());
+    wrap.append(alert.element, retry.element);
+    masonryContainer.append(wrap);
+}
+
 // ========== DOM Elements ==========
 const loginView = document.getElementById('login-view');
 const forumView = document.getElementById('forum-view');
@@ -132,6 +209,10 @@ function switchView(viewName) {
         forumView.classList.add('active');
         // 论坛视图显示后再做一次轻量重渲染，避免隐藏状态下读取宽度
         setTimeout(() => renderCurrentFilteredPosts({ force: false }), 50);
+    }
+    // next 模式：工具栏仅在论坛视图显示。
+    if (isNextUiMode() && nextForumToolbar) {
+        nextForumToolbar.element.hidden = viewName !== 'forum';
     }
 }
 
@@ -556,6 +637,7 @@ settingsModal.addEventListener('click', e => {
 // ========== Masonry Posts Logic ==========
 async function loadPosts() {
     refreshBtn.classList.add('spinning');
+    if (isNextUiMode()) renderForumLoading();
 
     // The API call promise will handle data processing as soon as it resolves.
     const apiCallPromise = apiFetch('/posts')
@@ -569,6 +651,7 @@ async function loadPosts() {
         .catch(error => {
             // Log errors immediately as well.
             console.error('Load posts failed:', error);
+            if (isNextUiMode()) renderForumError(error.message);
             // We re-throw the error to ensure Promise.all can catch it if needed,
             // but the main goal is immediate logging.
             throw error;
@@ -648,6 +731,10 @@ function renderCurrentFilteredPosts({ force = false } = {}) {
 }
 
 function renderWaterfall(postsToRender) {
+    if (isNextUiMode()) {
+        renderWaterfallNext(postsToRender);
+        return;
+    }
     masonryContainer.innerHTML = '';
 
     if (!postsToRender || postsToRender.length === 0) {
@@ -665,6 +752,20 @@ function renderWaterfall(postsToRender) {
     });
 
     masonryContainer.appendChild(fragment);
+}
+
+// --- next 模式：keyed 瀑布流增量更新 + 空/加载/错误状态 ---
+function renderWaterfallNext(postsToRender) {
+    if (!postsToRender || postsToRender.length === 0) {
+        lastRenderedPostKeys = '';
+        renderForumState('暂无帖子', '当前筛选条件下没有帖子，尝试调整搜索词或板块。', 'forum');
+        return;
+    }
+
+    const sorted = getSortedPosts(postsToRender);
+    lastRenderedPostKeys = getPostRenderKey(postsToRender);
+    clearForumStateNodes();
+    reconcileByKey(masonryContainer, sorted, post => post.uid, post => createPostCard(post, 0));
 }
 
 function createPostCard(post, index) {
@@ -1713,6 +1814,15 @@ function escapeHtml(str) {
 
 // ========== Custom Dialog Functions ==========
 function customConfirm(message, title = '确认操作') {
+    if (isNextUiMode() && window.VCPUI) {
+        return window.VCPUI.feedback.confirm({
+            title,
+            message,
+            danger: true,
+            confirmLabel: '确定',
+            cancelLabel: '取消'
+        });
+    }
     return new Promise((resolve) => {
         const modal = document.getElementById('custom-confirm-modal');
         const titleEl = document.getElementById('confirm-title');
@@ -1753,6 +1863,11 @@ function customConfirm(message, title = '确认操作') {
 }
 
 function customAlert(message, title = '提示') {
+    if (isNextUiMode() && window.VCPUI) {
+        const isError = /失败|错误|Error/i.test(String(message));
+        window.VCPUI.feedback.toast(message, { variant: isError ? 'error' : 'success', duration: 4200 });
+        return Promise.resolve();
+    }
     return new Promise((resolve) => {
         const modal = document.getElementById('custom-alert-modal');
         const titleEl = document.getElementById('alert-title');
@@ -1849,20 +1964,74 @@ function formatDate(ts) {
 
 // --- 新版 UI：真实重建页面结构（AppPageShell + VCPUI 控件 + Web Awesome） ---
 function buildNextForum() {
-    window.VCPPageRebuild.rebuild({
+    if (!window.VCPUI) return;
+    if (window.VCPUiModeController?.getCurrentMode() !== 'next') return;
+    if (document.body.classList.contains('vcp-ui-scope')) return;
+
+    const V = window.VCPUI;
+    const app = document.querySelector('.app-container');
+    if (!app) return;
+    document.body.classList.add('vcp-ui-scope');
+
+    const shell = V.create('AppPageShell', {
         title: 'VCP 论坛',
-        containerSelector: '.app-container',
-        navSelector: '#top-nav-bar',
-        actionSelectors: ['#create-post-btn'],
+        windowControls: true,
         onMinimize: () => api?.minimizeWindow?.(),
         onMaximize: () => api?.maximizeWindow?.(),
         onClose: () => (api?.closeWindow ? api.closeWindow() : window.close()),
-        enhanceSelectors: {
-            input: ['input:is(:not([type]),[type="text"],[type="number"],[type="search"],[type="url"],[type="email"],[type="password"])'],
-            select: ['select'],
-            textarea: ['textarea']
-        },
-        tooltipSelectors: ['#create-post-btn', '#settings-btn', '#refresh-posts']
     });
+
+    const body = document.createElement('div');
+    body.className = 'vcp-ui-forum-body';
+    while (app.firstChild) body.append(app.firstChild);
+    shell.update({ content: body });
+    document.body.append(shell.element);
+
+    // 控件增强（保留原生 .value / 既有监听器）。
+    [searchInput, boardFilter].forEach(control => {
+        if (!control) return;
+        try { V.enhance(control.tagName === 'SELECT' ? 'Select' : 'Input', control); } catch (error) { console.warn('[Forum] enhance control:', error); }
+    });
+    document.querySelectorAll('input:is(:not([type]),[type="text"],[type="number"],[type="search"],[type="url"],[type="email"],[type="password"])').forEach(el => {
+        if (el === searchInput) return;
+        try { V.enhance('Input', el); } catch (error) { /* ignore */ }
+    });
+    document.querySelectorAll('select').forEach(el => {
+        if (el === boardFilter) return;
+        try { V.enhance('Select', el); } catch (error) { /* ignore */ }
+    });
+    document.querySelectorAll('textarea').forEach(el => {
+        try { V.enhance('Textarea', el); } catch (error) { /* ignore */ }
+    });
+
+    deepenNextForum(V);
+
+    document.getElementById('top-nav-bar')?.remove();
+    app.remove();
+}
+
+// --- 新版 UI：深加工 —— VCPUI 管理工具栏 + keyed 瀑布流 + 危险操作确认 ---
+function deepenNextForum(V) {
+    const body = document.querySelector('.vcp-ui-forum-body');
+    nextForumRender = true;
+
+    const toolbar = V.create('Toolbar', {
+        label: '论坛工具栏',
+        start: [searchInput, boardFilter].filter(Boolean),
+        end: [refreshBtn, createPostBtn, settingsBtn].filter(Boolean),
+    });
+    nextForumToolbar = toolbar;
+    if (body) body.prepend(toolbar.element);
+
+    // Tooltip 通过 VCPUI.create('Tooltip') 创建（由 VCPUI 委托 Web Awesome）。
+    [refreshBtn, createPostBtn, settingsBtn].forEach(btn => {
+        if (!btn || !btn.isConnected) return;
+        try {
+            const tip = V.create('Tooltip', { trigger: btn, content: btn.title || btn.getAttribute('aria-label') || '操作', placement: 'top' });
+            document.body.append(tip.element);
+        } catch (error) { /* ignore */ }
+    });
+
+    renderCurrentFilteredPosts({ force: true });
 }
 window.addEventListener('vcp-ui-runtime-ready', buildNextForum);
