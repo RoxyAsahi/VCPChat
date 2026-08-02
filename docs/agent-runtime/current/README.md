@@ -61,6 +61,7 @@ ToolBox backend approval 和富消息 Electron live gate 仍待，因此产品�
 - [toolbox-bridge.md](toolbox-bridge.md)：Nova、`vcp_invoke`、interrupt、VCPLog/VCPInfo。
 - [agent-workbench.md](agent-workbench.md)：Session 切换、Message/Block、动作与主聊天复用边界。
 - [gui-capability-roadmap.md](gui-capability-roadmap.md)：Codex GUI-R0–R6 的导航、Composer、时间线、审批、Inspector 与真实验收路线。
+- [workspace-browser-plan.md](workspace-browser-plan.md)：P0 只读 Workspace 文件树/预览与工具、Diff、附件统一路径动作的 WB-R0–R5 计划。
 - [workbench-experience-roadmap.md](workbench-experience-roadmap.md)：Session 目录、Runtime/Thread 预热、主聊天同构 loading/streaming 与工具卡收口路线图。
 - [reuse-register.md](reuse-register.md)：外部项目可复用模块、采用方式、许可证和禁止边界。
 - [gui-reuse-implementation-plan.md](gui-reuse-implementation-plan.md)：OpenCode、CodexMonitor、DeepChat、Harnss 等候选的具体文件映射、当前完成度和施工顺序。

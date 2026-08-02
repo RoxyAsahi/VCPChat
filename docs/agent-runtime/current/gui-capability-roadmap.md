@@ -47,6 +47,7 @@ Agent Workbench
 | GUI compaction | `thread/compact/start` 已有终态 waiter：ACK 不完成，等待 `contextCompaction` terminal item 后 `thread/read` 对账；超时/crash/失败 reject | working-tree checkpoint |
 | Activity Center、未读游标、bounded ring | 稳定 shell、分 Tab 未读、搜索/筛选、100 条 ring、Plan/Diff/Usage/Connection 已接线 | hermetic working-tree pass；视觉/性能 pending |
 | frozen-tail Markdown、结构化 Diff Inspector | frozen-tail Markdown 与累计/重叠 delta 净化已在 working tree 接入并有 DOM identity fixture；Diff Inspector 未引入 | partial / working-tree checkpoint |
+| Workspace 文件树、预览与统一路径动作 | Main 安全服务、窄 IPC、Workspace Tab、搜索/预览和 tree/tool/diff/attachment 路径入口已实现；人工视觉与大工作区性能收据待补 | working-tree hermetic pass |
 | 2 px scroll、10 Agent/50 Session、双 streaming live | 未形成完整收据 | GUI-R6 pending |
 
 外部复用的具体文件和边界见 [gui-reuse-implementation-plan.md](gui-reuse-implementation-plan.md)。clone 目录只是审计快照，不是运行时依赖。
@@ -182,6 +183,10 @@ Session/provider/model/message/time 元数据、input/output/reasoning/cache tok
 - `toolbox-only` 暂时隐藏 Changes：本机真实 Projection 已证明 FileOperator WriteFile 仅产生
   `dynamicToolCall` 且没有 `fileChange`/可靠最终路径；重新开放前必须有 Bridge mutation receipt；
 - 非交互卡仍需 keyed patch 和长流性能门槛；当前仅保证 tab panel shell 稳定。
+
+Workspace 文件树、只读预览以及工具卡/Diff/附件的统一打开、定位和资源管理器动作，按
+[workspace-browser-plan.md](workspace-browser-plan.md) 的 WB-R0–R5 独立实施。该能力属于 Electron Host，
+不通过 Codex native file/Shell 工具实现，也不改变 `toolbox-only` 工具面。
 
 退出门槛：Inspector 不持有第二份 transcript；刷新后由 SQLite + `thread/read` 重建；通知不会写回模型历史。
 

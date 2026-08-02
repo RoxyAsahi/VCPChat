@@ -14,7 +14,9 @@
 | Codex release | npm `@openai/codex@0.146.0` + `C:\VCP\vchat-develop\codex` tag `rust-v0.146.0` | `e363b08c9175ac1cbe5893615dd2cb9ddf95043b` | 以仓库许可证为准 | App Server 运行时与固定 stable/experimental schema；本地 `main` 只审计，不复制 Agent Runtime。 |
 | VCPToolBox | `C:\VCP\VCPToolBox-upstream-latest` | `324a659f`（不依赖未提交 protocolBridge 改动） | 以仓库许可证为准 | `/v1/chat/completions`、`/v1/human/tool`、VCPLog/VCPInfo 和审批协议权威。 |
 | Cherry Studio | `C:\VCP\vchat-develop\cherry-studio` | `e72bde30eb0e13cb50fccf66e2646e562fc09ec7` | AGPL-3.0 | 仅 clean-room 借鉴 Session 投影、Runtime resume 与通用 Message/Block 展示分离；不复制源码。 |
-| OpenCode | `C:\VCP\vchat-develop\opencode` | `a45c2b917e657e50881117e8c3f85f4bff06e47d` | MIT | frozen-tail Markdown、diff 归一化、patch file 投影与 worker queue fixture。 |
+| OpenCode | `C:\VCP\vchat-develop\opencode` | `a45c2b917e657e50881117e8c3f85f4bff06e47d` | MIT | frozen-tail Markdown、diff 归一化，以及 Workspace lazy tree、preview/search、虚拟化和稳定路径模型。 |
+| CodexGui | `C:\VCP\vchat-develop\CodexGui` | `9ee551775a8e72c9543e2bad49fc64c88e34fadb` | MIT | changed-path 驱动的 Host 侧只读 Git diff 与 Workspace shell 机制参考；不移植 Avalonia/.NET。 |
+| Agmente | `C:\VCP\vchat-develop\Agmente` | `87f224e7d5884d450f4d54cc1d72724416e6d750` | MIT | FileChange 稳定 identity、完整路径优先去重与增量 row reconciliation；不移植 SwiftUI。 |
 | CodexMonitor | `C:\VCP\vchat-develop\codex-monitor` | `dd61b9abd37de5ded86e82b9fe8a83fd49d46fa5` | MIT | Codex Thread reducer、后台状态、requestUserInput、审批队列与 Thread 列表行为测试。 |
 | DeepChat | `C:\VCP\vchat-develop\deepchat` | `b76fab868959e7e86267128ecee4d9678100bda9` | Apache-2.0 | Main Session ownership、pending input、取消、Projection 与故障恢复测试。 |
 | Harnss | `C:\VCP\vchat-develop\harnss` | `dc1dfd8a33caa46a1eefcfe9e14697b27ac4c33d` | MIT | streaming buffer、permission queue、context usage、tool formatting 与 patch utility。 |
@@ -46,6 +48,11 @@
 |---|---|---|---|---|
 | OpenCode `packages/session-ui/src/components/markdown-stream.ts` 及测试 | **直接受控端口算法与 fixture** | GUI-R3 | `modules/ui-system/agent-presentation/` 的流式 Markdown stable head/frozen tail | 删除 SolidJS/OpenCode SDK 类型；输入只接规范 Message Block；不能持有 Session、Thread、Tool 或审批状态。 |
 | OpenCode `session-diff.ts`、`apply-patch-file.ts` 及测试 | **直接受控端口纯函数** | GUI-R5 | 新建 Agent Diff model/Inspector adapter | Codex `fileChange` 是唯一来源；不得从 Markdown 猜 patch，不得执行 patch。保留 16 项有界 LRU 或更严格上限。 |
+| OpenCode `context/file/tree-store.ts`、`file-tree-v2-model.ts` 及测试 | **直接受控端口纯算法与 fixture** | WB-R1/R2 | Main lazy directory store 与 Renderer tree model | 端口 inflight 去重、scope generation、路径归一化、目录优先排序和迭代 flatten；不导入 SolidJS、OpenCode SDK、Session store。 |
+| OpenCode `file-tree-v2.tsx`、`session-file-browser-tab.tsx`、`session-file-list-v2.tsx` | **clean-room 机制参考** | WB-R2 | 树/搜索键盘、临时/固定 preview、长列表虚拟化 | 不复制组件或样式；使用 VChat DOM、token、图标和 Renderer 临时状态。 |
+| OpenCode `session-review-file-preview-v2.tsx`、`session-review-file-preview-v2-virtualize.ts` | **最小抽取虚拟化阈值与 fixture** | WB-R2/R4 | 长文件和 Diff preview | 预览输入只能来自 Main 已校验 descriptor；不得访问 OpenCode Session 或文件 API。 |
+| CodexGui `GitDiffService.cs`、`ShellWorkspaceSidebarView.axaml`、`ShellConversationWorkspaceView.axaml` | **机制参考** | WB-R4 | 对 Codex 权威 changed paths 执行有界只读 Git diff | 不复制 .NET/Avalonia；不扫描或猜测 ToolBox 文件变化，不提供 apply/revert。 |
+| Agmente `FileChangesSummaryView.swift`、`ChatRenderDiff.swift`、`FileChangesRows.swift` 及测试 | **行为 fixture 重写** | WB-R3/R4 | 统一路径引用、FileChange 去重和 keyed 增量更新 | 不复制 SwiftUI；identity 必须保留 Session/workspace/path，basename 不得作为唯一 key。 |
 | OpenCode `markdown-worker-*` | **条件式抽取** | GUI-R3/R6 | 长消息后台 parse queue | 只有主线程 trace 证明 Markdown parse 阻塞后才引入；worker 只处理文本，不访问 SQLite、Codex transport 或 ToolBox。 |
 | CodexMonitor `threadReducer/common.ts`、`threadLifecycleSlice.ts`、`threadItemsSlice.ts`、`useThreadsReducer.test.ts` | **移植纯 reducer 和 fixture** | GUI-R1/R3 | 新建 `reduceAgentSessionUiState` 与 Codex Item upsert/finalize 测试 | 禁止移植 `${Date.now()}-assistant` 等本地伪 ID；全部 identity 必须来自 Codex/Projection。React/Tauri 组件不直接导入。 |
 | CodexMonitor `useThreadUserInput*`、`useThreadApprovalEvents*`、`RequestUserInputMessage.tsx`、`ApprovalToasts*.tsx` | **协议归一化与行为 fixture 抽取** | GUI-R4 | Main server-request coordinator + Workbench Interaction Center | UI 仅作视觉参考；每个 JSON-RPC request ID 恰好响应一次，超时/关闭/crash fail-closed。 |
@@ -63,7 +70,7 @@
 
 ## 本地参考快照收据
 
-以下仓库已 clone 至 `C:\VCP\vchat-develop`，仅供代码审计、fixture 对照与受控端口；它们均不在 `package.json`、打包输入或运行时路径中：`cherry-studio`、`opencode`、`codex-monitor`、`deepchat`、`harnss`、`openclaw-codex-app-server`、`assistant-ui`、`acp-ui`。每个具体 revision 与许可证见本文件开头的来源表。
+以下仓库已 clone 至 `C:\VCP\vchat-develop`，仅供代码审计、fixture 对照与受控端口；它们均不在 `package.json`、打包输入或运行时路径中：`cherry-studio`、`opencode`、`CodexGui`、`Agmente`、`codex-monitor`、`deepchat`、`harnss`、`openclaw-codex-app-server`、`assistant-ui`、`acp-ui`。每个具体 revision 与许可证见本文件开头的来源表。
 
 若后续需要新的开源来源，必须先补入来源表（路径、commit、许可证、最小目标文件与禁用能力），再 clone；不得以“本机已有目录”作为可直接复制的授权或依赖依据。
 

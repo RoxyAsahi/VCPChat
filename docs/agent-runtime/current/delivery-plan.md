@@ -167,6 +167,13 @@
   已迁回 Settings。
   toolbox-only 已隐藏无真实数据来源的 Changes；VCP mutation receipt、Session 生命周期通知持久索引、
   非交互卡完整 keyed patch、Plan dock、Diff 文件导航、专用 timeline Block 与视觉/性能验收仍待。
+- [~] **WB-R0–R5 Workspace Browser 与统一路径动作**：Main-only 安全服务、窄 IPC、Workspace Tab、
+  搜索/预览、固定 Tab、CSS content-visibility 长列表优化，以及 tree/tool/diff/attachment 统一路径入口
+  已实现并通过 hermetic + Electron smoke。详细合同见
+  [workspace-browser-plan.md](workspace-browser-plan.md)。先复用 `workspacePolicy.js` 建立 Main-only
+  只读服务和 `agent-workspace:*` 窄 IPC；工具卡、Diff、附件与文件树统一产生 `WorkspacePathRef`。
+  10k 文件性能录制、人工视觉和真实结构化 ToolBox 资源验收仍待。不得开启 Codex native
+  Shell/file tools，不得从 ToolBox 文本猜路径或加入写/delete/apply/revert 能力。
 - [ ] **GUI-R6 视觉、性能与 live gate**：富消息截图、scroll anchor、10 Agent/50 Session、cold/warm latency、crash/restart、双 Thread 和真实 ToolBox。
 - [ ] assistant-ui 仅登记为未来 React island 的条件式评估；acp-ui 仅登记为未来 ACP profile 参考，本轮不得增加 React/Vue/Tauri/ACP 依赖。
 
@@ -196,6 +203,9 @@
 1. 固化 GUI-R0 至 GUI-R2 working-tree checkpoint：运行 capability、transport、projection、runtime manager、session state 和 Workbench 测试；形成干净提交前不得把它们标为 release verified。
 2. GUI-R3：补 Plan/resource/warning/compaction Block、复杂 Markdown fixture 和长流 trace；frozen-tail/accumulator 基线已存在，不得退回整段 `textContent` 重绘。
 5. GUI-R4：端口 Harnss permission queue 与 CodexMonitor/openclaw interaction fixture，完成 requestUserInput 和多审批来源的恰好一次响应。
-6. GUI-R5：当前 Context/Usage Inspector 与分组 Activity Center 已接线；下一步先补 Session 生命周期通知索引、Plan dock 和 Diff 文件导航，再做非交互卡 keyed patch。引入 `@pierre/diffs` 前执行 release-size gate。
-7. R4/R6 live：始终使用未修改 ToolBox，重跑动态 `FileOperator`、双 Thread、取消隔离、backend approval、VCPInfo reconnect/replay 和 Electron 富消息/性能门槛。
-8. 所有端口附来源 revision、许可证、行为差异和测试收据；所有 hermetic/live 收据与 worktree 状态一致后再形成 checkpoint。在此之前始终保持 experimental。
+6. WB-R0/R1：先冻结 WorkspaceRef、安全上限和 Windows 路径 fixture，再建立 Main-only 只读 Workspace Service；不得先写树 UI 后补安全层。
+7. WB-R2/R3：clean-room 端口 OpenCode 的 tree model/preview 机制，并让 tree/tool/diff/attachment 共用 `WorkspacePathRef` 和动作 adapter。
+8. WB-R4：仅对 Codex 权威 `fileChange` 路径提供有界只读 Git diff；ToolBox mutation receipt 未落地前继续隐藏 toolbox-only Changes。
+9. GUI-R5：当前 Context/Usage Inspector 与分组 Activity Center 已接线；补 Session 生命周期通知索引、Plan dock和非交互卡 keyed patch。引入 `@pierre/diffs` 前执行 release-size gate。
+10. R4/R6 live：始终使用未修改 ToolBox，重跑动态 `FileOperator`、双 Thread、取消隔离、backend approval、VCPInfo reconnect/replay 和 Electron 富消息/性能门槛。
+11. 所有端口附来源 revision、许可证、行为差异和测试收据；所有 hermetic/live 收据与 worktree 状态一致后再形成 checkpoint。在此之前始终保持 experimental。
