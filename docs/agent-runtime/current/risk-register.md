@@ -1,6 +1,6 @@
 # Codex Agent Risk Register
 
-Status: **implemented**
+Status: **hermetic**
 
 | ID | Severity | Risk | Control | Verification |
 | --- | --- | --- | --- | --- |
@@ -17,5 +17,7 @@ Status: **implemented**
 | AG-R11 | P1 | An uncertain or acknowledged start/fork is replayed or rebound to the wrong Thread | generation-start normalization, fixed-schema `thread/list`, exclude bound Threads, recorded Thread mismatch rejection, explicit user bind/delete only | Runtime manager fault injection and recovery UI tests |
 | AG-R13 | P1 | Authoritative Codex reconcile deletes VChat/ToolBox-only observations | Message authority summary preserves local Blocks and removes only stale Codex Blocks from mixed Messages | Projection authority reconcile tests |
 | AG-R12 | P1 | Opening history unnecessarily depends on App Server or ToolBox | projection-only IPC and no eager Workbench startup | Workbench and Electron recovery smoke |
+| AG-R14 | P1 | Main registers an undefined or stale Agent IPC channel and blocks Electron startup behind an error dialog | single central Agent channel registry plus static Handler-reference validation | `check:agent-runtime` and Electron recovery/smoke |
+| AG-R15 | P2 | Hermetic Electron tests share Chromium storage locks or unrelated CDS startup with a live VChat process | per-run `userData`, temporary AppData, CDS disabled in Codex E2E, bounded debugger/IPC waits | `test:electron-codex-recovery` and `test:electron-codex-smoke` |
 
 No item may be marked `product` while a P0/P1 entry lacks a same-commit hermetic or live receipt.

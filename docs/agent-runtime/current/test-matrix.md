@@ -1,8 +1,9 @@
 # 验收矩阵与收据
 
-更新时间：2026-08-02。Codex App Server 功能 checkpoint 为 `29c2068a`；R7-R10 可靠性功能 revision 为
-`261d11ba`。R7-R10 的 committed hermetic gate、真实双 Thread 并发/取消隔离和 FileOperator 动态工具链已重跑，
-其范围状态为 `live`；原生审批、ToolBox 后端审批重放和富消息 Electron gate 尚未完成，因此不是产品完成。
+更新时间：2026-08-02。Codex App Server 功能 checkpoint 为 `29c2068a`；当前 R7-R10 可靠性 revision 为
+`d14f9a58`，状态为 `hermetic`。旧 revision `261d11ba` 的双 Thread 并发/取消隔离与 FileOperator live
+结果保留为历史证据，但尚未在当前 revision 重跑；原生审批、ToolBox 后端审批重放和富消息 Electron gate
+仍未完成，因此不是产品完成。
 
 当前迁移目标：项目内 Codex CLI `0.146.0`，release tag `rust-v0.146.0`，source
 `e363b08c9175ac1cbe5893615dd2cb9ddf95043b`；全局 `0.124.0` 保持不变且不作为测试 executable。
@@ -296,8 +297,9 @@ R4.1、R4.2、R5.1、R5.3 的 gate 除测试通过外，还必须记录：来源
 | Workspace | 10k fixture、search concurrency、cross-Session cancel rejection、timeout traversal stop、preview handle close | `npm run test:agent-workspace-service` | committed pass |
 | Electron recovery | two concurrent Sessions、identity isolation、Renderer reload、kill/restart/resume、archive/restore/delete、pending interaction、read-only degraded | `npm run test:electron-codex-recovery` | committed pass |
 | Governance/UI | pinned 0.146 schema、ownership/ADR/receipt、no global refs、scoped CSS/no inline mutation | `npm run check:codex-governance`、`npm run check:ui-system` | committed pass |
-| Concurrent Nova release gate | one App Server PID、two running Threads、interrupt A、B completes、Projection isolation | `VCP_CODEX_LIVE=1 npm run test:codex-concurrent-live` | live pass, 2026-08-02 |
-| Dynamic ToolBox release gate | `vcp_invoke` unwrap、FileOperator ReadFile、Codex identity、bridge result、SQLite Projection | `VCP_CODEX_LIVE=1 npm run test:codex-toolbox-live` | live pass, 2026-08-02; requires a registered DistributedServer FileOperator node |
+| Central IPC/product boundary | every Handler channel defined、no global attachment status、Codex-owned Workspace policy、archived Runtime excluded from product | `npm run check:agent-runtime`、`npm run check:codex-governance` | committed pass (`d14f9a58`) |
+| Concurrent Nova release gate | one App Server PID、two running Threads、interrupt A、B completes、Projection isolation | `VCP_CODEX_LIVE=1 npm run test:codex-concurrent-live` | historical live pass on `261d11ba`; current revision pending |
+| Dynamic ToolBox release gate | `vcp_invoke` unwrap、FileOperator ReadFile、Codex identity、bridge result、SQLite Projection | `VCP_CODEX_LIVE=1 npm run test:codex-toolbox-live` | historical live pass on `261d11ba`; current revision pending |
 
 ### R7 Profile/Session identity follow-up
 
@@ -374,6 +376,25 @@ git diff --check
 ```
 
 Machine receipt: [r9-follow-up.json](receipts/r9-follow-up.json).
+
+### R10 reliability/governance follow-up
+
+Assertions committed on 2026-08-02 in `d14f9a589789f44bea76aa3fc11145a3013d3aed`:
+
+- Codex Agent IPC no longer imports archived Runtime contracts or exposes global attachment state.
+- Every `IPC_CHANNELS.*` Handler reference must resolve through the central registry; the gate caught and fixed missing Profile channels before release.
+- Workspace policy ownership moved to `modules/codex-runtime`, with archived imports reduced to a compatibility re-export.
+- Pi/Rust scripts and workflow are explicitly archived and excluded from Codex product packaging.
+- Electron recovery uses isolated Chromium `userData`, disables unrelated CDS startup, bounds debugger/IPC waits, and leaves no silent startup hang.
+
+Commands passed:
+
+```text
+npm run test:codex-ci
+npm run test:electron-codex-smoke
+npm run check:ui-system
+git diff --check
+```
 
 R7-R10 machine receipt: [r7-r10-working-tree.json](receipts/r7-r10-working-tree.json). The live ToolBox test initially
 failed with `Plugin "FileOperator" not found for tool call`, proving the bridge failed closed while no distributed node

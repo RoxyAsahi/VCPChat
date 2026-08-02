@@ -1,6 +1,6 @@
 # Codex Agent Reliability Roadmap
 
-Status: **live** for the R7-R10 reliability scope; **not product complete**
+Status: **hermetic** for current revision `d14f9a58`; **not product complete**
 
 This document is the source of truth for R7-R10. Codex App Server remains a pinned `0.146.x` black box and the only enabled execution profile is `toolbox-only`. VCPToolBox is not modified.
 
@@ -49,16 +49,20 @@ This document is the source of truth for R7-R10. Codex App Server remains a pinn
 - Projection export is explicit JSON or Markdown through Main.
 - Archived Sessions remain projection-only, composer-disabled, and can be restored, exported, or permanently deleted under the safety preconditions.
 - Workspace operations use bounded general/search schedulers and cancellable request IDs.
+- The maintained Workspace path policy lives under `modules/codex-runtime/`; archived Pi/Rust imports are compatibility re-exports only.
 - Agent Renderer is an independent product implementation. Main-chat and Agent share security/golden fixtures only.
+- Agent IPC uses the central registry. Governance fails when any Handler references an undefined channel, and Runtime status has no global attachment field.
+- Archived Pi/Rust scripts are explicitly namespaced, excluded from Codex product packaging, and the Rust workflow is manual-only.
 - Electron recovery covers concurrent Session identity, Renderer reload, demand restart, archive/restore/permanent delete, pending-interaction blocking, and forced read-only degraded mode.
+- Hermetic Electron runs isolate Chromium `userData` and disable unrelated main-chat CDS startup, so a live VChat process cannot stall the recovery gate.
 - Real ToolBox/Nova tests remain a manual release gate and must never run in credential-free CI.
 
 ## Verification Receipt
 
-- Functional revision: `261d11ba7577125867a236033a13be58d94ae72d`.
-- Committed gates passed: `test:codex-reliability`, `check:ui-system`, `test:codex-ci`, and `test:electron-codex-smoke`.
-- On 2026-08-02, `deepseek-v4-flash` passed the real two-Thread gate in one App Server process: both Turns ran concurrently, interrupting A did not affect B, and the two SQLite projections remained isolated.
-- The real `vcp_invoke -> FileOperator.ReadFile -> bridge -> Projection` gate passed after a repository-provided DistributedServer node registered FileOperator. The first attempt correctly failed with `Plugin "FileOperator" not found`; no VCPToolBox source or configuration was changed.
+- Functional revision: `d14f9a589789f44bea76aa3fc11145a3013d3aed`.
+- Committed gates passed: `test:codex-ci`, `test:electron-codex-smoke`, `check:ui-system`, and `git diff --check`.
+- Historical live evidence exists on revision `261d11ba7577125867a236033a13be58d94ae72d`: `deepseek-v4-flash` passed two-Thread concurrency/cancel isolation and `vcp_invoke -> FileOperator.ReadFile -> bridge -> Projection` without modifying VCPToolBox.
+- That historical live evidence is not inherited by `d14f9a58`; current live status remains pending until the release gates are rerun on this revision.
 - The machine-readable details are in [r7-r10-working-tree.json](receipts/r7-r10-working-tree.json).
 - Native Codex approval, ToolBox backend approval replay/exactly-once, VCPInfo/VCPLog reconnect/replay, and rich Electron visual/performance acceptance remain product gates.
 

@@ -6,7 +6,7 @@ Status: **implemented**
 | --- | --- | --- |
 | App Server transport and lifecycle | `modules/codex-runtime/` | Renderer state, VCPToolBox source changes |
 | Projection schema and reconciliation | `modules/codex-runtime/projection/` | Codex rollout internals, local transcript in Renderer |
-| Agent IPC and workspace security | `modules/ipc/agentRuntimeHandlers.js`, `workspaceService.js` | arbitrary root/path from Renderer, generic exec/read/write IPC |
+| Agent IPC and workspace security | `modules/ipc/agentRuntimeHandlers.js`, `modules/ipc/ipcContracts.js`, `modules/codex-runtime/workspacePolicy.js`, `workspaceService.js` | archived Runtime contracts, undefined channels, arbitrary root/path from Renderer, generic exec/read/write IPC |
 | Workbench state | `modules/ui-system/agent-workbench-store.js` | main-chat global refs, global attachment inference |
 | Agent presentation | `modules/ui-system/agent-presentation/` | main renderer runtime state and persistence |
 | Dock and Workspace view state | `agent-session-dock.js`, `agent-workspace-model.js` | arbitrary absolute paths, cross-Session file refs |
