@@ -13,6 +13,25 @@
         display: block;
     }
 
+    /* Integrated business pages join the top navigation instead of painting
+       a second title-bar divider. Pages with a rail still own that rail;
+       canvas pages expose a single rounded work surface. */
+    html[data-ui-mode="next"] .vcp-ui-scope.next-ui-internal-app-host:is(
+        [data-active-app-id="vchat-app-notes"],
+        [data-active-app-id="vchat-app-translator"],
+        [data-active-app-id="vchat-app-memo"],
+        [data-active-app-id="vchat-app-log"],
+        [data-active-app-id="vchat-app-plugin-manager"],
+        [data-active-app-id="vchat-app-task"],
+        [data-active-app-id="vchat-app-forum"],
+        [data-active-app-id="vchat-app-note-mini"]
+    ) {
+        border-top: 0;
+        background: var(--vcp-ui-bg-1);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+
     /* Agent intentionally shares the navigation material with the normal
        sidebar. Other internal apps keep the opaque host surface above. */
     html[data-ui-mode="next"] .vcp-ui-scope.next-ui-internal-app-host:has(.agent-chat-root) {

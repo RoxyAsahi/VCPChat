@@ -29,6 +29,18 @@ if (document.documentElement.dataset.uiMode) {
     });
 }
 
+// Standalone next-mode pages do not inherit the main renderer's icon runtime.
+// Keep that dependency at this shared design-system entry so business pages
+// still request semantic icons only through VCPUI.
+if (document.documentElement.dataset.uiMode === 'next' && !window.lucide) {
+    try {
+        window.lucide = await import('../../node_modules/lucide/dist/esm/lucide.mjs');
+        await import('./lucide-adapter.js');
+    } catch (error) {
+        console.warn('[VCPUI Runtime] Lucide unavailable, using the bundled symbol font:', error);
+    }
+}
+
 // In next mode the page opts into Web Awesome as the behavior/a11y kernel for
 // the core controls it builds through VCPUI.create (Button, IconButton, Input,
 // Textarea, Select, Checkbox, Switch, Card, Tabs, Dialog, Tooltip). The bundles
@@ -59,6 +71,11 @@ if (document.documentElement.dataset.uiMode === 'next' && window.VCPWebAwesome) 
         .catch(error => console.warn('[VCPUI Runtime] Web Awesome preload failed, using native controls:', error));
 }
 await waReady;
+
+if (document.documentElement.dataset.uiMode === 'next' && document.body && window.VCPWebAwesome) {
+    window.VCPWebAwesome.mountScope(document.body);
+    window.VCPUISelectObserver = VCPUI.observeControls(document.body, { kinds: ['Select'] });
+}
 
 // Dispatch after DOMContentLoaded (module eval happens in the interactive
 // phase, before page DOMContentLoaded handlers attach their ready listeners).

@@ -16,7 +16,7 @@
 | IconButton | ✅ | `wa-button`（appearance=plain/outlined/filled，aria-label/aria-pressed/title） | 原生 `<button>` | — |
 | Input | ✅ | `wa-input`（value/disabled/readonly/required/placeholder/type/size/leading+trailing slot） | `<span.vcp-ui-input-wrap>` + 原生 `<input>` | `element.querySelector('input')`、`.value`、`.disabled/.required/.readOnly`、`input`/`change` 事件转发（`bridgeNativeControl`） |
 | Textarea | ✅ | `wa-textarea`（value/rows/resize/placeholder/…） | `<span.vcp-ui-textarea-wrap>` + 原生 `<textarea>` | `element.querySelector('textarea')`、`.value`、事件转发 |
-| Select | ✅ | `wa-select` + `wa-option`（value/placeholder/disabled/required） | 原生 `<select>` | `element.querySelector('select')`、`.value`、`.options`、`.selectedIndex` |
+| Select | ✅ | `wa-select` + `wa-option`（value/placeholder/disabled/required）；`enhance()` 使用可见 Proxy | 原生 `<select>` | 原生节点继续作为表单真源，双向同步 `.value`、`.options`、`.selectedIndex`、`add/remove` 与 `input/change`；动态节点由 `observeControls()` 接入 |
 | Card | ✅ | `wa-card`（appearance=filled/outlined，交互态 aria-pressed） | 原生 `<section|button>` | — |
 | Tabs | ✅ | `wa-tab-group` + `wa-tab` + `wa-tab-panel`（`active` 属性、`wa-tab-show` → `change`） | `<div role="tablist">` + 按钮（方向键/Home/End 轮转） | — |
 | Dialog / Modal | ✅ | `wa-dialog`（label/open/light-dismiss、`wa-after-hide` → destroy + 焦点恢复） | `<div.vcp-ui-modal-overlay>` + `<section role="dialog">`（Escape/Tab 环回/背板关闭） | — |
@@ -30,14 +30,14 @@
 
 ## 加载时序与降级路径
 
-1. 页面 module 加载 `vcp-ui-runtime-bootstrap.js` → 解析模式 → `VCPWebAwesome.loadComponents([button, card, input, textarea, select, option, checkbox, switch, tab, tab-panel, tab-group, dialog, tooltip])` 并 `await`。
+1. 独立应用加载 `vcp-ui-runtime-bootstrap.js` 后预载组件并启动动态 Select observer；主 Renderer 保持启动零注册，只在 Agent Workbench 或设置页实际打开时由 `vcp-main-ui-runtime.js` 懒加载。
 2. 成功：`vcp-webawesome-loaded`（tags）→ `waKernel: 'web-awesome'`。
 3. 失败：`vcp-webawesome-failed`（tags + error）→ 所有 tag 保持未定义 → 每个 `VCPUI.create` 走原生回落 → `waKernel: 'native'`。
 4. `vcp-ui-runtime-ready`（DOMContentLoaded 后派发）携带 `{ mode, waKernel }`；业务页在此监听后构建 UI 树，内核选择恒定可测。
 
 ## 验证证据
 
-- 门禁与契约：`npm run check:ui-system`（含 `check-ui-system` 的 lucide 别名/图标守卫、`test-ui-system.mjs`、`test-webawesome-adapter.mjs`、`test-ui-mode-controller.mjs`、stylelint、`check-ui-applications`、`test-page-runtime`）全部通过。
+- Select 迁移契约：`npm run test:ui-system` 与 `npm run check:ui-applications` 通过；覆盖双向值同步、动态 options、单次事件、动态 observer、重复 enhance、销毁恢复和原生 controller 的延迟升级。
 - `test-ui-system.mjs`：
   - 原生回落行为套件：Button loading/disabled 吞点击、IconButton aria-label、Input disabled/readonly/required/invalid/focus、Textarea rows/resize、Select value/disabled、Checkbox change、Switch role/aria-checked、Tabs 方向键轮转（roving tabindex）、Card aria-pressed、Tooltip aria-describedby 销毁清理、Modal Escape 关闭。
   - WA stub 内核套件：13 个 `wa-*` stub 注册后逐组件验证 tag、属性映射、loading/disabled/checked 切换、`wa-tab-group.active`、`wa-tab-show → change`、`wa-dialog` 打开、Tooltip `for` 关联；以及 `querySelector('input'/'textarea'/'select')`、`.value` 双向、`.options/.selectedIndex`、`input` 事件转发到原生 shim。

@@ -6,6 +6,8 @@
 
 Web Awesome runtime 只能在新版 UI 实际需要时加载。经典模式不得加载 adapter/theme、不得改变现有页面布局；模式切回 classic 时必须销毁新版控制器并恢复原业务 DOM。当前组件库 pilot 的顶层注册将在正式迁移的 R5.0 改为 lazy-load。
 
+`VCPUI.create('Select')` 用于新代码，直接返回统一 controller；`VCPUI.enhance('Select', nativeSelect)` 用于旧页面，在 next mode 创建可见的 Web Awesome Proxy，并保留隐藏原生 select 作为 `.value/.options`、旧事件和表单提交的兼容真源。动态表单使用 `VCPUI.observeControls(root)` 接入，同一原生节点重复 enhance 必须返回同一 controller。业务代码不得查询或操作 `wa-select`。
+
 ## 目录
 
 - `styles/ui-system/`：字体、Token、组件和组件库应用样式。
@@ -96,6 +98,20 @@ window.nextUiApps.register({
 ```
 
 同一应用 ID 只打开一个顶部标签。关闭活动标签时优先激活左侧相邻标签；没有左侧标签则返回首页。外部 Electron 应用仍通过原有托盘 IPC 打开。
+
+### Integrated App Shell
+
+新版内嵌业务页统一使用 `vcp-ui-integrated-shell`，让页面内容与 VChat 顶部导航形成同一应用表面。`AppPageShell` 仍是窗口生命周期外壳，但在 `data-embedded="true"` 时隐藏重复标题栏；独立窗口继续显示标题和窗口按钮。
+
+页面只允许选择一种真实信息结构：
+
+- `data-layout="rail"`：笔记、翻译、记忆等左侧检索/分类，右侧工作的主从布局。
+- `data-layout="compact-rail"`：确有稳定图标工具轨的密集工具页面。
+- `data-layout="canvas"`：插件、任务、论坛、日志、便签等单一工作画布。
+
+共同 DOM 合同为 `vcp-ui-integrated-layout`、`vcp-ui-integrated-rail`、`vcp-ui-integrated-main` 和 `vcp-ui-integrated-content-toolbar`。主表面统一使用左上圆角、顶部/左侧边线和轻阴影；外层及 rail 明确使用 `--vcp-ui-bg-1`，不得依赖透明 Electron 子视图碰巧混出相近颜色。
+
+嵌入模式隐藏标题栏前，标题栏内的业务动作必须迁移到内容工具栏或页面原有操作区。不得隐藏刷新、创建、设置、保存或危险操作；窗口最小化、最大化、关闭只在独立窗口出现。
 
 ## 迁移台账
 

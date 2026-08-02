@@ -633,14 +633,14 @@
         color: var(--vcp-ui-text-0);
         font-size: var(--vcp-ui-font-title);
         font-weight: 600;
-        border-bottom: 1px solid var(--vcp-ui-border);
+        border-bottom: 0;
     }
 
     /* ---- shell grid: left rail | content | fixed save bar ---- */
     html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-settings-shell {
         grid-template-columns: 228px minmax(0, 1fr);
         grid-template-rows: 1fr auto;
-        gap: var(--vcp-ui-space-3);
+        gap: var(--vcp-ui-space-2) var(--vcp-ui-space-3);
         padding: var(--vcp-ui-space-3);
     }
 
@@ -652,10 +652,10 @@
         flex-direction: column;
         gap: var(--vcp-ui-space-2);
         min-width: 0;
-        padding: var(--vcp-ui-space-2);
-        border: 1px solid var(--vcp-ui-border);
+        padding: var(--vcp-ui-space-3) var(--vcp-ui-space-2);
+        border: 0;
         border-radius: var(--vcp-ui-radius-md);
-        background: var(--vcp-ui-bg-1);
+        background: color-mix(in srgb, var(--vcp-ui-accent) 14%, var(--vcp-ui-bg-1));
         overflow-y: auto;
     }
 
@@ -666,9 +666,9 @@
         min-height: var(--vcp-ui-control-md);
         box-sizing: border-box;
         padding: 0 var(--vcp-ui-space-2);
-        border: 1px solid var(--vcp-ui-control-border);
+        border: 0;
         border-radius: var(--vcp-ui-radius-sm);
-        background: var(--vcp-ui-control-bg);
+        background: color-mix(in srgb, var(--vcp-ui-bg-0) 76%, transparent);
         color: var(--vcp-ui-text-2);
         flex-shrink: 0;
     }
@@ -721,7 +721,7 @@
         min-height: var(--vcp-ui-control-md);
         box-sizing: border-box;
         padding: 0 var(--vcp-ui-space-2);
-        border: 1px solid transparent;
+        border: 0;
         border-radius: var(--vcp-ui-radius-sm);
         color: var(--vcp-ui-text-1);
         background: transparent;
@@ -733,13 +733,13 @@
 
     html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-list-item:hover {
         color: var(--vcp-ui-text-0);
-        background: var(--vcp-ui-fill-1);
+        background: color-mix(in srgb, var(--vcp-ui-accent) 12%, var(--vcp-ui-bg-0));
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-list-item[data-state="selected"] {
-        color: var(--vcp-ui-text-0);
-        background: var(--vcp-ui-selection-bg);
-        border-color: var(--vcp-ui-border-strong);
+        color: var(--vcp-ui-on-accent);
+        background: var(--vcp-ui-accent);
+        box-shadow: var(--vcp-ui-shadow-sm);
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-list-item .vcp-ui-icon {
@@ -750,7 +750,7 @@
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-list-item[data-state="selected"] .vcp-ui-icon {
-        color: var(--vcp-ui-text-accent);
+        color: var(--vcp-ui-on-accent);
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-list-copy {
@@ -772,9 +772,9 @@
         grid-row: 1;
         min-width: 0;
         padding: var(--vcp-ui-space-3) var(--vcp-ui-space-4);
-        border: 1px solid var(--vcp-ui-border);
+        border: 0;
         border-radius: var(--vcp-ui-radius-md);
-        background: var(--vcp-ui-bg-1);
+        background: var(--vcp-ui-bg-0);
         overflow-y: auto;
     }
 
@@ -796,7 +796,7 @@
         color: var(--vcp-ui-text-0);
         font-size: var(--vcp-ui-font-body);
         font-weight: 600;
-        border-bottom: 1px solid var(--vcp-ui-border);
+        border-bottom: 0;
     }
 
     /* ---- form typography ---- */
@@ -825,10 +825,10 @@
         min-height: var(--vcp-ui-control-md);
         box-sizing: border-box;
         padding: 0 var(--vcp-ui-space-2);
-        border: 1px solid var(--vcp-ui-control-border);
+        border: 1px solid transparent;
         border-radius: var(--vcp-ui-radius-sm);
         color: var(--vcp-ui-text-0);
-        background: var(--vcp-ui-control-bg);
+        background: var(--vcp-ui-fill-1);
         box-shadow: none;
         font-family: "Noto Sans SC Variable", sans-serif;
         font-size: var(--vcp-ui-font-helper);
@@ -839,6 +839,74 @@
         min-height: 64px;
         line-height: var(--vcp-ui-line-body);
         resize: vertical;
+    }
+
+    /* Web Awesome Select is the visible next-mode control; the native select
+       remains hidden as the form and business-state source. Keep both paths
+       on the same compact settings geometry. */
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm select,
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm wa-select.vcp-ui-select-proxy {
+        width: 100%;
+        height: var(--vcp-ui-control-md);
+        min-height: var(--vcp-ui-control-md);
+        margin: 0;
+        font-size: var(--vcp-ui-font-helper);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm wa-select.vcp-ui-select-proxy::part(form-control),
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm wa-select.vcp-ui-select-proxy::part(form-control-input) {
+        min-height: 0;
+        height: 100%;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm wa-select.vcp-ui-select-proxy::part(combobox) {
+        height: var(--vcp-ui-control-md);
+        min-height: var(--vcp-ui-control-md);
+        padding: 0 var(--vcp-ui-space-2);
+        border: 1px solid transparent;
+        border-radius: var(--vcp-ui-radius-sm);
+        color: var(--vcp-ui-text-0);
+        background: var(--vcp-ui-fill-1);
+        box-shadow: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm wa-select.vcp-ui-select-proxy:hover::part(combobox) {
+        border-color: var(--vcp-ui-border);
+        background: var(--vcp-ui-fill-2);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm wa-select.vcp-ui-select-proxy:focus-within::part(combobox) {
+        border-color: var(--vcp-ui-control-focus);
+        background: var(--vcp-ui-fill-1);
+        box-shadow: 0 0 0 2px var(--vcp-ui-focus-ring);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm wa-select.vcp-ui-select-proxy::part(display-input) {
+        min-height: 0;
+        padding: 0;
+        color: var(--vcp-ui-text-0);
+        font-family: "Noto Sans SC Variable", sans-serif;
+        font-size: var(--vcp-ui-font-helper);
+        line-height: var(--vcp-ui-line-compact);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm wa-select.vcp-ui-select-proxy::part(expand-icon) {
+        width: var(--vcp-ui-icon-sm);
+        height: var(--vcp-ui-icon-sm);
+        margin-left: var(--vcp-ui-space-2);
+        color: var(--vcp-ui-text-2);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm wa-select.vcp-ui-select-proxy::part(listbox) {
+        border: 1px solid var(--vcp-ui-border);
+        border-radius: var(--vcp-ui-radius-sm);
+        background: var(--vcp-ui-bg-1);
+        box-shadow: var(--vcp-ui-shadow-md);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-form-group:has(> select),
+    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-form-group:has(> wa-select.vcp-ui-select-proxy) {
+        margin-bottom: var(--vcp-ui-space-2);
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm :is(input, select, textarea):focus-visible,
@@ -855,13 +923,12 @@
 
     /* ---- switches ---- */
     html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm .switch .slider {
-        border: 1px solid var(--vcp-ui-control-border);
+        border: 0;
         background: var(--vcp-ui-fill-1);
         box-shadow: none;
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm .switch input:checked + .slider {
-        border-color: var(--vcp-ui-accent);
         background: var(--vcp-ui-accent);
     }
 
@@ -869,9 +936,9 @@
     html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-subsection {
         margin-bottom: var(--vcp-ui-space-4);
         padding: var(--vcp-ui-space-3) var(--vcp-ui-space-4);
-        border: 1px solid var(--vcp-ui-border);
+        border: 0;
         border-radius: var(--vcp-ui-radius-md);
-        background: var(--vcp-ui-bg-1);
+        background: var(--vcp-ui-fill-0);
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-subsection:last-child {
@@ -898,15 +965,17 @@
     /* ---- dependent / nested panels ---- */
     html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-dependent-panel {
         padding: var(--vcp-ui-space-3);
-        border: 1px dashed var(--vcp-ui-border);
+        border: 0;
         border-radius: var(--vcp-ui-radius-md);
-        background: var(--vcp-ui-surface-soft);
+        background: var(--vcp-ui-fill-1);
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-nested-panel {
         margin-top: var(--vcp-ui-space-3);
-        padding-top: var(--vcp-ui-space-3);
-        border-top: 1px solid var(--vcp-ui-border);
+        padding: var(--vcp-ui-space-3);
+        border: 0;
+        border-radius: var(--vcp-ui-radius-sm);
+        background: var(--vcp-ui-fill-1);
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .form-group-inline {
@@ -922,22 +991,20 @@
         gap: var(--vcp-ui-space-2);
         margin: 0;
         padding: var(--vcp-ui-space-3);
-        border: 1px solid var(--vcp-ui-border);
+        border: 0;
         border-radius: var(--vcp-ui-radius-md);
-        background: var(--vcp-ui-bg-1);
+        background: var(--vcp-ui-fill-0);
         cursor: pointer;
         transition: border-color var(--vcp-ui-transition-fast), background-color var(--vcp-ui-transition-fast);
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .chat-presentation-mode-option:hover {
-        border-color: var(--vcp-ui-border-strong);
         background: var(--vcp-ui-fill-1);
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .chat-presentation-mode-option:has(input:checked) {
-        border-color: var(--vcp-ui-border-strong);
         background: var(--vcp-ui-selection-bg);
-        box-shadow: 0 0 0 1px var(--vcp-ui-selection-bg);
+        box-shadow: inset 3px 0 0 var(--vcp-ui-accent);
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .chat-presentation-mode-option strong {
@@ -954,9 +1021,9 @@
     html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .scenario-preview-card {
         min-height: 112px;
         padding: var(--vcp-ui-space-3);
-        border: 1px solid var(--vcp-ui-border);
+        border: 0;
         border-radius: var(--vcp-ui-radius-md);
-        background: var(--vcp-ui-bg-1);
+        background: var(--vcp-ui-fill-0);
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .scenario-preview-title {
@@ -1027,15 +1094,15 @@
         justify-content: flex-end;
         gap: var(--vcp-ui-space-2);
         padding: var(--vcp-ui-space-2) var(--vcp-ui-space-3);
-        border: 1px solid var(--vcp-ui-border);
+        border: 0;
         border-radius: var(--vcp-ui-radius-md);
-        background: var(--vcp-ui-bg-1);
+        background: var(--vcp-ui-bg-0);
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .global-settings-footer button[type="submit"] {
         min-height: var(--vcp-ui-control-md);
         padding: 0 var(--vcp-ui-space-4);
-        border: 1px solid var(--vcp-ui-accent);
+        border: 0;
         border-radius: var(--vcp-ui-radius-sm);
         color: var(--vcp-ui-on-accent);
         background: var(--vcp-ui-accent);
@@ -1064,6 +1131,132 @@
         border-radius: var(--vcp-ui-radius-sm);
     }
 
+    /* The modal itself owns .vcp-ui-scope. Keep these selectors on the same
+       element so legacy global-settings rules cannot reintroduce separators. */
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .global-settings-modal-content {
+        position: relative;
+        border: 0;
+        background: var(--vcp-ui-bg-0);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .global-settings-title {
+        display: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .vcp-ui-settings-shell {
+        gap: 0;
+        padding: 0;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .settings-section-title {
+        display: flex;
+        align-items: center;
+        min-height: calc(var(--vcp-ui-control-md) + var(--vcp-ui-space-2));
+        margin: 0 0 var(--vcp-ui-space-2);
+        padding: 0 calc(var(--vcp-ui-control-md) + var(--vcp-ui-space-3)) 0 0;
+        border: 0;
+        line-height: var(--vcp-ui-line-compact);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .close-button {
+        z-index: 3;
+        top: var(--vcp-ui-space-3);
+        right: var(--vcp-ui-space-3);
+        border: 0;
+        outline: 0;
+        background: color-mix(in srgb, var(--vcp-ui-bg-0) 82%, transparent);
+        box-shadow: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .global-settings-nav {
+        grid-row: 1 / 3;
+        padding: var(--vcp-ui-space-3) var(--vcp-ui-space-2);
+        border: 0;
+        border-radius: 0;
+        background: color-mix(in srgb, var(--vcp-ui-accent) 14%, var(--vcp-ui-bg-1));
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .vcp-ui-settings-search {
+        border: 0;
+        background: color-mix(in srgb, var(--vcp-ui-bg-0) 76%, transparent);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .settings-nav-list {
+        padding: 0;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .vcp-ui-list {
+        gap: var(--vcp-ui-space-2);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .settings-nav-item {
+        border: 0;
+        color: var(--vcp-ui-text-1);
+        background: transparent;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .settings-nav-item:hover {
+        color: var(--vcp-ui-text-0);
+        background: color-mix(in srgb, var(--vcp-ui-accent) 12%, var(--vcp-ui-bg-0));
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .settings-nav-item.active {
+        color: var(--vcp-ui-on-accent);
+        background: var(--vcp-ui-accent);
+        box-shadow: var(--vcp-ui-shadow-sm);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .vcp-ui-list-item {
+        min-height: var(--vcp-ui-control-md);
+        padding: 0 var(--vcp-ui-space-3);
+        border: 0;
+        border-radius: var(--vcp-ui-radius-md);
+        color: var(--vcp-ui-text-1);
+        background: transparent;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .vcp-ui-list-item:hover {
+        color: var(--vcp-ui-text-0);
+        background: color-mix(in srgb, var(--vcp-ui-accent) 12%, var(--vcp-ui-bg-0));
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .vcp-ui-list-item[data-state="selected"] {
+        color: var(--vcp-ui-on-accent);
+        background: var(--vcp-ui-accent);
+        box-shadow: var(--vcp-ui-shadow-sm);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .vcp-ui-list-item[data-state="selected"] .vcp-ui-icon {
+        color: var(--vcp-ui-on-accent);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .global-settings-content {
+        border: 0;
+        border-radius: 0;
+        background: var(--vcp-ui-bg-0);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal :is(.agent-identity-container, .settings-subsection, .chat-presentation-mode-option, .scenario-preview-card) {
+        border: 0;
+        background: var(--vcp-ui-fill-0);
+        box-shadow: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .agent-identity-container::before {
+        display: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal :is(.settings-dependent-panel, .settings-nested-panel) {
+        border: 0;
+        background: var(--vcp-ui-fill-1);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .global-settings-footer {
+        border: 0;
+        border-radius: 0;
+        background: var(--vcp-ui-bg-0);
+    }
+
     /* 700×500 审查窗口等窄视口仍保持双栏 shell（classic 的窄屏堆叠不适用）。 */
     @media (max-width: 768px) {
         html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-settings-shell {
@@ -1071,14 +1264,13 @@
             grid-template-columns: 200px minmax(0, 1fr);
             grid-template-rows: 1fr auto;
             flex-direction: initial;
-            gap: var(--vcp-ui-space-2);
-            padding: var(--vcp-ui-space-2);
+            gap: 0;
+            padding: 0;
         }
 
-        html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .global-settings-nav {
-            border: 1px solid var(--vcp-ui-border);
+        html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .global-settings-nav {
+            border: 0;
             border-radius: var(--vcp-ui-radius-md);
-            border-right: 0;
             max-height: none;
         }
 

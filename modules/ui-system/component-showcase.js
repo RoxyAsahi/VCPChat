@@ -239,7 +239,7 @@ function mountShowcase(container) {
     group = row(demo, 'States');
     group.append(create('Textarea', { placeholder: '输入说明...', rows: 4 }).element, create('Textarea', { value: '需要补充更多细节', invalid: true, resize: 'none' }).element);
 
-    demo = section('Select', 'Select', '原生选择器，支持占位、禁用选项和校验状态。');
+    demo = section('Select', 'Select', 'Web Awesome 驱动的选择器，支持占位、禁用选项、动态选项和校验状态。');
     group = row(demo, 'States');
     const selectOptions = [{ label: '自动', value: 'auto' }, { label: '浅色', value: 'light' }, { label: '深色', value: 'dark' }];
     group.append(create('Select', { placeholder: '选择主题', options: selectOptions, value: 'auto' }).element, create('Select', { options: selectOptions, invalid: true }).element, create('Select', { options: selectOptions, disabled: true }).element);

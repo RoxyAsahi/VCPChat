@@ -30,7 +30,17 @@ const surfaceDirs = [
     'VCPHumanToolBox',
     'VchatManager',
 ];
-const singleFiles = ['main.html'];
+const singleFiles = ['main.html', 'modules/ui-system/agent-workbench.js'];
+const SELECT_RUNTIME_ENTRYPOINTS = [
+    'Translatormodules/translator.html',
+    'Logmodules/log.html',
+    'PluginManagerModules/plugin-manager.html',
+    'Agenttaskmodules/task.html',
+    'Memomodules/memo.html',
+    'Forummodules/forum.html',
+    'RAGmodules/RAG_Observer.html',
+    'VCPHumanToolBox/index.html',
+];
 
 const CDN_HOSTS = [
     /unpkg\.com/i,
@@ -47,6 +57,7 @@ const CDN_SCHEMES = [/^https?:[/\\]{2}/i];
 const LUCIDE_SANCTIONED_ENTRIES = new Set([
     path.normalize('main.html'),
     path.normalize('VCPHumanToolBox/index.html'),
+    path.normalize('modules/ui-system/vcp-ui-runtime-bootstrap.js'),
 ]);
 
 const failures = [];
@@ -129,6 +140,26 @@ if (!fs.existsSync(adapterCssPath)) {
 }
 const adapterCss = fs.readFileSync(adapterCssPath, 'utf8');
 const registeredParts = [...adapterCss.matchAll(/::part\(([\w-]+)\)/g)].map(match => match[1]);
+
+for (const entrypoint of SELECT_RUNTIME_ENTRYPOINTS) {
+    const entryPath = path.join(root, entrypoint);
+    const source = fs.existsSync(entryPath) ? fs.readFileSync(entryPath, 'utf8') : '';
+    if (!source.includes('vcp-ui-runtime-bootstrap.js')) {
+        failures.push(`${entrypoint}: Select-bearing next-mode page must load vcp-ui-runtime-bootstrap.js`);
+    }
+}
+const mainSource = fs.readFileSync(path.join(root, 'main.html'), 'utf8');
+if (!mainSource.includes('modules/ui-system/vcp-main-ui-runtime.js')) {
+    failures.push('main.html: Agent Workbench/global settings Select migration requires vcp-main-ui-runtime.js');
+}
+const runtimeSource = fs.readFileSync(path.join(root, 'modules/ui-system/vcp-ui-runtime-bootstrap.js'), 'utf8');
+if (!runtimeSource.includes('VCPUI.observeControls')) {
+    failures.push('vcp-ui-runtime-bootstrap.js: dynamic Select observer is missing');
+}
+const vcpUiSource = fs.readFileSync(path.join(root, 'modules/ui-system/vcp-ui.js'), 'utf8');
+if (!vcpUiSource.includes("ENHANCERS.set('select', selectEnhancer)")) {
+    failures.push('vcp-ui.js: Select enhancer must use the Web Awesome proxy adapter');
+}
 
 if (failures.length) {
     console.error('UI applications gate failed:\n');

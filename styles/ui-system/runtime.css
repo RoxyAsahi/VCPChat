@@ -25,4 +25,21 @@
         display: flex;
         flex-direction: column;
     }
+
+    /* Wallpaper-aware page surface: the semi-transparent --next-chat-surface is
+       layered over the shared wallpaper, matching the main chat. Page CSS that
+       only sets `background-color` composes with these image layers; a page that
+       uses the opaque `background:` shorthand would hide the wallpaper. */
+    html[data-ui-mode="next"] body.vcp-ui-scope {
+        background-color: var(--vcp-ui-bg-primary);
+        background-image:
+            linear-gradient(var(--next-chat-surface), var(--next-chat-surface)),
+            var(--next-wallpaper);
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: cover;
+        background-attachment: fixed;
+        backdrop-filter: var(--next-surface-backdrop-filter);
+        -webkit-backdrop-filter: var(--next-surface-backdrop-filter);
+    }
 }

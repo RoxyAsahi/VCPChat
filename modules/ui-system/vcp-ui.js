@@ -14,6 +14,9 @@ function icon(name, className = '') {
     span.className = `vcp-ui-icon ${className}`.trim();
     span.setAttribute('aria-hidden', 'true');
     span.textContent = name;
+    queueMicrotask(() => {
+        if (span.isConnected) window.VCPIcons?.set?.(span, name);
+    });
     return span;
 }
 
@@ -128,7 +131,7 @@ function nativeControlEnhancer(element, kind, options = {}) {
     const originalAriaLabel = element.getAttribute('aria-label');
     const state = { size: 'md', ...options };
 
-    return makeController(element, state, current => {
+    const controller = makeController(element, state, current => {
         element.classList.add(className);
         element.dataset.size = normalize(current.size, ['sm', 'md', 'lg'], 'md', 'size');
         if (current.label) element.setAttribute('aria-label', current.label);
@@ -144,6 +147,213 @@ function nativeControlEnhancer(element, kind, options = {}) {
         if (originalAriaLabel === null) element.removeAttribute('aria-label');
         else element.setAttribute('aria-label', originalAriaLabel);
     }, { removeOnDestroy: false });
+    controller.kernel = 'native';
+    controller.kind = kind;
+    return controller;
+}
+
+function selectEnhancer(element, options = {}) {
+    if (!element?.matches?.('select')) {
+        throw new TypeError('VCPUI select enhancement received an incompatible element.');
+    }
+
+    const wa = waControl('select', {});
+    if (!wa) return nativeControlEnhancer(element, 'select', options);
+
+    const originallyNativeSelect = element.classList.contains('vcp-ui-native-select');
+    const originallySelectSource = element.classList.contains('vcp-ui-select-source');
+    const originalSize = element.getAttribute('data-size');
+    const originalAriaHidden = element.getAttribute('aria-hidden');
+    const originalTabIndex = element.getAttribute('tabindex');
+    const originallyHidden = element.hidden;
+    const state = { size: element.dataset.size || 'md', ...options };
+    const propertyRestorers = [];
+    let syncing = false;
+    let observer;
+
+    wa.className = 'vcp-ui-select vcp-ui-wa-select vcp-ui-select-proxy';
+    wa.dataset.vcpSelectProxyFor = element.id || '';
+    wa.setAttribute('data-vcp-select-proxy', 'true');
+    element.classList.add('vcp-ui-native-select', 'vcp-ui-select-source');
+    element.hidden = true;
+    element.setAttribute('aria-hidden', 'true');
+    element.setAttribute('tabindex', '-1');
+
+    const insertProxy = () => {
+        if (!wa.isConnected && element.parentNode) element.after(wa);
+    };
+
+    const nativeOptionRecords = () => [...element.options].map(option => ({
+        value: option.value,
+        label: option.label || option.textContent || option.value,
+        disabled: option.disabled || Boolean(option.closest('optgroup')?.disabled),
+        group: option.closest('optgroup')?.label || '',
+    }));
+
+    const syncNativeToProxy = () => {
+        if (syncing) return;
+        syncing = true;
+        insertProxy();
+        const businessClasses = [...element.classList]
+            .filter(name => !['vcp-ui-native-select', 'vcp-ui-select-source'].includes(name));
+        wa.className = ['vcp-ui-select', 'vcp-ui-wa-select', 'vcp-ui-select-proxy', ...businessClasses].join(' ');
+        wa.removeAttribute('style');
+        [
+            'display', 'width', 'minWidth', 'maxWidth', 'height', 'minHeight', 'maxHeight',
+            'margin', 'marginTop', 'marginRight', 'marginBottom', 'marginLeft',
+            'flex', 'flexGrow', 'flexShrink', 'flexBasis', 'alignSelf', 'justifySelf',
+            'gridArea', 'gridColumn', 'gridRow', 'order', 'boxSizing', 'fontSize',
+        ].forEach(property => {
+            const value = element.style[property];
+            if (value) wa.style[property] = value;
+        });
+        waSize(wa, element.dataset.size || state.size);
+        wa.disabled = Boolean(element.disabled);
+        wa.required = Boolean(element.required);
+        wa.name = '';
+        const label = state.label || element.getAttribute('aria-label') || element.labels?.[0]?.textContent?.trim() || '';
+        if (label) wa.setAttribute('aria-label', label);
+        else wa.removeAttribute('aria-label');
+        ['aria-describedby', 'aria-labelledby', 'title'].forEach(attribute => {
+            const value = element.getAttribute(attribute);
+            if (value) wa.setAttribute(attribute, value);
+            else wa.removeAttribute(attribute);
+        });
+        const invalid = state.invalid ?? element.getAttribute('aria-invalid') === 'true';
+        if (invalid) wa.setAttribute('aria-invalid', 'true');
+        else wa.removeAttribute('aria-invalid');
+        if (typeof wa.setCustomValidity === 'function') {
+            wa.setCustomValidity(invalid ? (state.invalidMessage || element.validationMessage || ' ') : '');
+        }
+        wa.replaceChildren();
+        let previousGroup = null;
+        nativeOptionRecords().forEach(record => {
+            const option = document.createElement('wa-option');
+            option.value = record.value;
+            option.disabled = record.disabled;
+            option.textContent = record.label;
+            if (record.group) {
+                option.dataset.group = record.group;
+                option.setAttribute('aria-label', `${record.group}: ${record.label}`);
+                if (record.group !== previousGroup) option.dataset.groupStart = 'true';
+            }
+            previousGroup = record.group;
+            wa.append(option);
+        });
+        wa.value = element.value;
+        syncing = false;
+    };
+
+    const syncProxyToNative = event => {
+        if (syncing) return;
+        syncing = true;
+        const nextValue = wa.value == null ? '' : String(wa.value);
+        const changed = element.value !== nextValue;
+        element.value = nextValue;
+        syncing = false;
+        event?.stopPropagation?.();
+        if (changed || event?.type === 'change') {
+            element.dispatchEvent(new Event('input', { bubbles: true }));
+            element.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    };
+
+    const patchProperty = property => {
+        const prototype = Object.getPrototypeOf(element);
+        const descriptor = Object.getOwnPropertyDescriptor(prototype, property);
+        if (!descriptor?.get || !descriptor?.set) return;
+        const own = Object.getOwnPropertyDescriptor(element, property);
+        Object.defineProperty(element, property, {
+            configurable: true,
+            enumerable: descriptor.enumerable,
+            get: () => descriptor.get.call(element),
+            set: value => {
+                descriptor.set.call(element, value);
+                queueMicrotask(syncNativeToProxy);
+            },
+        });
+        propertyRestorers.push(() => {
+            if (own) Object.defineProperty(element, property, own);
+            else delete element[property];
+        });
+    };
+
+    const patchMethod = method => {
+        if (typeof element[method] !== 'function') return;
+        const own = Object.getOwnPropertyDescriptor(element, method);
+        const original = element[method].bind(element);
+        Object.defineProperty(element, method, {
+            configurable: true,
+            value: (...args) => {
+                const result = original(...args);
+                queueMicrotask(syncNativeToProxy);
+                return result;
+            },
+        });
+        propertyRestorers.push(() => {
+            if (own) Object.defineProperty(element, method, own);
+            else delete element[method];
+        });
+    };
+
+    patchProperty('value');
+    patchProperty('selectedIndex');
+    patchMethod('add');
+    patchMethod('remove');
+    const ownFocus = Object.getOwnPropertyDescriptor(element, 'focus');
+    Object.defineProperty(element, 'focus', {
+        configurable: true,
+        value: (...args) => wa.focus?.(...args),
+    });
+    propertyRestorers.push(() => {
+        if (ownFocus) Object.defineProperty(element, 'focus', ownFocus);
+        else delete element.focus;
+    });
+
+    let controller;
+    controller = makeController(wa, state, current => {
+        if (current.value !== undefined && element.value !== String(current.value)) element.value = String(current.value);
+        if (current.disabled !== undefined) element.disabled = Boolean(current.disabled);
+        if (current.required !== undefined) element.required = Boolean(current.required);
+        syncNativeToProxy();
+    }, () => {
+        observer?.disconnect();
+        propertyRestorers.splice(0).reverse().forEach(restore => restore());
+        controllerByElement.delete(element);
+        if (!originallyNativeSelect) element.classList.remove('vcp-ui-native-select');
+        if (!originallySelectSource) element.classList.remove('vcp-ui-select-source');
+        if (originalSize === null) element.removeAttribute('data-size');
+        else element.setAttribute('data-size', originalSize);
+        if (originalAriaHidden === null) element.removeAttribute('aria-hidden');
+        else element.setAttribute('aria-hidden', originalAriaHidden);
+        if (originalTabIndex === null) element.removeAttribute('tabindex');
+        else element.setAttribute('tabindex', originalTabIndex);
+        element.hidden = originallyHidden;
+    });
+    controller.nativeElement = element;
+    controller.kernel = 'webawesome-proxy';
+    controller.kind = 'select';
+    controller.refresh = () => {
+        syncNativeToProxy();
+        return controller;
+    };
+    controllerByElement.set(element, controller);
+    controller._listen(wa, 'input', syncProxyToNative);
+    controller._listen(wa, 'change', syncProxyToNative);
+    controller._listen(wa, 'focus', syncNativeToProxy, true);
+    controller._listen(wa, 'pointerdown', syncNativeToProxy, true);
+    controller._listen(element, 'input', syncNativeToProxy);
+    controller._listen(element, 'change', syncNativeToProxy);
+    [...(element.labels || [])].forEach(label => controller._listen(label, 'click', event => {
+        event.preventDefault();
+        wa.focus?.();
+    }));
+    if (typeof MutationObserver !== 'undefined') {
+        observer = new MutationObserver(() => queueMicrotask(syncNativeToProxy));
+        observer.observe(element, { attributes: true, childList: true, subtree: true, characterData: true });
+    }
+    queueMicrotask(syncNativeToProxy);
+    return waFocus(controller, wa);
 }
 
 function nativeSwitchEnhancer(element, options = {}) {
@@ -666,11 +876,7 @@ function iconButtonFactory(options = {}) {
             wa.setAttribute('aria-label', current.label || 'Icon button');
             wa.setAttribute('aria-pressed', String(Boolean(current.active)));
             wa.setAttribute('title', current.title || current.label || '');
-            wa.replaceChildren();
-            const start = document.createElement('span');
-            start.slot = 'start';
-            start.append(icon(current.icon));
-            wa.append(start);
+            wa.replaceChildren(icon(current.icon));
         });
         return waFocus(controller, wa);
     }
@@ -1596,12 +1802,25 @@ function windowControlsFactory(options = {}) {
     const maximize = iconButtonFactory({ icon: 'crop_square', label: '最大化窗口', size: 'sm', variant: 'ghost' });
     const close = iconButtonFactory({ icon: 'close', label: '关闭窗口', size: 'sm', variant: 'ghost' });
     close.element.classList.add('vcp-ui-window-control-close');
+    [minimize.element, maximize.element, close.element].forEach(button => {
+        button.classList.add('vcp-ui-window-control-button');
+        button.style.webkitAppRegion = 'no-drag';
+    });
     const controller = makeController(element, state, current => {
         element.replaceChildren(minimize.element, maximize.element, close.element);
     });
-    minimize.element.addEventListener('click', () => state.onMinimize?.() ?? window.utilityAPI?.minimizeWindow?.());
-    maximize.element.addEventListener('click', () => state.onMaximize?.() ?? window.utilityAPI?.maximizeWindow?.());
-    close.element.addEventListener('click', () => state.onClose?.() ?? window.utilityAPI?.closeWindow?.());
+    minimize.element.addEventListener('click', () => {
+        if (typeof state.onMinimize === 'function') state.onMinimize();
+        else window.utilityAPI?.minimizeWindow?.();
+    });
+    maximize.element.addEventListener('click', () => {
+        if (typeof state.onMaximize === 'function') state.onMaximize();
+        else window.utilityAPI?.maximizeWindow?.();
+    });
+    close.element.addEventListener('click', () => {
+        if (typeof state.onClose === 'function') state.onClose();
+        else window.utilityAPI?.closeWindow?.();
+    });
     return controller;
 }
 
@@ -1691,7 +1910,7 @@ function asyncBoundaryFactory(options = {}) {
 
 ENHANCERS.set('input', (element, options) => nativeControlEnhancer(element, 'input', options));
 ENHANCERS.set('textarea', (element, options) => nativeControlEnhancer(element, 'textarea', options));
-ENHANCERS.set('select', (element, options) => nativeControlEnhancer(element, 'select', options));
+ENHANCERS.set('select', selectEnhancer);
 ENHANCERS.set('range', (element, options) => rangeEnhancer(element, options));
 ENHANCERS.set('switch', nativeSwitchEnhancer);
 ENHANCERS.set('field', fieldEnhancer);
@@ -1775,6 +1994,42 @@ const feedback = Object.freeze({
     }
 });
 
+function observeControls(root = document, options = {}) {
+    const kinds = new Set(options.kinds || ['Select']);
+    const filter = typeof options.filter === 'function' ? options.filter : () => true;
+    const owned = new Set();
+    const enhanceTree = candidate => {
+        if (document.documentElement.dataset.uiMode !== 'next') return;
+        const scope = candidate?.nodeType === 1 ? candidate : root;
+        const selects = [];
+        if (kinds.has('Select')) {
+            if (scope?.matches?.('select:not(.vcp-ui-select-source)')) selects.push(scope);
+            scope?.querySelectorAll?.('select:not(.vcp-ui-select-source)').forEach(select => selects.push(select));
+        }
+        selects.filter(filter).forEach(select => {
+            try {
+                const controller = VCPUI.enhance('Select', select);
+                owned.add(controller);
+            } catch (error) {
+                console.warn('[VCPUI] Unable to enhance dynamic Select:', error);
+            }
+        });
+    };
+    enhanceTree(root);
+    const observer = typeof MutationObserver === 'undefined' ? null : new MutationObserver(records => {
+        records.forEach(record => record.addedNodes.forEach(enhanceTree));
+    });
+    observer?.observe(root === document ? document.documentElement : root, { childList: true, subtree: true });
+    return Object.freeze({
+        refresh: () => enhanceTree(root),
+        destroy() {
+            observer?.disconnect();
+            owned.forEach(controller => controller.destroy?.());
+            owned.clear();
+        },
+    });
+}
+
 const VCPUI = Object.freeze({
     create(name, options = {}) {
         const factory = COMPONENTS.get(String(name).toLowerCase());
@@ -1786,7 +2041,14 @@ const VCPUI = Object.freeze({
         const enhancer = ENHANCERS.get(normalized);
         if (!enhancer) throw new Error(`Unknown VCPUI enhancer: ${name}`);
         const existing = controllerByElement.get(element);
-        if (existing) return existing.update(options);
+        if (existing) {
+            const canUpgradeSelect = normalized === 'select'
+                && existing.kernel === 'native'
+                && document.documentElement.dataset.uiMode === 'next'
+                && window.VCPWebAwesome?.isDefined?.('select');
+            if (!canUpgradeSelect) return existing.update(options);
+            existing.destroy();
+        }
         return enhancer(element, options);
     },
     feedback,
@@ -1809,6 +2071,7 @@ const VCPUI = Object.freeze({
     getController(element) {
         return controllerByElement.get(element) || null;
     },
+    observeControls,
     getComponentMeta(name) {
         const normalized = String(name).toLowerCase();
         return COMPONENT_MANIFEST.find(item => item.name.toLowerCase() === normalized || item.aliases.some(alias => alias.toLowerCase() === normalized)) || null;

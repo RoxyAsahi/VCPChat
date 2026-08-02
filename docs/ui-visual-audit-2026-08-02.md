@@ -32,7 +32,7 @@
 | S | 主界面/组件库 | 主界面 | ✅ boot 零 WA 请求/零注册；组件库懒加载 WA；Lucide 生效 | ✅ 切 classic 清理 | 懒加载注册 | ✅ | — | `main-showcase.png` | 视觉通过 |
 
 注 1：记忆页在无后端初始化时显示「初始化未完成」，首屏无可见表单控件；文件夹初始化在真实环境完成。该空态不构成 next 模式缺陷，但列入“真实业务验证”项。
-注 2：业务页表单控件采用「native 增强」策略（`vcp-ui-native-*` 类、保留原生 `.value`），因此 `wa-input/wa-select` 只在便签（`VCPUI.create('Input')`）出现，其余页面以 `wa-tooltip` 作为 WA 真实参与的可见证据；VCPUI 核心控件（Select/Tabs/Modal/Tooltip）的 `wa-*` 断言在组件库段直接验证。
+注 2（已由后续 Select 迁移取代）：业务页仍保留原生 select 作为兼容真源，但 next mode 的可见选择器改由 VCPUI Select Proxy 创建 `wa-select`；Input/Textarea 仍按各页面迁移状态处理。
 
 ---
 
@@ -103,8 +103,8 @@
 
 ### D-06（信息）业务页表单控件为「native 增强」而非真 WA 控件
 - 页面：除便签外的全部业务页
-- 现象：`VCPUI.enhance('Select'/'Input'/'Textarea')` 给原生控件加 `vcp-ui-native-*` 类并保留原生 `.value`，不生成 `wa-input/wa-select`；因此这些页面唯一的真 WA 元素是 `wa-tooltip`。
-- 说明：这是既定设计（保留业务 `.value` 契约），`wa-*` 的组件级验证由组件库段的 `VCPUI.create('Select'|'Tabs'|'Modal')` 断言覆盖。已按此口径设置 smoke 断言，**不视为缺陷**，仅记录供后续决策（若需真 WA 控件需重构业务读取路径）。
+- 历史现象：早期 `VCPUI.enhance('Select')` 只增加原生样式，不生成 `wa-select`。
+- 当前决策：Select 已采用双向 Proxy；保留原生 `.value/.options` 契约不再阻止业务页面使用真正的 Web Awesome Select。该文档其余截图结论仍代表当日基线，不自动视为本轮验收收据。
 
 ---
 

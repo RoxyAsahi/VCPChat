@@ -34,7 +34,7 @@ VCPChat 保留自身约束：卡片圆角不超过 8px，不使用 `!important`�
 现有设置页、侧栏和聊天区拥有大量稳定的 DOM ID、事件引用和 IPC 流程，不采用整页重写。迁移固定分为三步：
 
 1. Token 化：先消除裸色值、液态玻璃和重复尺寸，但不改变业务 DOM。
-2. Enhance：通过 `VCPUI.enhance(name, existingElement)` 把原节点接入组件状态与生命周期，保留原事件和表单提交。
+2. Enhance：通过 `VCPUI.enhance(name, existingElement)` 把原节点接入组件状态与生命周期，保留原事件和表单提交。`Select` 在 next mode 使用 Web Awesome Proxy：原生节点仍是表单与业务真源，可见控件由 `wa-select` 提供；classic mode 不创建 Proxy。
 3. Create：只有新页面或已完成业务解耦的区域才使用 `VCPUI.create(name)` 生成完整 DOM。
 
 增强控制器销毁时不得删除业务节点；切换经典 UI 时必须撤销组件类和 ARIA 增量。一个控件完成 Enhance 迁移并通过真实 Electron 验证后，才可将对应候选组件升级为 stable。
@@ -62,6 +62,9 @@ VCPChat 保留自身约束：卡片圆角不超过 8px，不使用 `!important`�
 - 控制器必须提供 `element/update/focus/destroy`，全局监听、Observer、计时器和未完成 Promise 必须在销毁时清理。
 - 业务页面不得使用内联样式、`!important`、裸色值或固定字号绕过系统。
 - 组件 API 的不兼容修改需要更新 manifest 版本、规范文档、展示页和契约测试。
+- 新版内嵌业务页必须采用共享 Integrated App Shell；禁止在业务 CSS 中复制一套“顶部融合、左上圆角、主面板阴影”的近似实现。
+- `AppPageShell` 的 embedded 标题栏隐藏后，业务动作必须在内容工具栏仍可达；standalone 标题栏和 WindowControls 不得因此删除。
+- 页面布局按 `rail`、`compact-rail`、`canvas` 三类选择，不能为了视觉统一给单画布页面虚构无业务含义的侧栏。
 
 ## 页面完成定义
 

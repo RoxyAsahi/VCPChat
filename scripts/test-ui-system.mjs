@@ -17,6 +17,7 @@ Object.assign(globalThis, {
     Event: dom.window.Event,
     CustomEvent: dom.window.CustomEvent,
     KeyboardEvent: dom.window.KeyboardEvent,
+    MutationObserver: dom.window.MutationObserver,
     Option: dom.window.Option,
     HTMLElement: dom.window.HTMLElement,
     HTMLButtonElement: dom.window.HTMLButtonElement,
@@ -116,6 +117,95 @@ enhancedInput.destroy();
 assert.ok(legacyInput.isConnected);
 assert.equal(legacyInput.getAttribute('aria-invalid'), null);
 legacyInput.remove();
+
+class TestWaOption extends dom.window.HTMLElement {
+    get value() { return this.getAttribute('value') || ''; }
+    set value(next) { this.setAttribute('value', String(next)); }
+    get disabled() { return this.hasAttribute('disabled'); }
+    set disabled(next) { this.toggleAttribute('disabled', Boolean(next)); }
+}
+class TestWaSelect extends dom.window.HTMLElement {
+    constructor() {
+        super();
+        this._value = '';
+        this.disabled = false;
+        this.required = false;
+        this.updateComplete = Promise.resolve();
+    }
+    get value() { return this._value; }
+    set value(next) { this._value = String(next ?? ''); }
+    setCustomValidity(message) { this.validationMessage = message; }
+}
+if (!customElements.get('wa-option')) customElements.define('wa-option', TestWaOption);
+if (!customElements.get('wa-select')) customElements.define('wa-select', TestWaSelect);
+
+const legacySelect = document.createElement('select');
+legacySelect.id = 'legacySelect';
+legacySelect.className = 'legacy-filter-select';
+legacySelect.style.cssText = 'width: 12rem; padding: 20px; border: 4px solid red; background: blue;';
+legacySelect.setAttribute('aria-label', 'Legacy choice');
+legacySelect.add(new Option('One', 'one'));
+legacySelect.add(new Option('Two', 'two'));
+legacySelect.value = 'one';
+scope.append(legacySelect);
+let legacySelectChanges = 0;
+legacySelect.addEventListener('change', () => { legacySelectChanges += 1; });
+const enhancedSelect = VCPUI.enhance('Select', legacySelect, { size: 'sm' });
+await new Promise(resolve => setTimeout(resolve, 0));
+assert.equal(enhancedSelect.nativeElement, legacySelect);
+assert.equal(enhancedSelect.element.localName, 'wa-select');
+assert.ok(enhancedSelect.element.classList.contains('legacy-filter-select'));
+assert.equal(enhancedSelect.element.style.width, '12rem');
+assert.equal(enhancedSelect.element.style.padding, '', 'legacy visual padding is not copied to the WA host');
+assert.equal(enhancedSelect.element.style.border, '', 'legacy visual border is not copied to the WA host');
+assert.equal(enhancedSelect.element.style.background, '', 'legacy visual background is not copied to the WA host');
+assert.ok(legacySelect.classList.contains('vcp-ui-select-source'));
+assert.equal(enhancedSelect.element.querySelectorAll('wa-option').length, 2);
+assert.equal(enhancedSelect.element.value, 'one');
+legacySelect.value = 'two';
+await new Promise(resolve => setTimeout(resolve, 0));
+assert.equal(enhancedSelect.element.value, 'two', 'native value writes sync to WA');
+legacySelect.add(new Option('Three', 'three'));
+await new Promise(resolve => setTimeout(resolve, 0));
+assert.equal(enhancedSelect.element.querySelectorAll('wa-option').length, 3, 'native option additions sync to WA');
+enhancedSelect.element.value = 'three';
+enhancedSelect.element.dispatchEvent(new Event('change', { bubbles: true }));
+assert.equal(legacySelect.value, 'three', 'WA value syncs to native source');
+assert.equal(legacySelectChanges, 1, 'WA change relays exactly one native change');
+assert.equal(VCPUI.getController(legacySelect), enhancedSelect, 'repeat enhancement resolves the proxy controller');
+enhancedSelect.destroy();
+assert.ok(legacySelect.isConnected, 'destroy restores the native select');
+assert.ok(!legacySelect.classList.contains('vcp-ui-select-source'));
+legacySelect.remove();
+
+const dynamicSelectRoot = document.createElement('div');
+scope.append(dynamicSelectRoot);
+const selectObserver = VCPUI.observeControls(dynamicSelectRoot, { kinds: ['Select'] });
+const dynamicSelect = document.createElement('select');
+dynamicSelect.add(new Option('Dynamic', 'dynamic'));
+dynamicSelectRoot.append(dynamicSelect);
+await new Promise(resolve => setTimeout(resolve, 0));
+assert.equal(dynamicSelectRoot.querySelectorAll('wa-select.vcp-ui-select-proxy').length, 1, 'dynamic Select receives one proxy');
+selectObserver.refresh();
+assert.equal(dynamicSelectRoot.querySelectorAll('wa-select.vcp-ui-select-proxy').length, 1, 'refresh does not duplicate Select proxies');
+selectObserver.destroy();
+assert.equal(dynamicSelectRoot.querySelectorAll('wa-select.vcp-ui-select-proxy').length, 0, 'observer teardown removes owned proxies');
+assert.equal(dynamicSelect.hidden, false, 'observer teardown restores native Select visibility');
+dynamicSelectRoot.remove();
+
+document.documentElement.dataset.uiMode = 'classic';
+const lateUpgradeSelect = document.createElement('select');
+lateUpgradeSelect.add(new Option('Late', 'late'));
+scope.append(lateUpgradeSelect);
+const nativeSelectController = VCPUI.enhance('Select', lateUpgradeSelect);
+assert.equal(nativeSelectController.kernel, 'native');
+document.documentElement.dataset.uiMode = 'next';
+const upgradedSelectController = VCPUI.enhance('Select', lateUpgradeSelect);
+await new Promise(resolve => setTimeout(resolve, 0));
+assert.equal(upgradedSelectController.kernel, 'webawesome-proxy', 'native Select upgrades after WA becomes available');
+assert.notEqual(upgradedSelectController, nativeSelectController);
+upgradedSelectController.destroy();
+lateUpgradeSelect.remove();
 
 const legacySection = document.createElement('section');
 legacySection.className = 'agent-settings-section collapsed';
@@ -251,6 +341,37 @@ assert.equal(behaviorIconButton.element.getAttribute('aria-label'), '关闭');
 assert.equal(behaviorIconButton.element.getAttribute('aria-pressed'), null);
 behaviorIconButton.destroy();
 
+// WindowControls: a page handler and the utility fallback are mutually
+// exclusive. Calling both makes maximize toggle twice and appear inert.
+const windowCalls = { pageMinimize: 0, pageMaximize: 0, pageClose: 0, fallbackMinimize: 0, fallbackMaximize: 0, fallbackClose: 0 };
+window.utilityAPI = {
+    minimizeWindow: () => { windowCalls.fallbackMinimize += 1; },
+    maximizeWindow: () => { windowCalls.fallbackMaximize += 1; },
+    closeWindow: () => { windowCalls.fallbackClose += 1; },
+};
+const behaviorWindowControls = VCPUI.create('WindowControls', {
+    onMinimize: () => { windowCalls.pageMinimize += 1; },
+    onMaximize: () => { windowCalls.pageMaximize += 1; },
+    onClose: () => { windowCalls.pageClose += 1; },
+});
+assert.equal(behaviorWindowControls.element.querySelectorAll('.vcp-ui-window-control-button').length, 3,
+    'WindowControls must mark every clickable host as a no-drag control');
+assert.ok([...behaviorWindowControls.element.querySelectorAll('.vcp-ui-window-control-button')]
+    .every(button => button.style.webkitAppRegion === 'no-drag'),
+    'WindowControls must apply no-drag directly instead of relying on a parent drag-region exception');
+behaviorWindowControls.element.querySelector('[aria-label="最小化窗口"]').click();
+behaviorWindowControls.element.querySelector('[aria-label="最大化窗口"]').click();
+behaviorWindowControls.element.querySelector('[aria-label="关闭窗口"]').click();
+assert.deepEqual(windowCalls, { pageMinimize: 1, pageMaximize: 1, pageClose: 1, fallbackMinimize: 0, fallbackMaximize: 0, fallbackClose: 0 });
+behaviorWindowControls.destroy();
+
+const fallbackWindowControls = VCPUI.create('WindowControls');
+fallbackWindowControls.element.querySelector('[aria-label="最小化窗口"]').click();
+fallbackWindowControls.element.querySelector('[aria-label="最大化窗口"]').click();
+fallbackWindowControls.element.querySelector('[aria-label="关闭窗口"]').click();
+assert.deepEqual(windowCalls, { pageMinimize: 1, pageMaximize: 1, pageClose: 1, fallbackMinimize: 1, fallbackMaximize: 1, fallbackClose: 1 });
+fallbackWindowControls.destroy();
+
 // Input: disabled / readonly / required / invalid / value / focus.
 const behaviorInput = VCPUI.create('Input', { placeholder: 'Name', required: true, readonly: true, disabled: true, invalid: true });
 const behaviorInputControl = behaviorInput.element.querySelector('input');
@@ -272,7 +393,7 @@ behaviorTextarea.destroy();
 
 // Select: options render, value/disabled read back.
 const behaviorSelect = VCPUI.create('Select', { options: ['One', 'Two'], value: 'Two', disabled: true });
-assert.equal(behaviorSelect.element.querySelectorAll('option').length, 2);
+assert.equal(behaviorSelect.element.querySelectorAll(behaviorSelect.element.localName === 'wa-select' ? 'wa-option' : 'option').length, 2);
 assert.equal(behaviorSelect.element.value, 'Two');
 assert.equal(behaviorSelect.element.disabled, true);
 behaviorSelect.update({ disabled: false, value: 'One' });
