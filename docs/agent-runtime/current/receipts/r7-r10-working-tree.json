@@ -1,14 +1,29 @@
 {
-  "status": "implemented",
+  "status": "hermetic",
   "codexProtocol": "0.146",
   "scope": ["R7", "R8", "R9", "R10"],
   "toolboxModified": false,
   "liveVerified": false,
+  "verifiedCommit": "a65849ba9183b7c2a45c688536ab1295b17a8da4",
+  "verifiedAt": "2026-08-02T20:53:04+02:00",
   "commands": [
-    "npm run test:codex-reliability",
-    "npm run test:electron-codex-recovery",
+    "npm run check:codex-schema",
     "npm run check:codex-governance",
-    "npm run test:codex-stack"
+    "npm run check:agent-runtime",
+    "npm run test:codex-stack",
+    "npm run test:electron-codex-recovery",
+    "npm run test:electron-codex-smoke"
   ],
-  "note": "Status may be promoted to hermetic only after these commands pass on the same commit."
+  "results": {
+    "codexCi": "passed",
+    "electronCodexSmoke": "passed",
+    "electronRecovery": {
+      "sqliteReadableAfterCrash": true,
+      "demandRestart": true,
+      "replayedTurns": 0,
+      "replayedInteractions": 0
+    }
+  },
+  "knownGate": "npm run check:ui-system remains blocked by the pre-existing inline-style guard in unmodified modules/ui-system/vcp-ui.js.",
+  "note": "Hermetic only. Real ToolBox/Nova dual-Thread long-task verification remains a manual release gate."
 }
