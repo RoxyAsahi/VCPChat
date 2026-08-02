@@ -82,6 +82,7 @@ function removeHandlers() {
         IPC_CHANNELS.LIST_INTERACTION_QUEUE,
         IPC_CHANNELS.REPLACE_INTERACTION_QUEUE,
         IPC_CHANNELS.CLEAR_INTERACTION_QUEUE,
+        IPC_CHANNELS.RESOLVE_PENDING_INPUT,
         IPC_CHANNELS.GET_WORKBENCH_SETTINGS,
         IPC_CHANNELS.UPDATE_WORKBENCH_SETTINGS,
         IPC_CHANNELS.SELECT_ATTACHMENTS,
@@ -237,9 +238,10 @@ function initialize(options) {
         await fs.promises.writeFile(result.filePath, exported.content, 'utf8');
         return { exported: true, filePath: result.filePath, format };
     }));
-    ipcMain.handle(IPC_CHANNELS.LIST_INTERACTION_QUEUE, (event) => projectionGuard(event, () => manager.listInteractionQueue()));
+    ipcMain.handle(IPC_CHANNELS.LIST_INTERACTION_QUEUE, (event, payload) => projectionGuard(event, () => manager.listInteractionQueue(payload || {})));
     ipcMain.handle(IPC_CHANNELS.REPLACE_INTERACTION_QUEUE, (event, payload) => projectionGuard(event, () => manager.replaceInteractionQueue(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.CLEAR_INTERACTION_QUEUE, (event) => projectionGuard(event, () => manager.clearInteractionQueue()));
+    ipcMain.handle(IPC_CHANNELS.CLEAR_INTERACTION_QUEUE, (event, payload) => projectionGuard(event, () => manager.clearInteractionQueue(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.RESOLVE_PENDING_INPUT, (event, payload) => toolboxGuard(event, () => manager.resolvePendingInput(payload || {})));
     ipcMain.handle(IPC_CHANNELS.GET_WORKBENCH_SETTINGS, (event) => projectionGuard(event, () => manager.getWorkbenchSettings()));
     ipcMain.handle(IPC_CHANNELS.UPDATE_WORKBENCH_SETTINGS, (event, payload) => projectionGuard(event, () => manager.updateWorkbenchSettings(payload || {})));
     ipcMain.handle(IPC_CHANNELS.SELECT_ATTACHMENTS, (event, payload) => projectionGuard(event, async () => {

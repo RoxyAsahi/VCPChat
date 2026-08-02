@@ -219,6 +219,9 @@ class AgentProjectionRepository {
             deletePendingInput: this.db.prepare('DELETE FROM agent_pending_inputs WHERE input_id = ?'),
             updatePendingInput: this.db.prepare(`
                 UPDATE agent_pending_inputs SET state = @state,
+                    dedupe_key = @dedupe_key,
+                    prompt = @prompt,
+                    client_message_id = @client_message_id,
                     codex_turn_id = @codex_turn_id,
                     attempt_count = @attempt_count,
                     last_error = @last_error,
@@ -598,6 +601,10 @@ class AgentProjectionRepository {
         this.stmt.updatePendingInput.run({
             input_id: String(inputId),
             state: patch.state || row.state,
+            dedupe_key: Object.prototype.hasOwnProperty.call(patch, 'dedupeKey') ? String(patch.dedupeKey) : row.dedupe_key,
+            prompt: Object.prototype.hasOwnProperty.call(patch, 'prompt') ? String(patch.prompt) : row.prompt,
+            client_message_id: Object.prototype.hasOwnProperty.call(patch, 'clientMessageId')
+                ? String(patch.clientMessageId) : row.client_message_id,
             codex_turn_id: Object.prototype.hasOwnProperty.call(patch, 'turnId') ? patch.turnId : row.codex_turn_id,
             attempt_count: Number.isInteger(patch.attemptCount) ? patch.attemptCount : row.attempt_count,
             last_error: Object.prototype.hasOwnProperty.call(patch, 'lastError') ? patch.lastError : row.last_error,
@@ -608,6 +615,18 @@ class AgentProjectionRepository {
 
     removePendingInput(inputId) {
         this.stmt.deletePendingInput.run(String(inputId));
+    }
+
+    retryPendingInput(inputId) {
+        const row = this.db.prepare('SELECT * FROM agent_pending_inputs WHERE input_id = ?').get(String(inputId));
+        if (!row) return null;
+        return this.updatePendingInput(inputId, {
+            state: 'queued',
+            clientMessageId: `client_msg:${crypto.randomUUID()}`,
+            turnId: null,
+            attemptCount: 0,
+            lastError: null,
+        });
     }
 
     createOperation({ operationId, sessionId = null, kind, state = 'prepared', threadId = null, payload = {} }) {

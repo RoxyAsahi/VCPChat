@@ -58,6 +58,7 @@ const IPC_CHANNELS = Object.freeze({
     LIST_INTERACTION_QUEUE: 'agent-runtime:list-interaction-queue',
     REPLACE_INTERACTION_QUEUE: 'agent-runtime:replace-interaction-queue',
     CLEAR_INTERACTION_QUEUE: 'agent-runtime:clear-interaction-queue',
+    RESOLVE_PENDING_INPUT: 'agent-runtime:resolve-pending-input',
     GET_WORKBENCH_SETTINGS: 'agent-runtime:get-workbench-settings',
     UPDATE_WORKBENCH_SETTINGS: 'agent-runtime:update-workbench-settings',
     SELECT_ATTACHMENTS: 'agent-runtime:select-attachments',

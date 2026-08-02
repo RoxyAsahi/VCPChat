@@ -46,4 +46,13 @@ for (let index = 0; index < 40; index += 1) {
     bounded.complete('codex-native', `bounded-${index}`, 'completed', 1);
 }
 assert.ok(bounded.records.size <= 16, 'terminal interaction history must remain capacity bounded');
+const saturated = new InteractionRegistry({ maxRecords: 16, now: () => now });
+saturated.setGeneration('codex-native', 1);
+for (let index = 0; index < 16; index += 1) {
+    assert.equal(saturated.enqueue({ source: 'codex-native', requestId: `pending-${index}` }).accepted, true);
+}
+const overflow = saturated.enqueue({ source: 'codex-native', requestId: 'pending-overflow' });
+assert.equal(overflow.accepted, false);
+assert.equal(overflow.reason, 'capacity', 'an all-pending registry must fail closed instead of exceeding capacity');
+assert.equal(saturated.records.size, 16);
 console.log('Codex interaction registry tests passed.');

@@ -4,6 +4,16 @@ import { JSDOM } from 'jsdom';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 
+async function waitFor(predicate, timeoutMs = 1_000) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        const value = predicate();
+        if (value) return value;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    return null;
+}
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dom = new JSDOM('<!doctype html><html><body><div id="host"></div></body></html>', {
     url: 'http://localhost/',
@@ -38,6 +48,7 @@ const steeringTurns = [];
 const cancelledTurns = [];
 let interactionQueue = [];
 const replacedInteractionQueues = [];
+const resolvedPendingInputs = [];
 const createdSessions = [];
 const createdTopics = [];
 const renamedTopics = [];
@@ -294,6 +305,11 @@ window.chatAPI = {
         return { ok: true };
     },
     agentRuntimeClearInteractionQueue: async () => { interactionQueue = []; return { ok: true }; },
+    agentRuntimeResolvePendingInput: async (payload) => {
+        resolvedPendingInputs.push(payload);
+        interactionQueue = interactionQueue.filter((item) => (item.inputId || item.interactionId) !== payload.inputId);
+        return { resolved: true, action: payload.action, items: interactionQueue };
+    },
     agentRuntimeGetWorkbenchSettings: async () => ({
         budget: { maxRequestsPerTurn: 8, maxTokensPerTurn: 120000 },
         permissionMode: 'ask',
@@ -729,7 +745,7 @@ host.querySelector('.agent-chat-send-button').click();
 await new Promise((resolve) => setTimeout(resolve, 30));
 assert.deepEqual(startedTurns[0], { sessionId: 'topic-in-use', prompt: '', attachments: [importedAttachment] },
     'an attachment-only turn must pass the descriptor to Main rather than stringify it into text');
-assert.ok(host.querySelector('.agent-chat-turn-starting .thinking-indicator'),
+assert.ok(await waitFor(() => host.querySelector('.agent-chat-turn-starting .thinking-indicator')),
     'the Workbench must show the main-chat thinking animation before the first Codex item notification');
 assert.equal(host.querySelector('.agent-chat-composer-attachments')?.childElementCount || 0, 0,
     'accepted descriptors leave the transient composer tray after they are submitted');
@@ -816,6 +832,22 @@ removeQueueButton.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
 assert.equal(replacedInteractionQueues.length, 1, 'removing one queue item must replace the Main-owned queue snapshot once');
 assert.equal(replacedInteractionQueues[0].length, 1, 'removing one queue item must preserve remaining interactions');
+interactionQueue = [{
+    inputId: 'uncertain-input-1', interactionId: 'uncertain-input-1', kind: 'follow-up',
+    prompt: '可能已经发送的长任务', state: 'uncertain', error: '连接在 ACK 前后中断',
+}];
+prompt.value = '刷新队列投影';
+prompt.dispatchEvent(new window.Event('input', { bubbles: true }));
+host.querySelector('.agent-chat-send-button').click();
+await new Promise((resolve) => setTimeout(resolve, 30));
+const resendQueueButton = [...host.querySelectorAll('.agent-chat-queue-item-actions button')]
+    .find((button) => button.textContent === '重新发送');
+assert.ok(resendQueueButton, 'uncertain input must expose an explicit resend decision');
+resendQueueButton.click();
+await new Promise((resolve) => setTimeout(resolve, 30));
+assert.deepEqual(resolvedPendingInputs, [{
+    sessionId: 'topic-in-use', inputId: 'uncertain-input-1', action: 'resend',
+}], 'Workbench must route the user decision to the exact Session/input identity');
 emitDaemonEvent({
     sessionId: 'topic-in-use', turnId: 'turn_test', sequence: 4,
     type: 'context.usage',

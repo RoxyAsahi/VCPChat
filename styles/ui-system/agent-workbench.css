@@ -2372,6 +2372,19 @@ html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .topic-list .agent-ch
         background: var(--vcp-ui-fill-0);
     }
 
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-queue-state {
+        color: var(--vcp-ui-text-2);
+        font-size: var(--vcp-ui-font-caption);
+        line-height: 1.3;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-queue-error {
+        color: var(--vcp-ui-warning);
+        font-size: var(--vcp-ui-font-caption);
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+    }
+
     /* The same observation block can appear in the conversation timeline and
        in the narrow Activity Center. The timeline variant reserves avatar
        space; carrying that 54px indent into the side panel makes every card

@@ -38,7 +38,10 @@ class InteractionRegistry {
             ? Number(input.generation)
             : this.generation(input?.source);
         const key = interactionKey(input?.source, input?.requestId, generation);
-        if (this.records.has(key)) return { accepted: false, record: this.records.get(key) };
+        if (this.records.has(key)) return { accepted: false, reason: 'duplicate', record: this.records.get(key) };
+        if (this.records.size >= this.maxRecords) {
+            return { accepted: false, reason: 'capacity', record: null };
+        }
         const record = Object.freeze({
             key,
             source: String(input.source),

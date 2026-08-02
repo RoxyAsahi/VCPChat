@@ -10,6 +10,7 @@ import {
 import { createAgentBlockPresentation, createAgentMessagePresentation } from './agent-presentation/index.js';
 import { createWorkspacePathRef, createWorkspaceTreeModel, structuredWorkspacePaths } from './agent-workspace-model.js';
 import { createSessionDockModel } from './agent-session-dock.js';
+import { renderPendingInputQueue } from './agent-workbench-queue.js';
 
 // Build Agent identities are independent from normal-chat Agents. Keep Nova
 // visible synchronously while the authoritative Build catalog loads.
@@ -2687,60 +2688,10 @@ function mountWorkbench(container) {
         }
         actions.append(activityBtn, ...(queueButton ? [queueButton] : []), usageButton, ...(compact ? [compact] : []));
         header.append(left, statusChip, actions);
-        if (!state.queueOpen) return;
-        const panel = node('section', 'agent-chat-queue-popover');
-        const title = node('div', 'agent-chat-queue-heading');
-        title.append(node('strong', '', '后续指令队列'));
-        const clear = button('清空', 'agent-chat-queue-clear');
-        clear.disabled = !state.queue.length;
-        clear.addEventListener('click', () => run(async () => {
-            await controller.clearInteractionQueue();
-            await refreshControlPlane();
-            notify('已清空后续指令队列。', 'success');
-        }));
-        title.append(clear);
-        panel.append(title);
-        if (!state.queue.length) {
-            panel.append(node('p', 'agent-chat-muted', '没有排队的 steering / follow-up。'));
-        } else {
-            const list = node('ol', 'agent-chat-queue-list');
-            for (const item of state.queue) {
-                const kind = typeof item === 'object' ? item.kind : 'follow-up';
-                const prompt = typeof item === 'string' ? item : item.prompt || item.text || JSON.stringify(item);
-                const interactionId = typeof item === 'object' ? item.interactionId : '';
-                const row = node('li', 'agent-chat-queue-item');
-                row.append(node('span', 'agent-chat-queue-kind', kind === 'steer' ? '即时指导' : '后续指令'), node('span', 'agent-chat-queue-prompt', prompt));
-                const itemActions = node('div', 'agent-chat-queue-item-actions');
-                const edit = button('编辑');
-                const remove = button('移除', 'danger');
-                const canEdit = Boolean(interactionId && (kind === 'steer' || kind === 'follow-up'));
-                edit.disabled = !canEdit;
-                remove.disabled = !canEdit;
-                edit.addEventListener('click', () => {
-                    const nextPrompt = window.prompt?.('编辑后续指令', prompt);
-                    if (nextPrompt === null || nextPrompt === undefined || nextPrompt.trim() === prompt.trim()) return;
-                    run(async () => {
-                        const interactions = state.queue.map((candidate) => candidate?.interactionId === interactionId
-                            ? { ...candidate, prompt: nextPrompt.trim() }
-                            : candidate);
-                        await controller.replaceInteractionQueue(interactions);
-                        await refreshControlPlane();
-                        notify('后续指令已更新。', 'success');
-                    });
-                });
-                remove.addEventListener('click', () => run(async () => {
-                    const interactions = state.queue.filter((candidate) => candidate?.interactionId !== interactionId);
-                    await controller.replaceInteractionQueue(interactions);
-                    await refreshControlPlane();
-                    notify('后续指令已移除。', 'success');
-                }));
-                itemActions.append(edit, remove);
-                row.append(itemActions);
-                list.append(row);
-            }
-            panel.append(list);
-        }
-        header.append(panel);
+        const queuePanel = renderPendingInputQueue({
+            state, controller, refresh: refreshControlPlane, notify, run, button, node,
+        });
+        if (queuePanel) header.append(queuePanel);
     }
 
     function renderFeed() {

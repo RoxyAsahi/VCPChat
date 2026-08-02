@@ -1154,9 +1154,81 @@ class CodexRuntimeManager extends EventEmitter {
         }
         return { format: 'markdown', fileName: `${safeTitle}.md`, content: `${lines.join('\n').trim()}\n` };
     }
-    async listInteractionQueue() { return { items: [] }; }
-    async replaceInteractionQueue() { return { items: [] }; }
-    async clearInteractionQueue() { return { items: [] }; }
+    async listInteractionQueue({ sessionId, topicId } = {}) {
+        this.ensureProjectionStore();
+        const idValue = String(sessionId || topicId || '').trim();
+        const session = this.repository.getSession(idValue);
+        if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
+        return { items: this.repository.listPendingInputs(idValue).map(pendingInputProjection) };
+    }
+
+    async replaceInteractionQueue({ sessionId, topicId, interactions = [] } = {}) {
+        this._assertProjectionWritable();
+        const idValue = String(sessionId || topicId || '').trim();
+        const session = this.repository.getSession(idValue);
+        if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
+        const requested = new Map((Array.isArray(interactions) ? interactions : []).map((item) => [
+            String(item?.inputId || item?.interactionId || ''), item,
+        ]).filter(([inputId]) => inputId));
+        for (const current of this.repository.listPendingInputs(idValue)) {
+            const next = requested.get(current.inputId);
+            if (current.state !== 'queued') continue;
+            if (!next) {
+                this.repository.removePendingInput(current.inputId);
+                continue;
+            }
+            const prompt = String(next.prompt || next.text || '').trim();
+            if (!prompt) throw new CodexAppServerError('INVALID_INPUT', 'Queued follow-up message must not be empty');
+            if (prompt !== current.prompt) {
+                this.repository.updatePendingInput(current.inputId, {
+                    prompt,
+                    dedupeKey: submissionDedupeKey(prompt, []),
+                });
+            }
+        }
+        return this.listInteractionQueue({ sessionId: idValue });
+    }
+
+    async clearInteractionQueue({ sessionId, topicId } = {}) {
+        this._assertProjectionWritable();
+        const idValue = String(sessionId || topicId || '').trim();
+        const session = this.repository.getSession(idValue);
+        if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
+        for (const current of this.repository.listPendingInputs(idValue)) {
+            if (['queued', 'failed'].includes(current.state)) this.repository.removePendingInput(current.inputId);
+        }
+        return this.listInteractionQueue({ sessionId: idValue });
+    }
+
+    async resolvePendingInput({ sessionId, topicId, inputId, action } = {}) {
+        this._assertProjectionWritable();
+        const idValue = String(sessionId || topicId || '').trim();
+        const targetId = String(inputId || '').trim();
+        const session = this.repository.getSession(idValue);
+        if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
+        const pending = this.repository.listPendingInputs(idValue).find((entry) => entry.inputId === targetId);
+        if (!pending) throw new CodexAppServerError('NOT_FOUND', 'Pending input was not found');
+        if (action === 'discard') {
+            if (!['queued', 'failed', 'uncertain'].includes(pending.state)) {
+                throw new CodexAppServerError('PENDING_INPUT_BUSY', 'Dispatching or accepted input cannot be discarded');
+            }
+            this.repository.removePendingInput(targetId);
+            return { resolved: true, action, items: this.repository.listPendingInputs(idValue).map(pendingInputProjection) };
+        }
+        if (action !== 'resend' || !['failed', 'uncertain'].includes(pending.state)) {
+            throw new CodexAppServerError('INVALID_PENDING_INPUT_ACTION', 'Only failed or uncertain input can be explicitly resent');
+        }
+        const retried = this.repository.retryPendingInput(targetId);
+        const runtimeSession = await this.ensureSessionRuntime({ sessionId: idValue, reason: 'explicit-input-resend' });
+        const state = this.threadStates.get(runtimeSession.threadId);
+        if (state?.activity !== 'running') await this._drainFollowUpQueue(runtimeSession);
+        return {
+            resolved: true,
+            action,
+            input: retried ? pendingInputProjection(retried) : null,
+            items: this.repository.listPendingInputs(idValue).map(pendingInputProjection),
+        };
+    }
     getWorkbenchSettings() {
         const settings = this.getSettings() || {};
         return {
@@ -1941,7 +2013,12 @@ class CodexRuntimeManager extends EventEmitter {
                 payload: sanitizeInteractionPayload(request.params),
                 expiresAtMs: interactionExpiry(request),
             });
-            if (!queued.accepted) return;
+            if (!queued.accepted) {
+                if (queued.reason === 'capacity') {
+                    this._failClosedServerRequest(request, 'VChat interaction capacity is exhausted');
+                }
+                return;
+            }
             this.serverRequests.set(String(request.id), request);
             if (policy.kind === 'native-approval' || policy.kind === 'legacy-native-approval') {
                 this._sendUiEvent(approvalEvent(String(request.id), request, this.repository));
@@ -2043,6 +2120,20 @@ class CodexRuntimeManager extends EventEmitter {
     async _handleTransportCrash(error) {
         this.state = 'crashed';
         this.lastError = serializeError(error);
+        if (this.repository && !this.repository.readOnly) {
+            for (const [threadId, threadState] of this.threadStates) {
+                if (threadState?.activity !== 'running') continue;
+                const session = this.repository.getSessionByThread(threadId);
+                if (!session) continue;
+                this.repository.saveSession({ ...session, state: 'interrupted', updatedAt: Date.now() });
+                this.repository.updateActivity(session.sessionId, {
+                    runtimeState: 'crashed',
+                    deliveryState: 'unconfirmed',
+                    interruptedTurnId: threadState.activeTurnId || null,
+                });
+            }
+        }
+        this.threadStates.clear();
         this.resumedThreadIds.clear();
         this.resumingThreads.clear();
         this._rejectCompactionWaiters(new CodexAppServerError('RUNTIME_CRASHED', 'Codex App Server crashed during compaction'));
@@ -2556,6 +2647,23 @@ function compatibilitySession(session) {
         topicId: session.sessionId,
         model: session.configSnapshot?.model || null,
         runtime: 'codex',
+    };
+}
+
+function pendingInputProjection(input) {
+    return {
+        interactionId: input.inputId,
+        inputId: input.inputId,
+        sessionId: input.sessionId,
+        kind: 'follow-up',
+        prompt: input.prompt,
+        state: input.state,
+        clientUserMessageId: input.clientMessageId,
+        turnId: input.turnId || null,
+        attempt: Number(input.attemptCount || 0),
+        error: input.lastError || null,
+        createdAt: input.createdAt,
+        updatedAt: input.updatedAt,
     };
 }
 

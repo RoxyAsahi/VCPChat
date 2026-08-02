@@ -117,4 +117,17 @@ const pinnedTransport = new CodexAppServerTransport({
 });
 await assert.rejects(() => pinnedTransport.start(), (error) => error.code === 'UNSUPPORTED_PROTOCOL_VERSION');
 assert.equal(newerLine.killed, true, 'a server outside the pinned fixture line must stop fail-closed');
+
+const exitingChild = new FakeChild();
+const exitingTransport = new CodexAppServerTransport({
+    executable: 'codex-app-server.exe',
+    spawnImpl: () => exitingChild,
+    startTimeoutMs: 2_000,
+    requestTimeoutMs: 10_000,
+});
+await exitingTransport.start();
+const pendingOnExit = exitingTransport.request('thread/read', { threadId: 'never-replies' });
+exitingChild.emit('exit', 9, null);
+await assert.rejects(() => pendingOnExit, (error) => error.code === 'PROCESS_EXITED');
+assert.equal(exitingTransport.status.pendingRequests, 0, 'process exit must reject and clear all old-generation waiters');
 console.log('Codex App Server transport tests passed.');

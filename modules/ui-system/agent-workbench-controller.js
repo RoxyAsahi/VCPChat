@@ -46,6 +46,10 @@ function createWorkbenchController(runtimeApi) {
         return runtimeForTopic(state.selectedSessionId || state.selectedTopic?.topicId, state);
     }
 
+    function selectedSessionId(state = store.getState()) {
+        return state.selectedSessionId || state.selectedTopic?.sessionId || state.selectedTopic?.topicId || null;
+    }
+
     function projectRuntimeActivity(event) {
         if (!event?.topicId || !event?.sessionId) return;
         const current = store.getState();
@@ -793,19 +797,24 @@ function createWorkbenchController(runtimeApi) {
     });
     const setSessionPinned = (sessionId, pinned) => requireApi('agentRuntimeSetSessionPinned')({ sessionId, pinned });
     const listInteractionQueue = () => {
-        const runtime = selectedRuntime();
-        if (!runtime) throw new Error('当前会话没有运行中的 Codex Thread');
-        return requireApi('agentRuntimeListInteractionQueue')({ sessionId: runtime.sessionId });
+        const sessionId = selectedSessionId();
+        if (!sessionId) throw new Error('请先选择 Agent Session');
+        return requireApi('agentRuntimeListInteractionQueue')({ sessionId });
     };
     const replaceInteractionQueue = (interactions) => {
-        const sessionId = selectedRuntime()?.sessionId;
+        const sessionId = selectedSessionId();
         if (!sessionId) throw new Error('请先选择 Agent Session');
         return requireApi('agentRuntimeReplaceInteractionQueue')({ sessionId, interactions });
     };
     const clearInteractionQueue = () => {
-        const runtime = selectedRuntime();
-        if (!runtime) throw new Error('当前会话没有运行中的 Codex Thread');
-        return requireApi('agentRuntimeClearInteractionQueue')({ sessionId: runtime.sessionId });
+        const sessionId = selectedSessionId();
+        if (!sessionId) throw new Error('请先选择 Agent Session');
+        return requireApi('agentRuntimeClearInteractionQueue')({ sessionId });
+    };
+    const resolvePendingInput = (inputId, action) => {
+        const sessionId = selectedSessionId();
+        if (!sessionId) throw new Error('请先选择 Agent Session');
+        return requireApi('agentRuntimeResolvePendingInput')({ sessionId, inputId, action });
     };
     const getWorkbenchSettings = () => requireApi('agentRuntimeGetWorkbenchSettings')();
     async function updateWorkbenchSettings(settings) {
@@ -1024,7 +1033,7 @@ function createWorkbenchController(runtimeApi) {
         listTopics, searchTopics, searchTopicMessages, getTopicIndexStatus, rebuildTopicIndex,
         readTopic, renameTopic, deleteTopic, archiveSession, restoreSession, permanentlyDeleteSession,
         exportSession, listRecoveryOperations, listRecoveryCandidates, resolveRecoveryOperation, setSessionPinned,
-        listInteractionQueue, replaceInteractionQueue, clearInteractionQueue,
+        listInteractionQueue, replaceInteractionQueue, clearInteractionQueue, resolvePendingInput,
         getWorkbenchSettings, updateWorkbenchSettings, applyAgentProfile, selectAttachments,
         startTurn, steerTurn, followUpTurn, cancelTurn, cancelTool, respondApproval, respondInteraction,
         respondToolboxApproval,

@@ -666,6 +666,39 @@ const startsBeforeUncertainDrain = fake.calls.filter((call) => call.method === '
 await manager._drainFollowUpQueue(lifecycleSession);
 assert.equal(fake.calls.filter((call) => call.method === 'turn/start').length, startsBeforeUncertainDrain,
     'an uncertain input must wait for an explicit user decision and never auto-replay');
+const uncertainQueue = await manager.listInteractionQueue({ sessionId: lifecycleSession.sessionId });
+assert.equal(uncertainQueue.items.find((entry) => entry.inputId === uncertainInput.inputId)?.state, 'uncertain',
+    'uncertain input must be exposed through the Session-scoped recovery queue');
+await manager.resolvePendingInput({
+    sessionId: lifecycleSession.sessionId,
+    inputId: uncertainInput.inputId,
+    action: 'discard',
+});
+assert.equal(manager.repository.listPendingInputs(lifecycleSession.sessionId)
+    .some((entry) => entry.inputId === uncertainInput.inputId), false,
+    'discard must remove only the explicitly selected uncertain input');
+
+manager.repository.enqueuePendingInput(lifecycleSession.sessionId, {
+    dedupeKey: 'explicit-resend', prompt: 'send only after user confirmation',
+});
+const resendInput = manager.repository.listPendingInputs(lifecycleSession.sessionId)
+    .find((entry) => entry.dedupeKey === 'explicit-resend');
+manager.repository.updatePendingInput(resendInput.inputId, { state: 'uncertain', attemptCount: 1 });
+const oldClientMessageId = resendInput.clientMessageId;
+const startsBeforeExplicitResend = fake.calls.filter((call) => call.method === 'turn/start').length;
+await manager.resolvePendingInput({
+    sessionId: lifecycleSession.sessionId,
+    inputId: resendInput.inputId,
+    action: 'resend',
+});
+assert.equal(fake.calls.filter((call) => call.method === 'turn/start').length, startsBeforeExplicitResend + 1,
+    'explicit resend must dispatch exactly one replacement Turn');
+const explicitResendCall = fake.calls.filter((call) => call.method === 'turn/start').at(-1);
+assert.notEqual(explicitResendCall.params.clientUserMessageId, oldClientMessageId,
+    'explicit resend must use a new client message identity');
+assert.equal(manager.repository.listPendingInputs(lifecycleSession.sessionId)
+    .some((entry) => entry.inputId === resendInput.inputId), false);
+manager.threadStates.set(lifecycleSession.threadId, { activity: 'idle', activeTurnId: null });
 manager.repository.enqueuePendingInput(lifecycleSession.sessionId, {
     dedupeKey: 'crash-before-turn-rpc', prompt: 'never reached the transport',
 });
@@ -871,6 +904,7 @@ manager._handleBridgeEvent({
     channel: 'backend-approval',
     event: { requestId: 'toolbox-crash-approval', expiresAtMs: Date.now() + 30_000, data: { toolName: 'PowerShellExecutor' } },
 });
+manager.threadStates.set(session.threadId, { activity: 'running', activeTurnId: 'turn_test' });
 let rejectCrashInvoke;
 manager.bridge.invoke = () => new Promise((_resolve, reject) => { rejectCrashInvoke = reject; });
 fake.emit('server-request', {
@@ -884,6 +918,9 @@ await new Promise((resolve) => setImmediate(resolve));
 fake.emit('exit', new Error('simulated App Server crash'));
 await new Promise((resolve) => setImmediate(resolve));
 assert.equal(manager.getStatus().state, 'crashed');
+assert.equal(manager.repository.getSession(session.sessionId).state, 'interrupted',
+    'a running Session must be durably marked interrupted after App Server crash');
+assert.equal(manager.repository.readProjection(session.sessionId).projection.activity.deliveryState, 'unconfirmed');
 assert.equal(manager.serverRequests.size, 0, 'crash must clear native and dynamic server requests');
 assert.equal(manager.dynamicCalls.size, 0, 'crash must clear dynamic-call routing identity');
 assert.equal(manager.toolboxApprovals.size, 0, 'crash must fail-close ToolBox backend approvals');
@@ -1052,4 +1089,27 @@ await assert.rejects(() => degradedManager.createTopic({ title: 'must fail' }),
 assert.equal(repositoryAttempts, 2, 'degraded startup must attempt writable then read-only exactly once');
 await degradedManager.stop();
 fs.rmSync(degradedRoot, { recursive: true, force: true });
+
+const backoffRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'vcp-codex-backoff-'));
+let failedStarts = 0;
+const failingTransport = new FakeTransport();
+failingTransport.start = async () => {
+    failedStarts += 1;
+    const error = new Error('simulated App Server startup failure');
+    error.code = 'PROCESS_EXITED';
+    throw error;
+};
+const backoffManager = new CodexRuntimeManager({
+    projectRoot: backoffRoot,
+    settingsPath: path.join(backoffRoot, 'settings.json'),
+    getSettings: () => ({}),
+    transportFactory: () => failingTransport,
+    repositoryFactory: () => new AgentProjectionRepository({ databasePath: path.join(backoffRoot, 'projection.sqlite') }),
+    responsesAdapterFactory: () => ({ capability: 'backoff-fixture', async start() {}, async stop() {} }),
+});
+await assert.rejects(() => backoffManager.start(), /startup failure/);
+await assert.rejects(() => backoffManager.start(), (error) => error.code === 'RUNTIME_RETRY_BACKOFF');
+assert.equal(failedStarts, 1, 'bounded restart backoff must not respawn immediately after a failed start');
+await backoffManager.stop();
+fs.rmSync(backoffRoot, { recursive: true, force: true });
 console.log('Codex runtime manager tests passed.');
