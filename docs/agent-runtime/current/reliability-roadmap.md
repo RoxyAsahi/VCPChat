@@ -31,15 +31,16 @@ This document is the source of truth for R7-R10. Codex App Server remains a pinn
 
 ## R9: Projection and Saga
 
-- Codex-owned Items absent from `thread/read(includeTurns: true)` are deleted transactionally with their Blocks.
+- Codex-owned Items absent from `thread/read(includeTurns: true)` are deleted transactionally with their Blocks. A Message that also contains VChat/ToolBox-owned Blocks is retained and only its stale Codex Blocks are removed.
 - Explicit empty/null snapshot fields can clear old content. Omitted optional fields preserve newer live data.
 - Reconciliation uses a mutation generation barrier and retries a bounded number of times.
 - Thread start/fork/archive/unarchive/delete use `agent_operations` states: `prepared`, `dispatching`, `remote-applied`, `completed`, `uncertain`, `failed`.
 - Known-Thread archive/unarchive/delete operations resume idempotently on the next App Server generation; start/fork remain explicit human recovery because an unreturned Thread ID is not safe to guess.
-- SQLite failure may enter read-only degraded mode. Lists, projection reads, and export remain available; mutations are rejected.
+- SQLite failure may enter read-only degraded mode. Lists, projection reads, and export remain available; every runtime/Codex mutation is rejected before App Server transport construction or RPC.
 - Writable and read-only startup both run integrity checks; constructor failures close SQLite handles before fallback or shutdown.
 - Saga reports split state. It does not claim cross-process ACID.
-- Uncertain start/fork recovery uses explicit `thread/list` candidates. Only a user-confirmed bind/delete action resolves the Saga.
+- On a fresh App Server generation, stale `prepared` start/fork operations become `failed`, stale `dispatching` operations become `uncertain`, and `remote-applied` operations remain explicit recovery work. None are remotely replayed.
+- Uncertain or remote-applied start/fork recovery uses explicit `thread/list` candidates. A recorded Thread ID cannot be rebound to another Thread; only a user-confirmed bind/delete action resolves the Saga.
 
 ## R10: Privacy and Governance
 
@@ -74,6 +75,12 @@ The follow-up adds hard pending-interaction capacity enforcement, Session-scoped
 `clientUserMessageId` for explicit resend, durable `interrupted/unconfirmed` crash state, waiter cleanup on process exit, and
 bounded restart-backoff assertions. The queue UI is isolated in `agent-workbench-queue.js`; it does not infer a current
 attachment or permit automatic replay.
+
+### R9 projection/Saga follow-up
+
+Revision `a13a3410e09252aeabfcb4c160d8d974df4582a5` closes three audit gaps: authority-aware snapshot deletion,
+pre-transport read-only mutation rejection, and explicit recovery of acknowledged-but-unbound start/fork operations. Fault
+injection proves that a crash after `thread/start` or `thread/fork` ACK does not issue a replacement remote mutation.
 
 ## Authority Boundary
 

@@ -99,10 +99,11 @@ item/completed
 
 对账必须满足：
 
-- Codex 返回的 Item 新增或非破坏性补齐 projection。
+- Codex 返回的 Item 新增或权威覆盖 Codex-owned projection。
 - 重复 Item 不产生重复 Message。
-- 本地存在、稀疏 `thread/read` 未返回的 reasoning/tool/plan/diff/compaction Item 不删除；只有明确的
-  Session 删除操作才删除展示投影。SQLite 展示投影仍不被当作 Codex 可继续上下文。
+- `thread/read(includeTurns: true)` 未返回的 Codex-owned Item 会被事务删除；若同一 Message 还包含
+  VChat/ToolBox-owned Block，则保留 Message 和本地 Block，仅删除其中 Codex-owned Block。
+- 显式空字符串、空数组和 `null` 可以清除旧 Codex 字段；协议未返回的可选字段保留 live event 内容。
 - 对账期间收到 live delta 时，通过 barrier/generation 避免旧 snapshot 覆盖新 delta。
 - 成功后清空 `last_error` 并记录时间。
 - 失败后保留旧 projection，显示“未对账”，不清空历史。
@@ -117,11 +118,10 @@ item/completed
 
 ## 当前已覆盖与缺口
 
-已覆盖：schema 5 -> 6 migration、WAL、Session CRUD、Item/Block upsert、text/reasoning delta、
-非破坏性 reconcile、orphan、usage/compaction Activity 持久化和临时数据库测试。
+已覆盖：schema 5 -> 7 migration、WAL、Session CRUD、Item/Block upsert、text/reasoning delta、Codex-owned
+权威删除、本地 authority 保留、空值清除、稀疏字段保留、generation barrier、orphan、usage/compaction
+Activity 持久化、integrity check、migration backup 和只读 degraded fallback。
 
-当前 `thread/read` reconcile 会在单个 SQLite 事务中 upsert 权威 Item，但不会因为稀疏 snapshot 删除
-事件阶段捕获的展示记录；generation gate 会在 live 更新竞态时跳过整次旧 snapshot。仍未覆盖：
-磁盘故障、完整数据大小 gate、正式 redaction、归档/删除策略和长期多版本升级测试。
+仍未覆盖：完整磁盘故障矩阵、完整数据大小 gate、正式 redaction 和长期多版本升级测试。
 
 `better-sqlite3` 固定按 Electron ABI 构建。依赖 SQLite 的命令通过 `scripts/run-electron-node.mjs` 在 `ELECTRON_RUN_AS_NODE=1` 下执行，不允许为了普通 Node 测试反复重编译原生模块并破坏产品 Electron。

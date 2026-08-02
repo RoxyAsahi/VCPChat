@@ -1,0 +1,36 @@
+{
+  "status": "hermetic",
+  "codexProtocol": "0.146",
+  "scope": "R9 projection authority, degraded mutation gate, and unbound Thread Saga recovery",
+  "toolboxModified": false,
+  "verifiedCommit": "a13a3410e09252aeabfcb4c160d8d974df4582a5",
+  "verifiedAt": "2026-08-02",
+  "environment": {
+    "platform": "Windows x64",
+    "appServerMode": "hermetic fake plus Electron recovery fixtures"
+  },
+  "commands": [
+    "npm run test:codex-projection-store",
+    "npm run test:codex-runtime-manager",
+    "npm run test:agent-workbench",
+    "npm run test:electron-codex-recovery",
+    "npm run check:agent-runtime",
+    "npm run check:codex-governance",
+    "npm run check:ui-system",
+    "git diff --check"
+  ],
+  "assertions": {
+    "localProjectionAuthorityPreserved": true,
+    "staleCodexBlocksRemoved": true,
+    "readOnlyMutationsRejectedBeforeTransport": true,
+    "acknowledgedStartForkNotReplayed": true,
+    "recordedRecoveryThreadCannotBeSubstituted": true,
+    "electronDemandRestartAndDegradedMode": true
+  },
+  "remainingProductGates": [
+    "real Codex native approval allow/deny/close",
+    "ToolBox backend approval replay and exactly-once response",
+    "VCPInfo/VCPLog reconnect and replay",
+    "rich Electron message, tool, approval, diff, and performance acceptance"
+  ]
+}

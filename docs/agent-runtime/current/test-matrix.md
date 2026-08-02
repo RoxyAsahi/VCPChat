@@ -291,8 +291,8 @@ R4.1、R4.2、R5.1、R5.3 的 gate 除测试通过外，还必须记录：来源
 
 | Gate | Direct assertions | Command | Status |
 | --- | --- | --- | --- |
-| Runtime/Input/Saga | generation reuse、pre-RPC crash、ACK crash、ambiguous transport、known-Thread archive/unarchive/delete recovery、start uncertain no replay | `npm run test:codex-runtime-manager` | committed pass |
-| Projection startup/reconcile | stale Item/Block deletion、empty/null clear、sparse preservation、generation barrier、quick_check、foreign-key、migration backup、read-only integrity | `npm run test:codex-projection-store` | committed pass |
+| Runtime/Input/Saga | generation reuse、pre-RPC crash、Turn ACK crash、start/fork ACK crash、ambiguous transport、known-Thread lifecycle recovery、unbound Thread explicit recovery、read-only pre-transport rejection | `npm run test:codex-runtime-manager` | committed pass |
+| Projection startup/reconcile | stale Codex Item/Block deletion、local/mixed authority preservation、empty/null clear、sparse preservation、generation barrier、quick_check、foreign-key、migration backup、read-only integrity | `npm run test:codex-projection-store` | committed pass |
 | Workspace | 10k fixture、search concurrency、cross-Session cancel rejection、timeout traversal stop、preview handle close | `npm run test:agent-workspace-service` | committed pass |
 | Electron recovery | two concurrent Sessions、identity isolation、Renderer reload、kill/restart/resume、archive/restore/delete、pending interaction、read-only degraded | `npm run test:electron-codex-recovery` | committed pass |
 | Governance/UI | pinned 0.146 schema、ownership/ADR/receipt、no global refs、scoped CSS/no inline mutation | `npm run check:codex-governance`、`npm run check:ui-system` | committed pass |
@@ -301,7 +301,7 @@ R4.1、R4.2、R5.1、R5.3 的 gate 除测试通过外，还必须记录：来源
 
 ### R7 Profile/Session identity follow-up
 
-Working-tree assertions added on 2026-08-02:
+Assertions committed on 2026-08-02 in `05ec17f94c6aaa6859af0615e3bd83fe792a37f7`:
 
 - Profile avatar updates create immutable revisioned assets and advance the Profile revision.
 - Existing Sessions retain frozen name/avatar identity while newly created Sessions receive the latest Profile snapshot.
@@ -319,11 +319,11 @@ npm run check:codex-governance
 git diff --check
 ```
 
-This is a working-tree receipt until the corresponding commit hash is recorded.
+Documentation receipt: `dae45fa1`.
 
 ### R8 Runtime/input follow-up
 
-Working-tree assertions added on 2026-08-02:
+Assertions committed on 2026-08-02 in `35e4c3390e3fbfa24f96851abd8653290130f63e`:
 
 - An all-pending InteractionRegistry rejects the next request at capacity instead of growing without bound.
 - Process exit rejects and removes every old-generation transport waiter.
@@ -348,7 +348,32 @@ npm run check:ui-system
 git diff --check
 ```
 
-This is a working-tree receipt until the corresponding commit hash is recorded.
+Documentation receipt: `5264efd6`.
+
+### R9 Projection/Saga follow-up
+
+Assertions committed on 2026-08-02 in `a13a3410e09252aeabfcb4c160d8d974df4582a5`:
+
+- `thread/read` removes stale Codex-only Messages, preserves local-only observations, and removes only Codex Blocks from mixed-authority Messages.
+- Read-only degraded mode retains Session list, projection read, and export while `start`、`createSession`、runtime ensure、Turn start/steer/cancel and compaction fail before transport construction.
+- Faults after `thread/start` and `thread/fork` ACK retain the returned Thread ID and never issue a second remote mutation.
+- Fresh runtime startup converts stale start/fork `prepared` to `failed`, `dispatching` to `uncertain`, and leaves `remote-applied` visible for explicit repair.
+- Recovery rejects substituting a different Thread for an operation that already recorded an acknowledged Thread ID.
+
+Commands passed:
+
+```text
+npm run test:codex-projection-store
+npm run test:codex-runtime-manager
+npm run test:agent-workbench
+npm run test:electron-codex-recovery
+npm run check:agent-runtime
+npm run check:codex-governance
+npm run check:ui-system
+git diff --check
+```
+
+Machine receipt: [r9-follow-up.json](receipts/r9-follow-up.json).
 
 R7-R10 machine receipt: [r7-r10-working-tree.json](receipts/r7-r10-working-tree.json). The live ToolBox test initially
 failed with `Plugin "FileOperator" not found for tool call`, proving the bridge failed closed while no distributed node
