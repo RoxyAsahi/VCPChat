@@ -1290,8 +1290,16 @@ function escapeHtml(unsafe) {
 }
 
 // --- 新版 UI：真实重建页面结构（AppPageShell + VCPUI 控件 + Web Awesome） ---
+// 经典模式保持原 DOM/CSS；next 模式将既有业务节点移入 VCPUI 外壳并增强：
+// 工具栏按钮换成 VCPUI Button、连接状态换成 Badge、三个编辑/详情弹窗换成
+// VCPUI Modal（观察 .active 类同步开合），业务逻辑继续操作同一批元素。
 function buildNextTask() {
-    window.VCPPageRebuild.rebuild({
+    if (!window.VCPUI) return;
+    if (window.VCPUiModeController?.getCurrentMode() !== 'next') return;
+    if (document.body.classList.contains('vcp-ui-scope')) return;
+
+    const V = window.VCPUI;
+    const shell = window.VCPPageRebuild.rebuild({
         title: '任务助手',
         containerSelector: '.app-container',
         navSelector: '#top-nav-bar',
@@ -1306,5 +1314,95 @@ function buildNextTask() {
         },
         tooltipSelectors: ['#settings-btn', '#refresh-agents-btn', '#create-agent-btn', '#save-agents-btn', '#refresh-tasks-btn', '#create-task-btn', '#save-tasks-btn', '#refresh-delegations-btn']
     });
+    if (!shell) return;
+
+    // 设置入口 → VCPUI IconButton（保留原点击逻辑）。
+    const legacySettings = document.getElementById('settings-btn');
+    if (legacySettings && legacySettings.isConnected) {
+        const iconBtn = V.create('IconButton', { icon: 'settings', label: '设置', variant: 'ghost' });
+        iconBtn.element.title = '设置';
+        iconBtn.element.addEventListener('click', () => legacySettings.click());
+        legacySettings.replaceWith(iconBtn.element);
+        legacySettings.dataset.nextUiReplaced = 'true';
+    }
+
+    // 工具栏/弹窗文字按钮 → VCPUI Button（保留原点击逻辑；label/class 同步）。
+    const replaceTextButton = (id, icon, fallbackLabel, variant = 'primary') => {
+        const original = document.getElementById(id);
+        if (!original || !original.isConnected) return null;
+        const button = V.create('Button', {
+            label: original.textContent.replace(/[✅❌➕🗑●⚠️]/g, '').trim() || fallbackLabel,
+            icon,
+            variant,
+        });
+        button.element.classList.add('vcp-ui-task-action');
+        new MutationObserver(() => {
+            const text = original.textContent.replace(/[✅❌➕🗑●⚠️]/g, '').trim();
+            if (text) button.update({ label: text });
+        }).observe(original, { childList: true, characterData: true, subtree: true });
+        new MutationObserver(() => {
+            button.element.classList.toggle('spinning', original.classList.contains('spinning'));
+        }).observe(original, { attributes: true, attributeFilter: ['class'] });
+        button.element.addEventListener('click', () => original.click());
+        original.replaceWith(button.element);
+        original.dataset.nextUiReplaced = 'true';
+        return button;
+    };
+
+    replaceTextButton('create-agent-btn', 'add', '新建 Agent');
+    replaceTextButton('create-task-btn', 'add', '新建任务');
+    replaceTextButton('refresh-agents-btn', 'refresh', '刷新配置', 'secondary');
+    replaceTextButton('refresh-tasks-btn', 'refresh', '刷新', 'secondary');
+    replaceTextButton('refresh-delegations-btn', 'refresh', '刷新委托', 'secondary');
+    replaceTextButton('save-agents-btn', 'save', '保存所有更改', 'secondary');
+    replaceTextButton('save-tasks-btn', 'save', '保存所有配置', 'secondary');
+    replaceTextButton('agent-modal-delete', 'delete', '删除此 Agent', 'danger');
+
+    // 连接状态 → VCPUI Badge（同步 label/variant）。
+    if (connectionStatus) {
+        const statusBadge = V.create('Badge', { label: '未连接', variant: 'neutral' });
+        statusBadge.element.classList.add('vcp-ui-task-connection');
+        const syncStatus = () => {
+            const text = (connectionStatus.textContent || '').replace(/[●✅❌⚠️]/g, '').trim() || '未连接';
+            const cls = connectionStatus.className || '';
+            const variant = cls.includes('connected') ? 'success'
+                : cls.includes('error') ? 'danger'
+                    : cls.includes('warning') ? 'warning' : 'neutral';
+            statusBadge.update({ label: text, variant });
+        };
+        syncStatus();
+        new MutationObserver(syncStatus).observe(connectionStatus, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+        connectionStatus.replaceWith(statusBadge.element);
+        connectionStatus.dataset.nextUiReplaced = 'true';
+    }
+
+    // 三个弹窗 → VCPUI Modal（观察 .active 类同步开合；业务读写不变）。
+    const wireModal = (legacy, titleEl) => {
+        let next = null;
+        const isOpen = () => next && next.element && next.element.isConnected;
+        new MutationObserver(() => {
+            const active = legacy.classList.contains('active');
+            if (active && !isOpen()) {
+                const bodyEl = legacy.querySelector('.modal-body');
+                const footerEl = legacy.querySelector('.modal-footer');
+                const actions = footerEl ? [...footerEl.querySelectorAll('button')] : [];
+                next = V.create('Modal', {
+                    title: titleEl?.textContent || legacy.querySelector('.modal-header h3')?.textContent || '详情',
+                    content: bodyEl,
+                    actions,
+                    closeOnBackdrop: true,
+                    onClose: () => legacy.classList.remove('active'),
+                });
+                document.body.append(next.element);
+            } else if (!active && isOpen()) {
+                const modal = next;
+                next = null;
+                modal.close?.();
+            }
+        }).observe(legacy, { attributes: true, attributeFilter: ['class'] });
+    };
+    wireModal(agentModal, document.getElementById('agent-modal-title'));
+    wireModal(taskModal, document.getElementById('task-modal-title'));
+    wireModal(delegationModal, delegationModalTitle);
 }
 window.addEventListener('vcp-ui-runtime-ready', buildNextTask);

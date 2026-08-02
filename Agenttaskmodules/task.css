@@ -1149,3 +1149,68 @@ input:checked + .switch-slider:before {
         gap: 16px;
     }
 }
+
+/* ============================================================
+   新版 UI（next 模式）覆写：仅在 html[data-ui-mode="next"] 生效。
+   经典模式不受影响；布局与控件由 task.js 的 buildNextTask 完成。
+   ============================================================ */
+html[data-ui-mode="next"] body.vcp-ui-scope {
+    background: var(--vcp-ui-bg-primary);
+    color: var(--vcp-ui-text-0);
+    font-family: 'Noto Sans SC Variable', var(--vcp-chat-font-family, sans-serif);
+}
+
+/* 弹窗由 VCPUI Modal 接管，旧弹窗隐藏。 */
+html[data-ui-mode="next"] body.vcp-ui-scope .modal-overlay {
+    display: none !important;
+}
+
+/* 工具栏动作按钮间距与外观。 */
+html[data-ui-mode="next"] body.vcp-ui-scope .view-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--vcp-ui-space-2);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-task-action {
+    min-height: var(--vcp-ui-control-sm);
+    padding: 0 var(--vcp-ui-space-3);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .vcp-ui-task-connection {
+    align-self: center;
+    margin-left: var(--vcp-ui-space-2);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .delegation-tracker-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--vcp-ui-space-2);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .glass {
+    color: var(--vcp-ui-text-0);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .view-header h2,
+html[data-ui-mode="next"] body.vcp-ui-scope .view-title .subtitle,
+html[data-ui-mode="next"] body.vcp-ui-scope .delegation-tracker-header h3,
+html[data-ui-mode="next"] body.vcp-ui-scope .delegation-tracker-header p,
+html[data-ui-mode="next"] body.vcp-ui-scope .delegation-section-title h4,
+html[data-ui-mode="next"] body.vcp-ui-scope .delegation-section-title span {
+    color: var(--vcp-ui-text-0);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .delegation-status-message {
+    color: var(--vcp-ui-text-2);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .stat-value,
+html[data-ui-mode="next"] body.vcp-ui-scope .stat-label {
+    color: var(--vcp-ui-text-0);
+}
+
+html[data-ui-mode="next"] body.vcp-ui-scope .empty-state {
+    color: var(--vcp-ui-text-2);
+}
