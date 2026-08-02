@@ -509,10 +509,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (activeListItem && api) {
             const filePath = activeListItem.dataset.path;
             const fileName = await window.electronPath.basename(filePath);
-            // Add a confirmation dialog before deleting
-            if (confirm(`确定要删除文件 "${fileName}"? 这个操作无法撤销。`)) {
-                api.deleteCanvasFile(filePath);
-            }
+            const message = `确定要删除文件 "${fileName}"? 这个操作无法撤销。`;
+            // next 模式走 VCPUI.feedback.confirm，经典保留原生 confirm。
+            const useVcp = window.VCPUiModeController?.getCurrentMode() === 'next' && !!window.VCPUI;
+            const ok = useVcp
+                ? await window.VCPUI.feedback.confirm({ title: '删除文件', message, danger: true, confirmLabel: '删除' })
+                : window.confirm(message);
+            if (ok) api.deleteCanvasFile(filePath);
         }
         contextMenu.style.display = 'none';
     });
@@ -641,14 +644,20 @@ document.addEventListener('DOMContentLoaded', () => {
     runPyBtn.addEventListener('click', () => {
        if (editor && api) {
            const code = editor.getValue();
+           const useVcp = window.VCPUiModeController?.getCurrentMode() === 'next' && !!window.VCPUI;
            api.executePythonCode(code).then(({ stdout, stderr }) => {
-               // For now, just log the output. A dedicated output panel would be better.
-               console.log('Python stdout:', stdout);
-               console.error('Python stderr:', stderr);
-               alert('Python Output:\n' + (stdout || stderr));
+               const output = (stdout || stderr || '（无输出）');
+               if (useVcp) {
+                   window.VCPUI.feedback.toast(`Python 输出: ${output.slice(0, 200)}`, { variant: stderr ? 'warning' : 'success' });
+               } else {
+                   alert('Python Output:\n' + (stdout || stderr));
+               }
            }).catch(err => {
-               console.error('Python execution failed:', err);
-               alert('Python execution failed:\n' + err);
+               if (useVcp) {
+                   window.VCPUI.feedback.toast(`Python 执行失败: ${err.message}`, { variant: 'error' });
+               } else {
+                   alert('Python execution failed:\n' + err);
+               }
            });
        }
     });
@@ -858,6 +867,7 @@ function buildNextCanvas() {
     const container = document.querySelector('.main-container');
     if (!container) return;
     document.body.classList.add('vcp-ui-scope');
+    const disposers = [];
 
     // 把带文字的按钮替换为 VCPUI Button：保留原点击逻辑；同步 label/display。
     const replaceActionButton = (id, options) => {
@@ -869,11 +879,14 @@ function buildNextCanvas() {
             if (text) button.update({ label: text });
         };
         syncLabel();
-        new MutationObserver(syncLabel).observe(original, { childList: true, characterData: true, subtree: true });
+        const labelObserver = new MutationObserver(syncLabel);
+        labelObserver.observe(original, { childList: true, characterData: true, subtree: true });
+        disposers.push(() => labelObserver.disconnect());
         const styleObserver = new MutationObserver(() => {
             button.element.style.display = original.style.display || '';
         });
         styleObserver.observe(original, { attributes: true, attributeFilter: ['style'] });
+        disposers.push(() => styleObserver.disconnect());
         button.element.style.display = original.style.display || '';
         button.element.addEventListener('click', () => original.click());
         original.replaceWith(button.element);
@@ -928,34 +941,60 @@ function buildNextCanvas() {
     replaceActionButton('render-html-btn', { label: '渲染', icon: 'globe', variant: 'secondary', size: 'sm' });
     replaceActionButton('toggle-wrap-btn', { label: '自动换行', icon: 'wrap_text', variant: 'ghost', size: 'sm' });
     replaceActionButton('newCanvasBtn', { label: '新建 Canvas', icon: 'add', variant: 'primary', size: 'sm' });
+    replaceActionButton('view-diff-btn', { label: '查看改动', variant: 'secondary', size: 'sm' });
+    replaceActionButton('dismiss-change-btn', { label: '忽略', variant: 'ghost', size: 'sm' });
 
-    // 空状态：历史列表 / 变动列表为空时显示 VCPUI EmptyState。
+    // 空状态：历史列表 / 变动列表为空时显示 VCPUI EmptyState（用 <li> 包裹保持 ul 合法）。
     const wireEmptyState = (listEl, emptyTitle, emptyDescription) => {
         if (!listEl) return;
         const patch = () => {
             const isEmpty = listEl.children.length === 0;
             listEl.classList.toggle('vcp-ui-canvas-empty-active', isEmpty);
-            let empty = listEl.querySelector('.vcp-ui-canvas-empty');
+            let item = listEl.querySelector('.vcp-ui-canvas-empty-item');
             if (isEmpty) {
-                if (!empty) {
-                    empty = V.create('EmptyState', { icon: 'inbox', title: emptyTitle, description: emptyDescription });
+                if (!item) {
+                    item = document.createElement('li');
+                    item.className = 'vcp-ui-canvas-empty-item';
+                    const empty = V.create('EmptyState', { icon: 'inbox', title: emptyTitle, description: emptyDescription });
                     empty.element.classList.add('vcp-ui-canvas-empty');
-                    listEl.appendChild(empty.element);
+                    item.appendChild(empty.element);
+                    listEl.appendChild(item);
                 }
-            } else if (empty) {
-                empty.remove();
+            } else if (item) {
+                item.remove();
             }
         };
         patch();
-        new MutationObserver(patch).observe(listEl, { childList: true, subtree: true });
+        const observer = new MutationObserver(patch);
+        observer.observe(listEl, { childList: true, subtree: true });
+        disposers.push(() => observer.disconnect());
     };
     wireEmptyState(document.getElementById('historyList'), '暂无 Canvas 文件', '新建或打开一个文件开始协作。');
     wireEmptyState(document.getElementById('changeHistoryList'), '暂无文档变动', '编辑保存后会在右侧显示变动记录。');
 
     // Tooltip 通过 VCPUI.create('Tooltip') 创建（由 VCPUI 委托 Web Awesome）。
     document.querySelectorAll('.vcp-ui-canvas-body .vcp-ui-button, .vcp-ui-canvas-body .vcp-ui-icon-button').forEach(el => {
+        const parent = el.parentNode;
+        const nextSibling = el.nextSibling;
         const tip = V.create('Tooltip', { trigger: el, content: el.title || el.getAttribute('aria-label') || '操作', placement: 'top' });
-        document.body.append(tip.element);
+        if (tip.element.matches?.('wa-tooltip')) {
+            document.body.append(tip.element);
+        } else {
+            parent?.insertBefore(tip.element, nextSibling);
+        }
     });
+
+    // 页面卸载时断开重建过程中创建的全部 observer，避免泄漏。
+    window.addEventListener('beforeunload', () => {
+        disposers.splice(0).forEach(dispose => dispose());
+    }, { once: true });
 }
 window.addEventListener('vcp-ui-runtime-ready', buildNextCanvas);
+// The async module bootstrap can finish before this classic script registers
+// its runtime-ready listener. DOMContentLoaded provides a deterministic second
+// barrier so ?uiMode=next always mounts the Canvas shell exactly once.
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', buildNextCanvas, { once: true });
+} else {
+    queueMicrotask(buildNextCanvas);
+}

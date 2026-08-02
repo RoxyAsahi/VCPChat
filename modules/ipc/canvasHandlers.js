@@ -9,6 +9,7 @@ const { PRELOAD_ROLES, resolveProjectPreload } = require('../services/preloadPat
 let mainWindow;
 let openChildWindows;
 let CANVAS_CACHE_DIR = path.join(__dirname, '..', '..', 'AppData', 'Canvas');
+let SETTINGS_FILE = path.join(__dirname, '..', '..', 'AppData', 'settings.json');
 let canvasWindow = null;
 let fileWatcher = null;
 const internalSaveInProgress = new Set(); // Track internal saves
@@ -112,6 +113,7 @@ function initialize(config) {
     mainWindow = config.mainWindow;
     openChildWindows = config.openChildWindows;
     CANVAS_CACHE_DIR = config.CANVAS_CACHE_DIR || CANVAS_CACHE_DIR;
+    SETTINGS_FILE = config.SETTINGS_FILE || SETTINGS_FILE;
     activeRootDir = CANVAS_CACHE_DIR;
     
     // Ensure the canvas directory exists
@@ -174,7 +176,18 @@ async function createCanvasWindow(eventOrFilePath = null, maybeFilePath = null) 
         show: false,
     });
 
-    await canvasWindow.loadFile(path.join(__dirname, '..', '..', 'Canvasmodules', 'canvas.html'));
+    let uiMode = 'classic';
+    try {
+        const settings = await fs.readJson(SETTINGS_FILE);
+        uiMode = settings?.uiMode === 'next' ? 'next' : 'classic';
+    } catch (error) {
+        if (error?.code !== 'ENOENT') {
+            console.warn(`[CanvasHandlers] Unable to read uiMode from ${SETTINGS_FILE}:`, error.message);
+        }
+    }
+    await canvasWindow.loadFile(path.join(__dirname, '..', '..', 'Canvasmodules', 'canvas.html'), {
+        query: { uiMode },
+    });
     windowService.attachWindow(WINDOW_APP_IDS.CANVAS, canvasWindow);
 
     openChildWindows.push(canvasWindow);
