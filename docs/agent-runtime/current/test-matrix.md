@@ -321,6 +321,35 @@ git diff --check
 
 This is a working-tree receipt until the corresponding commit hash is recorded.
 
+### R8 Runtime/input follow-up
+
+Working-tree assertions added on 2026-08-02:
+
+- An all-pending InteractionRegistry rejects the next request at capacity instead of growing without bound.
+- Process exit rejects and removes every old-generation transport waiter.
+- `uncertain` input is visible only in its owning Session and cannot auto-drain.
+- Explicit resend creates a new client message identity and dispatches exactly one replacement Turn; discard removes only the selected record.
+- App Server crash persists `interrupted` Session state and `unconfirmed` projection activity before clearing process-local runtime state.
+- A failed App Server start activates bounded retry backoff and does not respawn immediately.
+- The Workbench queue exposes the exact resend decision through Session/input IPC, with queue rendering split from the Workbench composition root.
+
+Commands passed before the follow-up commit:
+
+```text
+npm run test:codex-interaction-registry
+npm run test:codex-app-server-transport
+npm run test:codex-runtime-manager
+npm run test:codex-projection-store
+npm run test:agent-workbench-store
+npm run test:agent-workbench
+npm run check:agent-runtime
+npm run check:codex-governance
+npm run check:ui-system
+git diff --check
+```
+
+This is a working-tree receipt until the corresponding commit hash is recorded.
+
 R7-R10 machine receipt: [r7-r10-working-tree.json](receipts/r7-r10-working-tree.json). The live ToolBox test initially
 failed with `Plugin "FileOperator" not found for tool call`, proving the bridge failed closed while no distributed node
 was registered. A temporary repository-provided node was then started with `ALLOWED_DIRECTORIES` restricted to the

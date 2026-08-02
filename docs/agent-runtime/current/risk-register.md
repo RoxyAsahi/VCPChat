@@ -5,8 +5,8 @@ Status: **implemented**
 | ID | Severity | Risk | Control | Verification |
 | --- | --- | --- | --- | --- |
 | AG-R01 | P0 | Selected Session is confused with a writable runtime | `selectedSessionId` and identity-keyed `activeRuntimes` are separate | Workbench store and Electron multi-Session tests |
-| AG-R02 | P1 | Old approval request ID suppresses a new runtime request | Source + generation registry key, TTL, capacity and crash cleanup | `test:codex-interaction-registry` |
-| AG-R03 | P1 | Follow-up is accepted remotely but replayed after Main crash | Stable client message ID, persistent dispatch state, pre-RPC/ACK fault injection and explicit uncertain decision | `test:codex-reliability` |
+| AG-R02 | P1 | Old approval request ID suppresses a new runtime request or pending approvals exceed memory bounds | Source + generation registry key, TTL, hard capacity rejection and crash cleanup | `test:codex-interaction-registry` |
+| AG-R03 | P1 | Follow-up is accepted remotely but replayed after Main crash | Stable client message ID, persistent dispatch state, pre-RPC/ACK fault injection and explicit Session-scoped resend/discard decision | `test:codex-reliability` and Workbench queue test |
 | AG-R04 | P1 | Stale Thread snapshot overwrites live event | Projection mutation generation barrier | Projection store and runtime tests |
 | AG-R05 | P1 | Codex mutation succeeds but SQLite write fails | Saga operation journal; known-Thread operations resume from `remote-applied`; start/fork require explicit binding | Runtime Saga fault injection and Electron lifecycle recovery |
 | AG-R06 | P1 | Invalid ToolBox config blocks history | Projection-only IPC does not refresh ToolBox | IPC contract test |

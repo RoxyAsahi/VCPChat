@@ -23,8 +23,10 @@ This document is the source of truth for R7-R10. Codex App Server remains a pinn
 - Terminal interaction records have TTL and capacity bounds and are cleared fail-closed on stop/crash/authority change.
 - Follow-up input states are `queued`, `dispatching`, `accepted`, `uncertain`, or `failed`.
 - Only `queued` input is automatically dispatched. A crash-window `dispatching` input is verified with `thread/read`; it is never automatically replayed.
+- `uncertain` and `failed` inputs are exposed in the Session-scoped queue. Only an explicit user action can create a replacement send identity or discard the record.
 - Fault injection covers crash before `turn/start`, lost transport during RPC, and ACK before SQLite acceptance commit. Ambiguous transport loss becomes `uncertain`, never retryable `failed`.
 - Restart is demand-driven with bounded backoff. Interrupted Turns are not replayed.
+- Interaction capacity is a hard fail-closed bound even when every entry is pending; transport exit rejects all old-generation waiters immediately.
 - Opening Workbench or selecting a Session never eagerly starts App Server; first send or an explicit recovery scan is runtime-required.
 
 ## R9: Projection and Saga
@@ -65,6 +67,13 @@ The follow-up implementation freezes Profile name/avatar in `SessionConfigSnapsh
 retains durable `threadId` in the Workbench projection, and makes pre-materialization Base Instructions editable under
 `expectedConfigRevision`. Materialized prompt/workspace and all existing Session Agent selectors are fail-closed in the UI and
 Runtime Manager. Its committed revision and command receipt are recorded in `test-matrix.md`; this section is not a product-ready claim.
+
+### R8 runtime/input follow-up
+
+The follow-up adds hard pending-interaction capacity enforcement, Session-scoped persistent input recovery actions, a new
+`clientUserMessageId` for explicit resend, durable `interrupted/unconfirmed` crash state, waiter cleanup on process exit, and
+bounded restart-backoff assertions. The queue UI is isolated in `agent-workbench-queue.js`; it does not infer a current
+attachment or permit automatic replay.
 
 ## Authority Boundary
 
