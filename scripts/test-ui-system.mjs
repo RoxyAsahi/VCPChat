@@ -356,9 +356,10 @@ const behaviorWindowControls = VCPUI.create('WindowControls', {
 });
 assert.equal(behaviorWindowControls.element.querySelectorAll('.vcp-ui-window-control-button').length, 3,
     'WindowControls must mark every clickable host as a no-drag control');
-assert.ok([...behaviorWindowControls.element.querySelectorAll('.vcp-ui-window-control-button')]
-    .every(button => button.style.webkitAppRegion === 'no-drag'),
-    'WindowControls must apply no-drag directly instead of relying on a parent drag-region exception');
+const uiComponentsCss = fs.readFileSync(new URL('../styles/ui-system/components.css', import.meta.url), 'utf8');
+assert.match(uiComponentsCss,
+    /\.vcp-ui-window-control-button\s*\{[^}]*-webkit-app-region:\s*no-drag/s,
+    'WindowControls must keep the no-drag contract in next-UI scoped CSS rather than inline mutation');
 behaviorWindowControls.element.querySelector('[aria-label="最小化窗口"]').click();
 behaviorWindowControls.element.querySelector('[aria-label="最大化窗口"]').click();
 behaviorWindowControls.element.querySelector('[aria-label="关闭窗口"]').click();

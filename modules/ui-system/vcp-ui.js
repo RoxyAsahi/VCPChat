@@ -1804,7 +1804,6 @@ function windowControlsFactory(options = {}) {
     close.element.classList.add('vcp-ui-window-control-close');
     [minimize.element, maximize.element, close.element].forEach(button => {
         button.classList.add('vcp-ui-window-control-button');
-        button.style.webkitAppRegion = 'no-drag';
     });
     const controller = makeController(element, state, current => {
         element.replaceChildren(minimize.element, maximize.element, close.element);
