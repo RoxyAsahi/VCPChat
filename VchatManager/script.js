@@ -1117,8 +1117,14 @@ document.addEventListener('DOMContentLoaded', () => {
         // Tooltip 通过 VCPUI.create('Tooltip') 创建（由 VCPUI 委托 Web Awesome）。
         [theme.element, consistency.element].forEach(btn => {
             try {
+                const parent = btn.parentNode;
+                const nextSibling = btn.nextSibling;
                 const tip = V.create('Tooltip', { trigger: btn, content: btn.title || btn.getAttribute('aria-label') || '操作', placement: 'top' });
-                document.body.append(tip.element);
+                if (tip.element.matches?.('wa-tooltip')) {
+                    document.body.append(tip.element);
+                } else {
+                    parent?.insertBefore(tip.element, nextSibling);
+                }
             } catch (error) { /* ignore */ }
         });
 
@@ -1138,6 +1144,7 @@ function buildNextVchatManager() {
     window.VCPPageRebuild.rebuild({
         title: 'VChat Manager',
         containerSelector: '#app',
+        bodyClass: 'vcp-ui-vchat-manager-body',
         windowControls: false,
         enhanceSelectors: {
             input: ['input:is(:not([type]),[type="text"],[type="number"],[type="search"],[type="url"],[type="email"],[type="password"])'],
@@ -1148,3 +1155,11 @@ function buildNextVchatManager() {
     window.dispatchEvent(new CustomEvent('vchat-manager-next-mounted'));
 }
 window.addEventListener('vcp-ui-runtime-ready', buildNextVchatManager);
+// The module bootstrap may finish before this classic script registers its
+// runtime-ready listener. DOMContentLoaded is a second deterministic barrier:
+// the main initializer above runs first, then the next shell is mounted once.
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', buildNextVchatManager, { once: true });
+} else {
+    queueMicrotask(buildNextVchatManager);
+}

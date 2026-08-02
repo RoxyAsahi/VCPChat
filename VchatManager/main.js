@@ -2,10 +2,23 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs').promises;
 
-// Define the path to the shared AppData directory, which is one level above VchatManager
-const sharedAppDataPath = path.join(__dirname, '../AppData');
+// Define the path to the shared AppData directory, honoring the same override
+// used by the main application and hermetic Electron tests.
+const configuredAppDataPath = process.env.VCPCHAT_APP_DATA_DIR?.trim();
+const sharedAppDataPath = configuredAppDataPath
+    ? path.resolve(configuredAppDataPath)
+    : path.join(__dirname, '../AppData');
 
-function createWindow() {
+async function readUiMode() {
+    try {
+        const settings = JSON.parse(await fs.readFile(path.join(sharedAppDataPath, 'settings.json'), 'utf8'));
+        return settings?.uiMode === 'next' ? 'next' : 'classic';
+    } catch {
+        return 'classic';
+    }
+}
+
+async function createWindow() {
     const mainWindow = new BrowserWindow({
         width: 1200,
         height: 800,
@@ -16,16 +29,17 @@ function createWindow() {
         }
     });
 
-    mainWindow.loadFile(path.join(__dirname, 'index.html'));
+    const uiMode = await readUiMode();
+    await mainWindow.loadFile(path.join(__dirname, 'index.html'), { query: { uiMode } });
     // mainWindow.webContents.openDevTools(); // Uncomment for debugging
 }
 
-app.whenReady().then(() => {
-    createWindow();
+app.whenReady().then(async () => {
+    await createWindow();
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
-            createWindow();
+            void createWindow();
         }
     });
 });

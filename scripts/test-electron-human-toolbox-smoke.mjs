@@ -61,6 +61,7 @@ const child = spawn(electron, ['VCPHumanToolBox', `--remote-debugging-port=${por
 child.stderr.on('data', chunk => { stderr.value = `${stderr.value}${chunk}`.slice(-12_000); });
 
 let browser;
+const rendererConsole = [];
 try {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
@@ -84,6 +85,13 @@ try {
 
     const rendererErrors = [];
     page.on('pageerror', error => rendererErrors.push(error?.stack || String(error)));
+    page.on('console', message => {
+        if (message.type() === 'error' || message.type() === 'warning') rendererConsole.push(message.text());
+    });
+    page.on('dialog', async dialog => {
+        rendererConsole.push(`[dialog:${dialog.type()}] ${dialog.message()}`);
+        await dialog.dismiss();
+    });
     await page.waitForSelector('.vcp-ui-page-shell', { timeout: timeoutMs });
     await page.waitForFunction(() => document.querySelectorAll('.tool-card').length > 0, { timeout: timeoutMs });
 
@@ -95,6 +103,7 @@ try {
         directWaTooltips: document.querySelectorAll('wa-tooltip').length,
         waCards: document.querySelectorAll('wa-card.tool-card').length,
         waInputs: document.querySelectorAll('wa-input.tool-search-input').length,
+        waSelects: document.querySelectorAll('wa-select.tool-category-select').length,
         workflowVisible: Boolean(document.querySelector('#workflow-btn-next')?.getClientRects().length),
         lucideIcons: document.querySelectorAll('[data-lucide]').length,
     }));
@@ -104,6 +113,7 @@ try {
     assert.ok(gridState.directWaTooltips >= 1, `VCPUI tooltip did not resolve through Web Awesome: ${JSON.stringify(gridState)}`);
     assert.equal(gridState.waCards, gridState.cards, `tool list is not Web Awesome-backed: ${JSON.stringify(gridState)}`);
     assert.ok(gridState.waInputs >= 1, `search is not Web Awesome-backed: ${JSON.stringify(gridState)}`);
+    assert.ok(gridState.waSelects >= 1, `category Select is not Web Awesome-backed: ${JSON.stringify(gridState)}`);
     assert.equal(gridState.workflowVisible, true, `workflow action is hidden: ${JSON.stringify(gridState)}`);
     assert.ok(gridState.lucideIcons >= 2, `Lucide icons missing: ${JSON.stringify(gridState)}`);
 
@@ -147,12 +157,54 @@ try {
     });
     await sleep(150);
     assert.equal(await page.$eval('.tool-count-badge', el => el.textContent.trim().startsWith('共')), true, 'search filter did not clear');
-    await page.evaluate(() => {
-        window.__workflowSmokeClicks = 0;
-        window.openWorkflowEditor = () => { window.__workflowSmokeClicks += 1; };
-    });
     await page.$eval('#workflow-btn-next', element => element.click());
-    assert.equal(await page.evaluate(() => window.__workflowSmokeClicks), 1, 'workflow action is not wired');
+    await page.waitForSelector('#workflowEditorContainer', { visible: true, timeout: timeoutMs });
+    const workflowState = await page.evaluate(() => ({
+        visible: Boolean(document.querySelector('#workflowEditorContainer')?.getClientRects().length),
+        nativeSelects: document.querySelectorAll('#workflowEditorContainer select.vcp-ui-select-source').length,
+        selectProxies: document.querySelectorAll('#workflowEditorContainer wa-select.vcp-ui-select-proxy').length,
+        overflowX: document.querySelector('#workflowEditorContainer')?.scrollWidth
+            > document.querySelector('#workflowEditorContainer')?.clientWidth + 1,
+    }));
+    assert.equal(workflowState.visible, true, `workflow editor did not open: ${JSON.stringify(workflowState)}`);
+    assert.equal(workflowState.selectProxies, workflowState.nativeSelects, `workflow Select proxies mismatch: ${JSON.stringify(workflowState)}`);
+    assert.equal(workflowState.overflowX, false, `workflow editor overflows horizontally: ${JSON.stringify(workflowState)}`);
+    await capture(page, 'human-toolbox-workflow.png');
+    await page.$eval('#closeWorkflowBtn', element => element.click());
+
+    await page.evaluate(() => window.openComfyUISettings?.());
+    await page.waitForSelector('#comfyui-drawer-content #workflowSelect', { timeout: timeoutMs });
+    await page.waitForFunction(() => {
+        const drawer = document.getElementById('comfyui-drawer-content');
+        const sources = drawer?.querySelectorAll('select.vcp-ui-select-source').length || 0;
+        return sources > 0 && drawer.querySelectorAll('wa-select.vcp-ui-select-proxy').length === sources;
+    }, { timeout: timeoutMs });
+    const comfyState = await page.evaluate(() => {
+        const drawer = document.getElementById('comfyui-drawer-content');
+        const proxies = [...drawer.querySelectorAll('wa-select.vcp-ui-select-proxy')];
+        return {
+            nativeSelects: drawer.querySelectorAll('select.vcp-ui-select-source').length,
+            selectProxies: proxies.length,
+            visibleNative: [...drawer.querySelectorAll('select.vcp-ui-select-source')]
+                .filter(select => !select.hidden && getComputedStyle(select).display !== 'none').length,
+            hostShellsReset: proxies.every(select => {
+                const style = getComputedStyle(select);
+                return parseFloat(style.borderTopWidth) === 0
+                    && parseFloat(style.paddingTop) === 0
+                    && style.backgroundColor === 'rgba(0, 0, 0, 0)';
+            }),
+            overflowX: drawer.scrollWidth > drawer.clientWidth + 1,
+        };
+    });
+    assert.ok(comfyState.nativeSelects >= 4, `ComfyUI Select sources missing: ${JSON.stringify(comfyState)}`);
+    assert.equal(comfyState.selectProxies, comfyState.nativeSelects, `ComfyUI Select proxies mismatch: ${JSON.stringify(comfyState)}`);
+    assert.equal(comfyState.visibleNative, 0, `ComfyUI native Select remains visible: ${JSON.stringify(comfyState)}`);
+    assert.equal(comfyState.hostShellsReset, true, `ComfyUI Select host still draws a second shell: ${JSON.stringify(comfyState)}`);
+    assert.equal(comfyState.overflowX, false, `ComfyUI drawer overflows horizontally: ${JSON.stringify(comfyState)}`);
+    await page.$eval('.config-tab-button[data-tab="parameters"]', element => element.click());
+    await page.waitForFunction(() => document.getElementById('parametersTab')?.classList.contains('active'));
+    await capture(page, 'human-toolbox-comfyui.png');
+    await page.evaluate(() => window.closeComfyUISettings?.());
     await capture(page, 'human-toolbox-tools.png');
 
     await page.$eval('.tool-card', element => element.click());
@@ -161,9 +213,12 @@ try {
         title: document.getElementById('tool-title')?.textContent?.trim(),
         controls: document.querySelectorAll('#tool-form input, #tool-form textarea, #tool-form select').length,
         enhanced: document.querySelectorAll('#tool-form .vcp-ui-native-input, #tool-form .vcp-ui-native-textarea, #tool-form .vcp-ui-native-select').length,
+        nativeSelects: document.querySelectorAll('#tool-form select.vcp-ui-select-source').length,
+        selectProxies: document.querySelectorAll('#tool-form wa-select.vcp-ui-select-proxy').length,
     }));
     assert.ok(detailState.title, `tool detail title missing: ${JSON.stringify(detailState)}`);
     assert.ok(detailState.controls > 0 && detailState.enhanced > 0, `dynamic form controls were not enhanced: ${JSON.stringify(detailState)}`);
+    assert.equal(detailState.selectProxies, detailState.nativeSelects, `dynamic Select proxies mismatch: ${JSON.stringify(detailState)}`);
     await capture(page, 'human-toolbox-detail.png');
 
     // Long text in a form textarea must not break the page layout.
@@ -219,9 +274,10 @@ try {
     await capture(page, 'human-toolbox-narrow.png');
     assert.equal(rendererErrors.length, 0, `renderer errors:\n${rendererErrors.join('\n')}`);
 
-    console.log(`Electron Human ToolBox smoke passed (${gridState.cards} tools, focus/keyboard/empty/long-text/detail/manage/narrow verified).`);
+    console.log(`Electron Human ToolBox smoke passed (${gridState.cards} tools, workflow/ComfyUI Selects, focus/keyboard/empty/long-text/detail/manage/narrow verified).`);
 } catch (error) {
     console.error(`Electron Human ToolBox smoke failed:\n${error?.stack || error}`);
+    if (rendererConsole.length) console.error(`Renderer console:\n${rendererConsole.slice(-20).join('\n')}`);
     process.exitCode = 1;
 } finally {
     child.kill();

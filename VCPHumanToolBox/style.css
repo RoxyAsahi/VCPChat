@@ -1593,13 +1593,13 @@ header p {
    ============================================================ */
 html[data-ui-mode="next"] {
     border-radius: 0;
-    background: var(--vcp-ui-bg-primary);
+    background-color: var(--vcp-ui-bg-primary);
 }
 
 html[data-ui-mode="next"] body.vcp-ui-human-toolbox {
     min-width: 0;
     color: var(--vcp-ui-text-0);
-    background: var(--vcp-ui-bg-primary) !important;
+    background-color: var(--vcp-ui-bg-primary) !important;
     background-image: none !important;
     font-family: var(--vcp-ui-font-family);
 }
@@ -1610,7 +1610,7 @@ html[data-ui-mode="next"] body.vcp-ui-human-toolbox > .vcp-ui-page-shell {
 
 html[data-ui-mode="next"] .vcp-ui-human-toolbox .vcp-ui-page-shell-content {
     overflow: hidden;
-    background: var(--vcp-ui-bg-primary);
+    background-color: var(--vcp-ui-bg-primary);
 }
 
 html[data-ui-mode="next"] .vcp-ui-human-toolbox .vcp-ui-page-shell-header {
