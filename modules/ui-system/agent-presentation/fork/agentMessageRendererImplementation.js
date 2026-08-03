@@ -34,6 +34,7 @@ import { createAgentRendererHistory } from './agent-renderer-history.js';
 import { createAgentRendererActions } from './agent-renderer-actions.js';
 import { protectLatexBlocks, restoreLatexBlocks } from './agent-renderer-latex.js';
 import { createAgentRendererAvatarStyle } from './agent-renderer-avatar-style.js';
+import { createAgentRendererTextTransforms } from './agent-renderer-text-transforms.js';
 
 const colorExtractionPromises = new Map();
 
@@ -489,100 +490,6 @@ function enhanceMermaidDiagram(mermaidElement) {
     });
 
     requestAnimationFrame(fitToWidth);
-}
-
-function getCompiledRegex(rule) {
-    if (!rule?.findPattern) {
-        return null;
-    }
-
-    if (window.uiHelperFunctions?.getCompiledRegex) {
-        const compiled = window.uiHelperFunctions.getCompiledRegex(rule.findPattern);
-        return compiled?.regex || null;
-    }
-
-    if (window.uiHelperFunctions?.regexFromString) {
-        return window.uiHelperFunctions.regexFromString(rule.findPattern);
-    }
-
-    const regexMatch = rule.findPattern.match(/^\/(.+?)\/([gimuy]*)$/);
-    if (regexMatch) {
-        return new RegExp(regexMatch[1], regexMatch[2]);
-    }
-    return new RegExp(rule.findPattern, 'g');
-}
-
-/**
- * 应用单个正则规则到文本
- * @param {string} text - 输入文本
- * @param {Object} rule - 正则规则对象
- * @returns {string} 处理后的文本
- */
-function applyRegexRule(text, rule) {
-    if (!rule || !rule.findPattern || typeof text !== 'string') {
-        return text;
-    }
-
-    try {
-        const regex = getCompiledRegex(rule);
-
-        if (!regex) {
-            console.error('无法解析正则表达式:', rule.findPattern);
-            return text;
-        }
-
-        regex.lastIndex = 0;
-
-        // 应用替换（如果没有替换内容，则默认替换为空字符串）
-        return text.replace(regex, rule.replaceWith || '');
-    } catch (error) {
-        console.error('应用正则规则时出错:', rule.findPattern, error);
-        return text;
-    }
-}
-
-function getActiveFrontendRegexRules(rules, role, depth) {
-    if (!rules || !Array.isArray(rules)) {
-        return [];
-    }
-
-    return rules.filter(rule => {
-        if (!rule || rule.enabled === false || !rule.findPattern || !rule.applyToFrontend) return false;
-
-        const shouldApplyToRole = rule.applyToRoles && rule.applyToRoles.includes(role);
-        if (!shouldApplyToRole) return false;
-
-        const minDepthOk = rule.minDepth === undefined || rule.minDepth === -1 || depth >= rule.minDepth;
-        const maxDepthOk = rule.maxDepth === undefined || rule.maxDepth === -1 || depth <= rule.maxDepth;
-        return minDepthOk && maxDepthOk;
-    });
-}
-
-/**
- * 应用所有匹配的正则规则到文本（前端版本）
- * @param {string} text - 输入文本
- * @param {Array} rules - 正则规则数组
- * @param {string} role - 消息角色 ('user' 或 'assistant')
- * @param {number} depth - 消息深度（0 = 最新消息）
- * @returns {string} 处理后的文本
- */
-function applyFrontendRegexRules(text, rules, role, depth) {
-    if (!rules || !Array.isArray(rules) || typeof text !== 'string') {
-        return text;
-    }
-
-    const activeRules = getActiveFrontendRegexRules(rules, role, depth);
-    if (activeRules.length === 0) {
-        return text;
-    }
-
-    let processedText = text;
-
-    activeRules.forEach(rule => {
-        processedText = applyRegexRule(processedText, rule);
-    });
-
-    return processedText;
 }
 
 /**
@@ -1043,6 +950,13 @@ function transformVCPChatCanvas(text) {
     });
 }
 
+const textTransforms = createAgentRendererTextTransforms({
+    window, escapeHtml, transformButton: transformUserButtonClick, transformCanvas: transformVCPChatCanvas,
+});
+const {
+    applyFrontendRegexRules, buildTurnDepthMap, calculateDepthByTurns, prepareUserMessageText,
+} = textTransforms;
+
 function extractSpeakableTextFromContentElement(contentElement) {
     if (!contentElement) return '';
 
@@ -1283,39 +1197,6 @@ function deIndentHtml(text) {
  * @param {Array<Message>} history - 完整的聊天记录数组。
  * @returns {number} - 计算出的深度（0代表最新一轮）。
  */
-function buildTurnDepthMap(history = []) {
-    const turns = [];
-    for (let i = history.length - 1; i >= 0; i--) {
-        if (history[i].role === 'assistant') {
-            const turn = { assistant: history[i], user: null };
-            if (i > 0 && history[i - 1].role === 'user') {
-                turn.user = history[i - 1];
-                i--;
-            }
-            turns.push(turn); // ✅ 使用 push
-        } else if (history[i].role === 'user') {
-            turns.push({ assistant: null, user: history[i] });
-        }
-    }
-    turns.reverse(); // ✅ 最后反转一次
-
-    const depthMap = new Map();
-    turns.forEach((turn, turnIndex) => {
-        const depth = turns.length - 1 - turnIndex;
-        if (turn.assistant?.id) {
-            depthMap.set(turn.assistant.id, depth);
-        }
-        if (turn.user?.id) {
-            depthMap.set(turn.user.id, depth);
-        }
-    });
-    return depthMap;
-}
-
-function calculateDepthByTurns(messageId, history) {
-    return buildTurnDepthMap(history).get(messageId) ?? 0;
-}
-
 
 /**
  * A helper function to preprocess the full message content string before parsing.
@@ -2264,33 +2145,6 @@ function updateMessageContent(messageId, newContent) {
         runHeavy: true,
         includeAttachments: !!messageInHistory
     });
-}
-
-function prepareUserMessageText(text) {
-    let processedText = text;
-
-    // 🔴 关键安全修复：用户输入属于不可信内容，必须先行进行 HTML 转义以防 XSS
-    // 🟢 改进：允许用户发送 <img> 标签（表情包），但需排除包含事件处理器的恶意标签
-    const userImgBlocks = [];
-    processedText = processedText.replace(/<img\s+[^>]*src=["']([^"']+)["'][^>]*>/gi, (match) => {
-        if (/on\w+\s*=/i.test(match) || /src\s*=\s*["']\s*javascript:/i.test(match)) {
-            return match;
-        }
-        const placeholder = `__VCP_USER_IMG_${userImgBlocks.length}__`;
-        userImgBlocks.push(match);
-        return placeholder;
-    });
-
-    processedText = escapeHtml(processedText);
-
-    userImgBlocks.forEach((img, i) => {
-        processedText = processedText.replace(`__VCP_USER_IMG_${i}__`, img);
-    });
-
-    processedText = transformUserButtonClick(processedText);
-    processedText = transformVCPChatCanvas(processedText);
-
-    return processedText;
 }
 
 // Expose methods to renderer.js

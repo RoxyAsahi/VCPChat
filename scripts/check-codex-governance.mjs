@@ -151,7 +151,7 @@ for (const file of governedUiModules) {
     }
 }
 for (const file of ['agent-renderer-history.js', 'agent-renderer-actions.js', 'agent-renderer-latex.js',
-    'agent-renderer-avatar-style.js']) {
+    'agent-renderer-avatar-style.js', 'agent-renderer-text-transforms.js']) {
     const absolute = path.join(root, 'modules/ui-system/agent-presentation/fork', file);
     if (!fs.existsSync(absolute)) errors.push(`missing governed Agent renderer module: ${file}`);
     else if (fs.readFileSync(absolute, 'utf8').split(/\r?\n/).length > 900) {
