@@ -13,7 +13,7 @@ import { createSessionDockModel } from './agent-session-dock.js';
 import { renderPendingInputQueue } from './agent-workbench-queue.js';
 import { createAgentComposerState } from './agent-composer-state.js';
 import { createWorkspaceRequestCoordinator } from './agent-workspace-requests.js';
-import { createRendererLifecycleScope } from './agent-renderer-lifecycle.js';
+import { createWorkbenchLifecycle } from './agent-workbench-lifecycle.js';
 import { renderAgentSettingsPane } from './agent-settings-view.js';
 import {
     createAgentSettingsState,
@@ -414,7 +414,7 @@ function createAttachmentChips(attachments, onRemove = null, onWorkspacePath = n
 }
 
 function mountWorkbench(container) {
-    const lifecycle = createRendererLifecycleScope(window);
+    const lifecycle = createWorkbenchLifecycle(window);
     const controller = createWorkbenchController(runtimeApi());
     const { store } = controller;
     const state = {
@@ -796,7 +796,7 @@ function mountWorkbench(container) {
     let approvalTicker = null;
     function ensureApprovalTicker() {
         if (approvalTicker) return;
-        approvalTicker = setInterval(() => {
+        approvalTicker = lifecycle.interval('approval-ticker', () => {
             const now = Date.now();
             for (const [id, entry] of approvalRegistry) {
                 const cards = root.querySelectorAll(`[data-approval-id="${cssEscape(id)}"]`);
@@ -823,7 +823,7 @@ function mountWorkbench(container) {
                 }
             }
             if (approvalRegistry.size === 0 && approvalTicker) {
-                clearInterval(approvalTicker);
+                lifecycle.clear('approval-ticker');
                 approvalTicker = null;
             }
         }, 500);
@@ -1890,7 +1890,7 @@ function mountWorkbench(container) {
             };
             search.addEventListener('input', () => {
                 applyTopicFilter();
-                clearTimeout(topicSearchTimer);
+                lifecycle.clear('topic-search');
                 const query = search.value.trim();
                 const request = ++topicSearchRequest;
                 if (!query) {
@@ -1902,7 +1902,7 @@ function mountWorkbench(container) {
                 }
                 state.topicSearchLoading = true;
                 state.topicSearchError = '';
-                topicSearchTimer = setTimeout(() => run(async () => {
+                topicSearchTimer = lifecycle.timeout('topic-search', () => run(async () => {
                     try {
                         const hits = await controller.searchTopics(query, state.selectedAgent, 50);
                         if (request !== topicSearchRequest || query !== state.topicSearch.trim()) return;
@@ -2107,8 +2107,7 @@ function mountWorkbench(container) {
                     settingsState.schedule(targetKey, field, callback);
                 },
                 scheduleBudgetSave(callback) {
-                    clearTimeout(budgetAutosaveTimer);
-                    budgetAutosaveTimer = setTimeout(callback, 500);
+                    budgetAutosaveTimer = lifecycle.timeout('budget-autosave', callback, 500);
                 },
             }));
         }
@@ -3150,8 +3149,7 @@ function mountWorkbench(container) {
         search.setAttribute('aria-label', '搜索工作区文件');
         search.addEventListener('input', () => {
             browser.search = search.value;
-            clearTimeout(workspaceSearchTimer);
-            workspaceSearchTimer = setTimeout(() => {
+            workspaceSearchTimer = lifecycle.timeout('workspace-search', () => {
                 const query = browser.search.trim();
                 browser.searchRequestId = '';
                 if (!query) { browser.searchResults = []; browser.searchLoading = false; renderActivity(); return; }
@@ -3708,8 +3706,7 @@ function mountWorkbench(container) {
         if (state.disposed) return;
         Object.assign(pendingRender, parts);
         if (renderFrame !== null) return;
-        const schedule = window.requestAnimationFrame || ((callback) => setTimeout(callback, 0));
-        renderFrame = schedule(() => {
+        renderFrame = lifecycle.frame('render', () => {
             renderFrame = null;
             const next = { ...pendingRender };
             Object.keys(pendingRender).forEach((key) => { pendingRender[key] = false; });
@@ -3907,7 +3904,7 @@ function mountWorkbench(container) {
         const visible = Boolean(turnId || pendingTurnStart);
         runStatus.hidden = !visible;
         if (!visible) {
-            if (runStatusTimer !== null) clearInterval(runStatusTimer);
+            if (runStatusTimer !== null) lifecycle.clear('run-status');
             runStatusTimer = null;
             return;
         }
@@ -3932,7 +3929,7 @@ function mountWorkbench(container) {
         runStatusStop.hidden = !selectedActiveTurnId(current);
         runStatusStop.disabled = !selectedActiveTurnId(current);
         if (runStatusTimer === null) {
-            runStatusTimer = setInterval(() => {
+            runStatusTimer = lifecycle.interval('run-status', () => {
                 if (!state.disposed) syncRunStatus();
             }, 250);
         }
@@ -4168,15 +4165,9 @@ function mountWorkbench(container) {
 
     return () => {
         state.disposed = true;
-        if (approvalTicker !== null) clearInterval(approvalTicker);
-        if (topicSearchTimer !== null) clearTimeout(topicSearchTimer);
-        if (workspaceSearchTimer !== null) clearTimeout(workspaceSearchTimer);
         workspaceRequests.dispose();
-        if (budgetAutosaveTimer !== null) clearTimeout(budgetAutosaveTimer);
         settingsState.dispose();
-        if (runStatusTimer !== null) clearInterval(runStatusTimer);
         closeTopicContextMenu();
-        if (renderFrame !== null && typeof window.cancelAnimationFrame === 'function') window.cancelAnimationFrame(renderFrame);
         state.accountThemeObserver?.disconnect();
         fullPresentation.dispose();
         lifecycle.dispose();

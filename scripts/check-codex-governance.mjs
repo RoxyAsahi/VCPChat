@@ -113,6 +113,9 @@ if (/agentRuntime(?:CreateTopic|CreateSession|ListTopics|ReadTopic|ReadProjectio
 for (const file of ['agent-session-client.js', 'agent-projection-client.js', 'agent-interaction-client.js', 'agent-workspace-client.js']) {
     if (!fs.existsSync(path.join(root, 'modules/ui-system', file))) errors.push(`missing Workbench client module: ${file}`);
 }
+if (!fs.existsSync(path.join(root, 'modules/ui-system/agent-workbench-lifecycle.js'))) {
+    errors.push('missing Workbench lifecycle module');
+}
 
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 for (const script of ['test:codex-reliability', 'test:electron-codex-recovery', 'check:codex-governance', 'test:codex-ci']) {
