@@ -29,13 +29,13 @@ const renderHtmlCacheStats = {
 };
 
 import { avatarColorCache, getDominantAvatarColor } from '../../../renderer/colorUtils.js';
-import { initializeImageHandler, setContentAndProcessImages } from '../../../renderer/imageHandler.js';
-import { processAnimationsInContent, cleanupAnimationsInContent } from '../../../renderer/animation.js';
-import * as visibilityOptimizer from '../../../renderer/visibilityOptimizer.js';
 import { createMessageSkeleton, formatMessageTimestamp } from '../../../renderer/domBuilder.js';
 import * as emoticonUrlFixer from '../../../renderer/emoticonUrlFixer.js';
 import { createContentPipeline, PIPELINE_MODES } from '../../../renderer/contentPipeline.js';
 import { createAnimationFrameBatcher } from '../stream-batcher.js';
+import { createAgentImageController } from './agentImageController.js';
+import { createAgentVisibilityController } from './agentVisibilityController.js';
+import { createAgentAnimationLifecycle } from './agentAnimationLifecycle.js';
 
 const colorExtractionPromises = new Map();
 
@@ -2142,6 +2142,9 @@ let agentRenderContext = {
     handleCreateBranch: () => { },
     // activeStreamingMessageId: null, // ID of the message currently being streamed - REMOVED
 };
+let imageController = null;
+let visibilityController = null;
+let animationLifecycle = null;
 
 const streamState = new Map();
 let streamBatcher = null;
@@ -2242,11 +2245,11 @@ function cleanupMessageDomResources(messageItem, messageId = null) {
     const contentDiv = messageItem.querySelector('.md-content');
     if (contentDiv) {
         contentProcessor.cleanupPreviewsInContent(contentDiv);
-        cleanupAnimationsInContent(contentDiv);
+        animationLifecycle?.cleanup(contentDiv);
     }
 
     cleanupScopedStylesForMessage(messageItem, messageId || messageItem.dataset?.messageId || null);
-    visibilityOptimizer.unobserveMessage(messageItem);
+    visibilityController?.unobserveMessage(messageItem);
 }
 
 function removeMessageById(messageId) {
@@ -2339,11 +2342,10 @@ function initializeAgentMessageRenderer(refs) {
         getDesktopPushPartialRegex: () => DESKTOP_PUSH_PARTIAL_REGEX,
     });
 
-    initializeImageHandler({
-        electronAPI: agentRenderContext.electronAPI,
-        uiHelper: agentRenderContext.uiHelper,
-        chatMessagesDiv: agentRenderContext.chatMessagesDiv,
-    });
+    imageController?.dispose();
+    visibilityController?.dispose();
+    animationLifecycle?.dispose();
+    imageController = createAgentImageController({ document, electronAPI: agentRenderContext.electronAPI });
 
     // Start the emoticon fixer initialization, but don't wait for it here.
     // The await will happen inside renderMessage to ensure it's ready before rendering.
@@ -2353,8 +2355,12 @@ function initializeAgentMessageRenderer(refs) {
     // 🟢 关键修复：IntersectionObserver 的 root 必须是产生滚动条的那个父容器
     const scrollContainer = agentRenderContext.chatMessagesDiv.closest('.chat-messages-container');
     if (typeof globalThis.Element !== 'undefined' && typeof globalThis.IntersectionObserver !== 'undefined') {
-        visibilityOptimizer.initializeVisibilityOptimizer(scrollContainer || agentRenderContext.chatMessagesDiv);
+        visibilityController = createAgentVisibilityController({
+            container: scrollContainer || agentRenderContext.chatMessagesDiv,
+            window,
+        });
     }
+    animationLifecycle = createAgentAnimationLifecycle({ root: agentRenderContext.chatMessagesDiv });
 
     // --- Event Delegation ---
     bindContainerEvent('click', (e) => {
@@ -2411,7 +2417,6 @@ function initializeAgentMessageRenderer(refs) {
         }
     });
 
-    contentProcessor.initializeContentProcessor(agentRenderContext);
     injectEnhancedStyles();
     console.log("[MessageRenderer] Initialized. Current selected item type on init:", getParticipant()?.type);
 }
@@ -2523,8 +2528,8 @@ async function renderPostProcessedHtml(contentDiv, rawHtml, options = {}) {
     if (typeof rawHtml === 'string') {
         // 替换 innerHTML 前必须释放旧子树上的预览 iframe、window message 监听器与动画/WebGL 资源。
         contentProcessor.cleanupPreviewsInContent(contentDiv);
-        cleanupAnimationsInContent(contentDiv);
-        setContentAndProcessImages(contentDiv, rawHtml, messageId);
+        animationLifecycle?.cleanup(contentDiv);
+        imageController?.setContent(contentDiv, rawHtml, messageId);
     }
 
     if (!isStillValid()) return;
@@ -2560,7 +2565,7 @@ async function renderPostProcessedHtml(contentDiv, rawHtml, options = {}) {
         contentProcessor.highlightAllPatternsInMessage(contentDiv);
     }
 
-    processAnimationsInContent(contentDiv);
+    animationLifecycle?.process(contentDiv);
     if (messageItem) {
         messageItem.dataset.vcpHeavyActivated = 'true';
         delete messageItem.dataset.vcpHeavyPending;
@@ -2664,7 +2669,7 @@ function renderMessage(message, isInitialLoad = false, appendToDom = true, rende
     if (appendToDom) {
         chatMessagesDiv.appendChild(messageItem);
         // 观察新消息的可见性
-        visibilityOptimizer.observeMessage(messageItem);
+        visibilityController?.observeMessage(messageItem);
     }
 
     const isActiveStreamRequest = message.role === 'assistant'
@@ -3225,7 +3230,7 @@ async function renderHistory(history, options = {}) {
 function shouldRunHeavyForMessage(messageItem, renderContext = {}) {
     if (renderContext.forceHeavy === true) return true;
     if (renderContext.deferHeavy === true) {
-        return visibilityOptimizer.isMessageInHotZone?.(messageItem) === true;
+        return visibilityController?.isMessageInHotZone(messageItem) === true;
     }
     return true;
 }
@@ -3239,7 +3244,7 @@ function processDeferredMessageElement(el, renderSessionId, renderContext = {}) 
         return;
     }
 
-    visibilityOptimizer.observeMessage(el);
+    visibilityController?.observeMessage(el);
 
     if (typeof el._vcp_process === 'function') {
         const runHeavy = shouldRunHeavyForMessage(el, renderContext);
@@ -3432,7 +3437,7 @@ function refreshLayoutDependentState() {
 
     requestAnimationFrame(() => {
         if (!chatMessagesDiv.isConnected) return;
-        visibilityOptimizer.recheckVisibility();
+        visibilityController?.recheckVisibility();
     });
 }
 
@@ -3444,7 +3449,12 @@ function disposeAgentMessageRenderer() {
     for (const row of agentRenderContext.chatMessagesDiv?.querySelectorAll('.message-item') || []) {
         cleanupMessageDomResources(row, row.dataset?.messageId || null);
     }
-    visibilityOptimizer.destroyVisibilityOptimizer?.();
+    visibilityController?.dispose();
+    imageController?.dispose();
+    animationLifecycle?.dispose();
+    visibilityController = null;
+    imageController = null;
+    animationLifecycle = null;
     agentRenderContext = {
         getSessionContext: () => ({ sessionId: null, threadId: null, participant: {}, messages: [], settings: {} }),
         actions: {},

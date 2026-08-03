@@ -1,0 +1,39 @@
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const { CodexRuntimeManager } = require('../modules/codex-runtime/runtimeManager.js');
+
+const manager = new CodexRuntimeManager({ projectRoot: process.cwd() });
+let repositoryClosed = false;
+let compactionRejected = null;
+manager.state = 'ready';
+manager.repository = {
+    close() { repositoryClosed = true; },
+    listSessions() { return []; },
+    updateActivity() {},
+};
+manager.transport = { stop: async () => {}, respond() {}, respondError() {} };
+manager.bridge = { stop: async () => {} };
+manager.responsesAdapter = { stop: async () => {} };
+manager.compactionWaiters.set('thread-1', {
+    timeout: setTimeout(() => {}, 60_000),
+    sessionId: 'session-1',
+    reject(error) { compactionRejected = error; },
+});
+manager.configApplyPromises.set('session-1', Promise.resolve());
+manager.interactionTimers.set('request-1', setTimeout(() => {}, 60_000));
+manager.knownOperationRecoveryPromise = Promise.resolve({ recovered: 0 });
+const generation = manager._captureGeneration();
+
+await manager.stop();
+assert.equal(repositoryClosed, true);
+assert.equal(manager.compactionWaiters.size, 0);
+assert.equal(manager.configApplyPromises.size, 0);
+assert.equal(manager.interactionTimers.size, 0);
+assert.equal(manager.knownOperationRecoveryPromise, null);
+assert.equal(compactionRejected?.code, 'RUNTIME_STOPPED');
+assert.throws(() => manager._assertGeneration(generation), /expired generation|stopped/i,
+    'operations from a stopped generation must fail before touching a new Runtime');
+
+console.log('Codex Runtime lifecycle tests passed.');

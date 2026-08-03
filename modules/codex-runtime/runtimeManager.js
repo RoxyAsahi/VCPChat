@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
 const { EventEmitter } = require('events');
+const { RuntimeGeneration } = require('./runtimeGeneration');
 const { CodexAppServerTransport, CodexAppServerError } = require('./appServerTransport');
 const { AgentProjectionRepository, CodexProjectionProjector } = require('./projection');
 const { ToolboxBridgeTransport } = require('./toolboxBridgeTransport');
@@ -160,6 +161,7 @@ class CodexRuntimeManager extends EventEmitter {
         this.diagnosticClock = options.diagnosticClock || (() => performance.now());
         this.startPromise = null;
         this.runtimeGeneration = 0;
+        this.generationScope = new RuntimeGeneration(this.runtimeGeneration);
         this.toolboxAuthorityGeneration = 0;
         this.runtimeStartFailures = 0;
         this.runtimeRetryAfter = 0;
@@ -213,7 +215,9 @@ class CodexRuntimeManager extends EventEmitter {
             this.ensureProjectionStore();
             const settings = this.getSettings() || {};
             await this._ensureResponsesAdapter(settings);
+            this.generationScope.close('Runtime superseded by a new generation');
             this.runtimeGeneration += 1;
+            this.generationScope = new RuntimeGeneration(this.runtimeGeneration);
             this.interactions.setGeneration('codex-native', this.runtimeGeneration);
             this.transport = this.transport || this.transportFactory({
                 cwd: this.projectRoot,
@@ -241,6 +245,7 @@ class CodexRuntimeManager extends EventEmitter {
                     durationMs: this.diagnosticClock() - startedAt,
                 });
             } catch (error) {
+                this.generationScope.close('Codex App Server failed to start');
                 this.state = 'error';
                 this.lastError = serializeError(error);
                 this.intentionalStop = true;
@@ -291,6 +296,9 @@ class CodexRuntimeManager extends EventEmitter {
     async stop() {
         this.state = 'stopping';
         this.intentionalStop = true;
+        this.generationScope.close('VChat Agent Runtime stopped');
+        this.runtimeGeneration += 1;
+        this._rejectCompactionWaiters(new CodexAppServerError('RUNTIME_STOPPED', 'VChat Agent Runtime stopped during compaction'));
         await this._failClosedNativeApprovals('VChat Agent Runtime stopped');
         await this._interruptDynamicCalls('VChat Agent Runtime stopped');
         await this._failClosedToolboxApprovals('VChat Agent Runtime stopped');
@@ -310,6 +318,7 @@ class CodexRuntimeManager extends EventEmitter {
         this.threadStates.clear();
         this.resumedThreadIds.clear();
         this.resumingThreads.clear();
+        this.configApplyPromises.clear();
         this.configApplyTargets.clear();
         this.sessionWarmPromises.clear();
         this.turnStartPromises.clear();
@@ -317,6 +326,8 @@ class CodexRuntimeManager extends EventEmitter {
         this.idleWarmSessions.clear();
         this.dynamicCalls.clear();
         this.toolboxApprovals.clear();
+        for (const timer of this.interactionTimers.values()) clearTimeout(timer);
+        this.interactionTimers.clear();
         this.attachments.clear();
         this.toolboxConfigFingerprint = null;
         this.toolboxReconfiguration = null;
@@ -325,8 +336,18 @@ class CodexRuntimeManager extends EventEmitter {
         this.toolboxRequestedGeneration = 0;
         this.toolboxAppliedGeneration = 0;
         this.startPromise = null;
+        this.knownOperationRecoveryPromise = null;
         this.state = 'stopped';
         return this.getStatus();
+    }
+
+    _captureGeneration() {
+        return this.generationScope;
+    }
+
+    _assertGeneration(scope) {
+        scope.assertCurrent(this.runtimeGeneration, CodexAppServerError);
+        if (!this.repository) throw new CodexAppServerError('RUNTIME_STOPPED', 'Agent projection store is closed');
     }
 
     async createTopic(options = {}) {
@@ -576,6 +597,7 @@ class CodexRuntimeManager extends EventEmitter {
             const startedAt = this.diagnosticClock();
             this._diagnostic('thread-warm-started', { sessionId: idValue, reason });
             await this.start();
+            const generation = this._captureGeneration();
             let session = this.repository.getSession(idValue);
             if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
             if (session.archivedAt) {
@@ -585,7 +607,9 @@ class CodexRuntimeManager extends EventEmitter {
             session = session.threadId
                 ? await this._resumeSession(session)
                 : await this._startThreadForSession(session, options);
+            this._assertGeneration(generation);
             if (recoverPendingInputs) await this._recoverPendingInputsForSession(session);
+            this._assertGeneration(generation);
             this._rememberIdleWarmSession(session.sessionId);
             this._diagnostic('thread-warm-completed', {
                 sessionId: session.sessionId,
@@ -599,6 +623,7 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     async _startThreadForSession(session, options = {}) {
+        const generation = this._captureGeneration();
         const config = session.configSnapshot || this._configSnapshot(options);
         const runtimeParams = this._runtimePolicyParams(config, { starting: true });
         const operation = this.repository.createOperation({
@@ -618,10 +643,12 @@ class CodexRuntimeManager extends EventEmitter {
                 ...this._threadInstructionParams(config),
                 dynamicTools: [vcpInvokeTool()],
             });
+            this._assertGeneration(generation);
             threadId = result?.thread?.id;
             if (!threadId) throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/start returned no thread id');
             this.repository.updateOperation(operation.operationId, { state: 'remote-applied', threadId });
             await this.faultInjection.afterThreadStartRemoteApplied?.({ operation, session, threadId });
+            this._assertGeneration(generation);
             session = session.threadId
                 ? this.repository.replaceUnmaterializedThread(session.sessionId, threadId)
                 : this.repository.saveSession({
@@ -663,6 +690,7 @@ class CodexRuntimeManager extends EventEmitter {
             return localProjection;
         }
         await this.start();
+        const runtimeGeneration = this._captureGeneration();
         if (session.threadId && reconcile !== false) {
             try {
                 let applied = false;
@@ -672,11 +700,13 @@ class CodexRuntimeManager extends EventEmitter {
                         threadId: session.threadId,
                         includeTurns: true,
                     });
+                    this._assertGeneration(runtimeGeneration);
                     applied = this.projector.reconcileThread(session.sessionId, result.thread || result, generation).applied;
                 }
                 if (!applied) throw new CodexAppServerError('RECONCILE_GENERATION_CHANGED', 'Projection changed during reconciliation; retry later');
                 if (session.orphaned) this.repository.markOrphaned(session.sessionId, false);
             } catch (error) {
+                if (error?.code === 'STALE_RUNTIME_GENERATION' || !this.repository) throw error;
                 if (isConfirmedThreadNotFound(error) && hasDurableProjection(localProjection)) {
                     this.repository.markOrphaned(session.sessionId, true);
                 }
@@ -758,7 +788,9 @@ class CodexRuntimeManager extends EventEmitter {
         this._assertProjectionWritable();
         const startedAt = this.diagnosticClock();
         let session = await this.ensureSessionRuntime({ sessionId, reason: 'send', recoverPendingInputs });
+        const generation = this._captureGeneration();
         await this._applySessionRuntimeConfig(session.sessionId, { barrier: true });
+        this._assertGeneration(generation);
         session = compatibilitySession(this.repository.getSession(session.sessionId));
         const text = String(prompt || '').trim();
         if (!text && (!Array.isArray(attachments) || attachments.length === 0)) {
@@ -782,6 +814,7 @@ class CodexRuntimeManager extends EventEmitter {
             approvalPolicy: normalizeApprovalPolicy(session.configSnapshot?.permissionMode || session.configSnapshot?.approvalPolicy),
             sandbox: normalizeSandboxMode(session.configSnapshot?.sandbox),
         });
+        this._assertGeneration(generation);
         const acceptedTurnId = result?.turn?.id || turnId;
         const appliedSession = this.repository.markSessionConfigApplied(
             session.sessionId, session.configRevision, session.configSnapshot,
@@ -1046,6 +1079,7 @@ class CodexRuntimeManager extends EventEmitter {
         if (this.repository?.readOnly) return { recovered: 0, remaining: 0 };
         if (this.knownOperationRecoveryPromise) return this.knownOperationRecoveryPromise;
         const promise = (async () => {
+            const generation = this._captureGeneration();
             const recoverable = this.repository.listRecoverableOperations()
                 .filter((operation) => ['thread-archive', 'thread-unarchive', 'thread-delete'].includes(operation.kind))
                 .filter((operation) => ['prepared', 'dispatching', 'remote-applied', 'uncertain'].includes(operation.state));
@@ -1053,7 +1087,9 @@ class CodexRuntimeManager extends EventEmitter {
             for (const operation of recoverable) {
                 try {
                     if (await this._recoverKnownThreadOperation(operation)) recovered += 1;
+                    this._assertGeneration(generation);
                 } catch (error) {
+                    if (error?.code === 'STALE_RUNTIME_GENERATION' || !this.repository) throw error;
                     this.lastError = serializeError(error);
                     this._diagnostic('known-operation-recovery-failed', {
                         operationId: operation.operationId,
@@ -1663,8 +1699,10 @@ class CodexRuntimeManager extends EventEmitter {
             this._sendSessionConfigEvent('session.config.pending', session);
             try {
                 await this.start();
+                const generation = this._captureGeneration();
                 if (!this.resumedThreadIds.has(session.threadId)) {
                     await this._resumeSession(session);
+                    this._assertGeneration(generation);
                     return this.repository.getSession(idValue);
                 }
                 if (instructionConfigChanged(desired, applied)) {
@@ -1675,8 +1713,10 @@ class CodexRuntimeManager extends EventEmitter {
                         return this.repository.getSession(idValue);
                     }
                     await this.transport.request('thread/unsubscribe', { threadId: session.threadId });
+                    this._assertGeneration(generation);
                     this.resumedThreadIds.delete(session.threadId);
                     await this._resumeSession(this.repository.getSession(idValue));
+                    this._assertGeneration(generation);
                     return this.repository.getSession(idValue);
                 }
                 const target = {
@@ -1687,9 +1727,11 @@ class CodexRuntimeManager extends EventEmitter {
                 };
                 this.configApplyTargets.set(session.threadId, target);
                 await this.transport.request('thread/settings/update', threadSettingsPatch(session, desired));
+                this._assertGeneration(generation);
                 if (!barrier) return this.repository.getSession(idValue);
                 return this.repository.getSession(idValue);
             } catch (error) {
+                if (error?.code === 'STALE_RUNTIME_GENERATION' || !this.repository) throw error;
                 const current = this.repository.getSession(idValue);
                 if (current?.configRevision === session.configRevision
                     && error?.code !== 'SESSION_CONFIG_PENDING') {
@@ -2623,6 +2665,8 @@ class CodexRuntimeManager extends EventEmitter {
     async _handleTransportCrash(error) {
         this.state = 'crashed';
         this.lastError = serializeError(error);
+        this.generationScope.close('Codex App Server crashed');
+        this.runtimeGeneration += 1;
         if (this.repository && !this.repository.readOnly) {
             for (const [threadId, threadState] of this.threadStates) {
                 if (threadState?.activity !== 'running') continue;
@@ -2639,6 +2683,7 @@ class CodexRuntimeManager extends EventEmitter {
         this.threadStates.clear();
         this.resumedThreadIds.clear();
         this.resumingThreads.clear();
+        this.configApplyPromises.clear();
         this.configApplyTargets.clear();
         this._rejectCompactionWaiters(new CodexAppServerError('RUNTIME_CRASHED', 'Codex App Server crashed during compaction'));
         await this._failClosedNativeApprovals('Codex App Server crashed', { respond: false });
@@ -2646,6 +2691,9 @@ class CodexRuntimeManager extends EventEmitter {
         await this._failClosedToolboxApprovals('Codex App Server crashed');
         this.interactions.clear({ source: 'codex-native' });
         this.interactions.clear({ source: 'toolbox' });
+        for (const timer of this.interactionTimers.values()) clearTimeout(timer);
+        this.interactionTimers.clear();
+        this.knownOperationRecoveryPromise = null;
         this.transport = null;
         this._transportWired = false;
         this.sendEvent({ runtime: 'codex', type: 'runtime.crashed', error: this.lastError });
@@ -2715,6 +2763,7 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     async _resumeSession(session) {
+        const generation = this._captureGeneration();
         const threadId = String(session?.threadId || '').trim();
         if (!threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached to a Codex Thread');
         if (this.resumedThreadIds.has(threadId)) return this.repository.getSession(session.sessionId) || session;
@@ -2737,6 +2786,7 @@ class CodexRuntimeManager extends EventEmitter {
                     ...(config.executionProfile === 'toolbox-only' ? { dynamicTools: [vcpInvokeTool()] } : {}),
                     excludeTurns: true,
                 });
+                this._assertGeneration(generation);
                 const resumedThreadId = String(result?.thread?.id || '').trim();
                 if (resumedThreadId !== threadId) {
                     throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/resume returned a mismatched thread id');
@@ -2752,6 +2802,7 @@ class CodexRuntimeManager extends EventEmitter {
                 if (session.orphaned) this.repository.markOrphaned(session.sessionId, false);
                 return this.repository.getSession(session.sessionId) || applied || session;
             } catch (error) {
+                if (error?.code === 'STALE_RUNTIME_GENERATION' || !this.repository) throw error;
                 const projection = this.repository.readProjection(session.sessionId);
                 if (isConfirmedThreadNotFound(error) && !hasDurableProjection(projection)) {
                     // Codex creates an in-memory empty Thread before its first
