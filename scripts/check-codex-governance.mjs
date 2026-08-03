@@ -6,6 +6,21 @@ import { createRequire } from 'node:module';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
 const errors = [];
+const agentCssOwners = [
+    'agent-shell.css', 'agent-sidebar.css', 'agent-composer.css', 'agent-timeline.css',
+    'agent-session-dock.css', 'agent-workspace.css', 'agent-activity.css',
+    'agent-responsive.css', 'agent-legacy-shell-adapter.css',
+];
+const agentCssEntryPath = path.join(root, 'styles/ui-system/agent-workbench.css');
+const expectedAgentCssEntry = agentCssOwners.map((file) => `@import url('./${file}');`).join('\n');
+if (!fs.existsSync(agentCssEntryPath)) errors.push('missing Agent Workbench CSS entry');
+else if (fs.readFileSync(agentCssEntryPath, 'utf8').trim() !== expectedAgentCssEntry) {
+    errors.push('Agent Workbench CSS import order or entry ownership is invalid');
+}
+for (const file of agentCssOwners) {
+    const absolute = path.join(root, 'styles/ui-system', file);
+    if (!fs.existsSync(absolute)) errors.push(`missing Agent CSS owner: ${file}`);
+}
 const productRoots = ['modules', 'preloads'];
 for (const productRoot of productRoots) {
     const pending = [path.join(root, productRoot)];

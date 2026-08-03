@@ -57,6 +57,10 @@ const inlineStyleCompatibilityAllowlist = new Set([
     path.join(moduleDir, 'agent-presentation', 'fork', 'agentMessageRenderer.js'),
     path.join(moduleDir, 'agent-presentation', 'fork', 'agentMessageRendererImplementation.js'),
     path.join(moduleDir, 'agent-presentation', 'fork', 'agentImageController.js'),
+    path.join(moduleDir, 'agent-presentation', 'fork', 'agent-renderer-avatar-style.js'),
+    path.join(moduleDir, 'agent-presentation', 'fork', 'agent-renderer-mermaid.js'),
+    path.join(moduleDir, 'agent-presentation', 'fork', 'agent-renderer-scoped-html.js'),
+    path.join(moduleDir, 'agent-presentation', 'fork', 'agent-renderer-tool-results.js'),
     // The shared legacy context-menu CSS positions the popup dynamically.
     path.join(moduleDir, 'agent-presentation', 'context-menu.js'),
 ]);

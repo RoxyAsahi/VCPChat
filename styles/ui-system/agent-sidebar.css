@@ -1,0 +1,492 @@
+@layer vcp-ui.components {
+
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar {
+        min-width: 0;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-row {
+        cursor: default;
+        position: relative;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-avatar {
+        width: var(--vcp-ui-sidebar-avatar-size);
+        height: var(--vcp-ui-sidebar-avatar-size);
+        margin-right: var(--vcp-ui-space-2);
+        position: relative;
+        display: inline-grid;
+        place-items: center;
+        flex: 0 0 var(--vcp-ui-sidebar-avatar-size);
+        border-radius: 50%;
+        isolation: isolate;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-avatar > .avatar {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        position: relative;
+        z-index: 1;
+        border-radius: 50%;
+        object-fit: cover;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-avatar.is-running::before,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-avatar.is-awaiting-approval::before {
+        content: '';
+        position: absolute;
+        inset: -4px;
+        z-index: 0;
+        border-radius: 50%;
+        background: conic-gradient(
+            from 0deg,
+            transparent 0 12%,
+            color-mix(in srgb, var(--vcp-ui-accent) 45%, white) 26%,
+            var(--vcp-ui-accent) 49%,
+            transparent 68% 100%
+        );
+        box-shadow: 0 0 10px color-mix(in srgb, var(--vcp-ui-accent) 42%, transparent);
+        animation: agent-chat-session-runtime-ring 1.6s linear infinite;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-avatar.is-awaiting-approval::before {
+        background: conic-gradient(
+            from 0deg,
+            transparent 0 18%,
+            color-mix(in srgb, var(--vcp-ui-warning) 58%, white) 38%,
+            var(--vcp-ui-warning) 55%,
+            transparent 72% 100%
+        );
+        box-shadow: 0 0 10px color-mix(in srgb, var(--vcp-ui-warning) 45%, transparent);
+        animation-duration: 2.2s;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-avatar::after {
+        content: '';
+        position: absolute;
+        inset: -1px;
+        z-index: 0;
+        border-radius: 50%;
+        background: var(--vcp-ui-bg-1);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-row > .vcp-ui-icon {
+        margin-right: var(--vcp-ui-space-2);
+        color: var(--vcp-ui-text-2);
+        font-size: var(--vcp-ui-icon-sm);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-row:hover .agent-chat-session-menu,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-row:focus-within .agent-chat-session-menu {
+        opacity: 1;
+    }
+
+    /* The Workbench Topic page reuses the main Topic toolbar classes, but
+       keeps its management selection transient in the renderer. Mirror the
+       shared visual contract without giving this projection main-chat IDs. */
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-chat-sidebar-content {
+        position: relative;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-chat-sidebar-content.is-managing .sidebar-list-scroll {
+        padding-bottom: calc(var(--vcp-ui-control-lg) + var(--vcp-ui-space-5));
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-chat-sidebar-content.is-managing .agent-chat-topic-manage-panel {
+        position: absolute;
+        right: var(--vcp-ui-sidebar-list-gutter);
+        bottom: var(--vcp-ui-space-2);
+        left: var(--vcp-ui-sidebar-list-gutter);
+        min-height: var(--vcp-ui-control-lg);
+        padding: var(--vcp-ui-space-2);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--vcp-ui-space-2);
+        border: 1px solid var(--vcp-ui-border);
+        border-radius: var(--vcp-ui-radius-md);
+        color: var(--vcp-ui-text-1);
+        background: var(--vcp-ui-bg-1);
+        box-shadow: var(--vcp-ui-shadow-md);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-chat-topic-selection-count {
+        font-size: var(--vcp-ui-font-caption);
+        white-space: nowrap;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .topic-list .topic-item .next-ui-topic-select-icon {
+        width: var(--vcp-ui-icon-sm);
+        height: var(--vcp-ui-icon-sm);
+        display: none;
+        place-items: center;
+        flex: 0 0 var(--vcp-ui-icon-sm);
+        color: var(--vcp-ui-text-3);
+        font-size: var(--vcp-ui-icon-sm);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-chat-sidebar-content.is-managing .topic-item .next-ui-topic-select-icon {
+        display: grid;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-chat-sidebar-content.is-managing .topic-item.selected {
+        color: var(--vcp-ui-text-0);
+        background: var(--vcp-ui-selection-bg);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-chat-sidebar-content.is-managing .topic-item.selected .next-ui-topic-select-icon {
+        color: var(--vcp-ui-accent);
+    }
+
+    /* R3-A Topic flow: a Workbench-local product surface. It uses only
+       temporary form/checkpoint-summary state; the actual Topic stays in the
+       Rust daemon and is never copied into renderer persistence. */
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer {
+        position: absolute;
+        z-index: 30;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding: var(--vcp-ui-space-4);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-backdrop {
+        position: absolute;
+        inset: 0;
+        background: color-mix(in srgb, var(--vcp-ui-bg-0) 72%, transparent);
+        backdrop-filter: blur(2px);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-dialog {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        gap: var(--vcp-ui-space-4);
+        width: min(100%, 560px);
+        max-height: min(720px, calc(100vh - var(--vcp-ui-space-8)));
+        overflow: auto;
+        padding: clamp(var(--vcp-ui-space-4), 3vw, var(--vcp-ui-space-6));
+        border: 1px solid var(--vcp-ui-border);
+        border-radius: var(--vcp-ui-radius-card);
+        color: var(--vcp-ui-text-0);
+        background: var(--vcp-ui-bg-1);
+        box-shadow: var(--vcp-ui-shadow-lg);
+        outline: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-title,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-description,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-status,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-loading,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-error,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-checkpoint {
+        margin: 0;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-description,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-status,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-loading,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-checkpoint {
+        color: var(--vcp-ui-text-2);
+        line-height: 1.5;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-status.is-busy {
+        color: var(--vcp-ui-warning);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-status.is-ready {
+        color: var(--vcp-ui-success);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-error {
+        color: var(--vcp-ui-danger);
+        line-height: 1.5;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-context {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--vcp-ui-space-2);
+        padding: var(--vcp-ui-space-2);
+        border: 1px solid var(--vcp-ui-border-subtle);
+        border-radius: var(--vcp-ui-radius-sm);
+        background: var(--vcp-ui-fill-0);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-context-item {
+        min-width: 0;
+        display: grid;
+        gap: 2px;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-context-label {
+        color: var(--vcp-ui-text-2);
+        font-size: var(--vcp-ui-font-caption);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-context-value {
+        min-width: 0;
+        overflow: hidden;
+        color: var(--vcp-ui-text-0);
+        font-size: var(--vcp-ui-font-caption);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-lease {
+        display: flex;
+        align-items: center;
+        gap: var(--vcp-ui-space-2);
+        padding: var(--vcp-ui-space-2) var(--vcp-ui-space-3);
+        border: 1px solid var(--vcp-ui-border-subtle);
+        border-radius: var(--vcp-ui-radius-sm);
+        font-size: var(--vcp-ui-font-helper);
+        line-height: 1.45;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-lease.is-idle {
+        color: var(--vcp-ui-success);
+        background: color-mix(in srgb, var(--vcp-ui-success) 10%, var(--vcp-ui-bg-1));
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-lease.is-occupied {
+        color: var(--vcp-ui-warning);
+        background: var(--vcp-ui-warning-bg);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-form {
+        display: grid;
+        gap: var(--vcp-ui-space-3);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-field {
+        display: grid;
+        gap: var(--vcp-ui-space-1);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-label {
+        color: var(--vcp-ui-text-1);
+        font-size: var(--vcp-ui-font-helper);
+        font-weight: 600;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-input {
+        width: 100%;
+        min-width: 0;
+        min-height: var(--vcp-ui-control-md);
+        padding: var(--vcp-ui-space-2) var(--vcp-ui-space-3);
+        border: 1px solid var(--vcp-ui-border);
+        border-radius: var(--vcp-ui-radius-sm);
+        color: var(--vcp-ui-text-0);
+        background: var(--vcp-ui-bg-0);
+        font: inherit;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-details {
+        display: grid;
+        grid-template-columns: minmax(88px, auto) minmax(0, 1fr);
+        gap: var(--vcp-ui-space-2) var(--vcp-ui-space-3);
+        margin: 0;
+        padding: var(--vcp-ui-space-3);
+        border: 1px solid var(--vcp-ui-border);
+        border-radius: var(--vcp-ui-radius-sm);
+        background: var(--vcp-ui-fill-0);
+        font-size: var(--vcp-ui-font-helper);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-details dt {
+        color: var(--vcp-ui-text-2);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-details dd {
+        min-width: 0;
+        margin: 0;
+        overflow-wrap: anywhere;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer .agent-chat-topic-flow-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: var(--vcp-ui-space-2);
+    }
+
+    /* Topic leases are background concurrency guards. A collision is shown
+       in the active conversation as a compact decision card: it must never
+       mask the existing transcript or composer. */
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer {
+        width: min(100%, 860px);
+        margin: 0 auto;
+        padding: 6px var(--vcp-ui-space-4) 0;
+        box-sizing: border-box;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-dialog {
+        display: flex;
+        min-height: 42px;
+        align-items: center;
+        gap: var(--vcp-ui-space-2);
+        width: 100%;
+        padding: 6px var(--vcp-ui-space-3);
+        border: 1px solid var(--vcp-ui-border);
+        border-radius: var(--vcp-ui-radius-sm);
+        color: var(--vcp-ui-text-0);
+        background: color-mix(in srgb, var(--vcp-ui-bg-1) 82%, transparent);
+        box-shadow: none;
+        outline: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-heading {
+        display: flex;
+        min-width: 0;
+        flex: 0 0 auto;
+        align-items: center;
+        gap: 6px;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-icon {
+        color: var(--vcp-ui-text-3);
+        font-size: var(--vcp-ui-icon-sm);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-title,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-description,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-detail,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-error {
+        margin: 0;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-description,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-detail {
+        min-width: 0;
+        flex: 1;
+        color: var(--vcp-ui-text-2);
+        font-size: var(--vcp-ui-font-caption);
+        line-height: 1.35;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-title {
+        color: var(--vcp-ui-text-1);
+        font-size: var(--vcp-ui-font-helper);
+        font-weight: 600;
+        line-height: 1.35;
+        white-space: nowrap;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-error {
+        color: var(--vcp-ui-danger);
+        font-size: var(--vcp-ui-font-helper);
+        line-height: 1.5;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-actions {
+        display: flex;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 6px;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer .agent-chat-topic-conflict-actions .agent-chat-button {
+        min-height: 28px;
+        padding: 0 9px;
+        border-radius: 6px;
+        font-size: var(--vcp-ui-font-caption);
+        line-height: 1;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-settings-pane {
+        width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+        padding: var(--vcp-ui-space-4);
+        color: var(--vcp-ui-text-2);
+        font-size: var(--vcp-ui-font-helper);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-account-dock {
+        margin-top: auto;
+        margin-bottom: 0;
+    }
+
+    /* Avatar-narrow sidebar: mirror the main-chat avatar-only shell while the
+       shared shell CSS only styles main-chat IDs (#tabContentAgents etc). */
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar.avatar-only {
+        width: 64px;
+        min-width: 64px;
+        max-width: 64px;
+        flex: 0 0 64px;
+        padding: 8px 3px 12px;
+        overflow: visible;
+        z-index: 160;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar:not(.active) {
+        flex: 0 0 0;
+        width: 0;
+        min-width: 0;
+        max-width: 0;
+        padding-left: 0;
+        padding-right: 0;
+        opacity: 0;
+        overflow: hidden;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar.avatar-only .agents-header,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar.avatar-only .topics-header-container,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar.avatar-only .agent-chat-settings-pane,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar.avatar-only .agent-chat-sidebar-content > .agent-chat-settings-pane {
+        display: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar.avatar-only .agent-chat-sidebar-content {
+        width: 100%;
+        min-width: 0;
+        overflow: hidden;
+        display: flex;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar.avatar-only .sidebar-list-scroll {
+        width: 100%;
+        padding: 5px 0 4px;
+        overflow-x: hidden;
+        scrollbar-width: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar.avatar-only .agent-list .agent-chat-agent-row,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar.avatar-only .topic-list .agent-chat-session-row {
+        width: 54px;
+        min-width: 54px;
+        height: 54px;
+        min-height: 54px;
+        margin: 0 auto 8px;
+        padding: 0;
+        justify-content: center;
+        overflow: visible;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar.avatar-only .agent-chat-agent-row .agent-name,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar.avatar-only .agent-chat-session-row .topic-title-display,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar.avatar-only .agent-chat-session-row .message-count,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar.avatar-only .agent-chat-agent-row .agent-emotion-card {
+        display: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar.avatar-only .agent-chat-agent-row .avatar,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar.avatar-only .agent-chat-session-row .avatar {
+        margin-right: 0;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar.avatar-only .agent-chat-session-avatar {
+        margin-right: 0;
+    }
+}

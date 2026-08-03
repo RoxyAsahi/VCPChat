@@ -1,0 +1,417 @@
+/*
+ * VCP Agent deliberately reuses the main-chat shell classes: .container,
+ * .sidebar, .main-content, .chat-header and .chat-input-card.  This file only
+ * supplies Agent-specific content, so a shell adjustment lands in both views.
+ */
+/*
+ * layout.css is deliberately unlayered legacy CSS. Its mobile `.sidebar`
+ * rule turns every sidebar into an off-canvas drawer below 768px. Agent has
+ * no matching drawer trigger, so that rule left a partially animated panel
+ * hanging outside the Workbench at desktop-sized 680px windows. Keep this
+ * small structural exception unlayered as well; the visual tokens remain in
+ * the component layer below.
+ */
+@media (max-width: 768px) {
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root.container {
+        flex-direction: row;
+        margin-top: 0;
+        min-width: 0;
+    }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar {
+        position: relative;
+        z-index: auto;
+        width: min(260px, 42vw);
+        min-width: 0;
+        max-width: none;
+        height: 100%;
+        flex: 0 0 min(260px, 42vw);
+        border-right: 1px solid var(--next-border, var(--border-color));
+        border-bottom: 0;
+        transform: none;
+        transition: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-main-content.agent-chat-pane {
+        width: auto;
+        min-width: 0;
+        flex: 1 1 0;
+    }
+}
+/* The legacy shared `.container` is content-box and carries shell padding.
+ * Agent owns a full-bleed internal-app view, so keeping that padding together
+ * with width: 100% makes its right edge wider than the viewport.  This must
+ * stay outside the component layer because the legacy shell CSS is unlayered.
+ */
+html[data-ui-mode="next"] body.next-ui-internal-app-open .vcp-ui-scope.agent-chat-root.container {
+    box-sizing: border-box;
+    max-width: 100%;
+    padding: 0;
+}
+/* The Topic-flow layer is mounted once for lifecycle stability.  The browser
+ * `hidden` attribute must win while no flow is open; otherwise this invisible
+ * full-window grid sits above the Workbench and absorbs every pointer event. */
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-flow-layer[hidden] {
+    display: none;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-topic-conflict-layer[hidden] {
+    display: none;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-chat-sidebar-content {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    flex: 1 1 auto;
+    align-self: stretch;
+    box-sizing: border-box;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-chat-sidebar-content > :is(
+    .agents-header,
+    .topics-header-container,
+    .sidebar-list-scroll,
+    .agent-chat-settings-pane
+) {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+/* layout.css is intentionally unlayered, so the tokenized rules in
+ * sidebar.css cannot override its legacy 54px glass-pill list rows. Keep the
+ * Agent projection on the exact same compact Next-sidebar metrics as main
+ * chat with a narrowly-scoped unlayered bridge. */
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-list .agent-chat-agent-row {
+    height: var(--vcp-ui-sidebar-row-height);
+    min-height: var(--vcp-ui-sidebar-row-height);
+    margin-bottom: var(--vcp-ui-space-2);
+    padding: 0 var(--vcp-ui-space-2);
+    border: 0;
+    border-radius: var(--vcp-ui-sidebar-item-radius);
+    background: transparent;
+    box-shadow: none;
+    cursor: pointer;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-list .agent-chat-agent-row:hover {
+    border: 0;
+    background: var(--vcp-ui-fill-0);
+    box-shadow: none;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-list .agent-chat-agent-row.active {
+    color: var(--vcp-ui-text-0);
+    background: var(--vcp-ui-selection-bg);
+    box-shadow: var(--vcp-ui-sidebar-item-shadow);
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-list .agent-chat-agent-row::after {
+    display: none;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-list .agent-chat-agent-row .avatar {
+    width: var(--vcp-ui-sidebar-avatar-size);
+    height: var(--vcp-ui-sidebar-avatar-size);
+    margin-right: var(--vcp-ui-space-2);
+    border: 0;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-list .agent-chat-agent-row .agent-name {
+    padding-bottom: 0;
+    color: var(--vcp-ui-text-0);
+    font-size: var(--vcp-ui-sidebar-font-size);
+    line-height: var(--vcp-ui-line-compact);
+}
+/* settings-sidebar-list.css is legacy, unlayered CSS and paints glass
+ * highlights on every `.sidebar .topic-list .topic-item`. Agent Topic rows
+ * deliberately share those structural classes, so disable only its decorative
+ * pseudo-elements here. Without this bridge an empty status/count still
+ * leaves a thin highlight line below each Agent conversation. */
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .topic-list .agent-chat-session-row::before,
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .topic-list .agent-chat-session-row::after,
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .topic-list .agent-chat-session-row .message-count::after {
+    display: none;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .topic-list .agent-chat-session-row .message-count {
+    isolation: auto;
+    overflow: visible;
+    box-shadow: none;
+}
+/* A persisted idle Topic has no count/status text. Legacy sidebar CSS gives
+ * even that empty span a minimum-width glass badge, which is the grey dash
+ * visible between the title and the three-dot action. */
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .topic-list .agent-chat-session-row .message-count:empty {
+    display: none;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-clipboard-proxy {
+    position: fixed;
+    opacity: 0;
+    pointer-events: none;
+}
+/* End of @layer vcp-ui.components */
+/* UX-R0/R3: local catalog and first-send presentation states. These remain
+   scoped to Agent Workbench and intentionally use the main-chat message tokens. */
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-skeleton {
+    min-height: 46px;
+    border-radius: 10px;
+    background: linear-gradient(90deg, var(--vcp-ui-surface-soft), var(--vcp-ui-surface-strong), var(--vcp-ui-surface-soft));
+    background-size: 200% 100%;
+    animation: agent-session-skeleton 1.2s ease-in-out infinite;
+}
+@keyframes agent-session-skeleton {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-turn-starting {
+    animation: none;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-turn-starting .thinking-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--primary-text, inherit);
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-turn-starting .thinking-indicator-dots {
+    display: inline-block;
+    min-width: 1.5em;
+    animation: agent-thinking-dots 1.1s steps(4, end) infinite;
+}
+@keyframes agent-thinking-dots {
+    0% { opacity: .25; }
+    50% { opacity: 1; }
+    100% { opacity: .25; }
+}
+/* messageRenderer.css is unlayered and defines `.vcp-result-toggle-icon` as
+   a plus/minus. Keep one unlayered Workbench override so reasoning and folded
+   tool groups consume the exact same chevron instead of maintaining copies. */
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root :is(.agent-chat-reasoning-block, .agent-chat-tool-group) .vcp-result-toggle-icon {
+    position: relative;
+    width: 30px;
+    height: 30px;
+    margin-left: auto;
+    display: grid;
+    place-items: center;
+    align-self: center;
+    flex: 0 0 30px;
+    color: var(--vcp-ui-text-2);
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root :is(.agent-chat-reasoning-block, .agent-chat-tool-group) .vcp-result-toggle-icon::before {
+    content: '';
+    position: static;
+    box-sizing: border-box;
+    width: 7px;
+    height: 7px;
+    inset: auto;
+    background: transparent;
+    border: 0;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    border-radius: 0;
+    transform: rotate(-45deg);
+    transform-origin: center;
+    transition: transform 150ms ease;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root :is(.agent-chat-reasoning-block, .agent-chat-tool-group) .vcp-result-toggle-icon::after {
+    content: none;
+    display: none;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root :is(.agent-chat-reasoning-block .vcp-thought-chain-bubble.expanded, .agent-chat-tool-group.expanded) .vcp-result-toggle-icon::before {
+    transform: rotate(45deg);
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-activity.vcp-tool-call-summary-bubble {
+    width: min(680px, calc(100% - var(--vcp-ui-message-avatar) - var(--vcp-ui-space-2) + 5px));
+    max-width: calc(100% - var(--vcp-ui-message-avatar) - var(--vcp-ui-space-2) + 5px);
+    margin: 8px 0 10px calc(var(--vcp-ui-message-avatar) + var(--vcp-ui-space-2) - 5px);
+    padding: 8px 12px;
+    backdrop-filter: none;
+    box-shadow: var(--tool-summary-shadow, var(--vcp-ui-shadow-sm));
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-activity .vcp-tool-call-summary-header {
+    margin: 0;
+    padding: 0;
+    border-bottom: 0;
+    min-height: 28px;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-activity .agent-chat-tool-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: auto;
+    color: var(--tool-summary-title-color, var(--primary-text));
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-activity .agent-chat-tool-duration {
+    color: var(--vcp-ui-text-secondary);
+    font-size: var(--vcp-ui-font-caption);
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-activity .agent-chat-tool-status-badge {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--tool-summary-chip-border, var(--vcp-ui-border));
+    border-radius: 999px;
+    padding: 2px 7px;
+    background: var(--tool-summary-chip-bg, var(--vcp-ui-surface));
+    font-size: var(--vcp-ui-font-caption);
+    line-height: 1.2;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-activity[data-status="running"] .agent-chat-tool-status-badge {
+    color: var(--vcp-ui-text-accent);
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-activity[data-status="completed"] .agent-chat-tool-status-badge {
+    color: var(--vcp-ui-success);
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-activity[data-status="failed"] .agent-chat-tool-status-badge,
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-activity[data-status="cancelled"] .agent-chat-tool-status-badge {
+    color: var(--vcp-ui-danger);
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-activity .agent-chat-tool-detail.vcp-tool-result-bubble {
+    width: 100%;
+    max-width: none;
+    margin: 8px 0 0;
+    padding: 8px 10px;
+    box-shadow: none;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-detail-error {
+    max-height: 220px;
+    margin: 0;
+    padding: var(--vcp-ui-space-2) var(--vcp-ui-space-3);
+    overflow: auto;
+    border: 1px solid color-mix(in srgb, var(--vcp-ui-danger) 28%, var(--vcp-ui-border));
+    border-radius: var(--vcp-ui-radius-sm);
+    color: var(--vcp-ui-danger);
+    background: color-mix(in srgb, var(--vcp-ui-danger-bg) 55%, transparent);
+    font: var(--vcp-ui-font-caption) / 1.5 ui-monospace, Consolas, monospace;
+    white-space: pre-wrap;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-activity .agent-chat-tool-args.vcp-tool-use-bubble {
+    width: 100%;
+    max-width: none;
+    margin: 0 0 8px;
+    padding: 8px 10px;
+    background: var(--tool-summary-bg, var(--vcp-ui-surface-soft));
+    box-shadow: none;
+    animation: none;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-group {
+    display: block;
+    width: min(680px, calc(100% - var(--vcp-ui-message-avatar) - var(--vcp-ui-space-2) + 5px));
+    max-width: calc(100% - var(--vcp-ui-message-avatar) - var(--vcp-ui-space-2) + 5px);
+    margin: 6px 0 8px calc(var(--vcp-ui-message-avatar) + var(--vcp-ui-space-2) - 5px);
+    padding: 0;
+    background: transparent;
+}
+/* In bubble mode, one Agent Turn is one visual conversation group. Keep the
+   avatar gutter reserved so continuation bubbles and tool cards never jump. */
+html[data-ui-mode="next"] body:not(.chat-presentation-panel):not(.chat-presentation-immersive)
+.vcp-ui-scope.agent-chat-root
+.message-item.assistant[data-agent-avatar-position="continuation"] > .chat-avatar {
+    visibility: hidden;
+    pointer-events: none;
+}
+html[data-ui-mode="next"] body:not(.chat-presentation-panel):not(.chat-presentation-immersive)
+.vcp-ui-scope.agent-chat-root
+.message-item.assistant[data-agent-avatar-position="continuation"] {
+    margin-top: calc(var(--vcp-ui-space-2) * -1);
+}
+html[data-ui-mode="next"] body:not(.chat-presentation-panel):not(.chat-presentation-immersive)
+.vcp-ui-scope.agent-chat-root
+.message-item.assistant[data-agent-avatar-position="continuation"] .name-time-block {
+    display: none;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-group-header {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+    border: 1px solid var(--vcp-ui-border);
+    border-radius: 8px;
+    background: var(--vcp-ui-bg-2);
+    overflow: hidden;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-group-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 38px;
+    padding: 7px 10px;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-group-toggle:focus-visible {
+    outline: 2px solid var(--vcp-ui-accent);
+    outline-offset: -2px;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-group-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex: 1 1 auto;
+    font-size: var(--vcp-ui-font-helper);
+    font-weight: 500;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-group-title .vcp-ui-icon {
+    flex: 0 0 auto;
+    font-size: var(--vcp-ui-font-body);
+    color: var(--vcp-ui-accent);
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-group-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-group-subtitle {
+    color: var(--vcp-ui-text-2);
+    font-size: var(--vcp-ui-font-caption);
+    font-weight: 400;
+    white-space: nowrap;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-group-cancel {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 32px;
+    width: 32px;
+    height: 32px;
+    margin-right: 4px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    color: var(--vcp-ui-text-2);
+    background: transparent;
+    cursor: pointer;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-group-cancel:hover {
+    color: var(--vcp-ui-danger);
+    background: var(--vcp-ui-danger-bg);
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-group-body {
+    width: 100%;
+    min-width: 0;
+    max-height: 300px;
+    margin-top: 4px;
+    padding: 2px 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-group-body[hidden] {
+    display: none;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-group-body > .agent-chat-tool-activity.agent-chat-tool-group-item {
+    width: 100%;
+    max-width: none;
+    margin: 8px 0 10px;
+    box-sizing: border-box;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-group-body > .agent-chat-tool-group-item[data-status="completed"] {
+    opacity: 0.72;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-group-body > .agent-chat-tool-group-item:last-child {
+    margin-bottom: 0;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .message-attachment-video {
+    max-width: min(300px, 100%);
+}
+@media (prefers-reduced-motion: reduce) {
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-skeleton,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-turn-starting .thinking-indicator-dots {
+        animation: none;
+    }
+}

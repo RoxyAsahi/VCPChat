@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import { JSDOM } from 'jsdom';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
+import { readCssWithImports } from './css-import-reader.mjs';
 
 async function waitFor(predicate, timeoutMs = 1_000) {
     const deadline = Date.now() + timeoutMs;
@@ -1351,7 +1352,7 @@ assert.ok(reasoningCard.querySelector('.vcp-thought-chain-icon').classList.conta
     'the reasoning icon must enter the shared Lucide observer contract when it is created');
 assert.equal(reasoningCard.querySelectorAll('.vcp-result-toggle-icon').length, 1,
     'a reasoning card must render exactly one disclosure control');
-const workbenchCss = fs.readFileSync(path.join(root, 'styles', 'ui-system', 'agent-workbench.css'), 'utf8');
+const workbenchCss = readCssWithImports(path.join(root, 'styles', 'ui-system', 'agent-workbench.css'));
 assert.match(workbenchCss,
     /:is\(\.agent-chat-reasoning-block, \.agent-chat-tool-group\) \.vcp-result-toggle-icon::after\s*\{[^}]*content:\s*none;[^}]*display:\s*none;/s,
     'reasoning and folded tools must share one rule that removes the inherited second toggle stroke');
