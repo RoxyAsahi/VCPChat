@@ -144,10 +144,6 @@ function createAgentActivityCoordinator({
         const activeElement = document.activeElement;
         const searchFocused = activeElement?.matches?.('.agent-chat-activity-filters input[type="search"]');
         const searchSelection = searchFocused ? [activeElement.selectionStart, activeElement.selectionEnd] : null;
-        const existingInteractions = new Map([...activityPanel.querySelectorAll('.agent-chat-interaction-card[data-interaction-id]')]
-            .map((item) => [item.dataset.interactionId, item]));
-        const existingCards = new Map([...activityPanel.querySelectorAll('[data-activity-key]')]
-            .map((item) => [item.dataset.activityKey, item]));
         const openKeys = new Set([...activityPanel.querySelectorAll('details[open][data-activity-key]')]
             .map((item) => item.dataset.activityKey));
         const localApprovals = current.approvals || [];
@@ -172,9 +168,10 @@ function createAgentActivityCoordinator({
         const definition = tabs.find((tab) => tab.id === state.activityTab) || tabs[0];
         const kind = definition?.kind || 'context';
         if (kind === 'connection') content.append(activityReadonlyView.buildConnection(current, deriveWorkbenchViewState(current)));
-        else if (kind === 'approvals') content.append(approvalView.build({
-            localApprovals, backendApprovals, interactions: passiveInteractions, existingInteractions,
-        }));
+        else if (kind === 'approvals') {
+            approvalView.update({ localApprovals, backendApprovals, interactions: passiveInteractions });
+            content.append(approvalView.element);
+        }
         else if (kind === 'context') content.append(activityReadonlyView.buildUsage(current));
         else if (kind === 'plan') content.append(activityReadonlyView.buildPlan(current));
         else if (kind === 'changes') content.append(activityReadonlyView.buildChanges(current, {
@@ -201,7 +198,8 @@ function createAgentActivityCoordinator({
                 });
             } else content.append(workspaceView.renderPreview(state.workspaceBrowser));
         } else {
-            content.append(notificationView.build(current, { cards: existingCards, openKeys }).content);
+            notificationView.update(current);
+            content.append(notificationView.element);
         }
         for (const details of content.querySelectorAll('details[data-activity-key]')) {
             if (openKeys.has(details.dataset.activityKey)) details.open = true;

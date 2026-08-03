@@ -1,15 +1,18 @@
 import { node } from './agent-workbench-dom.js';
 
 export function createAgentNotificationView({ document, blockPresentation, actions }) {
+    const element = node('div', 'agent-chat-notification-view');
     let search = '';
     let sourceFilter = 'all';
     let kindFilter = 'all';
 
-    function build(current, previous = {}) {
+    function update(current) {
         const ws = current.toolboxWs || [];
         const markers = current.markerObservations || [];
-        const existingCards = previous.cards || new Map();
-        const openKeys = previous.openKeys || new Set();
+        const existingCards = new Map([...element.querySelectorAll('[data-activity-key]')]
+            .map((item) => [item.dataset.activityKey, item]));
+        const openKeys = new Set([...element.querySelectorAll('details[open][data-activity-key]')]
+            .map((item) => item.dataset.activityKey));
         const content = document.createDocumentFragment();
         content.append(node('div', 'agent-chat-activity-note', '全局 VCPLog/VCPInfo 仅保留本次运行；会话关联的工具、推理和检查结果会随会话恢复。'));
         const controls = node('div', 'agent-chat-activity-filters');
@@ -77,8 +80,13 @@ export function createAgentNotificationView({ document, blockPresentation, actio
         for (const details of content.querySelectorAll('details[data-activity-key]')) {
             if (openKeys.has(details.dataset.activityKey)) details.open = true;
         }
-        return { content, searchInput, list };
+        element.replaceChildren(content);
+        return element;
     }
 
-    return { build, dispose() {} };
+    return {
+        element,
+        update,
+        dispose() { element.replaceChildren(); },
+    };
 }

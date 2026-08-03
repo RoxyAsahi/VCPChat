@@ -1,6 +1,7 @@
 import { button, cssEscape, node } from './agent-workbench-dom.js';
 
 export function createAgentApprovalView({ document, blockPresentation, registry, actions }) {
+    const element = node('div', 'agent-chat-approval-view');
     function interactionCard(interaction) {
         const payload = interaction.payload || {};
         const card = node('section', 'agent-chat-toolbox-ws-card agent-chat-interaction-card');
@@ -181,12 +182,15 @@ export function createAgentApprovalView({ document, blockPresentation, registry,
         return card;
     }
 
-    function build({ localApprovals, backendApprovals, interactions, existingInteractions }) {
-        const content = node('div', 'agent-chat-approval-view');
+    function update({ localApprovals, backendApprovals, interactions }) {
+        const existingInteractions = new Map([...element.querySelectorAll('.agent-chat-interaction-card[data-interaction-id]')]
+            .map((item) => [item.dataset.interactionId, item]));
+        const content = document.createDocumentFragment();
         const pending = localApprovals.length + backendApprovals.length + interactions.length;
         if (!pending) {
             content.append(node('div', 'agent-chat-activity-empty', '没有待确认的审批。'));
-            return content;
+            element.replaceChildren(content);
+            return element;
         }
         for (const approval of localApprovals) {
             content.append(blockPresentation.createApproval(approval, {
@@ -204,8 +208,13 @@ export function createAgentApprovalView({ document, blockPresentation, registry,
         for (const interaction of interactions) {
             content.append(existingInteractions.get(String(interaction.requestId)) || interactionCard(interaction));
         }
-        return content;
+        element.replaceChildren(content);
+        return element;
     }
 
-    return { build, dispose() {} };
+    return {
+        element,
+        update,
+        dispose() { element.replaceChildren(); },
+    };
 }

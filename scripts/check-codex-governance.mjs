@@ -172,6 +172,15 @@ for (const file of governedUiModules) {
         errors.push(`${file} bypasses Workbench action/client boundary`);
     }
 }
+for (const file of [
+    'agent-workbench-sidebar-view.js', 'agent-session-dock-view.js',
+    'agent-notification-view.js', 'agent-approval-view.js',
+]) {
+    const source = fs.readFileSync(path.join(root, 'modules/ui-system', file), 'utf8');
+    if (!/\belement\b/.test(source) || !/\bupdate\s*\(/.test(source) || !/\bdispose\s*\(/.test(source)) {
+        errors.push(`${file} does not expose the standard View lifecycle contract`);
+    }
+}
 for (const file of ['agent-renderer-history.js', 'agent-renderer-actions.js', 'agent-renderer-latex.js',
     'agent-renderer-avatar-style.js', 'agent-renderer-text-transforms.js',
     'agent-renderer-scoped-html.js', 'agent-renderer-special-blocks.js',
