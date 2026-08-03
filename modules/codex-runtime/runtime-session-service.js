@@ -3,13 +3,13 @@
 const path = require('path');
 const { CodexAppServerError } = require('./appServerTransport');
 const {
-    compatibilitySession,
     explicitAgent,
     hasDurableProjection,
     isConfirmedThreadNotFound,
     isUncertainRemoteMutation,
     normalizeInstructionMode,
-    resolveSessionIdInput,
+    requireSessionId,
+    sessionProjection,
     sameIdentity,
 } = require('./runtime-normalizers');
 
@@ -56,14 +56,14 @@ class RuntimeSessionService {
             createdAt: now,
             updatedAt: now,
         });
-        return { topicId: session.sessionId, sessionId: session.sessionId, ...session };
+        return sessionProjection(session);
     }
 
-    async read({ topicId, sessionId, reconcile = true } = {}) {
+    async read({ sessionId, reconcile = true } = {}) {
         const startedAt = this.context.diagnosticClock();
         this.context.ensureProjectionStore();
         let repository = this.context.repository();
-        let session = repository.getSession(resolveSessionIdInput({ sessionId, topicId }));
+        let session = repository.getSession(requireSessionId(sessionId));
         if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
         session = this.context.repairSessionConfig(session);
         const localProjection = repository.readProjection(session.sessionId);
@@ -126,7 +126,6 @@ class RuntimeSessionService {
             ));
         const result = sessions.map((session) => ({
             id: session.sessionId,
-            topicId: session.sessionId,
             sessionId: session.sessionId,
             agentId: session.agentId,
             agentCatalogId: session.agentCatalogId || session.agentId,
@@ -148,18 +147,18 @@ class RuntimeSessionService {
         return result;
     }
 
-    rename({ topicId, sessionId, title } = {}) {
+    rename({ sessionId, title } = {}) {
         this.context.assertProjectionWritable();
         const repository = this.context.repository();
-        const session = repository.getSession(resolveSessionIdInput({ sessionId, topicId }));
+        const session = repository.getSession(requireSessionId(sessionId));
         if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
         repository.saveSession({ ...session, title: String(title || '').trim(), updatedAt: Date.now() });
         return repository.getSession(session.sessionId);
     }
 
-    async archive({ sessionId, topicId } = {}) {
+    async archive({ sessionId } = {}) {
         this.context.assertProjectionWritable();
-        const idValue = resolveSessionIdInput({ sessionId, topicId });
+        const idValue = requireSessionId(sessionId);
         let repository = this.context.repository();
         const session = repository.getSession(idValue);
         if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
@@ -189,17 +188,17 @@ class RuntimeSessionService {
         const archived = repository.archiveSession(idValue);
         this.context.attachments().clearSession(idValue);
         repository.updateOperation(operation.operationId, { state: 'completed', threadId: session.threadId });
-        return { sessionId: idValue, threadId: session.threadId, archived: true, session: compatibilitySession(archived) };
+        return { sessionId: idValue, threadId: session.threadId, archived: true, session: sessionProjection(archived) };
     }
 
-    async restore({ sessionId, topicId } = {}) {
+    async restore({ sessionId } = {}) {
         this.context.assertProjectionWritable();
-        const idValue = resolveSessionIdInput({ sessionId, topicId });
+        const idValue = requireSessionId(sessionId);
         let repository = this.context.repository();
         const session = repository.getSession(idValue);
         if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
         if (!session.archivedAt) {
-            return { sessionId: idValue, threadId: session.threadId, restored: false, session: compatibilitySession(session) };
+            return { sessionId: idValue, threadId: session.threadId, restored: false, session: sessionProjection(session) };
         }
         if (session.threadId) await this.context.start();
         const generation = this.context.captureGeneration();
@@ -232,22 +231,22 @@ class RuntimeSessionService {
         repository = this._repository(generation);
         const restored = repository.unarchiveSession(idValue);
         repository.updateOperation(operation.operationId, { state: 'completed', threadId: session.threadId });
-        return { sessionId: idValue, threadId: restored.threadId, restored: true, session: compatibilitySession(restored) };
+        return { sessionId: idValue, threadId: restored.threadId, restored: true, session: sessionProjection(restored) };
     }
 
-    pin({ sessionId, topicId, pinned } = {}) {
+    pin({ sessionId, pinned } = {}) {
         this.context.assertProjectionWritable();
-        const idValue = resolveSessionIdInput({ sessionId, topicId });
+        const idValue = requireSessionId(sessionId);
         if (typeof pinned !== 'boolean') throw new CodexAppServerError('INVALID_INPUT', 'Session pin state must be boolean');
         const repository = this.context.repository();
         if (!repository.getSession(idValue)) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
         const updated = repository.setPinned(idValue, pinned);
-        return { sessionId: idValue, pinned, session: compatibilitySession(updated) };
+        return { sessionId: idValue, pinned, session: sessionProjection(updated) };
     }
 
-    async permanentlyDelete({ sessionId, topicId } = {}) {
+    async permanentlyDelete({ sessionId } = {}) {
         this.context.assertProjectionWritable();
-        const idValue = resolveSessionIdInput({ sessionId, topicId });
+        const idValue = requireSessionId(sessionId);
         let repository = this.context.repository();
         const session = repository.getSession(idValue);
         if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
@@ -298,9 +297,9 @@ class RuntimeSessionService {
         return { deleted: true, receipt };
     }
 
-    export({ sessionId, topicId, format = 'markdown' } = {}) {
+    export({ sessionId, format = 'markdown' } = {}) {
         this.context.ensureProjectionStore();
-        const idValue = resolveSessionIdInput({ sessionId, topicId });
+        const idValue = requireSessionId(sessionId);
         const projection = this.context.repository().readProjection(idValue);
         if (!projection) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
         const safeTitle = String(projection.session.title || 'agent-session').replace(/[\\/:*?"<>|]+/g, '-');

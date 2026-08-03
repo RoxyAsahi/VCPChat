@@ -27,13 +27,8 @@ function sameIdentity(left, right) {
     return Boolean(a && b && a === b);
 }
 
-function resolveSessionIdInput({ sessionId, topicId } = {}, { required = true } = {}) {
-    const canonical = String(sessionId || '').trim();
-    const legacy = String(topicId || '').trim();
-    if (canonical && legacy && canonical !== legacy) {
-        throw new CodexAppServerError('SESSION_IDENTITY_MISMATCH', 'sessionId and legacy topicId refer to different Sessions');
-    }
-    const resolved = canonical || legacy;
+function requireSessionId(sessionId, { required = true } = {}) {
+    const resolved = String(sessionId || '').trim();
     if (required && !resolved) throw new CodexAppServerError('INVALID_INPUT', 'sessionId is required');
     return resolved || null;
 }
@@ -172,8 +167,8 @@ function safeAvatarFile(value) {
     return file;
 }
 
-function compatibilitySession(session) {
-    return { ...session, topicId: session.sessionId, model: session.configSnapshot?.model || null, runtime: 'codex' };
+function sessionProjection(session) {
+    return { ...session, model: session.configSnapshot?.model || null, runtime: 'codex' };
 }
 
 function sessionConfigResult(session) {
@@ -206,10 +201,9 @@ function pendingInputProjection(input) {
     };
 }
 
-function compatibilityRuntime(session, state = {}) {
+function runtimeProjection(session, state = {}) {
     return {
         sessionId: session.sessionId,
-        topicId: session.sessionId,
         threadId: session.threadId,
         agentId: session.agentId,
         title: session.title,
@@ -250,7 +244,6 @@ function approvalProjection(requestId, request, repository) {
         requestId: String(requestId),
         scope: 'codex-native',
         method: request?.method || '',
-        topicId: session?.sessionId || null,
         sessionId: session?.sessionId || null,
         threadId: params.threadId || null,
         turnId: params.turnId || null,
@@ -267,7 +260,6 @@ function approvalEvent(requestId, request, repository) {
     const approval = approvalProjection(requestId, request, repository);
     return {
         type: 'approval.requested',
-        topicId: approval.topicId,
         sessionId: approval.sessionId,
         turnId: approval.turnId,
         toolCallId: approval.toolCallId,
@@ -469,8 +461,8 @@ module.exports = {
     bridgeResultContentItems,
     buildTurnInput,
     classifyToolboxEvent,
-    compatibilityRuntime,
-    compatibilitySession,
+    runtimeProjection,
+    sessionProjection,
     decodeVcpInvokeCall,
     explicitAgent,
     hasDurableProjection,
@@ -489,7 +481,7 @@ module.exports = {
     notificationItemId,
     pendingInputProjection,
     reasoningEffortsFromModel,
-    resolveSessionIdInput,
+    requireSessionId,
     safeAvatarFile,
     sanitizeInteractionPayload,
     sanitizeToolboxValue,

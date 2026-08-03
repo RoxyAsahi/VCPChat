@@ -93,7 +93,7 @@ try {
         baseInstructions,
         workspaceRoot: path.resolve(import.meta.dirname, '..'),
     });
-    const session = await manager.createSession({ resume: topic.topicId });
+    const session = await manager.createSession({ sessionId: topic.sessionId });
 
     const identityCompletion = waitForTurn(manager, session.sessionId, session.threadId, 'completed');
     console.log(JSON.stringify({ stage: 'identity-turn-started', threadId: session.threadId }));
@@ -144,7 +144,7 @@ try {
     console.log(JSON.stringify({ stage: 'restart-resume-started' }));
     recoveredManager = new CodexRuntimeManager(managerOptions);
     await recoveredManager.start();
-    const resumedSession = await recoveredManager.createSession({ resume: topic.topicId });
+    const resumedSession = await recoveredManager.createSession({ sessionId: topic.sessionId });
     assert.equal(resumedSession.threadId, session.threadId,
         'a persisted Nova Thread must resume with the original Codex identity');
     const fork = await recoveredManager.forkSession({ sessionId: session.sessionId, turnId: turn.turnId });

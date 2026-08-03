@@ -10,13 +10,13 @@ const {
     threadSettingsPatch,
 } = require('./runtimeConfig');
 const {
-    compatibilitySession,
     normalizeApprovalPolicy,
     normalizeInstructionMode,
     normalizePermissionMode,
     normalizePersonality,
     normalizeReasoningEffort,
-    resolveSessionIdInput,
+    requireSessionId,
+    sessionProjection,
     serializeError,
     sessionConfigResult,
 } = require('./runtime-normalizers');
@@ -73,7 +73,7 @@ class RuntimeConfigService {
                 throw new CodexAppServerError('INVALID_WORKSPACE', 'Workspace directory does not exist');
             }
         }
-        const sessionId = String(settings.sessionId || settings.topicId || '').trim();
+        const sessionId = String(settings.sessionId || '').trim();
         let session = null;
         if (sessionId) {
             const repository = this.context.repository();
@@ -127,7 +127,7 @@ class RuntimeConfigService {
                             model: derived.configSnapshot?.model || null,
                             reasoningEffort: normalizeReasoningEffort(derived.configSnapshot?.reasoningEffort),
                         },
-                        session: compatibilitySession(derived),
+                        session: sessionProjection(derived),
                         ...sessionConfigResult(derived),
                         appliesTo: 'derived-session',
                         createdDerivedSession: true,
@@ -202,7 +202,7 @@ class RuntimeConfigService {
                 ...(effectiveModel ? { model: effectiveModel } : {}),
                 reasoningEffort: normalizeReasoningEffort(session?.configSnapshot?.reasoningEffort),
             },
-            session: session ? compatibilitySession(session) : null,
+            session: session ? sessionProjection(session) : null,
             desiredConfig: session?.configSnapshot || null,
             appliedRuntimeConfig: session?.appliedRuntimeConfig || null,
             configRevision: session?.configRevision || null,
@@ -213,8 +213,8 @@ class RuntimeConfigService {
         };
     }
 
-    updateSessionConfig({ sessionId, topicId, expectedConfigRevision, patch } = {}) {
-        const resolvedSessionId = resolveSessionIdInput({ sessionId, topicId });
+    updateSessionConfig({ sessionId, expectedConfigRevision, patch } = {}) {
+        const resolvedSessionId = requireSessionId(sessionId);
         if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
             throw new CodexAppServerError('INVALID_INPUT', 'Session config patch must be an object');
         }
@@ -242,7 +242,6 @@ class RuntimeConfigService {
         if (!session) return;
         this.context.sendUiEvent({
             type,
-            topicId: session.sessionId,
             sessionId: session.sessionId,
             threadId: session.threadId || null,
             payload: { ...sessionConfigResult(session), ...(error ? { error: String(error) } : {}) },

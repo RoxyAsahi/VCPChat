@@ -6,13 +6,13 @@ const { pathToFileURL } = require('url');
 const { CodexAppServerError } = require('./appServerTransport');
 const { normalizeProfile, PROFILE_SCHEMA_VERSION } = require('./dataContracts');
 const {
-    compatibilitySession,
     explicitAgent,
     normalizeApprovalPolicy,
     normalizeInstructionMode,
     normalizePersonality,
     normalizePermissionMode,
     normalizeReasoningEffort,
+    sessionProjection,
     normalizeSandboxMode,
     reasoningEffortsFromModel,
     safeAvatarFile,
@@ -319,7 +319,7 @@ class RuntimeProfileService {
                 current: updated.session,
             });
         }
-        return { applied: true, requiresNewSession: false, differences, session: compatibilitySession(updated.session) };
+        return { applied: true, requiresNewSession: false, differences, session: sessionProjection(updated.session) };
     }
 
     configSnapshot(options = {}) {

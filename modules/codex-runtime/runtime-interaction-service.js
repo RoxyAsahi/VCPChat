@@ -14,7 +14,7 @@ const {
     normalizeApprovalDecision,
     normalizeInteractionResponse,
     pendingInputProjection,
-    resolveSessionIdInput,
+    requireSessionId,
     sanitizeInteractionPayload,
     submissionDedupeKey,
 } = require('./runtime-normalizers');
@@ -82,7 +82,6 @@ class RuntimeInteractionService {
             const projection = approvalProjection(requestId, request, repository);
             this.context.sendUiEvent({
                 type: 'interaction.requested',
-                topicId: projection.topicId,
                 sessionId: projection.sessionId,
                 turnId: projection.turnId,
                 payload: queued.record,
@@ -130,7 +129,6 @@ class RuntimeInteractionService {
         const projection = approvalProjection(pendingId, request, this.context.repository());
         this.context.sendUiEvent({
             type: 'approval.resolved',
-            topicId: projection.topicId,
             sessionId: projection.sessionId,
             approvalId: pendingId,
             payload: { approvalId: pendingId, decision },
@@ -210,7 +208,6 @@ class RuntimeInteractionService {
         const projection = approvalProjection(pendingId, request, this.context.repository());
         this.context.sendUiEvent({
             type: 'interaction.resolved',
-            topicId: projection.topicId,
             sessionId: projection.sessionId,
             turnId: projection.turnId,
             payload: { source, requestId: pendingId, kind, state: 'completed' },
@@ -218,17 +215,17 @@ class RuntimeInteractionService {
         return { requestId: pendingId, resolved: true, kind };
     }
 
-    listQueue({ sessionId, topicId } = {}) {
+    listQueue({ sessionId } = {}) {
         this.context.ensureProjectionStore();
-        const idValue = resolveSessionIdInput({ sessionId, topicId });
+        const idValue = requireSessionId(sessionId);
         const repository = this.context.repository();
         if (!repository.getSession(idValue)) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
         return { items: repository.listPendingInputs(idValue).map(pendingInputProjection) };
     }
 
-    replaceQueue({ sessionId, topicId, interactions = [] } = {}) {
+    replaceQueue({ sessionId, interactions = [] } = {}) {
         this.context.assertProjectionWritable();
-        const idValue = resolveSessionIdInput({ sessionId, topicId });
+        const idValue = requireSessionId(sessionId);
         const repository = this.context.repository();
         if (!repository.getSession(idValue)) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
         const requested = new Map((Array.isArray(interactions) ? interactions : []).map((item) => [
@@ -250,9 +247,9 @@ class RuntimeInteractionService {
         return this.listQueue({ sessionId: idValue });
     }
 
-    clearQueue({ sessionId, topicId } = {}) {
+    clearQueue({ sessionId } = {}) {
         this.context.assertProjectionWritable();
-        const idValue = resolveSessionIdInput({ sessionId, topicId });
+        const idValue = requireSessionId(sessionId);
         const repository = this.context.repository();
         if (!repository.getSession(idValue)) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
         for (const current of repository.listPendingInputs(idValue)) {
@@ -261,9 +258,9 @@ class RuntimeInteractionService {
         return this.listQueue({ sessionId: idValue });
     }
 
-    async resolvePendingInput({ sessionId, topicId, inputId, action } = {}) {
+    async resolvePendingInput({ sessionId, inputId, action } = {}) {
         this.context.assertProjectionWritable();
-        const idValue = resolveSessionIdInput({ sessionId, topicId });
+        const idValue = requireSessionId(sessionId);
         const repository = this.context.repository();
         const targetId = String(inputId || '').trim();
         if (!repository.getSession(idValue)) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
@@ -312,7 +309,6 @@ class RuntimeInteractionService {
             const projection = approvalProjection(requestId, request, this.context.repository());
             this.context.sendUiEvent({
                 type: 'approval.resolved',
-                topicId: projection.topicId,
                 sessionId: projection.sessionId,
                 approvalId: requestId,
                 payload: { approvalId: requestId, decision: 'decline', scope: 'codex-native', reason },
@@ -331,7 +327,6 @@ class RuntimeInteractionService {
         const projection = approvalProjection(requestId, message, this.context.repository());
         this.context.sendUiEvent({
             type: 'interaction.rejected',
-            topicId: projection.topicId,
             sessionId: projection.sessionId,
             turnId: message?.params?.turnId || null,
             payload: { requestId, method: message?.method || null, reason: reason || 'Unsupported server request' },

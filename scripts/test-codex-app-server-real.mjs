@@ -29,15 +29,15 @@ try {
         workspaceRoot: path.resolve(import.meta.dirname, '..'),
     });
     const [session, secondSession] = await Promise.all([
-        manager.createSession({ resume: topic.topicId }),
-        manager.createSession({ resume: secondTopic.topicId }),
+        manager.createSession({ sessionId: topic.sessionId }),
+        manager.createSession({ sessionId: secondTopic.sessionId }),
     ]);
     assert.match(session.threadId, /^[0-9a-f-]{36}$/i);
     assert.match(secondSession.threadId, /^[0-9a-f-]{36}$/i);
     assert.notEqual(session.threadId, secondSession.threadId, 'parallel VChat Sessions must not share a Codex Thread');
     const [projection, secondProjection] = await Promise.all([
-        manager.readTopic({ topicId: topic.topicId }),
-        manager.readTopic({ topicId: secondTopic.topicId }),
+        manager.readTopic({ sessionId: topic.sessionId }),
+        manager.readTopic({ sessionId: secondTopic.sessionId }),
     ]);
     assert.equal(projection.messages.length, 0);
     assert.equal(secondProjection.messages.length, 0);
@@ -51,10 +51,10 @@ try {
     await manager.stop();
     recoveredManager = new CodexRuntimeManager(options);
     await recoveredManager.start();
-    const resumedSession = await recoveredManager.createSession({ resume: topic.topicId });
+    const resumedSession = await recoveredManager.createSession({ sessionId: topic.sessionId });
     assert.notEqual(resumedSession.threadId, session.threadId,
         'an empty pre-turn Thread is not yet a persisted rollout and must be safely recreated');
-    const resumedProjection = await recoveredManager.readTopic({ topicId: topic.topicId });
+    const resumedProjection = await recoveredManager.readTopic({ sessionId: topic.sessionId });
     assert.equal(resumedProjection.session.orphaned, false);
     console.log(JSON.stringify({
         runtime: recoveredManager.getStatus().runtime,

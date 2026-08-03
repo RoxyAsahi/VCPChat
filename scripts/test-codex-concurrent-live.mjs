@@ -155,8 +155,8 @@ try {
         }),
     ]);
     const [sessionA, sessionB] = await Promise.all([
-        manager.createSession({ resume: topicA.topicId }),
-        manager.createSession({ resume: topicB.topicId }),
+        manager.createSession({ sessionId: topicA.sessionId }),
+        manager.createSession({ sessionId: topicB.sessionId }),
     ]);
     assert.notEqual(sessionA.sessionId, sessionB.sessionId);
     assert.notEqual(sessionA.threadId, sessionB.threadId);

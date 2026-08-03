@@ -221,6 +221,17 @@ for (const relative of identityBoundaryFiles) {
         errors.push(`${relative} contains implicit Session/Topic identity fallback`);
     }
 }
+const canonicalRuntimeDir = path.join(root, 'modules/codex-runtime');
+for (const entry of fs.readdirSync(canonicalRuntimeDir, { withFileTypes: true })) {
+    if (!entry.isFile() || !/\.js$/.test(entry.name)) continue;
+    const source = fs.readFileSync(path.join(canonicalRuntimeDir, entry.name), 'utf8');
+    if (/\btopicId\b/.test(source)) {
+        errors.push(`modules/codex-runtime/${entry.name} contains legacy Topic identity`);
+    }
+    if (/\b(?:compatibilitySession|compatibilityRuntime|resolveSessionIdInput)\b/.test(source)) {
+        errors.push(`modules/codex-runtime/${entry.name} imports legacy Session compatibility helpers`);
+    }
+}
 const runtimeFacadeLineCount = fs.readFileSync(path.join(root, 'modules/codex-runtime/runtimeManager.js'), 'utf8').split(/\r?\n/).length;
 if (runtimeFacadeLineCount > 600) errors.push(`runtimeManager.js exceeds facade ceiling: ${runtimeFacadeLineCount} lines`);
 const runtimeManagerSource = fs.readFileSync(path.join(root, 'modules/codex-runtime/runtimeManagerImplementation.js'), 'utf8');
@@ -299,9 +310,15 @@ if (!fs.existsSync(runtimeNormalizersPath)) {
 }
 const runtimeHostServiceSource = fs.existsSync(path.join(root, 'modules/codex-runtime/runtime-host-service.js'))
     ? fs.readFileSync(path.join(root, 'modules/codex-runtime/runtime-host-service.js'), 'utf8') : '';
-if (!runtimeManagerSource.includes('async updateSessionConfig(')
-    || !`${runtimeManagerSource}\n${runtimeHostServiceSource}`.includes('SESSION_IDENTITY_MISMATCH')) {
-    errors.push('Runtime manager must expose an explicit Session config API and reject conflicting legacy identity');
+const sessionCompatibilitySource = fs.readFileSync(
+    path.join(root, 'modules/ipc/agentSessionCompatibility.js'), 'utf8',
+);
+if (!runtimeManagerSource.includes('async updateSessionConfig(')) {
+    errors.push('Runtime manager must expose an explicit Session config API');
+}
+if (!sessionCompatibilitySource.includes('SESSION_IDENTITY_MISMATCH')
+    || !sessionCompatibilitySource.includes('legacySessionProjection')) {
+    errors.push('Topic compatibility adapter must reject conflicts and own legacy response projection');
 }
 const sharedCatalog = fs.readFileSync(path.join(root, 'preloads/shared/catalog.js'), 'utf8');
 for (const method of ['agentRuntimeReadSessionConfig', 'agentRuntimeUpdateSessionConfig']) {

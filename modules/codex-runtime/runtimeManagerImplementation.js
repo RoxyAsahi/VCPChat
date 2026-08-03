@@ -15,8 +15,8 @@ const {
 } = require('./protocolCapabilities');
 const {
     approvalProjection,
-    compatibilityRuntime,
-    resolveSessionIdInput,
+    requireSessionId,
+    runtimeProjection,
     serializeError,
     vcpInvokeTool,
 } = require('./runtime-normalizers');
@@ -89,7 +89,7 @@ class CodexRuntimeManager extends EventEmitter {
             sessions: this.repository?.listSessions() || [],
             runtimes: (this.repository?.listSessions() || [])
                 .filter((session) => session.threadId)
-                .map((session) => compatibilityRuntime(session, this.threadStates.get(session.threadId))),
+                .map((session) => runtimeProjection(session, this.threadStates.get(session.threadId))),
             pendingApprovals: [...this.serverRequests.entries()]
                 .filter(([, request]) => [
                     'item/commandExecution/requestApproval',
@@ -204,7 +204,7 @@ class CodexRuntimeManager extends EventEmitter {
 
     async createSession(options = {}) {
         this._assertProjectionWritable();
-        const requestedSessionId = options.sessionId || options.topicId || options.resume;
+        const requestedSessionId = String(options.sessionId || '').trim();
         this.ensureProjectionStore();
         let session = requestedSessionId ? this.repository.getSession(requestedSessionId) : null;
         if (!session) {
@@ -227,10 +227,10 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     async ensureSessionRuntime({
-        sessionId, topicId, reason = 'send', recoverPendingInputs = true, ...options
+        sessionId, reason = 'send', recoverPendingInputs = true, ...options
     } = {}) {
         return this.turnService.ensureSessionRuntime({
-            sessionId, topicId, reason, recoverPendingInputs, ...options,
+            sessionId: requireSessionId(sessionId), reason, recoverPendingInputs, ...options,
         });
     }
 
@@ -238,25 +238,25 @@ class CodexRuntimeManager extends EventEmitter {
         return this.turnService.startThreadForSession(session, options);
     }
 
-    async readTopic({ topicId, sessionId, reconcile = true } = {}) {
-        return this.sessionService.read({ topicId, sessionId, reconcile });
+    async readTopic({ sessionId, reconcile = true } = {}) {
+        return this.sessionService.read({ sessionId: requireSessionId(sessionId), reconcile });
     }
 
     async listTopics({ agentId, archived = false } = {}) {
         return this.sessionService.list({ agentId, archived });
     }
 
-    async startTurn({ sessionId, topicId, prompt, attachments = [], clientUserMessageId } = {}) {
+    async startTurn({ sessionId, prompt, attachments = [], clientUserMessageId } = {}) {
         return this._startTurnWithGuard({
-            sessionId, topicId, prompt, attachments, clientUserMessageId, recoverPendingInputs: true,
+            sessionId: requireSessionId(sessionId), prompt, attachments, clientUserMessageId, recoverPendingInputs: true,
         });
     }
 
     async _startTurnWithGuard({
-        sessionId, topicId, prompt, attachments = [], clientUserMessageId, recoverPendingInputs,
+        sessionId, prompt, attachments = [], clientUserMessageId, recoverPendingInputs,
     } = {}) {
         return this.turnService.startTurnWithGuard({
-            sessionId, topicId, prompt, attachments, clientUserMessageId, recoverPendingInputs,
+            sessionId: requireSessionId(sessionId), prompt, attachments, clientUserMessageId, recoverPendingInputs,
         });
     }
 
@@ -268,20 +268,20 @@ class CodexRuntimeManager extends EventEmitter {
         });
     }
 
-    async steerTurn({ sessionId, topicId, turnId, prompt } = {}) {
-        return this.turnService.steer({ sessionId, topicId, turnId, prompt });
+    async steerTurn({ sessionId, turnId, prompt } = {}) {
+        return this.turnService.steer({ sessionId: requireSessionId(sessionId), turnId, prompt });
     }
 
-    async followUpTurn({ sessionId, topicId, prompt, attachments = [] } = {}) {
-        return this.turnService.followUp({ sessionId, topicId, prompt, attachments });
+    async followUpTurn({ sessionId, prompt, attachments = [] } = {}) {
+        return this.turnService.followUp({ sessionId: requireSessionId(sessionId), prompt, attachments });
     }
 
-    async cancelTurn({ sessionId, topicId, turnId } = {}) {
-        return this.turnService.cancel({ sessionId, topicId, turnId });
+    async cancelTurn({ sessionId, turnId } = {}) {
+        return this.turnService.cancel({ sessionId: requireSessionId(sessionId), turnId });
     }
 
-    async forkSession({ sessionId, topicId, turnId, title } = {}) {
-        return this.turnService.fork({ sessionId, topicId, turnId, title });
+    async forkSession({ sessionId, turnId, title } = {}) {
+        return this.turnService.fork({ sessionId: requireSessionId(sessionId), turnId, title });
     }
 
     _assertLifecycleIdle(session) {
@@ -293,18 +293,18 @@ class CodexRuntimeManager extends EventEmitter {
         }
     }
 
-    async archiveSession({ sessionId, topicId } = {}) {
-        return this.sessionService.archive({ sessionId, topicId });
+    async archiveSession({ sessionId } = {}) {
+        return this.sessionService.archive({ sessionId: requireSessionId(sessionId) });
     }
 
     async closeSession(options = {}) { return this.archiveSession(options); }
 
-    async restoreSession({ sessionId, topicId } = {}) {
-        return this.sessionService.restore({ sessionId, topicId });
+    async restoreSession({ sessionId } = {}) {
+        return this.sessionService.restore({ sessionId: requireSessionId(sessionId) });
     }
 
-    async setSessionPinned({ sessionId, topicId, pinned } = {}) {
-        return this.sessionService.pin({ sessionId, topicId, pinned });
+    async setSessionPinned({ sessionId, pinned } = {}) {
+        return this.sessionService.pin({ sessionId: requireSessionId(sessionId), pinned });
     }
 
     async setWorkbenchPresence(mounted = true) {
@@ -317,17 +317,17 @@ class CodexRuntimeManager extends EventEmitter {
         }
         return { mounted: this.workbenchMounted };
     }
-    async compactSession({ sessionId, topicId, timeoutMs = 120_000 } = {}) {
-        return this.turnService.compact({ sessionId, topicId, timeoutMs });
+    async compactSession({ sessionId, timeoutMs = 120_000 } = {}) {
+        return this.turnService.compact({ sessionId: requireSessionId(sessionId), timeoutMs });
     }
     async searchTopics(options = {}) { return { topics: await this.listTopics(options) }; }
-    async searchTopicMessages({ topicId, sessionId } = {}) { return this.readTopic({ topicId, sessionId }); }
+    async searchTopicMessages({ sessionId } = {}) { return this.readTopic({ sessionId }); }
     async getTopicIndexStatus() { return { available: false, source: 'codex-thread-store' }; }
     async rebuildTopicIndex() { return { available: false }; }
-    async renameTopic({ topicId, sessionId, title }) {
-        return this.sessionService.rename({ topicId, sessionId, title });
+    async renameTopic({ sessionId, title }) {
+        return this.sessionService.rename({ sessionId: requireSessionId(sessionId), title });
     }
-    async deleteTopic({ topicId, sessionId }) { return this.archiveSession({ topicId, sessionId }); }
+    async deleteTopic({ sessionId }) { return this.archiveSession({ sessionId }); }
     listRecoveryOperations() {
         return this.recoveryService.listOperations();
     }
@@ -349,26 +349,26 @@ class CodexRuntimeManager extends EventEmitter {
     async resolveRecoveryOperation({ operationId, action, threadId } = {}) {
         return this.recoveryService.resolveRecoveryOperation({ operationId, action, threadId });
     }
-    async permanentlyDeleteSession({ sessionId, topicId } = {}) {
-        return this.sessionService.permanentlyDelete({ sessionId, topicId });
+    async permanentlyDeleteSession({ sessionId } = {}) {
+        return this.sessionService.permanentlyDelete({ sessionId: requireSessionId(sessionId) });
     }
-    exportSession({ sessionId, topicId, format = 'markdown' } = {}) {
-        return this.sessionService.export({ sessionId, topicId, format });
+    exportSession({ sessionId, format = 'markdown' } = {}) {
+        return this.sessionService.export({ sessionId: requireSessionId(sessionId), format });
     }
-    async listInteractionQueue({ sessionId, topicId } = {}) {
-        return this.interactionService.listQueue({ sessionId, topicId });
-    }
-
-    async replaceInteractionQueue({ sessionId, topicId, interactions = [] } = {}) {
-        return this.interactionService.replaceQueue({ sessionId, topicId, interactions });
+    async listInteractionQueue({ sessionId } = {}) {
+        return this.interactionService.listQueue({ sessionId: requireSessionId(sessionId) });
     }
 
-    async clearInteractionQueue({ sessionId, topicId } = {}) {
-        return this.interactionService.clearQueue({ sessionId, topicId });
+    async replaceInteractionQueue({ sessionId, interactions = [] } = {}) {
+        return this.interactionService.replaceQueue({ sessionId: requireSessionId(sessionId), interactions });
     }
 
-    async resolvePendingInput({ sessionId, topicId, inputId, action } = {}) {
-        return this.interactionService.resolvePendingInput({ sessionId, topicId, inputId, action });
+    async clearInteractionQueue({ sessionId } = {}) {
+        return this.interactionService.clearQueue({ sessionId: requireSessionId(sessionId) });
+    }
+
+    async resolvePendingInput({ sessionId, inputId, action } = {}) {
+        return this.interactionService.resolvePendingInput({ sessionId: requireSessionId(sessionId), inputId, action });
     }
     getWorkbenchSettings() {
         return this.configService.getWorkbenchSettings();
@@ -378,8 +378,8 @@ class CodexRuntimeManager extends EventEmitter {
         return this.configService.updateWorkbenchSettings(settings);
     }
 
-    async updateSessionConfig({ sessionId, topicId, expectedConfigRevision, patch } = {}) {
-        return this.configService.updateSessionConfig({ sessionId, topicId, expectedConfigRevision, patch });
+    async updateSessionConfig({ sessionId, expectedConfigRevision, patch } = {}) {
+        return this.configService.updateSessionConfig({ sessionId: requireSessionId(sessionId), expectedConfigRevision, patch });
     }
 
     readSessionConfig({ sessionId } = {}) {

@@ -306,7 +306,6 @@ class RuntimeHostService {
             runtime: 'codex',
             type: 'projection.updated',
             method: message.method,
-            topicId: session.sessionId,
             sessionId: session.sessionId,
             threadId,
             turnId: message?.params?.turnId || message?.params?.turn?.id || null,
@@ -326,7 +325,7 @@ class RuntimeHostService {
         if (!waiter) return;
         if (message.method === 'item/started') {
             this.context.sendUiEvent({
-                type: 'compaction.started', topicId: waiter.sessionId, sessionId: waiter.sessionId,
+                type: 'compaction.started', sessionId: waiter.sessionId,
                 payload: { itemId: item.id || null },
             });
             return;
@@ -339,7 +338,7 @@ class RuntimeHostService {
             const error = new CodexAppServerError('COMPACTION_FAILED', item.message || 'Codex context compaction failed');
             waiter.reject(error);
             this.context.sendUiEvent({
-                type: 'compaction.failed', topicId: waiter.sessionId, sessionId: waiter.sessionId,
+                type: 'compaction.failed', sessionId: waiter.sessionId,
                 payload: { itemId: item.id || null, reason: error.message },
             });
             return;
@@ -347,13 +346,13 @@ class RuntimeHostService {
         void this.context.readSession({ sessionId: waiter.sessionId }).then((snapshot) => {
             waiter.resolve({ sessionId: waiter.sessionId, threadId: waiter.threadId, itemId: item.id || null, snapshot });
             this.context.sendUiEvent({
-                type: 'compaction.completed', topicId: waiter.sessionId, sessionId: waiter.sessionId,
+                type: 'compaction.completed', sessionId: waiter.sessionId,
                 payload: { itemId: item.id || null },
             });
         }).catch((error) => {
             waiter.reject(error);
             this.context.sendUiEvent({
-                type: 'compaction.failed', topicId: waiter.sessionId, sessionId: waiter.sessionId,
+                type: 'compaction.failed', sessionId: waiter.sessionId,
                 payload: { itemId: item.id || null, reason: error.message },
             });
         });
@@ -365,7 +364,7 @@ class RuntimeHostService {
             clearTimeout(waiter.timeout);
             waiter.reject(error);
             this.context.sendUiEvent({
-                type: 'compaction.failed', topicId: waiter.sessionId, sessionId: waiter.sessionId,
+                type: 'compaction.failed', sessionId: waiter.sessionId,
                 payload: { reason: error.message },
             });
         }

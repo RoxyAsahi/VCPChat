@@ -71,7 +71,7 @@ try {
         workspaceRoot: os.tmpdir(),
         permissionMode: 'ask',
     });
-    const session = await manager.createSession({ resume: topic.topicId });
+    const session = await manager.createSession({ sessionId: topic.sessionId });
     const transportCalls = [];
     const request = manager.transport.request.bind(manager.transport);
     manager.transport.request = async (method, params, options) => {

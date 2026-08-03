@@ -135,7 +135,7 @@ try {
         baseInstructions,
         workspaceRoot: projectRoot,
     });
-    const session = await manager.createSession({ resume: topic.topicId });
+    const session = await manager.createSession({ sessionId: topic.sessionId });
     const completion = waitForCompletedTurn(manager, session, diagnostics, liveTimeoutMs);
     await manager.startTurn({
         sessionId: session.sessionId,

@@ -3,13 +3,13 @@
 const { CodexAppServerError } = require('./appServerTransport');
 const {
     buildTurnInput,
-    compatibilitySession,
     hasDurableProjection,
     isConfirmedThreadNotFound,
     isUncertainRemoteMutation,
     normalizeApprovalPolicy,
     normalizeSandboxMode,
-    resolveSessionIdInput,
+    requireSessionId,
+    sessionProjection,
     submissionDedupeKey,
     vcpInvokeTool,
 } = require('./runtime-normalizers');
@@ -27,11 +27,11 @@ class RuntimeTurnService {
     }
 
     async ensureSessionRuntime({
-        sessionId, topicId, reason = 'send', recoverPendingInputs = true, ...options
+        sessionId, reason = 'send', recoverPendingInputs = true, ...options
     } = {}) {
         this.context.ensureProjectionStore();
         this.context.assertProjectionWritable();
-        const idValue = resolveSessionIdInput({ sessionId, topicId });
+        const idValue = requireSessionId(sessionId);
         const warmPromises = this.context.sessionWarmPromises();
         if (warmPromises.has(idValue)) return warmPromises.get(idValue);
         const warm = (async () => {
@@ -58,7 +58,7 @@ class RuntimeTurnService {
                 reason,
                 durationMs: this.context.diagnosticClock() - startedAt,
             });
-            return compatibilitySession(repository.getSession(session.sessionId) || session);
+            return sessionProjection(repository.getSession(session.sessionId) || session);
         })().finally(() => warmPromises.delete(idValue));
         warmPromises.set(idValue, warm);
         return warm;
@@ -119,10 +119,10 @@ class RuntimeTurnService {
     }
 
     async startTurnWithGuard({
-        sessionId, topicId, prompt, attachments = [], clientUserMessageId, recoverPendingInputs,
+        sessionId, prompt, attachments = [], clientUserMessageId, recoverPendingInputs,
     } = {}) {
         this.context.assertProjectionWritable();
-        const requestedSessionId = resolveSessionIdInput({ sessionId, topicId });
+        const requestedSessionId = requireSessionId(sessionId);
         const text = String(prompt || '').trim();
         const requestKey = submissionDedupeKey(text, attachments);
         const startPromises = this.context.turnStartPromises();
@@ -154,7 +154,7 @@ class RuntimeTurnService {
         const generation = this.context.captureGeneration();
         await this.context.applySessionRuntimeConfig(session.sessionId, { barrier: true });
         let repository = this._repository(generation);
-        session = compatibilitySession(repository.getSession(session.sessionId));
+        session = sessionProjection(repository.getSession(session.sessionId));
         const text = String(prompt || '').trim();
         if (!text && (!Array.isArray(attachments) || attachments.length === 0)) {
             throw new CodexAppServerError('INVALID_INPUT', 'Prompt or attachment must not be empty');
@@ -187,12 +187,12 @@ class RuntimeTurnService {
             turnId: acceptedTurnId,
             durationMs: this.context.diagnosticClock() - startedAt,
         });
-        return { sessionId: session.sessionId, topicId: session.sessionId, threadId: session.threadId, turnId: acceptedTurnId };
+        return { sessionId: session.sessionId, threadId: session.threadId, turnId: acceptedTurnId };
     }
 
-    async steer({ sessionId, topicId, turnId, prompt } = {}) {
+    async steer({ sessionId, turnId, prompt } = {}) {
         this.context.assertProjectionWritable();
-        const session = this.context.repository().getSession(resolveSessionIdInput({ sessionId, topicId }));
+        const session = this.context.repository().getSession(requireSessionId(sessionId));
         if (!session?.threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached');
         const generation = this.context.captureGeneration();
         const result = await this.context.transport().request('turn/steer', {
@@ -205,14 +205,14 @@ class RuntimeTurnService {
         return { sessionId: session.sessionId, threadId: session.threadId, turnId: result?.turnId || turnId };
     }
 
-    async followUp({ sessionId, topicId, prompt, attachments = [] } = {}) {
+    async followUp({ sessionId, prompt, attachments = [] } = {}) {
         this.context.assertProjectionWritable();
         if (Array.isArray(attachments) && attachments.length) {
             throw new CodexAppServerError(
                 'QUEUE_ATTACHMENT_UNSUPPORTED', 'Queued follow-up attachments are not persisted; send them as a new turn instead',
             );
         }
-        const idValue = resolveSessionIdInput({ sessionId, topicId });
+        const idValue = requireSessionId(sessionId);
         const repository = this.context.repository();
         const session = repository.getSession(idValue);
         const text = String(prompt || '').trim();
@@ -223,9 +223,9 @@ class RuntimeTurnService {
         return { sessionId: idValue, threadId: session.threadId, inputId: queued.input_id, queued: true };
     }
 
-    async cancel({ sessionId, topicId, turnId } = {}) {
+    async cancel({ sessionId, turnId } = {}) {
         this.context.assertProjectionWritable();
-        const session = this.context.repository().getSession(resolveSessionIdInput({ sessionId, topicId }));
+        const session = this.context.repository().getSession(requireSessionId(sessionId));
         if (!session?.threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached');
         const generation = this.context.captureGeneration();
         await this.context.transport().request('turn/interrupt', { threadId: session.threadId, turnId });
@@ -240,10 +240,10 @@ class RuntimeTurnService {
         return { sessionId: session.sessionId, threadId: session.threadId, turnId, interrupted: true };
     }
 
-    async fork({ sessionId, topicId, turnId, title } = {}) {
+    async fork({ sessionId, turnId, title } = {}) {
         this.context.assertProjectionWritable();
         let repository = this.context.repository();
-        const source = repository.getSession(resolveSessionIdInput({ sessionId, topicId }));
+        const source = repository.getSession(requireSessionId(sessionId));
         if (!source?.threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached');
         const generation = this.context.captureGeneration();
         const targetSessionId = this.context.createId('session');
@@ -291,9 +291,9 @@ class RuntimeTurnService {
         }
     }
 
-    async compact({ sessionId, topicId, timeoutMs = 120_000 } = {}) {
+    async compact({ sessionId, timeoutMs = 120_000 } = {}) {
         this.context.assertProjectionWritable();
-        const session = this.context.repository().getSession(resolveSessionIdInput({ sessionId, topicId }));
+        const session = this.context.repository().getSession(requireSessionId(sessionId));
         if (!session?.threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached');
         this.context.assertLifecycleIdle(session);
         const waiters = this.context.compactionWaiters();
@@ -311,7 +311,7 @@ class RuntimeTurnService {
             waiters.delete(session.threadId);
             waiter.reject(new CodexAppServerError('COMPACTION_TIMEOUT', 'Codex context compaction did not complete in time'));
             this.context.sendUiEvent({
-                type: 'compaction.failed', topicId: session.sessionId, sessionId: session.sessionId,
+                type: 'compaction.failed', sessionId: session.sessionId,
                 payload: { reason: 'timeout' },
             });
         }, Math.max(1_000, Number(timeoutMs) || 120_000));
@@ -319,7 +319,7 @@ class RuntimeTurnService {
             sessionId: session.sessionId, threadId: session.threadId,
             resolve: resolveWaiter, reject: rejectWaiter, timeout, generation,
         });
-        this.context.sendUiEvent({ type: 'compaction.started', topicId: session.sessionId, sessionId: session.sessionId });
+        this.context.sendUiEvent({ type: 'compaction.started', sessionId: session.sessionId });
         try {
             await this.context.transport().request('thread/compact/start', { threadId: session.threadId });
             this.context.assertGeneration(generation);
@@ -416,7 +416,7 @@ class RuntimeTurnService {
                 repository.updatePendingInput(next.inputId, { state: 'accepted', turnId: accepted.turnId, lastError: null });
                 repository.removePendingInput(next.inputId);
                 this.context.sendUiEvent({
-                    type: 'input.dequeued', topicId: session.sessionId, sessionId: session.sessionId,
+                    type: 'input.dequeued', sessionId: session.sessionId,
                     turnId: accepted.turnId, payload: { inputId: next.inputId },
                 });
                 return accepted;
@@ -428,7 +428,7 @@ class RuntimeTurnService {
                     lastError: error?.message || String(error),
                 });
                 this.context.sendUiEvent({
-                    type: 'input.queue.failed', topicId: session.sessionId, sessionId: session.sessionId,
+                    type: 'input.queue.failed', sessionId: session.sessionId,
                     payload: { inputId: next.inputId, error: error.message },
                 });
                 return null;

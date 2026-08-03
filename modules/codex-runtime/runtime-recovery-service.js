@@ -2,10 +2,10 @@
 
 const { CodexAppServerError } = require('./appServerTransport');
 const {
-    compatibilitySession,
     isConfirmedThreadNotFound,
     isUncertainRemoteMutation,
     serializeError,
+    sessionProjection,
 } = require('./runtime-normalizers');
 
 const KNOWN_OPERATION_KINDS = new Set(['thread-archive', 'thread-unarchive', 'thread-delete']);
@@ -268,7 +268,7 @@ class RuntimeRecoveryService {
         });
         this.context.threadStates().set(selectedThreadId, { activity: 'idle', activeTurnId: null });
         return { operationId: operation.operationId, resolved: true, action: 'bind', threadId: selectedThreadId,
-            session: compatibilitySession(session) };
+            session: sessionProjection(session) };
     }
 }
 

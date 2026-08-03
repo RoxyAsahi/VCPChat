@@ -350,9 +350,9 @@ fs.rmSync(reconfigureRoot, { recursive: true, force: true });
 await manager.start();
 await manager.setWorkbenchPresence(true);
 const topic = await manager.createTopic({ agentId: 'Nova', title: 'Test', model: 'Nova', systemPrompt: '{{Nova}}' });
-const session = await manager.createSession({ topicId: topic.topicId });
+const session = await manager.createSession({ sessionId: topic.sessionId });
 assert.equal(session.threadId, 'thr_test');
-const resumed = await manager.createSession({ resume: topic.topicId });
+const resumed = await manager.createSession({ sessionId: topic.sessionId });
 assert.equal(resumed.sessionId, session.sessionId, 'resume must reuse the VChat Session instead of creating another one');
 assert.equal(fake.calls.filter((call) => call.method === 'thread/start').length, 1);
 // The generic personality only shapes how Codex phrases the default template;
@@ -366,7 +366,7 @@ const baseInstructionsTopic = await manager.createTopic({
     systemPrompt: '{{Nova}}',
     developerInstructions: 'extra hint',
 });
-await manager.createSession({ topicId: baseInstructionsTopic.topicId });
+await manager.createSession({ sessionId: baseInstructionsTopic.sessionId });
 const personaStart = fake.calls.find((call) => call.method === 'thread/start'
     && call.params.baseInstructions === '{{Nova}}');
 assert.equal(personaStart.params.baseInstructions, '{{Nova}}',
@@ -382,7 +382,7 @@ const managedTopic = await manager.createTopic({
     developerInstructions: 'Keep answers concise.',
     personality: 'friendly',
 });
-await manager.createSession({ topicId: managedTopic.topicId });
+await manager.createSession({ sessionId: managedTopic.sessionId });
 const managedStart = fake.calls.find((call) => call.method === 'thread/start'
     && call.params.developerInstructions === 'Keep answers concise.');
 assert.equal(managedStart.params.baseInstructions, undefined,
@@ -395,7 +395,7 @@ const explicitBaseTopic = await manager.createTopic({
     baseInstructions: 'You are Nova, VChat\'s coding agent.',
     systemPrompt: '{{Nova}}',
 });
-await manager.createSession({ topicId: explicitBaseTopic.topicId });
+await manager.createSession({ sessionId: explicitBaseTopic.sessionId });
 const explicitBaseStart = fake.calls.find((call) => call.method === 'thread/start'
     && call.params.baseInstructions === 'You are Nova, VChat\'s coding agent.');
 assert.ok(explicitBaseStart, 'explicit baseInstructions must override the catalog systemPrompt');
@@ -507,7 +507,7 @@ assert.equal(manager.repository.getSession(session.sessionId).configSnapshot.bas
 // VChat Session. Simulate that boundary: the next write must reopen exactly
 // the saved Codex Thread, never create a replacement Thread.
 manager.resumedThreadIds.clear();
-const resumedAfterRestart = await manager.createSession({ resume: topic.topicId });
+const resumedAfterRestart = await manager.createSession({ sessionId: topic.sessionId });
 assert.equal(resumedAfterRestart.threadId, 'thr_test');
 assert.equal(fake.calls.filter((call) => call.method === 'thread/start').length, 4,
     'the original, VChat identity, Codex-managed and explicit-base Sessions start Threads; every resume reopens the saved one');
@@ -541,7 +541,7 @@ fake.emit('notification', {
     method: 'item/completed',
     params: { threadId: 'thr_test', turnId: 'turn_test', item: { id: 'item_a', type: 'agentMessage', text: 'done' } },
 });
-const projection = await manager.readTopic({ topicId: session.sessionId });
+const projection = await manager.readTopic({ sessionId: session.sessionId });
 assert.equal(projection.messages[0].blocks[0].content.text, 'done');
 fake.emit('notification', { method: 'turn/completed', params: { threadId: 'thr_test', turn: { id: 'turn_test', status: 'completed' } } });
 let compactionSettled = false;
@@ -564,12 +564,12 @@ assert.equal(compacted.itemId, 'compact_1');
 assert.equal(compacted.snapshot.session.sessionId, session.sessionId,
     'terminal compaction must reconcile the durable SQLite projection before resolving');
 fake.readError = new Error('temporary App Server transport failure');
-const temporaryFailureProjection = await manager.readTopic({ topicId: session.sessionId });
+const temporaryFailureProjection = await manager.readTopic({ sessionId: session.sessionId });
 assert.equal(temporaryFailureProjection.session.orphaned, false,
     'a temporary read failure must preserve a writable Session instead of inventing an orphan');
 assert.match(temporaryFailureProjection.projection.lastError, /temporary App Server transport failure/);
 fake.readError = new Error('No rollout found for thread thr_test');
-const missingThreadProjection = await manager.readTopic({ topicId: session.sessionId });
+const missingThreadProjection = await manager.readTopic({ sessionId: session.sessionId });
 assert.equal(missingThreadProjection.session.orphaned, true,
     'only an explicit missing Codex Thread may mark the local Session orphaned');
 fake.readError = null;
@@ -579,11 +579,11 @@ assert.equal(manager.repository.getSession(session.sessionId).orphaned, false,
     'a successful explicit resume clears a previously stale orphan marker');
 const fork = await manager.forkSession({ sessionId: session.sessionId, turnId: 'turn_test' });
 assert.equal(fork.threadId, 'thr_fork');
-assert.equal(manager.getStatus().runtimes.some((runtime) => runtime.topicId === session.sessionId), true);
+assert.equal(manager.getStatus().runtimes.some((runtime) => runtime.sessionId === session.sessionId), true);
 // Archive/unarchive must move the actual Codex Thread, while pinning remains
 // VChat-only presentation metadata. None of these navigation operations may
 // infer or replace a Thread identity.
-const lifecycleSession = await manager.createSession({ topicId: baseInstructionsTopic.topicId });
+const lifecycleSession = await manager.createSession({ sessionId: baseInstructionsTopic.sessionId });
 const pinned = await manager.setSessionPinned({ sessionId: lifecycleSession.sessionId, pinned: true });
 assert.equal(pinned.session.pinnedAt > 0, true);
 const archived = await manager.closeSession({ sessionId: lifecycleSession.sessionId });

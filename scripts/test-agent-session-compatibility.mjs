@@ -2,11 +2,16 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { registerAgentSessionCompatibility, sessionPayload } = require('../modules/ipc/agentSessionCompatibility.js');
+const {
+    legacySessionProjection,
+    registerAgentSessionCompatibility,
+    sessionPayload,
+} = require('../modules/ipc/agentSessionCompatibility.js');
 
-assert.deepEqual(sessionPayload({ topicId: 'session-a' }), { topicId: 'session-a', sessionId: 'session-a' });
-assert.deepEqual(sessionPayload({ sessionId: 'session-a', topicId: 'session-a' }), {
-    sessionId: 'session-a', topicId: 'session-a',
+assert.deepEqual(sessionPayload({ topicId: 'session-a' }), { sessionId: 'session-a' });
+assert.deepEqual(sessionPayload({ sessionId: 'session-a', topicId: 'session-a' }), { sessionId: 'session-a' });
+assert.deepEqual(legacySessionProjection({ sessionId: 'session-a', session: { sessionId: 'session-a' } }), {
+    sessionId: 'session-a', topicId: 'session-a', session: { sessionId: 'session-a', topicId: 'session-a' },
 });
 assert.throws(
     () => sessionPayload({ sessionId: 'session-a', topicId: 'session-b' }),
@@ -45,13 +50,13 @@ await handlers.get(channels.READ_PROJECTION)({}, { topicId: 'session-projection'
 await handlers.get(channels.CLOSE_SESSION)({}, { topicId: 'session-archive' });
 await handlers.get(channels.PERMANENTLY_DELETE_SESSION)({}, { topicId: 'session-delete' });
 assert.deepEqual(calls, [
-    ['readSession', { topicId: 'session-read', sessionId: 'session-read' }],
-    ['readSession', { topicId: 'session-projection', sessionId: 'session-projection', reconcile: false }],
-    ['archiveSession', { topicId: 'session-archive', sessionId: 'session-archive' }],
-    ['permanentlyDeleteSession', { topicId: 'session-delete', sessionId: 'session-delete' }],
+    ['readSession', { sessionId: 'session-read' }],
+    ['readSession', { sessionId: 'session-projection', reconcile: false }],
+    ['archiveSession', { sessionId: 'session-archive' }],
+    ['permanentlyDeleteSession', { sessionId: 'session-delete' }],
 ]);
-assert.throws(
-    () => handlers.get(channels.READ_TOPIC)({}, { sessionId: 'session-a', topicId: 'session-b' }),
+await assert.rejects(
+    handlers.get(channels.READ_TOPIC)({}, { sessionId: 'session-a', topicId: 'session-b' }),
     (error) => error?.code === 'SESSION_IDENTITY_MISMATCH',
 );
 

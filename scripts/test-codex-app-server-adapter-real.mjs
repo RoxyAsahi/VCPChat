@@ -130,7 +130,7 @@ try {
         model: 'gpt-5.6-luna',
         baseInstructions: pureBaseInstructions,
     });
-    const session = await manager.createSession({ resume: topic.topicId });
+    const session = await manager.createSession({ sessionId: topic.sessionId });
     const completed = waitForTurn(session);
     await manager.startTurn({ sessionId: session.sessionId, prompt: 'Use FileOperator to read package.json.' });
     const completion = await completed;
