@@ -32,6 +32,7 @@ import {
 import { createAgentWorkbenchShellView } from './agent-workbench-shell-view.js';
 import { createAgentWorkbenchRunStatusView } from './agent-workbench-run-status-view.js';
 import { createAgentWorkbenchComposerView } from './agent-workbench-composer-view.js';
+import { createAgentWorkspaceView } from './agent-workspace-view.js';
 
 // Build Agent identities are independent from normal-chat Agents. Keep Nova
 // visible synchronously while the authoritative Build catalog loads.
@@ -444,6 +445,19 @@ function mountWorkbench(container) {
             notify(error?.message || String(error), 'error');
         }
     };
+    const workspaceView = createAgentWorkspaceView({
+        document,
+        actions: {
+            run,
+            refresh: () => renderActivity(),
+            loadDirectory: (relativePath) => loadWorkspaceDirectory(relativePath),
+            openPreview: (ref) => openWorkspacePreview(ref),
+            openFileTab: (ref) => openWorkspaceFileTab(ref),
+            performPathAction: (ref, action) => performWorkspaceAction(ref, action),
+            search: (value) => scheduleWorkspaceSearch(value),
+            onBinaryPreview: () => activitySplitter.classList.remove('is-active'),
+        },
+    });
     const workspaceRequests = createWorkspaceRequestCoordinator({
         cancel: ({ requestId, sessionId }) => {
             try { void controller.workspaceCancel({ requestId, sessionId }).catch(() => null); } catch {}
@@ -2825,221 +2839,53 @@ function mountWorkbench(container) {
         return performWorkspaceAction(ref, action);
     }
 
-    function workspacePathActions(ref) {
-        const actions = node('div', 'agent-workspace-path-actions');
-        for (const [action, label, iconName] of [
-            ['open-in-vchat', '在 VChat 中打开', 'tab'],
-            ['copy-relative-path', '复制相对路径', 'content_copy'],
-            ['copy-absolute-path', '复制绝对路径', 'file_copy'],
-            ['reveal-in-explorer', '在资源管理器中显示', 'folder_open'],
-            ['open-with-system', '使用系统程序打开', 'open_in_new'],
-        ]) {
-            const control = iconButton(iconName, label, 'agent-workspace-path-action');
-            control.addEventListener('click', () => run(() => action === 'open-in-vchat'
-                ? openWorkspaceFileTab(ref)
-                : performWorkspaceAction(ref, action)));
-            actions.append(control);
-        }
-        return actions;
-    }
-
-    function buildWorkspacePreview(browser) {
-        const host = node('section', 'agent-workspace-preview');
-        if (browser.previewLoading) {
-            const loading = node('div', 'agent-workspace-empty');
-            loading.append(node('span', 'vcp-ui-icon agent-workspace-empty-icon', 'hourglass_top'), node('span', '', '正在读取预览…'));
-            host.append(loading);
-            return host;
-        }
-        const preview = browser.preview;
-        if (!preview) {
-            const empty = node('div', 'agent-workspace-empty');
-            empty.append(
-                node('span', 'vcp-ui-icon agent-workspace-empty-icon', 'description'),
-                node('strong', '', '选择文件以预览'),
-                node('span', '', '双击文件可固定到顶部标签栏'),
-            );
-            host.append(empty);
-            return host;
-        }
-        const ref = createWorkspacePathRef({
-            sessionId: preview.sessionId, workspaceRevision: preview.workspaceRevision,
-            relativePath: preview.relativePath, kind: 'file', source: 'tree',
-        });
-        const header = node('header', 'agent-workspace-preview-header');
-        const identity = node('div', 'agent-workspace-preview-identity');
-        identity.append(
-            node('span', 'vcp-ui-icon agent-workspace-preview-file-icon', 'draft'),
-            node('span', 'agent-workspace-preview-name', preview.displayName || preview.relativePath.split('/').pop()),
-            node('span', 'agent-workspace-preview-path', preview.relativePath),
-        );
-        const headerActions = workspacePathActions(ref);
-        const pin = iconButton('keep', '固定到顶部标签栏', 'agent-workspace-path-action');
-        pin.addEventListener('click', () => run(() => openWorkspaceFileTab(ref)));
-        headerActions.prepend(pin);
-        header.append(identity, headerActions);
-        host.append(header);
-        if (preview.kind === 'text') {
-            const pre = node('pre', 'agent-workspace-preview-text', preview.content || '');
-            host.append(pre);
-            if (preview.truncated) host.append(node('div', 'agent-workspace-preview-note', `已截断 · ${preview.byteLen} bytes`));
-        } else if (preview.kind === 'image' && preview.dataUrl) {
-            const image = document.createElement('img'); image.className = 'agent-workspace-preview-image'; image.src = preview.dataUrl; image.alt = preview.displayName;
-            host.append(image);
-        } else {
-            activitySplitter.classList.remove('is-active');
-            host.append(node('div', 'agent-workspace-preview-note', `${preview.kind} · ${preview.mimeType || '未知类型'} · ${preview.byteLen} bytes`));
-        }
-        return host;
-    }
-
-    function buildWorkspaceBrowser(current) {
-        const identity = syncWorkspaceScope(current);
+    function scheduleWorkspaceSearch(value) {
         const browser = state.workspaceBrowser;
-        const wrap = node('section', 'agent-workspace-browser');
-        if (!identity.sessionId || !identity.workspaceRoot) {
-            wrap.append(node('div', 'agent-chat-activity-empty', '当前会话没有可浏览的工作目录。'));
-            return wrap;
-        }
-        const toolbar = node('header', 'agent-workspace-toolbar');
-        const heading = node('div', 'agent-workspace-heading');
-        heading.append(node('span', 'vcp-ui-icon', 'account_tree'), node('strong', '', 'Workspace'));
-        const searchWrap = node('label', 'agent-workspace-search-wrap');
-        searchWrap.append(node('span', 'vcp-ui-icon', 'search'));
-        const search = document.createElement('input');
-        search.type = 'search'; search.className = 'agent-workspace-search'; search.placeholder = '搜索工作区文件'; search.value = browser.search;
-        search.setAttribute('aria-label', '搜索工作区文件');
-        search.addEventListener('input', () => {
-            browser.search = search.value;
-            workspaceSearchTimer = lifecycle.timeout('workspace-search', () => {
-                const query = browser.search.trim();
-                browser.searchRequestId = '';
-                if (!query) { browser.searchResults = []; browser.searchLoading = false; renderActivity(); return; }
-                browser.searchLoading = true; renderActivity();
-                const scope = browser.scope;
-                const token = workspaceRequests.begin({
-                    key: 'search', operation: 'search', sessionId: browser.sessionId,
-                    workspaceRevision: browser.workspaceRevision, relativePath: query,
-                });
-                browser.searchRequestId = token.requestId;
-                void controller.workspaceSearchFiles({ requestId: token.requestId, sessionId: browser.sessionId, workspaceRevision: browser.workspaceRevision || undefined, query, limit: 200 })
-                    .then((result) => {
-                        if (browser.scope === scope && workspaceRequests.isCurrent(token, {
-                            sessionId: browser.sessionId, relativePath: browser.search.trim(),
-                        })) { browser.workspaceRevision = result.workspaceRevision; browser.searchResults = result.entries || []; }
-                    })
-                    .catch((error) => {
-                        if (browser.scope === scope && workspaceRequests.isCurrent(token, {
-                            sessionId: browser.sessionId, relativePath: browser.search.trim(),
-                        })) browser.error = error?.message || String(error);
-                    })
-                    .finally(() => {
-                        if (browser.scope === scope && workspaceRequests.finish(token)) {
-                            browser.searchRequestId = ''; browser.searchLoading = false; renderActivity();
-                        }
-                    });
-            }, 180);
-        });
-        searchWrap.append(search);
-        toolbar.append(heading, searchWrap);
-        const explorerPane = node('section', 'agent-workspace-explorer-pane');
-        explorerPane.append(toolbar);
-        if (browser.error) explorerPane.append(node('div', 'agent-workspace-error', browser.error));
-        const rows = browser.search.trim() ? browser.searchResults.map((entry) => ({ entry, depth: 0 })) : browser.model.flatten();
-        const list = node('div', 'agent-workspace-tree');
-        list.setAttribute('role', 'tree');
-        const treeMeta = node('div', 'agent-workspace-tree-meta');
-        treeMeta.append(
-            node('span', '', browser.search.trim() ? `搜索结果 · ${rows.length}` : `项目文件 · ${rows.length}`),
-            browser.model.isLoading('') ? node('span', 'agent-workspace-tree-loading', '读取中…') : node('span', '', ''),
-        );
-        list.append(treeMeta);
-        if (browser.searchLoading) list.append(node('div', 'agent-chat-activity-empty', '正在搜索…'));
-        for (const [index, { entry, depth }] of rows.slice(0, 5000).entries()) {
-            const row = button('', 'agent-workspace-tree-row');
-            row.dataset.workspacePath = entry.relativePath;
-            row.dataset.workspaceIndex = String(index);
-            row.classList.toggle('is-selected', browser.selectedPath === entry.relativePath);
-            row.setAttribute('role', 'treeitem');
-            row.setAttribute('aria-level', String(depth + 1));
-            const indentation = node('span', 'agent-workspace-tree-indent');
-            for (let level = 0; level < Math.min(depth, 32); level += 1) indentation.append(node('span', 'agent-workspace-tree-indent-unit'));
-            const directory = entry.kind === 'directory';
-            if (directory) row.append(node('span', 'vcp-ui-icon agent-workspace-tree-chevron', browser.model.isExpanded(entry.relativePath) ? 'expand_more' : 'chevron_right'));
-            else row.append(node('span', 'agent-workspace-tree-chevron', ''));
-            row.append(indentation, node('span', 'vcp-ui-icon agent-workspace-tree-icon', directory
-                ? (browser.model.isExpanded(entry.relativePath) ? 'folder_open' : 'folder') : 'description'));
-            row.append(node('span', 'agent-workspace-tree-name', entry.name));
-            if (directory) row.setAttribute('aria-expanded', String(browser.model.isExpanded(entry.relativePath)));
-            row.addEventListener('click', () => run(async () => {
-                if (directory) {
-                    const expanded = !browser.model.isExpanded(entry.relativePath);
-                    browser.model.setExpanded(entry.relativePath, expanded);
-                    if (expanded) await loadWorkspaceDirectory(entry.relativePath);
-                    else renderActivity();
-                } else {
-                    const ref = createWorkspacePathRef({ sessionId: browser.sessionId, workspaceRevision: browser.workspaceRevision, relativePath: entry.relativePath, source: 'tree' });
-                    await openWorkspacePreview(ref);
-                }
-            }));
-            row.addEventListener('dblclick', () => {
-                if (!directory) run(() => openWorkspaceFileTab(createWorkspacePathRef({
-                    sessionId: browser.sessionId, workspaceRevision: browser.workspaceRevision,
-                    relativePath: entry.relativePath, source: 'tree',
-                })));
+        browser.search = value;
+        workspaceSearchTimer = lifecycle.timeout('workspace-search', () => {
+            const query = browser.search.trim();
+            browser.searchRequestId = '';
+            if (!query) {
+                browser.searchResults = [];
+                browser.searchLoading = false;
+                renderActivity();
+                return;
+            }
+            browser.searchLoading = true;
+            renderActivity();
+            const scope = browser.scope;
+            const token = workspaceRequests.begin({
+                key: 'search', operation: 'search', sessionId: browser.sessionId,
+                workspaceRevision: browser.workspaceRevision, relativePath: query,
             });
-            list.append(row);
-        }
-        if (rows.length > 5000) list.append(node('div', 'agent-workspace-preview-note', '仅显示前 5000 项，请使用搜索缩小范围。'));
-        list.addEventListener('keydown', (event) => {
-            const visibleRows = [...list.querySelectorAll('.agent-workspace-tree-row')];
-            const currentIndex = visibleRows.indexOf(document.activeElement);
-            if (event.key === 'ArrowDown' && visibleRows[currentIndex + 1]) { event.preventDefault(); visibleRows[currentIndex + 1].focus(); }
-            if (event.key === 'ArrowUp' && visibleRows[currentIndex - 1]) { event.preventDefault(); visibleRows[currentIndex - 1].focus(); }
-            if (event.key === 'ArrowRight' && document.activeElement?.getAttribute('aria-expanded') === 'false') { event.preventDefault(); document.activeElement.click(); }
-            if (event.key === 'ArrowLeft' && document.activeElement?.getAttribute('aria-expanded') === 'true') { event.preventDefault(); document.activeElement.click(); }
-        });
-        explorerPane.append(list);
-        const previewPane = buildWorkspacePreview(browser);
-        const divider = node('div', 'agent-workspace-splitter');
-        divider.tabIndex = 0;
-        divider.setAttribute('role', 'separator');
-        divider.setAttribute('aria-orientation', 'vertical');
-        divider.setAttribute('aria-label', '调整文件预览与目录树宽度');
-        const applySplit = (percent, allowCollapse = true) => {
-            browser.splitPercent = allowCollapse && percent >= 90
-                ? 100
-                : Math.round(Math.max(28, Math.min(88, percent)) / 2) * 2;
-            [...wrap.classList].filter((name) => name.startsWith('agent-workspace-split-')).forEach((name) => wrap.classList.remove(name));
-            wrap.classList.add(`agent-workspace-split-${browser.splitPercent}`);
-            divider.setAttribute('aria-valuenow', String(browser.splitPercent));
-        };
-        applySplit(browser.splitPercent);
-        divider.addEventListener('pointerdown', (event) => {
-            event.preventDefault();
-            divider.setPointerCapture?.(event.pointerId);
-            const bounds = wrap.getBoundingClientRect();
-            const onMove = (moveEvent) => applySplit(((moveEvent.clientX - bounds.left) / Math.max(1, bounds.width)) * 100);
-            const onUp = (upEvent) => {
-                divider.releasePointerCapture?.(upEvent.pointerId);
-                divider.removeEventListener('pointermove', onMove);
-                divider.removeEventListener('pointerup', onUp);
-                divider.removeEventListener('pointercancel', onUp);
-            };
-            divider.addEventListener('pointermove', onMove);
-            divider.addEventListener('pointerup', onUp);
-            divider.addEventListener('pointercancel', onUp);
-        });
-        divider.addEventListener('keydown', (event) => {
-            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-            event.preventDefault();
-            if (event.key === 'ArrowRight' && browser.splitPercent >= 88) applySplit(100);
-            else if (event.key === 'ArrowLeft' && browser.splitPercent === 100) applySplit(88, false);
-            else applySplit(browser.splitPercent + (event.key === 'ArrowRight' ? 2 : -2), false);
-        });
-        wrap.append(previewPane, divider, explorerPane);
-        if (!browser.model.hasChildren('') && !browser.model.isLoading('')) queueMicrotask(() => run(() => loadWorkspaceDirectory('')));
-        return wrap;
+            browser.searchRequestId = token.requestId;
+            void controller.workspaceSearchFiles({
+                requestId: token.requestId,
+                sessionId: browser.sessionId,
+                workspaceRevision: browser.workspaceRevision || undefined,
+                query,
+                limit: 200,
+            }).then((result) => {
+                if (browser.scope === scope && workspaceRequests.isCurrent(token, {
+                    sessionId: browser.sessionId,
+                    relativePath: browser.search.trim(),
+                })) {
+                    browser.workspaceRevision = result.workspaceRevision;
+                    browser.searchResults = result.entries || [];
+                }
+            }).catch((error) => {
+                if (browser.scope === scope && workspaceRequests.isCurrent(token, {
+                    sessionId: browser.sessionId,
+                    relativePath: browser.search.trim(),
+                })) browser.error = error?.message || String(error);
+            }).finally(() => {
+                if (browser.scope === scope && workspaceRequests.finish(token)) {
+                    browser.searchRequestId = '';
+                    browser.searchLoading = false;
+                    renderActivity();
+                }
+            });
+        }, 180);
     }
 
     function buildInteractionCard(interaction) {
@@ -3376,7 +3222,8 @@ function mountWorkbench(container) {
         } else if (activeKind === 'changes') {
             content.append(buildChangeInspector(current));
         } else if (activeKind === 'files') {
-            content.append(buildWorkspaceBrowser(current));
+            workspaceView.update({ identity: syncWorkspaceScope(current), browser: state.workspaceBrowser });
+            content.append(workspaceView.element);
         } else if (activeKind === 'file') {
             syncWorkspaceScope(current);
             const ref = createWorkspacePathRef({
@@ -3389,7 +3236,7 @@ function mountWorkbench(container) {
                 || state.workspaceBrowser.preview?.workspaceRevision !== activeDefinition.workspaceRevision) {
                 content.append(node('div', 'agent-chat-activity-empty', '正在读取文件…'));
                 if (!state.workspaceBrowser.previewLoading) queueMicrotask(() => run(() => openWorkspacePreview(ref)));
-            } else content.append(buildWorkspacePreview(state.workspaceBrowser));
+            } else content.append(workspaceView.renderPreview(state.workspaceBrowser));
         } else {
             // This is a process-global observation feed, not a Session feed;
             // backend approval cards may also be reached from Approvals.
@@ -3909,6 +3756,7 @@ function mountWorkbench(container) {
         closeTopicContextMenu();
         state.accountThemeObserver?.disconnect();
         fullPresentation.dispose();
+        workspaceView.dispose();
         composerView.dispose();
         runStatusView.dispose();
         lifecycle.dispose();
