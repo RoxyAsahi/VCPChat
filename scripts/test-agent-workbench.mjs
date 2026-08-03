@@ -383,17 +383,20 @@ window.chatAPI = {
         return () => { unsubscribeCalls += 1; };
     },
 };
+window.chatAPI.agentRuntimeUpdateSessionConfig = async ({ sessionId, expectedConfigRevision, patch }) => (
+    window.chatAPI.agentRuntimeUpdateWorkbenchSettings({ sessionId, expectedConfigRevision, ...(patch || {}) })
+);
 
 let runtimeEventNumber = 0;
 function emitDaemonEvent(event) {
-    runtimeEventNumber += 1;
+    runtimeEventNumber = Math.max(runtimeEventNumber + 1, Number(event?.sequence) || 0);
     eventCallback({
         eventId: `runtime-event-${runtimeEventNumber}`,
         topicId: 'topic-in-use',
-        sequence: runtimeEventNumber,
         timestamp: 1_700_000_000_000 + runtimeEventNumber,
         runtime: 'codex',
         ...event,
+        sequence: runtimeEventNumber,
     });
 }
 
@@ -1693,12 +1696,12 @@ await new Promise((resolve) => setTimeout(resolve, 0));
 const materializedWorkspace = [...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field')]
     .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent.includes('工作目录'))
     ?.querySelector('input');
-assert.equal(materializedWorkspace?.disabled, true,
-    'a materialized Thread must lock workspace identity in the settings UI');
+assert.equal(materializedWorkspace?.disabled, false,
+    'Codex 0.146 must allow a materialized Thread workspace to change from the next Turn');
 assert.match(host.querySelector('.agent-chat-settings-summary')?.textContent || '', /Profile.*revision/s,
     'a selected Session must show its frozen Profile identity and revision');
-assert.ok(host.querySelector('.agent-chat-settings-pane textarea[readonly]'),
-    'a materialized Thread must expose Base Instructions as a read-only frozen snapshot');
+assert.ok(host.querySelector('.agent-chat-settings-pane textarea:not([readonly])'),
+    'an idle materialized Thread must allow Base Instructions to be saved for safe reload');
 
 dispose();
 assert.equal(unsubscribeCalls, 1, 'Workbench unmount must release runtime event subscription');

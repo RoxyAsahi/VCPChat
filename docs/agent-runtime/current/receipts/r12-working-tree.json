@@ -1,0 +1,22 @@
+{
+  "status": "implemented",
+  "phase": "R12",
+  "date": "2026-08-03",
+  "branch": "codex/vcpchat-codex-app-server",
+  "codexProtocol": "0.146",
+  "toolboxModified": false,
+  "dirtyWorktree": true,
+  "commands": [
+    "npm run test:agent-settings-interaction",
+    "npm run test:agent-config-apply",
+    "npm run test:agent-data-contracts",
+    "npm run test:codex-projection-store",
+    "npm run test:codex-runtime-manager",
+    "npm run test:agent-workbench"
+  ],
+  "remaining": [
+    "full aggregate gates",
+    "real Electron settings interaction and screenshot",
+    "real ToolBox next-turn payload verification"
+  ]
+}

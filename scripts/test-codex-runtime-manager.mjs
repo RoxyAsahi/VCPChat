@@ -159,6 +159,7 @@ assert.throws(() => manager.saveAgentProfile({
 assert.throws(() => manager.saveAgentProfile({ name: 'Research Agent', systemPrompt: '{{Other}}' }), /already exists/);
 const savedBuildAvatar = manager.saveAgentAvatar({
     agentId: 'Nova',
+    expectedProfileRevision: buildProfiles.find((profile) => profile.id === 'Nova').revision,
     avatarData: { name: 'nova.png', type: 'image/png', buffer: new Uint8Array([1, 2, 3]) },
 });
 assert.match(savedBuildAvatar.avatarUrl, /CodexAgents\/Nova\/avatar-r\d+\.png/i,
@@ -169,6 +170,7 @@ assert.equal(firstAvatarSnapshot, savedBuildAvatar.avatarUrl,
     'Session creation must freeze the current Profile avatar URL');
 const secondBuildAvatar = manager.saveAgentAvatar({
     agentId: 'Nova',
+    expectedProfileRevision: savedBuildAvatar.revision,
     avatarData: { name: 'nova.webp', type: 'image/webp', buffer: new Uint8Array([4, 5, 6]) },
 });
 assert.notEqual(secondBuildAvatar.avatarUrl, savedBuildAvatar.avatarUrl);
@@ -205,12 +207,15 @@ manager.repository.saveSession({
     threadId: 'thr_materialized_identity',
     updatedAt: Date.now(),
 });
-await assert.rejects(() => manager.updateWorkbenchSettings({
+const materializedPromptUpdate = await manager.updateWorkbenchSettings({
     sessionId: workspaceTopic.sessionId,
     systemPrompt: '{{MustFork}}',
     expectedConfigRevision: promptUpdate.session.configRevision,
-}), (error) => error.code === 'IDENTITY_CHANGE_REQUIRES_NEW_SESSION',
-'a materialized Thread must reject in-place Base Instructions changes');
+});
+assert.equal(materializedPromptUpdate.desiredConfig.baseInstructions, '{{MustFork}}',
+    'Codex 0.146 materialized Threads must save VChat Base Instructions for an idle reload');
+assert.ok(['pending', 'applying', 'applied'].includes(materializedPromptUpdate.applyState),
+    'a materialized Base Instructions change must expose its Runtime apply state');
 
 // The Codex provider must target VChat's loopback compatibility adapter, not
 // ToolBox's optional /v1/responses implementation.  The upstream ToolBox key
@@ -415,8 +420,8 @@ const repairedLegacy = manager.repository.getSession('session_legacy_identity').
 assert.equal(repairedLegacy.baseInstructions, '{{Nova}}');
 assert.equal(repairedLegacy.developerInstructions, '');
 assert.equal(repairedLegacy.identityMigrationVersion, 1);
-assert.equal(repairedLegacy.executionProfile, 'codex-native-legacy',
-    'an existing Thread must not be mislabeled as ToolBox-only because its original environment cannot be revoked on resume');
+assert.equal(repairedLegacy.executionProfile, 'toolbox-only',
+    'R12 must normalize every active Session snapshot to the only supported execution profile');
 
 manager.repository.saveSession({
     sessionId: 'session_custom_developer',
@@ -464,12 +469,14 @@ await assert.rejects(() => manager.updateWorkbenchSettings({
 const materializedAvatarSnapshot = manager.repository.getSession(session.sessionId).configSnapshot.agentAvatar;
 const latestProfileAvatar = manager.saveAgentAvatar({
     agentId: 'Nova',
+    expectedProfileRevision: secondBuildAvatar.revision,
     avatarData: { name: 'nova-latest.png', type: 'image/png', buffer: new Uint8Array([7, 8, 9]) },
 });
 assert.equal(manager.repository.getSession(session.sessionId).configSnapshot.agentAvatar, materializedAvatarSnapshot,
     'a materialized Session must not adopt a later Profile avatar implicitly');
 const revisedNova = manager.saveAgentProfile({
-    agentId: 'Nova', name: 'Nova', systemPrompt: '{{NovaV2}}', model: 'profile-model-v2', permissionMode: 'ask',
+    agentId: 'Nova', expectedProfileRevision: latestProfileAvatar.revision,
+    name: 'Nova', systemPrompt: '{{NovaV2}}', model: 'profile-model-v2', permissionMode: 'ask',
 });
 assert.ok(revisedNova.profile.revision > Number(session.configSnapshot.profileRevision || 1));
 assert.equal(revisedNova.profile.avatarUrl, latestProfileAvatar.avatarUrl,
@@ -789,19 +796,13 @@ fake.emit('server-request', {
     method: 'item/commandExecution/requestApproval',
     params: { threadId: 'thr_test', turnId: 'turn_test', itemId: 'cmd_a', command: 'Get-Location' },
 });
-assert.equal(uiEvents.at(-1).type, 'approval.requested');
-assert.equal(uiEvents.at(-1).payload.approval.scope, 'codex-native');
-await manager.respondApproval({ approvalId: 'req_approval', decision: 'allow', generation: manager.runtimeGeneration });
-assert.deepEqual(fake.responses.at(-1), { id: 'req_approval', result: { decision: 'accept' } });
-await assert.rejects(
-    () => manager.respondApproval({ approvalId: 'req_approval', decision: 'allow', generation: manager.runtimeGeneration }),
-    (error) => error.code === 'NOT_FOUND' || error.code === 'INTERACTION_ALREADY_RESOLVED',
-    'a resolved Codex approval must never be replayed',
-);
+assert.equal(uiEvents.at(-1).type, 'interaction.rejected',
+    'R12 schema normalization must not let persisted legacy fields reopen Codex-native tools');
+assert.deepEqual(fake.responses.at(-1), { id: 'req_approval', result: { decision: 'decline' } });
 fake.emit('server-request', { id: 'req_tool', method: 'item/tool/call', params: { callId: 'call_a' } });
 await new Promise((resolve) => setImmediate(resolve));
 assert.equal(fake.responses.at(-1).error.code, -32001);
-assert.equal(uiEvents.filter((event) => event.type === 'approval.requested').length, 1,
+assert.equal(uiEvents.filter((event) => event.type === 'approval.requested').length, 0,
     'dynamic tools must not be misrepresented as native Codex approvals');
 const toolboxDecisions = [];
 const toolboxInvocations = [];
@@ -963,8 +964,9 @@ assert.equal(manager.dynamicCalls.size, 0, 'crash must clear dynamic-call routin
 assert.equal(manager.toolboxApprovals.size, 0, 'crash must fail-close ToolBox backend approvals');
 assert.deepEqual(toolboxInterrupts, ['codex:thr_test:turn_test:call_crash']);
 assert.ok(toolboxDecisions.some((decision) => decision.requestId === 'toolbox-crash-approval' && decision.approved === false));
-assert.ok(uiEvents.some((event) => event.type === 'approval.resolved'
-    && event.approvalId === 'req_crash_native' && event.payload.reason === 'Codex App Server crashed'));
+assert.ok(uiEvents.some((event) => event.type === 'interaction.rejected'
+    && event.payload.requestId === 'req_crash_native'),
+'toolbox-only native requests must be rejected immediately instead of surviving until a crash');
 rejectCrashInvoke(new Error('bridge interrupted after crash'));
 await manager.stop();
 fs.rmSync(root, { recursive: true, force: true });

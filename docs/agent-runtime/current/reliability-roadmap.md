@@ -1,6 +1,6 @@
 # Codex Agent Reliability Roadmap
 
-Status: **live** for tested revision `46e2ce41`; **not product complete**
+Status: **R7-R10 live receipt retained; R12 implemented/working-tree; not product complete**
 
 This document is the source of truth for R7-R10. Codex App Server remains a pinned `0.146.x` black box and the only enabled execution profile is `toolbox-only`. VCPToolBox is not modified.
 
@@ -9,8 +9,8 @@ This document is the source of truth for R7-R10. Codex App Server remains a pinn
 - `AgentProfile` is a template with a monotonically increasing revision.
 - `SessionConfigSnapshot` freezes profile identity at Session creation.
 - Profile avatar assets are immutable revisioned files. Updating an avatar advances the Profile revision; existing Sessions keep the avatar URL frozen in their snapshot.
-- Materialized Threads allow model and permission changes for the next Turn. Prompt and workspace changes create a new Session.
-- Before Thread materialization, prompt and workspace remain editable under Session config CAS. Agent identity is fixed once the Session exists.
+- Materialized Threads allow model, permission, reasoning, personality and workspace changes for the next Turn through Codex 0.146 settings update.
+- VChat prompt changes reload an idle Thread with the same threadId; active Turns defer the reload. VChat-to-Codex-managed transition creates a derived Session after confirmation.
 - Session setting writes use `expectedConfigRevision` compare-and-swap.
 - Projection-only IPC never starts App Server and never waits for ToolBox configuration.
 - ToolBox settings are applied by a latest-wins generation drain.

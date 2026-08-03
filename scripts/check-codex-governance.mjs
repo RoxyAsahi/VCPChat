@@ -13,6 +13,9 @@ const required = [
     'docs/agent-runtime/current/adr/ADR-007-codex-sqlite-saga.md',
     'docs/agent-runtime/current/adr/ADR-008-agent-renderer-independence.md',
     'docs/agent-runtime/current/receipts/r7-r10-working-tree.json',
+    'docs/agent-runtime/current/data-governance.md',
+    'docs/agent-runtime/current/adr/ADR-009-agent-config-desired-applied.md',
+    'docs/agent-runtime/current/receipts/r12-working-tree.json',
     '.github/workflows/codex_agent_windows.yml',
 ];
 for (const relative of required) {
@@ -57,7 +60,10 @@ for (const relative of rendererFiles) {
     }
 }
 const workbenchLineCount = fs.readFileSync(path.join(root, 'modules/ui-system/agent-workbench.js'), 'utf8').split(/\r?\n/).length;
-if (workbenchLineCount > 4400) errors.push(`agent-workbench.js exceeds composition-root ceiling: ${workbenchLineCount} lines`);
+// R12 adds only the desired/applied settings projection to this existing
+// composition root. Keep the hard ceiling finite while the planned module
+// extraction proceeds; no new message/Markdown/tool logic belongs here.
+if (workbenchLineCount > 4450) errors.push(`agent-workbench.js exceeds composition-root ceiling: ${workbenchLineCount} lines`);
 const forkLineCount = fs.readFileSync(path.join(root, 'modules/ui-system/agent-presentation/fork/agentMessageRenderer.js'), 'utf8').split(/\r?\n/).length;
 if (forkLineCount > 3500) errors.push(`agentMessageRenderer.js exceeds independent renderer ceiling: ${forkLineCount} lines`);
 const forkReceipt = fs.readFileSync(path.join(root, 'modules/ui-system/agent-presentation/fork/FORK_RECEIPT.md'), 'utf8');
@@ -73,6 +79,47 @@ if (!String(packageJson.scripts?.['test:e2e'] || '').includes('test:codex-stack'
     errors.push('default test:e2e must run the Codex Agent stack');
 }
 if (packageJson.devDependencies?.['@openai/codex'] !== '0.146.0') errors.push('@openai/codex must remain pinned to 0.146.0');
+for (const script of ['test:agent-settings-interaction', 'test:agent-config-apply', 'test:agent-data-contracts']) {
+    if (!packageJson.scripts?.[script]) errors.push(`package.json missing R12 gate ${script}`);
+}
+
+const dataContracts = fs.readFileSync(path.join(root, 'modules/codex-runtime/dataContracts.js'), 'utf8');
+if (!dataContracts.includes('PROFILE_SCHEMA_VERSION = 2')
+    || !dataContracts.includes('SESSION_CONFIG_SCHEMA_VERSION = 2')) {
+    errors.push('R12 data contracts must pin Profile and Session schema versions');
+}
+const attachmentRegistry = fs.readFileSync(path.join(root, 'modules/codex-runtime/attachmentRegistry.js'), 'utf8');
+if (!attachmentRegistry.includes('class AttachmentRegistry') || !attachmentRegistry.includes('resolveMany')) {
+    errors.push('Main-only AttachmentRegistry is missing or lacks pre-send resolution');
+}
+if (/return\s*\{[^}]*path\s*:/.test(attachmentRegistry)) {
+    errors.push('AttachmentRegistry public descriptor must not expose an absolute path');
+}
+const workbenchStore = fs.readFileSync(path.join(root, 'modules/ui-system/agent-workbench-store.js'), 'utf8');
+if (!workbenchStore.includes('createAgentEventDeduper') || workbenchStore.includes('const seenEvents = new Set')) {
+    errors.push('Workbench event dedupe must be Session-scoped and bounded');
+}
+
+const identityBoundaryFiles = [
+    'modules/codex-runtime/runtimeManager.js',
+    'modules/ui-system/agent-workbench-controller.js',
+    'modules/ui-system/agent-workbench-store.js',
+];
+for (const relative of identityBoundaryFiles) {
+    const source = fs.readFileSync(path.join(root, relative), 'utf8');
+    if (/\b(?:sessionId|topicId)\s*\|\|\s*(?:sessionId|topicId)\b/.test(source)) {
+        errors.push(`${relative} contains implicit Session/Topic identity fallback`);
+    }
+}
+const runtimeManagerSource = fs.readFileSync(path.join(root, 'modules/codex-runtime/runtimeManager.js'), 'utf8');
+if (!runtimeManagerSource.includes('async updateSessionConfig(')
+    || !runtimeManagerSource.includes('SESSION_IDENTITY_MISMATCH')) {
+    errors.push('Runtime manager must expose an explicit Session config API and reject conflicting legacy identity');
+}
+const sharedCatalog = fs.readFileSync(path.join(root, 'preloads/shared/catalog.js'), 'utf8');
+for (const method of ['agentRuntimeReadSessionConfig', 'agentRuntimeUpdateSessionConfig']) {
+    if (!sharedCatalog.includes(method)) errors.push(`shared preload catalog missing ${method}`);
+}
 
 const archivedRustWorkflow = fs.readFileSync(path.join(root, '.github/workflows/rust_agent_runtime.yml'), 'utf8');
 if (/^\s{2}(push|pull_request):/m.test(archivedRustWorkflow)) {

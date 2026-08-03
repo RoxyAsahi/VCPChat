@@ -1,6 +1,6 @@
 # Agent Settings 与 Composer 合同
 
-状态：**checkpoint hermetic pass / live pending**（2026-08-03）。Runtime 合同 revision 为 `3efcc65c`，Workbench revision 为 `fd6c0ef4`。本页是 R11 的设置与输入真源；高级发送不在本阶段。
+状态：**R12 implemented / working-tree**（2026-08-03）。本页与 [data-governance.md](data-governance.md) 共同构成设置真源；高级发送不在本阶段，旧 R11 收据不覆盖 R12。
 
 ## 三个作用域
 
@@ -12,13 +12,13 @@
 
 ### 当前会话
 
-`SessionConfigSnapshot` 保存创建时的 Profile ID/revision 和完整配置。模型、经过模型 metadata 验证的 reasoning effort、以及本地审批可以通过 `expectedConfigRevision` CAS 更新，并从下一 Turn 生效。指令来源、当前生效的指令字段和 workspace 是 Thread 身份；Thread materialize 后只读，应用新 Profile 时若这些字段变化则显式创建派生 Session。
+`SessionConfigV2` 保存创建时的 Profile ID/revision、desired/applied 配置和独立 revision。模型、workspace、reasoning、personality 与本地审批通过 `expectedConfigRevision` CAS 保存并从下一 Turn 生效。VChat 指令可在空闲 Thread 安全 reload；active Turn 时保持 pending。只有 VChat 身份切换到 Codex 管理模式需要确认后创建派生 Session。
 
 ### 高级
 
 只放安全预算、Runtime/schema/build 信息、Saga/孤立 Thread 恢复、导出与诊断。高级区不改变 Agent 身份，也不把恢复表单常驻在普通设置中。
 
-每个作用域独立显示 `dirty/saving/saved/error`。Select 立即保存；文本输入 500 ms 去抖；workspace 由 Main 在 change/失焦后重新解析和验证。CAS 冲突保留 DOM 中的本地输入并报告冲突，不静默覆盖。
+每个 Profile/Session 的每个字段独立显示 `dirty/saving/saved/pending-runtime/applying/conflict/error`。Select 先更新 Draft 再保存；文本输入 500 ms 去抖；workspace 由 Main 重新解析和验证。CAS 冲突保留本地输入，不允许旧 Snapshot 重绘覆盖。
 
 ## 指令来源
 

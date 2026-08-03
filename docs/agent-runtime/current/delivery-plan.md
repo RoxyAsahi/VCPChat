@@ -222,6 +222,15 @@
 11. 所有端口附来源 revision、许可证、行为差异和测试收据；所有 hermetic/live 收据与 worktree 状态一致后再形成 checkpoint。在此之前始终保持 experimental。
 ## R7-R10 Reliability and Governance
 
+## R12 Settings and Data Governance
+
+- [~] ProfileV2/SessionConfigV2、schema 8 migration、Profile/Session CAS 和 desired/applied revision 已实现。
+- [~] 字段级 Draft/queue、Codex 0.146 settings apply、发送 barrier、空闲指令 reload、附件 capability 与有界 event dedupe 已实现并有专项测试。
+- [~] 内部 Runtime/Workbench 已移除隐式 `sessionId || topicId` 路由，并对冲突 identity fail-closed；旧 `topicId` 仅保留在 IPC/展示兼容边界。Runtime/Workbench 大文件继续拆分。
+- [ ] 真实 Electron YOLO/cwd/指令切换、重启持久化和下一 Turn payload 验收后才可升级状态。
+
+R12 当前状态只能是 `implemented/working-tree`，不得复用 R7-R10 live revision 宣称完成。
+
 - [x] R7: Agent Profile/Session snapshot、CAS、projection-only IPC、ToolBox latest-wins 与 Session-keyed Renderer state。
 - [x] R8: Runtime generation、InteractionRegistry 有界清理、按需重启、持久输入状态机与 pre-RPC/ACK crash fault injection。
 - [x] R9: 权威 reconcile、mutation generation barrier、Saga 日志、known-Thread lifecycle recovery、SQLite integrity/backup/read-only degraded。

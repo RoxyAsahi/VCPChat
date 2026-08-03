@@ -24,13 +24,13 @@
 | `codex_thread_id` | Codex 返回的 Thread id，可在尚未启动 Thread 时为空。 |
 | `agent_id` | VChat 助手身份。 |
 | `title` | VChat Session 标题。 |
-| `workspace_root` | 冻结工作目录。 |
+| `workspace_root` | 当前 desired workspace。可在 Session 设置中 CAS 更新；从下一 Turn 起由 Codex 0.146 应用，旧 workspace 引用按 revision 失效。 |
 | `state` | created/idle/running/orphaned/archived 等展示状态。 |
 | `config_snapshot_json` | model/provider/persona/instructions/permission/sandbox/头像等冻结配置。 |
 | `orphaned` | Codex Thread 丢失标记。 |
 | timestamps | created/updated/archived。 |
 
-全局助手设置修改后，不静默改变旧 Session 快照。显式“用新设置创建分支”应通过 `thread/fork` 创建新 Session。
+全局助手设置修改后，不静默改变旧 Session 快照。模型、reasoning、权限和 workspace 的当前 Session patch 写入 desired config，并在 Runtime 确认后写入 applied config；身份指令模式变化仍按协议限制要求显式派生 Session。
 
 ### `agent_messages`
 

@@ -38,14 +38,14 @@ migrationDb.exec(`
     );
 `);
 const migratedRepository = new AgentProjectionRepository({ db: migrationDb });
-assert.equal(migratedRepository.schemaVersion, 7, 'schema 5 databases must migrate to schema 7');
+assert.equal(migratedRepository.schemaVersion, 8, 'schema 5 databases must migrate to schema 8');
 assert.ok(migrationDb.prepare("PRAGMA table_info('projection_state')").all()
     .some((column) => column.name === 'activity_json' && String(column.dflt_value).includes('{}')),
     'schema 5 migration must add the durable Activity projection column');
 migratedRepository.close();
 
 const repository = new AgentProjectionRepository({ databasePath: path.join(root, 'projection.sqlite') });
-assert.equal(repository.schemaVersion, 7);
+assert.equal(repository.schemaVersion, 8);
 repository.saveSession({
     sessionId: 'session_1',
     threadId: 'thr_1',
@@ -280,7 +280,7 @@ const downgraded = new Database(backupDatabasePath);
 downgraded.prepare('UPDATE projection_schema SET version = 6').run();
 downgraded.close();
 const migratedFromDisk = new AgentProjectionRepository({ databasePath: backupDatabasePath });
-assert.equal(migratedFromDisk.schemaVersion, 7);
+assert.equal(migratedFromDisk.schemaVersion, 8);
 migratedFromDisk.close();
 assert.equal(fs.existsSync(`${backupDatabasePath}.schema-6.bak`), true,
     'an on-disk schema migration must create a versioned backup before mutation');

@@ -61,6 +61,7 @@ ToolBox backend approval 和富消息 Electron live gate 仍待，因此产品�
 - [toolbox-bridge.md](toolbox-bridge.md)：Nova、`vcp_invoke`、interrupt、VCPLog/VCPInfo。
 - [agent-workbench.md](agent-workbench.md)：Session 切换、Message/Block、动作与主聊天复用边界。
 - [agent-settings-and-composer.md](agent-settings-and-composer.md)：R11 的 Profile/Session/Advanced 设置、指令来源、reasoning capability 与 Session Composer 状态机。
+- [data-governance.md](data-governance.md)：R12 的 Profile/Session schema、desired/applied 配置、附件 capability 与事件去重边界。
 - [gui-capability-roadmap.md](gui-capability-roadmap.md)：Codex GUI-R0–R6 的导航、Composer、时间线、审批、Inspector 与真实验收路线。
 - [workspace-browser-plan.md](workspace-browser-plan.md)：P0 只读 Workspace 文件树/预览与工具、Diff、附件统一路径动作的 WB-R0–R5 计划。
 - [workbench-experience-roadmap.md](workbench-experience-roadmap.md)：Session 目录、Runtime/Thread 预热、主聊天同构 loading/streaming 与工具卡收口路线图。
@@ -71,6 +72,7 @@ ToolBox backend approval 和富消息 Electron live gate 仍待，因此产品�
 - [reliability-roadmap.md](reliability-roadmap.md)：R7-R10 配置、Runtime、Projection、隐私与治理合同。
 - [ADR-007](adr/ADR-007-codex-sqlite-saga.md)：Codex/SQLite Saga 与 uncertain 边界。
 - [ADR-008](adr/ADR-008-agent-renderer-independence.md)：Agent Renderer 独立演进与模块拆分边界。
+- [ADR-009](adr/ADR-009-agent-config-desired-applied.md)：Session desired/applied 配置分离与发送 barrier。
 
 Workbench 当前已完成 SQLite 快路径、canonical Agent identity、Thread warm、Full Fork Message renderer、首发 thinking/streaming 骨架与基础 Block registry。下一阶段不重复 UX-R0–R4，而按 GUI-R0–R6 补齐协议能力矩阵、Session 状态机、完整 Composer、规范 Block、审批/交互中心、Inspector 和真实视觉性能门槛。当前正式执行 profile 仍只有 `toolbox-only`；App Server 支持但 VChat 未启用的能力不得直接暴露为 GUI 开关。
 

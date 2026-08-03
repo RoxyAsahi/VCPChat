@@ -173,20 +173,20 @@ assert.equal(store.getState().context.compacting, true, 'store must use the Runt
 dispatch({ type: 'context.compaction.completed', sessionId: 's1', turnId: 't1', sequence: 12, payload: { summary: 'checkpoint' } });
 assert.equal(store.getState().context.compacting, false);
 assert.equal(store.getState().context.summary, 'checkpoint');
-dispatch({ type: 'turn.completed', sessionId: 's1', turnId: 't1', sequence: 11, payload: {} });
+dispatch({ type: 'turn.completed', sessionId: 's1', turnId: 't1', sequence: 13, payload: {} });
 assert.equal(store.getState().activeTurnId, null);
-dispatch({ type: 'toolbox.ws', sessionId: 's1', sequence: 12, payload: { channel: 'Info', kind: 'notification', value: { message: 'ToolBox 已连接' } } });
-assert.deepEqual(store.getState().toolboxWs, [{ id: 'Info:notification:12', channel: 'Info', kind: 'notification', value: { message: 'ToolBox 已连接' }, timestamp: 1_700_000_000_014 }]);
-dispatch({ type: 'marker.observed', sessionId: 's1', turnId: 't1', messageId: 'assistant-1', sequence: 12, payload: { kind: 'dynamic-fold', summary: '安全摘要', detail: '只在展开时显示的正文' } });
+dispatch({ type: 'toolbox.ws', sessionId: 's1', sequence: 14, payload: { channel: 'Info', kind: 'notification', value: { message: 'ToolBox 已连接' } } });
+assert.deepEqual(store.getState().toolboxWs, [{ id: 'Info:notification:14', channel: 'Info', kind: 'notification', value: { message: 'ToolBox 已连接' }, timestamp: 1_700_000_000_014 }]);
+dispatch({ type: 'marker.observed', sessionId: 's1', turnId: 't1', messageId: 'assistant-1', sequence: 15, payload: { kind: 'dynamic-fold', summary: '安全摘要', detail: '只在展开时显示的正文' } });
 assert.deepEqual(store.getState().markerObservations, [{
-    id: 'marker:dynamic-fold:12', kind: 'dynamic-fold', summary: '安全摘要', detail: '只在展开时显示的正文',
+    id: 'marker:dynamic-fold:15', kind: 'dynamic-fold', summary: '安全摘要', detail: '只在展开时显示的正文',
     messageId: 'assistant-1', turnId: 't1', timestamp: 1_700_000_000_015,
 }], 'marker observations must remain a separate ephemeral projection, never a message/tool/Topic record');
-dispatch({ type: 'runtime.readiness', sessionId: 'runtime', sequence: 13, payload: {
+dispatch({ type: 'runtime.readiness', sessionId: 'runtime', sequence: 15, payload: {
     server: { state: 'configured', detail: 'shared settings' },
     toolbox: { state: 'checking', detail: 'Main readiness check' },
 } });
-dispatch({ type: 'runtime.readiness', sessionId: 'runtime', sequence: 14, payload: {
+dispatch({ type: 'runtime.readiness', sessionId: 'runtime', sequence: 16, payload: {
     toolbox: { state: 'ready', detail: 'authenticated probe' },
     capability: { state: 'unknown', detail: 'awaiting VCPLog' },
 } });

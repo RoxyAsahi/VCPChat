@@ -8,6 +8,9 @@ Status: **implemented**
 | Projection schema and reconciliation | `modules/codex-runtime/projection/` | Codex rollout internals, local transcript in Renderer |
 | Agent IPC and workspace security | `modules/ipc/agentRuntimeHandlers.js`, `modules/ipc/ipcContracts.js`, `modules/codex-runtime/workspacePolicy.js`, `workspaceService.js` | archived Runtime contracts, undefined channels, arbitrary root/path from Renderer, generic exec/read/write IPC |
 | Workbench state | `modules/ui-system/agent-workbench-store.js` | main-chat global refs, global attachment inference |
+| Settings Draft state | `agent-settings-state.js`, `agent-settings-view.js` | page-global timer/queue, stale Snapshot overwrite |
+| Runtime config apply | `runtimeConfig.js`, Runtime Manager apply coordinator | desired config entering Responses Adapter before confirmation |
+| Attachment capabilities | `attachmentRegistry.js` | absolute paths in Renderer, SQLite, transcript or logs |
 | Agent presentation | `modules/ui-system/agent-presentation/` | main renderer runtime state and persistence |
 | Dock and Workspace view state | `agent-session-dock.js`, `agent-workspace-model.js` | arbitrary absolute paths, cross-Session file refs |
 | VCP tools | existing bridge boundary | modifications to VCPToolBox, a second tool catalog |

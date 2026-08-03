@@ -25,3 +25,7 @@ Status: **live** for R7-R10 controls; **not product complete**
 | AG-R19 | P1 | Renderer or unknown local request injects Codex-managed instructions | process-local loopback capability, Thread/Session lookup, 64 KiB limit and unknown identity rejection | Responses adapter and Runtime manager tests |
 
 No item may be marked `product` while a P0/P1 entry lacks a same-commit hermetic or live receipt.
+
+| AG-R20 | P1 | Old Sidebar or Main Session object overwrites a newer setting/apply confirmation | field-keyed Draft state; CAS; desired/applied revisions; Runtime state updates re-read durable Session | `test:agent-settings-interaction`, `test:agent-config-apply` |
+| AG-R21 | P1 | Renderer attachment leaks an absolute path or is reused across Sessions | Main-only bounded AttachmentRegistry, capability descriptor, TTL and pre-send stat validation | `test:agent-data-contracts` |
+| AG-R22 | P1 | Global unbounded event dedupe drops another Session event or leaks memory | Session bucket + sequence watermark + bounded eventId LRU | `test:agent-data-contracts`, Workbench store |
