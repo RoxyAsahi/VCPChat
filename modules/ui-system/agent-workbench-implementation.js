@@ -33,6 +33,7 @@ import { createAgentWorkbenchShellView } from './agent-workbench-shell-view.js';
 import { createAgentWorkbenchRunStatusView } from './agent-workbench-run-status-view.js';
 import { createAgentWorkbenchComposerView } from './agent-workbench-composer-view.js';
 import { createAgentWorkspaceView } from './agent-workspace-view.js';
+import { createAgentWorkbenchHeaderView } from './agent-workbench-header-view.js';
 
 // Build Agent identities are independent from normal-chat Agents. Keep Nova
 // visible synchronously while the authoritative Build catalog loads.
@@ -435,6 +436,32 @@ function mountWorkbench(container) {
     } = shellView.refs;
     const runStatusView = createAgentWorkbenchRunStatusView({ refs: shellView.refs, lifecycle });
     const composerView = createAgentWorkbenchComposerView({ refs: shellView.refs, document });
+    const headerView = createAgentWorkbenchHeaderView({
+        element: header,
+        document,
+        actions: {
+            reconnect: () => run(recoverRuntime),
+            toggleActivity: () => setActivityOpen(!state.activityOpen),
+            toggleQueue: () => {
+                state.queueOpen = !state.queueOpen;
+                renderHeader();
+            },
+            toggleContext: () => {
+                if (state.activityOpen && normalizeDockKind(state.activityTab) === 'context') setActivityOpen(false);
+                else setActivityOpen(true, 'context');
+            },
+            compact: () => run(async () => {
+                const session = activeSession();
+                if (!session) return;
+                const result = await controller.compactSession(session.sessionId);
+                const before = Number(result?.compaction?.beforeTokens || 0);
+                const after = Number(result?.compaction?.afterTokens || 0);
+                notify(before && after
+                    ? `上下文已完成压缩：${before} -> ${after} tokens。`
+                    : '上下文已完成压缩并刷新会话历史。', 'success');
+            }),
+        },
+    });
 
     const run = async (work) => {
         try { await work(); } catch (error) {
@@ -2093,115 +2120,33 @@ function mountWorkbench(container) {
 
     function renderHeader() {
         syncPermissionModeFromSelectedSession();
-        header.replaceChildren();
         const session = activeSession();
         const current = store.getState();
         const viewState = deriveWorkbenchViewState(current);
-        const isCodexRuntime = current.runtime?.runtime === 'codex-app-server';
-        // Another Session Runtime may continue in the background while the
-        // user reads this SQLite projection. Header identity always comes from
-        // the selected Session, never an unrelated active Runtime.
         const selected = current.selectedTopic;
         const selectedHasRuntime = selected?.topicId && selected.topicId === session?.topicId;
         const headingTitle = selected?.title
             || (selectedHasRuntime ? session?.title : '')
             || `与 ${selected?.agentId || state.selectedAgent || 'Nova'} 聊天中`;
-        const left = node('h3', 'agent-chat-title', headingTitle);
-        // R3 fixed lifecycle state chip — single source of truth for the
-        // Workbench's connection/execution phase, surfaced in the header.
-        const statusChip = node('span', 'agent-chat-status-chip', WORKBENCH_VIEW_STATE_LABELS[viewState] || viewState);
-        statusChip.dataset.state = viewState;
-        statusChip.setAttribute('role', 'status');
-        statusChip.setAttribute('aria-live', 'polite');
-        if (viewState === 'error') {
-            statusChip.setAttribute('role', 'button');
-            statusChip.tabIndex = 0;
-            statusChip.title = '点击重新连接';
-            const reconnect = () => run(recoverRuntime);
-            statusChip.addEventListener('click', reconnect);
-            statusChip.addEventListener('keydown', (event) => {
-                if (event.key !== 'Enter' && event.key !== ' ') return;
-                event.preventDefault();
-                reconnect();
-            });
-        } else {
-            statusChip.title = '当前运行状态';
-        }
-        const actions = node('div', 'chat-actions agent-chat-header-actions');
-        // R3 header action cluster: every button is a uniform ghost-muted icon
-        // button (opencode icon-button-v2 / Cherry NavbarIcon spec) so the
-        // title | status chip | actions row stays aligned regardless of source.
-        const pendingApprovals = (store.getState().approvals || []).length;
-        const alertState = viewState === 'error' || viewState === 'reconnecting';
-        const activityBtn = iconButton('notifications', state.activityOpen ? '关闭活动面板' : '打开活动面板', 'agent-chat-header-activity');
-        activityBtn.classList.toggle('is-active', state.activityOpen);
-        activityBtn.setAttribute('aria-expanded', String(state.activityOpen));
-        activityBtn.setAttribute('aria-controls', 'agentChatActivityPanel');
-        if (pendingApprovals) {
-            activityBtn.append(node('span', 'agent-chat-action-badge', String(pendingApprovals)));
-        } else if (Number(current.activityUnread) > 0) {
-            activityBtn.append(node('span', 'agent-chat-action-badge', String(Math.min(99, Number(current.activityUnread)))));
-        } else if (alertState) {
-            activityBtn.append(node('span', 'agent-chat-action-badge is-warning', '!'));
-        }
-        activityBtn.addEventListener('click', () => setActivityOpen(!state.activityOpen));
-        const queueButton = isCodexRuntime ? null : iconButton('queue_play_next', state.queue.length ? `后续指令（${state.queue.length}）` : '后续指令', 'agent-chat-queue-toggle');
-        if (queueButton) {
-            queueButton.setAttribute('aria-expanded', String(state.queueOpen));
-            queueButton.addEventListener('click', () => {
-                state.queueOpen = !state.queueOpen;
-                renderHeader();
-            });
-        }
-        const usage = store.getState().context;
-        const contextPct = Number.isFinite(Number(usage.percentage)) ? Math.max(0, Math.min(100, Number(usage.percentage))) : 0;
-        const usageButton = button('', 'agent-chat-usage-toggle agent-chat-context-toggle');
-        const contextRing = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        contextRing.classList.add('agent-chat-context-ring');
-        contextRing.setAttribute('viewBox', '0 0 36 36');
-        contextRing.setAttribute('aria-hidden', 'true');
-        const ringTrack = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        ringTrack.classList.add('agent-chat-context-ring-track');
-        ringTrack.setAttribute('cx', '18'); ringTrack.setAttribute('cy', '18'); ringTrack.setAttribute('r', '15.5');
-        const ringValue = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        ringValue.classList.add('agent-chat-context-ring-value');
-        ringValue.setAttribute('cx', '18'); ringValue.setAttribute('cy', '18'); ringValue.setAttribute('r', '15.5');
-        ringValue.setAttribute('pathLength', '100');
-        ringValue.setAttribute('stroke-dasharray', `${contextPct} 100`);
-        const ringText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        ringText.classList.add('agent-chat-context-ring-core');
-        ringText.setAttribute('x', '18'); ringText.setAttribute('y', '21'); ringText.setAttribute('text-anchor', 'middle');
-        ringText.textContent = contextPct ? String(Math.round(contextPct)) : '';
-        contextRing.append(ringTrack, ringValue, ringText);
-        usageButton.append(contextRing);
-        usageButton.title = usage.contextWindow
-            ? `上下文 ${contextPct}% · ${Number(usage.usedTokens || 0).toLocaleString('zh-CN')} / ${Number(usage.contextWindow).toLocaleString('zh-CN')} tokens`
-            : '查看上下文、用量与会话信息';
-        usageButton.setAttribute('aria-label', usageButton.title);
-        const usageExpanded = state.activityOpen && normalizeDockKind(state.activityTab) === 'context';
-        usageButton.classList.toggle('is-active', usageExpanded);
-        usageButton.setAttribute('aria-expanded', String(usageExpanded));
-        usageButton.addEventListener('click', () => {
-            if (state.activityOpen && normalizeDockKind(state.activityTab) === 'context') setActivityOpen(false);
-            else setActivityOpen(true, 'context');
-        });
-        const compact = iconButton('compress', usage.compacting ? '正在安全压缩上下文' : '压缩当前 Agent 上下文', 'agent-chat-compact');
-        if (compact) {
-            compact.disabled = !session || Boolean(usage.compacting);
-            compact.addEventListener('click', () => run(async () => {
-                if (!session) return;
-                const result = await controller.compactSession(session.sessionId);
-                const before = Number(result?.compaction?.beforeTokens || 0);
-                const after = Number(result?.compaction?.afterTokens || 0);
-                notify(before && after ? `上下文已完成压缩：${before} -> ${after} tokens。` : '上下文已完成压缩并刷新会话历史。', 'success');
-            }));
-        }
-        actions.append(activityBtn, ...(queueButton ? [queueButton] : []), usageButton, ...(compact ? [compact] : []));
-        header.append(left, statusChip, actions);
         const queuePanel = renderPendingInputQueue({
             state, controller, refresh: refreshControlPlane, notify, run, button, node,
         });
-        if (queuePanel) header.append(queuePanel);
+        headerView.update({
+            title: headingTitle,
+            state: viewState,
+            stateLabel: WORKBENCH_VIEW_STATE_LABELS[viewState] || viewState,
+            codexRuntime: current.runtime?.runtime === 'codex-app-server',
+            pendingApprovals: (current.approvals || []).length,
+            activityUnread: Number(current.activityUnread) || 0,
+            alert: viewState === 'error' || viewState === 'reconnecting',
+            activityOpen: state.activityOpen,
+            queueLength: state.queue.length,
+            queueOpen: state.queueOpen,
+            usage: current.context,
+            contextExpanded: state.activityOpen && normalizeDockKind(state.activityTab) === 'context',
+            hasSession: Boolean(session),
+            queuePanel,
+        });
     }
 
     function renderFeed() {
@@ -3757,6 +3702,7 @@ function mountWorkbench(container) {
         state.accountThemeObserver?.disconnect();
         fullPresentation.dispose();
         workspaceView.dispose();
+        headerView.dispose();
         composerView.dispose();
         runStatusView.dispose();
         lifecycle.dispose();
