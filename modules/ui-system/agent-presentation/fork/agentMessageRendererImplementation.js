@@ -36,6 +36,7 @@ import { createAnimationFrameBatcher } from '../stream-batcher.js';
 import { createAgentImageController } from './agentImageController.js';
 import { createAgentVisibilityController } from './agentVisibilityController.js';
 import { createAgentAnimationLifecycle } from './agentAnimationLifecycle.js';
+import { createAgentRendererSession } from './agent-renderer-session.js';
 
 const colorExtractionPromises = new Map();
 
@@ -2145,38 +2146,30 @@ let agentRenderContext = {
 let imageController = null;
 let visibilityController = null;
 let animationLifecycle = null;
+const rendererSession = createAgentRendererSession();
 
 const streamState = new Map();
 let streamBatcher = null;
 let containerEventDisposers = [];
 
 function getSessionContext(subject = null) {
-    const context = agentRenderContext.getSessionContext?.(subject) || {};
-    return {
-        sessionId: context.sessionId || null,
-        threadId: context.threadId || null,
-        participant: context.participant || {},
-        messages: Array.isArray(context.messages) ? context.messages : [],
-        settings: context.settings || {},
-    };
+    return rendererSession.context(subject);
 }
 
 function getMessages(subject = null) {
-    return getSessionContext(subject).messages;
+    return rendererSession.messages(subject);
 }
 
 function getParticipant(subject = null) {
-    return getSessionContext(subject).participant;
+    return rendererSession.participant(subject);
 }
 
 function getSettings(subject = null) {
-    return getSessionContext(subject).settings;
+    return rendererSession.settings(subject);
 }
 
 function bindContainerEvent(type, handler, options) {
-    const container = agentRenderContext.chatMessagesDiv;
-    container?.addEventListener(type, handler, options);
-    const dispose = () => container?.removeEventListener(type, handler, options);
+    const dispose = rendererSession.bind(type, handler, options);
     containerEventDisposers.push(dispose);
     return dispose;
 }
@@ -2302,6 +2295,7 @@ function clearChat() {
 function initializeAgentMessageRenderer(refs) {
     disposeContainerEvents();
     Object.assign(agentRenderContext, refs);
+    rendererSession.update(refs);
 
     contentPipeline = createContentPipeline({
         escapeHtml,
@@ -3455,6 +3449,7 @@ function disposeAgentMessageRenderer() {
     visibilityController = null;
     imageController = null;
     animationLifecycle = null;
+    rendererSession.dispose();
     agentRenderContext = {
         getSessionContext: () => ({ sessionId: null, threadId: null, participant: {}, messages: [], settings: {} }),
         actions: {},
