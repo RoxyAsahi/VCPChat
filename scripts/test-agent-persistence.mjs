@@ -16,8 +16,8 @@ try {
     }
     throw error;
 }
-const { AgentRuntimeRepository } = require('../modules/agent-runtime/persistence/repository.js');
-const { SessionRecord } = require('../modules/agent-runtime/sessionRegistry.js');
+const { AgentRuntimeRepository } = require('../archive/agent-runtime/persistence/repository.js');
+const { SessionRecord } = require('../archive/agent-runtime/sessionRegistry.js');
 
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-runtime-store-'));
 const databasePath = path.join(directory, 'agent-runtime.sqlite');

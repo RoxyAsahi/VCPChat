@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { CapabilityPolicy } = require('../modules/agent-runtime/security/capabilityPolicy.js');
+const { CapabilityPolicy } = require('../archive/agent-runtime/security/capabilityPolicy.js');
 
 const now = new Date('2026-07-25T12:00:00.000Z');
 const policy = new CapabilityPolicy({

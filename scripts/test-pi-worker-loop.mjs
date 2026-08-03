@@ -6,7 +6,7 @@ import { createRequire } from 'node:module';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
-const { resolveElectronNodeExecPath } = require('../modules/agent-runtime/workerTransport.js');
+const { resolveElectronNodeExecPath } = require('../archive/agent-runtime/workerTransport.js');
 const sidecar = path.join(root, 'agent-runtime', 'sidecar.cjs');
 const child = fork(sidecar, [], {
     cwd: root,

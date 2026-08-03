@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 import { requireLiveRustEnvironment } from './rust-live-preflight.mjs';
 
 const require = createRequire(import.meta.url);
-const { RustDaemonTransport } = require('../modules/agent-runtime/rustDaemonTransport');
+const { RustDaemonTransport } = require('../archive/agent-runtime/rustDaemonTransport');
 
 const repo = path.resolve(import.meta.dirname, '..');
 const configuredApiKey = process.env.VCP_API_KEY || null;

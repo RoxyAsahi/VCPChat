@@ -5,7 +5,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { LocalToolCatalog } = require('../modules/agent-runtime/catalog/localToolCatalog.js');
+const { LocalToolCatalog } = require('../archive/agent-runtime/catalog/localToolCatalog.js');
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-catalog-'));
 const plugin = path.join(root, 'Plugin', 'Example');

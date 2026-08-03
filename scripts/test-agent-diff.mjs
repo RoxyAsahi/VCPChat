@@ -5,7 +5,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { PatchManager } = require('../modules/agent-runtime/workspace/patchManager.js');
+const { PatchManager } = require('../archive/agent-runtime/workspace/patchManager.js');
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-diff-vcp-'));
 const files = new Map([[path.join(root, 'file.txt'), 'before\n']]);

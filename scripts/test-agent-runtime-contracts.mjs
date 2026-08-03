@@ -7,11 +7,11 @@ const {
     RUNTIME_KINDS,
     assertEventEnvelope,
     hashArguments,
-} = require('../modules/agent-runtime/contracts.js');
-const { SessionEventSequencer } = require('../modules/agent-runtime/eventFactory.js');
-const { isLegalTransition, TURN_STATES } = require('../modules/agent-runtime/runtimeState.js');
-const { redactValue } = require('../modules/agent-runtime/secretRedactor.js');
-const { BoundedEventBuffer } = require('../modules/agent-runtime/eventBuffer.js');
+} = require('../archive/agent-runtime/contracts.js');
+const { SessionEventSequencer } = require('../archive/agent-runtime/eventFactory.js');
+const { isLegalTransition, TURN_STATES } = require('../archive/agent-runtime/runtimeState.js');
+const { redactValue } = require('../archive/agent-runtime/secretRedactor.js');
+const { BoundedEventBuffer } = require('../archive/agent-runtime/eventBuffer.js');
 
 const sequencer = new SessionEventSequencer('sess_test', RUNTIME_KINDS.PI);
 const one = sequencer.next(EVENT_TYPES.TURN_STARTED, { prompt: 'hello' }, { turnId: 'turn_1' });

@@ -3,7 +3,7 @@ import http from 'node:http';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { LegacyVcpToolboxClient } = require('../modules/agent-runtime/toolbox/legacyVcpToolboxClient.js');
+const { LegacyVcpToolboxClient } = require('../archive/agent-runtime/toolbox/legacyVcpToolboxClient.js');
 
 const requests = [];
 const server = http.createServer(async (req, res) => {

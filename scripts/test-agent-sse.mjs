@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { parseOpenAiSse, splitModelDelta } = require('../modules/agent-runtime/runtimeManager.js');
+const { parseOpenAiSse, splitModelDelta } = require('../archive/agent-runtime/runtimeManager.js');
 
 const encoder = new TextEncoder();
 const payload = [

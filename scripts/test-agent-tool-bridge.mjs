@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { encodeToolRequestBlock } = require('../modules/agent-runtime/toolbox/legacyToolProtocol.js');
-const { classifyLegacyTool, classifyPatchTool } = require('../modules/agent-runtime/toolbox/toolRiskClassifier.js');
-const { ApprovalBroker } = require('../modules/agent-runtime/approvalBroker.js');
-const { resolveInsideRoot } = require('../modules/agent-runtime/workspacePolicy.js');
-const { LEGACY_TOOL_NAMES } = require('../modules/agent-runtime/contracts.js');
+const { encodeToolRequestBlock } = require('../archive/agent-runtime/toolbox/legacyToolProtocol.js');
+const { classifyLegacyTool, classifyPatchTool } = require('../archive/agent-runtime/toolbox/toolRiskClassifier.js');
+const { ApprovalBroker } = require('../archive/agent-runtime/approvalBroker.js');
+const { resolveInsideRoot } = require('../archive/agent-runtime/workspacePolicy.js');
+const { LEGACY_TOOL_NAMES } = require('../archive/agent-runtime/contracts.js');
 
 const block = encodeToolRequestBlock('FileOperator', { command: 'ListFiles', path: '.' });
 assert.match(block, /^<<<\[TOOL_REQUEST\]>>>/);

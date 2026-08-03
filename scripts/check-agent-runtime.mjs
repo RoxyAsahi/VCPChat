@@ -42,7 +42,9 @@ for (const relative of requiredFiles) {
 const handlers = fs.readFileSync(path.join(root, 'modules/ipc/agentRuntimeHandlers.js'), 'utf8');
 if (!handlers.includes('CodexRuntimeManager')) errors.push('IPC handlers must use CodexRuntimeManager');
 if (handlers.includes('RustAgentRuntimeManager')) errors.push('IPC handlers must not use RustAgentRuntimeManager');
-if (handlers.includes("../agent-runtime/")) errors.push('Codex IPC handlers must not import archived Agent Runtime modules');
+if (handlers.includes("../agent-runtime/") || handlers.includes("../../archive/agent-runtime/")) {
+    errors.push('Codex IPC handlers must not import archived Agent Runtime modules');
+}
 if (handlers.includes('locallyAttached') || handlers.includes('attachedTopicId')) {
     errors.push('Codex Session listing must not infer a global attachment');
 }
@@ -80,7 +82,8 @@ if (packageJson.build?.extraResources?.some((item) => String(item.from).includes
     errors.push('Codex product packaging must not ship the old vcp-agentd daemon');
 }
 if (packageJson.build?.files?.includes('agent-runtime/**/*')
-    || !packageJson.build?.files?.includes('!modules/agent-runtime/**/*')) {
+    || packageJson.build?.files?.includes('modules/agent-runtime/**/*')
+    || !packageJson.build?.files?.includes('!archive/agent-runtime/**/*')) {
     errors.push('Codex product packaging must exclude archived Pi/Rust runtime sources');
 }
 if (!packageJson.build?.extraResources?.some((item) => String(item.from).includes('vcp-toolbox-bridge'))) {

@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 import { requireLiveRustEnvironment } from './rust-live-preflight.mjs';
 
 const require = createRequire(import.meta.url);
-const { RustDaemonTransport } = require('../modules/agent-runtime/rustDaemonTransport');
+const { RustDaemonTransport } = require('../archive/agent-runtime/rustDaemonTransport');
 const root = path.resolve(import.meta.dirname, '..');
 const live = await requireLiveRustEnvironment();
 const temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'vcp-agent-live-concurrent-'));

@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
-const { AgentRuntimeManager } = require('../modules/agent-runtime/runtimeManager.js');
+const { AgentRuntimeManager } = require('../archive/agent-runtime/runtimeManager.js');
 const toolboxRoot = process.env.VCP_TOOLBOX_ROOT;
 if (!toolboxRoot) throw new Error('VCP_TOOLBOX_ROOT is required');
 const envText = fs.readFileSync(path.join(toolboxRoot, 'config.env'), 'utf8');

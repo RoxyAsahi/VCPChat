@@ -27,7 +27,7 @@ Workspace Browser 是 VChat Host 能力，不是 Codex 工具。它不得开启 
 
 CodexGui 只借鉴“Codex 提供 changed path，Host 对这些路径执行受限 Git diff，GUI 单独展示”的机制；不移植 Avalonia/.NET。Agmente 只借鉴 file change 稳定 ID、去重和增量 reconciliation；不移植 SwiftUI。精确文件、revision 和许可证见 [reuse-register.md](reuse-register.md)。
 
-VChat 已有 [workspacePolicy.js](../../../modules/agent-runtime/workspacePolicy.js) 负责 canonical root、realpath、相对 containment、symlink/ancestor 和 traversal 校验。新服务必须复用它，不得创建第二套路径安全实现。
+VChat 已有 [workspacePolicy.js](../../../modules/codex-runtime/workspacePolicy.js) 负责 canonical root、realpath、相对 containment、symlink/ancestor 和 traversal 校验。新服务必须复用它，不得创建第二套路径安全实现。
 
 ## WB-R0：合同与安全边界
 

@@ -5,8 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { AgentRuntimeManager } = require('../modules/agent-runtime/runtimeManager.js');
-const { resolveElectronNodeExecPath } = require('../modules/agent-runtime/workerTransport.js');
+const { AgentRuntimeManager } = require('../archive/agent-runtime/runtimeManager.js');
+const { resolveElectronNodeExecPath } = require('../archive/agent-runtime/workerTransport.js');
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const events = [];

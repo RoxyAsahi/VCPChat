@@ -10,7 +10,7 @@ if (process.env.VCP_AGENT_LIVE_MUTATE_TOOLBOX_APPROVAL !== '1') {
 }
 
 const require = createRequire(import.meta.url);
-const { RustDaemonTransport } = require('../modules/agent-runtime/rustDaemonTransport');
+const { RustDaemonTransport } = require('../archive/agent-runtime/rustDaemonTransport');
 const repo = path.resolve(import.meta.dirname, '..');
 const live = await requireLiveRustEnvironment();
 const approvalTool = String(process.env.VCP_AGENT_BACKEND_APPROVAL_TOOL || 'PowerShellExecutor');

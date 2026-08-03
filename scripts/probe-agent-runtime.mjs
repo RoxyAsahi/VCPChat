@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '..');
 const require = createRequire(import.meta.url);
-const { resolveElectronNodeExecPath } = require('../modules/agent-runtime/workerTransport.js');
+const { resolveElectronNodeExecPath } = require('../archive/agent-runtime/workerTransport.js');
 const sidecar = path.join(root, 'agent-runtime', 'sidecar.cjs');
 const driver = process.env.AGENT_RUNTIME_DRIVER || 'pi';
 

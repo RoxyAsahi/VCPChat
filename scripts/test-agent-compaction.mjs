@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { AgentRuntimeManager, buildTranscriptSummary, normalizeContextUsage } = require('../modules/agent-runtime/runtimeManager.js');
+const { AgentRuntimeManager, buildTranscriptSummary, normalizeContextUsage } = require('../archive/agent-runtime/runtimeManager.js');
 
 const summary = buildTranscriptSummary([
     { role: 'user', content: 'Investigate the failure.' },

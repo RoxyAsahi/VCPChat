@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 import { rustSourceRevision } from './rust-source-revision.mjs';
 
 const require = createRequire(import.meta.url);
-const { RustDaemonTransport } = require('../modules/agent-runtime/rustDaemonTransport');
+const { RustDaemonTransport } = require('../archive/agent-runtime/rustDaemonTransport');
 
 const repo = path.resolve(import.meta.dirname, '..');
 const pinnedRevision = rustSourceRevision(repo);

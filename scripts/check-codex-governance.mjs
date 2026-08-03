@@ -6,6 +6,21 @@ import { createRequire } from 'node:module';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
 const errors = [];
+const productRoots = ['modules', 'preloads'];
+for (const productRoot of productRoots) {
+    const pending = [path.join(root, productRoot)];
+    while (pending.length) {
+        const current = pending.pop();
+        for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+            const absolute = path.join(current, entry.name);
+            if (entry.isDirectory()) pending.push(absolute);
+            else if (/\.(?:c?js|mjs)$/.test(entry.name)
+                && fs.readFileSync(absolute, 'utf8').includes('archive/agent-runtime')) {
+                errors.push(`${path.relative(root, absolute)} imports archived Agent Runtime code`);
+            }
+        }
+    }
+}
 const required = [
     'docs/agent-runtime/current/reliability-roadmap.md',
     'docs/agent-runtime/current/risk-register.md',

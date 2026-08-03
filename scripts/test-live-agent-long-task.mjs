@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
-const { AgentRuntimeManager } = require('../modules/agent-runtime/runtimeManager.js');
+const { AgentRuntimeManager } = require('../archive/agent-runtime/runtimeManager.js');
 const stored = JSON.parse(fs.readFileSync(path.join(root, 'AppData', 'settings.json'), 'utf8'));
 const settings = {
     vcpServerUrl: process.env.VCP_SERVER_URL || stored.vcpServerUrl,

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { TeamCoordinator } = require('../modules/agent-runtime/orchestration/teamCoordinator.js');
+const { TeamCoordinator } = require('../archive/agent-runtime/orchestration/teamCoordinator.js');
 
 const saved = new Map();
 let running = 0;

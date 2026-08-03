@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { SubagentCoordinator } = require('../modules/agent-runtime/orchestration/subagentCoordinator.js');
+const { SubagentCoordinator } = require('../archive/agent-runtime/orchestration/subagentCoordinator.js');
 
 let childNumber = 0;
 const pending = new Map();

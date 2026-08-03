@@ -5,7 +5,7 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
-import { RustDaemonTransport } from '../modules/agent-runtime/rustDaemonTransport.js';
+import { RustDaemonTransport } from '../archive/agent-runtime/rustDaemonTransport.js';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const root = await fs.mkdtemp(path.join(os.tmpdir(), 'vcp-agent-topic-takeover-'));

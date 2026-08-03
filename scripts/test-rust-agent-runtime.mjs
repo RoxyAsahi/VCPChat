@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { RustAgentRuntimeManager } = require('../modules/agent-runtime/rustRuntimeManager');
-const { MAX_FRAME_BYTES } = require('../modules/agent-runtime/rustDaemonTransport');
+const { RustAgentRuntimeManager } = require('../archive/agent-runtime/rustRuntimeManager');
+const { MAX_FRAME_BYTES } = require('../archive/agent-runtime/rustDaemonTransport');
 
 class FakeTransport {
     constructor(options) {
