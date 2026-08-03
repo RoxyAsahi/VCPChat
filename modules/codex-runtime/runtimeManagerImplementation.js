@@ -12,6 +12,7 @@ const { ToolboxBridgeTransport } = require('./toolboxBridgeTransport');
 const { ToolboxResponsesAdapter } = require('./toolboxResponsesAdapter');
 const { AttachmentRegistry } = require('./attachmentRegistry');
 const { RuntimeInteractionService } = require('./runtime-interaction-service');
+const { RuntimeToolboxService } = require('./runtime-toolbox-service');
 const { normalizeProfile, normalizeSessionConfig, PROFILE_SCHEMA_VERSION } = require('./dataContracts');
 const {
     instructionConfigChanged,
@@ -23,12 +24,9 @@ const {
 } = require('./protocolCapabilities');
 const {
     approvalProjection,
-    bridgeResultContentItems,
     buildTurnInput,
-    classifyToolboxEvent,
     compatibilityRuntime,
     compatibilitySession,
-    decodeVcpInvokeCall,
     explicitAgent,
     hasDurableProjection,
     hasToolboxConfiguration,
@@ -46,7 +44,6 @@ const {
     resolveSessionIdInput,
     safeAvatarFile,
     sanitizeInteractionPayload,
-    sanitizeToolboxValue,
     serializeError,
     sessionConfigResult,
     sameIdentity,
@@ -92,7 +89,6 @@ class CodexRuntimeManager extends EventEmitter {
         // `thread/resume` before VChat sends a new turn to an existing Thread.
         this.resumedThreadIds = new Set();
         this.resumingThreads = new Map();
-        this.dynamicCalls = new Map();
         this.interactionService = new RuntimeInteractionService({
             repository: () => this.repository,
             transport: () => this.transport,
@@ -109,6 +105,16 @@ class CodexRuntimeManager extends EventEmitter {
         this.interactions = this.interactionService.interactions;
         this.interactionTimers = this.interactionService.interactionTimers;
         this.toolboxApprovals = this.interactionService.toolboxApprovals;
+        this.toolboxService = new RuntimeToolboxService({
+            transport: () => this.transport,
+            bridge: () => this.bridge,
+            runtimeGeneration: () => this.runtimeGeneration,
+            toolboxAuthorityGeneration: () => this.toolboxAuthorityGeneration,
+            interactions: this.interactionService,
+            sendUiEvent: (event) => this._sendUiEvent(event),
+            diagnostic: (message) => this.emit('diagnostic', message),
+        });
+        this.dynamicCalls = this.toolboxService.dynamicCalls;
         this.uiEventSequence = 0;
         this.workbenchMounted = false;
         this.intentionalStop = false;
@@ -2538,24 +2544,7 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     async _interruptDynamicCalls(reason) {
-        const calls = [...this.dynamicCalls.values()];
-        this.dynamicCalls.clear();
-        for (const [requestId, request] of [...this.serverRequests.entries()]) {
-            if (request.method === 'item/tool/call') this.serverRequests.delete(requestId);
-        }
-        await Promise.all(calls.map(async (call) => {
-            try {
-                await this.bridge?.interrupt(call.bridgeRequestId);
-            } catch (error) {
-                this.emit('diagnostic', `Could not interrupt ToolBox dynamic call ${call.bridgeRequestId}: ${error.message}`);
-            }
-        }));
-        if (calls.length) {
-            this._sendUiEvent({
-                type: 'runtime.warning',
-                payload: { warning: `${calls.length} VCP dynamic call(s) were interrupted: ${reason}` },
-            });
-        }
+        return this.toolboxService.interruptDynamicCalls(reason);
     }
 
     async _resumeSession(session) {
@@ -2620,67 +2609,7 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     async _handleDynamicToolCall(message) {
-        const params = message.params || {};
-        const transport = this.transport;
-        const runtimeGeneration = this.runtimeGeneration;
-        const respond = (result) => {
-            if (this.transport !== transport || this.runtimeGeneration !== runtimeGeneration) return false;
-            transport?.respond(message.id, result);
-            return true;
-        };
-        const respondError = (code, detail) => {
-            if (this.transport !== transport || this.runtimeGeneration !== runtimeGeneration) return false;
-            transport?.respondError(message.id, code, detail);
-            return true;
-        };
-        if (!this.bridge) {
-            respondError(-32001, 'vcp-toolbox-bridge is not connected');
-            this.serverRequests.delete(String(message.id));
-            return;
-        }
-        let invocation;
-        try {
-            invocation = decodeVcpInvokeCall(params);
-        } catch (error) {
-            // `tool` identifies the registered Codex dynamic tool.  It is not
-            // the ToolBox target.  A malformed envelope must never reach the
-            // bridge as an accidental `vcp_invoke` ToolBox invocation.
-            respond({
-                contentItems: [{ type: 'inputText', text: `Invalid vcp_invoke request: ${error.message}` }],
-                success: false,
-            });
-            return;
-        }
-        const bridgeRequestId = `codex:${params.threadId}:${params.turnId}:${params.callId}`;
-        this.serverRequests.set(String(message.id), message);
-        this.dynamicCalls.set(String(message.id), {
-            threadId: params.threadId,
-            turnId: params.turnId,
-            callId: params.callId,
-            bridgeRequestId,
-            wrapperToolName: invocation.wrapperToolName,
-            targetToolName: invocation.targetToolName,
-        });
-        try {
-            const result = await this.bridge.invoke({
-                requestId: bridgeRequestId,
-                toolName: invocation.targetToolName,
-                arguments: invocation.targetArguments,
-            });
-            const toolboxResult = result.result || result;
-            respond({
-                contentItems: bridgeResultContentItems(toolboxResult),
-                success: toolboxResult.ok !== false && !toolboxResult.error,
-            });
-        } catch (error) {
-            respond({
-                contentItems: [{ type: 'inputText', text: `VCPToolBox bridge failed: ${error.message}` }],
-                success: false,
-            });
-        } finally {
-            this.serverRequests.delete(String(message.id));
-            this.dynamicCalls.delete(String(message.id));
-        }
+        return this.toolboxService.handleDynamicToolCall(message);
     }
 
     _updateThreadState(message, session) {
@@ -2804,42 +2733,7 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     _handleBridgeEvent(message) {
-        const channel = message?.channel;
-        const value = message?.event;
-        if (channel === 'backend-approval') {
-            const requestId = String(value?.requestId || '').trim();
-            const expiresAtMs = Number(value?.expiresAtMs) || 0;
-            if (!requestId || expiresAtMs <= Date.now()) return;
-            const approval = {
-                approvalId: requestId,
-                requestId,
-                scope: 'toolbox',
-                expiresAtMs,
-                replay: value?.replay === true,
-                toolName: value?.data?.toolName || null,
-                reason: value?.data?.reason || null,
-                generation: this.toolboxAuthorityGeneration,
-            };
-            const queued = this.interactions.enqueue({
-                source: 'toolbox', requestId, kind: 'backend-approval', expiresAtMs,
-                generation: this.toolboxAuthorityGeneration,
-            });
-            if (!queued.accepted) return;
-            this.toolboxApprovals.set(requestId, approval);
-            this._sendUiEvent({
-                type: 'approval.requested',
-                payload: { approval },
-            });
-            return;
-        }
-        this._sendUiEvent({
-            type: 'toolbox.ws',
-            payload: {
-                channel: channel || 'toolbox',
-                kind: classifyToolboxEvent(channel, value),
-                value: sanitizeToolboxValue(value),
-            },
-        });
+        return this.toolboxService.handleBridgeEvent(message);
     }
 
     async _failClosedToolboxApprovals(reason) {

@@ -166,6 +166,12 @@ if (runtimeFacadeLineCount > 600) errors.push(`runtimeManager.js exceeds facade 
 const runtimeManagerSource = fs.readFileSync(path.join(root, 'modules/codex-runtime/runtimeManagerImplementation.js'), 'utf8');
 const runtimeNormalizersPath = path.join(root, 'modules/codex-runtime/runtime-normalizers.js');
 const runtimeInteractionServicePath = path.join(root, 'modules/codex-runtime/runtime-interaction-service.js');
+const runtimeToolboxServicePath = path.join(root, 'modules/codex-runtime/runtime-toolbox-service.js');
+if (!fs.existsSync(runtimeToolboxServicePath)) {
+    errors.push('Runtime ToolBox service is missing');
+} else if (fs.readFileSync(runtimeToolboxServicePath, 'utf8').split(/\r?\n/).length > 900) {
+    errors.push('runtime-toolbox-service.js exceeds module ceiling');
+}
 if (!fs.existsSync(runtimeInteractionServicePath)) {
     errors.push('Runtime interaction service is missing');
 } else if (fs.readFileSync(runtimeInteractionServicePath, 'utf8').split(/\r?\n/).length > 900) {
