@@ -20,6 +20,15 @@ else if (fs.readFileSync(agentCssEntryPath, 'utf8').trim() !== expectedAgentCssE
 for (const file of agentCssOwners) {
     const absolute = path.join(root, 'styles/ui-system', file);
     if (!fs.existsSync(absolute)) errors.push(`missing Agent CSS owner: ${file}`);
+    else {
+        const source = fs.readFileSync(absolute, 'utf8');
+        const lineCount = source.split(/\r?\n/).length;
+        if (lineCount > 900) errors.push(`${file} exceeds CSS owner ceiling: ${lineCount} lines`);
+        if (file !== 'agent-legacy-shell-adapter.css'
+            && /(?:^|[,{\s])(?:\.container|\.main-content|\.chat-header|\.chat-input-card)(?:[\s>.:#,]|$)/m.test(source)) {
+            errors.push(`${file} contains legacy shared-shell selectors outside the adapter`);
+        }
+    }
 }
 const productRoots = ['modules', 'preloads'];
 for (const productRoot of productRoots) {
