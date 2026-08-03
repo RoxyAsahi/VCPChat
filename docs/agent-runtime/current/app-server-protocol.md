@@ -166,18 +166,14 @@ Codex 自带模型级 system prompt，例如 `core/gpt_5_codex_prompt.md` 以
 
 要点：
 
-- `developerInstructions` 只是**追加**一条 developer 消息，不覆盖模板，所以它无法压制
-  “我是 Codex”自述。
-- `personality` 只替换模板里的占位符，同样不改变身份宣告。
-- 要替换身份，必须传 `baseInstructions`（VChat 的人设全文）；传了它之后
-  `personality`/`developerInstructions` 都不再需要。
+- `vchat-identity` 模式用 `baseInstructions` 替换身份；不同时发送 personality/developerInstructions。
+- `codex-managed` 模式不传 `baseInstructions`，允许 Codex 0.146 使用内置身份、personality 与附加 developerInstructions。
 - Agent catalog 的 `systemPrompt`（例如 `{{Nova}}`）就是 VChat 身份，且 `{{Nova}}`
   这类占位符由 VCPToolBox 端展开。因此 `_configSnapshot` 把 `systemPrompt` 映射到
   `baseInstructions`，而不是 `developerInstructions`——否则它只会被追加、压在内置模板之下，
   仍回 Codex 自述。显式 `baseInstructions` 优先于 `systemPrompt`；显式
   `developerInstructions` 保留为独立的追加提示。
-- workbench `createSession`/`createTopic` 必须透传选中 Agent 的 `systemPrompt`；否则
-  `{{Nova}}` 根本不进入任何 `thread/start` 参数，Codex 仍用内置 “You are Codex”。
+- workbench `createSession`/`createTopic` 只传 Agent identity；Main 从 Profile 冻结完整配置。旧 `systemPrompt` 是 `baseInstructions` 的兼容别名。
 - `thread/start` 与 `thread/resume` 都透传 `baseInstructions`，`thread/fork` 继承源
   Thread，无需重传。
 - VChat 的 Nova/ToolBox Session 使用 `executionProfile=toolbox-only`。新 Thread 固定请求
@@ -191,6 +187,8 @@ Codex 自带模型级 system prompt，例如 `core/gpt_5_codex_prompt.md` 以
   shell、view_image、update_plan、MCP、multi-agent 等所有其他 definitions。真实 App Server
   adapter 测试必须断言上游请求的 tool name 集合**恰好**为 `[vcp_invoke]`。这不是提示词约束，
   也不需要 fork Codex 或修改 ToolBox。
+- Adapter 按已知 Thread/Session 回查 `instructionMode`。VChat 模式只注入冻结的 `baseInstructions`；Codex 管理模式只接受持有进程内 loopback capability 的 App Server 指令并限制为 64 KiB。Renderer 或未知 Thread 不能提供指令。
+- Session 保存的 `reasoningEffort` 只有在 `/v1/models` metadata 明确广告时才会进入下一次 `turn/start.effort`；Adapter 只映射实际收到的 Responses effort，不按模型名称猜测。
 - `thread/resume` 不能重新选择 execution environment。旧 Thread 若创建时曾带 Codex 原生
   environment，只能标记为 `codex-native-legacy`，不能伪装成 App Server 内部环境已收缩；
   adapter 仍会限制其后续 Nova 请求只看见 `vcp_invoke`。要同时获得 App Server 侧的

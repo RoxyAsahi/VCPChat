@@ -4,6 +4,16 @@
 
 标记：`[x]` 已实现且有当前证据；`[~]` 部分实现或仅 working-tree pass；`[ ]` 未完成。
 
+## R11：Agent 设置体系与 Composer 融合
+
+- [x] `AgentProfile`/`SessionConfigSnapshot` 已加入指令模式、两类指令字段、personality 与 capability-backed reasoning；旧 `systemPrompt` 保持兼容。
+- [x] 左侧设置已拆为 Agent 默认、当前会话和高级；新 Session 继续一键继承 Profile，不恢复重复创建弹窗。
+- [x] Composer draft/attachments/steer-follow-up mode 已按 Session 隔离，停止成为独立动作。
+- [~] `turn/start.effort` 与 Responses `reasoning_effort` 映射已有 hermetic 测试；真实 ToolBox 参数验收待执行。
+- [~] Electron 基础 smoke 已通过；深浅主题、窄栏、双 Agent 并发、Ctrl+R 临时草稿清空以及真实 reasoning 模型仍需交互验收。
+
+详细合同见 [agent-settings-and-composer.md](agent-settings-and-composer.md)。本阶段不包含高级发送、Native Agent、Shell/file、MCP、Plan、Review 或 multi-agent。
+
 ## R0：保存基线与建立文档真源
 
 目标：任何开发者都能确认正确工作树、分支、历史边界和当前产品路径。

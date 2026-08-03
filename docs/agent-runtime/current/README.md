@@ -60,6 +60,7 @@ ToolBox backend approval 和富消息 Electron live gate 仍待，因此产品�
 - [projection-store.md](projection-store.md)：SQLite schema、事务、delta、对账和 orphan 恢复。
 - [toolbox-bridge.md](toolbox-bridge.md)：Nova、`vcp_invoke`、interrupt、VCPLog/VCPInfo。
 - [agent-workbench.md](agent-workbench.md)：Session 切换、Message/Block、动作与主聊天复用边界。
+- [agent-settings-and-composer.md](agent-settings-and-composer.md)：R11 的 Profile/Session/Advanced 设置、指令来源、reasoning capability 与 Session Composer 状态机。
 - [gui-capability-roadmap.md](gui-capability-roadmap.md)：Codex GUI-R0–R6 的导航、Composer、时间线、审批、Inspector 与真实验收路线。
 - [workspace-browser-plan.md](workspace-browser-plan.md)：P0 只读 Workspace 文件树/预览与工具、Diff、附件统一路径动作的 WB-R0–R5 计划。
 - [workbench-experience-roadmap.md](workbench-experience-roadmap.md)：Session 目录、Runtime/Thread 预热、主聊天同构 loading/streaming 与工具卡收口路线图。

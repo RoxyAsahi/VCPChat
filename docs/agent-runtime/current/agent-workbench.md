@@ -142,6 +142,8 @@ R4.2 优先复用 vcp-code `vcp-content.ts` 的 `VCP_DYNAMIC_FOLD`、`VCPINFO` d
 
 ## Composer 与附件
 
+R11 的设置作用域、两类指令来源与 Composer 状态机以 [agent-settings-and-composer.md](agent-settings-and-composer.md) 为准。
+
 - 使用主聊天按钮尺寸、自动高度、IME、快捷键和 disabled 视觉。
 - Session snapshot 可见后会通过 `ensure-session-runtime` 后台有界预热；发送复用同一
   `sessionId -> warmPromise`，不会重复 `thread/start/thread.resume`。VChat proactive warm LRU 首轮上限为 2。
@@ -149,7 +151,8 @@ R4.2 优先复用 vcp-code `vcp-content.ts` 的 `VCP_DYNAMIC_FOLD`、`VCPINFO` d
   和主聊天 `.streaming` 流光；它不进入 SQLite，也不伪造 Codex Item identity。真实 assistant/reasoning
   Item 到达后由 keyed timeline 移除临时 Part。
 - 图片/音频/文件只通过 Main 选择和验证，Renderer 持有 descriptor。
-- 草稿按 Session 保存在 Renderer 生命周期内；切换失败不清空。
+- 草稿、附件和运行中输入模式按 Session 保存在 Renderer 生命周期内；切换失败不清空，归档/永久删除清理对应 entry。
+- active Turn 显式选择“立即调整”或“排队后续”，停止是独立按钮；空输入不再隐式取消，`/steer` 只保留兼容语义。
 - App Server ACK 后显示 sending；Codex user Item/SQLite projection 确认后转 durable。
 - crash 时显示 unconfirmed，不自动重放，重连后以 `thread/read` 对账。
 

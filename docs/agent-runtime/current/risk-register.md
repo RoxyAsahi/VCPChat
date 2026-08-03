@@ -19,5 +19,9 @@ Status: **live** for R7-R10 controls; **not product complete**
 | AG-R12 | P1 | Opening history unnecessarily depends on App Server or ToolBox | projection-only IPC and no eager Workbench startup | Workbench and Electron recovery smoke |
 | AG-R14 | P1 | Main registers an undefined or stale Agent IPC channel and blocks Electron startup behind an error dialog | single central Agent channel registry plus static Handler-reference validation | `check:agent-runtime` and Electron recovery/smoke |
 | AG-R15 | P2 | Hermetic Electron tests share Chromium storage locks or unrelated CDS startup with a live VChat process | per-run `userData`, temporary AppData, CDS disabled in Codex E2E, bounded debugger/IPC waits | `test:electron-codex-recovery` and `test:electron-codex-smoke` |
+| AG-R16 | P1 | Profile edits silently rewrite an existing Thread identity | frozen Session snapshot, CAS, identity-field diff and explicit derived Session | Runtime manager and Workbench settings tests |
+| AG-R17 | P1 | Draft, attachment or steer/follow-up mode crosses Session identity | Renderer-only `composerStateBySession` keyed by durable Session ID; lifecycle cleanup | `test:agent-composer-state` and Workbench DOM test |
+| AG-R18 | P1 | UI advertises unsupported reasoning effort or silently drops a rejected value | only explicit model metadata enables options; Main validates again; ToolBox rejection propagates | Runtime, settings UX and Responses adapter tests; live provider pending |
+| AG-R19 | P1 | Renderer or unknown local request injects Codex-managed instructions | process-local loopback capability, Thread/Session lookup, 64 KiB limit and unknown identity rejection | Responses adapter and Runtime manager tests |
 
 No item may be marked `product` while a P0/P1 entry lacks a same-commit hermetic or live receipt.
