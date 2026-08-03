@@ -39,6 +39,7 @@ import { createAgentWorkspaceCoordinator } from './agent-workspace-coordinator.j
 import { createAgentWorkbenchTimelineView } from './agent-workbench-timeline-view.js';
 import { createAgentSettingsCoordinator } from './agent-settings-coordinator.js';
 import { createAgentTopicContextMenuView } from './agent-topic-context-menu-view.js';
+import { createAgentSessionOperationsCoordinator } from './agent-session-operations-coordinator.js';
 import {
     agentCacheKey,
     createAgentSessionCatalogCoordinator,
@@ -750,95 +751,18 @@ function mountWorkbench(container) {
         return now;
     }
 
-    async function refreshRecoveryOperations({ scanThreads = false } = {}) {
-        state.recoveryLoading = true;
-        state.recoveryError = '';
-        renderSidebar();
-        try {
-            if (scanThreads) {
-                const result = await controller.listRecoveryCandidates();
-                state.recoveryOperations = Array.isArray(result?.operations) ? result.operations : [];
-                state.recoveryThreads = Array.isArray(result?.threads) ? result.threads : [];
-            } else {
-                const operations = await controller.listRecoveryOperations();
-                state.recoveryOperations = Array.isArray(operations) ? operations : [];
-                state.recoveryThreads = [];
-            }
-        } catch (error) {
-            state.recoveryError = error?.message || String(error);
-        } finally {
-            state.recoveryLoading = false;
-            if (!state.disposed) renderSidebar();
-        }
-    }
-
-    async function createSession(overrides = {}) {
-        const runtimeState = store.getState().runtime.state;
-        if (runtimeState === 'stopped' || runtimeState === 'unknown') {
-            await controller.startRuntime();
-        }
-        const title = overrides.title || (overrides.resume ? undefined : nextSessionTitle());
-        const session = await controller.createSession({
-            ...(Object.prototype.hasOwnProperty.call(overrides, 'workspaceRoot') ? { workspaceRoot: overrides.workspaceRoot } : {}),
-            ...(Object.prototype.hasOwnProperty.call(overrides, 'model') ? { model: overrides.model } : {}),
-            ...(Object.prototype.hasOwnProperty.call(overrides, 'systemPrompt') ? { systemPrompt: overrides.systemPrompt } : {}),
-            ...(Object.prototype.hasOwnProperty.call(overrides, 'permissionMode') ? { permissionMode: overrides.permissionMode } : {}),
-            agent: overrides.agent ?? (state.selectedAgent || 'Nova'),
-            resume: overrides.resume,
-            title,
-        });
-        rememberTopic(session);
-        state.tab = 'sessions';
-        await refreshControlPlane();
-        return session;
-    }
-
-    async function createTopic(overrides = {}) {
-        const created = await controller.createTopic({
-            ...(Object.prototype.hasOwnProperty.call(overrides, 'workspaceRoot') ? { workspaceRoot: overrides.workspaceRoot } : {}),
-            ...(Object.prototype.hasOwnProperty.call(overrides, 'model') ? { model: overrides.model } : {}),
-            ...(Object.prototype.hasOwnProperty.call(overrides, 'systemPrompt') ? { systemPrompt: overrides.systemPrompt } : {}),
-            ...(Object.prototype.hasOwnProperty.call(overrides, 'permissionMode') ? { permissionMode: overrides.permissionMode } : {}),
-            agent: overrides.agent ?? (state.selectedAgent || 'Nova'),
-            title: overrides.title || nextSessionTitle(),
-        });
-        rememberTopic(created);
-        state.tab = 'sessions';
-        await refreshControlPlane();
-        return created;
-    }
-
-    async function createNewTopicDirectly() {
-        if (state.topicCreating) return null;
-        const profile = selectedAgentProfile();
-        if (!profile) {
-            state.profileConfigurationNotice = '请先选择一个 Build Agent。';
-            state.tab = 'agents';
-            renderSidebar();
-            return null;
-        }
-        if (profileNeedsConfiguration(profile)) {
-            state.profileConfigurationNotice = `Agent「${profile.name || profile.id}」尚未配置提示词。请先在“设置”中填写提示词，避免用错误身份启动 Codex。`;
-            state.tab = 'settings';
-            renderSidebar();
-            return null;
-        }
-        state.topicCreating = true;
-        state.profileConfigurationNotice = '';
-        queueRender({ shell: true, header: true, composer: true });
-        try {
-            const created = await createTopic({
-                agent: state.selectedAgent,
-                title: nextSessionTitle(),
-            });
-            state.tab = 'sessions';
-            notify(`已新建会话「${created.title || created.topicId}」。`, 'success');
-            return created;
-        } finally {
-            state.topicCreating = false;
-            queueRender({ shell: true, header: true, composer: true });
-        }
-    }
+    const sessionOperations = createAgentSessionOperationsCoordinator({
+        state, store, controller, selectedAgentProfile, profileNeedsConfiguration,
+        refreshControlPlane, queueRender, renderSidebar, notify, rememberTopic,
+        clearRememberedTopic: () => {
+            try { window.localStorage?.removeItem(LAST_TOPIC_STORAGE_KEY); } catch {}
+        },
+        nextSessionTitle, activeSession,
+    });
+    const {
+        refreshRecoveryOperations, createTopic, createNewTopicDirectly, recoverRuntime,
+        rememberTopicTitle, forgetTopic,
+    } = sessionOperations;
 
     function openNewTopicFlow() {
         // New Session inherits the selected Profile and is created immediately;
@@ -862,49 +786,6 @@ function mountWorkbench(container) {
             saving: false,
         };
         queueRender({ topicFlow: true });
-    }
-
-    async function recoverRuntime() {
-        // Recovery is intentionally user-driven. An App Server crash must
-        // never replay an interrupted model/tool Turn; restore only SQLite's
-        // durable preview after the process restarts.
-        if (state.recovering) return;
-        state.recovering = true;
-        queueRender({ header: true, composer: true });
-        try {
-            const previous = activeSession();
-            await controller.stopRuntime();
-            await controller.startRuntime();
-            if (previous?.topicId) {
-                await controller.previewTopic(previous.topicId, previous.agentId, previous);
-                notify('Codex App Server 已重新连接，并显示最近的 SQLite 投影。中断的 Turn 不会重放。', 'success');
-            } else {
-                await refreshControlPlane();
-                notify('Codex App Server 已重新连接。请新建一个 Agent 会话。', 'success');
-            }
-        } finally {
-            state.recovering = false;
-            queueRender({ header: true, composer: true });
-        }
-    }
-
-    function rememberTopicTitle(topic, title) {
-        if (state.rememberedTopic?.topicId === topic.id) {
-            state.rememberedTopic = { ...state.rememberedTopic, title };
-        }
-        rememberTopic({
-            topicId: topic.id,
-            title,
-            agentId: topic.agentId || state.selectedAgent || 'Nova',
-            model: topic.model || state.model,
-            workspaceRoot: topic.workspaceRef || state.workspace,
-        });
-    }
-
-    function forgetTopic(topicId) {
-        if (state.rememberedTopic?.topicId !== topicId) return;
-        state.rememberedTopic = null;
-        try { window.localStorage?.removeItem(LAST_TOPIC_STORAGE_KEY); } catch { /* convenience pointer only */ }
     }
 
     const topicContextMenuView = createAgentTopicContextMenuView({
@@ -1950,6 +1831,7 @@ function mountWorkbench(container) {
     return () => {
         state.disposed = true;
         sessionCatalog.dispose();
+        sessionOperations.dispose();
         settingsCoordinator.dispose();
         workspaceCoordinator.dispose();
         settingsState.dispose();
