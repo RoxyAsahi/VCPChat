@@ -1,6 +1,6 @@
 function createWorkbenchCommandController(context) {
     const {
-        store, requireApi, runtimeApi, refreshStatus, selectedRuntime, selectedSessionId,
+        store, requireApi, refreshStatus, selectedRuntime, selectedSessionId,
         selectedTurnId, ensureSessionRuntime, previewTopic, hydrateTopic, beginSnapshotBarrier,
         releaseSnapshotBarrier,
     } = context;
@@ -217,8 +217,8 @@ function createWorkbenchCommandController(context) {
     async function cancelTool(toolCallId, turnId) {
         const sessionId = selectedRuntime()?.sessionId;
         if (!sessionId || !toolCallId) return null;
-        const direct = runtimeApi.agentRuntimeCancelTool;
-        if (typeof direct === 'function') return direct.call(runtimeApi, { sessionId, toolCallId });
+        const direct = requireApi('agentRuntimeCancelTool');
+        if (direct) return direct({ sessionId, toolCallId });
         if (!turnId) throw new Error('该工具事件缺少 Codex turnId，不能猜测并取消其他任务');
         return requireApi('agentRuntimeCancelTurn')({ sessionId, turnId });
     }
@@ -282,6 +282,15 @@ function createWorkbenchCommandController(context) {
         workspaceStatPath: (payload) => requireApi('agentWorkspaceStatPath')(payload),
         workspacePerformPathAction: (payload) => requireApi('agentWorkspacePerformPathAction')(payload),
         workspaceCancel: (payload) => requireApi('agentWorkspaceCancel')(payload),
+        listAgentProfiles: () => requireApi('agentRuntimeListAgentProfiles')(),
+        getCachedModels: () => requireApi('getCachedModels')(),
+        saveAgentProfile: (payload) => requireApi('agentRuntimeSaveAgentProfile')(payload),
+        saveAgentAvatar: (payload) => requireApi('agentRuntimeSaveAgentAvatar')(payload),
+        openExternal: (url) => requireApi('sendOpenExternalLink')(url),
+        launchVchatApp: (appId) => requireApi('desktopLaunchVchatApp')(appId),
+        openThemes: () => requireApi('openThemesWindow')(),
+        openImageViewer: (payload) => requireApi('openImageViewer')(payload),
+        showImageContextMenu: (src) => requireApi('showImageContextMenu')(src),
     };
 }
 

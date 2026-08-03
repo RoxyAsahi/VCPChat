@@ -3,7 +3,8 @@ const METHODS = Object.freeze([
     'agentSessionRename', 'agentSessionArchive', 'agentSessionRestore', 'agentSessionDelete', 'agentSessionFork',
     'agentRuntimeEnsureSessionRuntime', 'agentRuntimeSetSessionPinned', 'agentRuntimeCompactSession',
     'agentRuntimeExportSession', 'agentRuntimeApplyAgentProfile', 'agentRuntimeSelectAttachments',
-    'agentRuntimeUpdateSessionConfig',
+    'agentRuntimeUpdateSessionConfig', 'agentRuntimeListAgentProfiles', 'agentRuntimeSaveAgentProfile',
+    'agentRuntimeSaveAgentAvatar', 'getCachedModels',
 ]);
 function createAgentSessionClient(runtimeApi) {
     return Object.freeze(Object.fromEntries(METHODS.map((name) => [name,

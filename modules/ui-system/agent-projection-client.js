@@ -4,6 +4,9 @@ const METHODS = Object.freeze([
     'agentRuntimeGetWorkbenchSettings', 'agentRuntimeUpdateWorkbenchSettings',
     'agentRuntimeListRecoveryOperations', 'agentRuntimeListRecoveryCandidates',
     'agentRuntimeResolveRecoveryOperation',
+    'agentRuntimeSetWorkbenchPresence', 'onAgentRuntimeEvent',
+    'sendOpenExternalLink', 'desktopLaunchVchatApp', 'openThemesWindow',
+    'openImageViewer', 'showImageContextMenu',
 ]);
 function createAgentProjectionClient(runtimeApi) {
     return Object.freeze(Object.fromEntries(METHODS.map((name) => [name,

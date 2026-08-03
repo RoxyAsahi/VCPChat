@@ -3,10 +3,10 @@ import { createAgentSessionUiState, reconcileAgentSessionUiState, reduceAgentSes
 import { createWorkbenchClients } from './agent-workbench-clients.js';
 import { codexSnapshotToProjection } from './agent-workbench-snapshot-projection.js';
 import { createWorkbenchCommandController } from './agent-workbench-command-controller.js';
+import { createAgentRuntimeEventSubscription } from './agent-runtime-event-subscription.js';
 function createWorkbenchController(runtimeApi) {
     const clients = createWorkbenchClients(runtimeApi);
     const store = createWorkbenchStore();
-    let unsubscribeRuntime = null;
     let selectionVersion = 0;
     let snapshotBarrier = null;
     // Renderer-only, bounded cache. SQLite is the durable presentation source;
@@ -25,6 +25,10 @@ function createWorkbenchController(runtimeApi) {
 
     function requireApi(name) {
         return clients.require(name);
+    }
+
+    function optionalApi(name) {
+        return clients.optional(name);
     }
 
     function runtimeForTopic(sessionId, state = store.getState()) {
@@ -118,6 +122,14 @@ function createWorkbenchController(runtimeApi) {
         sessionWarmPromises.set(id, promise);
         return promise;
     }
+
+    const runtimeSubscription = createAgentRuntimeEventSubscription({
+        subscribe: clients.optional('onAgentRuntimeEvent'),
+        snapshotBarrier: () => snapshotBarrier,
+        store, applyCodexRuntimeEvent: (event) => applyCodexRuntimeEvent(event),
+        applySessionUiEvent: (event) => applySessionUiEvent(event), projectRuntimeActivity,
+        refreshStatus: () => refreshStatus(),
+    });
 
     function applyCodexProjectionMessage(entry) {
         if (!entry) return;
@@ -437,7 +449,6 @@ function createWorkbenchController(runtimeApi) {
     const commands = createWorkbenchCommandController({
         store,
         requireApi,
-        runtimeApi,
         refreshStatus,
         selectedRuntime,
         selectedSessionId,
@@ -459,6 +470,8 @@ function createWorkbenchController(runtimeApi) {
         respondApproval, respondInteraction, respondToolboxApproval,
         workspaceListDirectory, workspaceReadPreview, workspaceSearchFiles,
         workspaceStatPath, workspacePerformPathAction, workspaceCancel,
+        listAgentProfiles, getCachedModels, saveAgentProfile, saveAgentAvatar,
+        openExternal, launchVchatApp, openThemes, openImageViewer, showImageContextMenu,
     } = commands;
 
     function resolvePreviewTopic(snapshot, selectedTopic) {
@@ -525,7 +538,7 @@ function createWorkbenchController(runtimeApi) {
         // while `read-topic` establishes the durable snapshot waterline.
         const barrier = beginSnapshotBarrier();
         subscribeRuntime();
-        runtimeApi.agentRuntimeSetWorkbenchPresence?.(true);
+        optionalApi('agentRuntimeSetWorkbenchPresence')?.(true);
         const status = await refreshStatus().catch(() => null);
         // Ctrl+R restores only an actual selected runtime. A list of active
         // Topic Hosts is not a request to pick one or replay its transcript.
@@ -541,42 +554,13 @@ function createWorkbenchController(runtimeApi) {
     }
 
     function subscribeRuntime() {
-        if (unsubscribeRuntime || typeof runtimeApi.onAgentRuntimeEvent !== 'function') return;
-        if (typeof runtimeApi.onAgentRuntimeEvent === 'function') {
-            unsubscribeRuntime = runtimeApi.onAgentRuntimeEvent((event) => {
-                if (snapshotBarrier) {
-                    snapshotBarrier.events.push(event);
-                    return;
-                }
-                const current = store.getState();
-                if (event?.runtime === 'codex' && event?.type === 'projection.updated') {
-                    applyCodexRuntimeEvent(event);
-                    return;
-                }
-                applySessionUiEvent(event);
-                projectRuntimeActivity(event);
-                const selectedSession = current.selectedSessionId;
-                const isApproval = event?.type?.startsWith('approval.');
-                const isProcessGlobal = event?.type?.startsWith('runtime.') || event?.type === 'toolbox.ws';
-                if (!isApproval && !isProcessGlobal && event?.sessionId && selectedSession
-                    && event.sessionId !== selectedSession) {
-                    // Do not retain another Topic's transcript. Its sidebar
-                    // badge derives from the identity-keyed active runtime Map.
-                    // A debounced status pull is sufficient and cannot lock
-                    // the current Topic's composer.
-                    void refreshStatus().catch(() => {});
-                    return;
-                }
-                store.dispatch(event);
-            });
-        }
+        runtimeSubscription.start();
     }
 
     function dispose() {
         selectionVersion += 1;
-        runtimeApi.agentRuntimeSetWorkbenchPresence?.(false);
-        if (typeof unsubscribeRuntime === 'function') unsubscribeRuntime();
-        unsubscribeRuntime = null;
+        void optionalApi('agentRuntimeSetWorkbenchPresence')?.(false);
+        runtimeSubscription.dispose();
     }
 
     return {
@@ -592,6 +576,8 @@ function createWorkbenchController(runtimeApi) {
         workspaceListDirectory, workspaceReadPreview, workspaceSearchFiles,
         workspaceStatPath, workspacePerformPathAction,
         workspaceCancel,
+        listAgentProfiles, getCachedModels, saveAgentProfile, saveAgentAvatar,
+        openExternal, launchVchatApp, openThemes, openImageViewer, showImageContextMenu,
     };
 }
 

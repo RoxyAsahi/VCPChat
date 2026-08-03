@@ -3,7 +3,7 @@ import './avatar-picker.js';
 export function renderAgentSettingsPane(context) {
     const {
         state, store, activeSession, sessionConfigRevisions, selectedAgentProfile,
-        profileNeedsConfiguration, persistWorkbenchSettings, renderSidebar, runtimeApi,
+        profileNeedsConfiguration, persistWorkbenchSettings, renderSidebar,
         run, refreshControlPlane, notify, controller, refreshRecoveryOperations,
         refreshTopicsForAgent, node, button, sameAgent, scheduleTextSave, scheduleBudgetSave,
         settingValue, settingStatus,
@@ -109,7 +109,7 @@ export function renderAgentSettingsPane(context) {
     };
 
     if (state.settingsScope !== 'advanced') {
-        if (!sessionId) form.append(renderAvatar({ state, profile, runtimeApi, run, refreshControlPlane, notify, renderSidebar, node, button, sameAgent }));
+        if (!sessionId) form.append(renderAvatar({ state, profile, controller, run, refreshControlPlane, notify, node, sameAgent }));
         const fields = [];
         if (!sessionId) fields.push(field('名称', profile.name || profile.id || '', (value) => {
             void persistWorkbenchSettings({ name: String(value || '').trim() }, '', '已自动保存 Agent 名称');
@@ -198,7 +198,7 @@ function modelOptions(catalog, selected) {
     return options;
 }
 
-function renderAvatar({ state, profile, runtimeApi, run, refreshControlPlane, notify, renderSidebar, node, sameAgent }) {
+function renderAvatar({ state, profile, controller, run, refreshControlPlane, notify, node, sameAgent }) {
     const agentId = profile.id || profile.name || state.selectedAgent;
     const section = node('section', 'agent-chat-settings-avatar');
     const copy = node('div', 'agent-chat-settings-avatar-copy');
@@ -211,7 +211,7 @@ function renderAvatar({ state, profile, runtimeApi, run, refreshControlPlane, no
         onBusyChange: (busy) => { state.avatarSaving = busy; },
         onError: (error) => notify(error?.message || '头像保存失败。', 'error'),
         onCommit: async (file) => run(async () => {
-            const result = await runtimeApi().agentRuntimeSaveAgentAvatar?.({
+            const result = await controller.saveAgentAvatar({
                 agentId,
                 expectedProfileRevision: Number(profile.profileRevision || profile.revision || 1),
                 avatarData: { name: file.name, type: file.type, buffer: await file.arrayBuffer() },

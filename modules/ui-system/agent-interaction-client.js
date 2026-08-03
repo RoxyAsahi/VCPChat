@@ -3,7 +3,7 @@ const METHODS = Object.freeze([
     'agentRuntimeFollowUpTurn', 'agentRuntimeCancelTurn', 'agentRuntimeRespondApproval',
     'agentRuntimeRespondInteraction', 'agentRuntimeListInteractionQueue',
     'agentRuntimeReplaceInteractionQueue', 'agentRuntimeClearInteractionQueue',
-    'agentRuntimeResolvePendingInput',
+    'agentRuntimeResolvePendingInput', 'agentRuntimeCancelTool',
 ]);
 function createAgentInteractionClient(runtimeApi) {
     return Object.freeze(Object.fromEntries(METHODS.map((name) => [name,

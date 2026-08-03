@@ -2,7 +2,7 @@ import { createAgentMessagePresentation } from './agent-presentation/index.js';
 import { createAgentWorkbenchTimelineView } from './agent-workbench-timeline-view.js';
 
 export function createAgentTimelineCoordinator({
-    state, store, controller, lifecycle, window, document, root, refs, runtimeApi,
+    state, store, controller, lifecycle, window, document, root, refs, rendererHost,
     blockPresentation, approvalRegistry, cssEscape, selectedAgentProfile, activeSession,
     selectedSessionKey, selectedTurnStart, run, notify, scrollFeed, isFollowingContainer,
 }) {
@@ -49,7 +49,7 @@ export function createAgentTimelineCoordinator({
         container: refs.feedItems,
         getSessionContext: sessionContext,
         nonMessageCallbacks: blockPresentation.timelineCallbacks,
-        electronAPI: runtimeApi,
+        electronAPI: rendererHost,
         scrollToBottom: () => scrollFeed(refs.feed, true),
         notify,
         actions: {

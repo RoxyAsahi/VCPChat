@@ -4,7 +4,8 @@ const CLIENT_METHODS = Object.freeze({
         'agentSessionRename', 'agentSessionArchive', 'agentSessionRestore', 'agentSessionDelete', 'agentSessionFork',
         'agentRuntimeEnsureSessionRuntime', 'agentRuntimeSetSessionPinned', 'agentRuntimeCompactSession',
         'agentRuntimeExportSession', 'agentRuntimeApplyAgentProfile', 'agentRuntimeSelectAttachments',
-        'agentRuntimeUpdateSessionConfig',
+        'agentRuntimeUpdateSessionConfig', 'agentRuntimeListAgentProfiles', 'agentRuntimeSaveAgentProfile',
+        'agentRuntimeSaveAgentAvatar', 'getCachedModels',
     ]),
     projection: Object.freeze([
         'agentRuntimeGetStatus', 'agentRuntimeSearchTopics', 'agentRuntimeSearchTopicMessages',
@@ -12,13 +13,16 @@ const CLIENT_METHODS = Object.freeze({
         'agentRuntimeGetWorkbenchSettings', 'agentRuntimeUpdateWorkbenchSettings',
         'agentRuntimeListRecoveryOperations', 'agentRuntimeListRecoveryCandidates',
         'agentRuntimeResolveRecoveryOperation',
+        'agentRuntimeSetWorkbenchPresence', 'onAgentRuntimeEvent',
+        'sendOpenExternalLink', 'desktopLaunchVchatApp', 'openThemesWindow',
+        'openImageViewer', 'showImageContextMenu',
     ]),
     interaction: Object.freeze([
         'agentRuntimeStart', 'agentRuntimeStop', 'agentRuntimeStartTurn', 'agentRuntimeSteerTurn',
         'agentRuntimeFollowUpTurn', 'agentRuntimeCancelTurn', 'agentRuntimeRespondApproval',
         'agentRuntimeRespondInteraction', 'agentRuntimeListInteractionQueue',
         'agentRuntimeReplaceInteractionQueue', 'agentRuntimeClearInteractionQueue',
-        'agentRuntimeResolvePendingInput',
+        'agentRuntimeResolvePendingInput', 'agentRuntimeCancelTool',
     ]),
     workspace: Object.freeze([
         'agentWorkspaceListDirectory', 'agentWorkspaceReadPreview', 'agentWorkspaceSearchFiles',
@@ -46,6 +50,10 @@ function createWorkbenchClients(runtimeApi) {
             const method = registry.get(name);
             if (!method) throw new Error(`Runtime API unavailable: ${name}`);
             return method;
+        },
+        optional(name) {
+            if (!registry.has(name)) throw new Error(`Runtime API is outside Workbench client boundary: ${name}`);
+            return registry.get(name) || null;
         },
     });
 }

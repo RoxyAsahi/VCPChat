@@ -135,6 +135,20 @@ const workbenchClients = fs.readFileSync(path.join(root, 'modules/ui-system/agen
 if (/agentRuntime(?:CreateTopic|CreateSession|ListTopics|ReadTopic|ReadProjection|RenameTopic|DeleteTopic)/.test(workbenchClients)) {
     errors.push('formal Workbench client boundary exposes deprecated Topic APIs');
 }
+for (const file of [
+    'agent-workbench-implementation.js', 'agent-workbench-command-controller.js',
+    'agent-settings-view.js', 'agent-timeline-coordinator.js',
+]) {
+    const source = fs.readFileSync(path.join(root, 'modules/ui-system', file), 'utf8');
+    const allowedComposition = file === 'agent-workbench-implementation.js'
+        ? source.replace('createWorkbenchController(runtimeApi())', 'createWorkbenchController(hostApi)') : source;
+    if (/\bruntimeApi\s*\(\)|\bruntimeApi\.[A-Za-z_$]/.test(allowedComposition)) {
+        errors.push(`${file} bypasses the formal Workbench client boundary`);
+    }
+}
+if (!fs.existsSync(path.join(root, 'modules/ui-system/agent-runtime-event-subscription.js'))) {
+    errors.push('Workbench Runtime event subscription owner is missing');
+}
 for (const file of ['agent-session-client.js', 'agent-projection-client.js', 'agent-interaction-client.js', 'agent-workspace-client.js']) {
     if (!fs.existsSync(path.join(root, 'modules/ui-system', file))) errors.push(`missing Workbench client module: ${file}`);
 }

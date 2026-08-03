@@ -242,7 +242,7 @@ function mountWorkbench(container) {
         window,
         document,
         actions: {
-            openThemes: () => runtimeApi().openThemesWindow?.(),
+            openThemes: () => controller.openThemes(),
             toggleTheme: () => proxyMainButton('themeToggleBtn'),
             openGlobalSettings: () => window.uiHelperFunctions?.openModal?.('globalSettingsModal'),
             setPresentationMode: (mode) => window.applyChatPresentationMode?.(mode, {
@@ -349,8 +349,8 @@ function mountWorkbench(container) {
         state,
         store,
         controller,
-        listAgentProfiles: () => runtimeApi().agentRuntimeListAgentProfiles?.(),
-        getCachedModels: () => runtimeApi().getCachedModels?.(),
+        listAgentProfiles: () => controller.listAgentProfiles(),
+        getCachedModels: () => controller.getCachedModels(),
         queueRender,
         syncPermissionModeFromSelectedSession,
         syncModelFromSelectedSession,
@@ -371,7 +371,7 @@ function mountWorkbench(container) {
         controller,
         selectedAgentProfile,
         selectAgent,
-        saveAgentProfile: (request) => runtimeApi().agentRuntimeSaveAgentProfile?.(request),
+        saveAgentProfile: (request) => controller.saveAgentProfile(request),
         refreshTopicsForAgent,
         notify,
         refreshViews: () => {
@@ -406,7 +406,7 @@ function mountWorkbench(container) {
             ensureTicker: () => timelineCoordinator?.ensureApprovalTicker(),
             respondApproval: (item, decision) => run(() => controller.respondApproval(item, decision)),
             respondInteraction: (interaction, response) => run(() => controller.respondInteraction(interaction, response)),
-            openExternal: (url) => runtimeApi().sendOpenExternalLink?.(url),
+            openExternal: (url) => controller.openExternal(url),
             notifyInvalidJson: () => notify('MCP 表单 JSON 无效。', 'error'),
         },
     });
@@ -424,7 +424,7 @@ function mountWorkbench(container) {
                     state.topicFlow = { ...state.topicFlow, saving: true };
                     queueRender({ topicFlow: true });
                     try {
-                        const result = await runtimeApi().agentRuntimeSaveAgentProfile?.(request);
+                        const result = await controller.saveAgentProfile(request);
                         if (!result?.success || !result.profile?.id) throw new Error(result?.error || 'Build Agent 创建失败。');
                         state.selectedAgent = result.profile.id;
                         state.topicFlow = null;
@@ -457,7 +457,11 @@ function mountWorkbench(container) {
 
     timelineCoordinator = createAgentTimelineCoordinator({
         state, store, controller, lifecycle, window, document, root, refs: shellView.refs,
-        runtimeApi: runtimeApi(), blockPresentation, approvalRegistry, cssEscape,
+        rendererHost: {
+            sendOpenExternalLink: (url) => controller.openExternal(url),
+            openImageViewer: (payload) => controller.openImageViewer(payload),
+            showImageContextMenu: (src) => controller.showImageContextMenu(src),
+        }, blockPresentation, approvalRegistry, cssEscape,
         selectedAgentProfile, activeSession, selectedSessionKey, selectedTurnStart,
         run, notify, scrollFeed, isFollowingContainer,
     });
@@ -564,7 +568,7 @@ function mountWorkbench(container) {
         queueRender,
         run,
         launchTerminal: async () => {
-            const result = await runtimeApi().desktopLaunchVchatApp?.('open-powershell-executor-terminal');
+            const result = await controller.launchVchatApp('open-powershell-executor-terminal');
             if (result && result.success === false) throw new Error(result.error || '无法打开 VChat 终端。');
         },
     });
@@ -597,7 +601,6 @@ function mountWorkbench(container) {
             profileNeedsConfiguration,
             persistWorkbenchSettings,
             renderSidebar,
-            runtimeApi,
             run,
             refreshControlPlane,
             notify,
