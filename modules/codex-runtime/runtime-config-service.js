@@ -34,6 +34,12 @@ class RuntimeConfigService {
         return repository;
     }
 
+    _operation(identity = {}) { return this.context.createOperationContext(identity); }
+    _operationRepository(operation) {
+        this.context.assertOperationContext(operation);
+        return this._repository(operation.generation);
+    }
+
     getWorkbenchSettings() {
         const settings = this.context.getSettings() || {};
         return {
@@ -291,13 +297,14 @@ class RuntimeConfigService {
             }
             session = repository.markSessionConfigApplying(idValue, session.configRevision);
             this.sendSessionConfigEvent('session.config.pending', session);
+            let operation = null;
             try {
                 await this.context.start();
-                const generation = this.context.captureGeneration();
-                repository = this._repository(generation);
+                operation = this._operation({ sessionId: idValue, threadId: session.threadId });
+                repository = operation ? this._operationRepository(operation) : this.context.repository();
                 if (!this.context.resumedThreadIds().has(session.threadId)) {
                     await this.context.resumeSession(session);
-                    return this._repository(generation).getSession(idValue);
+                    return this._operationRepository(operation).getSession(idValue);
                 }
                 if (instructionConfigChanged(desired, applied)) {
                     const activity = this.context.threadStates().get(session.threadId)?.activity;
@@ -308,10 +315,10 @@ class RuntimeConfigService {
                         return repository.getSession(idValue);
                     }
                     await this.context.transport().request('thread/unsubscribe', { threadId: session.threadId });
-                    repository = this._repository(generation);
+                    repository = this._operationRepository(operation);
                     this.context.resumedThreadIds().delete(session.threadId);
                     await this.context.resumeSession(repository.getSession(idValue));
-                    return this._repository(generation).getSession(idValue);
+                    return this._operationRepository(operation).getSession(idValue);
                 }
                 this.context.configApplyTargets().set(session.threadId, {
                     sessionId: idValue,
@@ -320,10 +327,10 @@ class RuntimeConfigService {
                     runtimeGeneration: this.context.runtimeGeneration(),
                 });
                 await this.context.transport().request('thread/settings/update', threadSettingsPatch(session, desired));
-                return this._repository(generation).getSession(idValue);
+                return this._operationRepository(operation).getSession(idValue);
             } catch (error) {
                 if (error?.code === 'STALE_RUNTIME_GENERATION' || !this.context.repository()) throw error;
-                repository = this.context.repository();
+                repository = this._operationRepository(operation);
                 const current = repository.getSession(idValue);
                 if (current?.configRevision === session.configRevision && error?.code !== 'SESSION_CONFIG_PENDING') {
                     const failed = repository.markSessionConfigFailed(idValue, session.configRevision, error.message);

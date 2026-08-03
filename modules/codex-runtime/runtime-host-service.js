@@ -55,14 +55,14 @@ class RuntimeHostService {
             this.context.setTransport(transport);
             this.wireTransport();
             try {
-                const generation = this.context.captureGeneration();
+                const operation = this.context.createOperationContext();
                 await transport.start();
-                this.context.assertGeneration(generation);
+                this.context.assertOperationContext(operation);
                 await this.ensureBridge(settings);
-                this.context.assertGeneration(generation);
+                this.context.assertOperationContext(operation);
                 this.context.normalizeUnboundThreadOperations();
                 await this.context.recoverKnownThreadOperations();
-                this.context.assertGeneration(generation);
+                this.context.assertOperationContext(operation);
                 this.toolboxConfigFingerprint = toolboxConfigFingerprint(settings);
                 this.context.setState('ready');
                 this.context.setRuntimeStartFailures(0);
@@ -323,6 +323,12 @@ class RuntimeHostService {
         if (!item || item.type !== 'contextCompaction' || !params.threadId) return;
         const waiter = this.context.compactionWaiters().get(params.threadId);
         if (!waiter) return;
+        try { this.context.assertOperationContext(waiter.operation); } catch (error) {
+            this.context.compactionWaiters().delete(params.threadId);
+            clearTimeout(waiter.timeout);
+            waiter.reject(error);
+            return;
+        }
         if (message.method === 'item/started') {
             this.context.sendUiEvent({
                 type: 'compaction.started', sessionId: waiter.sessionId,
