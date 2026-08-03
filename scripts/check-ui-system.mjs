@@ -55,6 +55,8 @@ const inlineStyleCompatibilityAllowlist = new Set([
     // Mermaid transforms and media sizing are part of the golden parity
     // contract; FORK_RECEIPT.md pins its exact source and drift gate.
     path.join(moduleDir, 'agent-presentation', 'fork', 'agentMessageRenderer.js'),
+    path.join(moduleDir, 'agent-presentation', 'fork', 'agentMessageRendererImplementation.js'),
+    path.join(moduleDir, 'agent-presentation', 'fork', 'agentImageController.js'),
     // The shared legacy context-menu CSS positions the popup dynamically.
     path.join(moduleDir, 'agent-presentation', 'context-menu.js'),
 ]);
