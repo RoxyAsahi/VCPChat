@@ -34,6 +34,7 @@ import { createAgentWorkbenchRunStatusView } from './agent-workbench-run-status-
 import { createAgentWorkbenchComposerView } from './agent-workbench-composer-view.js';
 import { createAgentWorkspaceView } from './agent-workspace-view.js';
 import { createAgentWorkbenchHeaderView } from './agent-workbench-header-view.js';
+import { createAgentWorkbenchAccountView } from './agent-workbench-account-view.js';
 
 // Build Agent identities are independent from normal-chat Agents. Keep Nova
 // visible synchronously while the authoritative Build catalog loads.
@@ -119,111 +120,6 @@ function proxyMainButton(id) {
 // sidebar/composer *classes* and design tokens, but never clones a main-chat
 // element: copying it also copied incidental IDs/listeners and made this page
 // depend on whichever main-chat markup happened to be mounted.
-function createAccountDock(state) {
-    const dock = node('div', 'next-ui-account-dock agent-chat-account-dock');
-    const menu = node('div', 'next-ui-account-menu agent-chat-account-menu');
-    menu.hidden = true;
-    const closeMenu = () => { menu.hidden = true; };
-    const themeStore = button('主题选择', 'next-ui-account-menu-item');
-    themeStore.prepend(...icon('palette'));
-    themeStore.addEventListener('click', () => { closeMenu(); runtimeApi().openThemesWindow?.(); });
-    const themeToggle = button(document.body.classList.contains('dark-theme') ? '切换为浅色模式' : '切换为深色模式', 'next-ui-account-menu-item');
-    themeToggle.prepend(...icon(document.body.classList.contains('dark-theme') ? 'light_mode' : 'dark_mode'));
-    themeToggle.addEventListener('click', () => { closeMenu(); proxyMainButton('themeToggleBtn'); });
-    // Chat presentation mode submenu, mirroring the main chat's account-dock
-    // switcher: label row expands a submenu of bubble/panel/immersive options.
-    const presentationLabels = { bubble: '气泡', panel: '面板', immersive: '沉浸' };
-    const getPresentationMode = () => {
-        if (document.body.classList.contains('chat-presentation-panel')) return 'panel';
-        if (document.body.classList.contains('chat-presentation-immersive')) return 'immersive';
-        return window.globalSettings?.chatPresentationMode || 'bubble';
-    };
-    const presentationItem = node('button', 'agent-chat-button next-ui-account-menu-item');
-    presentationItem.type = 'button';
-    presentationItem.prepend(...icon('view_agenda'));
-    presentationItem.append(
-        node('span', 'next-ui-account-menu-label', '聊天显示模式'),
-        node('span', 'next-ui-account-menu-value agent-chat-account-presentation-value', presentationLabels[getPresentationMode()] || '气泡'),
-        ...icon('chevron_right')
-    );
-    presentationItem.setAttribute('aria-expanded', 'false');
-    const presentationOptions = node('div', 'next-ui-account-submenu agent-chat-account-presentation-options');
-    presentationOptions.setAttribute('role', 'group');
-    presentationOptions.setAttribute('aria-label', '选择聊天显示模式');
-    presentationOptions.hidden = true;
-    const presentationOptionSpecs = [
-        ['bubble', 'chat_bubble', '气泡模式'],
-        ['panel', 'view_day', '面板模式'],
-        ['immersive', 'fullscreen', '沉浸模式'],
-    ];
-    for (const [mode, iconName, label] of presentationOptionSpecs) {
-        const option = node('button', 'next-ui-account-submenu-item');
-        option.type = 'button';
-        option.dataset.presentationMode = mode;
-        option.append(...icon(iconName), node('span', '', label), node('span', 'vcp-ui-icon next-ui-account-option-check', 'check'));
-        option.addEventListener('click', async () => {
-            if (typeof window.applyChatPresentationMode === 'function') {
-                await window.applyChatPresentationMode(mode, {
-                    persist: true,
-                    preserveScroll: true,
-                    notify: false,
-                    source: 'agent-account-menu'
-                });
-            }
-            closeMenu();
-        });
-        presentationOptions.append(option);
-    }
-    presentationItem.addEventListener('click', () => {
-        const expanded = presentationOptions.hidden;
-        presentationOptions.hidden = !expanded;
-        presentationItem.setAttribute('aria-expanded', String(!expanded));
-    });
-    menu.append(themeStore, themeToggle, presentationItem, presentationOptions);
-    // Keep the dock's theme labels and presentation mode in sync with runtime
-    // switching. The main chat toggles `dark-theme` and `chat-presentation-*`
-    // on <body>; without watching it the account menu would show stale labels
-    // until the next full re-render.
-    const syncAccountTheme = () => {
-        const dark = document.body.classList.contains('dark-theme');
-        themeStore.replaceChildren(...icon('palette'), document.createTextNode('主题选择'));
-        themeToggle.replaceChildren(...icon(dark ? 'light_mode' : 'dark_mode'), document.createTextNode(dark ? '切换为浅色模式' : '切换为深色模式'));
-        const mode = getPresentationMode();
-        const value = menu.querySelector('.agent-chat-account-presentation-value');
-        if (value) value.textContent = presentationLabels[mode] || '气泡';
-        presentationOptions.querySelectorAll('[data-presentation-mode]').forEach(option => {
-            const active = option.dataset.presentationMode === mode;
-            option.classList.toggle('active', active);
-            option.setAttribute('aria-pressed', String(active));
-        });
-    };
-    if (typeof MutationObserver !== 'undefined') {
-        const observer = new MutationObserver(syncAccountTheme);
-        observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
-        state.accountThemeObserver = observer;
-    }
-    const trigger = node('button', 'next-ui-account-trigger');
-    trigger.type = 'button';
-    trigger.title = '全局设置';
-    const avatar = document.createElement('img');
-    avatar.className = 'agent-chat-account-avatar';
-    avatar.src = window.globalSettings?.userAvatarUrl || 'assets/default_user_avatar.png';
-    avatar.alt = '';
-    trigger.append(avatar, node('span', 'agent-chat-account-name', window.globalSettings?.userName?.trim() || '用户'), ...icon('expand_less'));
-    trigger.setAttribute('aria-haspopup', 'menu');
-    trigger.setAttribute('aria-expanded', 'false');
-    trigger.addEventListener('click', (event) => {
-        event.stopPropagation();
-        menu.hidden = !menu.hidden;
-        trigger.setAttribute('aria-expanded', String(!menu.hidden));
-        if (!menu.hidden) presentationOptions.hidden = true;
-    });
-    const settings = iconButton('settings', '全局设置', 'next-ui-account-settings');
-    settings.addEventListener('click', () => { closeMenu(); window.uiHelperFunctions?.openModal?.('globalSettingsModal'); });
-    dock.append(menu, trigger, settings);
-    return dock;
-}
-
 function notify(message, variant = 'info') {
     if (window.VCPUI?.feedback?.toast) window.VCPUI.feedback.toast(message, { variant });
     else window.uiHelperFunctions?.showToastNotification?.(message, variant === 'error' ? 'error' : 'success');
@@ -459,6 +355,21 @@ function mountWorkbench(container) {
                 notify(before && after
                     ? `上下文已完成压缩：${before} -> ${after} tokens。`
                     : '上下文已完成压缩并刷新会话历史。', 'success');
+            }),
+        },
+    });
+    const accountView = createAgentWorkbenchAccountView({
+        window,
+        document,
+        actions: {
+            openThemes: () => runtimeApi().openThemesWindow?.(),
+            toggleTheme: () => proxyMainButton('themeToggleBtn'),
+            openGlobalSettings: () => window.uiHelperFunctions?.openModal?.('globalSettingsModal'),
+            setPresentationMode: (mode) => window.applyChatPresentationMode?.(mode, {
+                persist: true,
+                preserveScroll: true,
+                notify: false,
+                source: 'agent-account-menu',
             }),
         },
     });
@@ -1914,7 +1825,8 @@ function mountWorkbench(container) {
                 },
             }));
         }
-        sidebar.append(tabs, content, createAccountDock(state));
+        accountView.update();
+        sidebar.append(tabs, content, accountView.element);
         if (sidebar.scrollTop !== scrollTop) sidebar.scrollTop = scrollTop;
     }
 
@@ -3699,10 +3611,10 @@ function mountWorkbench(container) {
         workspaceRequests.dispose();
         settingsState.dispose();
         closeTopicContextMenu();
-        state.accountThemeObserver?.disconnect();
         fullPresentation.dispose();
         workspaceView.dispose();
         headerView.dispose();
+        accountView.dispose();
         composerView.dispose();
         runStatusView.dispose();
         lifecycle.dispose();

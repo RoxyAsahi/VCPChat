@@ -38,6 +38,7 @@ const requiredFiles = [
     'modules/ui-system/agent-workbench-composer-view.js',
     'modules/ui-system/agent-workspace-view.js',
     'modules/ui-system/agent-workbench-header-view.js',
+    'modules/ui-system/agent-workbench-account-view.js',
     'modules/ui-system/agent-workbench-store.js',
     'modules/ui-system/agent-presentation/contract.js',
     'modules/ui-system/agent-presentation/renderer.js',
