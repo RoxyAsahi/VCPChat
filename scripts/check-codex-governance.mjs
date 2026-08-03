@@ -6,6 +6,55 @@ import { createRequire } from 'node:module';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
 const errors = [];
+function filesUnder(directory, pattern = /\.(?:c?js|mjs)$/) {
+    const result = [];
+    const pending = [directory];
+    while (pending.length) {
+        const current = pending.pop();
+        for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+            const absolute = path.join(current, entry.name);
+            if (entry.isDirectory()) pending.push(absolute);
+            else if (pattern.test(entry.name)) result.push(absolute);
+        }
+    }
+    return result;
+}
+function localDependencies(file, allowedRoots) {
+    const source = fs.readFileSync(file, 'utf8');
+    const dependencies = [];
+    const pattern = /(?:from\s+|import\s*\(|require\s*\()\s*['"]([^'"]+)['"]/g;
+    for (const match of source.matchAll(pattern)) {
+        if (!match[1].startsWith('.')) continue;
+        const base = path.resolve(path.dirname(file), match[1]);
+        const candidates = [base, `${base}.js`, `${base}.mjs`, path.join(base, 'index.js')];
+        const resolved = candidates.find((candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile());
+        if (resolved && allowedRoots.some((directory) => resolved.startsWith(directory))) dependencies.push(resolved);
+    }
+    return dependencies;
+}
+function assertAcyclic(files, label) {
+    const fileSet = new Set(files);
+    const graph = new Map(files.map((file) => [file, localDependencies(file, [root]).filter((item) => fileSet.has(item))]));
+    const active = new Set();
+    const complete = new Set();
+    const stack = [];
+    function visit(file) {
+        if (complete.has(file)) return;
+        if (active.has(file)) {
+            const cycleStart = stack.indexOf(file);
+            const cycle = [...stack.slice(cycleStart), file].map((item) => path.relative(root, item));
+            errors.push(`${label} contains a circular dependency: ${cycle.join(' -> ')}`);
+            return;
+        }
+        active.add(file);
+        stack.push(file);
+        for (const dependency of graph.get(file) || []) visit(dependency);
+        stack.pop();
+        active.delete(file);
+        complete.add(file);
+    }
+    for (const file of files) visit(file);
+}
 const agentCssOwners = [
     'agent-shell.css', 'agent-sidebar.css', 'agent-composer.css', 'agent-timeline.css',
     'agent-session-dock.css', 'agent-workspace.css', 'agent-activity.css',
@@ -133,6 +182,31 @@ for (const forbidden of [
         errors.push(`Agent renderer uses shared mutable singleton lifecycle: ${forbidden}`);
     }
 }
+const rendererForkDirectory = path.join(root, 'modules/ui-system/agent-presentation/fork');
+const rendererForkFiles = filesUnder(rendererForkDirectory);
+const rendererForbiddenRefs = [
+    ...forbiddenGlobalRefs, 'window.chatManager', 'initializeImageHandler(',
+    'visibilityOptimizer.initialize', 'visibilityOptimizer.destroy',
+    'contentProcessor.initializeContentProcessor(',
+];
+for (const absolute of rendererForkFiles) {
+    const relative = path.relative(root, absolute);
+    const source = fs.readFileSync(absolute, 'utf8');
+    const lineCount = source.split(/\r?\n/).length;
+    if (lineCount > 900) errors.push(`${relative} exceeds module ceiling: ${lineCount} lines`);
+    for (const token of rendererForbiddenRefs) {
+        if (source.includes(token)) errors.push(`${relative} reads forbidden shared renderer state: ${token}`);
+    }
+    if (!/agent-renderer-session\.js$/.test(absolute)
+        && /\b(?:document|window)\.addEventListener\s*\(/.test(source)) {
+        errors.push(`${relative} owns an unscoped document/window listener`);
+    }
+    if (!/(?:agent-renderer-session|agentVisibilityController)\.js$/.test(absolute)
+        && /\b(?:setTimeout|setInterval|requestAnimationFrame|requestIdleCallback|MutationObserver|IntersectionObserver)\b/.test(source)) {
+        errors.push(`${relative} bypasses the Agent Renderer lifecycle owner`);
+    }
+}
+assertAcyclic(rendererForkFiles, 'Agent renderer fork');
 for (const [file, forbiddenPattern] of [
     ['agentMessageRendererImplementation.js', /\b(?:requestAnimationFrame|requestIdleCallback|setTimeout|setInterval|MutationObserver|IntersectionObserver)\b/],
     ['agent-renderer-message-lifecycle.js', /\b(?:requestAnimationFrame|requestIdleCallback|setTimeout|setInterval|MutationObserver|IntersectionObserver)\b/],
@@ -204,18 +278,6 @@ for (const file of [
         errors.push(`${file} does not expose the standard View lifecycle contract`);
     }
 }
-for (const file of ['agent-renderer-history.js', 'agent-renderer-actions.js', 'agent-renderer-latex.js',
-    'agent-renderer-avatar-style.js', 'agent-renderer-text-transforms.js',
-    'agent-renderer-scoped-html.js', 'agent-renderer-special-blocks.js',
-    'agent-renderer-tool-results.js', 'agent-renderer-message-lifecycle.js', 'agent-renderer-mermaid.js',
-    'agent-renderer-markdown-pipeline.js']) {
-    const absolute = path.join(root, 'modules/ui-system/agent-presentation/fork', file);
-    if (!fs.existsSync(absolute)) errors.push(`missing governed Agent renderer module: ${file}`);
-    else if (fs.readFileSync(absolute, 'utf8').split(/\r?\n/).length > 900) {
-        errors.push(`${file} exceeds module ceiling`);
-    }
-}
-
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 for (const script of ['test:codex-reliability', 'test:electron-codex-recovery', 'check:codex-governance', 'test:codex-ci']) {
     if (!packageJson.scripts?.[script]) errors.push(`package.json missing ${script}`);
