@@ -79,8 +79,12 @@ const workbenchLineCount = fs.readFileSync(path.join(root, 'modules/ui-system/ag
 // composition root. Keep the hard ceiling finite while the planned module
 // extraction proceeds; no new message/Markdown/tool logic belongs here.
 if (workbenchLineCount > 4450) errors.push(`agent-workbench.js exceeds composition-root ceiling: ${workbenchLineCount} lines`);
-const forkLineCount = fs.readFileSync(path.join(root, 'modules/ui-system/agent-presentation/fork/agentMessageRenderer.js'), 'utf8').split(/\r?\n/).length;
-if (forkLineCount > 3500) errors.push(`agentMessageRenderer.js exceeds independent renderer ceiling: ${forkLineCount} lines`);
+const rendererFacadePath = 'modules/ui-system/agent-presentation/fork/agentMessageRenderer.js';
+const rendererImplementationPath = 'modules/ui-system/agent-presentation/fork/agentMessageRendererImplementation.js';
+const forkLineCount = fs.readFileSync(path.join(root, rendererFacadePath), 'utf8').split(/\r?\n/).length;
+const forkImplementationLineCount = fs.readFileSync(path.join(root, rendererImplementationPath), 'utf8').split(/\r?\n/).length;
+if (forkLineCount > 600) errors.push(`${rendererFacadePath} exceeds facade ceiling: ${forkLineCount} lines`);
+if (forkImplementationLineCount > 3500) errors.push(`${rendererImplementationPath} exceeds temporary extraction ceiling: ${forkImplementationLineCount} lines`);
 const forkReceipt = fs.readFileSync(path.join(root, 'modules/ui-system/agent-presentation/fork/FORK_RECEIPT.md'), 'utf8');
 if (!forkReceipt.includes('独立演进策略') || !forkReceipt.includes('不再要求跟随主聊天 renderer 逐行同步')) {
     errors.push('Agent renderer receipt must declare independent evolution rather than manual synchronization');
@@ -126,7 +130,9 @@ for (const relative of identityBoundaryFiles) {
         errors.push(`${relative} contains implicit Session/Topic identity fallback`);
     }
 }
-const runtimeManagerSource = fs.readFileSync(path.join(root, 'modules/codex-runtime/runtimeManager.js'), 'utf8');
+const runtimeFacadeLineCount = fs.readFileSync(path.join(root, 'modules/codex-runtime/runtimeManager.js'), 'utf8').split(/\r?\n/).length;
+if (runtimeFacadeLineCount > 600) errors.push(`runtimeManager.js exceeds facade ceiling: ${runtimeFacadeLineCount} lines`);
+const runtimeManagerSource = fs.readFileSync(path.join(root, 'modules/codex-runtime/runtimeManagerImplementation.js'), 'utf8');
 if (!runtimeManagerSource.includes('async updateSessionConfig(')
     || !runtimeManagerSource.includes('SESSION_IDENTITY_MISMATCH')) {
     errors.push('Runtime manager must expose an explicit Session config API and reject conflicting legacy identity');

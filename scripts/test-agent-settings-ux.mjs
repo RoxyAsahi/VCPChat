@@ -3,7 +3,7 @@ import fs from 'node:fs';
 
 const workbench = fs.readFileSync(new URL('../modules/ui-system/agent-workbench.js', import.meta.url), 'utf8');
 const settingsView = fs.readFileSync(new URL('../modules/ui-system/agent-settings-view.js', import.meta.url), 'utf8');
-const runtime = fs.readFileSync(new URL('../modules/codex-runtime/runtimeManager.js', import.meta.url), 'utf8');
+const runtime = fs.readFileSync(new URL('../modules/codex-runtime/runtimeManagerImplementation.js', import.meta.url), 'utf8');
 const adapter = fs.readFileSync(new URL('../modules/codex-runtime/toolboxResponsesAdapter.js', import.meta.url), 'utf8');
 
 for (const label of ['Agent 默认', '当前会话', '高级']) assert.ok(settingsView.includes(label));

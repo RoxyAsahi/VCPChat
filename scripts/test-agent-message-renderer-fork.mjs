@@ -7,7 +7,7 @@ import { createAgentRenderContext } from '../modules/ui-system/agent-presentatio
 
 const root = new URL('../', import.meta.url);
 const sourcePath = new URL('modules/messageRenderer.js', root);
-const forkPath = new URL('modules/ui-system/agent-presentation/fork/agentMessageRenderer.js', root);
+const forkPath = new URL('modules/ui-system/agent-presentation/fork/agentMessageRendererImplementation.js', root);
 const ledger = JSON.parse(await readFile(new URL('modules/ui-system/agent-presentation/fork/migration-ledger.json', root), 'utf8'));
 const source = await readFile(sourcePath);
 const fork = await readFile(forkPath, 'utf8');
