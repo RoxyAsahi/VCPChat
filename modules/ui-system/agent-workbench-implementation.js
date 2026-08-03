@@ -38,6 +38,7 @@ import { createAgentWorkbenchAccountView } from './agent-workbench-account-view.
 import { createAgentActivityReadonlyView } from './agent-activity-readonly-view.js';
 import { createAgentWorkbenchSidebarView } from './agent-workbench-sidebar-view.js';
 import { createAgentSessionDockView } from './agent-session-dock-view.js';
+import { createAgentNotificationView } from './agent-notification-view.js';
 
 // Build Agent identities are independent from normal-chat Agents. Keep Nova
 // visible synchronously while the authoritative Build catalog loads.
@@ -227,9 +228,6 @@ function mountWorkbench(container) {
         activityTab: 'notifications',
         sessionDock: createSessionDockModel(window.sessionStorage),
         dockMenuOpen: false,
-        activitySearch: '',
-        activitySourceFilter: 'all',
-        activityKindFilter: 'all',
         lastViewState: null,
         hadApprovals: false,
         workspace: '',
@@ -447,6 +445,11 @@ function mountWorkbench(container) {
             respondToolboxApproval: (approvalId, decision, approval) => run(() => controller.respondToolboxApproval(approvalId, decision, approval?.generation)),
             openWorkspacePath: (relativePath, action = 'preview') => run(() => openWorkspaceSourcePath(relativePath, 'tool', action)),
         },
+    });
+    const notificationView = createAgentNotificationView({
+        document,
+        blockPresentation,
+        actions: { refresh: () => renderActivity() },
     });
 
     function presentationSessionContext() {
@@ -2444,57 +2447,11 @@ function mountWorkbench(container) {
                 if (!state.workspaceBrowser.previewLoading) queueMicrotask(() => run(() => openWorkspacePreview(ref)));
             } else content.append(workspaceView.renderPreview(state.workspaceBrowser));
         } else {
-            // This is a process-global observation feed, not a Session feed;
-            // backend approval cards may also be reached from Approvals.
-            const ws = current.toolboxWs || [];
-            const markers = current.markerObservations || [];
-            content.append(node('div', 'agent-chat-activity-note', '全局 VCPLog/VCPInfo 仅保留本次运行；会话关联的工具、推理和检查结果会随会话恢复。'));
-            const controls = node('div', 'agent-chat-activity-filters');
-            const search = document.createElement('input');
-            search.type = 'search';
-            search.placeholder = '搜索活动';
-            search.value = state.activitySearch;
-            search.setAttribute('aria-label', '搜索工具活动');
-            search.addEventListener('input', () => { state.activitySearch = search.value; renderActivity(); });
-            const sourceFilter = document.createElement('select');
-            sourceFilter.setAttribute('aria-label', '活动来源');
-            for (const value of ['all', ...new Set(ws.map((item) => item.channel).filter(Boolean))]) {
-                const option = document.createElement('option'); option.value = value; option.textContent = value === 'all' ? '全部来源' : value; sourceFilter.append(option);
-            }
-            sourceFilter.value = state.activitySourceFilter;
-            sourceFilter.addEventListener('change', () => { state.activitySourceFilter = sourceFilter.value; renderActivity(); });
-            const kindFilter = document.createElement('select');
-            kindFilter.setAttribute('aria-label', '活动类型');
-            for (const value of ['all', ...new Set([...ws.map((item) => item.kind), ...markers.map((item) => item.kind)].filter(Boolean))]) {
-                const option = document.createElement('option'); option.value = value; option.textContent = value === 'all' ? '全部类型' : value; kindFilter.append(option);
-            }
-            kindFilter.value = state.activityKindFilter;
-            kindFilter.addEventListener('change', () => { state.activityKindFilter = kindFilter.value; renderActivity(); });
-            controls.append(search, sourceFilter, kindFilter);
-            content.append(controls);
-            const query = state.activitySearch.trim().toLocaleLowerCase();
-            const visibleWs = ws.filter((item) => (state.activitySourceFilter === 'all' || item.channel === state.activitySourceFilter)
-                && (state.activityKindFilter === 'all' || item.kind === state.activityKindFilter)
-                && (!query || JSON.stringify(item).toLocaleLowerCase().includes(query)));
-            const visibleMarkers = markers.filter((item) => (state.activitySourceFilter === 'all')
-                && (state.activityKindFilter === 'all' || item.kind === state.activityKindFilter)
-                && (!query || JSON.stringify(item).toLocaleLowerCase().includes(query)));
-            const list = node('div', 'agent-chat-activity-list');
-            if (!visibleWs.length && !visibleMarkers.length) {
-                list.append(node('div', 'agent-chat-activity-empty', '暂无 VCPToolBox 或 VCP 内容观察事件。'));
-            } else {
-                for (const observation of visibleWs) {
-                    const card = existingActivityCards.get(observation.id) || blockPresentation.createToolboxObservation(observation);
-                    card.dataset.activityKey = observation.id;
-                    list.append(card);
-                }
-                for (const observation of visibleMarkers) {
-                    const card = existingActivityCards.get(observation.id) || blockPresentation.createMarkerObservation(observation);
-                    card.dataset.activityKey = observation.id;
-                    list.append(card);
-                }
-            }
-            content.append(list);
+            const notification = notificationView.build(current, {
+                cards: existingActivityCards,
+                openKeys,
+            });
+            content.append(notification.content);
         }
         for (const details of content.querySelectorAll('details[data-activity-key]')) {
             if (openKeys.has(details.dataset.activityKey)) details.open = true;
@@ -2962,6 +2919,7 @@ function mountWorkbench(container) {
         closeTopicContextMenu();
         fullPresentation.dispose();
         activityReadonlyView.dispose();
+        notificationView.dispose();
         sessionDockView.dispose();
         workspaceView.dispose();
         headerView.dispose();
