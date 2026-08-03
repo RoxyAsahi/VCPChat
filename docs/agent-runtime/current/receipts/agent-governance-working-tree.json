@@ -1,5 +1,5 @@
 {
-  "status": "implemented",
+  "status": "implemented/working-tree",
   "scope": "agent-code-governance",
   "branch": "codex/vcpchat-codex-app-server",
   "codexProtocol": "0.146",
@@ -15,11 +15,15 @@
     "npm run test:agent-session-compatibility",
     "npm run test:agent-workspace-requests",
     "npm run test:codex-runtime-lifecycle",
+    "npm run test:codex-runtime-toolbox-service",
+    "npm run test:agent-presentation",
+    "npm run test:agent-workbench",
+    "npm run check:ui-system",
     "npm run check:codex-governance",
     "npm run test:codex-ci",
     "npm run test:electron-codex-smoke",
     "npm run guard:ui-system",
     "npm run lint:ui-system"
   ],
-  "notes": "2026-08-03 continuation checkpoint: Runtime/Recovery/Controller remain within final gates. Workbench Sidebar, Dock, Notification, Approval, Topic Flow, Workspace, Timeline, Session catalog, settings persistence and Topic context menu have explicit owners. Agent A-to-B catalog responses, Session A-to-B settings completions, Workspace A-to-B success/failure/finally, and closed-menu focus microtasks are identity guarded. Renderer History, root-local Action delegation and pure LaTeX preprocessing are extracted. Workbench implementation is about 1985 lines and Renderer implementation about 2539 lines; Agent CSS remains about 4002 lines. Final 800/600/component-owner targets are not yet met, so status remains implemented rather than complete/product."
+  "notes": "2026-08-03 governance completion working tree: Runtime Manager and Controller are within 600 lines, Workbench composition is within 800 lines, and Agent Renderer implementation is 540 physical lines with a final 600-line gate. Renderer content, message lifecycle, Mermaid, Tool Result and Markdown pipeline have explicit instance-owned modules. Agent CSS is a fixed nine-owner import graph; AST migration preserved 583 rules and 2301 declarations. Runtime stop/crash now follows generation, approvals, waiters, dynamic/timers, transports, Repository ordering; duplicate ToolBox cleanup is at-most-once. Targeted Renderer, UI, lifecycle and Electron recovery tests passed. Status remains implemented/working-tree until the complete final matrix and product-level visual/live gates are recorded on the final revision."
 }

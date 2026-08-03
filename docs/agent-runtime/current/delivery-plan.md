@@ -235,15 +235,18 @@ R12 当前状态只能是 `implemented/working-tree`，不得复用 R7-R10 live 
 
 ## R13 Agent Code Governance and Race Closure
 
-- [x] Renderer/Runtime/Workbench public facades established; private implementations remain behaviorally unchanged and are guarded by temporary ceilings.
+- [x] Runtime Manager、Controller、Workbench composition 和 Full Fork Renderer 均达到最终 600/600/800/600 物理行门禁；普通 Service/View/Renderer module 受 900 行门禁约束。
 - [x] Agent-private lifecycle scope and Workspace request coordinator prevent cross-root cleanup and stale request writes.
 - [x] Workbench access is grouped into Session, Projection, Interaction, and Workspace clients; canonical Session IPC is the only formal path.
 - [x] Snapshot-to-timeline projection is now a stateless Controller dependency; Runtime identity/config/approval/ToolBox normalization lives in `runtime-normalizers.js`.
 - [x] Agent Renderer stream state and Workbench named timer/RAF resources are instance-owned and disposed through explicit lifecycle modules.
 - [x] Pi/Rust JavaScript Runtime moved to `archive/agent-runtime/`; archived tests remain available through `archive:*` scripts and are excluded from product packaging.
-- [ ] Reduce private implementation files below their final module ceilings and split CSS into owned component files. This remains governance debt and is not a product release claim.
+- [x] Agent CSS 拆为固定顺序的 shell/sidebar/composer/timeline/session-dock/workspace/activity/responsive/legacy adapter；入口不再持有直接规则，拆分前后 583 rules / 2301 declarations 保持一致。
+- [x] Runtime stop/crash 顺序固定为 generation close、approval fail-close、waiter reject、dynamic/timer cancel、transport stop、Repository close；ToolBox duplicate cleanup 不重复 interrupt。
+- [x] Renderer content/message lifecycle/Mermaid/Tool Result/Markdown pipeline 独立归属，presentation golden、isolation 和 lifecycle gate 通过。
+- [~] Hermetic 与 Electron recovery 已通过；最终完整聚合矩阵和人工多分辨率/长流视觉验收仍需在本次治理 revision 上完成。
 
-R13 当前状态为 `implemented/working-tree`；所有真实 Electron 多 Tab、长流和关闭重开验收仍需在同一提交收据中重跑。
+R13 当前状态为 `implemented/working-tree`；代码治理目标已实现，但产品级多分辨率截图、20 文件 Tab、长流滚动和 live backend approval 仍属于 GUI-R6/R6，不因治理完成而自动升级为 product。
 
 - [x] R7: Agent Profile/Session snapshot、CAS、projection-only IPC、ToolBox latest-wins 与 Session-keyed Renderer state。
 - [x] R8: Runtime generation、InteractionRegistry 有界清理、按需重启、持久输入状态机与 pre-RPC/ACK crash fault injection。
