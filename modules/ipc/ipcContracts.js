@@ -13,7 +13,6 @@ const CHANNELS = Object.freeze({
     FLOWLOCK_RESPONSE: 'flowlock:response',
     DESKTOP_LAUNCH: 'desktop-launch-vchat-app',
     AGENT_RUNTIME_GET_STATUS: 'agent-runtime:get-status',
-    AGENT_RUNTIME_GET_PRESENTATION_MODE: 'agent-runtime:get-presentation-mode',
     AGENT_RUNTIME_LIST_AGENT_PROFILES: 'agent-runtime:list-agent-profiles',
     AGENT_RUNTIME_SAVE_AGENT_PROFILE: 'agent-runtime:save-agent-profile',
     AGENT_RUNTIME_SAVE_AGENT_AVATAR: 'agent-runtime:save-agent-avatar',
@@ -134,14 +133,6 @@ const channelRegistry = new Map([
             state: 'string', runtime: 'string', protocol: 'string', worker: 'object?',
             sessions: 'array', runtimes: 'array', storage: 'object', capabilities: 'object',
         },
-        supportsConcurrent: true,
-    }],
-    [CHANNELS.AGENT_RUNTIME_GET_PRESENTATION_MODE, {
-        channelName: CHANNELS.AGENT_RUNTIME_GET_PRESENTATION_MODE,
-        channelType: CHANNEL_TYPES.QUERY,
-        owner: 'Agent Runtime',
-        requestSchema: null,
-        responseSchema: { mode: 'string' },
         supportsConcurrent: true,
     }],
     [CHANNELS.AGENT_RUNTIME_START, {

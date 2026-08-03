@@ -18,45 +18,6 @@ function projectSession(summary = {}) {
     };
 }
 
-function normalizeContent(content) {
-    if (typeof content === 'string') return content;
-    if (Array.isArray(content)) {
-        return content
-            .map((part) => typeof part === 'string' ? part : part?.type === 'text' ? part.text || '' : '')
-            .filter(Boolean)
-            .join('\n');
-    }
-    if (content === null || content === undefined) return '';
-    return typeof content === 'object' ? JSON.stringify(content, null, 2) : String(content);
-}
-
-function normalizeAttachments(message = {}) {
-    if (Array.isArray(message.attachments)) return message.attachments.filter(Boolean).map((item) => ({ ...item }));
-    if (!Array.isArray(message.content)) return [];
-    return message.content
-        .filter((part) => part?.type === 'attachment' || part?.type === 'attachment_ref')
-        .map((part) => part.attachment)
-        .filter(Boolean)
-        .map((item) => ({ ...item }));
-}
-
-function projectMessage(message = {}) {
-    return {
-        id: message.id || message.messageId,
-        turnId: message.turnId || null,
-        role: message.role || 'assistant',
-        content: normalizeContent(message.content),
-        attachments: normalizeAttachments(message),
-        reasoning: normalizeContent(message.reasoning),
-        state: message.state || 'complete',
-        deliveryState: message.deliveryState || 'confirmed',
-        deliveryDetail: message.deliveryDetail || '',
-        createdAt: message.createdAt || 0,
-        firstSequence: Number.isFinite(Number(message.firstSequence)) ? Number(message.firstSequence) : null,
-        lastSequence: Number.isFinite(Number(message.lastSequence)) ? Number(message.lastSequence) : null,
-    };
-}
-
 function projectTool(tool = {}) {
     return {
         toolCallId: tool.toolCallId,
@@ -110,7 +71,6 @@ function projectPlan(plan) {
 
 export {
     projectArtifact,
-    projectMessage,
     projectPlan,
     projectSession,
     projectTool,

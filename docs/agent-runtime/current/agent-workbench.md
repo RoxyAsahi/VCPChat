@@ -192,7 +192,7 @@ R5.3 借鉴 vcp-code `VcpInfoNotifications` 和 ExtensionState 的 200 条 bound
 
 ## 当前实现状态
 
-已完成基础接线：SQLite snapshot -> Workbench projection、单 Message keyed patch、active runtime 与 selected Session 分离、fork controller/API、Full Fork presentation/animation-frame batcher、首发 thinking barrier、Session 模型保存、JSDOM mount/store 回归，以及真实 Electron preload/IPC 的空 Session/Thread/Projection smoke。Workbench Message row 现在默认使用 Full Fork；`legacy` 仅作为隐藏环境回退保留。结构化工具等非 Message Block 继续使用 Agent 专用 keyed renderer，不建立第二套 transcript 真源。
+已完成基础接线：SQLite snapshot -> Workbench projection、单 Message keyed patch、active runtime 与 selected Session 分离、fork controller/API、Full Fork presentation/animation-frame batcher、首发 thinking barrier、Session 模型保存、JSDOM mount/store 回归，以及真实 Electron preload/IPC 的空 Session/Thread/Projection smoke。Workbench Message row 只使用 Full Fork；旧手写 Message Renderer 及其环境变量、IPC 和 preload 回退通道已退役。结构化工具等非 Message Block 继续使用 Agent 专用 keyed renderer，不建立第二套 transcript 真源。
 
 Full Fork 已清除 `currentChatHistoryRef`、`currentSelectedItemRef`、`currentTopicIdRef`、`saveChatHistory`、主聊天 `streamManager` 和主 context menu 依赖。主聊天/Fork golden fixture 覆盖 reasoning、Markdown 表格、LaTeX、代码、Mermaid、链接、图片、VCP marker 与附件，并比较规范化关键 DOM。编辑、重试、分支、取消已接真实 Codex action adapter；转发目前为安全的剪贴板交接，不调用绑定主聊天 history identity 的旧转发 modal。
 
@@ -202,11 +202,11 @@ Full Fork 已清除 `currentChatHistoryRef`、`currentSelectedItemRef`、`curren
   presentation-only Message Part；它由 Full Fork 渲染完整 Agent 头像、名称、消息骨架、
   `thinking-indicator` 与 `.streaming` 流光。真实 assistant/reasoning Item 到达后 keyed timeline 接管。
 - 设置页模型保存按 Cherry 的 Session-scoped 机制写入当前 `configSnapshot.model`；模型-only 更新保留原审批策略。无选中 Session 时才更新新 Session 默认模型。
-- 当前实际 Message renderer：`VCP_AGENT_PRESENTATION_RENDERER` 未设置时为 `fork`，入口是 `createAgentMessagePresentation()` -> `agent-presentation/fork/agentMessageRenderer.js`；`legacy` 仅为显式回退。
+- 当前唯一 Message renderer：`createAgentMessagePresentation()` -> `agent-presentation/fork/agentMessageRenderer.js`。`data-presentation-renderer="fork"` 仅是 Electron QA 诊断标记，不是运行时模式开关。
 
 checkpoint 收据：以上实现进入 `29c2068a`；`npm run test:agent-workbench`、`npm run test:codex-runtime-manager`、`npm run test:agent-presentation`、`npm run test:codex-projection-store`、`npm run check:agent-runtime`、`npm run check:ui-system`、`npm run test:electron-codex-smoke` 已对同一内容通过。真实 Nova/ToolBox 长任务仍不由这些命令覆盖。
 
-结构化 Agent Block 已从 Workbench 页面迁入 `agent-presentation/blocks/`。Tool、Approval、ToolBox/VCP observation、marker、error 和 unknown fallback 由统一 registry 创建；Workbench 只提供取消和审批动作。Fork/legacy 灰度仅影响 Message renderer，不再产生第二套工具或审批卡。Tool patch 保留根 DOM，在 terminal 状态移除取消动作，并在展开状态使用最新 Projection payload 重建详情。
+结构化 Agent Block 已从 Workbench 页面迁入 `agent-presentation/blocks/`。Tool、Approval、ToolBox/VCP observation、marker、error 和 unknown fallback 由统一 registry 创建；Workbench 只提供取消和审批动作。Message 与结构化 Block 均只有一条正式 presentation 路径。Tool patch 保留根 DOM，在 terminal 状态移除取消动作，并在展开状态使用最新 Projection payload 重建详情。
 
 Tool Block 仍保留 Agent 专用结构化 adapter 与 `agent-chat-tool-activity` identity hook，但视觉根节点和
 详情已复用主聊天 `vcp-tool-call-summary-bubble`、`vcp-tool-use-bubble`、`vcp-tool-result-bubble` 与 UI token；

@@ -47,11 +47,11 @@ Renderer fork 不读取 `currentChatHistoryRef`、`currentSelectedItemRef`、`cu
 
 1. `migration-ledger.json` 的 forbidden dependency ceiling 已全部归零。
 2. `createAgentMessagePresentation()` 已成为 Workbench Message row 的默认 `create/patch` 路径；结构化 Tool/Approval/Observation Block 继续走现有 keyed renderer。
-3. `VCP_AGENT_PRESENTATION_RENDERER=fork|legacy` 由 Main 读取并经窄 IPC 注入；默认 `fork`，不进入 localStorage。
+3. Full Fork 是唯一 Message renderer；旧环境变量、模式 IPC、preload API 和 Workbench 手写回退实现已删除。
 4. 编辑、重试和分支均通过 action adapter 调用 `thread/fork`；取消调用目标 Turn；任何动作均不直接改 SQLite 历史。
 5. 主聊天与 Fork 的 golden fixture 已在隔离 JSDOM 中比较规范化 DOM；附件删除按钮因 Agent durable history 不允许直接变更而明确排除。
 6. 原 `renderer.js`、`modules/messageRenderer.js`、主聊天 streamManager 和 `messageContextMenu.js` 保持零修改。
-7. 原先位于 `agent-workbench.js` 的 Tool/Approval/Observation DOM 实现已删除；Fork 与 legacy Message 灰度模式共享同一 Block registry。
+7. 原先位于 `agent-workbench.js` 的 Tool/Approval/Observation DOM 与 legacy Message 实现均已删除；正式路径使用 Full Fork + 单一 Block registry。
 
 ## 当前验证
 
@@ -59,11 +59,10 @@ Renderer fork 不读取 `currentChatHistoryRef`、`currentSelectedItemRef`、`cu
 npm run test:agent-presentation
 npm run test:agent-workbench
 npm run test:electron-codex-smoke
-$env:VCP_AGENT_PRESENTATION_RENDERER='legacy'; npm run test:electron-codex-smoke
 ```
 
-Checkpoint 收据（VChat `29c2068a`）：JSDOM Full Fork receipt、forbidden dependency、golden DOM、action adapter、keyed patch 与 Workbench mount 均通过；真实 Electron 以 `fork` 和 `legacy` 两种模式从内部应用启动器挂载 Workbench，并断言 Main/preload 模式值、sidebar/feed/composer DOM 和错误窗口。当前主题仍引用缺失的 `themes_snow_realm_light.jpg`，Electron smoke 仅对这一个精确的既有 shell 资源作基线隔离，其他 request/console/page error 继续 fail-closed。
+Checkpoint 收据（VChat `29c2068a`）：JSDOM Full Fork receipt、forbidden dependency、golden DOM、action adapter、keyed patch 与 Workbench mount 均通过。后续单轨收口删除了旧模式 IPC/preload API；真实 Electron 固定从内部应用启动器挂载 Full Fork Workbench，并断言旧 preload API 不再暴露、sidebar/feed/composer DOM 和错误窗口。当前主题仍引用缺失的 `themes_snow_realm_light.jpg`，Electron smoke 仅对这一个精确的既有 shell 资源作基线隔离，其他 request/console/page error 继续 fail-closed。
 
 结构化 Block 迁移收据：`scripts/test-agent-presentation-blocks.mjs` 验证 running→completed 不替换 Tool 根节点、清除终态取消按钮、展开详情读取最新 payload、args/result/resources/warnings/task、审批恰好一次、marker 展开和未知 Block fail-safe。该测试已进入 `test:agent-presentation` 与 `test:codex-stack:real`。
 
-空 Session shell 已在 1440×900、1024×720 的深浅主题下通过实际 Electron 截图检查：sidebar/header/feed/composer 无裁切、重叠或空白，正式 `setTheme` 广播后外壳和 Workbench 主题一致。截图保存在系统临时 QA 目录，不纳入仓库。该证据尚不等于富消息视觉完成：Markdown/KaTeX/Mermaid/工具/长流截图、滚动 trace、两个连续提交 revision 的 smoke 以及真实 Nova/ToolBox 工具流仍未完成。legacy 因此继续保留。
+空 Session shell 已在 1440×900、1024×720 的深浅主题下通过实际 Electron 截图检查：sidebar/header/feed/composer 无裁切、重叠或空白，正式 `setTheme` 广播后外壳和 Workbench 主题一致。截图保存在系统临时 QA 目录，不纳入仓库。该证据尚不等于富消息视觉完成：Markdown/KaTeX/Mermaid/工具/长流截图、滚动 trace、两个连续提交 revision 的 smoke 以及真实 Nova/ToolBox 工具流仍未完成；这些缺口由 Full Fork 后续门槛承担，不再保留第二套 Renderer。

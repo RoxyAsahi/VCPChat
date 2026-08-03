@@ -149,6 +149,65 @@ function groupConsecutiveToolParts(parts = []) {
     return grouped;
 }
 
+// Bubble-mode metadata for visually continuous Agent activity.  This is a
+// presentation-only grouping: protocol ownership still comes exclusively
+// from the real Turn/Agent identities carried by each projected part.
+function classifyAgentMessageGroups(parts = []) {
+    const groups = new Map();
+    let active = null;
+
+    for (const part of parts) {
+        const key = timelinePartKey(part);
+        if (part.kind === 'tool' || part.kind === 'tool-group') {
+            if (active && part.turnId && part.turnId === active.turnId) {
+                groups.set(key, { position: 'continuation', groupId: active.groupId });
+            } else {
+                active = null;
+                groups.set(key, { position: 'standalone', groupId: null });
+            }
+            continue;
+        }
+
+        if (part.kind !== 'message' || part.value?.role !== 'assistant') {
+            active = null;
+            groups.set(key, { position: 'standalone', groupId: null });
+            continue;
+        }
+
+        const turnId = part.turnId || null;
+        const agentId = part.value?.agentId || part.value?.participantId || part.value?.name || 'assistant';
+        const continues = Boolean(turnId && active
+            && active.turnId === turnId
+            && active.agentId === agentId);
+        const groupId = continues ? active.groupId : `turn:${turnId || key}`;
+        groups.set(key, { position: continues ? 'continuation' : 'first', groupId });
+        active = turnId ? { turnId, agentId, groupId } : null;
+    }
+
+    return groups;
+}
+
+function applyAgentMessageGroups(parts, rows) {
+    const groups = classifyAgentMessageGroups(parts);
+    for (const part of parts) {
+        const row = rows.get(timelinePartKey(part));
+        if (!row) continue;
+        const group = groups.get(timelinePartKey(part));
+        if (!group || group.position === 'standalone') {
+            delete row.dataset.agentAvatarPosition;
+            delete row.dataset.agentMessageGroup;
+        } else {
+            row.dataset.agentAvatarPosition = group.position;
+            row.dataset.agentMessageGroup = group.groupId;
+        }
+        const avatar = row.querySelector?.('.chat-avatar');
+        if (avatar) {
+            if (group?.position === 'continuation') avatar.setAttribute('aria-hidden', 'true');
+            else avatar.removeAttribute('aria-hidden');
+        }
+    }
+}
+
 /**
  * Canonical, ephemeral AgentTimelinePart projection.  Approval and observer
  * parts deliberately stay out of this main conversation feed; their owning
@@ -195,6 +254,7 @@ function reconcileAgentTimeline(container, parts, callbacks, rows = new Map()) {
         // gives sequence reordering a deterministic, keyed implementation.
         container.append(row);
     }
+    applyAgentMessageGroups(parts, rows);
     for (const [key, row] of rows) {
         if (!desired.has(key)) {
             row.remove();
@@ -205,6 +265,7 @@ function reconcileAgentTimeline(container, parts, callbacks, rows = new Map()) {
 }
 
 export {
+    classifyAgentMessageGroups,
     createAgentTimelineParts,
     groupConsecutiveToolParts,
     projectVcpToolPresentation,

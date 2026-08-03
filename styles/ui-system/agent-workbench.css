@@ -3859,6 +3859,27 @@ html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-group {
     background: transparent;
 }
 
+/* In bubble mode, one Agent Turn is one visual conversation group. Keep the
+   avatar gutter reserved so continuation bubbles and tool cards never jump. */
+html[data-ui-mode="next"] body:not(.chat-presentation-panel):not(.chat-presentation-immersive)
+.vcp-ui-scope.agent-chat-root
+.message-item.assistant[data-agent-avatar-position="continuation"] > .chat-avatar {
+    visibility: hidden;
+    pointer-events: none;
+}
+
+html[data-ui-mode="next"] body:not(.chat-presentation-panel):not(.chat-presentation-immersive)
+.vcp-ui-scope.agent-chat-root
+.message-item.assistant[data-agent-avatar-position="continuation"] {
+    margin-top: calc(var(--vcp-ui-space-2) * -1);
+}
+
+html[data-ui-mode="next"] body:not(.chat-presentation-panel):not(.chat-presentation-immersive)
+.vcp-ui-scope.agent-chat-root
+.message-item.assistant[data-agent-avatar-position="continuation"] .name-time-block {
+    display: none;
+}
+
 html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-group-header {
     display: flex;
     align-items: center;

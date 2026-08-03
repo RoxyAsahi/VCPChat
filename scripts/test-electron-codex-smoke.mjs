@@ -99,7 +99,6 @@ try {
         const session = await api.agentRuntimeCreateSession({ resume: topic.topicId });
         const projection = await api.agentRuntimeReadProjection({ sessionId: session.sessionId });
         const status = await api.agentRuntimeGetStatus();
-        const presentation = await api.agentRuntimeGetPresentationMode();
         const workspace = await api.agentWorkspaceListDirectory({ sessionId: session.sessionId, relativePath: '', limit: 1000 });
         const packagePreview = await api.agentWorkspaceReadPreview({
             sessionId: session.sessionId,
@@ -114,7 +113,10 @@ try {
             executable: status.worker?.executable || null,
             messageCount: projection.messages.length,
             orphaned: projection.session.orphaned,
-            presentationMode: presentation.mode,
+            legacyPresentationApiExposed: Object.prototype.hasOwnProperty.call(
+                api,
+                ['agentRuntimeGet', 'PresentationMode'].join(''),
+            ),
             workspaceRevision: workspace.workspaceRevision,
             workspaceHasPackage: workspace.entries.some((entry) => entry.relativePath === 'package.json'),
             packagePreviewKind: packagePreview.kind,
@@ -126,10 +128,7 @@ try {
     assert.equal(result.runtime, 'codex-app-server');
     assert.equal(result.messageCount, 0);
     assert.equal(result.orphaned, false);
-    const expectedPresentationMode = String(process.env.VCP_AGENT_PRESENTATION_RENDERER || '').toLowerCase() === 'legacy'
-        ? 'legacy'
-        : 'fork';
-    assert.equal(result.presentationMode, expectedPresentationMode);
+    assert.equal(result.legacyPresentationApiExposed, false);
     assert.match(result.workspaceRevision, /^[0-9a-f]{16}$/);
     assert.equal(result.workspaceHasPackage, true);
     assert.equal(result.packagePreviewKind, 'text');

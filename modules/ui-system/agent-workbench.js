@@ -1,6 +1,6 @@
 import { register } from './next-ui-apps.js';
 import { createWorkbenchController } from './agent-workbench-controller.js';
-import { projectMessage, projectSession } from './agent-workbench-projections.js';
+import { projectSession } from './agent-workbench-projections.js';
 import { deriveWorkbenchViewState } from './agent-workbench-store.js';
 import {
     createAgentTimelineParts,
@@ -322,37 +322,6 @@ function formatTime(value) {
     try { return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' }).format(new Date(value)); } catch { return ''; }
 }
 
-function deliveryLabel(item) {
-    if (item.role !== 'user') return '';
-    const labels = {
-        sending: '发送中…',
-        unconfirmed: '发送状态未确认',
-        interrupted: '任务已中断',
-        failed: '附件不可用',
-    };
-    return labels[item.deliveryState] || '';
-}
-
-function syncMessageDelivery(row, body, item) {
-    if (!row || item.role !== 'user') return;
-    const label = deliveryLabel(item);
-    row.dataset.deliveryState = item.deliveryState || 'confirmed';
-    let status = body?.querySelector('.agent-chat-message-delivery');
-    if (!label) {
-        status?.remove();
-        row.removeAttribute('data-delivery-state');
-        return;
-    }
-    if (!status) {
-        status = node('div', 'agent-chat-message-delivery');
-        status.setAttribute('role', 'status');
-        status.setAttribute('aria-live', 'polite');
-        body?.append(status);
-    }
-    status.textContent = label;
-    status.title = item.deliveryDetail || label;
-}
-
 function renderMarkdown(text) {
     const bridge = window.vcpRenderBridge;
     if (!text) return '';
@@ -361,107 +330,8 @@ function renderMarkdown(text) {
     return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function renderReasoning(text) {
-    if (!text) return '';
-    const bridge = window.vcpRenderBridge;
-    if (bridge) return bridge.renderReasoningBlock(text);
-    // Keep the renderer-only fallback structurally equivalent to the normal
-    // VCP thought-chain output.  That lets the Workbench retain the same
-    // interaction and visual hierarchy in tests or during a partial renderer
-    // bootstrap, instead of dropping to a browser-default <details> control.
-    return `<div class="vcp-thought-chain-bubble collapsible expanded" data-vcp-block-type="thought-chain">
-        <div class="vcp-thought-chain-header"><span class="vcp-thought-chain-icon vcp-ui-icon" data-vcp-icon="lightbulb">lightbulb</span><span class="vcp-thought-chain-label">思考中</span><span class="vcp-result-toggle-icon"></span></div>
-        <div class="vcp-thought-chain-collapsible-content"><div class="vcp-thought-chain-body"><pre>${
-            String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        }</pre></div></div>
-    </div>`;
-}
-
 function postRender(contentDiv) {
     window.vcpRenderBridge?.runPostRender(contentDiv);
-}
-
-// Wall-clock reasoning duration, keyed by message id.  Recorded when a
-// reasoning block first streams and read back when the message completes so
-// the thinking block can auto-collapse with an accurate "思考 Ns" label.
-const reasoningStartTimes = new Map();
-
-// Drive the thought-chain (reasoning) block's open/collapsed state and, on
-// completion, stamp a thinking duration.  Keeps the live stream expanded and
-// auto-collapses it once the assistant message is complete.
-function applyReasoningState(reasoningEl, item) {
-    if (!reasoningEl) return;
-    const bubble = reasoningEl.querySelector('.vcp-thought-chain-bubble');
-    const header = reasoningEl.querySelector('.vcp-thought-chain-header');
-    const iconEl = reasoningEl.querySelector('.vcp-thought-chain-icon');
-    const label = reasoningEl.querySelector('.vcp-thought-chain-label');
-    const completed = item.state === 'complete';
-    if (iconEl) {
-        // Cherry Studio uses a quiet lightbulb affordance rather than a large
-        // decorative emoji. Keep the shared VCP renderer markup but turn this
-        // Workbench projection into that compact status treatment.
-        iconEl.classList.add('vcp-ui-icon');
-        iconEl.textContent = 'lightbulb';
-        iconEl.dataset.vcpIcon = 'lightbulb';
-        window.VCPIcons?.set?.(iconEl, 'lightbulb');
-    }
-    header?.setAttribute('title', completed ? '展开推理过程' : '查看正在生成的推理过程');
-    // The normal renderer binds this through vcpRenderBridge.  Keep the
-    // bootstrap/test fallback independently interactive without registering a
-    // second listener in the full renderer.
-    if (!window.vcpRenderBridge && header && header.dataset.agentWorkbenchToggleBound !== 'true') {
-        header.dataset.agentWorkbenchToggleBound = 'true';
-        header.tabIndex = 0;
-        header.setAttribute('role', 'button');
-        header.setAttribute('aria-expanded', String(bubble?.classList.contains('expanded')));
-        const toggle = () => {
-            bubble?.classList.toggle('expanded');
-            header.setAttribute('aria-expanded', String(bubble?.classList.contains('expanded')));
-        };
-        header.addEventListener('click', toggle);
-        header.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                toggle();
-            }
-        });
-    }
-    reasoningEl.dataset.state = completed ? 'complete' : 'streaming';
-    if (completed) {
-        bubble?.classList.remove('expanded');
-        reasoningEl.classList.add('is-complete');
-        const start = reasoningStartTimes.get(item.id);
-        const secs = Math.max(0.1, (start == null ? 0 : performance.now() - start) / 1000);
-        if (label) {
-            label.replaceChildren(document.createTextNode('已深度思考 '), node('span', 'agent-chat-reasoning-time', `${secs.toFixed(1)}s`));
-        }
-        const content = reasoningEl.querySelector('.vcp-thought-chain-collapsible-content');
-        if (content && !content.querySelector('.agent-chat-reasoning-copy')) {
-            const copy = iconButton('content_copy', '复制推理过程', 'agent-chat-reasoning-copy');
-            copy.addEventListener('click', (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                const value = String(item.reasoning || '');
-                if (!value) return;
-                const write = window.navigator?.clipboard?.writeText?.(value);
-                if (write && typeof write.catch === 'function') {
-                    write.then(() => notify('已复制推理过程。', 'success'))
-                        .catch(() => notify('无法访问系统剪贴板。', 'warning'));
-                } else {
-                    notify('当前环境无法访问系统剪贴板。', 'warning');
-                }
-            });
-            content.append(copy);
-        }
-        reasoningStartTimes.delete(item.id);
-    } else {
-        bubble?.classList.add('expanded');
-        if (!reasoningStartTimes.has(item.id)) reasoningStartTimes.set(item.id, performance.now());
-        const secs = Math.max(0.1, (performance.now() - reasoningStartTimes.get(item.id)) / 1000);
-        if (label) {
-            label.replaceChildren(document.createTextNode('思考中 '), node('span', 'agent-chat-reasoning-time', `${secs.toFixed(1)}s`));
-        }
-    }
 }
 
 function scrollFeed(container, force) {
@@ -540,109 +410,6 @@ function createAttachmentChips(attachments, onRemove = null, onWorkspacePath = n
     });
     return list;
 }
-
-function createMessage(message) {
-    const item = projectMessage(message);
-    const role = item.role === 'user' ? 'user' : 'assistant';
-    const row = node('article', `message-item ${role}`);
-    row.dataset.messageId = item.id || `${role}:${item.turnId || ''}`;
-    const avatar = document.createElement('img');
-    avatar.className = 'chat-avatar';
-    avatar.src = role === 'user' ? 'assets/default_user_avatar.png' : 'assets/default_avatar.png';
-    avatar.alt = role === 'user' ? '你的头像' : 'Nova 头像';
-    avatar.onerror = () => { avatar.classList.add('is-image-unavailable'); };
-    const body = node('div', 'details-and-bubble-wrapper');
-    const heading = node('div', 'name-time-block');
-    heading.append(node('div', 'sender-name', role === 'user' ? '你' : 'Nova'), node('div', 'message-timestamp', formatTime(item.createdAt)));
-    const content = node('div', 'md-content');
-    if (item.content && item.state === 'streaming') {
-        // Streaming text is patched as text until Codex closes the
-        // message.  This avoids reparsing an ever-growing Markdown document
-        // on every delta while leaving final rendering to the shared bridge.
-        content.textContent = item.content;
-        content.dataset.agentStreaming = 'true';
-    } else if (item.content) {
-        content.innerHTML = renderMarkdown(item.content);
-        postRender(content);
-    } else if (item.state === 'streaming') {
-        content.innerHTML = '<span class="agent-chat-thinking-placeholder">正在思考…</span>';
-    }
-    body.append(heading, content);
-    if (item.attachments?.length) body.append(createAttachmentChips(item.attachments, null, (relativePath) => openWorkspaceSourcePath(relativePath, 'attachment')));
-    if (item.reasoning) {
-        const reasoningEl = node('div', 'agent-chat-reasoning-block');
-        reasoningEl.innerHTML = renderReasoning(item.reasoning);
-        postRender(reasoningEl);
-        applyReasoningState(reasoningEl, item);
-        body.append(reasoningEl);
-    }
-    syncMessageDelivery(row, body, item);
-    // Streaming indicator: only show when there is no content yet
-    if (item.state === 'streaming' && !item.content) {
-        body.append(node('span', 'agent-chat-streaming', '正在生成'));
-    }
-    row.append(avatar, body);
-    return row;
-}
-
-function patchMessage(row, message) {
-    const item = projectMessage(message);
-    const content = row.querySelector('.md-content');
-    if (content) {
-        if (item.content && item.state === 'streaming') {
-            content.textContent = item.content;
-            content.dataset.agentStreaming = 'true';
-        } else if (item.content) {
-            content.innerHTML = renderMarkdown(item.content);
-            delete content.dataset.agentStreaming;
-            postRender(content);
-        } else if (item.state === 'streaming') {
-            if (!content.querySelector('.agent-chat-thinking-placeholder')) {
-                content.innerHTML = '<span class="agent-chat-thinking-placeholder">正在思考…</span>';
-            }
-        } else {
-            content.innerHTML = '';
-            delete content.dataset.agentStreaming;
-        }
-    }
-
-    const body = row.querySelector('.details-and-bubble-wrapper');
-    body?.querySelector('.agent-chat-attachment-list')?.remove();
-    if (item.attachments?.length && body) {
-        const attachmentList = createAttachmentChips(item.attachments, null, (relativePath) => openWorkspaceSourcePath(relativePath, 'attachment'));
-        const reasoningBlock = body.querySelector('.agent-chat-reasoning-block');
-        if (reasoningBlock) body.insertBefore(attachmentList, reasoningBlock);
-        else body.append(attachmentList);
-    }
-    let reasoningEl = body?.querySelector('.agent-chat-reasoning-block');
-    if (item.reasoning) {
-        if (!reasoningEl) {
-            reasoningEl = node('div', 'agent-chat-reasoning-block');
-            body?.append(reasoningEl);
-        }
-        reasoningEl.innerHTML = renderReasoning(item.reasoning);
-        postRender(reasoningEl);
-        applyReasoningState(reasoningEl, item);
-    } else if (reasoningEl) {
-        reasoningEl.remove();
-        reasoningStartTimes.delete(item.id);
-    }
-    syncMessageDelivery(row, body, item);
-
-    // Streaming indicator: only show when there is no content yet
-    let streaming = body?.querySelector('.agent-chat-streaming');
-    if (item.state === 'streaming' && !item.content) {
-        if (!streaming) {
-            streaming = node('span', 'agent-chat-streaming', '正在生成');
-            body?.append(streaming);
-        }
-    } else {
-        streaming?.remove();
-    }
-}
-
-
-
 
 function mountWorkbench(container) {
     const controller = createWorkbenchController(runtimeApi());
@@ -734,7 +501,6 @@ function mountWorkbench(container) {
         // Keyed by Codex-owned messageId/toolCallId. This is a DOM cache only;
         // it never contains a transcript beyond the current renderer view.
         timelineRows: new Map(),
-        presentationMode: 'fork',
         // Renderer-only send barriers, isolated by durable Session identity.
         // They are never written to SQLite and must never disable or decorate
         // another Session while thread/start is still in flight.
@@ -774,9 +540,9 @@ function mountWorkbench(container) {
     let runStatusTimer = null;
 
     const root = node('section', 'container agent-chat-root vcp-ui-scope');
-    // Read-only diagnostics for Electron smoke/visual QA. The mode still
-    // comes exclusively from Main and never becomes persisted Renderer state.
-    root.dataset.presentationRenderer = state.presentationMode;
+    // Read-only diagnostic for Electron smoke/visual QA. Full Fork is the
+    // Workbench's only Message renderer and is not configurable runtime state.
+    root.dataset.presentationRenderer = 'fork';
     const topicFlowLayer = node('div', 'vcp-ui-scope agent-chat-topic-flow-layer');
     const sidebar = node('aside', 'sidebar active vcp-ui-scope agent-chat-sidebar');
     const main = node('main', 'main-content agent-chat-main-content agent-chat-pane');
@@ -932,18 +698,6 @@ function mountWorkbench(container) {
             openWorkspacePath: (relativePath, action = 'preview') => run(() => openWorkspaceSourcePath(relativePath, 'tool', action)),
         },
     });
-
-    const legacyTimelineCallbacks = {
-        create(part) {
-            if (part.kind === 'message') return createMessage(part.value);
-            return blockPresentation.timelineCallbacks.create(part);
-        },
-        patch(row, part) {
-            if (part.kind === 'message') patchMessage(row, part.value);
-            else return blockPresentation.timelineCallbacks.patch(row, part);
-            return row;
-        },
-    };
 
     function presentationSessionContext() {
         const current = store.getState();
@@ -2721,10 +2475,7 @@ function mountWorkbench(container) {
             return;
         }
         clearEmpty();
-        const callbacks = state.presentationMode === 'legacy'
-            ? legacyTimelineCallbacks
-            : fullPresentation.timelineCallbacks;
-        reconcileAgentTimeline(feedItems, timeline, callbacks, state.timelineRows);
+        reconcileAgentTimeline(feedItems, timeline, fullPresentation.timelineCallbacks, state.timelineRows);
 
         scrollFeed(feed, follow);
     }
@@ -4350,19 +4101,6 @@ function mountWorkbench(container) {
     render();
     controller.initialize()
         .then(async () => {
-            void Promise.resolve()
-                .then(() => runtimeApi().agentRuntimeGetPresentationMode?.())
-                .catch(() => null)
-                .then((presentationMode) => {
-                if (state.disposed) return;
-                const nextPresentationMode = presentationMode?.mode === 'legacy' ? 'legacy' : 'fork';
-                root.dataset.presentationRenderer = nextPresentationMode;
-                if (nextPresentationMode === state.presentationMode) return;
-                state.presentationMode = nextPresentationMode;
-                for (const row of state.timelineRows.values()) row.remove();
-                state.timelineRows.clear();
-                queueRender({ feed: true });
-                });
             // A renderer reload restores SQLite only. The first actual send
             // starts or resumes the selected Codex Thread on demand.
             if (!store.getState().selectedSessionId && state.rememberedTopic?.topicId) {

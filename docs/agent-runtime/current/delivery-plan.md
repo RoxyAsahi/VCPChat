@@ -124,7 +124,7 @@
 - [x] 多 Thread runtime 状态与 selected Session 分离的基础接线。
 - [~] Session 列表、feed、草稿、切换 JSDOM 回归通过；仍含 Rust Topic 术语和兼容动作。
 - [x] Full Fork presentation 默认接入 Message row；forbidden dependency 归零，主聊天原 renderer/streamManager/context menu 零修改。
-- [x] Tool/Approval/Observation/Error 从 Workbench 迁入统一 Block registry；原页面内结构化卡片实现删除，Fork/legacy 共用同一路径。
+- [x] Tool/Approval/Observation/Error 从 Workbench 迁入统一 Block registry；原页面内结构化卡片和 legacy Message Renderer 均已删除。
 - [x] 编辑、重试、分支通过 action adapter 调用 `thread/fork`；取消路由目标 Turn，SQLite 不被菜单动作直接改写。
 - [~] 转发当前为安全剪贴板交接；尚缺不依赖主聊天 history identity 的目标选择 adapter。
 - [ ] **R5.1 Session UI 状态机复用**：从 vcp-code `sessionStateMachine.ts` 抽取 transition 机制和 fixture，建立 Renderer-only 的纯函数 reducer，覆盖 idle/creating/streaming、两类审批、用户输入、completed/interrupted/error/orphaned；不得把 UI state 当作 Runtime 真源。
@@ -136,7 +136,7 @@
 - [~] 原生 Codex tool、`vcp_invoke`、审批、资源、warning 的 Block registry 已建立并覆盖当前 Projection；尚缺完整 Codex native command/file/MCP 类型专用视觉和 live 资源验收。
 - [ ] 长流 animation-frame 合并、非底部 scroll anchor、10 Session 秒切性能录制。
 - [ ] 清除 Rust lease/takeover/compact/interaction queue 等不适用于 Codex 的 UI。
-- [~] Electron 创建/读取/空 Thread orphan smoke 已通过；增强 smoke 真实打开 Workbench 并分别断言默认 Fork 与隐藏 legacy 回退。关闭重开、crash/reconnect、富消息视觉和后台双 Thread 恢复仍缺。
+- [~] Electron 创建/读取/空 Thread orphan smoke 已通过；增强 smoke 真实打开 Workbench、固定断言 Full Fork，并确认旧模式 preload API 不再暴露。关闭重开、crash/reconnect、富消息视觉和后台双 Thread 恢复仍缺。
 - [x] **UX-R0 分段耗时诊断**：记录 Agent click/cache paint/SQLite list、Runtime ready、Thread warm、
   Turn ACK、首个 assistant Item 与首个可见 delta；只输出 duration、数量和截断 identity。
 - [x] **UX-R1 Session 目录快路径**：Projection SQLite list/read 不启动 App Server；Main 负责

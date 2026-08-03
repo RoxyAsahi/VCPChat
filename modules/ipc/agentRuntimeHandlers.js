@@ -50,7 +50,6 @@ function removeHandlers() {
     settingsManagerWithListener = null;
     settingsUpdatedListener = null;
     for (const channel of [
-        IPC_CHANNELS.GET_PRESENTATION_MODE,
         IPC_CHANNELS.LIST_AGENT_PROFILES,
         IPC_CHANNELS.SAVE_AGENT_PROFILE,
         IPC_CHANNELS.SAVE_AGENT_AVATAR,
@@ -185,11 +184,6 @@ function initialize(options) {
     settingsManager.on?.('settings-updated', settingsUpdatedListener);
     settingsManagerWithListener = settingsManager;
 
-    ipcMain.handle(IPC_CHANNELS.GET_PRESENTATION_MODE, (event) => projectionGuard(event, () => ({
-        mode: String(process.env.VCP_AGENT_PRESENTATION_RENDERER || '').toLowerCase() === 'legacy'
-            ? 'legacy'
-            : 'fork',
-    })));
     ipcMain.handle(IPC_CHANNELS.LIST_AGENT_PROFILES, (event) => projectionGuard(event, () => manager.listAgentProfiles()));
     ipcMain.handle(IPC_CHANNELS.SAVE_AGENT_PROFILE, (event, payload) => projectionGuard(event, () => manager.saveAgentProfile(payload || {})));
     ipcMain.handle(IPC_CHANNELS.SAVE_AGENT_AVATAR, (event, payload) => projectionGuard(event, () => manager.saveAgentAvatar(payload || {})));
