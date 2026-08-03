@@ -816,22 +816,14 @@ const settingsManager = (() => {
                 deleteItemBtn.addEventListener('click', handleDeleteCurrentItem);
             }
             if (agentAvatarInput) {
-                agentAvatarInput.addEventListener('change', (event) => {
-                    const file = event.target.files[0];
-                    if (file) {
-                        uiHelper.openAvatarCropper(file, (croppedFileResult) => {
+                window.VCPAvatarPicker?.bindInput({
+                    input: agentAvatarInput,
+                    preview: agentAvatarPreview,
+                    cropType: 'agent',
+                    onError: (error) => console.error('[SettingsManager] Agent avatar crop failed:', error),
+                    onCommit: async (croppedFileResult, previewUrl) => {
                             mainRendererFunctions.setCroppedFile('agent', croppedFileResult);
                             if (agentAvatarPreview) {
-                                const previewUrl = URL.createObjectURL(croppedFileResult);
-                                agentAvatarPreview.src = previewUrl;
-                                agentAvatarPreview.style.display = 'block';
-
-                                // 上传新头像后移除 no-avatar 类
-                                const avatarWrapper = agentAvatarPreview.closest('.agent-avatar-wrapper');
-                                if (avatarWrapper) {
-                                    avatarWrapper.classList.remove('no-avatar');
-                                }
-
                                 // 只对用户上传的真实头像进行颜色提取，不对默认头像提取
                                 // 裁切完成后立即计算颜色并填充到输入框
                                 // 使用与全局设置相同的getDominantAvatarColor函数以保持一致性
@@ -891,11 +883,7 @@ const settingsManager = (() => {
                                     });
                                 }
                             }
-                        }, 'agent');
-                    } else {
-                        if (agentAvatarPreview) agentAvatarPreview.style.display = 'none';
-                        mainRendererFunctions.setCroppedFile('agent', null);
-                    }
+                    },
                 });
             }
 

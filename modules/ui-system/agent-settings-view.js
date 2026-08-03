@@ -1,3 +1,5 @@
+import './avatar-picker.js';
+
 export function renderAgentSettingsPane(context) {
     const {
         state, store, activeSession, sessionConfigRevisions, selectedAgentProfile,
@@ -196,44 +198,33 @@ function modelOptions(catalog, selected) {
     return options;
 }
 
-function renderAvatar({ state, profile, runtimeApi, run, refreshControlPlane, notify, renderSidebar, node, button, sameAgent }) {
+function renderAvatar({ state, profile, runtimeApi, run, refreshControlPlane, notify, renderSidebar, node, sameAgent }) {
     const agentId = profile.id || profile.name || state.selectedAgent;
     const section = node('section', 'agent-chat-settings-avatar');
-    const preview = document.createElement('img');
-    preview.className = 'agent-chat-settings-avatar-preview';
-    preview.src = profile.avatarUrl || 'assets/default_avatar.png';
-    preview.alt = `${profile.name || agentId || 'Agent'} 头像`;
-    preview.onerror = () => { preview.src = 'assets/default_avatar.png'; };
     const copy = node('div', 'agent-chat-settings-avatar-copy');
     copy.append(node('strong', 'agent-chat-setting-label', 'Agent 头像'),
-        node('span', 'agent-chat-setting-help', '仅用于 Build Agent，不影响主聊天助手。PNG、JPEG、GIF 或 WebP。'));
-    const input = document.createElement('input');
-    input.type = 'file'; input.accept = 'image/png,image/jpeg,image/gif,image/webp'; input.hidden = true;
-    input.setAttribute('aria-label', '选择 Agent 头像');
-    const choose = button(state.avatarSaving ? '正在保存头像…' : '选择头像', 'secondary agent-chat-settings-save');
-    choose.disabled = state.avatarSaving || !agentId;
-    choose.addEventListener('click', () => input.click());
-    input.addEventListener('change', () => run(async () => {
-        const file = input.files?.[0];
-        if (!file || !agentId) return;
-        state.avatarSaving = true; renderSidebar();
-        try {
+        node('span', 'agent-chat-setting-help', state.avatarSaving ? '正在保存头像…' : '点击头像选择并裁剪；仅用于 Build Agent，不影响主聊天助手。'));
+    const picker = window.VCPAvatarPicker?.create({
+        src: profile.avatarUrl,
+        alt: `${profile.name || agentId || 'Agent'} 头像`,
+        disabled: state.avatarSaving || !agentId,
+        onBusyChange: (busy) => { state.avatarSaving = busy; },
+        onError: (error) => notify(error?.message || '头像保存失败。', 'error'),
+        onCommit: async (file) => run(async () => {
             const result = await runtimeApi().agentRuntimeSaveAgentAvatar?.({
-                avatarData: { name: file.name, type: file.type, buffer: await file.arrayBuffer() },
                 agentId,
                 expectedProfileRevision: Number(profile.profileRevision || profile.revision || 1),
+                avatarData: { name: file.name, type: file.type, buffer: await file.arrayBuffer() },
             });
             if (!result?.success) throw new Error(result?.error || '头像保存失败。');
             const target = state.agentCatalog.find((agent) => sameAgent(agent.id || agent.name, agentId));
             if (target) target.avatarUrl = result.avatarUrl || profile.avatarUrl;
             await refreshControlPlane();
             notify(`${target?.name || agentId} 的头像已更新。`, 'success');
-        } finally {
-            state.avatarSaving = false;
-            if (!state.disposed) renderSidebar();
-        }
-    }));
-    copy.append(choose, input); section.append(preview, copy); return section;
+        }),
+    });
+    if (picker) section.append(picker.element, copy);
+    return section;
 }
 
 function renderSessionProfileAction({ sessionId, snapshot, projection, workspace, controller, run, notify, renderSidebar, node, button }) {

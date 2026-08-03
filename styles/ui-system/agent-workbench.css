@@ -740,13 +740,17 @@ html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .topic-list .agent-ch
         border-bottom: 1px solid var(--vcp-ui-border-subtle);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-settings-avatar-preview {
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-settings-avatar .agent-avatar-display {
         width: 72px;
         height: 72px;
         border: 1px solid var(--vcp-ui-border-subtle);
         border-radius: 50%;
         object-fit: cover;
         background: var(--vcp-ui-surface-2);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-settings-avatar .agent-avatar-wrapper:hover .avatar-upload-overlay {
+        opacity: 1;
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-settings-avatar-copy {

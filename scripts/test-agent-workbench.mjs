@@ -26,6 +26,12 @@ globalThis.CustomEvent = dom.window.CustomEvent;
 globalThis.Event = dom.window.Event;
 globalThis.Node = dom.window.Node;
 globalThis.HTMLButtonElement = dom.window.HTMLButtonElement;
+let revokedAvatarUrl = null;
+window.URL.createObjectURL = () => 'blob:cropped-agent-avatar';
+window.URL.revokeObjectURL = (url) => { revokedAvatarUrl = url; };
+window.uiHelperFunctions = {
+    openAvatarCropper: (file, callback) => callback(file),
+};
 
 let registered = null;
 let unsubscribeCalls = 0;
@@ -1617,8 +1623,12 @@ assert.ok(savedWorkbenchSettings.some((item) => item.budget?.maxRequestsPerTurn 
     .find((button) => button.textContent === 'Agent 默认').click();
 const avatarSettings = host.querySelector('.agent-chat-settings-avatar');
 assert.ok(avatarSettings, 'Agent settings must expose the isolated Build Agent avatar control');
-assert.match(avatarSettings.querySelector('.agent-chat-settings-avatar-preview')?.src || '', /nova-avatar\.png/,
+assert.match(avatarSettings.querySelector('.agent-avatar-display')?.src || '', /nova-avatar\.png/,
     'avatar preview must use the selected Agent catalog avatar');
+assert.ok(avatarSettings.querySelector('.agent-avatar-wrapper .avatar-upload-overlay'),
+    'Build Agent settings must use the shared main-chat avatar picker and camera overlay');
+assert.equal([...avatarSettings.querySelectorAll('button')].some((item) => item.textContent.includes('选择头像')), false,
+    'the legacy standalone avatar upload button must be removed');
 const avatarInput = avatarSettings.querySelector('input[type="file"]');
 const avatarBytes = new Uint8Array([1, 2, 3]).buffer;
 const avatarFile = { name: 'nova.png', type: 'image/png', arrayBuffer: async () => avatarBytes };
