@@ -8,13 +8,27 @@ const session = {
     sessionId: 'session-turn', threadId: 'thread-turn', workspaceRoot: '.', archivedAt: null,
     configRevision: 2, configSnapshot: { model: 'gpt-5.6', permissionMode: 'ask', sandbox: 'none' },
 };
+const secondSession = {
+    ...session,
+    sessionId: 'session-second',
+    threadId: 'thread-second',
+};
+const sessions = new Map([
+    [session.sessionId, session],
+    [secondSession.sessionId, secondSession],
+]);
 const repository = {
-    getSession: (sessionId) => sessionId === session.sessionId ? session : null,
-    markSessionConfigApplied: (sessionId, revision, config) => ({ ...session, sessionId, configRevision: revision, configSnapshot: config }),
+    getSession: (sessionId) => sessions.get(sessionId) || null,
+    markSessionConfigApplied: (sessionId, revision, config) => ({
+        ...sessions.get(sessionId), sessionId, configRevision: revision, configSnapshot: config,
+    }),
     listPendingInputs: () => [],
 };
-const threadStates = new Map([['thread-turn', { activity: 'idle', activeTurnId: null }]]);
-const resumedThreadIds = new Set(['thread-turn']);
+const threadStates = new Map([
+    ['thread-turn', { activity: 'idle', activeTurnId: null }],
+    ['thread-second', { activity: 'idle', activeTurnId: null }],
+]);
+const resumedThreadIds = new Set(['thread-turn', 'thread-second']);
 const turnStartPromises = new Map();
 const calls = [];
 let generation = 4;
@@ -25,7 +39,7 @@ const service = new RuntimeTurnService({
     transport: () => ({
         async request(method, params) {
             calls.push({ method, params });
-            if (method === 'turn/start') return { turn: { id: 'turn-accepted' } };
+            if (method === 'turn/start') return { turn: { id: `turn-${params.threadId}` } };
             if (method === 'turn/interrupt') return {};
             throw new Error(`unexpected ${method}`);
         },
@@ -66,13 +80,47 @@ const service = new RuntimeTurnService({
 });
 
 const started = await service.startTurn({ sessionId: session.sessionId, prompt: 'hello' });
-assert.equal(started.turnId, 'turn-accepted');
+assert.equal(started.turnId, 'turn-thread-turn');
 assert.equal(threadStates.get('thread-turn').activity, 'running');
 assert.equal(calls.filter((call) => call.method === 'turn/start').length, 1);
 await service.cancel({ sessionId: session.sessionId, turnId: started.turnId });
 assert.equal(calls.at(-1).method, 'turn/interrupt');
 
-let release;
-const staleTransport = service.context?.transport;
-void staleTransport;
+threadStates.set('thread-turn', { activity: 'idle', activeTurnId: null });
+const [firstConcurrent, secondConcurrent] = await Promise.all([
+    service.startTurn({ sessionId: session.sessionId, prompt: 'first concurrent' }),
+    service.startTurn({ sessionId: secondSession.sessionId, prompt: 'second concurrent' }),
+]);
+assert.deepEqual(firstConcurrent, {
+    sessionId: session.sessionId, threadId: session.threadId, turnId: 'turn-thread-turn',
+});
+assert.deepEqual(secondConcurrent, {
+    sessionId: secondSession.sessionId, threadId: secondSession.threadId, turnId: 'turn-thread-second',
+});
+assert.equal(threadStates.get(session.threadId).activeTurnId, 'turn-thread-turn');
+assert.equal(threadStates.get(secondSession.threadId).activeTurnId, 'turn-thread-second');
+assert.equal(calls.filter((call) => call.method === 'turn/start' && call.params.threadId === session.threadId).length, 2);
+assert.equal(calls.filter((call) => call.method === 'turn/start' && call.params.threadId === secondSession.threadId).length, 1);
+
+let releaseStaleTurn;
+const staleSession = {
+    ...session,
+    sessionId: 'session-stale',
+    threadId: 'thread-stale',
+};
+sessions.set(staleSession.sessionId, staleSession);
+resumedThreadIds.add(staleSession.threadId);
+threadStates.set(staleSession.threadId, { activity: 'idle', activeTurnId: null });
+const originalTransport = service.context.transport;
+service.context.transport = () => ({
+    request: () => new Promise((resolve) => { releaseStaleTurn = resolve; }),
+});
+const staleStart = service.startTurn({ sessionId: staleSession.sessionId, prompt: 'stale turn' });
+await new Promise((resolve) => setImmediate(resolve));
+generation += 1;
+releaseStaleTurn({ turn: { id: 'turn-stale' } });
+await assert.rejects(staleStart, (error) => error.code === 'STALE_RUNTIME_GENERATION');
+assert.equal(threadStates.get(staleSession.threadId).activeTurnId, null,
+    'an old generation Turn ACK must not update replacement Runtime state');
+service.context.transport = originalTransport;
 console.log('Codex Runtime turn service tests passed.');

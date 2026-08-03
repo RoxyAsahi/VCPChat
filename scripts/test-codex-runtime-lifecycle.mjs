@@ -17,13 +17,15 @@ manager.repository = {
 manager.transport = { stop: async () => { order.push('transport'); }, respond() {}, respondError() {} };
 manager.bridge = { stop: async () => { order.push('bridge'); } };
 manager.responsesAdapter = { stop: async () => { order.push('responses'); } };
+const compactionTimeout = setTimeout(() => {}, 60_000);
+const interactionTimeout = setTimeout(() => {}, 60_000);
 manager.compactionWaiters.set('thread-1', {
-    timeout: setTimeout(() => {}, 60_000),
+    timeout: compactionTimeout,
     sessionId: 'session-1',
     reject(error) { compactionRejected = error; },
 });
 manager.configApplyPromises.set('session-1', Promise.resolve());
-manager.interactionTimers.set('request-1', setTimeout(() => {}, 60_000));
+manager.interactionTimers.set('request-1', interactionTimeout);
 manager.knownOperationRecoveryPromise = Promise.resolve({ recovered: 0 });
 const generation = manager._captureGeneration();
 const invalidateGeneration = manager.hostService.context.invalidateGeneration;
@@ -33,11 +35,16 @@ manager.interactionService.failClosedToolboxApprovals = async () => { order.push
 manager.configService.clearScheduledApplies = () => { order.push('config-waiters'); manager.configApplyPromises.clear(); };
 manager.hostService.rejectCompactionWaiters = (error) => {
     order.push('compaction-waiters');
+    clearTimeout(compactionTimeout);
     manager.compactionWaiters.clear();
     compactionRejected = error;
 };
 manager.toolboxService.interruptDynamicCalls = async () => { order.push('dynamic-calls'); };
-manager.interactionService.clearTimers = () => { order.push('timers'); manager.interactionTimers.clear(); };
+manager.interactionService.clearTimers = () => {
+    order.push('timers');
+    clearTimeout(interactionTimeout);
+    manager.interactionTimers.clear();
+};
 
 await manager.stop();
 assert.equal(repositoryClosed, true);
