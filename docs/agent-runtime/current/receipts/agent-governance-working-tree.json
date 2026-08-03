@@ -2,6 +2,8 @@
   "status": "implemented/working-tree",
   "scope": "agent-code-governance",
   "branch": "codex/vcpchat-codex-app-server",
+  "verifiedBaseRevision": "831773f052cb296e08f25e14ef55c908c7985487",
+  "verifiedAt": "2026-08-03",
   "codexProtocol": "0.146",
   "toolboxModified": false,
   "sqliteSchemaModified": false,
@@ -25,5 +27,5 @@
     "npm run guard:ui-system",
     "npm run lint:ui-system"
   ],
-  "notes": "2026-08-03 governance completion working tree: Runtime Manager and Controller are within 600 lines, Workbench composition is within 800 lines, and Agent Renderer implementation is 540 physical lines with a final 600-line gate. Renderer content, message lifecycle, Mermaid, Tool Result and Markdown pipeline have explicit instance-owned modules. Agent CSS is a fixed nine-owner import graph; AST migration preserved 583 rules and 2301 declarations. Runtime stop/crash now follows generation, approvals, waiters, dynamic/timers, transports, Repository ordering; duplicate ToolBox cleanup is at-most-once. Targeted Renderer, UI, lifecycle and Electron recovery tests passed. Status remains implemented/working-tree until the complete final matrix and product-level visual/live gates are recorded on the final revision."
+  "notes": "2026-08-03 governance completion working tree: Runtime Manager and Controller are within 600 lines, Workbench composition is within 800 lines, and Agent Renderer implementation is within the final 600-line gate. Renderer scheduling is Session-generation-owned; cancelled frame/idle/delay waits always settle and cannot write after disposal. Runtime lifecycle is part of the default Codex native gate, with explicit dual-Session Turn isolation and stale ACK coverage. Notification and Approval Dock views use the standard element/update/dispose contract. Agent CSS remains a fixed nine-owner import graph with no component !important declarations. The complete test:codex-ci gate passed in 104.7 seconds, including Electron recovery/degraded. Electron smoke initially exposed obsolete data-topic-id selectors and a notification wrapper flex regression; the canonical data-session-id smoke and full-height notification scroller then passed against the local pinned Codex 0.146.0 executable. Status remains implemented/working-tree because product-level multi-resolution visual review and live backend approval gates are outside this governance receipt."
 }
