@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 
 function hasColumn(db, table, column) {
     return db.prepare(`PRAGMA table_info('${table}')`).all().some((entry) => entry.name === column);
@@ -55,6 +55,12 @@ function migrate(db, options = {}) {
             state TEXT NOT NULL,
             config_snapshot_json TEXT NOT NULL,
             config_revision INTEGER NOT NULL DEFAULT 1,
+            config_schema_version INTEGER NOT NULL DEFAULT 2,
+            applied_config_snapshot_json TEXT NOT NULL DEFAULT '{}',
+            applied_config_revision INTEGER NOT NULL DEFAULT 0,
+            config_apply_state TEXT NOT NULL DEFAULT 'unmaterialized',
+            config_apply_error TEXT,
+            config_apply_updated_at INTEGER,
             orphaned INTEGER NOT NULL DEFAULT 0,
             pinned_at INTEGER,
             created_at INTEGER NOT NULL,
@@ -86,6 +92,7 @@ function migrate(db, options = {}) {
             status TEXT NOT NULL,
             ordinal INTEGER NOT NULL,
             content_json TEXT NOT NULL,
+            content_schema_version INTEGER NOT NULL DEFAULT 1,
             authority TEXT NOT NULL DEFAULT 'codex',
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL,
@@ -155,7 +162,33 @@ function migrate(db, options = {}) {
     db.exec(`CREATE INDEX agent_sessions_updated_idx
         ON agent_sessions(archived_at, pinned_at DESC, updated_at DESC, session_id)`);
     addColumn(db, 'agent_sessions', 'config_revision INTEGER NOT NULL DEFAULT 1');
+    addColumn(db, 'agent_sessions', 'config_schema_version INTEGER NOT NULL DEFAULT 2');
+    addColumn(db, 'agent_sessions', "applied_config_snapshot_json TEXT NOT NULL DEFAULT '{}'");
+    addColumn(db, 'agent_sessions', 'applied_config_revision INTEGER NOT NULL DEFAULT 0');
+    addColumn(db, 'agent_sessions', "config_apply_state TEXT NOT NULL DEFAULT 'unmaterialized'");
+    addColumn(db, 'agent_sessions', 'config_apply_error TEXT');
+    addColumn(db, 'agent_sessions', 'config_apply_updated_at INTEGER');
     addColumn(db, 'agent_blocks', "authority TEXT NOT NULL DEFAULT 'codex'");
+    addColumn(db, 'agent_blocks', 'content_schema_version INTEGER NOT NULL DEFAULT 1');
+    if (Number(existingVersion || 0) < 8) {
+        db.exec(`
+            UPDATE agent_sessions
+            SET config_snapshot_json = CASE
+                WHEN json_valid(config_snapshot_json)
+                    THEN json_set(config_snapshot_json, '$.schemaVersion', 2, '$.workspaceRoot', workspace_root)
+                    ELSE json_object('schemaVersion', 2)
+                END,
+                applied_config_snapshot_json = CASE
+                    WHEN json_valid(config_snapshot_json)
+                    THEN json_set(config_snapshot_json, '$.schemaVersion', 2, '$.workspaceRoot', workspace_root)
+                    ELSE json_object('schemaVersion', 2)
+                END,
+                applied_config_revision = config_revision,
+                config_apply_state = CASE WHEN codex_thread_id IS NULL THEN 'unmaterialized' ELSE 'applied' END,
+                config_apply_error = NULL,
+                config_apply_updated_at = updated_at
+        `);
+    }
     addColumn(db, 'agent_pending_inputs', "state TEXT NOT NULL DEFAULT 'queued'");
     addColumn(db, 'agent_pending_inputs', 'client_message_id TEXT');
     addColumn(db, 'agent_pending_inputs', 'codex_turn_id TEXT');

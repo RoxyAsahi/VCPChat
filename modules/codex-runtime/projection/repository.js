@@ -3,6 +3,12 @@
 const path = require('path');
 const crypto = require('crypto');
 const { migrate } = require('./migrations');
+const {
+    SESSION_CONFIG_SCHEMA_VERSION,
+    BLOCK_CONTENT_SCHEMA_VERSION,
+    normalizeSessionConfig,
+    normalizeApplyState,
+} = require('../dataContracts');
 
 function parseJson(value, fallback) {
     try {
@@ -81,11 +87,17 @@ class AgentProjectionRepository {
                 INSERT INTO agent_sessions (
                     session_id, codex_thread_id, agent_id, agent_catalog_id, agent_name_snapshot,
                     title, workspace_root, state,
-                    config_snapshot_json, config_revision, orphaned, pinned_at, created_at, updated_at, archived_at
+                    config_snapshot_json, config_revision, config_schema_version,
+                    applied_config_snapshot_json, applied_config_revision, config_apply_state,
+                    config_apply_error, config_apply_updated_at,
+                    orphaned, pinned_at, created_at, updated_at, archived_at
                 ) VALUES (
                     @session_id, @codex_thread_id, @agent_id, @agent_catalog_id, @agent_name_snapshot,
                     @title, @workspace_root, @state,
-                    @config_snapshot_json, @config_revision, @orphaned, @pinned_at, @created_at, @updated_at, @archived_at
+                    @config_snapshot_json, @config_revision, @config_schema_version,
+                    @applied_config_snapshot_json, @applied_config_revision, @config_apply_state,
+                    @config_apply_error, @config_apply_updated_at,
+                    @orphaned, @pinned_at, @created_at, @updated_at, @archived_at
                 ) ON CONFLICT(session_id) DO UPDATE SET
                     codex_thread_id = COALESCE(excluded.codex_thread_id, agent_sessions.codex_thread_id),
                     agent_id = excluded.agent_id,
@@ -96,6 +108,12 @@ class AgentProjectionRepository {
                     state = excluded.state,
                     config_snapshot_json = excluded.config_snapshot_json,
                     config_revision = excluded.config_revision,
+                    config_schema_version = excluded.config_schema_version,
+                    applied_config_snapshot_json = excluded.applied_config_snapshot_json,
+                    applied_config_revision = excluded.applied_config_revision,
+                    config_apply_state = excluded.config_apply_state,
+                    config_apply_error = excluded.config_apply_error,
+                    config_apply_updated_at = excluded.config_apply_updated_at,
                     orphaned = excluded.orphaned,
                     pinned_at = excluded.pinned_at,
                     updated_at = excluded.updated_at,
@@ -135,10 +153,30 @@ class AgentProjectionRepository {
             updateSessionConfigCas: this.db.prepare(`
                 UPDATE agent_sessions SET config_snapshot_json = @config_snapshot_json,
                     config_revision = config_revision + 1,
+                    config_schema_version = @config_schema_version,
+                    config_apply_state = CASE WHEN codex_thread_id IS NULL THEN 'unmaterialized' ELSE 'pending' END,
+                    config_apply_error = NULL,
+                    config_apply_updated_at = @now,
                     workspace_root = @workspace_root,
                     agent_name_snapshot = @agent_name_snapshot,
                     updated_at = @now
                 WHERE session_id = @session_id AND config_revision = @expected_revision
+            `),
+            markConfigApplying: this.db.prepare(`
+                UPDATE agent_sessions SET config_apply_state = 'applying', config_apply_error = NULL,
+                    config_apply_updated_at = @now
+                WHERE session_id = @session_id AND config_revision = @config_revision
+            `),
+            markConfigApplied: this.db.prepare(`
+                UPDATE agent_sessions SET applied_config_snapshot_json = @applied_config_snapshot_json,
+                    applied_config_revision = @config_revision, config_apply_state = 'applied',
+                    config_apply_error = NULL, config_apply_updated_at = @now
+                WHERE session_id = @session_id AND config_revision = @config_revision
+            `),
+            markConfigFailed: this.db.prepare(`
+                UPDATE agent_sessions SET config_apply_state = 'error', config_apply_error = @error,
+                    config_apply_updated_at = @now
+                WHERE session_id = @session_id AND config_revision = @config_revision
             `),
             getMessageByItem: this.db.prepare(`
                 SELECT * FROM agent_messages WHERE session_id = ? AND codex_item_id = ?
@@ -172,12 +210,15 @@ class AgentProjectionRepository {
             `),
             upsertBlock: this.db.prepare(`
                 INSERT INTO agent_blocks (
-                    block_id, message_id, kind, status, ordinal, content_json, authority, created_at, updated_at
+                    block_id, message_id, kind, status, ordinal, content_json, content_schema_version,
+                    authority, created_at, updated_at
                 ) VALUES (
-                    @block_id, @message_id, @kind, @status, @ordinal, @content_json, @authority, @created_at, @updated_at
+                    @block_id, @message_id, @kind, @status, @ordinal, @content_json, @content_schema_version,
+                    @authority, @created_at, @updated_at
                 ) ON CONFLICT(message_id, ordinal) DO UPDATE SET
                     kind = excluded.kind, status = excluded.status,
-                    content_json = excluded.content_json, authority = excluded.authority,
+                    content_json = excluded.content_json, content_schema_version = excluded.content_schema_version,
+                    authority = excluded.authority,
                     updated_at = excluded.updated_at
             `),
             getBlock: this.db.prepare('SELECT * FROM agent_blocks WHERE message_id = ? AND ordinal = ?'),
@@ -309,6 +350,12 @@ class AgentProjectionRepository {
     saveSession(session) {
         const now = Date.now();
         const sessionId = String(session.sessionId || `codex_session_${crypto.randomUUID()}`);
+        const desiredConfig = normalizeSessionConfig({
+            ...(session.configSnapshot || {}),
+            workspaceRoot: session.workspaceRoot || session.configSnapshot?.workspaceRoot || '',
+        });
+        const appliedConfig = normalizeSessionConfig(session.appliedRuntimeConfig || desiredConfig);
+        const configRevision = Number.isInteger(session.configRevision) ? session.configRevision : 1;
         this.stmt.upsertSession.run({
             session_id: sessionId,
             codex_thread_id: session.threadId || null,
@@ -318,8 +365,16 @@ class AgentProjectionRepository {
             title: session.title || null,
             workspace_root: session.workspaceRoot || null,
             state: session.state || 'ready',
-            config_snapshot_json: json(session.configSnapshot || {}),
-            config_revision: Number.isInteger(session.configRevision) ? session.configRevision : 1,
+            config_snapshot_json: json(desiredConfig),
+            config_revision: configRevision,
+            config_schema_version: SESSION_CONFIG_SCHEMA_VERSION,
+            applied_config_snapshot_json: json(appliedConfig),
+            applied_config_revision: Number.isInteger(session.appliedRuntimeConfigRevision)
+                ? session.appliedRuntimeConfigRevision : (session.threadId ? configRevision : 0),
+            config_apply_state: normalizeApplyState(session.configApplyState,
+                session.threadId ? 'applied' : 'unmaterialized'),
+            config_apply_error: session.configApplyError || null,
+            config_apply_updated_at: session.configApplyUpdatedAt || now,
             orphaned: session.orphaned ? 1 : 0,
             pinned_at: session.pinnedAt || null,
             created_at: session.createdAt || now,
@@ -336,13 +391,41 @@ class AgentProjectionRepository {
         const result = this.stmt.updateSessionConfigCas.run({
             session_id: String(sessionId),
             expected_revision: Number(expectedRevision),
-            config_snapshot_json: json(configSnapshot || {}),
+            config_snapshot_json: json(normalizeSessionConfig({
+                ...(configSnapshot || {}),
+                workspaceRoot: workspaceRoot || current.workspaceRoot || configSnapshot?.workspaceRoot || '',
+            })),
+            config_schema_version: SESSION_CONFIG_SCHEMA_VERSION,
             workspace_root: workspaceRoot || current.workspaceRoot || null,
             agent_name_snapshot: agentNameSnapshot || current.agentNameSnapshot || null,
             now: Date.now(),
         });
         if (result.changes !== 1) return { updated: false, reason: 'conflict', session: this.getSession(sessionId) };
         return { updated: true, session: this.getSession(sessionId) };
+    }
+
+    markSessionConfigApplying(sessionId, configRevision) {
+        this.stmt.markConfigApplying.run({ session_id: String(sessionId), config_revision: Number(configRevision), now: Date.now() });
+        return this.getSession(sessionId);
+    }
+
+    markSessionConfigApplied(sessionId, configRevision, configSnapshot) {
+        this.stmt.markConfigApplied.run({
+            session_id: String(sessionId), config_revision: Number(configRevision),
+            applied_config_snapshot_json: json(normalizeSessionConfig({
+                ...(configSnapshot || {}),
+                workspaceRoot: this.getSession(sessionId)?.workspaceRoot || configSnapshot?.workspaceRoot || '',
+            })), now: Date.now(),
+        });
+        return this.getSession(sessionId);
+    }
+
+    markSessionConfigFailed(sessionId, configRevision, error) {
+        this.stmt.markConfigFailed.run({
+            session_id: String(sessionId), config_revision: Number(configRevision),
+            error: String(error || 'Runtime configuration could not be applied'), now: Date.now(),
+        });
+        return this.getSession(sessionId);
     }
 
     getSession(sessionId) {
@@ -495,6 +578,7 @@ class AgentProjectionRepository {
                 status: block.status || record.status || 'inProgress',
                 ordinal,
                 content_json: json(content),
+                content_schema_version: BLOCK_CONTENT_SCHEMA_VERSION,
                 authority: block.authority || existingBlock?.authority || 'codex',
                 created_at: existingBlock?.created_at || block.createdAt || now,
                 updated_at: now,
@@ -528,6 +612,7 @@ class AgentProjectionRepository {
             status: block.status,
             ordinal,
             content_json: json(content),
+            content_schema_version: BLOCK_CONTENT_SCHEMA_VERSION,
             authority: block.authority || 'codex',
             created_at: block.created_at,
             updated_at: Date.now(),
@@ -720,8 +805,14 @@ class AgentProjectionRepository {
             workspaceRoot: row.workspace_root,
             state: row.state,
             pinnedAt: row.pinned_at || null,
-            configSnapshot: parseJson(row.config_snapshot_json, {}),
+            configSnapshot: normalizeSessionConfig(parseJson(row.config_snapshot_json, {})),
             configRevision: Number(row.config_revision || 1),
+            appliedRuntimeConfig: normalizeSessionConfig(parseJson(row.applied_config_snapshot_json, {})),
+            appliedRuntimeConfigRevision: Number(row.applied_config_revision || 0),
+            configApplyState: normalizeApplyState(row.config_apply_state,
+                row.codex_thread_id ? 'pending' : 'unmaterialized'),
+            configApplyError: row.config_apply_error || null,
+            configApplyUpdatedAt: row.config_apply_updated_at || null,
             orphaned: row.orphaned === 1,
             createdAt: row.created_at,
             updatedAt: row.updated_at,
@@ -736,6 +827,7 @@ class AgentProjectionRepository {
             status: row.status,
             ordinal: row.ordinal,
             content: parseJson(row.content_json, {}),
+            contentSchemaVersion: Number(row.content_schema_version || BLOCK_CONTENT_SCHEMA_VERSION),
             authority: row.authority || 'codex',
             createdAt: row.created_at,
             updatedAt: row.updated_at,

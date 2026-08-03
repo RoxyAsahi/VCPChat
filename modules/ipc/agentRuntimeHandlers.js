@@ -86,6 +86,8 @@ function removeHandlers() {
         IPC_CHANNELS.RESOLVE_PENDING_INPUT,
         IPC_CHANNELS.GET_WORKBENCH_SETTINGS,
         IPC_CHANNELS.UPDATE_WORKBENCH_SETTINGS,
+        IPC_CHANNELS.READ_SESSION_CONFIG,
+        IPC_CHANNELS.UPDATE_SESSION_CONFIG,
         IPC_CHANNELS.SELECT_ATTACHMENTS,
         IPC_CHANNELS.START_TURN,
         IPC_CHANNELS.STEER_TURN,
@@ -196,8 +198,16 @@ function initialize(options) {
     ipcMain.handle(IPC_CHANNELS.GET_STATUS, (event) => projectionGuard(event, () => manager.getStatus()));
     ipcMain.handle(IPC_CHANNELS.START, (event) => runtimeGuard(event, () => manager.start()));
     ipcMain.handle(IPC_CHANNELS.STOP, (event) => runtimeGuard(event, () => manager.stop()));
-    ipcMain.handle(IPC_CHANNELS.CREATE_TOPIC, (event, payload) => projectionGuard(event, () => manager.createTopic(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.CREATE_SESSION, (event, payload) => toolboxGuard(event, () => manager.createSession(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.CREATE_TOPIC, (event, payload) => projectionGuard(event, () => manager.createTopic({
+        agentId: payload?.agentId || payload?.agent,
+        title: payload?.title,
+    })));
+    ipcMain.handle(IPC_CHANNELS.CREATE_SESSION, (event, payload) => toolboxGuard(event, () => manager.createSession({
+        sessionId: payload?.sessionId || payload?.topicId,
+        resume: payload?.resume,
+        agentId: payload?.agentId || payload?.agent,
+        title: payload?.title,
+    })));
     ipcMain.handle(IPC_CHANNELS.ENSURE_SESSION_RUNTIME, (event, payload) => toolboxGuard(event, () => manager.ensureSessionRuntime(payload || {})));
     ipcMain.handle(IPC_CHANNELS.FORK_SESSION, (event, payload) => runtimeGuard(event, () => manager.forkSession(payload || {})));
     ipcMain.handle(IPC_CHANNELS.CLOSE_SESSION, (event, payload) => runtimeGuard(event, () => manager.closeSession(payload || {})));
@@ -238,6 +248,8 @@ function initialize(options) {
     ipcMain.handle(IPC_CHANNELS.RESOLVE_PENDING_INPUT, (event, payload) => toolboxGuard(event, () => manager.resolvePendingInput(payload || {})));
     ipcMain.handle(IPC_CHANNELS.GET_WORKBENCH_SETTINGS, (event) => projectionGuard(event, () => manager.getWorkbenchSettings()));
     ipcMain.handle(IPC_CHANNELS.UPDATE_WORKBENCH_SETTINGS, (event, payload) => projectionGuard(event, () => manager.updateWorkbenchSettings(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.READ_SESSION_CONFIG, (event, payload) => projectionGuard(event, () => manager.readSessionConfig(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.UPDATE_SESSION_CONFIG, (event, payload) => projectionGuard(event, () => manager.updateSessionConfig(payload || {})));
     ipcMain.handle(IPC_CHANNELS.SELECT_ATTACHMENTS, (event, payload) => projectionGuard(event, async () => {
         const mainWindow = assertMainWindowSender(event);
         const sessionId = String(payload?.sessionId || '').trim();

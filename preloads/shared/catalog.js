@@ -151,6 +151,8 @@ function createCatalog(ops) {
         agentRuntimeListInteractionQueue: query((data) => ops.invoke('agent-runtime:list-interaction-queue', data)),
         agentRuntimeClearInteractionQueue: query((data) => ops.invoke('agent-runtime:clear-interaction-queue', data)),
         agentRuntimeResolvePendingInput: query((data) => ops.invoke('agent-runtime:resolve-pending-input', data)),
+        agentRuntimeReadSessionConfig: query((data) => ops.invoke('agent-runtime:read-session-config', data)),
+        agentRuntimeUpdateSessionConfig: query((data) => ops.invoke('agent-runtime:update-session-config', data)),
         agentRuntimeSelectAttachments: query((data) => ops.invoke('agent-runtime:select-attachments', data)),
         agentRuntimeStartTurn: query((data) => ops.invoke('agent-runtime:start-turn', data)),
         agentRuntimeSteerTurn: query((data) => ops.invoke('agent-runtime:steer-turn', data)),
