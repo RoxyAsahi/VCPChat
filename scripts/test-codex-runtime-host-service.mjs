@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { EventEmitter } from 'node:events';
 
 const require = createRequire(import.meta.url);
 const { RuntimeHostService } = require('../modules/codex-runtime/runtime-host-service.js');
@@ -74,4 +75,41 @@ service.observeCompactionNotification({
 });
 assert.equal(staleRejected?.code, 'STALE_RUNTIME_GENERATION');
 assert.equal(waiters.has('thread-a'), false);
+
+const oldTransport = new EventEmitter();
+const replacementTransport = new EventEmitter();
+let activeTransport = oldTransport;
+let projectedNotifications = 0;
+let acceptedRequests = 0;
+let dynamicRequests = 0;
+let crashes = 0;
+let diagnostics = 0;
+generation += 1;
+const authorityService = new RuntimeHostService({
+    transport: () => activeTransport,
+    createOperationContext: (identity) => createRuntimeOperationContext(captureGeneration(), identity),
+    assertOperationContext: (operation) => operation.generation.assertCurrent(generation),
+    intentionalStop: () => false,
+    acceptServerRequest: () => { acceptedRequests += 1; },
+    handleDynamicToolCall: () => { dynamicRequests += 1; },
+    emitDiagnostic: () => { diagnostics += 1; },
+});
+authorityService.handleNotification = () => { projectedNotifications += 1; };
+authorityService.handleTransportCrash = async () => { crashes += 1; };
+authorityService.wireTransport();
+oldTransport.emit('notification', { method: 'turn/started' });
+oldTransport.emit('server-request', { id: 'approval-a', method: 'item/fileChange/requestApproval' });
+oldTransport.emit('server-request', { id: 'tool-a', method: 'item/tool/call' });
+oldTransport.emit('stderr', 'owned');
+assert.deepEqual([projectedNotifications, acceptedRequests, dynamicRequests, diagnostics], [1, 1, 1, 1]);
+
+activeTransport = replacementTransport;
+oldTransport.emit('notification', { method: 'turn/completed' });
+oldTransport.emit('server-request', { id: 'approval-stale', method: 'item/fileChange/requestApproval' });
+oldTransport.emit('server-request', { id: 'tool-stale', method: 'item/tool/call' });
+oldTransport.emit('stderr', 'stale');
+oldTransport.emit('exit', new Error('stale transport exited'));
+await new Promise((resolve) => setImmediate(resolve));
+assert.deepEqual([projectedNotifications, acceptedRequests, dynamicRequests, diagnostics, crashes], [1, 1, 1, 1, 0],
+    'a replaced transport must not mutate the current Runtime generation');
 console.log('Codex Runtime host service tests passed.');

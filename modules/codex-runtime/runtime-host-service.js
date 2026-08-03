@@ -266,9 +266,21 @@ class RuntimeHostService {
         if (this.transportWired) return;
         const transport = this.context.transport();
         if (!transport) throw new CodexAppServerError('RUNTIME_UNAVAILABLE', 'Codex App Server transport is unavailable');
+        const operation = this.context.createOperationContext();
+        const ownsTransport = () => {
+            try {
+                this.context.assertOperationContext(operation);
+            } catch {
+                return false;
+            }
+            return this.context.transport() === transport;
+        };
         this.transportWired = true;
-        transport.on('notification', (message) => this.handleNotification(message));
+        transport.on('notification', (message) => {
+            if (ownsTransport()) this.handleNotification(message);
+        });
         transport.on('server-request', (message) => {
+            if (!ownsTransport()) return;
             if (message.method === 'item/tool/call') {
                 void this.context.handleDynamicToolCall(message);
                 return;
@@ -276,10 +288,12 @@ class RuntimeHostService {
             this.context.acceptServerRequest(message);
         });
         transport.on('exit', (error) => {
-            if (this.context.intentionalStop()) return;
+            if (!ownsTransport() || this.context.intentionalStop()) return;
             void this.handleTransportCrash(error);
         });
-        transport.on('stderr', (line) => this.context.emitDiagnostic(line));
+        transport.on('stderr', (line) => {
+            if (ownsTransport()) this.context.emitDiagnostic(line);
+        });
     }
 
     handleNotification(message) {
@@ -393,8 +407,12 @@ class RuntimeHostService {
             env: { VCP_TOOLBOX_URL: settings.vcpServerUrl, VCP_TOOLBOX_API_KEY: settings.vcpApiKey },
         });
         this.context.setBridge(bridge);
-        bridge.on('stderr', (line) => this.context.emitDiagnostic(`[toolbox-bridge] ${line}`));
-        bridge.on('event', (message) => this.context.handleBridgeEvent(message));
+        bridge.on('stderr', (line) => {
+            if (this.context.bridge() === bridge) this.context.emitDiagnostic(`[toolbox-bridge] ${line}`);
+        });
+        bridge.on('event', (message) => {
+            if (this.context.bridge() === bridge) this.context.handleBridgeEvent(message);
+        });
         await bridge.start();
         return bridge;
     }
