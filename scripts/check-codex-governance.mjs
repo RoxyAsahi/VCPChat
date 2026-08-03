@@ -274,14 +274,18 @@ else {
 }
 for (const file of [
     'runtime-session-service.js', 'runtime-recovery-service.js', 'runtime-turn-service.js',
-    'runtime-config-service.js', 'runtime-host-service.js',
+    'runtime-config-service.js', 'runtime-host-service.js', 'runtime-interaction-service.js',
+    'runtime-toolbox-service.js',
 ]) {
     const source = fs.readFileSync(path.join(canonicalRuntimeDir, file), 'utf8');
     if (!source.includes('createOperationContext') || !source.includes('assertOperationContext')) {
         errors.push(`${file} does not enforce RuntimeOperationContext across remote operations`);
     }
 }
-for (const file of ['runtime-turn-service.js', 'runtime-config-service.js', 'runtime-host-service.js']) {
+for (const file of [
+    'runtime-turn-service.js', 'runtime-config-service.js', 'runtime-host-service.js',
+    'runtime-interaction-service.js', 'runtime-toolbox-service.js',
+]) {
     const source = fs.readFileSync(path.join(canonicalRuntimeDir, file), 'utf8');
     if (/this\.context\.captureGeneration\(\)/.test(source)) {
         errors.push(`${file} bypasses RuntimeOperationContext with a bare generation capture`);

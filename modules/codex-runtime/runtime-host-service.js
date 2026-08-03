@@ -429,7 +429,16 @@ class RuntimeHostService {
         await this.context.interruptDynamicCalls('Codex App Server crashed');
         this.context.clearInteractionTimers();
         this.context.setKnownOperationRecoveryPromise(null);
-        this.context.setTransport(null);
+        const transport = this.context.transport();
+        const bridge = this.context.bridge();
+        const responsesAdapter = this.context.responsesAdapter();
+        await transport?.stop?.().catch(() => null);
+        await bridge?.stop?.().catch(() => null);
+        await responsesAdapter?.stop?.().catch(() => null);
+        this.context.repository()?.close();
+        this.context.clearHostResources();
+        this.reset();
+        this.context.setState('crashed');
         this.transportWired = false;
         this.context.sendEvent({ runtime: 'codex', type: 'runtime.crashed', error: serialized });
     }

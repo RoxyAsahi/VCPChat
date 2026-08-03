@@ -807,6 +807,7 @@ assert.equal(uiEvents.filter((event) => event.type === 'approval.requested').len
 const toolboxDecisions = [];
 const toolboxInvocations = [];
 const toolboxInterrupts = [];
+let crashBridgeStops = 0;
 manager.bridge = {
     invoke: async (payload) => {
         toolboxInvocations.push(payload);
@@ -820,7 +821,7 @@ manager.bridge = {
         toolboxInterrupts.push(requestId);
         return { interrupted: true };
     },
-    stop: async () => {},
+    stop: async () => { crashBridgeStops += 1; },
 };
 fake.emit('server-request', {
     id: 'req_vcp_invoke',
@@ -956,9 +957,15 @@ await new Promise((resolve) => setImmediate(resolve));
 fake.emit('exit', new Error('simulated App Server crash'));
 await new Promise((resolve) => setImmediate(resolve));
 assert.equal(manager.getStatus().state, 'crashed');
-assert.equal(manager.repository.getSession(session.sessionId).state, 'interrupted',
-    'a running Session must be durably marked interrupted after App Server crash');
-assert.equal(manager.repository.readProjection(session.sessionId).projection.activity.deliveryState, 'unconfirmed');
+assert.equal(fake.status.running, false, 'crash must stop the old App Server transport authority');
+assert.equal(crashBridgeStops, 1, 'crash must stop the old ToolBox bridge authority');
+assert.equal(manager.transport, null);
+assert.equal(manager.bridge, null);
+assert.equal(manager.repository, null, 'crash must close and release the old projection Repository handle');
+const crashRepository = manager.ensureProjectionStore();
+    assert.equal(crashRepository.getSession(session.sessionId).state, 'interrupted',
+        'a running Session must be durably marked interrupted after App Server crash');
+    assert.equal(crashRepository.readProjection(session.sessionId).projection.activity.deliveryState, 'unconfirmed');
 assert.equal(manager.serverRequests.size, 0, 'crash must clear native and dynamic server requests');
 assert.equal(manager.dynamicCalls.size, 0, 'crash must clear dynamic-call routing identity');
 assert.equal(manager.toolboxApprovals.size, 0, 'crash must fail-close ToolBox backend approvals');

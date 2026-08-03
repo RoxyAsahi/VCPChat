@@ -16,15 +16,28 @@ class RuntimeToolboxService {
     async handleDynamicToolCall(message) {
         const params = message.params || {};
         const transport = this.context.transport();
-        const runtimeGeneration = this.context.runtimeGeneration();
+        const operation = this.context.createOperationContext({
+            threadId: params.threadId,
+            turnId: params.turnId,
+        });
         const respond = (result) => {
-            if (this.context.transport() !== transport || this.context.runtimeGeneration() !== runtimeGeneration) return false;
+            try {
+                this.context.assertOperationContext(operation);
+            } catch {
+                return false;
+            }
+            if (this.context.transport() !== transport) return false;
             transport?.respond(message.id, result);
             return true;
         };
         const bridge = this.context.bridge();
         if (!bridge) {
-            if (this.context.transport() === transport && this.context.runtimeGeneration() === runtimeGeneration) {
+            try {
+                this.context.assertOperationContext(operation);
+            } catch {
+                return;
+            }
+            if (this.context.transport() === transport) {
                 transport?.respondError(message.id, -32001, 'vcp-toolbox-bridge is not connected');
             }
             this.context.interactions.serverRequests.delete(String(message.id));
@@ -50,7 +63,9 @@ class RuntimeToolboxService {
             bridgeRequestId,
             wrapperToolName: invocation.wrapperToolName,
             targetToolName: invocation.targetToolName,
-            runtimeGeneration,
+            operation,
+            bridge,
+            transport,
         });
         try {
             const result = await bridge.invoke({
@@ -58,19 +73,29 @@ class RuntimeToolboxService {
                 toolName: invocation.targetToolName,
                 arguments: invocation.targetArguments,
             });
+            this.context.assertOperationContext(operation);
             const toolboxResult = result.result || result;
             respond({
                 contentItems: bridgeResultContentItems(toolboxResult),
                 success: toolboxResult.ok !== false && !toolboxResult.error,
             });
         } catch (error) {
+            try {
+                this.context.assertOperationContext(operation);
+            } catch {
+                return;
+            }
             respond({
                 contentItems: [{ type: 'inputText', text: `VCPToolBox bridge failed: ${error.message}` }],
                 success: false,
             });
         } finally {
-            this.context.interactions.serverRequests.delete(requestId);
-            this.dynamicCalls.delete(requestId);
+            if (this.context.interactions.serverRequests.get(requestId) === message) {
+                this.context.interactions.serverRequests.delete(requestId);
+            }
+            if (this.dynamicCalls.get(requestId)?.operation === operation) {
+                this.dynamicCalls.delete(requestId);
+            }
         }
     }
 
@@ -80,10 +105,9 @@ class RuntimeToolboxService {
         for (const [requestId, request] of [...this.context.interactions.serverRequests.entries()]) {
             if (request.method === 'item/tool/call') this.context.interactions.serverRequests.delete(requestId);
         }
-        const bridge = this.context.bridge();
         await Promise.all(calls.map(async (call) => {
             try {
-                await bridge?.interrupt(call.bridgeRequestId);
+                await call.bridge?.interrupt(call.bridgeRequestId);
             } catch (error) {
                 this.context.diagnostic(`Could not interrupt ToolBox dynamic call ${call.bridgeRequestId}: ${error.message}`);
             }

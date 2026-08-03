@@ -148,7 +148,9 @@ class RuntimeInteractionService {
         if (!this.interactions.begin('toolbox', pendingId, approval.generation)) {
             throw new CodexAppServerError('INTERACTION_ALREADY_RESOLVED', 'ToolBox approval is already being answered');
         }
-        const responsePromise = Promise.resolve().then(() => this.context.bridge()?.respondApproval({
+        const operation = this.context.createOperationContext();
+        const bridge = this.context.bridge();
+        const responsePromise = Promise.resolve().then(() => bridge?.respondApproval({
                 requestId: pendingId,
                 approved: normalizeApprovalDecision(decision) === 'accept',
                 reason,
@@ -171,6 +173,14 @@ class RuntimeInteractionService {
         }
         this.toolboxApprovals.delete(pendingId);
         this.interactions.complete('toolbox', pendingId, 'completed', approval.generation);
+        try {
+            this.context.assertOperationContext(operation);
+        } catch {
+            return { requestId: pendingId, resolved: true, scope: 'toolbox', stale: true };
+        }
+        if (this.context.bridge() !== bridge) {
+            return { requestId: pendingId, resolved: true, scope: 'toolbox', stale: true };
+        }
         this.context.sendUiEvent({
             type: 'approval.resolved',
             approvalId: pendingId,
@@ -278,18 +288,22 @@ class RuntimeInteractionService {
                 'Only failed or uncertain input can be explicitly resent');
         }
         const retried = repository.retryPendingInput(targetId);
+        const operation = this.context.createOperationContext({ sessionId: idValue });
         const runtimeSession = await this.context.ensureSessionRuntime({
             sessionId: idValue,
             reason: 'explicit-input-resend',
         });
+        this.context.assertOperationContext(operation);
         if (this.context.threadStates().get(runtimeSession.threadId)?.activity !== 'running') {
             await this.context.drainFollowUpQueue(runtimeSession);
+            this.context.assertOperationContext(operation);
         }
+        const currentRepository = this.context.repository();
         return {
             resolved: true,
             action,
             input: retried ? pendingInputProjection(retried) : null,
-            items: repository.listPendingInputs(idValue).map(pendingInputProjection),
+            items: currentRepository.listPendingInputs(idValue).map(pendingInputProjection),
         };
     }
 

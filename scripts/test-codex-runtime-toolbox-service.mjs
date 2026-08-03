@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { InteractionRegistry } = require('../modules/codex-runtime/interactionRegistry.js');
 const { RuntimeToolboxService } = require('../modules/codex-runtime/runtime-toolbox-service.js');
+const { createRuntimeOperationContext } = require('../modules/codex-runtime/runtime-operation-context.js');
 
 let generation = 5;
 let authorityGeneration = 2;
@@ -26,11 +27,19 @@ const interactions = {
     toolboxApprovals: new Map(),
     interactions: new InteractionRegistry(),
 };
+const captureGeneration = () => {
+    const captured = generation;
+    return { assertCurrent(current) {
+        if (current !== captured) { const error = new Error('stale'); error.code = 'STALE_RUNTIME_GENERATION'; throw error; }
+    } };
+};
 interactions.interactions.setGeneration('toolbox', authorityGeneration);
 const service = new RuntimeToolboxService({
     transport: () => transport,
     bridge: () => bridge,
     runtimeGeneration: () => generation,
+    createOperationContext: (identity) => createRuntimeOperationContext(captureGeneration(), identity),
+    assertOperationContext: (operation) => operation.generation.assertCurrent(generation),
     toolboxAuthorityGeneration: () => authorityGeneration,
     interactions,
     sendUiEvent: (event) => events.push(event),
@@ -62,7 +71,25 @@ await staleCall;
 assert.equal(responses.some((entry) => entry.requestId === 'rpc-stale'), false,
     'old generation dynamic result must not respond on the replacement transport authority');
 
-service.dynamicCalls.set('rpc-interrupt', { bridgeRequestId: 'codex:thread-a:turn-a:call-x' });
+let releaseReused;
+generation -= 1;
+invokeHandler = () => new Promise((resolve) => { releaseReused = resolve; });
+const reusedCall = service.handleDynamicToolCall(dynamicCall('rpc-reused'));
+await Promise.resolve();
+const oldRecord = service.dynamicCalls.get('rpc-reused');
+service.dynamicCalls.set('rpc-reused', { operation: {}, bridgeRequestId: 'new-authority' });
+generation += 1;
+releaseReused({ result: { ok: true, output: 'late' } });
+await reusedCall;
+assert.notEqual(service.dynamicCalls.get('rpc-reused'), oldRecord);
+assert.equal(service.dynamicCalls.get('rpc-reused').bridgeRequestId, 'new-authority',
+    'old completion must not delete a replacement call with the same request id');
+service.dynamicCalls.delete('rpc-reused');
+
+service.dynamicCalls.set('rpc-interrupt', {
+    bridgeRequestId: 'codex:thread-a:turn-a:call-x', bridge,
+    operation: createRuntimeOperationContext(captureGeneration(), { threadId: 'thread-a', turnId: 'turn-a' }),
+});
 interactions.serverRequests.set('rpc-interrupt', { method: 'item/tool/call' });
 await service.interruptDynamicCalls('test stop');
 await service.interruptDynamicCalls('duplicate stop');
