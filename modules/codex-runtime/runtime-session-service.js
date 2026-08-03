@@ -25,6 +25,15 @@ class RuntimeSessionService {
         return repository;
     }
 
+    _operation(identity = {}) {
+        return this.context.createOperationContext(identity);
+    }
+
+    _operationRepository(operation) {
+        this.context.assertOperationContext(operation);
+        return this._repository(operation.generation);
+    }
+
     create(options = {}) {
         this.context.ensureProjectionStore();
         this.context.assertProjectionWritable();
@@ -75,18 +84,18 @@ class RuntimeSessionService {
             return localProjection;
         }
         await this.context.start();
-        const runtimeGeneration = this.context.captureGeneration();
+        const operation = this._operation({ sessionId: session.sessionId, threadId: session.threadId });
         if (session.threadId) {
             try {
                 let applied = false;
                 for (let attempt = 0; attempt < 3 && !applied; attempt += 1) {
-                    repository = this._repository(runtimeGeneration);
+                    repository = this._operationRepository(operation);
                     const projectionGeneration = repository.projectionGeneration(session.sessionId);
                     const result = await this.context.transport().request('thread/read', {
                         threadId: session.threadId,
                         includeTurns: true,
                     });
-                    repository = this._repository(runtimeGeneration);
+                    repository = this._operationRepository(operation);
                     applied = this.context.projector().reconcileThread(
                         session.sessionId, result.thread || result, projectionGeneration,
                     ).applied;
@@ -94,18 +103,18 @@ class RuntimeSessionService {
                 if (!applied) throw new CodexAppServerError(
                     'RECONCILE_GENERATION_CHANGED', 'Projection changed during reconciliation; retry later',
                 );
-                repository = this._repository(runtimeGeneration);
+                repository = this._operationRepository(operation);
                 if (session.orphaned) repository.markOrphaned(session.sessionId, false);
             } catch (error) {
                 if (error?.code === 'STALE_RUNTIME_GENERATION' || !this.context.repository()) throw error;
-                repository = this._repository(runtimeGeneration);
+                repository = this._operationRepository(operation);
                 if (isConfirmedThreadNotFound(error) && hasDurableProjection(localProjection)) {
                     repository.markOrphaned(session.sessionId, true);
                 }
                 repository.markProjectionError(session.sessionId, error.message);
             }
         }
-        repository = this._repository(runtimeGeneration);
+        repository = this._operationRepository(operation);
         const projection = repository.readProjection(session.sessionId);
         this.context.diagnostic('projection-reconcile-returned', {
             sessionId: session.sessionId,
@@ -164,19 +173,18 @@ class RuntimeSessionService {
         if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
         this.context.assertLifecycleIdle(session);
         if (session.threadId) await this.context.start();
-        const generation = this.context.captureGeneration();
-        repository = this._repository(generation);
+        const operationContext = this._operation({ sessionId: idValue, threadId: session.threadId });
+        repository = this._operationRepository(operationContext);
         const operation = repository.createOperation({
             sessionId: idValue, kind: 'thread-archive', threadId: session.threadId,
         });
         try {
             repository.updateOperation(operation.operationId, { state: 'dispatching' });
             if (session.threadId) await this.context.transport().request('thread/archive', { threadId: session.threadId });
-            repository = this._repository(generation);
+            repository = this._operationRepository(operationContext);
             repository.updateOperation(operation.operationId, { state: 'remote-applied', threadId: session.threadId });
         } catch (error) {
-            this.context.assertGeneration(generation);
-            repository = this._repository(generation);
+            repository = this._operationRepository(operationContext);
             repository.updateOperation(operation.operationId, {
                 state: isUncertainRemoteMutation(error) ? 'uncertain' : 'failed',
                 lastError: error?.message || String(error),
@@ -184,7 +192,7 @@ class RuntimeSessionService {
             throw error;
         }
         await this.context.faultInjection().afterArchiveRemoteApplied?.({ operation, session });
-        repository = this._repository(generation);
+        repository = this._operationRepository(operationContext);
         const archived = repository.archiveSession(idValue);
         this.context.attachments().clearSession(idValue);
         repository.updateOperation(operation.operationId, { state: 'completed', threadId: session.threadId });
@@ -201,8 +209,8 @@ class RuntimeSessionService {
             return { sessionId: idValue, threadId: session.threadId, restored: false, session: sessionProjection(session) };
         }
         if (session.threadId) await this.context.start();
-        const generation = this.context.captureGeneration();
-        repository = this._repository(generation);
+        const operationContext = this._operation({ sessionId: idValue, threadId: session.threadId });
+        repository = this._operationRepository(operationContext);
         const operation = repository.createOperation({
             sessionId: idValue, kind: 'thread-unarchive', threadId: session.threadId,
         });
@@ -210,17 +218,16 @@ class RuntimeSessionService {
             repository.updateOperation(operation.operationId, { state: 'dispatching' });
             if (session.threadId) {
                 const result = await this.context.transport().request('thread/unarchive', { threadId: session.threadId });
-                this.context.assertGeneration(generation);
+                this.context.assertOperationContext(operationContext);
                 const returnedThreadId = String(result?.thread?.id || session.threadId);
                 if (returnedThreadId !== session.threadId) {
                     throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/unarchive returned a mismatched thread id');
                 }
             }
-            repository = this._repository(generation);
+            repository = this._operationRepository(operationContext);
             repository.updateOperation(operation.operationId, { state: 'remote-applied', threadId: session.threadId });
         } catch (error) {
-            this.context.assertGeneration(generation);
-            repository = this._repository(generation);
+            repository = this._operationRepository(operationContext);
             repository.updateOperation(operation.operationId, {
                 state: isUncertainRemoteMutation(error) ? 'uncertain' : 'failed',
                 lastError: error?.message || String(error),
@@ -228,7 +235,7 @@ class RuntimeSessionService {
             throw error;
         }
         await this.context.faultInjection().afterUnarchiveRemoteApplied?.({ operation, session });
-        repository = this._repository(generation);
+        repository = this._operationRepository(operationContext);
         const restored = repository.unarchiveSession(idValue);
         repository.updateOperation(operation.operationId, { state: 'completed', threadId: session.threadId });
         return { sessionId: idValue, threadId: restored.threadId, restored: true, session: sessionProjection(restored) };
@@ -261,8 +268,8 @@ class RuntimeSessionService {
             throw new CodexAppServerError('SESSION_HAS_PENDING_INPUT', 'Resolve queued or uncertain input before permanent deletion');
         }
         if (session.threadId) await this.context.start();
-        const generation = this.context.captureGeneration();
-        repository = this._repository(generation);
+        const operationContext = this._operation({ sessionId: idValue, threadId: session.threadId });
+        repository = this._operationRepository(operationContext);
         const operation = repository.createOperation({
             sessionId: idValue, kind: 'thread-delete', threadId: session.threadId,
         });
@@ -275,11 +282,10 @@ class RuntimeSessionService {
                     if (!isConfirmedThreadNotFound(error)) throw error;
                 }
             }
-            repository = this._repository(generation);
+            repository = this._operationRepository(operationContext);
             repository.updateOperation(operation.operationId, { state: 'remote-applied', threadId: session.threadId });
         } catch (error) {
-            this.context.assertGeneration(generation);
-            repository = this._repository(generation);
+            repository = this._operationRepository(operationContext);
             repository.updateOperation(operation.operationId, {
                 state: isUncertainRemoteMutation(error) ? 'uncertain' : 'failed',
                 lastError: error?.message || String(error),
@@ -287,7 +293,7 @@ class RuntimeSessionService {
             throw error;
         }
         await this.context.faultInjection().afterDeleteRemoteApplied?.({ operation, session });
-        repository = this._repository(generation);
+        repository = this._operationRepository(operationContext);
         const receipt = repository.permanentlyDeleteSession(idValue, session.threadId);
         this.context.attachments().clearSession(idValue);
         repository.updateOperation(operation.operationId, {

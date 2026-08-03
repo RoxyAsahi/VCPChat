@@ -29,19 +29,25 @@ class RuntimeRecoveryService {
         return repository;
     }
 
+    _operation(identity = {}) { return this.context.createOperationContext(identity); }
+    _operationRepository(operation) {
+        this.context.assertOperationContext(operation);
+        return this._repository(operation.generation);
+    }
+
     async recoverKnownThreadOperations() {
         const repository = this.context.repository();
         if (repository?.readOnly) return { recovered: 0, remaining: 0 };
         if (this.context.recoveryPromise()) return this.context.recoveryPromise();
         const promise = (async () => {
-            const generation = this.context.captureGeneration();
-            const recoverable = this._repository(generation).listRecoverableOperations()
+            const operationContext = this._operation();
+            const recoverable = this._operationRepository(operationContext).listRecoverableOperations()
                 .filter((operation) => KNOWN_OPERATION_KINDS.has(operation.kind))
                 .filter((operation) => ['prepared', 'dispatching', 'remote-applied', 'uncertain'].includes(operation.state));
             let recovered = 0;
             for (const operation of recoverable) {
                 try {
-                    if (await this.recoverKnownThreadOperation(operation, generation)) recovered += 1;
+                    if (await this.recoverKnownThreadOperation(operation, operationContext)) recovered += 1;
                 } catch (error) {
                     if (error?.code === 'STALE_RUNTIME_GENERATION' || !this.context.repository()) throw error;
                     this.context.setLastError(serializeError(error));
@@ -52,7 +58,7 @@ class RuntimeRecoveryService {
                     });
                 }
             }
-            const currentRepository = this._repository(generation);
+            const currentRepository = this._operationRepository(operationContext);
             return {
                 recovered,
                 remaining: currentRepository.listRecoverableOperations()
@@ -63,8 +69,10 @@ class RuntimeRecoveryService {
         return promise;
     }
 
-    async recoverKnownThreadOperation(input, generation = this.context.captureGeneration()) {
-        let repository = this._repository(generation);
+    async recoverKnownThreadOperation(input, operationContext = this._operation({
+        sessionId: input?.sessionId, threadId: input?.threadId,
+    })) {
+        let repository = this._operationRepository(operationContext);
         let operation = repository.getOperation(input.operationId);
         if (!operation || !KNOWN_OPERATION_KINDS.has(operation.kind)) return false;
         if (operation.state !== 'remote-applied') {
@@ -78,14 +86,13 @@ class RuntimeRecoveryService {
                     } catch (error) {
                         if (operation.kind !== 'thread-delete' || !isConfirmedThreadNotFound(error)) throw error;
                     }
-                    repository = this._repository(generation);
+                    repository = this._operationRepository(operationContext);
                 }
                 operation = repository.updateOperation(operation.operationId, {
                     state: 'remote-applied', threadId: operation.threadId, lastError: null,
                 });
             } catch (error) {
-                this.context.assertGeneration(generation);
-                repository = this._repository(generation);
+                repository = this._operationRepository(operationContext);
                 repository.updateOperation(operation.operationId, {
                     state: isUncertainRemoteMutation(error) ? 'uncertain' : 'failed',
                     lastError: error?.message || String(error),
@@ -93,7 +100,7 @@ class RuntimeRecoveryService {
                 return false;
             }
         }
-        repository = this._repository(generation);
+        repository = this._operationRepository(operationContext);
         operation = repository.getOperation(input.operationId);
         if (!operation || !KNOWN_OPERATION_KINDS.has(operation.kind)) return false;
         const session = operation.sessionId ? repository.getSession(operation.sessionId) : null;
@@ -114,14 +121,14 @@ class RuntimeRecoveryService {
         return true;
     }
 
-    async listStoredThreads(archived, generation) {
+    async listStoredThreads(archived, operationContext) {
         const threads = [];
         let cursor = null;
         for (let page = 0; page < 20; page += 1) {
             const result = await this.context.transport().request('thread/list', {
                 archived: archived === true, cursor, limit: 100, useStateDbOnly: true,
             });
-            if (generation) this.context.assertGeneration(generation);
+            if (operationContext) this.context.assertOperationContext(operationContext);
             const data = Array.isArray(result?.data) ? result.data : [];
             threads.push(...data);
             cursor = typeof result?.nextCursor === 'string' && result.nextCursor ? result.nextCursor : null;
@@ -152,11 +159,11 @@ class RuntimeRecoveryService {
                 && (operation.kind === 'thread-start' || operation.kind === 'thread-fork'));
         if (!initialOperations.length) return { operations: [], threads: [] };
         await this.context.start();
-        const generation = this.context.captureGeneration();
+        const operationContext = this._operation();
         const [active, archived] = await Promise.all([
-            this.listStoredThreads(false, generation), this.listStoredThreads(true, generation),
+            this.listStoredThreads(false, operationContext), this.listStoredThreads(true, operationContext),
         ]);
-        const repository = this._repository(generation);
+        const repository = this._operationRepository(operationContext);
         const operations = initialOperations.map((operation) => repository.getOperation(operation.operationId))
             .filter((operation) => operation && ['uncertain', 'remote-applied'].includes(operation.state));
         const boundThreadIds = new Set([
@@ -193,8 +200,8 @@ class RuntimeRecoveryService {
             throw new CodexAppServerError('RECOVERY_THREAD_MISMATCH', 'Recovery must use the Thread recorded by the acknowledged operation');
         }
         await this.context.start();
-        const generation = this.context.captureGeneration();
-        repository = this._repository(generation);
+        const operationContext = this._operation({ threadId: selectedThreadId });
+        repository = this._operationRepository(operationContext);
         operation = repository.getOperation(String(operationId || ''));
         if (!operation || !['uncertain', 'remote-applied'].includes(operation.state)
             || (operation.kind !== 'thread-start' && operation.kind !== 'thread-fork')) {
@@ -212,7 +219,7 @@ class RuntimeRecoveryService {
             } catch (error) {
                 if (!isConfirmedThreadNotFound(error)) throw error;
             }
-            repository = this._repository(generation);
+            repository = this._operationRepository(operationContext);
             operation = repository.getOperation(String(operationId || ''));
             if (!operation || !['uncertain', 'remote-applied'].includes(operation.state)) {
                 throw new CodexAppServerError('RECOVERY_TARGET_CHANGED', 'Recovery operation changed during Thread deletion');
@@ -225,7 +232,7 @@ class RuntimeRecoveryService {
         }
         if (action !== 'bind') throw new CodexAppServerError('INVALID_INPUT', 'Recovery action must be bind or delete');
         const result = await this.context.transport().request('thread/read', { threadId: selectedThreadId, includeTurns: true });
-        repository = this._repository(generation);
+        repository = this._operationRepository(operationContext);
         operation = repository.getOperation(String(operationId || ''));
         if (!operation || !['uncertain', 'remote-applied'].includes(operation.state)) {
             throw new CodexAppServerError('RECOVERY_TARGET_CHANGED', 'Recovery operation changed during Thread read');

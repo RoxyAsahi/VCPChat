@@ -238,6 +238,30 @@ for (const relative of identityBoundaryFiles) {
     }
 }
 const canonicalRuntimeDir = path.join(root, 'modules/codex-runtime');
+const operationContextPath = path.join(canonicalRuntimeDir, 'runtime-operation-context.js');
+if (!fs.existsSync(operationContextPath)) errors.push('RuntimeOperationContext contract is missing');
+else {
+    const operationContextSource = fs.readFileSync(operationContextPath, 'utf8');
+    if (!operationContextSource.includes('createRuntimeOperationContext')
+        || !operationContextSource.includes('sessionId')
+        || !operationContextSource.includes('threadId')
+        || !operationContextSource.includes('turnId')) {
+        errors.push('RuntimeOperationContext must bind generation and Session/Thread/Turn identity');
+    }
+}
+for (const file of ['runtime-session-service.js', 'runtime-recovery-service.js']) {
+    const source = fs.readFileSync(path.join(canonicalRuntimeDir, file), 'utf8');
+    if (!source.includes('createOperationContext') || !source.includes('assertOperationContext')) {
+        errors.push(`${file} does not enforce RuntimeOperationContext across remote operations`);
+    }
+}
+const runtimeServiceGraph = fs.readFileSync(path.join(canonicalRuntimeDir, 'runtime-service-graph.js'), 'utf8');
+if (/runtime\.(?:createTopic|readTopic)\(/.test(runtimeServiceGraph)) {
+    errors.push('canonical Runtime service graph delegates through deprecated Topic methods');
+}
+const runtimeTopicCompatibility = path.join(canonicalRuntimeDir, 'runtime-topic-compatibility.js');
+if (!fs.existsSync(runtimeTopicCompatibility)) errors.push('deprecated Runtime Topic compatibility adapter is missing');
+const topicMethodPattern = /\b(?:createTopic|listTopics|readTopic|renameTopic|deleteTopic)\b/;
 for (const entry of fs.readdirSync(canonicalRuntimeDir, { withFileTypes: true })) {
     if (!entry.isFile() || !/\.js$/.test(entry.name)) continue;
     const source = fs.readFileSync(path.join(canonicalRuntimeDir, entry.name), 'utf8');
@@ -246,6 +270,9 @@ for (const entry of fs.readdirSync(canonicalRuntimeDir, { withFileTypes: true })
     }
     if (/\b(?:compatibilitySession|compatibilityRuntime|resolveSessionIdInput)\b/.test(source)) {
         errors.push(`modules/codex-runtime/${entry.name} imports legacy Session compatibility helpers`);
+    }
+    if (entry.name !== 'runtime-topic-compatibility.js' && topicMethodPattern.test(source)) {
+        errors.push(`modules/codex-runtime/${entry.name} exposes deprecated Topic methods outside compatibility adapter`);
     }
 }
 const canonicalWorkbenchFiles = fs.readdirSync(path.join(root, 'modules/ui-system'), { withFileTypes: true })

@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { CodexAppServerError } = require('../modules/codex-runtime/appServerTransport.js');
 const { RuntimeRecoveryService } = require('../modules/codex-runtime/runtime-recovery-service.js');
+const { createRuntimeOperationContext } = require('../modules/codex-runtime/runtime-operation-context.js');
 
 function makeRepository({ operations = [], sessions = [] } = {}) {
     const operationMap = new Map(operations.map((operation) => [operation.operationId, { ...operation }]));
@@ -49,6 +50,19 @@ function makeHarness({ repository, request, start } = {}) {
     let recoveryPromise = null;
     const reconciles = [];
     const threadStates = new Map();
+    const captureScope = () => {
+        const captured = generation;
+        return {
+            value: captured,
+            assertCurrent(current) {
+                if (current !== captured) {
+                    const error = new Error('expired generation');
+                    error.code = 'STALE_RUNTIME_GENERATION';
+                    throw error;
+                }
+            },
+        };
+    };
     const service = new RuntimeRecoveryService({
         ensureProjectionStore: () => {},
         assertProjectionWritable: () => {},
@@ -61,13 +75,11 @@ function makeHarness({ repository, request, start } = {}) {
         }),
         threadStates: () => threadStates,
         start: start || (async () => {}),
-        captureGeneration: () => generation,
-        assertGeneration(scope) {
-            if (scope !== generation) {
-                const error = new Error('expired generation');
-                error.code = 'STALE_RUNTIME_GENERATION';
-                throw error;
-            }
+        captureGeneration: captureScope,
+        assertGeneration: (scope) => scope.assertCurrent(generation),
+        createOperationContext: (identity) => createRuntimeOperationContext(captureScope(), identity),
+        assertOperationContext(operation) {
+            operation.generation.assertCurrent(generation);
         },
         recoveryPromise: () => recoveryPromise,
         setRecoveryPromise: (value) => { recoveryPromise = value; },
@@ -80,6 +92,7 @@ function makeHarness({ repository, request, start } = {}) {
         threadStates,
         advanceGeneration: () => { generation += 1; },
         setRepository: (next) => { currentRepository = next; },
+        operation: (identity) => createRuntimeOperationContext(captureScope(), identity),
     };
 }
 
@@ -171,7 +184,9 @@ const paginationHarness = makeHarness({
         return { data: [{ id: `thread-${pages}` }], nextCursor: `cursor-${pages}` };
     },
 });
-const pagedThreads = await paginationHarness.service.listStoredThreads(false, 1);
+const paginationOperation = paginationHarness.operation();
+assert.equal(Object.isFrozen(paginationOperation), true);
+const pagedThreads = await paginationHarness.service.listStoredThreads(false, paginationOperation);
 assert.equal(pages, 20, 'Thread discovery must stop at the fixed page bound');
 assert.equal(pagedThreads.length, 20);
 
@@ -180,7 +195,7 @@ const stalePaginationHarness = makeHarness({
     repository: makeRepository(),
     request: () => new Promise((resolve) => { releasePage = resolve; }),
 });
-const stalePagination = stalePaginationHarness.service.listStoredThreads(false, 1);
+const stalePagination = stalePaginationHarness.service.listStoredThreads(false, stalePaginationHarness.operation());
 await Promise.resolve();
 stalePaginationHarness.advanceGeneration();
 releasePage({ data: [], nextCursor: null });

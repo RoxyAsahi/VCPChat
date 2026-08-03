@@ -10,6 +10,7 @@ const { ToolboxBridgeTransport } = require('./toolboxBridgeTransport');
 const { ToolboxResponsesAdapter } = require('./toolboxResponsesAdapter');
 const { AttachmentRegistry } = require('./attachmentRegistry');
 const { attachRuntimeServiceGraph } = require('./runtime-service-graph');
+const { createRuntimeOperationContext } = require('./runtime-operation-context');
 const {
     capabilityMatrix,
 } = require('./protocolCapabilities');
@@ -182,24 +183,29 @@ class CodexRuntimeManager extends EventEmitter {
         if (!this.repository) throw new CodexAppServerError('RUNTIME_STOPPED', 'Agent projection store is closed');
     }
 
-    async createTopic(options = {}) {
-        return this.sessionService.create(options);
+    _createOperationContext(identity = {}) {
+        return createRuntimeOperationContext(this._captureGeneration(), identity);
+    }
+
+    _assertOperationContext(operation) {
+        this._assertGeneration(operation?.generation);
+        return operation;
     }
 
     async createSessionRecord(options = {}) {
-        return this.createTopic(options);
+        return this.sessionService.create(options);
     }
 
     async listSessions(options = {}) {
-        return this.listTopics(options);
+        return this.sessionService.list(options);
     }
 
     async readSession({ sessionId, reconcile = true } = {}) {
-        return this.readTopic({ sessionId, reconcile });
+        return this.sessionService.read({ sessionId: requireSessionId(sessionId), reconcile });
     }
 
     async renameSession({ sessionId, title } = {}) {
-        return this.renameTopic({ sessionId, title });
+        return this.sessionService.rename({ sessionId: requireSessionId(sessionId), title });
     }
 
     async createSession(options = {}) {
@@ -208,7 +214,7 @@ class CodexRuntimeManager extends EventEmitter {
         this.ensureProjectionStore();
         let session = requestedSessionId ? this.repository.getSession(requestedSessionId) : null;
         if (!session) {
-            const created = await this.createTopic(options);
+            const created = await this.createSessionRecord(options);
             session = this.repository.getSession(created.sessionId);
         }
         return this.ensureSessionRuntime({ ...options, sessionId: session.sessionId });
@@ -236,14 +242,6 @@ class CodexRuntimeManager extends EventEmitter {
 
     async _startThreadForSession(session, options = {}) {
         return this.turnService.startThreadForSession(session, options);
-    }
-
-    async readTopic({ sessionId, reconcile = true } = {}) {
-        return this.sessionService.read({ sessionId: requireSessionId(sessionId), reconcile });
-    }
-
-    async listTopics({ agentId, archived = false } = {}) {
-        return this.sessionService.list({ agentId, archived });
     }
 
     async startTurn({ sessionId, prompt, attachments = [], clientUserMessageId } = {}) {
@@ -320,14 +318,10 @@ class CodexRuntimeManager extends EventEmitter {
     async compactSession({ sessionId, timeoutMs = 120_000 } = {}) {
         return this.turnService.compact({ sessionId: requireSessionId(sessionId), timeoutMs });
     }
-    async searchTopics(options = {}) { return { topics: await this.listTopics(options) }; }
-    async searchTopicMessages({ sessionId } = {}) { return this.readTopic({ sessionId }); }
+    async searchSessions(options = {}) { return { topics: await this.listSessions(options) }; }
+    async searchSessionMessages({ sessionId } = {}) { return this.readSession({ sessionId }); }
     async getTopicIndexStatus() { return { available: false, source: 'codex-thread-store' }; }
     async rebuildTopicIndex() { return { available: false }; }
-    async renameTopic({ sessionId, title }) {
-        return this.sessionService.rename({ sessionId: requireSessionId(sessionId), title });
-    }
-    async deleteTopic({ sessionId }) { return this.archiveSession({ sessionId }); }
     listRecoveryOperations() {
         return this.recoveryService.listOperations();
     }
