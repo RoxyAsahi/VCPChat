@@ -81,7 +81,7 @@ const workbenchImplementationLineCount = fs.readFileSync(path.join(root, 'module
 const controllerFacadeLineCount = fs.readFileSync(path.join(root, 'modules/ui-system/agent-workbench-controller.js'), 'utf8').split(/\r?\n/).length;
 const controllerImplementationLineCount = fs.readFileSync(path.join(root, 'modules/ui-system/agent-workbench-controller-implementation.js'), 'utf8').split(/\r?\n/).length;
 if (workbenchLineCount > 800) errors.push(`agent-workbench.js exceeds composition facade ceiling: ${workbenchLineCount} lines`);
-if (workbenchImplementationLineCount > 3400) errors.push(`agent-workbench-implementation.js exceeds temporary extraction ceiling: ${workbenchImplementationLineCount} lines`);
+if (workbenchImplementationLineCount > 2610) errors.push(`agent-workbench-implementation.js exceeds temporary extraction ceiling: ${workbenchImplementationLineCount} lines`);
 if (controllerFacadeLineCount > 800) errors.push(`agent-workbench-controller.js exceeds controller facade ceiling: ${controllerFacadeLineCount} lines`);
 if (controllerImplementationLineCount > 600) errors.push(`agent-workbench-controller-implementation.js exceeds controller ceiling: ${controllerImplementationLineCount} lines`);
 const commandControllerPath = path.join(root, 'modules/ui-system/agent-workbench-command-controller.js');
@@ -93,7 +93,7 @@ const rendererStreamPath = 'modules/ui-system/agent-presentation/fork/agent-rend
 const forkLineCount = fs.readFileSync(path.join(root, rendererFacadePath), 'utf8').split(/\r?\n/).length;
 const forkImplementationLineCount = fs.readFileSync(path.join(root, rendererImplementationPath), 'utf8').split(/\r?\n/).length;
 if (forkLineCount > 600) errors.push(`${rendererFacadePath} exceeds facade ceiling: ${forkLineCount} lines`);
-if (forkImplementationLineCount > 3100) errors.push(`${rendererImplementationPath} exceeds temporary extraction ceiling: ${forkImplementationLineCount} lines`);
+if (forkImplementationLineCount > 2800) errors.push(`${rendererImplementationPath} exceeds temporary extraction ceiling: ${forkImplementationLineCount} lines`);
 if (!fs.existsSync(path.join(root, rendererStreamPath))) errors.push(`missing Agent renderer stream module: ${rendererStreamPath}`);
 const forkReceipt = fs.readFileSync(path.join(root, 'modules/ui-system/agent-presentation/fork/FORK_RECEIPT.md'), 'utf8');
 if (!forkReceipt.includes('独立演进策略') || !forkReceipt.includes('不再要求跟随主聊天 renderer 逐行同步')) {
@@ -118,6 +118,33 @@ for (const file of ['agent-session-client.js', 'agent-projection-client.js', 'ag
 }
 if (!fs.existsSync(path.join(root, 'modules/ui-system/agent-workbench-lifecycle.js'))) {
     errors.push('missing Workbench lifecycle module');
+}
+const governedUiModules = [
+    'agent-workbench-sidebar-view.js',
+    'agent-session-dock-view.js',
+    'agent-notification-view.js',
+    'agent-approval-view.js',
+    'agent-workbench-topic-flow.js',
+];
+for (const file of governedUiModules) {
+    const absolute = path.join(root, 'modules/ui-system', file);
+    if (!fs.existsSync(absolute)) {
+        errors.push(`missing governed Workbench module: ${file}`);
+        continue;
+    }
+    const source = fs.readFileSync(absolute, 'utf8');
+    const lineCount = source.split(/\r?\n/).length;
+    if (lineCount > 900) errors.push(`${file} exceeds module ceiling: ${lineCount} lines`);
+    if (/window\.(?:chatAPI|electronAPI)|\bruntimeApi\s*\(/.test(source)) {
+        errors.push(`${file} bypasses Workbench action/client boundary`);
+    }
+}
+for (const file of ['agent-renderer-history.js', 'agent-renderer-actions.js']) {
+    const absolute = path.join(root, 'modules/ui-system/agent-presentation/fork', file);
+    if (!fs.existsSync(absolute)) errors.push(`missing governed Agent renderer module: ${file}`);
+    else if (fs.readFileSync(absolute, 'utf8').split(/\r?\n/).length > 900) {
+        errors.push(`${file} exceeds module ceiling`);
+    }
 }
 
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
