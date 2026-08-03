@@ -33,15 +33,11 @@ function createAgentRendererHistory(options) {
         });
         if (!options.isSessionActive(renderSessionId)) return;
         elements.forEach((element) => fragment.appendChild(element));
-        return new Promise((resolve) => {
-            options.requestFrame(() => {
-                if (!options.isSessionActive(renderSessionId)) return resolve();
-                options.root().appendChild(fragment);
-                elements.forEach((element) => processDeferred(element, renderSessionId, renderContext));
-                if (scrollToBottom && options.isSessionActive(renderSessionId)) options.scrollToBottom();
-                resolve();
-            });
-        });
+        if (!await options.waitFrame()) return;
+        if (!options.isSessionActive(renderSessionId)) return;
+        options.root().appendChild(fragment);
+        elements.forEach((element) => processDeferred(element, renderSessionId, renderContext));
+        if (scrollToBottom && options.isSessionActive(renderSessionId)) options.scrollToBottom();
     }
 
     async function renderOlder(messages, batchSize, batchDelay,
@@ -61,23 +57,21 @@ function createAgentRendererHistory(options) {
                     elements.push(element);
                 }
             }
-            await new Promise((resolve) => options.requestIdle(() => {
-                if (!options.isSessionActive(renderSessionId)) return resolve();
-                const root = options.root();
-                let insertPoint = root.firstChild;
-                while (insertPoint?.classList?.contains('topic-timestamp-bubble')) insertPoint = insertPoint.nextSibling;
-                if (insertPoint) root.insertBefore(fragment, insertPoint);
-                else root.appendChild(fragment);
-                elements.forEach((element) => processDeferred(element, renderSessionId, {
-                    ...renderContext,
-                    deferHeavy: true,
-                }));
-                resolve();
+            if (!await options.waitIdle()) return;
+            if (!options.isSessionActive(renderSessionId)) return;
+            const root = options.root();
+            let insertPoint = root.firstChild;
+            while (insertPoint?.classList?.contains('topic-timestamp-bubble')) insertPoint = insertPoint.nextSibling;
+            if (insertPoint) root.insertBefore(fragment, insertPoint);
+            else root.appendChild(fragment);
+            elements.forEach((element) => processDeferred(element, renderSessionId, {
+                ...renderContext,
+                deferHeavy: true,
             }));
             if (!options.isSessionActive(renderSessionId)) return;
             if (index > 0 && batchDelay > 0) {
                 const delay = batch.length < batchSize / 2 ? batchDelay / 2 : batchDelay;
-                await new Promise((resolve) => setTimeout(resolve, delay));
+                if (!await options.delay(delay)) return;
             }
         }
     }
@@ -93,13 +87,11 @@ function createAgentRendererHistory(options) {
         }
         if (!options.isSessionActive(renderSessionId)) return;
         elements.forEach((element) => fragment.appendChild(element));
-        return new Promise((resolve) => options.requestFrame(() => {
-            if (!options.isSessionActive(renderSessionId)) return resolve();
-            options.root().appendChild(fragment);
-            elements.forEach((element) => processDeferred(element, renderSessionId, renderContext));
-            if (options.isSessionActive(renderSessionId)) options.scrollToBottom();
-            resolve();
-        }));
+        if (!await options.waitFrame()) return;
+        if (!options.isSessionActive(renderSessionId)) return;
+        options.root().appendChild(fragment);
+        elements.forEach((element) => processDeferred(element, renderSessionId, renderContext));
+        if (options.isSessionActive(renderSessionId)) options.scrollToBottom();
     }
 
     async function render(history, settings = {}) {

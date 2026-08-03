@@ -1,4 +1,4 @@
-function createAgentRendererMermaid({ documentRef, windowRef, getMermaid, escapeHtml }) {
+function createAgentRendererMermaid({ documentRef, getMermaid, escapeHtml, requestFrame }) {
     function enhance(element) {
         if (!element || element.dataset.vcpMermaidEnhanced === 'true') return;
         const svg = element.querySelector('svg');
@@ -98,7 +98,7 @@ function createAgentRendererMermaid({ documentRef, windowRef, getMermaid, escape
         viewport.addEventListener('pointerup', endDrag);
         viewport.addEventListener('pointercancel', endDrag);
         viewport.addEventListener('dblclick', (event) => { event.preventDefault(); reset(); });
-        windowRef.requestAnimationFrame(fit);
+        requestFrame(fit);
     }
 
     async function render(container) {

@@ -32,7 +32,7 @@ function createAgentRendererMessageLifecycle(options) {
     }
 
     function schedulePretextEstimate(messageId, text, container) {
-        const bridge = options.windowRef.pretextBridge;
+        const bridge = options.pretextBridge;
         if (!bridge?.isReady?.() || !messageId || !text) return;
         const run = () => {
             try {
@@ -41,11 +41,7 @@ function createAgentRendererMessageLifecycle(options) {
                 // Pretext is an optional optimization.
             }
         };
-        if (typeof options.windowRef.requestIdleCallback === 'function') {
-            options.windowRef.requestIdleCallback(run, { timeout: 300 });
-        } else {
-            options.windowRef.setTimeout(run, 0);
-        }
+        options.requestIdle(run, { timeout: 300 });
     }
 
     function renderMessage(message, isInitialLoad = false, appendToDom = true, renderSessionId = options.getActiveRenderSessionId(), renderContext = {}) {
@@ -103,7 +99,7 @@ function createAgentRendererMessageLifecycle(options) {
                 return postProcess({ runHeavy: true });
             };
             if (appendToDom) {
-                options.windowRef.requestAnimationFrame(() => {
+                options.requestFrame(() => {
                     if (options.isRenderSessionActive(renderSessionId) && messageItem.isConnected) postProcess();
                 });
             } else {

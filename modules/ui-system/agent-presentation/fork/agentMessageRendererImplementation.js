@@ -130,9 +130,9 @@ const TOOL_RESULT_DANGEROUS_HTML_REGEX = /<\s*\/?\s*(?:style|script|iframe|objec
 const HTML_STYLE_TAG_REGEX = /<style\b/i;
 const mermaidRenderer = createAgentRendererMermaid({
     documentRef: document,
-    windowRef: window,
     getMermaid: () => globalThis.mermaid,
     escapeHtml,
+    requestFrame: (callback) => rendererSession.frame(callback),
 });
 function renderMermaidDiagrams(container) {
     return mermaidRenderer.render(container);
@@ -255,18 +255,17 @@ let agentRenderContext = {
 let imageController = null;
 let visibilityController = null;
 let animationLifecycle = null;
-const rendererSession = createAgentRendererSession();
+const rendererSession = createAgentRendererSession({}, window);
 let containerEventDisposers = [];
 let streamController = null;
 function getStreamController() {
     if (streamController) return streamController;
     streamController = createAgentRendererStream({
         requestFrame(callback) {
-            return window.requestAnimationFrame?.(callback) ?? setTimeout(callback, 0);
+            return rendererSession.frame(callback);
         },
         cancelFrame(frameId) {
-            if (window.cancelAnimationFrame) window.cancelAnimationFrame(frameId);
-            else clearTimeout(frameId);
+            rendererSession.cancel(frameId);
         },
         onFlush(messageId, content) {
             updateMessageContent(messageId, content);
@@ -317,6 +316,7 @@ const rendererContent = createAgentRendererContent({
     renderAttachments: (message, content) => renderAttachments(message, content),
     processRenderedContent: (content, settings) => contentProcessor.processRenderedContent(content, settings),
     renderMermaid: (content) => renderMermaidDiagrams(content),
+    defer: (callback, delay) => rendererSession.timeout(callback, delay),
     highlight: (content) => contentProcessor.highlightAllPatternsInMessage(content),
     processAnimation: (content) => animationLifecycle?.process(content),
 });
@@ -331,11 +331,9 @@ const rendererHistory = createAgentRendererHistory({
     buildDepthMap: (history) => buildTurnDepthMap(history),
     observeMessage: (element) => visibilityController?.observeMessage(element),
     isMessageInHotZone: (element) => visibilityController?.isMessageInHotZone(element) === true,
-    requestFrame: (callback) => requestAnimationFrame(callback),
-    requestIdle: (callback) => {
-        if ('requestIdleCallback' in window) requestIdleCallback(callback, { timeout: 1000 });
-        else requestAnimationFrame(callback);
-    },
+    waitFrame: () => rendererSession.waitFrame(),
+    waitIdle: () => rendererSession.waitIdle(),
+    delay: (delay) => rendererSession.delay(delay),
     scrollToBottom: () => agentRenderContext.uiHelper.scrollToBottom(),
     onError: (message, error) => console.error(`Failed to render message ${message.id}:`, error),
 });
@@ -388,15 +386,12 @@ function initializeAgentMessageRenderer(refs) {
     // Start the emoticon fixer initialization, but don't wait for it here.
     // The await will happen inside renderMessage to ensure it's ready before rendering.
     emoticonUrlFixer.initialize(agentRenderContext.electronAPI);
-    // 初始化可见性优化器
-    // 🟢 关键修复：IntersectionObserver 的 root 必须是产生滚动条的那个父容器
+    // The controller owns observer capability detection and its non-observer fallback.
     const scrollContainer = agentRenderContext.chatMessagesDiv.closest('.chat-messages-container');
-    if (typeof globalThis.Element !== 'undefined' && typeof globalThis.IntersectionObserver !== 'undefined') {
-        visibilityController = createAgentVisibilityController({
-            container: scrollContainer || agentRenderContext.chatMessagesDiv,
-            window,
-        });
-    }
+    visibilityController = createAgentVisibilityController({
+        container: scrollContainer || agentRenderContext.chatMessagesDiv,
+        window,
+    });
     animationLifecycle = createAgentAnimationLifecycle({ root: agentRenderContext.chatMessagesDiv });
     bindContainerEvent('click', rendererActions.onClick);
     injectEnhancedStyles();
@@ -448,7 +443,9 @@ async function finalizeStreamedMessage(messageId, finishReason, context, finalPa
 }
 const messageLifecycle = createAgentRendererMessageLifecycle({
     documentRef: document,
-    windowRef: window,
+    pretextBridge: window.pretextBridge,
+    requestIdle: (callback, options) => rendererSession.idle(callback, options),
+    requestFrame: (callback) => rendererSession.frame(callback),
     getContext: () => agentRenderContext,
     getSettings,
     getParticipant,
@@ -491,7 +488,7 @@ function refreshLayoutDependentState() {
         delete messageItem.dataset.vcpMeasuredHeight;
         messageItem.style.containIntrinsicSize = 'auto 100px';
     });
-    requestAnimationFrame(() => {
+    rendererSession.frame(() => {
         if (!chatMessagesDiv.isConnected) return;
         visibilityController?.recheckVisibility();
     });

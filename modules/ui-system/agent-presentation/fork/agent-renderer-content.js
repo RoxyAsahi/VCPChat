@@ -37,7 +37,7 @@ function createAgentRendererContent(options) {
         await options.renderMermaid(contentDiv);
         if (!isStillValid()) return;
         if (deferHighlights) {
-            setTimeout(() => {
+            options.defer(() => {
                 if (isStillValid()) options.highlight(contentDiv);
             }, 0);
         } else {

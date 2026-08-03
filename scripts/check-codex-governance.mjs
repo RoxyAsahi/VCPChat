@@ -124,6 +124,13 @@ for (const forbidden of [
         errors.push(`Agent renderer uses shared mutable singleton lifecycle: ${forbidden}`);
     }
 }
+for (const [file, forbiddenPattern] of [
+    ['agentMessageRendererImplementation.js', /\b(?:requestAnimationFrame|requestIdleCallback|setTimeout|setInterval|MutationObserver|IntersectionObserver)\b/],
+    ['agent-renderer-message-lifecycle.js', /\b(?:requestAnimationFrame|requestIdleCallback|setTimeout|setInterval|MutationObserver|IntersectionObserver)\b/],
+]) {
+    const source = fs.readFileSync(path.join(root, 'modules/ui-system/agent-presentation/fork', file), 'utf8');
+    if (forbiddenPattern.test(source)) errors.push(`${file} bypasses the Agent Renderer lifecycle scheduler`);
+}
 const workbenchClients = fs.readFileSync(path.join(root, 'modules/ui-system/agent-workbench-clients.js'), 'utf8');
 if (/agentRuntime(?:CreateTopic|CreateSession|ListTopics|ReadTopic|ReadProjection|RenameTopic|DeleteTopic)/.test(workbenchClients)) {
     errors.push('formal Workbench client boundary exposes deprecated Topic APIs');
