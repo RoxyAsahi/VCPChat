@@ -14,9 +14,11 @@
 
 ## 暂时归档
 
-便签、日志、插件、任务、记忆、论坛、协同 Canvas、RAG 观察器、Human ToolBox 和 VchatManager 的新版重建代码保留在原业务文件中，但运行时强制使用经典 presentation。
+便签、日志、插件、任务、记忆、论坛、RAG 观察器、Human ToolBox 和 VchatManager 的新版重建代码保留在原业务文件中，但运行时强制使用经典 presentation。
 
 归档不是删除：数据库、IPC、业务协议和经典页面均不改变，也不复制第二份业务状态。统一策略由 `modules/ui-system/ui-surface-policy.js` 管理；`vcp-ui-runtime-bootstrap.js` 在加载 Web Awesome 前应用策略，因此归档页面不会挂载 `AppPageShell` 或注册 WA 控件。
+
+协同 Canvas 不属于“归档重建”：其 next-UI 重建已撤销，`Canvasmodules/` 三个业务文件恢复为 `origin/main` 的上游经典实现，因此不加载新版 runtime。
 
 ## 重新启用门槛
 
@@ -39,8 +41,8 @@ npm run check:ui-system
 npm run test:electron-ui-apps
 ```
 
-- UI 门禁通过：`2 active rebuilt, 10 archived rebuilt`。
+- UI 门禁通过：`2 active rebuilt, 9 archived rebuilt, 1 upstream classic`。
 - Electron UI apps：25/25 通过。
 - 笔记、翻译和全局设置使用新版 presentation。
-- 便签、日志、插件、任务、记忆、论坛、Canvas、RAG 观察器、VchatManager 和 Human ToolBox 在 next 请求下均验证为经典 presentation，无 `AppPageShell` 和 Web Awesome 注册。
+- 便签、日志、插件、任务、记忆、论坛、RAG 观察器、VchatManager 和 Human ToolBox 在 next 请求下均验证为经典 presentation；Canvas 直接使用上游经典实现。以上页面均无 `AppPageShell` 和 Web Awesome 注册。
 - 原 Human ToolBox 新版深度 smoke 保留为 `npm run test:electron-human-toolbox-next-experimental`，不再属于默认产品门槛。

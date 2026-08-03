@@ -1,6 +1,6 @@
 # 新版 UI Electron QA 矩阵
 
-> 2026-08-03：业务子页面改为 allowlist。产品运行时仅笔记与翻译要求新版验收；归档页面必须验证在 `uiMode=next` 请求下安全回退经典 UI、无 AppPageShell、无 Web Awesome 注册。参见 `docs/ui-active-surface-policy.md`。
+> 2026-08-03：业务子页面改为 allowlist。产品运行时仅笔记与翻译要求新版验收；归档页面必须验证在 `uiMode=next` 请求下安全回退经典 UI。Canvas 已恢复上游经典实现。参见 `docs/ui-active-surface-policy.md`。
 
 本表只记录已经在真实 Electron 渲染器中执行过的检查。`partial` 不得作为发布完成的依据。逐页审计与截图见 `docs/ui-visual-audit-2026-08-02.md`。
 
@@ -17,7 +17,7 @@
 | 全局搜索 | Ctrl+F 首开、输入聚焦、Escape、模式切换清理、空态 | 带真实结果的分页和跳转 |
 | Agent/Group 设置 | 真实 Agent 选择、设置页、折叠区段；新旧模式样式隔离 | 保存、删除、校验、真实 Group 数据 |
 | 消息与富内容 | 壁纸透出；消息、代码、工具摘要、思考链、桌面推送、日记、表格；700px 表格不溢出 | 真实长流、错误、工具调用、媒体和最小窗口 |
-| 迁移页面运行时 | 12 页已真正重建（AppPageShell + VCPUI 控件 + VCPUI Tooltip）；真实 Electron 逐页验证：便签/翻译/日志/插件/任务/笔记/记忆/论坛（embedded）+ 协同Canvas/监听RAG（独立窗口）+ 工具ToolBox + 数据VchatManager，均跑 next 与 classic 双模式；几何/溢出/重叠/焦点/键盘/窄屏/长文本/空态断言全绿；Lucide 在 main.html 与 ToolBox 生效 | 见「逐页状态」；记忆页依赖后端初始化；便签正文区留白（D-05） |
+| 页面运行时 | 11 页保留 AppPageShell 重建（2 active、9 archived）；Canvas 恢复上游经典实现。真实 Electron 仍逐页验证 12 个业务表面及 next/classic 行为；几何、溢出、重叠、焦点、键盘、窄屏、长文本与空态断言全绿 | 见「逐页状态」；记忆页依赖后端初始化；便签正文区留白（D-05） |
 
 ### 逐页状态（基线 2444ffd6，详细见 `docs/ui-visual-audit-2026-08-02.md`）
 
@@ -31,7 +31,7 @@
 | 笔记 | 视觉通过 | `wa-tooltip` + native 增强 |
 | 记忆 | Hermetic verified | 「初始化未完成」空态，依赖后端初始化 |
 | 论坛 | 视觉通过 | 空态首屏留白（数据相关） |
-| 协同Canvas | 视觉通过 | 独立窗口重建 |
+| 协同Canvas | 经典实现通过 | 已恢复 `origin/main`，独立窗口不加载新版 runtime |
 | 监听RAG | 结构迁移 | shell 挂载但 WA 参与为 0（tooltip 选择器指向不存在的按钮，D-02） |
 | 工具ToolBox | 视觉通过 | 50 工具全 `wa-card`；Lucide≥2；焦点/键盘/空态/长文本/窄屏全过 |
 | 数据VchatManager | 结构迁移 | uiMode 恒 classic，next 从不触发（D-03） |

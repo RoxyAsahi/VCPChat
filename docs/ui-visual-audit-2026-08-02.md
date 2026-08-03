@@ -1,6 +1,6 @@
 # 新版 UI 视觉 QA 审计报告（E 组 · 基线 2444ffd6）
 
-> 历史收据说明（2026-08-03）：本页截图证明当日实验性重建曾成功渲染，不代表当前产品启用。当前只启用笔记与翻译，其余业务页面已由 `docs/ui-active-surface-policy.md` 暂时归档并回退经典 presentation。
+> 历史收据说明（2026-08-03）：本页截图证明当日实验性重建曾成功渲染，不代表当前产品启用。当前只启用笔记与翻译；大部分业务页面由 `docs/ui-active-surface-policy.md` 暂时归档，Canvas 的实验重建则已撤销并恢复 `origin/main` 的经典实现。
 
 - 审计日期：2026-08-02
 - 审计基线：`2444ffd6`（含全部 WIP：12 页已重建为 next 模式、Web Awesome vendored、门禁脚本齐全）

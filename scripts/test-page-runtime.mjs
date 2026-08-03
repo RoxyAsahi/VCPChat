@@ -36,10 +36,12 @@ const archivedRebuiltPages = [
     { html: 'Agenttaskmodules/task.html', js: 'Agenttaskmodules/task.js' },
     { html: 'Memomodules/memo.html', js: 'Memomodules/memo.js' },
     { html: 'Forummodules/forum.html', js: 'Forummodules/forum.js' },
-    { html: 'Canvasmodules/canvas.html', js: 'Canvasmodules/canvas.js' },
     { html: 'RAGmodules/RAG_Observer.html', js: 'RAGmodules/RAG_Observer.html' },
     { html: 'VCPHumanToolBox/index.html', js: 'VCPHumanToolBox/renderer.js', strictAdapter: true },
     { html: 'VchatManager/index.html', js: 'VchatManager/script.js' },
+];
+const upstreamClassicPages = [
+    { html: 'Canvasmodules/canvas.html', js: 'Canvasmodules/canvas.js' },
 ];
 const rebuiltPages = [...activeRebuiltPages, ...archivedRebuiltPages];
 
@@ -97,6 +99,14 @@ for (const page of archivedRebuiltPages) {
     const mode = resolveSurfaceUiMode('next', { pathname: `C:/VCPChat/${page.html}` });
     if (mode !== 'classic') failures.push(`${page.html}: archived rebuild resolves to ${mode}`);
 }
+for (const page of upstreamClassicPages) {
+    const html = fs.readFileSync(path.join(root, page.html), 'utf8');
+    const js = fs.readFileSync(path.join(root, page.js), 'utf8');
+    if (activePolicyPages.has(page.html)) failures.push(`${page.html}: upstream classic page must not be active`);
+    if (html.includes('vcp-ui-runtime-bootstrap.js') || /AppPageShell|VCPPageRebuild/.test(js)) {
+        failures.push(`${page.html}: upstream classic page must not contain the retired next-UI rebuild`);
+    }
+}
 
 if (failures.length) {
     console.error('Page runtime gate failed:\n');
@@ -104,4 +114,4 @@ if (failures.length) {
     process.exit(1);
 }
 
-console.log(`Page runtime gate passed (${wiredPages.length} wired, ${activeRebuiltPages.length} active rebuilt, ${archivedRebuiltPages.length} archived rebuilt).`);
+console.log(`Page runtime gate passed (${wiredPages.length} wired, ${activeRebuiltPages.length} active rebuilt, ${archivedRebuiltPages.length} archived rebuilt, ${upstreamClassicPages.length} upstream classic).`);
