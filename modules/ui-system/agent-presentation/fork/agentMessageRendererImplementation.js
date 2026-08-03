@@ -35,6 +35,7 @@ import { createAgentRendererActions } from './agent-renderer-actions.js';
 import { protectLatexBlocks, restoreLatexBlocks } from './agent-renderer-latex.js';
 import { createAgentRendererAvatarStyle } from './agent-renderer-avatar-style.js';
 import { createAgentRendererTextTransforms } from './agent-renderer-text-transforms.js';
+import { createAgentRendererScopedHtml } from './agent-renderer-scoped-html.js';
 
 const colorExtractionPromises = new Map();
 
@@ -168,14 +169,6 @@ const TOOL_RESULT_SAFE_MARKDOWN_OPTIONS = Object.freeze({
     headerIds: false
 });
 
-function containsAssistantHtmlNeedingScope(text) {
-    return typeof text === 'string' && ASSISTANT_HTML_SCOPE_TRIGGER_REGEX.test(text);
-}
-
-function containsStyleTag(text) {
-    return typeof text === 'string' && HTML_STYLE_TAG_REGEX.test(text);
-}
-
 function escapeRawHtmlOutsideCodeFences(markdownText) {
     if (typeof markdownText !== 'string' || !TOOL_RESULT_RAW_HTML_LINE_REGEX.test(markdownText)) {
         return markdownText;
@@ -285,13 +278,6 @@ function renderSafeToolResultMarkdown(markdownText) {
  * Generates a unique ID for scoping CSS.
  * @returns {string} A unique ID string (e.g., 'vcp-bubble-1a2b3c4d').
  */
-function generateUniqueId() {
-    // Use a combination of timestamp and random string for uniqueness
-    const timestampPart = Date.now().toString(36);
-    const randomPart = Math.random().toString(36).substring(2, 9);
-    return `vcp-bubble-${timestampPart}${randomPart}`;
-}
-
 /**
  * Renders Mermaid diagrams found within a given container.
  * Finds placeholders, replaces them with the actual Mermaid code,
@@ -956,6 +942,24 @@ const textTransforms = createAgentRendererTextTransforms({
 const {
     applyFrontendRegexRules, buildTurnDepthMap, calculateDepthByTurns, prepareUserMessageText,
 } = textTransforms;
+const scopedHtml = createAgentRendererScopedHtml({
+    document,
+    scopeCss: contentProcessor.scopeCss,
+    styleRegex: STYLE_REGEX,
+    htmlTriggerRegex: ASSISTANT_HTML_SCOPE_TRIGGER_REGEX,
+    htmlStyleTagRegex: HTML_STYLE_TAG_REGEX,
+    htmlFenceCheckRegex: HTML_FENCE_CHECK_REGEX,
+    toolResultRegex: TOOL_RESULT_REGEX,
+    replaceToolRequestBlocks,
+    desktopPushRegex: DESKTOP_PUSH_REGEX,
+    desktopPushPartialRegex: DESKTOP_PUSH_PARTIAL_REGEX,
+    codeFenceRegex: CODE_FENCE_REGEX,
+});
+const generateUniqueId = scopedHtml.generateUniqueId;
+const containsAssistantHtmlNeedingScope = scopedHtml.containsScopedHtml;
+const processAssistantScopedHtmlContent = scopedHtml.process;
+const ensureHtmlFenced = scopedHtml.ensureHtmlFenced;
+const deIndentHtml = scopedHtml.deIndentHtml;
 
 function extractSpeakableTextFromContentElement(contentElement) {
     if (!contentElement) return '';
@@ -976,112 +980,6 @@ function extractSpeakableTextFromContentElement(contentElement) {
  * @param {string} scopeId - The unique ID for scoping.
  * @returns {{processedContent: string, styleInjected: boolean}} The content with <style> tags removed, and a flag indicating if styles were injected.
  */
-function processAndInjectScopedCss(content, scopeId) {
-    let cssContent = '';
-    let styleInjected = false;
-
-    const processedContent = content.replace(STYLE_REGEX, (match, css) => {
-        cssContent += css.trim() + '\n';
-        return ''; // Remove style tags from the content
-    });
-
-    if (cssContent.length > 0) {
-        try {
-            const scopedCss = contentProcessor.scopeCss(cssContent, scopeId);
-
-            const styleElement = document.createElement('style');
-            styleElement.type = 'text/css';
-            styleElement.setAttribute('data-vcp-scope-id', scopeId);
-            styleElement.textContent = scopedCss;
-            document.head.appendChild(styleElement);
-            styleInjected = true;
-
-            console.debug(`[ScopedCSS] Injected scoped styles for ID: #${scopeId}`);
-        } catch (error) {
-            console.error(`[ScopedCSS] Failed to scope or inject CSS for ID: ${scopeId}`, error);
-        }
-    }
-
-    return { processedContent, styleInjected };
-}
-
-
-function processAssistantScopedHtmlContent(content, scopeId, messageItem = null) {
-    if (!scopeId || !containsAssistantHtmlNeedingScope(content)) {
-        return content;
-    }
-
-    if (messageItem) {
-        messageItem.dataset.vcpHtmlScopeCandidate = 'true';
-        if (!containsStyleTag(content)) {
-            messageItem.dataset.vcpInlineHtmlScoped = 'true';
-        }
-    }
-
-    // --- 🟢 关键修复：先保护所有可能包含 <style> 的特殊区域，再提取样式 ---
-    // 这样可以避免代码块、推送块、工具请求块、工具结果块和「始」「末」标记内的 <style> 被误当作真正的样式注入。
-    // 即使只是结构化 HTML / 内联 style，也会进入该路径以跳过 HTML 缓存并统一保护扫描。
-    const protectedBlocks = [];
-
-    // 🔴 最高优先级：保护工具结果块（[[VCP调用结果信息汇总:...VCP调用结果结束]]）
-    // 工具结果可能包含任意内容（大型 markdown 文件、代码、「始」「末」标记等）
-    // 必须在「始」「末」标记保护之前运行，否则结果内部的标记会被错误匹配。
-    TOOL_RESULT_REGEX.lastIndex = 0;
-    let textWithProtectedBlocks = content.replace(TOOL_RESULT_REGEX, (match) => {
-        const placeholder = `__VCP_STYLE_PROTECT_${protectedBlocks.length}__`;
-        protectedBlocks.push(match);
-        return placeholder;
-    });
-    TOOL_RESULT_REGEX.lastIndex = 0;
-
-    // 🔴 保护工具请求块（<<<[TOOL_REQUEST]>>>...<<<[END_TOOL_REQUEST]>>>）
-    // 工具请求参数中可能包含完整 HTML 文档（如壁纸 HTML），其中的 <style> 不应被注入。
-    // 使用 ESCAPE 感知的扫描器，避免参数内容里的 END 标记导致工具块提前闭合。
-    textWithProtectedBlocks = replaceToolRequestBlocks(textWithProtectedBlocks, (match) => {
-        const placeholder = `__VCP_STYLE_PROTECT_${protectedBlocks.length}__`;
-        protectedBlocks.push(match);
-        return placeholder;
-    });
-
-    // 「始」「末」与「始ESCAPE」「末ESCAPE」只在工具请求围栏内部作为字段边界语法。
-    // 工具请求块已在上一步整体保护；这里不再扫描工具围栏外的裸始末标记，
-    // 避免普通聊天提及这些标记时误保护大段正文或影响 <style> 提取边界。
-
-    // 保护桌面推送块（必须在代码块之前，因为推送块可能包含代码围栏）。
-    textWithProtectedBlocks = textWithProtectedBlocks.replace(DESKTOP_PUSH_REGEX, (match) => {
-        const placeholder = `__VCP_STYLE_PROTECT_${protectedBlocks.length}__`;
-        protectedBlocks.push(match);
-        return placeholder;
-    });
-    // 也保护未闭合的推送块。
-    textWithProtectedBlocks = textWithProtectedBlocks.replace(DESKTOP_PUSH_PARTIAL_REGEX, (match) => {
-        const placeholder = `__VCP_STYLE_PROTECT_${protectedBlocks.length}__`;
-        protectedBlocks.push(match);
-        return placeholder;
-    });
-
-    // 保护代码块。
-    textWithProtectedBlocks = textWithProtectedBlocks.replace(CODE_FENCE_REGEX, (match) => {
-        const placeholder = `__VCP_STYLE_PROTECT_${protectedBlocks.length}__`;
-        protectedBlocks.push(match);
-        return placeholder;
-    });
-
-    // 现在只会匹配不在保护区域内的 <style> 标签。
-    const { processedContent: contentWithoutStyles } = processAndInjectScopedCss(textWithProtectedBlocks, scopeId);
-
-    // 恢复所有被保护的块。
-    // 🟢 使用 split/join，避免代码块中的 $ 字符（如 $'、$$、$&）被 String.replace() 误解释为特殊替换模式。
-    let restoredContent = contentWithoutStyles;
-    protectedBlocks.forEach((block, i) => {
-        const placeholder = `__VCP_STYLE_PROTECT_${i}__`;
-        restoredContent = restoredContent.split(placeholder).join(block);
-    });
-
-    return restoredContent;
-}
-
-
 /**
  * Wraps raw HTML documents in markdown code fences if they aren't already.
  * An HTML document is identified by the `<!DOCTYPE html>` declaration.
@@ -1092,76 +990,6 @@ function processAssistantScopedHtmlContent(content, scopeId, messageItem = null)
  * Wraps raw HTML documents in markdown code fences if they aren't already.
  * 🟢 跳过「始」「末」标记内的 HTML，防止工具调用参数被错误封装
  */
-function ensureHtmlFenced(text) {
-    const doctypeTag = '<!DOCTYPE html>';
-    const htmlCloseTag = '</html>';
-    const lowerText = text.toLowerCase();
-
-    // 已在代码块中，不处理
-    if (HTML_FENCE_CHECK_REGEX.test(text)) {
-        return text;
-    }
-
-    // 快速检查：没有 doctype 直接返回
-    if (!lowerText.includes(doctypeTag.toLowerCase())) {
-        return text;
-    }
-
-    // 🟢 只保护工具请求围栏区域内的 HTML。
-    // 「始」「末」标记不再作为全局保护区入口，避免普通正文提及该语法时导致 HTML fenced 边界误判。
-    const protectedRanges = [];
-    replaceToolRequestBlocks(text, (match, content, startIndex, endIndex) => {
-        protectedRanges.push({ start: startIndex, end: endIndex });
-        return match;
-    });
-
-    // 🟢 检查位置是否在保护区域内
-    const isProtected = (index) => {
-        return protectedRanges.some(range => index >= range.start && index < range.end);
-    };
-
-    let result = '';
-    let lastIndex = 0;
-
-    while (true) {
-        const startIndex = text.toLowerCase().indexOf(doctypeTag.toLowerCase(), lastIndex);
-
-        result += text.substring(lastIndex, startIndex === -1 ? text.length : startIndex);
-
-        if (startIndex === -1) break;
-
-        const endIndex = text.toLowerCase().indexOf(htmlCloseTag.toLowerCase(), startIndex + doctypeTag.length);
-
-        if (endIndex === -1) {
-            result += text.substring(startIndex);
-            break;
-        }
-
-        const block = text.substring(startIndex, endIndex + htmlCloseTag.length);
-
-        // 🔴 核心修复：如果在工具请求保护区内，直接添加不封装
-        if (isProtected(startIndex)) {
-            result += block;
-            lastIndex = endIndex + htmlCloseTag.length;
-            continue;
-        }
-
-        // 正常逻辑：检查是否已在代码块内
-        const fencesInResult = (result.match(/```/g) || []).length;
-
-        if (fencesInResult % 2 === 0) {
-            result += `\n\`\`\`html\n${block}\n\`\`\`\n`;
-        } else {
-            result += block;
-        }
-
-        lastIndex = endIndex + htmlCloseTag.length;
-    }
-
-    return result;
-}
-
-
 /**
  * Removes leading whitespace from lines that appear to be HTML tags,
  * as long as they are not inside a fenced code block. This prevents
@@ -1169,28 +997,6 @@ function ensureHtmlFenced(text) {
  * @param {string} text The text content.
  * @returns {string} The processed text.
  */
-function deIndentHtml(text) {
-    const lines = text.split('\n');
-    let inFence = false;
-    return lines.map(line => {
-        if (line.trim().startsWith('```')) {
-            inFence = !inFence;
-            return line;
-        }
-
-        // 🟢 新增：如果行内包含 <img>，不要拆分它
-        if (!inFence && line.includes('<img')) {
-            return line; // 保持原样
-        }
-
-        if (!inFence && /^\s+<(!|[a-zA-Z])/.test(line)) {
-            return line.trimStart();
-        }
-        return line;
-    }).join('\n');
-}
-
-
 /**
  * 根据对话轮次计算消息的深度。
  * @param {string} messageId - 目标消息的ID。
