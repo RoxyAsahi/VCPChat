@@ -12,7 +12,6 @@ const enhancedRenderDebounceTimers = new WeakMap(); // For debouncing prettify c
 const RENDER_PIPELINE_VERSION = '2026-07-26-dollar-guard-v3';
 
 import { avatarColorCache, getDominantAvatarColor } from '../../../renderer/colorUtils.js';
-import { createMessageSkeleton, formatMessageTimestamp } from '../../../renderer/domBuilder.js';
 import * as emoticonUrlFixer from '../../../renderer/emoticonUrlFixer.js';
 import { createContentPipeline, PIPELINE_MODES } from '../../../renderer/contentPipeline.js';
 import * as contentProcessor from '../../../renderer/contentProcessor.js';
@@ -34,6 +33,7 @@ import { createAgentRendererTextTransforms } from './agent-renderer-text-transfo
 import { createAgentRendererScopedHtml } from './agent-renderer-scoped-html.js';
 import { createAgentRendererSpecialBlocks } from './agent-renderer-special-blocks.js';
 import { createAgentRendererToolResults } from './agent-renderer-tool-results.js';
+import { createAgentRendererMessageLifecycle } from './agent-renderer-message-lifecycle.js';
 
 const colorExtractionPromises = new Map();
 
@@ -881,187 +881,6 @@ async function renderPostProcessedHtml(contentDiv, rawHtml, options = {}) {
     return rendererContent.renderPostProcessedHtml(contentDiv, rawHtml, options);
 }
 
-function renderMessage(message, isInitialLoad = false, appendToDom = true, renderSessionId = getActiveRenderSessionId(), renderContext = {}) {
-    // console.debug('[MessageRenderer renderMessage] Received message:', JSON.parse(JSON.stringify(message)));
-    const { chatMessagesDiv, electronAPI, markedInstance, uiHelper } = agentRenderContext;
-    const globalSettings = getSettings();
-    const currentSelectedItem = getParticipant();
-    const currentChatHistory = getMessages();
-
-    // Prevent re-rendering if the message already exists in the DOM, unless it's a thinking message being replaced.
-    const existingMessageDom = chatMessagesDiv.querySelector(`.message-item[data-message-id="${message.id}"]`);
-    if (existingMessageDom && !existingMessageDom.classList.contains('thinking')) {
-        // console.log(`[MessageRenderer] Message ${message.id} already in DOM. Skipping render.`);
-        // return existingMessageDom;
-    }
-
-    if (!chatMessagesDiv || !electronAPI || !markedInstance) {
-        console.error("MessageRenderer: Missing critical references for rendering.");
-        return null;
-    }
-
-    if (!message.id) {
-        message.id = `msg_${message.timestamp}_${Math.random().toString(36).substring(2, 9)}`;
-    }
-
-    const { messageItem, contentDiv, avatarImg, senderNameDiv } = createMessageSkeleton(message, globalSettings, currentSelectedItem);
-    messageItem.dataset.vcpInitialLoad = isInitialLoad ? 'true' : 'false';
-
-    // --- NEW: Scoped CSS Implementation ---
-    let scopeId = null;
-    if (message.role === 'assistant') {
-        scopeId = generateUniqueId();
-        messageItem.id = scopeId; // Assign the unique ID to the message container
-    }
-    // --- END Scoped CSS Implementation ---
-
-
-    // 先添加到DOM
-    if (appendToDom) {
-        chatMessagesDiv.appendChild(messageItem);
-        // 观察新消息的可见性
-        visibilityController?.observeMessage(messageItem);
-    }
-
-    const isActiveStreamRequest = message.role === 'assistant'
-        && (message.state === 'streaming' || message.isStreaming === true || getStreamController().has(message.id));
-    const messageTextIsEmpty = message.content === null
-        || message.content === undefined
-        || (typeof message.content === 'string' && message.content.trim() === '');
-
-    if (message.isThinking || (isActiveStreamRequest && messageTextIsEmpty)) {
-        contentDiv.innerHTML = `<span class="thinking-indicator">${message.content || '思考中'}<span class="thinking-indicator-dots">...</span></span>`;
-        messageItem.classList.add(message.isThinking ? 'thinking' : 'streaming');
-    } else {
-        // 切回仍在后台运行且已经产生内容的会话时，恢复可中止的流式状态。
-        if (isActiveStreamRequest) {
-            messageItem.classList.add('streaming');
-        }
-        let textToRender = "";
-        if (typeof message.content === 'string') {
-            textToRender = message.content;
-        } else if (message.content && typeof message.content.text === 'string') {
-            // This case handles objects like { text: "..." }, common for group messages before history saving
-            textToRender = message.content.text;
-        } else if (message.content === null || message.content === undefined) {
-            textToRender = ""; // Handle null or undefined content gracefully
-            console.warn('[MessageRenderer] message.content is null or undefined for message ID:', message.id);
-        } else {
-            // Fallback for other unexpected object structures, log and use a placeholder
-            console.warn('[MessageRenderer] Unexpected message.content type. Message ID:', message.id, 'Content:', JSON.stringify(message.content));
-            textToRender = "[消息内容格式异常]";
-        }
-
-        if (message.role === 'user') {
-            textToRender = prepareUserMessageText(textToRender);
-        } else if (message.role === 'assistant') {
-            textToRender = processAssistantScopedHtmlContent(textToRender, scopeId, messageItem);
-        }
-
-        // --- 按“对话轮次”计算深度 ---
-        // 历史批量渲染时优先使用预计算 depthMap，避免每条消息重复扫描完整 history。
-        // 如果是实时新消息，它此时可能还不在 history 数组里，则保留原有临时追加兜底逻辑。
-        const precomputedDepth = renderContext.depthMap?.get?.(message.id);
-        const depth = precomputedDepth !== undefined
-            ? precomputedDepth
-            : calculateDepthByTurns(
-                message.id,
-                currentChatHistory.some(m => m.id === message.id)
-                    ? [...currentChatHistory]
-                    : [...currentChatHistory, message]
-            );
-        // --- 深度计算结束 ---
-
-        // --- 应用前端正则规则 ---
-        // 核心修复：将正则规则应用移出 preprocessFullContent，以避免在流式传输的块上执行
-        // 这样可以确保正则表达式在完整的消息内容上运行
-        const agentConfigForRegex = currentSelectedItem?.config || currentSelectedItem;
-        if (agentConfigForRegex?.stripRegexes && Array.isArray(agentConfigForRegex.stripRegexes)) {
-            textToRender = applyFrontendRegexRules(textToRender, agentConfigForRegex.stripRegexes, message.role, depth);
-        }
-        // --- 正则规则应用结束 ---
-
-        let rawHtml = renderMarkdownToHtml(textToRender, {
-            settings: globalSettings,
-            messageRole: message.role,
-            depth
-        });
-
-        // 修复：清理 Markdown 解析器可能生成的损坏的 SVG viewBox 属性
-        // 错误 "Unexpected end of attribute" 表明 viewBox 的值不完整, 例如 "0 "
-        rawHtml = rawHtml.replace(/viewBox="0 "/g, 'viewBox="0 0 24 24"');
-
-        // Synchronously set the base HTML content
-        const finalHtml = rawHtml;
-        contentDiv.innerHTML = finalHtml;
-
-        // [Pretext集成] 延后填充文本高度缓存，避免阻塞首屏与批量历史渲染
-        scheduleMessagePretextEstimate(message.id, textToRender, chatMessagesDiv);
-
-        // Define the post-processing logic as a function.
-        // This allows us to control WHEN it gets executed.
-        const runPostRenderProcessing = async (postOptions = {}) => {
-            if (!isRenderSessionActive(renderSessionId) || !messageItem.isConnected || !contentDiv.isConnected) {
-                return;
-            }
-
-            return renderPostProcessedHtml(contentDiv, finalHtml, {
-                messageId: message.id,
-                message,
-                settings: globalSettings,
-                renderSessionId,
-                runHeavy: postOptions.runHeavy !== false,
-                includeAttachments: true
-            });
-        };
-
-        messageItem._vcp_activateHeavy = () => {
-            if (messageItem.dataset.vcpHeavyActivated === 'true') return;
-            return runPostRenderProcessing({ runHeavy: true });
-        };
-
-        // If we are appending directly to the DOM, schedule the processing immediately.
-        if (appendToDom) {
-            // We still use requestAnimationFrame to ensure the element is painted before we process it.
-            requestAnimationFrame(() => {
-                if (!isRenderSessionActive(renderSessionId) || !messageItem.isConnected) return;
-                runPostRenderProcessing();
-            });
-        } else {
-            // If not, attach the processing function to the element itself.
-            // The caller (e.g., a batch renderer) will be responsible for executing it
-            // AFTER the element has been attached to the DOM.
-            messageItem._vcp_process = (postOptions = {}) => {
-                if (!isRenderSessionActive(renderSessionId) || !messageItem.isConnected) return;
-                return runPostRenderProcessing(postOptions);
-            };
-            messageItem._vcp_renderSessionId = renderSessionId;
-        }
-    }
-
-    avatarStyle.apply({
-        message, messageItem, avatarImg, senderNameDiv,
-        settings: globalSettings, participant: currentSelectedItem,
-    });
-
-
-    // Attachments and content processing are now deferred within a requestAnimationFrame
-    // to prevent race conditions during history loading. See the block above.
-
-    if (isInitialLoad && message.isThinking && !isActiveStreamRequest) {
-        // Durable Projection does not keep stale thinking placeholders.
-        messageItem.remove();
-        return null;
-    }
-
-    // Highlighting is now part of processRenderedContent
-
-    if (appendToDom) {
-        agentRenderContext.uiHelper.scrollToBottom();
-    }
-    return messageItem;
-}
-
 function startStreamingMessage(message, messageItem = null) {
     getStreamController().start(message);
     return messageItem;
@@ -1108,154 +927,29 @@ async function finalizeStreamedMessage(messageId, finishReason, context, finalPa
  * @param {string} agentName - The name of the agent sending the message.
  * @param {string} agentId - The ID of the agent sending the message.
  */
-async function renderFullMessage(messageId, fullContent, agentName, agentId) {
-    console.debug(`[MessageRenderer renderFullMessage] Rendering full message for ID: ${messageId}`);
-    const { chatMessagesDiv } = agentRenderContext;
-    const currentChatHistoryArray = getMessages();
-    const currentSelectedItem = getParticipant();
-    const projectedMessage = currentChatHistoryArray.find(msg => msg.id === messageId) || {
-        id: messageId,
-        role: 'assistant',
-        timestamp: Date.now(),
-    };
-
-    const messageItem = chatMessagesDiv.querySelector(`.message-item[data-message-id="${messageId}"]`);
-    if (!messageItem) {
-        return;
-    }
-
-    messageItem.classList.remove('thinking', 'streaming');
-
-    const contentDiv = messageItem.querySelector('.md-content');
-    if (!contentDiv) {
-        console.error(`[renderFullMessage] Could not find .md-content div for message ID ${messageId}.`);
-        return;
-    }
-
-    // Update timestamp display if it was missing
-    const nameTimeBlock = messageItem.querySelector('.name-time-block');
-    if (nameTimeBlock && !nameTimeBlock.querySelector('.message-timestamp')) {
-        const timestampDiv = document.createElement('div');
-        timestampDiv.classList.add('message-timestamp');
-        timestampDiv.textContent = formatMessageTimestamp(projectedMessage.timestamp || Date.now());
-        nameTimeBlock.appendChild(timestampDiv);
-    }
-
-    // --- Update DOM ---
-    const globalSettings = getSettings();
-    // --- 应用前端正则规则 (修复流式处理问题) ---
-    const agentConfigForRegex = currentSelectedItem?.config || currentSelectedItem;
-    const messageFromHistoryForRegex = currentChatHistoryArray.find(msg => msg.id === messageId);
-    const messageRoleForRender = messageFromHistoryForRegex?.role || 'assistant';
-    let depth = 0;
-    if (messageFromHistoryForRegex) {
-        depth = calculateDepthByTurns(messageId, currentChatHistoryArray);
-        if (agentConfigForRegex?.stripRegexes && Array.isArray(agentConfigForRegex.stripRegexes)) {
-            fullContent = applyFrontendRegexRules(fullContent, agentConfigForRegex.stripRegexes, messageRoleForRender, depth);
-        }
-    }
-    // --- 正则规则应用结束 ---
-    if (messageRoleForRender === 'assistant') {
-        let scopedMessageId = messageItem.id;
-        if (!scopedMessageId) {
-            scopedMessageId = generateUniqueId();
-            messageItem.id = scopedMessageId;
-        }
-        fullContent = processAssistantScopedHtmlContent(fullContent, scopedMessageId, messageItem);
-    }
-
-    const rawHtml = renderMarkdownToHtml(fullContent, {
-        settings: globalSettings,
-        messageRole: messageRoleForRender,
-        depth
-    });
-
-    await renderPostProcessedHtml(contentDiv, rawHtml, {
-        messageId,
-        message: messageFromHistoryForRegex ? { ...messageFromHistoryForRegex, content: fullContent } : null,
-        settings: globalSettings,
-        renderSessionId: null,
-        runHeavy: true,
-        includeAttachments: !!messageFromHistoryForRegex
-    });
-
-    agentRenderContext.uiHelper.scrollToBottom();
-}
-
-function scheduleMessagePretextEstimate(messageId, text, container) {
-    if (!window.pretextBridge || !window.pretextBridge.isReady() || !messageId || !text) return;
-
-    const run = () => {
-        try {
-            const containerWidth = container ? container.clientWidth : 800;
-            window.pretextBridge.estimateHeight(messageId, text, 'body', containerWidth);
-        } catch (e) {
-            // Pretext 失败不影响正常渲染
-        }
-    };
-
-    if (typeof window.requestIdleCallback === 'function') {
-        window.requestIdleCallback(run, { timeout: 300 });
-    } else {
-        setTimeout(run, 0);
-    }
-}
-
-function updateMessageContent(messageId, newContent) {
-    const { chatMessagesDiv } = agentRenderContext;
-    const messageItem = chatMessagesDiv.querySelector(`.message-item[data-message-id="${messageId}"]`);
-    if (!messageItem) return;
-
-    const contentDiv = messageItem.querySelector('.md-content');
-    if (!contentDiv) return;
-
-    const globalSettings = getSettings(messageId);
-    let textToRender = (typeof newContent === 'string') ? newContent : (newContent?.text || "[内容格式异常]");
-
-    // --- 深度计算 (用于历史消息渲染) ---
-    const currentChatHistoryForUpdate = getMessages();
-    const messageInHistory = currentChatHistoryForUpdate.find(m => m.id === messageId);
-
-    if (messageInHistory && messageInHistory.role === 'user') {
-        textToRender = prepareUserMessageText(textToRender);
-    }
-
-    // --- 按“对话轮次”计算深度 ---
-    const depthForUpdate = calculateDepthByTurns(messageId, currentChatHistoryForUpdate);
-    // --- 深度计算结束 ---
-    // --- 应用前端正则规则 (修复流式处理问题) ---
-    const currentSelectedItem = getParticipant();
-    const agentConfigForRegex = currentSelectedItem?.config || currentSelectedItem;
-    if (agentConfigForRegex?.stripRegexes && Array.isArray(agentConfigForRegex.stripRegexes) && messageInHistory) {
-        textToRender = applyFrontendRegexRules(textToRender, agentConfigForRegex.stripRegexes, messageInHistory.role, depthForUpdate);
-    }
-    // --- 正则规则应用结束 ---
-    if ((messageInHistory?.role || 'assistant') === 'assistant') {
-        let scopedMessageId = messageItem.id;
-        if (!scopedMessageId) {
-            scopedMessageId = generateUniqueId();
-            messageItem.id = scopedMessageId;
-        }
-        textToRender = processAssistantScopedHtmlContent(textToRender, scopedMessageId, messageItem);
-    }
-
-    const rawHtml = renderMarkdownToHtml(textToRender, {
-        settings: globalSettings,
-        messageRole: messageInHistory?.role || 'assistant',
-        depth: depthForUpdate
-    });
-
-    // --- Post-Render Processing (aligned with renderMessage logic) ---
-
-    renderPostProcessedHtml(contentDiv, rawHtml, {
-        messageId,
-        message: messageInHistory ? { ...messageInHistory, content: newContent } : null,
-        settings: globalSettings,
-        renderSessionId: null,
-        runHeavy: true,
-        includeAttachments: !!messageInHistory
-    });
-}
+const messageLifecycle = createAgentRendererMessageLifecycle({
+    documentRef: document,
+    windowRef: window,
+    getContext: () => agentRenderContext,
+    getSettings,
+    getParticipant,
+    getMessages,
+    getStreamController,
+    getActiveRenderSessionId,
+    isRenderSessionActive,
+    observeMessage: (messageItem) => visibilityController?.observeMessage(messageItem),
+    generateUniqueId,
+    prepareUserMessageText,
+    processAssistantScopedHtmlContent,
+    calculateDepthByTurns,
+    applyFrontendRegexRules,
+    renderMarkdownToHtml,
+    renderPostProcessedHtml,
+    applyAvatar: (payload) => avatarStyle.apply(payload),
+});
+const renderMessage = messageLifecycle.renderMessage;
+const renderFullMessage = messageLifecycle.renderFullMessage;
+const updateMessageContent = messageLifecycle.updateMessageContent;
 
 // Expose methods to renderer.js
 /**
