@@ -13,14 +13,14 @@ function createAgentTopicContextMenuView({ document, window, node, visualActionB
         if (returnFocus && closing.trigger?.isConnected) closing.trigger.focus();
     }
 
-    async function copyTopicId(topicId) {
+    async function copySessionId(sessionId) {
         try {
             if (!window.navigator?.clipboard?.writeText) throw new Error('clipboard API unavailable');
-            await window.navigator.clipboard.writeText(topicId);
+            await window.navigator.clipboard.writeText(sessionId);
             actions.notify('Topic ID 已复制。', 'success');
         } catch {
             const temporary = document.createElement('textarea');
-            temporary.value = topicId;
+            temporary.value = sessionId;
             temporary.className = 'agent-chat-clipboard-proxy';
             temporary.setAttribute('readonly', '');
             document.body.append(temporary);
@@ -28,7 +28,7 @@ function createAgentTopicContextMenuView({ document, window, node, visualActionB
             const copied = document.execCommand?.('copy');
             temporary.remove();
             if (copied) actions.notify('Topic ID 已复制。', 'success');
-            else actions.notify(`无法访问系统剪贴板；Topic ID：${topicId}`, 'warning');
+            else actions.notify(`无法访问系统剪贴板；Topic ID：${sessionId}`, 'warning');
         }
     }
 
@@ -81,7 +81,7 @@ function createAgentTopicContextMenuView({ document, window, node, visualActionB
             addItem(menu, 'folder-open', archived ? '查看归档会话' : '打开会话', () => actions.open(topic));
             if (!archived) addItem(menu, 'edit', '重命名', () => actions.rename(topic));
         }
-        addItem(menu, 'copy', '复制 Topic ID', () => copyTopicId(topic.id));
+        addItem(menu, 'copy', '复制 Topic ID', () => copySessionId(topic.id));
         if (!live) addItem(menu, 'file-export', '导出 Markdown', () => actions.exportMarkdown(topic));
         if (!live && !archived) addItem(menu, 'archive', '归档会话', () => actions.archive(topic));
         else if (!live && archived) {

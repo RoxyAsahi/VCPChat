@@ -18,21 +18,21 @@ export function createAgentWorkbenchSidebarCoordinator({
             : (current.activeRuntimes instanceof Map ? [...current.activeRuntimes.values()] : []))
             .filter((runtime) => sameAgent(runtime.agentId, state.selectedAgent))
             .map((runtime) => projectSession({
-                ...(state.topics.find((topic) => topic.id === runtime.topicId) || {}),
+                ...(state.topics.find((topic) => topic.id === runtime.sessionId) || {}),
                 ...runtime,
             }));
-        const liveTopicIds = new Set(liveSessions.map((session) => session.topicId).filter(Boolean));
+        const liveSessionIds = new Set(liveSessions.map((session) => session.sessionId).filter(Boolean));
         return {
             liveSessions,
-            persistedTopics: state.topics.filter((topic) => !liveTopicIds.has(topic.id)),
-            selectedTopicId: current.selectedSessionId || current.selectedTopic?.topicId || null,
+            persistedTopics: state.topics.filter((topic) => !liveSessionIds.has(topic.id)),
+            selectedSessionId: current.selectedSessionId || current.selectedTopic?.sessionId || null,
         };
     }
 
     function model() {
         syncModel();
         const current = store.getState();
-        const { liveSessions, persistedTopics, selectedTopicId } = entries();
+        const { liveSessions, persistedTopics, selectedSessionId } = entries();
         return {
             tab: state.tab,
             selectedAgent: state.selectedAgent,
@@ -53,10 +53,10 @@ export function createAgentWorkbenchSidebarCoordinator({
             profileConfigurationRequired: profileNeedsConfiguration(),
             profileConfigurationNotice: state.profileConfigurationNotice,
             liveSessions: liveSessions.map((session) => ({
-                ...session, activity: sessionActivity(session.topicId, session.activity),
+                ...session, activity: sessionActivity(session.sessionId, session.activity),
             })),
             persistedTopics,
-            selectedTopicId,
+            selectedSessionId,
             selectedMessageCount: current.messages.length,
         };
     }
@@ -134,11 +134,11 @@ export function createAgentWorkbenchSidebarCoordinator({
                 createSessionAvatar,
                 appendTopicActions,
                 hydrateSession: (session) => run(() => controller.hydrateTopic(
-                    session.topicId, session, null, session.agentId,
+                    session.sessionId, session, null, session.agentId,
                 )),
                 previewSession: (topic) => run(async () => {
                     await controller.previewTopic(topic.id, topic.agentId, topic);
-                    if (!disposed) rememberTopic({ topicId: topic.id });
+                    if (!disposed) rememberTopic({ sessionId: topic.id });
                 }),
                 toggleTopicSelection(sessionId) {
                     if (state.topicSelectedIds.has(sessionId)) state.topicSelectedIds.delete(sessionId);

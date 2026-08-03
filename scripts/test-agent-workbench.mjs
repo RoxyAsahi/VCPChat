@@ -170,7 +170,7 @@ window.chatAPI = {
     agentRuntimeCreateTopic: async (payload) => {
         createdTopics.push(payload);
         const topic = {
-            topicId: `topic-created-${createdTopics.length}`,
+            sessionId: `topic-created-${createdTopics.length}`,
             agentId: payload.agent || 'Nova',
             title: payload.title || '新会话',
             model: payload.model || 'gpt-5.6-terra',
@@ -178,7 +178,7 @@ window.chatAPI = {
             readOnly: true,
         };
         topicCatalog = [{
-            id: topic.topicId, title: topic.title, agentId: topic.agentId,
+            id: topic.sessionId, title: topic.title, agentId: topic.agentId,
             model: topic.model, workspaceRef: topic.workspaceRoot, inUse: false,
         }, ...topicCatalog];
         return topic;
@@ -186,7 +186,7 @@ window.chatAPI = {
     agentRuntimeCreateSession: async (payload) => {
         createdSessions.push(payload);
         const session = {
-            sessionId: 'topic-in-use', topicId: payload.resume || 'topic-new',
+            sessionId: 'topic-in-use',
             title: payload.title || '可恢复的 Codex Session', state: 'created',
             model: payload.model || 'gpt-5.6-terra', agentId: payload.agent || 'Nova',
             workspaceRoot: payload.workspaceRoot || root,
@@ -198,7 +198,7 @@ window.chatAPI = {
         runtimeStatus = 'ready';
         activeRuntimeSession = {
             sessionId,
-            topicId: sessionId,
+            sessionId: sessionId,
             title: '并行研究 Session',
             state: 'ready',
             activity: 'idle',
@@ -209,10 +209,10 @@ window.chatAPI = {
         return activeRuntimeSession;
     },
     agentRuntimeCompactSession: async ({ sessionId }) => { compactedSessions.push(sessionId); return { ok: true }; },
-    agentRuntimeReadTopic: async ({ topicId }) => {
-        if (topicId === 'topic-missing-session') throw new Error('Agent Session was not found');
-        if (topicId === 'topic-restored') return {
-            topicId,
+    agentRuntimeReadTopic: async ({ sessionId }) => {
+        if (sessionId === 'topic-missing-session') throw new Error('Agent Session was not found');
+        if (sessionId === 'topic-restored') return {
+            sessionId,
             readOnly: true,
             messages: [{
                 messageId: 'msg_reason_saved', itemId: 'reason_saved', turnId: 'turn_saved', role: 'assistant',
@@ -241,10 +241,10 @@ window.chatAPI = {
                 compaction: { state: 'completed', summary: '已恢复压缩摘要', error: '' },
             } },
         };
-        if (topicId === 'topic-in-use') return {
-            topicId,
+        if (sessionId === 'topic-in-use') return {
+            sessionId,
             session: {
-                sessionId: topicId,
+                sessionId: sessionId,
                 threadId: 'thread-active',
                 agentId: 'Nova',
                 workspaceRoot: root,
@@ -260,8 +260,8 @@ window.chatAPI = {
             history: [],
         };
         return {
-            topicId,
-            ...(topicId === 'topic-archived' ? {
+            sessionId,
+            ...(sessionId === 'topic-archived' ? {
                 session: {
                     agentId: 'Nova',
                     configRevision: sessionConfigRevisions.get('topic-archived'),
@@ -309,7 +309,7 @@ window.chatAPI = {
         return catalog
             .filter((topic) => `${topic.title} ${topic.id}`.toLocaleLowerCase().includes(String(query || '').toLocaleLowerCase()))
             .map((topic) => ({
-                agentId: topic.agentId || agentId || 'Nova', topicId: topic.id, title: topic.title,
+                agentId: topic.agentId || agentId || 'Nova', sessionId: topic.id, title: topic.title,
                 inUse: topic.inUse === true, readOnly: topic.readOnly === true,
                 model: topic.model, workspaceRef: topic.workspaceRef, updatedAt: topic.updatedAt,
                 messageId: 'search-hit', snippet: topic.title, score: 1,
@@ -376,8 +376,8 @@ window.chatAPI = {
             },
         };
     },
-    agentRuntimeRenameTopic: async ({ topicId, title }) => { renamedTopics.push({ topicId, title }); return { ok: true, topicId, title }; },
-    agentRuntimeDeleteTopic: async ({ topicId }) => ({ ok: true, topicId }),
+    agentRuntimeRenameTopic: async ({ sessionId, title }) => { renamedTopics.push({ sessionId, title }); return { ok: true, sessionId, title }; },
+    agentRuntimeDeleteTopic: async ({ sessionId }) => ({ ok: true, sessionId }),
     agentRuntimeRestoreSession: async ({ sessionId }) => ({ restored: true, sessionId }),
     agentRuntimePermanentlyDeleteSession: async ({ sessionId }) => ({ deleted: true, sessionId }),
     agentRuntimeExportSession: async (payload) => { exportedSessions.push(payload); return { exported: true }; },
@@ -395,20 +395,20 @@ window.chatAPI.agentRuntimeUpdateSessionConfig = async ({ sessionId, expectedCon
 );
 window.chatAPI.agentSessionCreate = window.chatAPI.agentRuntimeCreateTopic;
 window.chatAPI.agentSessionList = window.chatAPI.agentRuntimeListTopics;
-window.chatAPI.agentSessionReadProjection = ({ sessionId, ...payload }) => window.chatAPI.agentRuntimeReadTopic({ ...payload, topicId: sessionId });
-window.chatAPI.agentSessionRead = ({ sessionId, ...payload }) => window.chatAPI.agentRuntimeReadTopic({ ...payload, topicId: sessionId });
-window.chatAPI.agentSessionRename = ({ sessionId, ...payload }) => window.chatAPI.agentRuntimeRenameTopic({ ...payload, topicId: sessionId });
-window.chatAPI.agentSessionArchive = ({ sessionId }) => window.chatAPI.agentRuntimeDeleteTopic({ topicId: sessionId });
+window.chatAPI.agentSessionReadProjection = ({ sessionId, ...payload }) => window.chatAPI.agentRuntimeReadTopic({ ...payload, sessionId: sessionId });
+window.chatAPI.agentSessionRead = ({ sessionId, ...payload }) => window.chatAPI.agentRuntimeReadTopic({ ...payload, sessionId: sessionId });
+window.chatAPI.agentSessionRename = ({ sessionId, ...payload }) => window.chatAPI.agentRuntimeRenameTopic({ ...payload, sessionId: sessionId });
+window.chatAPI.agentSessionArchive = ({ sessionId }) => window.chatAPI.agentRuntimeDeleteTopic({ sessionId: sessionId });
 window.chatAPI.agentSessionRestore = window.chatAPI.agentRuntimeRestoreSession;
 window.chatAPI.agentSessionDelete = window.chatAPI.agentRuntimePermanentlyDeleteSession;
-window.chatAPI.agentSessionFork = async ({ sessionId }) => ({ sessionId: `${sessionId}-fork`, topicId: `${sessionId}-fork`, agentId: 'Nova' });
+window.chatAPI.agentSessionFork = async ({ sessionId }) => ({ sessionId: `${sessionId}-fork`, sessionId: `${sessionId}-fork`, agentId: 'Nova' });
 
 let runtimeEventNumber = 0;
 function emitDaemonEvent(event) {
     runtimeEventNumber = Math.max(runtimeEventNumber + 1, Number(event?.sequence) || 0);
     eventCallback({
         eventId: `runtime-event-${runtimeEventNumber}`,
-        topicId: 'topic-in-use',
+        sessionId: 'topic-in-use',
         timestamp: 1_700_000_000_000 + runtimeEventNumber,
         runtime: 'codex',
         ...event,
@@ -453,14 +453,14 @@ document.body.append(mainAgentList);
 window.prompt = () => '重命名后的 Topic';
 window.confirm = () => true;
 window.localStorage.setItem('vcpchat.agentWorkbench.lastTopic.v1', JSON.stringify({
-    topicId: 'topic-restored', title: '可恢复的 Codex Session', agentId: 'Nova',
+    sessionId: 'topic-restored', title: '可恢复的 Codex Session', agentId: 'Nova',
     model: 'gpt-5.6-terra', workspaceRoot: root,
 }));
 const dispose = registered.mount(host, {});
 await new Promise((resolve) => setTimeout(resolve, 100));
 assert.equal(createdSessions.length, 0,
     'renderer reload must preview the saved Codex Session without acquiring a writable Session');
-assert.deepEqual(JSON.parse(window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1')), { topicId: 'topic-restored' },
+assert.deepEqual(JSON.parse(window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1')), { sessionId: 'topic-restored' },
     'localStorage must retain only the durable Topic pointer');
 assert.ok([...host.querySelectorAll('.message-item .md-content')]
     .some((node) => node.textContent.includes('restored answer')),
@@ -713,12 +713,12 @@ assert.ok(host.querySelector('.agent-chat-session-row'));
 assert.ok([...host.querySelectorAll('.agent-chat-session-row .topic-title-display')]
     .some((node) => node.textContent === '另一条持久 Topic'),
     'the sidebar must render durable Codex Sessions, not only the current in-memory session');
-const stableTopicRow = host.querySelector('.agent-chat-persisted-topic[data-topic-id="topic-archived"]');
+const stableTopicRow = host.querySelector('.agent-chat-persisted-topic[data-session-id="topic-archived"]');
 const stableTopicScroll = host.querySelector('.agent-chat-sidebar .sidebar-list-scroll');
 stableTopicScroll.scrollTop = 37;
 sessionTab.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
-assert.strictEqual(host.querySelector('.agent-chat-persisted-topic[data-topic-id="topic-archived"]'), stableTopicRow,
+assert.strictEqual(host.querySelector('.agent-chat-persisted-topic[data-session-id="topic-archived"]'), stableTopicRow,
     'a background Codex Session refresh must reconcile the existing sidebar row instead of rebuilding the list');
 assert.equal(host.querySelector('.agent-chat-sidebar .sidebar-list-scroll').scrollTop, 37,
     'a background Codex Session refresh must keep the sidebar reading anchor');
@@ -733,13 +733,13 @@ const topicSearch = host.querySelector('.topics-header-container.is-searching .t
 assert.ok(topicSearch, 'Agent Topic search must expand from the shared Topic toolbar rather than remain permanently visible');
 topicSearch.value = '另一条';
 topicSearch.dispatchEvent(new window.Event('input', { bubbles: true }));
-assert.equal(host.querySelector('.agent-chat-persisted-topic[data-topic-id="topic-restored"]').hidden, true,
+assert.equal(host.querySelector('.agent-chat-persisted-topic[data-session-id="topic-restored"]').hidden, true,
     'expanded Topic search must filter durable Codex Sessions');
 await new Promise((resolve) => setTimeout(resolve, 240));
 assert.deepEqual(topicSearchRequests.at(-1), { query: '另一条', agentId: 'Nova' },
     'Topic search must cross the narrow Agent IPC instead of remaining a local DOM filter');
-assert.ok(host.querySelector('.agent-chat-persisted-topic[data-topic-id="topic-archived"]'),
-    'SQLite search hits must project back into the Topic list using their durable topicId');
+assert.ok(host.querySelector('.agent-chat-persisted-topic[data-session-id="topic-archived"]'),
+    'SQLite search hits must project back into the Topic list using their durable sessionId');
 host.querySelector('.topics-header-container .next-ui-topic-search-close').click();
 assert.equal(host.querySelector('.topic-search-input')?.value || '', '', 'closing Topic search must clear its transient query');
 topicManage.click();
@@ -747,7 +747,7 @@ assert.equal(host.querySelector('.topics-header-container .next-ui-topic-icon-tr
     'Topic manage control must enter renderer-local management mode');
 assert.ok(host.querySelector('.agent-chat-sidebar-content.is-managing .agent-chat-topic-manage-panel'),
     'Topic manage mode must expose the same bottom management affordance as main chat');
-const selectableTopic = host.querySelector('.agent-chat-persisted-topic[data-topic-id="topic-archived"]');
+const selectableTopic = host.querySelector('.agent-chat-persisted-topic[data-session-id="topic-archived"]');
 selectableTopic.click();
 assert.match(host.querySelector('.agent-chat-topic-selection-count').textContent, /1/,
     'management mode must select a Codex Session rather than opening it');
@@ -756,7 +756,7 @@ assert.equal(host.querySelector('.agent-chat-sidebar-content').classList.contain
     'exiting Topic management must discard renderer-only selection state');
 const persistedTopicMenu = host.querySelector('.agent-chat-persisted-topic .agent-chat-session-menu');
 assert.ok(persistedTopicMenu, 'a free durable Topic must expose its own management menu');
-const managedTopicId = persistedTopicMenu.closest('.agent-chat-persisted-topic')?.dataset.topicId;
+const managedSessionId = persistedTopicMenu.closest('.agent-chat-persisted-topic')?.dataset.sessionId;
 persistedTopicMenu.click();
 const topicContextMenu = document.querySelector('.agent-chat-topic-context-menu');
 assert.ok(topicContextMenu?.parentElement === document.body,
@@ -771,9 +771,9 @@ const renameTopicButton = [...topicContextMenu.querySelectorAll('[role="menuitem
 assert.ok(renameTopicButton, 'Topic management menu must offer rename');
 renameTopicButton.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
-assert.deepEqual(renamedTopics, [{ topicId: managedTopicId, title: '重命名后的 Topic' }],
+assert.deepEqual(renamedTopics, [{ sessionId: managedSessionId, title: '重命名后的 Topic' }],
     'Topic rename must use the narrow Codex Agent IPC, not write renderer-side storage');
-const persistedTopicRow = host.querySelector('.agent-chat-persisted-topic[data-topic-id="topic-restored"]');
+const persistedTopicRow = host.querySelector('.agent-chat-persisted-topic[data-session-id="topic-restored"]');
 persistedTopicRow.dispatchEvent(new window.MouseEvent('contextmenu', {
     bubbles: true, cancelable: true, clientX: 32, clientY: 48,
 }));
@@ -789,7 +789,7 @@ const archivedToggle = host.querySelector('[aria-label="查看归档会话"]');
 assert.ok(archivedToggle, 'the Session toolbar must expose archived history without mixing it into the active list');
 archivedToggle.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
-const archivedRow = host.querySelector('.agent-chat-persisted-topic[data-topic-id="topic-permanent-archive"]');
+const archivedRow = host.querySelector('.agent-chat-persisted-topic[data-session-id="topic-permanent-archive"]');
 assert.ok(archivedRow, 'the archived view must come from the projection-only Session catalog');
 archivedRow.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
@@ -827,7 +827,7 @@ inUseTopicRow.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
 assert.equal(host.querySelector('.agent-chat-topic-conflict-dialog'), null,
     'Codex Session selection must never open the retired runtime-conflict dialog');
-assert.equal(host.querySelector('.agent-chat-persisted-topic[data-topic-id="topic-in-use"]')?.classList.contains('active'), true,
+assert.equal(host.querySelector('.agent-chat-persisted-topic[data-session-id="topic-in-use"]')?.classList.contains('active'), true,
     'legacy inUse metadata must not prevent immediate SQLite projection selection');
 assert.ok(host.querySelector('.agent-chat-header-actions'), 'Tool and approval activity must remain reachable from the redesigned header');
 const compactButton = host.querySelector('.agent-chat-compact');
@@ -908,12 +908,12 @@ const activeRunStatus = host.querySelector('.agent-chat-run-status');
 assert.equal(activeRunStatus.hidden, false, 'an active Turn must expose a dedicated status rail above the composer');
 assert.match(activeRunStatus.textContent, /正在运行.*Agent 正在处理当前任务.*\d+\.\d+s/s,
     'the status rail must show explicit running state and elapsed time without relying on the send button');
-const runningSessionRow = host.querySelector('.agent-chat-session-row[data-topic-id="topic-in-use"]');
+const runningSessionRow = host.querySelector('.agent-chat-session-row[data-session-id="topic-in-use"]');
 assert.ok(runningSessionRow?.classList.contains('is-running'),
     'the owning Session row must expose its own running state');
 assert.ok(runningSessionRow.querySelector('.agent-chat-session-avatar.is-running'),
     'background activity must be rendered as a glow ring around the owning Session avatar');
-const idleSessionRow = host.querySelector('.agent-chat-session-row[data-topic-id="topic-restored"]');
+const idleSessionRow = host.querySelector('.agent-chat-session-row[data-session-id="topic-restored"]');
 prompt.value = 'running-session draft';
 prompt.dispatchEvent(new window.Event('input', { bubbles: true }));
 idleSessionRow.click();
@@ -1389,11 +1389,11 @@ assert.match(completedLiveMessage.querySelector('.agent-chat-reasoning-block .vc
 assert.ok(completedLiveMessage.querySelector('.agent-chat-reasoning-copy'),
     'completed reasoning must expose a small copy action, matching the Cherry-style review workflow');
 
-const projectedEventTopicId = host.querySelector('.agent-chat-session-row.active')?.dataset.topicId
-    || JSON.parse(window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1') || '{}').topicId;
+const projectedEventSessionId = host.querySelector('.agent-chat-session-row.active')?.dataset.sessionId
+    || JSON.parse(window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1') || '{}').sessionId;
 emitDaemonEvent({
     runtime: 'codex', type: 'projection.updated', method: 'item/completed',
-    sessionId: 'topic-in-use', topicId: projectedEventTopicId, threadId: 'thread_test', turnId: 'turn_projected',
+    sessionId: 'topic-in-use', threadId: 'thread_test', turnId: 'turn_projected',
     itemId: 'reason_projected', activity: 'idle',
     projectionMessage: {
         messageId: 'msg_reason_projected', itemId: 'reason_projected', turnId: 'turn_projected',
@@ -1587,7 +1587,7 @@ assert.equal(createdSessions.length, sessionsBeforeRecovery,
     'recovery must restore the SQLite projection without silently resuming a Session Runtime or replaying a Turn');
 
 const restoredTopicRow = [...host.querySelectorAll('.agent-chat-session-row')]
-    .find((row) => row.dataset.topicId === 'topic-archived');
+    .find((row) => row.dataset.sessionId === 'topic-archived');
 assert.ok(restoredTopicRow, 'durable Topic row must retain its Topic identifier');
 const topicSidebar = host.querySelector('.agent-chat-sidebar');
 topicSidebar.scrollTop = 73;
@@ -1598,7 +1598,7 @@ assert.equal(host.querySelector('.agent-chat-topic-flow-dialog'), null,
     'clicking an idle Topic row must not show a blocking restore dialog');
 assert.equal(createdSessions.length, sessionsBeforeTopicPreview,
     'clicking a durable Session must preview SQLite persistence without starting its Runtime');
-assert.strictEqual(host.querySelector('.agent-chat-session-row[data-topic-id="topic-archived"]'), restoredTopicRow,
+assert.strictEqual(host.querySelector('.agent-chat-session-row[data-session-id="topic-archived"]'), restoredTopicRow,
     'preview selection must patch the existing sidebar row instead of rebuilding the session list');
 assert.equal(topicSidebar.scrollTop, 73,
     'preview selection must preserve the conversation-list scroll position');
@@ -1705,7 +1705,7 @@ assert.equal([...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-se
 const materializedSessionsTab = [...host.querySelectorAll('.agent-chat-sidebar .sidebar-tab-button')]
     .find((tab) => tab.textContent.trim() === '会话');
 materializedSessionsTab.click();
-host.querySelector('.agent-chat-session-row[data-topic-id="topic-in-use"]').click();
+host.querySelector('.agent-chat-session-row[data-session-id="topic-in-use"]').click();
 await new Promise((resolve) => setTimeout(resolve, 30));
 const materializedSettingsTab = [...host.querySelectorAll('.agent-chat-sidebar .sidebar-tab-button')]
     .find((tab) => tab.textContent.trim() === '设置');
@@ -1728,7 +1728,7 @@ assert.equal(unsubscribeCalls, 1, 'Workbench unmount must release runtime event 
 assert.deepEqual(presenceCalls, [true, false]);
 assert.equal(host.childElementCount, 0);
 
-window.localStorage.setItem('vcpchat.agentWorkbench.lastTopic.v1', JSON.stringify({ topicId: 'topic-missing-session' }));
+window.localStorage.setItem('vcpchat.agentWorkbench.lastTopic.v1', JSON.stringify({ sessionId: 'topic-missing-session' }));
 const missingSessionDispose = registered.mount(host, {});
 for (let attempt = 0; attempt < 50
     && window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1') !== null; attempt += 1) {

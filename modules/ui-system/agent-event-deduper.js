@@ -5,8 +5,7 @@ function bucketKey(event = {}) {
     const sessionId = String(event.sessionId || '').trim();
     if (sessionId && sessionId !== 'runtime') return `session:${sessionId}`;
     if (event.type?.startsWith('runtime.') || event.type === 'toolbox.ws') return 'runtime';
-    const topicId = String(event.topicId || '').trim();
-    return topicId ? `session:${topicId}` : 'global';
+    return 'global';
 }
 
 export function createAgentEventDeduper({

@@ -147,32 +147,31 @@ function createAgentComposerCoordinator({
             return;
         }
         if (!prompt && !composerState.attachments.length) return;
-        const topicId = selectedSessionKey(current);
         const pending = {
-            topicId, prompt, attachments: composerState.attachments.map((item) => ({ ...item })),
+            sessionId, prompt, attachments: composerState.attachments.map((item) => ({ ...item })),
             phase: 'starting', turnId: null, startedAt: Date.now(), createdAt: Date.now(),
         };
-        state.turnStarts.set(topicId, pending);
-        state.uxTimings.set(`turn-start:${topicId || 'new'}`, window.performance?.now?.() || Date.now());
+        state.turnStarts.set(sessionId, pending);
+        state.uxTimings.set(`turn-start:${sessionId || 'new'}`, window.performance?.now?.() || Date.now());
         renderFeed();
         queueRender({ feed: true, header: true, composer: true });
         try {
             const accepted = await controller.startTurn(prompt, pending.attachments);
             if (disposed) return;
-            const currentStart = state.turnStarts.get(topicId);
-            if (currentStart === pending) state.turnStarts.set(topicId, {
+            const currentStart = state.turnStarts.get(sessionId);
+            if (currentStart === pending) state.turnStarts.set(sessionId, {
                 ...currentStart, phase: accepted?.turnId ? 'thinking' : 'starting', turnId: accepted?.turnId || null,
             });
             if (accepted?.turnId && !state.turnStartedAt.has(accepted.turnId)) {
                 state.turnStartedAt.set(accepted.turnId, pending.startedAt);
             }
-            uxMark('turn-start-ack', accepted?.turnId, state.uxTimings.get(`turn-start:${topicId || 'new'}`) || null);
+            uxMark('turn-start-ack', accepted?.turnId, state.uxTimings.get(`turn-start:${sessionId || 'new'}`) || null);
             state.composerStateBySession.clearAfterAcceptedSend(sessionId);
             settleTurnStartIndicator();
             queueRender({ feed: true, header: true, composer: true });
         } catch (error) {
-            if (!disposed && (state.turnStarts.get(topicId) === pending
-                || state.turnStarts.get(topicId)?.turnId === pending.turnId)) state.turnStarts.delete(topicId);
+            if (!disposed && (state.turnStarts.get(sessionId) === pending
+                || state.turnStarts.get(sessionId)?.turnId === pending.turnId)) state.turnStarts.delete(sessionId);
             if (!disposed) queueRender({ feed: true, header: true, composer: true });
             throw error;
         }

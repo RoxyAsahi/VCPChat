@@ -121,7 +121,7 @@ function createAgentActivityReadonlyView({ document = globalThis.document, actio
         const desiredRevision = Number(selected.configRevision || 0);
         const appliedRevision = Number(selected.appliedRuntimeConfigRevision || 0);
         const applyState = selected.configApplyState || (desiredRevision === appliedRevision ? 'applied' : 'pending');
-        identityStat('会话', selected.title || selected.topicId || current.selectedSessionId);
+        identityStat('会话', selected.title || selected.sessionId || current.selectedSessionId);
         identityStat('Provider', usage.provider);
         identityStat('模型', usage.model || selected.model || snapshot.model);
         identityStat('指令来源', instructionMode === 'codex-managed' ? 'Codex 0.146 管理' : 'VChat 身份');

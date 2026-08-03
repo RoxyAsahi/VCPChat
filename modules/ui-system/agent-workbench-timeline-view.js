@@ -22,7 +22,7 @@ export function createAgentWorkbenchTimelineView({ refs, rows, callbacks, action
     function render(model) {
         const follow = actions.isFollowing(feed);
         const current = model.projection;
-        if (!current.selectedSessionId && !current.selectedTopic?.topicId) {
+        if (!current.selectedSessionId && !current.selectedTopic?.sessionId) {
             showEmpty('创建一个 Agent 会话，即可开始与 VCPToolBox 协作。');
             return;
         }
@@ -32,7 +32,7 @@ export function createAgentWorkbenchTimelineView({ refs, rows, callbacks, action
             const alreadyHasAssistant = pending.turnId && current.messages.some((message) => (
                 message.role === 'assistant' && message.turnId === pending.turnId
             ));
-            if (model.selectedSessionId && pending.topicId === model.selectedSessionId && !alreadyHasAssistant) {
+            if (model.selectedSessionId && pending.sessionId === model.selectedSessionId && !alreadyHasAssistant) {
                 const id = `turn-start:${model.selectedSessionId}`;
                 timeline.push({
                     kind: 'message',

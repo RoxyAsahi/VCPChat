@@ -33,10 +33,10 @@ export function createAgentWorkbenchRenderCoordinator({
 
     function patchSidebarTopicSelection() {
         const current = store.getState();
-        const selectedTopicId = current.selectedSessionId || current.selectedTopic?.topicId || null;
-        for (const row of sidebar.querySelectorAll('.agent-chat-session-row[data-topic-id]')) {
-            const active = Boolean(selectedTopicId && row.dataset.topicId === selectedTopicId);
-            const activity = sessionActivity(row.dataset.topicId, row.dataset.runtimeActivity || 'idle');
+        const selectedSessionId = current.selectedSessionId || current.selectedTopic?.sessionId || null;
+        for (const row of sidebar.querySelectorAll('.agent-chat-session-row[data-session-id]')) {
+            const active = Boolean(selectedSessionId && row.dataset.sessionId === selectedSessionId);
+            const activity = sessionActivity(row.dataset.sessionId, row.dataset.runtimeActivity || 'idle');
             row.classList.toggle('active', active);
             row.classList.toggle('active-topic-glowing', active);
             row.classList.toggle('is-running', ['starting', 'running'].includes(activity));
@@ -64,13 +64,13 @@ export function createAgentWorkbenchRenderCoordinator({
     }
 
     function settleTurnStartIndicator(event) {
-        const eventSessionId = event?.sessionId || event?.topicId || null;
+        const eventSessionId = event?.sessionId || null;
         const turnStart = eventSessionId ? state.turnStarts.get(eventSessionId) : selectedTurnStart();
         if (event && turnStart) {
             const turnMatches = !event.turnId || !turnStart.turnId || event.turnId === turnStart.turnId;
-            const sessionMatches = eventSessionId === turnStart.topicId;
+            const sessionMatches = eventSessionId === turnStart.sessionId;
             if (sessionMatches && event.type === 'turn.started') {
-                state.turnStarts.set(turnStart.topicId, {
+                state.turnStarts.set(turnStart.sessionId, {
                     ...turnStart, turnId: event.turnId || turnStart.turnId, phase: 'thinking', seenRunning: true,
                 });
             }
@@ -78,7 +78,7 @@ export function createAgentWorkbenchRenderCoordinator({
                 'assistant.started', 'assistant.delta', 'reasoning.delta', 'turn.completed',
                 'turn.failed', 'turn.cancelled', 'runtime.crashed',
             ].includes(event.type)) {
-                state.turnStarts.delete(turnStart.topicId);
+                state.turnStarts.delete(turnStart.sessionId);
                 return;
             }
         }
@@ -96,7 +96,7 @@ export function createAgentWorkbenchRenderCoordinator({
             if (!hasAssistant && !terminalRuntime) continue;
             if (hasAssistant) {
                 uxMark('first-assistant-item', entry.turnId,
-                    state.uxTimings.get(`turn-start:${entry.topicId || 'new'}`) || null);
+                    state.uxTimings.get(`turn-start:${entry.sessionId || 'new'}`) || null);
             }
             state.turnStarts.delete(sessionId);
         }

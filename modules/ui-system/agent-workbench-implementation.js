@@ -71,8 +71,9 @@ function loadRememberedTopic() {
     try {
         const value = window.localStorage?.getItem(LAST_TOPIC_STORAGE_KEY);
         const parsed = value ? JSON.parse(value) : null;
-        if (!parsed || typeof parsed.topicId !== 'string') return null;
-        const pointer = { topicId: parsed.topicId };
+        const sessionId = String(parsed?.sessionId || parsed?.topicId || '').trim();
+        if (!sessionId) return null;
+        const pointer = { sessionId };
         // Normalize legacy values immediately; no async runtime/catalog read
         // may leave transcript, Agent or workspace metadata in localStorage.
         window.localStorage?.setItem(LAST_TOPIC_STORAGE_KEY, JSON.stringify(pointer));
@@ -83,9 +84,9 @@ function loadRememberedTopic() {
 }
 
 function rememberTopic(session) {
-    if (!session?.topicId) return;
+    if (!session?.sessionId) return;
     try {
-        window.localStorage?.setItem(LAST_TOPIC_STORAGE_KEY, JSON.stringify({ topicId: session.topicId }));
+        window.localStorage?.setItem(LAST_TOPIC_STORAGE_KEY, JSON.stringify({ sessionId: session.sessionId }));
     } catch {
         // Local storage is only a convenience pointer; Topic recovery must
         // never fail because a locked-down renderer refuses preferences.
@@ -318,7 +319,7 @@ function mountWorkbench(container) {
     function selectedWorkspaceIdentity(current = store.getState()) {
         const selected = current.selectedTopic || {};
         return {
-            sessionId: current.selectedSessionId || selected.topicId || selected.sessionId || '',
+            sessionId: current.selectedSessionId || selected.sessionId || '',
             workspaceRoot: selected.workspaceRef || selected.workspaceRoot || '',
         };
     }
@@ -510,7 +511,7 @@ function mountWorkbench(container) {
             openLive: (topic) => controller.hydrateTopic(topic.id, null, null, topic.agentId),
             async open(topic) {
                 await controller.previewTopic(topic.id, topic.agentId, topic);
-                rememberTopic({ topicId: topic.id });
+                rememberTopic({ sessionId: topic.id });
             },
             async rename(topic) {
                 const title = window.prompt?.('重命名 Agent Topic', topic.title || '');
@@ -646,7 +647,7 @@ function mountWorkbench(container) {
         const current = store.getState();
         const viewState = deriveWorkbenchViewState(current);
         const selected = current.selectedTopic;
-        const selectedHasRuntime = selected?.topicId && selected.topicId === session?.topicId;
+        const selectedHasRuntime = selected?.sessionId && selected.sessionId === session?.sessionId;
         const headingTitle = selected?.title
             || (selectedHasRuntime ? session?.title : '')
             || `与 ${selected?.agentId || state.selectedAgent || 'Nova'} 聊天中`;
@@ -718,20 +719,20 @@ function mountWorkbench(container) {
         .then(async () => {
             // A renderer reload restores SQLite only. The first actual send
             // starts or resumes the selected Codex Thread on demand.
-            if (!store.getState().selectedSessionId && state.rememberedTopic?.topicId) {
+            if (!store.getState().selectedSessionId && state.rememberedTopic?.sessionId) {
                 // Do not wait for model/catalog discovery before restoring
                 // the visible history. Main validates the durable Session;
                 // catalog data enriches the row in the background.
-                const topicId = state.rememberedTopic.topicId;
-                rememberTopic({ topicId });
+                const sessionId = state.rememberedTopic.sessionId;
+                rememberTopic({ sessionId });
                 try {
-                    await controller.previewTopic(topicId);
+                    await controller.previewTopic(sessionId);
                 } catch (error) {
                     if (!isMissingRememberedSessionError(error)) throw error;
                     // The pointer is not durable history. Forget only it;
                     // Main retains the empty Session and will write its first
                     // projection normally after a future Turn.
-                    forgetTopic(topicId);
+                    forgetTopic(sessionId);
                 }
             }
             await refreshControlPlane();

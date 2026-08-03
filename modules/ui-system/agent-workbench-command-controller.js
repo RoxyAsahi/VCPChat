@@ -27,8 +27,8 @@ function createWorkbenchCommandController(context) {
         const barrier = beginSnapshotBarrier();
         const created = await requireApi('agentSessionCreate')(options);
         await refreshStatus();
-        if (created.topicId) {
-            try { await hydrateTopic(created.topicId, created, barrier, created.agentId); }
+        if (created.sessionId) {
+            try { await hydrateTopic(created.sessionId, created, barrier, created.agentId); }
             catch { releaseSnapshotBarrier(barrier, null, created); }
         } else {
             releaseSnapshotBarrier(barrier, null, created);
@@ -38,22 +38,22 @@ function createWorkbenchCommandController(context) {
 
     async function createTopic(options = {}) {
         const topic = await requireApi('agentSessionCreate')(options);
-        const topicId = String(topic?.topicId || '').trim();
+        const sessionId = String(topic?.sessionId || '').trim();
         const agentId = String(topic?.agentId || options.agent || options.agentId || '').trim();
-        if (!topicId || !agentId) throw new Error('Codex Runtime 未返回新会话的完整身份');
-        await previewTopic(topicId, agentId, {
+        if (!sessionId || !agentId) throw new Error('Codex Runtime 未返回新会话的完整身份');
+        await previewTopic(sessionId, agentId, {
             title: topic.title || '', model: topic.model || '', workspaceRoot: topic.workspaceRoot || '',
         });
-        return { ...topic, topicId, agentId };
+        return { ...topic, sessionId, agentId };
     }
 
     async function forkSession({ sessionId, turnId, title } = {}) {
-        const sourceSessionId = sessionId || selectedRuntime()?.sessionId || store.getState().selectedTopic?.topicId;
+        const sourceSessionId = sessionId || selectedRuntime()?.sessionId || store.getState().selectedTopic?.sessionId;
         if (!sourceSessionId) throw new Error('请先选择要创建分支的会话');
         const fork = await requireApi('agentSessionFork')({ sessionId: sourceSessionId, turnId, title });
-        const topicId = fork?.topicId || fork?.sessionId;
-        if (!topicId) throw new Error('Codex thread/fork 未返回新会话身份');
-        await previewTopic(topicId, fork.agentId, fork);
+        const forkSessionId = fork?.sessionId;
+        if (!forkSessionId) throw new Error('Codex thread/fork 未返回新会话身份');
+        await previewTopic(forkSessionId, fork.agentId, fork);
         return fork;
     }
 
@@ -63,9 +63,9 @@ function createWorkbenchCommandController(context) {
             const result = await requireApi('agentRuntimeCompactSession')({
                 sessionId, instructions: instructions || undefined,
             });
-            const refreshedTopicId = result?.topicId
+            const refreshedSessionId = result?.sessionId
                 || (result?.snapshot ? (result?.sessionId ? result.sessionId : sessionId) : null);
-            if (refreshedTopicId) await hydrateTopic(refreshedTopicId);
+            if (refreshedSessionId) await hydrateTopic(refreshedSessionId);
             return result;
         } finally {
             store.setState({ context: { ...store.getState().context, compacting: false } });
@@ -76,18 +76,18 @@ function createWorkbenchCommandController(context) {
     const searchTopics = (query, agentId, limit = 20) => requireApi('agentRuntimeSearchTopics')(
         topicPayload({ query, limit }, agentId),
     );
-    const searchTopicMessages = (query, topicId, agentId, limit = 50) => requireApi(
+    const searchTopicMessages = (query, sessionId, agentId, limit = 50) => requireApi(
         'agentRuntimeSearchTopicMessages',
-    )(topicPayload({ query, topicId, limit }, agentId));
+    )(topicPayload({ query, sessionId, limit }, agentId));
     const getTopicIndexStatus = () => requireApi('agentRuntimeGetTopicIndexStatus')();
     const rebuildTopicIndex = () => requireApi('agentRuntimeRebuildTopicIndex')();
-    const readTopic = (topicId, agentId) => requireApi('agentSessionRead')({
-        sessionId: topicId, ...(agentId ? { agentId } : {}),
+    const readTopic = (sessionId, agentId) => requireApi('agentSessionRead')({
+        sessionId: sessionId, ...(agentId ? { agentId } : {}),
     });
-    const renameTopic = (topicId, title, agentId) => requireApi('agentSessionRename')({
-        sessionId: topicId, title, ...(agentId ? { agentId } : {}),
+    const renameTopic = (sessionId, title, agentId) => requireApi('agentSessionRename')({
+        sessionId: sessionId, title, ...(agentId ? { agentId } : {}),
     });
-    const deleteTopic = (topicId) => requireApi('agentSessionArchive')({ sessionId: topicId });
+    const deleteTopic = (sessionId) => requireApi('agentSessionArchive')({ sessionId: sessionId });
     const archiveSession = (sessionId) => requireApi('agentSessionArchive')({ sessionId });
     const restoreSession = (sessionId) => requireApi('agentSessionRestore')({ sessionId });
     const permanentlyDeleteSession = (sessionId) => requireApi('agentSessionDelete')({ sessionId });
@@ -124,7 +124,7 @@ function createWorkbenchCommandController(context) {
                 sessionId: settings.sessionId,
                 expectedConfigRevision: settings.expectedConfigRevision,
                 patch: Object.fromEntries(Object.entries(settings).filter(([key]) => ![
-                    'sessionId', 'topicId', 'expectedConfigRevision',
+                    'sessionId', 'expectedConfigRevision',
                 ].includes(key))),
             })
             : await requireApi('agentRuntimeUpdateWorkbenchSettings')(settings);
@@ -173,7 +173,7 @@ function createWorkbenchCommandController(context) {
         const result = await requireApi('agentRuntimeApplyAgentProfile')(settings);
         if (result?.session?.sessionId && result.applied) {
             const current = store.getState();
-            if (current.selectedTopic?.topicId === result.session.sessionId) {
+            if (current.selectedTopic?.sessionId === result.session.sessionId) {
                 store.setState({ selectedTopic: {
                     ...current.selectedTopic,
                     configSnapshot: result.session.configSnapshot,
@@ -195,14 +195,14 @@ function createWorkbenchCommandController(context) {
         let current = store.getState();
         const selected = current.selectedTopic;
         let runtime = selectedRuntime(current);
-        if (selected?.topicId && !runtime) {
+        if (selected?.sessionId && !runtime) {
             if (!selected.agentId) {
                 throw new Error('当前会话缺少持久化的助手身份，不能猜测并发送。请重新从会话列表打开它。');
             }
-            runtime = await ensureSessionRuntime(selected.topicId, 'send');
+            runtime = await ensureSessionRuntime(selected.sessionId, 'send');
             current = store.getState();
         }
-        const sessionId = runtime?.sessionId || selectedRuntime(current)?.sessionId || selected?.topicId;
+        const sessionId = runtime?.sessionId || selectedRuntime(current)?.sessionId || selected?.sessionId;
         if (!sessionId) throw new Error('请先选择或新建 Session');
         const accepted = await requireApi('agentRuntimeStartTurn')({ sessionId, prompt, attachments });
         store.addPendingUserMessage({ turnId: accepted?.turnId, prompt, attachments });

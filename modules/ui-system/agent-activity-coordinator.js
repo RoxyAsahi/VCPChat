@@ -14,13 +14,13 @@ function createAgentActivityCoordinator({
     let disposed = false;
 
     function selectedSessionId(current = store.getState()) {
-        return current.selectedSessionId || current.selectedTopic?.topicId || '';
+        return current.selectedSessionId || current.selectedTopic?.sessionId || '';
     }
 
     function selectedWorkspaceIdentity(current = store.getState()) {
         const selected = current.selectedTopic || {};
         return {
-            sessionId: current.selectedSessionId || selected.topicId || selected.sessionId || '',
+            sessionId: current.selectedSessionId || selected.sessionId || '',
             workspaceRoot: selected.workspaceRef || selected.workspaceRoot || '',
         };
     }

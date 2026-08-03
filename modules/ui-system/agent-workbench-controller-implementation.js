@@ -27,18 +27,18 @@ function createWorkbenchController(runtimeApi) {
         return clients.require(name);
     }
 
-    function runtimeForTopic(topicId, state = store.getState()) {
-        if (!topicId) return null;
+    function runtimeForTopic(sessionId, state = store.getState()) {
+        if (!sessionId) return null;
         if (!(state.activeRuntimes instanceof Map)) return null;
-        return state.activeRuntimes.get(topicId) || null;
+        return state.activeRuntimes.get(sessionId) || null;
     }
 
     function selectedRuntime(state = store.getState()) {
-        return runtimeForTopic(state.selectedSessionId || state.selectedTopic?.topicId, state);
+        return runtimeForTopic(state.selectedSessionId || state.selectedTopic?.sessionId, state);
     }
 
     function selectedSessionId(state = store.getState()) {
-        return state.selectedSessionId || state.selectedTopic?.sessionId || state.selectedTopic?.topicId || null;
+        return state.selectedSessionId || state.selectedTopic?.sessionId || null;
     }
 
     function selectedTurnId(state = store.getState()) {
@@ -46,11 +46,11 @@ function createWorkbenchController(runtimeApi) {
     }
 
     function projectRuntimeActivity(event) {
-        if (!event?.topicId || !event?.sessionId) return;
+        if (!event?.sessionId) return;
         const current = store.getState();
         const activeRuntimes = new Map(current.activeRuntimes);
         const runtime = activeRuntimes.get(event.sessionId);
-        if (!runtime || runtime.sessionId !== event.sessionId || runtime.topicId !== event.topicId) return;
+        if (!runtime || runtime.sessionId !== event.sessionId) return;
         let activity = null;
         if (event.type === 'turn.started') activity = 'running';
         else if (event.type === 'approval.requested') activity = 'awaiting-approval';
@@ -103,11 +103,10 @@ function createWorkbenchController(runtimeApi) {
                         ...activeRuntimes.get(runtime.sessionId),
                         ...runtime,
                         sessionId: runtime.sessionId,
-                        topicId: runtime.topicId || runtime.sessionId,
                     });
                     store.setState({
                         activeRuntimes,
-                        selectedTopic: current.selectedTopic?.topicId === runtime.sessionId
+                        selectedTopic: current.selectedTopic?.sessionId === runtime.sessionId
                             ? { ...current.selectedTopic, mode: 'runtime-active' }
                             : current.selectedTopic,
                     });
@@ -173,7 +172,7 @@ function createWorkbenchController(runtimeApi) {
         const current = store.getState();
         const runtimes = new Map(current.activeRuntimes);
         const runtime = runtimes.get(event.sessionId);
-        if (runtime && runtime.topicId === event.topicId) {
+        if (runtime && runtime.sessionId === event.sessionId) {
             runtimes.set(event.sessionId, {
                 ...runtime,
                 activity: event.activity || runtime.activity,
@@ -183,13 +182,13 @@ function createWorkbenchController(runtimeApi) {
             });
         }
         const selected = event.sessionId === current.selectedSessionId
-            && event.topicId === current.selectedTopic?.topicId;
+            && event.sessionId === current.selectedTopic?.sessionId;
         store.setState({
             activeRuntimes: runtimes,
             ...(selected ? { activeTurnId: event.activity === 'running' ? event.turnId : null } : {}),
         });
-        if (event.projectionMessage && event.topicId) {
-            liveProjectionRevision.set(event.topicId, (liveProjectionRevision.get(event.topicId) || 0) + 1);
+        if (event.projectionMessage && event.sessionId) {
+            liveProjectionRevision.set(event.sessionId, (liveProjectionRevision.get(event.sessionId) || 0) + 1);
         }
         if (selected && event.projectionMessage) applyCodexProjectionMessage(event.projectionMessage);
         applySessionUiEvent(event);
@@ -210,34 +209,34 @@ function createWorkbenchController(runtimeApi) {
         if (reduced !== current.sessionUi) store.setState({ sessionUi: reduced });
     }
 
-    function cacheSnapshot(topicId, snapshot) {
-        if (!topicId || !snapshot) return;
+    function cacheSnapshot(sessionId, snapshot) {
+        if (!sessionId || !snapshot) return;
         const projection = codexSnapshotToProjection(snapshot);
         const bytes = Math.min(MAX_SNAPSHOT_CACHE_BYTES, JSON.stringify(snapshot.messages || snapshot.history || []).length * 2);
-        const existing = snapshotCache.get(topicId);
+        const existing = snapshotCache.get(sessionId);
         if (existing) snapshotCacheBytes -= existing.bytes;
-        snapshotCache.set(topicId, { projection, snapshotSequence: Number(snapshot.snapshotSequence) || 0, bytes });
+        snapshotCache.set(sessionId, { projection, snapshotSequence: Number(snapshot.snapshotSequence) || 0, bytes });
         snapshotCacheBytes += bytes;
         while (snapshotCache.size > MAX_SNAPSHOT_CACHE_ENTRIES || snapshotCacheBytes > MAX_SNAPSHOT_CACHE_BYTES) {
-            const [oldestTopicId, oldest] = snapshotCache.entries().next().value;
-            snapshotCache.delete(oldestTopicId);
+            const [oldestSessionId, oldest] = snapshotCache.entries().next().value;
+            snapshotCache.delete(oldestSessionId);
             snapshotCacheBytes -= oldest.bytes;
         }
     }
 
-    function cachedProjection(topicId) {
-        const cached = snapshotCache.get(topicId);
+    function cachedProjection(sessionId) {
+        const cached = snapshotCache.get(sessionId);
         if (!cached) return null;
-        snapshotCache.delete(topicId);
-        snapshotCache.set(topicId, cached);
+        snapshotCache.delete(sessionId);
+        snapshotCache.set(sessionId, cached);
         return cached.projection;
     }
 
     function applyPreviewProjection(projection, selectedTopic) {
         const current = store.getState();
-        const selectedSessionId = projection?.session?.sessionId || selectedTopic.sessionId || selectedTopic.topicId;
+        const selectedSessionId = projection?.session?.sessionId || selectedTopic.sessionId;
         const sessionSnapshots = new Map(current.sessionSnapshots);
-        sessionSnapshots.set(selectedTopic.topicId, projection);
+        sessionSnapshots.set(selectedTopic.sessionId, projection);
         store.setState({
             ...projection,
             selectedTopic,
@@ -260,7 +259,7 @@ function createWorkbenchController(runtimeApi) {
         if (event.type?.startsWith('runtime.')) return true;
         return Boolean(runtime?.sessionId
             && event.sessionId === runtime.sessionId
-            && event.topicId === runtime.topicId);
+            && event.sessionId === runtime.sessionId);
     }
 
     function releaseSnapshotBarrier(barrier, snapshot, runtime) {
@@ -292,12 +291,12 @@ function createWorkbenchController(runtimeApi) {
         }
     }
 
-    function applyHydratedSnapshot(topicId, snapshot, runtimeHint, agentId) {
+    function applyHydratedSnapshot(sessionId, snapshot, runtimeHint, agentId) {
         const current = store.getState();
         // A sidebar row may have been created before a background Turn
         // started. The identity-keyed runtime Map is fresher than that DOM
         // closure, so never let a stale row hint erase activeTurnId/activity.
-        const active = runtimeForTopic(topicId, current) || runtimeHint;
+        const active = runtimeForTopic(sessionId, current) || runtimeHint;
         // `read-topic` / `read-projection` is the durable metadata source
         // after a reload. Main's runtime status intentionally has only a
         // small identity shell, never a transcript cache.
@@ -310,7 +309,7 @@ function createWorkbenchController(runtimeApi) {
                 : agentId || active?.agentId || null;
         const nextRuntime = active ? {
             ...active,
-            topicId,
+            sessionId,
             title: typeof durableState.title === 'string' && durableState.title.trim()
                 ? durableState.title : active.title,
             model: typeof durableState.model === 'string' && durableState.model.trim()
@@ -321,13 +320,13 @@ function createWorkbenchController(runtimeApi) {
             configSnapshot: durableState.configSnapshot || active.configSnapshot || null,
         } : null;
         const runtimeSessionId = nextRuntime?.sessionId && String(nextRuntime.sessionId).trim()
-            ? nextRuntime.sessionId : topicId;
+            ? nextRuntime.sessionId : sessionId;
         const activeRuntimes = new Map(current.activeRuntimes);
         if (nextRuntime) activeRuntimes.set(runtimeSessionId, { ...nextRuntime, sessionId: runtimeSessionId });
         const projection = codexSnapshotToProjection(snapshot);
-        cacheSnapshot(topicId, snapshot);
+        cacheSnapshot(sessionId, snapshot);
         const sessionSnapshots = new Map(current.sessionSnapshots);
-        sessionSnapshots.set(topicId, projection);
+        sessionSnapshots.set(sessionId, projection);
         const selectedSessionId = durableState.sessionId
             ? durableState.sessionId : runtimeSessionId;
         store.setState({
@@ -337,7 +336,7 @@ function createWorkbenchController(runtimeApi) {
             sessionSnapshots,
             activeRuntimes,
             selectedTopic: {
-                topicId,
+                sessionId,
                 sessionId: selectedSessionId,
                 threadId: durableState.threadId || nextRuntime?.threadId || null,
                 agentId: durableAgentId,
@@ -353,13 +352,13 @@ function createWorkbenchController(runtimeApi) {
         return nextRuntime;
     }
 
-    async function reconcileHydratedTopic(topicId, runtimeHint, agentId, version, revisionAtStart) {
+    async function reconcileHydratedTopic(sessionId, runtimeHint, agentId, version, revisionAtStart) {
         try {
-            const snapshot = await requireApi('agentSessionRead')({ sessionId: topicId, ...(agentId ? { agentId } : {}) });
+            const snapshot = await requireApi('agentSessionRead')({ sessionId: sessionId, ...(agentId ? { agentId } : {}) });
             const current = store.getState();
-            if (version !== selectionVersion || current.selectedTopic?.topicId !== topicId) return null;
-            if ((liveProjectionRevision.get(topicId) || 0) !== revisionAtStart) return null;
-            applyHydratedSnapshot(topicId, snapshot, runtimeHint || runtimeForTopic(topicId), agentId);
+            if (version !== selectionVersion || current.selectedTopic?.sessionId !== sessionId) return null;
+            if ((liveProjectionRevision.get(sessionId) || 0) !== revisionAtStart) return null;
+            applyHydratedSnapshot(sessionId, snapshot, runtimeHint || runtimeForTopic(sessionId), agentId);
             return snapshot;
         } catch (_error) {
             // The SQLite projection remains visible; Main records a sync
@@ -368,37 +367,37 @@ function createWorkbenchController(runtimeApi) {
         }
     }
 
-    async function hydrateTopic(topicId, runtimeHint = null, existingBarrier = null, agentId = undefined) {
-        if (!topicId) return null;
+    async function hydrateTopic(sessionId, runtimeHint = null, existingBarrier = null, agentId = undefined) {
+        if (!sessionId) return null;
         const version = ++selectionVersion;
         const barrier = existingBarrier || beginSnapshotBarrier();
         try {
             const snapshot = await requireApi('agentSessionReadProjection')({
-                sessionId: topicId, ...(agentId ? { agentId } : {}),
+                sessionId: sessionId, ...(agentId ? { agentId } : {}),
             });
             if (version !== selectionVersion) {
-                releaseSnapshotBarrier(barrier, null, runtimeHint || runtimeForTopic(topicId));
+                releaseSnapshotBarrier(barrier, null, runtimeHint || runtimeForTopic(sessionId));
                 return null;
             }
-            const nextRuntime = applyHydratedSnapshot(topicId, snapshot, runtimeHint, agentId);
+            const nextRuntime = applyHydratedSnapshot(sessionId, snapshot, runtimeHint, agentId);
             releaseSnapshotBarrier(barrier, snapshot, nextRuntime);
-            const revisionAtStart = liveProjectionRevision.get(topicId) || 0;
-            void reconcileHydratedTopic(topicId, runtimeHint, agentId, version, revisionAtStart);
+            const revisionAtStart = liveProjectionRevision.get(sessionId) || 0;
+            void reconcileHydratedTopic(sessionId, runtimeHint, agentId, version, revisionAtStart);
             return snapshot;
         } catch (error) {
-            releaseSnapshotBarrier(barrier, null, runtimeForTopic(topicId));
+            releaseSnapshotBarrier(barrier, null, runtimeForTopic(sessionId));
             throw error;
         }
     }
 
     // View selection reads the durable SQLite projection first. It does not
     // resume, stop, or otherwise mutate any Codex Thread.
-    async function previewTopic(topicId, agentId = undefined, metadata = {}) {
-        if (!topicId) return null;
+    async function previewTopic(sessionId, agentId = undefined, metadata = {}) {
+        if (!sessionId) return null;
         const version = ++selectionVersion;
         const barrier = beginSnapshotBarrier();
         const selectedTopic = {
-            topicId,
+            sessionId,
             agentId: agentId || metadata.agentId || null,
             model: metadata.model || '',
             workspaceRoot: metadata.workspaceRef || metadata.workspaceRoot || '',
@@ -406,31 +405,31 @@ function createWorkbenchController(runtimeApi) {
             archivedAt: metadata.archivedAt || null,
             mode: 'preview',
         };
-        const cached = cachedProjection(topicId);
+        const cached = cachedProjection(sessionId);
         if (cached) applyPreviewProjection(cached, selectedTopic);
         let localSnapshot;
         try {
             // This is the only awaited cold-open read in the Codex path. It
             // is a local SQLite query and must not request a Codex Thread.
             localSnapshot = await requireApi('agentSessionReadProjection')({
-                sessionId: topicId, ...(agentId ? { agentId } : {}),
+                sessionId: sessionId, ...(agentId ? { agentId } : {}),
             });
             if (version !== selectionVersion) {
-                releaseSnapshotBarrier(barrier, null, runtimeForTopic(topicId));
+                releaseSnapshotBarrier(barrier, null, runtimeForTopic(sessionId));
                 return null;
             }
             const resolvedTopic = resolvePreviewTopic(localSnapshot, selectedTopic);
-            cacheSnapshot(topicId, localSnapshot);
+            cacheSnapshot(sessionId, localSnapshot);
             applyPreviewProjection(codexSnapshotToProjection(localSnapshot), resolvedTopic);
-            releaseSnapshotBarrier(barrier, localSnapshot, runtimeForTopic(topicId));
+            releaseSnapshotBarrier(barrier, localSnapshot, runtimeForTopic(sessionId));
             // Deliberately detached: navigation is complete before App Server
             // reconciliation begins. The guards in reconcilePreviewTopic make
             // an A response harmless after the user selects B.
-            const revisionAtStart = liveProjectionRevision.get(topicId) || 0;
-            void reconcilePreviewTopic(topicId, agentId, resolvedTopic, version, revisionAtStart);
+            const revisionAtStart = liveProjectionRevision.get(sessionId) || 0;
+            void reconcilePreviewTopic(sessionId, agentId, resolvedTopic, version, revisionAtStart);
             return localSnapshot;
         } catch (error) {
-            releaseSnapshotBarrier(barrier, null, runtimeForTopic(topicId));
+            releaseSnapshotBarrier(barrier, null, runtimeForTopic(sessionId));
             throw error;
         }
     }
@@ -485,16 +484,16 @@ function createWorkbenchController(runtimeApi) {
         };
     }
 
-    async function reconcilePreviewTopic(topicId, agentId, selectedTopic, version, revisionAtStart) {
+    async function reconcilePreviewTopic(sessionId, agentId, selectedTopic, version, revisionAtStart) {
         try {
-            const snapshot = await requireApi('agentSessionRead')({ sessionId: topicId, ...(agentId ? { agentId } : {}) });
+            const snapshot = await requireApi('agentSessionRead')({ sessionId: sessionId, ...(agentId ? { agentId } : {}) });
             const current = store.getState();
-            if (version !== selectionVersion || current.selectedTopic?.topicId !== topicId) return null;
+            if (version !== selectionVersion || current.selectedTopic?.sessionId !== sessionId) return null;
             // Do not let an older `thread/read` snapshot erase a delta/tool
             // patch that arrived after reconciliation began.  The next view
             // entry will perform a fresh SQLite read and reconcile again.
-            if ((liveProjectionRevision.get(topicId) || 0) !== revisionAtStart) return null;
-            cacheSnapshot(topicId, snapshot);
+            if ((liveProjectionRevision.get(sessionId) || 0) !== revisionAtStart) return null;
+            cacheSnapshot(sessionId, snapshot);
             applyPreviewProjection(codexSnapshotToProjection(snapshot), resolvePreviewTopic(snapshot, selectedTopic));
             return snapshot;
         } catch (_error) {
@@ -532,9 +531,9 @@ function createWorkbenchController(runtimeApi) {
         // Topic Hosts is not a request to pick one or replay its transcript.
         const selected = store.getState().selectedTopic;
         const runtime = selectedRuntime();
-        const topicId = selected?.topicId || runtime?.topicId || null;
-        if (topicId && runtime) {
-            await hydrateTopic(topicId, runtime, barrier, selected?.agentId || runtime.agentId);
+        const sessionId = selected?.sessionId || runtime?.sessionId || null;
+        if (sessionId && runtime) {
+            await hydrateTopic(sessionId, runtime, barrier, selected?.agentId || runtime.agentId);
         } else {
             releaseSnapshotBarrier(barrier, null, runtime);
         }

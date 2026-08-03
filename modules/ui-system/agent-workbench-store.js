@@ -175,7 +175,7 @@ function reduceEvent(current, event) {
     }
     if (event.type === 'session.created') {
         const runtimes = new Map(next.activeRuntimes);
-        const current = runtimes.get(event.sessionId) || { sessionId: event.sessionId, topicId: event.topicId || event.sessionId };
+        const current = runtimes.get(event.sessionId) || { sessionId: event.sessionId };
         runtimes.set(event.sessionId, { ...current, state: 'created', ...(event.payload || {}) });
         next.activeRuntimes = runtimes;
         return next;
@@ -318,7 +318,7 @@ function reduceEvent(current, event) {
         const payload = event.payload?.approval || event.payload;
         const approval = payload ? {
             ...payload,
-            topicId: event.topicId,
+            sessionId: event.sessionId,
             sessionId: event.sessionId,
             turnId: event.turnId,
             toolCallId: event.toolCallId,
@@ -497,14 +497,11 @@ function createWorkbenchStore(initial = createInitialState()) {
             // shape before the first snapshot installs selectedTopic. Normal
             // Workbench routing always uses selectedTopic.
             const selectedSessionId = state.selectedSessionId || null;
-            const selectedTopicId = state.selectedTopic?.topicId || selectedSessionId;
             // Only the visible Topic may change this live transcript. Local
             // approvals are global Activity state and retain their complete
             // complete identities when the user switches Sessions.
             if (!isRuntimeEvent && !isSessionEvent && !isApproval && !isInteraction
-                && (!selectedSessionId || (event.sessionId
-                    ? event.sessionId !== selectedSessionId
-                    : event.topicId !== selectedTopicId))) {
+                && (!selectedSessionId || event.sessionId !== selectedSessionId)) {
                 return state;
             }
             if (!eventDeduper.accept(event)) return state;
@@ -513,13 +510,11 @@ function createWorkbenchStore(initial = createInitialState()) {
             return state;
         },
         selectSession(session) {
-            const sessionId = session?.sessionId || session?.topicId || null;
-            const displayTopicId = session?.topicId && String(session.topicId).trim()
-                ? session.topicId : sessionId;
+            const sessionId = session?.sessionId || null;
             state = {
                 ...state,
                 selectedSessionId: sessionId,
-                selectedTopic: session ? { ...session, topicId: displayTopicId } : null,
+                selectedTopic: session ? { ...session, sessionId } : null,
                 messages: [],
                 tools: new Map(),
                 approvals: [],
@@ -552,7 +547,7 @@ function createWorkbenchStore(initial = createInitialState()) {
  */
 function deriveWorkbenchViewState(state = {}) {
     const runtime = state.runtime || {};
-    const selectedSessionId = state.selectedSessionId || state.selectedTopic?.topicId || null;
+    const selectedSessionId = state.selectedSessionId || state.selectedTopic?.sessionId || null;
     const selectedRuntime = selectedSessionId && state.activeRuntimes instanceof Map
         ? state.activeRuntimes.get(selectedSessionId) : null;
     const hasSession = Boolean(selectedSessionId);
@@ -562,15 +557,14 @@ function deriveWorkbenchViewState(state = {}) {
     // coupled to process startup.
     const hasIdlePreview = Boolean(
         state.selectedTopic?.mode === 'preview'
-        && state.selectedTopic?.topicId
+        && state.selectedTopic?.sessionId
     );
     const hasTurn = Boolean(state.activeTurnId || selectedRuntime?.activeTurnId);
-    const selectedTopicId = selectedSessionId;
     // Local approvals stay visible in the global Activity center, but only
     // their owning Topic is paused. A pending approval in Topic A must not
     // stop the user from starting an independent Topic B turn.
-    const hasApproval = Boolean(selectedTopicId && Array.isArray(state.approvals)
-        && state.approvals.some((approval) => approval?.topicId === selectedTopicId));
+    const hasApproval = Boolean(selectedSessionId && Array.isArray(state.approvals)
+        && state.approvals.some((approval) => approval?.sessionId === selectedSessionId));
 
     if (runtime.state === 'failed') return 'error';
     if (state.recovering || runtime.state === 'degraded') return 'reconnecting';

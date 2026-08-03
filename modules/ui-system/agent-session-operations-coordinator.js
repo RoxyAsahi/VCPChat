@@ -64,7 +64,7 @@ function createAgentSessionOperationsCoordinator({
         queueRender({ shell: true, header: true, composer: true });
         try {
             const created = await createTopic({ agent: state.selectedAgent, title: nextSessionTitle() });
-            if (!disposed && !state.disposed) notify(`已新建会话「${created.title || created.topicId}」。`, 'success');
+            if (!disposed && !state.disposed) notify(`已新建会话「${created.title || created.sessionId}」。`, 'success');
             return created;
         } finally {
             if (!disposed && !state.disposed) {
@@ -83,8 +83,8 @@ function createAgentSessionOperationsCoordinator({
             await controller.stopRuntime();
             await controller.startRuntime();
             if (disposed || state.disposed) return;
-            if (previous?.topicId) {
-                await controller.previewTopic(previous.topicId, previous.agentId, previous);
+            if (previous?.sessionId) {
+                await controller.previewTopic(previous.sessionId, previous.agentId, previous);
                 if (!disposed && !state.disposed) notify('Codex App Server 已重新连接，并显示最近的 SQLite 投影。中断的 Turn 不会重放。', 'success');
             } else {
                 await refreshControlPlane();
@@ -99,12 +99,12 @@ function createAgentSessionOperationsCoordinator({
     }
 
     function rememberTopicTitle(topic, title) {
-        if (state.rememberedTopic?.topicId === topic.id) state.rememberedTopic = { ...state.rememberedTopic, title };
-        rememberTopic({ topicId: topic.id, title, agentId: topic.agentId || state.selectedAgent || 'Nova' });
+        if (state.rememberedTopic?.sessionId === topic.id) state.rememberedTopic = { ...state.rememberedTopic, title };
+        rememberTopic({ sessionId: topic.id, title, agentId: topic.agentId || state.selectedAgent || 'Nova' });
     }
 
-    function forgetTopic(topicId) {
-        if (state.rememberedTopic?.topicId !== topicId) return;
+    function forgetTopic(sessionId) {
+        if (state.rememberedTopic?.sessionId !== sessionId) return;
         state.rememberedTopic = null;
         clearRememberedTopic();
     }

@@ -79,7 +79,7 @@ function createAgentSettingsCoordinator({
         state.settingsSaveMessage = '正在自动保存…';
         state.settingsSaveByScope.set(saveScope, { state: 'saving', message: '正在自动保存…' });
         const projectionAtEnqueue = store.getState().selectedTopic;
-        if (selectedSession && (projectionAtEnqueue?.sessionId || projectionAtEnqueue?.topicId) === selectedSession) {
+        if (selectedSession && projectionAtEnqueue?.sessionId === selectedSession) {
             sessionConfigRevisions.set(selectedSession, Number(projectionAtEnqueue.configRevision || 1));
         }
         return settingsState.enqueue(targetKey, payload, async () => {

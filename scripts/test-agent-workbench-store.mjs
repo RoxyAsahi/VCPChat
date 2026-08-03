@@ -4,7 +4,7 @@ import { createWorkbenchStore, deriveWorkbenchViewState } from '../modules/ui-sy
 import { projectSession, projectTool } from '../modules/ui-system/agent-workbench-projections.js';
 
 function createWorkbenchController(api) {
-    const topicPayload = (payload = {}) => ({ ...payload, topicId: payload.topicId || payload.sessionId });
+    const topicPayload = (payload = {}) => ({ ...payload, sessionId: payload.sessionId || payload.sessionId });
     return createRawWorkbenchController({
         ...api,
         agentSessionCreate: api.agentSessionCreate || api.agentRuntimeCreateTopic || api.agentRuntimeCreateSession,
@@ -33,7 +33,7 @@ function dispatch(event) {
     eventNumber += 1;
     store.dispatch({
         eventId: `event-${eventNumber}`,
-        topicId: 'topic-1',
+        sessionId: 's1',
         timestamp: 1_700_000_000_000 + eventNumber,
         runtime: 'codex',
         ...event,
@@ -42,23 +42,23 @@ function dispatch(event) {
 
 // Selection and runtime ownership are separate: the selected Session controls
 // only the visible projection, while activeRuntimes owns process state.
-store.selectSession({ sessionId: 's1', topicId: 'topic-1', state: 'idle' });
-store.setState({ activeRuntimes: new Map([['s1', { sessionId: 's1', topicId: 'topic-1', state: 'idle' }]]) });
+store.selectSession({ sessionId: 's1', state: 'idle' });
+store.setState({ activeRuntimes: new Map([['s1', { sessionId: 's1', state: 'idle' }]]) });
 store.setState({ runtime: { state: 'ready', worker: null, lastError: null } });
 assert.equal(deriveWorkbenchViewState(store.getState()), 'idle', 'an idle Session Runtime must enable the composer');
 store.setState({ activeRuntimes: new Map([['s1', {
-    sessionId: 's1', topicId: 'topic-1', state: 'ready', activity: 'running', activeTurnId: 'turn-background',
+    sessionId: 's1', state: 'ready', activity: 'running', activeTurnId: 'turn-background',
 }]]) });
 assert.equal(deriveWorkbenchViewState(store.getState()), 'running',
     'returning to a Session must recover its running state from the Session-keyed runtime Map');
-store.setState({ activeRuntimes: new Map([['s1', { sessionId: 's1', topicId: 'topic-1', state: 'idle' }]]) });
+store.setState({ activeRuntimes: new Map([['s1', { sessionId: 's1', state: 'idle' }]]) });
 assert.equal('sessions' in store.getState(), false);
 assert.equal('artifacts' in store.getState(), false);
 
 const previewOnlyStore = createWorkbenchStore();
 previewOnlyStore.setState({
     runtime: { state: 'ready', worker: null, lastError: null },
-    selectedTopic: { topicId: 'preview-only-topic', mode: 'preview' },
+    selectedTopic: { sessionId: 'preview-only-topic', mode: 'preview' },
 });
 assert.equal(deriveWorkbenchViewState(previewOnlyStore.getState()), 'idle',
     'a ready control process must keep an idle Session preview send-capable until send-time runtime startup');
@@ -66,48 +66,48 @@ assert.equal(deriveWorkbenchViewState(previewOnlyStore.getState()), 'idle',
 const concurrentApprovalStore = createWorkbenchStore();
 concurrentApprovalStore.setState({
     runtime: { state: 'ready', worker: null, lastError: null },
-    selectedTopic: { topicId: 'topic-b', mode: 'preview' },
-    approvals: [{ approvalId: 'approval-a', topicId: 'topic-a', sessionId: 'session-a', turnId: 'turn-a', toolCallId: 'tool-a' }],
+    selectedTopic: { sessionId: 'topic-b', mode: 'preview' },
+    approvals: [{ approvalId: 'approval-a', sessionId: 'session-a', turnId: 'turn-a', toolCallId: 'tool-a' }],
 });
 assert.equal(deriveWorkbenchViewState(concurrentApprovalStore.getState()), 'idle',
     'a local approval in Topic A must not disable Topic B composer');
 concurrentApprovalStore.setState({
-    selectedSessionId: 'topic-a',
-    selectedTopic: { topicId: 'topic-a', mode: 'runtime-active' },
-    activeRuntimes: new Map([['session-a', { sessionId: 'session-a', topicId: 'topic-a', state: 'idle' }]]),
+    selectedSessionId: 'session-a',
+    selectedTopic: { sessionId: 'session-a', mode: 'runtime-active' },
+    activeRuntimes: new Map([['session-a', { sessionId: 'session-a', state: 'idle' }]]),
 });
 assert.equal(deriveWorkbenchViewState(concurrentApprovalStore.getState()), 'awaiting-approval',
     'the approval-owning Session must remain paused until Codex resolves it');
 
 const usageStore = createWorkbenchStore();
-usageStore.selectSession({ sessionId: 'usage-session', topicId: 'usage-topic', state: 'idle' });
-usageStore.dispatch({ eventId: 'usage-unknown', sequence: 1, timestamp: 1, sessionId: 'usage-session', topicId: 'usage-topic', type: 'context.usage', runtime: 'codex', payload: { totalTokens: 123 } });
+usageStore.selectSession({ sessionId: 'usage-session', state: 'idle' });
+usageStore.dispatch({ eventId: 'usage-unknown', sequence: 1, timestamp: 1, sessionId: 'usage-session', type: 'context.usage', runtime: 'codex', payload: { totalTokens: 123 } });
 assert.equal(usageStore.getState().context.source, 'unknown');
 assert.equal(usageStore.getState().context.usageAvailable, false,
     'token-shaped data without explicit provenance must never be displayed as real usage');
-usageStore.dispatch({ eventId: 'usage-estimate', sequence: 2, timestamp: 2, sessionId: 'usage-session', topicId: 'usage-topic', type: 'context.usage', runtime: 'codex', payload: { source: 'estimated', totalTokens: 123 } });
+usageStore.dispatch({ eventId: 'usage-estimate', sequence: 2, timestamp: 2, sessionId: 'usage-session', type: 'context.usage', runtime: 'codex', payload: { source: 'estimated', totalTokens: 123 } });
 assert.equal(usageStore.getState().context.usageAvailable, true);
 assert.equal(usageStore.getState().context.source, 'estimated');
 
 const activityStore = createWorkbenchStore();
-activityStore.selectSession({ sessionId: 'activity-session', topicId: 'activity-topic', state: 'idle' });
-activityStore.dispatch({ eventId: 'activity-1', sequence: 1, timestamp: 1, sessionId: 'activity-session', topicId: 'activity-topic', type: 'toolbox.ws', runtime: 'codex', payload: { kind: 'notification', value: 'one' } });
-activityStore.dispatch({ eventId: 'activity-2', sequence: 2, timestamp: 2, sessionId: 'activity-session', topicId: 'activity-topic', type: 'marker.observed', runtime: 'codex', payload: { kind: 'vcpinfo', summary: 'two' } });
+activityStore.selectSession({ sessionId: 'activity-session', state: 'idle' });
+activityStore.dispatch({ eventId: 'activity-1', sequence: 1, timestamp: 1, sessionId: 'activity-session', type: 'toolbox.ws', runtime: 'codex', payload: { kind: 'notification', value: 'one' } });
+activityStore.dispatch({ eventId: 'activity-2', sequence: 2, timestamp: 2, sessionId: 'activity-session', type: 'marker.observed', runtime: 'codex', payload: { kind: 'vcpinfo', summary: 'two' } });
 assert.equal(activityStore.getState().activityUnread, 2, 'activity observations must increment a bounded Renderer-only unread cursor');
 
 const compactStore = createWorkbenchStore();
-compactStore.selectSession({ sessionId: 'compact-session', topicId: 'compact-topic', state: 'idle' });
-compactStore.dispatch({ eventId: 'compact-start', sequence: 1, timestamp: 1, sessionId: 'compact-session', topicId: 'compact-topic', type: 'compaction.started', runtime: 'codex', payload: {} });
+compactStore.selectSession({ sessionId: 'compact-session', state: 'idle' });
+compactStore.dispatch({ eventId: 'compact-start', sequence: 1, timestamp: 1, sessionId: 'compact-session', type: 'compaction.started', runtime: 'codex', payload: {} });
 assert.equal(compactStore.getState().context.compacting, true,
     'Codex runtime compaction.started must drive the Workbench state rather than only legacy context.compaction.* names');
-compactStore.dispatch({ eventId: 'compact-done', sequence: 2, timestamp: 2, sessionId: 'compact-session', topicId: 'compact-topic', type: 'compaction.completed', runtime: 'codex', payload: { summary: 'checkpoint reconciled' } });
+compactStore.dispatch({ eventId: 'compact-done', sequence: 2, timestamp: 2, sessionId: 'compact-session', type: 'compaction.completed', runtime: 'codex', payload: { summary: 'checkpoint reconciled' } });
 assert.deepEqual(compactStore.getState().context.compactionState, 'completed');
 
 // R3-C: the Renderer may show an accepted command immediately, but it must
 // replace that temporary projection with the Runtime event identity rather
 // than grow a second transcript or guess a durable message id.
 const deliveryStore = createWorkbenchStore();
-deliveryStore.selectSession({ sessionId: 'delivery-session', topicId: 'delivery-topic', state: 'idle' });
+deliveryStore.selectSession({ sessionId: 'delivery-session', state: 'idle' });
 deliveryStore.addPendingUserMessage({ turnId: 'delivery-turn', prompt: '请先显示我，再等待 Codex 确认', createdAt: 123 });
 assert.deepEqual(deliveryStore.getState().messages, [{
     id: 'pending-user:delivery-turn', turnId: 'delivery-turn', role: 'user',
@@ -117,7 +117,7 @@ assert.deepEqual(deliveryStore.getState().messages, [{
 }]);
 deliveryStore.dispatch({
     eventId: 'runtime-turn-started', sequence: 1, timestamp: 124, runtime: 'codex',
-    sessionId: 'delivery-session', topicId: 'delivery-topic', turnId: 'delivery-turn',
+    sessionId: 'delivery-session', turnId: 'delivery-turn',
     messageId: 'msg_delivery-turn_user',
     type: 'turn.started', payload: { prompt: '请先显示我，再等待 Codex 确认' },
 });
@@ -129,19 +129,18 @@ assert.deepEqual(deliveryStore.getState().messages, [{
 }], 'turn.started must confirm and replace the temporary user item');
 deliveryStore.addPendingUserMessage({ turnId: 'delivery-crash', prompt: '可能已经到达 App Server', createdAt: 125 });
 deliveryStore.dispatch({
-    eventId: 'runtime-crashed', sequence: 2, timestamp: 126, runtime: 'codex', sessionId: 'runtime',
-    topicId: 'runtime', type: 'runtime.crashed', payload: { error: 'pipe closed' },
+    eventId: 'runtime-crashed', sequence: 2, timestamp: 126, runtime: 'codex', sessionId: 'runtime', type: 'runtime.crashed', payload: { error: 'pipe closed' },
 });
 assert.equal(deliveryStore.getState().messages.at(-1).deliveryState, 'unconfirmed',
     'a broken pipe must not claim failure or auto-replay a command whose durable outcome is unknown');
 const missingAssetStore = createWorkbenchStore();
-missingAssetStore.selectSession({ sessionId: 'asset-session', topicId: 'asset-topic', state: 'idle' });
+missingAssetStore.selectSession({ sessionId: 'asset-session', state: 'idle' });
 missingAssetStore.addPendingUserMessage({
     turnId: 'asset-turn', prompt: '', attachments: [{ id: 'attachment-missing', displayName: '缺失.png' }], createdAt: 126,
 });
 missingAssetStore.dispatch({
     eventId: 'asset-missing', sequence: 1, timestamp: 127, runtime: 'codex',
-    sessionId: 'asset-session', topicId: 'asset-topic', turnId: 'asset-turn',
+    sessionId: 'asset-session', turnId: 'asset-turn',
     type: 'turn.failed',
     payload: { code: 'attachment-unavailable', error: '附件文件不可用或已损坏；请重新选择附件后再发送。' },
 });
@@ -150,12 +149,12 @@ assert.equal(missingAssetStore.getState().messages[0].deliveryState, 'failed',
 assert.match(missingAssetStore.getState().messages[0].deliveryDetail, /重新选择附件/);
 deliveryStore.dispatch({
     eventId: 'assistant-part-one', sequence: 3, timestamp: 127, runtime: 'codex',
-    sessionId: 'delivery-session', topicId: 'delivery-topic', turnId: 'delivery-turn',
+    sessionId: 'delivery-session', turnId: 'delivery-turn',
     messageId: 'assistant-part-one', type: 'assistant.started', payload: {},
 });
 deliveryStore.dispatch({
     eventId: 'assistant-part-two', sequence: 4, timestamp: 128, runtime: 'codex',
-    sessionId: 'delivery-session', topicId: 'delivery-topic', turnId: 'delivery-turn',
+    sessionId: 'delivery-session', turnId: 'delivery-turn',
     messageId: 'assistant-part-two', type: 'assistant.started', payload: {},
 });
 assert.equal(deliveryStore.getState().messages.filter((message) => message.role === 'assistant').length, 2,
@@ -181,7 +180,7 @@ dispatch({ type: 'approval.requested', sessionId: 's1', turnId: 't1', toolCallId
 assert.equal(store.getState().approvals.length, 1);
 assert.deepEqual(store.getState().approvals[0], {
     approvalId: 'a1', toolName: 'vcp_invoke', argumentsHash: 'hash-1', expiresAtMs: 1234,
-    topicId: 'topic-1', sessionId: 's1', turnId: 't1', toolCallId: 'tool-1',
+    sessionId: 's1', turnId: 't1', toolCallId: 'tool-1',
 });
 dispatch({ type: 'approval.resolved', sessionId: 's1', approvalId: 'a1', sequence: 9, payload: {} });
 assert.equal(store.getState().approvals.length, 0);
@@ -229,11 +228,11 @@ assert.deepEqual({
 }, interruptProjection, 'interrupt receipts are transport diagnostics and must not create transcript/tool/UI state');
 
 const messageCount = store.getState().messages.length;
-store.dispatch({ eventId: 'event-5', type: 'assistant.delta', sessionId: 's1', topicId: 'topic-1', turnId: 't1', messageId: 'assistant-1', sequence: 5, timestamp: 1_700_000_000_005, runtime: 'codex', payload: { text: 'lo' } });
+store.dispatch({ eventId: 'event-5', type: 'assistant.delta', sessionId: 's1', turnId: 't1', messageId: 'assistant-1', sequence: 5, timestamp: 1_700_000_000_005, runtime: 'codex', payload: { text: 'lo' } });
 assert.equal(store.getState().messages.length, messageCount, 'eventId is the only replay key');
 dispatch({ type: 'assistant.delta', sessionId: 'other', turnId: 't2', messageId: 'assistant-2', sequence: 13, payload: { text: 'ignore' } });
 assert.equal(store.getState().messages.length, messageCount, 'events from inactive sessions must be filtered');
-store.dispatch({ type: 'assistant.delta', sessionId: 's1', topicId: 'topic-1', turnId: 't1', sequence: 14, timestamp: 1_700_000_000_014, runtime: 'codex', payload: { text: 'invalid' } });
+store.dispatch({ type: 'assistant.delta', sessionId: 's1', turnId: 't1', sequence: 14, timestamp: 1_700_000_000_014, runtime: 'codex', payload: { text: 'invalid' } });
 assert.equal(store.getState().messages.length, messageCount, 'missing Runtime event identity is fail-closed');
 
 const calls = [];
@@ -246,7 +245,7 @@ const pendingInteraction = {
 const controller = createWorkbenchController({
     agentRuntimeGetStatus: async () => ({
         state: 'ready',
-        runtimes: [{ sessionId: 'restored', topicId: 'topic-restored', state: 'idle' }],
+        runtimes: [{ sessionId: 'restored', state: 'idle' }],
         pendingInteractions: [pendingInteraction],
     }),
     agentSessionReadProjection: async (payload) => {
@@ -257,25 +256,25 @@ const controller = createWorkbenchController({
     agentRuntimeSetWorkbenchPresence() {},
     onAgentRuntimeEvent(callback) { liveEvent = callback; return () => {}; },
 });
-controller.store.selectSession({ sessionId: 'restored', topicId: 'topic-restored', state: 'idle' });
+controller.store.selectSession({ sessionId: 'restored', state: 'idle' });
 const initializing = controller.initialize();
 await new Promise((resolve) => setImmediate(resolve));
 assert.deepEqual(controller.store.getState().interactions, [pendingInteraction],
     'Activity Center must receive Main-owned interaction identities independently of approval cards');
 assert.equal(typeof liveEvent, 'function', 'Renderer must subscribe before it starts reading a Session projection');
-assert.deepEqual(calls.find(([name]) => name === 'topic')[1], { sessionId: 'topic-restored' });
+assert.deepEqual(calls.find(([name]) => name === 'topic')[1], { sessionId: 'restored' });
 liveEvent({
     eventId: 'initial-live-event', sequence: 5, timestamp: 5, runtime: 'codex',
-    sessionId: 'restored', topicId: 'topic-restored', turnId: 'turn-restored',
+    sessionId: 'restored', turnId: 'turn-restored',
     messageId: 'assistant-live', type: 'assistant.delta', payload: { text: 'snapshot 期间的 live delta' },
 });
 liveEvent({
     eventId: 'initial-readiness-event', sequence: 6, timestamp: 6, runtime: 'codex',
-    sessionId: 'restored', topicId: 'topic-restored', type: 'runtime.readiness',
+    sessionId: 'restored', type: 'runtime.readiness',
     payload: { toolbox: { state: 'unavailable', detail: 'Main readiness settled during snapshot' } },
 });
 resolveInitialRead({
-    topicId: 'topic-restored', snapshotSequence: 4,
+    sessionId: 'restored', snapshotSequence: 4,
     state: { title: '恢复的 Codex Session 标题', model: 'gpt-5.6-terra', workspaceRef: 'C:\\workspace\\restored' },
     history: [
         { id: 'history-1', role: 'assistant', content: '来自 Codex Session', snapshotOrdinal: 0 },
@@ -307,10 +306,10 @@ assert.equal(controller.store.getState().readiness.toolbox.state, 'unavailable',
 // currently previewed Session when an active Runtime has a different
 // identity, otherwise the user sees a silently disabled composer with no
 // reconnect affordance.
-controller.store.setState({ selectedTopic: { topicId: 'previewed-other-topic', mode: 'preview' } });
+controller.store.setState({ selectedTopic: { sessionId: 'previewed-other-topic', mode: 'preview' } });
 liveEvent({
     eventId: 'runtime-crash-on-other-topic', sequence: 7, timestamp: 7, runtime: 'vcpchat',
-    sessionId: 'runtime', topicId: 'topic-restored', type: 'runtime.crashed', payload: { error: 'pipe closed' },
+    sessionId: 'runtime', type: 'runtime.crashed', payload: { error: 'pipe closed' },
 });
 assert.equal(controller.store.getState().runtime.state, 'failed',
     'process-global crash diagnostics must not be discarded as a foreign Session event');
@@ -332,11 +331,11 @@ const switching = createWorkbenchController({
     onAgentRuntimeEvent(callback) { switchEvent = callback; return () => {}; },
 });
 switching.subscribeRuntime();
-const sessionRuntime = { sessionId: 'switch-session', topicId: 'switch-topic', state: 'idle' };
-const hydrating = switching.hydrateTopic(sessionRuntime.topicId, sessionRuntime);
-switchEvent({ eventId: 'old-event', sequence: 4, timestamp: 4, runtime: 'codex', sessionId: sessionRuntime.sessionId, topicId: sessionRuntime.topicId, turnId: 'turn-1', messageId: 'old-message', type: 'assistant.delta', payload: { text: 'stale' } });
-switchEvent({ eventId: 'new-event', sequence: 5, timestamp: 5, runtime: 'codex', sessionId: sessionRuntime.sessionId, topicId: sessionRuntime.topicId, turnId: 'turn-1', messageId: 'new-message', type: 'assistant.delta', payload: { text: 'live' } });
-deferredRead({ topicId: sessionRuntime.topicId, snapshotSequence: 4, history: [{ id: 'checkpoint-message', role: 'assistant', content: 'checkpoint' }] });
+const sessionRuntime = { sessionId: 'switch-session', state: 'idle' };
+const hydrating = switching.hydrateTopic(sessionRuntime.sessionId, sessionRuntime);
+switchEvent({ eventId: 'old-event', sequence: 4, timestamp: 4, runtime: 'codex', sessionId: sessionRuntime.sessionId, turnId: 'turn-1', messageId: 'old-message', type: 'assistant.delta', payload: { text: 'stale' } });
+switchEvent({ eventId: 'new-event', sequence: 5, timestamp: 5, runtime: 'codex', sessionId: sessionRuntime.sessionId, turnId: 'turn-1', messageId: 'new-message', type: 'assistant.delta', payload: { text: 'live' } });
+deferredRead({ sessionId: sessionRuntime.sessionId, snapshotSequence: 4, history: [{ id: 'checkpoint-message', role: 'assistant', content: 'checkpoint' }] });
 await hydrating;
 assert.ok(switching.store.getState().messages.some((message) => message.content === 'checkpoint'), 'snapshot must become the base projection');
 assert.ok(switching.store.getState().messages.some((message) => message.id === 'new-message'), 'newer buffered events must follow the snapshot');
@@ -348,7 +347,7 @@ switching.dispose();
 // read-topic call says that no snapshot has been committed yet.
 const fresh = createWorkbenchController({
     agentRuntimeGetStatus: async () => ({ state: 'ready', pendingApprovals: [] }),
-    agentRuntimeCreateSession: async () => ({ sessionId: 'fresh-session', topicId: 'fresh-topic', state: 'idle' }),
+    agentRuntimeCreateSession: async () => ({ sessionId: 'fresh-session', state: 'idle' }),
     agentRuntimeReadTopic: async () => { throw new Error('Topic has no checkpoint yet'); },
 });
 await fresh.createSession();
@@ -362,10 +361,10 @@ fresh.dispose();
 const previewCalls = [];
 const preview = createWorkbenchController({
     agentRuntimeGetStatus: async () => ({ state: 'ready', pendingApprovals: [] }),
-    agentRuntimeReadTopic: async ({ topicId }) => ({ topicId, snapshotSequence: 0, history: [{ id: 'preview-history', role: 'assistant', content: 'preview only' }] }),
+    agentRuntimeReadTopic: async ({ sessionId }) => ({ sessionId, snapshotSequence: 0, history: [{ id: 'preview-history', role: 'assistant', content: 'preview only' }] }),
     agentRuntimeCreateSession: async (payload) => {
         previewCalls.push(['runtime', payload]);
-        return { sessionId: 'preview-session', topicId: payload.resume, state: 'idle' };
+        return { sessionId: 'preview-session', state: 'idle' };
     },
     agentRuntimeStartTurn: async (payload) => {
         previewCalls.push(['turn', payload]);
@@ -390,13 +389,13 @@ let resolveWarm;
 const warming = createWorkbenchController({
     agentRuntimeGetStatus: async () => ({
         state: 'ready', pendingApprovals: [],
-        runtimes: [{ sessionId: 'warm-session', topicId: 'warm-session', activity: 'idle' }],
+        runtimes: [{ sessionId: 'warm-session', activity: 'idle' }],
     }),
-    agentRuntimeReadProjection: async ({ topicId }) => ({
-        session: { sessionId: topicId, agentId: 'Nova', title: 'Warm' }, messages: [],
+    agentRuntimeReadProjection: async ({ sessionId }) => ({
+        session: { sessionId: sessionId, agentId: 'Nova', title: 'Warm' }, messages: [],
     }),
-    agentRuntimeReadTopic: async ({ topicId }) => ({
-        session: { sessionId: topicId, agentId: 'Nova', title: 'Warm' }, messages: [],
+    agentRuntimeReadTopic: async ({ sessionId }) => ({
+        session: { sessionId: sessionId, agentId: 'Nova', title: 'Warm' }, messages: [],
     }),
     agentRuntimeEnsureSessionRuntime: (payload) => {
         warmCalls.push(payload);
@@ -410,7 +409,7 @@ assert.equal(warmCalls.length, 0, 'selection must not start or resume a Codex Th
 const warmSend = warming.startTurn('发送时按需启动');
 await Promise.resolve();
 assert.equal(warmCalls.length, 1, 'send must begin one demand-driven Session Runtime ensure');
-resolveWarm({ sessionId: 'warm-session', topicId: 'warm-session', threadId: 'warm-thread' });
+resolveWarm({ sessionId: 'warm-session', threadId: 'warm-thread' });
 const warmAccepted = await warmSend;
 assert.equal(warmAccepted.turnId, 'warm-turn');
 warming.dispose();
@@ -423,17 +422,17 @@ let resolveSqliteA;
 let resolveThreadA;
 let resolveThreadB;
 const cold = createWorkbenchController({
-    agentRuntimeReadProjection: ({ topicId }) => {
-        coldCalls.push(['sqlite', topicId]);
-        if (topicId === 'topic-a') return new Promise((resolve) => { resolveSqliteA = resolve; });
+    agentRuntimeReadProjection: ({ sessionId }) => {
+        coldCalls.push(['sqlite', sessionId]);
+        if (sessionId === 'topic-a') return new Promise((resolve) => { resolveSqliteA = resolve; });
         return Promise.resolve({
             session: { agentId: 'Nova', title: 'SQLite B' },
             messages: [{ messageId: 'sqlite-b', itemId: 'item-b', role: 'assistant', status: 'completed', blocks: [{ blockId: 'b:0', kind: 'message', content: { text: 'SQLite B' } }] }],
         });
     },
-    agentRuntimeReadTopic: ({ topicId }) => {
-        coldCalls.push(['thread', topicId]);
-        if (topicId === 'topic-a') return new Promise((resolve) => { resolveThreadA = resolve; });
+    agentRuntimeReadTopic: ({ sessionId }) => {
+        coldCalls.push(['thread', sessionId]);
+        if (sessionId === 'topic-a') return new Promise((resolve) => { resolveThreadA = resolve; });
         return new Promise((resolve) => { resolveThreadB = resolve; });
     },
 });
@@ -447,7 +446,7 @@ resolveSqliteA({
 await openingA;
 assert.equal(cold.store.getState().messages[0].content, 'SQLite A', 'SQLite projection is the visible cold-open result');
 await new Promise((resolve) => setImmediate(resolve));
-assert.ok(coldCalls.some(([kind, topicId]) => kind === 'thread' && topicId === 'topic-a'), 'thread/read starts only after SQLite has rendered');
+assert.ok(coldCalls.some(([kind, sessionId]) => kind === 'thread' && sessionId === 'topic-a'), 'thread/read starts only after SQLite has rendered');
 await cold.previewTopic('topic-b', 'Nova', { title: 'B' });
 assert.equal(cold.store.getState().messages[0].content, 'SQLite B');
 resolveThreadA({
@@ -455,7 +454,7 @@ resolveThreadA({
     messages: [{ messageId: 'thread-a', itemId: 'item-a', role: 'assistant', status: 'completed', blocks: [{ blockId: 'a:0', kind: 'message', content: { text: 'must not replace B' } }] }],
 });
 await new Promise((resolve) => setImmediate(resolve));
-assert.equal(cold.store.getState().selectedTopic.topicId, 'topic-b');
+assert.equal(cold.store.getState().selectedTopic.sessionId, 'topic-b');
 assert.equal(cold.store.getState().messages[0].content, 'SQLite B', 'late A reconciliation must not overwrite B');
 resolveThreadB({ session: { agentId: 'Nova', title: 'Thread B' }, messages: [] });
 cold.dispose();
@@ -474,7 +473,7 @@ const hydratedCodex = createWorkbenchController({
     },
 });
 const openingAttached = hydratedCodex.hydrateTopic('attached-topic', {
-    sessionId: 'attached-session', topicId: 'attached-topic', agentId: 'Nova', title: 'Runtime shell', state: 'idle',
+    sessionId: 'attached-session', agentId: 'Nova', title: 'Runtime shell', state: 'idle',
 });
 await new Promise((resolve) => setImmediate(resolve));
 assert.deepEqual(hydrateCalls, ['sqlite'], 'an attached Codex Session must also open from SQLite before thread/read');
@@ -502,7 +501,7 @@ const liveGuard = createWorkbenchController({
 liveGuard.subscribeRuntime();
 await liveGuard.previewTopic('live-guard-topic', 'Nova');
 liveGuardEvent({
-    runtime: 'codex', type: 'projection.updated', topicId: 'live-guard-topic', sessionId: 'live-guard-topic',
+    runtime: 'codex', type: 'projection.updated', sessionId: 'live-guard-topic',
     threadId: 'thread-live-guard', turnId: 'turn-live-guard', activity: 'running',
     projectionMessage: {
         messageId: 'live-guard-message', itemId: 'live-guard-item', turnId: 'turn-live-guard', role: 'assistant', status: 'inProgress',
@@ -519,7 +518,7 @@ assert.ok(liveGuard.store.getState().messages.some((message) => message.content 
 assert.equal(liveGuard.store.getState().messages.some((message) => message.content === 'must not replace live delta'), false);
 liveGuard.dispose();
 
-// Codex Session identity is authoritative. A compatibility topicId must never
+// Codex Session identity is authoritative. A compatibility sessionId must never
 // let another Session mutate an existing runtime slot or the visible status.
 let strictIdentityEvent;
 const strictIdentity = createWorkbenchController({
@@ -528,19 +527,19 @@ const strictIdentity = createWorkbenchController({
 });
 strictIdentity.store.setState({
     selectedSessionId: 'session-nova',
-    selectedTopic: { sessionId: 'session-nova', topicId: 'session-nova', agentId: 'Nova', mode: 'runtime-active' },
+    selectedTopic: { sessionId: 'session-nova', agentId: 'Nova', mode: 'runtime-active' },
     activeRuntimes: new Map([['legacy-topic-key', {
-        sessionId: 'session-nova', topicId: 'legacy-topic-key', agentId: 'Nova', activity: 'idle',
+        sessionId: 'session-nova', agentId: 'Nova', activity: 'idle',
     }]]),
 });
 strictIdentity.subscribeRuntime();
 strictIdentityEvent({
     eventId: 'foreign-session-turn', sequence: 1, timestamp: 1, runtime: 'codex',
-    type: 'turn.started', sessionId: 'session-uika', topicId: 'legacy-topic-key',
+    type: 'turn.started', sessionId: 'session-uika',
     turnId: 'turn-uika', messageId: 'message-uika', payload: { prompt: 'UIka task' },
 });
 assert.equal(strictIdentity.store.getState().activeRuntimes.get('legacy-topic-key').activity, 'idle',
-    'a foreign Session event must not update a runtime through the old topicId compatibility key');
+    'a foreign Session event must not update a runtime through the old sessionId compatibility key');
 assert.equal(strictIdentity.store.getState().activeTurnId, null,
     'a foreign Agent Session must never mark the selected Session as running');
 strictIdentity.dispose();
@@ -555,15 +554,15 @@ const duplicateGuard = createWorkbenchController({
 });
 duplicateGuard.store.setState({
     selectedSessionId: 'codex-topic',
-    selectedTopic: { topicId: 'codex-topic', mode: 'runtime-active' },
-    activeRuntimes: new Map([['codex-topic', { sessionId: 'codex-topic', topicId: 'codex-topic', state: 'idle' }]]),
+    selectedTopic: { sessionId: 'codex-topic', mode: 'runtime-active' },
+    activeRuntimes: new Map([['codex-topic', { sessionId: 'codex-topic', state: 'idle' }]]),
 });
 duplicateGuard.subscribeRuntime();
 await duplicateGuard.startTurn('只显示一次');
 assert.equal(duplicateGuard.store.getState().messages.filter((message) => message.role === 'user').length, 1,
     'turn acceptance may show one temporary user row');
 duplicateGuardEvent({
-    runtime: 'codex', type: 'projection.updated', topicId: 'codex-topic', sessionId: 'codex-topic',
+    runtime: 'codex', type: 'projection.updated', sessionId: 'codex-topic',
     turnId: 'codex-turn-1', activity: 'running',
     projectionMessage: {
         messageId: 'durable-user-message', itemId: 'durable-user-item', turnId: 'codex-turn-1',

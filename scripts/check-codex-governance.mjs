@@ -232,6 +232,16 @@ for (const entry of fs.readdirSync(canonicalRuntimeDir, { withFileTypes: true })
         errors.push(`modules/codex-runtime/${entry.name} imports legacy Session compatibility helpers`);
     }
 }
+const canonicalWorkbenchFiles = fs.readdirSync(path.join(root, 'modules/ui-system'), { withFileTypes: true })
+    .filter((entry) => entry.isFile() && /^agent-.*\.js$/.test(entry.name));
+for (const entry of canonicalWorkbenchFiles) {
+    const source = fs.readFileSync(path.join(root, 'modules/ui-system', entry.name), 'utf8');
+    const withoutLegacyPointerMigration = entry.name === 'agent-workbench-implementation.js'
+        ? source.replace("parsed?.topicId", "parsed?.legacySessionId") : source;
+    if (/\btopicId\b|data-topic-id/.test(withoutLegacyPointerMigration)) {
+        errors.push(`modules/ui-system/${entry.name} contains legacy Topic identity`);
+    }
+}
 const runtimeFacadeLineCount = fs.readFileSync(path.join(root, 'modules/codex-runtime/runtimeManager.js'), 'utf8').split(/\r?\n/).length;
 if (runtimeFacadeLineCount > 600) errors.push(`runtimeManager.js exceeds facade ceiling: ${runtimeFacadeLineCount} lines`);
 const runtimeManagerSource = fs.readFileSync(path.join(root, 'modules/codex-runtime/runtimeManagerImplementation.js'), 'utf8');

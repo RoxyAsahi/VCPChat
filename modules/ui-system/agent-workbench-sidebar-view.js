@@ -29,17 +29,17 @@ export function createAgentWorkbenchSidebarView({
             || model.topicSearchOpen || model.topicSearch.trim()
             || sessionShell.agentId !== model.selectedAgent) return false;
         const desired = [
-            ...model.liveSessions.map((session) => ({ id: session.topicId, live: true, value: session })),
+            ...model.liveSessions.map((session) => ({ id: session.sessionId, live: true, value: session })),
             ...model.persistedTopics.map((topic) => ({ id: topic.id, live: false, value: topic })),
         ];
         const rows = [...sessionShell.list.children]
             .filter((row) => row.classList.contains('agent-chat-session-row'));
         if (rows.length !== desired.length
-            || rows.some((row, index) => row.dataset.topicId !== desired[index].id)) return false;
+            || rows.some((row, index) => row.dataset.sessionId !== desired[index].id)) return false;
 
         for (const [index, entry] of desired.entries()) {
             const row = rows[index];
-            const active = entry.id === model.selectedTopicId;
+            const active = entry.id === model.selectedSessionId;
             const activity = entry.value.activity || 'idle';
             row.classList.toggle('active', active);
             row.classList.toggle('active-topic-glowing', active);
@@ -81,17 +81,17 @@ export function createAgentWorkbenchSidebarView({
     }
 
     function createSessionRow(session) {
-        const active = session.topicId === model.selectedTopicId;
+        const active = session.sessionId === model.selectedSessionId;
         const activity = session.activity || 'idle';
         const row = node('li', `topic-item agent-chat-session-row${active ? ' active active-topic-glowing' : ''}${['starting', 'running'].includes(activity) ? ' is-running' : ''}${activity === 'awaiting-approval' ? ' is-awaiting-approval' : ''}`);
         row.tabIndex = 0;
         row.dataset.itemId = session.agentId || model.selectedAgent || 'Nova';
         row.dataset.itemType = 'agent-runtime';
-        row.dataset.topicId = session.topicId;
+        row.dataset.sessionId = session.sessionId;
         row.dataset.topicInUse = 'false';
         row.dataset.runtimeActivity = activity;
         row.dataset.topicSearch = `${session.title} ${session.model}`.toLocaleLowerCase();
-        const avatar = actions.createSessionAvatar(session.topicId, session.agentId || model.selectedAgent,
+        const avatar = actions.createSessionAvatar(session.sessionId, session.agentId || model.selectedAgent,
             `${model.selectedAgent || 'Nova'} - ${session.title}`, activity);
         const title = node('span', 'topic-title-display', session.title);
         const count = node('span', 'message-count', active
@@ -99,9 +99,9 @@ export function createAgentWorkbenchSidebarView({
             : activity === 'awaiting-approval' ? '!' : '');
         row.append(avatar, title, count);
         row.addEventListener('click', () => actions.hydrateSession(session));
-        if (!model.topicManaging && session.topicId) {
+        if (!model.topicManaging && session.sessionId) {
             actions.appendTopicActions(row, {
-                id: session.topicId,
+                id: session.sessionId,
                 title: session.title,
                 agentId: session.agentId,
                 model: session.model,
@@ -114,12 +114,12 @@ export function createAgentWorkbenchSidebarView({
 
     function createPersistedRow(topic) {
         const selected = model.topicSelectedIds.has(topic.id);
-        const active = topic.id === model.selectedTopicId;
+        const active = topic.id === model.selectedSessionId;
         const row = node('li', `topic-item agent-chat-session-row agent-chat-persisted-topic${selected ? ' selected' : ''}${active ? ' active active-topic-glowing' : ''}`);
         row.tabIndex = 0;
         row.dataset.itemId = topic.agentId || model.selectedAgent || 'Nova';
         row.dataset.itemType = 'agent-topic';
-        row.dataset.topicId = topic.id;
+        row.dataset.sessionId = topic.id;
         row.dataset.topicSearch = `${topic.title || topic.id} ${topic.model || ''}`.toLocaleLowerCase();
         const avatar = actions.createSessionAvatar(topic.id, topic.agentId || model.selectedAgent,
             `${topic.agentId || 'Nova'} - ${topic.title || topic.id}`);
@@ -147,9 +147,9 @@ export function createAgentWorkbenchSidebarView({
         const panel = node('div', 'next-ui-topic-manage-panel agent-chat-topic-manage-panel');
         panel.setAttribute('aria-hidden', 'false');
         const selection = node('div', 'next-ui-topic-manage-selection');
-        const visibleIds = [...list.querySelectorAll('.agent-chat-persisted-topic[data-topic-id]')]
-            .filter((row) => !row.hidden && !model.topics.find((topic) => topic.id === row.dataset.topicId)?.inUse)
-            .map((row) => row.dataset.topicId);
+        const visibleIds = [...list.querySelectorAll('.agent-chat-persisted-topic[data-session-id]')]
+            .filter((row) => !row.hidden && !model.topics.find((topic) => topic.id === row.dataset.sessionId)?.inUse)
+            .map((row) => row.dataset.sessionId);
         const allSelected = visibleIds.length > 0
             && visibleIds.every((sessionId) => model.topicSelectedIds.has(sessionId));
         const selectAll = button('', 'next-ui-topic-manage-button');
@@ -236,8 +236,8 @@ export function createAgentWorkbenchSidebarView({
         const list = node('ul', 'topic-list agent-chat-session-list');
         const indexedTopics = model.topicSearch.trim()
             ? model.topicSearchResults.map((hit) => ({
-                id: hit.topicId,
-                title: hit.title || hit.topicId,
+                id: hit.sessionId,
+                title: hit.title || hit.sessionId,
                 agentId: hit.agentId || model.selectedAgent,
                 inUse: hit.inUse === true,
                 readOnly: hit.readOnly === true,
@@ -248,7 +248,7 @@ export function createAgentWorkbenchSidebarView({
             }))
             : model.persistedTopics;
         const persistedTopics = indexedTopics
-            .filter((topic) => !model.liveSessions.some((session) => session.topicId === topic.id));
+            .filter((topic) => !model.liveSessions.some((session) => session.sessionId === topic.id));
         if (!model.topicSearch.trim() && !model.liveSessions.length && !persistedTopics.length) {
             if (model.topicListLoading) {
                 for (let index = 0; index < 4; index += 1) list.append(node('li', 'topic-item agent-chat-session-row agent-chat-session-skeleton', ''));

@@ -15,7 +15,7 @@ export function createAgentTimelineCoordinator({
         const runtime = activeSession();
         const snapshot = runtime?.configSnapshot || selected.configSnapshot || {};
         return {
-            sessionId: current.selectedSessionId || selected.topicId || null,
+            sessionId: current.selectedSessionId || selected.sessionId || null,
             threadId: runtime?.threadId || selected.threadId || null,
             participant: {
                 id: selected.agentId || profile.id || state.selectedAgent,
