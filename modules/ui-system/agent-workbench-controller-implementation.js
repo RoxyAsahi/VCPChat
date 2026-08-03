@@ -460,9 +460,9 @@ function createWorkbenchController(runtimeApi) {
         releaseSnapshotBarrier,
     });
     const {
-        startRuntime, stopRuntime, createSession, createTopic, forkSession, compactSession,
-        listTopics, searchTopics, searchTopicMessages, getTopicIndexStatus, rebuildTopicIndex,
-        readTopic, renameTopic, deleteTopic, archiveSession, restoreSession, permanentlyDeleteSession,
+        startRuntime, stopRuntime, createSession, createSessionPreview, forkSession, compactSession,
+        listSessions, searchTopics, searchTopicMessages, getTopicIndexStatus, rebuildTopicIndex,
+        readSession, renameSession, archiveSession, restoreSession, permanentlyDeleteSession,
         exportSession, listRecoveryOperations, listRecoveryCandidates, resolveRecoveryOperation, setSessionPinned,
         listInteractionQueue, replaceInteractionQueue, clearInteractionQueue, resolvePendingInput,
         getWorkbenchSettings, updateWorkbenchSettings, applyAgentProfile, selectAttachments,
@@ -565,9 +565,9 @@ function createWorkbenchController(runtimeApi) {
 
     return {
         store, initialize, subscribeRuntime, dispose, refreshStatus, startRuntime, stopRuntime,
-        createSession, createTopic, forkSession, compactSession, hydrateTopic, previewTopic, ensureSessionRuntime, clearSelection,
-        listTopics, searchTopics, searchTopicMessages, getTopicIndexStatus, rebuildTopicIndex,
-        readTopic, renameTopic, deleteTopic, archiveSession, restoreSession, permanentlyDeleteSession,
+        createSession, createSessionPreview, forkSession, compactSession, hydrateTopic, previewTopic, ensureSessionRuntime, clearSelection,
+        listSessions, searchTopics, searchTopicMessages, getTopicIndexStatus, rebuildTopicIndex,
+        readSession, renameSession, archiveSession, restoreSession, permanentlyDeleteSession,
         exportSession, listRecoveryOperations, listRecoveryCandidates, resolveRecoveryOperation, setSessionPinned,
         listInteractionQueue, replaceInteractionQueue, clearInteractionQueue, resolvePendingInput,
         getWorkbenchSettings, updateWorkbenchSettings, applyAgentProfile, selectAttachments,

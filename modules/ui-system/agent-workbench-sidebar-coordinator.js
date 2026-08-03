@@ -156,7 +156,7 @@ export function createAgentWorkbenchSidebarCoordinator({
                     run(async () => {
                         if (!topics.length || !window.confirm?.(`确定归档选中的 ${topics.length} 个 Agent 会话吗？`)) return;
                         for (const topic of topics) {
-                            await controller.deleteTopic(topic.id, topic.agentId);
+                            await controller.archiveSession(topic.id);
                             if (disposed) return;
                             forgetTopic(topic.id);
                         }

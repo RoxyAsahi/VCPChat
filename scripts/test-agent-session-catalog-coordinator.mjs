@@ -44,7 +44,7 @@ function createHarness() {
     const a = deferred();
     const b = deferred();
     const controller = {
-        listTopics(agentId) { return agentId === 'Agent A' ? a.promise : b.promise; },
+        listSessions(agentId) { return agentId === 'Agent A' ? a.promise : b.promise; },
     };
     const coordinator = createAgentSessionCatalogCoordinator({
         state, store, controller,
@@ -76,7 +76,7 @@ function createHarness() {
     const profilesB = deferred();
     let profileCall = 0;
     const controller = {
-        listTopics: async (agentId) => [{ id: `${agentId}-session` }],
+        listSessions: async (agentId) => [{ id: `${agentId}-session` }],
         listInteractionQueue: async () => [],
         getWorkbenchSettings: async () => ({}),
     };

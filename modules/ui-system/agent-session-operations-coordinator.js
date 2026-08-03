@@ -28,8 +28,8 @@ function createAgentSessionOperationsCoordinator({
         }
     }
 
-    async function createTopic(overrides = {}) {
-        const created = await controller.createTopic({
+    async function createSession(overrides = {}) {
+        const created = await controller.createSessionPreview({
             ...(Object.prototype.hasOwnProperty.call(overrides, 'workspaceRoot') ? { workspaceRoot: overrides.workspaceRoot } : {}),
             ...(Object.prototype.hasOwnProperty.call(overrides, 'model') ? { model: overrides.model } : {}),
             ...(Object.prototype.hasOwnProperty.call(overrides, 'systemPrompt') ? { systemPrompt: overrides.systemPrompt } : {}),
@@ -63,7 +63,7 @@ function createAgentSessionOperationsCoordinator({
         state.profileConfigurationNotice = '';
         queueRender({ shell: true, header: true, composer: true });
         try {
-            const created = await createTopic({ agent: state.selectedAgent, title: nextSessionTitle() });
+            const created = await createSession({ agent: state.selectedAgent, title: nextSessionTitle() });
             if (!disposed && !state.disposed) notify(`已新建会话「${created.title || created.sessionId}」。`, 'success');
             return created;
         } finally {
@@ -110,7 +110,7 @@ function createAgentSessionOperationsCoordinator({
     }
 
     return Object.freeze({
-        refreshRecoveryOperations, createTopic, createNewTopicDirectly, recoverRuntime,
+        refreshRecoveryOperations, createSession, createNewTopicDirectly, recoverRuntime,
         rememberTopicTitle, forgetTopic, dispose() { disposed = true; },
     });
 }

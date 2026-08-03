@@ -298,6 +298,9 @@ for (const entry of canonicalWorkbenchFiles) {
     if (/\btopicId\b|data-topic-id/.test(withoutLegacyPointerMigration)) {
         errors.push(`modules/ui-system/${entry.name} contains legacy Topic identity`);
     }
+    if (/\b(?:createTopic|listTopics|readTopic|renameTopic|deleteTopic)\b/.test(source)) {
+        errors.push(`modules/ui-system/${entry.name} exposes deprecated Topic operations`);
+    }
 }
 const runtimeFacadeLineCount = fs.readFileSync(path.join(root, 'modules/codex-runtime/runtimeManager.js'), 'utf8').split(/\r?\n/).length;
 if (runtimeFacadeLineCount > 600) errors.push(`runtimeManager.js exceeds facade ceiling: ${runtimeFacadeLineCount} lines`);

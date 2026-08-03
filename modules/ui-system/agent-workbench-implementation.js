@@ -475,7 +475,7 @@ function mountWorkbench(container) {
         nextSessionTitle, activeSession,
     });
     const {
-        refreshRecoveryOperations, createTopic, createNewTopicDirectly, recoverRuntime,
+        refreshRecoveryOperations, createSession, createNewTopicDirectly, recoverRuntime,
         rememberTopicTitle, forgetTopic,
     } = sessionOperations;
 
@@ -520,7 +520,7 @@ function mountWorkbench(container) {
             async rename(topic) {
                 const title = window.prompt?.('重命名 Agent Topic', topic.title || '');
                 if (title === null || title === undefined || title.trim() === (topic.title || '').trim()) return;
-                await controller.renameTopic(topic.id, title, topic.agentId);
+                await controller.renameSession(topic.id, title, topic.agentId);
                 rememberTopicTitle(topic, title.trim());
                 await refreshControlPlane();
                 notify('Agent Topic 已重命名。', 'success');
@@ -531,7 +531,7 @@ function mountWorkbench(container) {
             },
             async archive(topic) {
                 if (!window.confirm?.(`确定归档「${topic.title || topic.id}」吗？之后可从归档会话中恢复。`)) return;
-                await controller.deleteTopic(topic.id, topic.agentId);
+                await controller.archiveSession(topic.id);
                 state.composerStateBySession.delete(topic.id);
                 forgetTopic(topic.id);
                 await refreshControlPlane();

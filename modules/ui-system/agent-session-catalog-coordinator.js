@@ -115,7 +115,7 @@ function createAgentSessionCatalogCoordinator({
         if (cached) paintCatalogTiming(selectedAgentId, key);
         const request = ++topicCatalogRequest;
         try {
-            const topics = await controller.listTopics(selectedAgentId, { archived });
+            const topics = await controller.listSessions(selectedAgentId, { archived });
             if (disposed || state.disposed || request !== topicCatalogRequest
                 || !sameAgent(selectedAgentId, state.selectedAgent)) return;
             const received = Array.isArray(topics) ? topics : topics?.topics || [];
@@ -169,7 +169,7 @@ function createAgentSessionCatalogCoordinator({
         });
 
         const [topics, queue, workbenchSettings] = await Promise.all([
-            optional(() => controller.listTopics(selectedAgentId, { archived: state.showArchivedTopics })),
+            optional(() => controller.listSessions(selectedAgentId, { archived: state.showArchivedTopics })),
             optional(() => controller.listInteractionQueue()),
             optional(() => controller.getWorkbenchSettings()),
         ]);

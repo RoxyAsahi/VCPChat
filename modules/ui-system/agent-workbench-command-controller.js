@@ -5,7 +5,7 @@ function createWorkbenchCommandController(context) {
         releaseSnapshotBarrier,
     } = context;
 
-    const topicPayload = (payload, agentId) => (
+    const sessionPayload = (payload, agentId) => (
         agentId === undefined || agentId === null || String(agentId).trim() === ''
             ? payload : { ...payload, agentId: String(agentId).trim() }
     );
@@ -36,15 +36,15 @@ function createWorkbenchCommandController(context) {
         return created;
     }
 
-    async function createTopic(options = {}) {
-        const topic = await requireApi('agentSessionCreate')(options);
-        const sessionId = String(topic?.sessionId || '').trim();
-        const agentId = String(topic?.agentId || options.agent || options.agentId || '').trim();
+    async function createSessionPreview(options = {}) {
+        const session = await requireApi('agentSessionCreate')(options);
+        const sessionId = String(session?.sessionId || '').trim();
+        const agentId = String(session?.agentId || options.agent || options.agentId || '').trim();
         if (!sessionId || !agentId) throw new Error('Codex Runtime 未返回新会话的完整身份');
         await previewTopic(sessionId, agentId, {
-            title: topic.title || '', model: topic.model || '', workspaceRoot: topic.workspaceRoot || '',
+            title: session.title || '', model: session.model || '', workspaceRoot: session.workspaceRoot || '',
         });
-        return { ...topic, sessionId, agentId };
+        return { ...session, sessionId, agentId };
     }
 
     async function forkSession({ sessionId, turnId, title } = {}) {
@@ -72,22 +72,21 @@ function createWorkbenchCommandController(context) {
         }
     }
 
-    const listTopics = (agentId, options = {}) => requireApi('agentSessionList')(topicPayload(options, agentId));
+    const listSessions = (agentId, options = {}) => requireApi('agentSessionList')(sessionPayload(options, agentId));
     const searchTopics = (query, agentId, limit = 20) => requireApi('agentRuntimeSearchTopics')(
-        topicPayload({ query, limit }, agentId),
+        sessionPayload({ query, limit }, agentId),
     );
     const searchTopicMessages = (query, sessionId, agentId, limit = 50) => requireApi(
         'agentRuntimeSearchTopicMessages',
-    )(topicPayload({ query, sessionId, limit }, agentId));
+    )(sessionPayload({ query, sessionId, limit }, agentId));
     const getTopicIndexStatus = () => requireApi('agentRuntimeGetTopicIndexStatus')();
     const rebuildTopicIndex = () => requireApi('agentRuntimeRebuildTopicIndex')();
-    const readTopic = (sessionId, agentId) => requireApi('agentSessionRead')({
+    const readSession = (sessionId, agentId) => requireApi('agentSessionRead')({
         sessionId: sessionId, ...(agentId ? { agentId } : {}),
     });
-    const renameTopic = (sessionId, title, agentId) => requireApi('agentSessionRename')({
+    const renameSession = (sessionId, title, agentId) => requireApi('agentSessionRename')({
         sessionId: sessionId, title, ...(agentId ? { agentId } : {}),
     });
-    const deleteTopic = (sessionId) => requireApi('agentSessionArchive')({ sessionId: sessionId });
     const archiveSession = (sessionId) => requireApi('agentSessionArchive')({ sessionId });
     const restoreSession = (sessionId) => requireApi('agentSessionRestore')({ sessionId });
     const permanentlyDeleteSession = (sessionId) => requireApi('agentSessionDelete')({ sessionId });
@@ -268,9 +267,9 @@ function createWorkbenchCommandController(context) {
     }
 
     return {
-        startRuntime, stopRuntime, createSession, createTopic, forkSession, compactSession,
-        listTopics, searchTopics, searchTopicMessages, getTopicIndexStatus, rebuildTopicIndex,
-        readTopic, renameTopic, deleteTopic, archiveSession, restoreSession, permanentlyDeleteSession,
+        startRuntime, stopRuntime, createSession, createSessionPreview, forkSession, compactSession,
+        listSessions, searchTopics, searchTopicMessages, getTopicIndexStatus, rebuildTopicIndex,
+        readSession, renameSession, archiveSession, restoreSession, permanentlyDeleteSession,
         exportSession, listRecoveryOperations, listRecoveryCandidates, resolveRecoveryOperation, setSessionPinned,
         listInteractionQueue, replaceInteractionQueue, clearInteractionQueue, resolvePendingInput,
         getWorkbenchSettings, updateWorkbenchSettings, applyAgentProfile, selectAttachments,
