@@ -32,6 +32,8 @@ const requiredFiles = [
     'modules/ipc/agentRuntimeHandlers.js',
     'modules/ui-system/agent-workbench-controller.js',
     'modules/ui-system/agent-workbench-command-controller.js',
+    'modules/ui-system/agent-workbench-dom.js',
+    'modules/ui-system/agent-workbench-shell-view.js',
     'modules/ui-system/agent-workbench-store.js',
     'modules/ui-system/agent-presentation/contract.js',
     'modules/ui-system/agent-presentation/renderer.js',

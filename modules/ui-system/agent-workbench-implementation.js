@@ -20,6 +20,16 @@ import {
     profileSettingsTarget,
     sessionSettingsTarget,
 } from './agent-settings-state.js';
+import {
+    button,
+    createSidebarSearchPanel,
+    cssEscape,
+    icon,
+    iconButton,
+    node,
+    visualActionButton,
+} from './agent-workbench-dom.js';
+import { createAgentWorkbenchShellView } from './agent-workbench-shell-view.js';
 
 // Build Agent identities are independent from normal-chat Agents. Keep Nova
 // visible synchronously while the authoritative Build catalog loads.
@@ -52,11 +62,6 @@ const runtimeApi = () => window.chatAPI || window.electronAPI || {};
 // VChat Agent Session to display after Ctrl+R; transcript data stays in SQLite
 // and execution context stays in the Codex Thread Store.
 const LAST_TOPIC_STORAGE_KEY = 'vcpchat.agentWorkbench.lastTopic.v1';
-
-function cssEscape(value) {
-    if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(String(value));
-    return String(value).replace(/["\\]/g, '\\$&');
-}
 
 // R3 fixed lifecycle state machine — labels shown in the Workbench header.
 const WORKBENCH_VIEW_STATE_LABELS = {
@@ -94,20 +99,6 @@ function rememberTopic(session) {
     }
 }
 
-function node(tag, className, text) {
-    const value = document.createElement(tag);
-    if (className) value.className = className;
-    if (text !== undefined) value.textContent = text;
-    return value;
-}
-
-function icon(name, label) {
-    const value = node('span', 'vcp-ui-icon', name);
-    value.setAttribute('aria-hidden', 'true');
-    if (!label) return [value];
-    return [value, node('span', 'agent-chat-visually-hidden', label)];
-}
-
 function proxyMainButton(id) {
     // The Agent Workbench is a separate product page.  The only shared piece
     // here is the VCPChat Agent/Group configuration flow, which belongs to
@@ -120,86 +111,10 @@ function proxyMainButton(id) {
     return document.getElementById(id)?.click();
 }
 
-function iconButton(iconName, label, className = '') {
-    const value = node('button', `agent-chat-icon-button ${className}`.trim());
-    value.type = 'button';
-    value.title = label;
-    value.setAttribute('aria-label', label);
-    value.append(...icon(iconName, label));
-    return value;
-}
-
-function button(label, className = '') {
-    const value = node('button', `agent-chat-button ${className}`.trim(), label);
-    value.type = 'button';
-    return value;
-}
-
 // Agent Workbench owns its DOM and behavior.  It deliberately uses the shared
 // sidebar/composer *classes* and design tokens, but never clones a main-chat
 // element: copying it also copied incidental IDs/listeners and made this page
 // depend on whichever main-chat markup happened to be mounted.
-function visualActionButton(iconName, label, className = '', text = '') {
-    const value = node('button', className);
-    value.type = 'button';
-    value.title = label;
-    value.setAttribute('aria-label', label);
-    value.append(...vectorIcon(iconName, label));
-    if (text) value.append(node('span', '', text));
-    return value;
-}
-
-function vectorIcon(name, label) {
-    const paths = {
-        add: [['path', { d: 'M12 5v14' }], ['path', { d: 'M5 12h14' }]],
-        search: [['circle', { cx: '11', cy: '11', r: '7' }], ['path', { d: 'm20 20-3.5-3.5' }]],
-        checklist: [
-            ['path', { d: 'm3 6 2 2 4-4' }], ['path', { d: 'M11 6h10' }],
-            ['path', { d: 'm3 12 2 2 4-4' }], ['path', { d: 'M11 12h10' }],
-            ['path', { d: 'm3 18 2 2 4-4' }], ['path', { d: 'M11 18h10' }],
-        ],
-        more: [['circle', { cx: '5', cy: '12', r: '1' }], ['circle', { cx: '12', cy: '12', r: '1' }], ['circle', { cx: '19', cy: '12', r: '1' }]],
-        open: [['path', { d: 'M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' }], ['path', { d: 'M3 10h18' }]],
-        edit: [['path', { d: 'M12 20h9' }], ['path', { d: 'M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z' }]],
-        copy: [['rect', { x: '9', y: '9', width: '11', height: '11', rx: '1' }], ['path', { d: 'M15 9V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h4' }]],
-        view: [['path', { d: 'M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6' }], ['circle', { cx: '12', cy: '12', r: '2.5' }]],
-        delete: [['path', { d: 'M4 7h16' }], ['path', { d: 'M9 7V4h6v3' }], ['path', { d: 'm6 7 1 13h10l1-13' }], ['path', { d: 'M10 11v5' }], ['path', { d: 'M14 11v5' }]],
-        close: [['path', { d: 'm7 7 10 10' }], ['path', { d: 'm17 7-10 10' }]],
-    };
-    const shape = paths[name];
-    if (!shape) return icon(name, label);
-    const value = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    value.setAttribute('viewBox', '0 0 24 24');
-    value.setAttribute('fill', 'none');
-    value.setAttribute('stroke', 'currentColor');
-    value.setAttribute('stroke-width', '2');
-    value.setAttribute('stroke-linecap', 'round');
-    value.setAttribute('stroke-linejoin', 'round');
-    value.setAttribute('aria-hidden', 'true');
-    for (const [tag, attributes] of shape) {
-        const child = document.createElementNS('http://www.w3.org/2000/svg', tag);
-        Object.entries(attributes).forEach(([attribute, attributeValue]) => child.setAttribute(attribute, attributeValue));
-        value.append(child);
-    }
-    return [value, ...(label ? [node('span', 'agent-chat-visually-hidden', label)] : [])];
-}
-
-function createSidebarSearchPanel(inputId, inputLabel, placeholder, closeClass, closeLabel) {
-    const panel = node('div', 'sidebar-subtab-item sidebar-search-subtab');
-    const searchContainer = node('div', 'topic-search-container');
-    searchContainer.append(...icon('search'));
-    const input = document.createElement('input');
-    input.type = 'search';
-    input.id = inputId;
-    input.className = 'topic-search-input';
-    input.placeholder = placeholder;
-    input.setAttribute('aria-label', inputLabel);
-    const close = visualActionButton('close', closeLabel, closeClass);
-    searchContainer.append(input, close);
-    panel.append(searchContainer);
-    return { panel, input, close };
-}
-
 function createAccountDock(state) {
     const dock = node('div', 'next-ui-account-dock agent-chat-account-dock');
     const menu = node('div', 'next-ui-account-menu agent-chat-account-menu');
@@ -541,137 +456,39 @@ function mountWorkbench(container) {
     let topicMenuInstance = 0;
     let runStatusTimer = null;
 
-    const root = node('section', 'container agent-chat-root vcp-ui-scope');
-    // Read-only diagnostic for Electron smoke/visual QA. Full Fork is the
-    // Workbench's only Message renderer and is not configurable runtime state.
-    root.dataset.presentationRenderer = 'fork';
-    const topicFlowLayer = node('div', 'vcp-ui-scope agent-chat-topic-flow-layer');
-    const sidebar = node('aside', 'sidebar active vcp-ui-scope agent-chat-sidebar');
-    const main = node('main', 'main-content agent-chat-main-content agent-chat-pane');
-    const feed = node('div', 'chat-messages-container vcp-ui-scope agent-chat-messages-container');
-    const feedItems = node('div', 'chat-messages agent-chat-messages');
-    const jumpToLatest = button('回到最新', 'agent-chat-jump-to-latest');
-    jumpToLatest.hidden = true;
-    jumpToLatest.setAttribute('aria-live', 'polite');
-    const header = node('header', 'chat-header vcp-ui-scope agent-chat-header');
-    const composer = node('footer', 'chat-input-area agent-chat-composer');
-    const runStatus = node('div', 'agent-chat-run-status');
-    runStatus.hidden = true;
-    runStatus.setAttribute('role', 'status');
-    runStatus.setAttribute('aria-live', 'polite');
-    const runStatusIcon = node('span', 'vcp-ui-icon agent-chat-run-status-icon', 'progress_activity');
-    const runStatusLabel = node('strong', 'agent-chat-run-status-label', '正在运行');
-    const runStatusDetail = node('span', 'agent-chat-run-status-detail');
-    const runStatusElapsed = node('time', 'agent-chat-run-status-elapsed', '0.0s');
-    const runStatusStop = visualActionButton('stop', '停止当前任务', 'agent-chat-run-status-stop');
-    runStatus.append(runStatusIcon, runStatusLabel, runStatusDetail, runStatusElapsed, runStatusStop);
-    const composerConfig = node('button', 'agent-chat-composer-config');
-    composerConfig.type = 'button';
-    composerConfig.addEventListener('click', () => {
-        state.tab = 'settings';
-        state.settingsScope = 'session';
-        queueRender({ shell: true });
+    const shellView = createAgentWorkbenchShellView({
+        document,
+        container,
+        state,
+        actions: {
+            openSessionSettings: () => {
+                state.tab = 'settings';
+                state.settingsScope = 'session';
+                queueRender({ shell: true });
+            },
+            setInputMode: (mode) => {
+                state.composerStateBySession.setMode(selectedSessionKey(), mode);
+                renderComposer();
+            },
+            openEmoticons: (trigger, targetInput) => {
+                if (window.emoticonManager?.togglePanel) window.emoticonManager.togglePanel(trigger, targetInput);
+                else notify('表情包系统尚未准备好。', 'warning');
+            },
+            openPermissionSettings: () => {
+                state.tab = 'settings';
+                state.settingsScope = selectedSessionKey() ? 'session' : 'profile';
+                queueRender({ shell: true });
+            },
+            setActivityOpen: (open) => setActivityOpen(open),
+        },
     });
-    const runningModes = node('div', 'agent-chat-composer-modes');
-    runningModes.setAttribute('role', 'group');
-    runningModes.setAttribute('aria-label', '运行中输入模式');
-    const steerModeButton = button('立即调整', 'agent-chat-composer-mode');
-    const followUpModeButton = button('排队后续', 'agent-chat-composer-mode');
-    steerModeButton.addEventListener('click', () => {
-        state.composerStateBySession.setMode(selectedSessionKey(), 'steer');
-        renderComposer();
-    });
-    followUpModeButton.addEventListener('click', () => {
-        state.composerStateBySession.setMode(selectedSessionKey(), 'follow-up');
-        renderComposer();
-    });
-    runningModes.append(steerModeButton, followUpModeButton);
-    const inputCard = node('div', 'chat-input-card');
-    const input = document.createElement('textarea');
-    input.className = 'agent-chat-message-input';
-    input.rows = 1;
-    input.placeholder = '输入消息…（Shift + Enter 换行）';
-    input.setAttribute('aria-label', '输入 Agent 消息');
-    const composerActions = node('div', 'chat-input-actions');
-    const newButton = visualActionButton('add_comment', '新建 Agent 会话', 'agent-chat-composer-new');
-    const attachButton = visualActionButton('attach_file', '添加图片、音频或视频附件');
-    const emoticonButton = visualActionButton('sentiment_satisfied', '打开表情包');
-    const permissionsButton = visualActionButton('policy', '本地审批', 'agent-chat-composer-permissions');
-    const sendButton = visualActionButton('arrow_upward', '发送消息', 'agent-chat-send-button');
-    const attachmentTray = node('div', 'agent-chat-composer-attachments');
-    emoticonButton.addEventListener('click', () => {
-        if (window.emoticonManager?.togglePanel) window.emoticonManager.togglePanel(emoticonButton, input);
-        else notify('表情包系统尚未准备好。', 'warning');
-    });
-    permissionsButton.addEventListener('click', () => {
-        state.tab = 'settings';
-        state.settingsScope = selectedSessionKey() ? 'session' : 'profile';
-        queueRender({ shell: true });
-    });
-    composerActions.append(newButton, attachButton, emoticonButton, permissionsButton, sendButton);
-    inputCard.append(attachmentTray, input, composerActions);
-    composer.append(runStatus, composerConfig, runningModes, inputCard);
-    feed.append(feedItems);
-    const mainColumn = node('div', 'agent-chat-main-column');
-    const activityPanel = node('aside', 'agent-chat-activity-panel agent-chat-activity-collapsed');
-    const activitySplitter = node('div', 'agent-chat-activity-splitter');
-    activitySplitter.tabIndex = 0;
-    activitySplitter.setAttribute('role', 'separator');
-    activitySplitter.setAttribute('aria-orientation', 'vertical');
-    activitySplitter.setAttribute('aria-label', '调整聊天区与会话信息面板宽度');
-    activityPanel.id = 'agentChatActivityPanel';
-    activityPanel.setAttribute('role', 'complementary');
-    activityPanel.setAttribute('aria-label', 'Agent 活动面板');
-    activityPanel.setAttribute('aria-hidden', 'true');
-    activityPanel.setAttribute('inert', '');
-    const activityInner = node('div', 'agent-chat-activity-inner');
-    const activityClose = iconButton('close', '关闭会话信息面板', 'agent-chat-activity-close');
-    activityClose.addEventListener('click', () => setActivityOpen(false));
-    const activityTabs = node('div', 'agent-chat-activity-tabs');
-    activityTabs.setAttribute('role', 'tablist');
-    const activityTabTools = node('div', 'agent-chat-dock-tools');
-    const activityAdd = iconButton('add', '打开会话工具', 'agent-chat-dock-add');
-    activityAdd.setAttribute('aria-haspopup', 'menu');
-    activityAdd.setAttribute('aria-expanded', 'false');
-    activityTabTools.append(activityAdd, activityClose);
-    const activityContent = node('div', 'agent-chat-activity-content');
-    activityContent.setAttribute('role', 'presentation');
-    const activityTabRow = node('div', 'agent-chat-dock-tab-row');
-    activityTabRow.append(activityTabs, activityTabTools);
-    activityInner.append(activityTabRow, activityContent);
-    activityPanel.append(activityInner);
-    const applyActivityPanelWidth = (width) => {
-        state.activityPanelWidth = Math.round(Math.max(320, Math.min(760, width)) / 20) * 20;
-        [...activityPanel.classList].filter((name) => name.startsWith('agent-chat-activity-width-')).forEach((name) => activityPanel.classList.remove(name));
-        activityPanel.classList.add(`agent-chat-activity-width-${state.activityPanelWidth}`);
-        activitySplitter.setAttribute('aria-valuenow', String(state.activityPanelWidth));
-    };
-    applyActivityPanelWidth(state.activityPanelWidth);
-    activitySplitter.addEventListener('pointerdown', (event) => {
-        event.preventDefault();
-        activitySplitter.setPointerCapture?.(event.pointerId);
-        const bounds = main.getBoundingClientRect();
-        const onMove = (moveEvent) => applyActivityPanelWidth(bounds.right - moveEvent.clientX);
-        const onUp = (upEvent) => {
-            activitySplitter.releasePointerCapture?.(upEvent.pointerId);
-            activitySplitter.removeEventListener('pointermove', onMove);
-            activitySplitter.removeEventListener('pointerup', onUp);
-            activitySplitter.removeEventListener('pointercancel', onUp);
-        };
-        activitySplitter.addEventListener('pointermove', onMove);
-        activitySplitter.addEventListener('pointerup', onUp);
-        activitySplitter.addEventListener('pointercancel', onUp);
-    });
-    activitySplitter.addEventListener('keydown', (event) => {
-        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-        event.preventDefault();
-        applyActivityPanelWidth(state.activityPanelWidth + (event.key === 'ArrowLeft' ? 20 : -20));
-    });
-    mainColumn.append(header, feed, jumpToLatest, composer);
-    main.append(mainColumn, activitySplitter, activityPanel);
-    root.append(sidebar, main);
-    container.classList.add('agent-workbench-root', 'agent-chat-root');
-    container.append(root, topicFlowLayer);
+    const {
+        root, topicFlowLayer, sidebar, main, feed, feedItems, jumpToLatest, header,
+        runStatus, runStatusLabel, runStatusDetail, runStatusElapsed, runStatusStop,
+        composerConfig, runningModes, steerModeButton, followUpModeButton, inputCard, input,
+        newButton, attachButton, permissionsButton, sendButton, attachmentTray,
+        activityPanel, activitySplitter, activityTabs, activityAdd, activityContent, activityTabRow,
+    } = shellView.refs;
 
     const run = async (work) => {
         try { await work(); } catch (error) {
@@ -4173,8 +3990,7 @@ function mountWorkbench(container) {
         lifecycle.dispose();
         unsubscribe();
         controller.dispose();
-        root.remove();
-        topicFlowLayer.remove();
+        shellView.dispose();
     };
 }
 
