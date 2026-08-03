@@ -3,6 +3,7 @@ import fs from 'node:fs';
 
 const workbench = fs.readFileSync(new URL('../modules/ui-system/agent-workbench-implementation.js', import.meta.url), 'utf8');
 const settingsView = fs.readFileSync(new URL('../modules/ui-system/agent-settings-view.js', import.meta.url), 'utf8');
+const sessionCatalog = fs.readFileSync(new URL('../modules/ui-system/agent-session-catalog-coordinator.js', import.meta.url), 'utf8');
 const runtime = fs.readFileSync(new URL('../modules/codex-runtime/runtimeManagerImplementation.js', import.meta.url), 'utf8');
 const turnService = fs.readFileSync(new URL('../modules/codex-runtime/runtime-turn-service.js', import.meta.url), 'utf8');
 const profileService = fs.readFileSync(new URL('../modules/codex-runtime/runtime-profile-service.js', import.meta.url), 'utf8');
@@ -11,7 +12,7 @@ const adapter = fs.readFileSync(new URL('../modules/codex-runtime/toolboxRespons
 for (const label of ['Agent 默认', '当前会话', '高级']) assert.ok(settingsView.includes(label));
 assert.ok(settingsView.includes("'vchat-identity'"));
 assert.ok(settingsView.includes("'codex-managed'"));
-assert.ok(workbench.includes('reasoningEffortsForModel'));
+assert.ok(sessionCatalog.includes('reasoningEffortsForModel'));
 assert.ok(settingsView.includes('该模型没有提供 reasoning effort capability'));
 assert.equal(`${workbench}\n${settingsView}`.includes('用此配置新建会话'), false,
     'settings must not retain the redundant create-Session action');

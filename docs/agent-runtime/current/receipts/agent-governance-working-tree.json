@@ -10,6 +10,8 @@
     "npm run test:agent-renderer-isolation",
     "npm run test:agent-renderer-lifecycle",
     "npm run test:agent-workbench-clients",
+    "npm run test:agent-session-catalog",
+    "npm run test:agent-settings-coordinator",
     "npm run test:agent-session-compatibility",
     "npm run test:agent-workspace-requests",
     "npm run test:codex-runtime-lifecycle",
@@ -19,5 +21,5 @@
     "npm run guard:ui-system",
     "npm run lint:ui-system"
   ],
-  "notes": "2026-08-03 checkpoint: Runtime/Recovery/Controller gates, full codex-ci, Electron recovery, Electron smoke, UI guard and stylelint pass. Workbench Sidebar, Dock, Notification, Approval, Topic Flow, Workspace coordination and Timeline View are explicit modules; Renderer History and root-local Action delegation are extracted. Workspace A-to-B stale success/failure/finally isolation is covered. Workbench implementation, Renderer implementation and Agent CSS remain above final 800/600/component-owner targets, so the overall governance status remains implemented rather than complete/product."
+  "notes": "2026-08-03 continuation checkpoint: Runtime/Recovery/Controller remain within final gates. Workbench Sidebar, Dock, Notification, Approval, Topic Flow, Workspace, Timeline, Session catalog, settings persistence and Topic context menu have explicit owners. Agent A-to-B catalog responses, Session A-to-B settings completions, Workspace A-to-B success/failure/finally, and closed-menu focus microtasks are identity guarded. Renderer History, root-local Action delegation and pure LaTeX preprocessing are extracted. Workbench implementation is about 1985 lines and Renderer implementation about 2539 lines; Agent CSS remains about 4002 lines. Final 800/600/component-owner targets are not yet met, so status remains implemented rather than complete/product."
 }
