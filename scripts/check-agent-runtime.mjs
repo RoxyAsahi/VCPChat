@@ -31,6 +31,7 @@ const requiredFiles = [
     'fixtures/codex-app-server/0.146.0/manifest.json',
     'modules/ipc/agentRuntimeHandlers.js',
     'modules/ui-system/agent-workbench-controller.js',
+    'modules/ui-system/agent-workbench-command-controller.js',
     'modules/ui-system/agent-workbench-store.js',
     'modules/ui-system/agent-presentation/contract.js',
     'modules/ui-system/agent-presentation/renderer.js',

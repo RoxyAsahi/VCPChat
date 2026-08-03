@@ -2,10 +2,7 @@ import { createWorkbenchStore } from './agent-workbench-store.js';
 import { createAgentSessionUiState, reconcileAgentSessionUiState, reduceAgentSessionUiState } from './agent-session-state.js';
 import { createWorkbenchClients } from './agent-workbench-clients.js';
 import { codexSnapshotToProjection } from './agent-workbench-snapshot-projection.js';
-
-// The Workbench deliberately has no Main-process transcript cache. SQLite is
-// the durable presentation projection while Codex Thread Store remains the
-// execution/context authority.
+import { createWorkbenchCommandController } from './agent-workbench-command-controller.js';
 function createWorkbenchController(runtimeApi) {
     const clients = createWorkbenchClients(runtimeApi);
     const store = createWorkbenchStore();
@@ -28,12 +25,6 @@ function createWorkbenchController(runtimeApi) {
 
     function requireApi(name) {
         return clients.require(name);
-    }
-
-    function topicPayload(payload, agentId) {
-        return agentId === undefined || agentId === null || String(agentId).trim() === ''
-            ? payload
-            : { ...payload, agentId: String(agentId).trim() };
     }
 
     function runtimeForTopic(topicId, state = store.getState()) {
@@ -96,10 +87,6 @@ function createWorkbenchController(runtimeApi) {
         if (Array.isArray(status?.pendingInteractions)) projection.interactions = status.pendingInteractions;
         store.setState(projection);
         return status;
-    }
-
-    function readLocalProjection(payload) {
-        return requireApi('agentSessionReadProjection')(payload);
     }
 
     function ensureSessionRuntime(sessionId, reason = 'selection') {
@@ -386,7 +373,9 @@ function createWorkbenchController(runtimeApi) {
         const version = ++selectionVersion;
         const barrier = existingBarrier || beginSnapshotBarrier();
         try {
-            const snapshot = await readLocalProjection({ sessionId: topicId, ...(agentId ? { agentId } : {}) });
+            const snapshot = await requireApi('agentSessionReadProjection')({
+                sessionId: topicId, ...(agentId ? { agentId } : {}),
+            });
             if (version !== selectionVersion) {
                 releaseSnapshotBarrier(barrier, null, runtimeHint || runtimeForTopic(topicId));
                 return null;
@@ -423,7 +412,9 @@ function createWorkbenchController(runtimeApi) {
         try {
             // This is the only awaited cold-open read in the Codex path. It
             // is a local SQLite query and must not request a Codex Thread.
-            localSnapshot = await readLocalProjection({ sessionId: topicId, ...(agentId ? { agentId } : {}) });
+            localSnapshot = await requireApi('agentSessionReadProjection')({
+                sessionId: topicId, ...(agentId ? { agentId } : {}),
+            });
             if (version !== selectionVersion) {
                 releaseSnapshotBarrier(barrier, null, runtimeForTopic(topicId));
                 return null;
@@ -444,49 +435,32 @@ function createWorkbenchController(runtimeApi) {
         }
     }
 
-    async function startRuntime() {
-        const result = await requireApi('agentRuntimeStart')();
-        await refreshStatus();
-        return result;
-    }
-
-    async function stopRuntime() {
-        const result = await requireApi('agentRuntimeStop')();
-        store.setState({ activeTurnId: null });
-        await refreshStatus();
-        return result;
-    }
-
-    async function createSession(options = {}) {
-        const barrier = beginSnapshotBarrier();
-        // This compatibility API creates or resumes one Session without
-        // changing any other Session Runtime.
-        const createdSession = await requireApi('agentSessionCreate')(options);
-        await refreshStatus();
-        if (createdSession.topicId) {
-            try {
-                await hydrateTopic(createdSession.topicId, createdSession, barrier, createdSession.agentId);
-            } catch {
-                releaseSnapshotBarrier(barrier, null, createdSession);
-            }
-        } else {
-            releaseSnapshotBarrier(barrier, null, createdSession);
-        }
-        return createdSession;
-    }
-
-    async function createTopic(options = {}) {
-        const topic = await requireApi('agentSessionCreate')(options);
-        const topicId = String(topic?.topicId || '').trim();
-        const agentId = String(topic?.agentId || options.agent || options.agentId || '').trim();
-        if (!topicId || !agentId) throw new Error('Codex Runtime 未返回新会话的完整身份');
-        await previewTopic(topicId, agentId, {
-            title: topic.title || '',
-            model: topic.model || '',
-            workspaceRoot: topic.workspaceRoot || '',
-        });
-        return { ...topic, topicId, agentId };
-    }
+    const commands = createWorkbenchCommandController({
+        store,
+        requireApi,
+        runtimeApi,
+        refreshStatus,
+        selectedRuntime,
+        selectedSessionId,
+        selectedTurnId,
+        ensureSessionRuntime,
+        previewTopic,
+        hydrateTopic,
+        beginSnapshotBarrier,
+        releaseSnapshotBarrier,
+    });
+    const {
+        startRuntime, stopRuntime, createSession, createTopic, forkSession, compactSession,
+        listTopics, searchTopics, searchTopicMessages, getTopicIndexStatus, rebuildTopicIndex,
+        readTopic, renameTopic, deleteTopic, archiveSession, restoreSession, permanentlyDeleteSession,
+        exportSession, listRecoveryOperations, listRecoveryCandidates, resolveRecoveryOperation, setSessionPinned,
+        listInteractionQueue, replaceInteractionQueue, clearInteractionQueue, resolvePendingInput,
+        getWorkbenchSettings, updateWorkbenchSettings, applyAgentProfile, selectAttachments,
+        startTurn, cancelTurn, cancelTool, steerTurn, followUpTurn,
+        respondApproval, respondInteraction, respondToolboxApproval,
+        workspaceListDirectory, workspaceReadPreview, workspaceSearchFiles,
+        workspaceStatPath, workspacePerformPathAction, workspaceCancel,
+    } = commands;
 
     function resolvePreviewTopic(snapshot, selectedTopic) {
         const durableAgentId = typeof snapshot?.session?.agentId === 'string' && snapshot.session.agentId.trim()
@@ -531,122 +505,6 @@ function createWorkbenchController(runtimeApi) {
         }
     }
 
-    async function forkSession({ sessionId, turnId, title } = {}) {
-        const sourceSessionId = sessionId || selectedRuntime()?.sessionId || store.getState().selectedTopic?.topicId;
-        if (!sourceSessionId) throw new Error('请先选择要创建分支的会话');
-        const fork = await requireApi('agentSessionFork')({ sessionId: sourceSessionId, turnId, title });
-        const topicId = fork?.topicId || fork?.sessionId;
-        if (!topicId) throw new Error('Codex thread/fork 未返回新会话身份');
-        await previewTopic(topicId, fork.agentId, fork);
-        return fork;
-    }
-
-    async function compactSession(sessionId, instructions) {
-        store.setState({ context: { ...store.getState().context, compacting: true, summary: '' } });
-        try {
-            const result = await requireApi('agentRuntimeCompactSession')({ sessionId, instructions: instructions || undefined });
-            // Codex returns its reconciled projection snapshot with sessionId.
-            // Keep the topicId fallback only for the compatibility IPC shape.
-            const refreshedTopicId = result?.topicId
-                || (result?.snapshot ? (result?.sessionId ? result.sessionId : sessionId) : null);
-            if (refreshedTopicId) await hydrateTopic(refreshedTopicId);
-            return result;
-        } finally {
-            store.setState({ context: { ...store.getState().context, compacting: false } });
-        }
-    }
-
-    const listTopics = (agentId = undefined, options = {}) => requireApi('agentSessionList')(topicPayload(options, agentId));
-    const searchTopics = (query, agentId = undefined, limit = 20) => requireApi('agentRuntimeSearchTopics')(topicPayload({ query, limit }, agentId));
-    const searchTopicMessages = (query, topicId, agentId = undefined, limit = 50) => requireApi('agentRuntimeSearchTopicMessages')(topicPayload({ query, topicId, limit }, agentId));
-    const getTopicIndexStatus = () => requireApi('agentRuntimeGetTopicIndexStatus')();
-    const rebuildTopicIndex = () => requireApi('agentRuntimeRebuildTopicIndex')();
-    const readTopic = (topicId, agentId = undefined) => requireApi('agentSessionRead')({ sessionId: topicId, ...(agentId ? { agentId } : {}) });
-    const renameTopic = (topicId, title, agentId = undefined) => requireApi('agentSessionRename')({ sessionId: topicId, title, ...(agentId ? { agentId } : {}) });
-    const deleteTopic = (topicId) => requireApi('agentSessionArchive')({ sessionId: topicId });
-    const archiveSession = (sessionId) => requireApi('agentSessionArchive')({ sessionId });
-    const restoreSession = (sessionId) => requireApi('agentSessionRestore')({ sessionId });
-    const permanentlyDeleteSession = (sessionId) => requireApi('agentSessionDelete')({ sessionId });
-    const exportSession = (sessionId, format = 'markdown') => requireApi('agentRuntimeExportSession')({ sessionId, format });
-    const listRecoveryOperations = () => requireApi('agentRuntimeListRecoveryOperations')();
-    const listRecoveryCandidates = () => requireApi('agentRuntimeListRecoveryCandidates')();
-    const resolveRecoveryOperation = (operationId, action, threadId) => requireApi('agentRuntimeResolveRecoveryOperation')({
-        operationId, action, threadId,
-    });
-    const setSessionPinned = (sessionId, pinned) => requireApi('agentRuntimeSetSessionPinned')({ sessionId, pinned });
-    const listInteractionQueue = () => {
-        const sessionId = selectedSessionId();
-        if (!sessionId) throw new Error('请先选择 Agent Session');
-        return requireApi('agentRuntimeListInteractionQueue')({ sessionId });
-    };
-    const replaceInteractionQueue = (interactions) => {
-        const sessionId = selectedSessionId();
-        if (!sessionId) throw new Error('请先选择 Agent Session');
-        return requireApi('agentRuntimeReplaceInteractionQueue')({ sessionId, interactions });
-    };
-    const clearInteractionQueue = () => {
-        const sessionId = selectedSessionId();
-        if (!sessionId) throw new Error('请先选择 Agent Session');
-        return requireApi('agentRuntimeClearInteractionQueue')({ sessionId });
-    };
-    const resolvePendingInput = (inputId, action) => {
-        const sessionId = selectedSessionId();
-        if (!sessionId) throw new Error('请先选择 Agent Session');
-        return requireApi('agentRuntimeResolvePendingInput')({ sessionId, inputId, action });
-    };
-    const getWorkbenchSettings = () => requireApi('agentRuntimeGetWorkbenchSettings')();
-    async function updateWorkbenchSettings(settings) {
-        const result = settings?.sessionId
-            ? await requireApi('agentRuntimeUpdateSessionConfig')({
-                sessionId: settings.sessionId,
-                expectedConfigRevision: settings.expectedConfigRevision,
-                patch: Object.fromEntries(Object.entries(settings).filter(([key]) => ![
-                    'sessionId', 'topicId', 'expectedConfigRevision',
-                ].includes(key))),
-            })
-            : await requireApi('agentRuntimeUpdateWorkbenchSettings')(settings);
-        const savedSession = result?.session;
-        const current = store.getState();
-        if (savedSession?.sessionId) {
-            const configSnapshot = savedSession.configSnapshot || null;
-            const activeRuntimes = new Map(current.activeRuntimes);
-            const runtime = activeRuntimes.get(savedSession.sessionId);
-            if (runtime) activeRuntimes.set(savedSession.sessionId, {
-                ...runtime,
-                model: configSnapshot?.model || savedSession.model || runtime.model || '',
-                workspaceRoot: savedSession.workspaceRoot || runtime.workspaceRoot,
-                configSnapshot,
-                appliedRuntimeConfig: savedSession.appliedRuntimeConfig || runtime.appliedRuntimeConfig || null,
-                configRevision: savedSession.configRevision || runtime.configRevision,
-                appliedRuntimeConfigRevision: savedSession.appliedRuntimeConfigRevision
-                    ?? runtime.appliedRuntimeConfigRevision ?? 0,
-                configApplyState: savedSession.configApplyState || savedSession.applyState || runtime.configApplyState,
-                configApplyError: savedSession.configApplyError || savedSession.applyError || null,
-            });
-            const selected = current.selectedSessionId === savedSession.sessionId;
-            const model = configSnapshot?.model || savedSession.model || current.selectedTopic?.model || '';
-            store.setState({
-                activeRuntimes,
-                ...(selected ? { selectedTopic: {
-                    ...current.selectedTopic,
-                    model,
-                    workspaceRoot: savedSession.workspaceRoot || current.selectedTopic?.workspaceRoot || '',
-                    workspaceRef: savedSession.workspaceRoot || current.selectedTopic?.workspaceRef || '',
-                    configSnapshot,
-                    configRevision: savedSession.configRevision || current.selectedTopic?.configRevision,
-                    appliedRuntimeConfig: savedSession.appliedRuntimeConfig
-                        || current.selectedTopic?.appliedRuntimeConfig || null,
-                    appliedRuntimeConfigRevision: savedSession.appliedRuntimeConfigRevision
-                        ?? current.selectedTopic?.appliedRuntimeConfigRevision ?? 0,
-                    configApplyState: savedSession.configApplyState || savedSession.applyState
-                        || current.selectedTopic?.configApplyState || null,
-                    configApplyError: savedSession.configApplyError || savedSession.applyError || null,
-                } } : {}),
-            });
-        }
-        return result;
-    }
-
     function clearSelection() {
         selectionVersion += 1;
         if (snapshotBarrier) releaseSnapshotBarrier(snapshotBarrier, null, null);
@@ -662,139 +520,6 @@ function createWorkbenchController(runtimeApi) {
         store.selectSession(null);
         store.setState(globalProjection);
     }
-    async function applyAgentProfile(settings) {
-        const result = await requireApi('agentRuntimeApplyAgentProfile')(settings);
-        if (result?.session?.sessionId && result.applied) {
-            const current = store.getState();
-            if (current.selectedTopic?.topicId === result.session.sessionId) {
-                store.setState({
-                    selectedTopic: {
-                        ...current.selectedTopic,
-                        configSnapshot: result.session.configSnapshot,
-                        configRevision: result.session.configRevision,
-                        workspaceRoot: result.session.workspaceRoot,
-                        workspaceRef: result.session.workspaceRoot,
-                        model: result.session.configSnapshot?.model || current.selectedTopic.model,
-                    },
-                });
-            }
-        }
-        return result;
-    }
-    const selectAttachments = () => {
-        const current = store.getState();
-        const sessionId = current.selectedSessionId || current.selectedTopic?.topicId;
-        if (!sessionId) throw new Error('请先选择或新建 Session');
-        return requireApi('agentRuntimeSelectAttachments')({ sessionId });
-    };
-
-    async function startTurn(prompt, attachments = []) {
-        let current = store.getState();
-        const selected = current.selectedTopic;
-        let runtime = selectedRuntime(current);
-        if (selected?.topicId && !runtime) {
-            if (!selected.agentId) {
-                throw new Error('当前会话缺少持久化的助手身份，不能猜测并发送。请重新从会话列表打开它。');
-            }
-            runtime = await ensureSessionRuntime(selected.topicId, 'send');
-            current = store.getState();
-        }
-        const sessionId = runtime?.sessionId || selectedRuntime(current)?.sessionId || selected?.topicId;
-        if (!sessionId) throw new Error('请先选择或新建 Session');
-        // ACK means Codex accepted this command, not that the durable SQLite
-        // projection already contains its Item. Project a renderer-only pending
-        // item immediately so the user never sends into an apparently empty
-        // conversation; `turn.started`/`user.message` later replaces it with
-        // the App Server event identity. If the pipe breaks first, the item is
-        // explicitly unconfirmed and is never automatically replayed.
-        const accepted = await requireApi('agentRuntimeStartTurn')({ sessionId, prompt, attachments });
-        // Keep activeTurnId authoritative: it is established by Codex's
-        // turn.started/projection event, while the Workbench owns a separate
-        // ephemeral startup indicator for the ACK-to-first-event gap.
-        store.addPendingUserMessage({ turnId: accepted?.turnId, prompt, attachments });
-        return accepted;
-    }
-
-    async function cancelTurn() {
-        const turnId = selectedTurnId();
-        const sessionId = selectedRuntime()?.sessionId;
-        if (!sessionId) return null;
-        return requireApi('agentRuntimeCancelTurn')({ sessionId, turnId: turnId || undefined });
-    }
-
-    // Cancel a single tool call if the backend exposes a per-tool primitive;
-    // otherwise fall back to cancelling the whole turn that owns the call.  The
-    // Workbench UI only shows the cancel affordance while a tool is in flight.
-    async function cancelTool(toolCallId, turnId) {
-        const sessionId = selectedRuntime()?.sessionId;
-        if (!sessionId || !toolCallId) return null;
-        const cancelToolApi = runtimeApi['agentRuntimeCancelTool'];
-        if (typeof cancelToolApi === 'function') {
-            return cancelToolApi.call(runtimeApi, { sessionId, toolCallId });
-        }
-        if (!turnId) throw new Error('该工具事件缺少 Codex turnId，不能猜测并取消其他任务');
-        return requireApi('agentRuntimeCancelTurn')({ sessionId, turnId });
-    }
-
-    async function steerTurn(prompt) {
-        const turnId = selectedTurnId();
-        const sessionId = selectedRuntime()?.sessionId;
-        if (!sessionId || !turnId) throw new Error('当前没有可插入指令的任务');
-        return requireApi('agentRuntimeSteerTurn')({ sessionId, turnId, prompt });
-    }
-
-    async function followUpTurn(prompt) {
-        const turnId = selectedTurnId();
-        const sessionId = selectedRuntime()?.sessionId;
-        if (!sessionId || !turnId) throw new Error('当前没有可追加后续指令的任务');
-        return requireApi('agentRuntimeFollowUpTurn')({ sessionId, turnId, prompt });
-    }
-
-    async function respondApproval(approval, decision) {
-        const result = await requireApi('agentRuntimeRespondApproval')({
-            approvalId: approval.approvalId,
-            decision,
-            ...(approval.scope ? { scope: approval.scope } : {}),
-            sessionId: approval.sessionId,
-            turnId: approval.turnId,
-            toolCallId: approval.toolCallId,
-            argumentsHash: approval.argumentsHash,
-            ...(Number.isFinite(Number(approval.generation)) ? { generation: Number(approval.generation) } : {}),
-        });
-        const key = `${approval.scope || approval.source || 'codex-native'}:${approval.approvalId}`;
-        store.setState({ approvals: store.getState().approvals.filter((item) => (
-            `${item.scope || item.source || 'codex-native'}:${item.approvalId}` !== key
-        )) });
-        return result;
-    }
-
-    async function respondInteraction(interaction, response) {
-        return requireApi('agentRuntimeRespondInteraction')({
-            source: interaction.source,
-            requestId: interaction.requestId,
-            kind: interaction.kind,
-            response,
-            ...(Number.isFinite(Number(interaction.generation)) ? { generation: Number(interaction.generation) } : {}),
-        });
-    }
-
-    async function respondToolboxApproval(approvalId, decision, generation) {
-        if (!approvalId) throw new Error('ToolBox 后端审批缺少 requestId');
-        return requireApi('agentRuntimeRespondApproval')({
-            approvalId,
-            decision,
-            scope: 'toolbox',
-            ...(Number.isFinite(Number(generation)) ? { generation: Number(generation) } : {}),
-        });
-    }
-
-    const workspaceListDirectory = (payload) => requireApi('agentWorkspaceListDirectory')(payload);
-    const workspaceReadPreview = (payload) => requireApi('agentWorkspaceReadPreview')(payload);
-    const workspaceSearchFiles = (payload) => requireApi('agentWorkspaceSearchFiles')(payload);
-    const workspaceStatPath = (payload) => requireApi('agentWorkspaceStatPath')(payload);
-    const workspacePerformPathAction = (payload) => requireApi('agentWorkspacePerformPathAction')(payload);
-    const workspaceCancel = (payload) => requireApi('agentWorkspaceCancel')(payload);
-
     async function initialize() {
         // Subscribe before reading the SQLite projection. The barrier belongs
         // to the Renderer and buffers any live Runtime frame that arrives

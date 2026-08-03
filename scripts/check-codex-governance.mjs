@@ -83,7 +83,10 @@ const controllerImplementationLineCount = fs.readFileSync(path.join(root, 'modul
 if (workbenchLineCount > 800) errors.push(`agent-workbench.js exceeds composition facade ceiling: ${workbenchLineCount} lines`);
 if (workbenchImplementationLineCount > 4300) errors.push(`agent-workbench-implementation.js exceeds temporary extraction ceiling: ${workbenchImplementationLineCount} lines`);
 if (controllerFacadeLineCount > 800) errors.push(`agent-workbench-controller.js exceeds controller facade ceiling: ${controllerFacadeLineCount} lines`);
-if (controllerImplementationLineCount > 1100) errors.push(`agent-workbench-controller-implementation.js exceeds temporary extraction ceiling: ${controllerImplementationLineCount} lines`);
+if (controllerImplementationLineCount > 600) errors.push(`agent-workbench-controller-implementation.js exceeds controller ceiling: ${controllerImplementationLineCount} lines`);
+const commandControllerPath = path.join(root, 'modules/ui-system/agent-workbench-command-controller.js');
+if (!fs.existsSync(commandControllerPath)) errors.push('Workbench command controller is missing');
+else if (fs.readFileSync(commandControllerPath, 'utf8').split(/\r?\n/).length > 900) errors.push('agent-workbench-command-controller.js exceeds module ceiling');
 const rendererFacadePath = 'modules/ui-system/agent-presentation/fork/agentMessageRenderer.js';
 const rendererImplementationPath = 'modules/ui-system/agent-presentation/fork/agentMessageRendererImplementation.js';
 const rendererStreamPath = 'modules/ui-system/agent-presentation/fork/agent-renderer-stream.js';
