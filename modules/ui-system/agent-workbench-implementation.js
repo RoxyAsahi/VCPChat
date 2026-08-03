@@ -36,6 +36,7 @@ import { createAgentWorkspaceView } from './agent-workspace-view.js';
 import { createAgentWorkbenchHeaderView } from './agent-workbench-header-view.js';
 import { createAgentWorkbenchAccountView } from './agent-workbench-account-view.js';
 import { createAgentActivityReadonlyView } from './agent-activity-readonly-view.js';
+import { createAgentWorkbenchSidebarView } from './agent-workbench-sidebar-view.js';
 
 // Build Agent identities are independent from normal-chat Agents. Keep Nova
 // visible synchronously while the authoritative Build catalog loads.
@@ -268,11 +269,6 @@ function mountWorkbench(container) {
         turnStarts: new Map(),
         topicCreating: false,
         profileConfigurationNotice: '',
-        // The Session sidebar is a stable DOM shell while its normal list is
-        // visible. Projection refreshes patch its rows in place so a
-        // background catalog read cannot discard the reader's scroll anchor,
-        // search control or selected row.
-        sessionSidebar: null,
         // This is deliberately a transient UI flow, not a second Session
         // store. SQLite remains the durable source of the Session projection;
         // the renderer only keeps the currently-open form and a small
@@ -293,8 +289,6 @@ function mountWorkbench(container) {
     // replace the newly selected Agent's history.
     let controlPlaneRequest = 0;
     let topicCatalogRequest = 0;
-    let topicSearchRequest = 0;
-    let topicSearchTimer = null;
     let workspaceSearchTimer = null;
     let topicMenuInstance = 0;
 
@@ -374,6 +368,7 @@ function mountWorkbench(container) {
             }),
         },
     });
+    let sidebarView = null;
 
     const run = async (work) => {
         try { await work(); } catch (error) {
@@ -1182,53 +1177,6 @@ function mountWorkbench(container) {
         };
     }
 
-    function patchSessionSidebar() {
-        const shell = state.sessionSidebar;
-        if (!shell || shell.agentId !== state.selectedAgent || state.tab !== 'sessions'
-            || state.topicManaging || state.topicSearchOpen || state.topicSearch.trim()) return false;
-        const { liveSessions, persistedTopics, selectedTopicId } = sessionSidebarEntries();
-        const desired = [
-            ...liveSessions.map((session) => ({ id: session.topicId, live: true, value: session })),
-            ...persistedTopics.map((topic) => ({ id: topic.id, live: false, value: topic })),
-        ];
-        // `children` avoids a JSDOM/Chromium `:scope` edge case and makes the
-        // ownership boundary explicit: only direct Topic rows participate in
-        // keyed reconciliation, never the empty/search status helpers.
-        const rows = [...shell.list.children].filter((row) => row.classList.contains('agent-chat-session-row'));
-        if (rows.length !== desired.length || rows.some((row, index) => row.dataset.topicId !== desired[index].id)) {
-            return false;
-        }
-
-        for (const [index, entry] of desired.entries()) {
-            const row = rows[index];
-            const active = entry.id === selectedTopicId;
-            const activity = sessionActivity(entry.id, entry.value.activity);
-            row.classList.toggle('active', active);
-            row.classList.toggle('active-topic-glowing', active);
-            row.classList.toggle('is-running', ['starting', 'running'].includes(activity));
-            row.classList.toggle('is-awaiting-approval', activity === 'awaiting-approval');
-            row.dataset.runtimeActivity = activity;
-            const avatar = row.querySelector('.agent-chat-session-avatar');
-            if (avatar) {
-                avatar.dataset.activity = activity;
-                avatar.classList.toggle('is-running', ['starting', 'running'].includes(activity));
-                avatar.classList.toggle('is-awaiting-approval', activity === 'awaiting-approval');
-            }
-            row.dataset.topicSearch = `${entry.value.title || entry.id} ${entry.value.model || ''}`.toLocaleLowerCase();
-            const title = row.querySelector('.topic-title-display');
-            if (title) title.textContent = entry.value.title || entry.id;
-            if (entry.live) {
-                const count = row.querySelector('.message-count');
-                if (count) count.textContent = active
-                    ? String(store.getState().messages.length)
-                    : activity === 'awaiting-approval' ? '!' : '';
-            } else {
-                row.title = entry.value.searchHit?.snippet || '';
-            }
-        }
-        return true;
-    }
-
     async function persistAgentProfileDefaults(payload) {
         const profile = selectedAgentProfile();
         if (!profile) throw new Error('请先选择 Build Agent');
@@ -1375,469 +1323,211 @@ function mountWorkbench(container) {
         return operation;
     }
 
-    function renderSidebar() {
+    function sidebarViewModel() {
         syncModelFromSelectedSession();
-        if (patchSessionSidebar()) return;
-        // A change of sidebar mode/form is intentionally a shell transition.
-        // Ordinary Topic refreshes take the keyed fast path above instead.
-        state.sessionSidebar = null;
-        // Topic selection is allowed to update the renderer projection, but
-        // it must not throw the conversation list back to its top.
-        const scrollTop = sidebar.scrollTop;
-        sidebar.replaceChildren();
-        const tabs = node('div', 'sidebar-tabs');
-        for (const [id, label] of [['agents', '助手'], ['sessions', '会话'], ['settings', '设置']]) {
-            const tab = node('button', `sidebar-tab-button${state.tab === id ? ' active' : ''}`, label);
-            tab.type = 'button';
-            tab.setAttribute('role', 'tab');
-            tab.setAttribute('aria-selected', String(state.tab === id));
-            tab.addEventListener('click', () => {
-                closeTopicContextMenu();
-                state.tab = id;
-                // Topic management is a transient renderer affordance. Never
-                // leave selection mode active while the Topic page is hidden.
-                if (id !== 'sessions') {
+        const { liveSessions, persistedTopics, selectedTopicId } = sessionSidebarEntries();
+        return {
+            tab: state.tab,
+            selectedAgent: state.selectedAgent,
+            selectedAgentName: selectedAgentProfile()?.name || state.selectedAgent,
+            agentCatalog: state.agentCatalog,
+            agentSearch: state.agentSearch,
+            topics: state.topics,
+            topicCreating: state.topicCreating,
+            topicManaging: state.topicManaging,
+            topicSelectedIds: new Set(state.topicSelectedIds),
+            showArchivedTopics: state.showArchivedTopics,
+            topicSearch: state.topicSearch,
+            topicSearchResults: state.topicSearchResults,
+            topicSearchLoading: state.topicSearchLoading,
+            topicSearchError: state.topicSearchError,
+            topicSearchOpen: state.topicSearchOpen,
+            topicListLoading: state.topicListLoading,
+            profileConfigurationRequired: profileNeedsConfiguration(),
+            profileConfigurationNotice: state.profileConfigurationNotice,
+            liveSessions: liveSessions.map((session) => ({
+                ...session,
+                activity: sessionActivity(session.topicId, session.activity),
+            })),
+            persistedTopics,
+            selectedTopicId,
+            selectedMessageCount: store.getState().messages.length,
+        };
+    }
+
+    function renderSettingsSidebarContent() {
+        return renderAgentSettingsPane({
+            state,
+            store,
+            activeSession,
+            sessionConfigRevisions,
+            selectedAgentProfile,
+            profileNeedsConfiguration,
+            persistWorkbenchSettings,
+            renderSidebar,
+            runtimeApi,
+            run,
+            refreshControlPlane,
+            notify,
+            controller,
+            refreshRecoveryOperations,
+            refreshTopicsForAgent,
+            node,
+            button,
+            sameAgent,
+            settingValue(targetKey, field, fallback) {
+                return settingsState.value(targetKey, field, fallback);
+            },
+            settingStatus(targetKey, fields) {
+                return settingsState.status(targetKey, fields);
+            },
+            scheduleTextSave(targetKey, field, callback) {
+                settingsState.schedule(targetKey, field, callback);
+            },
+            scheduleBudgetSave(callback) {
+                budgetAutosaveTimer = lifecycle.timeout('budget-autosave', callback, 500);
+            },
+        });
+    }
+
+    function ensureSidebarView() {
+        if (sidebarView) return sidebarView;
+        sidebarView = createAgentWorkbenchSidebarView({
+            element: sidebar,
+            accountView,
+            lifecycle,
+            actions: {
+                selectTab(id) {
+                    closeTopicContextMenu();
+                    state.tab = id;
+                    if (id !== 'sessions') {
+                        state.topicManaging = false;
+                        state.topicSelectedIds.clear();
+                        state.topicSearchOpen = false;
+                        state.topicSearch = '';
+                        state.topicSearchResults = [];
+                        state.topicSearchLoading = false;
+                        state.topicSearchError = '';
+                    }
+                    renderSidebar();
+                    if (id === 'sessions') run(() => refreshControlPlane());
+                    else if (id === 'settings') void refreshRecoveryOperations();
+                },
+                openNewSession: openNewTopicFlow,
+                toggleTopicManagement() {
+                    closeTopicContextMenu();
+                    state.topicManaging = !state.topicManaging;
+                    if (!state.topicManaging) state.topicSelectedIds.clear();
+                    renderSidebar();
+                },
+                toggleArchivedSessions() {
+                    closeTopicContextMenu();
+                    state.showArchivedTopics = !state.showArchivedTopics;
                     state.topicManaging = false;
                     state.topicSelectedIds.clear();
                     state.topicSearchOpen = false;
                     state.topicSearch = '';
                     state.topicSearchResults = [];
-                    state.topicSearchLoading = false;
-                    state.topicSearchError = '';
-                    topicSearchRequest += 1;
-                }
-                renderSidebar();
-                // Session projection metadata may have changed while
-                // this page was hidden. Opening the tab never creates a
-                // Session; it simply refreshes the selected Agent's history.
-                if (id === 'sessions') run(() => refreshControlPlane());
-                else if (id === 'settings') void refreshRecoveryOperations();
-            });
-            tabs.append(tab);
-        }
-        const content = node('div', 'sidebar-tab-content active agent-chat-sidebar-content');
-        if (state.tab === 'sessions') {
-            const header = node('div', 'topics-header-container');
-            const tools = node('div', 'next-ui-topic-tools');
-            // Keep the Topic toolbar structurally identical to the main
-            // chat's Topic toolbar. The callbacks deliberately stay local to
-            // the Workbench: Agent Sessions are SQLite/Codex-owned objects.
-            const add = visualActionButton('add', '新建会话', 'next-ui-create-topic-trigger', '新建会话');
-            add.disabled = state.topicCreating;
-            add.addEventListener('click', openNewTopicFlow);
-            const manage = visualActionButton('checklist', '管理会话', 'next-ui-topic-icon-trigger');
-            manage.disabled = state.showArchivedTopics;
-            manage.addEventListener('click', () => {
-                closeTopicContextMenu();
-                state.topicManaging = !state.topicManaging;
-                if (!state.topicManaging) state.topicSelectedIds.clear();
-                renderSidebar();
-            });
-            manage.classList.toggle('active', state.topicManaging);
-            manage.setAttribute('aria-pressed', String(state.topicManaging));
-            const searchTrigger = visualActionButton('search', '搜索会话', 'next-ui-topic-icon-trigger');
-            searchTrigger.setAttribute('aria-expanded', String(state.topicSearchOpen));
-            const archiveToggle = visualActionButton('archive', state.showArchivedTopics ? '返回当前会话' : '查看归档会话', 'next-ui-topic-icon-trigger');
-            archiveToggle.setAttribute('aria-pressed', String(state.showArchivedTopics));
-            archiveToggle.addEventListener('click', () => {
-                closeTopicContextMenu();
-                state.showArchivedTopics = !state.showArchivedTopics;
-                state.topicManaging = false;
-                state.topicSelectedIds.clear();
-                state.topicSearchOpen = false;
-                state.topicSearch = '';
-                state.topicSearchResults = [];
-                renderSidebar();
-                run(() => refreshTopicsForAgent(state.selectedAgent, state.showArchivedTopics));
-            });
-            tools.append(add, manage, searchTrigger, archiveToggle);
-
-            const { panel: searchPanel, input: search, close: closeSearch } = createSidebarSearchPanel(
-                'agentWorkbenchTopicSearchInput', '搜索 Agent 会话', '搜索会话...',
-                'next-ui-topic-search-close', '关闭会话搜索',
-            );
-            search.value = state.topicSearch;
-            closeSearch.title = '关闭搜索';
-            closeSearch.setAttribute('aria-label', '关闭会话搜索');
-            searchTrigger.setAttribute('aria-controls', search.id);
-            header.classList.toggle('is-searching', state.topicSearchOpen);
-            const setSearchOpen = (open, clear = !open) => {
-                state.topicSearchOpen = open;
-                searchTrigger.setAttribute('aria-expanded', String(open));
-                header.classList.toggle('is-searching', open);
-                if (clear) {
-                    state.topicSearch = '';
-                    state.topicSearchResults = [];
-                    state.topicSearchLoading = false;
-                    state.topicSearchError = '';
-                    topicSearchRequest += 1;
-                    search.value = '';
-                    applyTopicFilter();
-                }
-                if (open) queueMicrotask(() => search.focus());
-            };
-            searchTrigger.addEventListener('click', () => setSearchOpen(true, false));
-            closeSearch.addEventListener('click', () => setSearchOpen(false));
-            search.addEventListener('keydown', (event) => {
-                if (event.key === 'Escape') {
-                    event.preventDefault();
-                    setSearchOpen(false);
-                    searchTrigger.focus();
-                }
-            });
-            header.append(tools, searchPanel);
-            content.append(header);
-            if (profileNeedsConfiguration()) {
-                const warning = node('section', 'agent-chat-profile-configuration-warning');
-                warning.setAttribute('role', 'status');
-                warning.append(
-                    node('strong', '', '需要配置 Agent 提示词'),
-                    node('span', '', state.profileConfigurationNotice
-                        || `Agent「${selectedAgentProfile()?.name || state.selectedAgent}」缺少提示词，暂时不能新建会话。`),
-                );
-                const configure = button('去设置', 'secondary agent-chat-profile-configuration-action');
-                configure.addEventListener('click', () => {
-                    state.tab = 'settings';
                     renderSidebar();
-                });
-                warning.append(configure);
-                content.append(warning);
-            }
-            const list = node('ul', 'topic-list agent-chat-session-list');
-            const { liveSessions, persistedTopics: normalPersistedTopics, selectedTopicId } = sessionSidebarEntries();
-            const indexedTopics = state.topicSearch.trim()
-                ? state.topicSearchResults.map((hit) => ({
-                    id: hit.topicId,
-                    title: hit.title || hit.topicId,
-                    agentId: hit.agentId || state.selectedAgent,
-                    inUse: hit.inUse === true,
-                    readOnly: hit.readOnly === true,
-                    model: hit.model || '',
-                    workspaceRef: hit.workspaceRef || '',
-                    updatedAt: hit.updatedAt || hit.timestamp || 0,
-                    searchHit: hit,
-                }))
-                : normalPersistedTopics;
-            const persistedTopics = indexedTopics.filter((topic) => !liveSessions.some((session) => session.topicId === topic.id));
-            if (!state.topicSearch.trim() && !liveSessions.length && !persistedTopics.length) {
-                if (state.topicListLoading) {
-                    for (let index = 0; index < 4; index += 1) {
-                        list.append(node('li', 'topic-item agent-chat-session-row agent-chat-session-skeleton', ''));
+                    run(() => refreshTopicsForAgent(state.selectedAgent, state.showArchivedTopics));
+                },
+                setTopicSearchOpen(open, clear) {
+                    state.topicSearchOpen = open;
+                    if (clear) {
+                        state.topicSearch = '';
+                        state.topicSearchResults = [];
+                        state.topicSearchLoading = false;
+                        state.topicSearchError = '';
                     }
-                } else {
-                    list.append(node('li', 'agent-chat-empty-list', state.showArchivedTopics
-                        ? `${state.selectedAgent || '当前 Agent'} 没有已归档会话。`
-                        : `${state.selectedAgent || '当前 Agent'} 还没有会话。创建一个会话后即可开始。`));
-                }
-            }
-            for (const session of liveSessions) {
-                const active = session.topicId === selectedTopicId;
-                // Keep this deliberately isomorphic to topicListManager's main
-                // chat rows.  The only different bit is the select callback.
-                const activity = sessionActivity(session.topicId, session.activity);
-                const row = node('li', `topic-item agent-chat-session-row${active ? ' active active-topic-glowing' : ''}${['starting', 'running'].includes(activity) ? ' is-running' : ''}${activity === 'awaiting-approval' ? ' is-awaiting-approval' : ''}`);
-                row.tabIndex = 0;
-                row.dataset.itemId = session.agentId || state.selectedAgent || 'Nova';
-                row.dataset.itemType = 'agent-runtime';
-                row.dataset.topicId = session.topicId;
-                row.dataset.topicInUse = 'false';
-                row.dataset.runtimeActivity = activity;
-                row.dataset.topicSearch = `${session.title} ${session.model}`.toLocaleLowerCase();
-                const avatar = createSessionAvatar(session.topicId, session.agentId || state.selectedAgent,
-                    `${state.selectedAgent || 'Nova'} - ${session.title}`, activity);
-                const title = node('span', 'topic-title-display', session.title);
-                const count = node('span', 'message-count', active
-                    ? String(store.getState().messages.length)
-                    : activity === 'awaiting-approval' ? '!' : '');
-                row.append(avatar, title, count);
-                // The row represents a live Session Runtime. Its transcript is
-                // still rebuilt only from the durable Session projection.
-                row.addEventListener('click', () => run(() => controller.hydrateTopic(session.topicId, session, null, session.agentId)));
-                if (!state.topicManaging && session.topicId) {
-                    appendTopicActions(row, {
-                        id: session.topicId,
-                        title: session.title,
-                        agentId: session.agentId,
-                        model: session.model,
-                        workspaceRef: session.workspaceRoot,
-                        inUse: false,
-                    }, { live: true });
-                }
-                list.append(row);
-            }
-            // Persisted Sessions render with the same main-chat row contract.
-            // Selection changes only the SQLite projection being viewed.
-            for (const topic of persistedTopics) {
-                const selectable = true;
-                const selected = state.topicSelectedIds.has(topic.id);
-                const active = topic.id === selectedTopicId;
-                const row = node('li', `topic-item agent-chat-session-row agent-chat-persisted-topic${selected ? ' selected' : ''}${active ? ' active active-topic-glowing' : ''}`);
-                row.tabIndex = 0;
-                row.dataset.itemId = topic.agentId || state.selectedAgent || 'Nova';
-                row.dataset.itemType = 'agent-topic';
-                row.dataset.topicId = topic.id;
-                row.dataset.topicSearch = `${topic.title || topic.id} ${topic.model || ''}`.toLocaleLowerCase();
-                const avatar = createSessionAvatar(topic.id, topic.agentId || state.selectedAgent,
-                    `${topic.agentId || 'Nova'} - ${topic.title || topic.id}`);
-                const title = node('span', 'topic-title-display', topic.title || topic.id);
-                const status = topic.searchHit ? node('span', 'message-count', '匹配') : null;
-                if (topic.searchHit?.snippet) row.title = topic.searchHit.snippet;
-                row.append(avatar, title);
-                if (status) row.append(status);
-                if (selectable) {
-                    const selectIcon = node('span', 'vcp-ui-icon next-ui-topic-select-icon', selected ? 'check_box' : 'check_box_outline_blank');
-                    selectIcon.setAttribute('aria-hidden', 'true');
-                    row.prepend(selectIcon);
-                }
-                row.setAttribute('aria-selected', String(selected));
-                row.addEventListener('click', (event) => run(async () => {
-                    if (event.target.closest('.agent-chat-session-menu')) return;
-                    if (state.topicManaging) {
-                        if (!selectable) return;
-                        if (state.topicSelectedIds.has(topic.id)) state.topicSelectedIds.delete(topic.id);
-                        else state.topicSelectedIds.add(topic.id);
-                        renderSidebar();
-                        return;
-                    }
+                    renderSidebar();
+                },
+                setTopicSearch(query, { loading, error, render = false } = {}) {
+                    state.topicSearch = query;
+                    state.topicSearchLoading = Boolean(loading);
+                    state.topicSearchError = error || '';
+                    if (!query) state.topicSearchResults = [];
+                    if (render) renderSidebar();
+                },
+                searchSessions: (query, agentId, limit) => controller.searchTopics(query, agentId, limit),
+                finishTopicSearch(query, { hits = [], error = '' } = {}) {
+                    if (query !== state.topicSearch.trim()) return;
+                    state.topicSearchResults = Array.isArray(hits) ? hits : [];
+                    state.topicSearchLoading = false;
+                    state.topicSearchError = error;
+                    renderSidebar();
+                    queueMicrotask(() => {
+                        const active = document.getElementById('agentWorkbenchTopicSearchInput');
+                        active?.focus();
+                        active?.setSelectionRange(active.value.length, active.value.length);
+                    });
+                },
+                createSessionAvatar,
+                appendTopicActions,
+                hydrateSession: (session) => run(() => controller.hydrateTopic(
+                    session.topicId, session, null, session.agentId,
+                )),
+                previewSession: (topic) => run(async () => {
                     await controller.previewTopic(topic.id, topic.agentId, topic);
                     rememberTopic({ topicId: topic.id });
-                }));
-                if (!state.topicManaging) appendTopicActions(row, topic);
-                list.append(row);
-            }
-            const applyTopicFilter = () => {
-                const query = search.value.trim().toLocaleLowerCase();
-                state.topicSearch = search.value;
-                for (const row of list.querySelectorAll('[data-topic-search]')) {
-                    row.hidden = Boolean(query) && !state.topicSearchResults.length && !row.dataset.topicSearch.includes(query);
-                }
-            };
-            search.addEventListener('input', () => {
-                applyTopicFilter();
-                lifecycle.clear('topic-search');
-                const query = search.value.trim();
-                const request = ++topicSearchRequest;
-                if (!query) {
-                    state.topicSearchResults = [];
-                    state.topicSearchLoading = false;
-                    state.topicSearchError = '';
+                }),
+                toggleTopicSelection(sessionId) {
+                    if (state.topicSelectedIds.has(sessionId)) state.topicSelectedIds.delete(sessionId);
+                    else state.topicSelectedIds.add(sessionId);
                     renderSidebar();
-                    return;
-                }
-                state.topicSearchLoading = true;
-                state.topicSearchError = '';
-                topicSearchTimer = lifecycle.timeout('topic-search', () => run(async () => {
-                    try {
-                        const hits = await controller.searchTopics(query, state.selectedAgent, 50);
-                        if (request !== topicSearchRequest || query !== state.topicSearch.trim()) return;
-                        state.topicSearchResults = Array.isArray(hits) ? hits : [];
-                    } catch (error) {
-                        if (request !== topicSearchRequest) return;
-                        state.topicSearchResults = [];
-                        state.topicSearchError = error?.message || String(error);
-                    } finally {
-                        if (request === topicSearchRequest) {
-                            state.topicSearchLoading = false;
-                            renderSidebar();
-                            queueMicrotask(() => {
-                                const active = document.getElementById('agentWorkbenchTopicSearchInput');
-                                active?.focus();
-                                active?.setSelectionRange(active.value.length, active.value.length);
-                            });
+                },
+                selectVisibleSessions(sessionIds, selected) {
+                    sessionIds.forEach((sessionId) => {
+                        if (selected) state.topicSelectedIds.add(sessionId);
+                        else state.topicSelectedIds.delete(sessionId);
+                    });
+                    renderSidebar();
+                },
+                archiveSelectedSessions(topics) {
+                    run(async () => {
+                        if (!topics.length || !window.confirm?.(`确定归档选中的 ${topics.length} 个 Agent 会话吗？`)) return;
+                        for (const topic of topics) {
+                            await controller.deleteTopic(topic.id, topic.agentId);
+                            forgetTopic(topic.id);
                         }
-                    }
-                }), 180);
-            });
-            applyTopicFilter();
-            const scroll = node('div', 'sidebar-list-scroll');
-            scroll.append(list);
-            if (state.topicSearchLoading) scroll.prepend(node('div', 'agent-chat-empty-list', '正在搜索 Agent 会话…'));
-            else if (state.topicSearchError) scroll.prepend(node('div', 'agent-chat-empty-list', `索引搜索不可用：${state.topicSearchError}`));
-            else if (state.topicSearch.trim() && !persistedTopics.length) scroll.prepend(node('div', 'agent-chat-empty-list', '没有匹配的 Agent Topic。'));
-            content.append(scroll);
-            if (state.topicManaging) {
-                content.classList.add('is-managing');
-                const panel = node('div', 'next-ui-topic-manage-panel agent-chat-topic-manage-panel');
-                panel.setAttribute('aria-hidden', 'false');
-                const selection = node('div', 'next-ui-topic-manage-selection');
-                const selectAll = button('', 'next-ui-topic-manage-button');
-                selectAll.title = '全选可归档会话';
-                selectAll.setAttribute('aria-label', '全选可归档会话');
-                const visibleSelectableIds = [...list.querySelectorAll('.agent-chat-persisted-topic[data-topic-id]')]
-                    .filter((row) => !row.hidden && !state.topics.find((topic) => topic.id === row.dataset.topicId)?.inUse)
-                    .map((row) => row.dataset.topicId);
-                const allSelected = visibleSelectableIds.length > 0
-                    && visibleSelectableIds.every((topicId) => state.topicSelectedIds.has(topicId));
-                selectAll.append(...icon(allSelected ? 'check_box' : 'check_box_outline_blank'));
-                selectAll.addEventListener('click', () => {
-                    if (allSelected) visibleSelectableIds.forEach((topicId) => state.topicSelectedIds.delete(topicId));
-                    else visibleSelectableIds.forEach((topicId) => state.topicSelectedIds.add(topicId));
-                    renderSidebar();
-                });
-                const selectionCount = node('span', 'agent-chat-topic-selection-count', `已选择 ${state.topicSelectedIds.size} 项`);
-                selectionCount.setAttribute('aria-live', 'polite');
-                selection.append(selectAll, selectionCount);
-                const actions = node('div', 'next-ui-topic-manage-actions');
-                const removeSelected = button('', 'next-ui-topic-manage-button danger');
-                removeSelected.title = '归档所选会话';
-                removeSelected.setAttribute('aria-label', '归档所选会话');
-                removeSelected.disabled = state.topicSelectedIds.size === 0;
-                removeSelected.append(...icon('delete'));
-                removeSelected.addEventListener('click', () => run(async () => {
-                    const selectedTopics = persistedTopics.filter((topic) => state.topicSelectedIds.has(topic.id));
-                    if (!selectedTopics.length) return;
-                    const confirmed = window.confirm?.(`确定归档选中的 ${selectedTopics.length} 个 Agent 会话吗？`);
-                    if (!confirmed) return;
-                    for (const topic of selectedTopics) {
-                        await controller.deleteTopic(topic.id, topic.agentId);
-                        forgetTopic(topic.id);
-                    }
-                    state.topicSelectedIds.clear();
-                    state.topicManaging = false;
-                    await refreshTopicsForAgent(agentId);
-                    notify(`已归档 ${selectedTopics.length} 个 Agent 会话。`, 'success');
-                }));
-                const exit = button('', 'next-ui-topic-manage-button');
-                exit.title = '退出管理';
-                exit.setAttribute('aria-label', '退出会话管理');
-                exit.append(...icon('close'));
-                exit.addEventListener('click', () => {
+                        state.topicSelectedIds.clear();
+                        state.topicManaging = false;
+                        await refreshTopicsForAgent(state.selectedAgent);
+                        notify(`已归档 ${topics.length} 个 Agent 会话。`, 'success');
+                    });
+                },
+                exitTopicManagement() {
                     state.topicManaging = false;
                     state.topicSelectedIds.clear();
                     renderSidebar();
-                });
-                actions.append(removeSelected, exit);
-                panel.append(selection, actions);
-                content.append(panel);
-            }
-            if (!state.topicManaging && !state.topicSearchOpen && !state.topicSearch.trim()) {
-                state.sessionSidebar = { tabs, content, header, list, scroll, agentId: state.selectedAgent };
-            }
-        } else if (state.tab === 'agents') {
-            const header = node('div', 'agents-header');
-            const tools = node('div', 'next-ui-agent-tools');
-            const add = visualActionButton('add', '新建 Build Agent', 'next-ui-create-item-trigger', '新建 Build Agent');
-            add.addEventListener('click', openNewAgentFlow);
-            const searchTrigger = visualActionButton('search', '搜索助手或群', 'next-ui-agent-search-trigger');
-            searchTrigger.setAttribute('aria-expanded', String(Boolean(state.agentSearch)));
-            tools.append(add, searchTrigger);
+                },
+                openNewAgent: openNewAgentFlow,
+                setAgentSearch(value) { state.agentSearch = value; },
+                selectAgent(agentId) {
+                    run(async () => {
+                        state.uxTimings.set(`agent-click:${agentCacheKey(agentId)}`, uxMark('agent-click', agentId));
+                        const current = store.getState();
+                        const sessionAgent = current.selectedTopic?.agentId;
+                        if (current.selectedSessionId && (!sessionAgent || !sameAgent(sessionAgent, agentId))) {
+                            controller.clearSelection();
+                        }
+                        selectAgent(agentId);
+                        state.tab = 'sessions';
+                        state.topicManaging = false;
+                        state.topicSelectedIds.clear();
+                        state.topicSearchOpen = false;
+                        state.topicSearch = '';
+                        queueRender({ shell: true, header: true, composer: true });
+                        await refreshControlPlane();
+                    });
+                },
+                renderSettings: renderSettingsSidebarContent,
+            },
+        });
+        return sidebarView;
+    }
 
-            const { panel: searchPanel, input: search, close: closeSearch } = createSidebarSearchPanel(
-                'agentWorkbenchSearchInput', '搜索助手或群', '搜索助手或群...',
-                'next-ui-agent-search-close', '关闭助手搜索',
-            );
-            search.value = state.agentSearch;
-            closeSearch.title = '关闭搜索';
-            closeSearch.setAttribute('aria-label', '关闭助手搜索');
-            searchTrigger.setAttribute('aria-controls', search.id);
-            const setSearchOpen = (open, clear = !open) => {
-                header.classList.toggle('is-searching', open);
-                searchTrigger.setAttribute('aria-expanded', String(open));
-                if (clear) {
-                    state.agentSearch = '';
-                    search.value = '';
-                }
-                if (open) queueMicrotask(() => search.focus());
-            };
-            searchTrigger.addEventListener('click', () => setSearchOpen(true, false));
-            closeSearch.addEventListener('click', () => setSearchOpen(false));
-            search.addEventListener('input', () => {
-                state.agentSearch = search.value;
-                for (const row of list.querySelectorAll('[data-agent-search]')) {
-                    row.hidden = Boolean(state.agentSearch.trim())
-                        && !row.dataset.agentSearch.includes(state.agentSearch.trim().toLocaleLowerCase());
-                }
-            });
-            search.addEventListener('keydown', (event) => {
-                if (event.key === 'Escape') {
-                    event.preventDefault();
-                    setSearchOpen(false);
-                    searchTrigger.focus();
-                }
-            });
-            header.append(tools, searchPanel);
-            content.append(header);
-            const list = node('ul', 'agent-list agent-chat-agent-list');
-            for (const agent of state.agentCatalog) {
-                const agentId = agent.id || agent.name;
-                const row = node('li', `agent-chat-agent-row${sameAgent(agentId, state.selectedAgent) ? ' active' : ''}${agent.configurationRequired ? ' configuration-required' : ''}`);
-                row.tabIndex = 0;
-                row.dataset.agentSearch = `${agent.name || ''} ${agentId || ''}`.toLocaleLowerCase();
-                const avatar = document.createElement('img');
-                avatar.className = 'avatar';
-                avatar.src = agent.avatarUrl || 'assets/default_avatar.png';
-                avatar.alt = `${agent.name || agentId} 头像`;
-                avatar.onerror = () => { avatar.src = 'assets/default_avatar.png'; };
-                row.append(avatar, node('span', 'agent-name', agent.name || agentId));
-                if (agent.configurationRequired) {
-                    const warning = node('span', 'vcp-ui-icon agent-chat-agent-configuration-icon', 'warning');
-                    warning.title = '缺少 Agent 提示词';
-                    warning.setAttribute('aria-label', '缺少 Agent 提示词');
-                    row.append(warning);
-                }
-                row.addEventListener('click', () => run(async () => {
-                    state.uxTimings.set(`agent-click:${agentCacheKey(agentId)}`, uxMark('agent-click', agentId));
-                    const currentSelection = store.getState();
-                    const selectedSessionAgent = currentSelection.selectedTopic?.agentId;
-                    if (currentSelection.selectedSessionId
-                        && (!selectedSessionAgent || !sameAgent(selectedSessionAgent, agentId))) {
-                        controller.clearSelection();
-                    }
-                    selectAgent(agentId);
-                    // Selecting an Agent is a browse action, not an implicit
-                    // create-session action. Go straight to its durable SQLite
-                    // Session catalog so prior history is visible immediately.
-                    state.tab = 'sessions';
-                    state.topicManaging = false;
-                    state.topicSelectedIds.clear();
-                    state.topicSearchOpen = false;
-                    state.topicSearch = '';
-                    queueRender({ shell: true, header: true, composer: true });
-                    await refreshControlPlane();
-                }));
-                list.append(row);
-            }
-            if (!state.agentCatalog.length) list.append(node('li', 'agent-chat-empty-list', '正在读取 Agent 目录…'));
-            const scroll = node('div', 'sidebar-list-scroll');
-            scroll.append(list);
-            content.append(scroll);
-        } else {
-            content.append(renderAgentSettingsPane({
-                state,
-                store,
-                activeSession,
-                sessionConfigRevisions,
-                selectedAgentProfile,
-                profileNeedsConfiguration,
-                persistWorkbenchSettings,
-                renderSidebar,
-                runtimeApi,
-                run,
-                refreshControlPlane,
-                notify,
-                controller,
-                refreshRecoveryOperations,
-                refreshTopicsForAgent,
-                node,
-                button,
-                sameAgent,
-                settingValue(targetKey, field, fallback) {
-                    return settingsState.value(targetKey, field, fallback);
-                },
-                settingStatus(targetKey, fields) {
-                    return settingsState.status(targetKey, fields);
-                },
-                scheduleTextSave(targetKey, field, callback) {
-                    settingsState.schedule(targetKey, field, callback);
-                },
-                scheduleBudgetSave(callback) {
-                    budgetAutosaveTimer = lifecycle.timeout('budget-autosave', callback, 500);
-                },
-            }));
-        }
-        accountView.update();
-        sidebar.append(tabs, content, accountView.element);
-        if (sidebar.scrollTop !== scrollTop) sidebar.scrollTop = scrollTop;
+    function renderSidebar() {
+        ensureSidebarView().update(sidebarViewModel());
     }
 
     function renderTopicFlow() {
@@ -3357,6 +3047,7 @@ function mountWorkbench(container) {
         activityReadonlyView.dispose();
         workspaceView.dispose();
         headerView.dispose();
+        sidebarView?.dispose();
         accountView.dispose();
         composerView.dispose();
         runStatusView.dispose();
