@@ -402,6 +402,19 @@ try {
             }
         }
     }
+    await page.reload({ waitUntil: 'domcontentloaded', timeout: timeoutMs });
+    await page.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout: timeoutMs });
+    const settingsAfterReload = await page.evaluate(async (sessionId) => {
+        const config = await (window.chatAPI || window.electronAPI).agentRuntimeReadSessionConfig({ sessionId });
+        return {
+            permissionMode: config.desiredConfig?.permissionMode,
+            workspaceRoot: config.desiredConfig?.workspaceRoot,
+        };
+    }, settingsSessionId);
+    assert.deepEqual(settingsAfterReload, {
+        permissionMode: 'always-approve',
+        workspaceRoot: settingsWorkspace,
+    }, 'Renderer reload must read the saved Session config from SQLite instead of restoring an old UI default');
     await page.evaluate(async () => (window.chatAPI || window.electronAPI).agentRuntimeStop());
     console.log(JSON.stringify(result));
 } finally {
