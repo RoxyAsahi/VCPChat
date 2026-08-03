@@ -8,7 +8,7 @@ import {
     reconcileAgentTimeline,
 } from './agent-workbench-timeline.js';
 import { createAgentBlockPresentation, createAgentMessagePresentation } from './agent-presentation/index.js';
-import { createWorkspacePathRef, createWorkspaceTreeModel, structuredWorkspacePaths } from './agent-workspace-model.js';
+import { createWorkspacePathRef, createWorkspaceTreeModel } from './agent-workspace-model.js';
 import { createSessionDockModel } from './agent-session-dock.js';
 import { renderPendingInputQueue } from './agent-workbench-queue.js';
 import { createAgentComposerState } from './agent-composer-state.js';
@@ -31,6 +31,7 @@ import {
 } from './agent-workbench-dom.js';
 import { createAgentWorkbenchShellView } from './agent-workbench-shell-view.js';
 import { createAgentWorkbenchRunStatusView } from './agent-workbench-run-status-view.js';
+import { createAgentWorkbenchComposerView } from './agent-workbench-composer-view.js';
 
 // Build Agent identities are independent from normal-chat Agents. Keep Nova
 // visible synchronously while the authoritative Build catalog loads.
@@ -271,64 +272,6 @@ function isFollowingContainer(container) {
     return bridge ? bridge.isNearBottom(container, 48) : (container.scrollTop + container.clientHeight >= container.scrollHeight - 48);
 }
 
-function formatAttachmentSize(bytes) {
-    const value = Number(bytes) || 0;
-    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)} MB`;
-    if (value >= 1_000) return `${Math.round(value / 1_000)} KB`;
-    return `${value} B`;
-}
-
-function attachmentKindLabel(attachment) {
-    switch (attachment?.kind) {
-    case 'audio': return '音频';
-    case 'video': return '视频';
-    default: return '图片';
-    }
-}
-
-function attachmentKindIcon(attachment) {
-    switch (attachment?.kind) {
-    case 'audio': return 'audiotrack';
-    case 'video': return 'movie';
-    default: return 'image';
-    }
-}
-
-function attachmentMetadata(attachment) {
-    const dimensions = attachment?.kind === 'image'
-        ? `${attachment.width || '?'}×${attachment.height || '?'}`
-        : attachmentKindLabel(attachment);
-    return `${dimensions} · ${formatAttachmentSize(attachment?.byteLen)}`;
-}
-
-function createAttachmentChips(attachments, onRemove = null, onWorkspacePath = null) {
-    const list = node('div', 'agent-chat-attachment-list');
-    list.setAttribute('aria-label', '媒体附件');
-    attachments.forEach((attachment, index) => {
-        const chip = node('div', 'agent-chat-attachment-chip');
-        const summary = node('div', 'agent-chat-attachment-summary');
-        summary.append(
-            ...icon(attachmentKindIcon(attachment)),
-            node('span', 'agent-chat-attachment-name', attachment.displayName || attachmentKindLabel(attachment)),
-            node('span', 'agent-chat-attachment-meta', attachmentMetadata(attachment)),
-        );
-        chip.append(summary);
-        const relativePath = structuredWorkspacePaths(attachment, 1)[0];
-        if (relativePath && typeof onWorkspacePath === 'function') {
-            const open = visualActionButton('draft', `在工作区预览 ${relativePath}`, 'agent-chat-attachment-open-workspace');
-            open.addEventListener('click', () => onWorkspacePath(relativePath));
-            chip.append(open);
-        }
-        if (onRemove) {
-            const remove = visualActionButton('close', `移除 ${attachment.displayName || '附件'}`, 'agent-chat-attachment-remove');
-            remove.addEventListener('click', () => onRemove(index));
-            chip.append(remove);
-        }
-        list.append(chip);
-    });
-    return list;
-}
-
 function mountWorkbench(container) {
     const lifecycle = createWorkbenchLifecycle(window);
     const controller = createWorkbenchController(runtimeApi());
@@ -490,6 +433,7 @@ function mountWorkbench(container) {
         activityPanel, activitySplitter, activityTabs, activityAdd, activityContent, activityTabRow,
     } = shellView.refs;
     const runStatusView = createAgentWorkbenchRunStatusView({ refs: shellView.refs, lifecycle });
+    const composerView = createAgentWorkbenchComposerView({ refs: shellView.refs, document });
 
     const run = async (work) => {
         try { await work(); } catch (error) {
@@ -3759,33 +3703,13 @@ function mountWorkbench(container) {
         const isStartingTurn = Boolean(pendingTurnStart && !hasActiveTurn);
         const canSend = Boolean(composerReady && (composerState.draft.trim()
             || (!hasActiveTurn && composerState.attachments.length)));
-        input.value = composerState.draft;
-        input.disabled = !composerReady || isStartingTurn;
-        sendButton.disabled = !composerReady || isStartingTurn || !canSend;
-        // Attachment import is a Session-scoped Main operation and does not
-        // require resuming the Codex Thread. It remains available in a normal
-        // SQLite preview, but never for archived or actively running Sessions.
-        attachButton.disabled = !composerReady || hasActiveTurn || composerState.attachments.length >= 8;
-        attachmentTray.replaceChildren();
-        if (composerState.attachments.length) {
-            attachmentTray.append(createAttachmentChips(composerState.attachments, (index) => {
-                const next = composerState.attachments.slice();
-                next.splice(index, 1);
-                state.composerStateBySession.setAttachments(sessionId, next);
-                renderComposer();
-            }));
-        }
-        // Keep the main chat's original SVG / icon hierarchy intact.  Replacing
-        // it on every streaming update was the source of the wrong button size.
-        sendButton.title = hasActiveTurn
+        const sendTitle = hasActiveTurn
             ? (composerState.activeInputMode === 'steer' ? '立即调整当前任务' : '排队到当前任务完成后')
             : '发送消息';
-        sendButton.setAttribute('aria-label', hasActiveTurn
+        const sendLabel = hasActiveTurn
             ? (composerState.activeInputMode === 'steer' ? '立即调整当前任务' : '排队后续指令')
-            : '发送消息');
-        const sendIcon = sendButton.querySelector('.vcp-ui-icon');
-        if (sendIcon) sendIcon.textContent = 'arrow_upward';
-        input.placeholder = selectedArchived
+            : '发送消息';
+        const placeholder = selectedArchived
             ? '该会话已归档；恢复后才能继续发送。'
             : isStartingTurn
             ? (pendingTurnStart?.phase === 'thinking' ? '正在思考…' : '正在启动 Agent…')
@@ -3802,22 +3726,36 @@ function mountWorkbench(container) {
                     ? '输入要立即调整的指令…'
                     : '输入任务完成后继续执行的指令…')
                 : '输入消息…（Shift + Enter 换行）';
-        inputCard.classList.toggle('is-busy', hasActiveTurn);
-        sendButton.classList.remove('interrupt-mode');
-        sendButton.classList.toggle('is-ready', canSend);
-        runningModes.hidden = !hasActiveTurn;
-        steerModeButton.classList.toggle('is-active', composerState.activeInputMode === 'steer');
-        followUpModeButton.classList.toggle('is-active', composerState.activeInputMode === 'follow-up');
         const snapshot = current.selectedTopic?.configSnapshot || {};
         const instructionLabel = snapshot.instructionMode === 'codex-managed' ? 'Codex 指令' : 'VChat 身份';
         const reasoningLabel = snapshot.reasoningEffort ? `推理 ${snapshot.reasoningEffort}` : '推理 默认';
-        composerConfig.textContent = `${snapshot.model || state.model || '模型默认'} · ${state.permissionMode === 'always-approve' ? '本地自动允许' : '逐次审批'} · ${instructionLabel} · ${reasoningLabel}`;
-        composerConfig.disabled = !sessionId;
         const permissionLabel = state.permissionMode === 'always-approve' ? '本地审批：YOLO（设置）' : '本地审批：逐次确认（设置）';
-        permissionsButton.title = permissionLabel;
-        permissionsButton.setAttribute('aria-label', permissionLabel);
-        permissionsButton.classList.toggle('is-active', state.permissionMode === 'always-approve');
-        newButton.disabled = state.topicCreating;
+        composerView.update({
+            draft: composerState.draft,
+            inputDisabled: !composerReady || isStartingTurn,
+            sendDisabled: !composerReady || isStartingTurn || !canSend,
+            // Attachment import is Session-scoped and remains available in a
+            // normal SQLite preview, but never for archived/running Sessions.
+            attachDisabled: !composerReady || hasActiveTurn || composerState.attachments.length >= 8,
+            attachments: composerState.attachments,
+            removeAttachment: (index) => {
+                const next = composerState.attachments.slice();
+                next.splice(index, 1);
+                state.composerStateBySession.setAttachments(sessionId, next);
+                renderComposer();
+            },
+            sendTitle,
+            sendLabel,
+            placeholder,
+            busy: hasActiveTurn,
+            ready: canSend,
+            inputMode: composerState.activeInputMode,
+            configText: `${snapshot.model || state.model || '模型默认'} · ${state.permissionMode === 'always-approve' ? '本地自动允许' : '逐次审批'} · ${instructionLabel} · ${reasoningLabel}`,
+            configDisabled: !sessionId,
+            permissionLabel,
+            permissionActive: state.permissionMode === 'always-approve',
+            newDisabled: state.topicCreating,
+        });
         syncRunStatus(current);
     }
 
@@ -3971,6 +3909,7 @@ function mountWorkbench(container) {
         closeTopicContextMenu();
         state.accountThemeObserver?.disconnect();
         fullPresentation.dispose();
+        composerView.dispose();
         runStatusView.dispose();
         lifecycle.dispose();
         unsubscribe();
