@@ -159,6 +159,18 @@ for (const relative of identityBoundaryFiles) {
 const runtimeFacadeLineCount = fs.readFileSync(path.join(root, 'modules/codex-runtime/runtimeManager.js'), 'utf8').split(/\r?\n/).length;
 if (runtimeFacadeLineCount > 600) errors.push(`runtimeManager.js exceeds facade ceiling: ${runtimeFacadeLineCount} lines`);
 const runtimeManagerSource = fs.readFileSync(path.join(root, 'modules/codex-runtime/runtimeManagerImplementation.js'), 'utf8');
+const runtimeNormalizersPath = path.join(root, 'modules/codex-runtime/runtime-normalizers.js');
+if (!fs.existsSync(runtimeNormalizersPath)) {
+    errors.push('Runtime pure normalizers module is missing');
+} else {
+    const normalizerLines = fs.readFileSync(runtimeNormalizersPath, 'utf8').split(/\r?\n/).length;
+    if (normalizerLines > 900) errors.push(`runtime-normalizers.js exceeds module ceiling: ${normalizerLines} lines`);
+    for (const requiredExport of ['decodeVcpInvokeCall', 'normalizeInteractionResponse', 'normalizeApprovalPolicy', 'sanitizeToolboxValue']) {
+        if (!runtimeNormalizersPath || !fs.readFileSync(runtimeNormalizersPath, 'utf8').includes(requiredExport)) {
+            errors.push(`runtime-normalizers.js missing ${requiredExport}`);
+        }
+    }
+}
 if (!runtimeManagerSource.includes('async updateSessionConfig(')
     || !runtimeManagerSource.includes('SESSION_IDENTITY_MISMATCH')) {
     errors.push('Runtime manager must expose an explicit Session config API and reject conflicting legacy identity');
