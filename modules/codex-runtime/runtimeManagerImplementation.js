@@ -16,6 +16,7 @@ const { RuntimeToolboxService } = require('./runtime-toolbox-service');
 const { RuntimeRecoveryService } = require('./runtime-recovery-service');
 const { RuntimeSessionService } = require('./runtime-session-service');
 const { RuntimeTurnService } = require('./runtime-turn-service');
+const { RuntimeConfigService } = require('./runtime-config-service');
 const { normalizeProfile, normalizeSessionConfig, PROFILE_SCHEMA_VERSION } = require('./dataContracts');
 const {
     instructionConfigChanged,
@@ -225,6 +226,30 @@ class CodexRuntimeManager extends EventEmitter {
             startTurnOverride: () => this._startTurn,
             defaultStartTurnMethod: () => this._defaultStartTurnMethod,
         });
+        this.configService = new RuntimeConfigService({
+            ensureProjectionStore: () => this.ensureProjectionStore(),
+            assertProjectionWritable: () => this._assertProjectionWritable(),
+            repository: () => this.repository,
+            transport: () => this.transport,
+            start: () => this.start(),
+            captureGeneration: () => this._captureGeneration(),
+            assertGeneration: (generation) => this._assertGeneration(generation),
+            resumeSession: (session) => this._resumeSession(session),
+            createSession: (options) => this.createTopic(options),
+            getSettings: () => this.getSettings() || {},
+            setSettings: () => this.setSettings,
+            projectRoot: () => this.projectRoot,
+            getModels: () => this.getModels?.() || [],
+            validateReasoningEffort: (model, effort, options) => this._validateReasoningEffort(model, effort, options),
+            reasoningEffortsForModel: (model) => this._reasoningEffortsForModel(model),
+            sendUiEvent: (event) => this._sendUiEvent(event),
+            setLastError: (error) => { this.lastError = error; },
+            configApplyPromises: () => this.configApplyPromises,
+            configApplyTargets: () => this.configApplyTargets,
+            resumedThreadIds: () => this.resumedThreadIds,
+            threadStates: () => this.threadStates,
+            runtimeGeneration: () => this.runtimeGeneration,
+        });
     }
 
     getStatus() {
@@ -353,6 +378,7 @@ class CodexRuntimeManager extends EventEmitter {
     async stop() {
         this.state = 'stopping';
         this.intentionalStop = true;
+        this.configService?.clearScheduledApplies();
         this.lifecycle.invalidate('VChat Agent Runtime stopped');
         this.runtimeGeneration = this.lifecycle.value;
         this.generationScope = this.lifecycle.capture();
@@ -834,307 +860,31 @@ class CodexRuntimeManager extends EventEmitter {
         };
     }
     getWorkbenchSettings() {
-        const settings = this.getSettings() || {};
-        return {
-            runtime: 'codex-app-server',
-            driver: 'codex',
-            // This is a default for a *new* Session.  A selected Session has
-            // its own frozen configuration in the projection database.
-            permissionMode: normalizePermissionMode(
-                settings.agentRuntime?.codex?.permissionMode
-                    || settings.agentRuntime?.codex?.approvalPolicy,
-            ),
-            model: settings.agentRuntime?.codex?.model
-                || settings.agentRuntime?.tui?.defaultModel
-                || null,
-        };
+        return this.configService.getWorkbenchSettings();
     }
 
     async updateWorkbenchSettings(settings = {}) {
-        this.ensureProjectionStore();
-        this._assertProjectionWritable();
-        const hasPermissionUpdate = Object.prototype.hasOwnProperty.call(settings, 'permissionMode');
-        const permissionMode = hasPermissionUpdate
-            ? (settings.permissionMode === 'always-approve' ? 'always-approve' : 'ask')
-            : null;
-        const requestedModel = typeof settings.model === 'string' && settings.model.trim()
-            ? settings.model.trim() : null;
-        const hasReasoningUpdate = Object.prototype.hasOwnProperty.call(settings, 'reasoningEffort');
-        const hasSystemPromptUpdate = Object.prototype.hasOwnProperty.call(settings, 'systemPrompt');
-        const hasBaseInstructionsUpdate = Object.prototype.hasOwnProperty.call(settings, 'baseInstructions');
-        const requestedSystemPrompt = (hasSystemPromptUpdate || hasBaseInstructionsUpdate)
-            ? String(settings.baseInstructions ?? settings.systemPrompt ?? '').trim() : null;
-        const hasInstructionModeUpdate = Object.prototype.hasOwnProperty.call(settings, 'instructionMode');
-        const hasDeveloperInstructionsUpdate = Object.prototype.hasOwnProperty.call(settings, 'developerInstructions');
-        const hasPersonalityUpdate = Object.prototype.hasOwnProperty.call(settings, 'personality');
-        const hasWorkspaceUpdate = Object.prototype.hasOwnProperty.call(settings, 'workspaceRoot');
-        let requestedWorkspaceRoot = null;
-        if (hasWorkspaceUpdate) {
-            requestedWorkspaceRoot = path.resolve(String(settings.workspaceRoot || '').trim() || this.projectRoot);
-            let workspaceStat = null;
-            try { workspaceStat = fs.statSync(requestedWorkspaceRoot); } catch { /* validated below */ }
-            if (!workspaceStat?.isDirectory()) {
-                throw new CodexAppServerError('INVALID_WORKSPACE', 'Workspace directory does not exist');
-            }
-        }
-        const sessionId = String(settings.sessionId || settings.topicId || '').trim();
-        let session = null;
-        if (sessionId) {
-            const current = this.repository.getSession(sessionId);
-            if (!current) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
-            const expectedRevision = Number(settings.expectedConfigRevision);
-            if (!Number.isInteger(expectedRevision) || expectedRevision < 1) {
-                throw new CodexAppServerError('SESSION_CONFIG_REVISION_REQUIRED', 'Session settings require expectedConfigRevision');
-            }
-            const nextInstructionMode = hasInstructionModeUpdate
-                ? normalizeInstructionMode(settings.instructionMode, requestedSystemPrompt)
-                : normalizeInstructionMode(current.configSnapshot?.instructionMode, current.configSnapshot?.baseInstructions);
-            const nextBaseInstructions = (hasSystemPromptUpdate || hasBaseInstructionsUpdate)
-                ? requestedSystemPrompt : String(current.configSnapshot?.baseInstructions || '');
-            const nextDeveloperInstructions = hasDeveloperInstructionsUpdate
-                ? String(settings.developerInstructions || '').trim()
-                : String(current.configSnapshot?.developerInstructions || '');
-            const nextPersonality = hasPersonalityUpdate
-                ? normalizePersonality(settings.personality)
-                : normalizePersonality(current.configSnapshot?.personality);
-            const currentInstructionMode = normalizeInstructionMode(
-                current.configSnapshot?.instructionMode,
-                current.configSnapshot?.baseInstructions,
-            );
-            const requestedConfig = {
-                ...(current.configSnapshot || {}),
-                instructionMode: nextInstructionMode,
-                baseInstructions: nextBaseInstructions,
-                developerInstructions: nextDeveloperInstructions,
-                personality: nextPersonality,
-            };
-            if (current.threadId && requiresFreshCodexManagedSession(
-                requestedConfig,
-                current.appliedRuntimeConfig || current.configSnapshot || {},
-            )) {
-                if (settings.createDerivedSession === true) {
-                    const derivedPermissionMode = permissionMode || normalizePermissionMode(
-                        current.configSnapshot?.permissionMode || current.configSnapshot?.approvalPolicy,
-                    );
-                    const derived = await this.createTopic({
-                        ...current.configSnapshot,
-                        ...requestedConfig,
-                        agentId: current.agentId,
-                        title: `${current.title || 'Agent Session'} (Codex managed)`,
-                        workspaceRoot: hasWorkspaceUpdate ? requestedWorkspaceRoot : current.workspaceRoot,
-                        permissionMode: derivedPermissionMode,
-                        approvalPolicy: normalizeApprovalPolicy(derivedPermissionMode),
-                        ...(requestedModel ? { model: requestedModel } : {}),
-                    });
-                    return {
-                        ...this.getWorkbenchSettings(),
-                        settings: {
-                            permissionMode: derivedPermissionMode,
-                            model: derived.configSnapshot?.model || null,
-                            reasoningEffort: normalizeReasoningEffort(derived.configSnapshot?.reasoningEffort),
-                        },
-                        session: compatibilitySession(derived),
-                        ...sessionConfigResult(derived),
-                        appliesTo: 'derived-session',
-                        createdDerivedSession: true,
-                        sourceSessionId: current.sessionId,
-                    };
-                }
-                throw new CodexAppServerError(
-                    'IDENTITY_CHANGE_REQUIRES_NEW_SESSION',
-                    'Codex 0.146 cannot clear persisted baseInstructions on this Thread; create a derived Session',
-                    { requiresDerivedSession: true, requestedConfig },
-                );
-            }
-            if (nextInstructionMode === 'vchat-identity' && !nextBaseInstructions) {
-                throw new CodexAppServerError('AGENT_IDENTITY_MISSING', 'VChat identity mode requires baseInstructions');
-            }
-            const currentPermissionMode = normalizePermissionMode(
-                current.configSnapshot?.permissionMode || current.configSnapshot?.approvalPolicy,
-            );
-            const nextModel = requestedModel || current.configSnapshot?.model || '';
-            const reasoning = hasReasoningUpdate
-                ? this._validateReasoningEffort(nextModel, settings.reasoningEffort)
-                : {
-                    effort: normalizeReasoningEffort(current.configSnapshot?.reasoningEffort),
-                    supported: Array.isArray(current.configSnapshot?.reasoningEfforts)
-                        ? current.configSnapshot.reasoningEfforts : this._reasoningEffortsForModel(nextModel),
-                };
-            const updated = this.repository.updateSessionConfig(sessionId, expectedRevision, {
-                workspaceRoot: hasWorkspaceUpdate ? requestedWorkspaceRoot : current.workspaceRoot,
-                configSnapshot: {
-                    ...(current.configSnapshot || {}),
-                    permissionMode: permissionMode || currentPermissionMode,
-                    approvalPolicy: normalizeApprovalPolicy(permissionMode || currentPermissionMode),
-                    ...(requestedModel ? { model: requestedModel } : {}),
-                    instructionMode: nextInstructionMode,
-                    baseInstructions: nextBaseInstructions,
-                    developerInstructions: nextDeveloperInstructions,
-                    personality: nextPersonality,
-                    reasoningEffort: reasoning.effort,
-                    reasoningEfforts: reasoning.supported,
-                },
-            });
-            if (!updated.updated) {
-                throw new CodexAppServerError('SESSION_CONFIG_CONFLICT', 'Session settings changed in another view', {
-                    current: updated.session,
-                });
-            }
-            session = updated.session;
-            this._sendSessionConfigEvent('session.config.saved', session);
-            this._scheduleSessionConfigApply(session.sessionId);
-        } else if ((requestedModel || hasPermissionUpdate) && this.setSettings) {
-            // Keep the global setting path narrow: this is only the default
-            // for future Sessions.  Existing Sessions always use their frozen
-            // configSnapshot and are never silently rewritten.
-            await this.setSettings((current) => ({
-                ...current,
-                agentRuntime: {
-                    ...(current?.agentRuntime || {}),
-                    codex: {
-                        ...(current?.agentRuntime?.codex || {}),
-                        ...(requestedModel ? { model: requestedModel } : {}),
-                        ...(hasPermissionUpdate ? { permissionMode } : {}),
-                    },
-                },
-            }));
-        }
-        const effectivePermissionMode = session
-            ? normalizePermissionMode(session.configSnapshot?.permissionMode || session.configSnapshot?.approvalPolicy)
-            : (permissionMode || this.getWorkbenchSettings().permissionMode);
-        const effectiveModel = session?.configSnapshot?.model || requestedModel || this.getWorkbenchSettings().model || null;
-        return {
-            ...this.getWorkbenchSettings(),
-            settings: {
-                permissionMode: effectivePermissionMode,
-                ...(effectiveModel ? { model: effectiveModel } : {}),
-                reasoningEffort: normalizeReasoningEffort(session?.configSnapshot?.reasoningEffort),
-            },
-            session: session ? compatibilitySession(session) : null,
-            desiredConfig: session?.configSnapshot || null,
-            appliedRuntimeConfig: session?.appliedRuntimeConfig || null,
-            configRevision: session?.configRevision || null,
-            appliedRuntimeConfigRevision: session?.appliedRuntimeConfigRevision || 0,
-            applyState: session?.configApplyState || null,
-            applyError: session?.configApplyError || null,
-            appliesTo: session ? 'next-turn' : 'new-sessions',
-        };
+        return this.configService.updateWorkbenchSettings(settings);
     }
 
     async updateSessionConfig({ sessionId, topicId, expectedConfigRevision, patch } = {}) {
-        const resolvedSessionId = resolveSessionIdInput({ sessionId, topicId });
-        if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
-            throw new CodexAppServerError('INVALID_INPUT', 'Session config patch must be an object');
-        }
-        const allowedFields = new Set([
-            'instructionMode', 'baseInstructions', 'systemPrompt',
-            'developerInstructions', 'personality', 'model',
-            'reasoningEffort', 'workspaceRoot', 'permissionMode',
-            'createDerivedSession',
-        ]);
-        const unknownFields = Object.keys(patch).filter((field) => !allowedFields.has(field));
-        if (unknownFields.length) {
-            throw new CodexAppServerError('INVALID_INPUT', `Unsupported Session config fields: ${unknownFields.join(', ')}`);
-        }
-        return this.updateWorkbenchSettings({
-            ...patch,
-            sessionId: resolvedSessionId,
-            expectedConfigRevision,
-        });
+        return this.configService.updateSessionConfig({ sessionId, topicId, expectedConfigRevision, patch });
     }
 
     readSessionConfig({ sessionId } = {}) {
-        this.ensureProjectionStore();
-        const session = this.repository.getSession(String(sessionId || '').trim());
-        if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
-        return sessionConfigResult(session);
+        return this.configService.readSessionConfig({ sessionId });
     }
 
     _sendSessionConfigEvent(type, session, error = null) {
-        if (!session) return;
-        this._sendUiEvent({
-            type,
-            topicId: session.sessionId,
-            sessionId: session.sessionId,
-            threadId: session.threadId || null,
-            payload: { ...sessionConfigResult(session), ...(error ? { error: String(error) } : {}) },
-        });
+        return this.configService.sendSessionConfigEvent(type, session, error);
     }
 
     _scheduleSessionConfigApply(sessionId) {
-        queueMicrotask(() => {
-            void this._applySessionRuntimeConfig(sessionId).catch((error) => {
-                this.lastError = serializeError(error);
-            });
-        });
+        return this.configService.scheduleApply(sessionId);
     }
 
     async _applySessionRuntimeConfig(sessionId, { barrier = false } = {}) {
-        const idValue = String(sessionId || '').trim();
-        if (this.configApplyPromises.has(idValue)) return this.configApplyPromises.get(idValue);
-        const apply = (async () => {
-            let session = this.repository.getSession(idValue);
-            if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
-            if (!session.threadId) return session;
-            if (session.appliedRuntimeConfigRevision === session.configRevision
-                && session.configApplyState === 'applied') return session;
-            const desired = normalizeSessionConfig(session.configSnapshot || {});
-            const applied = normalizeSessionConfig(session.appliedRuntimeConfig || {});
-            if (requiresFreshCodexManagedSession(desired, applied)) {
-                const error = new CodexAppServerError('IDENTITY_CHANGE_REQUIRES_NEW_SESSION',
-                    'Codex-managed instructions require a derived Session for this Thread');
-                session = this.repository.markSessionConfigFailed(idValue, session.configRevision, error.message);
-                this._sendSessionConfigEvent('session.config.failed', session, error.message);
-                throw error;
-            }
-            session = this.repository.markSessionConfigApplying(idValue, session.configRevision);
-            this._sendSessionConfigEvent('session.config.pending', session);
-            try {
-                await this.start();
-                const generation = this._captureGeneration();
-                if (!this.resumedThreadIds.has(session.threadId)) {
-                    await this._resumeSession(session);
-                    this._assertGeneration(generation);
-                    return this.repository.getSession(idValue);
-                }
-                if (instructionConfigChanged(desired, applied)) {
-                    const activity = this.threadStates.get(session.threadId)?.activity;
-                    if (activity === 'running') {
-                        if (barrier) throw new CodexAppServerError('SESSION_CONFIG_PENDING',
-                            'Instruction changes will be applied after the active Turn finishes');
-                        return this.repository.getSession(idValue);
-                    }
-                    await this.transport.request('thread/unsubscribe', { threadId: session.threadId });
-                    this._assertGeneration(generation);
-                    this.resumedThreadIds.delete(session.threadId);
-                    await this._resumeSession(this.repository.getSession(idValue));
-                    this._assertGeneration(generation);
-                    return this.repository.getSession(idValue);
-                }
-                const target = {
-                    sessionId: idValue,
-                    revision: session.configRevision,
-                    snapshot: desired,
-                    runtimeGeneration: this.runtimeGeneration,
-                };
-                this.configApplyTargets.set(session.threadId, target);
-                await this.transport.request('thread/settings/update', threadSettingsPatch(session, desired));
-                this._assertGeneration(generation);
-                if (!barrier) return this.repository.getSession(idValue);
-                return this.repository.getSession(idValue);
-            } catch (error) {
-                if (error?.code === 'STALE_RUNTIME_GENERATION' || !this.repository) throw error;
-                const current = this.repository.getSession(idValue);
-                if (current?.configRevision === session.configRevision
-                    && error?.code !== 'SESSION_CONFIG_PENDING') {
-                    const failed = this.repository.markSessionConfigFailed(idValue, session.configRevision, error.message);
-                    this._sendSessionConfigEvent('session.config.failed', failed, error.message);
-                }
-                throw error;
-            }
-        })().finally(() => this.configApplyPromises.delete(idValue));
-        this.configApplyPromises.set(idValue, apply);
-        return apply;
+        return this.configService.applySessionRuntimeConfig(sessionId, { barrier });
     }
 
     async applyAgentProfileToSession({
