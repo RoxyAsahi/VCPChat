@@ -13,6 +13,11 @@ import { createSessionDockModel } from './agent-session-dock.js';
 import { renderPendingInputQueue } from './agent-workbench-queue.js';
 import { createAgentComposerState } from './agent-composer-state.js';
 import { renderAgentSettingsPane } from './agent-settings-view.js';
+import {
+    createAgentSettingsState,
+    profileSettingsTarget,
+    sessionSettingsTarget,
+} from './agent-settings-state.js';
 
 // Build Agent identities are independent from normal-chat Agents. Keep Nova
 // visible synchronously while the authoritative Build catalog loads.
@@ -910,8 +915,7 @@ function mountWorkbench(container) {
         }
     };
     let budgetAutosaveTimer = null;
-    let settingsAutosaveTimer = null;
-    let settingsSaveQueue = Promise.resolve();
+    const settingsState = createAgentSettingsState();
     const sessionConfigRevisions = new Map();
     runStatusStop.addEventListener('click', () => run(async () => {
         runStatusStop.disabled = true;
@@ -1258,6 +1262,8 @@ function mountWorkbench(container) {
                 permissionMode: (agent.config?.permissionMode || agent.permissionMode) === 'always-approve'
                     ? 'always-approve' : 'ask',
                 revision: Number(agent.config?.revision || agent.revision || 1),
+                profileRevision: Number(agent.config?.profileRevision || agent.profileRevision
+                    || agent.config?.revision || agent.revision || 1),
                 avatarUrl: agent.avatarUrl || null,
                 configurationRequired: Boolean(
                     (agent.config?.instructionMode || agent.instructionMode) !== 'codex-managed'
@@ -1743,6 +1749,7 @@ function mountWorkbench(container) {
         if (!profile) throw new Error('请先选择 Build Agent');
         const result = await runtimeApi().agentRuntimeSaveAgentProfile?.({
             agentId: profile.id || profile.name,
+            expectedProfileRevision: Number(profile.profileRevision || profile.revision || 1),
             name: Object.prototype.hasOwnProperty.call(payload, 'name')
                 ? payload.name : profile.name || profile.id,
             instructionMode: Object.prototype.hasOwnProperty.call(payload, 'instructionMode')
@@ -1794,6 +1801,10 @@ function mountWorkbench(container) {
     function persistWorkbenchSettings(payload, selectedSession, successMessage) {
         const saveScope = selectedSession ? 'session'
             : (Object.prototype.hasOwnProperty.call(payload, 'budget') ? 'advanced' : 'profile');
+        const profile = selectedAgentProfile();
+        const targetKey = selectedSession
+            ? sessionSettingsTarget(selectedSession)
+            : saveScope === 'advanced' ? 'advanced:global' : profileSettingsTarget(profile?.id || profile?.name);
         state.settingsSaveState = 'saving';
         state.settingsSaveMessage = '正在自动保存…';
         state.settingsSaveByScope.set(saveScope, { state: 'saving', message: '正在自动保存…' });
@@ -1802,7 +1813,7 @@ function mountWorkbench(container) {
             && (projectionAtEnqueue?.sessionId || projectionAtEnqueue?.topicId) === selectedSession) {
             sessionConfigRevisions.set(selectedSession, Number(projectionAtEnqueue.configRevision || 1));
         }
-        const operation = settingsSaveQueue.then(async () => {
+        const operation = settingsState.enqueue(targetKey, payload, async () => {
             const request = {
                 ...payload,
                 ...(selectedSession ? {
@@ -1821,6 +1832,16 @@ function mountWorkbench(container) {
                 : await controller.updateWorkbenchSettings(request);
             if (saved?.profile && !saved.profile.configurationRequired) {
                 state.profileConfigurationNotice = '';
+            }
+            if (saved?.createdDerivedSession && saved?.session?.sessionId) {
+                await refreshTopicsForAgent(saved.session.agentId || state.selectedAgent, false);
+                await controller.hydrateTopic(
+                    saved.session.sessionId,
+                    saved.session,
+                    null,
+                    saved.session.agentId || state.selectedAgent,
+                );
+                notify('已保留原会话，并创建 Codex 管理指令派生会话。', 'success');
             }
             if (saved?.session?.configRevision) {
                 sessionConfigRevisions.set(saved.session.sessionId, Number(saved.session.configRevision));
@@ -1854,7 +1875,7 @@ function mountWorkbench(container) {
             state.settingsSaveMessage = successMessage || '已自动保存';
             state.settingsSaveByScope.set(saveScope, { state: 'saved', message: successMessage || '已自动保存' });
             return saved;
-        }).catch((error) => {
+        }, successMessage || '已自动保存').catch((error) => {
             state.settingsSaveState = 'error';
             state.settingsSaveMessage = error?.message || String(error);
             state.settingsSaveByScope.set(saveScope, { state: 'error', message: state.settingsSaveMessage });
@@ -1866,8 +1887,6 @@ function mountWorkbench(container) {
                 renderHeader();
             }
         });
-        settingsSaveQueue = operation.catch(() => {});
-        renderSidebar();
         return operation;
     }
 
@@ -2317,9 +2336,14 @@ function mountWorkbench(container) {
                 node,
                 button,
                 sameAgent,
-                scheduleTextSave(callback) {
-                    clearTimeout(settingsAutosaveTimer);
-                    settingsAutosaveTimer = setTimeout(callback, 500);
+                settingValue(targetKey, field, fallback) {
+                    return settingsState.value(targetKey, field, fallback);
+                },
+                settingStatus(targetKey, fields) {
+                    return settingsState.status(targetKey, fields);
+                },
+                scheduleTextSave(targetKey, field, callback) {
+                    settingsState.schedule(targetKey, field, callback);
                 },
                 scheduleBudgetSave(callback) {
                     clearTimeout(budgetAutosaveTimer);
@@ -2955,6 +2979,12 @@ function mountWorkbench(container) {
         identityStat('模型', usage.model || selected.model || snapshot.model);
         identityStat('指令来源', instructionMode === 'codex-managed' ? 'Codex 0.146 管理' : 'VChat 身份');
         identityStat('Reasoning', snapshot.reasoningEffort || '模型默认');
+        const desiredRevision = Number(selected.configRevision || 0);
+        const appliedRevision = Number(selected.appliedRuntimeConfigRevision || 0);
+        const applyState = selected.configApplyState || (desiredRevision === appliedRevision ? 'applied' : 'pending');
+        identityStat('配置状态', applyState === 'applied' && desiredRevision === appliedRevision
+            ? `已应用 r${appliedRevision}`
+            : `已保存 r${desiredRevision} · Runtime r${appliedRevision} · ${applyState}`);
         identityStat('消息', `${messages.length}（用户 ${userCount} / 助手 ${assistantCount}）`);
         identityStat('创建时间', formatTimeValue(timestamps.length ? Math.min(...timestamps) : null));
         identityStat('最后活动', formatTimeValue(timestamps.length ? Math.max(...timestamps) : null));
@@ -4358,7 +4388,7 @@ function mountWorkbench(container) {
     return () => {
         state.disposed = true;
         if (budgetAutosaveTimer !== null) clearTimeout(budgetAutosaveTimer);
-        if (settingsAutosaveTimer !== null) clearTimeout(settingsAutosaveTimer);
+        settingsState.dispose();
         if (runStatusTimer !== null) clearInterval(runStatusTimer);
         closeTopicContextMenu();
         if (renderFrame !== null && typeof window.cancelAnimationFrame === 'function') window.cancelAnimationFrame(renderFrame);

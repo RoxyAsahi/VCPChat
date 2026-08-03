@@ -551,13 +551,16 @@ function createWorkbenchController(runtimeApi) {
             agentId: durableAgentId || active.agentId,
             configSnapshot: durableState.configSnapshot || active.configSnapshot || null,
         } : null;
+        const runtimeSessionId = nextRuntime?.sessionId && String(nextRuntime.sessionId).trim()
+            ? nextRuntime.sessionId : topicId;
         const activeRuntimes = new Map(current.activeRuntimes);
-        if (nextRuntime) activeRuntimes.set(nextRuntime.sessionId || topicId, nextRuntime);
+        if (nextRuntime) activeRuntimes.set(runtimeSessionId, { ...nextRuntime, sessionId: runtimeSessionId });
         const projection = codexSnapshotToProjection(snapshot);
         cacheSnapshot(topicId, snapshot);
         const sessionSnapshots = new Map(current.sessionSnapshots);
         sessionSnapshots.set(topicId, projection);
-        const selectedSessionId = durableState.sessionId || nextRuntime?.sessionId || topicId;
+        const selectedSessionId = durableState.sessionId
+            ? durableState.sessionId : runtimeSessionId;
         store.setState({
             ...projection,
             selectedSessionId,
@@ -777,7 +780,8 @@ function createWorkbenchController(runtimeApi) {
             const result = await requireApi('agentRuntimeCompactSession')({ sessionId, instructions: instructions || undefined });
             // Codex returns its reconciled projection snapshot with sessionId.
             // Keep the topicId fallback only for the compatibility IPC shape.
-            const refreshedTopicId = result?.topicId || (result?.snapshot ? (result?.sessionId || sessionId) : null);
+            const refreshedTopicId = result?.topicId
+                || (result?.snapshot ? (result?.sessionId ? result.sessionId : sessionId) : null);
             if (refreshedTopicId) await hydrateTopic(refreshedTopicId);
             return result;
         } finally {
@@ -825,7 +829,15 @@ function createWorkbenchController(runtimeApi) {
     };
     const getWorkbenchSettings = () => requireApi('agentRuntimeGetWorkbenchSettings')();
     async function updateWorkbenchSettings(settings) {
-        const result = await requireApi('agentRuntimeUpdateWorkbenchSettings')(settings);
+        const result = settings?.sessionId
+            ? await requireApi('agentRuntimeUpdateSessionConfig')({
+                sessionId: settings.sessionId,
+                expectedConfigRevision: settings.expectedConfigRevision,
+                patch: Object.fromEntries(Object.entries(settings).filter(([key]) => ![
+                    'sessionId', 'topicId', 'expectedConfigRevision',
+                ].includes(key))),
+            })
+            : await requireApi('agentRuntimeUpdateWorkbenchSettings')(settings);
         const savedSession = result?.session;
         const current = store.getState();
         if (savedSession?.sessionId) {
@@ -837,6 +849,12 @@ function createWorkbenchController(runtimeApi) {
                 model: configSnapshot?.model || savedSession.model || runtime.model || '',
                 workspaceRoot: savedSession.workspaceRoot || runtime.workspaceRoot,
                 configSnapshot,
+                appliedRuntimeConfig: savedSession.appliedRuntimeConfig || runtime.appliedRuntimeConfig || null,
+                configRevision: savedSession.configRevision || runtime.configRevision,
+                appliedRuntimeConfigRevision: savedSession.appliedRuntimeConfigRevision
+                    ?? runtime.appliedRuntimeConfigRevision ?? 0,
+                configApplyState: savedSession.configApplyState || savedSession.applyState || runtime.configApplyState,
+                configApplyError: savedSession.configApplyError || savedSession.applyError || null,
             });
             const selected = current.selectedSessionId === savedSession.sessionId;
             const model = configSnapshot?.model || savedSession.model || current.selectedTopic?.model || '';
@@ -849,6 +867,13 @@ function createWorkbenchController(runtimeApi) {
                     workspaceRef: savedSession.workspaceRoot || current.selectedTopic?.workspaceRef || '',
                     configSnapshot,
                     configRevision: savedSession.configRevision || current.selectedTopic?.configRevision,
+                    appliedRuntimeConfig: savedSession.appliedRuntimeConfig
+                        || current.selectedTopic?.appliedRuntimeConfig || null,
+                    appliedRuntimeConfigRevision: savedSession.appliedRuntimeConfigRevision
+                        ?? current.selectedTopic?.appliedRuntimeConfigRevision ?? 0,
+                    configApplyState: savedSession.configApplyState || savedSession.applyState
+                        || current.selectedTopic?.configApplyState || null,
+                    configApplyError: savedSession.configApplyError || savedSession.applyError || null,
                 } } : {}),
             });
         }

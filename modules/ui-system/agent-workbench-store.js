@@ -1,4 +1,5 @@
 import { createAgentSessionUiState } from './agent-session-state.js';
+import { createAgentEventDeduper } from './agent-event-deduper.js';
 
 const TERMINAL_EVENT_TYPES = new Set([
     'turn.completed',
@@ -10,6 +11,10 @@ const SESSION_EVENT_TYPES = new Set([
     'session.created',
     'session.state_changed',
     'session.closed',
+    'session.config.saved',
+    'session.config.pending',
+    'session.config.applied',
+    'session.config.failed',
 ]);
 
 function createInitialState() {
@@ -184,6 +189,33 @@ function reduceEvent(current, event) {
             state: event.type === 'session.closed' ? 'closed' : event.payload?.state,
         });
         next.activeRuntimes = runtimes;
+        return next;
+    }
+    if (event.type.startsWith('session.config.')) {
+        const payload = event.payload || {};
+        const sessionId = event.sessionId || payload.sessionId;
+        const runtimes = new Map(next.activeRuntimes);
+        const runtime = runtimes.get(sessionId);
+        if (runtime) runtimes.set(sessionId, {
+            ...runtime,
+            configRevision: payload.configRevision,
+            appliedRuntimeConfigRevision: payload.appliedRuntimeConfigRevision,
+            configApplyState: payload.applyState,
+            configApplyError: payload.applyError || payload.error || null,
+        });
+        next.activeRuntimes = runtimes;
+        if (next.selectedSessionId === sessionId && next.selectedTopic) {
+            next.selectedTopic = {
+                ...next.selectedTopic,
+                configSnapshot: payload.desiredConfig || next.selectedTopic.configSnapshot,
+                appliedRuntimeConfig: payload.appliedRuntimeConfig || next.selectedTopic.appliedRuntimeConfig,
+                configRevision: payload.configRevision ?? next.selectedTopic.configRevision,
+                appliedRuntimeConfigRevision: payload.appliedRuntimeConfigRevision
+                    ?? next.selectedTopic.appliedRuntimeConfigRevision,
+                configApplyState: payload.applyState || next.selectedTopic.configApplyState,
+                configApplyError: payload.applyError || payload.error || null,
+            };
+        }
         return next;
     }
     if (event.type === 'turn.started') {
@@ -411,12 +443,10 @@ function reduceEvent(current, event) {
     return next;
 }
 
-function eventKey(event) { return event.eventId || null; }
-
 function createWorkbenchStore(initial = createInitialState()) {
     let state = initial;
     const listeners = new Set();
-    const seenEvents = new Set();
+    const eventDeduper = createAgentEventDeduper();
 
     function notify(event) {
         listeners.forEach((listener) => listener(state, event));
@@ -477,20 +507,19 @@ function createWorkbenchStore(initial = createInitialState()) {
                     : event.topicId !== selectedTopicId))) {
                 return state;
             }
-            const key = eventKey(event);
-            if (seenEvents.has(key)) return state;
-            seenEvents.add(key);
+            if (!eventDeduper.accept(event)) return state;
             state = reduceEvent(state, event);
             notify(event);
             return state;
         },
         selectSession(session) {
-            seenEvents.clear();
             const sessionId = session?.sessionId || session?.topicId || null;
+            const displayTopicId = session?.topicId && String(session.topicId).trim()
+                ? session.topicId : sessionId;
             state = {
                 ...state,
                 selectedSessionId: sessionId,
-                selectedTopic: session ? { ...session, topicId: session.topicId || sessionId } : null,
+                selectedTopic: session ? { ...session, topicId: displayTopicId } : null,
                 messages: [],
                 tools: new Map(),
                 approvals: [],
@@ -507,7 +536,7 @@ function createWorkbenchStore(initial = createInitialState()) {
             notify();
         },
         reset() {
-            seenEvents.clear();
+            eventDeduper.clear();
             state = createInitialState();
             notify();
         },

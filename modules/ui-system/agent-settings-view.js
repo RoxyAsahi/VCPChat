@@ -4,6 +4,7 @@ export function renderAgentSettingsPane(context) {
         profileNeedsConfiguration, persistWorkbenchSettings, renderSidebar, runtimeApi,
         run, refreshControlPlane, notify, controller, refreshRecoveryOperations,
         refreshTopicsForAgent, node, button, sameAgent, scheduleTextSave, scheduleBudgetSave,
+        settingValue, settingStatus,
     } = context;
     const pane = node('div', 'agent-chat-settings-pane');
     const form = node('div', 'agent-chat-settings-form');
@@ -19,25 +20,23 @@ export function renderAgentSettingsPane(context) {
     const threadId = runtime?.threadId || projection?.threadId || projection?.session?.threadId || null;
     const materialized = Boolean(sessionId && threadId);
     const profile = selectedAgentProfile() || {};
-    const workspace = projection?.workspaceRef || projection?.workspaceRoot
+    const targetKey = sessionId ? `session:${sessionId}` : `profile:${profile.id || profile.name || 'unselected'}`;
+    const workspaceFallback = projection?.workspaceRef || projection?.workspaceRoot
         || (runtime?.sessionId === sessionId ? runtime.workspaceRoot : '')
         || profile.workspaceRoot || state.workspace;
-    const permissionMode = snapshot?.permissionMode
+    const permissionFallback = snapshot?.permissionMode
         || (snapshot?.approvalPolicy === 'never' ? 'always-approve'
             : snapshot?.approvalPolicy ? 'ask' : state.permissionMode);
-    const model = state.modelDraftSessionId === sessionId && state.modelDraft !== null
-        ? state.modelDraft : (snapshot?.model || state.model);
-    if (state.modelDraftSessionId !== sessionId) {
-        state.modelDraftSessionId = sessionId;
-        state.modelDraft = null;
-    }
+    const workspace = settingValue(targetKey, 'workspaceRoot', workspaceFallback);
+    const permissionMode = settingValue(targetKey, 'permissionMode', permissionFallback);
+    const model = settingValue(targetKey, 'model', snapshot?.model || profile.model || state.model);
     state.permissionMode = permissionMode;
-    const instructionMode = (snapshot?.instructionMode || profile.instructionMode) === 'codex-managed'
+    const instructionMode = settingValue(targetKey, 'instructionMode', snapshot?.instructionMode || profile.instructionMode) === 'codex-managed'
         ? 'codex-managed' : 'vchat-identity';
-    const baseInstructions = snapshot?.baseInstructions ?? profile.baseInstructions ?? profile.systemPrompt ?? '';
-    const developerInstructions = snapshot?.developerInstructions ?? profile.developerInstructions ?? '';
-    const personality = snapshot?.personality || profile.personality || 'none';
-    const reasoningEffort = snapshot?.reasoningEffort ?? profile.reasoningEffort ?? '';
+    const baseInstructions = settingValue(targetKey, 'baseInstructions', snapshot?.baseInstructions ?? profile.baseInstructions ?? profile.systemPrompt ?? '');
+    const developerInstructions = settingValue(targetKey, 'developerInstructions', snapshot?.developerInstructions ?? profile.developerInstructions ?? '');
+    const personality = settingValue(targetKey, 'personality', snapshot?.personality || profile.personality || 'none');
+    const reasoningEffort = settingValue(targetKey, 'reasoningEffort', snapshot?.reasoningEffort ?? profile.reasoningEffort ?? '');
 
     const scopes = node('div', 'agent-chat-settings-scopes');
     for (const [scope, label] of [['profile', 'Agent 默认'], ['session', '当前会话'], ['advanced', '高级']]) {
@@ -98,7 +97,9 @@ export function renderAgentSettingsPane(context) {
                 state.settingsSaveState = 'dirty';
                 state.settingsSaveMessage = '有修改尚未保存';
                 state.settingsSaveByScope.set(sessionId ? 'session' : 'profile', { state: 'dirty', message: '有修改尚未保存' });
-                scheduleTextSave(() => persistWorkbenchSettings({ [payloadKey]: control.value.trim() }, sessionId, message));
+                const nextValue = control.value.trim();
+                scheduleTextSave(targetKey, payloadKey,
+                    () => persistWorkbenchSettings({ [payloadKey]: nextValue }, sessionId, message));
             });
         }
         wrap.append(control);
@@ -115,11 +116,9 @@ export function renderAgentSettingsPane(context) {
             if (!sessionId) state.workspace = value;
             void persistWorkbenchSettings({ workspaceRoot: value }, sessionId,
                 sessionId ? '已自动保存当前 Session 工作目录' : '已自动保存 Agent 默认工作目录');
-        }, null, { disabled: materialized, title: materialized ? '工作目录属于已创建 Codex Thread 的身份。' : '' }));
+        }, null, { title: materialized ? 'Codex 0.146 会从下一 Turn 使用新的工作目录。' : '' }));
         fields.push(field('模型', model, (value) => {
             state.model = value;
-            state.modelDraft = value;
-            state.modelDraftSessionId = sessionId;
             void persistWorkbenchSettings({ model: String(value || '').trim(), reasoningEffort: null }, sessionId,
                 sessionId ? `已自动保存模型：${value}` : `已自动保存默认模型：${value}`);
         }, modelOptions(state.modelCatalog, model)));
@@ -139,31 +138,33 @@ export function renderAgentSettingsPane(context) {
             title: efforts.length ? '' : '该模型没有提供 reasoning effort capability，只能使用模型默认值。',
         }));
         fields.push(field('指令来源', instructionMode, (value) => {
-            void persistWorkbenchSettings({ instructionMode: value }, sessionId,
+            const createDerivedSession = Boolean(sessionId && materialized
+                && instructionMode === 'vchat-identity' && value === 'codex-managed');
+            if (createDerivedSession && !window.confirm(
+                'Codex 0.146 无法可靠清除这个 Thread 已保存的 VChat 身份指令。将保留原会话，并创建一个继承当前配置的新会话。是否继续？',
+            )) return;
+            void persistWorkbenchSettings({ instructionMode: value, ...(createDerivedSession ? { createDerivedSession: true } : {}) }, sessionId,
                 value === 'codex-managed' ? '已切换为 Codex 管理指令' : '已切换为 VChat 身份指令');
-        }, [{ value: 'vchat-identity', label: 'VChat 身份' }, { value: 'codex-managed', label: 'Codex 0.146 管理' }], {
-            disabled: materialized,
-            title: materialized ? '指令来源属于 Thread 身份；请应用 Profile 创建派生会话。' : '',
-        }));
+        }, [{ value: 'vchat-identity', label: 'VChat 身份' }, { value: 'codex-managed', label: 'Codex 0.146 管理' }]));
         form.append(...fields);
 
         if (instructionMode === 'vchat-identity') {
             form.append(textarea({
-                label: materialized ? 'VChat 身份提示词（冻结快照）' : 'VChat 身份提示词',
+                label: materialized ? 'VChat 身份提示词（下一轮应用）' : 'VChat 身份提示词',
                 value: baseInstructions, placeholder: '例如：{{Nova}}', payloadKey: 'baseInstructions',
                 message: sessionId ? '已自动保存当前 Session 身份提示词' : '已自动保存 Agent 身份提示词',
-                readOnly: materialized,
+                readOnly: false,
             }), node('p', 'agent-chat-setting-help', 'ToolBox 占位符会原样保存并在 ToolBox 请求边界展开；Codex 内置身份不会同时发送。'));
         } else {
             form.append(field('Personality', personality, (value) => {
                 void persistWorkbenchSettings({ personality: value }, sessionId, '已自动保存 Codex personality');
-            }, [{ value: 'none', label: '不指定' }, { value: 'friendly', label: 'Friendly' }, { value: 'pragmatic', label: 'Pragmatic' }], { disabled: materialized }));
+            }, [{ value: 'none', label: '不指定' }, { value: 'friendly', label: 'Friendly' }, { value: 'pragmatic', label: 'Pragmatic' }]));
             form.append(textarea({
                 label: materialized ? '附加 Developer Instructions（冻结快照）' : '附加 Developer Instructions',
                 value: developerInstructions, placeholder: '可选；追加到 Codex 0.146 管理的身份',
                 payloadKey: 'developerInstructions',
                 message: sessionId ? '已自动保存当前 Session 附加指令' : '已自动保存 Agent 附加指令',
-                readOnly: materialized,
+                readOnly: false,
             }), node('p', 'agent-chat-setting-help', 'Codex 完整内部 prompt 不由协议返回，因此这里只显示可配置来源，不伪造隐藏内容。'));
         }
         if (sessionId && snapshot?.profileId) form.append(renderSessionProfileAction({
@@ -177,7 +178,8 @@ export function renderAgentSettingsPane(context) {
         }));
     }
 
-    const status = state.settingsSaveByScope.get(state.settingsScope) || { state: 'idle', message: '' };
+    const status = settingStatus(targetKey) || state.settingsSaveByScope.get(state.settingsScope)
+        || { state: 'idle', message: '' };
     const statusNode = node('p', `agent-chat-settings-save-status is-${status.state}`, status.message || '修改后自动保存');
     statusNode.setAttribute('role', 'status');
     form.append(statusNode);
@@ -217,7 +219,9 @@ function renderAvatar({ state, profile, runtimeApi, run, refreshControlPlane, no
         state.avatarSaving = true; renderSidebar();
         try {
             const result = await runtimeApi().agentRuntimeSaveAgentAvatar?.({
-                agentId, avatarData: { name: file.name, type: file.type, buffer: await file.arrayBuffer() },
+                avatarData: { name: file.name, type: file.type, buffer: await file.arrayBuffer() },
+                agentId,
+                expectedProfileRevision: Number(profile.profileRevision || profile.revision || 1),
             });
             if (!result?.success) throw new Error(result?.error || '头像保存失败。');
             const target = state.agentCatalog.find((agent) => sameAgent(agent.id || agent.name, agentId));
