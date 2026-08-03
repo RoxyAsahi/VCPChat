@@ -37,6 +37,7 @@ import { createAgentWorkbenchHeaderView } from './agent-workbench-header-view.js
 import { createAgentWorkbenchAccountView } from './agent-workbench-account-view.js';
 import { createAgentActivityReadonlyView } from './agent-activity-readonly-view.js';
 import { createAgentWorkbenchSidebarView } from './agent-workbench-sidebar-view.js';
+import { createAgentSessionDockView } from './agent-session-dock-view.js';
 
 // Build Agent identities are independent from normal-chat Agents. Keep Nova
 // visible synchronously while the authoritative Build catalog loads.
@@ -229,8 +230,6 @@ function mountWorkbench(container) {
         activitySearch: '',
         activitySourceFilter: 'all',
         activityKindFilter: 'all',
-        activityTabPanels: new Map(),
-        activityTabButtons: new Map(),
         lastViewState: null,
         hadApprovals: false,
         workspace: '',
@@ -323,7 +322,7 @@ function mountWorkbench(container) {
         runStatus, runStatusLabel, runStatusDetail, runStatusElapsed, runStatusStop,
         composerConfig, runningModes, steerModeButton, followUpModeButton, inputCard, input,
         newButton, attachButton, permissionsButton, sendButton, attachmentTray,
-        activityPanel, activitySplitter, activityTabs, activityAdd, activityContent, activityTabRow,
+        activityPanel, activitySplitter,
     } = shellView.refs;
     const runStatusView = createAgentWorkbenchRunStatusView({ refs: shellView.refs, lifecycle });
     const composerView = createAgentWorkbenchComposerView({ refs: shellView.refs, document });
@@ -399,6 +398,31 @@ function mountWorkbench(container) {
             reconnect: () => recoverRuntime(),
             openFileTab: (ref) => openWorkspaceFileTab(ref),
             revealPath: (ref) => performWorkspaceAction(ref, 'reveal-in-explorer'),
+        },
+    });
+    const sessionDockView = createAgentSessionDockView({
+        refs: shellView.refs,
+        document,
+        actions: {
+            activate(id, kind) {
+                state.sessionDock.activate(id);
+                state.activityTab = id;
+                clearActivityUnread(kind);
+                renderActivity();
+            },
+            close(id) {
+                state.sessionDock.close(id);
+                state.activityTab = state.sessionDock.snapshot().activeId;
+                renderActivity();
+            },
+            toggleMenu() {
+                state.dockMenuOpen = !state.dockMenuOpen;
+                renderActivity();
+            },
+            closeMenu() {
+                state.dockMenuOpen = false;
+                renderActivity();
+            },
         },
     });
     const workspaceRequests = createWorkspaceRequestCoordinator({
@@ -1864,48 +1888,24 @@ function mountWorkbench(container) {
         setActivityOpen(true);
     }
 
-    function buildDockMenu() {
-        const menu = node('div', 'agent-chat-dock-menu');
-        menu.setAttribute('role', 'menu');
+    function dockMenuCommands() {
         const current = store.getState();
         const changesAvailable = [...(current.tools instanceof Map ? current.tools.values() : [])]
             .some((tool) => Array.isArray(tool?.payload?.changes?.files) && tool.payload.changes.files.length);
-        const commands = [
-            ['folder_open', '打开文件', () => openDockKind('files')],
-            ...(changesAvailable ? [['difference', '查看变更', () => openDockKind('changes')]] : []),
-            ['data_usage', '上下文', () => openDockKind('context')],
-            ['notifications', '通知', () => openDockKind('notifications')],
-            ['approval', '审批', () => openDockKind('approvals')],
-            ['terminal', '在 VChat 终端中打开', () => run(async () => {
+        return [
+            { icon: 'folder_open', label: '打开文件', run: () => openDockKind('files') },
+            ...(changesAvailable ? [{ icon: 'difference', label: '查看变更', run: () => openDockKind('changes') }] : []),
+            { icon: 'data_usage', label: '上下文', run: () => openDockKind('context') },
+            { icon: 'notifications', label: '通知', run: () => openDockKind('notifications') },
+            { icon: 'approval', label: '审批', run: () => openDockKind('approvals') },
+            { icon: 'terminal', label: '在 VChat 终端中打开', run: () => run(async () => {
                 const result = await runtimeApi().desktopLaunchVchatApp?.('open-powershell-executor-terminal');
                 if (result && result.success === false) throw new Error(result.error || '无法打开 VChat 终端。');
                 state.dockMenuOpen = false;
                 renderActivity();
-            })],
+            }) },
         ];
-        for (const [symbol, label, action] of commands) {
-            const item = button('', 'agent-chat-dock-menu-item');
-            item.setAttribute('role', 'menuitem');
-            item.append(node('span', 'vcp-ui-icon', symbol), node('span', '', label));
-            item.addEventListener('click', action);
-            menu.append(item);
-        }
-        return menu;
     }
-
-    activityAdd.addEventListener('click', (event) => {
-        event.stopPropagation();
-        state.dockMenuOpen = !state.dockMenuOpen;
-        activityAdd.setAttribute('aria-expanded', String(state.dockMenuOpen));
-        renderActivity();
-    });
-    const closeDockMenuOnOutsideClick = (event) => {
-        if (!state.dockMenuOpen || activityTabRow.contains(event.target)) return;
-        state.dockMenuOpen = false;
-        activityAdd.setAttribute('aria-expanded', 'false');
-        renderActivity();
-    };
-    lifecycle.listen(document, 'click', closeDockMenuOnOutsideClick);
 
     function setActivityOpen(open, tab) {
         if (open && tab) {
@@ -2347,7 +2347,7 @@ function mountWorkbench(container) {
     function renderActivity() {
         if (state.disposed) return;
         const current = store.getState();
-        const previousContent = state.activityTabPanels.get(state.activityTab);
+        const previousContent = sessionDockView.activePanel();
         const previousActiveTab = state.sessionDock.snapshot().tabs.find((tab) => tab.id === state.activityTab);
         const previousScrollTarget = previousActiveTab?.kind === 'notifications'
             ? previousContent?.querySelector('.agent-chat-activity-list')
@@ -2380,95 +2380,12 @@ function mountWorkbench(container) {
         state.sessionDock.setBadge('approvals', pendingApprovals);
         const tabDefs = state.sessionDock.snapshot().tabs;
         if (!tabDefs.some((tab) => tab.id === state.activityTab)) state.activityTab = 'context';
-        const visibleTabIds = new Set(tabDefs.map(({ id }) => id));
-        for (const [id, tab] of state.activityTabButtons) {
-            if (visibleTabIds.has(id)) continue;
-            tab.remove();
-            state.activityTabButtons.delete(id);
-        }
-        for (const definition of tabDefs) {
-            const { id } = definition;
-            const count = Number(definition.badge || 0);
-            let tab = state.activityTabButtons.get(id);
-            if (!tab) {
-                tab = node('button', 'agent-chat-activity-tab');
-                tab.type = 'button';
-                tab.dataset.tab = id;
-                tab.setAttribute('role', 'tab');
-                tab.addEventListener('click', (event) => {
-                    if (event.target.closest('.agent-chat-dock-tab-close')) return;
-                    state.sessionDock.activate(id);
-                    state.activityTab = id;
-                    clearActivityUnread(definition.kind);
-                    renderActivity();
-                });
-                tab.addEventListener('auxclick', (event) => {
-                    if (event.button !== 1 || !definition.closeable) return;
-                    event.preventDefault();
-                    state.sessionDock.close(id);
-                    state.activityTab = state.sessionDock.snapshot().activeId;
-                    renderActivity();
-                });
-                tab.addEventListener('keydown', (event) => {
-                    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-                    const tabs = state.sessionDock.snapshot().tabs;
-                    const index = tabs.findIndex((item) => item.id === id);
-                    const next = tabs[index + (event.key === 'ArrowRight' ? 1 : -1)];
-                    if (!next) return;
-                    event.preventDefault();
-                    state.sessionDock.activate(next.id);
-                    state.activityTab = next.id;
-                    renderActivity();
-                    queueMicrotask(() => state.activityTabButtons.get(next.id)?.focus());
-                });
-                state.activityTabButtons.set(id, tab);
-            }
-            activityTabs.append(tab);
-            tab.dataset.kind = definition.kind;
-            tab.classList.toggle('is-launcher', definition.kind === 'files');
-            tab.replaceChildren(node('span', 'vcp-ui-icon agent-chat-dock-tab-icon', definition.icon));
-            const label = node('span', 'agent-chat-dock-tab-label', definition.title);
-            tab.append(label);
-            tab.title = definition.kind === 'file' ? definition.relativePath : definition.title;
-            if (count) tab.append(node('span', 'agent-chat-dock-tab-badge', String(Math.min(99, count))));
-            if (definition.closeable) {
-                const close = node('span', 'agent-chat-dock-tab-close');
-                close.setAttribute('role', 'button');
-                close.setAttribute('aria-label', `关闭${definition.title}标签`);
-                close.append(node('span', 'vcp-ui-icon agent-chat-dock-tab-close-icon', 'close'));
-                close.addEventListener('click', (event) => {
-                    event.stopPropagation();
-                    state.sessionDock.close(id);
-                    state.activityTab = state.sessionDock.snapshot().activeId;
-                    renderActivity();
-                });
-                tab.append(close);
-            }
-            tab.classList.toggle('is-active', state.activityTab === id);
-            tab.setAttribute('aria-selected', String(state.activityTab === id));
-        }
-        activityAdd.setAttribute('aria-expanded', String(state.dockMenuOpen));
-        activityTabRow.querySelector('.agent-chat-dock-menu')?.remove();
-        if (state.dockMenuOpen) activityTabRow.append(buildDockMenu());
-
-        for (const [id, panel] of state.activityTabPanels) {
-            if (visibleTabIds.has(id)) continue;
-            panel.remove();
-            state.activityTabPanels.delete(id);
-        }
-
-        for (const { id } of tabDefs) {
-            let panel = state.activityTabPanels.get(id);
-            if (!panel) {
-                panel = node('div', 'agent-chat-activity-tabpanel');
-                panel.dataset.activityPanel = id;
-                panel.setAttribute('role', 'tabpanel');
-                state.activityTabPanels.set(id, panel);
-                activityContent.append(panel);
-            }
-            panel.hidden = id !== state.activityTab;
-        }
-        const content = state.activityTabPanels.get(state.activityTab);
+        const content = sessionDockView.update({
+            tabs: tabDefs,
+            activeId: state.activityTab,
+            menuOpen: state.dockMenuOpen,
+            commands: dockMenuCommands(),
+        });
         content.replaceChildren();
         const viewState = deriveWorkbenchViewState(current);
         const activeDefinition = tabDefs.find((tab) => tab.id === state.activityTab) || tabDefs[0];
@@ -3045,6 +2962,7 @@ function mountWorkbench(container) {
         closeTopicContextMenu();
         fullPresentation.dispose();
         activityReadonlyView.dispose();
+        sessionDockView.dispose();
         workspaceView.dispose();
         headerView.dispose();
         sidebarView?.dispose();
