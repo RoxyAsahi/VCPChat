@@ -34,6 +34,7 @@ import { createAgentRendererScopedHtml } from './agent-renderer-scoped-html.js';
 import { createAgentRendererSpecialBlocks } from './agent-renderer-special-blocks.js';
 import { createAgentRendererToolResults } from './agent-renderer-tool-results.js';
 import { createAgentRendererMessageLifecycle } from './agent-renderer-message-lifecycle.js';
+import { createAgentRendererMermaid } from './agent-renderer-mermaid.js';
 
 const colorExtractionPromises = new Map();
 
@@ -167,198 +168,14 @@ const TOOL_RESULT_SAFE_MARKDOWN_OPTIONS = Object.freeze({
     headerIds: false
 });
 
-async function renderMermaidDiagrams(container) {
-    const placeholders = Array.from(container.querySelectorAll('.mermaid-placeholder'));
-    if (placeholders.length === 0) return;
-
-    // Prepare elements for rendering
-    placeholders.forEach(placeholder => {
-        const code = placeholder.dataset.mermaidCode;
-        if (code) {
-            try {
-                // The placeholder div itself will become the mermaid container
-                let decodedCode = decodeURIComponent(code);
-                // 修复 AI 常用的“智能字符”导致的 Mermaid 语法错误
-                decodedCode = decodedCode.replace(/[—–－]/g, '--');
-
-                placeholder.textContent = decodedCode;
-                placeholder.classList.remove('mermaid-placeholder');
-                placeholder.classList.add('mermaid');
-                placeholder.dataset.mermaidSource = decodedCode;
-            } catch (e) {
-                console.error('Failed to decode mermaid code', e);
-                placeholder.textContent = '[Mermaid code decoding error]';
-            }
-        }
-    });
-
-    // Get the list of actual .mermaid elements to render
-    const elementsToRender = placeholders.filter(el => el.classList.contains('mermaid'));
-
-    if (elementsToRender.length > 0 && typeof mermaid !== 'undefined') {
-        // Initialize mermaid if it hasn't been already
-        mermaid.initialize({ startOnLoad: false });
-
-        // 逐个渲染以防止单个图表错误导致所有图表显示错误
-        for (const el of elementsToRender) {
-            try {
-                await mermaid.run({ nodes: [el] });
-                enhanceMermaidDiagram(el);
-            } catch (error) {
-                console.error("Error rendering Mermaid diagram:", error);
-                const originalCode = el.dataset.mermaidSource || el.textContent;
-                el.innerHTML = `<div class="mermaid-error">Mermaid 渲染错误: ${error.message}</div><pre>${escapeHtml(originalCode)}</pre>`;
-            }
-        }
-    }
-}
-
-function enhanceMermaidDiagram(mermaidElement) {
-    if (!mermaidElement || mermaidElement.dataset.vcpMermaidEnhanced === 'true') return;
-
-    const svg = mermaidElement.querySelector('svg');
-    if (!svg) return;
-
-    mermaidElement.dataset.vcpMermaidEnhanced = 'true';
-
-    const wrapper = document.createElement('div');
-    wrapper.className = 'mermaid-viewer';
-    wrapper.dataset.scale = '1';
-    wrapper.dataset.translateX = '0';
-    wrapper.dataset.translateY = '0';
-
-    const toolbar = document.createElement('div');
-    toolbar.className = 'mermaid-viewer-toolbar';
-    toolbar.innerHTML = `
-        <button type="button" class="mermaid-viewer-btn" data-mermaid-action="zoom-out" title="缩小">−</button>
-        <button type="button" class="mermaid-viewer-btn" data-mermaid-action="reset" title="重置视图">100%</button>
-        <button type="button" class="mermaid-viewer-btn" data-mermaid-action="zoom-in" title="放大">＋</button>
-        <button type="button" class="mermaid-viewer-btn" data-mermaid-action="fit" title="适应宽度">适应</button>
-    `;
-
-    const viewport = document.createElement('div');
-    viewport.className = 'mermaid-viewer-viewport';
-    viewport.title = '滚轮缩放，按住鼠标左键拖拽平移，双击重置';
-
-    const canvas = document.createElement('div');
-    canvas.className = 'mermaid-viewer-canvas';
-
-    svg.removeAttribute('style');
-    svg.style.maxWidth = 'none';
-    svg.style.height = 'auto';
-    canvas.appendChild(svg);
-    viewport.appendChild(canvas);
-
-    mermaidElement.textContent = '';
-    wrapper.appendChild(toolbar);
-    wrapper.appendChild(viewport);
-    mermaidElement.appendChild(wrapper);
-
-    const clampScale = (scale) => Math.min(5, Math.max(0.2, scale));
-    const getState = () => ({
-        scale: parseFloat(wrapper.dataset.scale) || 1,
-        translateX: parseFloat(wrapper.dataset.translateX) || 0,
-        translateY: parseFloat(wrapper.dataset.translateY) || 0
-    });
-    const setState = (nextState) => {
-        const scale = clampScale(nextState.scale);
-        wrapper.dataset.scale = String(scale);
-        wrapper.dataset.translateX = String(nextState.translateX || 0);
-        wrapper.dataset.translateY = String(nextState.translateY || 0);
-        canvas.style.transform = `translate(${nextState.translateX || 0}px, ${nextState.translateY || 0}px) scale(${scale})`;
-        const resetButton = toolbar.querySelector('[data-mermaid-action="reset"]');
-        if (resetButton) resetButton.textContent = `${Math.round(scale * 100)}%`;
-    };
-    const zoomAt = (targetScale, originX = viewport.clientWidth / 2, originY = viewport.clientHeight / 2) => {
-        const current = getState();
-        const scale = clampScale(targetScale);
-        const ratio = scale / current.scale;
-        setState({
-            scale,
-            translateX: originX - (originX - current.translateX) * ratio,
-            translateY: originY - (originY - current.translateY) * ratio
-        });
-    };
-    const resetView = () => setState({ scale: 1, translateX: 0, translateY: 0 });
-    const fitToWidth = () => {
-        const svgWidth = svg.getBBox?.().width || svg.viewBox?.baseVal?.width || svg.getBoundingClientRect().width;
-        const availableWidth = Math.max(1, viewport.clientWidth - 32);
-        if (!svgWidth) {
-            resetView();
-            return;
-        }
-        setState({
-            scale: clampScale(Math.min(1.8, availableWidth / svgWidth)),
-            translateX: 0,
-            translateY: 0
-        });
-    };
-
-    toolbar.addEventListener('click', (event) => {
-        const button = event.target.closest('[data-mermaid-action]');
-        if (!button) return;
-
-        event.preventDefault();
-        event.stopPropagation();
-
-        const { scale } = getState();
-        const action = button.dataset.mermaidAction;
-        if (action === 'zoom-in') zoomAt(scale * 1.2);
-        else if (action === 'zoom-out') zoomAt(scale / 1.2);
-        else if (action === 'reset') resetView();
-        else if (action === 'fit') fitToWidth();
-    });
-
-    viewport.addEventListener('wheel', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-
-        const rect = viewport.getBoundingClientRect();
-        const factor = event.deltaY < 0 ? 1.12 : 1 / 1.12;
-        zoomAt(getState().scale * factor, event.clientX - rect.left, event.clientY - rect.top);
-    }, { passive: false });
-
-    let dragState = null;
-    viewport.addEventListener('pointerdown', (event) => {
-        if (event.button !== 0) return;
-
-        const state = getState();
-        dragState = {
-            pointerId: event.pointerId,
-            startX: event.clientX,
-            startY: event.clientY,
-            originX: state.translateX,
-            originY: state.translateY
-        };
-        viewport.classList.add('dragging');
-        viewport.setPointerCapture?.(event.pointerId);
-        event.preventDefault();
-    });
-
-    viewport.addEventListener('pointermove', (event) => {
-        if (!dragState || dragState.pointerId !== event.pointerId) return;
-
-        setState({
-            scale: getState().scale,
-            translateX: dragState.originX + event.clientX - dragState.startX,
-            translateY: dragState.originY + event.clientY - dragState.startY
-        });
-    });
-
-    const endDrag = (event) => {
-        if (!dragState || dragState.pointerId !== event.pointerId) return;
-        dragState = null;
-        viewport.classList.remove('dragging');
-        viewport.releasePointerCapture?.(event.pointerId);
-    };
-    viewport.addEventListener('pointerup', endDrag);
-    viewport.addEventListener('pointercancel', endDrag);
-    viewport.addEventListener('dblclick', (event) => {
-        event.preventDefault();
-        resetView();
-    });
-
-    requestAnimationFrame(fitToWidth);
+const mermaidRenderer = createAgentRendererMermaid({
+    documentRef: document,
+    windowRef: window,
+    getMermaid: () => globalThis.mermaid,
+    escapeHtml,
+});
+function renderMermaidDiagrams(container) {
+    return mermaidRenderer.render(container);
 }
 
 /**
@@ -947,9 +764,15 @@ const messageLifecycle = createAgentRendererMessageLifecycle({
     renderPostProcessedHtml,
     applyAvatar: (payload) => avatarStyle.apply(payload),
 });
-const renderMessage = messageLifecycle.renderMessage;
-const renderFullMessage = messageLifecycle.renderFullMessage;
-const updateMessageContent = messageLifecycle.updateMessageContent;
+function renderMessage(message, isInitialLoad = false, appendToDom = true, renderSessionId = getActiveRenderSessionId(), renderContext = {}) {
+    return messageLifecycle.renderMessage(message, isInitialLoad, appendToDom, renderSessionId, renderContext);
+}
+function renderFullMessage(messageId, fullContent, agentName, agentId) {
+    return messageLifecycle.renderFullMessage(messageId, fullContent, agentName, agentId);
+}
+function updateMessageContent(messageId, newContent) {
+    return messageLifecycle.updateMessageContent(messageId, newContent);
+}
 
 // Expose methods to renderer.js
 /**
