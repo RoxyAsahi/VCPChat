@@ -320,7 +320,6 @@ function reduceEvent(current, event) {
         const approval = payload ? {
             ...payload,
             sessionId: event.sessionId,
-            sessionId: event.sessionId,
             turnId: event.turnId,
             toolCallId: event.toolCallId,
         } : null;

@@ -1,6 +1,5 @@
 function projectSession(summary = {}) {
     return {
-        sessionId: summary.sessionId,
         // These are Rust daemon identities, not renderer-generated aliases.
         // The sidebar needs them to distinguish the sole writable attachment
         // from durable preview Topics without inventing a legacy JS Session.

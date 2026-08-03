@@ -354,6 +354,20 @@ for (const script of ['test:agent-renderer-isolation', 'test:agent-renderer-life
     'test:agent-workbench-clients', 'test:agent-session-compatibility']) {
     if (!packageJson.scripts?.[script]) errors.push(`package.json missing governance gate ${script}`);
 }
+if (!packageJson.scripts?.['lint:agent']) {
+    errors.push('package.json missing canonical Agent ESLint gate');
+} else if (!String(packageJson.scripts['test:codex-ci'] || '').includes('lint:agent')) {
+    errors.push('test:codex-ci must execute the canonical Agent ESLint gate');
+}
+const agentEslintConfigPath = path.join(root, 'eslint.agent.config.mjs');
+if (!fs.existsSync(agentEslintConfigPath)) {
+    errors.push('canonical Agent ESLint config is missing');
+} else {
+    const agentEslintSource = fs.readFileSync(agentEslintConfigPath, 'utf8');
+    if (!/complexity:\s*\['error',\s*170\]/.test(agentEslintSource)) {
+        errors.push('Agent ESLint must enforce the accepted complexity ceiling');
+    }
+}
 
 const dataContracts = fs.readFileSync(path.join(root, 'modules/codex-runtime/dataContracts.js'), 'utf8');
 if (!dataContracts.includes('PROFILE_SCHEMA_VERSION = 2')
