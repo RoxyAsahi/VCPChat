@@ -132,7 +132,7 @@ window.chatAPI = {
     // Agent Workbench request to the ToolBox model endpoint.
     getCachedModels: async () => {
         await new Promise((resolve) => setTimeout(resolve, 250));
-        return [{ id: 'gpt-5.6-terra' }, { id: 'gpt-5.6-luna' }];
+        return [{ id: 'gpt-5.6-terra', reasoning_efforts: ['low', 'medium', 'high'] }, { id: 'gpt-5.6-luna' }];
     },
     agentRuntimeGetStatus: async () => ({
         state: runtimeStatus,
@@ -341,6 +341,11 @@ window.chatAPI = {
             configSnapshot = {
                 ...currentSnapshot,
                 ...(payload.systemPrompt !== undefined ? { baseInstructions: payload.systemPrompt } : {}),
+                ...(payload.baseInstructions !== undefined ? { baseInstructions: payload.baseInstructions } : {}),
+                ...(payload.instructionMode !== undefined ? { instructionMode: payload.instructionMode } : {}),
+                ...(payload.developerInstructions !== undefined ? { developerInstructions: payload.developerInstructions } : {}),
+                ...(payload.personality !== undefined ? { personality: payload.personality } : {}),
+                ...(payload.reasoningEffort !== undefined ? { reasoningEffort: payload.reasoningEffort } : {}),
                 ...(payload.permissionMode ? {
                     permissionMode: payload.permissionMode,
                     approvalPolicy: payload.permissionMode === 'always-approve' ? 'never' : 'on-request',
@@ -659,18 +664,18 @@ assert.equal(host.querySelector('.sidebar-tab-button.active')?.textContent, '设
     'a missing-prompt Agent must route to its actionable settings page');
 assert.match(host.querySelector('.agent-chat-profile-configuration-warning')?.textContent || '', /缺少|提示词|不能创建/,
     'the settings page must explain why this Agent cannot create a Session');
-const legacyPrompt = host.querySelector('[aria-label="当前 Agent 提示词"]');
+const legacyPrompt = host.querySelector('[aria-label="VChat 身份提示词"]');
 assert.equal(legacyPrompt?.readOnly, false,
     'the old Agent prompt must be editable in place instead of remaining permanently blocked');
 legacyPrompt.value = '{{LegacyEmpty}}';
-legacyPrompt.dispatchEvent(new window.Event('change', { bubbles: true }));
-await new Promise((resolve) => setTimeout(resolve, 80));
-assert.equal(savedAgentProfiles.at(-1).systemPrompt, '{{LegacyEmpty}}',
+legacyPrompt.dispatchEvent(new window.Event('input', { bubbles: true }));
+await new Promise((resolve) => setTimeout(resolve, 580));
+assert.equal(savedAgentProfiles.at(-1).baseInstructions, '{{LegacyEmpty}}',
     'repairing a legacy Agent must persist only that Agent prompt');
-const repairedAgentCreate = [...host.querySelectorAll('.agent-chat-settings-save')]
-    .find((button) => button.textContent === '用此配置新建会话');
-assert.ok(repairedAgentCreate, 'repaired Agent settings must keep the direct create action');
-repairedAgentCreate.click();
+assert.equal([...host.querySelectorAll('.agent-chat-settings-save')]
+    .some((button) => button.textContent === '用此配置新建会话'), false,
+    'settings must not duplicate the one-click new Session action');
+host.querySelector('.agent-chat-composer-new').click();
 await new Promise((resolve) => setTimeout(resolve, 50));
 assert.equal(createdTopics.length, topicsBeforeMissingPromptClick + 1,
     'after repairing its prompt, the same Agent may create one direct Session');
@@ -890,8 +895,13 @@ assert.ok(runningSessionRow?.classList.contains('is-running'),
 assert.ok(runningSessionRow.querySelector('.agent-chat-session-avatar.is-running'),
     'background activity must be rendered as a glow ring around the owning Session avatar');
 const idleSessionRow = host.querySelector('.agent-chat-session-row[data-topic-id="topic-restored"]');
+prompt.value = 'running-session draft';
+prompt.dispatchEvent(new window.Event('input', { bubbles: true }));
 idleSessionRow.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
+assert.equal(prompt.value, '', 'switching Session must not show the running Session draft in another Session');
+prompt.value = 'idle-session draft';
+prompt.dispatchEvent(new window.Event('input', { bubbles: true }));
 assert.equal(activeRunStatus.hidden, true,
     'switching to an idle Session must hide another Session\'s running status rail');
 assert.ok(runningSessionRow.classList.contains('is-running'),
@@ -900,6 +910,10 @@ assert.equal(idleSessionRow.querySelector('.agent-chat-session-avatar')?.classLi
     'the selected idle Session avatar must not inherit another Session\'s running state');
 runningSessionRow.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
+assert.equal(prompt.value, 'running-session draft',
+    'switching back must restore the draft bound to that durable Session ID');
+prompt.value = '';
+prompt.dispatchEvent(new window.Event('input', { bubbles: true }));
 assert.equal(activeRunStatus.hidden, false,
     'switching back to the owning Session must restore its Session-scoped running rail');
 const runStatusStop = activeRunStatus.querySelector('.agent-chat-run-status-stop');
@@ -908,23 +922,28 @@ runStatusStop.click();
 await new Promise((resolve) => setTimeout(resolve, 0));
 assert.deepEqual(cancelledTurns, [{ sessionId: 'topic-in-use', turnId: 'turn_test' }],
     'the status-rail stop action must cancel the authoritative active Turn');
-assert.equal(activeSendButton.querySelector('.vcp-ui-icon')?.textContent, 'stop',
-    'an active Codex turn must replace the send arrow with the main-chat stop icon');
-assert.equal(activeSendButton.getAttribute('aria-label'), '取消当前任务');
-assert.equal(activeSendButton.classList.contains('interrupt-mode'), true,
-    'an empty composer during an active turn must use the shared interrupt visual state');
+assert.equal(activeSendButton.querySelector('.vcp-ui-icon')?.textContent, 'arrow_upward',
+    'the send action must remain distinct from the explicit running-rail stop control');
+assert.equal(activeSendButton.disabled, true,
+    'an empty running composer must not implicitly cancel the Turn');
+const runningModes = host.querySelector('.agent-chat-composer-modes');
+assert.equal(runningModes.hidden, false, 'running input must expose steer and follow-up modes');
+assert.ok([...runningModes.querySelectorAll('button')].some((button) => button.textContent === '立即调整'));
 prompt.value = '完成后再列出风险';
 prompt.dispatchEvent(new window.Event('input', { bubbles: true }));
 host.querySelector('.agent-chat-send-button').click();
 await new Promise((resolve) => setTimeout(resolve, 0));
 assert.deepEqual(followUpTurns, [{ sessionId: 'topic-in-use', turnId: 'turn_test', prompt: '完成后再列出风险' }],
     'while a turn is active, normal composer input must queue a Codex follow-up instead of cancelling the task');
-prompt.value = '/steer 先检查风险';
+const steerMode = [...host.querySelectorAll('.agent-chat-composer-mode')]
+    .find((button) => button.textContent === '立即调整');
+steerMode.click();
+prompt.value = '先检查风险';
 prompt.dispatchEvent(new window.Event('input', { bubbles: true }));
 host.querySelector('.agent-chat-send-button').click();
 await new Promise((resolve) => setTimeout(resolve, 0));
 assert.deepEqual(steeringTurns, [{ sessionId: 'topic-in-use', turnId: 'turn_test', prompt: '先检查风险' }],
-    'the explicit /steer prefix must insert immediate steering rather than a follow-up');
+    'the explicit running mode must insert immediate steering rather than a follow-up');
 await new Promise((resolve) => setTimeout(resolve, 30));
 const queueToggle = host.querySelector('.agent-chat-queue-toggle');
 assert.ok(queueToggle, 'the header must expose the persisted interaction queue');
@@ -1571,10 +1590,28 @@ settingsTab.click();
 assert.ok(host.querySelector('.agent-chat-settings-pane .agent-chat-settings-form'),
     'settings must render inside a dedicated padded pane instead of placing fields against the sidebar edge');
 await new Promise((resolve) => setTimeout(resolve, 0));
+const settingScopes = [...host.querySelectorAll('.agent-chat-settings-scope')];
+assert.deepEqual(settingScopes.map((button) => button.textContent), ['Agent 默认', '当前会话', '高级'],
+    'settings must separate Profile, Session and advanced diagnostics');
+settingScopes.find((button) => button.textContent === '高级').click();
 const recoverySection = host.querySelector('.agent-chat-recovery-section');
 assert.ok(recoverySection, 'settings must expose incomplete Saga recovery without hiding it in logs');
 assert.match(recoverySection.textContent, /没有需要人工处理的操作/);
 assert.ok([...recoverySection.querySelectorAll('button')].some((item) => item.textContent === '扫描未绑定 Thread'));
+const budgetSettings = host.querySelector('.agent-chat-settings-budget:not(.agent-chat-settings-runtime-info)');
+assert.ok(budgetSettings, 'per-turn safety budgets must live only in advanced Agent settings');
+assert.equal(budgetSettings.querySelector('[name="maxRequestsPerTurn"]').value, '8');
+assert.equal(budgetSettings.querySelector('[name="maxTokensPerTurn"]').value, '120000');
+budgetSettings.querySelector('[name="maxRequestsPerTurn"]').value = '12';
+budgetSettings.querySelector('[name="maxTokensPerTurn"]').value = '240000';
+budgetSettings.querySelector('[name="maxRequestsPerTurn"]').dispatchEvent(new window.Event('input', { bubbles: true }));
+budgetSettings.querySelector('[name="maxTokensPerTurn"]').dispatchEvent(new window.Event('input', { bubbles: true }));
+await new Promise((resolve) => setTimeout(resolve, 550));
+assert.ok(savedWorkbenchSettings.some((item) => item.budget?.maxRequestsPerTurn === '12'
+    && item.budget?.maxTokensPerTurn === '240000'),
+    'budget autosave must use the narrow Agent settings IPC, never renderer storage');
+[...host.querySelectorAll('.agent-chat-settings-scope')]
+    .find((button) => button.textContent === 'Agent 默认').click();
 const avatarSettings = host.querySelector('.agent-chat-settings-avatar');
 assert.ok(avatarSettings, 'Agent settings must expose the isolated Build Agent avatar control');
 assert.match(avatarSettings.querySelector('.agent-chat-settings-avatar-preview')?.src || '', /nova-avatar\.png/,
@@ -1591,6 +1628,8 @@ assert.equal(savedAvatars[0].avatarData.name, 'nova.png');
 assert.equal(savedAvatars[0].avatarData.type, 'image/png');
 assert.ok(savedAvatars[0].avatarData.buffer instanceof ArrayBuffer,
     'avatar save must pass binary data without persisting Base64 in renderer state');
+[...host.querySelectorAll('.agent-chat-settings-scope')]
+    .find((button) => button.textContent === '当前会话').click();
 const workspaceSetting = [...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field')]
     .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent.includes('工作目录'))
     ?.querySelector('input');
@@ -1601,18 +1640,6 @@ await new Promise((resolve) => setTimeout(resolve, 30));
 assert.ok(savedWorkbenchSettings.some((item) => item.sessionId === 'topic-archived'
     && item.workspaceRoot === `${root}\\updated`),
     'changing the workspace must persist it to the selected Session instead of keeping a renderer-only draft');
-const budgetSettings = host.querySelector('.agent-chat-settings-budget');
-assert.ok(budgetSettings, 'per-turn safety budgets must live in Agent settings rather than the usage inspector');
-assert.equal(budgetSettings.querySelector('[name="maxRequestsPerTurn"]').value, '8');
-assert.equal(budgetSettings.querySelector('[name="maxTokensPerTurn"]').value, '120000');
-budgetSettings.querySelector('[name="maxRequestsPerTurn"]').value = '12';
-budgetSettings.querySelector('[name="maxTokensPerTurn"]').value = '240000';
-budgetSettings.querySelector('[name="maxRequestsPerTurn"]').dispatchEvent(new window.Event('input', { bubbles: true }));
-budgetSettings.querySelector('[name="maxTokensPerTurn"]').dispatchEvent(new window.Event('input', { bubbles: true }));
-await new Promise((resolve) => setTimeout(resolve, 550));
-assert.ok(savedWorkbenchSettings.some((item) => item.budget?.maxRequestsPerTurn === '12'
-    && item.budget?.maxTokensPerTurn === '240000'),
-    'budget autosave must use the narrow Agent settings IPC, never renderer storage');
 assert.equal(host.querySelector('.agent-chat-settings-pane > .agent-chat-settings-placeholder') !== null, true);
 const permissionSelect = [...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field select')]
     .find((control) => [...control.options].some((option) => option.value === 'always-approve'));
@@ -1623,9 +1650,9 @@ const promptEditor = host.querySelector('.agent-chat-settings-pane textarea:not(
 assert.equal(promptEditor?.value, '冻结的 Nova 指令',
     'an unmaterialized Session must expose its frozen Base Instructions as an editable field');
 promptEditor.value = '{{SessionNova}}';
-promptEditor.dispatchEvent(new window.Event('change', { bubbles: true }));
-await new Promise((resolve) => setTimeout(resolve, 30));
-assert.equal(savedWorkbenchSettings.at(-1)?.systemPrompt, '{{SessionNova}}',
+promptEditor.dispatchEvent(new window.Event('input', { bubbles: true }));
+await new Promise((resolve) => setTimeout(resolve, 550));
+assert.equal(savedWorkbenchSettings.at(-1)?.baseInstructions, '{{SessionNova}}',
     'editing an unmaterialized Session prompt must autosave through the Session CAS IPC');
 await new Promise((resolve) => setTimeout(resolve, 30));
 assert.ok(savedWorkbenchSettings.some((item) => item.permissionMode === 'always-approve'),
@@ -1661,16 +1688,15 @@ const materializedSettingsTab = [...host.querySelectorAll('.agent-chat-sidebar .
     .find((tab) => tab.textContent.trim() === '设置');
 materializedSettingsTab.click();
 await new Promise((resolve) => setTimeout(resolve, 0));
+[...host.querySelectorAll('.agent-chat-settings-scope')]
+    .find((button) => button.textContent === '当前会话').click();
 const materializedWorkspace = [...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field')]
     .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent.includes('工作目录'))
     ?.querySelector('input');
-const materializedAgent = [...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field')]
-    .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent === 'Agent')
-    ?.querySelector('select');
 assert.equal(materializedWorkspace?.disabled, true,
     'a materialized Thread must lock workspace identity in the settings UI');
-assert.equal(materializedAgent?.disabled, true,
-    'a selected Session must lock its Agent Profile identity in the settings UI');
+assert.match(host.querySelector('.agent-chat-settings-summary')?.textContent || '', /Profile.*revision/s,
+    'a selected Session must show its frozen Profile identity and revision');
 assert.ok(host.querySelector('.agent-chat-settings-pane textarea[readonly]'),
     'a materialized Thread must expose Base Instructions as a read-only frozen snapshot');
 
