@@ -2,8 +2,8 @@
   "status": "implemented/working-tree",
   "scope": "agent-code-governance",
   "branch": "codex/vcpchat-codex-app-server",
-  "verifiedBaseRevision": "831773f052cb296e08f25e14ef55c908c7985487",
-  "verifiedAt": "2026-08-03",
+  "verifiedBaseRevision": "f9c8cc77374b0ae857f12a0153afaf1e46dc47da",
+  "verifiedAt": "2026-08-04",
   "codexProtocol": "0.146",
   "toolboxModified": false,
   "sqliteSchemaModified": false,
@@ -12,11 +12,13 @@
     "npm run test:agent-renderer-isolation",
     "npm run test:agent-renderer-lifecycle",
     "npm run test:agent-workbench-clients",
+    "npm run test:agent-workbench-store",
     "npm run test:agent-session-catalog",
     "npm run test:agent-settings-coordinator",
     "npm run test:agent-session-compatibility",
     "npm run test:agent-workspace-requests",
     "npm run test:codex-runtime-lifecycle",
+    "npm run test:codex-runtime-recovery-service",
     "npm run test:codex-runtime-toolbox-service",
     "npm run test:agent-presentation",
     "npm run test:agent-workbench",
@@ -24,8 +26,9 @@
     "npm run check:codex-governance",
     "npm run test:codex-ci",
     "npm run test:electron-codex-smoke",
+    "npm run test:electron-codex-recovery",
     "npm run guard:ui-system",
     "npm run lint:ui-system"
   ],
-  "notes": "2026-08-03 governance completion working tree: Runtime Manager and Controller are within 600 lines, Workbench composition is within 800 lines, and Agent Renderer implementation is within the final 600-line gate. Renderer scheduling is Session-generation-owned; cancelled frame/idle/delay waits always settle and cannot write after disposal. Runtime lifecycle is part of the default Codex native gate, with explicit dual-Session Turn isolation and stale ACK coverage. Notification and Approval Dock views use the standard element/update/dispose contract. Agent CSS remains a fixed nine-owner import graph with no component !important declarations. The complete test:codex-ci gate passed in 104.7 seconds, including Electron recovery/degraded. Electron smoke initially exposed obsolete data-topic-id selectors and a notification wrapper flex regression; the canonical data-session-id smoke and full-height notification scroller then passed against the local pinned Codex 0.146.0 executable. Status remains implemented/working-tree because product-level multi-resolution visual review and live backend approval gates are outside this governance receipt."
+  "notes": "2026-08-04 governance completion at f9c8cc77: immutable RuntimeOperationContext binds lifecycle generation and Session/Thread/Turn identity; Session and Recovery services reacquire the active Repository after remote awaits. The canonical service graph and Workbench no longer delegate through Topic-named operations; deprecated Manager Topic methods live only in runtime-topic-compatibility.js and IPC identity compatibility remains isolated. All Workbench host calls now cross the explicit Session/Projection/Interaction/Workspace clients, including presence, event subscription, profiles, avatar, model catalog, shell launch, external links and tool cancellation. Runtime Manager is 590 lines, Controller 584, Workbench composition 742, Renderer implementation 536. The nine Workbench CSS owners are all below 900 lines and shared-shell selectors are restricted to the legacy adapter. The complete requested matrix passed in 112.9 seconds; Electron recovery proved two concurrent Sessions, crash-safe SQLite reads, reload preservation, demand restart, and zero replayed turns/interactions. Status remains implemented/working-tree because product-level multi-resolution visual review, 20-file-tab/long-stream UX, and live ToolBox backend approval are outside this governance receipt."
 }

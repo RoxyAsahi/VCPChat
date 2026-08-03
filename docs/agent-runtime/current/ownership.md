@@ -28,7 +28,12 @@ Status: **implemented**
 | Legacy Agent Runtime archive | `archive/agent-runtime/` | product imports, default CI, or packaged sources |
 | Agent CSS entry and owners | `styles/ui-system/agent-workbench.css`, `agent-{shell,sidebar,composer,timeline,session-dock,workspace,activity,responsive,legacy-shell-adapter}.css` | direct rules in the entry, arbitrary import order, cross-page selectors outside legacy adapter |
 | Runtime lifecycle ordering | `runtime-host-service.js`, `runtime-lifecycle-service.js` | Repository close before approval/waiter cleanup, old-generation UI/SQLite/transport writes |
+| Runtime operation identity | `runtime-operation-context.js`; Session/Recovery services | remote await without generation + Session/Thread/Turn identity, writes through a closed Repository |
+| Deprecated Runtime Topic methods | `runtime-topic-compatibility.js` only | canonical service graph or Workbench delegation through Topic-named methods |
+| Workbench host API boundary | Session/Projection/Interaction/Workspace clients, `agent-runtime-event-subscription.js` | direct preload calls from Views, coordinators, command controller, or presentation |
 
 Reviewers should reject new modules that read `currentChatHistoryRef`, `currentSelectedItemRef`, `currentTopicIdRef`, `saveChatHistory`, or the main-chat `streamManager`.
 
 `agent-workbench.js` and `agent-workbench-implementation.js` are composition roots, not destinations for new message, Markdown, tool, approval, Dock, Workspace or action logic. Both are within the final 800-line gate; new behavior must enter the owned modules above rather than grow the composition files.
+
+Every Workbench CSS owner is also capped at 900 physical lines. Shared shell selectors belong only to `agent-legacy-shell-adapter.css`; owner files may use Agent-scoped structural class names but may not patch unrelated pages.

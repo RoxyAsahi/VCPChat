@@ -244,7 +244,9 @@ R12 当前状态只能是 `implemented/working-tree`，不得复用 R7-R10 live 
 - [x] Agent CSS 拆为固定顺序的 shell/sidebar/composer/timeline/session-dock/workspace/activity/responsive/legacy adapter；入口不再持有直接规则，拆分前后 583 rules / 2301 declarations 保持一致。
 - [x] Runtime stop/crash 顺序固定为 generation close、approval fail-close、waiter reject、dynamic/timer cancel、transport stop、Repository close；ToolBox duplicate cleanup 不重复 interrupt。
 - [x] Renderer content/message lifecycle/Mermaid/Tool Result/Markdown pipeline 独立归属，presentation golden、isolation 和 lifecycle gate 通过。
-- [~] Hermetic 与 Electron recovery 已通过；最终完整聚合矩阵和人工多分辨率/长流视觉验收仍需在本次治理 revision 上完成。
+- [x] 2026-08-04 完整聚合矩阵在治理 revision 上通过：Codex schema/governance/native stack、Electron smoke/recovery/degraded、Renderer isolation/lifecycle、Workbench clients/store/compatibility 与 UI/CSS 门禁均为 pass。
+- [x] RuntimeOperationContext、Session-canonical service graph、Workbench 四 client 边界和 CSS owner 900 行门禁已进入静态治理检查。
+- [~] 人工多分辨率、20 文件 Tab、长流视觉与真实 ToolBox backend approval 仍属于产品/GUI 验收，不阻塞代码治理的 hermetic 完成，但阻止状态升级为 product。
 
 R13 当前状态为 `implemented/working-tree`；代码治理目标已实现，但产品级多分辨率截图、20 文件 Tab、长流滚动和 live backend approval 仍属于 GUI-R6/R6，不因治理完成而自动升级为 product。
 

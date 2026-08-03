@@ -10,6 +10,10 @@ Renderer lifecycle belongs to an instance scope. Agent code may reuse audited pu
 
 Formal Workbench data access is split into Session, Projection, Interaction, and Workspace clients. Session identity is canonical; old Topic IPC is isolated in `modules/ipc/agentSessionCompatibility.js`, warns once, rejects conflicting identity, and is scheduled for removal at the next Agent protocol revision.
 
+Long-running Runtime mutations use an immutable `RuntimeOperationContext` that binds the captured lifecycle generation with optional Session, Thread, and Turn identity. A service must revalidate this context and reacquire the active Repository after each remote `await` before writing. Deprecated Manager Topic method names are installed only by `runtime-topic-compatibility.js`; the service graph and Workbench use Session methods.
+
+Workbench composition receives the preload object once and immediately wraps it in the four formal clients. Views and coordinators receive semantic controller actions only. Renderer attachments receive a narrow host adapter for image viewing, context menus, and external links rather than the full preload surface.
+
 Historical Pi/Rust JavaScript runtimes live under `archive/agent-runtime/`. Product code and packaging may not import or include that directory. The Rust workspace remains because it still builds `vcp-toolbox-bridge`.
 
 Agent Workbench CSS has one entry, `styles/ui-system/agent-workbench.css`, which imports the fixed owner sequence: shell, sidebar, composer, timeline, session dock, workspace, activity, responsive, and legacy shell adapter. The legacy adapter is the only owner for unlayered compatibility bridges.
@@ -22,3 +26,4 @@ Runtime shutdown and crash close the current generation first, fail-close approv
 - Runtime and Renderer lifecycle tests can reject stale-generation or cross-root cleanup.
 - Final composition and service ceilings are enforced by `check:codex-governance`; they may not be relaxed to accept new feature growth.
 - SQLite schema, Codex App Server protocol, ToolBox configuration, and main-chat renderer remain unchanged.
+- CSS owner files and Runtime/Renderer/Controller facades have enforceable physical-line ceilings; legacy shell selectors outside the dedicated adapter fail governance checks.
