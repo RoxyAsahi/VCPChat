@@ -4,7 +4,7 @@ import { projectSession } from './agent-workbench-projections.js';
 import { deriveWorkbenchViewState } from './agent-workbench-store.js';
 import { projectVcpToolPresentation } from './agent-workbench-timeline.js';
 import { createAgentBlockPresentation, createAgentMessagePresentation } from './agent-presentation/index.js';
-import { createWorkspacePathRef, createWorkspaceTreeModel } from './agent-workspace-model.js';
+import { createWorkspaceTreeModel } from './agent-workspace-model.js';
 import { createSessionDockModel } from './agent-session-dock.js';
 import { renderPendingInputQueue } from './agent-workbench-queue.js';
 import { createAgentComposerState } from './agent-composer-state.js';
@@ -40,6 +40,7 @@ import { createAgentWorkbenchTimelineView } from './agent-workbench-timeline-vie
 import { createAgentSettingsCoordinator } from './agent-settings-coordinator.js';
 import { createAgentTopicContextMenuView } from './agent-topic-context-menu-view.js';
 import { createAgentSessionOperationsCoordinator } from './agent-session-operations-coordinator.js';
+import { createAgentActivityCoordinator } from './agent-activity-coordinator.js';
 import {
     agentCacheKey,
     createAgentSessionCatalogCoordinator,
@@ -405,6 +406,13 @@ function mountWorkbench(container) {
             try { void controller.workspaceCancel({ requestId, sessionId }).catch(() => null); } catch {}
         },
     });
+    function selectedWorkspaceIdentity(current = store.getState()) {
+        const selected = current.selectedTopic || {};
+        return {
+            sessionId: current.selectedSessionId || selected.topicId || selected.sessionId || '',
+            workspaceRoot: selected.workspaceRef || selected.workspaceRoot || '',
+        };
+    }
     const workspaceCoordinator = createAgentWorkspaceCoordinator({
         browser: state.workspaceBrowser,
         requests: workspaceRequests,
@@ -838,6 +846,41 @@ function mountWorkbench(container) {
             },
         },
     });
+    const activityCoordinator = createAgentActivityCoordinator({
+        state,
+        store,
+        document,
+        node,
+        refs: shellView.refs,
+        sessionDockView,
+        activityReadonlyView,
+        approvalView,
+        notificationView,
+        workspaceView,
+        workspaceCoordinator,
+        queueRender,
+        run,
+        launchTerminal: async () => {
+            const result = await runtimeApi().desktopLaunchVchatApp?.('open-powershell-executor-terminal');
+            if (result && result.success === false) throw new Error(result.error || '无法打开 VChat 终端。');
+        },
+    });
+    const {
+        normalizeKind: normalizeDockKind,
+        selectedSessionId: selectedDockSessionId,
+        syncDock: syncSessionDock,
+        clearUnread: clearActivityUnread,
+        setOpen: setActivityOpen,
+        maybeAutoOpen: maybeAutoOpenActivity,
+        syncWorkspace: syncWorkspaceScope,
+        loadDirectory: loadWorkspaceDirectory,
+        openPreview: openWorkspacePreview,
+        openFileTab: openWorkspaceFileTab,
+        performPathAction: performWorkspaceAction,
+        openSourcePath: openWorkspaceSourcePath,
+        search: scheduleWorkspaceSearch,
+        render: renderActivity,
+    } = activityCoordinator;
     const closeTopicContextMenu = topicContextMenuView.close;
     const appendTopicActions = topicContextMenuView.appendActions;
 
@@ -1128,259 +1171,6 @@ function mountWorkbench(container) {
             state.unreadTimelineCount = Math.min(99, (state.unreadTimelineCount || 0) + 1);
         }
         renderJumpToLatest();
-    }
-
-    function normalizeDockKind(tab) {
-        return ({ usage: 'context', workspace: 'files', activity: 'notifications' })[tab] || tab || 'context';
-    }
-
-    function selectedDockSessionId(current = store.getState()) {
-        return current.selectedSessionId || current.selectedTopic?.topicId || '';
-    }
-
-    function syncSessionDock(current = store.getState()) {
-        state.sessionDock.setSession(selectedDockSessionId(current));
-        const snapshot = state.sessionDock.snapshot();
-        state.activityTab = snapshot.activeId;
-        return snapshot;
-    }
-
-    function openDockKind(kind) {
-        const normalized = normalizeDockKind(kind);
-        state.sessionDock.setSession(selectedDockSessionId());
-        state.sessionDock.openKind(normalized);
-        state.activityTab = state.sessionDock.snapshot().activeId;
-        state.dockMenuOpen = false;
-        setActivityOpen(true);
-    }
-
-    function dockMenuCommands() {
-        const current = store.getState();
-        const changesAvailable = [...(current.tools instanceof Map ? current.tools.values() : [])]
-            .some((tool) => Array.isArray(tool?.payload?.changes?.files) && tool.payload.changes.files.length);
-        return [
-            { icon: 'folder_open', label: '打开文件', run: () => openDockKind('files') },
-            ...(changesAvailable ? [{ icon: 'difference', label: '查看变更', run: () => openDockKind('changes') }] : []),
-            { icon: 'data_usage', label: '上下文', run: () => openDockKind('context') },
-            { icon: 'notifications', label: '通知', run: () => openDockKind('notifications') },
-            { icon: 'approval', label: '审批', run: () => openDockKind('approvals') },
-            { icon: 'terminal', label: '在 VChat 终端中打开', run: () => run(async () => {
-                const result = await runtimeApi().desktopLaunchVchatApp?.('open-powershell-executor-terminal');
-                if (result && result.success === false) throw new Error(result.error || '无法打开 VChat 终端。');
-                state.dockMenuOpen = false;
-                renderActivity();
-            }) },
-        ];
-    }
-
-    function setActivityOpen(open, tab) {
-        if (open && tab) {
-            const normalized = normalizeDockKind(tab);
-            state.sessionDock.setSession(selectedDockSessionId());
-            state.sessionDock.openKind(normalized);
-            state.activityTab = state.sessionDock.snapshot().activeId;
-        }
-        state.activityOpen = open;
-        if (open) clearActivityUnread(normalizeDockKind(state.activityTab));
-        if (open) {
-            activitySplitter.classList.add('is-active');
-            activityPanel.classList.add('agent-chat-activity-open');
-            activityPanel.classList.remove('agent-chat-activity-collapsed');
-            activityPanel.removeAttribute('inert');
-            activityPanel.setAttribute('aria-hidden', 'false');
-        } else {
-            activityPanel.classList.remove('agent-chat-activity-open');
-            activityPanel.classList.add('agent-chat-activity-collapsed');
-            activityPanel.setAttribute('inert', '');
-            activityPanel.setAttribute('aria-hidden', 'true');
-        }
-        queueRender({ activity: true, header: true });
-    }
-
-    function clearActivityUnread(tab) {
-        tab = normalizeDockKind(tab);
-        const current = store.getState();
-        const byTab = { ...(current.activityUnreadByTab || {}) };
-        const legacyTab = ({ context: 'usage', files: 'workspace', notifications: 'activity' })[tab];
-        if (!byTab[tab] && !(legacyTab && byTab[legacyTab])) return;
-        byTab[tab] = 0;
-        if (legacyTab) byTab[legacyTab] = 0;
-        store.setState({
-            activityUnreadByTab: byTab,
-            activityUnread: Object.values(byTab).reduce((sum, value) => sum + Number(value || 0), 0),
-        });
-    }
-
-    // Surface the activity panel automatically on state transitions the user
-    // must notice: a Runtime error, or the first pending approval arriving.
-    // Main remains responsible for fail-closed expiry even while this
-    // panel is collapsed; the renderer ticker only refreshes visible labels.
-    function maybeAutoOpenActivity() {
-        const current = store.getState();
-        const viewState = deriveWorkbenchViewState(current);
-        const approvalsCount = (current.approvals || []).length;
-        if (approvalsCount > 0 && !state.hadApprovals && !state.activityOpen) {
-            setActivityOpen(true, 'approvals');
-        }
-        state.lastViewState = viewState;
-        state.hadApprovals = approvalsCount > 0;
-    }
-
-    function selectedWorkspaceIdentity(current = store.getState()) {
-        const selected = current.selectedTopic || {};
-        return {
-            sessionId: current.selectedSessionId || selected.topicId || selected.sessionId || '',
-            workspaceRoot: selected.workspaceRef || selected.workspaceRoot || '',
-        };
-    }
-
-    function syncWorkspaceScope(current = store.getState()) {
-        return workspaceCoordinator.syncScope(current);
-    }
-
-    function loadWorkspaceDirectory(relativePath = '') {
-        return workspaceCoordinator.loadDirectory(relativePath, store.getState());
-    }
-
-    function openWorkspacePreview(ref) {
-        return workspaceCoordinator.openPreview(ref);
-    }
-
-    async function openWorkspaceFileTab(ref) {
-        state.sessionDock.setSession(selectedDockSessionId());
-        const snapshot = state.sessionDock.openFile(ref);
-        if (!snapshot) throw new Error('文件引用不属于当前会话或工作区版本已失效。');
-        state.activityTab = snapshot.activeId;
-        await workspaceCoordinator.openPreview(ref);
-        setActivityOpen(true);
-    }
-
-    function performWorkspaceAction(ref, action) {
-        return workspaceCoordinator.performAction(ref, action);
-    }
-
-    async function openWorkspaceSourcePath(relativePath, source = 'tree', action = 'preview') {
-        syncWorkspaceScope();
-        if (!state.workspaceBrowser.workspaceRevision) await loadWorkspaceDirectory('');
-        const browser = state.workspaceBrowser;
-        const ref = createWorkspacePathRef({
-            sessionId: browser.sessionId, workspaceRevision: browser.workspaceRevision,
-            relativePath, source,
-        });
-        if (action === 'preview') {
-            setActivityOpen(true, 'files');
-            return openWorkspacePreview(ref);
-        }
-        if (action === 'open-in-vchat') return openWorkspaceFileTab(ref);
-        return performWorkspaceAction(ref, action);
-    }
-
-    function scheduleWorkspaceSearch(value) {
-        workspaceCoordinator.search(value);
-    }
-
-    function renderActivity() {
-        if (state.disposed) return;
-        const current = store.getState();
-        const previousContent = sessionDockView.activePanel();
-        const previousActiveTab = state.sessionDock.snapshot().tabs.find((tab) => tab.id === state.activityTab);
-        const previousScrollTarget = previousActiveTab?.kind === 'notifications'
-            ? previousContent?.querySelector('.agent-chat-activity-list')
-            : previousContent;
-        const scrollTop = previousScrollTarget?.scrollTop || 0;
-        const searchFocused = document.activeElement?.matches?.('.agent-chat-activity-filters input[type="search"]');
-        const searchSelection = searchFocused ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null;
-        const existingInteractions = new Map([...activityPanel.querySelectorAll('.agent-chat-interaction-card[data-interaction-id]')]
-            .map((item) => [item.dataset.interactionId, item]));
-        const existingActivityCards = new Map([...activityPanel.querySelectorAll('[data-activity-key]')]
-            .map((item) => [item.dataset.activityKey, item]));
-        const openKeys = new Set([...activityPanel.querySelectorAll('details[open][data-activity-key]')]
-            .map((item) => item.dataset.activityKey));
-
-        const localApprovals = current.approvals || [];
-        const backendApprovals = (current.toolboxWs || [])
-            .filter((item) => item?.kind === 'backend-approval-request');
-        const interactionKey = (source, requestId) => `${String(source || 'codex-native')}:${String(requestId || '')}`;
-        const actionableKeys = new Set([
-            ...localApprovals.map((item) => interactionKey(item.scope || 'codex-native', item.requestId || item.approvalId)),
-            ...backendApprovals.map((item) => interactionKey('toolbox', item?.value?.requestId || item?.value?.data?.requestId)),
-        ]);
-        const passiveInteractions = (current.interactions || []).filter((item) => (
-            !actionableKeys.has(interactionKey(item.source, item.requestId))
-        ));
-        const pendingApprovals = localApprovals.length + backendApprovals.length + passiveInteractions.length;
-        const unread = current.activityUnreadByTab || {};
-        syncSessionDock(current);
-        state.sessionDock.setBadge('notifications', Number(unread.notifications || unread.activity || 0));
-        state.sessionDock.setBadge('approvals', pendingApprovals);
-        const tabDefs = state.sessionDock.snapshot().tabs;
-        if (!tabDefs.some((tab) => tab.id === state.activityTab)) state.activityTab = 'context';
-        const content = sessionDockView.update({
-            tabs: tabDefs,
-            activeId: state.activityTab,
-            menuOpen: state.dockMenuOpen,
-            commands: dockMenuCommands(),
-        });
-        content.replaceChildren();
-        const viewState = deriveWorkbenchViewState(current);
-        const activeDefinition = tabDefs.find((tab) => tab.id === state.activityTab) || tabDefs[0];
-        const activeKind = activeDefinition?.kind || 'context';
-
-        if (activeKind === 'connection') {
-            content.append(activityReadonlyView.buildConnection(current, viewState));
-        } else if (activeKind === 'approvals') {
-            content.append(approvalView.build({
-                localApprovals,
-                backendApprovals,
-                interactions: passiveInteractions,
-                existingInteractions,
-            }));
-        } else if (activeKind === 'context') {
-            content.append(activityReadonlyView.buildUsage(current));
-        } else if (activeKind === 'plan') {
-            content.append(activityReadonlyView.buildPlan(current));
-        } else if (activeKind === 'changes') {
-            const selectedSessionId = current.selectedSessionId || current.selectedTopic?.topicId || '';
-            content.append(activityReadonlyView.buildChanges(current, {
-                sessionId: selectedSessionId,
-                workspaceRevision: state.workspaceBrowser.sessionId === selectedSessionId
-                    ? state.workspaceBrowser.workspaceRevision : '',
-            }));
-        } else if (activeKind === 'files') {
-            workspaceView.update({ identity: syncWorkspaceScope(current), browser: state.workspaceBrowser });
-            content.append(workspaceView.element);
-        } else if (activeKind === 'file') {
-            syncWorkspaceScope(current);
-            const ref = createWorkspacePathRef({
-                sessionId: activeDefinition.sessionId,
-                workspaceRevision: activeDefinition.workspaceRevision,
-                relativePath: activeDefinition.relativePath,
-                source: 'tree',
-            });
-            if (state.workspaceBrowser.preview?.relativePath !== activeDefinition.relativePath
-                || state.workspaceBrowser.preview?.workspaceRevision !== activeDefinition.workspaceRevision) {
-                content.append(node('div', 'agent-chat-activity-empty', '正在读取文件…'));
-                if (!state.workspaceBrowser.previewLoading) queueMicrotask(() => run(() => openWorkspacePreview(ref)));
-            } else content.append(workspaceView.renderPreview(state.workspaceBrowser));
-        } else {
-            const notification = notificationView.build(current, {
-                cards: existingActivityCards,
-                openKeys,
-            });
-            content.append(notification.content);
-        }
-        for (const details of content.querySelectorAll('details[data-activity-key]')) {
-            if (openKeys.has(details.dataset.activityKey)) details.open = true;
-        }
-        const scrollTarget = activeKind === 'notifications'
-            ? content.querySelector('.agent-chat-activity-list')
-            : content;
-        if (scrollTarget) scrollTarget.scrollTop = scrollTop;
-        if (searchFocused) {
-            const nextSearch = content.querySelector('.agent-chat-activity-filters input[type="search"]');
-            nextSearch?.focus();
-            if (searchSelection) nextSearch?.setSelectionRange?.(...searchSelection);
-        }
     }
 
     function patchStreamingFeed(event) {
@@ -1833,6 +1623,7 @@ function mountWorkbench(container) {
         sessionCatalog.dispose();
         sessionOperations.dispose();
         settingsCoordinator.dispose();
+        activityCoordinator.dispose();
         workspaceCoordinator.dispose();
         settingsState.dispose();
         topicContextMenuView.dispose();
