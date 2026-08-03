@@ -3611,7 +3611,7 @@ html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .topic-list .agent-ch
     /* A user prompt becomes visible immediately after the daemon accepts the
        command. This is renderer-only delivery feedback, not a second
        transcript: a later Rust `turn.started` event confirms/replaces it. */
-    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .message-item.user[data-delivery-state="sending"] .md-content {
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .message-item.user[data-delivery-state="sending"] .md-content {
         opacity: 0.72;
     }
 
@@ -3988,6 +3988,10 @@ html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-group-b
 
 html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-tool-group-body > .agent-chat-tool-group-item:last-child {
     margin-bottom: 0;
+}
+
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .message-attachment-video {
+    max-width: min(300px, 100%);
 }
 
 @media (prefers-reduced-motion: reduce) {

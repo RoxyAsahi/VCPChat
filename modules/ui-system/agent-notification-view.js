@@ -10,7 +10,7 @@ export function createAgentNotificationView({ document, blockPresentation, actio
         const markers = current.markerObservations || [];
         const existingCards = previous.cards || new Map();
         const openKeys = previous.openKeys || new Set();
-        const content = node('div', 'agent-chat-notification-view');
+        const content = document.createDocumentFragment();
         content.append(node('div', 'agent-chat-activity-note', '全局 VCPLog/VCPInfo 仅保留本次运行；会话关联的工具、推理和检查结果会随会话恢复。'));
         const controls = node('div', 'agent-chat-activity-filters');
         const searchInput = document.createElement('input');

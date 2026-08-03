@@ -43,7 +43,7 @@ export async function renderAttachments({ documentRef, windowRef, electronAPI, m
             element = documentRef.createElement('video');
             element.src = attachment.src;
             element.controls = true;
-            element.style.maxWidth = '300px';
+            element.classList.add('message-attachment-video');
         } else {
             element = documentRef.createElement('a');
             element.href = attachment.src;
