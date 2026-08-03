@@ -141,7 +141,7 @@ for (const file of governedUiModules) {
         errors.push(`${file} bypasses Workbench action/client boundary`);
     }
 }
-for (const file of ['agent-renderer-history.js', 'agent-renderer-actions.js']) {
+for (const file of ['agent-renderer-history.js', 'agent-renderer-actions.js', 'agent-renderer-latex.js']) {
     const absolute = path.join(root, 'modules/ui-system/agent-presentation/fork', file);
     if (!fs.existsSync(absolute)) errors.push(`missing governed Agent renderer module: ${file}`);
     else if (fs.readFileSync(absolute, 'utf8').split(/\r?\n/).length > 900) {
