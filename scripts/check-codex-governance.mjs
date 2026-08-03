@@ -81,7 +81,7 @@ const workbenchImplementationLineCount = fs.readFileSync(path.join(root, 'module
 const controllerFacadeLineCount = fs.readFileSync(path.join(root, 'modules/ui-system/agent-workbench-controller.js'), 'utf8').split(/\r?\n/).length;
 const controllerImplementationLineCount = fs.readFileSync(path.join(root, 'modules/ui-system/agent-workbench-controller-implementation.js'), 'utf8').split(/\r?\n/).length;
 if (workbenchLineCount > 800) errors.push(`agent-workbench.js exceeds composition facade ceiling: ${workbenchLineCount} lines`);
-if (workbenchImplementationLineCount > 2000) errors.push(`agent-workbench-implementation.js exceeds temporary extraction ceiling: ${workbenchImplementationLineCount} lines`);
+if (workbenchImplementationLineCount > 800) errors.push(`agent-workbench-implementation.js exceeds composition ceiling: ${workbenchImplementationLineCount} lines`);
 if (controllerFacadeLineCount > 800) errors.push(`agent-workbench-controller.js exceeds controller facade ceiling: ${controllerFacadeLineCount} lines`);
 if (controllerImplementationLineCount > 600) errors.push(`agent-workbench-controller-implementation.js exceeds controller ceiling: ${controllerImplementationLineCount} lines`);
 const commandControllerPath = path.join(root, 'modules/ui-system/agent-workbench-command-controller.js');
@@ -133,6 +133,9 @@ const governedUiModules = [
     'agent-composer-coordinator.js',
     'agent-workbench-render-coordinator.js',
     'agent-workbench-sidebar-coordinator.js',
+    'agent-timeline-coordinator.js',
+    'agent-session-view-context.js',
+    'agent-workbench-state.js',
 ];
 for (const file of governedUiModules) {
     const absolute = path.join(root, 'modules/ui-system', file);

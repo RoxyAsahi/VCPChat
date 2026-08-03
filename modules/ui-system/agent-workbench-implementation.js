@@ -1,11 +1,8 @@
 import { register } from './next-ui-apps.js';
 import { createWorkbenchController } from './agent-workbench-controller.js';
 import { deriveWorkbenchViewState } from './agent-workbench-store.js';
-import { createAgentBlockPresentation, createAgentMessagePresentation } from './agent-presentation/index.js';
-import { createWorkspaceTreeModel } from './agent-workspace-model.js';
-import { createSessionDockModel } from './agent-session-dock.js';
+import { createAgentBlockPresentation } from './agent-presentation/index.js';
 import { renderPendingInputQueue } from './agent-workbench-queue.js';
-import { createAgentComposerState } from './agent-composer-state.js';
 import { createWorkspaceRequestCoordinator } from './agent-workspace-requests.js';
 import { createWorkbenchLifecycle } from './agent-workbench-lifecycle.js';
 import { renderAgentSettingsPane } from './agent-settings-view.js';
@@ -33,7 +30,6 @@ import { createAgentNotificationView } from './agent-notification-view.js';
 import { createAgentApprovalView } from './agent-approval-view.js';
 import { createAgentWorkbenchTopicFlow } from './agent-workbench-topic-flow.js';
 import { createAgentWorkspaceCoordinator } from './agent-workspace-coordinator.js';
-import { createAgentWorkbenchTimelineView } from './agent-workbench-timeline-view.js';
 import { createAgentSettingsCoordinator } from './agent-settings-coordinator.js';
 import { createAgentTopicContextMenuView } from './agent-topic-context-menu-view.js';
 import { createAgentSessionOperationsCoordinator } from './agent-session-operations-coordinator.js';
@@ -41,6 +37,9 @@ import { createAgentActivityCoordinator } from './agent-activity-coordinator.js'
 import { createAgentComposerCoordinator } from './agent-composer-coordinator.js';
 import { createAgentWorkbenchRenderCoordinator } from './agent-workbench-render-coordinator.js';
 import { createAgentWorkbenchSidebarCoordinator } from './agent-workbench-sidebar-coordinator.js';
+import { createAgentTimelineCoordinator } from './agent-timeline-coordinator.js';
+import { createAgentSessionViewContext } from './agent-session-view-context.js';
+import { createAgentWorkbenchState } from './agent-workbench-state.js';
 import {
     agentCacheKey,
     createAgentSessionCatalogCoordinator,
@@ -163,107 +162,16 @@ function mountWorkbench(container) {
     const lifecycle = createWorkbenchLifecycle(window);
     const controller = createWorkbenchController(runtimeApi());
     const { store } = controller;
-    const state = {
-        tab: 'agents',
-        selectedAgent: 'Nova',
-        agentCatalog: seedBuildAgentCatalog(),
-        agentSearch: '',
-        modelCatalog: [],
-        topics: [],
-        topicsByAgent: new Map(),
-        archivedTopicsByAgent: new Map(),
-        showArchivedTopics: false,
-        topicListLoading: false,
-        topicSearch: '',
-        topicSearchResults: [],
-        topicSearchLoading: false,
-        topicSearchError: '',
-        topicSearchOpen: false,
-        topicManaging: false,
-        topicSelectedIds: new Set(),
-        queue: [],
-        queueOpen: false,
-        budget: { maxRequestsPerTurn: null, maxTokensPerTurn: null },
-        budgetSaving: false,
-        settingsSaveState: 'idle',
-        settingsSaveMessage: '',
-        settingsScope: 'profile',
-        settingsSaveByScope: new Map([
-            ['profile', { state: 'idle', message: '' }],
-            ['session', { state: 'idle', message: '' }],
-            ['advanced', { state: 'idle', message: '' }],
-        ]),
-        recoveryOperations: [],
-        recoveryThreads: [],
-        recoveryLoading: false,
-        recoveryError: '',
-        // This is deliberately local-client policy only.  It never changes
-        // VCPToolBox's independent backend approval policy.
-        permissionMode: 'ask',
-        permissionSaving: false,
-        modelSaving: false,
-        avatarSaving: false,
-        // Draft model value for the selected Session.  It is intentionally
-        // kept separate from the durable configSnapshot until Save succeeds.
-        modelDraft: null,
-        modelDraftSessionId: null,
-        recovering: false,
-        activityOpen: false,
-        activityPanelWidth: 420,
-        activityTab: 'notifications',
-        sessionDock: createSessionDockModel(window.sessionStorage),
-        dockMenuOpen: false,
-        lastViewState: null,
-        hadApprovals: false,
-        workspace: '',
-        workspaceBrowser: {
-            scope: '',
-            sessionId: '',
-            workspaceRevision: '',
-            model: createWorkspaceTreeModel(),
-            inflight: new Map(),
-            inflightRequestIds: new Map(),
-            previewRequestId: '',
-            searchRequestId: '',
-            error: '',
-            preview: null,
-            previewLoading: false,
-            search: '',
-            searchResults: [],
-            searchLoading: false,
-            selectedPath: '',
-            splitPercent: 46,
-        },
-        model: 'gpt-5.6-terra',
-        composerStateBySession: createAgentComposerState(),
-        rememberedTopic: loadRememberedTopic(),
-        // A purely visual reading aid.  It records neither transcript content
-        // nor Runtime state; it only lets a reader return to the live edge
-        // after intentionally browsing older timeline Parts.
-        followingFeed: true,
-        unreadTimelineCount: 0,
-        // Keyed by Codex-owned messageId/toolCallId. This is a DOM cache only;
-        // it never contains a transcript beyond the current renderer view.
-        timelineRows: new Map(),
-        // Renderer-only send barriers, isolated by durable Session identity.
-        // They are never written to SQLite and must never disable or decorate
-        // another Session while thread/start is still in flight.
-        turnStarts: new Map(),
-        topicCreating: false,
-        profileConfigurationNotice: '',
-        // This is deliberately a transient UI flow, not a second Session
-        // store. SQLite remains the durable source of the Session projection;
-        // the renderer only keeps the currently-open form and a small
-        // read-only snapshot summary while the dialog is visible.
-        topicFlow: null,
-        // A document-level popover is intentionally transient. It is never
-        // used as Session state: SQLite owns display metadata while Codex owns
-        // Thread execution and mutations.
-        topicContextMenu: null,
-        uxTimings: new Map(),
-        turnStartedAt: new Map(),
-        disposed: false,
-    };
+    const state = createAgentWorkbenchState({
+        window, agentCatalog: seedBuildAgentCatalog(), rememberedTopic: loadRememberedTopic(),
+    });
+    const sessionViewContext = createAgentSessionViewContext({ state, store, document, sameAgent });
+    const {
+        activeSession, selectedSessionKey, selectedComposerState, selectedTurnStart,
+        selectedActiveTurnId, sessionActivity, createSessionAvatar,
+    } = sessionViewContext;
+    const syncPermissionModeFromSelectedSession = sessionViewContext.syncPermissionMode;
+    const syncModelFromSelectedSession = sessionViewContext.syncModel;
     let renderCoordinator = null;
     const queueRender = (parts) => renderCoordinator?.queueRender(parts);
     const settleTurnStartIndicator = (event) => renderCoordinator?.settleTurnStartIndicator(event);
@@ -473,6 +381,7 @@ function mountWorkbench(container) {
     const { persist: persistWorkbenchSettings, sessionConfigRevisions } = settingsCoordinator;
 
     const approvalRegistry = new Map();
+    let timelineCoordinator = null;
     const blockPresentation = createAgentBlockPresentation({
         document,
         renderContent: renderMarkdown,
@@ -493,7 +402,7 @@ function mountWorkbench(container) {
         blockPresentation,
         registry: approvalRegistry,
         actions: {
-            ensureTicker: ensureApprovalTicker,
+            ensureTicker: () => timelineCoordinator?.ensureApprovalTicker(),
             respondApproval: (item, decision) => run(() => controller.respondApproval(item, decision)),
             respondInteraction: (interaction, response) => run(() => controller.respondInteraction(interaction, response)),
             openExternal: (url) => runtimeApi().sendOpenExternalLink?.(url),
@@ -530,225 +439,10 @@ function mountWorkbench(container) {
         },
     });
 
-    function presentationSessionContext() {
-        const current = store.getState();
-        const profile = selectedAgentProfile() || {};
-        const selected = current.selectedTopic || {};
-        const runtime = activeSession();
-        const snapshot = runtime?.configSnapshot || selected.configSnapshot || {};
-        return {
-            sessionId: current.selectedSessionId || selected.topicId || null,
-            threadId: runtime?.threadId || selected.threadId || null,
-            participant: {
-                id: selected.agentId || profile.id || state.selectedAgent,
-                name: snapshot.agentName || selected.agentName || profile.name || selected.agentId || state.selectedAgent || 'Nova',
-                avatarUrl: snapshot.agentAvatar || selected.avatarUrl || profile.avatarUrl || '',
-                colors: profile.colors || profile.config?.colors || {},
-                config: profile.config || profile,
-            },
-            messages: current.messages || [],
-            settings: window.globalSettings || {},
-        };
-    }
-
-    function promptForPart(part) {
-        const messages = store.getState().messages || [];
-        const index = messages.findIndex((message) => (message.id || message.messageId) === part.id);
-        const candidates = index >= 0 ? messages.slice(0, index + 1).reverse() : messages.slice().reverse();
-        const user = candidates.find((message) => message.role === 'user' && typeof message.content === 'string');
-        return user?.content || (typeof part.value?.content === 'string' ? part.value.content : '');
-    }
-
-    async function forkAndSend(part, prompt, title) {
-        const context = presentationSessionContext();
-        await controller.forkSession({ sessionId: context.sessionId, turnId: part.turnId, title });
-        if (prompt?.trim()) await controller.startTurn(prompt.trim(), []);
-    }
-
-    const fullPresentation = createAgentMessagePresentation({
-        window,
-        document,
-        container: feedItems,
-        getSessionContext: presentationSessionContext,
-        nonMessageCallbacks: blockPresentation.timelineCallbacks,
-        electronAPI: runtimeApi(),
-        scrollToBottom: () => scrollFeed(feed, true),
-        notify,
-        actions: {
-            copy: async ({ text: value }) => {
-                await navigator.clipboard.writeText(value);
-                notify('已复制渲染后的文本。', 'success');
-            },
-            interrupt: ({ part }) => run(async () => {
-                await controller.cancelTurn();
-                notify(`已请求中止 ${part.turnId || '当前 Turn'}。`, 'success');
-            }),
-            fork: ({ part }) => run(async () => {
-                await controller.forkSession({
-                    sessionId: presentationSessionContext().sessionId,
-                    turnId: part.turnId,
-                    title: 'Agent 分支',
-                });
-                notify('已创建 Codex 会话分支。', 'success');
-            }),
-            retry: ({ part }) => run(async () => {
-                await forkAndSend(part, promptForPart(part), '从消息重试');
-                notify('已在新 Codex 分支重试。', 'success');
-            }),
-            edit: ({ part }) => {
-                const original = promptForPart(part);
-                const edited = window.prompt?.('编辑并在新 Codex 分支发送', original);
-                if (edited === null || edited === undefined || !edited.trim()) return;
-                run(async () => {
-                    await forkAndSend(part, edited, '编辑消息分支');
-                    notify('已在新 Codex 分支发送编辑内容。', 'success');
-                });
-            },
-            forward: ({ part }) => run(async () => {
-                const value = typeof part.value?.content === 'string' ? part.value.content : promptForPart(part);
-                await navigator.clipboard.writeText(value || '');
-                notify('Agent 消息已复制；可粘贴到目标 VChat 会话。', 'success');
-            }),
-        },
-    });
-    fullPresentation.bindInteractions();
-    const timelineView = createAgentWorkbenchTimelineView({
-        refs: shellView.refs,
-        rows: state.timelineRows,
-        callbacks: fullPresentation.timelineCallbacks,
-        actions: {
-            isFollowing: isFollowingContainer,
-            scroll: scrollFeed,
-        },
-    });
-
-    // One renderer-only ticker keeps Host-owned deadlines visible. It never
-    // resolves an approval; Main's approval.resolved event is the sole
-    // authoritative terminal transition.
-    let approvalTicker = null;
-    function ensureApprovalTicker() {
-        if (approvalTicker) return;
-        approvalTicker = lifecycle.interval('approval-ticker', () => {
-            const now = Date.now();
-            for (const [id, entry] of approvalRegistry) {
-                const cards = root.querySelectorAll(`[data-approval-id="${cssEscape(id)}"]`);
-                if (!cards.length) continue;
-                const remaining = entry.deadline - now;
-                const expired = remaining <= 0;
-                cards.forEach((card) => {
-                    const label = card.querySelector('.agent-chat-approval-countdown');
-                    if (expired) {
-                        if (!entry.expired) {
-                            entry.expired = true;
-                            card.classList.add('agent-chat-approval-expired');
-                            if (label) label.textContent = '等待 Codex App Server 确认超时拒绝';
-                            const approvalLive = card.querySelector('.agent-chat-approval-live');
-                            if (approvalLive) approvalLive.textContent = '审批截止时间已到，等待 Codex App Server 最终事件。';
-                        }
-                    } else if (label) {
-                        label.textContent = `默认拒绝 · Codex App Server ${Math.ceil(remaining / 1000)}s 后处理`;
-                    }
-                });
-                if (expired) {
-                    approvalRegistry.delete(id);
-                    continue;
-                }
-            }
-            if (approvalRegistry.size === 0 && approvalTicker) {
-                lifecycle.clear('approval-ticker');
-                approvalTicker = null;
-            }
-        }, 500);
-    }
-
-    function activeSession() {
-        const current = store.getState();
-        const sessionId = current.selectedSessionId || current.selectedTopic?.topicId;
-        return sessionId && current.activeRuntimes instanceof Map
-            ? current.activeRuntimes.get(sessionId) || null
-            : null;
-    }
-
-    function selectedSessionKey(current = store.getState()) {
-        return current.selectedSessionId || current.selectedTopic?.topicId || null;
-    }
-
-    function selectedComposerState(current = store.getState()) {
-        return state.composerStateBySession.get(selectedSessionKey(current));
-    }
-
-    function selectedTurnStart(current = store.getState()) {
-        const sessionId = selectedSessionKey(current);
-        return sessionId ? state.turnStarts.get(sessionId) || null : null;
-    }
-
-    function selectedActiveTurnId(current = store.getState()) {
-        const sessionId = selectedSessionKey(current);
-        const runtime = sessionId && current.activeRuntimes instanceof Map
-            ? current.activeRuntimes.get(sessionId) : null;
-        return current.activeTurnId || runtime?.activeTurnId || null;
-    }
-
-    function syncPermissionModeFromSelectedSession() {
-        const current = store.getState();
-        const snapshot = current.selectedTopic?.configSnapshot || null;
-        if (!snapshot || (!Object.prototype.hasOwnProperty.call(snapshot, 'permissionMode')
-            && !Object.prototype.hasOwnProperty.call(snapshot, 'approvalPolicy'))) return;
-        // The selected Session snapshot is the same source that Main passes
-        // to Codex on the next turn. The page-level value is only a default
-        // for creating a new Session and must not overwrite this projection.
-        state.permissionMode = snapshot.permissionMode
-            || (snapshot.approvalPolicy === 'never' ? 'always-approve' : 'ask');
-    }
-
-    function syncModelFromSelectedSession() {
-        const current = store.getState();
-        const selectedSessionId = current.selectedSessionId || current.selectedTopic?.topicId || '';
-        if (state.modelDraftSessionId !== selectedSessionId) {
-            state.modelDraftSessionId = selectedSessionId;
-            state.modelDraft = null;
-        }
-        const snapshot = current.selectedTopic?.configSnapshot || null;
-        const selectedModel = typeof snapshot?.model === 'string' ? snapshot.model.trim() : '';
-        if (selectedModel && state.modelDraft === null) state.model = selectedModel;
-    }
-
     function isMissingRememberedSessionError(error) {
         // The pointer is only a convenience preference. A Session may have
         // been permanently deleted since the previous Renderer lifetime.
         return /(?:Session was not found|NOT_FOUND)/i.test(String(error?.message || error || ''));
-    }
-
-    function agentAvatarUrl(agentId) {
-        return state.agentCatalog.find((agent) => sameAgent(agent.id || agent.name, agentId))?.avatarUrl
-            || 'assets/default_avatar.png';
-    }
-
-    function sessionActivity(sessionId, fallback = 'idle') {
-        const current = store.getState();
-        const runtime = sessionId && current.activeRuntimes instanceof Map
-            ? current.activeRuntimes.get(sessionId) : null;
-        if (runtime?.activity) return runtime.activity;
-        if (runtime?.activeTurnId) return 'running';
-        if (sessionId && state.turnStarts.has(sessionId)) return 'starting';
-        return fallback || 'idle';
-    }
-
-    function createSessionAvatar(sessionId, agentId, label, activity = 'idle') {
-        const wrap = node('span', 'agent-chat-session-avatar');
-        const resolvedActivity = sessionActivity(sessionId, activity);
-        wrap.dataset.activity = resolvedActivity;
-        wrap.classList.toggle('is-running', ['starting', 'running'].includes(resolvedActivity));
-        wrap.classList.toggle('is-awaiting-approval', resolvedActivity === 'awaiting-approval');
-        const avatar = document.createElement('img');
-        avatar.className = 'avatar';
-        avatar.loading = 'lazy';
-        avatar.decoding = 'async';
-        avatar.src = agentAvatarUrl(agentId);
-        avatar.alt = label;
-        avatar.onerror = () => { avatar.src = 'assets/default_avatar.png'; };
-        wrap.append(avatar);
-        return wrap;
     }
 
     function uxMark(name, identity, startedAt = null) {
@@ -759,6 +453,13 @@ function mountWorkbench(container) {
         console.debug('[Agent UX]', { name, id: shortId, durationMs: Math.round((now - base) * 10) / 10 });
         return now;
     }
+
+    timelineCoordinator = createAgentTimelineCoordinator({
+        state, store, controller, lifecycle, window, document, root, refs: shellView.refs,
+        runtimeApi: runtimeApi(), blockPresentation, approvalRegistry, cssEscape,
+        selectedAgentProfile, activeSession, selectedSessionKey, selectedTurnStart,
+        run, notify, scrollFeed, isFollowingContainer,
+    });
 
     const sessionOperations = createAgentSessionOperationsCoordinator({
         state, store, controller, selectedAgentProfile, profileNeedsConfiguration,
@@ -971,19 +672,11 @@ function mountWorkbench(container) {
     }
 
     function renderFeed() {
-        const current = store.getState();
-        timelineView.update({
-            projection: current,
-            pendingTurnStart: selectedTurnStart(current),
-            selectedSessionId: selectedSessionKey(current),
-        });
+        timelineCoordinator.render();
     }
 
     function renderJumpToLatest() {
-        timelineView.updateJump({
-            following: state.followingFeed,
-            unreadCount: state.unreadTimelineCount,
-        });
+        timelineCoordinator.renderJumpToLatest();
     }
 
     const composerCoordinator = createAgentComposerCoordinator({
@@ -1057,8 +750,7 @@ function mountWorkbench(container) {
         workspaceCoordinator.dispose();
         settingsState.dispose();
         topicContextMenuView.dispose();
-        timelineView.dispose();
-        fullPresentation.dispose();
+        timelineCoordinator.dispose();
         activityReadonlyView.dispose();
         approvalView.dispose();
         notificationView.dispose();
