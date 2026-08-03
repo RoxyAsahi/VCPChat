@@ -269,6 +269,35 @@ for (const file of governedUiModules) {
         errors.push(`${file} bypasses Workbench action/client boundary`);
     }
 }
+const governedAgentModuleDirectories = [
+    path.join(root, 'modules/codex-runtime'),
+    path.join(root, 'modules/ui-system'),
+];
+const governedAgentModules = governedAgentModuleDirectories.flatMap((directory) => filesUnder(directory))
+    .filter((absolute) => absolute.includes(`${path.sep}codex-runtime${path.sep}`)
+        || path.basename(absolute).startsWith('agent-')
+        || absolute.includes(`${path.sep}agent-presentation${path.sep}`));
+for (const absolute of governedAgentModules) {
+    const lineCount = fs.readFileSync(absolute, 'utf8').split(/\r?\n/).length;
+    if (lineCount > 900) errors.push(`${path.relative(root, absolute)} exceeds module ceiling: ${lineCount} lines`);
+}
+assertAcyclic(governedAgentModules, 'Agent host integration');
+for (const file of filesUnder(path.join(root, 'modules/ui-system'), /agent-.*\.js$/)) {
+    const relative = path.relative(root, file);
+    const source = fs.readFileSync(file, 'utf8');
+    if (!/(?:agent-workbench-lifecycle|agent-renderer-lifecycle|agent-renderer-session|agent-settings-state|agent-session-catalog-coordinator)\.js$/.test(file)
+        && /\b(?:setInterval|setTimeout|requestAnimationFrame|requestIdleCallback)\s*\(/.test(source)) {
+        errors.push(`${relative} owns an unregistered timer or frame`);
+    }
+    if (/agent-session-catalog-coordinator\.js$/.test(file)
+        && /(?:window\.requestAnimationFrame|setTimeout\s*\()/.test(source)) {
+        errors.push(`${relative} bypasses the injected Workbench lifecycle frame scheduler`);
+    }
+    if (!/(?:agent-session-dock-view|agent-topic-context-menu-view|agent-renderer-session)\.js$/.test(file)
+        && /\b(?:document|window)\.addEventListener\s*\(/.test(source)) {
+        errors.push(`${relative} owns an unregistered document/window listener`);
+    }
+}
 const formalWorkbenchViews = [
     'agent-workbench-shell-view.js', 'agent-workbench-header-view.js',
     'agent-workbench-run-status-view.js', 'agent-workbench-sidebar-view.js',

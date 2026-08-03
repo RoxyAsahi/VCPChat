@@ -141,11 +141,10 @@ function postRender(contentDiv) {
     window.vcpRenderBridge?.runPostRender(contentDiv);
 }
 
-function scrollFeed(container, force) {
+function scrollFeed(container, force, scheduleFrame) {
     const bridge = window.vcpRenderBridge;
     if (force) {
-        const raf = window.requestAnimationFrame || ((cb) => setTimeout(cb, 0));
-        raf(() => { if (container?.isConnected) container.scrollTop = container.scrollHeight; });
+        scheduleFrame(() => { if (container?.isConnected) container.scrollTop = container.scrollHeight; });
         return;
     }
     if (bridge) {
@@ -162,6 +161,9 @@ function isFollowingContainer(container) {
 
 function mountWorkbench(container) {
     const lifecycle = createWorkbenchLifecycle(window);
+    const scopedScrollFeed = (target, force) => scrollFeed(
+        target, force, (callback) => lifecycle.frame('scroll-feed', callback),
+    );
     const controller = createWorkbenchController(runtimeApi());
     const { store } = controller;
     const state = createAgentWorkbenchState({
@@ -356,7 +358,7 @@ function mountWorkbench(container) {
         syncPermissionModeFromSelectedSession,
         syncModelFromSelectedSession,
         uxMark,
-        requestAnimationFrame: window.requestAnimationFrame || ((callback) => setTimeout(callback, 0)),
+        requestAnimationFrame: (callback) => lifecycle.frame('session-catalog-paint', callback),
     });
     const {
         selectedAgentProfile,
@@ -464,7 +466,7 @@ function mountWorkbench(container) {
             showImageContextMenu: (src) => controller.showImageContextMenu(src),
         }, blockPresentation, approvalRegistry, cssEscape,
         selectedAgentProfile, activeSession, selectedSessionKey, selectedTurnStart,
-        run, notify, scrollFeed, isFollowingContainer,
+        run, notify, scrollFeed: scopedScrollFeed, isFollowingContainer,
     });
 
     const sessionOperations = createAgentSessionOperationsCoordinator({
@@ -688,7 +690,7 @@ function mountWorkbench(container) {
         state, store, controller, composerView, runStatusView, refs: shellView.refs, run, notify,
         selectedSessionKey, selectedComposerState, selectedTurnStart, selectedActiveTurnId,
         renderFeed, renderJumpToLatest, queueRender, settleTurnStartIndicator,
-        refreshControlPlane, uxMark, openNewTopicFlow, isFollowingContainer, scrollFeed,
+        refreshControlPlane, uxMark, openNewTopicFlow, isFollowingContainer, scrollFeed: scopedScrollFeed,
     });
     const renderComposer = composerCoordinator.render;
 

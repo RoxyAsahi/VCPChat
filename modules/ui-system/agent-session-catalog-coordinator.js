@@ -70,8 +70,11 @@ function createAgentSessionCatalogCoordinator({
     syncPermissionModeFromSelectedSession,
     syncModelFromSelectedSession,
     uxMark,
-    requestAnimationFrame = (callback) => setTimeout(callback, 0),
+    requestAnimationFrame,
 }) {
+    if (typeof requestAnimationFrame !== 'function') {
+        throw new TypeError('Session catalog requires a Workbench lifecycle frame scheduler');
+    }
     let controlPlaneRequest = 0;
     let topicCatalogRequest = 0;
     let disposed = false;
