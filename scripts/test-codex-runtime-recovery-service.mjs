@@ -43,15 +43,16 @@ function makeRepository({ operations = [], sessions = [] } = {}) {
     };
 }
 
-function makeHarness({ repository, request } = {}) {
+function makeHarness({ repository, request, start } = {}) {
     let generation = 1;
+    let currentRepository = repository;
     let recoveryPromise = null;
     const reconciles = [];
     const threadStates = new Map();
     const service = new RuntimeRecoveryService({
         ensureProjectionStore: () => {},
         assertProjectionWritable: () => {},
-        repository: () => repository,
+        repository: () => currentRepository,
         transport: () => ({ request: request || (async () => ({})) }),
         projector: () => ({
             reconcileThread(sessionId, thread, projectionGeneration) {
@@ -59,7 +60,7 @@ function makeHarness({ repository, request } = {}) {
             },
         }),
         threadStates: () => threadStates,
-        start: async () => {},
+        start: start || (async () => {}),
         captureGeneration: () => generation,
         assertGeneration(scope) {
             if (scope !== generation) {
@@ -73,7 +74,13 @@ function makeHarness({ repository, request } = {}) {
         setLastError: () => {},
         diagnostic: () => {},
     });
-    return { service, reconciles, threadStates, advanceGeneration: () => { generation += 1; } };
+    return {
+        service,
+        reconciles,
+        threadStates,
+        advanceGeneration: () => { generation += 1; },
+        setRepository: (next) => { currentRepository = next; },
+    };
 }
 
 const normalizedRepository = makeRepository({ operations: [
@@ -167,5 +174,40 @@ const paginationHarness = makeHarness({
 const pagedThreads = await paginationHarness.service.listStoredThreads(false, 1);
 assert.equal(pages, 20, 'Thread discovery must stop at the fixed page bound');
 assert.equal(pagedThreads.length, 20);
+
+let releasePage;
+const stalePaginationHarness = makeHarness({
+    repository: makeRepository(),
+    request: () => new Promise((resolve) => { releasePage = resolve; }),
+});
+const stalePagination = stalePaginationHarness.service.listStoredThreads(false, 1);
+await Promise.resolve();
+stalePaginationHarness.advanceGeneration();
+releasePage({ data: [], nextCursor: null });
+await assert.rejects(stalePagination, (error) => error.code === 'STALE_RUNTIME_GENERATION');
+
+const staleCandidateRepository = makeRepository({
+    operations: [{
+        operationId: 'candidate-old', kind: 'thread-start', state: 'uncertain', sessionId: 'session-old',
+    }],
+    sessions: [{ sessionId: 'session-old', threadId: null, archivedAt: null }],
+});
+const currentCandidateRepository = makeRepository({
+    operations: [{
+        operationId: 'candidate-new', kind: 'thread-start', state: 'uncertain', sessionId: 'session-new',
+    }],
+    sessions: [{ sessionId: 'session-new', threadId: null, archivedAt: null }],
+});
+let candidateHarness;
+candidateHarness = makeHarness({
+    repository: staleCandidateRepository,
+    start: async () => { candidateHarness.setRepository(currentCandidateRepository); },
+    request: async () => ({ data: [], nextCursor: null }),
+});
+const candidates = await candidateHarness.service.listRecoveryCandidates();
+assert.deepEqual(candidates.operations, [],
+    'candidate discovery must re-read operations from the Repository active after Runtime start');
+assert.equal(staleCandidateRepository.writes.length, 0,
+    'candidate discovery must never mutate the Repository that existed before Runtime start');
 
 console.log('Codex Runtime recovery service tests passed.');
