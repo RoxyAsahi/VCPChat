@@ -12,6 +12,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { JSDOM } from 'jsdom';
+import {
+    ACTIVE_NEXT_UI_SURFACES,
+    resolveSurfaceUiMode,
+} from '../modules/ui-system/ui-surface-policy.js';
 
 const root = process.cwd();
 
@@ -21,13 +25,15 @@ const root = process.cwd();
 // detail behind VCPUI; strict sample pages are forbidden from reaching through
 // to VCPWebAwesome directly.
 const wiredPages = [];
-const rebuiltPages = [
-    { html: 'Notemodules/notemini.html', js: 'Notemodules/notemini.js' },
+const activeRebuiltPages = [
     { html: 'Translatormodules/translator.html', js: 'Translatormodules/translator.js' },
+    { html: 'Notemodules/notes.html', js: 'Notemodules/notes.js' },
+];
+const archivedRebuiltPages = [
+    { html: 'Notemodules/notemini.html', js: 'Notemodules/notemini.js' },
     { html: 'Logmodules/log.html', js: 'Logmodules/log.js' },
     { html: 'PluginManagerModules/plugin-manager.html', js: 'PluginManagerModules/plugin-manager.js' },
     { html: 'Agenttaskmodules/task.html', js: 'Agenttaskmodules/task.js' },
-    { html: 'Notemodules/notes.html', js: 'Notemodules/notes.js' },
     { html: 'Memomodules/memo.html', js: 'Memomodules/memo.js' },
     { html: 'Forummodules/forum.html', js: 'Forummodules/forum.js' },
     { html: 'Canvasmodules/canvas.html', js: 'Canvasmodules/canvas.js' },
@@ -35,6 +41,7 @@ const rebuiltPages = [
     { html: 'VCPHumanToolBox/index.html', js: 'VCPHumanToolBox/renderer.js', strictAdapter: true },
     { html: 'VchatManager/index.html', js: 'VchatManager/script.js' },
 ];
+const rebuiltPages = [...activeRebuiltPages, ...archivedRebuiltPages];
 
 const failures = [];
 
@@ -79,10 +86,22 @@ for (const page of [...wiredPages, ...rebuiltPages]) {
     }
 }
 
+const activePolicyPages = new Set(ACTIVE_NEXT_UI_SURFACES);
+for (const page of activeRebuiltPages) {
+    if (!activePolicyPages.has(page.html)) failures.push(`${page.html}: active rebuild is missing from the next-UI surface allowlist`);
+    const mode = resolveSurfaceUiMode('next', { pathname: `C:/VCPChat/${page.html}` });
+    if (mode !== 'next') failures.push(`${page.html}: active rebuild resolves to ${mode}`);
+}
+for (const page of archivedRebuiltPages) {
+    if (activePolicyPages.has(page.html)) failures.push(`${page.html}: archived rebuild must not be active`);
+    const mode = resolveSurfaceUiMode('next', { pathname: `C:/VCPChat/${page.html}` });
+    if (mode !== 'classic') failures.push(`${page.html}: archived rebuild resolves to ${mode}`);
+}
+
 if (failures.length) {
     console.error('Page runtime gate failed:\n');
     failures.forEach(failure => console.error(`- ${failure}`));
     process.exit(1);
 }
 
-console.log(`Page runtime gate passed (${wiredPages.length} wired, ${rebuiltPages.length} rebuilt).`);
+console.log(`Page runtime gate passed (${wiredPages.length} wired, ${activeRebuiltPages.length} active rebuilt, ${archivedRebuiltPages.length} archived rebuilt).`);

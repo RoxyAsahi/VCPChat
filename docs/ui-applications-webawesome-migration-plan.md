@@ -1,6 +1,6 @@
 # VCPChat 应用页面与全局设置 Web Awesome 全量重构计划
 
-> 状态：in progress（R5.0 基础设施已完成并通过门禁；R5.1 全局设置已增强；R5.2–R5.6 分批进行中）  
+> 状态：in progress（R5.0 基础设施已完成；产品运行时当前仅启用笔记与翻译，其余业务页新版 presentation 暂时归档）
 > 基线日期：2026-08-01  
 > 适用分支：`codex/vcpchat-codex-app-server`  
 > 当前试验：UI 组件库中的“WA 对照”已完成真实 Electron 渲染验证，但不能据此宣称业务页面已迁移。
@@ -328,6 +328,8 @@
 
 ### R5.2–R5.5 页面状态（诚实记录，2026-08-02）
 
+> 2026-08-03 产品策略更新：下表记录的是已经存在的实验性重建代码，不等于当前启用状态。由于逐页业务完成度和 Electron 稳定性不足，当前 allowlist 只启用笔记与翻译；其他页面强制回退经典 presentation。启用真源见 `docs/ui-active-surface-policy.md`。
+
 **已真正重建（next 模式由 VCPUI 重建结构，业务页仅经 VCPUI；Electron 逐页验证便签/翻译/日志）**
 | 页面 | 重建内容 |
 |---|---|
@@ -354,4 +356,3 @@
 - 全局设置结构重构（`styles/setting/*` 迁移 token、分类导航改 VCPUI Tabs/List、逐分类真实保存回归）。
 - 各页 embedded/standalone 逐页行为回归（`test-page-electron-smoke` 扩展到全部页面）。
 - R5.6 旧样式退役、迁移覆盖率报告、打包后真实资源解析 smoke 驱动。
-

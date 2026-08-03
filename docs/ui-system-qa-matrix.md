@@ -1,5 +1,7 @@
 # 新版 UI Electron QA 矩阵
 
+> 2026-08-03：业务子页面改为 allowlist。产品运行时仅笔记与翻译要求新版验收；归档页面必须验证在 `uiMode=next` 请求下安全回退经典 UI、无 AppPageShell、无 Web Awesome 注册。参见 `docs/ui-active-surface-policy.md`。
+
 本表只记录已经在真实 Electron 渲染器中执行过的检查。`partial` 不得作为发布完成的依据。逐页审计与截图见 `docs/ui-visual-audit-2026-08-02.md`。
 
 | Surface | Verified | Remaining |

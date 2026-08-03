@@ -117,6 +117,8 @@ window.nextUiApps.register({
 
 下列状态以实际 Electron 检查为准，`partial` 不得视为完成：
 
+业务子页面采用显式 allowlist。当前只启用笔记与翻译；其余已存在的 AppPageShell 重建保留为归档实验代码并运行经典 presentation，详见 `docs/ui-active-surface-policy.md`。
+
 | Surface | Status | Evidence required before stable |
 | --- | --- | --- |
 | 顶栏、标签、应用启动器 | migrated | 明暗主题、标签关闭、内部应用复用，以及切换经典 UI 后的 Host/标签/反馈容器清理 |

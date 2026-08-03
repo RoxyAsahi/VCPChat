@@ -13,20 +13,40 @@
 
 import VCPUI from './vcp-ui.js';
 import UiModeController from './ui-mode-controller.js';
+import { resolveSurfaceUiMode } from './ui-surface-policy.js';
 import './webawesome-adapter.js';
 import './vcp-page-rebuild.js';
 
 window.VCPUI = VCPUI;
 
+let bootstrapController = null;
 if (document.documentElement.dataset.uiMode) {
     // A previous bootstrap (or the host) already resolved the mode.
     window.VCPUiModeController = UiModeController;
 } else {
     const controller = await UiModeController.bootstrap();
+    bootstrapController = controller;
     window.VCPUiModeController = Object.freeze({
         ...UiModeController,
         bootstrapController: controller,
     });
+}
+
+// A child application's next presentation is a product capability, not an
+// automatic consequence of the main window using next UI. Pages that are not
+// on the active allowlist remain on their classic DOM while their experimental
+// AppPageShell implementations stay archived in source control.
+const requestedMode = document.documentElement.dataset.uiMode || 'classic';
+const effectiveMode = resolveSurfaceUiMode(requestedMode, window.location);
+if (effectiveMode !== requestedMode) {
+    if (bootstrapController?.apply) {
+        bootstrapController.apply(effectiveMode);
+    } else {
+        document.documentElement.dataset.uiMode = effectiveMode;
+        window.dispatchEvent(new CustomEvent('ui-mode-changed', {
+            detail: { mode: effectiveMode, previousMode: requestedMode },
+        }));
+    }
 }
 
 // Standalone next-mode pages do not inherit the main renderer's icon runtime.

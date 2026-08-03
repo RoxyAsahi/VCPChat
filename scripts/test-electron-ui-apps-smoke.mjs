@@ -86,6 +86,7 @@ const EMBEDDED_APPS = [
     },
     {
         id: 'open-translator-window', action: 'open-translator-window', name: '翻译', key: 'translator.html',
+        nextEnabled: true,
         shellTitle: '翻译助手', integrated: true, minWa: { 'wa-tooltip': 1, 'wa-select': 2 }, minHeaderRects: 0, minNativeEnhanced: 2,
         legacySelector: '.translator-container', bodyFocus: '.vcp-ui-page-shell-content textarea',
     },
@@ -109,6 +110,7 @@ const EMBEDDED_APPS = [
     },
     {
         id: 'open-notes-window', action: 'open-notes-window', name: '笔记', key: 'notes.html',
+        nextEnabled: true,
         shellTitle: '我的笔记', integrated: true, minWa: { 'wa-tooltip': 1 }, minHeaderRects: 0, minNativeEnhanced: 1,
         legacySelector: '.container', bodyFocus: '.vcp-ui-page-shell-content input',
     },
@@ -342,6 +344,24 @@ async function auditNextPage(page, app, captureName, { expectEmbedded = true } =
     return { state, longText };
 }
 
+async function auditArchivedClassicPage(page, app, captureName) {
+    await page.waitForFunction((selector) => document.querySelector(selector), { timeout: timeoutMs }, app.legacySelector || app.legacy);
+    await sleep(300);
+    const state = await page.evaluate((legacySelector) => ({
+        uiMode: document.documentElement.dataset.uiMode,
+        hasShell: Boolean(document.querySelector('.vcp-ui-page-shell')),
+        waCount: document.querySelectorAll('wa-button, wa-input, wa-select, wa-card, wa-tooltip').length,
+        bodyScope: document.body.classList.contains('vcp-ui-scope'),
+        legacyPresent: Boolean(document.querySelector(legacySelector)),
+    }), app.legacySelector || app.legacy);
+    assert.equal(state.uiMode, 'classic', `${app.name} archived surface must resolve to classic: ${JSON.stringify(state)}`);
+    assert.equal(state.hasShell, false, `${app.name} archived surface must not mount AppPageShell: ${JSON.stringify(state)}`);
+    assert.equal(state.waCount, 0, `${app.name} archived surface must not register WA: ${JSON.stringify(state)}`);
+    assert.equal(state.bodyScope, false, `${app.name} archived surface must not enter next scope: ${JSON.stringify(state)}`);
+    assert.ok(state.legacyPresent, `${app.name} archived legacy DOM missing: ${JSON.stringify(state)}`);
+    await capture(page, captureName);
+}
+
 const appData = await fs.mkdtemp(path.join(os.tmpdir(), 'vcpchat-ui-apps-electron-'));
 const nextSettings = {
     uiMode: 'next',
@@ -352,13 +372,8 @@ const nextSettings = {
 const classicSettings = { ...nextSettings, uiMode: 'classic' };
 await fs.writeFile(path.join(appData, 'settings.json'), JSON.stringify(nextSettings), 'utf8');
 
-// NOTE (test isolation defect): embedded pages resolve their uiMode from
-// `modules/services/embeddedAppSessionManager.js -> readUiMode()` which reads
-// <appRoot>/AppData/settings.json and ignores the VCPCHAT_APP_DATA_DIR
-// override (see defect D-01 in docs/ui-visual-audit-2026-08-02.md). The
-// hermetic test therefore mirrors the settings
-// into the project-root AppData dir, which is gitignored and only exists at
-// runtime, exactly like a real user's dev checkout.
+// Keep the project-root mirror for older packaged/runtime paths while the
+// primary hermetic authority remains VCPCHAT_APP_DATA_DIR.
 const projectAppDataDir = path.join(root, 'AppData');
 await fs.mkdir(projectAppDataDir, { recursive: true });
 const projectSettingsFile = path.join(projectAppDataDir, 'settings.json');
@@ -518,34 +533,42 @@ try {
         });
         const childPage = await waitForChildPage(browser, app.key, Date.now() + timeoutMs, app.name);
         instrument(childPage, label);
-        await auditNextPage(childPage, app, `next-${app.name}.png`);
+        if (app.nextEnabled) {
+            await auditNextPage(childPage, app, `next-${app.name}.png`);
+        } else {
+            await auditArchivedClassicPage(childPage, app, `archived-classic-${app.name}.png`);
+        }
         const errors = collectRealErrors(label);
         assert.equal(errors.length, 0, `${app.name} renderer errors:\n${errors.slice(0, 8).join('\n')}`);
-        summary.push({ surface: app.name, mode: 'next', pass: true, lucide: 0, note: `shell + ${Object.entries(app.minWa || {}).map(([t, n]) => `${n}+<${t}>`).join(', ')}，native增强>=${app.minNativeEnhanced || 0}，无溢出/重叠/报错` });
+        summary.push(app.nextEnabled
+            ? { surface: app.name, mode: 'next', pass: true, lucide: 0, note: `shell + ${Object.entries(app.minWa || {}).map(([t, n]) => `${n}+<${t}>`).join(', ')}，native增强>=${app.minNativeEnhanced || 0}，无溢出/重叠/报错` }
+            : { surface: app.name, mode: 'archived-classic', pass: true, lucide: 0, note: 'next 请求被产品 allowlist 安全回退到经典页面' });
         await page.evaluate((appDefinition) => window.topTabManager.closeView(`app:${appDefinition.id}`), { id: app.id });
         await ensureChildPageClosed(browser, app.key, Date.now() + timeoutMs, app.name);
     }
 
-    // 5. Standalone windows opened through the app's own launch path.
+    // 5. Archived standalone surfaces stay classic even while the main window
+    //    requests next UI. Their reconstructed source remains dormant.
     for (const standalone of [
         { action: 'open-canvas-window', key: 'canvas.html', name: '协同Canvas', shellTitle: '协同 Canvas', minWa: { 'wa-tooltip': 1 }, minNativeEnhanced: 1, legacy: '.editor-container', requireOpaqueBody: true },
         { action: 'open-rag-observer-window', key: 'RAG_Observer.html', name: '监听RAG', shellTitle: 'VCP 监听', minWa: { 'wa-tooltip': 0 }, minNativeEnhanced: 0, legacy: '.main-wrapper' },
     ]) {
-        const label = `next:${standalone.name}`;
+        const label = `archived-classic:${standalone.name}`;
         await page.evaluate((action) => window.trayManager.launchApp({ id: `audit-${action}`, name: 'audit', action }), standalone.action);
         const standalonePage = await waitForChildPage(browser, standalone.key, Date.now() + timeoutMs, standalone.name);
         instrument(standalonePage, label);
-        await auditNextPage(standalonePage, standalone, `next-${standalone.name}.png`, { expectEmbedded: false });
+        await auditArchivedClassicPage(standalonePage, standalone, `archived-classic-${standalone.name}.png`);
         const errors = collectRealErrors(label);
         assert.equal(errors.length, 0, `${standalone.name} renderer errors:\n${errors.slice(0, 8).join('\n')}`);
-        summary.push({ surface: standalone.name, mode: 'next', pass: true, lucide: 0, note: `独立窗口 shell 重建通过（wa-tooltip=${standalone.minWa['wa-tooltip']}+，native增强>=${standalone.minNativeEnhanced || 0}）` });
-        await standalonePage.click('.vcp-ui-window-control-close');
+        summary.push({ surface: standalone.name, mode: 'archived-classic', pass: true, lucide: 0, note: '产品 allowlist 回退经典页面，无 WA' });
+        await standalonePage.evaluate(() => { try { window.close(); } catch { /* best effort */ } });
         await ensureChildPageClosed(browser, standalone.key, Date.now() + timeoutMs, standalone.name);
     }
 
     // 6. Classic mode: embedded pages must keep the legacy DOM and never mount
     //    the next surface. Flip the project AppData settings the same way a
     //    user switching mode does, then walk a representative subset.
+    await fs.writeFile(path.join(appData, 'settings.json'), JSON.stringify(classicSettings), 'utf8');
     await writeProjectUiMode('classic');
     for (const app of EMBEDDED_APPS) {
         const label = `classic:${app.name}`;
@@ -573,6 +596,7 @@ try {
         await page.evaluate((appDefinition) => window.topTabManager.closeView(`app:${appDefinition.id}`), { id: app.id });
         await ensureChildPageClosed(browser, app.key, Date.now() + timeoutMs, app.name);
     }
+    await fs.writeFile(path.join(appData, 'settings.json'), JSON.stringify(nextSettings), 'utf8');
     await writeProjectUiMode('next');
 
     // 6b. Classic mode for the standalone windows: flip the isolated app-data
@@ -675,15 +699,16 @@ try {
             hasLoadSettings: Boolean((window.utilityAPI || window.electronAPI)?.loadSettings),
             bodyTextLength: (document.body?.textContent || '').trim().length,
         }));
-        await capture(subPage, 'next-VchatManager.png');
-        assert.equal(vmState.uiMode, 'next', `VchatManager must inherit next mode: ${JSON.stringify(vmState)}`);
-        assert.equal(vmState.controllerMode, 'next', `VchatManager controller mode mismatch: ${JSON.stringify(vmState)}`);
-        assert.equal(vmState.hasShell, true, `VchatManager next shell missing: ${JSON.stringify(vmState)}`);
-        assert.equal(vmState.bodyScope, true, `VchatManager next scope missing: ${JSON.stringify(vmState)}`);
+        await capture(subPage, 'archived-classic-VchatManager.png');
+        assert.equal(vmState.uiMode, 'classic', `VchatManager archived surface must resolve to classic: ${JSON.stringify(vmState)}`);
+        assert.equal(vmState.controllerMode, 'classic', `VchatManager archived controller mode mismatch: ${JSON.stringify(vmState)}`);
+        assert.equal(vmState.hasShell, false, `VchatManager archived surface must not mount next shell: ${JSON.stringify(vmState)}`);
+        assert.equal(vmState.bodyScope, false, `VchatManager archived surface must not enter next scope: ${JSON.stringify(vmState)}`);
+        assert.equal(vmState.waCount, 0, `VchatManager archived surface must not register WA: ${JSON.stringify(vmState)}`);
         summary.push({
-            surface: '数据VchatManager', mode: vmState.uiMode, pass: true,
+            surface: '数据VchatManager', mode: 'archived-classic', pass: true,
             lucide: 0,
-            note: `共享 settings uiMode 已传入（api=${vmState.hasAPI}，shell=${vmState.hasShell}）`,
+            note: `共享 settings 请求被产品 allowlist 回退经典页面（api=${vmState.hasAPI}）`,
         });
         assert.equal(subErrors.length, 0, `VchatManager renderer errors:\n${subErrors.slice(0, 8).join('\n')}`);
     } catch (error) {
