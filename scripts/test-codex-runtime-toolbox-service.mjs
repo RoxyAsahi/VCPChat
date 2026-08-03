@@ -65,6 +65,7 @@ assert.equal(responses.some((entry) => entry.requestId === 'rpc-stale'), false,
 service.dynamicCalls.set('rpc-interrupt', { bridgeRequestId: 'codex:thread-a:turn-a:call-x' });
 interactions.serverRequests.set('rpc-interrupt', { method: 'item/tool/call' });
 await service.interruptDynamicCalls('test stop');
+await service.interruptDynamicCalls('duplicate stop');
 assert.deepEqual(interrupts, ['codex:thread-a:turn-a:call-x']);
 assert.equal(interactions.serverRequests.size, 0);
 

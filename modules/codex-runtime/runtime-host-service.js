@@ -92,15 +92,16 @@ class RuntimeHostService {
     async stop() {
         this.context.setState('stopping');
         this.context.setIntentionalStop(true);
-        this.context.clearScheduledConfigApplies();
         this.context.invalidateGeneration('VChat Agent Runtime stopped');
-        const error = new CodexAppServerError('RUNTIME_STOPPED', 'VChat Agent Runtime stopped during compaction');
-        this.rejectCompactionWaiters(error);
         await this.context.failClosedNativeApprovals('VChat Agent Runtime stopped');
-        await this.context.interruptDynamicCalls('VChat Agent Runtime stopped');
         await this.context.failClosedToolboxApprovals('VChat Agent Runtime stopped');
         this.context.clearInteractions('codex-native');
         this.context.clearInteractions('toolbox');
+        this.context.clearScheduledConfigApplies();
+        const error = new CodexAppServerError('RUNTIME_STOPPED', 'VChat Agent Runtime stopped during compaction');
+        this.rejectCompactionWaiters(error);
+        await this.context.interruptDynamicCalls('VChat Agent Runtime stopped');
+        this.context.clearInteractionTimers();
         await this.context.transport()?.stop();
         await this.context.bridge()?.stop();
         await this.context.responsesAdapter()?.stop();
@@ -413,14 +414,14 @@ class RuntimeHostService {
             }
         }
         this.context.clearCrashRegistries();
-        this.rejectCompactionWaiters(new CodexAppServerError(
-            'RUNTIME_CRASHED', 'Codex App Server crashed during compaction',
-        ));
         await this.context.failClosedNativeApprovals('Codex App Server crashed', { respond: false });
-        await this.context.interruptDynamicCalls('Codex App Server crashed');
         await this.context.failClosedToolboxApprovals('Codex App Server crashed');
         this.context.clearInteractions('codex-native');
         this.context.clearInteractions('toolbox');
+        this.rejectCompactionWaiters(new CodexAppServerError(
+            'RUNTIME_CRASHED', 'Codex App Server crashed during compaction',
+        ));
+        await this.context.interruptDynamicCalls('Codex App Server crashed');
         this.context.clearInteractionTimers();
         this.context.setKnownOperationRecoveryPromise(null);
         this.context.setTransport(null);
