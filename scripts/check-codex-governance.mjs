@@ -272,11 +272,15 @@ else {
         errors.push('RuntimeOperationContext must bind generation and Session/Thread/Turn identity');
     }
 }
-for (const file of ['runtime-session-service.js', 'runtime-recovery-service.js']) {
+for (const file of ['runtime-session-service.js', 'runtime-recovery-service.js', 'runtime-turn-service.js']) {
     const source = fs.readFileSync(path.join(canonicalRuntimeDir, file), 'utf8');
     if (!source.includes('createOperationContext') || !source.includes('assertOperationContext')) {
         errors.push(`${file} does not enforce RuntimeOperationContext across remote operations`);
     }
+}
+const runtimeTurnSource = fs.readFileSync(path.join(canonicalRuntimeDir, 'runtime-turn-service.js'), 'utf8');
+if (/this\.context\.captureGeneration\(\)/.test(runtimeTurnSource)) {
+    errors.push('runtime-turn-service.js bypasses RuntimeOperationContext with a bare generation capture');
 }
 const runtimeServiceGraph = fs.readFileSync(path.join(canonicalRuntimeDir, 'runtime-service-graph.js'), 'utf8');
 if (/runtime\.(?:createTopic|readTopic)\(/.test(runtimeServiceGraph)) {

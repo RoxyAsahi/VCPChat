@@ -26,6 +26,12 @@ class RuntimeTurnService {
         return repository;
     }
 
+    _operation(identity = {}) { return this.context.createOperationContext(identity); }
+    _operationRepository(operation) {
+        this.context.assertOperationContext(operation);
+        return this._repository(operation.generation);
+    }
+
     async ensureSessionRuntime({
         sessionId, reason = 'send', recoverPendingInputs = true, ...options
     } = {}) {
@@ -38,8 +44,8 @@ class RuntimeTurnService {
             const startedAt = this.context.diagnosticClock();
             this.context.diagnostic('thread-warm-started', { sessionId: idValue, reason });
             await this.context.start();
-            const generation = this.context.captureGeneration();
-            let repository = this._repository(generation);
+            const operation = this._operation({ sessionId: idValue });
+            let repository = this._operationRepository(operation);
             let session = repository.getSession(idValue);
             if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
             if (session.archivedAt) {
@@ -49,9 +55,9 @@ class RuntimeTurnService {
             session = session.threadId
                 ? await this.resumeSession(session)
                 : await this.startThreadForSession(session, options);
-            repository = this._repository(generation);
-            if (recoverPendingInputs) await this.recoverPendingInputsForSession(session, generation);
-            this._repository(generation);
+            repository = this._operationRepository(operation);
+            if (recoverPendingInputs) await this.recoverPendingInputsForSession(session, operation);
+            this._operationRepository(operation);
             this.context.rememberIdleWarmSession(session.sessionId);
             this.context.diagnostic('thread-warm-completed', {
                 sessionId: session.sessionId,
@@ -65,8 +71,8 @@ class RuntimeTurnService {
     }
 
     async startThreadForSession(session, options = {}) {
-        const generation = this.context.captureGeneration();
-        let repository = this._repository(generation);
+        const operationContext = this._operation({ sessionId: session.sessionId });
+        let repository = this._operationRepository(operationContext);
         const config = session.configSnapshot || this.context.configSnapshot(options);
         const operation = repository.createOperation({
             sessionId: session.sessionId,
@@ -85,12 +91,12 @@ class RuntimeTurnService {
                 ...this.context.threadInstructionParams(config),
                 dynamicTools: [vcpInvokeTool()],
             });
-            repository = this._repository(generation);
+            repository = this._operationRepository(operationContext);
             threadId = result?.thread?.id;
             if (!threadId) throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/start returned no thread id');
             repository.updateOperation(operation.operationId, { state: 'remote-applied', threadId });
             await this.context.faultInjection().afterThreadStartRemoteApplied?.({ operation, session, threadId });
-            repository = this._repository(generation);
+            repository = this._operationRepository(operationContext);
             session = session.threadId
                 ? repository.replaceUnmaterializedThread(session.sessionId, threadId)
                 : repository.saveSession({ ...session, threadId, state: 'ready', updatedAt: Date.now() });
@@ -100,8 +106,7 @@ class RuntimeTurnService {
             this.context.sendSessionConfigEvent('session.config.applied', session);
             repository.updateOperation(operation.operationId, { state: 'completed', threadId });
         } catch (error) {
-            this.context.assertGeneration(generation);
-            repository = this._repository(generation);
+            repository = this._operationRepository(operationContext);
             repository.updateOperation(operation.operationId, {
                 state: (threadId || isUncertainRemoteMutation(error)) ? 'uncertain' : 'failed',
                 threadId: threadId || null,
@@ -151,9 +156,9 @@ class RuntimeTurnService {
         this.context.assertProjectionWritable();
         const startedAt = this.context.diagnosticClock();
         let session = await this.ensureSessionRuntime({ sessionId, reason: 'send', recoverPendingInputs });
-        const generation = this.context.captureGeneration();
+        const operation = this._operation({ sessionId: session.sessionId, threadId: session.threadId });
         await this.context.applySessionRuntimeConfig(session.sessionId, { barrier: true });
-        let repository = this._repository(generation);
+        let repository = this._operationRepository(operation);
         session = sessionProjection(repository.getSession(session.sessionId));
         const text = String(prompt || '').trim();
         if (!text && (!Array.isArray(attachments) || attachments.length === 0)) {
@@ -173,7 +178,7 @@ class RuntimeTurnService {
             ),
             sandbox: normalizeSandboxMode(session.configSnapshot?.sandbox),
         });
-        repository = this._repository(generation);
+        repository = this._operationRepository(operation);
         const acceptedTurnId = result?.turn?.id || this.context.createId('turn');
         const appliedSession = repository.markSessionConfigApplied(
             session.sessionId, session.configRevision, session.configSnapshot,
@@ -194,14 +199,14 @@ class RuntimeTurnService {
         this.context.assertProjectionWritable();
         const session = this.context.repository().getSession(requireSessionId(sessionId));
         if (!session?.threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached');
-        const generation = this.context.captureGeneration();
+        const operation = this._operation({ sessionId: session.sessionId, threadId: session.threadId, turnId });
         const result = await this.context.transport().request('turn/steer', {
             threadId: session.threadId,
             expectedTurnId: turnId,
             clientUserMessageId: this.context.createId('client_msg'),
             input: [{ type: 'text', text: String(prompt || ''), text_elements: [] }],
         });
-        this._repository(generation);
+        this._operationRepository(operation);
         return { sessionId: session.sessionId, threadId: session.threadId, turnId: result?.turnId || turnId };
     }
 
@@ -227,16 +232,16 @@ class RuntimeTurnService {
         this.context.assertProjectionWritable();
         const session = this.context.repository().getSession(requireSessionId(sessionId));
         if (!session?.threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached');
-        const generation = this.context.captureGeneration();
+        const operation = this._operation({ sessionId: session.sessionId, threadId: session.threadId, turnId });
         await this.context.transport().request('turn/interrupt', { threadId: session.threadId, turnId });
-        this.context.assertGeneration(generation);
+        this.context.assertOperationContext(operation);
         await this.context.responsesAdapter()?.cancelTurn?.({ threadId: session.threadId, turnId });
-        this.context.assertGeneration(generation);
+        this.context.assertOperationContext(operation);
         const interrupts = [...this.context.dynamicCalls().values()]
             .filter((call) => call.threadId === session.threadId && (!turnId || call.turnId === turnId))
             .map((call) => this.context.bridge()?.interrupt(call.bridgeRequestId).catch(() => false));
         await Promise.all(interrupts);
-        this._repository(generation);
+        this._operationRepository(operation);
         return { sessionId: session.sessionId, threadId: session.threadId, turnId, interrupted: true };
     }
 
@@ -245,7 +250,9 @@ class RuntimeTurnService {
         let repository = this.context.repository();
         const source = repository.getSession(requireSessionId(sessionId));
         if (!source?.threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached');
-        const generation = this.context.captureGeneration();
+        const operationContext = this._operation({
+            sessionId: source.sessionId, threadId: source.threadId, turnId,
+        });
         const targetSessionId = this.context.createId('session');
         const operation = repository.createOperation({
             sessionId: source.sessionId, kind: 'thread-fork',
@@ -257,14 +264,14 @@ class RuntimeTurnService {
             const result = await this.context.transport().request('thread/fork', {
                 threadId: source.threadId, ...(turnId ? { lastTurnId: turnId } : {}),
             });
-            repository = this._repository(generation);
+            repository = this._operationRepository(operationContext);
             threadId = result?.thread?.id;
             if (!threadId) throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/fork returned no thread id');
             repository.updateOperation(operation.operationId, { state: 'remote-applied', threadId });
             await this.context.faultInjection().afterThreadForkRemoteApplied?.({
                 operation, source, threadId, targetSessionId,
             });
-            repository = this._repository(generation);
+            repository = this._operationRepository(operationContext);
             const fork = repository.saveSession({
                 sessionId: targetSessionId,
                 threadId,
@@ -280,8 +287,7 @@ class RuntimeTurnService {
             repository.updateOperation(operation.operationId, { state: 'completed', threadId });
             return fork;
         } catch (error) {
-            this.context.assertGeneration(generation);
-            repository = this._repository(generation);
+            repository = this._operationRepository(operationContext);
             repository.updateOperation(operation.operationId, {
                 state: (threadId || isUncertainRemoteMutation(error)) ? 'uncertain' : 'failed',
                 threadId: threadId || null,
@@ -301,13 +307,13 @@ class RuntimeTurnService {
             throw new CodexAppServerError('SESSION_BUSY', 'Context compaction is already running for this Session');
         }
         await this.context.start();
-        const generation = this.context.captureGeneration();
+        const operation = this._operation({ sessionId: session.sessionId, threadId: session.threadId });
         let resolveWaiter;
         let rejectWaiter;
         const completion = new Promise((resolve, reject) => { resolveWaiter = resolve; rejectWaiter = reject; });
         const timeout = setTimeout(() => {
             const waiter = waiters.get(session.threadId);
-            if (!waiter || waiter.generation !== generation) return;
+            if (!waiter || waiter.operation !== operation) return;
             waiters.delete(session.threadId);
             waiter.reject(new CodexAppServerError('COMPACTION_TIMEOUT', 'Codex context compaction did not complete in time'));
             this.context.sendUiEvent({
@@ -317,15 +323,15 @@ class RuntimeTurnService {
         }, Math.max(1_000, Number(timeoutMs) || 120_000));
         waiters.set(session.threadId, {
             sessionId: session.sessionId, threadId: session.threadId,
-            resolve: resolveWaiter, reject: rejectWaiter, timeout, generation,
+            resolve: resolveWaiter, reject: rejectWaiter, timeout, operation,
         });
         this.context.sendUiEvent({ type: 'compaction.started', sessionId: session.sessionId });
         try {
             await this.context.transport().request('thread/compact/start', { threadId: session.threadId });
-            this.context.assertGeneration(generation);
+            this.context.assertOperationContext(operation);
         } catch (error) {
             const waiter = waiters.get(session.threadId);
-            if (waiter?.generation === generation) {
+            if (waiter?.operation === operation) {
                 waiters.delete(session.threadId);
                 clearTimeout(waiter.timeout);
                 waiter.reject(error);
@@ -336,12 +342,12 @@ class RuntimeTurnService {
     }
 
     async resumeSession(session) {
-        const generation = this.context.captureGeneration();
         const threadId = String(session?.threadId || '').trim();
         if (!threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached to a Codex Thread');
+        const operation = this._operation({ sessionId: session.sessionId, threadId });
         const resumed = this.context.resumedThreadIds();
         const resuming = this.context.resumingThreads();
-        if (resumed.has(threadId)) return this._repository(generation).getSession(session.sessionId) || session;
+        if (resumed.has(threadId)) return this._operationRepository(operation).getSession(session.sessionId) || session;
         if (resuming.has(threadId)) return resuming.get(threadId);
         const promise = (async () => {
             const config = session.configSnapshot || {};
@@ -357,7 +363,7 @@ class RuntimeTurnService {
                     ...(config.executionProfile === 'toolbox-only' ? { dynamicTools: [vcpInvokeTool()] } : {}),
                     excludeTurns: true,
                 });
-                const repository = this._repository(generation);
+                const repository = this._operationRepository(operation);
                 const resumedThreadId = String(result?.thread?.id || '').trim();
                 if (resumedThreadId !== threadId) {
                     throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/resume returned a mismatched thread id');
@@ -374,7 +380,7 @@ class RuntimeTurnService {
                 return repository.getSession(session.sessionId) || applied || session;
             } catch (error) {
                 if (error?.code === 'STALE_RUNTIME_GENERATION' || !this.context.repository()) throw error;
-                const repository = this._repository(generation);
+                const repository = this._operationRepository(operation);
                 const projection = repository.readProjection(session.sessionId);
                 if (isConfirmedThreadNotFound(error) && !hasDurableProjection(projection)) {
                     return this.startThreadForSession(session);
@@ -393,10 +399,10 @@ class RuntimeTurnService {
     async drainFollowUpQueue(session) {
         const drains = this.context.followUpDrainPromises();
         if (!session?.sessionId || drains.has(session.sessionId)) return drains.get(session?.sessionId) || null;
-        const generation = this.context.captureGeneration();
+        const operation = this._operation({ sessionId: session.sessionId, threadId: session.threadId });
         const drain = (async () => {
             if (this.context.threadStates().get(session.threadId)?.activity === 'running') return null;
-            let repository = this._repository(generation);
+            let repository = this._operationRepository(operation);
             const next = repository.listPendingInputs(session.sessionId).find((entry) => entry.state === 'queued');
             if (!next) return null;
             repository.updatePendingInput(next.inputId, {
@@ -404,7 +410,7 @@ class RuntimeTurnService {
             });
             try {
                 await this.context.faultInjection().beforePendingInputRpc?.({ session, pendingInput: next });
-                this.context.assertGeneration(generation);
+                this.context.assertOperationContext(operation);
                 const accepted = await this.startTurnWithGuard({
                     sessionId: session.sessionId,
                     prompt: next.prompt,
@@ -412,7 +418,7 @@ class RuntimeTurnService {
                     recoverPendingInputs: false,
                 });
                 await this.context.faultInjection().afterTurnAckBeforePendingCommit?.({ session, pendingInput: next, accepted });
-                repository = this._repository(generation);
+                repository = this._operationRepository(operation);
                 repository.updatePendingInput(next.inputId, { state: 'accepted', turnId: accepted.turnId, lastError: null });
                 repository.removePendingInput(next.inputId);
                 this.context.sendUiEvent({
@@ -422,7 +428,7 @@ class RuntimeTurnService {
                 return accepted;
             } catch (error) {
                 if (error?.simulateProcessCrash === true || error?.code === 'STALE_RUNTIME_GENERATION') throw error;
-                repository = this._repository(generation);
+                repository = this._operationRepository(operation);
                 repository.updatePendingInput(next.inputId, {
                     state: isUncertainRemoteMutation(error) ? 'uncertain' : 'failed',
                     lastError: error?.message || String(error),
@@ -438,8 +444,10 @@ class RuntimeTurnService {
         return drain;
     }
 
-    async recoverPendingInputsForSession(session, generation = this.context.captureGeneration()) {
-        let repository = this._repository(generation);
+    async recoverPendingInputsForSession(session, operation = this._operation({
+        sessionId: session?.sessionId, threadId: session?.threadId,
+    })) {
+        let repository = this._operationRepository(operation);
         const pending = repository.listPendingInputs(session.sessionId)
             .filter((entry) => ['dispatching', 'accepted'].includes(entry.state));
         if (!pending.length || !session.threadId) return;
@@ -448,11 +456,10 @@ class RuntimeTurnService {
             const result = await this.context.transport().request('thread/read', {
                 threadId: session.threadId, includeTurns: true,
             });
-            repository = this._repository(generation);
+            repository = this._operationRepository(operation);
             thread = result?.thread || result;
         } catch (error) {
-            this.context.assertGeneration(generation);
-            repository = this._repository(generation);
+            repository = this._operationRepository(operation);
             for (const entry of pending) repository.updatePendingInput(entry.inputId, {
                 state: 'uncertain', lastError: `Could not verify accepted input: ${error.message}`,
             });

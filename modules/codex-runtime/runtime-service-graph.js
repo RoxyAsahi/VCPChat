@@ -116,6 +116,8 @@ function attachRuntimeServiceGraph(runtime) {
         start: () => runtime.start(),
         captureGeneration: () => runtime._captureGeneration(),
         assertGeneration: (generation) => runtime._assertGeneration(generation),
+        createOperationContext: (identity) => runtime._createOperationContext(identity),
+        assertOperationContext: (operation) => runtime._assertOperationContext(operation),
         repairSessionConfig: (session) => runtime._repairSessionConfig(session),
         repairSessionIdentity: (session) => runtime._repairSessionIdentity(session),
         configSnapshot: (options) => runtime._configSnapshot(options),

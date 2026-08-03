@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const { RuntimeTurnService } = require('../modules/codex-runtime/runtime-turn-service.js');
+const { createRuntimeOperationContext } = require('../modules/codex-runtime/runtime-operation-context.js');
 
 const session = {
     sessionId: 'session-turn', threadId: 'thread-turn', workspaceRoot: '.', archivedAt: null,
@@ -32,6 +33,12 @@ const resumedThreadIds = new Set(['thread-turn', 'thread-second']);
 const turnStartPromises = new Map();
 const calls = [];
 let generation = 4;
+const captureGeneration = () => {
+    const captured = generation;
+    return { value: captured, assertCurrent(current) {
+        if (current !== captured) { const error = new Error('stale'); error.code = 'STALE_RUNTIME_GENERATION'; throw error; }
+    } };
+};
 const service = new RuntimeTurnService({
     ensureProjectionStore: () => {},
     assertProjectionWritable: () => {},
@@ -49,10 +56,10 @@ const service = new RuntimeTurnService({
     attachments: () => ({ resolveMany: () => [] }),
     dynamicCalls: () => new Map(),
     start: async () => {},
-    captureGeneration: () => generation,
-    assertGeneration: (scope) => {
-        if (scope !== generation) { const error = new Error('stale'); error.code = 'STALE_RUNTIME_GENERATION'; throw error; }
-    },
+    captureGeneration,
+    assertGeneration: (scope) => scope.assertCurrent(generation),
+    createOperationContext: (identity) => createRuntimeOperationContext(captureGeneration(), identity),
+    assertOperationContext: (operation) => operation.generation.assertCurrent(generation),
     repairSessionConfig: (value) => value,
     repairSessionIdentity: (value) => value,
     configSnapshot: () => ({}),
