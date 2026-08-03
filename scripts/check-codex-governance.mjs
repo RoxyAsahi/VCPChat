@@ -172,6 +172,7 @@ const runtimeSessionServicePath = path.join(root, 'modules/codex-runtime/runtime
 const runtimeTurnServicePath = path.join(root, 'modules/codex-runtime/runtime-turn-service.js');
 const runtimeConfigServicePath = path.join(root, 'modules/codex-runtime/runtime-config-service.js');
 const runtimeProfileServicePath = path.join(root, 'modules/codex-runtime/runtime-profile-service.js');
+const runtimeHostServicePath = path.join(root, 'modules/codex-runtime/runtime-host-service.js');
 if (!fs.existsSync(runtimeToolboxServicePath)) {
     errors.push('Runtime ToolBox service is missing');
 } else if (fs.readFileSync(runtimeToolboxServicePath, 'utf8').split(/\r?\n/).length > 900) {
@@ -207,6 +208,11 @@ if (!fs.existsSync(runtimeProfileServicePath)) {
 } else if (fs.readFileSync(runtimeProfileServicePath, 'utf8').split(/\r?\n/).length > 900) {
     errors.push('runtime-profile-service.js exceeds module ceiling');
 }
+if (!fs.existsSync(runtimeHostServicePath)) {
+    errors.push('Runtime host service is missing');
+} else if (fs.readFileSync(runtimeHostServicePath, 'utf8').split(/\r?\n/).length > 900) {
+    errors.push('runtime-host-service.js exceeds module ceiling');
+}
 if (!fs.existsSync(runtimeNormalizersPath)) {
     errors.push('Runtime pure normalizers module is missing');
 } else {
@@ -218,8 +224,10 @@ if (!fs.existsSync(runtimeNormalizersPath)) {
         }
     }
 }
+const runtimeHostServiceSource = fs.existsSync(path.join(root, 'modules/codex-runtime/runtime-host-service.js'))
+    ? fs.readFileSync(path.join(root, 'modules/codex-runtime/runtime-host-service.js'), 'utf8') : '';
 if (!runtimeManagerSource.includes('async updateSessionConfig(')
-    || !runtimeManagerSource.includes('SESSION_IDENTITY_MISMATCH')) {
+    || !`${runtimeManagerSource}\n${runtimeHostServiceSource}`.includes('SESSION_IDENTITY_MISMATCH')) {
     errors.push('Runtime manager must expose an explicit Session config API and reject conflicting legacy identity');
 }
 const sharedCatalog = fs.readFileSync(path.join(root, 'preloads/shared/catalog.js'), 'utf8');
