@@ -27,6 +27,7 @@ Status: **implemented**
 | Agent Renderer LaTeX preprocessing | `agent-renderer-latex.js` | DOM access, global cache, Renderer Session state |
 | Legacy Agent Runtime archive | `archive/agent-runtime/` | product imports, default CI, or packaged sources |
 | Agent CSS entry and owners | `styles/ui-system/agent-workbench.css`, `agent-{shell,sidebar,composer,timeline,session-dock,workspace,activity,responsive,legacy-shell-adapter}.css` | direct rules in the entry, arbitrary import order, cross-page selectors outside legacy adapter |
+| Agent JavaScript lint and complexity baseline | `eslint.agent.config.mjs`, `lint:agent`, `check:codex-governance` | canonical host code outside lint coverage, complexity ceiling increases, inline disables replacing module extraction |
 | Runtime lifecycle ordering | `runtime-host-service.js`, `runtime-lifecycle-service.js` | Repository close before approval/waiter cleanup, old-generation UI/SQLite/transport writes |
 | Runtime operation identity | `runtime-operation-context.js`; Session/Recovery services | remote await without generation + Session/Thread/Turn identity, writes through a closed Repository |
 | Runtime external authority | Turn, Config, Host, Interaction, ToolBox and Recovery services using `RuntimeOperationContext` | old-generation UI/SQLite writes, use of replacement Bridge/Transport, deletion of a replacement dynamic call |

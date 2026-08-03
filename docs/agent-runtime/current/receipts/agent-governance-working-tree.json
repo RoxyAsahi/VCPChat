@@ -2,7 +2,7 @@
   "status": "implemented/working-tree",
   "scope": "agent-code-governance",
   "branch": "codex/vcpchat-codex-app-server",
-  "verifiedBaseRevision": "6d47e428a7438a12d4fc4033cb89a2d08fd8f2f6",
+  "verifiedBaseRevision": "7c2bd1d8ffa5adb25368b36dc2e134b195ca224e",
   "verifiedAt": "2026-08-04",
   "codexProtocol": "0.146",
   "toolboxModified": false,
@@ -11,6 +11,7 @@
   "commands": [
     "npm run test:agent-renderer-isolation",
     "npm run test:agent-renderer-lifecycle",
+    "npm run lint:agent",
     "npm run test:agent-workbench-clients",
     "npm run test:agent-workbench-store",
     "npm run test:agent-session-catalog",
@@ -30,5 +31,5 @@
     "npm run guard:ui-system",
     "npm run lint:ui-system"
   ],
-  "notes": "2026-08-04 governance verification at functional revision 6d47e428: Runtime services own Session attachments and Workbench presence behavior, use frozen RuntimeServiceContext dependency tables, and bind remote work to immutable RuntimeOperationContext authority. Remote completions revalidate generation and external authority before SQLite, UI or transport effects; Recovery reacquires the active Repository after remote awaits, and crash cleanup releases it only after approvals, waiters, dynamic calls and transports are closed. Canonical SelectedSessionIdentity is fail-closed, selectedSessionId is the only selection key, and ComposerStateBySession, SessionDockModel, WorkspaceViewState and SidebarViewState own page-local state. Deprecated Manager Topic methods live only in runtime-topic-compatibility.js and IPC identity compatibility remains isolated. Runtime Manager is 493 lines, Controller 565, Workbench composition 748, and Renderer runtime facade 328. All Runtime services, Views, Renderer modules and CSS owners remain below 900 lines. Static governance covers the Agent renderer import graph, circular dependencies, formal View contracts, resource ownership, frozen service dependencies, CSS ownership and Session fallback prohibition. The complete test:codex-ci passed in 105.4 seconds; explicit Electron smoke, Renderer isolation/lifecycle, Workbench clients/store, Session compatibility, UI-system and governance gates also passed. Electron recovery covered concurrent Sessions, crash-safe SQLite reads, reload preservation, demand restart and zero replayed turns/interactions. Codex remained 0.146.0; VCPToolBox, Projection SQLite schema and main-chat Renderer were not modified. Status remains implemented/working-tree because product-level multi-resolution visual review, 20-file-tab/long-stream UX, and live ToolBox backend approval are outside this governance receipt."
+  "notes": "2026-08-04 governance verification at functional revision 7c2bd1d8: Runtime services own Session attachments and Workbench presence behavior, use frozen RuntimeServiceContext dependency tables, and bind remote work to immutable RuntimeOperationContext authority. Remote completions revalidate generation and external authority before SQLite, UI or transport effects; Recovery reacquires the active Repository after remote awaits, and crash cleanup releases it only after approvals, waiters, dynamic calls and transports are closed. Canonical SelectedSessionIdentity is fail-closed, selectedSessionId is the only selection key, and ComposerStateBySession, SessionDockModel, WorkspaceViewState and SidebarViewState own page-local state. Deprecated Manager Topic methods live only in runtime-topic-compatibility.js and IPC identity compatibility remains isolated. Runtime Manager is 493 lines, Controller 565, Workbench composition 748, and Renderer runtime facade 328. All Runtime services, Views, Renderer modules and CSS owners remain below 900 lines. Canonical Runtime, Workbench and Agent presentation JavaScript now runs through ESLint correctness rules with a no-regression complexity ceiling of 170; the existing import-graph governance continues to reject circular dependencies. Static governance also covers formal View contracts, resource ownership, frozen service dependencies, CSS ownership and Session fallback prohibition. The complete test:codex-ci passed in 117.5 seconds and explicitly included lint:agent; Electron smoke, Renderer isolation/lifecycle, Workbench clients/store, Session compatibility, UI-system and stylelint gates also passed. Electron recovery covered concurrent Sessions, crash-safe SQLite reads, reload preservation, demand restart and zero replayed turns/interactions. Codex remained 0.146.0; VCPToolBox, Projection SQLite schema and main-chat Renderer were not modified. Status remains implemented/working-tree because product-level multi-resolution visual review, 20-file-tab/long-stream UX, and live ToolBox backend approval are outside this governance receipt."
 }

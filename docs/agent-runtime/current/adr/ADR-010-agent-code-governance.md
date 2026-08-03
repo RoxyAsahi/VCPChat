@@ -20,6 +20,8 @@ Historical Pi/Rust JavaScript runtimes live under `archive/agent-runtime/`. Prod
 
 Agent Workbench CSS has one entry, `styles/ui-system/agent-workbench.css`, which imports the fixed owner sequence: shell, sidebar, composer, timeline, session dock, workspace, activity, responsive, and legacy shell adapter. The legacy adapter is the only owner for unlayered compatibility bridges.
 
+Canonical Codex Runtime, Agent Workbench, and Agent presentation JavaScript is linted by `eslint.agent.config.mjs`. The initial cyclomatic-complexity ceiling is 170, matching the current event reducer peak and preventing silent regression; lowering it requires a behavior-preserving reducer split rather than inline disables. Circular dependencies remain an import-graph governance failure.
+
 Runtime shutdown and crash close the current generation first, fail-close approvals, reject waiters, cancel dynamic work and timers, stop transports, and close Projection storage last. External ToolBox interrupt and approval responses are at-most-once even if cleanup is invoked repeatedly.
 
 Workbench selection is represented by a canonical `SelectedSessionIdentity`. `selectedSessionId` is the only selection key; cached Session objects are display snapshots and cannot supply missing identity. Composer, Dock, Workspace, and Sidebar page-local state have separate Session-keyed owners and may not become alternate Runtime or projection truth.

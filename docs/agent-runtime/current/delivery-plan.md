@@ -248,8 +248,9 @@ R12 当前状态只能是 `implemented/working-tree`，不得复用 R7-R10 live 
 - [x] RuntimeOperationContext、Session-canonical service graph、Workbench 四 client 边界和 CSS owner 900 行门禁已进入静态治理检查。
 - [x] Turn、Config、Host、Interaction、ToolBox 与 Recovery 均绑定创建时 generation；旧完成不得写 SQLite/UI、新 transport 或覆盖 replacement dynamic call，crash 在释放旧 Repository 前完成 fail-close 与 transport shutdown。
 - [x] `selectedSessionId` 成为唯一选择键，`SelectedSessionIdentity` 冲突或缺失时 fail-closed；Composer、Dock、Workspace、Sidebar 临时状态分别由独立 owner 管理。
-- [x] functional revision `6d47e428` 的 `test:codex-ci`（105.4 秒）、Electron smoke、Renderer isolation/lifecycle、Workbench clients/store、Session compatibility、UI system 与 governance 显式门禁于 2026-08-04 通过；Codex 固定为 0.146.0，ToolBox、Projection schema 和主聊天 Renderer 均未修改。
+- [x] functional revision `7c2bd1d8` 的 `test:codex-ci`（117.5 秒）、Electron smoke、Renderer isolation/lifecycle、Workbench clients/store、Session compatibility、UI system 与 governance 显式门禁于 2026-08-04 通过；Codex 固定为 0.146.0，ToolBox、Projection schema 和主聊天 Renderer 均未修改。
 - [x] Runtime Manager 仅保留组合与委托：附件导入归 `RuntimeSessionService`，Workbench presence 与审批 fail-close 归 `RuntimeInteractionService`；所有 Runtime service 的依赖表冻结，当前行数为 Manager 493、Controller 565、Workbench composition 748、Renderer runtime facade 328。
+- [x] canonical Runtime、Workbench 与 Agent presentation JS 已纳入 `lint:agent`；ESLint correctness 规则和当前复杂度防回退上限 170 由 `test:codex-ci` 强制执行，循环依赖继续由完整 import graph 门禁拒绝。
 - [~] 人工多分辨率、20 文件 Tab、长流视觉与真实 ToolBox backend approval 仍属于产品/GUI 验收，不阻塞代码治理的 hermetic 完成，但阻止状态升级为 product。
 
 R13 当前状态为 `implemented/working-tree`；代码治理目标已实现，但产品级多分辨率截图、20 文件 Tab、长流滚动和 live backend approval 仍属于 GUI-R6/R6，不因治理完成而自动升级为 product。
