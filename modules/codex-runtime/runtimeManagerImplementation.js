@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
 const { EventEmitter } = require('events');
-const { RuntimeGeneration } = require('./runtimeGeneration');
+const { RuntimeLifecycleService } = require('./runtime-lifecycle-service');
 const { CodexAppServerTransport, CodexAppServerError } = require('./appServerTransport');
 const { AgentProjectionRepository, CodexProjectionProjector } = require('./projection');
 const { ToolboxBridgeTransport } = require('./toolboxBridgeTransport');
@@ -160,8 +160,9 @@ class CodexRuntimeManager extends EventEmitter {
             ? Math.max(0, options.maxIdleWarmSessions) : 2;
         this.diagnosticClock = options.diagnosticClock || (() => performance.now());
         this.startPromise = null;
-        this.runtimeGeneration = 0;
-        this.generationScope = new RuntimeGeneration(this.runtimeGeneration);
+        this.lifecycle = new RuntimeLifecycleService();
+        this.runtimeGeneration = this.lifecycle.value;
+        this.generationScope = this.lifecycle.capture();
         this.toolboxAuthorityGeneration = 0;
         this.runtimeStartFailures = 0;
         this.runtimeRetryAfter = 0;
@@ -215,9 +216,8 @@ class CodexRuntimeManager extends EventEmitter {
             this.ensureProjectionStore();
             const settings = this.getSettings() || {};
             await this._ensureResponsesAdapter(settings);
-            this.generationScope.close('Runtime superseded by a new generation');
-            this.runtimeGeneration += 1;
-            this.generationScope = new RuntimeGeneration(this.runtimeGeneration);
+            this.generationScope = this.lifecycle.begin('Runtime superseded by a new generation');
+            this.runtimeGeneration = this.lifecycle.value;
             this.interactions.setGeneration('codex-native', this.runtimeGeneration);
             this.transport = this.transport || this.transportFactory({
                 cwd: this.projectRoot,
@@ -245,7 +245,7 @@ class CodexRuntimeManager extends EventEmitter {
                     durationMs: this.diagnosticClock() - startedAt,
                 });
             } catch (error) {
-                this.generationScope.close('Codex App Server failed to start');
+                this.lifecycle.close('Codex App Server failed to start');
                 this.state = 'error';
                 this.lastError = serializeError(error);
                 this.intentionalStop = true;
@@ -296,8 +296,9 @@ class CodexRuntimeManager extends EventEmitter {
     async stop() {
         this.state = 'stopping';
         this.intentionalStop = true;
-        this.generationScope.close('VChat Agent Runtime stopped');
-        this.runtimeGeneration += 1;
+        this.lifecycle.invalidate('VChat Agent Runtime stopped');
+        this.runtimeGeneration = this.lifecycle.value;
+        this.generationScope = this.lifecycle.capture();
         this._rejectCompactionWaiters(new CodexAppServerError('RUNTIME_STOPPED', 'VChat Agent Runtime stopped during compaction'));
         await this._failClosedNativeApprovals('VChat Agent Runtime stopped');
         await this._interruptDynamicCalls('VChat Agent Runtime stopped');
@@ -342,11 +343,11 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     _captureGeneration() {
-        return this.generationScope;
+        return this.lifecycle.capture();
     }
 
     _assertGeneration(scope) {
-        scope.assertCurrent(this.runtimeGeneration, CodexAppServerError);
+        this.lifecycle.assert(scope, CodexAppServerError);
         if (!this.repository) throw new CodexAppServerError('RUNTIME_STOPPED', 'Agent projection store is closed');
     }
 
@@ -2681,7 +2682,9 @@ class CodexRuntimeManager extends EventEmitter {
     async _handleTransportCrash(error) {
         this.state = 'crashed';
         this.lastError = serializeError(error);
-        this.generationScope.close('Codex App Server crashed');
+        this.lifecycle.invalidate('Codex App Server crashed');
+        this.runtimeGeneration = this.lifecycle.value;
+        this.generationScope = this.lifecycle.capture();
         this.runtimeGeneration += 1;
         if (this.repository && !this.repository.readOnly) {
             for (const [threadId, threadState] of this.threadStates) {
