@@ -14,19 +14,6 @@ let toolResultContentIdCounter = 0;
 
 // 🟢 完整 Markdown → HTML 渲染缓存：只缓存 raw HTML 字符串，不缓存 DOM / 后处理结果 / message 对象。
 const RENDER_PIPELINE_VERSION = '2026-07-26-dollar-guard-v3';
-const RENDER_HTML_CACHE_MAX_BYTES = 20 * 1024 * 1024;
-const RENDER_HTML_CACHE_MAX_ENTRIES = 500;
-const RENDER_HTML_CACHE_MAX_SINGLE_BYTES = 1024 * 1024;
-const RENDER_HTML_CACHE_MIN_TEXT_LENGTH = 512;
-const RENDER_HTML_CACHE_MAX_TEXT_LENGTH = 512 * 1024;
-const renderHtmlCache = new Map();
-let renderHtmlCacheBytes = 0;
-const renderHtmlCacheStats = {
-    hits: 0,
-    misses: 0,
-    skips: 0,
-    evictions: 0
-};
 
 import { avatarColorCache, getDominantAvatarColor } from '../../../renderer/colorUtils.js';
 import { createMessageSkeleton, formatMessageTimestamp } from '../../../renderer/domBuilder.js';
@@ -40,6 +27,7 @@ import { createAgentRendererStream } from './agent-renderer-stream.js';
 import { renderAttachments as renderResourceAttachments } from './agent-renderer-resource-dom.js';
 import { createAgentMessageDom } from './agent-renderer-message-dom.js';
 import { createAgentRendererContent } from './agent-renderer-content.js';
+import { createAgentRendererHtmlCache } from './agent-renderer-html-cache.js';
 
 const colorExtractionPromises = new Map();
 
@@ -1612,109 +1600,6 @@ function preprocessStreamTailContent(text) {
     }).text;
 }
 
-function estimateStringBytes(str) {
-    return typeof str === 'string' ? str.length * 2 : 0;
-}
-
-function hashStringFNV1a(str) {
-    let hash = 0x811c9dc5;
-    for (let i = 0; i < str.length; i++) {
-        hash ^= str.charCodeAt(i);
-        hash = Math.imul(hash, 0x01000193);
-    }
-    return (hash >>> 0).toString(16);
-}
-
-function buildRenderSettingsFingerprint(settings = {}) {
-    // 仅纳入会影响 Markdown → raw HTML 或按钮标记处理的稳定设置；后续新增渲染相关设置时可 bump RENDER_PIPELINE_VERSION。
-    return JSON.stringify({
-        enableAiMessageButtons: settings.enableAiMessageButtons !== false
-    });
-}
-
-function shouldBypassRenderHtmlCache(text, options = {}) {
-    if (typeof text !== 'string' || !text) return true;
-    if (text.length < RENDER_HTML_CACHE_MIN_TEXT_LENGTH) return true;
-    if (text.length > RENDER_HTML_CACHE_MAX_TEXT_LENGTH) return true;
-
-    // scoped CSS 有 scopeId 与 document.head 注入副作用，第一版保守跳过。
-    // 同时用大小写无关的 HTML/CSS 风险识别覆盖 <STYLE>、结构化 HTML 与内联 style 场景。
-    if ((options.messageRole || 'assistant') === 'assistant' && containsAssistantHtmlNeedingScope(text)) return true;
-
-    return false;
-}
-
-function buildRenderHtmlCacheKey(text, options = {}) {
-    const settings = options.settings || getSettings();
-    const messageRole = options.messageRole || 'assistant';
-    const depth = options.depth ?? 0;
-
-    return [
-        RENDER_PIPELINE_VERSION,
-        messageRole,
-        depth,
-        buildRenderSettingsFingerprint(settings),
-        text.length,
-        hashStringFNV1a(text)
-    ].join('|');
-}
-
-function getRenderHtmlCache(key) {
-    const entry = renderHtmlCache.get(key);
-    if (!entry) return null;
-
-    renderHtmlCache.delete(key);
-    entry.lastUsed = Date.now();
-    entry.hits += 1;
-    renderHtmlCache.set(key, entry);
-    renderHtmlCacheStats.hits += 1;
-
-    return entry.html;
-}
-
-function trimRenderHtmlCache() {
-    while (
-        renderHtmlCacheBytes > RENDER_HTML_CACHE_MAX_BYTES ||
-        renderHtmlCache.size > RENDER_HTML_CACHE_MAX_ENTRIES
-    ) {
-        const oldestKey = renderHtmlCache.keys().next().value;
-        if (oldestKey === undefined) break;
-
-        const oldest = renderHtmlCache.get(oldestKey);
-        renderHtmlCacheBytes -= oldest?.size || 0;
-        renderHtmlCache.delete(oldestKey);
-        renderHtmlCacheStats.evictions += 1;
-    }
-}
-
-function setRenderHtmlCache(key, html) {
-    const size = estimateStringBytes(html);
-    if (size <= 0 || size > RENDER_HTML_CACHE_MAX_SINGLE_BYTES) {
-        return;
-    }
-
-    if (renderHtmlCache.has(key)) {
-        const old = renderHtmlCache.get(key);
-        renderHtmlCacheBytes -= old?.size || 0;
-        renderHtmlCache.delete(key);
-    }
-
-    renderHtmlCache.set(key, {
-        html,
-        size,
-        hits: 0,
-        lastUsed: Date.now()
-    });
-    renderHtmlCacheBytes += size;
-
-    trimRenderHtmlCache();
-}
-
-function clearRenderHtmlCache() {
-    renderHtmlCache.clear();
-    renderHtmlCacheBytes = 0;
-}
-
 function renderMarkdownToHtmlUncached(text, options = {}) {
     const markedInstance = agentRenderContext.markedInstance;
     if (!markedInstance) return escapeHtml(text);
@@ -1733,25 +1618,15 @@ function renderMarkdownToHtmlUncached(text, options = {}) {
     return html;
 }
 
+const renderHtmlCache = createAgentRendererHtmlCache({
+    version: RENDER_PIPELINE_VERSION,
+    getSettings,
+    containsScopedHtml: containsAssistantHtmlNeedingScope,
+    renderUncached: renderMarkdownToHtmlUncached,
+});
+
 function renderMarkdownToHtml(text, options = {}) {
-    const markedInstance = agentRenderContext.markedInstance;
-    if (!markedInstance) return escapeHtml(text);
-
-    if (shouldBypassRenderHtmlCache(text, options)) {
-        renderHtmlCacheStats.skips += 1;
-        return renderMarkdownToHtmlUncached(text, options);
-    }
-
-    const cacheKey = buildRenderHtmlCacheKey(text, options);
-    const cachedHtml = getRenderHtmlCache(cacheKey);
-    if (cachedHtml !== null) {
-        return cachedHtml;
-    }
-
-    renderHtmlCacheStats.misses += 1;
-    const html = renderMarkdownToHtmlUncached(text, options);
-    setRenderHtmlCache(cacheKey, html);
-    return html;
+    return renderHtmlCache.render(text, options);
 }
 
 function parseFullMarkdown(text, options = {}) {
@@ -2208,7 +2083,7 @@ const messageDom = createAgentMessageDom({
     cleanupAnimation: (content) => animationLifecycle?.cleanup(content),
     unobserveMessage: (item) => visibilityController?.unobserveMessage(item),
     invalidateSession: () => invalidateRenderSession(),
-    clearRenderCache: () => clearRenderHtmlCache(),
+    clearRenderCache: () => renderHtmlCache.clear(),
     clearToolResults: () => {
         toolResultFullContentMap.clear();
         toolResultContentIdCounter = 0;
