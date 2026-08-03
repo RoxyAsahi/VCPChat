@@ -24,7 +24,7 @@
     "npm run check:ui-system"
   ],
   "remaining": [
-    "real Electron settings interaction and screenshot",
+    "real Electron settings persistence after restart",
     "real ToolBox next-turn payload verification"
   ]
 }

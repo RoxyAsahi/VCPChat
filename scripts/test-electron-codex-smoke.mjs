@@ -202,6 +202,68 @@ try {
     assert.ok(directCreateState.activeTopicId, `Direct Session creation did not select a durable Session: ${JSON.stringify(directCreateState)}`);
     assert.match(directCreateState.title, /^新会话 /, 'Direct Session creation must use the standard generated title');
     assert.equal(directCreateState.composerDisabled, false, 'A directly created Session preview must be immediately send-capable');
+
+    // R12 real UI contract: a current-Session Select must retain the user's
+    // value while the async SQLite save is pending, and the saved workspace
+    // must be scoped to this Session rather than the Agent Profile.
+    const settingsSessionId = directCreateState.activeTopicId;
+    const settingsWorkspace = appData;
+    await page.evaluate(() => {
+        const host = document.querySelector('#nextUiInternalAppHost');
+        const settingsTab = [...(host?.querySelectorAll('.sidebar-tab-button') || [])]
+            .find((tab) => tab.textContent?.trim() === '设置');
+        settingsTab?.click();
+    });
+    await page.waitForSelector('#nextUiInternalAppHost .agent-chat-settings-pane', { visible: true, timeout: timeoutMs });
+    await page.evaluate(() => {
+        const host = document.querySelector('#nextUiInternalAppHost');
+        const sessionScope = [...(host?.querySelectorAll('.agent-chat-settings-scope') || [])]
+            .find((button) => button.textContent?.trim() === '当前会话');
+        sessionScope?.click();
+    });
+    await page.waitForFunction(() => Boolean(document.querySelector(
+        '#nextUiInternalAppHost .agent-chat-settings-pane .agent-chat-setting-field select',
+    )), { timeout: timeoutMs });
+    const setLabeledControl = async (labelText, value, eventType = 'change') => page.evaluate(({ labelText: targetLabel, value: nextValue, eventType: type }) => {
+        const host = document.querySelector('#nextUiInternalAppHost');
+        const field = [...(host?.querySelectorAll('.agent-chat-setting-field') || [])]
+            .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent?.includes(targetLabel));
+        const control = field?.querySelector('select, input, textarea');
+        if (!control) return false;
+        const setter = Object.getOwnPropertyDescriptor(control.constructor.prototype, 'value')?.set
+            || Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+        setter?.call(control, nextValue);
+        control.dispatchEvent(new Event(type, { bubbles: true }));
+        return true;
+    }, { labelText, value, eventType });
+    assert.equal(await setLabeledControl('本地工具审批', 'always-approve'), true);
+    const immediatePermission = await page.evaluate(() => {
+        const fields = document.querySelectorAll('#nextUiInternalAppHost .agent-chat-setting-field');
+        const field = [...fields].find((item) => item.querySelector('.agent-chat-setting-label')
+            ?.textContent?.includes('本地工具审批'));
+        return field?.querySelector('select')?.value || null;
+    });
+    assert.equal(immediatePermission, 'always-approve', 'YOLO Select must not jump back to the old Snapshot during save');
+    assert.equal(await setLabeledControl('工作目录（可留空）', settingsWorkspace), true);
+    await page.waitForFunction(async (sessionId, workspaceRoot) => {
+        const config = await (window.chatAPI || window.electronAPI).agentRuntimeReadSessionConfig({ sessionId });
+        return config?.desiredConfig?.permissionMode === 'always-approve'
+            && config?.desiredConfig?.workspaceRoot === workspaceRoot;
+    }, { timeout: timeoutMs }, settingsSessionId, settingsWorkspace);
+    const persistedSettings = await page.evaluate(async (sessionId) => {
+        const config = await (window.chatAPI || window.electronAPI).agentRuntimeReadSessionConfig({ sessionId });
+        return {
+            sessionId: config.sessionId,
+            permissionMode: config.desiredConfig?.permissionMode,
+            workspaceRoot: config.desiredConfig?.workspaceRoot,
+            applyState: config.applyState,
+        };
+    }, settingsSessionId);
+    assert.equal(persistedSettings.sessionId, settingsSessionId);
+    assert.equal(persistedSettings.permissionMode, 'always-approve');
+    assert.equal(persistedSettings.workspaceRoot, settingsWorkspace);
+    assert.ok(['unmaterialized', 'pending', 'applying', 'applied'].includes(persistedSettings.applyState),
+        `unexpected Session config apply state: ${persistedSettings.applyState}`);
     await page.screenshot({ path: path.join(root, 'screenshots', 'agent-direct-new-session.png') });
     const knownThemeAssets = [
         'styles/assets/wallpaper/themes_snow_realm_light.jpg',
