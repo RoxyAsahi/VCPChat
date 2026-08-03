@@ -45,6 +45,7 @@
     "test:agent-session-state": "node scripts/test-agent-session-state.mjs",
     "test:agent-settings-ux": "node scripts/test-agent-settings-ux.mjs",
     "test:agent-settings-interaction": "node scripts/test-agent-settings-interaction.mjs",
+    "test:agent-settings-coordinator": "node scripts/test-agent-settings-coordinator.mjs",
     "test:agent-config-apply": "node scripts/run-electron-node.mjs scripts/test-agent-config-apply.mjs",
     "test:agent-data-contracts": "node scripts/test-agent-data-contracts.mjs",
     "test:agent-composer-state": "node scripts/test-agent-composer-state.mjs",

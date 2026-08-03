@@ -126,6 +126,7 @@ const governedUiModules = [
     'agent-approval-view.js',
     'agent-workbench-topic-flow.js',
     'agent-session-catalog-coordinator.js',
+    'agent-settings-coordinator.js',
 ];
 for (const file of governedUiModules) {
     const absolute = path.join(root, 'modules/ui-system', file);

@@ -13,8 +13,6 @@ import { createWorkbenchLifecycle } from './agent-workbench-lifecycle.js';
 import { renderAgentSettingsPane } from './agent-settings-view.js';
 import {
     createAgentSettingsState,
-    profileSettingsTarget,
-    sessionSettingsTarget,
 } from './agent-settings-state.js';
 import {
     button,
@@ -39,6 +37,7 @@ import { createAgentApprovalView } from './agent-approval-view.js';
 import { createAgentWorkbenchTopicFlow } from './agent-workbench-topic-flow.js';
 import { createAgentWorkspaceCoordinator } from './agent-workspace-coordinator.js';
 import { createAgentWorkbenchTimelineView } from './agent-workbench-timeline-view.js';
+import { createAgentSettingsCoordinator } from './agent-settings-coordinator.js';
 import {
     agentCacheKey,
     createAgentSessionCatalogCoordinator,
@@ -422,7 +421,6 @@ function mountWorkbench(container) {
     });
     let budgetAutosaveTimer = null;
     const settingsState = createAgentSettingsState();
-    const sessionConfigRevisions = new Map();
     runStatusStop.addEventListener('click', () => run(async () => {
         runStatusStop.disabled = true;
         await controller.cancelTurn();
@@ -447,6 +445,22 @@ function mountWorkbench(container) {
         refreshTopicsForAgent,
         refreshControlPlane,
     } = sessionCatalog;
+    const settingsCoordinator = createAgentSettingsCoordinator({
+        state,
+        store,
+        settingsState,
+        controller,
+        selectedAgentProfile,
+        selectAgent,
+        saveAgentProfile: (request) => runtimeApi().agentRuntimeSaveAgentProfile?.(request),
+        refreshTopicsForAgent,
+        notify,
+        refreshViews: () => {
+            renderSidebar();
+            renderHeader();
+        },
+    });
+    const { persist: persistWorkbenchSettings, sessionConfigRevisions } = settingsCoordinator;
 
     const approvalRegistry = new Map();
     const blockPresentation = createAgentBlockPresentation({
@@ -1082,152 +1096,6 @@ function mountWorkbench(container) {
             persistedTopics: state.topics.filter((topic) => !liveTopicIds.has(topic.id)),
             selectedTopicId: current.selectedSessionId || current.selectedTopic?.topicId || null,
         };
-    }
-
-    async function persistAgentProfileDefaults(payload) {
-        const profile = selectedAgentProfile();
-        if (!profile) throw new Error('请先选择 Build Agent');
-        const result = await runtimeApi().agentRuntimeSaveAgentProfile?.({
-            agentId: profile.id || profile.name,
-            expectedProfileRevision: Number(profile.profileRevision || profile.revision || 1),
-            name: Object.prototype.hasOwnProperty.call(payload, 'name')
-                ? payload.name : profile.name || profile.id,
-            instructionMode: Object.prototype.hasOwnProperty.call(payload, 'instructionMode')
-                ? payload.instructionMode : profile.instructionMode || 'vchat-identity',
-            baseInstructions: Object.prototype.hasOwnProperty.call(payload, 'baseInstructions')
-                ? payload.baseInstructions
-                : Object.prototype.hasOwnProperty.call(payload, 'systemPrompt')
-                ? payload.systemPrompt : profile.baseInstructions || profile.systemPrompt || '',
-            developerInstructions: Object.prototype.hasOwnProperty.call(payload, 'developerInstructions')
-                ? payload.developerInstructions : profile.developerInstructions || '',
-            personality: Object.prototype.hasOwnProperty.call(payload, 'personality')
-                ? payload.personality : profile.personality || 'none',
-            model: Object.prototype.hasOwnProperty.call(payload, 'model') ? payload.model : profile.model,
-            reasoningEffort: Object.prototype.hasOwnProperty.call(payload, 'reasoningEffort')
-                ? payload.reasoningEffort : profile.reasoningEffort,
-            workspaceRoot: Object.prototype.hasOwnProperty.call(payload, 'workspaceRoot')
-                ? payload.workspaceRoot : profile.workspaceRoot,
-            permissionMode: Object.prototype.hasOwnProperty.call(payload, 'permissionMode')
-                ? payload.permissionMode : profile.permissionMode,
-        });
-        if (!result?.success || !result.profile?.id) throw new Error(result?.error || 'Build Agent Profile 保存失败');
-        const savedProfile = {
-            ...result.profile,
-            instructionMode: result.profile.instructionMode === 'codex-managed'
-                ? 'codex-managed' : 'vchat-identity',
-            baseInstructions: result.profile.baseInstructions || result.profile.systemPrompt || '',
-            systemPrompt: result.profile.systemPrompt || '',
-            developerInstructions: result.profile.developerInstructions || '',
-            personality: result.profile.personality || 'none',
-            reasoningEffort: result.profile.reasoningEffort || null,
-            reasoningEfforts: Array.isArray(result.profile.reasoningEfforts) ? result.profile.reasoningEfforts : [],
-            model: result.profile.model || '',
-            workspaceRoot: result.profile.workspaceRoot || '',
-            permissionMode: result.profile.permissionMode === 'always-approve' ? 'always-approve' : 'ask',
-            configurationRequired: result.profile.instructionMode !== 'codex-managed'
-                && !String(result.profile.baseInstructions || result.profile.systemPrompt || '').trim(),
-        };
-        Object.assign(profile, savedProfile);
-        selectAgent(savedProfile.id);
-        return {
-            profile: savedProfile,
-            settings: {
-                model: savedProfile.model,
-                permissionMode: savedProfile.permissionMode,
-            },
-        };
-    }
-
-    function persistWorkbenchSettings(payload, selectedSession, successMessage) {
-        const saveScope = selectedSession ? 'session'
-            : (Object.prototype.hasOwnProperty.call(payload, 'budget') ? 'advanced' : 'profile');
-        const profile = selectedAgentProfile();
-        const targetKey = selectedSession
-            ? sessionSettingsTarget(selectedSession)
-            : saveScope === 'advanced' ? 'advanced:global' : profileSettingsTarget(profile?.id || profile?.name);
-        state.settingsSaveState = 'saving';
-        state.settingsSaveMessage = '正在自动保存…';
-        state.settingsSaveByScope.set(saveScope, { state: 'saving', message: '正在自动保存…' });
-        const projectionAtEnqueue = store.getState().selectedTopic;
-        if (selectedSession
-            && (projectionAtEnqueue?.sessionId || projectionAtEnqueue?.topicId) === selectedSession) {
-            sessionConfigRevisions.set(selectedSession, Number(projectionAtEnqueue.configRevision || 1));
-        }
-        const operation = settingsState.enqueue(targetKey, payload, async () => {
-            const request = {
-                ...payload,
-                ...(selectedSession ? {
-                    sessionId: selectedSession,
-                    expectedConfigRevision: sessionConfigRevisions.get(selectedSession)
-                        || Number(projectionAtEnqueue?.configRevision || 1),
-                } : {}),
-            };
-            const profileUpdate = !selectedSession && [
-                'name', 'systemPrompt', 'baseInstructions', 'instructionMode', 'developerInstructions',
-                'personality', 'model', 'reasoningEffort', 'workspaceRoot', 'permissionMode',
-            ]
-                .some((key) => Object.prototype.hasOwnProperty.call(payload, key));
-            const saved = profileUpdate
-                ? await persistAgentProfileDefaults(payload)
-                : await controller.updateWorkbenchSettings(request);
-            if (saved?.profile && !saved.profile.configurationRequired) {
-                state.profileConfigurationNotice = '';
-            }
-            if (saved?.createdDerivedSession && saved?.session?.sessionId) {
-                await refreshTopicsForAgent(saved.session.agentId || state.selectedAgent, false);
-                await controller.hydrateTopic(
-                    saved.session.sessionId,
-                    saved.session,
-                    null,
-                    saved.session.agentId || state.selectedAgent,
-                );
-                notify('已保留原会话，并创建 Codex 管理指令派生会话。', 'success');
-            }
-            if (saved?.session?.configRevision) {
-                sessionConfigRevisions.set(saved.session.sessionId, Number(saved.session.configRevision));
-            }
-            const stillSelected = !selectedSession || store.getState().selectedSessionId === selectedSession;
-            if (stillSelected && Object.prototype.hasOwnProperty.call(payload, 'permissionMode')) {
-                state.permissionMode = saved?.settings?.permissionMode === 'always-approve' ? 'always-approve' : 'ask';
-            }
-            if (stillSelected && Object.prototype.hasOwnProperty.call(payload, 'model')) {
-                state.model = saved?.settings?.model || saved?.session?.configSnapshot?.model || payload.model;
-                state.modelDraft = null;
-            }
-            if (Object.prototype.hasOwnProperty.call(payload, 'budget')) {
-                state.budget = { ...state.budget, ...payload.budget };
-            }
-            if (stillSelected && selectedSession && saved?.session?.configSnapshot) {
-                const currentProjection = store.getState();
-                store.setState({
-                    selectedTopic: currentProjection.selectedSessionId === selectedSession
-                        ? {
-                            ...currentProjection.selectedTopic,
-                            configSnapshot: saved.session.configSnapshot,
-                            configRevision: saved.session.configRevision,
-                            workspaceRef: saved.session.workspaceRoot || currentProjection.selectedTopic.workspaceRef,
-                            workspaceRoot: saved.session.workspaceRoot || currentProjection.selectedTopic.workspaceRoot,
-                        }
-                        : currentProjection.selectedTopic,
-                });
-            }
-            state.settingsSaveState = 'saved';
-            state.settingsSaveMessage = successMessage || '已自动保存';
-            state.settingsSaveByScope.set(saveScope, { state: 'saved', message: successMessage || '已自动保存' });
-            return saved;
-        }, successMessage || '已自动保存').catch((error) => {
-            state.settingsSaveState = 'error';
-            state.settingsSaveMessage = error?.message || String(error);
-            state.settingsSaveByScope.set(saveScope, { state: 'error', message: state.settingsSaveMessage });
-            notify(state.settingsSaveMessage, 'error');
-            return null;
-        }).finally(() => {
-            if (!state.disposed) {
-                renderSidebar();
-                renderHeader();
-            }
-        });
-        return operation;
     }
 
     function sidebarViewModel() {
@@ -2201,6 +2069,7 @@ function mountWorkbench(container) {
     return () => {
         state.disposed = true;
         sessionCatalog.dispose();
+        settingsCoordinator.dispose();
         workspaceCoordinator.dispose();
         settingsState.dispose();
         closeTopicContextMenu();
