@@ -3,7 +3,32 @@ import http from 'node:http';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { ToolboxResponsesAdapter } = require('../modules/codex-runtime/toolboxResponsesAdapter.js');
+const { ToolboxResponsesAdapter, responsesRequestToChat } = require('../modules/codex-runtime/toolboxResponsesAdapter.js');
+
+const managedMapping = responsesRequestToChat({
+    model: 'reasoning-model',
+    instructions: 'Codex managed identity from the local App Server.',
+    reasoning: { effort: 'high' },
+    input: [{ role: 'user', content: 'hello' }],
+}, 'managed-request', {
+    stripEmbeddedInstructions: true,
+    trustedInstructions: {
+        mode: 'codex-managed',
+        developerInstructions: 'Keep the answer concise.',
+        personality: 'pragmatic',
+    },
+});
+assert.deepEqual(managedMapping.messages.slice(0, 2), [
+    { role: 'system', content: 'Codex managed identity from the local App Server.' },
+    { role: 'developer', content: 'Keep the answer concise.' },
+]);
+assert.equal(managedMapping.reasoning_effort, 'high');
+assert.throws(() => responsesRequestToChat({
+    model: 'reasoning-model', instructions: 'x'.repeat(70 * 1024), input: 'hello',
+}, null, {
+    stripEmbeddedInstructions: true,
+    trustedInstructions: { mode: 'codex-managed' },
+}), /64 KiB/, 'unbounded embedded App Server instructions must fail closed');
 
 async function listen(server) {
     await new Promise((resolve, reject) => {

@@ -812,7 +812,12 @@ if (!gotTheLock) {
 
         // Create the native window first, but load the renderer only after IPC registration.
         createWindow({ deferLoad: true });
-        agentRuntimeHandlers.initialize({ mainWindow, settingsManager: appSettingsManager, projectRoot: PROJECT_ROOT });
+        agentRuntimeHandlers.initialize({
+            mainWindow,
+            settingsManager: appSettingsManager,
+            projectRoot: PROJECT_ROOT,
+            getModels: () => cachedModels,
+        });
         createTray();
         // --- Application Menu ---
         const isMac = process.platform === 'darwin';

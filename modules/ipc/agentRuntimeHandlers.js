@@ -117,6 +117,7 @@ function initialize(options) {
         // the Codex Agent catalog uses the same layout in development and release.
         agentsDir: path.join(path.dirname(settingsManager.settingsPath || path.join(projectRoot, 'AppData', 'settings.json')), 'CodexAgents'),
         getSettings: () => cachedSettings,
+        getModels: () => options.getModels?.() || [],
         setSettings: (updater) => settingsManager.updateSettings(updater),
         hasUi: () => workbenchSenders.size > 0 && Boolean(getMainWindow()),
         sendEvent: (event) => {

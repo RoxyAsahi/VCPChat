@@ -120,6 +120,7 @@ const manager = new CodexRuntimeManager({
     projectRoot: root,
     settingsPath: path.join(root, 'settings.json'),
     getSettings: () => ({}),
+    getModels: () => [{ id: 'gpt-5.6-terra', reasoning_efforts: ['low', 'medium', 'high'] }],
     transportFactory: () => fake,
     repositoryFactory: () => new AgentProjectionRepository({ databasePath: path.join(root, 'projection.sqlite') }),
     sendEvent: (event) => uiEvents.push(event),
@@ -135,7 +136,7 @@ const researchWorkspace = path.join(root, 'research-workspace');
 fs.mkdirSync(researchWorkspace);
 const savedBuildProfile = manager.saveAgentProfile({
     name: 'Research Agent', systemPrompt: '{{Research}}', model: 'gpt-5.6-terra',
-    workspaceRoot: researchWorkspace, permissionMode: 'always-approve',
+    reasoningEffort: 'high', workspaceRoot: researchWorkspace, permissionMode: 'always-approve',
 });
 assert.equal(savedBuildProfile.profile.id, 'Research-Agent');
 assert.equal(manager.listAgentProfiles().some((profile) => profile.id === 'Research-Agent'), true,
@@ -150,6 +151,11 @@ assert.equal(inheritedProfileSession.configSnapshot.model, 'gpt-5.6-terra',
     'a new Session must freeze its Build Agent Profile model instead of falling back to a global model');
 assert.equal(inheritedProfileSession.configSnapshot.permissionMode, 'always-approve',
     'a new Session must freeze its Build Agent Profile approval mode');
+assert.equal(inheritedProfileSession.configSnapshot.reasoningEffort, 'high',
+    'a new Session must freeze only a reasoning effort advertised by its model metadata');
+assert.throws(() => manager.saveAgentProfile({
+    name: 'Unsupported reasoning', systemPrompt: '{{Nova}}', model: 'unknown-model', reasoningEffort: 'high',
+}), /does not advertise reasoning effort/);
 assert.throws(() => manager.saveAgentProfile({ name: 'Research Agent', systemPrompt: '{{Other}}' }), /already exists/);
 const savedBuildAvatar = manager.saveAgentAvatar({
     agentId: 'Nova',
@@ -357,12 +363,26 @@ const baseInstructionsTopic = await manager.createTopic({
 });
 await manager.createSession({ topicId: baseInstructionsTopic.topicId });
 const personaStart = fake.calls.find((call) => call.method === 'thread/start'
-    && call.params.developerInstructions === 'extra hint');
+    && call.params.baseInstructions === '{{Nova}}');
 assert.equal(personaStart.params.baseInstructions, '{{Nova}}',
     'systemPrompt must map to baseInstructions so VCPToolBox expands the Nova identity and replaces Codex');
-assert.equal(personaStart.params.developerInstructions, 'extra hint',
-    'an explicit developerInstructions still appends as a separate hint');
-assert.equal(personaStart.params.personality, 'pragmatic');
+assert.equal(personaStart.params.developerInstructions, undefined,
+    'VChat identity mode must not expose an ineffective second instruction source');
+assert.equal(personaStart.params.personality, undefined,
+    'personality is effective only when Codex manages the identity');
+const managedTopic = await manager.createTopic({
+    agentId: 'Nova',
+    title: 'Codex managed',
+    instructionMode: 'codex-managed',
+    developerInstructions: 'Keep answers concise.',
+    personality: 'friendly',
+});
+await manager.createSession({ topicId: managedTopic.topicId });
+const managedStart = fake.calls.find((call) => call.method === 'thread/start'
+    && call.params.developerInstructions === 'Keep answers concise.');
+assert.equal(managedStart.params.baseInstructions, undefined,
+    'Codex-managed identity must not inject a VChat baseInstructions replacement');
+assert.equal(managedStart.params.personality, 'friendly');
 // An explicit `baseInstructions` wins over `systemPrompt` when both are given.
 const explicitBaseTopic = await manager.createTopic({
     agentId: 'Nova',
@@ -461,7 +481,7 @@ const profilePreview = await manager.applyAgentProfileToSession({
 });
 assert.equal(profilePreview.requiresNewSession, true,
     'a materialized Thread must not silently accept prompt identity changes from its Profile');
-assert.ok(profilePreview.identityChanges.includes('systemPrompt'));
+assert.ok(profilePreview.identityChanges.includes('baseInstructions'));
 assert.ok(profilePreview.differences.some((difference) => difference.field === 'avatar'),
     'Profile preview must disclose avatar drift instead of silently changing old Session presentation');
 const profileFork = await manager.applyAgentProfileToSession({
@@ -482,20 +502,24 @@ assert.equal(manager.repository.getSession(session.sessionId).configSnapshot.bas
 manager.resumedThreadIds.clear();
 const resumedAfterRestart = await manager.createSession({ resume: topic.topicId });
 assert.equal(resumedAfterRestart.threadId, 'thr_test');
-assert.equal(fake.calls.filter((call) => call.method === 'thread/start').length, 3,
-    'only the original and two persona Sessions start Threads; every resume reopens the saved one');
+assert.equal(fake.calls.filter((call) => call.method === 'thread/start').length, 4,
+    'the original, VChat identity, Codex-managed and explicit-base Sessions start Threads; every resume reopens the saved one');
+await manager.startTurn({ sessionId: inheritedProfileTopic.sessionId, prompt: 'reason carefully' });
+assert.equal(fake.calls.filter((call) => call.method === 'turn/start').at(-1).params.effort, 'high',
+    'the validated Session reasoning effort must reach the next turn/start request');
 const resumeCall = fake.calls.find((call) => call.method === 'thread/resume' && call.params.threadId === 'thr_test');
 assert.deepEqual({ threadId: resumeCall.params.threadId, excludeTurns: resumeCall.params.excludeTurns }, {
     threadId: 'thr_test', excludeTurns: true,
 });
 const turn = await manager.startTurn({ sessionId: session.sessionId, prompt: 'hello' });
 assert.equal(turn.turnId, 'turn_test');
-assert.deepEqual(fake.calls.find((call) => call.method === 'turn/start').params.input, [
+const helloTurnStart = fake.calls.filter((call) => call.method === 'turn/start').at(-1);
+assert.deepEqual(helloTurnStart.params.input, [
     { type: 'text', text: 'hello', text_elements: [] },
 ]);
-assert.equal(fake.calls.find((call) => call.method === 'turn/start').params.approvalPolicy, 'never',
+assert.equal(helloTurnStart.params.approvalPolicy, 'never',
     'the next Turn must receive the current Session approval policy without restarting its Thread');
-assert.equal(fake.calls.find((call) => call.method === 'turn/start').params.model, 'gpt-5.6-luna',
+assert.equal(helloTurnStart.params.model, 'gpt-5.6-luna',
     'the next Turn must receive the model saved for the current Session');
 fake.emit('notification', {
     method: 'item/started',

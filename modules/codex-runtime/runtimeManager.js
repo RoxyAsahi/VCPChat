@@ -43,6 +43,41 @@ function sameIdentity(left, right) {
     return Boolean(a && b && a === b);
 }
 
+const INSTRUCTION_MODES = new Set(['vchat-identity', 'codex-managed']);
+const PERSONALITIES = new Set(['none', 'friendly', 'pragmatic']);
+
+function normalizeInstructionMode(value, baseInstructions = '') {
+    const mode = String(value || '').trim();
+    if (INSTRUCTION_MODES.has(mode)) return mode;
+    return String(baseInstructions || '').trim() ? 'vchat-identity' : 'vchat-identity';
+}
+
+function normalizePersonality(value) {
+    const personality = String(value || '').trim();
+    return PERSONALITIES.has(personality) ? personality : 'none';
+}
+
+function normalizeReasoningEffort(value) {
+    const effort = String(value || '').trim();
+    return effort && effort !== 'default' ? effort : null;
+}
+
+function reasoningEffortsFromModel(model) {
+    if (!model || typeof model !== 'object') return [];
+    const candidates = [
+        model.reasoningEfforts,
+        model.reasoning_efforts,
+        model.supportedReasoningEfforts,
+        model.supported_reasoning_efforts,
+        model.capabilities?.reasoningEfforts,
+        model.capabilities?.reasoning_efforts,
+        model.metadata?.reasoningEfforts,
+        model.metadata?.reasoning_efforts,
+    ];
+    const source = candidates.find(Array.isArray);
+    return source ? [...new Set(source.map((item) => String(item || '').trim()).filter(Boolean))] : [];
+}
+
 class CodexRuntimeManager extends EventEmitter {
     constructor(options = {}) {
         super();
@@ -50,6 +85,7 @@ class CodexRuntimeManager extends EventEmitter {
         this.settingsPath = options.settingsPath || path.join(this.projectRoot, 'AppData', 'settings.json');
         this.agentsDir = options.agentsDir || path.join(path.dirname(this.settingsPath), 'CodexAgents');
         this.getSettings = options.getSettings || (() => ({}));
+        this.getModels = options.getModels || (() => []);
         this.sendEvent = options.sendEvent || (() => {});
         this.transportFactory = options.transportFactory || ((config) => new CodexAppServerTransport(config));
         this.repositoryFactory = options.repositoryFactory || ((config) => new AgentProjectionRepository(config));
@@ -272,7 +308,8 @@ class CodexRuntimeManager extends EventEmitter {
         const now = Date.now();
         const agentId = explicitAgent(options.agentId || options.agent) || 'codex';
         const configSnapshot = this._configSnapshot({ ...options, agentId });
-        if (!sameIdentity(agentId, 'codex') && !String(configSnapshot.baseInstructions || '').trim()) {
+        if (configSnapshot.instructionMode === 'vchat-identity'
+            && !String(configSnapshot.baseInstructions || '').trim()) {
             throw new CodexAppServerError(
                 'AGENT_IDENTITY_MISSING',
                 `Agent ${agentId} has no system prompt; refusing to start it with the Codex identity`,
@@ -317,9 +354,18 @@ class CodexRuntimeManager extends EventEmitter {
             id: entry.catalogId, name: entry.name,
             revision: Number(entry.profile?.revision || 1),
             model: entry.profile?.model || '',
-            systemPrompt: entry.profile?.systemPrompt || '',
+            instructionMode: normalizeInstructionMode(
+                entry.profile?.instructionMode,
+                entry.profile?.baseInstructions || entry.profile?.systemPrompt,
+            ),
+            baseInstructions: entry.profile?.baseInstructions || entry.profile?.systemPrompt || '',
+            systemPrompt: entry.profile?.baseInstructions || entry.profile?.systemPrompt || '',
+            developerInstructions: entry.profile?.developerInstructions || '',
+            personality: normalizePersonality(entry.profile?.personality),
             workspaceRoot: entry.profile?.workspaceRoot || '',
             permissionMode: normalizePermissionMode(entry.profile?.permissionMode),
+            reasoningEffort: normalizeReasoningEffort(entry.profile?.reasoningEffort),
+            reasoningEfforts: Array.isArray(entry.profile?.reasoningEfforts) ? entry.profile.reasoningEfforts : [],
             executionProfile: 'toolbox-only',
             avatarUrl: this._agentAvatarUrl(entry.catalogId, entry.profile),
         }));
@@ -331,9 +377,19 @@ class CodexRuntimeManager extends EventEmitter {
                 name: session.agentNameSnapshot || session.configSnapshot?.agentName || idValue,
                 revision: Number(session.configSnapshot?.profileRevision || 1),
                 model: session.configSnapshot?.model || '',
+                instructionMode: normalizeInstructionMode(
+                    session.configSnapshot?.instructionMode,
+                    session.configSnapshot?.baseInstructions,
+                ),
+                baseInstructions: session.configSnapshot?.baseInstructions || '',
                 systemPrompt: session.configSnapshot?.baseInstructions || '',
+                developerInstructions: session.configSnapshot?.developerInstructions || '',
+                personality: normalizePersonality(session.configSnapshot?.personality),
                 workspaceRoot: session.workspaceRoot || '',
                 permissionMode: normalizePermissionMode(session.configSnapshot?.permissionMode),
+                reasoningEffort: normalizeReasoningEffort(session.configSnapshot?.reasoningEffort),
+                reasoningEfforts: Array.isArray(session.configSnapshot?.reasoningEfforts)
+                    ? session.configSnapshot.reasoningEfforts : [],
                 executionProfile: 'toolbox-only',
                 avatarUrl: session.configSnapshot?.agentAvatar || '',
             });
@@ -341,11 +397,17 @@ class CodexRuntimeManager extends EventEmitter {
         return profiles;
     }
 
-    saveAgentProfile({ agentId, name, systemPrompt, model, workspaceRoot, permissionMode } = {}) {
+    saveAgentProfile({
+        agentId, name, systemPrompt, instructionMode, baseInstructions, developerInstructions,
+        personality, model, reasoningEffort, workspaceRoot, permissionMode,
+    } = {}) {
         this.ensureProjectionStore();
         this._assertProjectionWritable();
         const displayName = String(name || '').trim();
-        const prompt = String(systemPrompt || '').trim();
+        const prompt = String(baseInstructions ?? systemPrompt ?? '').trim();
+        const normalizedInstructionMode = normalizeInstructionMode(instructionMode, prompt);
+        const normalizedDeveloperInstructions = String(developerInstructions || '').trim();
+        const normalizedPersonality = normalizePersonality(personality);
         const requestedId = String(agentId || '').trim();
         const idValue = requestedId || displayName
             .replace(/[\\/:*?"<>|]+/g, '-')
@@ -354,7 +416,9 @@ class CodexRuntimeManager extends EventEmitter {
         if (!displayName || !idValue || idValue === '.' || idValue === '..' || /[\\/:*?"<>|]/.test(idValue)) {
             throw new CodexAppServerError('INVALID_INPUT', 'Build Agent name is invalid');
         }
-        if (!prompt) throw new CodexAppServerError('INVALID_INPUT', 'Build Agent system prompt is required');
+        if (normalizedInstructionMode === 'vchat-identity' && !prompt) {
+            throw new CodexAppServerError('INVALID_INPUT', 'VChat identity mode requires baseInstructions');
+        }
         const directIdentity = this._resolveCanonicalAgent(idValue, { failOnAmbiguous: true });
         const namedIdentity = this._resolveCanonicalAgent(displayName, { failOnAmbiguous: true });
         const existing = directIdentity?.profile ? directIdentity : namedIdentity?.profile ? namedIdentity : null;
@@ -372,13 +436,21 @@ class CodexRuntimeManager extends EventEmitter {
         }
         const previousRevision = Number(existing?.profile?.revision || 0);
         const avatarFile = safeAvatarFile(existing?.profile?.avatarFile);
+        const normalizedModel = String(model || '').trim();
+        const reasoning = this._validateReasoningEffort(normalizedModel, reasoningEffort);
         const profile = {
             name: displayName,
+            instructionMode: normalizedInstructionMode,
+            baseInstructions: prompt,
             systemPrompt: prompt,
+            developerInstructions: normalizedDeveloperInstructions,
+            personality: normalizedPersonality,
             revision: previousRevision + 1,
             executionProfile: 'toolbox-only',
             permissionMode: normalizePermissionMode(permissionMode),
-            ...(String(model || '').trim() ? { model: String(model).trim() } : {}),
+            ...(normalizedModel ? { model: normalizedModel } : {}),
+            ...(reasoning.effort ? { reasoningEffort: reasoning.effort } : {}),
+            ...(reasoning.supported.length ? { reasoningEfforts: reasoning.supported } : {}),
             ...(normalizedWorkspace ? { workspaceRoot: normalizedWorkspace } : {}),
             ...(avatarFile ? { avatarFile } : {}),
             updatedAt: Date.now(),
@@ -482,9 +554,7 @@ class CodexRuntimeManager extends EventEmitter {
                 cwd: session.workspaceRoot,
                 approvalPolicy: normalizeApprovalPolicy(config.permissionMode || config.approvalPolicy),
                 sandbox: normalizeSandboxMode(config.sandbox),
-                personality: config.personality || 'pragmatic',
-                ...(config.baseInstructions ? { baseInstructions: config.baseInstructions } : {}),
-                ...(config.developerInstructions ? { developerInstructions: config.developerInstructions } : {}),
+                ...this._threadInstructionParams(config),
                 dynamicTools: [vcpInvokeTool()],
             });
             threadId = result?.thread?.id;
@@ -629,12 +699,14 @@ class CodexRuntimeManager extends EventEmitter {
         }
         const turnId = id('turn');
         const input = buildTurnInput(text, attachments);
+        const effort = this._effectiveReasoningEffort(session.configSnapshot || {});
         const result = await this.transport.request('turn/start', {
             threadId: session.threadId,
             clientUserMessageId: clientUserMessageId || id('client_msg'),
             input,
             cwd: session.workspaceRoot,
             model: session.configSnapshot?.model || undefined,
+            ...(effort ? { effort } : {}),
             // App Server applies execution policy to the turn it is about to
             // start.  Reading it from the Session snapshot means a saved
             // current-session change takes effect without restarting this
@@ -1284,8 +1356,14 @@ class CodexRuntimeManager extends EventEmitter {
             : null;
         const requestedModel = typeof settings.model === 'string' && settings.model.trim()
             ? settings.model.trim() : null;
+        const hasReasoningUpdate = Object.prototype.hasOwnProperty.call(settings, 'reasoningEffort');
         const hasSystemPromptUpdate = Object.prototype.hasOwnProperty.call(settings, 'systemPrompt');
-        const requestedSystemPrompt = hasSystemPromptUpdate ? String(settings.systemPrompt || '').trim() : null;
+        const hasBaseInstructionsUpdate = Object.prototype.hasOwnProperty.call(settings, 'baseInstructions');
+        const requestedSystemPrompt = (hasSystemPromptUpdate || hasBaseInstructionsUpdate)
+            ? String(settings.baseInstructions ?? settings.systemPrompt ?? '').trim() : null;
+        const hasInstructionModeUpdate = Object.prototype.hasOwnProperty.call(settings, 'instructionMode');
+        const hasDeveloperInstructionsUpdate = Object.prototype.hasOwnProperty.call(settings, 'developerInstructions');
+        const hasPersonalityUpdate = Object.prototype.hasOwnProperty.call(settings, 'personality');
         const hasWorkspaceUpdate = Object.prototype.hasOwnProperty.call(settings, 'workspaceRoot');
         let requestedWorkspaceRoot = null;
         if (hasWorkspaceUpdate) {
@@ -1311,19 +1389,47 @@ class CodexRuntimeManager extends EventEmitter {
                     'Workspace is part of the materialized Codex Thread identity; create a new Session to change it',
                 );
             }
-            if (hasSystemPromptUpdate && current.threadId
-                && requestedSystemPrompt !== String(current.configSnapshot?.baseInstructions || '')) {
+            const nextInstructionMode = hasInstructionModeUpdate
+                ? normalizeInstructionMode(settings.instructionMode, requestedSystemPrompt)
+                : normalizeInstructionMode(current.configSnapshot?.instructionMode, current.configSnapshot?.baseInstructions);
+            const nextBaseInstructions = (hasSystemPromptUpdate || hasBaseInstructionsUpdate)
+                ? requestedSystemPrompt : String(current.configSnapshot?.baseInstructions || '');
+            const nextDeveloperInstructions = hasDeveloperInstructionsUpdate
+                ? String(settings.developerInstructions || '').trim()
+                : String(current.configSnapshot?.developerInstructions || '');
+            const nextPersonality = hasPersonalityUpdate
+                ? normalizePersonality(settings.personality)
+                : normalizePersonality(current.configSnapshot?.personality);
+            const currentInstructionMode = normalizeInstructionMode(
+                current.configSnapshot?.instructionMode,
+                current.configSnapshot?.baseInstructions,
+            );
+            const identityChanged = nextInstructionMode !== currentInstructionMode
+                || (nextInstructionMode === 'vchat-identity'
+                    && nextBaseInstructions !== String(current.configSnapshot?.baseInstructions || ''))
+                || (nextInstructionMode === 'codex-managed'
+                    && (nextDeveloperInstructions !== String(current.configSnapshot?.developerInstructions || '')
+                        || nextPersonality !== normalizePersonality(current.configSnapshot?.personality)));
+            if (current.threadId && identityChanged) {
                 throw new CodexAppServerError(
                     'IDENTITY_CHANGE_REQUIRES_NEW_SESSION',
-                    'System prompt is part of the materialized Codex Thread identity; create a new Session to change it',
+                    'Instructions and personality are part of the materialized Codex Thread identity; create a derived Session',
                 );
             }
-            if (hasSystemPromptUpdate && !requestedSystemPrompt && !sameIdentity(current.agentId, 'codex')) {
-                throw new CodexAppServerError('AGENT_IDENTITY_MISSING', 'Build Agent Session requires a system prompt');
+            if (nextInstructionMode === 'vchat-identity' && !nextBaseInstructions) {
+                throw new CodexAppServerError('AGENT_IDENTITY_MISSING', 'VChat identity mode requires baseInstructions');
             }
             const currentPermissionMode = normalizePermissionMode(
                 current.configSnapshot?.permissionMode || current.configSnapshot?.approvalPolicy,
             );
+            const nextModel = requestedModel || current.configSnapshot?.model || '';
+            const reasoning = hasReasoningUpdate
+                ? this._validateReasoningEffort(nextModel, settings.reasoningEffort)
+                : {
+                    effort: normalizeReasoningEffort(current.configSnapshot?.reasoningEffort),
+                    supported: Array.isArray(current.configSnapshot?.reasoningEfforts)
+                        ? current.configSnapshot.reasoningEfforts : this._reasoningEffortsForModel(nextModel),
+                };
             const updated = this.repository.updateSessionConfig(sessionId, expectedRevision, {
                 workspaceRoot: hasWorkspaceUpdate ? requestedWorkspaceRoot : current.workspaceRoot,
                 configSnapshot: {
@@ -1331,7 +1437,12 @@ class CodexRuntimeManager extends EventEmitter {
                     permissionMode: permissionMode || currentPermissionMode,
                     approvalPolicy: normalizeApprovalPolicy(permissionMode || currentPermissionMode),
                     ...(requestedModel ? { model: requestedModel } : {}),
-                    ...(hasSystemPromptUpdate ? { baseInstructions: requestedSystemPrompt } : {}),
+                    instructionMode: nextInstructionMode,
+                    baseInstructions: nextBaseInstructions,
+                    developerInstructions: nextDeveloperInstructions,
+                    personality: nextPersonality,
+                    reasoningEffort: reasoning.effort,
+                    reasoningEfforts: reasoning.supported,
                 },
             });
             if (!updated.updated) {
@@ -1362,7 +1473,11 @@ class CodexRuntimeManager extends EventEmitter {
         const effectiveModel = session?.configSnapshot?.model || requestedModel || this.getWorkbenchSettings().model || null;
         return {
             ...this.getWorkbenchSettings(),
-            settings: { permissionMode: effectivePermissionMode, ...(effectiveModel ? { model: effectiveModel } : {}) },
+            settings: {
+                permissionMode: effectivePermissionMode,
+                ...(effectiveModel ? { model: effectiveModel } : {}),
+                reasoningEffort: normalizeReasoningEffort(session?.configSnapshot?.reasoningEffort),
+            },
             session: session ? compatibilitySession(session) : null,
             appliesTo: session ? 'next-turn' : 'new-sessions',
         };
@@ -1381,12 +1496,25 @@ class CodexRuntimeManager extends EventEmitter {
         const addDifference = (field, current, next, identity = false) => {
             if (String(current ?? '') !== String(next ?? '')) differences.push({ field, current: current ?? null, next: next ?? null, identity });
         };
-        addDifference('systemPrompt', session.configSnapshot?.baseInstructions || '', profile.systemPrompt || '', true);
+        const profileMode = normalizeInstructionMode(
+            profile.instructionMode,
+            profile.baseInstructions || profile.systemPrompt,
+        );
+        addDifference(
+            'instructionMode',
+            normalizeInstructionMode(session.configSnapshot?.instructionMode, session.configSnapshot?.baseInstructions),
+            profileMode,
+            true,
+        );
+        addDifference('baseInstructions', session.configSnapshot?.baseInstructions || '', profile.baseInstructions || profile.systemPrompt || '', profileMode === 'vchat-identity');
+        addDifference('developerInstructions', session.configSnapshot?.developerInstructions || '', profile.developerInstructions || '', profileMode === 'codex-managed');
+        addDifference('personality', normalizePersonality(session.configSnapshot?.personality), normalizePersonality(profile.personality), profileMode === 'codex-managed');
         const profileWorkspace = profile.workspaceRoot ? path.resolve(profile.workspaceRoot) : session.workspaceRoot;
         addDifference('workspaceRoot', session.workspaceRoot || '', profileWorkspace || '', true);
         addDifference('name', session.agentNameSnapshot || session.configSnapshot?.agentName || '', profile.name || '');
         addDifference('avatar', session.configSnapshot?.agentAvatar || '', profile.avatarUrl || '');
         addDifference('model', session.configSnapshot?.model || '', profile.model || session.configSnapshot?.model || '');
+        addDifference('reasoningEffort', session.configSnapshot?.reasoningEffort || '', profile.reasoningEffort || '');
         addDifference('permissionMode', normalizePermissionMode(session.configSnapshot?.permissionMode), normalizePermissionMode(profile.permissionMode));
         addDifference('profileRevision', Number(session.configSnapshot?.profileRevision || 1), Number(profile.revision || 1));
         const identityChanges = differences.filter((entry) => entry.identity).map((entry) => entry.field);
@@ -1413,7 +1541,11 @@ class CodexRuntimeManager extends EventEmitter {
                 workspaceRoot: profileWorkspace,
                 model: profile.model || session.configSnapshot?.model,
                 permissionMode: profile.permissionMode,
-                systemPrompt: profile.systemPrompt,
+                instructionMode: profileMode,
+                baseInstructions: profile.baseInstructions || profile.systemPrompt || '',
+                developerInstructions: profile.developerInstructions || '',
+                personality: profile.personality,
+                reasoningEffort: profile.reasoningEffort,
             });
             return { applied: false, createdNewSession: true, requiresNewSession: true, differences, session: created };
         }
@@ -1425,10 +1557,15 @@ class CodexRuntimeManager extends EventEmitter {
                 ...(session.configSnapshot || {}),
                 profileId: profile.id,
                 profileRevision: Number(profile.revision || 1),
-                baseInstructions: profile.systemPrompt || '',
+                instructionMode: profileMode,
+                baseInstructions: profile.baseInstructions || profile.systemPrompt || '',
+                developerInstructions: String(profile.developerInstructions || ''),
+                personality: normalizePersonality(profile.personality),
                 agentName: profile.name || session.agentNameSnapshot || '',
                 agentAvatar: profile.avatarUrl || session.configSnapshot?.agentAvatar || '',
                 model: profile.model || session.configSnapshot?.model,
+                reasoningEffort: normalizeReasoningEffort(profile.reasoningEffort),
+                reasoningEfforts: Array.isArray(profile.reasoningEfforts) ? profile.reasoningEfforts : [],
                 permissionMode,
                 approvalPolicy: normalizeApprovalPolicy(permissionMode),
                 provider: 'vcp_toolbox',
@@ -1580,11 +1717,25 @@ class CodexRuntimeManager extends EventEmitter {
         const permissionMode = normalizePermissionMode(
             options.permissionMode || options.approvalPolicy || profile?.permissionMode,
         );
-        return {
-            model: options.model || profile?.model || settings.agentRuntime?.codex?.model
+        const model = options.model || profile?.model || settings.agentRuntime?.codex?.model
                 || settings.agentRuntime?.tui?.defaultModel
-                || (toolboxConfigured ? 'Nova' : 'gpt-5.1-codex'),
-            personality: options.personality || 'pragmatic',
+                || (toolboxConfigured ? 'Nova' : 'gpt-5.1-codex');
+        const baseInstructions = options.baseInstructions ?? options.systemPrompt
+            ?? profile?.baseInstructions ?? profile?.systemPrompt ?? '';
+        const requestedInstructionMode = options.instructionMode ?? profile?.instructionMode;
+        const instructionMode = requestedInstructionMode
+            ? normalizeInstructionMode(requestedInstructionMode, baseInstructions)
+            : (!String(baseInstructions || '').trim() && sameIdentity(agentId, 'codex')
+                ? 'codex-managed' : 'vchat-identity');
+        const reasoning = this._validateReasoningEffort(
+            model,
+            options.reasoningEffort ?? profile?.reasoningEffort,
+            { supported: options.reasoningEfforts || profile?.reasoningEfforts },
+        );
+        return {
+            model,
+            instructionMode,
+            personality: normalizePersonality(options.personality ?? profile?.personality),
             permissionMode,
             approvalPolicy: normalizeApprovalPolicy(permissionMode),
             sandbox: normalizeSandboxMode(options.sandbox),
@@ -1592,8 +1743,10 @@ class CodexRuntimeManager extends EventEmitter {
             // `{{Nova}}`, expanded by VCPToolBox). It must replace Codex's
             // built-in system prompt via `baseInstructions`; `developerInstructions`
             // only appends and cannot suppress the "You are Codex" default.
-            baseInstructions: options.baseInstructions || options.systemPrompt || profile?.systemPrompt || '',
-            developerInstructions: options.developerInstructions || '',
+            baseInstructions: String(baseInstructions || '').trim(),
+            developerInstructions: String(options.developerInstructions ?? profile?.developerInstructions ?? '').trim(),
+            reasoningEffort: reasoning.effort,
+            reasoningEfforts: reasoning.supported,
             agentName: options.agentName || options.name || profile?.name || '',
             agentAvatar: options.agentAvatar || options.avatar || profile?.avatarUrl
                 || this._agentAvatarUrl(profile?.id || agentId),
@@ -1769,6 +1922,13 @@ class CodexRuntimeManager extends EventEmitter {
         const placeholder = /^\{\{([^{}]+)\}\}$/.exec(developerInstructions);
         let identityRepaired = false;
 
+        if (!config.instructionMode) {
+            config.instructionMode = !baseInstructions && sameIdentity(session.agentId, 'codex')
+                ? 'codex-managed' : 'vchat-identity';
+            config.personality = 'none';
+            identityRepaired = true;
+        }
+
         if (!baseInstructions && placeholder && (
             sameIdentity(placeholder[1], session.agentId)
             || sameIdentity(placeholder[1], profile?.name)
@@ -1833,6 +1993,65 @@ class CodexRuntimeManager extends EventEmitter {
         };
     }
 
+    _reasoningEffortsForModel(modelId) {
+        const wanted = String(modelId || '').trim();
+        if (!wanted) return [];
+        const models = this.getModels?.() || [];
+        const model = (Array.isArray(models) ? models : []).find((entry) => {
+            const idValue = typeof entry === 'string' ? entry : entry?.id || entry?.name;
+            return String(idValue || '').trim() === wanted;
+        });
+        return reasoningEffortsFromModel(model);
+    }
+
+    _validateReasoningEffort(modelId, value, { supported } = {}) {
+        const effort = normalizeReasoningEffort(value);
+        const advertised = Array.isArray(supported) && supported.length
+            ? [...new Set(supported.map((item) => String(item || '').trim()).filter(Boolean))]
+            : this._reasoningEffortsForModel(modelId);
+        if (effort && !advertised.includes(effort)) {
+            throw new CodexAppServerError(
+                'REASONING_EFFORT_UNSUPPORTED',
+                `Model ${modelId || '(default)'} does not advertise reasoning effort ${effort}`,
+                { model: modelId || null, supported: advertised },
+            );
+        }
+        return { effort, supported: advertised };
+    }
+
+    _effectiveReasoningEffort(config = {}) {
+        return this._validateReasoningEffort(config.model, config.reasoningEffort, {
+            supported: config.reasoningEfforts,
+        }).effort;
+    }
+
+    _threadInstructionParams(config = {}) {
+        if (config.executionProfile && config.executionProfile !== 'toolbox-only') {
+            return {
+                ...(String(config.baseInstructions || '').trim()
+                    ? { baseInstructions: String(config.baseInstructions).trim() } : {}),
+                ...(String(config.developerInstructions || '').trim()
+                    ? { developerInstructions: String(config.developerInstructions).trim() } : {}),
+                ...(normalizePersonality(config.personality) !== 'none'
+                    ? { personality: normalizePersonality(config.personality) } : {}),
+            };
+        }
+        const mode = normalizeInstructionMode(config.instructionMode, config.baseInstructions);
+        if (mode === 'codex-managed') {
+            const personality = normalizePersonality(config.personality);
+            return {
+                ...(personality !== 'none' ? { personality } : {}),
+                ...(String(config.developerInstructions || '').trim()
+                    ? { developerInstructions: String(config.developerInstructions).trim() } : {}),
+            };
+        }
+        const baseInstructions = String(config.baseInstructions || '').trim();
+        if (!baseInstructions) {
+            throw new CodexAppServerError('AGENT_IDENTITY_MISSING', 'VChat identity mode requires baseInstructions');
+        }
+        return { baseInstructions };
+    }
+
     _providerParams() {
         const settings = this.getSettings() || {};
         if (!settings.vcpServerUrl || !settings.vcpApiKey || !this.responsesAdapter?.baseUrl) return {};
@@ -1855,7 +2074,7 @@ class CodexRuntimeManager extends EventEmitter {
             toolboxUrl: settings.vcpServerUrl,
             toolboxApiKey: settings.vcpApiKey,
             onRequest: (identity) => this._diagnostic('toolbox-response-request', identity),
-            resolveBaseInstructions: ({ threadId }) => {
+            resolveInstructions: ({ threadId, sessionId }) => {
                 const session = threadId ? this.repository?.getSessionByThread(threadId) : null;
                 if (!session) {
                     throw new CodexAppServerError('SESSION_NOT_FOUND', 'ToolBox request is not bound to a known VChat Agent Session');
@@ -1863,7 +2082,20 @@ class CodexRuntimeManager extends EventEmitter {
                 if (session.configSnapshot?.executionProfile !== 'toolbox-only') {
                     throw new CodexAppServerError('PROFILE_MISMATCH', 'Only toolbox-only Threads may use the VCPToolBox Responses adapter');
                 }
-                return String(session.configSnapshot?.baseInstructions || '');
+                if (sessionId && sessionId !== session.sessionId) {
+                    throw new CodexAppServerError('SESSION_IDENTITY_MISMATCH', 'ToolBox request Session identity does not match its Thread');
+                }
+                const mode = normalizeInstructionMode(
+                    session.configSnapshot?.instructionMode,
+                    session.configSnapshot?.baseInstructions,
+                );
+                return mode === 'codex-managed'
+                    ? {
+                        mode,
+                        developerInstructions: String(session.configSnapshot?.developerInstructions || ''),
+                        personality: normalizePersonality(session.configSnapshot?.personality),
+                    }
+                    : { mode, baseInstructions: String(session.configSnapshot?.baseInstructions || '') };
             },
         });
         try {
@@ -2258,9 +2490,7 @@ class CodexRuntimeManager extends EventEmitter {
                     cwd: session.workspaceRoot || undefined,
                     approvalPolicy: normalizeApprovalPolicy(config.permissionMode || config.approvalPolicy),
                     sandbox: normalizeSandboxMode(config.sandbox),
-                    personality: config.personality || 'pragmatic',
-                    ...(config.baseInstructions ? { baseInstructions: config.baseInstructions } : {}),
-                    ...(config.developerInstructions ? { developerInstructions: config.developerInstructions } : {}),
+                    ...this._threadInstructionParams(config),
                     ...(config.executionProfile === 'toolbox-only' ? { dynamicTools: [vcpInvokeTool()] } : {}),
                     excludeTurns: true,
                 });

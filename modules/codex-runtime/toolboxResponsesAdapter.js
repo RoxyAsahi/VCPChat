@@ -11,6 +11,7 @@ const http = require('http');
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 const MAX_ERROR_BYTES = 16 * 1024;
+const MAX_INSTRUCTION_BYTES = 64 * 1024;
 const CANCELLED_TURN_TTL_MS = 5 * 60 * 1000;
 const VCP_DYNAMIC_TOOL_NAME = 'vcp_invoke';
 
@@ -25,8 +26,11 @@ class ToolboxResponsesAdapter {
         // ToolBox-only Threads must not trust instruction-shaped text emitted
         // by Codex itself. Resolve the frozen VChat Agent identity from Main's
         // Thread projection and inject only that value upstream.
-        this.resolveBaseInstructions = typeof options.resolveBaseInstructions === 'function'
-            ? options.resolveBaseInstructions : null;
+        this.resolveInstructions = typeof options.resolveInstructions === 'function'
+            ? options.resolveInstructions
+            : (typeof options.resolveBaseInstructions === 'function'
+                ? (identity) => ({ mode: 'vchat-identity', baseInstructions: options.resolveBaseInstructions(identity) })
+                : null);
         this.server = null;
         this.port = null;
         // VChat-only, process-memory correlation. The Codex-provided turn
@@ -107,11 +111,11 @@ class ToolboxResponsesAdapter {
             // active-request key and an interrupt for A can affect B.
             const requestId = `vcp_codex_${crypto.randomUUID()}`;
             const identity = responseRequestIdentity(body, requestId, request.headers);
-            const trustedBaseInstructions = this.resolveBaseInstructions
-                ? this.resolveBaseInstructions(identity) : undefined;
+            const trustedInstructions = this.resolveInstructions
+                ? this.resolveInstructions(identity) : undefined;
             chatRequest = responsesRequestToChat(body, requestId, {
-                stripEmbeddedInstructions: Boolean(this.resolveBaseInstructions),
-                trustedBaseInstructions,
+                stripEmbeddedInstructions: Boolean(this.resolveInstructions),
+                trustedInstructions,
             });
             this.onRequest?.(identity);
         } catch (error) {
@@ -280,10 +284,18 @@ function responsesRequestToChat(body, requestId = null, options = {}) {
     const model = String(body.model || '').trim();
     if (!model) throw new Error('Responses request model is required');
     const messages = [];
+    const trusted = options.trustedInstructions && typeof options.trustedInstructions === 'object'
+        ? options.trustedInstructions : null;
     const instructions = options.stripEmbeddedInstructions
-        ? normalizeText(options.trustedBaseInstructions)
-        : normalizeText(body.instructions);
+        ? (trusted?.mode === 'codex-managed'
+            ? boundedInstructionText(body.instructions)
+            : boundedInstructionText(trusted?.baseInstructions ?? options.trustedBaseInstructions))
+        : boundedInstructionText(body.instructions);
     if (instructions) messages.push({ role: 'system', content: instructions });
+    if (options.stripEmbeddedInstructions && trusted?.mode === 'codex-managed'
+        && boundedInstructionText(trusted.developerInstructions)) {
+        messages.push({ role: 'developer', content: boundedInstructionText(trusted.developerInstructions) });
+    }
     const declaredCallIds = new Set();
     const completedCallIds = new Set();
     const embeddedTools = [];
@@ -359,6 +371,8 @@ function responsesRequestToChat(body, requestId = null, options = {}) {
     if (body.tool_choice != null) chat.tool_choice = body.tool_choice;
     if (Number.isFinite(body.temperature)) chat.temperature = body.temperature;
     if (Number.isFinite(body.max_output_tokens)) chat.max_tokens = body.max_output_tokens;
+    const effort = normalizeText(body.reasoning?.effort || body.reasoning_effort);
+    if (effort) chat.reasoning_effort = effort;
     return chat;
 }
 
@@ -463,6 +477,14 @@ function normalizeText(value) {
     if (typeof value === 'string') return value;
     if (!Array.isArray(value)) return value == null ? '' : String(value);
     return value.map((part) => typeof part === 'string' ? part : part?.text || part?.input_text || part?.output_text || '').join('');
+}
+
+function boundedInstructionText(value) {
+    const text = normalizeText(value);
+    if (Buffer.byteLength(text, 'utf8') > MAX_INSTRUCTION_BYTES) {
+        throw new Error('App Server instructions exceed the 64 KiB safety limit');
+    }
+    return text;
 }
 
 function responsesToolsToChat(tools) {
