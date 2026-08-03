@@ -170,6 +170,7 @@ function selectEnhancer(element, options = {}) {
     const propertyRestorers = [];
     let syncing = false;
     let observer;
+    let renderedOptionsSignature = null;
 
     wa.className = 'vcp-ui-select vcp-ui-wa-select vcp-ui-select-proxy';
     wa.dataset.vcpSelectProxyFor = element.id || '';
@@ -225,22 +226,28 @@ function selectEnhancer(element, options = {}) {
         if (typeof wa.setCustomValidity === 'function') {
             wa.setCustomValidity(invalid ? (state.invalidMessage || element.validationMessage || ' ') : '');
         }
-        wa.replaceChildren();
-        let previousGroup = null;
-        nativeOptionRecords().forEach(record => {
-            const option = document.createElement('wa-option');
-            option.value = record.value;
-            option.disabled = record.disabled;
-            option.textContent = record.label;
-            if (record.group) {
-                option.dataset.group = record.group;
-                option.setAttribute('aria-label', `${record.group}: ${record.label}`);
-                if (record.group !== previousGroup) option.dataset.groupStart = 'true';
-            }
-            previousGroup = record.group;
-            wa.append(option);
-        });
-        wa.value = element.value;
+        const optionRecords = nativeOptionRecords();
+        const optionsSignature = JSON.stringify(optionRecords);
+        if (optionsSignature !== renderedOptionsSignature) {
+            wa.replaceChildren();
+            let previousGroup = null;
+            optionRecords.forEach(record => {
+                const option = document.createElement('wa-option');
+                option.value = record.value;
+                option.disabled = record.disabled;
+                option.textContent = record.label;
+                if (record.group) {
+                    option.dataset.group = record.group;
+                    option.setAttribute('aria-label', `${record.group}: ${record.label}`);
+                    if (record.group !== previousGroup) option.dataset.groupStart = 'true';
+                }
+                previousGroup = record.group;
+                wa.append(option);
+            });
+            renderedOptionsSignature = optionsSignature;
+        }
+        const proxyValue = wa.value == null ? '' : String(wa.value);
+        if (proxyValue !== element.value) wa.value = element.value;
         syncing = false;
     };
 
@@ -252,8 +259,13 @@ function selectEnhancer(element, options = {}) {
         element.value = nextValue;
         syncing = false;
         event?.stopPropagation?.();
-        if (changed || event?.type === 'change') {
+        if (event?.type === 'input' && changed) {
             element.dispatchEvent(new Event('input', { bubbles: true }));
+        } else if (event?.type === 'change') {
+            // Web Awesome normally emits input followed by change. If a
+            // component/version emits only change, retain native ordering by
+            // synthesizing the missing input before the committed change.
+            if (changed) element.dispatchEvent(new Event('input', { bubbles: true }));
             element.dispatchEvent(new Event('change', { bubbles: true }));
         }
     };
@@ -340,8 +352,12 @@ function selectEnhancer(element, options = {}) {
     controllerByElement.set(element, controller);
     controller._listen(wa, 'input', syncProxyToNative);
     controller._listen(wa, 'change', syncProxyToNative);
-    controller._listen(wa, 'focus', syncNativeToProxy, true);
-    controller._listen(wa, 'pointerdown', syncNativeToProxy, true);
+    // Refresh just before the listbox opens. Do not refresh on focus or every
+    // pointerdown: Web Awesome restores focus before it emits the committed
+    // input/change pair, so a focus refresh would overwrite the user's new
+    // choice with the old native value. Pointerdown also fires for options and
+    // must never rebuild the option being clicked.
+    controller._listen(wa, 'wa-show', syncNativeToProxy);
     controller._listen(element, 'input', syncNativeToProxy);
     controller._listen(element, 'change', syncNativeToProxy);
     [...(element.labels || [])].forEach(label => controller._listen(label, 'click', event => {

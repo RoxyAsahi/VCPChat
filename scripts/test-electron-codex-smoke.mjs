@@ -128,6 +128,7 @@ try {
     assert.equal(result.runtime, 'codex-app-server');
     assert.equal(result.messageCount, 0);
     assert.equal(result.orphaned, false);
+    const expectedPresentationMode = 'fork';
     assert.equal(result.legacyPresentationApiExposed, false);
     assert.match(result.workspaceRevision, /^[0-9a-f]{16}$/);
     assert.equal(result.workspaceHasPackage, true);
@@ -235,7 +236,66 @@ try {
         control.dispatchEvent(new Event(type, { bubbles: true }));
         return true;
     }, { labelText, value, eventType });
-    assert.equal(await setLabeledControl('本地工具审批', 'always-approve'), true);
+    const chooseLabeledSelectOption = async (labelText, value) => {
+        const testId = await page.evaluate((targetLabel) => {
+            const host = document.querySelector('#nextUiInternalAppHost');
+            const field = [...(host?.querySelectorAll('.agent-chat-setting-field') || [])]
+                .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent?.includes(targetLabel));
+            const proxy = field?.querySelector('wa-select.vcp-ui-select-proxy');
+            if (!proxy) return null;
+            const id = `agent-setting-select-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+            proxy.dataset.testSelectId = id;
+            return id;
+        }, labelText);
+        assert.ok(testId, `visible Web Awesome Select proxy missing for ${labelText}`);
+        const proxySelector = `wa-select[data-test-select-id="${testId}"]`;
+        await page.click(proxySelector);
+        await page.waitForFunction((selector) => document.querySelector(selector)?.open === true,
+            { timeout: timeoutMs }, proxySelector);
+        await page.click(`${proxySelector} > wa-option[value="${value}"]`);
+        await page.waitForFunction((selector) => {
+            const proxy = document.querySelector(selector);
+            return !proxy || proxy.open === false;
+        },
+            { timeout: timeoutMs }, proxySelector);
+        return page.evaluate(({ targetLabel, expectedValue }) => {
+            const host = document.querySelector('#nextUiInternalAppHost');
+            const field = [...(host?.querySelectorAll('.agent-chat-setting-field') || [])]
+                .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent?.includes(targetLabel));
+            const native = field?.querySelector('select.vcp-ui-select-source');
+            const proxy = field?.querySelector('wa-select.vcp-ui-select-proxy');
+            return {
+                proxyValue: proxy?.value || (native?.value === expectedValue ? expectedValue : null),
+                nativeValue: native?.value || null,
+            };
+        }, { targetLabel: labelText, expectedValue: value });
+    };
+    assert.deepEqual(await chooseLabeledSelectOption('本地工具审批', 'always-approve'), {
+        proxyValue: 'always-approve',
+        nativeValue: 'always-approve',
+    });
+    const settingsModel = 'electron-visible-select-model';
+    assert.equal(await page.evaluate((modelValue) => {
+        const host = document.querySelector('#nextUiInternalAppHost');
+        const field = [...(host?.querySelectorAll('.agent-chat-setting-field') || [])]
+            .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent?.trim() === '模型');
+        const native = field?.querySelector('select.vcp-ui-select-source');
+        if (!native) return false;
+        if (![...native.options].some(option => option.value === modelValue)) {
+            const option = document.createElement('option');
+            option.value = modelValue;
+            option.textContent = modelValue;
+            native.append(option);
+        }
+        return true;
+    }, settingsModel), true, 'model Select fixture option could not be installed');
+    await page.waitForFunction((modelValue) => [...document.querySelectorAll(
+        '#nextUiInternalAppHost .agent-chat-setting-field wa-select.vcp-ui-select-proxy > wa-option',
+    )].some(option => option.value === modelValue), { timeout: timeoutMs }, settingsModel);
+    assert.deepEqual(await chooseLabeledSelectOption('模型', settingsModel), {
+        proxyValue: settingsModel,
+        nativeValue: settingsModel,
+    });
     const immediatePermission = await page.evaluate(() => {
         const fields = document.querySelectorAll('#nextUiInternalAppHost .agent-chat-setting-field');
         const field = [...fields].find((item) => item.querySelector('.agent-chat-setting-label')
@@ -247,6 +307,7 @@ try {
     await page.waitForFunction(async (sessionId, workspaceRoot) => {
         const config = await (window.chatAPI || window.electronAPI).agentRuntimeReadSessionConfig({ sessionId });
         return config?.desiredConfig?.permissionMode === 'always-approve'
+            && config?.desiredConfig?.model === 'electron-visible-select-model'
             && config?.desiredConfig?.workspaceRoot === workspaceRoot;
     }, { timeout: timeoutMs }, settingsSessionId, settingsWorkspace);
     const persistedSettings = await page.evaluate(async (sessionId) => {
@@ -254,12 +315,14 @@ try {
         return {
             sessionId: config.sessionId,
             permissionMode: config.desiredConfig?.permissionMode,
+            model: config.desiredConfig?.model,
             workspaceRoot: config.desiredConfig?.workspaceRoot,
             applyState: config.applyState,
         };
     }, settingsSessionId);
     assert.equal(persistedSettings.sessionId, settingsSessionId);
     assert.equal(persistedSettings.permissionMode, 'always-approve');
+    assert.equal(persistedSettings.model, settingsModel);
     assert.equal(persistedSettings.workspaceRoot, settingsWorkspace);
     assert.ok(['unmaterialized', 'pending', 'applying', 'applied'].includes(persistedSettings.applyState),
         `unexpected Session config apply state: ${persistedSettings.applyState}`);
@@ -407,11 +470,13 @@ try {
         const config = await (window.chatAPI || window.electronAPI).agentRuntimeReadSessionConfig({ sessionId });
         return {
             permissionMode: config.desiredConfig?.permissionMode,
+            model: config.desiredConfig?.model,
             workspaceRoot: config.desiredConfig?.workspaceRoot,
         };
     }, settingsSessionId);
     assert.deepEqual(settingsAfterReload, {
         permissionMode: 'always-approve',
+        model: settingsModel,
         workspaceRoot: settingsWorkspace,
     }, 'Renderer reload must read the saved Session config from SQLite instead of restoring an old UI default');
     await page.evaluate(async () => (window.chatAPI || window.electronAPI).agentRuntimeStop());
