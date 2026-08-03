@@ -33,6 +33,7 @@ const {
     compatibilityRuntime,
     compatibilitySession,
     decodeVcpInvokeCall,
+    explicitAgent,
     hasDurableProjection,
     hasToolboxConfiguration,
     interactionExpiry,
@@ -41,95 +42,28 @@ const {
     normalizeApprovalDecision,
     normalizeApprovalPolicy,
     normalizeInteractionResponse,
+    normalizeInstructionMode,
+    normalizePersonality,
     normalizePermissionMode,
+    normalizeReasoningEffort,
     normalizeSandboxMode,
     notificationItemId,
     pendingInputProjection,
+    reasoningEffortsFromModel,
+    resolveSessionIdInput,
     safeAvatarFile,
     sanitizeInteractionPayload,
     sanitizeToolboxValue,
     serializeError,
     sessionConfigResult,
+    sameIdentity,
+    submissionDedupeKey,
     toolboxConfigFingerprint,
     vcpInvokeTool,
 } = require('./runtime-normalizers');
 
 function id(prefix) {
     return `${prefix}_${crypto.randomUUID()}`;
-}
-
-function submissionDedupeKey(prompt, attachments = []) {
-    const descriptors = (Array.isArray(attachments) ? attachments : []).map((attachment) => ({
-        attachmentId: attachment?.attachmentId || null,
-        displayName: attachment?.displayName || null,
-        byteLen: Number(attachment?.byteLen) || 0,
-        kind: attachment?.kind || null,
-    }));
-    return crypto.createHash('sha256')
-        .update(JSON.stringify({ prompt: String(prompt || '').trim(), attachments: descriptors }))
-        .digest('hex');
-}
-
-function explicitAgent(value) {
-    const result = String(value || '').trim();
-    return result || null;
-}
-
-function sameIdentity(left, right) {
-    const a = String(left || '').trim().toLocaleLowerCase();
-    const b = String(right || '').trim().toLocaleLowerCase();
-    return Boolean(a && b && a === b);
-}
-
-// `topicId` is accepted only at the legacy public boundary. Once a request
-// enters the runtime manager it is resolved to the canonical Session ID. A
-// conflicting pair is rejected instead of silently choosing one identity.
-function resolveSessionIdInput({ sessionId, topicId } = {}, { required = true } = {}) {
-    const canonical = String(sessionId || '').trim();
-    const legacy = String(topicId || '').trim();
-    if (canonical && legacy && canonical !== legacy) {
-        throw new CodexAppServerError('SESSION_IDENTITY_MISMATCH', 'sessionId and legacy topicId refer to different Sessions');
-    }
-    const resolved = canonical || legacy;
-    if (required && !resolved) {
-        throw new CodexAppServerError('INVALID_INPUT', 'sessionId is required');
-    }
-    return resolved || null;
-}
-
-const INSTRUCTION_MODES = new Set(['vchat-identity', 'codex-managed']);
-const PERSONALITIES = new Set(['none', 'friendly', 'pragmatic']);
-
-function normalizeInstructionMode(value, baseInstructions = '') {
-    const mode = String(value || '').trim();
-    if (INSTRUCTION_MODES.has(mode)) return mode;
-    return String(baseInstructions || '').trim() ? 'vchat-identity' : 'codex-managed';
-}
-
-function normalizePersonality(value) {
-    const personality = String(value || '').trim();
-    return PERSONALITIES.has(personality) ? personality : 'none';
-}
-
-function normalizeReasoningEffort(value) {
-    const effort = String(value || '').trim();
-    return effort && effort !== 'default' ? effort : null;
-}
-
-function reasoningEffortsFromModel(model) {
-    if (!model || typeof model !== 'object') return [];
-    const candidates = [
-        model.reasoningEfforts,
-        model.reasoning_efforts,
-        model.supportedReasoningEfforts,
-        model.supported_reasoning_efforts,
-        model.capabilities?.reasoningEfforts,
-        model.capabilities?.reasoning_efforts,
-        model.metadata?.reasoningEfforts,
-        model.metadata?.reasoning_efforts,
-    ];
-    const source = candidates.find(Array.isArray);
-    return source ? [...new Set(source.map((item) => String(item || '').trim()).filter(Boolean))] : [];
 }
 
 class CodexRuntimeManager extends EventEmitter {
