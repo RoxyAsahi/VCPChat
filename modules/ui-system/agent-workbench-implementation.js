@@ -2,7 +2,6 @@ import { register } from './next-ui-apps.js';
 import { createWorkbenchController } from './agent-workbench-controller.js';
 import { projectSession } from './agent-workbench-projections.js';
 import { deriveWorkbenchViewState } from './agent-workbench-store.js';
-import { projectVcpToolPresentation } from './agent-workbench-timeline.js';
 import { createAgentBlockPresentation, createAgentMessagePresentation } from './agent-presentation/index.js';
 import { createWorkspaceTreeModel } from './agent-workspace-model.js';
 import { createSessionDockModel } from './agent-session-dock.js';
@@ -41,6 +40,7 @@ import { createAgentSettingsCoordinator } from './agent-settings-coordinator.js'
 import { createAgentTopicContextMenuView } from './agent-topic-context-menu-view.js';
 import { createAgentSessionOperationsCoordinator } from './agent-session-operations-coordinator.js';
 import { createAgentActivityCoordinator } from './agent-activity-coordinator.js';
+import { createAgentComposerCoordinator } from './agent-composer-coordinator.js';
 import {
     agentCacheKey,
     createAgentSessionCatalogCoordinator,
@@ -1356,124 +1356,13 @@ function mountWorkbench(container) {
         queueRender({ feed: true, activity: true, composer: true });
     }
 
-    function latestRunningTool(current, turnId) {
-        const tools = current.tools instanceof Map ? [...current.tools.values()] : [];
-        return tools
-            .filter((tool) => (!turnId || !tool.turnId || tool.turnId === turnId)
-                && ['requested', 'running'].includes(tool.state))
-            .sort((left, right) => Number(right.lastTimestamp || right.firstTimestamp || 0)
-                - Number(left.lastTimestamp || left.firstTimestamp || 0))[0] || null;
-    }
-
-    function syncRunStatus(current = store.getState()) {
-        const pendingTurnStart = selectedTurnStart(current);
-        const turnId = selectedActiveTurnId(current) || pendingTurnStart?.turnId || null;
-        const visible = Boolean(turnId || pendingTurnStart);
-        if (!visible) {
-            runStatusView.update({ visible: false });
-            return;
-        }
-        const startedAt = turnId
-            ? (state.turnStartedAt.get(turnId) || pendingTurnStart?.startedAt || Date.now())
-            : (pendingTurnStart?.startedAt || Date.now());
-        if (turnId && !state.turnStartedAt.has(turnId)) state.turnStartedAt.set(turnId, startedAt);
-        const viewState = deriveWorkbenchViewState(current);
-        const label = viewState === 'awaiting-approval'
-            ? '等待审批'
-            : pendingTurnStart?.phase === 'starting' && !selectedActiveTurnId(current)
-                ? '正在启动 Agent'
-                : '正在运行';
-        const runningTool = latestRunningTool(current, turnId);
-        runStatusView.update({
-            visible: true,
-            state: viewState,
-            label,
-            detail: runningTool
-                ? `正在执行 ${projectVcpToolPresentation(runningTool).label}`
-                : 'Agent 正在处理当前任务',
-            startedAt,
-            canStop: Boolean(selectedActiveTurnId(current)),
-        });
-    }
-
-    function renderComposer() {
-        const current = store.getState();
-        const sessionId = selectedSessionKey(current);
-        const composerState = selectedComposerState(current);
-        const viewState = deriveWorkbenchViewState(current);
-        // The composer is live only when the fixed R3 lifecycle state machine
-        // reports the agent as idle, running, or parked on an actionable
-        // approval — never while it is starting, reconnecting, or down.
-        const previewReady = Boolean(current.selectedTopic?.mode === 'preview'
-            && (viewState === 'idle' || viewState === 'running' || viewState === 'awaiting-approval'));
-        const selectedArchived = Boolean(current.selectedTopic?.archivedAt);
-        const composerReady = Boolean(!selectedArchived && (current.selectedSessionId || previewReady)
-            && (viewState === 'idle' || viewState === 'running' || viewState === 'awaiting-approval'));
-        const activeTurnId = selectedActiveTurnId(current);
-        const hasActiveTurn = Boolean(activeTurnId);
-        const pendingTurnStart = selectedTurnStart(current);
-        // Once Codex confirms the Turn via turn.started/projection, the
-        // normal running composer is usable again (steer/follow-up/cancel).
-        // The ephemeral thinking row can remain until the first assistant
-        // item arrives.
-        const isStartingTurn = Boolean(pendingTurnStart && !hasActiveTurn);
-        const canSend = Boolean(composerReady && (composerState.draft.trim()
-            || (!hasActiveTurn && composerState.attachments.length)));
-        const sendTitle = hasActiveTurn
-            ? (composerState.activeInputMode === 'steer' ? '立即调整当前任务' : '排队到当前任务完成后')
-            : '发送消息';
-        const sendLabel = hasActiveTurn
-            ? (composerState.activeInputMode === 'steer' ? '立即调整当前任务' : '排队后续指令')
-            : '发送消息';
-        const placeholder = selectedArchived
-            ? '该会话已归档；恢复后才能继续发送。'
-            : isStartingTurn
-            ? (pendingTurnStart?.phase === 'thinking' ? '正在思考…' : '正在启动 Agent…')
-            : (viewState === 'reconnecting' || viewState === 'error')
-            ? '正在重新连接 Codex App Server…'
-            : previewReady
-            ? '输入消息…（发送时启动此会话）'
-            : !current.selectedSessionId
-            ? '请先创建 Agent 会话…'
-            : viewState === 'starting'
-            ? 'Agent Runtime 正在准备…'
-            : hasActiveTurn
-                ? (composerState.activeInputMode === 'steer'
-                    ? '输入要立即调整的指令…'
-                    : '输入任务完成后继续执行的指令…')
-                : '输入消息…（Shift + Enter 换行）';
-        const snapshot = current.selectedTopic?.configSnapshot || {};
-        const instructionLabel = snapshot.instructionMode === 'codex-managed' ? 'Codex 指令' : 'VChat 身份';
-        const reasoningLabel = snapshot.reasoningEffort ? `推理 ${snapshot.reasoningEffort}` : '推理 默认';
-        const permissionLabel = state.permissionMode === 'always-approve' ? '本地审批：YOLO（设置）' : '本地审批：逐次确认（设置）';
-        composerView.update({
-            draft: composerState.draft,
-            inputDisabled: !composerReady || isStartingTurn,
-            sendDisabled: !composerReady || isStartingTurn || !canSend,
-            // Attachment import is Session-scoped and remains available in a
-            // normal SQLite preview, but never for archived/running Sessions.
-            attachDisabled: !composerReady || hasActiveTurn || composerState.attachments.length >= 8,
-            attachments: composerState.attachments,
-            removeAttachment: (index) => {
-                const next = composerState.attachments.slice();
-                next.splice(index, 1);
-                state.composerStateBySession.setAttachments(sessionId, next);
-                renderComposer();
-            },
-            sendTitle,
-            sendLabel,
-            placeholder,
-            busy: hasActiveTurn,
-            ready: canSend,
-            inputMode: composerState.activeInputMode,
-            configText: `${snapshot.model || state.model || '模型默认'} · ${state.permissionMode === 'always-approve' ? '本地自动允许' : '逐次审批'} · ${instructionLabel} · ${reasoningLabel}`,
-            configDisabled: !sessionId,
-            permissionLabel,
-            permissionActive: state.permissionMode === 'always-approve',
-            newDisabled: state.topicCreating,
-        });
-        syncRunStatus(current);
-    }
+    const composerCoordinator = createAgentComposerCoordinator({
+        state, store, controller, composerView, runStatusView, refs: shellView.refs, run, notify,
+        selectedSessionKey, selectedComposerState, selectedTurnStart, selectedActiveTurnId,
+        renderFeed, renderJumpToLatest, queueRender, settleTurnStartIndicator,
+        refreshControlPlane, uxMark, openNewTopicFlow, isFollowingContainer, scrollFeed,
+    });
+    const renderComposer = composerCoordinator.render;
 
     function render() {
         if (state.disposed) return;
@@ -1484,113 +1373,6 @@ function mountWorkbench(container) {
         renderComposer();
         renderTopicFlow();
     }
-
-    input.addEventListener('input', () => {
-        state.composerStateBySession.setDraft(selectedSessionKey(), input.value);
-        renderComposer();
-    });
-    feed.addEventListener('scroll', () => {
-        const following = isFollowingContainer(feed);
-        if (following === state.followingFeed && !(following && state.unreadTimelineCount)) return;
-        state.followingFeed = following;
-        if (following) state.unreadTimelineCount = 0;
-        renderJumpToLatest();
-    }, { passive: true });
-    jumpToLatest.addEventListener('click', () => {
-        state.followingFeed = true;
-        state.unreadTimelineCount = 0;
-        renderJumpToLatest();
-        scrollFeed(feed, true);
-    });
-    input.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendButton.click(); }
-    });
-    attachButton.addEventListener('click', () => run(async () => {
-        const result = await controller.selectAttachments();
-        const imported = Array.isArray(result?.attachments) ? result.attachments : [];
-        const sessionId = selectedSessionKey();
-        const composerState = state.composerStateBySession.get(sessionId);
-        const attachments = composerState.attachments.slice();
-        const existing = new Set(attachments.map((item) => item.id));
-        for (const attachment of imported) {
-            if (!existing.has(attachment.id) && attachments.length < 8) {
-                attachments.push(attachment);
-                existing.add(attachment.id);
-            }
-        }
-        state.composerStateBySession.setAttachments(sessionId, attachments);
-        if (result?.errors?.length) notify(result.errors.join('；'), imported.length ? 'warning' : 'error');
-        renderComposer();
-    }));
-    sendButton.addEventListener('click', () => run(async () => {
-        const current = store.getState();
-        const sessionId = selectedSessionKey(current);
-        const composerState = state.composerStateBySession.get(sessionId);
-        const prompt = composerState.draft.trim();
-        const activeTurnId = selectedActiveTurnId(current);
-        if (activeTurnId) {
-            if (!prompt) return;
-            const steering = prompt.match(/^\/steer\s+([\s\S]+)$/i);
-            if (steering || composerState.activeInputMode === 'steer') {
-                await controller.steerTurn(steering ? steering[1].trim() : prompt);
-                notify('已插入即时 steering 指令。', 'success');
-            } else {
-                await controller.followUpTurn(prompt);
-                notify('已加入后续指令队列。', 'success');
-            }
-            state.composerStateBySession.setDraft(sessionId, '');
-            renderComposer();
-            await refreshControlPlane();
-            return;
-        }
-        if (!prompt && !composerState.attachments.length) return;
-        const attachments = composerState.attachments.map((item) => ({ ...item }));
-        const topicId = selectedSessionKey(current);
-        const pendingTurnStart = {
-            topicId,
-            prompt,
-            attachments,
-            phase: 'starting',
-            turnId: null,
-            startedAt: Date.now(),
-            createdAt: Date.now(),
-        };
-        state.turnStarts.set(topicId, pendingTurnStart);
-        state.uxTimings.set(`turn-start:${topicId || 'new'}`, window.performance?.now?.() || Date.now());
-        // Paint before awaiting Session Runtime/thread startup. This is the
-        // same immediate feedback users get in main chat, while remaining a
-        // renderer-only placeholder until Codex returns a real Turn ID.
-        renderFeed();
-        queueRender({ feed: true, header: true, composer: true });
-        try {
-            const accepted = await controller.startTurn(prompt, attachments);
-            const currentStart = state.turnStarts.get(topicId);
-            if (currentStart === pendingTurnStart) {
-                state.turnStarts.set(topicId, {
-                    ...currentStart,
-                    phase: accepted?.turnId ? 'thinking' : 'starting',
-                    turnId: accepted?.turnId || null,
-                });
-            }
-            if (accepted?.turnId && !state.turnStartedAt.has(accepted.turnId)) {
-                state.turnStartedAt.set(accepted.turnId, pendingTurnStart.startedAt || Date.now());
-            }
-            uxMark('turn-start-ack', accepted?.turnId, state.uxTimings.get(`turn-start:${topicId || 'new'}`) || null);
-            // Preserve the draft if Runtime startup or Turn acceptance fails.
-            // Codex is the only place that can confirm a Turn.
-            state.composerStateBySession.clearAfterAcceptedSend(sessionId);
-            settleTurnStartIndicator();
-            queueRender({ feed: true, header: true, composer: true });
-        } catch (error) {
-            if (state.turnStarts.get(topicId) === pendingTurnStart
-                || state.turnStarts.get(topicId)?.turnId === pendingTurnStart.turnId) {
-                state.turnStarts.delete(topicId);
-            }
-            queueRender({ feed: true, header: true, composer: true });
-            throw error;
-        }
-    }));
-    newButton.addEventListener('click', openNewTopicFlow);
 
     const unsubscribe = store.subscribe((_nextState, event) => renderForStoreEvent(event));
     render();
@@ -1624,6 +1406,7 @@ function mountWorkbench(container) {
         sessionOperations.dispose();
         settingsCoordinator.dispose();
         activityCoordinator.dispose();
+        composerCoordinator.dispose();
         workspaceCoordinator.dispose();
         settingsState.dispose();
         topicContextMenuView.dispose();

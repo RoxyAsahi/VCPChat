@@ -130,6 +130,7 @@ const governedUiModules = [
     'agent-topic-context-menu-view.js',
     'agent-session-operations-coordinator.js',
     'agent-activity-coordinator.js',
+    'agent-composer-coordinator.js',
 ];
 for (const file of governedUiModules) {
     const absolute = path.join(root, 'modules/ui-system', file);
