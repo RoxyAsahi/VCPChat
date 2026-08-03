@@ -86,10 +86,12 @@ if (controllerFacadeLineCount > 800) errors.push(`agent-workbench-controller.js 
 if (controllerImplementationLineCount > 1100) errors.push(`agent-workbench-controller-implementation.js exceeds temporary extraction ceiling: ${controllerImplementationLineCount} lines`);
 const rendererFacadePath = 'modules/ui-system/agent-presentation/fork/agentMessageRenderer.js';
 const rendererImplementationPath = 'modules/ui-system/agent-presentation/fork/agentMessageRendererImplementation.js';
+const rendererStreamPath = 'modules/ui-system/agent-presentation/fork/agent-renderer-stream.js';
 const forkLineCount = fs.readFileSync(path.join(root, rendererFacadePath), 'utf8').split(/\r?\n/).length;
 const forkImplementationLineCount = fs.readFileSync(path.join(root, rendererImplementationPath), 'utf8').split(/\r?\n/).length;
 if (forkLineCount > 600) errors.push(`${rendererFacadePath} exceeds facade ceiling: ${forkLineCount} lines`);
 if (forkImplementationLineCount > 3500) errors.push(`${rendererImplementationPath} exceeds temporary extraction ceiling: ${forkImplementationLineCount} lines`);
+if (!fs.existsSync(path.join(root, rendererStreamPath))) errors.push(`missing Agent renderer stream module: ${rendererStreamPath}`);
 const forkReceipt = fs.readFileSync(path.join(root, 'modules/ui-system/agent-presentation/fork/FORK_RECEIPT.md'), 'utf8');
 if (!forkReceipt.includes('独立演进策略') || !forkReceipt.includes('不再要求跟随主聊天 renderer 逐行同步')) {
     errors.push('Agent renderer receipt must declare independent evolution rather than manual synchronization');

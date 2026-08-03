@@ -32,11 +32,11 @@ import { avatarColorCache, getDominantAvatarColor } from '../../../renderer/colo
 import { createMessageSkeleton, formatMessageTimestamp } from '../../../renderer/domBuilder.js';
 import * as emoticonUrlFixer from '../../../renderer/emoticonUrlFixer.js';
 import { createContentPipeline, PIPELINE_MODES } from '../../../renderer/contentPipeline.js';
-import { createAnimationFrameBatcher } from '../stream-batcher.js';
 import { createAgentImageController } from './agentImageController.js';
 import { createAgentVisibilityController } from './agentVisibilityController.js';
 import { createAgentAnimationLifecycle } from './agentAnimationLifecycle.js';
 import { createAgentRendererSession } from './agent-renderer-session.js';
+import { createAgentRendererStream } from './agent-renderer-stream.js';
 
 const colorExtractionPromises = new Map();
 
@@ -2148,9 +2148,25 @@ let visibilityController = null;
 let animationLifecycle = null;
 const rendererSession = createAgentRendererSession();
 
-const streamState = new Map();
-let streamBatcher = null;
 let containerEventDisposers = [];
+let streamController = null;
+
+function getStreamController() {
+    if (streamController) return streamController;
+    streamController = createAgentRendererStream({
+        requestFrame(callback) {
+            return window.requestAnimationFrame?.(callback) ?? setTimeout(callback, 0);
+        },
+        cancelFrame(frameId) {
+            if (window.cancelAnimationFrame) window.cancelAnimationFrame(frameId);
+            else clearTimeout(frameId);
+        },
+        onFlush(messageId, content) {
+            updateMessageContent(messageId, content);
+        },
+    });
+    return streamController;
+}
 
 function getSessionContext(subject = null) {
     return rendererSession.context(subject);
@@ -2177,21 +2193,6 @@ function bindContainerEvent(type, handler, options) {
 function disposeContainerEvents() {
     for (const dispose of containerEventDisposers.splice(0)) dispose();
 }
-
-function getStreamBatcher() {
-    if (streamBatcher) return streamBatcher;
-    const requestFrame = window.requestAnimationFrame?.bind(window) || ((callback) => setTimeout(callback, 0));
-    const cancelFrame = window.cancelAnimationFrame?.bind(window) || clearTimeout;
-    streamBatcher = createAnimationFrameBatcher({
-        requestFrame,
-        cancelFrame,
-        flush(batch) {
-            for (const [messageId, content] of batch) updateMessageContent(messageId, content);
-        },
-    });
-    return streamBatcher;
-}
-
 
 let contentPipeline = null;
 
@@ -2288,7 +2289,7 @@ function clearChat() {
 
         agentRenderContext.chatMessagesDiv.innerHTML = '';
     }
-    streamState.clear();
+    getStreamController().clear();
 }
 
 
@@ -2667,7 +2668,7 @@ function renderMessage(message, isInitialLoad = false, appendToDom = true, rende
     }
 
     const isActiveStreamRequest = message.role === 'assistant'
-        && (message.state === 'streaming' || message.isStreaming === true || streamState.has(message.id));
+        && (message.state === 'streaming' || message.isStreaming === true || getStreamController().has(message.id));
     const messageTextIsEmpty = message.content === null
         || message.content === undefined
         || (typeof message.content === 'string' && message.content.trim() === '');
@@ -2920,25 +2921,13 @@ function renderMessage(message, isInitialLoad = false, appendToDom = true, rende
 }
 
 function startStreamingMessage(message, messageItem = null) {
-    const messageId = message?.id;
-    if (!messageId) throw new TypeError('Streaming Agent message requires message.id');
-    streamState.set(messageId, {
-        message: { ...message, state: 'streaming' },
-        content: typeof message.content === 'string' ? message.content : '',
-    });
+    getStreamController().start(message);
     return messageItem;
 }
 
 
 function appendStreamChunk(messageId, chunkData, context) {
-    const current = streamState.get(messageId) || { message: { id: messageId, role: 'assistant', state: 'streaming' }, content: '' };
-    const delta = typeof chunkData === 'string'
-        ? chunkData
-        : chunkData?.delta ?? chunkData?.text ?? chunkData?.content ?? '';
-    current.content += String(delta || '');
-    current.context = context || current.context;
-    streamState.set(messageId, current);
-    getStreamBatcher().enqueue(messageId, current.content);
+    getStreamController().append(messageId, chunkData, context);
 }
 
 /**
@@ -2952,16 +2941,11 @@ function extractAndPushDesktopBlocks(content) {
 }
 
 async function finalizeStreamedMessage(messageId, finishReason, context, finalPayload = null) {
-    const current = streamState.get(messageId) || {};
-    const finalContent = typeof finalPayload === 'string'
-        ? finalPayload
-        : finalPayload?.content ?? finalPayload?.text ?? current.content ?? '';
-    getStreamBatcher().flushNow();
+    const { current, finalContent } = getStreamController().finalize(messageId, finalPayload);
     updateMessageContent(messageId, finalContent);
     const row = agentRenderContext.chatMessagesDiv?.querySelector(`.message-item[data-message-id="${escapeCssAttributeValue(messageId)}"]`);
     row?.classList.remove('thinking', 'streaming');
     if (row) row.dataset.finishReason = finishReason || 'completed';
-    streamState.delete(messageId);
     extractAndPushDesktopBlocks(finalContent);
     return {
         ...(current.message || {}),
@@ -3437,9 +3421,8 @@ function refreshLayoutDependentState() {
 
 function disposeAgentMessageRenderer() {
     disposeContainerEvents();
-    streamBatcher?.dispose();
-    streamBatcher = null;
-    streamState.clear();
+    streamController?.dispose();
+    streamController = null;
     for (const row of agentRenderContext.chatMessagesDiv?.querySelectorAll('.message-item') || []) {
         cleanupMessageDomResources(row, row.dataset?.messageId || null);
     }
