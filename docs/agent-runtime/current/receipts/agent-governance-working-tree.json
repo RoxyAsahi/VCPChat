@@ -1,0 +1,18 @@
+{
+  "status": "implemented",
+  "scope": "agent-code-governance",
+  "branch": "codex/vcpchat-codex-app-server",
+  "codexProtocol": "0.146",
+  "toolboxModified": false,
+  "sqliteSchemaModified": false,
+  "mainChatRendererModified": false,
+  "commands": [
+    "npm run test:agent-renderer-isolation",
+    "npm run test:agent-renderer-lifecycle",
+    "npm run test:agent-workbench-clients",
+    "npm run test:agent-session-compatibility",
+    "npm run test:codex-runtime-lifecycle",
+    "npm run check:codex-governance"
+  ],
+  "notes": "Facade and lifecycle boundaries are enforced. Private implementation files remain above final extraction targets and are governed by temporary non-increasing ceilings."
+}

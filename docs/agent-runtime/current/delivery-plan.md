@@ -233,6 +233,16 @@
 
 R12 当前状态只能是 `implemented/working-tree`，不得复用 R7-R10 live revision 宣称完成。
 
+## R13 Agent Code Governance and Race Closure
+
+- [x] Renderer/Runtime/Workbench public facades established; private implementations remain behaviorally unchanged and are guarded by temporary ceilings.
+- [x] Agent-private lifecycle scope and Workspace request coordinator prevent cross-root cleanup and stale request writes.
+- [x] Workbench access is grouped into Session, Projection, Interaction, and Workspace clients; canonical Session IPC is the only formal path.
+- [x] Pi/Rust JavaScript Runtime moved to `archive/agent-runtime/`; archived tests remain available through `archive:*` scripts and are excluded from product packaging.
+- [ ] Reduce private implementation files below their final module ceilings and split CSS into owned component files. This remains governance debt and is not a product release claim.
+
+R13 当前状态为 `implemented/working-tree`；所有真实 Electron 多 Tab、长流和关闭重开验收仍需在同一提交收据中重跑。
+
 - [x] R7: Agent Profile/Session snapshot、CAS、projection-only IPC、ToolBox latest-wins 与 Session-keyed Renderer state。
 - [x] R8: Runtime generation、InteractionRegistry 有界清理、按需重启、持久输入状态机与 pre-RPC/ACK crash fault injection。
 - [x] R9: 权威 reconcile、mutation generation barrier、Saga 日志、known-Thread lifecycle recovery、SQLite integrity/backup/read-only degraded。

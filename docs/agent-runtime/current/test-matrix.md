@@ -416,3 +416,10 @@ gate against the existing ToolBox process, and the temporary node was stopped. T
 | Electron full process restart | `node scripts/test-electron-codex-process-restart.mjs` | working-tree pass |
 
 Electron 真实点击与完整 Main 进程重启已通过；真实 ToolBox provider payload 和 backend approval 仍 pending。本表不是 live/product 收据。
+# Agent governance gates
+
+- `npm run test:agent-renderer-isolation`: Agent mount/dispose does not mutate main-chat image or visibility ownership.
+- `npm run test:agent-renderer-lifecycle`: listeners, timers, intervals, and RAF registrations are disposed idempotently.
+- `npm run test:agent-workbench-clients`: Renderer calls stay inside Session, Projection, Interaction, and Workspace client groups.
+- `npm run test:agent-session-compatibility`: deprecated Topic IPC maps once, warns once, and rejects conflicting identity.
+- `npm run test:codex-runtime-lifecycle`: stopped or crashed Runtime generations cannot write into the next generation.

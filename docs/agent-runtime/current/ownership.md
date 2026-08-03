@@ -15,6 +15,10 @@ Status: **implemented**
 | Dock and Workspace view state | `agent-session-dock.js`, `agent-workspace-model.js` | arbitrary absolute paths, cross-Session file refs |
 | VCP tools | existing bridge boundary | modifications to VCPToolBox, a second tool catalog |
 | Release evidence | `docs/agent-runtime/current/receipts/` | status promotion without same-commit commands |
+| Agent Workbench public entrypoints | `modules/ui-system/agent-workbench.js`, `agent-workbench-controller.js` | UI feature logic or Runtime protocol details |
+| Agent Workbench private composition | `modules/ui-system/agent-workbench-implementation.js`, `agent-workbench-clients.js` | Main-process persistence or transport ownership |
+| Agent Renderer instance lifecycle | `modules/ui-system/agent-presentation/fork/`, `agent-renderer-lifecycle.js` | initialization/disposal of main-chat mutable renderer singletons |
+| Legacy Agent Runtime archive | `archive/agent-runtime/` | product imports, default CI, or packaged sources |
 
 Reviewers should reject new modules that read `currentChatHistoryRef`, `currentSelectedItemRef`, `currentTopicIdRef`, `saveChatHistory`, or the main-chat `streamManager`.
 

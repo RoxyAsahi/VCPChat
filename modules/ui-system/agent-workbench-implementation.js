@@ -13,6 +13,7 @@ import { createSessionDockModel } from './agent-session-dock.js';
 import { renderPendingInputQueue } from './agent-workbench-queue.js';
 import { createAgentComposerState } from './agent-composer-state.js';
 import { createWorkspaceRequestCoordinator } from './agent-workspace-requests.js';
+import { createRendererLifecycleScope } from './agent-renderer-lifecycle.js';
 import { renderAgentSettingsPane } from './agent-settings-view.js';
 import {
     createAgentSettingsState,
@@ -413,6 +414,7 @@ function createAttachmentChips(attachments, onRemove = null, onWorkspacePath = n
 }
 
 function mountWorkbench(container) {
+    const lifecycle = createRendererLifecycleScope(window);
     const controller = createWorkbenchController(runtimeApi());
     const { store } = controller;
     const state = {
@@ -2571,7 +2573,7 @@ function mountWorkbench(container) {
         activityAdd.setAttribute('aria-expanded', 'false');
         renderActivity();
     };
-    document.addEventListener('click', closeDockMenuOnOutsideClick);
+    lifecycle.listen(document, 'click', closeDockMenuOnOutsideClick);
 
     function setActivityOpen(open, tab) {
         if (open && tab) {
@@ -4177,7 +4179,7 @@ function mountWorkbench(container) {
         if (renderFrame !== null && typeof window.cancelAnimationFrame === 'function') window.cancelAnimationFrame(renderFrame);
         state.accountThemeObserver?.disconnect();
         fullPresentation.dispose();
-        document.removeEventListener('click', closeDockMenuOnOutsideClick);
+        lifecycle.dispose();
         unsubscribe();
         controller.dispose();
         root.remove();

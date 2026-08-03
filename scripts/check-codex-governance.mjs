@@ -30,7 +30,9 @@ const required = [
     'docs/agent-runtime/current/receipts/r7-r10-working-tree.json',
     'docs/agent-runtime/current/data-governance.md',
     'docs/agent-runtime/current/adr/ADR-009-agent-config-desired-applied.md',
+    'docs/agent-runtime/current/adr/ADR-010-agent-code-governance.md',
     'docs/agent-runtime/current/receipts/r12-working-tree.json',
+    'docs/agent-runtime/current/receipts/agent-governance-working-tree.json',
     '.github/workflows/codex_agent_windows.yml',
 ];
 for (const relative of required) {
@@ -92,6 +94,20 @@ const forkReceipt = fs.readFileSync(path.join(root, 'modules/ui-system/agent-pre
 if (!forkReceipt.includes('独立演进策略') || !forkReceipt.includes('不再要求跟随主聊天 renderer 逐行同步')) {
     errors.push('Agent renderer receipt must declare independent evolution rather than manual synchronization');
 }
+const rendererImplementation = fs.readFileSync(path.join(root,
+    'modules/ui-system/agent-presentation/fork/agentMessageRendererImplementation.js'), 'utf8');
+for (const forbidden of [
+    'initializeImageHandler(', 'visibilityOptimizer.initialize', 'visibilityOptimizer.destroy',
+    'contentProcessor.initializeContentProcessor(',
+]) {
+    if (rendererImplementation.includes(forbidden)) {
+        errors.push(`Agent renderer uses shared mutable singleton lifecycle: ${forbidden}`);
+    }
+}
+const workbenchClients = fs.readFileSync(path.join(root, 'modules/ui-system/agent-workbench-clients.js'), 'utf8');
+if (/agentRuntime(?:CreateTopic|CreateSession|ListTopics|ReadTopic|ReadProjection|RenameTopic|DeleteTopic)/.test(workbenchClients)) {
+    errors.push('formal Workbench client boundary exposes deprecated Topic APIs');
+}
 
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 for (const script of ['test:codex-reliability', 'test:electron-codex-recovery', 'check:codex-governance', 'test:codex-ci']) {
@@ -103,6 +119,10 @@ if (!String(packageJson.scripts?.['test:e2e'] || '').includes('test:codex-stack'
 if (packageJson.devDependencies?.['@openai/codex'] !== '0.146.0') errors.push('@openai/codex must remain pinned to 0.146.0');
 for (const script of ['test:agent-settings-interaction', 'test:agent-config-apply', 'test:agent-data-contracts']) {
     if (!packageJson.scripts?.[script]) errors.push(`package.json missing R12 gate ${script}`);
+}
+for (const script of ['test:agent-renderer-isolation', 'test:agent-renderer-lifecycle',
+    'test:agent-workbench-clients', 'test:agent-session-compatibility']) {
+    if (!packageJson.scripts?.[script]) errors.push(`package.json missing governance gate ${script}`);
 }
 
 const dataContracts = fs.readFileSync(path.join(root, 'modules/codex-runtime/dataContracts.js'), 'utf8');

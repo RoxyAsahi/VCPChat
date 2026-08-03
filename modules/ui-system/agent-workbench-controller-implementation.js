@@ -1,10 +1,12 @@
 import { createWorkbenchStore } from './agent-workbench-store.js';
 import { createAgentSessionUiState, reconcileAgentSessionUiState, reduceAgentSessionUiState } from './agent-session-state.js';
+import { createWorkbenchClients } from './agent-workbench-clients.js';
 
 // The Workbench deliberately has no Main-process transcript cache. SQLite is
 // the durable presentation projection while Codex Thread Store remains the
 // execution/context authority.
 function createWorkbenchController(runtimeApi) {
+    const clients = createWorkbenchClients(runtimeApi);
     const store = createWorkbenchStore();
     let unsubscribeRuntime = null;
     let selectionVersion = 0;
@@ -24,8 +26,7 @@ function createWorkbenchController(runtimeApi) {
     const sessionWarmPromises = new Map();
 
     function requireApi(name) {
-        if (typeof runtimeApi[name] !== 'function') throw new Error(`Runtime API unavailable: ${name}`);
-        return runtimeApi[name].bind(runtimeApi);
+        return clients.require(name);
     }
 
     function topicPayload(payload, agentId) {
@@ -144,10 +145,6 @@ function createWorkbenchController(runtimeApi) {
             });
         }
         return { messages, tools };
-    }
-
-    function hasApi(name) {
-        return typeof runtimeApi[name] === 'function';
     }
 
     function readLocalProjection(payload) {
