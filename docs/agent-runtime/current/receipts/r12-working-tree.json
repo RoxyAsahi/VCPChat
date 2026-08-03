@@ -6,16 +6,24 @@
   "codexProtocol": "0.146",
   "toolboxModified": false,
   "dirtyWorktree": true,
+  "implementationCommits": [
+    "502df123",
+    "55f9b5de",
+    "48a0c4a2"
+  ],
   "commands": [
     "npm run test:agent-settings-interaction",
     "npm run test:agent-config-apply",
     "npm run test:agent-data-contracts",
-    "npm run test:codex-projection-store",
-    "npm run test:codex-runtime-manager",
-    "npm run test:agent-workbench"
+    "npm run test:codex-stack",
+    "npm run test:codex-reliability",
+    "npm run test:electron-codex-smoke",
+    "npm run test:electron-codex-recovery",
+    "npm run check:codex-schema",
+    "npm run check:codex-governance",
+    "npm run check:ui-system"
   ],
   "remaining": [
-    "full aggregate gates",
     "real Electron settings interaction and screenshot",
     "real ToolBox next-turn payload verification"
   ]
