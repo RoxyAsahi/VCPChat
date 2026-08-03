@@ -39,29 +39,12 @@ import { createAgentApprovalView } from './agent-approval-view.js';
 import { createAgentWorkbenchTopicFlow } from './agent-workbench-topic-flow.js';
 import { createAgentWorkspaceCoordinator } from './agent-workspace-coordinator.js';
 import { createAgentWorkbenchTimelineView } from './agent-workbench-timeline-view.js';
-
-// Build Agent identities are independent from normal-chat Agents. Keep Nova
-// visible synchronously while the authoritative Build catalog loads.
-const NOVA_CATALOG_FALLBACK = Object.freeze({
-    id: 'Nova', name: 'Nova', model: '', systemPrompt: '{{Nova}}', avatarUrl: null,
-});
-
-function seedBuildAgentCatalog() { return [{ ...NOVA_CATALOG_FALLBACK }]; }
-
-function reasoningEffortsForModel(model) {
-    if (!model || typeof model !== 'object') return [];
-    const values = [
-        model.reasoningEfforts,
-        model.reasoning_efforts,
-        model.supportedReasoningEfforts,
-        model.supported_reasoning_efforts,
-        model.capabilities?.reasoningEfforts,
-        model.capabilities?.reasoning_efforts,
-        model.metadata?.reasoningEfforts,
-        model.metadata?.reasoning_efforts,
-    ].find(Array.isArray);
-    return values ? [...new Set(values.map((item) => String(item || '').trim()).filter(Boolean))] : [];
-}
+import {
+    agentCacheKey,
+    createAgentSessionCatalogCoordinator,
+    sameAgent,
+    seedBuildAgentCatalog,
+} from './agent-session-catalog-coordinator.js';
 
 // This is deliberately a view over AgentRuntime, not a second chat/session
 // implementation. Session, message, tool, approval and runtime state all come
@@ -281,11 +264,6 @@ function mountWorkbench(container) {
     };
     const pendingRender = { shell: false, header: false, feed: false, composer: false, activity: false };
     let renderFrame = null;
-    // Control-plane replies can arrive after a user picked another Agent.
-    // Keep the latest selection authoritative; an older Topic list must not
-    // replace the newly selected Agent's history.
-    let controlPlaneRequest = 0;
-    let topicCatalogRequest = 0;
     let topicMenuInstance = 0;
 
     const shellView = createAgentWorkbenchShellView({
@@ -449,6 +427,26 @@ function mountWorkbench(container) {
         runStatusStop.disabled = true;
         await controller.cancelTurn();
     }));
+
+    const sessionCatalog = createAgentSessionCatalogCoordinator({
+        state,
+        store,
+        controller,
+        listAgentProfiles: () => runtimeApi().agentRuntimeListAgentProfiles?.(),
+        getCachedModels: () => runtimeApi().getCachedModels?.(),
+        queueRender,
+        syncPermissionModeFromSelectedSession,
+        syncModelFromSelectedSession,
+        uxMark,
+        requestAnimationFrame: window.requestAnimationFrame || ((callback) => setTimeout(callback, 0)),
+    });
+    const {
+        selectedAgentProfile,
+        profileNeedsConfiguration,
+        selectAgent,
+        refreshTopicsForAgent,
+        refreshControlPlane,
+    } = sessionCatalog;
 
     const approvalRegistry = new Map();
     const blockPresentation = createAgentBlockPresentation({
@@ -667,13 +665,6 @@ function mountWorkbench(container) {
         return current.activeTurnId || runtime?.activeTurnId || null;
     }
 
-    function profileNeedsConfiguration(profile = selectedAgentProfile()) {
-        const agentId = String(profile?.id || profile?.name || '').trim();
-        const instructionMode = profile?.instructionMode === 'codex-managed' ? 'codex-managed' : 'vchat-identity';
-        return Boolean(agentId && instructionMode === 'vchat-identity'
-            && !String(profile?.baseInstructions || profile?.systemPrompt || '').trim());
-    }
-
     function syncPermissionModeFromSelectedSession() {
         const current = store.getState();
         const snapshot = current.selectedTopic?.configSnapshot || null;
@@ -698,19 +689,10 @@ function mountWorkbench(container) {
         if (selectedModel && state.modelDraft === null) state.model = selectedModel;
     }
 
-    function sameAgent(left, right) {
-        return String(left || '').trim().toLocaleLowerCase()
-            === String(right || '').trim().toLocaleLowerCase();
-    }
-
     function isMissingRememberedSessionError(error) {
         // The pointer is only a convenience preference. A Session may have
         // been permanently deleted since the previous Renderer lifetime.
         return /(?:Session was not found|NOT_FOUND)/i.test(String(error?.message || error || ''));
-    }
-
-    function selectedAgentProfile() {
-        return state.agentCatalog.find((agent) => sameAgent(agent.id || agent.name, state.selectedAgent)) || null;
     }
 
     function agentAvatarUrl(agentId) {
@@ -745,24 +727,6 @@ function mountWorkbench(container) {
         return wrap;
     }
 
-    function selectAgent(agentId) {
-        const profile = state.agentCatalog.find((agent) => sameAgent(agent.id || agent.name, agentId));
-        if (!profile) return;
-        state.selectedAgent = profile.id || profile.name;
-        // Profile defaults are the only source for a future Session. Never
-        // retain model/workspace/approval drafts from the previously selected
-        // Agent; existing Sessions continue to use their frozen snapshots.
-        state.model = profile.model || '';
-        state.workspace = profile.workspaceRoot || '';
-        state.permissionMode = profile.permissionMode === 'always-approve' ? 'always-approve' : 'ask';
-        state.modelDraft = null;
-        state.modelDraftSessionId = null;
-    }
-
-    function agentCacheKey(agentId) {
-        return String(agentId || '').trim().toLocaleLowerCase();
-    }
-
     function uxMark(name, identity, startedAt = null) {
         const now = window.performance?.now?.() || Date.now();
         const shortId = String(identity || '').slice(0, 8);
@@ -770,154 +734,6 @@ function mountWorkbench(container) {
         const base = startedAt ?? state.uxTimings.get(name) ?? now;
         console.debug('[Agent UX]', { name, id: shortId, durationMs: Math.round((now - base) * 10) / 10 });
         return now;
-    }
-
-    async function refreshTopicsForAgent(agentId, archived = state.showArchivedTopics) {
-        const selectedAgentId = String(agentId || state.selectedAgent || 'Nova').trim();
-        const key = agentCacheKey(selectedAgentId);
-        const cache = archived ? state.archivedTopicsByAgent : state.topicsByAgent;
-        const cached = cache.get(key);
-        state.topics = Array.isArray(cached) ? cached : [];
-        state.topicListLoading = !cached;
-        queueRender({ shell: true, header: true, composer: true });
-        if (cached) {
-            const clickedAt = state.uxTimings.get(`agent-click:${key}`) || null;
-            (window.requestAnimationFrame || ((callback) => setTimeout(callback, 0)))(() => {
-                uxMark('session-cache-painted', selectedAgentId, clickedAt);
-            });
-        }
-        const request = ++topicCatalogRequest;
-        try {
-            const topics = await controller.listTopics(selectedAgentId, { archived });
-            if (state.disposed || request !== topicCatalogRequest || !sameAgent(selectedAgentId, state.selectedAgent)) return;
-            const received = Array.isArray(topics) ? topics : topics?.topics || [];
-            // Main has already resolved canonical Agent identity. Renderer
-            // must not repeat legacy name/folder-id guessing here.
-            cache.set(key, received);
-            state.topics = received;
-            uxMark('projection-list-returned', selectedAgentId, state.uxTimings.get(`agent-click:${key}`) || null);
-            const clickedAt = state.uxTimings.get(`agent-click:${key}`) || null;
-            (window.requestAnimationFrame || ((callback) => setTimeout(callback, 0)))(() => {
-                uxMark('session-cache-painted', selectedAgentId, clickedAt);
-            });
-        } finally {
-            if (!state.disposed && request === topicCatalogRequest && sameAgent(selectedAgentId, state.selectedAgent)) {
-                state.topicListLoading = false;
-                queueRender({ shell: true, header: true, composer: true });
-            }
-        }
-    }
-
-    async function refreshControlPlane() {
-        const request = ++controlPlaneRequest;
-        const optional = (fn) => Promise.resolve().then(fn).catch(() => []);
-        // Build profiles are isolated from the normal-chat Agent directory.
-        const sharedAgents = await optional(() => runtimeApi().agentRuntimeListAgentProfiles?.());
-        const normalizedAgents = Array.isArray(sharedAgents)
-            ? sharedAgents.map((agent) => ({
-                id: agent.id || agent.name,
-                name: agent.name || agent.id,
-                model: agent.config?.model || agent.model || '',
-                instructionMode: (agent.config?.instructionMode || agent.instructionMode) === 'codex-managed'
-                    ? 'codex-managed' : 'vchat-identity',
-                baseInstructions: agent.config?.baseInstructions || agent.baseInstructions
-                    || agent.config?.systemPrompt || agent.systemPrompt || '',
-                systemPrompt: agent.config?.systemPrompt || agent.systemPrompt || '',
-                developerInstructions: agent.config?.developerInstructions || agent.developerInstructions || '',
-                personality: ['friendly', 'pragmatic'].includes(agent.config?.personality || agent.personality)
-                    ? (agent.config?.personality || agent.personality) : 'none',
-                reasoningEffort: agent.config?.reasoningEffort || agent.reasoningEffort || null,
-                reasoningEfforts: Array.isArray(agent.config?.reasoningEfforts || agent.reasoningEfforts)
-                    ? (agent.config?.reasoningEfforts || agent.reasoningEfforts) : [],
-                workspaceRoot: agent.config?.workspaceRoot || agent.workspaceRoot || '',
-                permissionMode: (agent.config?.permissionMode || agent.permissionMode) === 'always-approve'
-                    ? 'always-approve' : 'ask',
-                revision: Number(agent.config?.revision || agent.revision || 1),
-                profileRevision: Number(agent.config?.profileRevision || agent.profileRevision
-                    || agent.config?.revision || agent.revision || 1),
-                avatarUrl: agent.avatarUrl || null,
-                configurationRequired: Boolean(
-                    (agent.config?.instructionMode || agent.instructionMode) !== 'codex-managed'
-                    && !String(agent.config?.baseInstructions || agent.baseInstructions
-                        || agent.config?.systemPrompt || agent.systemPrompt || '').trim(),
-                ),
-            }))
-            : [];
-        if (!normalizedAgents.some((agent) => agent.id === 'Nova' || agent.name === 'Nova')) {
-            normalizedAgents.unshift({ ...NOVA_CATALOG_FALLBACK });
-        }
-        state.agentCatalog = normalizedAgents;
-        // Preserve a deliberate Agent selection. Nova is a fallback only
-        // when the previously selected shared Agent disappeared.
-        if (!selectedAgentProfile()) {
-            const fallback = state.agentCatalog.find((agent) => sameAgent(agent.id || agent.name, 'Nova'))
-                || state.agentCatalog[0];
-            if (fallback) selectAgent(fallback.id || fallback.name);
-        } else if (!store.getState().selectedSessionId) {
-            selectAgent(state.selectedAgent);
-        }
-        const selectedAgentId = state.selectedAgent || 'Nova';
-        queueRender({ shell: true, header: true, composer: true });
-
-        // VCPChat Main already owns its background `/v1/models` cache.  Read
-        // that cache opportunistically for the optional settings selector;
-        // never wait for it before rendering or restoring a Topic.
-        void optional(() => runtimeApi().getCachedModels?.()).then((models) => {
-            if (state.disposed) return;
-            const rawModels = Array.isArray(models) ? models : models?.models || [];
-            state.modelCatalog = rawModels.map((model) => typeof model === 'string'
-                ? { id: model, name: model }
-                : {
-                    ...model,
-                    id: model?.id || model?.name || '',
-                    name: model?.name || model?.id || '',
-                    reasoningEfforts: reasoningEffortsForModel(model),
-                })
-                .filter((model) => model.id);
-            if (!state.modelDraft && !state.model) state.model = state.modelCatalog[0]?.id || '';
-            // Model discovery only changes selectors in the sidebar.  It must
-            // not reset a potentially streaming transcript.
-            queueRender({ shell: true, header: true, composer: true });
-        });
-
-        // Sessions and the follow-up queue are Codex Agent state. Load them
-        // after the base VCPChat Agent surface is visible so a
-        // transient App Server or ToolBox issue cannot blank the entire page.
-        const [topics, queue, workbenchSettings] = await Promise.all([
-            optional(() => controller.listTopics(selectedAgentId, { archived: state.showArchivedTopics })),
-            optional(() => controller.listInteractionQueue()),
-            optional(() => controller.getWorkbenchSettings()),
-        ]);
-        if (state.disposed || request !== controlPlaneRequest || !sameAgent(selectedAgentId, state.selectedAgent)) return;
-        const receivedTopics = Array.isArray(topics) ? topics : topics?.topics || [];
-        // Main returns Agent-scoped Session metadata. Retain this defensive
-        // filter so an old/stale Main result cannot leak another Agent's
-        // history into the current sidebar.
-        state.topics = receivedTopics;
-        (state.showArchivedTopics ? state.archivedTopicsByAgent : state.topicsByAgent)
-            .set(agentCacheKey(selectedAgentId), receivedTopics);
-        state.topicListLoading = false;
-        state.queue = Array.isArray(queue) ? queue : queue?.items || queue?.queue || [];
-        if (workbenchSettings && typeof workbenchSettings === 'object') {
-            const budget = workbenchSettings.budget && typeof workbenchSettings.budget === 'object'
-                ? workbenchSettings.budget : {};
-            state.budget = {
-                maxRequestsPerTurn: budget.maxRequestsPerTurn ?? null,
-                maxTokensPerTurn: budget.maxTokensPerTurn ?? null,
-            };
-            if (!selectedAgentProfile() && !store.getState().selectedTopic?.configSnapshot) {
-                state.permissionMode = workbenchSettings.permissionMode === 'always-approve'
-                    ? 'always-approve' : 'ask';
-            }
-            if (!selectedAgentProfile() && !store.getState().selectedTopic?.configSnapshot?.model && workbenchSettings.model) {
-                state.model = String(workbenchSettings.model);
-            }
-        }
-        syncPermissionModeFromSelectedSession();
-        syncModelFromSelectedSession();
-        // Topics and queue state live in the control plane; leave the active
-        // transcript intact while those catalog reads finish.
-        queueRender({ shell: true, header: true, composer: true });
     }
 
     async function refreshRecoveryOperations({ scanThreads = false } = {}) {
@@ -2384,6 +2200,7 @@ function mountWorkbench(container) {
 
     return () => {
         state.disposed = true;
+        sessionCatalog.dispose();
         workspaceCoordinator.dispose();
         settingsState.dispose();
         closeTopicContextMenu();

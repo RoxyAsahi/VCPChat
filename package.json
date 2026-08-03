@@ -37,6 +37,7 @@
     "test:electron-human-toolbox-next-experimental": "node scripts/test-electron-human-toolbox-smoke.mjs",
     "test:agent-workbench-store": "node scripts/test-agent-workbench-store.mjs",
     "test:agent-workbench-clients": "node scripts/test-agent-workbench-clients.mjs",
+    "test:agent-session-catalog": "node scripts/test-agent-session-catalog-coordinator.mjs",
     "test:agent-workbench-timeline": "node scripts/test-agent-workbench-timeline.mjs",
     "test:agent-workspace-service": "node scripts/test-agent-workspace-service.mjs",
     "test:agent-workspace-model": "node scripts/test-agent-workspace-model.mjs",
