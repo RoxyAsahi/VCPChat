@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const { RuntimeSessionService } = require('../modules/codex-runtime/runtime-session-service.js');
+const { createRuntimeOperationContext } = require('../modules/codex-runtime/runtime-operation-context.js');
 
 function makeRepository() {
     const sessions = new Map();
@@ -52,14 +53,30 @@ function makeHarness(repository, request = async () => ({})) {
         transport: () => ({ request }),
         projector: () => ({ reconcileThread: () => ({ applied: true }) }),
         start: async () => {},
-        captureGeneration: () => generation,
-        assertGeneration(scope) {
-            if (scope !== generation) {
-                const error = new Error('stale generation');
-                error.code = 'STALE_RUNTIME_GENERATION';
-                throw error;
-            }
+        captureGeneration: () => {
+            const captured = generation;
+            return { assertCurrent(current) {
+                if (current !== captured) {
+                    const error = new Error('stale generation');
+                    error.code = 'STALE_RUNTIME_GENERATION';
+                    throw error;
+                }
+            } };
         },
+        assertGeneration(scope) {
+            scope.assertCurrent(generation);
+        },
+        createOperationContext(identity) {
+            const captured = generation;
+            return createRuntimeOperationContext({ assertCurrent(current) {
+                if (current !== captured) {
+                    const error = new Error('stale generation');
+                    error.code = 'STALE_RUNTIME_GENERATION';
+                    throw error;
+                }
+            } }, identity);
+        },
+        assertOperationContext(operation) { operation.generation.assertCurrent(generation); },
         repairSessionConfig: (session) => session,
         repairSessionIdentity: (session) => session,
         resolveCanonicalAgent: (agentId) => ({ catalogId: agentId, name: agentId, profile: {} }),
@@ -90,13 +107,18 @@ assert.equal(harness.service.pin({ sessionId: created.sessionId, pinned: true })
 assert.equal(harness.service.export({ sessionId: created.sessionId }).fileName, 'Renamed.md');
 
 let releaseArchive;
+let archiveRequested;
+const archiveRequestStarted = new Promise((resolve) => { archiveRequested = resolve; });
 const staleRepository = makeRepository();
 staleRepository.saveSession({
     sessionId: 'session-stale', threadId: 'thread-stale', agentId: 'Nova', title: 'Stale', archivedAt: null,
 });
-const staleHarness = makeHarness(staleRepository, () => new Promise((resolve) => { releaseArchive = resolve; }));
+const staleHarness = makeHarness(staleRepository, () => new Promise((resolve) => {
+    releaseArchive = resolve;
+    archiveRequested();
+}));
 const archive = staleHarness.service.archive({ sessionId: 'session-stale' });
-await Promise.resolve();
+await archiveRequestStarted;
 staleHarness.advanceGeneration();
 releaseArchive({});
 await assert.rejects(archive, (error) => error.code === 'STALE_RUNTIME_GENERATION');
