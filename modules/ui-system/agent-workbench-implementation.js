@@ -38,6 +38,7 @@ import { createAgentWorkbenchTopicFlow } from './agent-workbench-topic-flow.js';
 import { createAgentWorkspaceCoordinator } from './agent-workspace-coordinator.js';
 import { createAgentWorkbenchTimelineView } from './agent-workbench-timeline-view.js';
 import { createAgentSettingsCoordinator } from './agent-settings-coordinator.js';
+import { createAgentTopicContextMenuView } from './agent-topic-context-menu-view.js';
 import {
     agentCacheKey,
     createAgentSessionCatalogCoordinator,
@@ -263,7 +264,6 @@ function mountWorkbench(container) {
     };
     const pendingRender = { shell: false, header: false, feed: false, composer: false, activity: false };
     let renderFrame = null;
-    let topicMenuInstance = 0;
 
     const shellView = createAgentWorkbenchShellView({
         document,
@@ -907,177 +907,58 @@ function mountWorkbench(container) {
         try { window.localStorage?.removeItem(LAST_TOPIC_STORAGE_KEY); } catch { /* convenience pointer only */ }
     }
 
-    function closeTopicContextMenu({ returnFocus = false } = {}) {
-        const current = state.topicContextMenu;
-        if (!current) return;
-        state.topicContextMenu = null;
-        current.menu.remove();
-        current.positionRule?.remove();
-        document.removeEventListener('pointerdown', current.onPointerDown, true);
-        document.removeEventListener('keydown', current.onKeyDown, true);
-        if (returnFocus && current.trigger?.isConnected) current.trigger.focus();
-    }
-
-    async function copyTopicId(topicId) {
-        try {
-            if (!navigator.clipboard?.writeText) throw new Error('clipboard API unavailable');
-            await navigator.clipboard.writeText(topicId);
-            notify('Topic ID 已复制。', 'success');
-        } catch {
-            // This copies only a durable identifier supplied by Main; it is
-            // not a transcript or a second renderer-side Topic store.
-            const temporary = document.createElement('textarea');
-            temporary.value = topicId;
-            temporary.className = 'agent-chat-clipboard-proxy';
-            temporary.setAttribute('readonly', '');
-            document.body.append(temporary);
-            temporary.select();
-            const copied = document.execCommand?.('copy');
-            temporary.remove();
-            if (copied) notify('Topic ID 已复制。', 'success');
-            else notify(`无法访问系统剪贴板；Topic ID：${topicId}`, 'warning');
-        }
-    }
-
-    function addTopicContextMenuItem(menu, iconName, label, action, { danger = false } = {}) {
-        // Deliberately reuse the main-chat DOM primitives. The callbacks stay
-        // Agent-specific and go through narrow IPC, but the visual contract (size,
-        // font, icon spacing, theme and hover state) is the exact same shared
-        // `.context-menu` / `.context-menu-item` implementation.
-        const item = node('div', `context-menu-item agent-chat-topic-context-menu-item${danger ? ' danger-item' : ''}`);
-        item.setAttribute('role', 'menuitem');
-        item.tabIndex = 0;
-        const iconElement = node('i', `fas fa-${iconName}`);
-        iconElement.setAttribute('aria-hidden', 'true');
-        item.append(iconElement, document.createTextNode(label));
-        const invoke = (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            closeTopicContextMenu();
-            run(action);
-        };
-        item.addEventListener('click', invoke);
-        item.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter' || event.key === ' ') invoke(event);
-        });
-        menu.append(item);
-        return item;
-    }
-
-    function positionTopicContextMenu(menu, point) {
-        // Mount under document.body so a sidebar scroller cannot clip the
-        // menu; then clamp it to the active Electron viewport.
-        const gap = 8;
-        const width = menu.offsetWidth || 188;
-        const height = menu.offsetHeight || 240;
-        const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
-        const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-        const left = Math.max(gap, Math.min(point.x, viewportWidth - width - gap));
-        const top = Math.max(gap, Math.min(point.y, viewportHeight - height - gap));
-        const instance = String(++topicMenuInstance);
-        menu.dataset.agentMenuInstance = instance;
-        // Keep transient pointer coordinates out of element inline styles.
-        // The rule contains only clamped numeric viewport coordinates and is
-        // removed with the document-level menu; it never holds Topic data.
-        const positionRule = document.createElement('style');
-        positionRule.textContent = `.agent-chat-topic-context-menu[data-agent-menu-instance="${instance}"] { left: ${left}px; top: ${top}px; visibility: visible; }`;
-        document.head.append(positionRule);
-        return positionRule;
-    }
-
-    function showTopicContextMenu(topic, trigger, point, { live = false } = {}) {
-        if (!topic?.id || state.topicManaging) return;
-        closeTopicContextMenu();
-        const menu = node('div', 'context-menu agent-chat-topic-context-menu');
-        menu.setAttribute('role', 'menu');
-        menu.setAttribute('aria-label', `管理 Topic：${topic.title || topic.id}`);
-        menu.hidden = true;
-
-        const archived = Boolean(topic.archivedAt);
-        if (live) {
-            addTopicContextMenuItem(menu, 'folder-open', '打开当前会话', async () => controller.hydrateTopic(topic.id, null, null, topic.agentId));
-        } else {
-            addTopicContextMenuItem(menu, 'folder-open', archived ? '查看归档会话' : '打开会话', async () => {
+    const topicContextMenuView = createAgentTopicContextMenuView({
+        document,
+        window,
+        node,
+        visualActionButton,
+        run,
+        actions: {
+            canOpen: () => !state.topicManaging,
+            notify,
+            openLive: (topic) => controller.hydrateTopic(topic.id, null, null, topic.agentId),
+            async open(topic) {
                 await controller.previewTopic(topic.id, topic.agentId, topic);
                 rememberTopic({ topicId: topic.id });
-            });
-            if (!archived) addTopicContextMenuItem(menu, 'edit', '重命名', async () => {
+            },
+            async rename(topic) {
                 const title = window.prompt?.('重命名 Agent Topic', topic.title || '');
                 if (title === null || title === undefined || title.trim() === (topic.title || '').trim()) return;
                 await controller.renameTopic(topic.id, title, topic.agentId);
                 rememberTopicTitle(topic, title.trim());
                 await refreshControlPlane();
                 notify('Agent Topic 已重命名。', 'success');
-            });
-        }
-        addTopicContextMenuItem(menu, 'copy', '复制 Topic ID', async () => copyTopicId(topic.id));
-        if (!live) addTopicContextMenuItem(menu, 'file-export', '导出 Markdown', async () => {
-            const result = await controller.exportSession(topic.id, 'markdown');
-            if (result?.exported) notify('Agent 会话已导出。', 'success');
-        });
-        if (!live && !archived) {
-            addTopicContextMenuItem(menu, 'archive', '归档会话', async () => {
-                const confirmed = window.confirm?.(`确定归档「${topic.title || topic.id}」吗？之后可从归档会话中恢复。`);
-                if (!confirmed) return;
+            },
+            async exportMarkdown(topic) {
+                const result = await controller.exportSession(topic.id, 'markdown');
+                if (result?.exported) notify('Agent 会话已导出。', 'success');
+            },
+            async archive(topic) {
+                if (!window.confirm?.(`确定归档「${topic.title || topic.id}」吗？之后可从归档会话中恢复。`)) return;
                 await controller.deleteTopic(topic.id, topic.agentId);
                 state.composerStateBySession.delete(topic.id);
                 forgetTopic(topic.id);
                 await refreshControlPlane();
                 notify('Agent 会话已归档。', 'success');
-            });
-        } else if (!live && archived) {
-            addTopicContextMenuItem(menu, 'undo', '恢复会话', async () => {
+            },
+            async restore(topic) {
                 await controller.restoreSession(topic.id);
                 forgetTopic(topic.id);
                 await refreshControlPlane();
                 notify('Agent 会话已恢复。', 'success');
-            });
-            addTopicContextMenuItem(menu, 'trash', '永久删除', async () => {
-                const confirmed = window.confirm?.(`永久删除「${topic.title || topic.id}」及其本地投影吗？此操作不可恢复。`);
-                if (!confirmed) return;
+            },
+            async remove(topic) {
+                if (!window.confirm?.(`永久删除「${topic.title || topic.id}」及其本地投影吗？此操作不可恢复。`)) return;
                 await controller.permanentlyDeleteSession(topic.id);
                 state.composerStateBySession.delete(topic.id);
                 forgetTopic(topic.id);
                 await refreshControlPlane();
                 notify('Agent 会话已永久删除。', 'success');
-            }, { danger: true });
-        }
-
-        const onPointerDown = (event) => {
-            if (!menu.contains(event.target) && event.target !== trigger) closeTopicContextMenu();
-        };
-        const onKeyDown = (event) => {
-            if (event.key !== 'Escape') return;
-            event.preventDefault();
-            closeTopicContextMenu({ returnFocus: true });
-        };
-        document.body.append(menu);
-        const positionRule = positionTopicContextMenu(menu, point);
-        menu.hidden = false;
-        state.topicContextMenu = { menu, trigger, onPointerDown, onKeyDown, positionRule };
-        document.addEventListener('pointerdown', onPointerDown, true);
-        document.addEventListener('keydown', onKeyDown, true);
-        queueMicrotask(() => menu.querySelector('[role="menuitem"]')?.focus());
-    }
-
-    function appendTopicActions(row, topic, { live = false } = {}) {
-        // Use an inline SVG here rather than a Material Symbols glyph. The
-        // Agent Workbench can mount before that optional font is ready; its
-        // text fallback was the small grey dash seen beside every Topic row.
-        const menu = visualActionButton('more', `管理 Topic：${topic.title || topic.id}`, 'agent-chat-session-menu');
-        menu.addEventListener('click', (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            const rect = menu.getBoundingClientRect();
-            showTopicContextMenu(topic, menu, { x: rect.right, y: rect.bottom }, { live });
-        });
-        row.addEventListener('contextmenu', (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            showTopicContextMenu(topic, menu, { x: event.clientX, y: event.clientY }, { live });
-        });
-        row.append(menu);
-    }
+            },
+        },
+    });
+    const closeTopicContextMenu = topicContextMenuView.close;
+    const appendTopicActions = topicContextMenuView.appendActions;
 
     function sessionSidebarEntries() {
         const current = store.getState();
@@ -2072,7 +1953,7 @@ function mountWorkbench(container) {
         settingsCoordinator.dispose();
         workspaceCoordinator.dispose();
         settingsState.dispose();
-        closeTopicContextMenu();
+        topicContextMenuView.dispose();
         timelineView.dispose();
         fullPresentation.dispose();
         activityReadonlyView.dispose();
