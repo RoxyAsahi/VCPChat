@@ -178,35 +178,35 @@ try {
         hasComposer: true,
     });
     const sessionIdsBeforeCreate = await page.evaluate(() => [...document.querySelectorAll(
-        '#nextUiInternalAppHost .agent-chat-session-row[data-topic-id]',
-    )].map((row) => row.dataset.topicId));
+        '#nextUiInternalAppHost .agent-chat-session-row[data-session-id]',
+    )].map((row) => row.dataset.sessionId));
     await page.click('#nextUiInternalAppHost .agent-chat-composer-new');
     await page.waitForFunction((previousIds) => {
         const host = document.querySelector('#nextUiInternalAppHost');
-        const active = host?.querySelector('.agent-chat-session-row.active[data-topic-id]');
-        return Boolean(active?.dataset.topicId
-            && !previousIds.includes(active.dataset.topicId)
+        const active = host?.querySelector('.agent-chat-session-row.active[data-session-id]');
+        return Boolean(active?.dataset.sessionId
+            && !previousIds.includes(active.dataset.sessionId)
             && !host.querySelector('.agent-chat-topic-flow-dialog'));
     }, { timeout: timeoutMs }, sessionIdsBeforeCreate);
     const directCreateState = await page.evaluate(() => {
         const host = document.querySelector('#nextUiInternalAppHost');
-        const active = host?.querySelector('.agent-chat-session-row.active[data-topic-id]');
+        const active = host?.querySelector('.agent-chat-session-row.active[data-session-id]');
         return {
             modalOpen: Boolean(host?.querySelector('.agent-chat-topic-flow-dialog')),
-            activeTopicId: active?.dataset.topicId || '',
+            activeSessionId: active?.dataset.sessionId || '',
             title: active?.querySelector('.topic-title-display')?.textContent || '',
             composerDisabled: Boolean(host?.querySelector('.agent-chat-message-input')?.disabled),
         };
     });
     assert.equal(directCreateState.modalOpen, false, 'New Session must not open the retired creation modal');
-    assert.ok(directCreateState.activeTopicId, `Direct Session creation did not select a durable Session: ${JSON.stringify(directCreateState)}`);
+    assert.ok(directCreateState.activeSessionId, `Direct Session creation did not select a durable Session: ${JSON.stringify(directCreateState)}`);
     assert.match(directCreateState.title, /^新会话 /, 'Direct Session creation must use the standard generated title');
     assert.equal(directCreateState.composerDisabled, false, 'A directly created Session preview must be immediately send-capable');
 
     // R12 real UI contract: a current-Session Select must retain the user's
     // value while the async SQLite save is pending, and the saved workspace
     // must be scoped to this Session rather than the Agent Profile.
-    const settingsSessionId = directCreateState.activeTopicId;
+    const settingsSessionId = directCreateState.activeSessionId;
     const settingsWorkspace = appData;
     await page.evaluate(() => {
         const host = document.querySelector('#nextUiInternalAppHost');

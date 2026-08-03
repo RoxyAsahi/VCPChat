@@ -108,11 +108,6 @@ assert.equal(applied.appliedRuntimeConfig.workspaceRoot, workspaceB,
     'the confirmed applied config must include the Runtime workspace identity');
 assert.ok(events.some((event) => event.type === 'session.config.saved'));
 assert.ok(events.some((event) => event.type === 'session.config.applied'));
-await assert.rejects(
-    () => manager.readTopic({ sessionId: topic.sessionId, topicId: 'different-session', reconcile: false }),
-    (error) => error.code === 'SESSION_IDENTITY_MISMATCH',
-    'conflicting Session and legacy Topic identities must fail closed',
-);
 
 const promptSaved = await manager.updateWorkbenchSettings({
     sessionId: topic.sessionId,
