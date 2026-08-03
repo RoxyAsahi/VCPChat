@@ -29,6 +29,7 @@ import { createAgentMessageDom } from './agent-renderer-message-dom.js';
 import { createAgentRendererContent } from './agent-renderer-content.js';
 import { createAgentRendererHtmlCache } from './agent-renderer-html-cache.js';
 import { createAgentRendererMarkdownStream } from './agent-renderer-markdown-stream.js';
+import { createAgentRendererHistory } from './agent-renderer-history.js';
 
 const colorExtractionPromises = new Map();
 
@@ -1992,6 +1993,25 @@ const rendererContent = createAgentRendererContent({
     highlight: (content) => contentProcessor.highlightAllPatternsInMessage(content),
     processAnimation: (content) => animationLifecycle?.process(content),
 });
+const rendererHistory = createAgentRendererHistory({
+    document,
+    root: () => agentRenderContext.chatMessagesDiv,
+    renderMessage: (...args) => renderMessage(...args),
+    activeSessionId: () => getActiveRenderSessionId(),
+    invalidateSession: () => invalidateRenderSession(),
+    isSessionActive: (sessionId) => isRenderSessionActive(sessionId),
+    initializeDependencies: () => emoticonUrlFixer.initialize(agentRenderContext.electronAPI),
+    buildDepthMap: (history) => buildTurnDepthMap(history),
+    observeMessage: (element) => visibilityController?.observeMessage(element),
+    isMessageInHotZone: (element) => visibilityController?.isMessageInHotZone(element) === true,
+    requestFrame: (callback) => requestAnimationFrame(callback),
+    requestIdle: (callback) => {
+        if ('requestIdleCallback' in window) requestIdleCallback(callback, { timeout: 1000 });
+        else requestAnimationFrame(callback);
+    },
+    scrollToBottom: () => agentRenderContext.uiHelper.scrollToBottom(),
+    onError: (message, error) => console.error(`Failed to render message ${message.id}:`, error),
+});
 
 function invalidateRenderSession() {
     activeRenderSessionId += 1;
@@ -2745,255 +2765,15 @@ function prepareUserMessageText(text) {
  * @param {number} options.batchDelay - Delay between batches in ms (default: 100)
  */
 async function renderHistory(history, options = {}) {
-    const renderSessionId = invalidateRenderSession();
-
-    const {
-        initialBatch = 5,
-        batchSize = 10,
-        batchDelay = 100
-    } = options;
-
-    // 核心修复：在开始批量渲染前，只等待一次依赖项。
-    await emoticonUrlFixer.initialize(agentRenderContext.electronAPI);
-
-    if (!history || history.length === 0) {
-        return Promise.resolve();
-    }
-
-    const renderContext = {
-        depthMap: buildTurnDepthMap(history)
-    };
-
-    // 如果消息数量很少，直接使用原来的方式渲染
-    if (history.length <= initialBatch) {
-        return renderHistoryLegacy(history, renderSessionId, renderContext);
-    }
-
-    console.debug(`[MessageRenderer] 开始分批渲染 ${history.length} 条消息，首批 ${initialBatch} 条，后续每批 ${batchSize} 条`);
-
-    // 分离最新的消息和历史消息
-    const latestMessages = history.slice(-initialBatch);
-    const olderMessages = history.slice(0, -initialBatch);
-
-    // 第一阶段：立即渲染最新的消息
-    await renderMessageBatch(latestMessages, true, renderSessionId, renderContext);
-    if (!isRenderSessionActive(renderSessionId)) return;
-    console.debug(`[MessageRenderer] 首批 ${latestMessages.length} 条最新消息已渲染`);
-
-    // 第二阶段：分批渲染历史消息（从旧到新）
-    if (olderMessages.length > 0) {
-        await renderOlderMessagesInBatches(olderMessages, batchSize, batchDelay, renderSessionId, renderContext);
-    }
-
-    if (!isRenderSessionActive(renderSessionId)) return;
-
-    // 最终滚动到底部
-    agentRenderContext.uiHelper.scrollToBottom();
-    console.debug(`[MessageRenderer] 所有 ${history.length} 条消息渲染完成`);
-}
-
-/**
- * 渲染一批消息
- * @param {Array<Message>} messages 要渲染的消息数组
- * @param {boolean} scrollToBottom 是否滚动到底部
- */
-function shouldRunHeavyForMessage(messageItem, renderContext = {}) {
-    if (renderContext.forceHeavy === true) return true;
-    if (renderContext.deferHeavy === true) {
-        return visibilityController?.isMessageInHotZone(messageItem) === true;
-    }
-    return true;
-}
-
-function processDeferredMessageElement(el, renderSessionId, renderContext = {}) {
-    if (!isRenderSessionActive(renderSessionId) || !el.isConnected) {
-        if (typeof el._vcp_process === 'function') {
-            delete el._vcp_process;
-        }
-        delete el._vcp_renderSessionId;
-        return;
-    }
-
-    visibilityController?.observeMessage(el);
-
-    if (typeof el._vcp_process === 'function') {
-        const runHeavy = shouldRunHeavyForMessage(el, renderContext);
-        el._vcp_process({ runHeavy });
-        delete el._vcp_process;
-    }
-    delete el._vcp_renderSessionId;
+    return rendererHistory.render(history, options);
 }
 
 async function renderMessageBatch(messages, scrollToBottom = false, renderSessionId = getActiveRenderSessionId(), renderContext = {}) {
-    if (!isRenderSessionActive(renderSessionId)) return;
-
-    const fragment = document.createDocumentFragment();
-    const messageElements = [];
-
-    // 使用 Promise.allSettled 避免单个失败影响整体
-    const results = await Promise.allSettled(
-        messages.map(msg => renderMessage(msg, true, false, renderSessionId, renderContext))
-    );
-
-    results.forEach((result, index) => {
-        if (result.status === 'fulfilled' && result.value) {
-            messageElements.push(result.value);
-        } else {
-            console.error(`Failed to render message ${messages[index].id}:`,
-                result.reason);
-        }
-    });
-
-    if (!isRenderSessionActive(renderSessionId)) return;
-
-    // 一次性添加到 fragment
-    messageElements.forEach(el => fragment.appendChild(el));
-
-    // 使用 requestAnimationFrame 确保 DOM 更新不阻塞 UI
-    return new Promise(resolve => {
-        requestAnimationFrame(() => {
-            if (!isRenderSessionActive(renderSessionId)) {
-                resolve();
-                return;
-            }
-
-            // Step 1: Append all elements to the DOM at once.
-            agentRenderContext.chatMessagesDiv.appendChild(fragment);
-
-            // Step 2: Now that they are in the DOM, run the deferred processing for each.
-            messageElements.forEach(el => processDeferredMessageElement(el, renderSessionId, renderContext));
-
-            if (scrollToBottom && isRenderSessionActive(renderSessionId)) {
-                agentRenderContext.uiHelper.scrollToBottom();
-            }
-            resolve();
-        });
-    });
+    return rendererHistory.renderBatch(messages, scrollToBottom, renderSessionId, renderContext);
 }
 
-/**
- * 分批渲染历史消息
- * @param {Array<Message>} olderMessages 历史消息数组
- * @param {number} batchSize 每批大小
- * @param {number} batchDelay 批次间延迟
- */
-/**
- * 智能批量渲染：使用 requestIdleCallback 在浏览器空闲时渲染
- */
-async function renderOlderMessagesInBatches(olderMessages, batchSize, batchDelay, renderSessionId = getActiveRenderSessionId(), renderContext = {}) {
-    const totalBatches = Math.ceil(olderMessages.length / batchSize);
-
-    for (let i = totalBatches - 1; i >= 0; i--) {
-        if (!isRenderSessionActive(renderSessionId)) return;
-
-        const startIndex = i * batchSize;
-        const endIndex = Math.min(startIndex + batchSize, olderMessages.length);
-        const batch = olderMessages.slice(startIndex, endIndex);
-
-        // 创建批次 fragment
-        const batchFragment = document.createDocumentFragment();
-        const elementsForProcessing = [];
-
-        for (const msg of batch) {
-            if (!isRenderSessionActive(renderSessionId)) return;
-
-            const messageElement = await renderMessage(msg, true, false, renderSessionId, renderContext);
-            if (messageElement) {
-                batchFragment.appendChild(messageElement);
-                elementsForProcessing.push(messageElement);
-            }
-        }
-
-        // 🟢 使用 requestIdleCallback 在空闲时插入（降级到 requestAnimationFrame）
-        await new Promise(resolve => {
-            const insertBatch = () => {
-                if (!isRenderSessionActive(renderSessionId)) {
-                    resolve();
-                    return;
-                }
-
-                const chatMessagesDiv = agentRenderContext.chatMessagesDiv;
-                let insertPoint = chatMessagesDiv.firstChild;
-                while (insertPoint?.classList?.contains('topic-timestamp-bubble')) {
-                    insertPoint = insertPoint.nextSibling;
-                }
-
-                if (insertPoint) {
-                    chatMessagesDiv.insertBefore(batchFragment, insertPoint);
-                } else {
-                    chatMessagesDiv.appendChild(batchFragment);
-                }
-
-                elementsForProcessing.forEach(el => processDeferredMessageElement(el, renderSessionId, {
-                    ...renderContext,
-                    deferHeavy: true
-                }));
-
-                resolve();
-            };
-
-            // 优先使用 requestIdleCallback，不支持时降级到 rAF
-            if ('requestIdleCallback' in window) {
-                requestIdleCallback(insertBatch, { timeout: 1000 });
-            } else {
-                requestAnimationFrame(insertBatch);
-            }
-        });
-
-        if (!isRenderSessionActive(renderSessionId)) return;
-
-        // 动态调整延迟：如果批次小，减少延迟
-        if (i > 0 && batchDelay > 0) {
-            const actualDelay = batch.length < batchSize / 2 ? batchDelay / 2 : batchDelay;
-            await new Promise(resolve => setTimeout(resolve, actualDelay));
-        }
-    }
-}
-
-/**
- * 原始的历史渲染方法（用于少量消息的情况）
- * @param {Array<Message>} history 聊天历史
- */
 async function renderHistoryLegacy(history, renderSessionId = getActiveRenderSessionId(), renderContext = {}) {
-    if (!isRenderSessionActive(renderSessionId)) return;
-
-    const fragment = document.createDocumentFragment();
-    const allMessageElements = [];
-
-    // Phase 1: Create all message elements in memory without appending to DOM
-    for (const msg of history) {
-        if (!isRenderSessionActive(renderSessionId)) return;
-
-        const messageElement = await renderMessage(msg, true, false, renderSessionId, renderContext);
-        if (messageElement) {
-            allMessageElements.push(messageElement);
-        }
-    }
-
-    if (!isRenderSessionActive(renderSessionId)) return;
-
-    // Phase 2: Append all created elements at once using a DocumentFragment
-    allMessageElements.forEach(el => fragment.appendChild(el));
-
-    return new Promise(resolve => {
-        requestAnimationFrame(() => {
-            if (!isRenderSessionActive(renderSessionId)) {
-                resolve();
-                return;
-            }
-
-            // Step 1: Append all elements to the DOM.
-            agentRenderContext.chatMessagesDiv.appendChild(fragment);
-
-            // Step 2: Run the deferred processing for each element now that it's attached.
-            allMessageElements.forEach(el => processDeferredMessageElement(el, renderSessionId, renderContext));
-
-            if (isRenderSessionActive(renderSessionId)) {
-                agentRenderContext.uiHelper.scrollToBottom();
-            }
-            resolve();
-        });
-    });
+    return rendererHistory.renderLegacy(history, renderSessionId, renderContext);
 }
 
 function refreshLayoutDependentState() {
