@@ -4,6 +4,8 @@ import fs from 'node:fs';
 const workbench = fs.readFileSync(new URL('../modules/ui-system/agent-workbench-implementation.js', import.meta.url), 'utf8');
 const settingsView = fs.readFileSync(new URL('../modules/ui-system/agent-settings-view.js', import.meta.url), 'utf8');
 const runtime = fs.readFileSync(new URL('../modules/codex-runtime/runtimeManagerImplementation.js', import.meta.url), 'utf8');
+const turnService = fs.readFileSync(new URL('../modules/codex-runtime/runtime-turn-service.js', import.meta.url), 'utf8');
+const profileService = fs.readFileSync(new URL('../modules/codex-runtime/runtime-profile-service.js', import.meta.url), 'utf8');
 const adapter = fs.readFileSync(new URL('../modules/codex-runtime/toolboxResponsesAdapter.js', import.meta.url), 'utf8');
 
 for (const label of ['Agent 默认', '当前会话', '高级']) assert.ok(settingsView.includes(label));
@@ -16,8 +18,9 @@ assert.equal(`${workbench}\n${settingsView}`.includes('用此配置新建会话'
 assert.equal(`${workbench}\n${settingsView}`.includes('长按发送'), false,
     'R11 must not reintroduce the explicitly cancelled advanced-send feature');
 
-assert.ok(runtime.includes("effort ? { effort }"), 'validated effort must reach turn/start');
-assert.ok(runtime.includes('REASONING_EFFORT_UNSUPPORTED'));
+assert.ok(turnService.includes("? { effort: this.context.effectiveReasoningEffort"),
+    'validated effort must reach turn/start through RuntimeTurnService');
+assert.ok(profileService.includes('REASONING_EFFORT_UNSUPPORTED'));
 assert.ok(runtime.includes('_threadInstructionParams'));
 assert.ok(adapter.includes("trusted?.mode === 'codex-managed'"));
 assert.ok(adapter.includes('chat.reasoning_effort = effort'));
