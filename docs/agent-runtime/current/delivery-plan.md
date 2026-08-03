@@ -227,7 +227,8 @@
 - [~] ProfileV2/SessionConfigV2、schema 8 migration、Profile/Session CAS 和 desired/applied revision 已实现。
 - [~] 字段级 Draft/queue、Codex 0.146 settings apply、发送 barrier、空闲指令 reload、附件 capability 与有界 event dedupe 已实现并有专项测试。
 - [~] 内部 Runtime/Workbench 已移除隐式 `sessionId || topicId` 路由，并对冲突 identity fail-closed；旧 `topicId` 仅保留在 IPC/展示兼容边界。Runtime/Workbench 大文件继续拆分。
-- [ ] 真实 Electron YOLO/cwd/指令切换、重启持久化和下一 Turn payload 验收后才可升级状态。
+- [x] 2026-08-03 真实 Electron 设置交互已验证 YOLO/cwd 不回跳并写入 SQLite；独立两阶段测试彻底关闭并重启 Electron Main 后，Session、YOLO、模型和 workspace 均从同一 Projection SQLite 恢复。
+- [ ] 指令模式切换与真实 ToolBox 下一 Turn provider payload 仍需 live 验收；通过前不得升级为 `live/product`。
 
 R12 当前状态只能是 `implemented/working-tree`，不得复用 R7-R10 live revision 宣称完成。
 

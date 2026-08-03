@@ -18,13 +18,14 @@
     "npm run test:codex-stack",
     "npm run test:codex-reliability",
     "npm run test:electron-codex-smoke",
+    "node scripts/test-electron-codex-process-restart.mjs",
     "npm run test:electron-codex-recovery",
     "npm run check:codex-schema",
     "npm run check:codex-governance",
     "npm run check:ui-system"
   ],
   "remaining": [
-    "real Electron settings persistence after restart",
-    "real ToolBox next-turn payload verification"
+    "real ToolBox next-turn payload verification",
+    "real ToolBox backend approval verification"
   ]
 }

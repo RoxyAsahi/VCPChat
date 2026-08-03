@@ -71,6 +71,7 @@ npm run check:agent-runtime           PASS
 npm run check:codex-governance        PASS
 npm run check:ui-system               PASS
 npm run test:electron-codex-smoke     PASS
+node scripts/test-electron-codex-process-restart.mjs PASS
 ```
 
-Electron smoke 证明 Main/preload、Session/Thread、Projection 和 Workspace 的 hermetic 链路未回归；它没有覆盖 R11 三个设置作用域的真实点击、深浅主题、窄栏和双 Agent 并发。真实 ToolBox reasoning 参数也尚未验收，因此不标记 `live` 或 `product`。
+Electron smoke 已覆盖当前 Session 的 YOLO/cwd 真实点击、异步保存和 Renderer reload；独立进程测试进一步覆盖 Electron Main 完整退出重启后的 SQLite 恢复。深浅主题、窄栏、双 Agent 并发设置交互与真实 ToolBox reasoning/provider 参数仍未验收，因此不标记 `live` 或 `product`。

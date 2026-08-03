@@ -60,7 +60,7 @@ npm run test:codex-toolbox-live
 | Agent presentation | JSDOM | Full Fork receipt、forbidden dependency=0、稳定 Block identity、主聊天 golden DOM、Tool/Approval/Observation/Error registry、stream/full 后处理、动作路由、animation-frame 合并 | working-tree pass | `npm run test:agent-presentation`，含 `test-agent-presentation-blocks.mjs`，并进入 `test:codex-stack`。原主聊天 renderer 三文件零 diff。 |
 | Workbench store/controller | JSDOM | SQLite snapshot、keyed patch、多 Session state、草稿和路由 | working-tree pass | `npm run test:agent-workbench-store`。 |
 | Workbench DOM | JSDOM | mount、消息/工具更新、审批、卸载清理 | working-tree pass | `npm run test:agent-workbench`；仍含 Rust 兼容 fixture。 |
-| R11/R12 Settings/Composer | Main fake + pure model + JSDOM + Electron shell | Profile/Session/Advanced 作用域、指令模式、CAS、desired/applied、真实配置 barrier、A/B 草稿附件模式隔离、steer/follow-up/stop | implemented / working-tree | R12 专项与 `test:electron-codex-smoke` 通过；真实 UI 已验证 YOLO/cwd 保存且控件不回跳。重启后设置恢复和下一 Turn provider payload 仍 pending。 |
+| R11/R12 Settings/Composer | Main fake + pure model + JSDOM + Electron shell | Profile/Session/Advanced 作用域、指令模式、CAS、desired/applied、真实配置 barrier、A/B 草稿附件模式隔离、steer/follow-up/stop | implemented / working-tree | R12 专项与 `test:electron-codex-smoke` 通过；真实 UI 已验证 YOLO/cwd 保存且控件不回跳。`node scripts/test-electron-codex-process-restart.mjs` 进一步验证完整 Main 进程重启后 Session、YOLO、模型和 workspace 从 SQLite 恢复。真实下一 Turn provider payload 仍 pending。 |
 | Workspace browser/path actions | Node + JSDOM + Electron | Session-bound root、traversal/absolute/UNC/symlink 防护、lazy tree、搜索、预览、稳定 revision、10k 文件分页/搜索、tree/tool/diff/attachment 统一动作 | committed hermetic pass | 2026-08-02：`npm run test:agent-workspace-service`、`npm run test:agent-workspace-model`、`npm run test:agent-workbench`、`npm run test:electron-codex-smoke`、`npm run check:agent-runtime`、`npm run check:ui-system`。Electron 真实读取当前 workspace `package.json`；人工截图、真实交互性能录制和 ToolBox resource path pending。 |
 | Session Tool Dock | pure model + JSDOM + Electron | 固定/动态 Tab、Session/workspace identity、关闭/中键/键盘、文件提升、最小恢复、审批可达、终端 launcher | working-tree pass / visual pending | 2026-08-02：`npm run test:agent-session-dock`、`npm run test:agent-workbench`。Electron 多分辨率截图、20 文件 Tab、真实 reload 与终端 launcher smoke 尚待，故不是产品完成。 |
 | Workbench UX segmented diagnostics | manager + JSDOM | Agent click/cache/list、Runtime ready、Thread warm、Turn ACK、first Item/delta；无 prompt/key/path | working-tree pass | Main/Renderer 输出 `[agent-ux]` / `[Agent UX]` 的受限 timing 字段；`test:codex-runtime-manager` 与 `test:agent-workbench` 覆盖关键触发点。 |
@@ -413,5 +413,6 @@ gate against the existing ToolBox process, and the temporary node was stopped. T
 | schema/capability/dedupe | `npm run test:agent-data-contracts` | working-tree pass |
 | Projection migration | `npm run test:codex-projection-store` | working-tree pass |
 | Runtime regression | `npm run test:codex-runtime-manager` | working-tree pass |
+| Electron full process restart | `node scripts/test-electron-codex-process-restart.mjs` | working-tree pass |
 
-Electron 真实点击、重启和 provider payload 仍 pending；本表不是 hermetic/live/product 收据。
+Electron 真实点击与完整 Main 进程重启已通过；真实 ToolBox provider payload 和 backend approval 仍 pending。本表不是 live/product 收据。
