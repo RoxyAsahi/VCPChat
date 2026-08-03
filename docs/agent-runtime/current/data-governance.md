@@ -40,4 +40,4 @@ npm run test:agent-config-apply
 npm run test:agent-data-contracts
 ```
 
-2026-08-03 已形成真实 Electron 收据：设置 UI 的 YOLO/cwd 不回跳并持久化，且独立两阶段测试在完整 Electron Main 进程重启后恢复 Session、YOLO、模型和 workspace。真实 ToolBox 下一 Turn provider payload 尚未验收，因此当前仍不是 `live` 或 `product`。
+2026-08-03 已形成真实 Electron 收据：设置 UI 的 YOLO/cwd 不回跳并持久化，且独立两阶段测试在完整 Electron Main 进程重启后恢复 Session、YOLO、模型和 workspace。同日真实 ToolBox 下一 Turn gate 已验证 model/cwd/approval/effort 及 desired/applied revision。指令模式切换和 ToolBox backend approval 尚未形成 live 收据，因此当前仍不是 `product`。

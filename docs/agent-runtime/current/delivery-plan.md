@@ -228,7 +228,8 @@
 - [~] 字段级 Draft/queue、Codex 0.146 settings apply、发送 barrier、空闲指令 reload、附件 capability 与有界 event dedupe 已实现并有专项测试。
 - [~] 内部 Runtime/Workbench 已移除隐式 `sessionId || topicId` 路由，并对冲突 identity fail-closed；旧 `topicId` 仅保留在 IPC/展示兼容边界。Runtime/Workbench 大文件继续拆分。
 - [x] 2026-08-03 真实 Electron 设置交互已验证 YOLO/cwd 不回跳并写入 SQLite；独立两阶段测试彻底关闭并重启 Electron Main 后，Session、YOLO、模型和 workspace 均从同一 Projection SQLite 恢复。
-- [ ] 指令模式切换与真实 ToolBox 下一 Turn provider payload 仍需 live 验收；通过前不得升级为 `live/product`。
+- [x] 2026-08-03 对固定 Codex 0.146 + ToolBox `324a659f` 的下一 Turn live gate 通过：真实 `thread/settings/update` 确认 cwd、model、`approvalPolicy=never`、`effort=high`，随后 ToolBox Chat body 使用 `deepseek-v4-flash` 与 `reasoning_effort=high`，desired/applied revision 对齐。
+- [ ] 指令模式切换与 ToolBox backend approval 恰好一次仍需 live 验收；通过前不得升级为 `product`。
 
 R12 当前状态只能是 `implemented/working-tree`，不得复用 R7-R10 live revision 宣称完成。
 

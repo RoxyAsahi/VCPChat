@@ -66,6 +66,11 @@ client -> initialized {}
 `x-codex-turn-metadata` 的 Thread identity 回查 Projection SQLite，只把该 Session 冻结的
 `baseInstructions` 映射为唯一 Chat `system` message；`additional_tools` 中的 exec/wait/native tools 全部丢弃。
 
+0.146 的 `x-codex-turn-metadata.session_id` 是 Codex provider/App Server Session identity，当前等于公开
+Codex Thread ID；它不是 VChat 的 `session_...` 主键。Adapter 必须先按 Codex Thread ID 回查 VChat
+Session，再要求 provider `session_id` 与该 Codex Thread ID 一致。拿它和 VChat Session 主键比较会拒绝
+每一条真实 provider 请求；跨 Thread 的 provider identity 仍必须 fail-closed。
+
 0.146 的自定义 provider 请求可能不在顶层 `tools` 重复携带已注册 dynamic tool。VChat 因此在最终
 ToolBox allowlist 边界补出唯一 `vcp_invoke` Chat definition。真实 App Server 已验证模型返回该 function
 call 后，Codex 仍会发出原生 `item/tool/call`，Main 解包、bridge 返回、continuation 和 SQLite projection

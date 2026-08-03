@@ -9,7 +9,9 @@
   "implementationCommits": [
     "502df123",
     "55f9b5de",
-    "48a0c4a2"
+    "48a0c4a2",
+    "8b6db350",
+    "c423c0e5"
   ],
   "commands": [
     "npm run test:agent-settings-interaction",
@@ -22,10 +24,21 @@
     "npm run test:electron-codex-recovery",
     "npm run check:codex-schema",
     "npm run check:codex-governance",
-    "npm run check:ui-system"
+    "npm run check:ui-system",
+    "VCP_CODEX_LIVE=1 npm run test:codex-nova-live",
+    "VCP_CODEX_LIVE=1 npm run test:codex-toolbox-live",
+    "VCP_CODEX_LIVE=1 node scripts/run-electron-node.mjs scripts/test-codex-settings-live.mjs",
+    "VCP_CODEX_LIVE=1 npm run test:codex-toolbox-ws-live"
   ],
+  "liveProfile": {
+    "toolboxRevision": "324a659f",
+    "toolboxModifiedByR12": false,
+    "model": "deepseek-v4-flash",
+    "baseInstructions": "{{Nova}}",
+    "providerSettingsVerified": ["model", "cwd", "approvalPolicy", "reasoningEffort"]
+  },
   "remaining": [
-    "real ToolBox next-turn payload verification",
+    "real instruction-mode switch verification",
     "real ToolBox backend approval verification"
   ]
 }
