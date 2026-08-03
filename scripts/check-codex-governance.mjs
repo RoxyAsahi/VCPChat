@@ -93,7 +93,7 @@ const rendererStreamPath = 'modules/ui-system/agent-presentation/fork/agent-rend
 const forkLineCount = fs.readFileSync(path.join(root, rendererFacadePath), 'utf8').split(/\r?\n/).length;
 const forkImplementationLineCount = fs.readFileSync(path.join(root, rendererImplementationPath), 'utf8').split(/\r?\n/).length;
 if (forkLineCount > 600) errors.push(`${rendererFacadePath} exceeds facade ceiling: ${forkLineCount} lines`);
-if (forkImplementationLineCount > 3200) errors.push(`${rendererImplementationPath} exceeds temporary extraction ceiling: ${forkImplementationLineCount} lines`);
+if (forkImplementationLineCount > 3100) errors.push(`${rendererImplementationPath} exceeds temporary extraction ceiling: ${forkImplementationLineCount} lines`);
 if (!fs.existsSync(path.join(root, rendererStreamPath))) errors.push(`missing Agent renderer stream module: ${rendererStreamPath}`);
 const forkReceipt = fs.readFileSync(path.join(root, 'modules/ui-system/agent-presentation/fork/FORK_RECEIPT.md'), 'utf8');
 if (!forkReceipt.includes('独立演进策略') || !forkReceipt.includes('不再要求跟随主聊天 renderer 逐行同步')) {
