@@ -165,6 +165,12 @@ const runtimeFacadeLineCount = fs.readFileSync(path.join(root, 'modules/codex-ru
 if (runtimeFacadeLineCount > 600) errors.push(`runtimeManager.js exceeds facade ceiling: ${runtimeFacadeLineCount} lines`);
 const runtimeManagerSource = fs.readFileSync(path.join(root, 'modules/codex-runtime/runtimeManagerImplementation.js'), 'utf8');
 const runtimeNormalizersPath = path.join(root, 'modules/codex-runtime/runtime-normalizers.js');
+const runtimeInteractionServicePath = path.join(root, 'modules/codex-runtime/runtime-interaction-service.js');
+if (!fs.existsSync(runtimeInteractionServicePath)) {
+    errors.push('Runtime interaction service is missing');
+} else if (fs.readFileSync(runtimeInteractionServicePath, 'utf8').split(/\r?\n/).length > 900) {
+    errors.push('runtime-interaction-service.js exceeds module ceiling');
+}
 if (!fs.existsSync(runtimeNormalizersPath)) {
     errors.push('Runtime pure normalizers module is missing');
 } else {

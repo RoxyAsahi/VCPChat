@@ -10,8 +10,8 @@ const { CodexAppServerTransport, CodexAppServerError } = require('./appServerTra
 const { AgentProjectionRepository, CodexProjectionProjector } = require('./projection');
 const { ToolboxBridgeTransport } = require('./toolboxBridgeTransport');
 const { ToolboxResponsesAdapter } = require('./toolboxResponsesAdapter');
-const { InteractionRegistry } = require('./interactionRegistry');
 const { AttachmentRegistry } = require('./attachmentRegistry');
+const { RuntimeInteractionService } = require('./runtime-interaction-service');
 const { normalizeProfile, normalizeSessionConfig, PROFILE_SCHEMA_VERSION } = require('./dataContracts');
 const {
     instructionConfigChanged,
@@ -20,13 +20,9 @@ const {
 } = require('./runtimeConfig');
 const {
     capabilityMatrix,
-    failClosedServerRequestResponse,
-    serverRequestPolicy,
 } = require('./protocolCapabilities');
 const {
-    approvalEvent,
     approvalProjection,
-    approvalResponse,
     bridgeResultContentItems,
     buildTurnInput,
     classifyToolboxEvent,
@@ -36,12 +32,9 @@ const {
     explicitAgent,
     hasDurableProjection,
     hasToolboxConfiguration,
-    interactionExpiry,
     isConfirmedThreadNotFound,
     isUncertainRemoteMutation,
-    normalizeApprovalDecision,
     normalizeApprovalPolicy,
-    normalizeInteractionResponse,
     normalizeInstructionMode,
     normalizePersonality,
     normalizePermissionMode,
@@ -90,10 +83,7 @@ class CodexRuntimeManager extends EventEmitter {
         this._transportWired = false;
         this.state = 'stopped';
         this.lastError = null;
-        this.serverRequests = new Map();
-        this.interactions = new InteractionRegistry();
         this.attachments = options.attachmentRegistry || new AttachmentRegistry();
-        this.interactionTimers = new Map();
         this.bridge = null;
         this.responsesAdapter = null;
         this.threadStates = new Map();
@@ -103,7 +93,22 @@ class CodexRuntimeManager extends EventEmitter {
         this.resumedThreadIds = new Set();
         this.resumingThreads = new Map();
         this.dynamicCalls = new Map();
-        this.toolboxApprovals = new Map();
+        this.interactionService = new RuntimeInteractionService({
+            repository: () => this.repository,
+            transport: () => this.transport,
+            bridge: () => this.bridge,
+            runtimeGeneration: () => this.runtimeGeneration,
+            workbenchMounted: () => this.workbenchMounted,
+            profileForRequest: (request) => this._profileForRequest(request),
+            sendUiEvent: (event) => this._sendUiEvent(event),
+            diagnostic: (message) => this.emit('diagnostic', message),
+        });
+        // Compatibility aliases for existing diagnostics/tests. State
+        // ownership belongs to RuntimeInteractionService.
+        this.serverRequests = this.interactionService.serverRequests;
+        this.interactions = this.interactionService.interactions;
+        this.interactionTimers = this.interactionService.interactionTimers;
+        this.toolboxApprovals = this.interactionService.toolboxApprovals;
         this.uiEventSequence = 0;
         this.workbenchMounted = false;
         this.intentionalStop = false;
@@ -291,8 +296,7 @@ class CodexRuntimeManager extends EventEmitter {
         this.idleWarmSessions.clear();
         this.dynamicCalls.clear();
         this.toolboxApprovals.clear();
-        for (const timer of this.interactionTimers.values()) clearTimeout(timer);
-        this.interactionTimers.clear();
+        this.interactionService.clearTimers();
         this.attachments.clear();
         this.toolboxConfigFingerprint = null;
         this.toolboxReconfiguration = null;
@@ -1829,113 +1833,11 @@ class CodexRuntimeManager extends EventEmitter {
         return { attachment: this.attachments.register(sessionId, resolved, stat) };
     }
     async respondApproval({ requestId, approvalId, decision, scope, reason, generation } = {}) {
-        const pendingId = String(requestId || approvalId || '');
-        if (scope === 'toolbox' || this.toolboxApprovals.has(pendingId)) {
-            const approval = this.toolboxApprovals.get(pendingId);
-            if (!approval || approval.expiresAtMs <= Date.now()) {
-                this.toolboxApprovals.delete(pendingId);
-                throw new CodexAppServerError('NOT_FOUND', 'ToolBox approval is no longer pending');
-            }
-            if (Number(generation) !== Number(approval.generation)) {
-                throw new CodexAppServerError('STALE_INTERACTION_GENERATION', 'ToolBox approval belongs to a different authority generation');
-            }
-            if (!this.interactions.begin('toolbox', pendingId, approval.generation)) {
-                throw new CodexAppServerError('INTERACTION_ALREADY_RESOLVED', 'ToolBox approval is already being answered');
-            }
-            let result;
-            try {
-                result = await this.bridge?.respondApproval({
-                    requestId: pendingId,
-                    approved: normalizeApprovalDecision(decision) === 'accept',
-                    reason,
-                });
-            } catch (error) {
-                this.interactions.rollback('toolbox', pendingId, approval.generation);
-                throw error;
-            }
-            if (!result?.written) {
-                this.interactions.rollback('toolbox', pendingId, approval.generation);
-                throw new CodexAppServerError('TOOLBOX_APPROVAL_FAILED', result?.error || 'ToolBox approval response was not written');
-            }
-            this.toolboxApprovals.delete(pendingId);
-            this.interactions.complete('toolbox', pendingId, 'completed', approval.generation);
-            this._sendUiEvent({
-                type: 'approval.resolved',
-                approvalId: pendingId,
-                payload: { approvalId: pendingId, decision, scope: 'toolbox' },
-            });
-            return { requestId: pendingId, resolved: true, scope: 'toolbox' };
-        }
-        if (!pendingId || !this.serverRequests.has(pendingId)) {
-            throw new CodexAppServerError('NOT_FOUND', 'Approval request is no longer pending');
-        }
-        const request = this.serverRequests.get(pendingId);
-        if (Number(generation) !== Number(request.runtimeGeneration)) {
-            throw new CodexAppServerError('STALE_INTERACTION_GENERATION', 'Codex approval belongs to a different runtime generation');
-        }
-        if (!['item/commandExecution/requestApproval', 'item/fileChange/requestApproval'].includes(request.method)) {
-            throw new CodexAppServerError('INTERACTION_KIND_MISMATCH', 'This request must be answered through respondInteraction');
-        }
-        if (!this.interactions.begin('codex-native', pendingId, request.runtimeGeneration)) {
-            throw new CodexAppServerError('INTERACTION_ALREADY_RESOLVED', 'Codex approval is already being answered');
-        }
-        const response = approvalResponse(request.method, decision);
-        try {
-            if (response) this.transport.respond(pendingId, response);
-            else this.transport.respondError(pendingId, -32002, `Unsupported Codex server request: ${request.method}`);
-        } catch (error) {
-            this.interactions.rollback('codex-native', pendingId, request.runtimeGeneration);
-            throw error;
-        }
-        this.serverRequests.delete(pendingId);
-        this.interactions.complete('codex-native', pendingId, 'completed', request.runtimeGeneration);
-        this._sendUiEvent({
-            type: 'approval.resolved',
-            topicId: approvalProjection(pendingId, request, this.repository).topicId,
-            sessionId: approvalProjection(pendingId, request, this.repository).sessionId,
-            approvalId: pendingId,
-            payload: { approvalId: pendingId, decision },
-        });
-        return { requestId: pendingId, resolved: true };
+        return this.interactionService.respondApproval({ requestId, approvalId, decision, scope, reason, generation });
     }
 
     async respondInteraction({ source = 'codex-native', requestId, kind, response = {}, generation } = {}) {
-        const pendingId = String(requestId || '').trim();
-        if (source !== 'codex-native') {
-            throw new CodexAppServerError('INTERACTION_SOURCE_MISMATCH', 'Only Codex server requests use the interaction response channel');
-        }
-        const request = this.serverRequests.get(pendingId);
-        if (!request) throw new CodexAppServerError('NOT_FOUND', 'Interaction request is no longer pending');
-        if (Number(generation) !== Number(request.runtimeGeneration)) {
-            throw new CodexAppServerError('STALE_INTERACTION_GENERATION', 'Codex interaction belongs to a different runtime generation');
-        }
-        const policy = serverRequestPolicy(request.method, this._profileForRequest(request));
-        if (policy.state !== 'supported' || policy.kind !== kind) {
-            throw new CodexAppServerError('INTERACTION_KIND_MISMATCH', 'Interaction kind does not match the pending request');
-        }
-        if (!this.interactions.begin(source, pendingId, request.runtimeGeneration)) {
-            throw new CodexAppServerError('INTERACTION_ALREADY_RESOLVED', 'Interaction is already being answered');
-        }
-        let normalized;
-        try {
-            normalized = normalizeInteractionResponse(request, response);
-            this.transport.respond(pendingId, normalized);
-        } catch (error) {
-            this.interactions.rollback(source, pendingId, request.runtimeGeneration);
-            throw error;
-        }
-        this._clearInteractionTimer(pendingId);
-        this.serverRequests.delete(pendingId);
-        this.interactions.complete(source, pendingId, 'completed', request.runtimeGeneration);
-        const projection = approvalProjection(pendingId, request, this.repository);
-        this._sendUiEvent({
-            type: 'interaction.resolved',
-            topicId: projection.topicId,
-            sessionId: projection.sessionId,
-            turnId: projection.turnId,
-            payload: { source, requestId: pendingId, kind, state: 'completed' },
-        });
-        return { requestId: pendingId, resolved: true, kind };
+        return this.interactionService.respondInteraction({ source, requestId, kind, response, generation });
     }
 
     _profileForRequest(request) {
@@ -1946,9 +1848,7 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     _clearInteractionTimer(requestId) {
-        const timer = this.interactionTimers.get(String(requestId));
-        if (timer) clearTimeout(timer);
-        this.interactionTimers.delete(String(requestId));
+        this.interactionService.clearTimer(requestId);
     }
 
     _configSnapshot(options) {
@@ -2514,60 +2414,7 @@ class CodexRuntimeManager extends EventEmitter {
                 void this._handleDynamicToolCall(message);
                 return;
             }
-            const request = { ...message, runtimeGeneration: this.runtimeGeneration };
-            const threadId = request?.params?.threadId || null;
-            const session = threadId ? this.repository?.getSessionByThread(threadId) : null;
-            const profile = session?.configSnapshot?.executionProfile || 'toolbox-only';
-            const policy = serverRequestPolicy(request.method, profile);
-            if (policy.state !== 'supported') {
-                this._failClosedServerRequest(request, policy.reason);
-                return;
-            }
-            if (!this.workbenchMounted) {
-                this._failClosedServerRequest(request, 'VChat Workbench is closed');
-                return;
-            }
-            const queued = this.interactions.enqueue({
-                source: 'codex-native',
-                requestId: String(request.id),
-                generation: request.runtimeGeneration,
-                sessionId: session?.sessionId || null,
-                threadId,
-                turnId: request?.params?.turnId || null,
-                kind: policy.kind || 'approval',
-                method: request.method,
-                payload: sanitizeInteractionPayload(request.params),
-                expiresAtMs: interactionExpiry(request),
-            });
-            if (!queued.accepted) {
-                if (queued.reason === 'capacity') {
-                    this._failClosedServerRequest(request, 'VChat interaction capacity is exhausted');
-                }
-                return;
-            }
-            this.serverRequests.set(String(request.id), request);
-            if (policy.kind === 'native-approval' || policy.kind === 'legacy-native-approval') {
-                this._sendUiEvent(approvalEvent(String(request.id), request, this.repository));
-            } else {
-                const projection = approvalProjection(String(request.id), request, this.repository);
-                this._sendUiEvent({
-                    type: 'interaction.requested',
-                    topicId: projection.topicId,
-                    sessionId: projection.sessionId,
-                    turnId: projection.turnId,
-                    payload: queued.record,
-                });
-            }
-            const expiresAtMs = queued.record.expiresAtMs;
-            if (expiresAtMs) {
-                const delay = Math.max(0, expiresAtMs - Date.now());
-                const timer = setTimeout(() => {
-                    if (!this.serverRequests.has(String(request.id))) return;
-                    this._failClosedServerRequest(request, 'Interaction timed out');
-                }, delay);
-                timer.unref?.();
-                this.interactionTimers.set(String(request.id), timer);
-            }
+            this.interactionService.acceptServerRequest(message);
         });
         this.transport.on('exit', (error) => {
             if (this.intentionalStop) return;
@@ -2674,8 +2521,7 @@ class CodexRuntimeManager extends EventEmitter {
         await this._failClosedToolboxApprovals('Codex App Server crashed');
         this.interactions.clear({ source: 'codex-native' });
         this.interactions.clear({ source: 'toolbox' });
-        for (const timer of this.interactionTimers.values()) clearTimeout(timer);
-        this.interactionTimers.clear();
+        this.interactionService.clearTimers();
         this.knownOperationRecoveryPromise = null;
         this.transport = null;
         this._transportWired = false;
@@ -2684,44 +2530,11 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     async _failClosedNativeApprovals(reason, options = {}) {
-        const respond = options.respond !== false;
-        for (const [requestId, request] of [...this.serverRequests.entries()]) {
-            if (request.method === 'item/tool/call') continue;
-            this.serverRequests.delete(requestId);
-            this._clearInteractionTimer(requestId);
-            this.interactions.complete('codex-native', requestId, 'expired', request.runtimeGeneration);
-            if (respond) {
-                try {
-                    this._failClosedServerRequest({ ...request, id: requestId }, reason);
-                } catch (error) {
-                    this.emit('diagnostic', `Could not fail-close Codex request ${requestId}: ${error.message}`);
-                }
-            }
-            this._sendUiEvent({
-                type: 'approval.resolved',
-                topicId: approvalProjection(requestId, request, this.repository).topicId,
-                sessionId: approvalProjection(requestId, request, this.repository).sessionId,
-                approvalId: requestId,
-                payload: { approvalId: requestId, decision: 'decline', scope: 'codex-native', reason },
-            });
-        }
+        return this.interactionService.failClosedNativeApprovals(reason, options);
     }
 
     _failClosedServerRequest(message, reason) {
-        const requestId = String(message?.id || '');
-        const response = failClosedServerRequestResponse(message?.method);
-        if (response) this.transport?.respond(requestId, response);
-        else this.transport?.respondError(requestId, -32002, reason || `Unsupported Codex server request: ${message?.method || '(empty)'}`);
-        this.serverRequests.delete(requestId);
-        this._clearInteractionTimer(requestId);
-        this.interactions.complete('codex-native', requestId, 'rejected', message.runtimeGeneration);
-        this._sendUiEvent({
-            type: 'interaction.rejected',
-            topicId: approvalProjection(requestId, message, this.repository).topicId,
-            sessionId: approvalProjection(requestId, message, this.repository).sessionId,
-            turnId: message?.params?.turnId || null,
-            payload: { requestId, method: message?.method || null, reason: reason || 'Unsupported server request' },
-        });
+        return this.interactionService.failClosedServerRequest(message, reason);
     }
 
     async _interruptDynamicCalls(reason) {
@@ -3030,18 +2843,7 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     async _failClosedToolboxApprovals(reason) {
-        const approvals = [...this.toolboxApprovals.values()];
-        this.toolboxApprovals.clear();
-        for (const approval of approvals) {
-            const requestId = approval.requestId;
-            await this.bridge?.respondApproval({ requestId, approved: false, reason }).catch(() => null);
-            this.interactions.complete('toolbox', requestId, 'expired', approval.generation);
-            this._sendUiEvent({
-                type: 'approval.resolved',
-                approvalId: requestId,
-                payload: { approvalId: requestId, decision: 'decline', scope: 'toolbox', reason },
-            });
-        }
+        return this.interactionService.failClosedToolboxApprovals(reason);
     }
 
     _sendUiEvent(event) {

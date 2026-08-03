@@ -9,6 +9,7 @@ const requiredFiles = [
     'modules/codex-runtime/appServerTransport.js',
     'modules/codex-runtime/runtimeManager.js',
     'modules/codex-runtime/runtime-lifecycle-service.js',
+    'modules/codex-runtime/runtime-interaction-service.js',
     'modules/codex-runtime/runtime-normalizers.js',
     'modules/codex-runtime/workspaceService.js',
     'modules/codex-runtime/workspacePolicy.js',
