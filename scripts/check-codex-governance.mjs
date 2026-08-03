@@ -164,6 +164,8 @@ for (const relative of identityBoundaryFiles) {
 const runtimeFacadeLineCount = fs.readFileSync(path.join(root, 'modules/codex-runtime/runtimeManager.js'), 'utf8').split(/\r?\n/).length;
 if (runtimeFacadeLineCount > 600) errors.push(`runtimeManager.js exceeds facade ceiling: ${runtimeFacadeLineCount} lines`);
 const runtimeManagerSource = fs.readFileSync(path.join(root, 'modules/codex-runtime/runtimeManagerImplementation.js'), 'utf8');
+const runtimeManagerLines = runtimeManagerSource.split(/\r?\n/).length;
+if (runtimeManagerLines > 600) errors.push(`runtimeManagerImplementation.js exceeds facade ceiling: ${runtimeManagerLines} lines`);
 const runtimeNormalizersPath = path.join(root, 'modules/codex-runtime/runtime-normalizers.js');
 const runtimeInteractionServicePath = path.join(root, 'modules/codex-runtime/runtime-interaction-service.js');
 const runtimeToolboxServicePath = path.join(root, 'modules/codex-runtime/runtime-toolbox-service.js');
@@ -173,6 +175,9 @@ const runtimeTurnServicePath = path.join(root, 'modules/codex-runtime/runtime-tu
 const runtimeConfigServicePath = path.join(root, 'modules/codex-runtime/runtime-config-service.js');
 const runtimeProfileServicePath = path.join(root, 'modules/codex-runtime/runtime-profile-service.js');
 const runtimeHostServicePath = path.join(root, 'modules/codex-runtime/runtime-host-service.js');
+const runtimePolicyServicePath = path.join(root, 'modules/codex-runtime/runtime-policy-service.js');
+const runtimeEventServicePath = path.join(root, 'modules/codex-runtime/runtime-event-service.js');
+const runtimeServiceGraphPath = path.join(root, 'modules/codex-runtime/runtime-service-graph.js');
 if (!fs.existsSync(runtimeToolboxServicePath)) {
     errors.push('Runtime ToolBox service is missing');
 } else if (fs.readFileSync(runtimeToolboxServicePath, 'utf8').split(/\r?\n/).length > 900) {
@@ -212,6 +217,14 @@ if (!fs.existsSync(runtimeHostServicePath)) {
     errors.push('Runtime host service is missing');
 } else if (fs.readFileSync(runtimeHostServicePath, 'utf8').split(/\r?\n/).length > 900) {
     errors.push('runtime-host-service.js exceeds module ceiling');
+}
+for (const [label, filePath] of [
+    ['Runtime policy service', runtimePolicyServicePath],
+    ['Runtime event service', runtimeEventServicePath],
+    ['Runtime service graph', runtimeServiceGraphPath],
+]) {
+    if (!fs.existsSync(filePath)) errors.push(`${label} is missing`);
+    else if (fs.readFileSync(filePath, 'utf8').split(/\r?\n/).length > 900) errors.push(`${path.basename(filePath)} exceeds module ceiling`);
 }
 if (!fs.existsSync(runtimeNormalizersPath)) {
     errors.push('Runtime pure normalizers module is missing');

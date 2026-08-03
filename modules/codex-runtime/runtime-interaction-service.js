@@ -13,7 +13,10 @@ const {
     interactionExpiry,
     normalizeApprovalDecision,
     normalizeInteractionResponse,
+    pendingInputProjection,
+    resolveSessionIdInput,
     sanitizeInteractionPayload,
+    submissionDedupeKey,
 } = require('./runtime-normalizers');
 
 class RuntimeInteractionService {
@@ -213,6 +216,84 @@ class RuntimeInteractionService {
             payload: { source, requestId: pendingId, kind, state: 'completed' },
         });
         return { requestId: pendingId, resolved: true, kind };
+    }
+
+    listQueue({ sessionId, topicId } = {}) {
+        this.context.ensureProjectionStore();
+        const idValue = resolveSessionIdInput({ sessionId, topicId });
+        const repository = this.context.repository();
+        if (!repository.getSession(idValue)) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
+        return { items: repository.listPendingInputs(idValue).map(pendingInputProjection) };
+    }
+
+    replaceQueue({ sessionId, topicId, interactions = [] } = {}) {
+        this.context.assertProjectionWritable();
+        const idValue = resolveSessionIdInput({ sessionId, topicId });
+        const repository = this.context.repository();
+        if (!repository.getSession(idValue)) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
+        const requested = new Map((Array.isArray(interactions) ? interactions : []).map((item) => [
+            String(item?.inputId || item?.interactionId || ''), item,
+        ]).filter(([inputId]) => inputId));
+        for (const current of repository.listPendingInputs(idValue)) {
+            const next = requested.get(current.inputId);
+            if (current.state !== 'queued') continue;
+            if (!next) {
+                repository.removePendingInput(current.inputId);
+                continue;
+            }
+            const prompt = String(next.prompt || next.text || '').trim();
+            if (!prompt) throw new CodexAppServerError('INVALID_INPUT', 'Queued follow-up message must not be empty');
+            if (prompt !== current.prompt) {
+                repository.updatePendingInput(current.inputId, { prompt, dedupeKey: submissionDedupeKey(prompt, []) });
+            }
+        }
+        return this.listQueue({ sessionId: idValue });
+    }
+
+    clearQueue({ sessionId, topicId } = {}) {
+        this.context.assertProjectionWritable();
+        const idValue = resolveSessionIdInput({ sessionId, topicId });
+        const repository = this.context.repository();
+        if (!repository.getSession(idValue)) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
+        for (const current of repository.listPendingInputs(idValue)) {
+            if (['queued', 'failed'].includes(current.state)) repository.removePendingInput(current.inputId);
+        }
+        return this.listQueue({ sessionId: idValue });
+    }
+
+    async resolvePendingInput({ sessionId, topicId, inputId, action } = {}) {
+        this.context.assertProjectionWritable();
+        const idValue = resolveSessionIdInput({ sessionId, topicId });
+        const repository = this.context.repository();
+        const targetId = String(inputId || '').trim();
+        if (!repository.getSession(idValue)) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
+        const pending = repository.listPendingInputs(idValue).find((entry) => entry.inputId === targetId);
+        if (!pending) throw new CodexAppServerError('NOT_FOUND', 'Pending input was not found');
+        if (action === 'discard') {
+            if (!['queued', 'failed', 'uncertain'].includes(pending.state)) {
+                throw new CodexAppServerError('PENDING_INPUT_BUSY', 'Dispatching or accepted input cannot be discarded');
+            }
+            repository.removePendingInput(targetId);
+            return { resolved: true, action, items: repository.listPendingInputs(idValue).map(pendingInputProjection) };
+        }
+        if (action !== 'resend' || !['failed', 'uncertain'].includes(pending.state)) {
+            throw new CodexAppServerError('INVALID_PENDING_INPUT_ACTION',
+                'Only failed or uncertain input can be explicitly resent');
+        }
+        const retried = repository.retryPendingInput(targetId);
+        const runtimeSession = await this.context.ensureSessionRuntime({
+            sessionId: idValue,
+            reason: 'explicit-input-resend',
+        });
+        if (this.context.threadStates().get(runtimeSession.threadId)?.activity !== 'running') {
+            await this.context.drainFollowUpQueue(runtimeSession);
+        }
+        return {
+            resolved: true,
+            action,
+            input: retried ? pendingInputProjection(retried) : null,
+            items: repository.listPendingInputs(idValue).map(pendingInputProjection),
+        };
     }
 
     async failClosedNativeApprovals(reason, { respond = true } = {}) {

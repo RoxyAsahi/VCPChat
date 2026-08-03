@@ -1,6 +1,5 @@
 'use strict';
 
-const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 const { EventEmitter } = require('events');
@@ -10,44 +9,17 @@ const { AgentProjectionRepository, CodexProjectionProjector } = require('./proje
 const { ToolboxBridgeTransport } = require('./toolboxBridgeTransport');
 const { ToolboxResponsesAdapter } = require('./toolboxResponsesAdapter');
 const { AttachmentRegistry } = require('./attachmentRegistry');
-const { RuntimeInteractionService } = require('./runtime-interaction-service');
-const { RuntimeToolboxService } = require('./runtime-toolbox-service');
-const { RuntimeRecoveryService } = require('./runtime-recovery-service');
-const { RuntimeSessionService } = require('./runtime-session-service');
-const { RuntimeTurnService } = require('./runtime-turn-service');
-const { RuntimeConfigService } = require('./runtime-config-service');
-const { RuntimeProfileService } = require('./runtime-profile-service');
-const { RuntimeHostService } = require('./runtime-host-service');
-const {
-    instructionConfigChanged,
-    requiresFreshCodexManagedSession,
-    threadSettingsPatch,
-} = require('./runtimeConfig');
+const { attachRuntimeServiceGraph } = require('./runtime-service-graph');
 const {
     capabilityMatrix,
 } = require('./protocolCapabilities');
 const {
     approvalProjection,
-    buildTurnInput,
     compatibilityRuntime,
-    compatibilitySession,
-    hasDurableProjection,
-    isConfirmedThreadNotFound,
-    isUncertainRemoteMutation,
-    normalizeInstructionMode,
-    normalizePersonality,
-    pendingInputProjection,
     resolveSessionIdInput,
-    sanitizeInteractionPayload,
     serializeError,
-    sessionConfigResult,
-    submissionDedupeKey,
     vcpInvokeTool,
 } = require('./runtime-normalizers');
-
-function id(prefix) {
-    return `${prefix}_${crypto.randomUUID()}`;
-}
 
 class CodexRuntimeManager extends EventEmitter {
     constructor(options = {}) {
@@ -81,69 +53,6 @@ class CodexRuntimeManager extends EventEmitter {
         // `thread/resume` before VChat sends a new turn to an existing Thread.
         this.resumedThreadIds = new Set();
         this.resumingThreads = new Map();
-        this.interactionService = new RuntimeInteractionService({
-            repository: () => this.repository,
-            transport: () => this.transport,
-            bridge: () => this.bridge,
-            runtimeGeneration: () => this.runtimeGeneration,
-            workbenchMounted: () => this.workbenchMounted,
-            profileForRequest: (request) => this._profileForRequest(request),
-            sendUiEvent: (event) => this._sendUiEvent(event),
-            diagnostic: (message) => this.emit('diagnostic', message),
-        });
-        // Compatibility aliases for existing diagnostics/tests. State
-        // ownership belongs to RuntimeInteractionService.
-        this.serverRequests = this.interactionService.serverRequests;
-        this.interactions = this.interactionService.interactions;
-        this.interactionTimers = this.interactionService.interactionTimers;
-        this.toolboxApprovals = this.interactionService.toolboxApprovals;
-        this.toolboxService = new RuntimeToolboxService({
-            transport: () => this.transport,
-            bridge: () => this.bridge,
-            runtimeGeneration: () => this.runtimeGeneration,
-            toolboxAuthorityGeneration: () => this.toolboxAuthorityGeneration,
-            interactions: this.interactionService,
-            sendUiEvent: (event) => this._sendUiEvent(event),
-            diagnostic: (message) => this.emit('diagnostic', message),
-        });
-        this.dynamicCalls = this.toolboxService.dynamicCalls;
-        this.recoveryService = new RuntimeRecoveryService({
-            ensureProjectionStore: () => this.ensureProjectionStore(),
-            assertProjectionWritable: () => this._assertProjectionWritable(),
-            repository: () => this.repository,
-            transport: () => this.transport,
-            projector: () => this.projector,
-            threadStates: () => this.threadStates,
-            start: () => this.start(),
-            captureGeneration: () => this._captureGeneration(),
-            assertGeneration: (generation) => this._assertGeneration(generation),
-            recoveryPromise: () => this.knownOperationRecoveryPromise,
-            setRecoveryPromise: (promise) => { this.knownOperationRecoveryPromise = promise; },
-            setLastError: (error) => { this.lastError = error; },
-            diagnostic: (name, fields) => this._diagnostic(name, fields),
-        });
-        this.sessionService = new RuntimeSessionService({
-            ensureProjectionStore: () => this.ensureProjectionStore(),
-            assertProjectionWritable: () => this._assertProjectionWritable(),
-            repository: () => this.repository,
-            transport: () => this.transport,
-            projector: () => this.projector,
-            start: () => this.start(),
-            captureGeneration: () => this._captureGeneration(),
-            assertGeneration: (generation) => this._assertGeneration(generation),
-            repairSessionConfig: (session) => this._repairSessionConfig(session),
-            repairSessionIdentity: (session) => this._repairSessionIdentity(session),
-            resolveCanonicalAgent: (agentId, options) => this._resolveCanonicalAgent(agentId, options),
-            configSnapshot: (options) => this._configSnapshot(options),
-            createId: (prefix) => id(prefix),
-            projectRoot: () => this.projectRoot,
-            diagnosticClock: () => this.diagnosticClock(),
-            diagnostic: (name, fields) => this._diagnostic(name, fields),
-            attachments: () => this.attachments,
-            faultInjection: () => this.faultInjection,
-            assertLifecycleIdle: (session) => this._assertLifecycleIdle(session),
-            toolboxApprovalCount: () => this.toolboxApprovals.size,
-        });
         this.uiEventSequence = 0;
         this.workbenchMounted = false;
         this.intentionalStop = false;
@@ -167,159 +76,7 @@ class CodexRuntimeManager extends EventEmitter {
         this.faultInjection = options.faultInjection || {};
         this.knownOperationRecoveryPromise = null;
         this._defaultStartTurnMethod = this._startTurn;
-        this.turnService = new RuntimeTurnService({
-            ensureProjectionStore: () => this.ensureProjectionStore(),
-            assertProjectionWritable: () => this._assertProjectionWritable(),
-            repository: () => this.repository,
-            transport: () => this.transport,
-            bridge: () => this.bridge,
-            responsesAdapter: () => this.responsesAdapter,
-            attachments: () => this.attachments,
-            dynamicCalls: () => this.dynamicCalls,
-            start: () => this.start(),
-            captureGeneration: () => this._captureGeneration(),
-            assertGeneration: (generation) => this._assertGeneration(generation),
-            repairSessionConfig: (session) => this._repairSessionConfig(session),
-            repairSessionIdentity: (session) => this._repairSessionIdentity(session),
-            configSnapshot: (options) => this._configSnapshot(options),
-            runtimePolicyParams: (config, options) => this._runtimePolicyParams(config, options),
-            threadInstructionParams: (config) => this._threadInstructionParams(config),
-            effectiveReasoningEffort: (config) => this._effectiveReasoningEffort(config),
-            applySessionRuntimeConfig: (sessionId, options) => this._applySessionRuntimeConfig(sessionId, options),
-            sendSessionConfigEvent: (type, session, error) => this._sendSessionConfigEvent(type, session, error),
-            sendUiEvent: (event) => this._sendUiEvent(event),
-            readSession: (options) => this.readTopic(options),
-            scheduleSessionConfigApply: (sessionId) => this._scheduleSessionConfigApply(sessionId),
-            rememberIdleWarmSession: (sessionId) => this._rememberIdleWarmSession(sessionId),
-            assertLifecycleIdle: (session) => this._assertLifecycleIdle(session),
-            createId: (prefix) => id(prefix),
-            diagnosticClock: () => this.diagnosticClock(),
-            diagnostic: (name, fields) => this._diagnostic(name, fields),
-            faultInjection: () => this.faultInjection,
-            sessionWarmPromises: () => this.sessionWarmPromises,
-            turnStartPromises: () => this.turnStartPromises,
-            followUpDrainPromises: () => this.followUpDrainPromises,
-            compactionWaiters: () => this.compactionWaiters,
-            resumedThreadIds: () => this.resumedThreadIds,
-            resumingThreads: () => this.resumingThreads,
-            threadStates: () => this.threadStates,
-            configApplyTargets: () => this.configApplyTargets,
-            idleWarmSessions: () => this.idleWarmSessions,
-            startTurnOverride: () => this._startTurn,
-            defaultStartTurnMethod: () => this._defaultStartTurnMethod,
-        });
-        this.configService = new RuntimeConfigService({
-            ensureProjectionStore: () => this.ensureProjectionStore(),
-            assertProjectionWritable: () => this._assertProjectionWritable(),
-            repository: () => this.repository,
-            transport: () => this.transport,
-            start: () => this.start(),
-            captureGeneration: () => this._captureGeneration(),
-            assertGeneration: (generation) => this._assertGeneration(generation),
-            resumeSession: (session) => this._resumeSession(session),
-            createSession: (options) => this.createTopic(options),
-            getSettings: () => this.getSettings() || {},
-            setSettings: () => this.setSettings,
-            projectRoot: () => this.projectRoot,
-            getModels: () => this.getModels?.() || [],
-            validateReasoningEffort: (model, effort, options) => this._validateReasoningEffort(model, effort, options),
-            reasoningEffortsForModel: (model) => this._reasoningEffortsForModel(model),
-            sendUiEvent: (event) => this._sendUiEvent(event),
-            setLastError: (error) => { this.lastError = error; },
-            configApplyPromises: () => this.configApplyPromises,
-            configApplyTargets: () => this.configApplyTargets,
-            resumedThreadIds: () => this.resumedThreadIds,
-            threadStates: () => this.threadStates,
-            runtimeGeneration: () => this.runtimeGeneration,
-        });
-        this.profileService = new RuntimeProfileService({
-            ensureProjectionStore: () => this.ensureProjectionStore(),
-            assertProjectionWritable: () => this._assertProjectionWritable(),
-            repository: () => this.repository,
-            agentsDir: () => this.agentsDir,
-            getSettings: () => this.getSettings() || {},
-            getModels: () => this.getModels?.() || [],
-            createSession: (options) => this.createTopic(options),
-        });
-        this.hostService = new RuntimeHostService({
-            assertProjectionWritable: () => this._assertProjectionWritable(),
-            ensureProjectionStore: () => this.ensureProjectionStore(),
-            repository: () => this.repository,
-            projector: () => this.projector,
-            transport: () => this.transport,
-            setTransport: (value) => { this.transport = value; },
-            bridge: () => this.bridge,
-            setBridge: (value) => { this.bridge = value; },
-            responsesAdapter: () => this.responsesAdapter,
-            setResponsesAdapter: (value) => { this.responsesAdapter = value; },
-            transportFactory: () => this.transportFactory,
-            bridgeFactory: () => this.bridgeFactory,
-            responsesAdapterFactory: () => this.responsesAdapterFactory,
-            getSettings: () => this.getSettings() || {},
-            getStatus: () => this.getStatus(),
-            projectRoot: () => this.projectRoot,
-            state: () => this.state,
-            setState: (value) => { this.state = value; },
-            lastError: () => this.lastError,
-            setLastError: (value) => { this.lastError = value; },
-            intentionalStop: () => this.intentionalStop,
-            setIntentionalStop: (value) => { this.intentionalStop = value; },
-            startPromise: () => this.startPromise,
-            setStartPromise: (value) => { this.startPromise = value; },
-            runtimeRetryAfter: () => this.runtimeRetryAfter,
-            setRuntimeRetryAfter: (value) => { this.runtimeRetryAfter = value; },
-            runtimeStartFailures: () => this.runtimeStartFailures,
-            setRuntimeStartFailures: (value) => { this.runtimeStartFailures = value; },
-            diagnosticClock: () => this.diagnosticClock(),
-            diagnostic: (name, fields) => this._diagnostic(name, fields),
-            emitDiagnostic: (message) => this.emit('diagnostic', message),
-            beginGeneration: () => {
-                this.generationScope = this.lifecycle.begin('Runtime superseded by a new generation');
-                this.runtimeGeneration = this.lifecycle.value;
-                this.interactions.setGeneration('codex-native', this.runtimeGeneration);
-            },
-            closeGeneration: (reason) => this.lifecycle.close(reason),
-            invalidateGeneration: (reason) => {
-                this.lifecycle.invalidate(reason);
-                this.runtimeGeneration = this.lifecycle.value;
-                this.generationScope = this.lifecycle.capture();
-            },
-            captureGeneration: () => this._captureGeneration(),
-            assertGeneration: (generation) => this._assertGeneration(generation),
-            runtimeGeneration: () => this.runtimeGeneration,
-            normalizeUnboundThreadOperations: () => this._normalizeUnboundThreadOperations(),
-            recoverKnownThreadOperations: () => this._recoverKnownThreadOperations(),
-            clearScheduledConfigApplies: () => this.configService?.clearScheduledApplies(),
-            failClosedNativeApprovals: (reason, options) => this._failClosedNativeApprovals(reason, options),
-            interruptDynamicCalls: (reason) => this._interruptDynamicCalls(reason),
-            failClosedToolboxApprovals: (reason) => this._failClosedToolboxApprovals(reason),
-            clearInteractions: (source) => this.interactions.clear({ source }),
-            clearInteractionTimers: () => this.interactionService.clearTimers(),
-            advanceToolboxAuthorityGeneration: () => {
-                this.toolboxAuthorityGeneration += 1;
-                this.interactions.setGeneration('toolbox', this.toolboxAuthorityGeneration);
-            },
-            acceptServerRequest: (message) => this.interactionService.acceptServerRequest(message),
-            handleDynamicToolCall: (message) => this._handleDynamicToolCall(message),
-            handleBridgeEvent: (message) => this._handleBridgeEvent(message),
-            sendUiEvent: (event) => this._sendUiEvent(event),
-            sendSessionConfigEvent: (type, session) => this._sendSessionConfigEvent(type, session),
-            updateThreadState: (message, session) => this._updateThreadState(message, session),
-            sendEvent: (event) => { this.sendEvent(event); this.emit('event', event); },
-            readSession: (options) => this.readTopic(options),
-            threadStates: () => this.threadStates,
-            compactionWaiters: () => this.compactionWaiters,
-            configApplyTargets: () => this.configApplyTargets,
-            setKnownOperationRecoveryPromise: (value) => { this.knownOperationRecoveryPromise = value; },
-            clearCrashRegistries: () => {
-                this.threadStates.clear();
-                this.resumedThreadIds.clear();
-                this.resumingThreads.clear();
-                this.configApplyPromises.clear();
-                this.configApplyTargets.clear();
-            },
-            clearHostResources: () => this._clearHostResources(),
-        });
+        attachRuntimeServiceGraph(this);
     }
 
     getStatus() {
@@ -599,79 +356,19 @@ class CodexRuntimeManager extends EventEmitter {
         return this.sessionService.export({ sessionId, topicId, format });
     }
     async listInteractionQueue({ sessionId, topicId } = {}) {
-        this.ensureProjectionStore();
-        const idValue = resolveSessionIdInput({ sessionId, topicId });
-        const session = this.repository.getSession(idValue);
-        if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
-        return { items: this.repository.listPendingInputs(idValue).map(pendingInputProjection) };
+        return this.interactionService.listQueue({ sessionId, topicId });
     }
 
     async replaceInteractionQueue({ sessionId, topicId, interactions = [] } = {}) {
-        this._assertProjectionWritable();
-        const idValue = resolveSessionIdInput({ sessionId, topicId });
-        const session = this.repository.getSession(idValue);
-        if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
-        const requested = new Map((Array.isArray(interactions) ? interactions : []).map((item) => [
-            String(item?.inputId || item?.interactionId || ''), item,
-        ]).filter(([inputId]) => inputId));
-        for (const current of this.repository.listPendingInputs(idValue)) {
-            const next = requested.get(current.inputId);
-            if (current.state !== 'queued') continue;
-            if (!next) {
-                this.repository.removePendingInput(current.inputId);
-                continue;
-            }
-            const prompt = String(next.prompt || next.text || '').trim();
-            if (!prompt) throw new CodexAppServerError('INVALID_INPUT', 'Queued follow-up message must not be empty');
-            if (prompt !== current.prompt) {
-                this.repository.updatePendingInput(current.inputId, {
-                    prompt,
-                    dedupeKey: submissionDedupeKey(prompt, []),
-                });
-            }
-        }
-        return this.listInteractionQueue({ sessionId: idValue });
+        return this.interactionService.replaceQueue({ sessionId, topicId, interactions });
     }
 
     async clearInteractionQueue({ sessionId, topicId } = {}) {
-        this._assertProjectionWritable();
-        const idValue = resolveSessionIdInput({ sessionId, topicId });
-        const session = this.repository.getSession(idValue);
-        if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
-        for (const current of this.repository.listPendingInputs(idValue)) {
-            if (['queued', 'failed'].includes(current.state)) this.repository.removePendingInput(current.inputId);
-        }
-        return this.listInteractionQueue({ sessionId: idValue });
+        return this.interactionService.clearQueue({ sessionId, topicId });
     }
 
     async resolvePendingInput({ sessionId, topicId, inputId, action } = {}) {
-        this._assertProjectionWritable();
-        const idValue = resolveSessionIdInput({ sessionId, topicId });
-        const targetId = String(inputId || '').trim();
-        const session = this.repository.getSession(idValue);
-        if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
-        const pending = this.repository.listPendingInputs(idValue).find((entry) => entry.inputId === targetId);
-        if (!pending) throw new CodexAppServerError('NOT_FOUND', 'Pending input was not found');
-        if (action === 'discard') {
-            if (!['queued', 'failed', 'uncertain'].includes(pending.state)) {
-                throw new CodexAppServerError('PENDING_INPUT_BUSY', 'Dispatching or accepted input cannot be discarded');
-            }
-            this.repository.removePendingInput(targetId);
-            return { resolved: true, action, items: this.repository.listPendingInputs(idValue).map(pendingInputProjection) };
-        }
-        if (action !== 'resend' || !['failed', 'uncertain'].includes(pending.state)) {
-            throw new CodexAppServerError('INVALID_PENDING_INPUT_ACTION', 'Only failed or uncertain input can be explicitly resent');
-        }
-        const retried = this.repository.retryPendingInput(targetId);
-        const runtimeSession = await this.ensureSessionRuntime({ sessionId: idValue, reason: 'explicit-input-resend' });
-        const state = this.threadStates.get(runtimeSession.threadId);
-        if (state?.activity !== 'running') await this._drainFollowUpQueue(runtimeSession);
-        return {
-            resolved: true,
-            action,
-            input: retried ? pendingInputProjection(retried) : null,
-            items: this.repository.listPendingInputs(idValue).map(pendingInputProjection),
-        };
+        return this.interactionService.resolvePendingInput({ sessionId, topicId, inputId, action });
     }
     getWorkbenchSettings() {
         return this.configService.getWorkbenchSettings();
@@ -767,15 +464,7 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     _rememberIdleWarmSession(sessionId) {
-        if (this.maxIdleWarmSessions <= 0) return;
-        this.idleWarmSessions.delete(sessionId);
-        this.idleWarmSessions.set(sessionId, Date.now());
-        while (this.idleWarmSessions.size > this.maxIdleWarmSessions) {
-            const oldest = this.idleWarmSessions.keys().next().value;
-            this.idleWarmSessions.delete(oldest);
-            const evicted = this.repository?.getSession(oldest);
-            if (evicted?.threadId) this.resumedThreadIds.delete(evicted.threadId);
-        }
+        return this.eventService.rememberIdleWarmSession(sessionId);
     }
 
     _diagnostic(name, fields = {}) {
@@ -796,44 +485,7 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     _runtimePolicyParams(config = {}, { starting = false } = {}) {
-        const provider = this._providerParams();
-        if (config.executionProfile !== 'toolbox-only') return provider;
-        const policyConfig = {
-            ...(provider.config || {}),
-            // ToolBox-backed Threads use the VChat Agent prompt as their only
-            // instruction source. Native Codex permission, capability, skill,
-            // project-doc and environment context is unnecessary because the
-            // model can only call the allowlisted vcp_invoke dynamic tool.
-            include_permissions_instructions: false,
-            include_apps_instructions: false,
-            include_collaboration_mode_instructions: false,
-            include_environment_context: false,
-            project_doc_max_bytes: 0,
-            'skills.include_instructions': false,
-            model_reasoning_summary: 'detailed',
-            web_search: 'disabled',
-            mcp_servers: {},
-            'tools.update_plan.enabled': false,
-            'tools.experimental_request_user_input.enabled': false,
-            'features.shell_tool': false,
-            'features.deferred_executor': false,
-            'features.request_permissions_tool': false,
-            'features.standalone_web_search': false,
-            'features.memory_tool': false,
-            'features.collab': false,
-            'features.multi_agent_v2': false,
-            'features.apps': false,
-            'features.enable_mcp_apps': false,
-            'features.tool_suggest': false,
-            'features.plugins': false,
-            'features.token_budget': false,
-            'features.current_time_reminder': false,
-        };
-        return {
-            ...provider,
-            config: policyConfig,
-            ...(starting ? { environments: [] } : {}),
-        };
+        return this.policyService.runtimePolicyParams(config, { starting });
     }
 
     _reasoningEffortsForModel(modelId) {
@@ -849,30 +501,7 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     _threadInstructionParams(config = {}) {
-        if (config.executionProfile && config.executionProfile !== 'toolbox-only') {
-            return {
-                ...(String(config.baseInstructions || '').trim()
-                    ? { baseInstructions: String(config.baseInstructions).trim() } : {}),
-                ...(String(config.developerInstructions || '').trim()
-                    ? { developerInstructions: String(config.developerInstructions).trim() } : {}),
-                ...(normalizePersonality(config.personality) !== 'none'
-                    ? { personality: normalizePersonality(config.personality) } : {}),
-            };
-        }
-        const mode = normalizeInstructionMode(config.instructionMode, config.baseInstructions);
-        if (mode === 'codex-managed') {
-            const personality = normalizePersonality(config.personality);
-            return {
-                ...(personality !== 'none' ? { personality } : {}),
-                ...(String(config.developerInstructions || '').trim()
-                    ? { developerInstructions: String(config.developerInstructions).trim() } : {}),
-            };
-        }
-        const baseInstructions = String(config.baseInstructions || '').trim();
-        if (!baseInstructions) {
-            throw new CodexAppServerError('AGENT_IDENTITY_MISSING', 'VChat identity mode requires baseInstructions');
-        }
-        return { baseInstructions };
+        return this.policyService.threadInstructionParams(config);
     }
 
     _providerParams() {
@@ -940,32 +569,7 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     _updateThreadState(message, session) {
-        if (!session?.threadId) return;
-        // A preceding notification handler (notably thread/settings/updated)
-        // may already have advanced desired/applied config revisions. Never
-        // persist the stale Session object captured before that mutation.
-        const durableSession = this.repository.getSession(session.sessionId) || session;
-        const previous = this.threadStates.get(session.threadId) || { activity: 'idle', activeTurnId: null };
-        let next = previous;
-        if (message.method === 'turn/started') {
-            next = { activity: 'running', activeTurnId: message.params?.turn?.id || null };
-        } else if (message.method === 'turn/completed') {
-            next = { activity: 'idle', activeTurnId: null };
-        } else if (message.method === 'thread/status/changed') {
-            const active = message.params?.status?.type === 'active';
-            next = { ...previous, activity: active ? 'running' : 'idle', activeTurnId: active ? previous.activeTurnId : null };
-        }
-        this.threadStates.set(session.threadId, next);
-        this.repository.saveSession({ ...durableSession, state: next.activity, updatedAt: Date.now() });
-        if (next.activity === 'idle') this._rememberIdleWarmSession(durableSession.sessionId);
-        else this.idleWarmSessions.delete(durableSession.sessionId);
-        if (message.method === 'turn/completed' && next.activity === 'idle') {
-            const latest = this.repository.getSession(durableSession.sessionId);
-            if (latest && latest.appliedRuntimeConfigRevision !== latest.configRevision) {
-                this._scheduleSessionConfigApply(latest.sessionId);
-            }
-            void this._drainFollowUpQueue(latest || durableSession);
-        }
+        return this.eventService.updateThreadState(message, session);
     }
 
     async _drainFollowUpQueue(session) {
@@ -985,31 +589,7 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     _sendUiEvent(event) {
-        if (event.sessionId && this.repository) {
-            if (event.type === 'context.usage') {
-                this.repository.updateActivity(event.sessionId, { usage: sanitizeInteractionPayload(event.payload || {}) });
-            } else if (event.type === 'compaction.started') {
-                this.repository.updateActivity(event.sessionId, { compaction: { state: 'started', summary: '', error: '' } });
-            } else if (event.type === 'compaction.completed') {
-                this.repository.updateActivity(event.sessionId, { compaction: {
-                    state: 'completed', summary: String(event.payload?.summary || '').slice(0, 2_000), error: '',
-                } });
-            } else if (event.type === 'compaction.failed') {
-                this.repository.updateActivity(event.sessionId, { compaction: {
-                    state: 'failed', summary: '', error: String(event.payload?.error || 'Context compaction failed').slice(0, 2_000),
-                } });
-            }
-        }
-        this.uiEventSequence += 1;
-        const envelope = {
-            runtime: 'codex',
-            eventId: event.eventId || `codex-ui:${this.uiEventSequence}:${crypto.randomUUID()}`,
-            sequence: this.uiEventSequence,
-            timestamp: Date.now(),
-            ...event,
-        };
-        this.sendEvent(envelope);
-        this.emit('event', envelope);
+        return this.eventService.sendUiEvent(event);
     }
 }
 
