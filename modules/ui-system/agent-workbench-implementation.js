@@ -2,11 +2,7 @@ import { register } from './next-ui-apps.js';
 import { createWorkbenchController } from './agent-workbench-controller.js';
 import { projectSession } from './agent-workbench-projections.js';
 import { deriveWorkbenchViewState } from './agent-workbench-store.js';
-import {
-    createAgentTimelineParts,
-    projectVcpToolPresentation,
-    reconcileAgentTimeline,
-} from './agent-workbench-timeline.js';
+import { projectVcpToolPresentation } from './agent-workbench-timeline.js';
 import { createAgentBlockPresentation, createAgentMessagePresentation } from './agent-presentation/index.js';
 import { createWorkspacePathRef, createWorkspaceTreeModel } from './agent-workspace-model.js';
 import { createSessionDockModel } from './agent-session-dock.js';
@@ -42,6 +38,7 @@ import { createAgentNotificationView } from './agent-notification-view.js';
 import { createAgentApprovalView } from './agent-approval-view.js';
 import { createAgentWorkbenchTopicFlow } from './agent-workbench-topic-flow.js';
 import { createAgentWorkspaceCoordinator } from './agent-workspace-coordinator.js';
+import { createAgentWorkbenchTimelineView } from './agent-workbench-timeline-view.js';
 
 // Build Agent identities are independent from normal-chat Agents. Keep Nova
 // visible synchronously while the authoritative Build catalog loads.
@@ -593,6 +590,15 @@ function mountWorkbench(container) {
         },
     });
     fullPresentation.bindInteractions();
+    const timelineView = createAgentWorkbenchTimelineView({
+        refs: shellView.refs,
+        rows: state.timelineRows,
+        callbacks: fullPresentation.timelineCallbacks,
+        actions: {
+            isFollowing: isFollowingContainer,
+            scroll: scrollFeed,
+        },
+    });
 
     // One renderer-only ticker keeps Host-owned deadlines visible. It never
     // resolves an approval; Main's approval.resolved event is the sole
@@ -1652,71 +1658,19 @@ function mountWorkbench(container) {
     }
 
     function renderFeed() {
-        // Preserve a reader's position during control updates. Main is
-        // the ordering authority; this renderer only reconciles keyed rows.
-        const follow = isFollowingContainer(feed);
         const current = store.getState();
-        const clearEmpty = () => {
-            state.timelineEmpty?.remove();
-            state.timelineEmpty = null;
-        };
-        const showEmpty = (text) => {
-            reconcileAgentTimeline(feedItems, [], {}, state.timelineRows);
-            if (!state.timelineEmpty) {
-                state.timelineEmpty = node('div', 'agent-chat-empty-conversation');
-                feedItems.append(state.timelineEmpty);
-            }
-            state.timelineEmpty.textContent = text;
-        };
-        if (!current.selectedSessionId && !current.selectedTopic?.topicId) {
-            showEmpty('创建一个 Agent 会话，即可开始与 VCPToolBox 协作。');
-            return;
-        }
-        const timeline = createAgentTimelineParts(current);
-        const pendingTurnStart = selectedTurnStart(current);
-        if (pendingTurnStart) {
-            const selectedTopicId = selectedSessionKey(current);
-            const alreadyHasAssistant = pendingTurnStart.turnId && current.messages.some((message) => (
-                message.role === 'assistant' && message.turnId === pendingTurnStart.turnId
-            ));
-            if (selectedTopicId && pendingTurnStart.topicId === selectedTopicId && !alreadyHasAssistant) {
-                const presentationId = `turn-start:${selectedTopicId}`;
-                timeline.push({
-                    kind: 'message',
-                    id: presentationId,
-                    presentationKey: presentationId,
-                    turnId: pendingTurnStart.turnId || null,
-                    value: {
-                        id: presentationId,
-                        role: 'assistant',
-                        state: 'streaming',
-                        content: pendingTurnStart.phase === 'starting' ? '正在启动 Agent…' : '思考中',
-                        presentationRole: 'turn-start',
-                        presentationKey: presentationId,
-                        presentationPhase: pendingTurnStart.phase,
-                        createdAt: pendingTurnStart.createdAt || Date.now(),
-                    },
-                });
-            }
-        }
-        if (!timeline.length && !pendingTurnStart) {
-            showEmpty('会话已就绪，发送第一条消息开始。');
-            return;
-        }
-        clearEmpty();
-        reconcileAgentTimeline(feedItems, timeline, fullPresentation.timelineCallbacks, state.timelineRows);
-
-        scrollFeed(feed, follow);
+        timelineView.update({
+            projection: current,
+            pendingTurnStart: selectedTurnStart(current),
+            selectedSessionId: selectedSessionKey(current),
+        });
     }
 
     function renderJumpToLatest() {
-        const count = Math.min(99, state.unreadTimelineCount || 0);
-        const visible = !state.followingFeed && count > 0;
-        jumpToLatest.hidden = !visible;
-        if (!visible) return;
-        const suffix = count > 1 ? `（${count} 条新动态）` : '（有新动态）';
-        jumpToLatest.textContent = `回到最新${suffix}`;
-        jumpToLatest.setAttribute('aria-label', `回到最新消息${suffix}`);
+        timelineView.updateJump({
+            following: state.followingFeed,
+            unreadCount: state.unreadTimelineCount,
+        });
     }
 
     function noteTimelineActivity() {
@@ -2433,6 +2387,7 @@ function mountWorkbench(container) {
         workspaceCoordinator.dispose();
         settingsState.dispose();
         closeTopicContextMenu();
+        timelineView.dispose();
         fullPresentation.dispose();
         activityReadonlyView.dispose();
         approvalView.dispose();
