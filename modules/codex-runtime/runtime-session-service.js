@@ -1,0 +1,326 @@
+'use strict';
+
+const path = require('path');
+const { CodexAppServerError } = require('./appServerTransport');
+const {
+    compatibilitySession,
+    explicitAgent,
+    hasDurableProjection,
+    isConfirmedThreadNotFound,
+    isUncertainRemoteMutation,
+    normalizeInstructionMode,
+    resolveSessionIdInput,
+    sameIdentity,
+} = require('./runtime-normalizers');
+
+class RuntimeSessionService {
+    constructor(context) {
+        this.context = context;
+    }
+
+    _repository(generation) {
+        if (generation) this.context.assertGeneration(generation);
+        const repository = this.context.repository();
+        if (!repository) throw new CodexAppServerError('RUNTIME_STOPPED', 'Agent projection store is closed');
+        return repository;
+    }
+
+    create(options = {}) {
+        this.context.ensureProjectionStore();
+        this.context.assertProjectionWritable();
+        const sessionId = this.context.createId('session');
+        const now = Date.now();
+        const agentId = explicitAgent(options.agentId || options.agent) || 'codex';
+        const configSnapshot = this.context.configSnapshot({ ...options, agentId });
+        if (configSnapshot.instructionMode === 'vchat-identity'
+            && !String(configSnapshot.baseInstructions || '').trim()) {
+            throw new CodexAppServerError(
+                'AGENT_IDENTITY_MISSING',
+                `Agent ${agentId} has no system prompt; refusing to start it with the Codex identity`,
+            );
+        }
+        const identity = this.context.resolveCanonicalAgent(agentId, { failOnAmbiguous: true });
+        const workspaceRoot = path.resolve(options.workspaceRoot
+            || identity?.profile?.workspaceRoot
+            || this.context.projectRoot());
+        const session = this.context.repository().saveSession({
+            sessionId,
+            agentId: identity?.catalogId || agentId,
+            agentCatalogId: identity?.catalogId || agentId,
+            agentNameSnapshot: identity?.name || configSnapshot.agentName || agentId,
+            title: String(options.title || 'Codex Agent').trim(),
+            workspaceRoot,
+            state: 'created',
+            configSnapshot,
+            configRevision: 1,
+            createdAt: now,
+            updatedAt: now,
+        });
+        return { topicId: session.sessionId, sessionId: session.sessionId, ...session };
+    }
+
+    async read({ topicId, sessionId, reconcile = true } = {}) {
+        const startedAt = this.context.diagnosticClock();
+        this.context.ensureProjectionStore();
+        let repository = this.context.repository();
+        let session = repository.getSession(resolveSessionIdInput({ sessionId, topicId }));
+        if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
+        session = this.context.repairSessionConfig(session);
+        const localProjection = repository.readProjection(session.sessionId);
+        if (reconcile === false || repository.readOnly) {
+            this.context.diagnostic('projection-read-returned', {
+                sessionId: session.sessionId,
+                durationMs: this.context.diagnosticClock() - startedAt,
+            });
+            return localProjection;
+        }
+        await this.context.start();
+        const runtimeGeneration = this.context.captureGeneration();
+        if (session.threadId) {
+            try {
+                let applied = false;
+                for (let attempt = 0; attempt < 3 && !applied; attempt += 1) {
+                    repository = this._repository(runtimeGeneration);
+                    const projectionGeneration = repository.projectionGeneration(session.sessionId);
+                    const result = await this.context.transport().request('thread/read', {
+                        threadId: session.threadId,
+                        includeTurns: true,
+                    });
+                    repository = this._repository(runtimeGeneration);
+                    applied = this.context.projector().reconcileThread(
+                        session.sessionId, result.thread || result, projectionGeneration,
+                    ).applied;
+                }
+                if (!applied) throw new CodexAppServerError(
+                    'RECONCILE_GENERATION_CHANGED', 'Projection changed during reconciliation; retry later',
+                );
+                repository = this._repository(runtimeGeneration);
+                if (session.orphaned) repository.markOrphaned(session.sessionId, false);
+            } catch (error) {
+                if (error?.code === 'STALE_RUNTIME_GENERATION' || !this.context.repository()) throw error;
+                repository = this._repository(runtimeGeneration);
+                if (isConfirmedThreadNotFound(error) && hasDurableProjection(localProjection)) {
+                    repository.markOrphaned(session.sessionId, true);
+                }
+                repository.markProjectionError(session.sessionId, error.message);
+            }
+        }
+        repository = this._repository(runtimeGeneration);
+        const projection = repository.readProjection(session.sessionId);
+        this.context.diagnostic('projection-reconcile-returned', {
+            sessionId: session.sessionId,
+            durationMs: this.context.diagnosticClock() - startedAt,
+        });
+        return projection;
+    }
+
+    list({ agentId, archived = false } = {}) {
+        const startedAt = this.context.diagnosticClock();
+        this.context.ensureProjectionStore();
+        const requested = explicitAgent(agentId);
+        const identity = requested ? this.context.resolveCanonicalAgent(requested, { failOnAmbiguous: true }) : null;
+        const sessions = this.context.repository().listSessions({ archived: archived === true })
+            .map((session) => this.context.repairSessionIdentity(session))
+            .filter((session) => !identity || sameIdentity(
+                session.agentCatalogId || session.agentId, identity.catalogId,
+            ));
+        const result = sessions.map((session) => ({
+            id: session.sessionId,
+            topicId: session.sessionId,
+            sessionId: session.sessionId,
+            agentId: session.agentId,
+            agentCatalogId: session.agentCatalogId || session.agentId,
+            agentNameSnapshot: session.agentNameSnapshot || session.configSnapshot?.agentName || session.agentId,
+            title: session.title,
+            model: session.configSnapshot?.model || null,
+            workspaceRoot: session.workspaceRoot,
+            state: session.state,
+            orphaned: session.orphaned,
+            pinnedAt: session.pinnedAt || null,
+            archivedAt: session.archivedAt || null,
+            updatedAt: session.updatedAt,
+        }));
+        this.context.diagnostic('projection-list-returned', {
+            agentId: identity?.catalogId || requested || 'all',
+            count: result.length,
+            durationMs: this.context.diagnosticClock() - startedAt,
+        });
+        return result;
+    }
+
+    rename({ topicId, sessionId, title } = {}) {
+        this.context.assertProjectionWritable();
+        const repository = this.context.repository();
+        const session = repository.getSession(resolveSessionIdInput({ sessionId, topicId }));
+        if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
+        repository.saveSession({ ...session, title: String(title || '').trim(), updatedAt: Date.now() });
+        return repository.getSession(session.sessionId);
+    }
+
+    async archive({ sessionId, topicId } = {}) {
+        this.context.assertProjectionWritable();
+        const idValue = resolveSessionIdInput({ sessionId, topicId });
+        let repository = this.context.repository();
+        const session = repository.getSession(idValue);
+        if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
+        this.context.assertLifecycleIdle(session);
+        if (session.threadId) await this.context.start();
+        const generation = this.context.captureGeneration();
+        repository = this._repository(generation);
+        const operation = repository.createOperation({
+            sessionId: idValue, kind: 'thread-archive', threadId: session.threadId,
+        });
+        try {
+            repository.updateOperation(operation.operationId, { state: 'dispatching' });
+            if (session.threadId) await this.context.transport().request('thread/archive', { threadId: session.threadId });
+            repository = this._repository(generation);
+            repository.updateOperation(operation.operationId, { state: 'remote-applied', threadId: session.threadId });
+        } catch (error) {
+            this.context.assertGeneration(generation);
+            repository = this._repository(generation);
+            repository.updateOperation(operation.operationId, {
+                state: isUncertainRemoteMutation(error) ? 'uncertain' : 'failed',
+                lastError: error?.message || String(error),
+            });
+            throw error;
+        }
+        await this.context.faultInjection().afterArchiveRemoteApplied?.({ operation, session });
+        repository = this._repository(generation);
+        const archived = repository.archiveSession(idValue);
+        this.context.attachments().clearSession(idValue);
+        repository.updateOperation(operation.operationId, { state: 'completed', threadId: session.threadId });
+        return { sessionId: idValue, threadId: session.threadId, archived: true, session: compatibilitySession(archived) };
+    }
+
+    async restore({ sessionId, topicId } = {}) {
+        this.context.assertProjectionWritable();
+        const idValue = resolveSessionIdInput({ sessionId, topicId });
+        let repository = this.context.repository();
+        const session = repository.getSession(idValue);
+        if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
+        if (!session.archivedAt) {
+            return { sessionId: idValue, threadId: session.threadId, restored: false, session: compatibilitySession(session) };
+        }
+        if (session.threadId) await this.context.start();
+        const generation = this.context.captureGeneration();
+        repository = this._repository(generation);
+        const operation = repository.createOperation({
+            sessionId: idValue, kind: 'thread-unarchive', threadId: session.threadId,
+        });
+        try {
+            repository.updateOperation(operation.operationId, { state: 'dispatching' });
+            if (session.threadId) {
+                const result = await this.context.transport().request('thread/unarchive', { threadId: session.threadId });
+                this.context.assertGeneration(generation);
+                const returnedThreadId = String(result?.thread?.id || session.threadId);
+                if (returnedThreadId !== session.threadId) {
+                    throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/unarchive returned a mismatched thread id');
+                }
+            }
+            repository = this._repository(generation);
+            repository.updateOperation(operation.operationId, { state: 'remote-applied', threadId: session.threadId });
+        } catch (error) {
+            this.context.assertGeneration(generation);
+            repository = this._repository(generation);
+            repository.updateOperation(operation.operationId, {
+                state: isUncertainRemoteMutation(error) ? 'uncertain' : 'failed',
+                lastError: error?.message || String(error),
+            });
+            throw error;
+        }
+        await this.context.faultInjection().afterUnarchiveRemoteApplied?.({ operation, session });
+        repository = this._repository(generation);
+        const restored = repository.unarchiveSession(idValue);
+        repository.updateOperation(operation.operationId, { state: 'completed', threadId: session.threadId });
+        return { sessionId: idValue, threadId: restored.threadId, restored: true, session: compatibilitySession(restored) };
+    }
+
+    pin({ sessionId, topicId, pinned } = {}) {
+        this.context.assertProjectionWritable();
+        const idValue = resolveSessionIdInput({ sessionId, topicId });
+        if (typeof pinned !== 'boolean') throw new CodexAppServerError('INVALID_INPUT', 'Session pin state must be boolean');
+        const repository = this.context.repository();
+        if (!repository.getSession(idValue)) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
+        const updated = repository.setPinned(idValue, pinned);
+        return { sessionId: idValue, pinned, session: compatibilitySession(updated) };
+    }
+
+    async permanentlyDelete({ sessionId, topicId } = {}) {
+        this.context.assertProjectionWritable();
+        const idValue = resolveSessionIdInput({ sessionId, topicId });
+        let repository = this.context.repository();
+        const session = repository.getSession(idValue);
+        if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
+        if (!session.archivedAt) throw new CodexAppServerError('SESSION_NOT_ARCHIVED', 'Archive the Session before permanently deleting it');
+        this.context.assertLifecycleIdle(session);
+        if (this.context.toolboxApprovalCount() > 0) {
+            throw new CodexAppServerError('SESSION_HAS_PENDING_APPROVAL', 'Resolve pending ToolBox approval before permanent deletion');
+        }
+        const blockingInput = repository.listPendingInputs(idValue)
+            .find((entry) => ['queued', 'dispatching', 'accepted', 'uncertain'].includes(entry.state));
+        if (blockingInput) {
+            throw new CodexAppServerError('SESSION_HAS_PENDING_INPUT', 'Resolve queued or uncertain input before permanent deletion');
+        }
+        if (session.threadId) await this.context.start();
+        const generation = this.context.captureGeneration();
+        repository = this._repository(generation);
+        const operation = repository.createOperation({
+            sessionId: idValue, kind: 'thread-delete', threadId: session.threadId,
+        });
+        try {
+            repository.updateOperation(operation.operationId, { state: 'dispatching' });
+            if (session.threadId) {
+                try {
+                    await this.context.transport().request('thread/delete', { threadId: session.threadId });
+                } catch (error) {
+                    if (!isConfirmedThreadNotFound(error)) throw error;
+                }
+            }
+            repository = this._repository(generation);
+            repository.updateOperation(operation.operationId, { state: 'remote-applied', threadId: session.threadId });
+        } catch (error) {
+            this.context.assertGeneration(generation);
+            repository = this._repository(generation);
+            repository.updateOperation(operation.operationId, {
+                state: isUncertainRemoteMutation(error) ? 'uncertain' : 'failed',
+                lastError: error?.message || String(error),
+            });
+            throw error;
+        }
+        await this.context.faultInjection().afterDeleteRemoteApplied?.({ operation, session });
+        repository = this._repository(generation);
+        const receipt = repository.permanentlyDeleteSession(idValue, session.threadId);
+        this.context.attachments().clearSession(idValue);
+        repository.updateOperation(operation.operationId, {
+            state: 'completed', threadId: session.threadId,
+            payload: { deletionReceiptId: receipt.receiptId },
+        });
+        return { deleted: true, receipt };
+    }
+
+    export({ sessionId, topicId, format = 'markdown' } = {}) {
+        this.context.ensureProjectionStore();
+        const idValue = resolveSessionIdInput({ sessionId, topicId });
+        const projection = this.context.repository().readProjection(idValue);
+        if (!projection) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
+        const safeTitle = String(projection.session.title || 'agent-session').replace(/[\\/:*?"<>|]+/g, '-');
+        if (format === 'json') {
+            return { format, fileName: `${safeTitle}.json`, content: `${JSON.stringify(projection, null, 2)}\n` };
+        }
+        const lines = [`# ${projection.session.title || 'Agent Session'}`, ''];
+        for (const message of projection.messages) {
+            lines.push(`## ${message.role || 'unknown'}`, '');
+            for (const block of message.blocks || []) {
+                const content = block.content || {};
+                if (typeof content.text === 'string') lines.push(content.text);
+                else if (Array.isArray(content.parts)) {
+                    for (const part of content.parts) if (typeof part?.text === 'string') lines.push(part.text);
+                } else lines.push('```json', JSON.stringify(content, null, 2), '```');
+                lines.push('');
+            }
+        }
+        return { format: 'markdown', fileName: `${safeTitle}.md`, content: `${lines.join('\n').trim()}\n` };
+    }
+}
+
+module.exports = { RuntimeSessionService };
