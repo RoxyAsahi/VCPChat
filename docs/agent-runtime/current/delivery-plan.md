@@ -238,6 +238,8 @@ R12 当前状态只能是 `implemented/working-tree`，不得复用 R7-R10 live 
 - [x] Renderer/Runtime/Workbench public facades established; private implementations remain behaviorally unchanged and are guarded by temporary ceilings.
 - [x] Agent-private lifecycle scope and Workspace request coordinator prevent cross-root cleanup and stale request writes.
 - [x] Workbench access is grouped into Session, Projection, Interaction, and Workspace clients; canonical Session IPC is the only formal path.
+- [x] Snapshot-to-timeline projection is now a stateless Controller dependency; Runtime identity/config/approval/ToolBox normalization lives in `runtime-normalizers.js`.
+- [x] Agent Renderer stream state and Workbench named timer/RAF resources are instance-owned and disposed through explicit lifecycle modules.
 - [x] Pi/Rust JavaScript Runtime moved to `archive/agent-runtime/`; archived tests remain available through `archive:*` scripts and are excluded from product packaging.
 - [ ] Reduce private implementation files below their final module ceilings and split CSS into owned component files. This remains governance debt and is not a product release claim.
 
