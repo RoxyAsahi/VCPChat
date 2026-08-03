@@ -41,6 +41,7 @@ import { createAgentTopicContextMenuView } from './agent-topic-context-menu-view
 import { createAgentSessionOperationsCoordinator } from './agent-session-operations-coordinator.js';
 import { createAgentActivityCoordinator } from './agent-activity-coordinator.js';
 import { createAgentComposerCoordinator } from './agent-composer-coordinator.js';
+import { createAgentWorkbenchRenderCoordinator } from './agent-workbench-render-coordinator.js';
 import {
     agentCacheKey,
     createAgentSessionCatalogCoordinator,
@@ -264,8 +265,9 @@ function mountWorkbench(container) {
         turnStartedAt: new Map(),
         disposed: false,
     };
-    const pendingRender = { shell: false, header: false, feed: false, composer: false, activity: false };
-    let renderFrame = null;
+    let renderCoordinator = null;
+    const queueRender = (parts) => renderCoordinator?.queueRender(parts);
+    const settleTurnStartIndicator = (event) => renderCoordinator?.settleTurnStartIndicator(event);
 
     const shellView = createAgentWorkbenchShellView({
         document,
@@ -1162,200 +1164,6 @@ function mountWorkbench(container) {
         });
     }
 
-    function noteTimelineActivity() {
-        if (isFollowingContainer(feed)) {
-            state.followingFeed = true;
-            state.unreadTimelineCount = 0;
-        } else {
-            state.followingFeed = false;
-            state.unreadTimelineCount = Math.min(99, (state.unreadTimelineCount || 0) + 1);
-        }
-        renderJumpToLatest();
-    }
-
-    function patchStreamingFeed(event) {
-        // Deltas share the same requestAnimationFrame batcher as all other
-        // timeline parts.  The keyed reconciler changes only this message row
-        // and keeps tool cards, expanded details and the composer intact.
-        if (event?.messageId) queueRender({ feed: true });
-    }
-
-    function queueRender(parts = {}) {
-        if (state.disposed) return;
-        Object.assign(pendingRender, parts);
-        if (renderFrame !== null) return;
-        renderFrame = lifecycle.frame('render', () => {
-            renderFrame = null;
-            const next = { ...pendingRender };
-            Object.keys(pendingRender).forEach((key) => { pendingRender[key] = false; });
-            if (next.shell) renderSidebar();
-            if (next.header) renderHeader();
-            if (next.feed) renderFeed();
-            if (next.activity) renderActivity();
-            if (next.composer) renderComposer();
-            if (next.topicFlow) renderTopicFlow();
-        });
-    }
-
-    function patchSidebarTopicSelection() {
-        const selectedTopicId = store.getState().selectedSessionId || store.getState().selectedTopic?.topicId || null;
-        for (const row of sidebar.querySelectorAll('.agent-chat-session-row[data-topic-id]')) {
-            const active = Boolean(selectedTopicId && row.dataset.topicId === selectedTopicId);
-            const activity = sessionActivity(row.dataset.topicId, row.dataset.runtimeActivity || 'idle');
-            row.classList.toggle('active', active);
-            row.classList.toggle('active-topic-glowing', active);
-            row.classList.toggle('is-running', ['starting', 'running'].includes(activity));
-            row.classList.toggle('is-awaiting-approval', activity === 'awaiting-approval');
-            row.dataset.runtimeActivity = activity;
-            const avatar = row.querySelector('.agent-chat-session-avatar');
-            if (avatar) {
-                avatar.dataset.activity = activity;
-                avatar.classList.toggle('is-running', ['starting', 'running'].includes(activity));
-                avatar.classList.toggle('is-awaiting-approval', activity === 'awaiting-approval');
-            }
-            row.setAttribute('aria-current', active ? 'true' : 'false');
-        }
-    }
-
-    function settleTurnStartIndicator(event) {
-        const eventSessionId = event?.sessionId || event?.topicId || null;
-        const pending = eventSessionId ? state.turnStarts.get(eventSessionId) : selectedTurnStart();
-        if (event && pending) {
-            const turnMatches = !event.turnId || !pending.turnId || event.turnId === pending.turnId;
-            const sessionMatches = eventSessionId === pending.topicId;
-            if (sessionMatches && event.type === 'turn.started') {
-                state.turnStarts.set(pending.topicId, {
-                    ...pending,
-                    turnId: event.turnId || pending.turnId,
-                    phase: 'thinking',
-                    seenRunning: true,
-                });
-            }
-            if (sessionMatches && turnMatches && (
-            event.type === 'assistant.started'
-            || event.type === 'assistant.delta'
-            || event.type === 'reasoning.delta'
-            || event.type === 'turn.completed'
-            || event.type === 'turn.failed'
-            || event.type === 'turn.cancelled'
-            || event.type === 'runtime.crashed'
-            )) {
-                state.turnStarts.delete(pending.topicId);
-                return;
-            }
-        }
-        // Codex projection notifications are reduced through store.setState
-        // with no synthetic business event.  A real assistant message is the
-        // authoritative replacement for the ephemeral thinking row.
-        if (!event) {
-            const current = store.getState();
-            for (const [sessionId, entry] of state.turnStarts) {
-                const hasAssistant = sessionId === selectedSessionKey(current) && entry.turnId
-                    && current.messages.some((message) => message.role === 'assistant' && message.turnId === entry.turnId);
-                const runtime = current.activeRuntimes instanceof Map ? current.activeRuntimes.get(sessionId) : null;
-                if (runtime && (runtime.activity === 'running' || runtime.activeTurnId) && !entry.seenRunning) {
-                    state.turnStarts.set(sessionId, { ...entry, seenRunning: true });
-                }
-                const terminalRuntime = Boolean(entry.turnId && entry.seenRunning && runtime
-                    && runtime.activity === 'idle' && !runtime.activeTurnId);
-                if (!hasAssistant && !terminalRuntime) continue;
-                if (hasAssistant) {
-                    uxMark('first-assistant-item', entry.turnId,
-                        state.uxTimings.get(`turn-start:${entry.topicId || 'new'}`) || null);
-                }
-                state.turnStarts.delete(sessionId);
-            }
-        }
-    }
-
-    function renderForStoreEvent(event) {
-        if (event?.type === 'toolbox.ws' || event?.type === 'marker.observed') {
-            state.sessionDock.setSession(selectedDockSessionId());
-            state.sessionDock.ensureKind('notifications');
-        }
-        if (event?.type?.startsWith('approval.') || event?.type?.startsWith('interaction.')) {
-            state.sessionDock.setSession(selectedDockSessionId());
-            state.sessionDock.ensureKind('approvals');
-        }
-        if (event?.type && state.activityOpen) {
-            const eventTab = event.type === 'toolbox.ws' || event.type === 'marker.observed' ? 'notifications'
-                : event.type.startsWith('approval.') || event.type.startsWith('interaction.') ? 'approvals'
-                    : event.type === 'plan.updated' ? 'context'
-                        : event.type === 'context.usage' || event.type.includes('compaction') ? 'context'
-                            : null;
-            const activeKind = state.sessionDock.snapshot().tabs.find((tab) => tab.id === state.activityTab)?.kind;
-            if (eventTab === activeKind) clearActivityUnread(eventTab);
-        }
-        if (event?.type === 'turn.started' && event.turnId) {
-            const rawTimestamp = typeof event.timestamp === 'string' ? Date.parse(event.timestamp) : Number(event.timestamp);
-            const eventTime = Number.isFinite(rawTimestamp) && rawTimestamp >= 1_000_000_000_000
-                ? rawTimestamp
-                : Number.isFinite(rawTimestamp) && rawTimestamp >= 1_000_000_000
-                    ? rawTimestamp * 1000
-                    : Date.now();
-            if (!state.turnStartedAt.has(event.turnId)) state.turnStartedAt.set(event.turnId, eventTime);
-        } else if (event?.turnId && ['turn.completed', 'turn.failed', 'turn.cancelled'].includes(event.type)) {
-            state.turnStartedAt.delete(event.turnId);
-        }
-        settleTurnStartIndicator(event);
-        if (!event?.type) {
-            // A snapshot preview changes only the visible projection.  Do not
-            // rebuild the sidebar shell/list (and therefore do not lose its
-            // row identity, focus or scroll anchor) merely to mark one Topic
-            // active.
-            patchSidebarTopicSelection();
-            queueRender({ header: true, feed: true, composer: true });
-            return;
-        }
-        if (event.type === 'assistant.delta' || event.type === 'reasoning.delta') {
-            const tokenKey = `first-visible-delta:${event.turnId || event.messageId || 'current'}`;
-            if (!state.uxTimings.has(tokenKey)) {
-                state.uxTimings.set(tokenKey, uxMark('first-visible-delta', event.turnId || event.messageId));
-            }
-            noteTimelineActivity();
-            // Delta events are the hot path.  Preserve focus, scroll anchors,
-            // expanded tool cards and pending approval buttons by changing
-            // only the matching assistant node.
-            patchStreamingFeed(event);
-            return;
-        }
-        if (event.type === 'interaction.consumed') {
-            // Codex Thread and Projection Store are authoritative for order. Reload the
-            // bounded queue projection rather than guessing which item moved
-            // at a tool-safe boundary.
-            void refreshControlPlane();
-            queueRender({ header: true, composer: true });
-            return;
-        }
-        if (event.type.startsWith('tool.') || event.type.startsWith('approval.')
-            || event.type === 'assistant.started' || event.type === 'assistant.completed'
-            || event.type === 'user.message' || event.type.startsWith('turn.')
-            || event.type === 'ui.user_message.pending') {
-            if (event.type !== 'approval.requested' && event.type !== 'approval.resolved' && event.type !== 'approval.expired') {
-                noteTimelineActivity();
-            }
-            // Approvals live in the activity panel now; keep it in sync too.
-            maybeAutoOpenActivity();
-            queueRender({ feed: true, header: true, activity: true, composer: true });
-            return;
-        }
-        if (event.type === 'toolbox.ws') {
-            // Observer events moved out of the chat feed into the activity panel.
-            queueRender({ activity: true });
-            return;
-        }
-        if (event.type.startsWith('session.')) {
-            queueRender({ shell: true, header: true, feed: true, composer: true });
-            return;
-        }
-        if (event.type.startsWith('runtime.') || event.type.startsWith('context.')) {
-            maybeAutoOpenActivity();
-            queueRender({ header: true, activity: true, composer: true });
-            return;
-        }
-        queueRender({ feed: true, activity: true, composer: true });
-    }
-
     const composerCoordinator = createAgentComposerCoordinator({
         state, store, controller, composerView, runStatusView, refs: shellView.refs, run, notify,
         selectedSessionKey, selectedComposerState, selectedTurnStart, selectedActiveTurnId,
@@ -1363,6 +1171,21 @@ function mountWorkbench(container) {
         refreshControlPlane, uxMark, openNewTopicFlow, isFollowingContainer, scrollFeed,
     });
     const renderComposer = composerCoordinator.render;
+
+    renderCoordinator = createAgentWorkbenchRenderCoordinator({
+        state, store, lifecycle, sidebar, feed, sessionActivity, selectedSessionKey,
+        selectedTurnStart, selectedDockSessionId, clearActivityUnread, maybeAutoOpenActivity,
+        refreshControlPlane, uxMark, isFollowingContainer,
+        renderers: {
+            sidebar: renderSidebar,
+            header: renderHeader,
+            feed: renderFeed,
+            activity: renderActivity,
+            composer: renderComposer,
+            topicFlow: renderTopicFlow,
+            jumpToLatest: renderJumpToLatest,
+        },
+    });
 
     function render() {
         if (state.disposed) return;
@@ -1374,7 +1197,7 @@ function mountWorkbench(container) {
         renderTopicFlow();
     }
 
-    const unsubscribe = store.subscribe((_nextState, event) => renderForStoreEvent(event));
+    const unsubscribe = store.subscribe((_nextState, event) => renderCoordinator.renderForStoreEvent(event));
     render();
     controller.initialize()
         .then(async () => {
@@ -1407,6 +1230,7 @@ function mountWorkbench(container) {
         settingsCoordinator.dispose();
         activityCoordinator.dispose();
         composerCoordinator.dispose();
+        renderCoordinator.dispose();
         workspaceCoordinator.dispose();
         settingsState.dispose();
         topicContextMenuView.dispose();
