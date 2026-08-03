@@ -1,7 +1,27 @@
 import assert from 'node:assert/strict';
-import { createWorkbenchController } from '../modules/ui-system/agent-workbench-controller.js';
+import { createWorkbenchController as createRawWorkbenchController } from '../modules/ui-system/agent-workbench-controller.js';
 import { createWorkbenchStore, deriveWorkbenchViewState } from '../modules/ui-system/agent-workbench-store.js';
 import { projectSession, projectTool } from '../modules/ui-system/agent-workbench-projections.js';
+
+function createWorkbenchController(api) {
+    const topicPayload = (payload = {}) => ({ ...payload, topicId: payload.topicId || payload.sessionId });
+    return createRawWorkbenchController({
+        ...api,
+        agentSessionCreate: api.agentSessionCreate || api.agentRuntimeCreateTopic || api.agentRuntimeCreateSession,
+        agentSessionList: api.agentSessionList || api.agentRuntimeListTopics,
+        agentSessionReadProjection: api.agentSessionReadProjection
+            || (api.agentRuntimeReadProjection ? (payload) => api.agentRuntimeReadProjection(topicPayload(payload))
+                : api.agentRuntimeReadTopic ? (payload) => api.agentRuntimeReadTopic(topicPayload(payload)) : undefined),
+        agentSessionRead: api.agentSessionRead
+            || (api.agentRuntimeReadTopic ? (payload) => api.agentRuntimeReadTopic(topicPayload(payload)) : undefined),
+        agentSessionRename: api.agentSessionRename || api.agentRuntimeRenameTopic,
+        agentSessionArchive: api.agentSessionArchive || api.agentRuntimeCloseSession,
+        agentSessionRestore: api.agentSessionRestore || api.agentRuntimeRestoreSession,
+        agentSessionDelete: api.agentSessionDelete || api.agentRuntimePermanentlyDeleteSession,
+        agentSessionFork: api.agentSessionFork || api.agentRuntimeForkSession,
+        agentRuntimeEnsureSessionRuntime: api.agentRuntimeEnsureSessionRuntime || api.agentRuntimeCreateSession,
+    });
+}
 
 assert.equal(projectSession({ sessionId: 's-running', activeTurnId: 'turn-running' }).activity, 'running',
     'Session projection must preserve per-Session running identity for the sidebar avatar');
@@ -229,10 +249,11 @@ const controller = createWorkbenchController({
         runtimes: [{ sessionId: 'restored', topicId: 'topic-restored', state: 'idle' }],
         pendingInteractions: [pendingInteraction],
     }),
-    agentRuntimeReadTopic: async (payload) => {
+    agentSessionReadProjection: async (payload) => {
         calls.push(['topic', payload]);
         return new Promise((resolve) => { resolveInitialRead = resolve; });
     },
+    agentSessionRead: () => new Promise(() => {}),
     agentRuntimeSetWorkbenchPresence() {},
     onAgentRuntimeEvent(callback) { liveEvent = callback; return () => {}; },
 });
@@ -242,7 +263,7 @@ await new Promise((resolve) => setImmediate(resolve));
 assert.deepEqual(controller.store.getState().interactions, [pendingInteraction],
     'Activity Center must receive Main-owned interaction identities independently of approval cards');
 assert.equal(typeof liveEvent, 'function', 'Renderer must subscribe before it starts reading a Session projection');
-assert.deepEqual(calls.find(([name]) => name === 'topic')[1], { topicId: 'topic-restored' });
+assert.deepEqual(calls.find(([name]) => name === 'topic')[1], { sessionId: 'topic-restored' });
 liveEvent({
     eventId: 'initial-live-event', sequence: 5, timestamp: 5, runtime: 'codex',
     sessionId: 'restored', topicId: 'topic-restored', turnId: 'turn-restored',
@@ -357,7 +378,7 @@ assert.equal(preview.store.getState().selectedTopic.mode, 'preview');
 assert.equal(preview.store.getState().messages[0].content, 'preview only');
 await preview.startTurn('继续这个任务');
 assert.equal(previewCalls[0][0], 'runtime', 'first send must start the selected Session Runtime before issuing a turn');
-assert.equal(previewCalls[0][1].resume, 'preview-topic');
+assert.equal(previewCalls[0][1].sessionId, 'preview-topic');
 assert.equal(previewCalls[1][0], 'turn');
 assert.equal(previewCalls[1][1].sessionId, 'preview-session');
 preview.dispose();

@@ -49,6 +49,7 @@
     "test:agent-presentation": "node scripts/test-agent-message-renderer-fork.mjs && node scripts/test-agent-message-presentation-api.mjs && node scripts/test-agent-renderer-golden-parity.mjs && node scripts/test-agent-markdown-stream.mjs && node scripts/test-agent-presentation.mjs && node scripts/test-agent-presentation-fork.mjs && node scripts/test-agent-presentation-blocks.mjs",
     "test:agent-renderer-isolation": "node scripts/test-agent-renderer-isolation.mjs",
     "test:agent-workspace-requests": "node scripts/test-agent-workspace-requests.mjs",
+    "test:agent-session-compatibility": "node scripts/test-agent-session-compatibility.mjs",
     "test:codex-app-server-transport": "node scripts/test-codex-app-server-transport.mjs",
     "test:codex-app-server-capabilities": "node scripts/test-codex-app-server-capabilities.mjs",
     "sync:codex-schema": "node scripts/sync-codex-app-server-schema.mjs",

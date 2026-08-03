@@ -384,6 +384,22 @@ class CodexRuntimeManager extends EventEmitter {
         return { topicId: session.sessionId, sessionId: session.sessionId, ...session };
     }
 
+    async createSessionRecord(options = {}) {
+        return this.createTopic(options);
+    }
+
+    async listSessions(options = {}) {
+        return this.listTopics(options);
+    }
+
+    async readSession({ sessionId, reconcile = true } = {}) {
+        return this.readTopic({ sessionId, reconcile });
+    }
+
+    async renameSession({ sessionId, title } = {}) {
+        return this.renameTopic({ sessionId, title });
+    }
+
     async createSession(options = {}) {
         this._assertProjectionWritable();
         const requestedSessionId = options.sessionId || options.topicId || options.resume;

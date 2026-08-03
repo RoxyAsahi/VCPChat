@@ -50,14 +50,26 @@ if (handlers.includes('locallyAttached') || handlers.includes('attachedTopicId')
 const preload = fs.readFileSync(path.join(root, 'preloads/chat.js'), 'utf8');
 for (const method of [
     'agentRuntimeGetStatus', 'agentRuntimeStart', 'agentRuntimeStop',
-    'agentRuntimeCreateSession', 'agentRuntimeEnsureSessionRuntime', 'agentRuntimeForkSession', 'agentRuntimeListTopics',
-    'agentRuntimeReadTopic', 'agentRuntimeReadProjection', 'agentRuntimeStartTurn',
+    'agentRuntimeEnsureSessionRuntime', 'agentRuntimeStartTurn',
     'agentRuntimeCancelTurn', 'agentRuntimeRespondApproval', 'agentRuntimeSetWorkbenchPresence',
+    'agentSessionCreate', 'agentSessionList', 'agentSessionRead', 'agentSessionReadProjection',
+    'agentSessionRename', 'agentSessionArchive', 'agentSessionRestore', 'agentSessionDelete', 'agentSessionFork',
     'agentWorkspaceListDirectory', 'agentWorkspaceReadPreview', 'agentWorkspaceSearchFiles',
     'agentWorkspaceStatPath', 'agentWorkspacePerformPathAction',
     'onAgentRuntimeEvent',
 ]) {
     if (!preload.includes(method)) errors.push(`chat preload missing API: ${method}`);
+}
+const workbenchController = fs.readFileSync(path.join(root, 'modules/ui-system/agent-workbench-controller.js'), 'utf8');
+for (const legacyMethod of [
+    'agentRuntimeCreateTopic', 'agentRuntimeCreateSession', 'agentRuntimeListTopics',
+    'agentRuntimeReadTopic', 'agentRuntimeReadProjection', 'agentRuntimeRenameTopic',
+    'agentRuntimeDeleteTopic', 'agentRuntimeForkSession', 'agentRuntimeCloseSession',
+    'agentRuntimeRestoreSession', 'agentRuntimePermanentlyDeleteSession',
+]) {
+    if (workbenchController.includes(legacyMethod)) {
+        errors.push(`formal Workbench still calls deprecated Topic API: ${legacyMethod}`);
+    }
 }
 for (const forbidden of ['agentRuntimeExec', 'agentRuntimeReadFile', 'agentRuntimeWriteFile', 'agentRuntimeInvoke']) {
     if (preload.includes(forbidden)) errors.push(`chat preload exposes forbidden generic API: ${forbidden}`);

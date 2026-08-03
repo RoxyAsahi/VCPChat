@@ -392,6 +392,15 @@ window.chatAPI = {
 window.chatAPI.agentRuntimeUpdateSessionConfig = async ({ sessionId, expectedConfigRevision, patch }) => (
     window.chatAPI.agentRuntimeUpdateWorkbenchSettings({ sessionId, expectedConfigRevision, ...(patch || {}) })
 );
+window.chatAPI.agentSessionCreate = window.chatAPI.agentRuntimeCreateTopic;
+window.chatAPI.agentSessionList = window.chatAPI.agentRuntimeListTopics;
+window.chatAPI.agentSessionReadProjection = ({ sessionId, ...payload }) => window.chatAPI.agentRuntimeReadTopic({ ...payload, topicId: sessionId });
+window.chatAPI.agentSessionRead = ({ sessionId, ...payload }) => window.chatAPI.agentRuntimeReadTopic({ ...payload, topicId: sessionId });
+window.chatAPI.agentSessionRename = ({ sessionId, ...payload }) => window.chatAPI.agentRuntimeRenameTopic({ ...payload, topicId: sessionId });
+window.chatAPI.agentSessionArchive = ({ sessionId }) => window.chatAPI.agentRuntimeDeleteTopic({ topicId: sessionId });
+window.chatAPI.agentSessionRestore = window.chatAPI.agentRuntimeRestoreSession;
+window.chatAPI.agentSessionDelete = window.chatAPI.agentRuntimePermanentlyDeleteSession;
+window.chatAPI.agentSessionFork = async ({ sessionId }) => ({ sessionId: `${sessionId}-fork`, topicId: `${sessionId}-fork`, agentId: 'Nova' });
 
 let runtimeEventNumber = 0;
 function emitDaemonEvent(event) {
@@ -1720,7 +1729,10 @@ assert.equal(host.childElementCount, 0);
 
 window.localStorage.setItem('vcpchat.agentWorkbench.lastTopic.v1', JSON.stringify({ topicId: 'topic-missing-session' }));
 const missingSessionDispose = registered.mount(host, {});
-await new Promise((resolve) => setTimeout(resolve, 100));
+for (let attempt = 0; attempt < 50
+    && window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1') !== null; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+}
 assert.ok(host.classList.contains('agent-workbench-root') && host.querySelector('.agent-chat-root.container'),
     'a deleted remembered Session must leave the Workbench usable instead of failing startup');
 assert.equal(window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1'), null,

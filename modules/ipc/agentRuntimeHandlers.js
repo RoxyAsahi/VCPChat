@@ -6,6 +6,7 @@ const fs = require('fs');
 const { CodexRuntimeManager } = require('../codex-runtime/runtimeManager');
 const { AgentWorkspaceService } = require('../codex-runtime/workspaceService');
 const { AGENT_CHANNELS: IPC_CHANNELS } = require('./ipcContracts');
+const { registerAgentSessionCompatibility } = require('./agentSessionCompatibility');
 
 let manager = null;
 let workspaceService = null;
@@ -192,34 +193,23 @@ function initialize(options) {
     ipcMain.handle(IPC_CHANNELS.GET_STATUS, (event) => projectionGuard(event, () => manager.getStatus()));
     ipcMain.handle(IPC_CHANNELS.START, (event) => runtimeGuard(event, () => manager.start()));
     ipcMain.handle(IPC_CHANNELS.STOP, (event) => runtimeGuard(event, () => manager.stop()));
-    ipcMain.handle(IPC_CHANNELS.CREATE_TOPIC, (event, payload) => projectionGuard(event, () => manager.createTopic({
-        agentId: payload?.agentId || payload?.agent,
-        title: payload?.title,
-    })));
-    ipcMain.handle(IPC_CHANNELS.CREATE_SESSION, (event, payload) => toolboxGuard(event, () => manager.createSession({
-        sessionId: payload?.sessionId || payload?.topicId,
-        resume: payload?.resume,
-        agentId: payload?.agentId || payload?.agent,
-        title: payload?.title,
-    })));
+    ipcMain.handle(IPC_CHANNELS.SESSION_CREATE, (event, payload) => projectionGuard(event, () => manager.createSessionRecord(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.SESSION_LIST, (event, payload) => projectionGuard(event, () => manager.listSessions(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.SESSION_READ, (event, payload) => runtimeGuard(event, () => manager.readSession(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.SESSION_READ_PROJECTION, (event, payload) => projectionGuard(event, () => manager.readSession({ ...(payload || {}), reconcile: false })));
+    ipcMain.handle(IPC_CHANNELS.SESSION_RENAME, (event, payload) => projectionGuard(event, () => manager.renameSession(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.SESSION_ARCHIVE, (event, payload) => runtimeGuard(event, () => manager.archiveSession(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.SESSION_RESTORE, (event, payload) => runtimeGuard(event, () => manager.restoreSession(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.SESSION_DELETE, (event, payload) => runtimeGuard(event, () => manager.permanentlyDeleteSession(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.SESSION_FORK, (event, payload) => runtimeGuard(event, () => manager.forkSession(payload || {})));
+    registerAgentSessionCompatibility({ ipcMain, channels: IPC_CHANNELS, projectionGuard, runtimeGuard, toolboxGuard, manager });
     ipcMain.handle(IPC_CHANNELS.ENSURE_SESSION_RUNTIME, (event, payload) => toolboxGuard(event, () => manager.ensureSessionRuntime(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.FORK_SESSION, (event, payload) => runtimeGuard(event, () => manager.forkSession(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.CLOSE_SESSION, (event, payload) => runtimeGuard(event, () => manager.closeSession(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.RESTORE_SESSION, (event, payload) => runtimeGuard(event, () => manager.restoreSession(payload || {})));
     ipcMain.handle(IPC_CHANNELS.SET_SESSION_PINNED, (event, payload) => projectionGuard(event, () => manager.setSessionPinned(payload || {})));
     ipcMain.handle(IPC_CHANNELS.COMPACT_SESSION, (event, payload) => runtimeGuard(event, () => manager.compactSession(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.LIST_TOPICS, (event, payload) => projectionGuard(event, async () => {
-        return manager.listTopics(payload || {});
-    }));
     ipcMain.handle(IPC_CHANNELS.SEARCH_TOPICS, (event, payload) => projectionGuard(event, () => manager.searchTopics(payload || {})));
     ipcMain.handle(IPC_CHANNELS.SEARCH_TOPIC_MESSAGES, (event, payload) => projectionGuard(event, () => manager.searchTopicMessages(payload || {})));
     ipcMain.handle(IPC_CHANNELS.GET_TOPIC_INDEX_STATUS, (event) => projectionGuard(event, () => manager.getTopicIndexStatus()));
     ipcMain.handle(IPC_CHANNELS.REBUILD_TOPIC_INDEX, (event) => projectionGuard(event, () => manager.rebuildTopicIndex()));
-    ipcMain.handle(IPC_CHANNELS.READ_TOPIC, (event, payload) => runtimeGuard(event, () => manager.readTopic(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.READ_PROJECTION, (event, payload) => projectionGuard(event, () => manager.readTopic({ ...(payload || {}), reconcile: false })));
-    ipcMain.handle(IPC_CHANNELS.RENAME_TOPIC, (event, payload) => projectionGuard(event, () => manager.renameTopic(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.DELETE_TOPIC, (event, payload) => runtimeGuard(event, () => manager.deleteTopic(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.PERMANENTLY_DELETE_SESSION, (event, payload) => runtimeGuard(event, () => manager.permanentlyDeleteSession(payload || {})));
     ipcMain.handle(IPC_CHANNELS.LIST_RECOVERY_OPERATIONS, (event) => projectionGuard(event, () => manager.listRecoveryOperations()));
     ipcMain.handle(IPC_CHANNELS.LIST_RECOVERY_CANDIDATES, (event) => runtimeGuard(event, () => manager.listRecoveryCandidates()));
     ipcMain.handle(IPC_CHANNELS.RESOLVE_RECOVERY_OPERATION, (event, payload) => runtimeGuard(event, () => manager.resolveRecoveryOperation(payload || {})));

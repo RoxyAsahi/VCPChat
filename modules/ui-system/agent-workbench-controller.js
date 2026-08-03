@@ -151,24 +151,14 @@ function createWorkbenchController(runtimeApi) {
     }
 
     function readLocalProjection(payload) {
-        // Codex uses the dedicated SQLite-only IPC.  The fallback keeps the
-        // archived controller tests and compatibility runtimes working,
-        // but it is deliberately not used by the Codex product path.
-        return hasApi('agentRuntimeReadProjection')
-            ? runtimeApi.agentRuntimeReadProjection(payload)
-            : requireApi('agentRuntimeReadTopic')(payload);
+        return requireApi('agentSessionReadProjection')(payload);
     }
 
     function ensureSessionRuntime(sessionId, reason = 'selection') {
         const id = String(sessionId || '').trim();
         if (!id) return Promise.reject(new Error('Session runtime warm requires sessionId'));
         if (sessionWarmPromises.has(id)) return sessionWarmPromises.get(id);
-        if (!hasApi('agentRuntimeEnsureSessionRuntime') && reason !== 'send') {
-            return Promise.resolve(null);
-        }
-        const call = hasApi('agentRuntimeEnsureSessionRuntime')
-            ? runtimeApi.agentRuntimeEnsureSessionRuntime({ sessionId: id, reason })
-            : requireApi('agentRuntimeCreateSession')({ resume: id });
+        const call = requireApi('agentRuntimeEnsureSessionRuntime')({ sessionId: id, reason });
         const promise = Promise.resolve(call)
             .then(async (runtime) => {
                 if (runtime?.sessionId) {
@@ -586,7 +576,7 @@ function createWorkbenchController(runtimeApi) {
 
     async function reconcileHydratedTopic(topicId, runtimeHint, agentId, version, revisionAtStart) {
         try {
-            const snapshot = await requireApi('agentRuntimeReadTopic')(topicPayload({ topicId }, agentId));
+            const snapshot = await requireApi('agentSessionRead')({ sessionId: topicId, ...(agentId ? { agentId } : {}) });
             const current = store.getState();
             if (version !== selectionVersion || current.selectedTopic?.topicId !== topicId) return null;
             if ((liveProjectionRevision.get(topicId) || 0) !== revisionAtStart) return null;
@@ -603,31 +593,16 @@ function createWorkbenchController(runtimeApi) {
         if (!topicId) return null;
         const version = ++selectionVersion;
         const barrier = existingBarrier || beginSnapshotBarrier();
-        if (hasApi('agentRuntimeReadProjection')) {
-            try {
-                const localSnapshot = await readLocalProjection(topicPayload({ topicId }, agentId));
-                if (version !== selectionVersion) {
-                    releaseSnapshotBarrier(barrier, null, runtimeHint || runtimeForTopic(topicId));
-                    return null;
-                }
-                const nextRuntime = applyHydratedSnapshot(topicId, localSnapshot, runtimeHint, agentId);
-                releaseSnapshotBarrier(barrier, localSnapshot, nextRuntime);
-                const revisionAtStart = liveProjectionRevision.get(topicId) || 0;
-                void reconcileHydratedTopic(topicId, runtimeHint, agentId, version, revisionAtStart);
-                return localSnapshot;
-            } catch (error) {
-                releaseSnapshotBarrier(barrier, null, runtimeHint || runtimeForTopic(topicId));
-                throw error;
-            }
-        }
         try {
-            const snapshot = await requireApi('agentRuntimeReadTopic')(topicPayload({ topicId }, agentId));
+            const snapshot = await readLocalProjection({ sessionId: topicId, ...(agentId ? { agentId } : {}) });
             if (version !== selectionVersion) {
                 releaseSnapshotBarrier(barrier, null, runtimeHint || runtimeForTopic(topicId));
                 return null;
             }
             const nextRuntime = applyHydratedSnapshot(topicId, snapshot, runtimeHint, agentId);
             releaseSnapshotBarrier(barrier, snapshot, nextRuntime);
+            const revisionAtStart = liveProjectionRevision.get(topicId) || 0;
+            void reconcileHydratedTopic(topicId, runtimeHint, agentId, version, revisionAtStart);
             return snapshot;
         } catch (error) {
             releaseSnapshotBarrier(barrier, null, runtimeForTopic(topicId));
@@ -656,7 +631,7 @@ function createWorkbenchController(runtimeApi) {
         try {
             // This is the only awaited cold-open read in the Codex path. It
             // is a local SQLite query and must not request a Codex Thread.
-            localSnapshot = await readLocalProjection(topicPayload({ topicId }, agentId));
+            localSnapshot = await readLocalProjection({ sessionId: topicId, ...(agentId ? { agentId } : {}) });
             if (version !== selectionVersion) {
                 releaseSnapshotBarrier(barrier, null, runtimeForTopic(topicId));
                 return null;
@@ -694,7 +669,7 @@ function createWorkbenchController(runtimeApi) {
         const barrier = beginSnapshotBarrier();
         // This compatibility API creates or resumes one Session without
         // changing any other Session Runtime.
-        const createdSession = await requireApi('agentRuntimeCreateSession')(options);
+        const createdSession = await requireApi('agentSessionCreate')(options);
         await refreshStatus();
         if (createdSession.topicId) {
             try {
@@ -709,7 +684,7 @@ function createWorkbenchController(runtimeApi) {
     }
 
     async function createTopic(options = {}) {
-        const topic = await requireApi('agentRuntimeCreateTopic')(options);
+        const topic = await requireApi('agentSessionCreate')(options);
         const topicId = String(topic?.topicId || '').trim();
         const agentId = String(topic?.agentId || options.agent || options.agentId || '').trim();
         if (!topicId || !agentId) throw new Error('Codex Runtime 未返回新会话的完整身份');
@@ -746,7 +721,7 @@ function createWorkbenchController(runtimeApi) {
 
     async function reconcilePreviewTopic(topicId, agentId, selectedTopic, version, revisionAtStart) {
         try {
-            const snapshot = await requireApi('agentRuntimeReadTopic')(topicPayload({ topicId }, agentId));
+            const snapshot = await requireApi('agentSessionRead')({ sessionId: topicId, ...(agentId ? { agentId } : {}) });
             const current = store.getState();
             if (version !== selectionVersion || current.selectedTopic?.topicId !== topicId) return null;
             // Do not let an older `thread/read` snapshot erase a delta/tool
@@ -767,7 +742,7 @@ function createWorkbenchController(runtimeApi) {
     async function forkSession({ sessionId, turnId, title } = {}) {
         const sourceSessionId = sessionId || selectedRuntime()?.sessionId || store.getState().selectedTopic?.topicId;
         if (!sourceSessionId) throw new Error('请先选择要创建分支的会话');
-        const fork = await requireApi('agentRuntimeForkSession')({ sessionId: sourceSessionId, turnId, title });
+        const fork = await requireApi('agentSessionFork')({ sessionId: sourceSessionId, turnId, title });
         const topicId = fork?.topicId || fork?.sessionId;
         if (!topicId) throw new Error('Codex thread/fork 未返回新会话身份');
         await previewTopic(topicId, fork.agentId, fork);
@@ -789,17 +764,17 @@ function createWorkbenchController(runtimeApi) {
         }
     }
 
-    const listTopics = (agentId = undefined, options = {}) => requireApi('agentRuntimeListTopics')(topicPayload(options, agentId));
+    const listTopics = (agentId = undefined, options = {}) => requireApi('agentSessionList')(topicPayload(options, agentId));
     const searchTopics = (query, agentId = undefined, limit = 20) => requireApi('agentRuntimeSearchTopics')(topicPayload({ query, limit }, agentId));
     const searchTopicMessages = (query, topicId, agentId = undefined, limit = 50) => requireApi('agentRuntimeSearchTopicMessages')(topicPayload({ query, topicId, limit }, agentId));
     const getTopicIndexStatus = () => requireApi('agentRuntimeGetTopicIndexStatus')();
     const rebuildTopicIndex = () => requireApi('agentRuntimeRebuildTopicIndex')();
-    const readTopic = (topicId, agentId = undefined) => requireApi('agentRuntimeReadTopic')(topicPayload({ topicId }, agentId));
-    const renameTopic = (topicId, title, agentId = undefined) => requireApi('agentRuntimeRenameTopic')(topicPayload({ topicId, title }, agentId));
-    const deleteTopic = (topicId, agentId = undefined) => requireApi('agentRuntimeDeleteTopic')(topicPayload({ topicId }, agentId));
-    const archiveSession = (sessionId) => requireApi('agentRuntimeCloseSession')({ sessionId });
-    const restoreSession = (sessionId) => requireApi('agentRuntimeRestoreSession')({ sessionId });
-    const permanentlyDeleteSession = (sessionId) => requireApi('agentRuntimePermanentlyDeleteSession')({ sessionId });
+    const readTopic = (topicId, agentId = undefined) => requireApi('agentSessionRead')({ sessionId: topicId, ...(agentId ? { agentId } : {}) });
+    const renameTopic = (topicId, title, agentId = undefined) => requireApi('agentSessionRename')({ sessionId: topicId, title, ...(agentId ? { agentId } : {}) });
+    const deleteTopic = (topicId) => requireApi('agentSessionArchive')({ sessionId: topicId });
+    const archiveSession = (sessionId) => requireApi('agentSessionArchive')({ sessionId });
+    const restoreSession = (sessionId) => requireApi('agentSessionRestore')({ sessionId });
+    const permanentlyDeleteSession = (sessionId) => requireApi('agentSessionDelete')({ sessionId });
     const exportSession = (sessionId, format = 'markdown') => requireApi('agentRuntimeExportSession')({ sessionId, format });
     const listRecoveryOperations = () => requireApi('agentRuntimeListRecoveryOperations')();
     const listRecoveryCandidates = () => requireApi('agentRuntimeListRecoveryCandidates')();

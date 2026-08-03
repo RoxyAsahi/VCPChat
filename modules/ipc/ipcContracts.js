@@ -58,6 +58,15 @@ const CHANNELS = Object.freeze({
     AGENT_RUNTIME_RESPOND_INTERACTION: 'agent-runtime:respond-interaction',
     AGENT_RUNTIME_SET_WORKBENCH_PRESENCE: 'agent-runtime:set-workbench-presence',
     AGENT_RUNTIME_EVENT: 'agent-runtime:event',
+    AGENT_SESSION_CREATE: 'agent-session:create',
+    AGENT_SESSION_LIST: 'agent-session:list',
+    AGENT_SESSION_READ: 'agent-session:read',
+    AGENT_SESSION_READ_PROJECTION: 'agent-session:read-projection',
+    AGENT_SESSION_RENAME: 'agent-session:rename',
+    AGENT_SESSION_ARCHIVE: 'agent-session:archive',
+    AGENT_SESSION_RESTORE: 'agent-session:restore',
+    AGENT_SESSION_DELETE: 'agent-session:delete',
+    AGENT_SESSION_FORK: 'agent-session:fork',
     AGENT_WORKSPACE_LIST_DIRECTORY: 'agent-workspace:list-directory',
     AGENT_WORKSPACE_READ_PREVIEW: 'agent-workspace:read-preview',
     AGENT_WORKSPACE_SEARCH_FILES: 'agent-workspace:search-files',
@@ -72,6 +81,9 @@ const AGENT_CHANNELS = Object.freeze(Object.fromEntries([
         .map(([name, channel]) => [name.slice('AGENT_RUNTIME_'.length), channel]),
     ...Object.entries(CHANNELS)
         .filter(([name]) => name.startsWith('AGENT_WORKSPACE_'))
+        .map(([name, channel]) => [name.slice('AGENT_'.length), channel]),
+    ...Object.entries(CHANNELS)
+        .filter(([name]) => name.startsWith('AGENT_SESSION_'))
         .map(([name, channel]) => [name.slice('AGENT_'.length), channel]),
 ]));
 
@@ -233,6 +245,24 @@ const channelRegistry = new Map([
         responseSchema: null,
         supportsConcurrent: true,
     }],
+    ...[
+        CHANNELS.AGENT_SESSION_CREATE,
+        CHANNELS.AGENT_SESSION_LIST,
+        CHANNELS.AGENT_SESSION_READ,
+        CHANNELS.AGENT_SESSION_READ_PROJECTION,
+        CHANNELS.AGENT_SESSION_RENAME,
+        CHANNELS.AGENT_SESSION_ARCHIVE,
+        CHANNELS.AGENT_SESSION_RESTORE,
+        CHANNELS.AGENT_SESSION_DELETE,
+        CHANNELS.AGENT_SESSION_FORK,
+    ].map((channel) => [channel, {
+        channelName: channel,
+        channelType: CHANNEL_TYPES.QUERY,
+        owner: 'Agent Session Service',
+        requestSchema: { sessionId: 'string?' },
+        responseSchema: { sessionId: 'string?' },
+        supportsConcurrent: true,
+    }]),
 ]);
 
 // Agent runtime control-plane queries. Electron validates IPC origin and
