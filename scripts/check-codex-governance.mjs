@@ -108,6 +108,9 @@ const workbenchClients = fs.readFileSync(path.join(root, 'modules/ui-system/agen
 if (/agentRuntime(?:CreateTopic|CreateSession|ListTopics|ReadTopic|ReadProjection|RenameTopic|DeleteTopic)/.test(workbenchClients)) {
     errors.push('formal Workbench client boundary exposes deprecated Topic APIs');
 }
+for (const file of ['agent-session-client.js', 'agent-projection-client.js', 'agent-interaction-client.js', 'agent-workspace-client.js']) {
+    if (!fs.existsSync(path.join(root, 'modules/ui-system', file))) errors.push(`missing Workbench client module: ${file}`);
+}
 
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 for (const script of ['test:codex-reliability', 'test:electron-codex-recovery', 'check:codex-governance', 'test:codex-ci']) {

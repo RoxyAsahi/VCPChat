@@ -27,16 +27,17 @@ const CLIENT_METHODS = Object.freeze({
 });
 
 function createWorkbenchClients(runtimeApi) {
-    const clients = {};
+    const clients = {
+        session: createAgentSessionClient(runtimeApi),
+        projection: createAgentProjectionClient(runtimeApi),
+        interaction: createAgentInteractionClient(runtimeApi),
+        workspace: createAgentWorkspaceClient(runtimeApi),
+    };
     const registry = new Map();
     for (const [group, methods] of Object.entries(CLIENT_METHODS)) {
-        clients[group] = {};
         for (const name of methods) {
-            const method = typeof runtimeApi?.[name] === 'function' ? runtimeApi[name].bind(runtimeApi) : null;
-            clients[group][name] = method;
-            registry.set(name, method);
+            registry.set(name, clients[group][name]);
         }
-        Object.freeze(clients[group]);
     }
     return Object.freeze({
         ...clients,
@@ -50,3 +51,7 @@ function createWorkbenchClients(runtimeApi) {
 }
 
 export { CLIENT_METHODS, createWorkbenchClients };
+import { createAgentSessionClient } from './agent-session-client.js';
+import { createAgentProjectionClient } from './agent-projection-client.js';
+import { createAgentInteractionClient } from './agent-interaction-client.js';
+import { createAgentWorkspaceClient } from './agent-workspace-client.js';
