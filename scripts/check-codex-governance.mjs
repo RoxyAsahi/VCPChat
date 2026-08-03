@@ -169,6 +169,7 @@ const runtimeInteractionServicePath = path.join(root, 'modules/codex-runtime/run
 const runtimeToolboxServicePath = path.join(root, 'modules/codex-runtime/runtime-toolbox-service.js');
 const runtimeRecoveryServicePath = path.join(root, 'modules/codex-runtime/runtime-recovery-service.js');
 const runtimeSessionServicePath = path.join(root, 'modules/codex-runtime/runtime-session-service.js');
+const runtimeTurnServicePath = path.join(root, 'modules/codex-runtime/runtime-turn-service.js');
 if (!fs.existsSync(runtimeToolboxServicePath)) {
     errors.push('Runtime ToolBox service is missing');
 } else if (fs.readFileSync(runtimeToolboxServicePath, 'utf8').split(/\r?\n/).length > 900) {
@@ -188,6 +189,11 @@ if (!fs.existsSync(runtimeSessionServicePath)) {
     errors.push('Runtime session service is missing');
 } else if (fs.readFileSync(runtimeSessionServicePath, 'utf8').split(/\r?\n/).length > 900) {
     errors.push('runtime-session-service.js exceeds module ceiling');
+}
+if (!fs.existsSync(runtimeTurnServicePath)) {
+    errors.push('Runtime turn service is missing');
+} else if (fs.readFileSync(runtimeTurnServicePath, 'utf8').split(/\r?\n/).length > 900) {
+    errors.push('runtime-turn-service.js exceeds module ceiling');
 }
 if (!fs.existsSync(runtimeNormalizersPath)) {
     errors.push('Runtime pure normalizers module is missing');

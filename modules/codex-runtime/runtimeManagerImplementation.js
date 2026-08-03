@@ -15,6 +15,7 @@ const { RuntimeInteractionService } = require('./runtime-interaction-service');
 const { RuntimeToolboxService } = require('./runtime-toolbox-service');
 const { RuntimeRecoveryService } = require('./runtime-recovery-service');
 const { RuntimeSessionService } = require('./runtime-session-service');
+const { RuntimeTurnService } = require('./runtime-turn-service');
 const { normalizeProfile, normalizeSessionConfig, PROFILE_SCHEMA_VERSION } = require('./dataContracts');
 const {
     instructionConfigChanged,
@@ -182,6 +183,48 @@ class CodexRuntimeManager extends EventEmitter {
         this.runtimeRetryAfter = 0;
         this.faultInjection = options.faultInjection || {};
         this.knownOperationRecoveryPromise = null;
+        this._defaultStartTurnMethod = this._startTurn;
+        this.turnService = new RuntimeTurnService({
+            ensureProjectionStore: () => this.ensureProjectionStore(),
+            assertProjectionWritable: () => this._assertProjectionWritable(),
+            repository: () => this.repository,
+            transport: () => this.transport,
+            bridge: () => this.bridge,
+            responsesAdapter: () => this.responsesAdapter,
+            attachments: () => this.attachments,
+            dynamicCalls: () => this.dynamicCalls,
+            start: () => this.start(),
+            captureGeneration: () => this._captureGeneration(),
+            assertGeneration: (generation) => this._assertGeneration(generation),
+            repairSessionConfig: (session) => this._repairSessionConfig(session),
+            repairSessionIdentity: (session) => this._repairSessionIdentity(session),
+            configSnapshot: (options) => this._configSnapshot(options),
+            runtimePolicyParams: (config, options) => this._runtimePolicyParams(config, options),
+            threadInstructionParams: (config) => this._threadInstructionParams(config),
+            effectiveReasoningEffort: (config) => this._effectiveReasoningEffort(config),
+            applySessionRuntimeConfig: (sessionId, options) => this._applySessionRuntimeConfig(sessionId, options),
+            sendSessionConfigEvent: (type, session, error) => this._sendSessionConfigEvent(type, session, error),
+            sendUiEvent: (event) => this._sendUiEvent(event),
+            readSession: (options) => this.readTopic(options),
+            scheduleSessionConfigApply: (sessionId) => this._scheduleSessionConfigApply(sessionId),
+            rememberIdleWarmSession: (sessionId) => this._rememberIdleWarmSession(sessionId),
+            assertLifecycleIdle: (session) => this._assertLifecycleIdle(session),
+            createId: (prefix) => id(prefix),
+            diagnosticClock: () => this.diagnosticClock(),
+            diagnostic: (name, fields) => this._diagnostic(name, fields),
+            faultInjection: () => this.faultInjection,
+            sessionWarmPromises: () => this.sessionWarmPromises,
+            turnStartPromises: () => this.turnStartPromises,
+            followUpDrainPromises: () => this.followUpDrainPromises,
+            compactionWaiters: () => this.compactionWaiters,
+            resumedThreadIds: () => this.resumedThreadIds,
+            resumingThreads: () => this.resumingThreads,
+            threadStates: () => this.threadStates,
+            configApplyTargets: () => this.configApplyTargets,
+            idleWarmSessions: () => this.idleWarmSessions,
+            startTurnOverride: () => this._startTurn,
+            defaultStartTurnMethod: () => this._defaultStartTurnMethod,
+        });
     }
 
     getStatus() {
@@ -589,90 +632,13 @@ class CodexRuntimeManager extends EventEmitter {
     async ensureSessionRuntime({
         sessionId, topicId, reason = 'send', recoverPendingInputs = true, ...options
     } = {}) {
-        this.ensureProjectionStore();
-        this._assertProjectionWritable();
-        const idValue = resolveSessionIdInput({ sessionId, topicId });
-        if (this.sessionWarmPromises.has(idValue)) return this.sessionWarmPromises.get(idValue);
-        const warm = (async () => {
-            const startedAt = this.diagnosticClock();
-            this._diagnostic('thread-warm-started', { sessionId: idValue, reason });
-            await this.start();
-            const generation = this._captureGeneration();
-            let session = this.repository.getSession(idValue);
-            if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
-            if (session.archivedAt) {
-                throw new CodexAppServerError('SESSION_ARCHIVED', 'Restore the archived Session before starting a Turn');
-            }
-            session = this._repairSessionIdentity(this._repairSessionConfig(session));
-            session = session.threadId
-                ? await this._resumeSession(session)
-                : await this._startThreadForSession(session, options);
-            this._assertGeneration(generation);
-            if (recoverPendingInputs) await this._recoverPendingInputsForSession(session);
-            this._assertGeneration(generation);
-            this._rememberIdleWarmSession(session.sessionId);
-            this._diagnostic('thread-warm-completed', {
-                sessionId: session.sessionId,
-                reason,
-                durationMs: this.diagnosticClock() - startedAt,
-            });
-            return compatibilitySession(session);
-        })().finally(() => this.sessionWarmPromises.delete(idValue));
-        this.sessionWarmPromises.set(idValue, warm);
-        return warm;
+        return this.turnService.ensureSessionRuntime({
+            sessionId, topicId, reason, recoverPendingInputs, ...options,
+        });
     }
 
     async _startThreadForSession(session, options = {}) {
-        const generation = this._captureGeneration();
-        const config = session.configSnapshot || this._configSnapshot(options);
-        const runtimeParams = this._runtimePolicyParams(config, { starting: true });
-        const operation = this.repository.createOperation({
-            sessionId: session.sessionId,
-            kind: 'thread-start',
-            payload: { workspaceRoot: session.workspaceRoot, profileRevision: config.profileRevision || null },
-        });
-        let threadId;
-        try {
-            this.repository.updateOperation(operation.operationId, { state: 'dispatching' });
-            const result = await this.transport.request('thread/start', {
-                model: config.model || options.model,
-                ...runtimeParams,
-                cwd: session.workspaceRoot,
-                approvalPolicy: normalizeApprovalPolicy(config.permissionMode || config.approvalPolicy),
-                sandbox: normalizeSandboxMode(config.sandbox),
-                ...this._threadInstructionParams(config),
-                dynamicTools: [vcpInvokeTool()],
-            });
-            this._assertGeneration(generation);
-            threadId = result?.thread?.id;
-            if (!threadId) throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/start returned no thread id');
-            this.repository.updateOperation(operation.operationId, { state: 'remote-applied', threadId });
-            await this.faultInjection.afterThreadStartRemoteApplied?.({ operation, session, threadId });
-            this._assertGeneration(generation);
-            session = session.threadId
-                ? this.repository.replaceUnmaterializedThread(session.sessionId, threadId)
-                : this.repository.saveSession({
-                    ...session,
-                    threadId,
-                    state: 'ready',
-                    updatedAt: Date.now(),
-                });
-            session = this.repository.markSessionConfigApplied(
-                session.sessionId, session.configRevision, session.configSnapshot,
-            );
-            this._sendSessionConfigEvent('session.config.applied', session);
-            this.repository.updateOperation(operation.operationId, { state: 'completed', threadId });
-        } catch (error) {
-            this.repository.updateOperation(operation.operationId, {
-                state: (threadId || isUncertainRemoteMutation(error)) ? 'uncertain' : 'failed',
-                threadId: threadId || null,
-                lastError: error?.message || String(error),
-            });
-            throw error;
-        }
-        this.threadStates.set(threadId, { activity: 'idle', activeTurnId: null });
-        this.resumedThreadIds.add(threadId);
-        return session;
+        return this.turnService.startThreadForSession(session, options);
     }
 
     async readTopic({ topicId, sessionId, reconcile = true } = {}) {
@@ -692,173 +658,33 @@ class CodexRuntimeManager extends EventEmitter {
     async _startTurnWithGuard({
         sessionId, topicId, prompt, attachments = [], clientUserMessageId, recoverPendingInputs,
     } = {}) {
-        this._assertProjectionWritable();
-        const requestedSessionId = resolveSessionIdInput({ sessionId, topicId });
-        const text = String(prompt || '').trim();
-        const requestKey = submissionDedupeKey(text, attachments);
-        const existing = this.turnStartPromises.get(requestedSessionId);
-        if (existing) {
-            if (existing.requestKey === requestKey) return existing.promise;
-            throw new CodexAppServerError('SESSION_BUSY', 'A different message is already being submitted for this Session');
-        }
-        const promise = this._startTurn({
-            sessionId: requestedSessionId, prompt: text, attachments, clientUserMessageId, recoverPendingInputs,
+        return this.turnService.startTurnWithGuard({
+            sessionId, topicId, prompt, attachments, clientUserMessageId, recoverPendingInputs,
         });
-        this.turnStartPromises.set(requestedSessionId, { requestKey, promise });
-        try {
-            return await promise;
-        } finally {
-            if (this.turnStartPromises.get(requestedSessionId)?.promise === promise) this.turnStartPromises.delete(requestedSessionId);
-        }
     }
 
     async _startTurn({
         sessionId, prompt, attachments = [], clientUserMessageId, recoverPendingInputs = true,
     } = {}) {
-        this._assertProjectionWritable();
-        const startedAt = this.diagnosticClock();
-        let session = await this.ensureSessionRuntime({ sessionId, reason: 'send', recoverPendingInputs });
-        const generation = this._captureGeneration();
-        await this._applySessionRuntimeConfig(session.sessionId, { barrier: true });
-        this._assertGeneration(generation);
-        session = compatibilitySession(this.repository.getSession(session.sessionId));
-        const text = String(prompt || '').trim();
-        if (!text && (!Array.isArray(attachments) || attachments.length === 0)) {
-            throw new CodexAppServerError('INVALID_INPUT', 'Prompt or attachment must not be empty');
-        }
-        const turnId = id('turn');
-        const resolvedAttachments = this.attachments.resolveMany(session.sessionId, attachments);
-        const input = buildTurnInput(text, resolvedAttachments);
-        const effort = this._effectiveReasoningEffort(session.configSnapshot || {});
-        const result = await this.transport.request('turn/start', {
-            threadId: session.threadId,
-            clientUserMessageId: clientUserMessageId || id('client_msg'),
-            input,
-            cwd: session.workspaceRoot,
-            model: session.configSnapshot?.model || undefined,
-            ...(effort ? { effort } : {}),
-            // App Server applies execution policy to the turn it is about to
-            // start.  Reading it from the Session snapshot means a saved
-            // current-session change takes effect without restarting this
-            // Thread (and without touching any other running Thread).
-            approvalPolicy: normalizeApprovalPolicy(session.configSnapshot?.permissionMode || session.configSnapshot?.approvalPolicy),
-            sandbox: normalizeSandboxMode(session.configSnapshot?.sandbox),
+        return this.turnService.startTurnInternal({
+            sessionId, prompt, attachments, clientUserMessageId, recoverPendingInputs,
         });
-        this._assertGeneration(generation);
-        const acceptedTurnId = result?.turn?.id || turnId;
-        const appliedSession = this.repository.markSessionConfigApplied(
-            session.sessionId, session.configRevision, session.configSnapshot,
-        );
-        this.configApplyTargets.delete(session.threadId);
-        this._sendSessionConfigEvent('session.config.applied', appliedSession);
-        this.idleWarmSessions.delete(session.sessionId);
-        this.threadStates.set(session.threadId, { activity: 'running', activeTurnId: acceptedTurnId });
-        this._diagnostic('turn-start-ack', {
-            sessionId: session.sessionId,
-            turnId: acceptedTurnId,
-            durationMs: this.diagnosticClock() - startedAt,
-        });
-        return {
-            sessionId: session.sessionId,
-            topicId: session.sessionId,
-            threadId: session.threadId,
-            turnId: acceptedTurnId,
-        };
     }
 
     async steerTurn({ sessionId, topicId, turnId, prompt } = {}) {
-        this._assertProjectionWritable();
-        const session = this.repository.getSession(resolveSessionIdInput({ sessionId, topicId }));
-        if (!session?.threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached');
-        const result = await this.transport.request('turn/steer', {
-            threadId: session.threadId,
-            expectedTurnId: turnId,
-            clientUserMessageId: id('client_msg'),
-            input: [{ type: 'text', text: String(prompt || ''), text_elements: [] }],
-        });
-        return { sessionId: session.sessionId, threadId: session.threadId, turnId: result?.turnId || turnId };
+        return this.turnService.steer({ sessionId, topicId, turnId, prompt });
     }
 
     async followUpTurn({ sessionId, topicId, prompt, attachments = [] } = {}) {
-        this._assertProjectionWritable();
-        if (Array.isArray(attachments) && attachments.length) {
-            throw new CodexAppServerError('QUEUE_ATTACHMENT_UNSUPPORTED', 'Queued follow-up attachments are not persisted; send them as a new turn instead');
-        }
-        const idValue = resolveSessionIdInput({ sessionId, topicId });
-        const session = this.repository.getSession(idValue);
-        const text = String(prompt || '').trim();
-        if (!session?.threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached');
-        if (!text) throw new CodexAppServerError('INVALID_INPUT', 'Follow-up message must not be empty');
-        const queued = this.repository.enqueuePendingInput(idValue, {
-            dedupeKey: submissionDedupeKey(text, []),
-            prompt: text,
-        });
-        const state = this.threadStates.get(session.threadId);
-        if (state?.activity !== 'running') void this._drainFollowUpQueue(session);
-        return { sessionId: idValue, threadId: session.threadId, inputId: queued.input_id, queued: true };
+        return this.turnService.followUp({ sessionId, topicId, prompt, attachments });
     }
 
     async cancelTurn({ sessionId, topicId, turnId } = {}) {
-        this._assertProjectionWritable();
-        const session = this.repository.getSession(resolveSessionIdInput({ sessionId, topicId }));
-        if (!session?.threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached');
-        await this.transport.request('turn/interrupt', {
-            threadId: session.threadId,
-            turnId,
-        });
-        // The adapter receives Codex's signed-by-process turn metadata header
-        // and can therefore interrupt only this exact ToolBox model request.
-        // Do this before unrelated dynamic VCP calls are considered.
-        await this.responsesAdapter?.cancelTurn?.({ threadId: session.threadId, turnId });
-        const interrupts = [...this.dynamicCalls.values()]
-            .filter((call) => call.threadId === session.threadId && (!turnId || call.turnId === turnId))
-            .map((call) => this.bridge?.interrupt(call.bridgeRequestId).catch(() => false));
-        await Promise.all(interrupts);
-        return { sessionId: session.sessionId, threadId: session.threadId, turnId, interrupted: true };
+        return this.turnService.cancel({ sessionId, topicId, turnId });
     }
 
     async forkSession({ sessionId, topicId, turnId, title } = {}) {
-        this._assertProjectionWritable();
-        const source = this.repository.getSession(resolveSessionIdInput({ sessionId, topicId }));
-        if (!source?.threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached');
-        const targetSessionId = id('session');
-        const operation = this.repository.createOperation({
-            sessionId: source.sessionId, kind: 'thread-fork',
-            payload: { targetSessionId, sourceThreadId: source.threadId, lastTurnId: turnId || null },
-        });
-        let threadId;
-        try {
-            this.repository.updateOperation(operation.operationId, { state: 'dispatching' });
-            const result = await this.transport.request('thread/fork', {
-                threadId: source.threadId,
-                ...(turnId ? { lastTurnId: turnId } : {}),
-            });
-            threadId = result?.thread?.id;
-            if (!threadId) throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/fork returned no thread id');
-            this.repository.updateOperation(operation.operationId, { state: 'remote-applied', threadId });
-            await this.faultInjection.afterThreadForkRemoteApplied?.({ operation, source, threadId, targetSessionId });
-            const fork = this.repository.saveSession({
-                sessionId: targetSessionId,
-                threadId,
-                agentId: source.agentId,
-                agentCatalogId: source.agentCatalogId,
-                agentNameSnapshot: source.agentNameSnapshot,
-                title: title || `${source.title || 'Codex Agent'} (branch)`,
-                workspaceRoot: source.workspaceRoot,
-                state: 'ready',
-                configSnapshot: source.configSnapshot,
-                configRevision: source.configRevision,
-            });
-            this.repository.updateOperation(operation.operationId, { state: 'completed', threadId });
-            return fork;
-        } catch (error) {
-            this.repository.updateOperation(operation.operationId, {
-                state: (threadId || isUncertainRemoteMutation(error)) ? 'uncertain' : 'failed',
-                threadId: threadId || null,
-                lastError: error?.message || String(error),
-            });
-            throw error;
-        }
+        return this.turnService.fork({ sessionId, topicId, turnId, title });
     }
 
     _assertLifecycleIdle(session) {
@@ -895,42 +721,7 @@ class CodexRuntimeManager extends EventEmitter {
         return { mounted: this.workbenchMounted };
     }
     async compactSession({ sessionId, topicId, timeoutMs = 120_000 } = {}) {
-        this._assertProjectionWritable();
-        const session = this.repository.getSession(resolveSessionIdInput({ sessionId, topicId }));
-        if (!session?.threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached');
-        this._assertLifecycleIdle(session);
-        if (this.compactionWaiters.has(session.threadId)) {
-            throw new CodexAppServerError('SESSION_BUSY', 'Context compaction is already running for this Session');
-        }
-        await this.start();
-        let resolveWaiter;
-        let rejectWaiter;
-        const completion = new Promise((resolve, reject) => { resolveWaiter = resolve; rejectWaiter = reject; });
-        const timeout = setTimeout(() => {
-            const waiter = this.compactionWaiters.get(session.threadId);
-            if (!waiter) return;
-            this.compactionWaiters.delete(session.threadId);
-            waiter.reject(new CodexAppServerError('COMPACTION_TIMEOUT', 'Codex context compaction did not complete in time'));
-            this._sendUiEvent({ type: 'compaction.failed', topicId: session.sessionId, sessionId: session.sessionId,
-                payload: { reason: 'timeout' } });
-        }, Math.max(1_000, Number(timeoutMs) || 120_000));
-        this.compactionWaiters.set(session.threadId, {
-            sessionId: session.sessionId, threadId: session.threadId, resolve: resolveWaiter, reject: rejectWaiter, timeout,
-        });
-        this._sendUiEvent({ type: 'compaction.started', topicId: session.sessionId, sessionId: session.sessionId });
-        try {
-            // ACK proves only admission. Completion requires a terminal item.
-            await this.transport.request('thread/compact/start', { threadId: session.threadId });
-        } catch (error) {
-            const waiter = this.compactionWaiters.get(session.threadId);
-            if (waiter) {
-                this.compactionWaiters.delete(session.threadId);
-                clearTimeout(waiter.timeout);
-                waiter.reject(error);
-            }
-            throw error;
-        }
-        return completion;
+        return this.turnService.compact({ sessionId, topicId, timeoutMs });
     }
     async searchTopics(options = {}) { return { topics: await this.listTopics(options) }; }
     async searchTopicMessages({ topicId, sessionId } = {}) { return this.readTopic({ topicId, sessionId }); }
@@ -2158,64 +1949,7 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     async _resumeSession(session) {
-        const generation = this._captureGeneration();
-        const threadId = String(session?.threadId || '').trim();
-        if (!threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached to a Codex Thread');
-        if (this.resumedThreadIds.has(threadId)) return this.repository.getSession(session.sessionId) || session;
-        if (this.resumingThreads.has(threadId)) return this.resumingThreads.get(threadId);
-        const resume = (async () => {
-            const config = session.configSnapshot || {};
-            try {
-                // `excludeTurns` is intentional: SQLite already owns the UI
-                // projection and `thread/read` reconciles it in the background.
-                // Resume only establishes the App Server live subscription and
-                // reopens the durable Codex execution context.
-                const result = await this.transport.request('thread/resume', {
-                    threadId,
-                    model: config.model || undefined,
-                    ...this._runtimePolicyParams(config),
-                    cwd: session.workspaceRoot || undefined,
-                    approvalPolicy: normalizeApprovalPolicy(config.permissionMode || config.approvalPolicy),
-                    sandbox: normalizeSandboxMode(config.sandbox),
-                    ...this._threadInstructionParams(config),
-                    ...(config.executionProfile === 'toolbox-only' ? { dynamicTools: [vcpInvokeTool()] } : {}),
-                    excludeTurns: true,
-                });
-                this._assertGeneration(generation);
-                const resumedThreadId = String(result?.thread?.id || '').trim();
-                if (resumedThreadId !== threadId) {
-                    throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/resume returned a mismatched thread id');
-                }
-                const activity = result?.thread?.status?.type === 'active' ? 'running' : 'idle';
-                this.threadStates.set(threadId, { activity, activeTurnId: null });
-                this.resumedThreadIds.add(threadId);
-                const applied = this.repository.markSessionConfigApplied(
-                    session.sessionId, session.configRevision, session.configSnapshot,
-                );
-                this.configApplyTargets.delete(threadId);
-                this._sendSessionConfigEvent('session.config.applied', applied);
-                if (session.orphaned) this.repository.markOrphaned(session.sessionId, false);
-                return this.repository.getSession(session.sessionId) || applied || session;
-            } catch (error) {
-                if (error?.code === 'STALE_RUNTIME_GENERATION' || !this.repository) throw error;
-                const projection = this.repository.readProjection(session.sessionId);
-                if (isConfirmedThreadNotFound(error) && !hasDurableProjection(projection)) {
-                    // Codex creates an in-memory empty Thread before its first
-                    // Turn writes a rollout. There is no user/agent context to
-                    // lose, so it is safe to bind this VChat Session to a new
-                    // Thread using the same frozen config. Any non-empty
-                    // projection remains fail-closed and orphaned instead.
-                    return this._startThreadForSession(session);
-                }
-                if (isConfirmedThreadNotFound(error)) this.repository.markOrphaned(session.sessionId, true);
-                this.repository.markProjectionError(session.sessionId, error.message);
-                throw error;
-            } finally {
-                this.resumingThreads.delete(threadId);
-            }
-        })();
-        this.resumingThreads.set(threadId, resume);
-        return resume;
+        return this.turnService.resumeSession(session);
     }
 
     async _handleDynamicToolCall(message) {
@@ -2252,94 +1986,11 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     async _drainFollowUpQueue(session) {
-        if (!session?.sessionId || this.followUpDrainPromises.has(session.sessionId)) {
-            return this.followUpDrainPromises.get(session?.sessionId) || null;
-        }
-        const drain = (async () => {
-            const state = this.threadStates.get(session.threadId);
-            if (state?.activity === 'running') return null;
-            const next = this.repository.listPendingInputs(session.sessionId)
-                .find((entry) => entry.state === 'queued');
-            if (!next) return null;
-            this.repository.updatePendingInput(next.inputId, {
-                state: 'dispatching',
-                attemptCount: next.attemptCount + 1,
-                lastError: null,
-            });
-            try {
-                await this.faultInjection.beforePendingInputRpc?.({ session, pendingInput: next });
-                const accepted = await this._startTurnWithGuard({
-                    sessionId: session.sessionId,
-                    prompt: next.prompt,
-                    clientUserMessageId: next.clientMessageId,
-                    // This row became `dispatching` in the current call. A
-                    // second recovery pass would mistake it for a prior crash
-                    // window before turn/start has even been dispatched.
-                    recoverPendingInputs: false,
-                });
-                await this.faultInjection.afterTurnAckBeforePendingCommit?.({ session, pendingInput: next, accepted });
-                this.repository.updatePendingInput(next.inputId, {
-                    state: 'accepted', turnId: accepted.turnId, lastError: null,
-                });
-                this.repository.removePendingInput(next.inputId);
-                this._sendUiEvent({
-                    type: 'input.dequeued',
-                    topicId: session.sessionId,
-                    sessionId: session.sessionId,
-                    turnId: accepted.turnId,
-                    payload: { inputId: next.inputId },
-                });
-                return accepted;
-            } catch (error) {
-                if (error?.simulateProcessCrash === true) throw error;
-                this.repository.updatePendingInput(next.inputId, {
-                    state: isUncertainRemoteMutation(error) ? 'uncertain' : 'failed',
-                    lastError: error?.message || String(error),
-                });
-                this._sendUiEvent({
-                    type: 'input.queue.failed',
-                    topicId: session.sessionId,
-                    sessionId: session.sessionId,
-                    payload: { inputId: next.inputId, error: error.message },
-                });
-                return null;
-            }
-        })().finally(() => this.followUpDrainPromises.delete(session.sessionId));
-        this.followUpDrainPromises.set(session.sessionId, drain);
-        return drain;
+        return this.turnService.drainFollowUpQueue(session);
     }
 
     async _recoverPendingInputsForSession(session) {
-        const pending = this.repository.listPendingInputs(session.sessionId)
-            .filter((entry) => ['dispatching', 'accepted'].includes(entry.state));
-        if (!pending.length || !session.threadId) return;
-        let thread;
-        try {
-            const result = await this.transport.request('thread/read', { threadId: session.threadId, includeTurns: true });
-            thread = result?.thread || result;
-        } catch (error) {
-            for (const entry of pending) this.repository.updatePendingInput(entry.inputId, {
-                state: 'uncertain', lastError: `Could not verify accepted input: ${error.message}`,
-            });
-            return;
-        }
-        const userItems = (thread?.turns || []).flatMap((turn) => (turn.items || []).map((item) => ({ turn, item })))
-            .filter(({ item }) => item?.type === 'userMessage');
-        for (const entry of pending) {
-            const match = userItems.find(({ item }) => [
-                item.id, item.clientUserMessageId, item.client_user_message_id,
-            ].some((value) => String(value || '') === String(entry.clientMessageId || '')));
-            if (match) {
-                this.repository.updatePendingInput(entry.inputId, {
-                    state: 'accepted', turnId: match.turn?.id || entry.turnId || null, lastError: null,
-                });
-                this.repository.removePendingInput(entry.inputId);
-            } else {
-                this.repository.updatePendingInput(entry.inputId, {
-                    state: 'uncertain', lastError: 'Codex Thread does not confirm whether this input was accepted',
-                });
-            }
-        }
+        return this.turnService.recoverPendingInputsForSession(session);
     }
 
     _handleBridgeEvent(message) {
