@@ -348,7 +348,7 @@ async function auditArchivedClassicPage(page, app, captureName) {
     await page.waitForFunction((selector) => document.querySelector(selector), { timeout: timeoutMs }, app.legacySelector || app.legacy);
     await sleep(300);
     const state = await page.evaluate((legacySelector) => ({
-        uiMode: document.documentElement.dataset.uiMode,
+        uiMode: document.documentElement.dataset.uiMode || 'classic',
         hasShell: Boolean(document.querySelector('.vcp-ui-page-shell')),
         waCount: document.querySelectorAll('wa-button, wa-input, wa-select, wa-card, wa-tooltip').length,
         bodyScope: document.body.classList.contains('vcp-ui-scope'),
@@ -580,7 +580,7 @@ try {
         await childPage.waitForFunction((selector) => document.querySelector(selector), { timeout: timeoutMs }, app.legacySelector);
         await sleep(300);
         const classicState = await childPage.evaluate((legacySelector) => ({
-            uiMode: document.documentElement.dataset.uiMode,
+            uiMode: document.documentElement.dataset.uiMode || 'classic',
             hasShell: Boolean(document.querySelector('.vcp-ui-page-shell')),
             waCount: document.querySelectorAll('wa-button, wa-input, wa-select, wa-card, wa-tooltip').length,
             bodyScope: document.body.classList.contains('vcp-ui-scope'),
@@ -615,7 +615,7 @@ try {
         await standalonePage.waitForFunction((selector) => document.querySelector(selector), { timeout: timeoutMs }, standalone.legacy);
         await sleep(300);
         const classicState = await standalonePage.evaluate((legacySelector) => ({
-            uiMode: document.documentElement.dataset.uiMode,
+            uiMode: document.documentElement.dataset.uiMode || 'classic',
             hasShell: Boolean(document.querySelector('.vcp-ui-page-shell')),
             waCount: document.querySelectorAll('wa-button, wa-input, wa-select, wa-card, wa-tooltip').length,
             bodyScope: document.body.classList.contains('vcp-ui-scope'),
