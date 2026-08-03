@@ -11,7 +11,7 @@ Status: **implemented**
 | Settings Draft state | `agent-settings-state.js`, `agent-settings-view.js` | page-global timer/queue, stale Snapshot overwrite |
 | Settings persistence and CAS | `agent-settings-coordinator.js` | Session A completion mutating Session B UI, page-global revision ownership |
 | Runtime config apply | `runtimeConfig.js`, Runtime Manager apply coordinator | desired config entering Responses Adapter before confirmation |
-| Attachment capabilities | `attachmentRegistry.js` | absolute paths in Renderer, SQLite, transcript or logs |
+| Attachment capabilities | `runtime-session-service.js`, `attachmentRegistry.js` | Manager-owned file validation, absolute paths in Renderer, SQLite, transcript or logs |
 | Agent presentation facade | `modules/ui-system/agent-presentation/fork/agentMessageRenderer.js`, `agent-renderer-runtime.js` | main renderer runtime state and persistence; feature logic in the composition root |
 | Agent presentation content and lifecycle | `agent-renderer-markdown-pipeline.js`, `agent-renderer-message-lifecycle.js`, `agent-renderer-mermaid.js`, `agent-renderer-tool-results.js`, existing stream/session/DOM/action modules | shared mutable renderer singletons, global container cleanup, hidden Session reads |
 | Dock and Workspace view state | `agent-session-dock.js`, `agent-session-dock-view.js`, `agent-workspace-model.js`, `agent-workspace-view.js` | arbitrary absolute paths, cross-Session file refs |
@@ -30,6 +30,8 @@ Status: **implemented**
 | Runtime lifecycle ordering | `runtime-host-service.js`, `runtime-lifecycle-service.js` | Repository close before approval/waiter cleanup, old-generation UI/SQLite/transport writes |
 | Runtime operation identity | `runtime-operation-context.js`; Session/Recovery services | remote await without generation + Session/Thread/Turn identity, writes through a closed Repository |
 | Runtime external authority | Turn, Config, Host, Interaction, ToolBox and Recovery services using `RuntimeOperationContext` | old-generation UI/SQLite writes, use of replacement Bridge/Transport, deletion of a replacement dynamic call |
+| Runtime service dependency tables | frozen `RuntimeServiceContext` in each `runtime-*-service.js` | replacing service dependency functions after construction, capturing stale Repository/transport values across awaits |
+| Workbench presence and approval closure | `runtime-interaction-service.js` | Manager-owned approval cleanup, closing a panel implicitly allowing an approval |
 | Deprecated Runtime Topic methods | `runtime-topic-compatibility.js` only | canonical service graph or Workbench delegation through Topic-named methods |
 | Workbench host API boundary | Session/Projection/Interaction/Workspace clients, `agent-runtime-event-subscription.js` | direct preload calls from Views, coordinators, command controller, or presentation |
 | Workbench selection identity | `SelectedSessionIdentity`, keyed by `selectedSessionId` | fallback to cached Topic/Session display snapshots or cross-Session action routing |
