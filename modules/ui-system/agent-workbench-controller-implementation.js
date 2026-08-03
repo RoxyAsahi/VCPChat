@@ -4,7 +4,8 @@ import { createWorkbenchClients } from './agent-workbench-clients.js';
 import { codexSnapshotToProjection } from './agent-workbench-snapshot-projection.js';
 import { createWorkbenchCommandController } from './agent-workbench-command-controller.js';
 import { createAgentRuntimeEventSubscription } from './agent-runtime-event-subscription.js';
-import { selectedSessionId as selectedSessionIdFromState } from './agent-selected-session.js';
+import { selectedSessionIdentity, selectedSessionId as selectedSessionIdFromState } from './agent-selected-session.js';
+import { requireMatchingProjectionSession, requireSnapshotSession } from './agent-session-projection-identity.js';
 function createWorkbenchController(runtimeApi) {
     const clients = createWorkbenchClients(runtimeApi);
     const store = createWorkbenchStore();
@@ -194,8 +195,7 @@ function createWorkbenchController(runtimeApi) {
                     : null,
             });
         }
-        const selected = event.sessionId === current.selectedSessionId
-            && event.sessionId === current.selectedTopic?.sessionId;
+        const selected = event.sessionId === selectedSessionIdentity(current)?.sessionId;
         store.setState({
             activeRuntimes: runtimes,
             ...(selected ? { activeTurnId: event.activity === 'running' ? event.turnId : null } : {}),
@@ -245,11 +245,13 @@ function createWorkbenchController(runtimeApi) {
         return cached.projection;
     }
 
-    function applyPreviewProjection(projection, selectedTopic) {
+    function applyPreviewProjection(projection, selectedTopic, projectionSessionId) {
         const current = store.getState();
-        const selectedSessionId = projection?.session?.sessionId || selectedTopic.sessionId;
+        const selectedSessionId = requireMatchingProjectionSession(
+            selectedTopic?.sessionId, projectionSessionId,
+        );
         const sessionSnapshots = new Map(current.sessionSnapshots);
-        sessionSnapshots.set(selectedTopic.sessionId, projection);
+        sessionSnapshots.set(selectedSessionId, projection);
         store.setState({
             ...projection,
             selectedTopic,
@@ -305,6 +307,7 @@ function createWorkbenchController(runtimeApi) {
     }
 
     function applyHydratedSnapshot(sessionId, snapshot, runtimeHint, agentId) {
+        requireSnapshotSession(snapshot, sessionId);
         const current = store.getState();
         // A sidebar row may have been created before a background Turn
         // started. The identity-keyed runtime Map is fresher than that DOM
@@ -418,7 +421,7 @@ function createWorkbenchController(runtimeApi) {
             mode: 'preview',
         };
         const cached = cachedProjection(sessionId);
-        if (cached) applyPreviewProjection(cached, selectedTopic);
+        if (cached) applyPreviewProjection(cached, selectedTopic, sessionId);
         let localSnapshot;
         try {
             // This is the only awaited cold-open read in the Codex path. It
@@ -432,7 +435,11 @@ function createWorkbenchController(runtimeApi) {
             }
             const resolvedTopic = resolvePreviewTopic(localSnapshot, selectedTopic);
             cacheSnapshot(sessionId, localSnapshot);
-            applyPreviewProjection(codexSnapshotToProjection(localSnapshot), resolvedTopic);
+            applyPreviewProjection(
+                codexSnapshotToProjection(localSnapshot),
+                resolvedTopic,
+                localSnapshot?.session?.sessionId,
+            );
             releaseSnapshotBarrier(barrier, localSnapshot, runtimeForTopic(sessionId));
             // Deliberately detached: navigation is complete before App Server
             // reconciliation begins. The guards in reconcilePreviewTopic make
@@ -507,7 +514,11 @@ function createWorkbenchController(runtimeApi) {
             // entry will perform a fresh SQLite read and reconcile again.
             if ((liveProjectionRevision.get(sessionId) || 0) !== revisionAtStart) return null;
             cacheSnapshot(sessionId, snapshot);
-            applyPreviewProjection(codexSnapshotToProjection(snapshot), resolvePreviewTopic(snapshot, selectedTopic));
+            applyPreviewProjection(
+                codexSnapshotToProjection(snapshot),
+                resolvePreviewTopic(snapshot, selectedTopic),
+                snapshot?.session?.sessionId,
+            );
             return snapshot;
         } catch (_error) {
             // A background sync failure preserves the SQLite projection. Main

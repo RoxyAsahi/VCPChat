@@ -331,6 +331,14 @@ for (const file of filesUnder(path.join(root, 'modules/ui-system'))) {
         errors.push(`${path.relative(root, file)} contains an implicit Session identity fallback`);
     }
 }
+for (const [relative, pattern] of [
+    ['modules/ui-system/agent-workbench-controller-implementation.js', /projection\?\.session\?\.sessionId\s*\|\|\s*selectedTopic\.sessionId/],
+    ['modules/ui-system/agent-workbench-timeline-view.js', /!current\.selectedSessionId\s*&&\s*!current\.selectedTopic\?\.sessionId/],
+]) {
+    if (pattern.test(fs.readFileSync(path.join(root, relative), 'utf8'))) {
+        errors.push(`${relative} uses a display snapshot as a Session selection fallback`);
+    }
+}
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 for (const script of ['test:codex-reliability', 'test:electron-codex-recovery', 'check:codex-governance', 'test:codex-ci']) {
     if (!packageJson.scripts?.[script]) errors.push(`package.json missing ${script}`);

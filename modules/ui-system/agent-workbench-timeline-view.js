@@ -1,5 +1,6 @@
 import { createAgentTimelineParts, reconcileAgentTimeline } from './agent-workbench-timeline.js';
 import { node } from './agent-workbench-dom.js';
+import { selectedSessionIdentity } from './agent-selected-session.js';
 
 export function createAgentWorkbenchTimelineView({ refs, rows, callbacks, actions }) {
     const { feed, feedItems, jumpToLatest } = refs;
@@ -22,7 +23,7 @@ export function createAgentWorkbenchTimelineView({ refs, rows, callbacks, action
     function render(model) {
         const follow = actions.isFollowing(feed);
         const current = model.projection;
-        if (!current.selectedSessionId && !current.selectedTopic?.sessionId) {
+        if (!selectedSessionIdentity(current)) {
             showEmpty('创建一个 Agent 会话，即可开始与 VCPToolBox 协作。');
             return;
         }

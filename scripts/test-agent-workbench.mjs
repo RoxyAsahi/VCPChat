@@ -395,8 +395,27 @@ window.chatAPI.agentRuntimeUpdateSessionConfig = async ({ sessionId, expectedCon
 );
 window.chatAPI.agentSessionCreate = window.chatAPI.agentRuntimeCreateTopic;
 window.chatAPI.agentSessionList = window.chatAPI.agentRuntimeListTopics;
-window.chatAPI.agentSessionReadProjection = ({ sessionId, ...payload }) => window.chatAPI.agentRuntimeReadTopic({ ...payload, sessionId: sessionId });
-window.chatAPI.agentSessionRead = ({ sessionId, ...payload }) => window.chatAPI.agentRuntimeReadTopic({ ...payload, sessionId: sessionId });
+function canonicalSessionProjection(snapshot) {
+    if (snapshot?.session?.sessionId) return snapshot;
+    const sessionId = String(snapshot?.sessionId || '').trim();
+    if (!sessionId) return snapshot;
+    return {
+        ...snapshot,
+        session: {
+            sessionId,
+            title: snapshot?.state?.title || '',
+            workspaceRoot: snapshot?.state?.workspaceRoot || snapshot?.state?.workspaceRef || '',
+            configSnapshot: snapshot?.state?.configSnapshot || (snapshot?.state?.model
+                ? { model: snapshot.state.model } : null),
+        },
+    };
+}
+window.chatAPI.agentSessionReadProjection = async ({ sessionId, ...payload }) => canonicalSessionProjection(
+    await window.chatAPI.agentRuntimeReadTopic({ ...payload, sessionId }),
+);
+window.chatAPI.agentSessionRead = async ({ sessionId, ...payload }) => canonicalSessionProjection(
+    await window.chatAPI.agentRuntimeReadTopic({ ...payload, sessionId }),
+);
 window.chatAPI.agentSessionRename = ({ sessionId, ...payload }) => window.chatAPI.agentRuntimeRenameTopic({ ...payload, sessionId: sessionId });
 window.chatAPI.agentSessionArchive = ({ sessionId }) => window.chatAPI.agentRuntimeDeleteTopic({ sessionId: sessionId });
 window.chatAPI.agentSessionRestore = window.chatAPI.agentRuntimeRestoreSession;

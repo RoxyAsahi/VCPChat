@@ -5,15 +5,33 @@ import { projectSession, projectTool } from '../modules/ui-system/agent-workbenc
 
 function createWorkbenchController(api) {
     const topicPayload = (payload = {}) => ({ ...payload, sessionId: payload.sessionId || payload.sessionId });
+    const canonicalProjection = async (reader, payload) => {
+        const snapshot = await reader(topicPayload(payload));
+        if (snapshot?.session?.sessionId) return snapshot;
+        const sessionId = String(snapshot?.sessionId || '').trim();
+        if (!sessionId) return snapshot;
+        return {
+            ...snapshot,
+            session: {
+                sessionId,
+                title: snapshot?.state?.title || '',
+                workspaceRoot: snapshot?.state?.workspaceRoot || snapshot?.state?.workspaceRef || '',
+                configSnapshot: snapshot?.state?.configSnapshot || (snapshot?.state?.model
+                    ? { model: snapshot.state.model } : null),
+            },
+        };
+    };
     return createRawWorkbenchController({
         ...api,
         agentSessionCreate: api.agentSessionCreate || api.agentRuntimeCreateTopic || api.agentRuntimeCreateSession,
         agentSessionList: api.agentSessionList || api.agentRuntimeListTopics,
         agentSessionReadProjection: api.agentSessionReadProjection
-            || (api.agentRuntimeReadProjection ? (payload) => api.agentRuntimeReadProjection(topicPayload(payload))
-                : api.agentRuntimeReadTopic ? (payload) => api.agentRuntimeReadTopic(topicPayload(payload)) : undefined),
+            ? (payload) => canonicalProjection(api.agentSessionReadProjection, payload)
+            : api.agentRuntimeReadProjection ? (payload) => canonicalProjection(api.agentRuntimeReadProjection, payload)
+                : api.agentRuntimeReadTopic ? (payload) => canonicalProjection(api.agentRuntimeReadTopic, payload) : undefined,
         agentSessionRead: api.agentSessionRead
-            || (api.agentRuntimeReadTopic ? (payload) => api.agentRuntimeReadTopic(topicPayload(payload)) : undefined),
+            ? (payload) => canonicalProjection(api.agentSessionRead, payload)
+            : api.agentRuntimeReadTopic ? (payload) => canonicalProjection(api.agentRuntimeReadTopic, payload) : undefined,
         agentSessionRename: api.agentSessionRename || api.agentRuntimeRenameTopic,
         agentSessionArchive: api.agentSessionArchive || api.agentRuntimeCloseSession,
         agentSessionRestore: api.agentSessionRestore || api.agentRuntimeRestoreSession,
@@ -437,7 +455,7 @@ const cold = createWorkbenchController({
         coldCalls.push(['sqlite', sessionId]);
         if (sessionId === 'topic-a') return new Promise((resolve) => { resolveSqliteA = resolve; });
         return Promise.resolve({
-            session: { agentId: 'Nova', title: 'SQLite B' },
+            session: { sessionId: 'topic-b', agentId: 'Nova', title: 'SQLite B' },
             messages: [{ messageId: 'sqlite-b', itemId: 'item-b', role: 'assistant', status: 'completed', blocks: [{ blockId: 'b:0', kind: 'message', content: { text: 'SQLite B' } }] }],
         });
     },
@@ -451,7 +469,7 @@ const openingA = cold.previewTopic('topic-a', 'Nova', { title: 'A' });
 await new Promise((resolve) => setImmediate(resolve));
 assert.deepEqual(coldCalls, [['sqlite', 'topic-a']], 'cold navigation must not wait for thread/read');
 resolveSqliteA({
-    session: { agentId: 'Nova', title: 'SQLite A' },
+    session: { sessionId: 'topic-a', agentId: 'Nova', title: 'SQLite A' },
     messages: [{ messageId: 'sqlite-a', itemId: 'item-a', role: 'assistant', status: 'completed', blocks: [{ blockId: 'a:0', kind: 'message', content: { text: 'SQLite A' } }] }],
 });
 await openingA;
@@ -461,13 +479,13 @@ assert.ok(coldCalls.some(([kind, sessionId]) => kind === 'thread' && sessionId =
 await cold.previewTopic('topic-b', 'Nova', { title: 'B' });
 assert.equal(cold.store.getState().messages[0].content, 'SQLite B');
 resolveThreadA({
-    session: { agentId: 'Nova', title: 'stale Thread A' },
+    session: { sessionId: 'topic-a', agentId: 'Nova', title: 'stale Thread A' },
     messages: [{ messageId: 'thread-a', itemId: 'item-a', role: 'assistant', status: 'completed', blocks: [{ blockId: 'a:0', kind: 'message', content: { text: 'must not replace B' } }] }],
 });
 await new Promise((resolve) => setImmediate(resolve));
 assert.equal(cold.store.getState().selectedTopic.sessionId, 'topic-b');
 assert.equal(cold.store.getState().messages[0].content, 'SQLite B', 'late A reconciliation must not overwrite B');
-resolveThreadB({ session: { agentId: 'Nova', title: 'Thread B' }, messages: [] });
+resolveThreadB({ session: { sessionId: 'topic-b', agentId: 'Nova', title: 'Thread B' }, messages: [] });
 cold.dispose();
 
 const hydrateCalls = [];
@@ -489,21 +507,21 @@ const openingAttached = hydratedCodex.hydrateTopic('attached-topic', {
 await new Promise((resolve) => setImmediate(resolve));
 assert.deepEqual(hydrateCalls, ['sqlite'], 'an attached Codex Session must also open from SQLite before thread/read');
 resolveHydrateSqlite({
-    session: { agentId: 'Nova', title: 'SQLite attached' },
+    session: { sessionId: 'attached-topic', agentId: 'Nova', title: 'SQLite attached' },
     messages: [{ messageId: 'attached-message', itemId: 'attached-item', role: 'assistant', status: 'completed', blocks: [{ blockId: 'attached:0', kind: 'message', content: { text: 'attached SQLite projection' } }] }],
 });
 await openingAttached;
 assert.equal(hydratedCodex.store.getState().messages[0].content, 'attached SQLite projection');
 await new Promise((resolve) => setImmediate(resolve));
 assert.deepEqual(hydrateCalls, ['sqlite', 'thread']);
-resolveHydrateThread({ session: { agentId: 'Nova', title: 'Thread attached' }, messages: [] });
+resolveHydrateThread({ session: { sessionId: 'attached-topic', agentId: 'Nova', title: 'Thread attached' }, messages: [] });
 hydratedCodex.dispose();
 
 let liveGuardEvent;
 let resolveLiveGuardThread;
 const liveGuard = createWorkbenchController({
     agentRuntimeReadProjection: async () => ({
-        session: { agentId: 'Nova', title: 'SQLite live guard' },
+        session: { sessionId: 'live-guard-topic', agentId: 'Nova', title: 'SQLite live guard' },
         messages: [{ messageId: 'sqlite-guard', itemId: 'item-guard', role: 'assistant', status: 'completed', blocks: [{ blockId: 'guard:0', kind: 'message', content: { text: 'SQLite base' } }] }],
     }),
     agentRuntimeReadTopic: async () => new Promise((resolve) => { resolveLiveGuardThread = resolve; }),
@@ -520,7 +538,7 @@ liveGuardEvent({
     },
 });
 resolveLiveGuardThread({
-    session: { agentId: 'Nova', title: 'stale thread result' },
+    session: { sessionId: 'live-guard-topic', agentId: 'Nova', title: 'stale thread result' },
     messages: [{ messageId: 'stale-guard-message', itemId: 'stale-guard-item', role: 'assistant', status: 'completed', blocks: [{ blockId: 'stale-guard:0', kind: 'message', content: { text: 'must not replace live delta' } }] }],
 });
 await new Promise((resolve) => setImmediate(resolve));
@@ -528,6 +546,19 @@ assert.ok(liveGuard.store.getState().messages.some((message) => message.content 
     'a late thread/read snapshot must not overwrite a newer live projection patch');
 assert.equal(liveGuard.store.getState().messages.some((message) => message.content === 'must not replace live delta'), false);
 liveGuard.dispose();
+
+const conflictingPreview = createWorkbenchController({
+    agentRuntimeReadProjection: async () => ({
+        session: { sessionId: 'session-b', agentId: 'Nova', title: 'Wrong Session' },
+        messages: [],
+    }),
+});
+await assert.rejects(
+    conflictingPreview.previewTopic('session-a', 'Nova'),
+    (error) => error?.code === 'SESSION_IDENTITY_MISMATCH',
+    'a projection for Session B must not populate the selected Session A',
+);
+conflictingPreview.dispose();
 
 // Codex Session identity is authoritative. A compatibility sessionId must never
 // let another Session mutate an existing runtime slot or the visible status.
