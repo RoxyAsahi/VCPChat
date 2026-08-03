@@ -10,7 +10,7 @@ Renderer lifecycle belongs to an instance scope. Agent code may reuse audited pu
 
 Formal Workbench data access is split into Session, Projection, Interaction, and Workspace clients. Session identity is canonical; old Topic IPC is isolated in `modules/ipc/agentSessionCompatibility.js`, warns once, rejects conflicting identity, and is scheduled for removal at the next Agent protocol revision.
 
-Long-running Runtime mutations use an immutable `RuntimeOperationContext` that binds the captured lifecycle generation with optional Session, Thread, and Turn identity. A service must revalidate this context and reacquire the active Repository after each remote `await` before writing. Deprecated Manager Topic method names are installed only by `runtime-topic-compatibility.js`; the service graph and Workbench use Session methods.
+Long-running Runtime mutations use an immutable `RuntimeOperationContext` that binds the captured lifecycle generation with optional Session, Thread, and Turn identity. Turn, Config, Host, Interaction, ToolBox, and Recovery operations all use this boundary. A service must revalidate the captured generation and external authority after remote `await` before writing SQLite, sending UI events, or using a transport; Repository-backed work reacquires the active Repository before a write. Deprecated Manager Topic method names are installed only by `runtime-topic-compatibility.js`; the service graph and Workbench use Session methods.
 
 Workbench composition receives the preload object once and immediately wraps it in the four formal clients. Views and coordinators receive semantic controller actions only. Renderer attachments receive a narrow host adapter for image viewing, context menus, and external links rather than the full preload surface.
 
@@ -19,6 +19,8 @@ Historical Pi/Rust JavaScript runtimes live under `archive/agent-runtime/`. Prod
 Agent Workbench CSS has one entry, `styles/ui-system/agent-workbench.css`, which imports the fixed owner sequence: shell, sidebar, composer, timeline, session dock, workspace, activity, responsive, and legacy shell adapter. The legacy adapter is the only owner for unlayered compatibility bridges.
 
 Runtime shutdown and crash close the current generation first, fail-close approvals, reject waiters, cancel dynamic work and timers, stop transports, and close Projection storage last. External ToolBox interrupt and approval responses are at-most-once even if cleanup is invoked repeatedly.
+
+Workbench selection is represented by a canonical `SelectedSessionIdentity`. `selectedSessionId` is the only selection key; cached Session objects are display snapshots and cannot supply missing identity. Composer, Dock, Workspace, and Sidebar page-local state have separate Session-keyed owners and may not become alternate Runtime or projection truth.
 
 ## Consequences
 

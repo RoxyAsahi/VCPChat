@@ -29,8 +29,11 @@ Status: **implemented**
 | Agent CSS entry and owners | `styles/ui-system/agent-workbench.css`, `agent-{shell,sidebar,composer,timeline,session-dock,workspace,activity,responsive,legacy-shell-adapter}.css` | direct rules in the entry, arbitrary import order, cross-page selectors outside legacy adapter |
 | Runtime lifecycle ordering | `runtime-host-service.js`, `runtime-lifecycle-service.js` | Repository close before approval/waiter cleanup, old-generation UI/SQLite/transport writes |
 | Runtime operation identity | `runtime-operation-context.js`; Session/Recovery services | remote await without generation + Session/Thread/Turn identity, writes through a closed Repository |
+| Runtime external authority | Turn, Config, Host, Interaction, ToolBox and Recovery services using `RuntimeOperationContext` | old-generation UI/SQLite writes, use of replacement Bridge/Transport, deletion of a replacement dynamic call |
 | Deprecated Runtime Topic methods | `runtime-topic-compatibility.js` only | canonical service graph or Workbench delegation through Topic-named methods |
 | Workbench host API boundary | Session/Projection/Interaction/Workspace clients, `agent-runtime-event-subscription.js` | direct preload calls from Views, coordinators, command controller, or presentation |
+| Workbench selection identity | `SelectedSessionIdentity`, keyed by `selectedSessionId` | fallback to cached Topic/Session display snapshots or cross-Session action routing |
+| Workbench local state owners | `ComposerStateBySession`, `SessionDockModel`, `WorkspaceViewState`, `SidebarViewState` | duplicate Session/Runtime/message truth or state shared across Session identity |
 
 Reviewers should reject new modules that read `currentChatHistoryRef`, `currentSelectedItemRef`, `currentTopicIdRef`, `saveChatHistory`, or the main-chat `streamManager`.
 
