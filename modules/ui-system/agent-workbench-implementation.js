@@ -41,6 +41,7 @@ import { createAgentSessionDockView } from './agent-session-dock-view.js';
 import { createAgentNotificationView } from './agent-notification-view.js';
 import { createAgentApprovalView } from './agent-approval-view.js';
 import { createAgentWorkbenchTopicFlow } from './agent-workbench-topic-flow.js';
+import { createAgentWorkspaceCoordinator } from './agent-workspace-coordinator.js';
 
 // Build Agent identities are independent from normal-chat Agents. Keep Nova
 // visible synchronously while the authoritative Build catalog loads.
@@ -288,7 +289,6 @@ function mountWorkbench(container) {
     // replace the newly selected Agent's history.
     let controlPlaneRequest = 0;
     let topicCatalogRequest = 0;
-    let workspaceSearchTimer = null;
     let topicMenuInstance = 0;
 
     const shellView = createAgentWorkbenchShellView({
@@ -428,6 +428,21 @@ function mountWorkbench(container) {
     const workspaceRequests = createWorkspaceRequestCoordinator({
         cancel: ({ requestId, sessionId }) => {
             try { void controller.workspaceCancel({ requestId, sessionId }).catch(() => null); } catch {}
+        },
+    });
+    const workspaceCoordinator = createAgentWorkspaceCoordinator({
+        browser: state.workspaceBrowser,
+        requests: workspaceRequests,
+        lifecycle,
+        getIdentity: selectedWorkspaceIdentity,
+        clearAttachments: (sessionId) => state.composerStateBySession.setAttachments(sessionId, []),
+        refresh: () => renderActivity(),
+        notify: (message) => notify(message, 'success'),
+        client: {
+            listDirectory: (request) => controller.workspaceListDirectory(request),
+            readPreview: (request) => controller.workspaceReadPreview(request),
+            performPathAction: (request) => controller.workspacePerformPathAction(request),
+            searchFiles: (request) => controller.workspaceSearchFiles(request),
         },
     });
     let budgetAutosaveTimer = null;
@@ -1820,114 +1835,15 @@ function mountWorkbench(container) {
     }
 
     function syncWorkspaceScope(current = store.getState()) {
-        const identity = selectedWorkspaceIdentity(current);
-        const scope = `${identity.sessionId}:${identity.workspaceRoot}`;
-        const browser = state.workspaceBrowser;
-        if (browser.scope === scope) return identity;
-        if (browser.sessionId && browser.sessionId === identity.sessionId) {
-            state.composerStateBySession.setAttachments(identity.sessionId, []);
-        }
-        workspaceRequests.cancelAll();
-        browser.scope = scope;
-        browser.sessionId = identity.sessionId;
-        browser.workspaceRevision = '';
-        browser.model.reset(scope);
-        browser.inflight.clear();
-        browser.inflightRequestIds.clear();
-        browser.previewRequestId = '';
-        browser.searchRequestId = '';
-        browser.error = '';
-        browser.preview = null;
-        browser.previewLoading = false;
-        browser.search = '';
-        browser.searchResults = [];
-        browser.selectedPath = '';
-        return identity;
+        return workspaceCoordinator.syncScope(current);
     }
 
-    async function loadWorkspaceDirectory(relativePath = '') {
-        const identity = syncWorkspaceScope();
-        const browser = state.workspaceBrowser;
-        if (!identity.sessionId || !identity.workspaceRoot) return;
-        const key = String(relativePath || '').replace(/\\/g, '/');
-        if (browser.model.hasChildren(key)) return;
-        if (browser.inflight.has(key)) return browser.inflight.get(key);
-        browser.model.setLoading(key, true);
-        browser.error = '';
-        renderActivity();
-        const scope = browser.scope;
-        const token = workspaceRequests.begin({
-            key: `directory:${key}`,
-            operation: 'directory',
-            sessionId: identity.sessionId,
-            workspaceRevision: browser.workspaceRevision,
-            relativePath: key,
-        });
-        const request = controller.workspaceListDirectory({
-            requestId: token.requestId,
-            sessionId: identity.sessionId,
-            workspaceRevision: browser.workspaceRevision || undefined,
-            relativePath: key,
-            limit: 1000,
-        }).then((result) => {
-            if (browser.scope !== scope || !workspaceRequests.isCurrent(token, {
-                sessionId: browser.sessionId,
-                relativePath: key,
-            })) return;
-            browser.workspaceRevision = result.workspaceRevision;
-            browser.model.setChildren(key, result.entries || []);
-        }).catch((error) => {
-            if (browser.scope === scope && workspaceRequests.isCurrent(token, {
-                sessionId: browser.sessionId,
-                relativePath: key,
-            })) browser.error = error?.message || String(error);
-            throw error;
-        }).finally(() => {
-            if (browser.scope === scope && workspaceRequests.finish(token)) {
-                browser.model.setLoading(key, false);
-                browser.inflight.delete(key);
-                browser.inflightRequestIds.delete(key);
-                renderActivity();
-            }
-        });
-        browser.inflight.set(key, request);
-        browser.inflightRequestIds.set(key, token.requestId);
-        return request;
+    function loadWorkspaceDirectory(relativePath = '') {
+        return workspaceCoordinator.loadDirectory(relativePath, store.getState());
     }
 
-    async function openWorkspacePreview(ref) {
-        const browser = state.workspaceBrowser;
-        browser.selectedPath = ref.relativePath;
-        browser.previewLoading = true;
-        browser.error = '';
-        renderActivity();
-        const scope = browser.scope;
-        const token = workspaceRequests.begin({
-            key: 'preview', operation: 'preview', sessionId: ref.sessionId,
-            workspaceRevision: ref.workspaceRevision, relativePath: ref.relativePath,
-        });
-        browser.previewRequestId = token.requestId;
-        try {
-            const preview = await controller.workspaceReadPreview({ ...ref, requestId: token.requestId });
-            if (browser.scope === scope && workspaceRequests.isCurrent(token, {
-                sessionId: browser.sessionId,
-                workspaceRevision: browser.workspaceRevision,
-                relativePath: browser.selectedPath,
-            })) browser.preview = preview;
-        } catch (error) {
-            if (browser.scope === scope && workspaceRequests.isCurrent(token, {
-                sessionId: browser.sessionId,
-                workspaceRevision: browser.workspaceRevision,
-                relativePath: browser.selectedPath,
-            })) browser.error = error?.message || String(error);
-            throw error;
-        } finally {
-            if (browser.scope === scope && workspaceRequests.finish(token)) {
-                browser.previewRequestId = '';
-                browser.previewLoading = false;
-                renderActivity();
-            }
-        }
+    function openWorkspacePreview(ref) {
+        return workspaceCoordinator.openPreview(ref);
     }
 
     async function openWorkspaceFileTab(ref) {
@@ -1935,27 +1851,12 @@ function mountWorkbench(container) {
         const snapshot = state.sessionDock.openFile(ref);
         if (!snapshot) throw new Error('文件引用不属于当前会话或工作区版本已失效。');
         state.activityTab = snapshot.activeId;
-        await openWorkspacePreview(ref);
+        await workspaceCoordinator.openPreview(ref);
         setActivityOpen(true);
     }
 
-    async function performWorkspaceAction(ref, action) {
-        const token = workspaceRequests.begin({
-            key: `action:${action}`, operation: `action:${action}`, sessionId: ref.sessionId,
-            workspaceRevision: ref.workspaceRevision, relativePath: ref.relativePath,
-        });
-        try {
-            const result = await controller.workspacePerformPathAction({ ...ref, action, requestId: token.requestId });
-            if (workspaceRequests.isCurrent(token, {
-                sessionId: state.workspaceBrowser.sessionId,
-                workspaceRevision: state.workspaceBrowser.workspaceRevision,
-                relativePath: ref.relativePath,
-            }) && (action === 'preview' || action === 'open-in-vchat')) state.workspaceBrowser.preview = result;
-            if (action.startsWith('copy-')) notify(action === 'copy-relative-path' ? '已复制相对路径。' : '已复制绝对路径。', 'success');
-            return result;
-        } finally {
-            workspaceRequests.finish(token);
-        }
+    function performWorkspaceAction(ref, action) {
+        return workspaceCoordinator.performAction(ref, action);
     }
 
     async function openWorkspaceSourcePath(relativePath, source = 'tree', action = 'preview') {
@@ -1975,52 +1876,7 @@ function mountWorkbench(container) {
     }
 
     function scheduleWorkspaceSearch(value) {
-        const browser = state.workspaceBrowser;
-        browser.search = value;
-        workspaceSearchTimer = lifecycle.timeout('workspace-search', () => {
-            const query = browser.search.trim();
-            browser.searchRequestId = '';
-            if (!query) {
-                browser.searchResults = [];
-                browser.searchLoading = false;
-                renderActivity();
-                return;
-            }
-            browser.searchLoading = true;
-            renderActivity();
-            const scope = browser.scope;
-            const token = workspaceRequests.begin({
-                key: 'search', operation: 'search', sessionId: browser.sessionId,
-                workspaceRevision: browser.workspaceRevision, relativePath: query,
-            });
-            browser.searchRequestId = token.requestId;
-            void controller.workspaceSearchFiles({
-                requestId: token.requestId,
-                sessionId: browser.sessionId,
-                workspaceRevision: browser.workspaceRevision || undefined,
-                query,
-                limit: 200,
-            }).then((result) => {
-                if (browser.scope === scope && workspaceRequests.isCurrent(token, {
-                    sessionId: browser.sessionId,
-                    relativePath: browser.search.trim(),
-                })) {
-                    browser.workspaceRevision = result.workspaceRevision;
-                    browser.searchResults = result.entries || [];
-                }
-            }).catch((error) => {
-                if (browser.scope === scope && workspaceRequests.isCurrent(token, {
-                    sessionId: browser.sessionId,
-                    relativePath: browser.search.trim(),
-                })) browser.error = error?.message || String(error);
-            }).finally(() => {
-                if (browser.scope === scope && workspaceRequests.finish(token)) {
-                    browser.searchRequestId = '';
-                    browser.searchLoading = false;
-                    renderActivity();
-                }
-            });
-        }, 180);
+        workspaceCoordinator.search(value);
     }
 
     function renderActivity() {
@@ -2574,7 +2430,7 @@ function mountWorkbench(container) {
 
     return () => {
         state.disposed = true;
-        workspaceRequests.dispose();
+        workspaceCoordinator.dispose();
         settingsState.dispose();
         closeTopicContextMenu();
         fullPresentation.dispose();
