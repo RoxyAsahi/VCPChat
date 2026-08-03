@@ -30,6 +30,7 @@ import { createAgentRendererContent } from './agent-renderer-content.js';
 import { createAgentRendererHtmlCache } from './agent-renderer-html-cache.js';
 import { createAgentRendererMarkdownStream } from './agent-renderer-markdown-stream.js';
 import { createAgentRendererHistory } from './agent-renderer-history.js';
+import { createAgentRendererActions } from './agent-renderer-actions.js';
 
 const colorExtractionPromises = new Map();
 
@@ -2012,6 +2013,17 @@ const rendererHistory = createAgentRendererHistory({
     scrollToBottom: () => agentRenderContext.uiHelper.scrollToBottom(),
     onError: (message, error) => console.error(`Failed to render message ${message.id}:`, error),
 });
+const rendererActions = createAgentRendererActions({
+    getToolResult: (contentId) => toolResultFullContentMap.get(contentId),
+    releaseToolResult: (contentId) => toolResultFullContentMap.delete(contentId),
+    renderToolResult(container, fullData) {
+        container.innerHTML = renderSafeToolResultMarkdown(fullData.raw);
+        if (TOOL_RESULT_DANGEROUS_HTML_REGEX.test(fullData.raw)) {
+            container.classList.add('vcp-tool-result-markdown-content--sealed-html');
+        }
+    },
+    stopSpeech: () => agentRenderContext.electronAPI.sovitsStop(),
+});
 
 function invalidateRenderSession() {
     activeRenderSessionId += 1;
@@ -2107,60 +2119,7 @@ function initializeAgentMessageRenderer(refs) {
     }
     animationLifecycle = createAgentAnimationLifecycle({ root: agentRenderContext.chatMessagesDiv });
 
-    // --- Event Delegation ---
-    bindContainerEvent('click', (e) => {
-        // 1. Handle collapsible tool results and thought chains
-        const toolHeader = e.target.closest('.vcp-tool-result-header');
-        if (toolHeader) {
-            const bubble = toolHeader.closest('.vcp-tool-result-bubble.collapsible');
-            if (bubble) {
-                bubble.classList.toggle('expanded');
-            }
-            return;
-        }
-
-        const thoughtHeader = e.target.closest('.vcp-thought-chain-header');
-        if (thoughtHeader) {
-            const bubble = thoughtHeader.closest('.vcp-thought-chain-bubble.collapsible');
-            if (bubble) {
-                bubble.classList.toggle('expanded');
-            }
-            return;
-        }
-
-        // 🟢 3. Handle "展开全部" button for truncated tool results
-        const truncatedNotice = e.target.closest('.vcp-tool-result-truncated-notice');
-        if (truncatedNotice) {
-            const contentId = parseInt(truncatedNotice.dataset.contentId, 10);
-            const fullData = toolResultFullContentMap.get(contentId);
-            if (fullData) {
-                // 找到对应的 markdown-content 容器（紧邻的前一个兄弟元素）
-                const markdownContainer = truncatedNotice.previousElementSibling;
-                if (markdownContainer && markdownContainer.classList.contains('vcp-tool-result-markdown-content')) {
-                    // 渲染完整内容
-                    const fullHtml = renderSafeToolResultMarkdown(fullData.raw);
-                    if (TOOL_RESULT_DANGEROUS_HTML_REGEX.test(fullData.raw)) {
-                        markdownContainer.classList.add('vcp-tool-result-markdown-content--sealed-html');
-                    }
-                    markdownContainer.innerHTML = fullHtml;
-                    // 移除按钮
-                    truncatedNotice.remove();
-                    // 释放缓存
-                    toolResultFullContentMap.delete(contentId);
-                }
-            }
-            return;
-        }
-
-        // 4. Avatar 点击停止 TTS（也使用委托）
-        const avatar = e.target.closest('.message-avatar');
-        if (avatar) {
-            const messageItem = avatar.closest('.message-item');
-            if (messageItem?.dataset.role === 'assistant') {
-                agentRenderContext.electronAPI.sovitsStop();
-            }
-        }
-    });
+    bindContainerEvent('click', rendererActions.onClick);
 
     injectEnhancedStyles();
     console.log("[MessageRenderer] Initialized. Current selected item type on init:", getParticipant()?.type);
@@ -2793,6 +2752,7 @@ function refreshLayoutDependentState() {
 
 function disposeAgentMessageRenderer() {
     disposeContainerEvents();
+    rendererActions.dispose();
     streamController?.dispose();
     streamController = null;
     for (const row of agentRenderContext.chatMessagesDiv?.querySelectorAll('.message-item') || []) {
