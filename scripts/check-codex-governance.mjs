@@ -132,6 +132,7 @@ const governedUiModules = [
     'agent-activity-coordinator.js',
     'agent-composer-coordinator.js',
     'agent-workbench-render-coordinator.js',
+    'agent-workbench-sidebar-coordinator.js',
 ];
 for (const file of governedUiModules) {
     const absolute = path.join(root, 'modules/ui-system', file);

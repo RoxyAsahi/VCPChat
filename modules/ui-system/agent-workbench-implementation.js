@@ -1,6 +1,5 @@
 import { register } from './next-ui-apps.js';
 import { createWorkbenchController } from './agent-workbench-controller.js';
-import { projectSession } from './agent-workbench-projections.js';
 import { deriveWorkbenchViewState } from './agent-workbench-store.js';
 import { createAgentBlockPresentation, createAgentMessagePresentation } from './agent-presentation/index.js';
 import { createWorkspaceTreeModel } from './agent-workspace-model.js';
@@ -29,7 +28,6 @@ import { createAgentWorkspaceView } from './agent-workspace-view.js';
 import { createAgentWorkbenchHeaderView } from './agent-workbench-header-view.js';
 import { createAgentWorkbenchAccountView } from './agent-workbench-account-view.js';
 import { createAgentActivityReadonlyView } from './agent-activity-readonly-view.js';
-import { createAgentWorkbenchSidebarView } from './agent-workbench-sidebar-view.js';
 import { createAgentSessionDockView } from './agent-session-dock-view.js';
 import { createAgentNotificationView } from './agent-notification-view.js';
 import { createAgentApprovalView } from './agent-approval-view.js';
@@ -42,6 +40,7 @@ import { createAgentSessionOperationsCoordinator } from './agent-session-operati
 import { createAgentActivityCoordinator } from './agent-activity-coordinator.js';
 import { createAgentComposerCoordinator } from './agent-composer-coordinator.js';
 import { createAgentWorkbenchRenderCoordinator } from './agent-workbench-render-coordinator.js';
+import { createAgentWorkbenchSidebarCoordinator } from './agent-workbench-sidebar-coordinator.js';
 import {
     agentCacheKey,
     createAgentSessionCatalogCoordinator,
@@ -345,7 +344,7 @@ function mountWorkbench(container) {
             }),
         },
     });
-    let sidebarView = null;
+    let sidebarCoordinator = null;
 
     const run = async (work) => {
         try { await work(); } catch (error) {
@@ -886,57 +885,6 @@ function mountWorkbench(container) {
     const closeTopicContextMenu = topicContextMenuView.close;
     const appendTopicActions = topicContextMenuView.appendActions;
 
-    function sessionSidebarEntries() {
-        const current = store.getState();
-        // Scope every active Thread by its durable Agent identity. Never reuse
-        // the selected Session metadata as a fallback across runtimes.
-        const liveSessions = (state.showArchivedTopics ? []
-            : (current.activeRuntimes instanceof Map ? [...current.activeRuntimes.values()] : []))
-            .filter((runtime) => sameAgent(runtime.agentId, state.selectedAgent))
-            .map((runtime) => projectSession({
-                ...(state.topics.find((topic) => topic.id === runtime.topicId) || {}),
-                ...runtime,
-            }));
-        const liveTopicIds = new Set(liveSessions.map((session) => session.topicId).filter(Boolean));
-        return {
-            liveSessions,
-            persistedTopics: state.topics.filter((topic) => !liveTopicIds.has(topic.id)),
-            selectedTopicId: current.selectedSessionId || current.selectedTopic?.topicId || null,
-        };
-    }
-
-    function sidebarViewModel() {
-        syncModelFromSelectedSession();
-        const { liveSessions, persistedTopics, selectedTopicId } = sessionSidebarEntries();
-        return {
-            tab: state.tab,
-            selectedAgent: state.selectedAgent,
-            selectedAgentName: selectedAgentProfile()?.name || state.selectedAgent,
-            agentCatalog: state.agentCatalog,
-            agentSearch: state.agentSearch,
-            topics: state.topics,
-            topicCreating: state.topicCreating,
-            topicManaging: state.topicManaging,
-            topicSelectedIds: new Set(state.topicSelectedIds),
-            showArchivedTopics: state.showArchivedTopics,
-            topicSearch: state.topicSearch,
-            topicSearchResults: state.topicSearchResults,
-            topicSearchLoading: state.topicSearchLoading,
-            topicSearchError: state.topicSearchError,
-            topicSearchOpen: state.topicSearchOpen,
-            topicListLoading: state.topicListLoading,
-            profileConfigurationRequired: profileNeedsConfiguration(),
-            profileConfigurationNotice: state.profileConfigurationNotice,
-            liveSessions: liveSessions.map((session) => ({
-                ...session,
-                activity: sessionActivity(session.topicId, session.activity),
-            })),
-            persistedTopics,
-            selectedTopicId,
-            selectedMessageCount: store.getState().messages.length,
-        };
-    }
-
     function renderSettingsSidebarContent() {
         return renderAgentSettingsPane({
             state,
@@ -972,145 +920,19 @@ function mountWorkbench(container) {
         });
     }
 
-    function ensureSidebarView() {
-        if (sidebarView) return sidebarView;
-        sidebarView = createAgentWorkbenchSidebarView({
-            element: sidebar,
-            accountView,
-            lifecycle,
-            actions: {
-                selectTab(id) {
-                    closeTopicContextMenu();
-                    state.tab = id;
-                    if (id !== 'sessions') {
-                        state.topicManaging = false;
-                        state.topicSelectedIds.clear();
-                        state.topicSearchOpen = false;
-                        state.topicSearch = '';
-                        state.topicSearchResults = [];
-                        state.topicSearchLoading = false;
-                        state.topicSearchError = '';
-                    }
-                    renderSidebar();
-                    if (id === 'sessions') run(() => refreshControlPlane());
-                    else if (id === 'settings') void refreshRecoveryOperations();
-                },
-                openNewSession: openNewTopicFlow,
-                toggleTopicManagement() {
-                    closeTopicContextMenu();
-                    state.topicManaging = !state.topicManaging;
-                    if (!state.topicManaging) state.topicSelectedIds.clear();
-                    renderSidebar();
-                },
-                toggleArchivedSessions() {
-                    closeTopicContextMenu();
-                    state.showArchivedTopics = !state.showArchivedTopics;
-                    state.topicManaging = false;
-                    state.topicSelectedIds.clear();
-                    state.topicSearchOpen = false;
-                    state.topicSearch = '';
-                    state.topicSearchResults = [];
-                    renderSidebar();
-                    run(() => refreshTopicsForAgent(state.selectedAgent, state.showArchivedTopics));
-                },
-                setTopicSearchOpen(open, clear) {
-                    state.topicSearchOpen = open;
-                    if (clear) {
-                        state.topicSearch = '';
-                        state.topicSearchResults = [];
-                        state.topicSearchLoading = false;
-                        state.topicSearchError = '';
-                    }
-                    renderSidebar();
-                },
-                setTopicSearch(query, { loading, error, render = false } = {}) {
-                    state.topicSearch = query;
-                    state.topicSearchLoading = Boolean(loading);
-                    state.topicSearchError = error || '';
-                    if (!query) state.topicSearchResults = [];
-                    if (render) renderSidebar();
-                },
-                searchSessions: (query, agentId, limit) => controller.searchTopics(query, agentId, limit),
-                finishTopicSearch(query, { hits = [], error = '' } = {}) {
-                    if (query !== state.topicSearch.trim()) return;
-                    state.topicSearchResults = Array.isArray(hits) ? hits : [];
-                    state.topicSearchLoading = false;
-                    state.topicSearchError = error;
-                    renderSidebar();
-                    queueMicrotask(() => {
-                        const active = document.getElementById('agentWorkbenchTopicSearchInput');
-                        active?.focus();
-                        active?.setSelectionRange(active.value.length, active.value.length);
-                    });
-                },
-                createSessionAvatar,
-                appendTopicActions,
-                hydrateSession: (session) => run(() => controller.hydrateTopic(
-                    session.topicId, session, null, session.agentId,
-                )),
-                previewSession: (topic) => run(async () => {
-                    await controller.previewTopic(topic.id, topic.agentId, topic);
-                    rememberTopic({ topicId: topic.id });
-                }),
-                toggleTopicSelection(sessionId) {
-                    if (state.topicSelectedIds.has(sessionId)) state.topicSelectedIds.delete(sessionId);
-                    else state.topicSelectedIds.add(sessionId);
-                    renderSidebar();
-                },
-                selectVisibleSessions(sessionIds, selected) {
-                    sessionIds.forEach((sessionId) => {
-                        if (selected) state.topicSelectedIds.add(sessionId);
-                        else state.topicSelectedIds.delete(sessionId);
-                    });
-                    renderSidebar();
-                },
-                archiveSelectedSessions(topics) {
-                    run(async () => {
-                        if (!topics.length || !window.confirm?.(`确定归档选中的 ${topics.length} 个 Agent 会话吗？`)) return;
-                        for (const topic of topics) {
-                            await controller.deleteTopic(topic.id, topic.agentId);
-                            forgetTopic(topic.id);
-                        }
-                        state.topicSelectedIds.clear();
-                        state.topicManaging = false;
-                        await refreshTopicsForAgent(state.selectedAgent);
-                        notify(`已归档 ${topics.length} 个 Agent 会话。`, 'success');
-                    });
-                },
-                exitTopicManagement() {
-                    state.topicManaging = false;
-                    state.topicSelectedIds.clear();
-                    renderSidebar();
-                },
-                openNewAgent: openNewAgentFlow,
-                setAgentSearch(value) { state.agentSearch = value; },
-                selectAgent(agentId) {
-                    run(async () => {
-                        state.uxTimings.set(`agent-click:${agentCacheKey(agentId)}`, uxMark('agent-click', agentId));
-                        const current = store.getState();
-                        const sessionAgent = current.selectedTopic?.agentId;
-                        if (current.selectedSessionId && (!sessionAgent || !sameAgent(sessionAgent, agentId))) {
-                            controller.clearSelection();
-                        }
-                        selectAgent(agentId);
-                        state.tab = 'sessions';
-                        state.topicManaging = false;
-                        state.topicSelectedIds.clear();
-                        state.topicSearchOpen = false;
-                        state.topicSearch = '';
-                        queueRender({ shell: true, header: true, composer: true });
-                        await refreshControlPlane();
-                    });
-                },
-                renderSettings: renderSettingsSidebarContent,
-            },
-        });
-        return sidebarView;
+    function renderSidebar() {
+        sidebarCoordinator?.render();
     }
 
-    function renderSidebar() {
-        ensureSidebarView().update(sidebarViewModel());
-    }
+    sidebarCoordinator = createAgentWorkbenchSidebarCoordinator({
+        state, store, controller, element: sidebar, accountView, lifecycle, document, run, notify,
+        sameAgent, agentCacheKey, selectedAgentProfile, profileNeedsConfiguration,
+        sessionActivity, createSessionAvatar, appendTopicActions, closeTopicContextMenu,
+        openNewTopicFlow, openNewAgentFlow, refreshControlPlane, refreshRecoveryOperations,
+        refreshTopicsForAgent, selectAgent, rememberTopic, forgetTopic,
+        syncModel: syncModelFromSelectedSession, renderSettings: renderSettingsSidebarContent,
+        queueRender, uxMark,
+    });
 
     function renderTopicFlow() {
         topicFlowView.update(state.topicFlow?.kind === 'agent'
@@ -1231,6 +1053,7 @@ function mountWorkbench(container) {
         activityCoordinator.dispose();
         composerCoordinator.dispose();
         renderCoordinator.dispose();
+        sidebarCoordinator.dispose();
         workspaceCoordinator.dispose();
         settingsState.dispose();
         topicContextMenuView.dispose();
@@ -1243,7 +1066,6 @@ function mountWorkbench(container) {
         topicFlowView.dispose();
         workspaceView.dispose();
         headerView.dispose();
-        sidebarView?.dispose();
         accountView.dispose();
         composerView.dispose();
         runStatusView.dispose();
