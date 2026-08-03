@@ -37,6 +37,7 @@ import { createAgentVisibilityController } from './agentVisibilityController.js'
 import { createAgentAnimationLifecycle } from './agentAnimationLifecycle.js';
 import { createAgentRendererSession } from './agent-renderer-session.js';
 import { createAgentRendererStream } from './agent-renderer-stream.js';
+import { renderAttachments as renderResourceAttachments } from './agent-renderer-resource-dom.js';
 
 const colorExtractionPromises = new Map();
 
@@ -2417,85 +2418,14 @@ function initializeAgentMessageRenderer(refs) {
 }
 
 
-function getAttachmentFileVisualDescriptor(name = '', type = '') {
-    const resolver = window.uiHelperFunctions?.resolveAttachmentFileVisual;
-    if (typeof resolver === 'function') {
-        return resolver(name, type);
-    }
-    return {
-        kind: 'file',
-        iconMarkup: `
-<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-    <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path>
-    <path d="M14 2v5a1 1 0 0 0 1 1h5"></path>
-</svg>`
-    };
-}
-
 async function renderAttachments(message, contentDiv) {
-    const { electronAPI } = agentRenderContext;
-    if (message.attachments && message.attachments.length > 0) {
-        const attachmentsContainer = document.createElement('div');
-        attachmentsContainer.classList.add('message-attachments');
-        message.attachments.forEach((att, index) => {
-            const wrapper = document.createElement('div');
-            wrapper.classList.add('message-attachment-wrapper');
-
-            let attachmentElement;
-            if (att.type.startsWith('image/')) {
-                attachmentElement = document.createElement('img');
-                attachmentElement.src = att.src;
-                attachmentElement.alt = `附件图片: ${att.name}`;
-                attachmentElement.title = `点击在新窗口预览: ${att.name}`;
-                attachmentElement.classList.add('message-attachment-image-thumbnail');
-                attachmentElement.onclick = (e) => {
-                    e.stopPropagation();
-                    const currentTheme = document.body.classList.contains('light-theme') ? 'light' : 'dark';
-                    electronAPI.openImageViewer({ src: att.src, title: att.name, theme: currentTheme });
-                };
-                attachmentElement.addEventListener('contextmenu', (e) => {
-                    e.preventDefault(); e.stopPropagation();
-                    electronAPI.showImageContextMenu(att.src);
-                });
-            } else if (att.type.startsWith('audio/')) {
-                attachmentElement = document.createElement('audio');
-                attachmentElement.src = att.src;
-                attachmentElement.controls = true;
-            } else if (att.type.startsWith('video/')) {
-                attachmentElement = document.createElement('video');
-                attachmentElement.src = att.src;
-                attachmentElement.controls = true;
-                attachmentElement.style.maxWidth = '300px';
-            } else {
-                attachmentElement = document.createElement('a');
-                attachmentElement.href = att.src;
-                const fileVisual = getAttachmentFileVisualDescriptor(att.name, att.type);
-                attachmentElement.classList.add('message-attachment-file', `message-attachment-file--${fileVisual.kind}`);
-                attachmentElement.title = `点击打开文件: ${att.name}`;
-                attachmentElement.onclick = (e) => {
-                    e.preventDefault();
-                    if (electronAPI.sendOpenExternalLink && att.src.startsWith('file://')) {
-                        electronAPI.sendOpenExternalLink(att.src);
-                    } else {
-                        console.warn("Cannot open local file attachment", att.src);
-                    }
-                };
-                const iconSpan = document.createElement('span');
-                iconSpan.className = 'message-attachment-file-icon';
-                iconSpan.innerHTML = fileVisual.iconMarkup;
-                const nameSpan = document.createElement('span');
-                nameSpan.className = 'message-attachment-file-name';
-                nameSpan.textContent = att.name;
-                attachmentElement.appendChild(iconSpan);
-                attachmentElement.appendChild(nameSpan);
-            }
-            if (attachmentElement) {
-                wrapper.appendChild(attachmentElement);
-                attachmentsContainer.appendChild(wrapper);
-            }
-        });
-        contentDiv.appendChild(attachmentsContainer);
-    }
+    return renderResourceAttachments({
+        documentRef: document,
+        windowRef: window,
+        electronAPI: agentRenderContext.electronAPI,
+        message,
+        contentDiv,
+    });
 }
 
 async function renderPostProcessedHtml(contentDiv, rawHtml, options = {}) {
