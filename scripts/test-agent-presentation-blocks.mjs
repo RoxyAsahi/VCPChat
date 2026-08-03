@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 
 import { createAgentBlockPresentation } from '../modules/ui-system/agent-presentation/blocks/registry.js';
 
-const workbenchSource = await readFile(new URL('../modules/ui-system/agent-workbench.js', import.meta.url), 'utf8');
+const workbenchSource = await readFile(new URL('../modules/ui-system/agent-workbench-implementation.js', import.meta.url), 'utf8');
 assert.match(workbenchSource, /createAgentBlockPresentation/);
 for (const removedRenderer of [
     'function createToolCard',

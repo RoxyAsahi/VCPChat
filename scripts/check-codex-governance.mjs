@@ -50,8 +50,8 @@ if (fs.existsSync(receiptPath)) {
 
 const rendererFiles = [
     'modules/ui-system/agent-workbench-store.js',
-    'modules/ui-system/agent-workbench-controller.js',
-    'modules/ui-system/agent-workbench.js',
+    'modules/ui-system/agent-workbench-controller-implementation.js',
+    'modules/ui-system/agent-workbench-implementation.js',
 ];
 const rendererBoundaryFiles = [
     'modules/ui-system/agent-presentation/renderer.js',
@@ -75,10 +75,13 @@ for (const relative of rendererFiles) {
     }
 }
 const workbenchLineCount = fs.readFileSync(path.join(root, 'modules/ui-system/agent-workbench.js'), 'utf8').split(/\r?\n/).length;
-// R12 adds only the desired/applied settings projection to this existing
-// composition root. Keep the hard ceiling finite while the planned module
-// extraction proceeds; no new message/Markdown/tool logic belongs here.
-if (workbenchLineCount > 4450) errors.push(`agent-workbench.js exceeds composition-root ceiling: ${workbenchLineCount} lines`);
+const workbenchImplementationLineCount = fs.readFileSync(path.join(root, 'modules/ui-system/agent-workbench-implementation.js'), 'utf8').split(/\r?\n/).length;
+const controllerFacadeLineCount = fs.readFileSync(path.join(root, 'modules/ui-system/agent-workbench-controller.js'), 'utf8').split(/\r?\n/).length;
+const controllerImplementationLineCount = fs.readFileSync(path.join(root, 'modules/ui-system/agent-workbench-controller-implementation.js'), 'utf8').split(/\r?\n/).length;
+if (workbenchLineCount > 800) errors.push(`agent-workbench.js exceeds composition facade ceiling: ${workbenchLineCount} lines`);
+if (workbenchImplementationLineCount > 4300) errors.push(`agent-workbench-implementation.js exceeds temporary extraction ceiling: ${workbenchImplementationLineCount} lines`);
+if (controllerFacadeLineCount > 800) errors.push(`agent-workbench-controller.js exceeds controller facade ceiling: ${controllerFacadeLineCount} lines`);
+if (controllerImplementationLineCount > 1100) errors.push(`agent-workbench-controller-implementation.js exceeds temporary extraction ceiling: ${controllerImplementationLineCount} lines`);
 const rendererFacadePath = 'modules/ui-system/agent-presentation/fork/agentMessageRenderer.js';
 const rendererImplementationPath = 'modules/ui-system/agent-presentation/fork/agentMessageRendererImplementation.js';
 const forkLineCount = fs.readFileSync(path.join(root, rendererFacadePath), 'utf8').split(/\r?\n/).length;

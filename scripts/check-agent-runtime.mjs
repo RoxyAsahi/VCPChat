@@ -62,7 +62,7 @@ for (const method of [
 ]) {
     if (!preload.includes(method)) errors.push(`chat preload missing API: ${method}`);
 }
-const workbenchController = fs.readFileSync(path.join(root, 'modules/ui-system/agent-workbench-controller.js'), 'utf8');
+const workbenchController = fs.readFileSync(path.join(root, 'modules/ui-system/agent-workbench-controller-implementation.js'), 'utf8');
 for (const legacyMethod of [
     'agentRuntimeCreateTopic', 'agentRuntimeCreateSession', 'agentRuntimeListTopics',
     'agentRuntimeReadTopic', 'agentRuntimeReadProjection', 'agentRuntimeRenameTopic',
