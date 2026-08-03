@@ -38,6 +38,7 @@ import { createAgentAnimationLifecycle } from './agentAnimationLifecycle.js';
 import { createAgentRendererSession } from './agent-renderer-session.js';
 import { createAgentRendererStream } from './agent-renderer-stream.js';
 import { renderAttachments as renderResourceAttachments } from './agent-renderer-resource-dom.js';
+import { createAgentMessageDom } from './agent-renderer-message-dom.js';
 
 const colorExtractionPromises = new Map();
 
@@ -2198,6 +2199,21 @@ function disposeContainerEvents() {
 let contentPipeline = null;
 
 let activeRenderSessionId = 0;
+const messageDom = createAgentMessageDom({
+    documentRef: document,
+    windowRef: window,
+    getRoot: () => agentRenderContext.chatMessagesDiv,
+    cleanupContent: (content) => contentProcessor.cleanupPreviewsInContent(content),
+    cleanupAnimation: (content) => animationLifecycle?.cleanup(content),
+    unobserveMessage: (item) => visibilityController?.unobserveMessage(item),
+    invalidateSession: () => invalidateRenderSession(),
+    clearRenderCache: () => clearRenderHtmlCache(),
+    clearToolResults: () => {
+        toolResultFullContentMap.clear();
+        toolResultContentIdCounter = 0;
+    },
+    clearStream: () => getStreamController().clear(),
+});
 
 function invalidateRenderSession() {
     activeRenderSessionId += 1;
@@ -2212,85 +2228,20 @@ function isRenderSessionActive(sessionId) {
     return sessionId === activeRenderSessionId;
 }
 
-function escapeCssAttributeValue(value) {
-    const str = String(value);
-    if (window.CSS && typeof window.CSS.escape === 'function') {
-        return window.CSS.escape(str);
-    }
-    return str.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-}
-
 function cleanupScopedStylesForMessage(messageItem, messageId = null) {
-    if (!messageItem && !messageId) return;
-
-    const scopeId = messageItem?.id;
-    if (scopeId) {
-        document.querySelectorAll(`style[data-vcp-scope-id="${escapeCssAttributeValue(scopeId)}"]`).forEach(el => el.remove());
-    }
-
-    const chatScopeId = messageItem?.getAttribute?.('data-chat-scope') || (messageId ? `vcp-chat-${messageId}` : null);
-    if (chatScopeId) {
-        document.querySelectorAll(`style[data-chat-scope-id="${escapeCssAttributeValue(chatScopeId)}"]`).forEach(el => el.remove());
-    }
+    return messageDom.cleanupScopedStyles(messageItem, messageId);
 }
 
 function cleanupMessageDomResources(messageItem, messageId = null) {
-    if (!messageItem) return;
-
-    const contentDiv = messageItem.querySelector('.md-content');
-    if (contentDiv) {
-        contentProcessor.cleanupPreviewsInContent(contentDiv);
-        animationLifecycle?.cleanup(contentDiv);
-    }
-
-    cleanupScopedStylesForMessage(messageItem, messageId || messageItem.dataset?.messageId || null);
-    visibilityController?.unobserveMessage(messageItem);
+    return messageDom.cleanupResources(messageItem, messageId);
 }
 
 function removeMessageById(messageId) {
-    const item = agentRenderContext.chatMessagesDiv.querySelector(`.message-item[data-message-id="${messageId}"]`);
-    if (item) {
-        // --- NEW: Cleanup dynamic content before removing from DOM ---
-        cleanupMessageDomResources(item, messageId);
-        // [Pretext集成] 释放高度缓存，防止内存泄漏
-        if (window.pretextBridge && window.pretextBridge.evict) {
-            window.pretextBridge.evict(messageId);
-        }
-        item.remove();
-    }
-
+    return messageDom.remove(messageId);
 }
 
 function clearChat() {
-    invalidateRenderSession();
-
-    // 清空聊天通常意味着用户希望释放当前渲染上下文占用；HTML 字符串缓存不持有 DOM，但这里主动释放更保守。
-    clearRenderHtmlCache();
-
-    // 只清理当前视图的 DOM/渲染相关内容，不触碰底层异步流状态
-    // 这样可避免切换话题时误伤同窗口内其他 agent 的后台流式聊天
-    toolResultFullContentMap.clear();
-    toolResultContentIdCounter = 0;
-
-    if (agentRenderContext.chatMessagesDiv) {
-        // --- NEW: Cleanup all messages before clearing the container ---
-        const allMessages = agentRenderContext.chatMessagesDiv.querySelectorAll('.message-item');
-        allMessages.forEach(item => {
-            cleanupMessageDomResources(item, item.dataset?.messageId || null);
-        });
-
-        // 🟢 清理所有注入的 scoped CSS
-        document.querySelectorAll('style[data-vcp-scope-id]').forEach(el => el.remove());
-        document.querySelectorAll('style[data-chat-scope-id]').forEach(el => el.remove());
-
-        // [Pretext集成] 清空所有高度缓存
-        if (window.pretextBridge && window.pretextBridge.clearAll) {
-            window.pretextBridge.clearAll();
-        }
-
-        agentRenderContext.chatMessagesDiv.innerHTML = '';
-    }
-    getStreamController().clear();
+    return messageDom.clear();
 }
 
 
