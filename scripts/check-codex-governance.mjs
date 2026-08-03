@@ -167,6 +167,7 @@ const runtimeManagerSource = fs.readFileSync(path.join(root, 'modules/codex-runt
 const runtimeNormalizersPath = path.join(root, 'modules/codex-runtime/runtime-normalizers.js');
 const runtimeInteractionServicePath = path.join(root, 'modules/codex-runtime/runtime-interaction-service.js');
 const runtimeToolboxServicePath = path.join(root, 'modules/codex-runtime/runtime-toolbox-service.js');
+const runtimeRecoveryServicePath = path.join(root, 'modules/codex-runtime/runtime-recovery-service.js');
 if (!fs.existsSync(runtimeToolboxServicePath)) {
     errors.push('Runtime ToolBox service is missing');
 } else if (fs.readFileSync(runtimeToolboxServicePath, 'utf8').split(/\r?\n/).length > 900) {
@@ -176,6 +177,11 @@ if (!fs.existsSync(runtimeInteractionServicePath)) {
     errors.push('Runtime interaction service is missing');
 } else if (fs.readFileSync(runtimeInteractionServicePath, 'utf8').split(/\r?\n/).length > 900) {
     errors.push('runtime-interaction-service.js exceeds module ceiling');
+}
+if (!fs.existsSync(runtimeRecoveryServicePath)) {
+    errors.push('Runtime recovery service is missing');
+} else if (fs.readFileSync(runtimeRecoveryServicePath, 'utf8').split(/\r?\n/).length > 900) {
+    errors.push('runtime-recovery-service.js exceeds module ceiling');
 }
 if (!fs.existsSync(runtimeNormalizersPath)) {
     errors.push('Runtime pure normalizers module is missing');

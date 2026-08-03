@@ -13,6 +13,7 @@ const { ToolboxResponsesAdapter } = require('./toolboxResponsesAdapter');
 const { AttachmentRegistry } = require('./attachmentRegistry');
 const { RuntimeInteractionService } = require('./runtime-interaction-service');
 const { RuntimeToolboxService } = require('./runtime-toolbox-service');
+const { RuntimeRecoveryService } = require('./runtime-recovery-service');
 const { normalizeProfile, normalizeSessionConfig, PROFILE_SCHEMA_VERSION } = require('./dataContracts');
 const {
     instructionConfigChanged,
@@ -115,6 +116,21 @@ class CodexRuntimeManager extends EventEmitter {
             diagnostic: (message) => this.emit('diagnostic', message),
         });
         this.dynamicCalls = this.toolboxService.dynamicCalls;
+        this.recoveryService = new RuntimeRecoveryService({
+            ensureProjectionStore: () => this.ensureProjectionStore(),
+            assertProjectionWritable: () => this._assertProjectionWritable(),
+            repository: () => this.repository,
+            transport: () => this.transport,
+            projector: () => this.projector,
+            threadStates: () => this.threadStates,
+            start: () => this.start(),
+            captureGeneration: () => this._captureGeneration(),
+            assertGeneration: (generation) => this._assertGeneration(generation),
+            recoveryPromise: () => this.knownOperationRecoveryPromise,
+            setRecoveryPromise: (promise) => { this.knownOperationRecoveryPromise = promise; },
+            setLastError: (error) => { this.lastError = error; },
+            diagnostic: (name, fields) => this._diagnostic(name, fields),
+        });
         this.uiEventSequence = 0;
         this.workbenchMounted = false;
         this.intentionalStop = false;
@@ -1063,231 +1079,25 @@ class CodexRuntimeManager extends EventEmitter {
     }
     async deleteTopic({ topicId, sessionId }) { return this.archiveSession({ topicId, sessionId }); }
     listRecoveryOperations() {
-        this.ensureProjectionStore();
-        return this.repository.listRecoverableOperations();
+        return this.recoveryService.listOperations();
     }
     async _recoverKnownThreadOperations() {
-        if (this.repository?.readOnly) return { recovered: 0, remaining: 0 };
-        if (this.knownOperationRecoveryPromise) return this.knownOperationRecoveryPromise;
-        const promise = (async () => {
-            const generation = this._captureGeneration();
-            const recoverable = this.repository.listRecoverableOperations()
-                .filter((operation) => ['thread-archive', 'thread-unarchive', 'thread-delete'].includes(operation.kind))
-                .filter((operation) => ['prepared', 'dispatching', 'remote-applied', 'uncertain'].includes(operation.state));
-            let recovered = 0;
-            for (const operation of recoverable) {
-                try {
-                    if (await this._recoverKnownThreadOperation(operation)) recovered += 1;
-                    this._assertGeneration(generation);
-                } catch (error) {
-                    if (error?.code === 'STALE_RUNTIME_GENERATION' || !this.repository) throw error;
-                    this.lastError = serializeError(error);
-                    this._diagnostic('known-operation-recovery-failed', {
-                        operationId: operation.operationId,
-                        kind: operation.kind,
-                        error: error?.message || String(error),
-                    });
-                }
-            }
-            return {
-                recovered,
-                remaining: this.repository.listRecoverableOperations()
-                    .filter((operation) => ['thread-archive', 'thread-unarchive', 'thread-delete'].includes(operation.kind))
-                    .length,
-            };
-        })().finally(() => { this.knownOperationRecoveryPromise = null; });
-        this.knownOperationRecoveryPromise = promise;
-        return promise;
+        return this.recoveryService.recoverKnownThreadOperations();
     }
     async _recoverKnownThreadOperation(input) {
-        let operation = this.repository.getOperation(input.operationId);
-        if (!operation || !['thread-archive', 'thread-unarchive', 'thread-delete'].includes(operation.kind)) return false;
-        if (operation.state !== 'remote-applied') {
-            this.repository.updateOperation(operation.operationId, { state: 'dispatching', lastError: null });
-            try {
-                if (operation.threadId) {
-                    const method = operation.kind === 'thread-archive' ? 'thread/archive'
-                        : operation.kind === 'thread-unarchive' ? 'thread/unarchive'
-                            : 'thread/delete';
-                    try {
-                        await this.transport.request(method, { threadId: operation.threadId });
-                    } catch (error) {
-                        if (operation.kind !== 'thread-delete' || !isConfirmedThreadNotFound(error)) throw error;
-                    }
-                }
-                operation = this.repository.updateOperation(operation.operationId, {
-                    state: 'remote-applied', threadId: operation.threadId, lastError: null,
-                });
-            } catch (error) {
-                this.repository.updateOperation(operation.operationId, {
-                    state: isUncertainRemoteMutation(error) ? 'uncertain' : 'failed',
-                    lastError: error?.message || String(error),
-                });
-                return false;
-            }
-        }
-        const session = operation.sessionId ? this.repository.getSession(operation.sessionId) : null;
-        let payload = operation.payload || {};
-        if (operation.kind === 'thread-archive') {
-            if (!session) throw new CodexAppServerError('RECOVERY_TARGET_CHANGED', 'Archive recovery Session no longer exists');
-            this.repository.archiveSession(session.sessionId);
-        } else if (operation.kind === 'thread-unarchive') {
-            if (!session) throw new CodexAppServerError('RECOVERY_TARGET_CHANGED', 'Unarchive recovery Session no longer exists');
-            this.repository.unarchiveSession(session.sessionId);
-        } else if (session) {
-            const receipt = this.repository.permanentlyDeleteSession(session.sessionId, operation.threadId);
-            payload = { ...payload, deletionReceiptId: receipt.receiptId };
-        }
-        this.repository.updateOperation(operation.operationId, {
-            state: 'completed', threadId: operation.threadId, payload, lastError: null,
-        });
-        return true;
+        return this.recoveryService.recoverKnownThreadOperation(input);
     }
     async _listStoredThreads(archived) {
-        const threads = [];
-        let cursor = null;
-        for (let page = 0; page < 20; page += 1) {
-            const result = await this.transport.request('thread/list', {
-                archived: archived === true,
-                cursor,
-                limit: 100,
-                useStateDbOnly: true,
-            });
-            const data = Array.isArray(result?.data) ? result.data : [];
-            threads.push(...data);
-            cursor = typeof result?.nextCursor === 'string' && result.nextCursor ? result.nextCursor : null;
-            if (!cursor) break;
-        }
-        return threads;
+        return this.recoveryService.listStoredThreads(archived);
     }
     _normalizeUnboundThreadOperations() {
-        for (const operation of this.repository.listRecoverableOperations()) {
-            if (operation.kind !== 'thread-start' && operation.kind !== 'thread-fork') continue;
-            if (operation.state === 'prepared') {
-                this.repository.updateOperation(operation.operationId, {
-                    state: 'failed',
-                    lastError: 'VChat restarted before the Codex Thread request was dispatched',
-                });
-            } else if (operation.state === 'dispatching') {
-                this.repository.updateOperation(operation.operationId, {
-                    state: 'uncertain',
-                    lastError: 'VChat restarted before the Codex Thread request outcome was recorded',
-                });
-            }
-        }
+        return this.recoveryService.normalizeUnboundThreadOperations();
     }
     async listRecoveryCandidates() {
-        this.ensureProjectionStore();
-        const operations = this.repository.listRecoverableOperations()
-            .filter((operation) => ['uncertain', 'remote-applied'].includes(operation.state)
-                && (operation.kind === 'thread-start' || operation.kind === 'thread-fork'));
-        if (!operations.length) return { operations: [], threads: [] };
-        await this.start();
-        const [active, archived] = await Promise.all([
-            this._listStoredThreads(false),
-            this._listStoredThreads(true),
-        ]);
-        const boundThreadIds = new Set([
-            ...this.repository.listSessions({ archived: false }),
-            ...this.repository.listSessions({ archived: true }),
-        ].map((session) => session.threadId).filter(Boolean));
-        const seen = new Set();
-        const threads = [...active, ...archived]
-            .filter((thread) => thread?.id && !boundThreadIds.has(thread.id) && !seen.has(thread.id) && seen.add(thread.id))
-            .map((thread) => ({
-                threadId: thread.id,
-                title: thread.name || thread.preview || thread.id,
-                preview: thread.preview || '',
-                cwd: thread.cwd || '',
-                modelProvider: thread.modelProvider || '',
-                archived: archived.some((entry) => entry?.id === thread.id),
-                createdAt: Number(thread.createdAt || 0),
-                updatedAt: Number(thread.updatedAt || 0),
-            }));
-        return { operations, threads };
+        return this.recoveryService.listRecoveryCandidates();
     }
     async resolveRecoveryOperation({ operationId, action, threadId } = {}) {
-        this._assertProjectionWritable();
-        const operation = this.repository.getOperation(String(operationId || ''));
-        if (!operation || !['uncertain', 'remote-applied'].includes(operation.state)
-            || (operation.kind !== 'thread-start' && operation.kind !== 'thread-fork')) {
-            throw new CodexAppServerError('INVALID_RECOVERY_OPERATION', 'Only unresolved Thread start/fork operations can be resolved');
-        }
-        const selectedThreadId = String(threadId || '').trim();
-        if (!selectedThreadId) throw new CodexAppServerError('INVALID_INPUT', 'Recovery requires a Codex threadId');
-        if (operation.threadId && operation.threadId !== selectedThreadId) {
-            throw new CodexAppServerError('RECOVERY_THREAD_MISMATCH', 'Recovery must use the Thread recorded by the acknowledged operation');
-        }
-        await this.start();
-        const bound = [
-            ...this.repository.listSessions({ archived: false }),
-            ...this.repository.listSessions({ archived: true }),
-        ].find((session) => session.threadId === selectedThreadId);
-        if (bound) throw new CodexAppServerError('THREAD_ALREADY_BOUND', 'The selected Codex Thread already belongs to a VChat Session');
-
-        if (action === 'delete') {
-            try {
-                await this.transport.request('thread/delete', { threadId: selectedThreadId });
-            } catch (error) {
-                if (!isConfirmedThreadNotFound(error)) throw error;
-            }
-            this.repository.updateOperation(operation.operationId, {
-                state: 'completed',
-                threadId: selectedThreadId,
-                payload: { ...operation.payload, resolution: 'deleted-unbound-thread' },
-                lastError: null,
-            });
-            return { operationId: operation.operationId, resolved: true, action: 'delete', threadId: selectedThreadId };
-        }
-        if (action !== 'bind') throw new CodexAppServerError('INVALID_INPUT', 'Recovery action must be bind or delete');
-
-        const result = await this.transport.request('thread/read', { threadId: selectedThreadId, includeTurns: true });
-        const thread = result?.thread || result;
-        if (String(thread?.id || '') !== selectedThreadId) {
-            throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/read returned a mismatched Thread');
-        }
-        let session;
-        if (operation.kind === 'thread-start') {
-            session = this.repository.getSession(operation.sessionId);
-            if (!session || session.threadId) {
-                throw new CodexAppServerError('RECOVERY_TARGET_CHANGED', 'The VChat Session is missing or already materialized');
-            }
-            session = this.repository.replaceUnmaterializedThread(session.sessionId, selectedThreadId);
-        } else {
-            const source = this.repository.getSession(operation.sessionId);
-            const targetSessionId = String(operation.payload?.targetSessionId || '').trim();
-            if (!source || !targetSessionId || this.repository.getSession(targetSessionId)) {
-                throw new CodexAppServerError('RECOVERY_TARGET_CHANGED', 'The fork recovery target is no longer available');
-            }
-            session = this.repository.saveSession({
-                sessionId: targetSessionId,
-                threadId: selectedThreadId,
-                agentId: source.agentId,
-                agentCatalogId: source.agentCatalogId,
-                agentNameSnapshot: source.agentNameSnapshot,
-                title: thread.name || `${source.title || 'Codex Agent'} (recovered branch)`,
-                workspaceRoot: thread.cwd || source.workspaceRoot,
-                state: 'ready',
-                configSnapshot: source.configSnapshot,
-                configRevision: source.configRevision,
-            });
-        }
-        const generation = this.repository.projectionGeneration(session.sessionId);
-        this.projector.reconcileThread(session.sessionId, thread, generation);
-        this.repository.updateOperation(operation.operationId, {
-            state: 'completed',
-            threadId: selectedThreadId,
-            payload: { ...operation.payload, resolution: 'bound-thread', boundSessionId: session.sessionId },
-            lastError: null,
-        });
-        this.threadStates.set(selectedThreadId, { activity: 'idle', activeTurnId: null });
-        return {
-            operationId: operation.operationId,
-            resolved: true,
-            action: 'bind',
-            threadId: selectedThreadId,
-            session: compatibilitySession(session),
-        };
+        return this.recoveryService.resolveRecoveryOperation({ operationId, action, threadId });
     }
     async permanentlyDeleteSession({ sessionId, topicId } = {}) {
         this._assertProjectionWritable();
