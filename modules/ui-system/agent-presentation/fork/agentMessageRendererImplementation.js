@@ -39,6 +39,7 @@ import { createAgentRendererSession } from './agent-renderer-session.js';
 import { createAgentRendererStream } from './agent-renderer-stream.js';
 import { renderAttachments as renderResourceAttachments } from './agent-renderer-resource-dom.js';
 import { createAgentMessageDom } from './agent-renderer-message-dom.js';
+import { createAgentRendererContent } from './agent-renderer-content.js';
 
 const colorExtractionPromises = new Map();
 
@@ -2214,6 +2215,19 @@ const messageDom = createAgentMessageDom({
     },
     clearStream: () => getStreamController().clear(),
 });
+const rendererContent = createAgentRendererContent({
+    getSettings: () => getSettings(),
+    getActiveRenderSessionId: () => getActiveRenderSessionId(),
+    isRenderSessionActive: (sessionId) => isRenderSessionActive(sessionId),
+    cleanupPreviews: (content) => contentProcessor.cleanupPreviewsInContent(content),
+    cleanupAnimation: (content) => animationLifecycle?.cleanup(content),
+    setImageContent: (content, html, messageId) => imageController?.setContent(content, html, messageId),
+    renderAttachments: (message, content) => renderAttachments(message, content),
+    processRenderedContent: (content, settings) => contentProcessor.processRenderedContent(content, settings),
+    renderMermaid: (content) => renderMermaidDiagrams(content),
+    highlight: (content) => contentProcessor.highlightAllPatternsInMessage(content),
+    processAnimation: (content) => animationLifecycle?.process(content),
+});
 
 function invalidateRenderSession() {
     activeRenderSessionId += 1;
@@ -2380,74 +2394,7 @@ async function renderAttachments(message, contentDiv) {
 }
 
 async function renderPostProcessedHtml(contentDiv, rawHtml, options = {}) {
-    if (!contentDiv) return;
-
-    const {
-        messageId = null,
-        message = null,
-        settings = getSettings(),
-        renderSessionId = getActiveRenderSessionId(),
-        runHeavy = true,
-        includeAttachments = true,
-        deferHighlights = true
-    } = options;
-
-    const messageItem = contentDiv.closest?.('.message-item');
-
-    const isStillValid = () => {
-        if (renderSessionId !== null && !isRenderSessionActive(renderSessionId)) return false;
-        if (!contentDiv.isConnected) return false;
-        if (messageItem && !messageItem.isConnected) return false;
-        return true;
-    };
-
-    if (typeof rawHtml === 'string') {
-        // 替换 innerHTML 前必须释放旧子树上的预览 iframe、window message 监听器与动画/WebGL 资源。
-        contentProcessor.cleanupPreviewsInContent(contentDiv);
-        animationLifecycle?.cleanup(contentDiv);
-        imageController?.setContent(contentDiv, rawHtml, messageId);
-    }
-
-    if (!isStillValid()) return;
-
-    if (includeAttachments && message) {
-        const existingAttachments = contentDiv.querySelector('.message-attachments');
-        if (existingAttachments) existingAttachments.remove();
-        await renderAttachments(message, contentDiv);
-    }
-
-    if (!isStillValid()) return;
-
-    if (!runHeavy) {
-        if (messageItem) {
-            messageItem.dataset.vcpHeavyPending = 'true';
-        }
-        contentDiv.dataset.vcpHeavyPending = 'true';
-        return;
-    }
-
-    contentProcessor.processRenderedContent(contentDiv, settings);
-    await renderMermaidDiagrams(contentDiv);
-
-    if (!isStillValid()) return;
-
-    if (deferHighlights) {
-        setTimeout(() => {
-            if (isStillValid()) {
-                contentProcessor.highlightAllPatternsInMessage(contentDiv);
-            }
-        }, 0);
-    } else {
-        contentProcessor.highlightAllPatternsInMessage(contentDiv);
-    }
-
-    animationLifecycle?.process(contentDiv);
-    if (messageItem) {
-        messageItem.dataset.vcpHeavyActivated = 'true';
-        delete messageItem.dataset.vcpHeavyPending;
-    }
-    contentDiv.dataset.vcpHeavyActivated = 'true';
-    delete contentDiv.dataset.vcpHeavyPending;
+    return rendererContent.renderPostProcessedHtml(contentDiv, rawHtml, options);
 }
 
 function renderMessage(message, isInitialLoad = false, appendToDom = true, renderSessionId = getActiveRenderSessionId(), renderContext = {}) {
