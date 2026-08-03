@@ -161,7 +161,7 @@ const commandControllerPath = path.join(root, 'modules/ui-system/agent-workbench
 if (!fs.existsSync(commandControllerPath)) errors.push('Workbench command controller is missing');
 else if (fs.readFileSync(commandControllerPath, 'utf8').split(/\r?\n/).length > 900) errors.push('agent-workbench-command-controller.js exceeds module ceiling');
 const rendererFacadePath = 'modules/ui-system/agent-presentation/fork/agentMessageRenderer.js';
-const rendererImplementationPath = 'modules/ui-system/agent-presentation/fork/agentMessageRendererImplementation.js';
+const rendererImplementationPath = 'modules/ui-system/agent-presentation/fork/agent-renderer-runtime.js';
 const rendererStreamPath = 'modules/ui-system/agent-presentation/fork/agent-renderer-stream.js';
 const forkLineCount = fs.readFileSync(path.join(root, rendererFacadePath), 'utf8').split(/\r?\n/).length;
 const forkImplementationLineCount = fs.readFileSync(path.join(root, rendererImplementationPath), 'utf8').split(/\r?\n/).length;
@@ -173,7 +173,7 @@ if (!forkReceipt.includes('独立演进策略') || !forkReceipt.includes('不再
     errors.push('Agent renderer receipt must declare independent evolution rather than manual synchronization');
 }
 const rendererImplementation = fs.readFileSync(path.join(root,
-    'modules/ui-system/agent-presentation/fork/agentMessageRendererImplementation.js'), 'utf8');
+    'modules/ui-system/agent-presentation/fork/agent-renderer-runtime.js'), 'utf8');
 for (const forbidden of [
     'initializeImageHandler(', 'visibilityOptimizer.initialize', 'visibilityOptimizer.destroy',
     'contentProcessor.initializeContentProcessor(',
@@ -208,7 +208,7 @@ for (const absolute of rendererForkFiles) {
 }
 assertAcyclic(rendererForkFiles, 'Agent renderer fork');
 for (const [file, forbiddenPattern] of [
-    ['agentMessageRendererImplementation.js', /\b(?:requestAnimationFrame|requestIdleCallback|setTimeout|setInterval|MutationObserver|IntersectionObserver)\b/],
+    ['agent-renderer-runtime.js', /\b(?:requestAnimationFrame|requestIdleCallback|setTimeout|setInterval|MutationObserver|IntersectionObserver)\b/],
     ['agent-renderer-message-lifecycle.js', /\b(?:requestAnimationFrame|requestIdleCallback|setTimeout|setInterval|MutationObserver|IntersectionObserver)\b/],
 ]) {
     const source = fs.readFileSync(path.join(root, 'modules/ui-system/agent-presentation/fork', file), 'utf8');

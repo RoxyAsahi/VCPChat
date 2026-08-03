@@ -16,4 +16,4 @@ export {
     renderMessageBatch,
     startStreamingMessage,
     updateMessageContent,
-} from './agentMessageRendererImplementation.js';
+} from './agent-renderer-runtime.js';

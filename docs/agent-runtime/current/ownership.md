@@ -12,7 +12,7 @@ Status: **implemented**
 | Settings persistence and CAS | `agent-settings-coordinator.js` | Session A completion mutating Session B UI, page-global revision ownership |
 | Runtime config apply | `runtimeConfig.js`, Runtime Manager apply coordinator | desired config entering Responses Adapter before confirmation |
 | Attachment capabilities | `attachmentRegistry.js` | absolute paths in Renderer, SQLite, transcript or logs |
-| Agent presentation facade | `modules/ui-system/agent-presentation/fork/agentMessageRenderer.js`, `agentMessageRendererImplementation.js` | main renderer runtime state and persistence; feature logic above 600 lines |
+| Agent presentation facade | `modules/ui-system/agent-presentation/fork/agentMessageRenderer.js`, `agent-renderer-runtime.js` | main renderer runtime state and persistence; feature logic in the composition root |
 | Agent presentation content and lifecycle | `agent-renderer-markdown-pipeline.js`, `agent-renderer-message-lifecycle.js`, `agent-renderer-mermaid.js`, `agent-renderer-tool-results.js`, existing stream/session/DOM/action modules | shared mutable renderer singletons, global container cleanup, hidden Session reads |
 | Dock and Workspace view state | `agent-session-dock.js`, `agent-session-dock-view.js`, `agent-workspace-model.js`, `agent-workspace-view.js` | arbitrary absolute paths, cross-Session file refs |
 | Workspace async coordination | `agent-workspace-requests.js`, `agent-workspace-coordinator.js` | Store mutation, Dock ownership, stale request completion clearing a newer request |

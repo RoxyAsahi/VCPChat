@@ -55,7 +55,7 @@ const inlineStyleCompatibilityAllowlist = new Set([
     // Mermaid transforms and media sizing are part of the golden parity
     // contract; FORK_RECEIPT.md pins its exact source and drift gate.
     path.join(moduleDir, 'agent-presentation', 'fork', 'agentMessageRenderer.js'),
-    path.join(moduleDir, 'agent-presentation', 'fork', 'agentMessageRendererImplementation.js'),
+    path.join(moduleDir, 'agent-presentation', 'fork', 'agent-renderer-runtime.js'),
     path.join(moduleDir, 'agent-presentation', 'fork', 'agentImageController.js'),
     path.join(moduleDir, 'agent-presentation', 'fork', 'agent-renderer-avatar-style.js'),
     path.join(moduleDir, 'agent-presentation', 'fork', 'agent-renderer-mermaid.js'),
