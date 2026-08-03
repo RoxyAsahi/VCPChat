@@ -708,10 +708,12 @@ function mountWorkbench(container) {
         // it never contains a transcript beyond the current renderer view.
         timelineRows: new Map(),
         presentationMode: 'fork',
-        // Renderer-only send barrier.  This is not a message/turn identity
-        // and is never written to SQLite; it exists so first-send startup is
-        // visibly busy while thread/start is still in flight.
-        turnStart: null,
+        // Renderer-only send barriers, isolated by durable Session identity.
+        // They are never written to SQLite and must never disable or decorate
+        // another Session while thread/start is still in flight.
+        turnStarts: new Map(),
+        topicCreating: false,
+        profileConfigurationNotice: '',
         // The Session sidebar is a stable DOM shell while its normal list is
         // visible. Projection refreshes patch its rows in place so a
         // background catalog read cannot discard the reader's scroll anchor,
@@ -865,6 +867,7 @@ function mountWorkbench(container) {
     };
     let budgetAutosaveTimer = null;
     let settingsSaveQueue = Promise.resolve();
+    const sessionConfigRevisions = new Map();
     runStatusStop.addEventListener('click', () => run(async () => {
         runStatusStop.disabled = true;
         await controller.cancelTurn();
@@ -1024,10 +1027,32 @@ function mountWorkbench(container) {
             : null;
     }
 
+    function selectedSessionKey(current = store.getState()) {
+        return current.selectedSessionId || current.selectedTopic?.topicId || null;
+    }
+
+    function selectedTurnStart(current = store.getState()) {
+        const sessionId = selectedSessionKey(current);
+        return sessionId ? state.turnStarts.get(sessionId) || null : null;
+    }
+
+    function selectedActiveTurnId(current = store.getState()) {
+        const sessionId = selectedSessionKey(current);
+        const runtime = sessionId && current.activeRuntimes instanceof Map
+            ? current.activeRuntimes.get(sessionId) : null;
+        return current.activeTurnId || runtime?.activeTurnId || null;
+    }
+
+    function profileNeedsConfiguration(profile = selectedAgentProfile()) {
+        const agentId = String(profile?.id || profile?.name || '').trim();
+        return Boolean(agentId && !sameAgent(agentId, 'codex') && !String(profile?.systemPrompt || '').trim());
+    }
+
     function syncPermissionModeFromSelectedSession() {
         const current = store.getState();
         const snapshot = current.selectedTopic?.configSnapshot || null;
-        if (!snapshot || !Object.prototype.hasOwnProperty.call(snapshot, 'approvalPolicy')) return;
+        if (!snapshot || (!Object.prototype.hasOwnProperty.call(snapshot, 'permissionMode')
+            && !Object.prototype.hasOwnProperty.call(snapshot, 'approvalPolicy'))) return;
         // The selected Session snapshot is the same source that Main passes
         // to Codex on the next turn. The page-level value is only a default
         // for creating a new Session and must not overwrite this projection.
@@ -1067,13 +1092,45 @@ function mountWorkbench(container) {
             || 'assets/default_avatar.png';
     }
 
+    function sessionActivity(sessionId, fallback = 'idle') {
+        const current = store.getState();
+        const runtime = sessionId && current.activeRuntimes instanceof Map
+            ? current.activeRuntimes.get(sessionId) : null;
+        if (runtime?.activity) return runtime.activity;
+        if (runtime?.activeTurnId) return 'running';
+        if (sessionId && state.turnStarts.has(sessionId)) return 'starting';
+        return fallback || 'idle';
+    }
+
+    function createSessionAvatar(sessionId, agentId, label, activity = 'idle') {
+        const wrap = node('span', 'agent-chat-session-avatar');
+        const resolvedActivity = sessionActivity(sessionId, activity);
+        wrap.dataset.activity = resolvedActivity;
+        wrap.classList.toggle('is-running', ['starting', 'running'].includes(resolvedActivity));
+        wrap.classList.toggle('is-awaiting-approval', resolvedActivity === 'awaiting-approval');
+        const avatar = document.createElement('img');
+        avatar.className = 'avatar';
+        avatar.loading = 'lazy';
+        avatar.decoding = 'async';
+        avatar.src = agentAvatarUrl(agentId);
+        avatar.alt = label;
+        avatar.onerror = () => { avatar.src = 'assets/default_avatar.png'; };
+        wrap.append(avatar);
+        return wrap;
+    }
+
     function selectAgent(agentId) {
         const profile = state.agentCatalog.find((agent) => sameAgent(agent.id || agent.name, agentId));
         if (!profile) return;
         state.selectedAgent = profile.id || profile.name;
-        // This is only the default for a future Topic. Existing Topics retain
-        // their persisted model when opened, and no Session is created here.
-        if (profile.model) state.model = profile.model;
+        // Profile defaults are the only source for a future Session. Never
+        // retain model/workspace/approval drafts from the previously selected
+        // Agent; existing Sessions continue to use their frozen snapshots.
+        state.model = profile.model || '';
+        state.workspace = profile.workspaceRoot || '';
+        state.permissionMode = profile.permissionMode === 'always-approve' ? 'always-approve' : 'ask';
+        state.modelDraft = null;
+        state.modelDraftSessionId = null;
     }
 
     function agentCacheKey(agentId) {
@@ -1136,7 +1193,15 @@ function mountWorkbench(container) {
                 name: agent.name || agent.id,
                 model: agent.config?.model || agent.model || '',
                 systemPrompt: agent.config?.systemPrompt || agent.systemPrompt || '',
+                workspaceRoot: agent.config?.workspaceRoot || agent.workspaceRoot || '',
+                permissionMode: (agent.config?.permissionMode || agent.permissionMode) === 'always-approve'
+                    ? 'always-approve' : 'ask',
+                revision: Number(agent.config?.revision || agent.revision || 1),
                 avatarUrl: agent.avatarUrl || null,
+                configurationRequired: Boolean(
+                    !sameAgent(agent.id || agent.name, 'codex')
+                    && !String(agent.config?.systemPrompt || agent.systemPrompt || '').trim(),
+                ),
             }))
             : [];
         if (!normalizedAgents.some((agent) => agent.id === 'Nova' || agent.name === 'Nova')) {
@@ -1149,6 +1214,8 @@ function mountWorkbench(container) {
             const fallback = state.agentCatalog.find((agent) => sameAgent(agent.id || agent.name, 'Nova'))
                 || state.agentCatalog[0];
             if (fallback) selectAgent(fallback.id || fallback.name);
+        } else if (!store.getState().selectedSessionId) {
+            selectAgent(state.selectedAgent);
         }
         const selectedAgentId = state.selectedAgent || 'Nova';
         queueRender({ shell: true, header: true, composer: true });
@@ -1163,9 +1230,7 @@ function mountWorkbench(container) {
                 ? { id: model, name: model }
                 : { ...model, id: model?.id || model?.name || '', name: model?.name || model?.id || '' })
                 .filter((model) => model.id);
-            if (!state.modelDraft && !state.modelCatalog.some((model) => model.id === state.model)) {
-                state.model = state.modelCatalog[0]?.id || state.model;
-            }
+            if (!state.modelDraft && !state.model) state.model = state.modelCatalog[0]?.id || '';
             // Model discovery only changes selectors in the sidebar.  It must
             // not reset a potentially streaming transcript.
             queueRender({ shell: true, header: true, composer: true });
@@ -1196,9 +1261,11 @@ function mountWorkbench(container) {
                 maxRequestsPerTurn: budget.maxRequestsPerTurn ?? null,
                 maxTokensPerTurn: budget.maxTokensPerTurn ?? null,
             };
-            state.permissionMode = workbenchSettings.permissionMode === 'always-approve'
-                ? 'always-approve' : 'ask';
-            if (!store.getState().selectedTopic?.configSnapshot?.model && workbenchSettings.model) {
+            if (!selectedAgentProfile() && !store.getState().selectedTopic?.configSnapshot) {
+                state.permissionMode = workbenchSettings.permissionMode === 'always-approve'
+                    ? 'always-approve' : 'ask';
+            }
+            if (!selectedAgentProfile() && !store.getState().selectedTopic?.configSnapshot?.model && workbenchSettings.model) {
                 state.model = String(workbenchSettings.model);
             }
         }
@@ -1239,11 +1306,11 @@ function mountWorkbench(container) {
         }
         const title = overrides.title || (overrides.resume ? undefined : nextSessionTitle());
         const session = await controller.createSession({
-            workspaceRoot: overrides.workspaceRoot ?? (state.workspace.trim() || undefined),
-            model: overrides.model ?? (state.model.trim() || undefined),
+            ...(Object.prototype.hasOwnProperty.call(overrides, 'workspaceRoot') ? { workspaceRoot: overrides.workspaceRoot } : {}),
+            ...(Object.prototype.hasOwnProperty.call(overrides, 'model') ? { model: overrides.model } : {}),
+            ...(Object.prototype.hasOwnProperty.call(overrides, 'systemPrompt') ? { systemPrompt: overrides.systemPrompt } : {}),
+            ...(Object.prototype.hasOwnProperty.call(overrides, 'permissionMode') ? { permissionMode: overrides.permissionMode } : {}),
             agent: overrides.agent ?? (state.selectedAgent || 'Nova'),
-            systemPrompt: overrides.systemPrompt ?? selectedAgentProfile()?.systemPrompt ?? '',
-            permissionMode: overrides.permissionMode ?? state.permissionMode,
             resume: overrides.resume,
             title,
         });
@@ -1255,15 +1322,12 @@ function mountWorkbench(container) {
 
     async function createTopic(overrides = {}) {
         state.pendingAttachments = [];
-        const runtimeState = store.getState().runtime.state;
-        if (runtimeState === 'stopped' || runtimeState === 'unknown') {
-            await controller.startRuntime();
-        }
         const created = await controller.createTopic({
-            workspaceRoot: overrides.workspaceRoot ?? (state.workspace.trim() || undefined),
-            model: overrides.model ?? (state.model.trim() || undefined),
+            ...(Object.prototype.hasOwnProperty.call(overrides, 'workspaceRoot') ? { workspaceRoot: overrides.workspaceRoot } : {}),
+            ...(Object.prototype.hasOwnProperty.call(overrides, 'model') ? { model: overrides.model } : {}),
+            ...(Object.prototype.hasOwnProperty.call(overrides, 'systemPrompt') ? { systemPrompt: overrides.systemPrompt } : {}),
+            ...(Object.prototype.hasOwnProperty.call(overrides, 'permissionMode') ? { permissionMode: overrides.permissionMode } : {}),
             agent: overrides.agent ?? (state.selectedAgent || 'Nova'),
-            systemPrompt: overrides.systemPrompt ?? selectedAgentProfile()?.systemPrompt ?? '',
             title: overrides.title || nextSessionTitle(),
         });
         rememberTopic(created);
@@ -1272,25 +1336,42 @@ function mountWorkbench(container) {
         return created;
     }
 
-    function defaultNewTopicFlow() {
-        return {
-            kind: 'create',
-            title: nextSessionTitle(),
-            agent: state.selectedAgent || 'Nova',
-            model: state.model || '',
-            workspaceRoot: state.workspace || '',
-            permissionMode: state.permissionMode,
-            saving: false,
-        };
+    async function createNewTopicDirectly() {
+        if (state.topicCreating) return null;
+        const profile = selectedAgentProfile();
+        if (!profile) {
+            state.profileConfigurationNotice = '请先选择一个 Build Agent。';
+            state.tab = 'agents';
+            renderSidebar();
+            return null;
+        }
+        if (profileNeedsConfiguration(profile)) {
+            state.profileConfigurationNotice = `Agent「${profile.name || profile.id}」尚未配置提示词。请先在“设置”中填写提示词，避免用错误身份启动 Codex。`;
+            state.tab = 'settings';
+            renderSidebar();
+            return null;
+        }
+        state.topicCreating = true;
+        state.profileConfigurationNotice = '';
+        queueRender({ shell: true, header: true, composer: true });
+        try {
+            const created = await createTopic({
+                agent: state.selectedAgent,
+                title: nextSessionTitle(),
+            });
+            state.tab = 'sessions';
+            notify(`已新建会话「${created.title || created.topicId}」。`, 'success');
+            return created;
+        } finally {
+            state.topicCreating = false;
+            queueRender({ shell: true, header: true, composer: true });
+        }
     }
 
     function openNewTopicFlow() {
-        state.topicFlow = defaultNewTopicFlow();
-        // A modal is a user-initiated foreground action, not a background
-        // control-plane refresh. Render it synchronously so a ready/readiness
-        // event cannot replace the header between the click and the next RAF
-        // and make the create affordance look inert.
-        renderTopicFlow();
+        // New Session inherits the selected Profile and is created immediately;
+        // only the separate New Build Agent flow remains modal.
+        void run(createNewTopicDirectly);
     }
 
     function closeTopicFlow() {
@@ -1304,6 +1385,8 @@ function mountWorkbench(container) {
             name: '',
             systemPrompt: '',
             model: state.model || '',
+            workspaceRoot: '',
+            permissionMode: 'ask',
             saving: false,
         };
         queueRender({ topicFlow: true });
@@ -1561,14 +1644,26 @@ function mountWorkbench(container) {
         for (const [index, entry] of desired.entries()) {
             const row = rows[index];
             const active = entry.id === selectedTopicId;
+            const activity = sessionActivity(entry.id, entry.value.activity);
             row.classList.toggle('active', active);
             row.classList.toggle('active-topic-glowing', active);
+            row.classList.toggle('is-running', ['starting', 'running'].includes(activity));
+            row.classList.toggle('is-awaiting-approval', activity === 'awaiting-approval');
+            row.dataset.runtimeActivity = activity;
+            const avatar = row.querySelector('.agent-chat-session-avatar');
+            if (avatar) {
+                avatar.dataset.activity = activity;
+                avatar.classList.toggle('is-running', ['starting', 'running'].includes(activity));
+                avatar.classList.toggle('is-awaiting-approval', activity === 'awaiting-approval');
+            }
             row.dataset.topicSearch = `${entry.value.title || entry.id} ${entry.value.model || ''}`.toLocaleLowerCase();
             const title = row.querySelector('.topic-title-display');
             if (title) title.textContent = entry.value.title || entry.id;
             if (entry.live) {
                 const count = row.querySelector('.message-count');
-                if (count) count.textContent = active ? String(store.getState().messages.length) : '';
+                if (count) count.textContent = active
+                    ? String(store.getState().messages.length)
+                    : activity === 'awaiting-approval' ? '!' : '';
             } else {
                 row.title = entry.value.searchHit?.snippet || '';
             }
@@ -1576,35 +1671,84 @@ function mountWorkbench(container) {
         return true;
     }
 
+    async function persistAgentProfileDefaults(payload) {
+        const profile = selectedAgentProfile();
+        if (!profile) throw new Error('请先选择 Build Agent');
+        const result = await runtimeApi().agentRuntimeSaveAgentProfile?.({
+            agentId: profile.id || profile.name,
+            name: profile.name || profile.id,
+            systemPrompt: Object.prototype.hasOwnProperty.call(payload, 'systemPrompt')
+                ? payload.systemPrompt : profile.systemPrompt || '',
+            model: Object.prototype.hasOwnProperty.call(payload, 'model') ? payload.model : profile.model,
+            workspaceRoot: Object.prototype.hasOwnProperty.call(payload, 'workspaceRoot')
+                ? payload.workspaceRoot : profile.workspaceRoot,
+            permissionMode: Object.prototype.hasOwnProperty.call(payload, 'permissionMode')
+                ? payload.permissionMode : profile.permissionMode,
+        });
+        if (!result?.success || !result.profile?.id) throw new Error(result?.error || 'Build Agent Profile 保存失败');
+        const savedProfile = {
+            ...result.profile,
+            systemPrompt: result.profile.systemPrompt || '',
+            model: result.profile.model || '',
+            workspaceRoot: result.profile.workspaceRoot || '',
+            permissionMode: result.profile.permissionMode === 'always-approve' ? 'always-approve' : 'ask',
+            configurationRequired: !sameAgent(result.profile.id, 'codex')
+                && !String(result.profile.systemPrompt || '').trim(),
+        };
+        Object.assign(profile, savedProfile);
+        selectAgent(savedProfile.id);
+        return {
+            profile: savedProfile,
+            settings: {
+                model: savedProfile.model,
+                permissionMode: savedProfile.permissionMode,
+            },
+        };
+    }
+
     function persistWorkbenchSettings(payload, selectedSession, successMessage) {
         state.settingsSaveState = 'saving';
         state.settingsSaveMessage = '正在自动保存…';
+        const projectionAtEnqueue = store.getState().selectedTopic;
+        if (selectedSession
+            && (projectionAtEnqueue?.sessionId || projectionAtEnqueue?.topicId) === selectedSession) {
+            sessionConfigRevisions.set(selectedSession, Number(projectionAtEnqueue.configRevision || 1));
+        }
         const operation = settingsSaveQueue.then(async () => {
-            const selectedProjection = store.getState().selectedTopic;
             const request = {
                 ...payload,
                 ...(selectedSession ? {
                     sessionId: selectedSession,
-                    expectedConfigRevision: selectedProjection?.topicId === selectedSession
-                        ? Number(selectedProjection.configRevision || 1)
-                        : 1,
+                    expectedConfigRevision: sessionConfigRevisions.get(selectedSession)
+                        || Number(projectionAtEnqueue?.configRevision || 1),
                 } : {}),
             };
-            const saved = await controller.updateWorkbenchSettings(request);
-            if (Object.prototype.hasOwnProperty.call(payload, 'permissionMode')) {
+            const profileUpdate = !selectedSession && ['systemPrompt', 'model', 'workspaceRoot', 'permissionMode']
+                .some((key) => Object.prototype.hasOwnProperty.call(payload, key));
+            const saved = profileUpdate
+                ? await persistAgentProfileDefaults(payload)
+                : await controller.updateWorkbenchSettings(request);
+            if (saved?.profile && !saved.profile.configurationRequired) {
+                state.profileConfigurationNotice = '';
+            }
+            if (saved?.session?.configRevision) {
+                sessionConfigRevisions.set(saved.session.sessionId, Number(saved.session.configRevision));
+            }
+            const stillSelected = !selectedSession || store.getState().selectedSessionId === selectedSession;
+            if (stillSelected && Object.prototype.hasOwnProperty.call(payload, 'permissionMode')) {
                 state.permissionMode = saved?.settings?.permissionMode === 'always-approve' ? 'always-approve' : 'ask';
             }
-            if (Object.prototype.hasOwnProperty.call(payload, 'model')) {
+            if (stillSelected && Object.prototype.hasOwnProperty.call(payload, 'model')) {
                 state.model = saved?.settings?.model || saved?.session?.configSnapshot?.model || payload.model;
                 state.modelDraft = null;
             }
             if (Object.prototype.hasOwnProperty.call(payload, 'budget')) {
                 state.budget = { ...state.budget, ...payload.budget };
             }
-            if (selectedSession && saved?.session?.configSnapshot) {
+            if (stillSelected && selectedSession && saved?.session?.configSnapshot) {
                 const currentProjection = store.getState();
                 store.setState({
-                    selectedTopic: currentProjection.selectedTopic?.topicId === selectedSession
+                    selectedTopic: currentProjection.selectedSessionId === selectedSession
                         ? {
                             ...currentProjection.selectedTopic,
                             configSnapshot: saved.session.configSnapshot,
@@ -1682,6 +1826,7 @@ function mountWorkbench(container) {
             // chat's Topic toolbar. The callbacks deliberately stay local to
             // the Workbench: Agent Sessions are SQLite/Codex-owned objects.
             const add = visualActionButton('add', '新建会话', 'next-ui-create-topic-trigger', '新建会话');
+            add.disabled = state.topicCreating;
             add.addEventListener('click', openNewTopicFlow);
             const manage = visualActionButton('checklist', '管理会话', 'next-ui-topic-icon-trigger');
             manage.disabled = state.showArchivedTopics;
@@ -1745,6 +1890,22 @@ function mountWorkbench(container) {
             });
             header.append(tools, searchPanel);
             content.append(header);
+            if (profileNeedsConfiguration()) {
+                const warning = node('section', 'agent-chat-profile-configuration-warning');
+                warning.setAttribute('role', 'status');
+                warning.append(
+                    node('strong', '', '需要配置 Agent 提示词'),
+                    node('span', '', state.profileConfigurationNotice
+                        || `Agent「${selectedAgentProfile()?.name || state.selectedAgent}」缺少提示词，暂时不能新建会话。`),
+                );
+                const configure = button('去设置', 'secondary agent-chat-profile-configuration-action');
+                configure.addEventListener('click', () => {
+                    state.tab = 'settings';
+                    renderSidebar();
+                });
+                warning.append(configure);
+                content.append(warning);
+            }
             const list = node('ul', 'topic-list agent-chat-session-list');
             const { liveSessions, persistedTopics: normalPersistedTopics, selectedTopicId } = sessionSidebarEntries();
             const indexedTopics = state.topicSearch.trim()
@@ -1776,26 +1937,21 @@ function mountWorkbench(container) {
                 const active = session.topicId === selectedTopicId;
                 // Keep this deliberately isomorphic to topicListManager's main
                 // chat rows.  The only different bit is the select callback.
-                const row = node('li', `topic-item agent-chat-session-row${active ? ' active active-topic-glowing' : ''}`);
+                const activity = sessionActivity(session.topicId, session.activity);
+                const row = node('li', `topic-item agent-chat-session-row${active ? ' active active-topic-glowing' : ''}${['starting', 'running'].includes(activity) ? ' is-running' : ''}${activity === 'awaiting-approval' ? ' is-awaiting-approval' : ''}`);
                 row.tabIndex = 0;
                 row.dataset.itemId = session.agentId || state.selectedAgent || 'Nova';
                 row.dataset.itemType = 'agent-runtime';
                 row.dataset.topicId = session.topicId;
                 row.dataset.topicInUse = 'false';
-                row.dataset.runtimeActivity = session.activity || 'idle';
+                row.dataset.runtimeActivity = activity;
                 row.dataset.topicSearch = `${session.title} ${session.model}`.toLocaleLowerCase();
-                const avatar = document.createElement('img');
-                avatar.className = 'avatar';
-                avatar.loading = 'lazy';
-                avatar.decoding = 'async';
-                avatar.src = agentAvatarUrl(session.agentId || state.selectedAgent);
-                avatar.alt = `${state.selectedAgent || 'Nova'} - ${session.title}`;
-                avatar.onerror = () => { avatar.src = 'assets/default_avatar.png'; };
+                const avatar = createSessionAvatar(session.topicId, session.agentId || state.selectedAgent,
+                    `${state.selectedAgent || 'Nova'} - ${session.title}`, activity);
                 const title = node('span', 'topic-title-display', session.title);
                 const count = node('span', 'message-count', active
                     ? String(store.getState().messages.length)
-                    : session.activity === 'running' ? '●'
-                        : session.activity === 'awaiting-approval' ? '!' : '');
+                    : activity === 'awaiting-approval' ? '!' : '');
                 row.append(avatar, title, count);
                 // The row represents a live Session Runtime. Its transcript is
                 // still rebuilt only from the durable Session projection.
@@ -1824,13 +1980,8 @@ function mountWorkbench(container) {
                 row.dataset.itemType = 'agent-topic';
                 row.dataset.topicId = topic.id;
                 row.dataset.topicSearch = `${topic.title || topic.id} ${topic.model || ''}`.toLocaleLowerCase();
-                const avatar = document.createElement('img');
-                avatar.className = 'avatar';
-                avatar.loading = 'lazy';
-                avatar.decoding = 'async';
-                avatar.src = agentAvatarUrl(topic.agentId || state.selectedAgent);
-                avatar.alt = `${topic.agentId || 'Nova'} - ${topic.title || topic.id}`;
-                avatar.onerror = () => { avatar.src = 'assets/default_avatar.png'; };
+                const avatar = createSessionAvatar(topic.id, topic.agentId || state.selectedAgent,
+                    `${topic.agentId || 'Nova'} - ${topic.title || topic.id}`);
                 const title = node('span', 'topic-title-display', topic.title || topic.id);
                 const status = topic.searchHit ? node('span', 'message-count', '匹配') : null;
                 if (topic.searchHit?.snippet) row.title = topic.searchHit.snippet;
@@ -2012,7 +2163,7 @@ function mountWorkbench(container) {
             const list = node('ul', 'agent-list agent-chat-agent-list');
             for (const agent of state.agentCatalog) {
                 const agentId = agent.id || agent.name;
-                const row = node('li', `agent-chat-agent-row${sameAgent(agentId, state.selectedAgent) ? ' active' : ''}`);
+                const row = node('li', `agent-chat-agent-row${sameAgent(agentId, state.selectedAgent) ? ' active' : ''}${agent.configurationRequired ? ' configuration-required' : ''}`);
                 row.tabIndex = 0;
                 row.dataset.agentSearch = `${agent.name || ''} ${agentId || ''}`.toLocaleLowerCase();
                 const avatar = document.createElement('img');
@@ -2021,8 +2172,20 @@ function mountWorkbench(container) {
                 avatar.alt = `${agent.name || agentId} 头像`;
                 avatar.onerror = () => { avatar.src = 'assets/default_avatar.png'; };
                 row.append(avatar, node('span', 'agent-name', agent.name || agentId));
+                if (agent.configurationRequired) {
+                    const warning = node('span', 'vcp-ui-icon agent-chat-agent-configuration-icon', 'warning');
+                    warning.title = '缺少 Agent 提示词';
+                    warning.setAttribute('aria-label', '缺少 Agent 提示词');
+                    row.append(warning);
+                }
                 row.addEventListener('click', () => run(async () => {
                     state.uxTimings.set(`agent-click:${agentCacheKey(agentId)}`, uxMark('agent-click', agentId));
+                    const currentSelection = store.getState();
+                    const selectedSessionAgent = currentSelection.selectedTopic?.agentId;
+                    if (currentSelection.selectedSessionId
+                        && (!selectedSessionAgent || !sameAgent(selectedSessionAgent, agentId))) {
+                        controller.clearSelection();
+                    }
                     selectAgent(agentId);
                     // Selecting an Agent is a browse action, not an implicit
                     // create-session action. Go straight to its durable SQLite
@@ -2047,13 +2210,16 @@ function mountWorkbench(container) {
             const selectedSession = store.getState().selectedSessionId || store.getState().selectedTopic?.topicId || '';
             const selectedProjection = store.getState().selectedTopic;
             const selectedRuntime = activeSession();
-            const selectedSnapshot = selectedRuntime?.configSnapshot || selectedProjection?.configSnapshot || null;
+            const selectedSnapshot = selectedProjection?.configSnapshot || selectedRuntime?.configSnapshot || null;
+            if (selectedSession && selectedProjection?.configRevision) {
+                sessionConfigRevisions.set(selectedSession, Number(selectedProjection.configRevision));
+            }
             const selectedThreadId = selectedRuntime?.threadId || selectedProjection?.threadId
                 || selectedProjection?.session?.threadId || null;
             const materializedSession = Boolean(selectedSession && selectedThreadId);
             const selectedWorkspace = selectedProjection?.workspaceRef || selectedProjection?.workspaceRoot
                 || (selectedRuntime?.sessionId === selectedSession ? selectedRuntime.workspaceRoot : '')
-                || state.workspace;
+                || selectedAgentProfile()?.workspaceRoot || state.workspace;
             const selectedPermissionMode = selectedSnapshot?.permissionMode
                 || (selectedSnapshot?.approvalPolicy === 'never' ? 'always-approve'
                     : selectedSnapshot?.approvalPolicy ? 'ask' : state.permissionMode);
@@ -2074,6 +2240,16 @@ function mountWorkbench(container) {
             settingsPane.append(node('p', 'agent-chat-settings-placeholder', selectedSession
                 ? '设置修改后自动保存到当前 Session，并从下一次 Turn 开始生效；正在运行的 Turn 不会被静默改写。'
                 : '设置修改后自动保存为新 Session 的默认值；真实凭据仍由 VCPChat 共享设置安全保存。'));
+            if (!selectedSession && profileNeedsConfiguration()) {
+                const warning = node('section', 'agent-chat-profile-configuration-warning is-settings');
+                warning.setAttribute('role', 'alert');
+                warning.append(
+                    node('strong', '', '此 Agent 还不能创建会话'),
+                    node('span', '', state.profileConfigurationNotice
+                        || '请填写下方 Agent 提示词。保存完成后即可直接新建会话。'),
+                );
+                settingsPane.append(warning);
+            }
             const field = (label, value, onChange, options = null, controlOptions = {}) => {
                 const wrap = node('label', 'agent-chat-setting-field');
                 wrap.append(node('span', 'agent-chat-setting-label', label));
@@ -2139,19 +2315,17 @@ function mountWorkbench(container) {
             settingsForm.append(avatarSection);
             settingsForm.append(
                 field('工作目录（可留空）', selectedWorkspace, (value) => {
-                    state.workspace = value;
+                    if (!selectedSession) state.workspace = value;
                     if (selectedSession) {
                         void persistWorkbenchSettings({ workspaceRoot: value }, selectedSession, '已自动保存当前 Session 工作目录');
                     } else {
-                        state.settingsSaveState = 'saved';
-                        state.settingsSaveMessage = '已作为新 Session 的页面默认目录';
-                        renderSidebar();
+                        void persistWorkbenchSettings({ workspaceRoot: value }, '', '已自动保存 Agent 默认工作目录');
                     }
                 }, null, {
                     disabled: materializedSession,
                     title: materializedSession ? '工作目录属于已创建 Codex Thread 的身份；请应用 Profile 并创建新 Session。' : '',
                 }),
-                field('Agent', state.selectedAgent, (value) => { state.selectedAgent = value; }, state.agentCatalog.map((agent) => ({ value: agent.id || agent.name, label: agent.name || agent.id })), {
+                field('Agent', state.selectedAgent, (value) => { selectAgent(value); renderSidebar(); }, state.agentCatalog.map((agent) => ({ value: agent.id || agent.name, label: agent.name || agent.id })), {
                     disabled: Boolean(selectedSession),
                     title: selectedSession ? 'Agent Profile identity 在 Session 创建时冻结。' : '',
                 }),
@@ -2188,13 +2362,16 @@ function mountWorkbench(container) {
                 : selectedSession ? '当前 Session 的 Base Instructions' : '当前 Agent 的提示词'));
             const prompt = document.createElement('textarea');
             prompt.className = 'agent-chat-setting-input agent-chat-setting-prompt';
-            prompt.readOnly = !selectedSession || materializedSession;
+            prompt.readOnly = materializedSession;
             prompt.rows = 5;
-            prompt.value = agentPrompt || '此 Agent 未配置提示词。';
+            prompt.value = agentPrompt;
+            prompt.placeholder = '请填写此 Build Agent 的提示词，例如：{{Nova}}';
             prompt.setAttribute('aria-label', '当前 Agent 提示词');
             if (!prompt.readOnly) {
                 prompt.addEventListener('change', () => {
-                    void persistWorkbenchSettings({ systemPrompt: prompt.value }, selectedSession, '已自动保存当前 Session 提示词');
+                    const systemPrompt = prompt.value.trim();
+                    void persistWorkbenchSettings({ systemPrompt }, selectedSession,
+                        selectedSession ? '已自动保存当前 Session 提示词' : '已自动保存 Agent 默认提示词');
                 });
             } else if (materializedSession) {
                 prompt.title = '提示词属于已创建 Codex Thread 的身份；请应用 Profile 并创建新 Session。';
@@ -2341,6 +2518,7 @@ function mountWorkbench(container) {
                 state.settingsSaveMessage || '修改后自动保存');
             saveStatus.setAttribute('role', 'status');
             const save = button('用此配置新建会话', 'primary agent-chat-settings-save');
+            save.disabled = state.topicCreating;
             save.addEventListener('click', openNewTopicFlow);
             settingsForm.append(permissionHint, budgetSection, recoverySection, saveStatus, save);
             settingsPane.append(settingsForm);
@@ -2371,7 +2549,7 @@ function mountWorkbench(container) {
             const title = node('h2', 'agent-chat-topic-flow-title', '新建 Agent 会话');
             title.id = 'agentChatTopicFlowTitle';
             const description = node('p', 'agent-chat-topic-flow-description',
-                '创建独立的 Codex 会话。其它 Thread 可继续运行；首次发送时才会启动此 Thread。');
+                '创建独立的 Codex 会话并继承 Agent Profile。其它 Thread 可继续运行；首次发送时才会启动此 Thread。');
             const context = node('section', 'agent-chat-topic-flow-context');
             context.setAttribute('aria-label', 'Topic 创建配置来源');
             const addContext = (label, value) => {
@@ -2379,9 +2557,11 @@ function mountWorkbench(container) {
                 item.append(node('span', 'agent-chat-topic-flow-context-label', label), node('strong', 'agent-chat-topic-flow-context-value', value));
                 context.append(item);
             };
-            addContext('Agent', flow.agent || '尚未选择（共享 VCPChat Agent 目录）');
-            addContext('模型', flow.model || '尚未选择（可输入共享模型 ID）');
-            addContext('工作目录', flow.workspaceRoot || '未指定（由 Codex App Server 使用当前 workspace）');
+            const profile = state.agentCatalog.find((agent) => sameAgent(agent.id || agent.name, flow.agent));
+            addContext('Agent Profile', profile?.name || flow.agent || '尚未选择');
+            addContext('模型', profile?.model || '使用 VCPChat 默认模型');
+            addContext('工作目录', profile?.workspaceRoot || '使用 VCPChat 当前工作目录');
+            addContext('本地工具审批', profile?.permissionMode === 'always-approve' ? 'YOLO：本地自动允许' : '每次确认');
             const form = node('form', 'agent-chat-topic-flow-form');
             form.addEventListener('submit', (event) => {
                 event.preventDefault();
@@ -2393,9 +2573,6 @@ function mountWorkbench(container) {
                         const created = await createTopic({
                             title: state.topicFlow.title.trim() || nextSessionTitle(),
                             agent: state.topicFlow.agent,
-                        model: state.topicFlow.model.trim() || undefined,
-                        workspaceRoot: state.topicFlow.workspaceRoot.trim() || undefined,
-                        permissionMode: state.topicFlow.permissionMode,
                         });
                         state.topicFlow = null;
                         state.tab = 'sessions';
@@ -2418,59 +2595,6 @@ function mountWorkbench(container) {
             titleInput.setAttribute('aria-label', 'Topic 标题');
             titleInput.addEventListener('input', () => { if (state.topicFlow?.kind === 'create') state.topicFlow.title = titleInput.value; });
 
-            const agentSelect = document.createElement('select');
-            agentSelect.className = 'agent-chat-topic-flow-input';
-            agentSelect.setAttribute('aria-label', 'Agent');
-            const agents = state.agentCatalog.length
-                ? state.agentCatalog
-                : [{ id: 'Nova', name: 'Nova' }];
-            for (const agent of agents) {
-                const option = document.createElement('option');
-                option.value = agent.id || agent.name;
-                option.textContent = agent.name || agent.id;
-                option.selected = option.value === flow.agent;
-                agentSelect.append(option);
-            }
-            agentSelect.addEventListener('change', () => { if (state.topicFlow?.kind === 'create') state.topicFlow.agent = agentSelect.value; });
-
-            const modelInput = document.createElement('input');
-            modelInput.className = 'agent-chat-topic-flow-input';
-            modelInput.value = flow.model;
-            modelInput.setAttribute('aria-label', '模型');
-            modelInput.setAttribute('list', 'agentChatTopicFlowModels');
-            const modelList = document.createElement('datalist');
-            modelList.id = 'agentChatTopicFlowModels';
-            for (const model of state.modelCatalog) {
-                const option = document.createElement('option');
-                option.value = model.id || model.name || String(model);
-                modelList.append(option);
-            }
-            modelInput.addEventListener('input', () => { if (state.topicFlow?.kind === 'create') state.topicFlow.model = modelInput.value; });
-
-            const workspaceInput = document.createElement('input');
-            workspaceInput.className = 'agent-chat-topic-flow-input';
-            workspaceInput.value = flow.workspaceRoot;
-            workspaceInput.placeholder = '留空使用 VCPChat 当前工作目录';
-            workspaceInput.setAttribute('aria-label', '工作目录');
-            workspaceInput.addEventListener('input', () => { if (state.topicFlow?.kind === 'create') state.topicFlow.workspaceRoot = workspaceInput.value; });
-
-            const permissionSelect = document.createElement('select');
-            permissionSelect.className = 'agent-chat-topic-flow-input';
-            permissionSelect.setAttribute('aria-label', '本地工具审批');
-            for (const optionValue of [
-                ['ask', '每次确认（推荐）'],
-                ['always-approve', 'YOLO：本地自动允许'],
-            ]) {
-                const option = document.createElement('option');
-                option.value = optionValue[0];
-                option.textContent = optionValue[1];
-                option.selected = option.value === flow.permissionMode;
-                permissionSelect.append(option);
-            }
-            permissionSelect.addEventListener('change', () => {
-                if (state.topicFlow?.kind === 'create') state.topicFlow.permissionMode = permissionSelect.value;
-            });
-
             const actions = node('div', 'agent-chat-topic-flow-actions');
             const cancel = button('取消', 'secondary');
             cancel.disabled = flow.saving;
@@ -2481,12 +2605,7 @@ function mountWorkbench(container) {
             actions.append(cancel, submit);
             form.append(
                 field('Topic 标题', titleInput),
-                field('共享 Agent', agentSelect),
-                field('共享模型', modelInput),
-                modelList,
-                field('工作目录', workspaceInput),
-                field('本地工具审批', permissionSelect),
-                node('p', 'agent-chat-topic-flow-description', 'YOLO 只跳过本地确认；VCPToolBox 后端审批仍会独立执行。'),
+                node('p', 'agent-chat-topic-flow-description', '模型、提示词、工作目录和审批模式来自上方 Agent Profile；创建后可在 Session 设置中调整允许变更的字段。'),
                 actions,
             );
             dialog.append(title, description, context, form);
@@ -2529,6 +2648,30 @@ function mountWorkbench(container) {
                 option.value = model.id || model.name || String(model);
                 modelList.append(option);
             }
+            const workspaceInput = document.createElement('input');
+            workspaceInput.className = 'agent-chat-topic-flow-input';
+            workspaceInput.value = flow.workspaceRoot;
+            workspaceInput.placeholder = '留空使用 VCPChat 当前工作目录';
+            workspaceInput.setAttribute('aria-label', 'Build Agent 默认工作目录');
+            workspaceInput.addEventListener('input', () => {
+                if (state.topicFlow?.kind === 'agent') state.topicFlow.workspaceRoot = workspaceInput.value;
+            });
+            const permissionSelect = document.createElement('select');
+            permissionSelect.className = 'agent-chat-topic-flow-input';
+            permissionSelect.setAttribute('aria-label', 'Build Agent 默认审批模式');
+            for (const [value, label] of [
+                ['ask', '每次确认（推荐）'],
+                ['always-approve', 'YOLO：本地自动允许'],
+            ]) {
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = label;
+                option.selected = value === flow.permissionMode;
+                permissionSelect.append(option);
+            }
+            permissionSelect.addEventListener('change', () => {
+                if (state.topicFlow?.kind === 'agent') state.topicFlow.permissionMode = permissionSelect.value;
+            });
             const actions = node('div', 'agent-chat-topic-flow-actions');
             const cancel = button('取消', 'secondary');
             cancel.type = 'button';
@@ -2543,6 +2686,8 @@ function mountWorkbench(container) {
                 field('提示词', promptInput),
                 field('默认模型（可留空）', modelInput),
                 modelList,
+                field('默认工作目录（可留空）', workspaceInput),
+                field('默认本地工具审批', permissionSelect),
                 actions,
             );
             form.addEventListener('input', () => {
@@ -2556,6 +2701,8 @@ function mountWorkbench(container) {
                         name: state.topicFlow.name.trim(),
                         systemPrompt: state.topicFlow.systemPrompt.trim(),
                         model: state.topicFlow.model.trim() || undefined,
+                        workspaceRoot: state.topicFlow.workspaceRoot.trim() || undefined,
+                        permissionMode: state.topicFlow.permissionMode,
                     };
                     state.topicFlow = { ...state.topicFlow, saving: true };
                     queueRender({ topicFlow: true });
@@ -2716,32 +2863,33 @@ function mountWorkbench(container) {
             return;
         }
         const timeline = createAgentTimelineParts(current);
-        if (state.turnStart) {
-            const selectedTopicId = current.selectedSessionId || current.selectedTopic?.topicId || null;
-            const alreadyHasAssistant = state.turnStart.turnId && current.messages.some((message) => (
-                message.role === 'assistant' && message.turnId === state.turnStart.turnId
+        const pendingTurnStart = selectedTurnStart(current);
+        if (pendingTurnStart) {
+            const selectedTopicId = selectedSessionKey(current);
+            const alreadyHasAssistant = pendingTurnStart.turnId && current.messages.some((message) => (
+                message.role === 'assistant' && message.turnId === pendingTurnStart.turnId
             ));
-            if (selectedTopicId && state.turnStart.topicId === selectedTopicId && !alreadyHasAssistant) {
+            if (selectedTopicId && pendingTurnStart.topicId === selectedTopicId && !alreadyHasAssistant) {
                 const presentationId = `turn-start:${selectedTopicId}`;
                 timeline.push({
                     kind: 'message',
                     id: presentationId,
                     presentationKey: presentationId,
-                    turnId: state.turnStart.turnId || null,
+                    turnId: pendingTurnStart.turnId || null,
                     value: {
                         id: presentationId,
                         role: 'assistant',
                         state: 'streaming',
-                        content: state.turnStart.phase === 'starting' ? '正在启动 Agent…' : '思考中',
+                        content: pendingTurnStart.phase === 'starting' ? '正在启动 Agent…' : '思考中',
                         presentationRole: 'turn-start',
                         presentationKey: presentationId,
-                        presentationPhase: state.turnStart.phase,
-                        createdAt: state.turnStart.createdAt || Date.now(),
+                        presentationPhase: pendingTurnStart.phase,
+                        createdAt: pendingTurnStart.createdAt || Date.now(),
                     },
                 });
             }
         }
-        if (!timeline.length && !state.turnStart) {
+        if (!timeline.length && !pendingTurnStart) {
             showEmpty('会话已就绪，发送第一条消息开始。');
             return;
         }
@@ -3932,21 +4080,37 @@ function mountWorkbench(container) {
         const selectedTopicId = store.getState().selectedSessionId || store.getState().selectedTopic?.topicId || null;
         for (const row of sidebar.querySelectorAll('.agent-chat-session-row[data-topic-id]')) {
             const active = Boolean(selectedTopicId && row.dataset.topicId === selectedTopicId);
+            const activity = sessionActivity(row.dataset.topicId, row.dataset.runtimeActivity || 'idle');
             row.classList.toggle('active', active);
             row.classList.toggle('active-topic-glowing', active);
+            row.classList.toggle('is-running', ['starting', 'running'].includes(activity));
+            row.classList.toggle('is-awaiting-approval', activity === 'awaiting-approval');
+            row.dataset.runtimeActivity = activity;
+            const avatar = row.querySelector('.agent-chat-session-avatar');
+            if (avatar) {
+                avatar.dataset.activity = activity;
+                avatar.classList.toggle('is-running', ['starting', 'running'].includes(activity));
+                avatar.classList.toggle('is-awaiting-approval', activity === 'awaiting-approval');
+            }
             row.setAttribute('aria-current', active ? 'true' : 'false');
         }
     }
 
     function settleTurnStartIndicator(event) {
-        const pending = state.turnStart;
-        if (!pending) return;
-        const turnId = pending.turnId;
-        const eventTurnMatches = !event?.turnId || !turnId || event.turnId === turnId;
-        const eventSessionMatches = !pending.topicId
-            || event?.topicId === pending.topicId
-            || event?.sessionId === pending.topicId;
-        if ((eventTurnMatches || eventSessionMatches) && event && (
+        const eventSessionId = event?.sessionId || event?.topicId || null;
+        const pending = eventSessionId ? state.turnStarts.get(eventSessionId) : selectedTurnStart();
+        if (event && pending) {
+            const turnMatches = !event.turnId || !pending.turnId || event.turnId === pending.turnId;
+            const sessionMatches = eventSessionId === pending.topicId;
+            if (sessionMatches && event.type === 'turn.started') {
+                state.turnStarts.set(pending.topicId, {
+                    ...pending,
+                    turnId: event.turnId || pending.turnId,
+                    phase: 'thinking',
+                    seenRunning: true,
+                });
+            }
+            if (sessionMatches && turnMatches && (
             event.type === 'assistant.started'
             || event.type === 'assistant.delta'
             || event.type === 'reasoning.delta'
@@ -3954,18 +4118,32 @@ function mountWorkbench(container) {
             || event.type === 'turn.failed'
             || event.type === 'turn.cancelled'
             || event.type === 'runtime.crashed'
-        )) {
-            state.turnStart = null;
-            return;
+            )) {
+                state.turnStarts.delete(pending.topicId);
+                return;
+            }
         }
         // Codex projection notifications are reduced through store.setState
         // with no synthetic business event.  A real assistant message is the
         // authoritative replacement for the ephemeral thinking row.
-        if (!event && turnId && store.getState().messages.some((message) => (
-            message.role === 'assistant' && message.turnId === turnId
-        ))) {
-            uxMark('first-assistant-item', turnId, state.uxTimings.get(`turn-start:${pending.topicId || 'new'}`) || null);
-            state.turnStart = null;
+        if (!event) {
+            const current = store.getState();
+            for (const [sessionId, entry] of state.turnStarts) {
+                const hasAssistant = sessionId === selectedSessionKey(current) && entry.turnId
+                    && current.messages.some((message) => message.role === 'assistant' && message.turnId === entry.turnId);
+                const runtime = current.activeRuntimes instanceof Map ? current.activeRuntimes.get(sessionId) : null;
+                if (runtime && (runtime.activity === 'running' || runtime.activeTurnId) && !entry.seenRunning) {
+                    state.turnStarts.set(sessionId, { ...entry, seenRunning: true });
+                }
+                const terminalRuntime = Boolean(entry.turnId && entry.seenRunning && runtime
+                    && runtime.activity === 'idle' && !runtime.activeTurnId);
+                if (!hasAssistant && !terminalRuntime) continue;
+                if (hasAssistant) {
+                    uxMark('first-assistant-item', entry.turnId,
+                        state.uxTimings.get(`turn-start:${entry.topicId || 'new'}`) || null);
+                }
+                state.turnStarts.delete(sessionId);
+            }
         }
     }
 
@@ -4078,8 +4256,9 @@ function mountWorkbench(container) {
     }
 
     function syncRunStatus(current = store.getState()) {
-        const turnId = current.activeTurnId || state.turnStart?.turnId || null;
-        const visible = Boolean(turnId || state.turnStart);
+        const pendingTurnStart = selectedTurnStart(current);
+        const turnId = selectedActiveTurnId(current) || pendingTurnStart?.turnId || null;
+        const visible = Boolean(turnId || pendingTurnStart);
         runStatus.hidden = !visible;
         if (!visible) {
             if (runStatusTimer !== null) clearInterval(runStatusTimer);
@@ -4087,14 +4266,14 @@ function mountWorkbench(container) {
             return;
         }
         const startedAt = turnId
-            ? (state.turnStartedAt.get(turnId) || state.turnStart?.startedAt || Date.now())
-            : (state.turnStart?.startedAt || Date.now());
+            ? (state.turnStartedAt.get(turnId) || pendingTurnStart?.startedAt || Date.now())
+            : (pendingTurnStart?.startedAt || Date.now());
         if (turnId && !state.turnStartedAt.has(turnId)) state.turnStartedAt.set(turnId, startedAt);
         const viewState = deriveWorkbenchViewState(current);
         runStatus.dataset.state = viewState;
         runStatusLabel.textContent = viewState === 'awaiting-approval'
             ? '等待审批'
-            : state.turnStart?.phase === 'starting' && !current.activeTurnId
+            : pendingTurnStart?.phase === 'starting' && !selectedActiveTurnId(current)
                 ? '正在启动 Agent'
                 : '正在运行';
         const runningTool = latestRunningTool(current, turnId);
@@ -4104,8 +4283,8 @@ function mountWorkbench(container) {
         const elapsedMs = Date.now() - startedAt;
         runStatusElapsed.textContent = formatRunElapsed(elapsedMs);
         runStatusElapsed.dateTime = `PT${Math.max(0, elapsedMs / 1000).toFixed(1)}S`;
-        runStatusStop.hidden = !current.activeTurnId;
-        runStatusStop.disabled = !current.activeTurnId;
+        runStatusStop.hidden = !selectedActiveTurnId(current);
+        runStatusStop.disabled = !selectedActiveTurnId(current);
         if (runStatusTimer === null) {
             runStatusTimer = setInterval(() => {
                 if (!state.disposed) syncRunStatus();
@@ -4124,12 +4303,14 @@ function mountWorkbench(container) {
         const selectedArchived = Boolean(current.selectedTopic?.archivedAt);
         const composerReady = Boolean(!selectedArchived && (current.selectedSessionId || previewReady)
             && (viewState === 'idle' || viewState === 'running' || viewState === 'awaiting-approval'));
-        const hasActiveTurn = Boolean(current.activeTurnId);
+        const activeTurnId = selectedActiveTurnId(current);
+        const hasActiveTurn = Boolean(activeTurnId);
+        const pendingTurnStart = selectedTurnStart(current);
         // Once Codex confirms the Turn via turn.started/projection, the
         // normal running composer is usable again (steer/follow-up/cancel).
         // The ephemeral thinking row can remain until the first assistant
         // item arrives.
-        const isStartingTurn = Boolean(state.turnStart && !hasActiveTurn);
+        const isStartingTurn = Boolean(pendingTurnStart && !hasActiveTurn);
         const canSend = Boolean(composerReady && (state.prompt.trim() || (!hasActiveTurn && state.pendingAttachments.length)));
         const interruptMode = Boolean(hasActiveTurn && !canSend);
         input.value = state.prompt;
@@ -4157,7 +4338,7 @@ function mountWorkbench(container) {
         input.placeholder = selectedArchived
             ? '该会话已归档；恢复后才能继续发送。'
             : isStartingTurn
-            ? (state.turnStart?.phase === 'thinking' ? '正在思考…' : '正在启动 Agent…')
+            ? (pendingTurnStart?.phase === 'thinking' ? '正在思考…' : '正在启动 Agent…')
             : (viewState === 'reconnecting' || viewState === 'error')
             ? '正在重新连接 Codex App Server…'
             : previewReady
@@ -4176,6 +4357,7 @@ function mountWorkbench(container) {
         permissionsButton.title = permissionLabel;
         permissionsButton.setAttribute('aria-label', permissionLabel);
         permissionsButton.classList.toggle('is-active', state.permissionMode === 'always-approve');
+        newButton.disabled = state.topicCreating;
         syncRunStatus(current);
     }
 
@@ -4222,7 +4404,8 @@ function mountWorkbench(container) {
     sendButton.addEventListener('click', () => run(async () => {
         const current = store.getState();
         const prompt = state.prompt.trim();
-        if (current.activeTurnId) {
+        const activeTurnId = selectedActiveTurnId(current);
+        if (activeTurnId) {
             if (!prompt) { await controller.cancelTurn(); return; }
             state.prompt = '';
             renderComposer();
@@ -4239,8 +4422,8 @@ function mountWorkbench(container) {
         }
         if (!prompt && !state.pendingAttachments.length) return;
         const attachments = state.pendingAttachments.map((item) => ({ ...item }));
-        const topicId = current.selectedSessionId || current.selectedTopic?.topicId || null;
-        state.turnStart = {
+        const topicId = selectedSessionKey(current);
+        const pendingTurnStart = {
             topicId,
             prompt,
             attachments,
@@ -4249,6 +4432,7 @@ function mountWorkbench(container) {
             startedAt: Date.now(),
             createdAt: Date.now(),
         };
+        state.turnStarts.set(topicId, pendingTurnStart);
         state.uxTimings.set(`turn-start:${topicId || 'new'}`, window.performance?.now?.() || Date.now());
         // Paint before awaiting Session Runtime/thread startup. This is the
         // same immediate feedback users get in main chat, while remaining a
@@ -4257,13 +4441,16 @@ function mountWorkbench(container) {
         queueRender({ feed: true, header: true, composer: true });
         try {
             const accepted = await controller.startTurn(prompt, attachments);
-            state.turnStart = {
-                ...state.turnStart,
-                phase: accepted?.turnId ? 'thinking' : 'starting',
-                turnId: accepted?.turnId || null,
-            };
+            const currentStart = state.turnStarts.get(topicId);
+            if (currentStart === pendingTurnStart) {
+                state.turnStarts.set(topicId, {
+                    ...currentStart,
+                    phase: accepted?.turnId ? 'thinking' : 'starting',
+                    turnId: accepted?.turnId || null,
+                });
+            }
             if (accepted?.turnId && !state.turnStartedAt.has(accepted.turnId)) {
-                state.turnStartedAt.set(accepted.turnId, state.turnStart?.startedAt || Date.now());
+                state.turnStartedAt.set(accepted.turnId, pendingTurnStart.startedAt || Date.now());
             }
             uxMark('turn-start-ack', accepted?.turnId, state.uxTimings.get(`turn-start:${topicId || 'new'}`) || null);
             // Preserve the draft if Runtime startup or Turn acceptance fails.
@@ -4273,7 +4460,10 @@ function mountWorkbench(container) {
             settleTurnStartIndicator();
             queueRender({ feed: true, header: true, composer: true });
         } catch (error) {
-            state.turnStart = null;
+            if (state.turnStarts.get(topicId) === pendingTurnStart
+                || state.turnStarts.get(topicId)?.turnId === pendingTurnStart.turnId) {
+                state.turnStarts.delete(topicId);
+            }
             queueRender({ feed: true, header: true, composer: true });
             throw error;
         }

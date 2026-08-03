@@ -535,7 +535,7 @@ function deriveWorkbenchViewState(state = {}) {
         state.selectedTopic?.mode === 'preview'
         && state.selectedTopic?.topicId
     );
-    const hasTurn = Boolean(state.activeTurnId);
+    const hasTurn = Boolean(state.activeTurnId || selectedRuntime?.activeTurnId);
     const selectedTopicId = selectedSessionId;
     // Local approvals stay visible in the global Activity center, but only
     // their owning Topic is paused. A pending approval in Topic A must not

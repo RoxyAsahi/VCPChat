@@ -37,9 +37,7 @@ function createWorkbenchController(runtimeApi) {
     function runtimeForTopic(topicId, state = store.getState()) {
         if (!topicId) return null;
         if (!(state.activeRuntimes instanceof Map)) return null;
-        return state.activeRuntimes.get(topicId)
-            || [...state.activeRuntimes.values()].find((runtime) => runtime?.topicId === topicId)
-            || null;
+        return state.activeRuntimes.get(topicId) || null;
     }
 
     function selectedRuntime(state = store.getState()) {
@@ -50,19 +48,22 @@ function createWorkbenchController(runtimeApi) {
         return state.selectedSessionId || state.selectedTopic?.sessionId || state.selectedTopic?.topicId || null;
     }
 
+    function selectedTurnId(state = store.getState()) {
+        return state.activeTurnId || selectedRuntime(state)?.activeTurnId || null;
+    }
+
     function projectRuntimeActivity(event) {
         if (!event?.topicId || !event?.sessionId) return;
         const current = store.getState();
         const activeRuntimes = new Map(current.activeRuntimes);
-        const key = activeRuntimes.has(event.sessionId) ? event.sessionId : event.topicId;
-        const runtime = activeRuntimes.get(key);
-        if (!runtime) return;
+        const runtime = activeRuntimes.get(event.sessionId);
+        if (!runtime || runtime.sessionId !== event.sessionId || runtime.topicId !== event.topicId) return;
         let activity = null;
         if (event.type === 'turn.started') activity = 'running';
         else if (event.type === 'approval.requested') activity = 'awaiting-approval';
         else if (['turn.completed', 'turn.failed', 'turn.cancelled'].includes(event.type)) activity = 'idle';
         if (!activity) return;
-        activeRuntimes.set(key, { ...runtime, activity, activeTurnId: activity === 'running' ? event.turnId : null });
+        activeRuntimes.set(event.sessionId, { ...runtime, activity, activeTurnId: activity === 'running' ? event.turnId : null });
         store.setState({ activeRuntimes });
     }
 
@@ -76,7 +77,8 @@ function createWorkbenchController(runtimeApi) {
                 lastError: status?.lastError || null,
             },
             activeRuntimes: new Map((Array.isArray(status?.runtimes) ? status.runtimes : [])
-                .map((runtime) => [runtime.sessionId || runtime.topicId, runtime])),
+                .filter((runtime) => typeof runtime?.sessionId === 'string' && runtime.sessionId.trim())
+                .map((runtime) => [runtime.sessionId, runtime])),
             sessionUi: reconcileAgentSessionUiState(
                 store.getState().sessionUi,
                 Array.isArray(status?.sessions) ? status.sessions : [],
@@ -402,7 +404,7 @@ function createWorkbenchController(runtimeApi) {
         const current = store.getState();
         const runtimes = new Map(current.activeRuntimes);
         const runtime = runtimes.get(event.sessionId);
-        if (runtime) {
+        if (runtime && runtime.topicId === event.topicId) {
             runtimes.set(event.sessionId, {
                 ...runtime,
                 activity: event.activity || runtime.activity,
@@ -411,7 +413,8 @@ function createWorkbenchController(runtimeApi) {
                     : null,
             });
         }
-        const selected = event.topicId === current.selectedTopic?.topicId;
+        const selected = event.sessionId === current.selectedSessionId
+            && event.topicId === current.selectedTopic?.topicId;
         store.setState({
             activeRuntimes: runtimes,
             ...(selected ? { activeTurnId: event.activity === 'running' ? event.turnId : null } : {}),
@@ -522,7 +525,10 @@ function createWorkbenchController(runtimeApi) {
 
     function applyHydratedSnapshot(topicId, snapshot, runtimeHint, agentId) {
         const current = store.getState();
-        const active = runtimeHint || runtimeForTopic(topicId, current);
+        // A sidebar row may have been created before a background Turn
+        // started. The identity-keyed runtime Map is fresher than that DOM
+        // closure, so never let a stale row hint erase activeTurnId/activity.
+        const active = runtimeForTopic(topicId, current) || runtimeHint;
         // `read-topic` / `read-projection` is the durable metadata source
         // after a reload. Main's runtime status intentionally has only a
         // small identity shell, never a transcript cache.
@@ -555,6 +561,7 @@ function createWorkbenchController(runtimeApi) {
         store.setState({
             ...projection,
             selectedSessionId,
+            activeTurnId: nextRuntime?.activeTurnId || projection.activeTurnId || null,
             sessionSnapshots,
             activeRuntimes,
             selectedTopic: {
@@ -821,19 +828,47 @@ function createWorkbenchController(runtimeApi) {
         const result = await requireApi('agentRuntimeUpdateWorkbenchSettings')(settings);
         const savedSession = result?.session;
         const current = store.getState();
-        if (savedSession?.sessionId && current.selectedTopic?.topicId === savedSession.sessionId) {
+        if (savedSession?.sessionId) {
             const configSnapshot = savedSession.configSnapshot || null;
-            const model = configSnapshot?.model || savedSession.model || current.selectedTopic.model || '';
+            const activeRuntimes = new Map(current.activeRuntimes);
+            const runtime = activeRuntimes.get(savedSession.sessionId);
+            if (runtime) activeRuntimes.set(savedSession.sessionId, {
+                ...runtime,
+                model: configSnapshot?.model || savedSession.model || runtime.model || '',
+                workspaceRoot: savedSession.workspaceRoot || runtime.workspaceRoot,
+                configSnapshot,
+            });
+            const selected = current.selectedSessionId === savedSession.sessionId;
+            const model = configSnapshot?.model || savedSession.model || current.selectedTopic?.model || '';
             store.setState({
-                selectedTopic: {
+                activeRuntimes,
+                ...(selected ? { selectedTopic: {
                     ...current.selectedTopic,
                     model,
+                    workspaceRoot: savedSession.workspaceRoot || current.selectedTopic?.workspaceRoot || '',
+                    workspaceRef: savedSession.workspaceRoot || current.selectedTopic?.workspaceRef || '',
                     configSnapshot,
-                    configRevision: savedSession.configRevision || current.selectedTopic.configRevision,
-                },
+                    configRevision: savedSession.configRevision || current.selectedTopic?.configRevision,
+                } } : {}),
             });
         }
         return result;
+    }
+
+    function clearSelection() {
+        selectionVersion += 1;
+        if (snapshotBarrier) releaseSnapshotBarrier(snapshotBarrier, null, null);
+        const current = store.getState();
+        const globalProjection = {
+            approvals: current.approvals,
+            interactions: current.interactions,
+            toolboxWs: current.toolboxWs,
+            readiness: current.readiness,
+            activityUnread: current.activityUnread,
+            activityUnreadByTab: current.activityUnreadByTab,
+        };
+        store.selectSession(null);
+        store.setState(globalProjection);
     }
     async function applyAgentProfile(settings) {
         const result = await requireApi('agentRuntimeApplyAgentProfile')(settings);
@@ -889,7 +924,7 @@ function createWorkbenchController(runtimeApi) {
     }
 
     async function cancelTurn() {
-        const { activeTurnId: turnId } = store.getState();
+        const turnId = selectedTurnId();
         const sessionId = selectedRuntime()?.sessionId;
         if (!sessionId) return null;
         return requireApi('agentRuntimeCancelTurn')({ sessionId, turnId: turnId || undefined });
@@ -910,14 +945,14 @@ function createWorkbenchController(runtimeApi) {
     }
 
     async function steerTurn(prompt) {
-        const { activeTurnId: turnId } = store.getState();
+        const turnId = selectedTurnId();
         const sessionId = selectedRuntime()?.sessionId;
         if (!sessionId || !turnId) throw new Error('当前没有可插入指令的任务');
         return requireApi('agentRuntimeSteerTurn')({ sessionId, turnId, prompt });
     }
 
     async function followUpTurn(prompt) {
-        const { activeTurnId: turnId } = store.getState();
+        const turnId = selectedTurnId();
         const sessionId = selectedRuntime()?.sessionId;
         if (!sessionId || !turnId) throw new Error('当前没有可追加后续指令的任务');
         return requireApi('agentRuntimeFollowUpTurn')({ sessionId, turnId, prompt });
@@ -1004,10 +1039,11 @@ function createWorkbenchController(runtimeApi) {
                 }
                 applySessionUiEvent(event);
                 projectRuntimeActivity(event);
-                const selectedTopicId = current.selectedTopic?.topicId;
+                const selectedSession = current.selectedSessionId;
                 const isApproval = event?.type?.startsWith('approval.');
                 const isProcessGlobal = event?.type?.startsWith('runtime.') || event?.type === 'toolbox.ws';
-                if (!isApproval && !isProcessGlobal && event?.topicId && selectedTopicId && event.topicId !== selectedTopicId) {
+                if (!isApproval && !isProcessGlobal && event?.sessionId && selectedSession
+                    && event.sessionId !== selectedSession) {
                     // Do not retain another Topic's transcript. Its sidebar
                     // badge derives from the identity-keyed active runtime Map.
                     // A debounced status pull is sufficient and cannot lock
@@ -1029,7 +1065,7 @@ function createWorkbenchController(runtimeApi) {
 
     return {
         store, initialize, subscribeRuntime, dispose, refreshStatus, startRuntime, stopRuntime,
-        createSession, createTopic, forkSession, compactSession, hydrateTopic, previewTopic, ensureSessionRuntime,
+        createSession, createTopic, forkSession, compactSession, hydrateTopic, previewTopic, ensureSessionRuntime, clearSelection,
         listTopics, searchTopics, searchTopicMessages, getTopicIndexStatus, rebuildTopicIndex,
         readTopic, renameTopic, deleteTopic, archiveSession, restoreSession, permanentlyDeleteSession,
         exportSession, listRecoveryOperations, listRecoveryCandidates, resolveRecoveryOperation, setSessionPinned,

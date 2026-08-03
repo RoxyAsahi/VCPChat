@@ -177,27 +177,32 @@ try {
         hasFeed: true,
         hasComposer: true,
     });
+    const sessionIdsBeforeCreate = await page.evaluate(() => [...document.querySelectorAll(
+        '#nextUiInternalAppHost .agent-chat-session-row[data-topic-id]',
+    )].map((row) => row.dataset.topicId));
     await page.click('#nextUiInternalAppHost .agent-chat-composer-new');
-    await page.waitForSelector('#nextUiInternalAppHost .agent-chat-topic-flow-dialog', { visible: true, timeout: timeoutMs });
-    await page.waitForFunction(() => {
-        const dialog = document.querySelector('#nextUiInternalAppHost .agent-chat-topic-flow-dialog');
-        const sources = dialog?.querySelectorAll('select.vcp-ui-select-source').length || 0;
-        const proxies = dialog?.querySelectorAll('wa-select.vcp-ui-select-proxy').length || 0;
-        return sources >= 2 && proxies === sources;
-    }, { timeout: timeoutMs });
-    const agentSelectState = await page.evaluate(() => {
-        const dialog = document.querySelector('#nextUiInternalAppHost .agent-chat-topic-flow-dialog');
+    await page.waitForFunction((previousIds) => {
+        const host = document.querySelector('#nextUiInternalAppHost');
+        const active = host?.querySelector('.agent-chat-session-row.active[data-topic-id]');
+        return Boolean(active?.dataset.topicId
+            && !previousIds.includes(active.dataset.topicId)
+            && !host.querySelector('.agent-chat-topic-flow-dialog'));
+    }, { timeout: timeoutMs }, sessionIdsBeforeCreate);
+    const directCreateState = await page.evaluate(() => {
+        const host = document.querySelector('#nextUiInternalAppHost');
+        const active = host?.querySelector('.agent-chat-session-row.active[data-topic-id]');
         return {
-            sources: dialog?.querySelectorAll('select.vcp-ui-select-source').length || 0,
-            proxies: dialog?.querySelectorAll('wa-select.vcp-ui-select-proxy').length || 0,
-            visibleSources: [...(dialog?.querySelectorAll('select.vcp-ui-select-source') || [])]
-                .filter(select => !select.hidden && getComputedStyle(select).display !== 'none').length,
+            modalOpen: Boolean(host?.querySelector('.agent-chat-topic-flow-dialog')),
+            activeTopicId: active?.dataset.topicId || '',
+            title: active?.querySelector('.topic-title-display')?.textContent || '',
+            composerDisabled: Boolean(host?.querySelector('.agent-chat-message-input')?.disabled),
         };
     });
-    assert.equal(agentSelectState.proxies, agentSelectState.sources, `Agent Select proxy mismatch: ${JSON.stringify(agentSelectState)}`);
-    assert.equal(agentSelectState.visibleSources, 0, `Agent native Select must remain hidden: ${JSON.stringify(agentSelectState)}`);
-    await page.screenshot({ path: path.join(root, 'screenshots', 'agent-new-topic-selects.png') });
-    await page.keyboard.press('Escape');
+    assert.equal(directCreateState.modalOpen, false, 'New Session must not open the retired creation modal');
+    assert.ok(directCreateState.activeTopicId, `Direct Session creation did not select a durable Session: ${JSON.stringify(directCreateState)}`);
+    assert.match(directCreateState.title, /^新会话 /, 'Direct Session creation must use the standard generated title');
+    assert.equal(directCreateState.composerDisabled, false, 'A directly created Session preview must be immediately send-capable');
+    await page.screenshot({ path: path.join(root, 'screenshots', 'agent-direct-new-session.png') });
     const knownThemeAssets = [
         'styles/assets/wallpaper/themes_snow_realm_light.jpg',
         'styles/assets/wallpaper/vcp_editorial_ink_light.jpg',

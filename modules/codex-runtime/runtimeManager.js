@@ -1581,7 +1581,7 @@ class CodexRuntimeManager extends EventEmitter {
             options.permissionMode || options.approvalPolicy || profile?.permissionMode,
         );
         return {
-            model: options.model || settings.agentRuntime?.codex?.model
+            model: options.model || profile?.model || settings.agentRuntime?.codex?.model
                 || settings.agentRuntime?.tui?.defaultModel
                 || (toolboxConfigured ? 'Nova' : 'gpt-5.1-codex'),
             personality: options.personality || 'pragmatic',

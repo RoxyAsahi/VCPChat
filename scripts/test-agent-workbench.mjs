@@ -71,8 +71,18 @@ let mainCreateProxyCalls = 0;
 let sharedCreateActionCalls = 0;
 let releaseAgentCatalog;
 const buildAgentProfiles = [
-    { id: 'Nova', name: 'Nova', avatarUrl: 'assets/nova-avatar.png', model: 'gpt-5.6-terra', systemPrompt: '{{Nova}}' },
-    { id: '123', name: '123', model: 'gpt-5.6-terra' },
+    {
+        id: 'Nova', name: 'Nova', avatarUrl: 'assets/nova-avatar.png', model: 'gpt-5.6-terra',
+        systemPrompt: '{{Nova}}', workspaceRoot: `${root}\\nova-profile`, permissionMode: 'always-approve',
+    },
+    {
+        id: '123', name: '123', model: 'deepseek-v4-flash', systemPrompt: '{{123}}',
+        workspaceRoot: `${root}\\agent-123-profile`, permissionMode: 'ask',
+    },
+    {
+        id: 'Legacy-Empty', name: 'Legacy Empty', model: 'deepseek-v4-flash', systemPrompt: '',
+        workspaceRoot: `${root}\\legacy-empty-profile`, permissionMode: 'ask',
+    },
 ];
 const agentCatalogGate = new Promise((resolve) => { releaseAgentCatalog = resolve; });
 let topicCatalog = [{
@@ -107,9 +117,11 @@ window.chatAPI = {
         return buildAgentProfiles;
     },
     agentRuntimeSaveAgentProfile: async (profile) => {
-        const saved = { id: profile.name.replace(/\s+/g, '-'), ...profile };
+        const saved = { id: profile.agentId || profile.name.replace(/\s+/g, '-'), ...profile };
         savedAgentProfiles.push(saved);
-        buildAgentProfiles.push(saved);
+        const existingIndex = buildAgentProfiles.findIndex((item) => item.id === saved.id);
+        if (existingIndex >= 0) buildAgentProfiles[existingIndex] = saved;
+        else buildAgentProfiles.push(saved);
         return { success: true, profile: saved };
     },
     agentRuntimeSaveAgentAvatar: async ({ agentId, avatarData }) => {
@@ -176,6 +188,7 @@ window.chatAPI = {
     },
     agentRuntimeEnsureSessionRuntime: async ({ sessionId }) => {
         runtimeEnsures.push(sessionId);
+        runtimeStatus = 'ready';
         activeRuntimeSession = {
             sessionId,
             topicId: sessionId,
@@ -523,6 +536,37 @@ assert.equal(createdSessions.length, sessionsBeforeAgentBrowse,
     'browsing an Agent history must not create an empty Agent Session');
 assert.equal(topicListRequests.at(-1), '123',
     'the Workbench must request the selected Agent Topic catalog explicitly');
+assert.match(host.querySelector('.agent-chat-title')?.textContent || '', /123/,
+    'switching Build Agents must clear the previous Agent Session projection instead of showing its running state');
+assert.equal([...host.querySelectorAll('.message-item .md-content')]
+    .some((node) => node.textContent.includes('restored answer')), false,
+    'switching Build Agents must not retain the previous Agent transcript in the main pane');
+await new Promise((resolve) => setTimeout(resolve, 300));
+const profileSettingsTab = [...host.querySelectorAll('.agent-chat-sidebar .sidebar-tab-button')]
+    .find((tab) => tab.textContent.trim() === '设置');
+profileSettingsTab.click();
+const profileSettingsFields = [...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field')];
+const profileWorkspace = profileSettingsFields
+    .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent.includes('工作目录'))?.querySelector('input');
+const profileModel = profileSettingsFields
+    .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent === '模型')?.querySelector('select');
+const profilePermission = profileSettingsFields
+    .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent === '本地工具审批')?.querySelector('select');
+profileWorkspace.value = `${root}\\agent-123-updated`;
+profileWorkspace.dispatchEvent(new window.Event('change', { bubbles: true }));
+profileModel.value = 'gpt-5.6-terra';
+profileModel.dispatchEvent(new window.Event('change', { bubbles: true }));
+profilePermission.value = 'always-approve';
+profilePermission.dispatchEvent(new window.Event('change', { bubbles: true }));
+await new Promise((resolve) => setTimeout(resolve, 100));
+assert.deepEqual({
+    agentId: savedAgentProfiles.at(-1).agentId,
+    model: savedAgentProfiles.at(-1).model,
+    workspaceRoot: savedAgentProfiles.at(-1).workspaceRoot,
+    permissionMode: savedAgentProfiles.at(-1).permissionMode,
+}, {
+    agentId: '123', model: 'gpt-5.6-terra', workspaceRoot: `${root}\\agent-123-updated`, permissionMode: 'always-approve',
+}, 'settings with no selected Session must update the current Agent Profile inherited by future Sessions');
 assistantTab.click();
 const novaAgent = [...host.querySelectorAll('.agent-chat-sidebar .agent-chat-agent-row')]
     .find((row) => row.querySelector('.agent-name')?.textContent === 'Nova');
@@ -542,10 +586,17 @@ agentDialog.querySelector('[aria-label="Build Agent 名称"]').value = 'Research
 agentDialog.querySelector('[aria-label="Build Agent 名称"]').dispatchEvent(new window.Event('input', { bubbles: true }));
 agentDialog.querySelector('[aria-label="Build Agent 提示词"]').value = '{{Research}}';
 agentDialog.querySelector('[aria-label="Build Agent 提示词"]').dispatchEvent(new window.Event('input', { bubbles: true }));
+agentDialog.querySelector('[aria-label="Build Agent 默认工作目录"]').value = `${root}\\research-profile`;
+agentDialog.querySelector('[aria-label="Build Agent 默认工作目录"]').dispatchEvent(new window.Event('input', { bubbles: true }));
+agentDialog.querySelector('[aria-label="Build Agent 默认审批模式"]').value = 'always-approve';
+agentDialog.querySelector('[aria-label="Build Agent 默认审批模式"]').dispatchEvent(new window.Event('change', { bubbles: true }));
 agentDialog.querySelector('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
 await new Promise((resolve) => setTimeout(resolve, 30));
-assert.equal(savedAgentProfiles.length, 1, 'Build Agent creation must persist through the isolated runtime profile IPC');
-assert.equal(savedAgentProfiles[0].systemPrompt, '{{Research}}');
+const createdAgentProfile = savedAgentProfiles.find((profile) => profile.name === 'Research Agent');
+assert.ok(createdAgentProfile, 'Build Agent creation must persist through the isolated runtime profile IPC');
+assert.equal(createdAgentProfile.systemPrompt, '{{Research}}');
+assert.equal(createdAgentProfile.workspaceRoot, `${root}\\research-profile`);
+assert.equal(createdAgentProfile.permissionMode, 'always-approve');
 assert.ok([...host.querySelectorAll('.agent-chat-agent-row .agent-name')].some((item) => item.textContent === 'Research Agent'),
     'a successfully created Build Agent must appear in the Build Agent list');
 assert.equal(sharedCreateActionCalls, 0, 'Build Agent creation must not write to the main-chat Agent directory');
@@ -568,38 +619,68 @@ host.querySelector('.next-ui-agent-search-close').click();
 assert.equal(agentSearch.value, '', 'closing assistant search must clear its transient query');
 const headerNewTopic = host.querySelector('.agent-chat-composer-new');
 assert.ok(headerNewTopic, 'Agent composer must retain the separate new-Topic action');
+const topicCountBeforeDirectCreate = createdTopics.length;
+headerNewTopic.click();
 headerNewTopic.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
-const createTopicFlow = host.querySelector('.agent-chat-topic-flow-dialog');
-assert.ok(createTopicFlow, 'new Agent conversations must begin in the Workbench-owned Topic flow');
-assert.match(createTopicFlow.textContent, /共享 Agent/);
-assert.match(createTopicFlow.textContent, /共享模型/);
-assert.ok(createTopicFlow.querySelector('.agent-chat-topic-flow-context'),
-    'new Topic flow must show the selected Agent, model and workspace sources before creation');
-const createTitle = createTopicFlow.querySelector('[aria-label="Topic 标题"]');
-const createModel = createTopicFlow.querySelector('[aria-label="模型"]');
-const createWorkspace = createTopicFlow.querySelector('[aria-label="工作目录"]');
-assert.ok(createTitle && createModel && createWorkspace, 'the new Topic flow must expose title, shared model and workspace controls');
-createTitle.value = '独立产品流程 Topic';
-createTitle.dispatchEvent(new window.Event('input', { bubbles: true }));
-createModel.value = 'gpt-5.6-terra';
-createModel.dispatchEvent(new window.Event('input', { bubbles: true }));
-createWorkspace.value = root;
-createWorkspace.dispatchEvent(new window.Event('input', { bubbles: true }));
-const createSubmit = [...createTopicFlow.querySelectorAll('button')].find((button) => button.textContent === '创建并打开');
-assert.ok(createSubmit, 'the new Topic flow must require an explicit create action');
-createSubmit.click();
-await new Promise((resolve) => setTimeout(resolve, 30));
-assert.deepEqual({
-    title: createdTopics.at(-1).title,
-    agent: createdTopics.at(-1).agent,
-    model: createdTopics.at(-1).model,
-    workspaceRoot: createdTopics.at(-1).workspaceRoot,
-}, {
-    title: '独立产品流程 Topic', agent: 'Nova', model: 'gpt-5.6-terra', workspaceRoot: root,
-}, 'new Agent Topics must pass the chosen shared Agent/model/workspace through Codex Agent IPC');
+assert.equal(host.querySelector('.agent-chat-topic-flow-dialog'), null,
+    'new Agent conversations must be created immediately without a redundant modal');
+assert.equal(createdTopics.length, topicCountBeforeDirectCreate + 1,
+    'double-clicking New Session while creation is in flight must produce exactly one Main request');
+assert.equal(createdTopics.at(-1).agent, 'Nova',
+    'a direct new Session must inherit the selected Profile identity');
+assert.match(createdTopics.at(-1).title, /^新会话 /,
+    'a direct new Session must receive the standard generated title');
+assert.deepEqual(Object.keys(createdTopics.at(-1)).sort(), ['agent', 'title'],
+    'new Agent Sessions must send only identity and title so Main freezes the selected Profile configuration');
 assert.equal(createdSessions.length, 0, 'creating a Session must not replace or stop another Session Runtime');
 assert.equal(host.querySelector('.agent-chat-message-input').disabled, false, 'a newly created Codex Session preview must keep the composer send-capable');
+
+// Legacy Build Agents created before prompts became mandatory must fail in
+// the Renderer as a single actionable configuration state. They must never
+// spam create-topic or silently inherit another Agent's identity.
+[...host.querySelectorAll('.agent-chat-sidebar .sidebar-tab-button')]
+    .find((tab) => tab.textContent.trim() === '助手').click();
+const legacyAgent = [...host.querySelectorAll('.agent-chat-agent-row')]
+    .find((row) => row.querySelector('.agent-name')?.textContent === 'Legacy Empty');
+assert.ok(legacyAgent?.classList.contains('configuration-required'),
+    'an old Build Agent without a prompt must be marked as requiring configuration');
+legacyAgent.click();
+await new Promise((resolve) => setTimeout(resolve, 30));
+const topicsBeforeMissingPromptClick = createdTopics.length;
+host.querySelector('.agent-chat-composer-new').click();
+host.querySelector('.agent-chat-composer-new').click();
+await new Promise((resolve) => setTimeout(resolve, 30));
+assert.equal(createdTopics.length, topicsBeforeMissingPromptClick,
+    'a missing-prompt Agent must not invoke create-topic even after repeated clicks');
+assert.equal(host.querySelector('.agent-chat-topic-flow-dialog'), null,
+    'missing Agent configuration must not reintroduce the removed new-Session modal');
+assert.equal(host.querySelector('.sidebar-tab-button.active')?.textContent, '设置',
+    'a missing-prompt Agent must route to its actionable settings page');
+assert.match(host.querySelector('.agent-chat-profile-configuration-warning')?.textContent || '', /缺少|提示词|不能创建/,
+    'the settings page must explain why this Agent cannot create a Session');
+const legacyPrompt = host.querySelector('[aria-label="当前 Agent 提示词"]');
+assert.equal(legacyPrompt?.readOnly, false,
+    'the old Agent prompt must be editable in place instead of remaining permanently blocked');
+legacyPrompt.value = '{{LegacyEmpty}}';
+legacyPrompt.dispatchEvent(new window.Event('change', { bubbles: true }));
+await new Promise((resolve) => setTimeout(resolve, 80));
+assert.equal(savedAgentProfiles.at(-1).systemPrompt, '{{LegacyEmpty}}',
+    'repairing a legacy Agent must persist only that Agent prompt');
+const repairedAgentCreate = [...host.querySelectorAll('.agent-chat-settings-save')]
+    .find((button) => button.textContent === '用此配置新建会话');
+assert.ok(repairedAgentCreate, 'repaired Agent settings must keep the direct create action');
+repairedAgentCreate.click();
+await new Promise((resolve) => setTimeout(resolve, 50));
+assert.equal(createdTopics.length, topicsBeforeMissingPromptClick + 1,
+    'after repairing its prompt, the same Agent may create one direct Session');
+assert.equal(createdTopics.at(-1).agent, 'Legacy-Empty');
+
+[...host.querySelectorAll('.agent-chat-sidebar .sidebar-tab-button')]
+    .find((tab) => tab.textContent.trim() === '助手').click();
+[...host.querySelectorAll('.agent-chat-agent-row')]
+    .find((row) => row.querySelector('.agent-name')?.textContent === 'Nova').click();
+await new Promise((resolve) => setTimeout(resolve, 30));
 const sessionTab = [...host.querySelectorAll('.agent-chat-sidebar .sidebar-tab-button')]
     .find((tab) => tab.textContent.trim() === '会话');
 assert.ok(sessionTab, 'Assistant and session tabs must both be available');
@@ -651,6 +732,7 @@ assert.equal(host.querySelector('.agent-chat-sidebar-content').classList.contain
     'exiting Topic management must discard renderer-only selection state');
 const persistedTopicMenu = host.querySelector('.agent-chat-persisted-topic .agent-chat-session-menu');
 assert.ok(persistedTopicMenu, 'a free durable Topic must expose its own management menu');
+const managedTopicId = persistedTopicMenu.closest('.agent-chat-persisted-topic')?.dataset.topicId;
 persistedTopicMenu.click();
 const topicContextMenu = document.querySelector('.agent-chat-topic-context-menu');
 assert.ok(topicContextMenu?.parentElement === document.body,
@@ -665,7 +747,7 @@ const renameTopicButton = [...topicContextMenu.querySelectorAll('[role="menuitem
 assert.ok(renameTopicButton, 'Topic management menu must offer rename');
 renameTopicButton.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
-assert.deepEqual(renamedTopics, [{ topicId: 'topic-created-1', title: '重命名后的 Topic' }],
+assert.deepEqual(renamedTopics, [{ topicId: managedTopicId, title: '重命名后的 Topic' }],
     'Topic rename must use the narrow Codex Agent IPC, not write renderer-side storage');
 const persistedTopicRow = host.querySelector('.agent-chat-persisted-topic[data-topic-id="topic-restored"]');
 persistedTopicRow.dispatchEvent(new window.MouseEvent('contextmenu', {
@@ -758,7 +840,12 @@ assert.equal(host.querySelector('.agent-chat-composer-attachments')?.childElemen
 emitDaemonEvent({ sessionId: 'topic-in-use', turnId: 'attachment_turn', type: 'turn.completed' });
 await new Promise((resolve) => setTimeout(resolve, 30));
 selectedAttachments = [importedVideoAttachment];
-attachButton.click();
+const mediaAttachButton = await waitFor(() => {
+    const candidate = host.querySelector('[aria-label="添加图片、音频或视频附件"]');
+    return candidate && !candidate.disabled ? candidate : null;
+}, 3_000);
+assert.ok(mediaAttachButton, 'a terminal event must re-enable attachment import for the selected Session');
+mediaAttachButton.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
 const videoChip = host.querySelector('.agent-chat-composer-attachments .agent-chat-attachment-chip');
 assert.match(videoChip?.textContent || '', /演示\.mp4[\s\S]*视频[\s\S]*4 KB/,
@@ -797,6 +884,24 @@ const activeRunStatus = host.querySelector('.agent-chat-run-status');
 assert.equal(activeRunStatus.hidden, false, 'an active Turn must expose a dedicated status rail above the composer');
 assert.match(activeRunStatus.textContent, /正在运行.*Agent 正在处理当前任务.*\d+\.\d+s/s,
     'the status rail must show explicit running state and elapsed time without relying on the send button');
+const runningSessionRow = host.querySelector('.agent-chat-session-row[data-topic-id="topic-in-use"]');
+assert.ok(runningSessionRow?.classList.contains('is-running'),
+    'the owning Session row must expose its own running state');
+assert.ok(runningSessionRow.querySelector('.agent-chat-session-avatar.is-running'),
+    'background activity must be rendered as a glow ring around the owning Session avatar');
+const idleSessionRow = host.querySelector('.agent-chat-session-row[data-topic-id="topic-restored"]');
+idleSessionRow.click();
+await new Promise((resolve) => setTimeout(resolve, 30));
+assert.equal(activeRunStatus.hidden, true,
+    'switching to an idle Session must hide another Session\'s running status rail');
+assert.ok(runningSessionRow.classList.contains('is-running'),
+    'switching away must preserve the background glow on the running Session row');
+assert.equal(idleSessionRow.querySelector('.agent-chat-session-avatar')?.classList.contains('is-running'), false,
+    'the selected idle Session avatar must not inherit another Session\'s running state');
+runningSessionRow.click();
+await new Promise((resolve) => setTimeout(resolve, 30));
+assert.equal(activeRunStatus.hidden, false,
+    'switching back to the owning Session must restore its Session-scoped running rail');
 const runStatusStop = activeRunStatus.querySelector('.agent-chat-run-status-stop');
 assert.ok(runStatusStop, 'the running rail must expose an independent stop action');
 runStatusStop.click();
@@ -1225,6 +1330,12 @@ assert.match(workbenchCss,
 assert.match(workbenchCss,
     /agent-chat-run-status\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*center;/s,
     'the explicit Turn status rail must remain vertically aligned above the composer');
+assert.match(workbenchCss,
+    /agent-chat-session-avatar\.is-running::before[\s\S]*conic-gradient[\s\S]*agent-chat-session-runtime-ring/,
+    'running Session identity must be expressed by the animated avatar ring');
+assert.match(workbenchCss,
+    /prefers-reduced-motion:\s*reduce[\s\S]*agent-chat-session-avatar\.is-running::before[\s\S]*animation:\s*none/,
+    'the running avatar ring must respect reduced-motion preferences');
 reasoningCard.querySelector('.vcp-thought-chain-header').click();
 assert.equal(reasoningCard.querySelector('.vcp-thought-chain-bubble').classList.contains('expanded'), false,
     'the fallback thinking header must remain explicitly collapsible');

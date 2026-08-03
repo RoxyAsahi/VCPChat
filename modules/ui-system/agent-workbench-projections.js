@@ -10,6 +10,8 @@ function projectSession(summary = {}) {
         model: summary.model || summary.metadata?.model || '未选择模型',
         workspaceRoot: summary.workspaceRoot || '',
         state: summary.state || 'unknown',
+        activity: summary.activity
+            || (summary.activeTurnId ? 'running' : 'idle'),
         updatedAt: summary.updatedAt || summary.createdAt || 0,
         activeTurnId: summary.activeTurnId || null,
         parentSessionId: summary.parentSessionId || summary.metadata?.forkedFrom || null,

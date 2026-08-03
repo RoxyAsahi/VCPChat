@@ -131,14 +131,25 @@ assert.ok(buildProfiles.some((profile) => profile.id === 'Nova'),
     'the isolated Build catalog must initialize its own Nova profile');
 assert.equal(buildProfiles.some((profile) => profile.id === 'MainOnly'), false,
     'normal-chat Agents must never appear in the Build Agent catalog');
+const researchWorkspace = path.join(root, 'research-workspace');
+fs.mkdirSync(researchWorkspace);
 const savedBuildProfile = manager.saveAgentProfile({
     name: 'Research Agent', systemPrompt: '{{Research}}', model: 'gpt-5.6-terra',
+    workspaceRoot: researchWorkspace, permissionMode: 'always-approve',
 });
 assert.equal(savedBuildProfile.profile.id, 'Research-Agent');
 assert.equal(manager.listAgentProfiles().some((profile) => profile.id === 'Research-Agent'), true,
     'a saved Build Agent profile must immediately appear in the isolated catalog');
 assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'CodexAgents', 'Research-Agent', 'config.json'), 'utf8')).systemPrompt,
     '{{Research}}', 'Build Agent creation must persist its prompt outside the normal-chat Agent directory');
+const inheritedProfileTopic = await manager.createTopic({ agentId: 'Research-Agent', title: 'Profile inheritance' });
+const inheritedProfileSession = manager.repository.getSession(inheritedProfileTopic.sessionId);
+assert.equal(inheritedProfileSession.workspaceRoot, researchWorkspace,
+    'a new Session must inherit its Build Agent Profile workspace when the caller provides no override');
+assert.equal(inheritedProfileSession.configSnapshot.model, 'gpt-5.6-terra',
+    'a new Session must freeze its Build Agent Profile model instead of falling back to a global model');
+assert.equal(inheritedProfileSession.configSnapshot.permissionMode, 'always-approve',
+    'a new Session must freeze its Build Agent Profile approval mode');
 assert.throws(() => manager.saveAgentProfile({ name: 'Research Agent', systemPrompt: '{{Other}}' }), /already exists/);
 const savedBuildAvatar = manager.saveAgentAvatar({
     agentId: 'Nova',
@@ -484,6 +495,8 @@ assert.deepEqual(fake.calls.find((call) => call.method === 'turn/start').params.
 ]);
 assert.equal(fake.calls.find((call) => call.method === 'turn/start').params.approvalPolicy, 'never',
     'the next Turn must receive the current Session approval policy without restarting its Thread');
+assert.equal(fake.calls.find((call) => call.method === 'turn/start').params.model, 'gpt-5.6-luna',
+    'the next Turn must receive the model saved for the current Session');
 fake.emit('notification', {
     method: 'item/started',
     params: { threadId: 'thr_test', turnId: 'turn_test', item: { id: 'item_a', type: 'agentMessage', text: '' } },

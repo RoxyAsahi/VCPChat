@@ -176,6 +176,105 @@ html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .topic-list .agent-ch
         position: relative;
     }
 
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-avatar {
+        width: var(--vcp-ui-sidebar-avatar-size);
+        height: var(--vcp-ui-sidebar-avatar-size);
+        margin-right: var(--vcp-ui-space-2);
+        position: relative;
+        display: inline-grid;
+        place-items: center;
+        flex: 0 0 var(--vcp-ui-sidebar-avatar-size);
+        border-radius: 50%;
+        isolation: isolate;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-avatar > .avatar {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        position: relative;
+        z-index: 1;
+        border-radius: 50%;
+        object-fit: cover;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-avatar.is-running::before,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-avatar.is-awaiting-approval::before {
+        content: '';
+        position: absolute;
+        inset: -4px;
+        z-index: 0;
+        border-radius: 50%;
+        background: conic-gradient(
+            from 0deg,
+            transparent 0 12%,
+            color-mix(in srgb, var(--vcp-ui-accent) 45%, white) 26%,
+            var(--vcp-ui-accent) 49%,
+            transparent 68% 100%
+        );
+        box-shadow: 0 0 10px color-mix(in srgb, var(--vcp-ui-accent) 42%, transparent);
+        animation: agent-chat-session-runtime-ring 1.6s linear infinite;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-avatar.is-awaiting-approval::before {
+        background: conic-gradient(
+            from 0deg,
+            transparent 0 18%,
+            color-mix(in srgb, var(--vcp-ui-warning) 58%, white) 38%,
+            var(--vcp-ui-warning) 55%,
+            transparent 72% 100%
+        );
+        box-shadow: 0 0 10px color-mix(in srgb, var(--vcp-ui-warning) 45%, transparent);
+        animation-duration: 2.2s;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-avatar::after {
+        content: '';
+        position: absolute;
+        inset: -1px;
+        z-index: 0;
+        border-radius: 50%;
+        background: var(--vcp-ui-bg-1);
+    }
+
+    @keyframes agent-chat-session-runtime-ring {
+        to { transform: rotate(360deg); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-avatar.is-running::before,
+        html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-avatar.is-awaiting-approval::before {
+            animation: none;
+        }
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-agent-configuration-icon {
+        margin-left: auto;
+        color: var(--vcp-ui-warning);
+        font-size: var(--vcp-ui-icon-sm);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-profile-configuration-warning {
+        margin: var(--vcp-ui-space-2) var(--vcp-ui-sidebar-list-gutter);
+        padding: var(--vcp-ui-space-3);
+        display: grid;
+        gap: var(--vcp-ui-space-2);
+        border: 1px solid color-mix(in srgb, var(--vcp-ui-warning) 34%, var(--vcp-ui-border));
+        border-radius: var(--vcp-ui-radius-sm);
+        color: var(--vcp-ui-text-1);
+        background: color-mix(in srgb, var(--vcp-ui-warning) 7%, var(--vcp-ui-bg-1));
+        font-size: var(--vcp-ui-font-caption);
+        line-height: 1.45;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-profile-configuration-warning.is-settings {
+        margin: 0 0 var(--vcp-ui-space-3);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-profile-configuration-action {
+        justify-self: start;
+    }
+
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-session-row > .vcp-ui-icon {
         margin-right: var(--vcp-ui-space-2);
         color: var(--vcp-ui-text-2);
@@ -758,6 +857,10 @@ html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .topic-list .agent-ch
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar.avatar-only .agent-chat-agent-row .avatar,
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar.avatar-only .agent-chat-session-row .avatar {
+        margin-right: 0;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar.avatar-only .agent-chat-session-avatar {
         margin-right: 0;
     }
 

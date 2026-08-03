@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { createWorkbenchController } from '../modules/ui-system/agent-workbench-controller.js';
 import { createWorkbenchStore, deriveWorkbenchViewState } from '../modules/ui-system/agent-workbench-store.js';
-import { projectTool } from '../modules/ui-system/agent-workbench-projections.js';
+import { projectSession, projectTool } from '../modules/ui-system/agent-workbench-projections.js';
+
+assert.equal(projectSession({ sessionId: 's-running', activeTurnId: 'turn-running' }).activity, 'running',
+    'Session projection must preserve per-Session running identity for the sidebar avatar');
+assert.equal(projectSession({ sessionId: 's-idle' }).activity, 'idle');
 
 const store = createWorkbenchStore();
 let eventNumber = 0;
@@ -22,6 +26,12 @@ store.selectSession({ sessionId: 's1', topicId: 'topic-1', state: 'idle' });
 store.setState({ activeRuntimes: new Map([['s1', { sessionId: 's1', topicId: 'topic-1', state: 'idle' }]]) });
 store.setState({ runtime: { state: 'ready', worker: null, lastError: null } });
 assert.equal(deriveWorkbenchViewState(store.getState()), 'idle', 'an idle Session Runtime must enable the composer');
+store.setState({ activeRuntimes: new Map([['s1', {
+    sessionId: 's1', topicId: 'topic-1', state: 'ready', activity: 'running', activeTurnId: 'turn-background',
+}]]) });
+assert.equal(deriveWorkbenchViewState(store.getState()), 'running',
+    'returning to a Session must recover its running state from the Session-keyed runtime Map');
+store.setState({ activeRuntimes: new Map([['s1', { sessionId: 's1', topicId: 'topic-1', state: 'idle' }]]) });
 assert.equal('sessions' in store.getState(), false);
 assert.equal('artifacts' in store.getState(), false);
 
@@ -471,7 +481,7 @@ const liveGuard = createWorkbenchController({
 liveGuard.subscribeRuntime();
 await liveGuard.previewTopic('live-guard-topic', 'Nova');
 liveGuardEvent({
-    runtime: 'codex', type: 'projection.updated', topicId: 'live-guard-topic', sessionId: 'live-guard-session',
+    runtime: 'codex', type: 'projection.updated', topicId: 'live-guard-topic', sessionId: 'live-guard-topic',
     threadId: 'thread-live-guard', turnId: 'turn-live-guard', activity: 'running',
     projectionMessage: {
         messageId: 'live-guard-message', itemId: 'live-guard-item', turnId: 'turn-live-guard', role: 'assistant', status: 'inProgress',
@@ -487,6 +497,32 @@ assert.ok(liveGuard.store.getState().messages.some((message) => message.content 
     'a late thread/read snapshot must not overwrite a newer live projection patch');
 assert.equal(liveGuard.store.getState().messages.some((message) => message.content === 'must not replace live delta'), false);
 liveGuard.dispose();
+
+// Codex Session identity is authoritative. A compatibility topicId must never
+// let another Session mutate an existing runtime slot or the visible status.
+let strictIdentityEvent;
+const strictIdentity = createWorkbenchController({
+    onAgentRuntimeEvent(callback) { strictIdentityEvent = callback; return () => {}; },
+    agentRuntimeGetStatus: async () => ({ state: 'ready', runtimes: [] }),
+});
+strictIdentity.store.setState({
+    selectedSessionId: 'session-nova',
+    selectedTopic: { sessionId: 'session-nova', topicId: 'session-nova', agentId: 'Nova', mode: 'runtime-active' },
+    activeRuntimes: new Map([['legacy-topic-key', {
+        sessionId: 'session-nova', topicId: 'legacy-topic-key', agentId: 'Nova', activity: 'idle',
+    }]]),
+});
+strictIdentity.subscribeRuntime();
+strictIdentityEvent({
+    eventId: 'foreign-session-turn', sequence: 1, timestamp: 1, runtime: 'codex',
+    type: 'turn.started', sessionId: 'session-uika', topicId: 'legacy-topic-key',
+    turnId: 'turn-uika', messageId: 'message-uika', payload: { prompt: 'UIka task' },
+});
+assert.equal(strictIdentity.store.getState().activeRuntimes.get('legacy-topic-key').activity, 'idle',
+    'a foreign Session event must not update a runtime through the old topicId compatibility key');
+assert.equal(strictIdentity.store.getState().activeTurnId, null,
+    'a foreign Agent Session must never mark the selected Session as running');
+strictIdentity.dispose();
 
 // Codex emits the durable user item asynchronously. It must reconcile the
 // renderer-only pending row by turn id instead of leaving two identical user
