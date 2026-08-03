@@ -1,5 +1,6 @@
 import { createAgentMessagePresentation } from './agent-presentation/index.js';
 import { createAgentWorkbenchTimelineView } from './agent-workbench-timeline-view.js';
+import { selectedSessionId } from './agent-selected-session.js';
 
 export function createAgentTimelineCoordinator({
     state, store, controller, lifecycle, window, document, root, refs, rendererHost,
@@ -15,7 +16,7 @@ export function createAgentTimelineCoordinator({
         const runtime = activeSession();
         const snapshot = runtime?.configSnapshot || selected.configSnapshot || {};
         return {
-            sessionId: current.selectedSessionId || selected.sessionId || null,
+            sessionId: selectedSessionId(current),
             threadId: runtime?.threadId || selected.threadId || null,
             participant: {
                 id: selected.agentId || profile.id || state.selectedAgent,

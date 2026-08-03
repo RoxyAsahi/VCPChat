@@ -1,5 +1,6 @@
 import { projectSession } from './agent-workbench-projections.js';
 import { createAgentWorkbenchSidebarView } from './agent-workbench-sidebar-view.js';
+import { selectedSessionId } from './agent-selected-session.js';
 
 export function createAgentWorkbenchSidebarCoordinator({
     state, store, controller, element, accountView, lifecycle, document, run, notify,
@@ -25,7 +26,7 @@ export function createAgentWorkbenchSidebarCoordinator({
         return {
             liveSessions,
             persistedTopics: state.topics.filter((topic) => !liveSessionIds.has(topic.id)),
-            selectedSessionId: current.selectedSessionId || current.selectedTopic?.sessionId || null,
+            selectedSessionId: selectedSessionId(current),
         };
     }
 

@@ -1,4 +1,5 @@
 import './avatar-picker.js';
+import { selectedSessionId } from './agent-selected-session.js';
 
 export function renderAgentSettingsPane(context) {
     const {
@@ -11,7 +12,7 @@ export function renderAgentSettingsPane(context) {
     const pane = node('div', 'agent-chat-settings-pane');
     const form = node('div', 'agent-chat-settings-form');
     const current = store.getState();
-    const rawSessionId = current.selectedSessionId || current.selectedTopic?.sessionId || '';
+    const rawSessionId = selectedSessionId(current) || '';
     const sessionId = state.settingsScope === 'session' ? rawSessionId : '';
     const projection = sessionId ? current.selectedTopic : null;
     const runtime = activeSession();

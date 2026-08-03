@@ -4,6 +4,7 @@ import { createWorkbenchClients } from './agent-workbench-clients.js';
 import { codexSnapshotToProjection } from './agent-workbench-snapshot-projection.js';
 import { createWorkbenchCommandController } from './agent-workbench-command-controller.js';
 import { createAgentRuntimeEventSubscription } from './agent-runtime-event-subscription.js';
+import { selectedSessionId as selectedSessionIdFromState } from './agent-selected-session.js';
 function createWorkbenchController(runtimeApi) {
     const clients = createWorkbenchClients(runtimeApi);
     const store = createWorkbenchStore();
@@ -38,11 +39,11 @@ function createWorkbenchController(runtimeApi) {
     }
 
     function selectedRuntime(state = store.getState()) {
-        return runtimeForTopic(state.selectedSessionId || state.selectedTopic?.sessionId, state);
+        return runtimeForTopic(selectedSessionIdFromState(state), state);
     }
 
     function selectedSessionId(state = store.getState()) {
-        return state.selectedSessionId || state.selectedTopic?.sessionId || null;
+        return selectedSessionIdFromState(state);
     }
 
     function selectedTurnId(state = store.getState()) {
@@ -348,7 +349,6 @@ function createWorkbenchController(runtimeApi) {
             sessionSnapshots,
             activeRuntimes,
             selectedTopic: {
-                sessionId,
                 sessionId: selectedSessionId,
                 threadId: durableState.threadId || nextRuntime?.threadId || null,
                 agentId: durableAgentId,
@@ -542,9 +542,10 @@ function createWorkbenchController(runtimeApi) {
         const status = await refreshStatus().catch(() => null);
         // Ctrl+R restores only an actual selected runtime. A list of active
         // Topic Hosts is not a request to pick one or replay its transcript.
-        const selected = store.getState().selectedTopic;
+        const current = store.getState();
+        const selected = current.selectedTopic;
         const runtime = selectedRuntime();
-        const sessionId = selected?.sessionId || runtime?.sessionId || null;
+        const sessionId = selectedSessionIdFromState(current);
         if (sessionId && runtime) {
             await hydrateTopic(sessionId, runtime, barrier, selected?.agentId || runtime.agentId);
         } else {

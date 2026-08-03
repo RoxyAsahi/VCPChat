@@ -1,3 +1,5 @@
+import { selectedSessionId as selectedSessionIdFromState } from './agent-selected-session.js';
+
 function eventTimestamp(value) {
     const raw = typeof value === 'string' ? Date.parse(value) : Number(value);
     if (Number.isFinite(raw) && raw >= 1_000_000_000_000) return raw;
@@ -33,7 +35,7 @@ export function createAgentWorkbenchRenderCoordinator({
 
     function patchSidebarTopicSelection() {
         const current = store.getState();
-        const selectedSessionId = current.selectedSessionId || current.selectedTopic?.sessionId || null;
+        const selectedSessionId = selectedSessionIdFromState(current);
         for (const row of sidebar.querySelectorAll('.agent-chat-session-row[data-session-id]')) {
             const active = Boolean(selectedSessionId && row.dataset.sessionId === selectedSessionId);
             const activity = sessionActivity(row.dataset.sessionId, row.dataset.runtimeActivity || 'idle');

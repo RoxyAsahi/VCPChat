@@ -269,13 +269,37 @@ for (const file of governedUiModules) {
         errors.push(`${file} bypasses Workbench action/client boundary`);
     }
 }
-for (const file of [
-    'agent-workbench-sidebar-view.js', 'agent-session-dock-view.js',
-    'agent-notification-view.js', 'agent-approval-view.js',
-]) {
-    const source = fs.readFileSync(path.join(root, 'modules/ui-system', file), 'utf8');
-    if (!/\belement\b/.test(source) || !/\bupdate\s*\(/.test(source) || !/\bdispose\s*\(/.test(source)) {
+const formalWorkbenchViews = [
+    'agent-workbench-shell-view.js', 'agent-workbench-header-view.js',
+    'agent-workbench-run-status-view.js', 'agent-workbench-sidebar-view.js',
+    'agent-workbench-composer-view.js', 'agent-workbench-timeline-view.js',
+    'agent-session-dock-view.js', 'agent-workspace-view.js',
+    'agent-notification-view.js', 'agent-approval-view.js', 'agent-workbench-account-view.js',
+];
+for (const file of formalWorkbenchViews) {
+    const absolute = path.join(root, 'modules/ui-system', file);
+    const source = fs.readFileSync(absolute, 'utf8');
+    if (!/\belement\b/.test(source) || !/\bupdate\s*(?:\(|:)/.test(source) || !/\bdispose\s*\(/.test(source)) {
         errors.push(`${file} does not expose the standard View lifecycle contract`);
+    }
+}
+for (const file of [
+    'agent-composer-state.js', 'agent-session-dock.js', 'agent-workspace-view-state.js',
+    'agent-sidebar-view-state.js',
+]) {
+    if (!fs.existsSync(path.join(root, 'modules/ui-system', file))) {
+        errors.push(`missing Renderer state owner: ${file}`);
+    }
+}
+const selectedSessionSource = fs.readFileSync(path.join(root, 'modules/ui-system/agent-selected-session.js'), 'utf8');
+if (!selectedSessionSource.includes('topicSessionId !== sessionId')) {
+    errors.push('SelectedSessionIdentity must fail closed when projection and selection disagree');
+}
+for (const file of filesUnder(path.join(root, 'modules/ui-system'))) {
+    if (file.endsWith('agent-selected-session.js')) continue;
+    const source = fs.readFileSync(file, 'utf8');
+    if (/selectedSessionId\s*\|\|\s*[^\n]*selectedTopic|selectedTopic\?\.sessionId\s*\|\|/.test(source)) {
+        errors.push(`${path.relative(root, file)} contains an implicit Session identity fallback`);
     }
 }
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));

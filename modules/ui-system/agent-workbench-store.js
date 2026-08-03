@@ -1,5 +1,6 @@
 import { createAgentSessionUiState } from './agent-session-state.js';
 import { createAgentEventDeduper } from './agent-event-deduper.js';
+import { selectedSessionId as selectedSessionIdFromState } from './agent-selected-session.js';
 
 const TERMINAL_EVENT_TYPES = new Set([
     'turn.completed',
@@ -547,7 +548,7 @@ function createWorkbenchStore(initial = createInitialState()) {
  */
 function deriveWorkbenchViewState(state = {}) {
     const runtime = state.runtime || {};
-    const selectedSessionId = state.selectedSessionId || state.selectedTopic?.sessionId || null;
+    const selectedSessionId = selectedSessionIdFromState(state);
     const selectedRuntime = selectedSessionId && state.activeRuntimes instanceof Map
         ? state.activeRuntimes.get(selectedSessionId) : null;
     const hasSession = Boolean(selectedSessionId);
@@ -556,8 +557,10 @@ function deriveWorkbenchViewState(state = {}) {
     // performs the demand-driven start. Browsing SQLite history must never be
     // coupled to process startup.
     const hasIdlePreview = Boolean(
+        selectedSessionId
+        &&
         state.selectedTopic?.mode === 'preview'
-        && state.selectedTopic?.sessionId
+        && state.selectedTopic?.sessionId === selectedSessionId
     );
     const hasTurn = Boolean(state.activeTurnId || selectedRuntime?.activeTurnId);
     // Local approvals stay visible in the global Activity center, but only

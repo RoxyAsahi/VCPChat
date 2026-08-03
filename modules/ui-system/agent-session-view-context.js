@@ -1,13 +1,15 @@
+import { selectedSessionId } from './agent-selected-session.js';
+
 export function createAgentSessionViewContext({ state, store, document, sameAgent }) {
     function activeSession() {
         const current = store.getState();
-        const sessionId = current.selectedSessionId || current.selectedTopic?.sessionId;
+        const sessionId = selectedSessionId(current);
         return sessionId && current.activeRuntimes instanceof Map
             ? current.activeRuntimes.get(sessionId) || null : null;
     }
 
     function selectedSessionKey(current = store.getState()) {
-        return current.selectedSessionId || current.selectedTopic?.sessionId || null;
+        return selectedSessionId(current);
     }
 
     function selectedComposerState(current = store.getState()) {
@@ -36,7 +38,7 @@ export function createAgentSessionViewContext({ state, store, document, sameAgen
 
     function syncModel() {
         const current = store.getState();
-        const sessionId = current.selectedSessionId || current.selectedTopic?.sessionId || '';
+        const sessionId = selectedSessionId(current) || '';
         if (state.modelDraftSessionId !== sessionId) {
             state.modelDraftSessionId = sessionId;
             state.modelDraft = null;

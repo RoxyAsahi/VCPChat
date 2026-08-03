@@ -5,6 +5,7 @@ import { createAgentBlockPresentation } from './agent-presentation/index.js';
 import { renderPendingInputQueue } from './agent-workbench-queue.js';
 import { createWorkspaceRequestCoordinator } from './agent-workspace-requests.js';
 import { createWorkbenchLifecycle } from './agent-workbench-lifecycle.js';
+import { selectedSessionId } from './agent-selected-session.js';
 import { renderAgentSettingsPane } from './agent-settings-view.js';
 import {
     createAgentSettingsState,
@@ -319,7 +320,7 @@ function mountWorkbench(container) {
     function selectedWorkspaceIdentity(current = store.getState()) {
         const selected = current.selectedTopic || {};
         return {
-            sessionId: current.selectedSessionId || selected.sessionId || '',
+            sessionId: selectedSessionId(current) || '',
             workspaceRoot: selected.workspaceRef || selected.workspaceRoot || '',
         };
     }

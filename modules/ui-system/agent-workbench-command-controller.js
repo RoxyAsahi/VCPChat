@@ -48,7 +48,7 @@ function createWorkbenchCommandController(context) {
     }
 
     async function forkSession({ sessionId, turnId, title } = {}) {
-        const sourceSessionId = sessionId || selectedRuntime()?.sessionId || store.getState().selectedTopic?.sessionId;
+        const sourceSessionId = sessionId || selectedSessionId();
         if (!sourceSessionId) throw new Error('请先选择要创建分支的会话');
         const fork = await requireApi('agentSessionFork')({ sessionId: sourceSessionId, turnId, title });
         const forkSessionId = fork?.sessionId;
@@ -193,16 +193,22 @@ function createWorkbenchCommandController(context) {
     async function startTurn(prompt, attachments = []) {
         let current = store.getState();
         const selected = current.selectedTopic;
+        const selectedId = selectedSessionId(current);
+        if (!selectedId || selected?.sessionId !== selectedId) {
+            throw new Error('当前会话身份不完整或已变化，请重新选择会话后发送。');
+        }
         let runtime = selectedRuntime(current);
-        if (selected?.sessionId && !runtime) {
+        if (!runtime) {
             if (!selected.agentId) {
                 throw new Error('当前会话缺少持久化的助手身份，不能猜测并发送。请重新从会话列表打开它。');
             }
-            runtime = await ensureSessionRuntime(selected.sessionId, 'send');
+            runtime = await ensureSessionRuntime(selectedId, 'send');
             current = store.getState();
         }
-        const sessionId = runtime?.sessionId || selectedRuntime(current)?.sessionId || selected?.sessionId;
-        if (!sessionId) throw new Error('请先选择或新建 Session');
+        const sessionId = selectedSessionId(current);
+        if (!sessionId || runtime?.sessionId !== sessionId) {
+            throw new Error('会话在 Runtime 启动期间发生变化，请重新发送。');
+        }
         const accepted = await requireApi('agentRuntimeStartTurn')({ sessionId, prompt, attachments });
         store.addPendingUserMessage({ turnId: accepted?.turnId, prompt, attachments });
         return accepted;

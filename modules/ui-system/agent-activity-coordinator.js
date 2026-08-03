@@ -1,5 +1,6 @@
 import { deriveWorkbenchViewState } from './agent-workbench-store.js';
 import { createWorkspacePathRef } from './agent-workspace-model.js';
+import { selectedSessionId as selectedSessionIdFromState } from './agent-selected-session.js';
 
 function normalizeDockKind(tab) {
     return ({ usage: 'context', workspace: 'files', activity: 'notifications' })[tab] || tab || 'context';
@@ -14,13 +15,13 @@ function createAgentActivityCoordinator({
     let disposed = false;
 
     function selectedSessionId(current = store.getState()) {
-        return current.selectedSessionId || current.selectedTopic?.sessionId || '';
+        return selectedSessionIdFromState(current) || '';
     }
 
     function selectedWorkspaceIdentity(current = store.getState()) {
         const selected = current.selectedTopic || {};
         return {
-            sessionId: current.selectedSessionId || selected.sessionId || '',
+            sessionId: selectedSessionIdFromState(current) || '',
             workspaceRoot: selected.workspaceRef || selected.workspaceRoot || '',
         };
     }

@@ -58,6 +58,7 @@ assert.equal('artifacts' in store.getState(), false);
 const previewOnlyStore = createWorkbenchStore();
 previewOnlyStore.setState({
     runtime: { state: 'ready', worker: null, lastError: null },
+    selectedSessionId: 'preview-only-topic',
     selectedTopic: { sessionId: 'preview-only-topic', mode: 'preview' },
 });
 assert.equal(deriveWorkbenchViewState(previewOnlyStore.getState()), 'idle',
@@ -66,6 +67,7 @@ assert.equal(deriveWorkbenchViewState(previewOnlyStore.getState()), 'idle',
 const concurrentApprovalStore = createWorkbenchStore();
 concurrentApprovalStore.setState({
     runtime: { state: 'ready', worker: null, lastError: null },
+    selectedSessionId: 'topic-b',
     selectedTopic: { sessionId: 'topic-b', mode: 'preview' },
     approvals: [{ approvalId: 'approval-a', sessionId: 'session-a', turnId: 'turn-a', toolCallId: 'tool-a' }],
 });
@@ -78,6 +80,15 @@ concurrentApprovalStore.setState({
 });
 assert.equal(deriveWorkbenchViewState(concurrentApprovalStore.getState()), 'awaiting-approval',
     'the approval-owning Session must remain paused until Codex resolves it');
+
+const conflictingSelectionStore = createWorkbenchStore();
+conflictingSelectionStore.setState({
+    runtime: { state: 'ready', worker: null, lastError: null },
+    selectedSessionId: 'session-a',
+    selectedTopic: { sessionId: 'session-b', agentId: 'Nova', mode: 'preview' },
+});
+assert.equal(deriveWorkbenchViewState(conflictingSelectionStore.getState()), 'disconnected',
+    'conflicting Session identities must fail closed instead of choosing either projection');
 
 const usageStore = createWorkbenchStore();
 usageStore.selectSession({ sessionId: 'usage-session', state: 'idle' });
@@ -364,7 +375,7 @@ const preview = createWorkbenchController({
     agentRuntimeReadTopic: async ({ sessionId }) => ({ sessionId, snapshotSequence: 0, history: [{ id: 'preview-history', role: 'assistant', content: 'preview only' }] }),
     agentRuntimeCreateSession: async (payload) => {
         previewCalls.push(['runtime', payload]);
-        return { sessionId: 'preview-session', state: 'idle' };
+        return { sessionId: payload.sessionId, state: 'idle' };
     },
     agentRuntimeStartTurn: async (payload) => {
         previewCalls.push(['turn', payload]);
@@ -379,7 +390,7 @@ await preview.startTurn('继续这个任务');
 assert.equal(previewCalls[0][0], 'runtime', 'first send must start the selected Session Runtime before issuing a turn');
 assert.equal(previewCalls[0][1].sessionId, 'preview-topic');
 assert.equal(previewCalls[1][0], 'turn');
-assert.equal(previewCalls[1][1].sessionId, 'preview-session');
+assert.equal(previewCalls[1][1].sessionId, 'preview-topic');
 preview.dispose();
 
 // Codex selection remains projection-only. The first send begins exactly one
@@ -543,6 +554,19 @@ assert.equal(strictIdentity.store.getState().activeRuntimes.get('legacy-topic-ke
 assert.equal(strictIdentity.store.getState().activeTurnId, null,
     'a foreign Agent Session must never mark the selected Session as running');
 strictIdentity.dispose();
+
+let conflictingStartCalls = 0;
+const conflictingSelection = createWorkbenchController({
+    agentRuntimeStartTurn: async () => { conflictingStartCalls += 1; return { turnId: 'must-not-start' }; },
+    agentRuntimeEnsureSessionRuntime: async ({ sessionId }) => ({ sessionId }),
+});
+conflictingSelection.store.setState({
+    selectedSessionId: 'session-a',
+    selectedTopic: { sessionId: 'session-b', agentId: 'Nova', mode: 'preview' },
+});
+await assert.rejects(() => conflictingSelection.startTurn('must fail closed'), /身份不完整|已变化/);
+assert.equal(conflictingStartCalls, 0, 'conflicting selection identity must never reach Main');
+conflictingSelection.dispose();
 
 // Codex emits the durable user item asynchronously. It must reconcile the
 // renderer-only pending row by turn id instead of leaving two identical user
