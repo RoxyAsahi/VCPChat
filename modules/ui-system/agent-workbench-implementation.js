@@ -30,6 +30,7 @@ import {
     visualActionButton,
 } from './agent-workbench-dom.js';
 import { createAgentWorkbenchShellView } from './agent-workbench-shell-view.js';
+import { createAgentWorkbenchRunStatusView } from './agent-workbench-run-status-view.js';
 
 // Build Agent identities are independent from normal-chat Agents. Keep Nova
 // visible synchronously while the authoritative Build catalog loads.
@@ -454,7 +455,6 @@ function mountWorkbench(container) {
     let topicSearchTimer = null;
     let workspaceSearchTimer = null;
     let topicMenuInstance = 0;
-    let runStatusTimer = null;
 
     const shellView = createAgentWorkbenchShellView({
         document,
@@ -489,6 +489,7 @@ function mountWorkbench(container) {
         newButton, attachButton, permissionsButton, sendButton, attachmentTray,
         activityPanel, activitySplitter, activityTabs, activityAdd, activityContent, activityTabRow,
     } = shellView.refs;
+    const runStatusView = createAgentWorkbenchRunStatusView({ refs: shellView.refs, lifecycle });
 
     const run = async (work) => {
         try { await work(); } catch (error) {
@@ -3695,17 +3696,6 @@ function mountWorkbench(container) {
         queueRender({ feed: true, activity: true, composer: true });
     }
 
-    function formatRunElapsed(milliseconds) {
-        const seconds = Math.max(0, milliseconds) / 1000;
-        if (seconds < 60) return `${seconds.toFixed(1)}s`;
-        const wholeSeconds = Math.floor(seconds);
-        const minutes = Math.floor(wholeSeconds / 60);
-        const remainder = wholeSeconds % 60;
-        if (minutes < 60) return `${minutes}m ${String(remainder).padStart(2, '0')}s`;
-        const hours = Math.floor(minutes / 60);
-        return `${hours}h ${String(minutes % 60).padStart(2, '0')}m`;
-    }
-
     function latestRunningTool(current, turnId) {
         const tools = current.tools instanceof Map ? [...current.tools.values()] : [];
         return tools
@@ -3719,10 +3709,8 @@ function mountWorkbench(container) {
         const pendingTurnStart = selectedTurnStart(current);
         const turnId = selectedActiveTurnId(current) || pendingTurnStart?.turnId || null;
         const visible = Boolean(turnId || pendingTurnStart);
-        runStatus.hidden = !visible;
         if (!visible) {
-            if (runStatusTimer !== null) lifecycle.clear('run-status');
-            runStatusTimer = null;
+            runStatusView.update({ visible: false });
             return;
         }
         const startedAt = turnId
@@ -3730,26 +3718,22 @@ function mountWorkbench(container) {
             : (pendingTurnStart?.startedAt || Date.now());
         if (turnId && !state.turnStartedAt.has(turnId)) state.turnStartedAt.set(turnId, startedAt);
         const viewState = deriveWorkbenchViewState(current);
-        runStatus.dataset.state = viewState;
-        runStatusLabel.textContent = viewState === 'awaiting-approval'
+        const label = viewState === 'awaiting-approval'
             ? '等待审批'
             : pendingTurnStart?.phase === 'starting' && !selectedActiveTurnId(current)
                 ? '正在启动 Agent'
                 : '正在运行';
         const runningTool = latestRunningTool(current, turnId);
-        runStatusDetail.textContent = runningTool
-            ? `正在执行 ${projectVcpToolPresentation(runningTool).label}`
-            : 'Agent 正在处理当前任务';
-        const elapsedMs = Date.now() - startedAt;
-        runStatusElapsed.textContent = formatRunElapsed(elapsedMs);
-        runStatusElapsed.dateTime = `PT${Math.max(0, elapsedMs / 1000).toFixed(1)}S`;
-        runStatusStop.hidden = !selectedActiveTurnId(current);
-        runStatusStop.disabled = !selectedActiveTurnId(current);
-        if (runStatusTimer === null) {
-            runStatusTimer = lifecycle.interval('run-status', () => {
-                if (!state.disposed) syncRunStatus();
-            }, 250);
-        }
+        runStatusView.update({
+            visible: true,
+            state: viewState,
+            label,
+            detail: runningTool
+                ? `正在执行 ${projectVcpToolPresentation(runningTool).label}`
+                : 'Agent 正在处理当前任务',
+            startedAt,
+            canStop: Boolean(selectedActiveTurnId(current)),
+        });
     }
 
     function renderComposer() {
@@ -3987,6 +3971,7 @@ function mountWorkbench(container) {
         closeTopicContextMenu();
         state.accountThemeObserver?.disconnect();
         fullPresentation.dispose();
+        runStatusView.dispose();
         lifecycle.dispose();
         unsubscribe();
         controller.dispose();
