@@ -40,6 +40,7 @@ import { createAgentWorkbenchSidebarView } from './agent-workbench-sidebar-view.
 import { createAgentSessionDockView } from './agent-session-dock-view.js';
 import { createAgentNotificationView } from './agent-notification-view.js';
 import { createAgentApprovalView } from './agent-approval-view.js';
+import { createAgentWorkbenchTopicFlow } from './agent-workbench-topic-flow.js';
 
 // Build Agent identities are independent from normal-chat Agents. Keep Nova
 // visible synchronously while the authoritative Build catalog loads.
@@ -463,6 +464,35 @@ function mountWorkbench(container) {
             respondInteraction: (interaction, response) => run(() => controller.respondInteraction(interaction, response)),
             openExternal: (url) => runtimeApi().sendOpenExternalLink?.(url),
             notifyInvalidJson: () => notify('MCP 表单 JSON 无效。', 'error'),
+        },
+    });
+    const topicFlowView = createAgentWorkbenchTopicFlow({
+        element: topicFlowLayer,
+        document,
+        actions: {
+            close: closeTopicFlow,
+            updateDraft(patch) {
+                if (state.topicFlow?.kind === 'agent') Object.assign(state.topicFlow, patch);
+            },
+            submit(request) {
+                run(async () => {
+                    if (!state.topicFlow || state.topicFlow.kind !== 'agent' || state.topicFlow.saving) return;
+                    state.topicFlow = { ...state.topicFlow, saving: true };
+                    queueRender({ topicFlow: true });
+                    try {
+                        const result = await runtimeApi().agentRuntimeSaveAgentProfile?.(request);
+                        if (!result?.success || !result.profile?.id) throw new Error(result?.error || 'Build Agent 创建失败。');
+                        state.selectedAgent = result.profile.id;
+                        state.topicFlow = null;
+                        await refreshControlPlane();
+                        state.tab = 'agents';
+                        notify(`已创建 Build Agent「${result.profile.name || result.profile.id}」。`, 'success');
+                    } finally {
+                        if (state.topicFlow?.kind === 'agent') state.topicFlow = { ...state.topicFlow, saving: false };
+                        queueRender({ shell: true, header: true, composer: true, topicFlow: true });
+                    }
+                });
+            },
         },
     });
 
@@ -1571,203 +1601,8 @@ function mountWorkbench(container) {
     }
 
     function renderTopicFlow() {
-        topicFlowLayer.replaceChildren();
-        const flow = state.topicFlow;
-        topicFlowLayer.hidden = !flow;
-        if (!flow) return;
-
-        const backdrop = node('div', 'agent-chat-topic-flow-backdrop');
-        const dialog = node('section', 'agent-chat-topic-flow-dialog');
-        dialog.tabIndex = -1;
-        dialog.setAttribute('role', 'dialog');
-        dialog.setAttribute('aria-modal', 'true');
-        dialog.setAttribute('aria-labelledby', 'agentChatTopicFlowTitle');
-        dialog.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape' && !flow.saving) closeTopicFlow();
-        });
-        backdrop.addEventListener('click', () => { if (!flow.saving) closeTopicFlow(); });
-
-        if (flow.kind === 'create') {
-            const title = node('h2', 'agent-chat-topic-flow-title', '新建 Agent 会话');
-            title.id = 'agentChatTopicFlowTitle';
-            const description = node('p', 'agent-chat-topic-flow-description',
-                '创建独立的 Codex 会话并继承 Agent Profile。其它 Thread 可继续运行；首次发送时才会启动此 Thread。');
-            const context = node('section', 'agent-chat-topic-flow-context');
-            context.setAttribute('aria-label', 'Topic 创建配置来源');
-            const addContext = (label, value) => {
-                const item = node('div', 'agent-chat-topic-flow-context-item');
-                item.append(node('span', 'agent-chat-topic-flow-context-label', label), node('strong', 'agent-chat-topic-flow-context-value', value));
-                context.append(item);
-            };
-            const profile = state.agentCatalog.find((agent) => sameAgent(agent.id || agent.name, flow.agent));
-            addContext('Agent Profile', profile?.name || flow.agent || '尚未选择');
-            addContext('模型', profile?.model || '使用 VCPChat 默认模型');
-            addContext('工作目录', profile?.workspaceRoot || '使用 VCPChat 当前工作目录');
-            addContext('本地工具审批', profile?.permissionMode === 'always-approve' ? 'YOLO：本地自动允许' : '每次确认');
-            const form = node('form', 'agent-chat-topic-flow-form');
-            form.addEventListener('submit', (event) => {
-                event.preventDefault();
-                run(async () => {
-                    if (!state.topicFlow || state.topicFlow.kind !== 'create') return;
-                    state.topicFlow = { ...state.topicFlow, saving: true };
-                    queueRender({ topicFlow: true });
-                    try {
-                        const created = await createTopic({
-                            title: state.topicFlow.title.trim() || nextSessionTitle(),
-                            agent: state.topicFlow.agent,
-                        });
-                        state.topicFlow = null;
-                        state.tab = 'sessions';
-                        notify(`已新建 Topic「${created.title || created.topicId}」。`, 'success');
-                    } finally {
-                        if (state.topicFlow?.kind === 'create') state.topicFlow = { ...state.topicFlow, saving: false };
-                        queueRender({ shell: true, header: true, feed: true, composer: true, topicFlow: true });
-                    }
-                });
-            });
-            const field = (label, control) => {
-                const wrap = node('label', 'agent-chat-topic-flow-field');
-                wrap.append(node('span', 'agent-chat-topic-flow-label', label), control);
-                return wrap;
-            };
-            const titleInput = document.createElement('input');
-            titleInput.className = 'agent-chat-topic-flow-input';
-            titleInput.value = flow.title;
-            titleInput.maxLength = 120;
-            titleInput.setAttribute('aria-label', 'Topic 标题');
-            titleInput.addEventListener('input', () => { if (state.topicFlow?.kind === 'create') state.topicFlow.title = titleInput.value; });
-
-            const actions = node('div', 'agent-chat-topic-flow-actions');
-            const cancel = button('取消', 'secondary');
-            cancel.disabled = flow.saving;
-            cancel.addEventListener('click', closeTopicFlow);
-            const submit = button(flow.saving ? '正在创建…' : '创建并打开', 'primary');
-            submit.type = 'submit';
-            submit.disabled = flow.saving || !flow.agent;
-            actions.append(cancel, submit);
-            form.append(
-                field('Topic 标题', titleInput),
-                node('p', 'agent-chat-topic-flow-description', '模型、提示词、工作目录和审批模式来自上方 Agent Profile；创建后可在 Session 设置中调整允许变更的字段。'),
-                actions,
-            );
-            dialog.append(title, description, context, form);
-        } else if (flow.kind === 'agent') {
-            const title = node('h2', 'agent-chat-topic-flow-title', '新建 Build Agent');
-            title.id = 'agentChatTopicFlowTitle';
-            const description = node('p', 'agent-chat-topic-flow-description',
-                '创建独立于主聊天助手目录的 Build Agent。提示词会冻结到以后新建的 Session。');
-            const form = node('form', 'agent-chat-topic-flow-form');
-            const field = (label, control) => {
-                const wrap = node('label', 'agent-chat-topic-flow-field');
-                wrap.append(node('span', 'agent-chat-topic-flow-label', label), control);
-                return wrap;
-            };
-            const nameInput = document.createElement('input');
-            nameInput.className = 'agent-chat-topic-flow-input';
-            nameInput.value = flow.name;
-            nameInput.maxLength = 80;
-            nameInput.required = true;
-            nameInput.setAttribute('aria-label', 'Build Agent 名称');
-            nameInput.addEventListener('input', () => { if (state.topicFlow?.kind === 'agent') state.topicFlow.name = nameInput.value; });
-            const promptInput = document.createElement('textarea');
-            promptInput.className = 'agent-chat-topic-flow-input agent-chat-setting-prompt';
-            promptInput.value = flow.systemPrompt;
-            promptInput.rows = 7;
-            promptInput.required = true;
-            promptInput.placeholder = '例如：{{Nova}}';
-            promptInput.setAttribute('aria-label', 'Build Agent 提示词');
-            promptInput.addEventListener('input', () => { if (state.topicFlow?.kind === 'agent') state.topicFlow.systemPrompt = promptInput.value; });
-            const modelInput = document.createElement('input');
-            modelInput.className = 'agent-chat-topic-flow-input';
-            modelInput.value = flow.model;
-            modelInput.setAttribute('aria-label', 'Build Agent 默认模型');
-            modelInput.setAttribute('list', 'agentChatAgentFlowModels');
-            modelInput.addEventListener('input', () => { if (state.topicFlow?.kind === 'agent') state.topicFlow.model = modelInput.value; });
-            const modelList = document.createElement('datalist');
-            modelList.id = 'agentChatAgentFlowModels';
-            for (const model of state.modelCatalog) {
-                const option = document.createElement('option');
-                option.value = model.id || model.name || String(model);
-                modelList.append(option);
-            }
-            const workspaceInput = document.createElement('input');
-            workspaceInput.className = 'agent-chat-topic-flow-input';
-            workspaceInput.value = flow.workspaceRoot;
-            workspaceInput.placeholder = '留空使用 VCPChat 当前工作目录';
-            workspaceInput.setAttribute('aria-label', 'Build Agent 默认工作目录');
-            workspaceInput.addEventListener('input', () => {
-                if (state.topicFlow?.kind === 'agent') state.topicFlow.workspaceRoot = workspaceInput.value;
-            });
-            const permissionSelect = document.createElement('select');
-            permissionSelect.className = 'agent-chat-topic-flow-input';
-            permissionSelect.setAttribute('aria-label', 'Build Agent 默认审批模式');
-            for (const [value, label] of [
-                ['ask', '每次确认（推荐）'],
-                ['always-approve', 'YOLO：本地自动允许'],
-            ]) {
-                const option = document.createElement('option');
-                option.value = value;
-                option.textContent = label;
-                option.selected = value === flow.permissionMode;
-                permissionSelect.append(option);
-            }
-            permissionSelect.addEventListener('change', () => {
-                if (state.topicFlow?.kind === 'agent') state.topicFlow.permissionMode = permissionSelect.value;
-            });
-            const actions = node('div', 'agent-chat-topic-flow-actions');
-            const cancel = button('取消', 'secondary');
-            cancel.type = 'button';
-            cancel.disabled = flow.saving;
-            cancel.addEventListener('click', closeTopicFlow);
-            const submit = button(flow.saving ? '正在创建…' : '创建助手', 'primary');
-            submit.type = 'submit';
-            submit.disabled = flow.saving || !flow.name.trim() || !flow.systemPrompt.trim();
-            actions.append(cancel, submit);
-            form.append(
-                field('名称', nameInput),
-                field('提示词', promptInput),
-                field('默认模型（可留空）', modelInput),
-                modelList,
-                field('默认工作目录（可留空）', workspaceInput),
-                field('默认本地工具审批', permissionSelect),
-                actions,
-            );
-            form.addEventListener('input', () => {
-                submit.disabled = Boolean(state.topicFlow?.saving) || !nameInput.value.trim() || !promptInput.value.trim();
-            });
-            form.addEventListener('submit', (event) => {
-                event.preventDefault();
-                run(async () => {
-                    if (!state.topicFlow || state.topicFlow.kind !== 'agent' || state.topicFlow.saving) return;
-                    const request = {
-                        name: state.topicFlow.name.trim(),
-                        systemPrompt: state.topicFlow.systemPrompt.trim(),
-                        model: state.topicFlow.model.trim() || undefined,
-                        workspaceRoot: state.topicFlow.workspaceRoot.trim() || undefined,
-                        permissionMode: state.topicFlow.permissionMode,
-                    };
-                    state.topicFlow = { ...state.topicFlow, saving: true };
-                    queueRender({ topicFlow: true });
-                    try {
-                        const result = await runtimeApi().agentRuntimeSaveAgentProfile?.(request);
-                        if (!result?.success || !result.profile?.id) throw new Error(result?.error || 'Build Agent 创建失败。');
-                        state.selectedAgent = result.profile.id;
-                        state.topicFlow = null;
-                        await refreshControlPlane();
-                        state.tab = 'agents';
-                        notify(`已创建 Build Agent「${result.profile.name || result.profile.id}」。`, 'success');
-                    } finally {
-                        if (state.topicFlow?.kind === 'agent') state.topicFlow = { ...state.topicFlow, saving: false };
-                        queueRender({ shell: true, header: true, composer: true, topicFlow: true });
-                    }
-                });
-            });
-            dialog.append(title, description, form);
-        }
-        topicFlowLayer.append(backdrop, dialog);
-        // A microtask avoids stealing the click that opened the dialog while
-        // still providing predictable keyboard focus for the next action.
-        queueMicrotask(() => dialog.focus());
+        topicFlowView.update(state.topicFlow?.kind === 'agent'
+            ? { ...state.topicFlow, modelCatalog: state.modelCatalog } : null);
     }
 
     function renderHeader() {
@@ -2747,6 +2582,7 @@ function mountWorkbench(container) {
         approvalView.dispose();
         notificationView.dispose();
         sessionDockView.dispose();
+        topicFlowView.dispose();
         workspaceView.dispose();
         headerView.dispose();
         sidebarView?.dispose();
