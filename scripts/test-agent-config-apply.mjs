@@ -41,13 +41,23 @@ fs.mkdirSync(workspaceA);
 fs.mkdirSync(workspaceB);
 const transport = new ConfigTransport();
 const events = [];
+let resolveToolboxInstructions = null;
 const manager = new CodexRuntimeManager({
     projectRoot: root,
     settingsPath: path.join(root, 'settings.json'),
-    getSettings: () => ({}),
+    getSettings: () => ({ vcpServerUrl: 'http://toolbox.invalid:6005', vcpApiKey: 'test-key' }),
     getModels: () => [{ id: 'model-a', reasoning_efforts: ['low', 'high'] }, { id: 'model-b', reasoning_efforts: ['low', 'high'] }],
     transportFactory: () => transport,
     repositoryFactory: () => new AgentProjectionRepository({ databasePath: path.join(root, 'projection.sqlite') }),
+    responsesAdapterFactory: (options) => {
+        resolveToolboxInstructions = options.resolveInstructions;
+        return {
+            capability: 'config-apply-fixture',
+            baseUrl: 'http://127.0.0.1:1460/v1/config-apply-fixture',
+            async start() { return this.baseUrl; },
+            async stop() {},
+        };
+    },
     sendEvent: (event) => events.push(event),
 });
 
@@ -56,6 +66,16 @@ const topic = await manager.createTopic({
     model: 'model-a', reasoningEffort: 'low', permissionMode: 'ask', baseInstructions: '{{Nova}}',
 });
 await manager.ensureSessionRuntime({ sessionId: topic.sessionId });
+assert.equal(resolveToolboxInstructions({
+    threadId: 'thread-config',
+    sessionId: 'thread-config',
+}).baseInstructions, '{{Nova}}',
+    'Codex provider session_id is the Codex Thread id, not the VChat Session primary key');
+assert.throws(() => resolveToolboxInstructions({
+    threadId: 'thread-config',
+    sessionId: 'different-thread',
+}), (error) => error.code === 'SESSION_IDENTITY_MISMATCH',
+    'a provider session identity from another Codex Thread must fail closed');
 const before = manager.repository.getSession(topic.sessionId);
 const saved = await manager.updateSessionConfig({
     sessionId: topic.sessionId,

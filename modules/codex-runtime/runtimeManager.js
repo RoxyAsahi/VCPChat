@@ -2297,7 +2297,7 @@ class CodexRuntimeManager extends EventEmitter {
             toolboxUrl: settings.vcpServerUrl,
             toolboxApiKey: settings.vcpApiKey,
             onRequest: (identity) => this._diagnostic('toolbox-response-request', identity),
-            resolveInstructions: ({ threadId, sessionId }) => {
+            resolveInstructions: ({ threadId, sessionId: providerSessionId }) => {
                 const session = threadId ? this.repository?.getSessionByThread(threadId) : null;
                 if (!session) {
                     throw new CodexAppServerError('SESSION_NOT_FOUND', 'ToolBox request is not bound to a known VChat Agent Session');
@@ -2305,8 +2305,13 @@ class CodexRuntimeManager extends EventEmitter {
                 if (session.configSnapshot?.executionProfile !== 'toolbox-only') {
                     throw new CodexAppServerError('PROFILE_MISMATCH', 'Only toolbox-only Threads may use the VCPToolBox Responses adapter');
                 }
-                if (sessionId && sessionId !== session.sessionId) {
-                    throw new CodexAppServerError('SESSION_IDENTITY_MISMATCH', 'ToolBox request Session identity does not match its Thread');
+                // Codex's `x-codex-turn-metadata.session_id` is the App Server
+                // provider/session identity. In 0.146 it is the public Codex
+                // Thread id, not VChat's durable `session_...` primary key.
+                // Compare it to the Thread resolved above; comparing it to
+                // the VChat Session id rejects every real provider request.
+                if (providerSessionId && providerSessionId !== session.threadId) {
+                    throw new CodexAppServerError('SESSION_IDENTITY_MISMATCH', 'ToolBox provider session identity does not match its Codex Thread');
                 }
                 const appliedConfig = session.appliedRuntimeConfigRevision > 0
                     ? session.appliedRuntimeConfig : session.configSnapshot;
