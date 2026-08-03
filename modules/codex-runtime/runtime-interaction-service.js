@@ -21,7 +21,7 @@ const {
 
 class RuntimeInteractionService {
     constructor(context) {
-        this.context = context;
+        this.context = Object.freeze({ ...context });
         this.serverRequests = new Map();
         this.interactions = new InteractionRegistry();
         this.interactionTimers = new Map();
@@ -39,6 +39,18 @@ class RuntimeInteractionService {
     clearTimers() {
         for (const timer of this.interactionTimers.values()) clearTimeout(timer);
         this.interactionTimers.clear();
+    }
+
+    async setWorkbenchPresence(mounted = true) {
+        const present = mounted === true;
+        this.context.setWorkbenchMounted(present);
+        if (!present) {
+            await this.failClosedNativeApprovals('VChat Workbench closed');
+            this.interactions.clear({ source: 'codex-native' });
+            await this.failClosedToolboxApprovals('VChat Workbench closed');
+            this.interactions.clear({ source: 'toolbox' });
+        }
+        return { mounted: present };
     }
 
     acceptServerRequest(message) {

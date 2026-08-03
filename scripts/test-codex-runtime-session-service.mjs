@@ -46,6 +46,8 @@ function makeHarness(repository, request = async () => ({})) {
     let generation = 1;
     let sequence = 0;
     const cleared = [];
+    const registered = [];
+    let stat = { isFile: () => true, size: 128 };
     const service = new RuntimeSessionService({
         ensureProjectionStore: () => {},
         assertProjectionWritable: () => {},
@@ -88,12 +90,24 @@ function makeHarness(repository, request = async () => ({})) {
         projectRoot: () => process.cwd(),
         diagnosticClock: () => 1,
         diagnostic: () => {},
-        attachments: () => ({ clearSession: (sessionId) => cleared.push(sessionId) }),
+        attachments: () => ({
+            clearSession: (sessionId) => cleared.push(sessionId),
+            register: (sessionId, filePath, fileStat) => {
+                const attachment = { sessionId, path: filePath, size: fileStat.size };
+                registered.push(attachment);
+                return attachment;
+            },
+        }),
+        statFile: () => stat,
         faultInjection: () => ({}),
         assertLifecycleIdle: () => {},
         toolboxApprovalCount: () => 0,
     });
-    return { service, cleared, advanceGeneration: () => { generation += 1; } };
+    return {
+        service, cleared, registered,
+        setStat: (value) => { stat = value; },
+        advanceGeneration: () => { generation += 1; },
+    };
 }
 
 const repository = makeRepository();
@@ -105,6 +119,14 @@ harness.service.rename({ sessionId: created.sessionId, title: 'Renamed' });
 assert.equal(repository.getSession(created.sessionId).title, 'Renamed');
 assert.equal(harness.service.pin({ sessionId: created.sessionId, pinned: true }).pinned, true);
 assert.equal(harness.service.export({ sessionId: created.sessionId }).fileName, 'Renamed.md');
+const attachment = harness.service.importAttachment({ sessionId: created.sessionId, path: 'C:\\Temp\\note.txt' });
+assert.equal(attachment.attachment.sessionId, created.sessionId);
+assert.equal(harness.registered.length, 1);
+harness.setStat({ isFile: () => true, size: 32 * 1024 * 1024 + 1 });
+assert.throws(
+    () => harness.service.importAttachment({ sessionId: created.sessionId, path: 'C:\\Temp\\large.bin' }),
+    (error) => error.code === 'ATTACHMENT_TOO_LARGE',
+);
 
 let releaseArchive;
 let archiveRequested;

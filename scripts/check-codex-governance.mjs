@@ -512,6 +512,21 @@ for (const [label, filePath] of [
     if (!fs.existsSync(filePath)) errors.push(`${label} is missing`);
     else if (fs.readFileSync(filePath, 'utf8').split(/\r?\n/).length > 900) errors.push(`${path.basename(filePath)} exceeds module ceiling`);
 }
+for (const filePath of [
+    runtimeInteractionServicePath, runtimeToolboxServicePath, runtimeRecoveryServicePath,
+    runtimeSessionServicePath, runtimeTurnServicePath, runtimeConfigServicePath,
+    runtimeProfileServicePath, runtimeHostServicePath, runtimePolicyServicePath,
+    runtimeEventServicePath,
+]) {
+    if (!fs.existsSync(filePath)) continue;
+    const source = fs.readFileSync(filePath, 'utf8');
+    if (/constructor\(context\)[\s\S]{0,180}this\.context\s*=\s*context/.test(source)) {
+        errors.push(`${path.basename(filePath)} retains a mutable RuntimeServiceContext dependency table`);
+    }
+}
+if (/fs\.statSync\(|setWorkbenchPresence\([^)]*\)\s*\{[\s\S]{0,400}failClosed/.test(runtimeManagerSource)) {
+    errors.push('Runtime Manager contains Session or Interaction business behavior instead of service delegation');
+}
 if (!fs.existsSync(runtimeNormalizersPath)) {
     errors.push('Runtime pure normalizers module is missing');
 } else {

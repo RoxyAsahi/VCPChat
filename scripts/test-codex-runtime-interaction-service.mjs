@@ -10,6 +10,7 @@ const responseErrors = [];
 const events = [];
 const toolboxResponses = [];
 let generation = 7;
+let workbenchMounted = true;
 const session = { sessionId: 'session-a', configSnapshot: { executionProfile: 'codex-native' } };
 const transport = {
     respond: (requestId, response) => responses.push({ requestId, response }),
@@ -32,6 +33,7 @@ const service = new RuntimeInteractionService({
     createOperationContext: (identity) => createRuntimeOperationContext(captureGeneration(), identity),
     assertOperationContext: (operation) => operation.generation.assertCurrent(generation),
     workbenchMounted: () => true,
+    setWorkbenchMounted: (value) => { workbenchMounted = value; },
     profileForRequest: () => 'codex-native',
     sendUiEvent: (event) => events.push(event),
     diagnostic: () => {},
@@ -83,8 +85,15 @@ service.acceptServerRequest({
     id: 'approval-2', method: 'item/fileChange/requestApproval',
     params: { threadId: 'thread-a', turnId: 'turn-b', itemId: 'item-b' },
 });
-await service.failClosedNativeApprovals('test shutdown');
+service.toolboxApprovals.set('toolbox-close', {
+    requestId: 'toolbox-close', generation: 3, expiresAtMs: Date.now() + 60_000,
+});
+service.interactions.enqueue({ source: 'toolbox', requestId: 'toolbox-close', generation: 3, kind: 'approval' });
+await service.setWorkbenchPresence(false);
+assert.equal(workbenchMounted, false);
 assert.equal(service.serverRequests.size, 0);
+assert.equal(service.toolboxApprovals.size, 0);
+assert.equal(toolboxResponses.filter((entry) => entry.requestId === 'toolbox-close').length, 1);
 assert.equal(events.at(-1).payload.decision, 'decline');
 service.clearTimers();
 

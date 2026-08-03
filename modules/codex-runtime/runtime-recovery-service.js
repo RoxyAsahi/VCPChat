@@ -12,7 +12,7 @@ const KNOWN_OPERATION_KINDS = new Set(['thread-archive', 'thread-unarchive', 'th
 
 class RuntimeRecoveryService {
     constructor(context) {
-        this.context = context;
+        this.context = Object.freeze({ ...context });
     }
 
     listOperations() {

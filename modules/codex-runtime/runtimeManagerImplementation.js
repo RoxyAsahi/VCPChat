@@ -306,14 +306,7 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     async setWorkbenchPresence(mounted = true) {
-        this.workbenchMounted = mounted === true;
-        if (!this.workbenchMounted) {
-            await this._failClosedNativeApprovals('VChat Workbench closed');
-            this.interactions.clear({ source: 'codex-native' });
-            await this._failClosedToolboxApprovals('VChat Workbench closed');
-            this.interactions.clear({ source: 'toolbox' });
-        }
-        return { mounted: this.workbenchMounted };
+        return this.interactionService.setWorkbenchPresence(mounted);
     }
     async compactSession({ sessionId, timeoutMs = 120_000 } = {}) {
         return this.turnService.compact({ sessionId: requireSessionId(sessionId), timeoutMs });
@@ -403,12 +396,7 @@ class CodexRuntimeManager extends EventEmitter {
         });
     }
     async importAttachment({ sessionId, path: inputPath } = {}) {
-        if (!this.repository.getSession(sessionId)) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
-        const resolved = path.resolve(String(inputPath || ''));
-        const stat = fs.statSync(resolved);
-        if (!stat.isFile()) throw new CodexAppServerError('INVALID_ATTACHMENT', 'Attachment must be a file');
-        if (stat.size > 32 * 1024 * 1024) throw new CodexAppServerError('ATTACHMENT_TOO_LARGE', 'Attachment exceeds 32 MiB');
-        return { attachment: this.attachments.register(sessionId, resolved, stat) };
+        return this.sessionService.importAttachment({ sessionId: requireSessionId(sessionId), path: inputPath });
     }
     async respondApproval({ requestId, approvalId, decision, scope, reason, generation } = {}) {
         return this.interactionService.respondApproval({ requestId, approvalId, decision, scope, reason, generation });

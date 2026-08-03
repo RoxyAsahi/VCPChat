@@ -15,7 +15,7 @@ const {
 
 class RuntimeSessionService {
     constructor(context) {
-        this.context = context;
+        this.context = Object.freeze({ ...context });
     }
 
     _repository(generation) {
@@ -249,6 +249,21 @@ class RuntimeSessionService {
         if (!repository.getSession(idValue)) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
         const updated = repository.setPinned(idValue, pinned);
         return { sessionId: idValue, pinned, session: sessionProjection(updated) };
+    }
+
+    importAttachment({ sessionId, path: inputPath } = {}) {
+        this.context.ensureProjectionStore();
+        const idValue = requireSessionId(sessionId);
+        if (!this.context.repository().getSession(idValue)) {
+            throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
+        }
+        const resolved = path.resolve(String(inputPath || ''));
+        const stat = this.context.statFile(resolved);
+        if (!stat.isFile()) throw new CodexAppServerError('INVALID_ATTACHMENT', 'Attachment must be a file');
+        if (stat.size > 32 * 1024 * 1024) {
+            throw new CodexAppServerError('ATTACHMENT_TOO_LARGE', 'Attachment exceeds 32 MiB');
+        }
+        return { attachment: this.context.attachments().register(idValue, resolved, stat) };
     }
 
     async permanentlyDelete({ sessionId } = {}) {

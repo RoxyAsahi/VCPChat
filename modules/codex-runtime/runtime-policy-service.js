@@ -5,7 +5,7 @@ const { normalizeInstructionMode, normalizePersonality } = require('./runtime-no
 
 class RuntimePolicyService {
     constructor(context) {
-        this.context = context;
+        this.context = Object.freeze({ ...context });
     }
 
     runtimePolicyParams(config = {}, { starting = false } = {}) {

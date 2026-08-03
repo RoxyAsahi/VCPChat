@@ -23,7 +23,7 @@ const {
 
 class RuntimeConfigService {
     constructor(context) {
-        this.context = context;
+        this.context = Object.freeze({ ...context });
         this.scheduledApplies = new Map();
     }
 

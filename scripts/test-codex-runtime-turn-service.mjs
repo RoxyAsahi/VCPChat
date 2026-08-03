@@ -33,6 +33,14 @@ const resumedThreadIds = new Set(['thread-turn', 'thread-second']);
 const turnStartPromises = new Map();
 const calls = [];
 let generation = 4;
+let activeTransport = {
+    async request(method, params) {
+        calls.push({ method, params });
+        if (method === 'turn/start') return { turn: { id: `turn-${params.threadId}` } };
+        if (method === 'turn/interrupt') return {};
+        throw new Error(`unexpected ${method}`);
+    },
+};
 const captureGeneration = () => {
     const captured = generation;
     return { value: captured, assertCurrent(current) {
@@ -43,14 +51,7 @@ const service = new RuntimeTurnService({
     ensureProjectionStore: () => {},
     assertProjectionWritable: () => {},
     repository: () => repository,
-    transport: () => ({
-        async request(method, params) {
-            calls.push({ method, params });
-            if (method === 'turn/start') return { turn: { id: `turn-${params.threadId}` } };
-            if (method === 'turn/interrupt') return {};
-            throw new Error(`unexpected ${method}`);
-        },
-    }),
+    transport: () => activeTransport,
     bridge: () => null,
     responsesAdapter: () => null,
     attachments: () => ({ resolveMany: () => [] }),
@@ -118,10 +119,10 @@ const staleSession = {
 sessions.set(staleSession.sessionId, staleSession);
 resumedThreadIds.add(staleSession.threadId);
 threadStates.set(staleSession.threadId, { activity: 'idle', activeTurnId: null });
-const originalTransport = service.context.transport;
-service.context.transport = () => ({
+const originalTransport = activeTransport;
+activeTransport = {
     request: () => new Promise((resolve) => { releaseStaleTurn = resolve; }),
-});
+};
 const staleStart = service.startTurn({ sessionId: staleSession.sessionId, prompt: 'stale turn' });
 await new Promise((resolve) => setImmediate(resolve));
 generation += 1;
@@ -129,5 +130,5 @@ releaseStaleTurn({ turn: { id: 'turn-stale' } });
 await assert.rejects(staleStart, (error) => error.code === 'STALE_RUNTIME_GENERATION');
 assert.equal(threadStates.get(staleSession.threadId).activeTurnId, null,
     'an old generation Turn ACK must not update replacement Runtime state');
-service.context.transport = originalTransport;
+activeTransport = originalTransport;
 console.log('Codex Runtime turn service tests passed.');
