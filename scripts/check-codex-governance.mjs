@@ -429,6 +429,11 @@ for (const file of [
     }
 }
 const runtimeServiceGraph = fs.readFileSync(path.join(canonicalRuntimeDir, 'runtime-service-graph.js'), 'utf8');
+const runtimeServiceContexts = fs.readFileSync(path.join(canonicalRuntimeDir, 'runtime-service-contexts.js'), 'utf8');
+if (!runtimeServiceContexts.includes('createRuntimeServiceContext')
+    || !runtimeServiceContexts.includes('cannot expose Runtime Manager')) {
+    errors.push('Runtime services must use explicit capability contexts without Manager authority');
+}
 if (/runtime\.(?:createTopic|readTopic)\(/.test(runtimeServiceGraph)) {
     errors.push('canonical Runtime service graph delegates through deprecated Topic methods');
 }

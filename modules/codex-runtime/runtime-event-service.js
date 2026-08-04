@@ -5,7 +5,7 @@ const { sanitizeInteractionPayload } = require('./runtime-normalizers');
 
 class RuntimeEventService {
     constructor(context) {
-        this.context = Object.freeze({ ...context });
+        this.context = Object.freeze(context);
         this.sequence = 0;
     }
 

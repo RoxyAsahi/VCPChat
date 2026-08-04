@@ -11,16 +11,17 @@ const { RuntimeProfileService } = require('./runtime-profile-service');
 const { RuntimeHostService } = require('./runtime-host-service');
 const { RuntimePolicyService } = require('./runtime-policy-service');
 const { RuntimeEventService } = require('./runtime-event-service');
+const { createRuntimeServiceContext } = require('./runtime-service-contexts');
 
 function createId(prefix) {
     return `${prefix}_${crypto.randomUUID()}`;
 }
 
 function attachRuntimeServiceGraph(runtime) {
-    runtime.policyService = new RuntimePolicyService({
+    runtime.policyService = new RuntimePolicyService(createRuntimeServiceContext('policy', {
         providerParams: () => runtime._providerParams(),
-    });
-    runtime.eventService = new RuntimeEventService({
+    }));
+    runtime.eventService = new RuntimeEventService(createRuntimeServiceContext('event', {
         repository: () => runtime.repository,
         threadStates: () => runtime.threadStates,
         idleWarmSessions: () => runtime.idleWarmSessions,
@@ -29,8 +30,8 @@ function attachRuntimeServiceGraph(runtime) {
         scheduleSessionConfigApply: (sessionId) => runtime._scheduleSessionConfigApply(sessionId),
         drainFollowUpQueue: (session) => runtime._drainFollowUpQueue(session),
         sendEvent: (event) => { runtime.sendEvent(event); runtime.emit('event', event); },
-    });
-    runtime.interactionService = new RuntimeInteractionService({
+    }));
+    runtime.interactionService = new RuntimeInteractionService(createRuntimeServiceContext('interaction', {
         repository: () => runtime.repository,
         transport: () => runtime.transport,
         bridge: () => runtime.bridge,
@@ -47,13 +48,13 @@ function attachRuntimeServiceGraph(runtime) {
         ensureSessionRuntime: (options) => runtime.ensureSessionRuntime(options),
         threadStates: () => runtime.threadStates,
         drainFollowUpQueue: (session) => runtime._drainFollowUpQueue(session),
-    });
+    }));
     runtime.serverRequests = runtime.interactionService.serverRequests;
     runtime.interactions = runtime.interactionService.interactions;
     runtime.interactionTimers = runtime.interactionService.interactionTimers;
     runtime.toolboxApprovals = runtime.interactionService.toolboxApprovals;
 
-    runtime.toolboxService = new RuntimeToolboxService({
+    runtime.toolboxService = new RuntimeToolboxService(createRuntimeServiceContext('toolbox', {
         transport: () => runtime.transport,
         bridge: () => runtime.bridge,
         runtimeGeneration: () => runtime.runtimeGeneration,
@@ -63,10 +64,10 @@ function attachRuntimeServiceGraph(runtime) {
         interactions: runtime.interactionService,
         sendUiEvent: (event) => runtime._sendUiEvent(event),
         diagnostic: (message) => runtime.emit('diagnostic', message),
-    });
+    }));
     runtime.dynamicCalls = runtime.toolboxService.dynamicCalls;
 
-    runtime.recoveryService = new RuntimeRecoveryService({
+    runtime.recoveryService = new RuntimeRecoveryService(createRuntimeServiceContext('recovery', {
         ensureProjectionStore: () => runtime.ensureProjectionStore(),
         assertProjectionWritable: () => runtime._assertProjectionWritable(),
         repository: () => runtime.repository,
@@ -82,9 +83,9 @@ function attachRuntimeServiceGraph(runtime) {
         setRecoveryPromise: (promise) => { runtime.knownOperationRecoveryPromise = promise; },
         setLastError: (error) => { runtime.lastError = error; },
         diagnostic: (name, fields) => runtime._diagnostic(name, fields),
-    });
+    }));
 
-    runtime.sessionService = new RuntimeSessionService({
+    runtime.sessionService = new RuntimeSessionService(createRuntimeServiceContext('session', {
         ensureProjectionStore: () => runtime.ensureProjectionStore(),
         assertProjectionWritable: () => runtime._assertProjectionWritable(),
         repository: () => runtime.repository,
@@ -108,9 +109,9 @@ function attachRuntimeServiceGraph(runtime) {
         faultInjection: () => runtime.faultInjection,
         assertLifecycleIdle: (session) => runtime._assertLifecycleIdle(session),
         toolboxApprovalCount: () => runtime.toolboxApprovals.size,
-    });
+    }));
 
-    runtime.turnService = new RuntimeTurnService({
+    runtime.turnService = new RuntimeTurnService(createRuntimeServiceContext('turn', {
         ensureProjectionStore: () => runtime.ensureProjectionStore(),
         assertProjectionWritable: () => runtime._assertProjectionWritable(),
         repository: () => runtime.repository,
@@ -152,9 +153,9 @@ function attachRuntimeServiceGraph(runtime) {
         idleWarmSessions: () => runtime.idleWarmSessions,
         startTurnOverride: () => runtime._startTurn,
         defaultStartTurnMethod: () => runtime._defaultStartTurnMethod,
-    });
+    }));
 
-    runtime.configService = new RuntimeConfigService({
+    runtime.configService = new RuntimeConfigService(createRuntimeServiceContext('config', {
         ensureProjectionStore: () => runtime.ensureProjectionStore(),
         assertProjectionWritable: () => runtime._assertProjectionWritable(),
         repository: () => runtime.repository,
@@ -179,9 +180,9 @@ function attachRuntimeServiceGraph(runtime) {
         resumedThreadIds: () => runtime.resumedThreadIds,
         threadStates: () => runtime.threadStates,
         runtimeGeneration: () => runtime.runtimeGeneration,
-    });
+    }));
 
-    runtime.profileService = new RuntimeProfileService({
+    runtime.profileService = new RuntimeProfileService(createRuntimeServiceContext('profile', {
         ensureProjectionStore: () => runtime.ensureProjectionStore(),
         assertProjectionWritable: () => runtime._assertProjectionWritable(),
         repository: () => runtime.repository,
@@ -189,9 +190,9 @@ function attachRuntimeServiceGraph(runtime) {
         getSettings: () => runtime.getSettings() || {},
         getModels: () => runtime.getModels?.() || [],
         createSession: (options) => runtime.createSessionRecord(options),
-    });
+    }));
 
-    runtime.hostService = new RuntimeHostService({
+    runtime.hostService = new RuntimeHostService(createRuntimeServiceContext('host', {
         assertProjectionWritable: () => runtime._assertProjectionWritable(),
         ensureProjectionStore: () => runtime.ensureProjectionStore(),
         repository: () => runtime.repository,
@@ -270,7 +271,7 @@ function attachRuntimeServiceGraph(runtime) {
             runtime.configApplyTargets.clear();
         },
         clearHostResources: () => runtime._clearHostResources(),
-    });
+    }));
 }
 
 module.exports = { attachRuntimeServiceGraph };

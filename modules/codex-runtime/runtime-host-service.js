@@ -14,7 +14,7 @@ const {
 
 class RuntimeHostService {
     constructor(context) {
-        this.context = Object.freeze({ ...context });
+        this.context = Object.freeze(context);
         this.transportWired = false;
         this.toolboxConfigFingerprint = null;
         this.toolboxReconfiguration = null;

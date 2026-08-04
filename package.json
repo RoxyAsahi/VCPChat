@@ -82,6 +82,7 @@
     "test:codex-runtime-config-service": "node scripts/test-codex-runtime-config-service.mjs",
     "test:codex-runtime-profile-service": "node scripts/test-codex-runtime-profile-service.mjs",
     "test:codex-runtime-host-service": "node scripts/test-codex-runtime-host-service.mjs",
+    "test:runtime-service-contexts": "node scripts/test-runtime-service-contexts.mjs",
     "test:codex-runtime-policy-event-services": "node scripts/test-codex-runtime-policy-event-services.mjs",
     "test:codex-runtime-interaction-service": "node scripts/test-codex-runtime-interaction-service.mjs",
     "test:codex-runtime-toolbox-service": "node scripts/test-codex-runtime-toolbox-service.mjs",

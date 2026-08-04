@@ -16,7 +16,7 @@ const {
 
 class RuntimeTurnService {
     constructor(context) {
-        this.context = Object.freeze({ ...context });
+        this.context = Object.freeze(context);
     }
 
     _repository(generation) {

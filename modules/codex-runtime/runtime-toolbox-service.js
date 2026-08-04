@@ -9,7 +9,7 @@ const {
 
 class RuntimeToolboxService {
     constructor(context) {
-        this.context = Object.freeze({ ...context });
+        this.context = Object.freeze(context);
         this.dynamicCalls = new Map();
     }
 

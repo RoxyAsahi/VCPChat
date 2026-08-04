@@ -15,7 +15,7 @@ const {
 
 class RuntimeSessionService {
     constructor(context) {
-        this.context = Object.freeze({ ...context });
+        this.context = Object.freeze(context);
     }
 
     _repository(generation) {

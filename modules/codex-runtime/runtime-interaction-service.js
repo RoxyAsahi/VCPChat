@@ -21,7 +21,7 @@ const {
 
 class RuntimeInteractionService {
     constructor(context) {
-        this.context = Object.freeze({ ...context });
+        this.context = Object.freeze(context);
         this.serverRequests = new Map();
         this.interactions = new InteractionRegistry();
         this.interactionTimers = new Map();

@@ -21,7 +21,7 @@ const {
 
 class RuntimeProfileService {
     constructor(context) {
-        this.context = Object.freeze({ ...context });
+        this.context = Object.freeze(context);
     }
 
     listAgentProfiles() {
