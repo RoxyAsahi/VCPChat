@@ -244,7 +244,7 @@ window.chatAPI = {
                 messageId: 'msg_reason_saved', itemId: 'reason_saved', turnId: 'turn_saved', role: 'assistant',
                 status: 'completed', sourceOrder: 1, createdAt: 1,
                 blocks: [{ blockId: 'block_reason_saved', kind: 'reasoning', ordinal: 0,
-                    content: { summary: [], content: [], text: 'restored reasoning detail' } }],
+                    content: { summary: ['restored reasoning detail'], content: [] } }],
             }, {
                 messageId: 'msg_saved', itemId: 'answer_saved', turnId: 'turn_saved', role: 'assistant',
                 status: 'completed', sourceOrder: 2, createdAt: 2,
@@ -297,7 +297,11 @@ window.chatAPI = {
                 },
             } : {}),
             readOnly: true,
-            history: [{ messageId: 'msg_saved', turnId: 'turn_saved', role: 'assistant', content: 'restored answer', timestamp: 1 }],
+            messages: [{
+                messageId: 'msg_saved', itemId: 'answer_saved', turnId: 'turn_saved', role: 'assistant',
+                status: 'completed', sourceOrder: 1, createdAt: 1,
+                blocks: [{ kind: 'message', ordinal: 0, content: { text: 'restored answer' } }],
+            }],
         };
     },
     agentRuntimeSelectAttachments: async () => ({ attachments: selectedAttachments }),
@@ -427,10 +431,40 @@ window.chatAPI.agentSessionCreate = window.chatAPI.agentRuntimeCreateTopic;
 window.chatAPI.agentSessionList = window.chatAPI.agentRuntimeListTopics;
 window.chatAPI.agentSessionRename = window.chatAPI.agentRuntimeRenameTopic;
 function canonicalSessionProjection(snapshot) {
-    if (snapshot?.session?.sessionId) return snapshot;
+    const addNormalized = (value) => {
+        const sessionId = String(value?.session?.sessionId || '').trim();
+        const threadId = String(value?.session?.threadId || value?.threadId || `thread:${sessionId}`).trim();
+        if (!sessionId || value.normalized) return value;
+        const blocks = [];
+        for (const message of value.messages || []) {
+            for (const [index, source] of (message.blocks || []).entries()) {
+                const ordinal = Number.isInteger(source.ordinal) ? source.ordinal : index;
+                const itemId = String(message.itemId || source.itemId || message.messageId);
+                blocks.push({
+                    schemaVersion: 2, blockId: `block:${sessionId}:${itemId}:${ordinal}`,
+                    sessionId, threadId, turnId: message.turnId || null, itemId,
+                    messageId: String(message.messageId), kind: source.kind || 'message',
+                    itemType: source.itemType || source.content?.item?.type || null,
+                    authority: source.authority || 'codex', status: source.status || message.status || 'completed',
+                    sourceOrder: Number(message.sourceOrder || 0), ordinal, content: source.content || {},
+                    createdAt: message.createdAt || 1, updatedAt: message.updatedAt || message.createdAt || 1,
+                });
+            }
+        }
+        return {
+            ...value,
+            session: { ...value.session, threadId },
+            normalized: {
+                schemaVersion: 2, sessionId, threadId,
+                projectionRevision: Number(value.projectionRevision || value.projection?.mutationGeneration || 0),
+                blocks,
+            },
+        };
+    };
+    if (snapshot?.session?.sessionId) return addNormalized(snapshot);
     const sessionId = String(snapshot?.sessionId || '').trim();
     if (!sessionId) return snapshot;
-    return {
+    return addNormalized({
         ...snapshot,
         session: {
             sessionId,
@@ -439,7 +473,7 @@ function canonicalSessionProjection(snapshot) {
             configSnapshot: snapshot?.state?.configSnapshot || (snapshot?.state?.model
                 ? { model: snapshot.state.model } : null),
         },
-    };
+    });
 }
 window.chatAPI.agentSessionReadProjection = async ({ sessionId, ...payload }) => canonicalSessionProjection(
     await window.chatAPI.agentRuntimeReadTopic({ ...payload, sessionId }),

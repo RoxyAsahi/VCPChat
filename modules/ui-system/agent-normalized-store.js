@@ -1,124 +1,40 @@
 import { codexSnapshotToProjection } from './agent-workbench-snapshot-projection.js';
 
-function blockIdentity(sessionId, block = {}) {
-    const prefix = `block:${sessionId}:`;
-    if (block.schemaVersion === 2 && String(block.blockId || '').startsWith(prefix)) return block.blockId;
-    return `${prefix}${block.itemId || block.messageId || 'unknown'}:${Number.isInteger(block.ordinal) ? block.ordinal : 0}`;
-}
-
-function reasoningContent(block = {}) {
-    const summary = Array.isArray(block.content?.summary) ? block.content.summary : [];
-    const legacySummary = summary.length ? summary
-        : block.content?.text ? [String(block.content.text)] : [];
-    return {
-        summary: block.schemaVersion === 2 ? summary : legacySummary,
-        content: Array.isArray(block.content?.content) ? block.content.content : [],
-    };
-}
-
-function blockContent(block = {}) {
-    if (block.kind === 'reasoning') return reasoningContent(block);
-    if (block.content && typeof block.content === 'object') return block.content;
-    return { text: String(block.content || '') };
-}
-
-function finiteNumber(value, fallback = 0) {
-    const number = Number(value);
-    return Number.isFinite(number) ? number : fallback;
-}
-
-function blockCallId(source, itemType, itemId) {
-    if (source.callId) return source.callId;
-    return itemType === 'dynamicToolCall' ? itemId : undefined;
-}
-
-function normalizeBlock(sessionId, threadId, message, block) {
-    const source = block || {};
-    const parent = message || {};
-    const itemType = source.itemType || source.content?.item?.type || source.content?.unknown?.type || null;
-    const itemId = source.itemId || parent.itemId || null;
-    const messageId = source.messageId || parent.messageId || null;
-    const now = Date.now();
-    return {
-        schemaVersion: 2,
-        blockId: blockIdentity(sessionId, {
-            ...source, itemId, messageId,
-        }),
-        sessionId,
-        threadId: threadId || parent.threadId || null,
-        turnId: source.turnId || parent.turnId || null,
-        itemId,
-        messageId,
-        callId: blockCallId(source, itemType, itemId),
-        kind: source.kind || 'message',
-        itemType,
-        authority: source.authority || 'codex',
-        status: source.status || parent.status || 'inProgress',
-        sourceOrder: finiteNumber(source.sourceOrder ?? parent.sourceOrder),
-        ordinal: Number.isInteger(source.ordinal) ? source.ordinal : 0,
-        content: blockContent(source),
-        createdAt: source.createdAt || parent.createdAt || now,
-        updatedAt: source.updatedAt || parent.updatedAt || now,
-    };
-}
-
-function snapshotBlocks(snapshot, sessionId, threadId) {
-    const result = [];
-    for (const message of Array.isArray(snapshot.messages) ? snapshot.messages : []) {
-        for (const block of Array.isArray(message.blocks) ? message.blocks : []) {
-            result.push(normalizeBlock(sessionId, threadId, message, block));
-        }
-    }
-    return result;
-}
-
-function historyText(entry = {}) {
-    if (typeof entry.content === 'string') return entry.content;
-    if (!Array.isArray(entry.content)) return '';
-    return entry.content.map((part) => part?.text || '').join('');
-}
-
-function historyBlock(sessionId, threadId, entry, index) {
-    const itemId = String(entry.itemId || entry.toolCallId || entry.id || `legacy:${index}`);
-    const messageId = String(entry.messageId || entry.id || `msg:${sessionId}:${itemId}`);
-    const sourceOrder = finiteNumber(entry.snapshotOrdinal, index);
-    const status = entry.state || 'completed';
-    const message = {
-        messageId, itemId, turnId: entry.turnId || null, status, sourceOrder,
-        createdAt: entry.createdAt || entry.timestamp || 0,
-    };
-    if (entry.role !== 'tool') {
-        const text = historyText(entry);
-        const content = entry.role === 'user' ? { parts: [{ type: 'text', text }] } : { text };
-        return normalizeBlock(sessionId, threadId, message, {
-            kind: 'message', ordinal: 0, status, sourceOrder, content,
-        });
-    }
-    const payload = entry.payload && typeof entry.payload === 'object' ? entry.payload : {};
-    return normalizeBlock(sessionId, threadId, message, {
-        kind: 'tool', itemType: 'dynamicToolCall', ordinal: 0, authority: 'toolbox', status, sourceOrder,
-        content: {
-            ...payload,
-            item: { id: itemId, type: 'dynamicToolCall', tool: entry.toolName || payload.toolName || 'vcp_invoke' },
-        },
-    });
-}
-
-function historyBlocks(snapshot, sessionId, threadId) {
-    if (!Array.isArray(snapshot.history)) return [];
-    return snapshot.history.map((entry, index) => historyBlock(sessionId, threadId, entry, index));
+function invalidSnapshot(message) {
+    const error = new Error(message);
+    error.code = 'INVALID_AGENT_PROJECTION_SNAPSHOT';
+    return error;
 }
 
 function projectionToNormalized(snapshot = {}) {
-    const sessionId = String(snapshot.session?.sessionId || snapshot.sessionId || '');
-    const threadId = snapshot.session?.threadId || snapshot.threadId || null;
-    const projected = snapshotBlocks(snapshot, sessionId, threadId);
+    const normalized = snapshot.normalized;
+    if (!normalized || normalized.schemaVersion !== 2 || !Array.isArray(normalized.blocks)) {
+        throw invalidSnapshot('Agent projection snapshot requires canonical schema-2 blocks');
+    }
+    const sessionId = String(normalized.sessionId || '').trim();
+    const threadId = String(normalized.threadId || '').trim();
+    if (!sessionId || snapshot.session?.sessionId !== sessionId) {
+        throw invalidSnapshot('Agent projection snapshot Session identity is invalid');
+    }
+    const blocks = normalized.blocks.map((block) => {
+        const itemId = String(block?.itemId || '').trim();
+        const messageId = String(block?.messageId || '').trim();
+        const ordinal = Number(block?.ordinal);
+        const expectedId = `block:${sessionId}:${itemId}:${ordinal}`;
+        if (block?.schemaVersion !== 2 || !threadId || block.sessionId !== sessionId
+            || block.threadId !== threadId || !itemId || !messageId
+            || !Number.isInteger(ordinal) || ordinal < 0 || block.blockId !== expectedId
+            || !block.content || typeof block.content !== 'object' || Array.isArray(block.content)) {
+            throw invalidSnapshot(`Agent projection snapshot contains an invalid Block: ${block?.blockId || '<missing>'}`);
+        }
+        return block;
+    });
     return {
         schemaVersion: 2,
         sessionId,
         threadId,
-        projectionRevision: Number(snapshot.projectionRevision || snapshot.projection?.mutationGeneration || 0),
-        blocks: projected.length ? projected : historyBlocks(snapshot, sessionId, threadId),
+        projectionRevision: Number(normalized.projectionRevision || 0),
+        blocks,
     };
 }
 
@@ -163,7 +79,7 @@ function orderMessagesForTimeline(messages = []) {
 }
 
 function applyProjectionSnapshot(state, snapshot) {
-    const normalized = snapshot?.normalized?.blocks ? snapshot.normalized : projectionToNormalized(snapshot);
+    const normalized = projectionToNormalized(snapshot);
     const next = ensureNormalizedState(state);
     const existingSession = next.sessionsById.get(normalized.sessionId);
     const resolvedThreadId = normalized.threadId || snapshot?.session?.threadId || existingSession?.threadId || null;
@@ -282,7 +198,6 @@ export {
     applyProjectionPatch,
     applyProjectionSnapshot,
     projectionToNormalized,
-    normalizeBlock,
     orderMessagesForTimeline,
     selectedProjectionView,
     sessionProjectionFromState,

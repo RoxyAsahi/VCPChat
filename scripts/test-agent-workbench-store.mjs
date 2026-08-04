@@ -5,14 +5,45 @@ import { applyProjectionPatch } from '../modules/ui-system/agent-normalized-stor
 import { ROUTES, reducersForEvent } from '../modules/ui-system/agent-store/event-router.js';
 import { projectSession, projectTool } from '../modules/ui-system/agent-workbench-projections.js';
 
+function withNormalizedProjection(snapshot) {
+    const sessionId = String(snapshot?.session?.sessionId || snapshot?.sessionId || '').trim();
+    const threadId = String(snapshot?.session?.threadId || snapshot?.threadId || `thread:${sessionId}`).trim();
+    if (!sessionId || snapshot?.normalized) return snapshot;
+    const blocks = [];
+    for (const message of snapshot.messages || []) {
+        for (const [index, source] of (message.blocks || []).entries()) {
+            const ordinal = Number.isInteger(source.ordinal) ? source.ordinal : index;
+            const itemId = String(message.itemId || source.itemId || message.messageId);
+            blocks.push({
+                schemaVersion: 2, blockId: `block:${sessionId}:${itemId}:${ordinal}`,
+                sessionId, threadId, turnId: message.turnId || null, itemId,
+                messageId: String(message.messageId), kind: source.kind || 'message',
+                itemType: source.itemType || source.content?.item?.type || null,
+                authority: source.authority || 'codex', status: source.status || message.status || 'completed',
+                sourceOrder: Number(message.sourceOrder || 0), ordinal, content: source.content || {},
+                createdAt: message.createdAt || 1, updatedAt: message.updatedAt || message.createdAt || 1,
+            });
+        }
+    }
+    return {
+        ...snapshot,
+        session: { ...(snapshot.session || {}), sessionId, threadId },
+        normalized: {
+            schemaVersion: 2, sessionId, threadId,
+            projectionRevision: Number(snapshot.projectionRevision || snapshot.projection?.mutationGeneration || 0),
+            blocks,
+        },
+    };
+}
+
 function createWorkbenchController(api) {
     const topicPayload = (payload = {}) => ({ ...payload, sessionId: payload.sessionId || payload.sessionId });
     const canonicalProjection = async (reader, payload) => {
         const snapshot = await reader(topicPayload(payload));
-        if (snapshot?.session?.sessionId) return snapshot;
+        if (snapshot?.session?.sessionId) return withNormalizedProjection(snapshot);
         const sessionId = String(snapshot?.sessionId || '').trim();
         if (!sessionId) return snapshot;
-        return {
+        return withNormalizedProjection({
             ...snapshot,
             session: {
                 sessionId,
@@ -21,7 +52,7 @@ function createWorkbenchController(api) {
                 configSnapshot: snapshot?.state?.configSnapshot || (snapshot?.state?.model
                     ? { model: snapshot.state.model } : null),
             },
-        };
+        });
     };
     return createRawWorkbenchController({
         ...api,
@@ -407,19 +438,18 @@ liveEvent({
     payload: { toolbox: { state: 'unavailable', detail: 'Main readiness settled during snapshot' } },
 });
 resolveInitialRead({
-    sessionId: 'restored', snapshotSequence: 4,
+    sessionId: 'restored', threadId: 'thread-restored', snapshotSequence: 4,
     state: { title: '恢复的 Codex Session 标题', model: 'gpt-5.6-terra', workspaceRef: 'C:\\workspace\\restored' },
-    history: [
-        { id: 'history-1', role: 'assistant', content: '来自 Codex Session', snapshotOrdinal: 0 },
-        {
-            id: 'tool-call-restored', role: 'tool', toolCallId: 'call-restored', toolName: 'FileOperator',
-            state: 'completed', timestamp: 2, snapshotOrdinal: 1,
-            payload: {
-                toolName: 'FileOperator', result: 'package.json',
+    messages: [
+        { messageId: 'history-1', itemId: 'history-1', role: 'assistant', status: 'completed', sourceOrder: 0,
+            blocks: [{ kind: 'message', content: { text: '来自 Codex Session' } }] },
+        { messageId: 'tool-call-restored', itemId: 'call-restored', role: 'tool', status: 'completed', sourceOrder: 1,
+            blocks: [{ kind: 'tool', authority: 'toolbox', content: {
+                item: { id: 'call-restored', type: 'dynamicToolCall', tool: 'FileOperator' },
+                result: 'package.json',
                 resources: [{ name: 'package.json', url: 'file-ref:package.json' }],
                 warnings: ['只读预览'], task: { id: 'task-restored', status: 'completed' },
-            },
-        },
+            } }] },
     ],
 });
 await initializing;
@@ -482,7 +512,13 @@ switchEvent({
         messageId: 'new-message', itemId: 'new-item', turnId: 'turn-1', kind: 'message', content: { text: 'live' },
     }),
 });
-deferredRead({ sessionId: sessionRuntime.sessionId, snapshotSequence: 4, history: [{ id: 'checkpoint-message', role: 'assistant', content: 'checkpoint' }] });
+deferredRead({
+    sessionId: sessionRuntime.sessionId, threadId: 'thread-switch', snapshotSequence: 4,
+    messages: [{
+        messageId: 'checkpoint-message', itemId: 'checkpoint-message', role: 'assistant',
+        status: 'completed', sourceOrder: 0, blocks: [{ kind: 'message', content: { text: 'checkpoint' } }],
+    }],
+});
 await hydrating;
 assert.ok(switching.store.getState().messages.some((message) => message.content === 'checkpoint'), 'snapshot must become the base projection');
 assert.ok(switching.store.getState().messages.some((message) => message.id === 'block:switch-session:new-item:0'),
@@ -510,7 +546,11 @@ fresh.dispose();
 const previewCalls = [];
 const preview = createWorkbenchController({
     agentRuntimeGetStatus: async () => ({ state: 'ready', pendingApprovals: [] }),
-    agentRuntimeReadTopic: async ({ sessionId }) => ({ sessionId, snapshotSequence: 0, history: [{ id: 'preview-history', role: 'assistant', content: 'preview only' }] }),
+    agentRuntimeReadTopic: async ({ sessionId }) => ({
+        sessionId, threadId: `thread:${sessionId}`, snapshotSequence: 0,
+        messages: [{ messageId: 'preview-history', itemId: 'preview-history', role: 'assistant',
+            status: 'completed', sourceOrder: 0, blocks: [{ kind: 'message', content: { text: 'preview only' } }] }],
+    }),
     agentRuntimeCreateSession: async (payload) => {
         previewCalls.push(['runtime', payload]);
         return { sessionId: payload.sessionId, state: 'idle' };
@@ -624,11 +664,11 @@ const liveSwitch = createWorkbenchController({
                 return new Promise((resolve) => { resolveSecondLiveSqlite = resolve; });
             }
             return Promise.resolve({
-                session: { sessionId, agentId: 'Nova', title: 'Live A' }, messages: [],
+                session: { sessionId, threadId: 'thread-live-a', agentId: 'Nova', title: 'Live A' }, messages: [],
             });
         }
         return Promise.resolve({
-            session: { sessionId, agentId: 'Nova', title: 'Idle B' },
+            session: { sessionId, threadId: 'thread-idle-b', agentId: 'Nova', title: 'Idle B' },
             messages: [{
                 messageId: 'idle-b-message', itemId: 'idle-b-item', role: 'assistant', status: 'completed',
                 blocks: [{ blockId: 'idle-b:0', kind: 'message', content: { text: 'Idle B' } }],
@@ -651,6 +691,7 @@ liveSwitch.subscribeRuntime();
 liveSwitch.store.setState({
     activeRuntimes: new Map([['live-session-a', {
         sessionId: 'live-session-a', activity: 'running', activeTurnId: 'live-turn-a',
+        threadId: 'thread-live-a',
     }]]),
 });
 await liveSwitch.previewTopic('live-session-a', 'Nova', { title: 'Live A' });
@@ -731,7 +772,7 @@ let liveGuardEvent;
 let resolveLiveGuardThread;
 const liveGuard = createWorkbenchController({
     agentRuntimeReadProjection: async () => ({
-        session: { sessionId: 'live-guard-topic', agentId: 'Nova', title: 'SQLite live guard' },
+        session: { sessionId: 'live-guard-topic', threadId: 'thread-live-guard', agentId: 'Nova', title: 'SQLite live guard' },
         messages: [{ messageId: 'sqlite-guard', itemId: 'item-guard', role: 'assistant', status: 'completed', blocks: [{ blockId: 'guard:0', kind: 'message', content: { text: 'SQLite base' } }] }],
     }),
     agentRuntimeReadTopic: async () => new Promise((resolve) => { resolveLiveGuardThread = resolve; }),
@@ -747,7 +788,7 @@ liveGuardEvent({
         content: { text: 'live delta must survive' } }),
 });
 resolveLiveGuardThread({
-    session: { sessionId: 'live-guard-topic', agentId: 'Nova', title: 'stale thread result' },
+    session: { sessionId: 'live-guard-topic', threadId: 'thread-live-guard', agentId: 'Nova', title: 'stale thread result' },
     messages: [{ messageId: 'stale-guard-message', itemId: 'stale-guard-item', role: 'assistant', status: 'completed', blocks: [{ blockId: 'stale-guard:0', kind: 'message', content: { text: 'must not replace live delta' } }] }],
 });
 await new Promise((resolve) => setImmediate(resolve));
