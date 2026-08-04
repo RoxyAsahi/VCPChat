@@ -74,7 +74,7 @@ export function renderAgentSettingsPane(context) {
     const {
         state, store, activeSession, sessionConfigRevisions, selectedAgentProfile,
         profileNeedsConfiguration, persistWorkbenchSettings, renderSidebar,
-        run, refreshControlPlane, notify, controller, refreshRecoveryOperations,
+        run, refreshControlPlane, refreshModelCatalog, notify, controller, refreshRecoveryOperations,
         refreshTopicsForAgent, node, button, sameAgent, scheduleTextSave, scheduleBudgetSave,
         settingValue, settingStatus, host,
     } = context;
@@ -96,7 +96,10 @@ export function renderAgentSettingsPane(context) {
         control.className = 'agent-chat-setting-input';
         control.disabled = controlOptions.disabled === true;
         if (controlOptions.title) control.title = controlOptions.title;
-        if (!options) control.value = value || '';
+        if (!options) {
+            control.value = value || '';
+            if (controlOptions.placeholder) control.placeholder = controlOptions.placeholder;
+        }
         for (const option of options || []) {
             const item = document.createElement('option');
             item.value = option.value;
@@ -110,8 +113,12 @@ export function renderAgentSettingsPane(context) {
     };
 
     const settingsGroup = (label, children, summaryText = '', open = false, options = {}) => {
-        const group = node('div', `agent-settings-collapsible-container agent-settings-section${open ? '' : ' collapsed'}`);
-        group.dataset.sectionKey = label === '基础信息' ? 'identity' : label === '系统提示词' || label === '提示词' ? 'prompt' : label === '模型设置' ? 'model' : 'agent';
+        const sectionKey = label === '基础信息' ? 'identity'
+            : label === '系统提示词' || label === '提示词' ? 'prompt'
+                : label === '模型设置' ? 'model' : 'agent';
+        const expanded = open || state.expandedSettingsSections?.has(sectionKey);
+        const group = node('div', `agent-settings-collapsible-container agent-settings-section${expanded ? '' : ' collapsed'}`);
+        group.dataset.sectionKey = sectionKey;
         const header = node('div', 'agent-settings-section-header');
         const title = node('span', 'agent-settings-section-title', label);
         const summary = node('div', 'agent-settings-section-summary');
@@ -142,8 +149,10 @@ export function renderAgentSettingsPane(context) {
         const setCollapsed = (collapsed) => {
             group.classList.toggle('collapsed', collapsed);
             toggle.setAttribute('aria-expanded', String(!collapsed));
+            if (collapsed) state.expandedSettingsSections?.delete(sectionKey);
+            else state.expandedSettingsSections?.add(sectionKey);
         };
-        setCollapsed(!open);
+        setCollapsed(!expanded);
         header.addEventListener('click', (event) => {
             if (event.target.closest('input, select, textarea, button')) {
                 if (event.target.closest('button')) setCollapsed(!group.classList.contains('collapsed'));
@@ -191,18 +200,31 @@ export function renderAgentSettingsPane(context) {
             identity: true,
             identitySummary: { name: profile.name || profile.id, avatarUrl: profile.avatarUrl },
         }));
+        const modelOptions = configOptions('model', { modelCatalog: state.modelCatalog });
+        const configuredModelOptions = model && !modelOptions.some((item) => item.value === model)
+            ? [...modelOptions, { value: model, label: model }] : modelOptions;
+        const modelControl = field('模型', model, (value) => {
+            state.model = value;
+            void persistWorkbenchSettings({ model: String(value || '').trim(), reasoningEffort: null }, sessionId,
+                sessionId ? `已自动保存模型：${value}` : `已自动保存默认模型：${value}`);
+        }, state.modelCatalog.length ? configuredModelOptions : null, {
+            placeholder: '输入模型名称',
+        });
+        const refreshModelButton = button(state.modelCatalogLoading ? '正在刷新模型…' : '刷新模型列表',
+            'secondary agent-chat-settings-save agent-chat-model-refresh');
+        refreshModelButton.disabled = state.modelCatalogLoading;
+        refreshModelButton.addEventListener('click', () => run(() => refreshModelCatalog()));
+        const modelStatus = node('p', 'agent-chat-setting-hint agent-chat-model-status',
+            state.modelCatalogError || (state.modelCatalog.length ? `已载入 ${state.modelCatalog.length} 个模型` : '可直接填写模型名称。'));
+        modelStatus.setAttribute('role', 'status');
+        const modelActions = node('div', 'agent-chat-model-actions');
+        modelActions.append(refreshModelButton, modelStatus);
         const modelFields = [field('工作目录（可留空）', workspace, (value) => {
             if (!sessionId) state.workspace = value;
             void persistWorkbenchSettings({ workspaceRoot: value }, sessionId,
                 sessionId ? '已自动保存当前 Session 工作目录' : '已自动保存 Agent 默认工作目录');
-        }, null, { title: materialized ? 'Codex 0.146 会从下一 Turn 使用新的工作目录。' : '' }), field('模型', model, (value) => {
-            state.model = value;
-            void persistWorkbenchSettings({ model: String(value || '').trim(), reasoningEffort: null }, sessionId,
-                sessionId ? `已自动保存模型：${value}` : `已自动保存默认模型：${value}`);
-        }, configOptions('model', { modelCatalog: state.modelCatalog }).concat(
-            model && !configOptions('model', { modelCatalog: state.modelCatalog }).some((item) => item.value === model)
-                ? [{ value: model, label: model }] : [],
-        )), field('本地工具审批', permissionMode, (value) => {
+        }, null, { title: materialized ? 'Codex 0.146 会从下一 Turn 使用新的工作目录。' : '' }),
+        modelControl, modelActions, field('本地工具审批', permissionMode, (value) => {
             const next = value === 'always-approve' ? 'always-approve' : 'ask';
             state.permissionMode = next;
             void persistWorkbenchSettings({ permissionMode: next }, sessionId,

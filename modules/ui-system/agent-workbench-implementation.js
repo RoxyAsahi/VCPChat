@@ -365,6 +365,8 @@ function mountWorkbench(container) {
         controller,
         listAgentProfiles: () => controller.listAgentProfiles(),
         getCachedModels: () => controller.getCachedModels(),
+        refreshModels: () => controller.refreshModels(),
+        onModelsUpdated: (callback) => controller.onModelsUpdated(callback),
         queueRender,
         syncPermissionModeFromSelectedSession,
         syncModelFromSelectedSession,
@@ -377,6 +379,7 @@ function mountWorkbench(container) {
         selectAgent,
         refreshTopicsForAgent,
         refreshControlPlane,
+        refreshModelCatalog,
     } = sessionCatalog;
     const settingsCoordinator = createAgentSettingsCoordinator({
         state,
@@ -632,6 +635,7 @@ function mountWorkbench(container) {
             renderSidebar,
             run,
             refreshControlPlane,
+            refreshModelCatalog,
             notify,
             controller,
             refreshRecoveryOperations,

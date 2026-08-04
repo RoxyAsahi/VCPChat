@@ -66,9 +66,11 @@ export function createAgentWorkbenchState({ window, agentCatalog, rememberedTopi
     return {
         ...createSidebarViewState(),
         selectedAgent: 'Nova', agentCatalog, modelCatalog: [],
+        modelCatalogLoading: false, modelCatalogError: '',
         topics: [], topicsByAgent: new Map(), archivedTopicsByAgent: new Map(),
         queue: [], queueOpen: false, budget: { maxRequestsPerTurn: null, maxTokensPerTurn: null },
         budgetSaving: false, settingsSaveState: 'idle', settingsSaveMessage: '', settingsScope: 'profile',
+        expandedSettingsSections: new Set(),
         settingsSaveByScope: new Map([
             ['profile', { state: 'idle', message: '' }],
             ['session', { state: 'idle', message: '' }],

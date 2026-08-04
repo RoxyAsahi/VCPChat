@@ -87,6 +87,9 @@ const runtimeEnsures = [];
 const exportedSessions = [];
 let mainCreateProxyCalls = 0;
 let sharedCreateActionCalls = 0;
+let modelUpdateCallback = null;
+let modelUnsubscribeCalls = 0;
+let refreshModelCalls = 0;
 let releaseAgentCatalog;
 const buildAgentProfiles = [
     {
@@ -151,6 +154,16 @@ window.chatAPI = {
     getCachedModels: async () => {
         await new Promise((resolve) => setTimeout(resolve, 250));
         return [{ id: 'gpt-5.6-terra', reasoning_efforts: ['low', 'medium', 'high'] }, { id: 'gpt-5.6-luna' }];
+    },
+    refreshModels: async () => {
+        refreshModelCalls += 1;
+        const models = [{ id: 'gpt-5.6-refresh', reasoning_efforts: ['medium', 'high'] }];
+        modelUpdateCallback?.(models);
+        return { success: true, models, count: models.length };
+    },
+    onModelsUpdated(callback) {
+        modelUpdateCallback = callback;
+        return () => { modelUnsubscribeCalls += 1; };
     },
     agentRuntimeGetStatus: async () => ({
         state: runtimeStatus,
@@ -1465,6 +1478,15 @@ assert.match(workbenchCss,
 assert.match(workbenchCss,
     /prefers-reduced-motion:\s*reduce[\s\S]*agent-chat-session-avatar\.is-running::before[\s\S]*animation:\s*none/,
     'the running avatar ring must respect reduced-motion preferences');
+assert.match(workbenchCss,
+    /agent-settings-section:not\(\.collapsed\) \.agent-settings-section-content\s*\{[^}]*overflow:\s*visible;/s,
+    'expanded settings sections must not clip native control focus rings');
+assert.match(workbenchCss,
+    /agent-settings-section-content > \.agent-settings-card-shell\s*\{[^}]*display:\s*grid;[^}]*gap:\s*var\(--vcp-ui-space-2\);/s,
+    'settings groups must keep enough vertical space between focused controls and the next field label');
+assert.match(workbenchCss,
+    /agent-chat-model-actions\s*\{[^}]*display:\s*grid;[^}]*justify-items:\s*start;/s,
+    'the model refresh status must stack cleanly in the minimum-width Build sidebar');
 reasoningCard.querySelector('.vcp-thought-chain-header').click();
 assert.equal(reasoningCard.querySelector('.vcp-thought-chain-bubble').classList.contains('expanded'), false,
     'the fallback thinking header must remain explicitly collapsible');
@@ -1735,6 +1757,34 @@ assert.ok(savedAvatars[0].avatarData.buffer instanceof ArrayBuffer,
 openSettingsSection('model');
 assert.ok(host.querySelector('.agent-chat-settings-pane .agent-chat-setting-field select'),
     'the expanded model section must expose its model and approval controls');
+modelUpdateCallback([]);
+await new Promise((resolve) => setTimeout(resolve, 30));
+let modelSection = host.querySelector('.agent-settings-section[data-section-key="model"]');
+assert.equal(modelSection.classList.contains('collapsed'), false,
+    'model catalog updates must preserve the expanded settings section');
+let modelField = [...modelSection.querySelectorAll('.agent-chat-setting-field')]
+    .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent === '模型');
+assert.equal(modelField?.querySelector('input')?.placeholder, '输入模型名称',
+    'an empty model catalog must remain editable instead of rendering an unusable empty select');
+assert.match(modelSection.querySelector('.agent-chat-model-status')?.textContent || '', /直接填写模型名称/);
+modelUpdateCallback([{ id: 'gpt-5.6-live', reasoning_efforts: ['low', 'high'] }]);
+await new Promise((resolve) => setTimeout(resolve, 30));
+modelSection = openSettingsSection('model');
+modelField = [...modelSection.querySelectorAll('.agent-chat-setting-field')]
+    .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent === '模型');
+assert.deepEqual([...modelField.querySelectorAll('option')].map((option) => option.value),
+    ['gpt-5.6-live', 'gpt-5.6-terra'],
+    'a live model update must repopulate the selector while preserving the configured model');
+modelSection.querySelector('.agent-chat-model-refresh').click();
+await new Promise((resolve) => setTimeout(resolve, 30));
+assert.equal(refreshModelCalls, 1, 'the Build model refresh control must invoke refreshModels');
+modelSection = host.querySelector('.agent-settings-section[data-section-key="model"]');
+assert.equal(modelSection.classList.contains('collapsed'), false,
+    'manual model refresh must keep the active settings section open');
+assert.equal([...modelSection.querySelectorAll('.agent-chat-setting-field')]
+    .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent === '模型')
+    ?.querySelector('select')?.options[0]?.value, 'gpt-5.6-refresh',
+    'manual refresh must install the returned model catalog');
 openSettingsSection('prompt');
 const promptEditor = host.querySelector('.agent-chat-settings-pane textarea:not([readonly])');
 assert.equal(promptEditor?.value, '{{Nova}}',
@@ -1742,6 +1792,7 @@ assert.equal(promptEditor?.value, '{{Nova}}',
 
 dispose();
 assert.equal(unsubscribeCalls, 1, 'Workbench unmount must release runtime event subscription');
+assert.equal(modelUnsubscribeCalls, 1, 'Workbench unmount must release model update subscription');
 assert.deepEqual(presenceCalls, [true, false]);
 assert.equal(host.childElementCount, 0);
 assert.equal(document.body.style.getPropertyValue('--agent-chat-sidebar-width'), '',

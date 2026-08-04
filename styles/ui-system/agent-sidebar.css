@@ -672,6 +672,16 @@
         transition: max-height 0.28s ease, opacity 0.22s ease, padding 0.22s ease;
     }
 
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-settings-section:not(.collapsed) .agent-settings-section-content {
+        overflow: visible;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-settings-section-content > .agent-settings-card-shell {
+        display: grid;
+        gap: var(--vcp-ui-space-2);
+        padding: 2px 0 4px;
+    }
+
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-settings-section.collapsed .agent-settings-section-content {
         display: block;
         max-height: 0;
@@ -907,6 +917,23 @@
         color: var(--vcp-ui-text-2);
         font-size: var(--vcp-ui-font-caption);
         line-height: 1.45;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-model-actions {
+        display: grid;
+        align-items: start;
+        justify-items: start;
+        gap: var(--vcp-ui-space-2);
+        min-width: 0;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-model-status {
+        min-width: 0;
+        margin: 0;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-model-refresh {
+        flex: 0 0 auto;
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-settings-save {

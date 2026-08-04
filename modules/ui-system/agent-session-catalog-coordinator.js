@@ -145,6 +145,8 @@ function createAgentSessionCatalogCoordinator({
     controller,
     listAgentProfiles,
     getCachedModels,
+    refreshModels,
+    onModelsUpdated,
     queueRender,
     syncPermissionModeFromSelectedSession,
     syncModelFromSelectedSession,
@@ -157,6 +159,52 @@ function createAgentSessionCatalogCoordinator({
     let controlPlaneRequest = 0;
     let topicCatalogRequest = 0;
     let disposed = false;
+    let unsubscribeModels = null;
+
+    function applyModelCatalog(models, errorMessage = '') {
+        if (disposed || state.disposed) return [];
+        const catalog = modelCatalogProjection(models);
+        state.modelCatalog = catalog;
+        state.modelCatalogLoading = false;
+        state.modelCatalogError = catalog.length ? '' : errorMessage;
+        if (!state.modelDraft && !state.model) state.model = catalog[0]?.id || '';
+        queueRender({ shell: true, header: true, composer: true });
+        return catalog;
+    }
+
+    function subscribeModelCatalog() {
+        if (unsubscribeModels || typeof onModelsUpdated !== 'function') return;
+        try {
+            unsubscribeModels = onModelsUpdated((models) => {
+                applyModelCatalog(models, '模型服务暂不可用，可直接填写模型名称。');
+            });
+        } catch {
+            unsubscribeModels = null;
+        }
+    }
+
+    async function refreshModelCatalog() {
+        if (disposed || state.disposed) return { success: false, models: [] };
+        state.modelCatalogLoading = true;
+        state.modelCatalogError = '';
+        queueRender({ shell: true, header: true, composer: true });
+        try {
+            const result = await refreshModels();
+            const models = Array.isArray(result) ? result : result?.models;
+            const catalog = applyModelCatalog(models,
+                result?.success === false ? '模型服务暂不可用，可直接填写模型名称。' : '没有可用模型，可直接填写模型名称。');
+            return { ...result, success: result?.success !== false && catalog.length > 0, models: catalog };
+        } catch (error) {
+            if (!disposed && !state.disposed) {
+                state.modelCatalogLoading = false;
+                state.modelCatalogError = error?.message || '模型列表刷新失败，可直接填写模型名称。';
+                queueRender({ shell: true, header: true, composer: true });
+            }
+            throw error;
+        }
+    }
+
+    subscribeModelCatalog();
 
     function selectedAgentProfile() {
         return state.agentCatalog.find((agent) => sameAgent(agent.id || agent.name, state.selectedAgent)) || null;
@@ -224,9 +272,7 @@ function createAgentSessionCatalogCoordinator({
 
         void optional(getCachedModels).then((models) => {
             if (!controlPlaneCurrent(disposed, state, request, controlPlaneRequest, selectedAgentId)) return;
-            state.modelCatalog = modelCatalogProjection(models);
-            if (!state.modelDraft && !state.model) state.model = state.modelCatalog[0]?.id || '';
-            queueRender({ shell: true, header: true, composer: true });
+            applyModelCatalog(models, '模型服务暂不可用，可直接填写模型名称。');
         });
 
         const [topics, queue, workbenchSettings] = await Promise.all([
@@ -246,6 +292,8 @@ function createAgentSessionCatalogCoordinator({
         disposed = true;
         controlPlaneRequest += 1;
         topicCatalogRequest += 1;
+        if (typeof unsubscribeModels === 'function') unsubscribeModels();
+        unsubscribeModels = null;
     }
 
     return Object.freeze({
@@ -254,6 +302,7 @@ function createAgentSessionCatalogCoordinator({
         selectAgent,
         refreshTopicsForAgent,
         refreshControlPlane,
+        refreshModelCatalog,
         dispose,
     });
 }

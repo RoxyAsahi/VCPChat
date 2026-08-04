@@ -299,6 +299,8 @@ function createWorkbenchCommandController(context) {
         workspaceCancel: (payload) => requireApi('agentWorkspaceCancel')(payload),
         listAgentProfiles: () => requireApi('agentRuntimeListAgentProfiles')(),
         getCachedModels: () => requireApi('getCachedModels')(),
+        refreshModels: () => requireApi('refreshModels')(),
+        onModelsUpdated: (callback) => requireApi('onModelsUpdated')(callback),
         saveAgentProfile: (payload) => requireApi('agentRuntimeSaveAgentProfile')(payload),
         saveAgentAvatar: (payload) => requireApi('agentRuntimeSaveAgentAvatar')(payload),
         openExternal: (url) => requireApi('sendOpenExternalLink')(url),
