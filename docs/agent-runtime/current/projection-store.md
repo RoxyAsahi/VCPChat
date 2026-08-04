@@ -104,7 +104,7 @@ Item 建立后按 identity 回放，超时则记录 projection error 并调度 `
 4. Main 按 `turnId/itemId` 对账。
 5. 仅更新变化的 Message/Block，不重建 sidebar/header/composer。
 
-当前兼容 API 仍使用部分 Topic 命名；语义已经是 VChat Session。后续必须清理 IPC/UI 命名，但不得因此改变数据权威。
+产品 API 与 UI 均使用 canonical Session 命名。旧 Topic IPC/preload/Runtime adapter 已物理删除；数据权威仍由 VChat Session、Codex Thread 与 Projection revision 共同约束。
 
 ## Reconcile
 

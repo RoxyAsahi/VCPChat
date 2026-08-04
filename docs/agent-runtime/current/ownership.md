@@ -22,10 +22,10 @@ Status: **implemented**
 | Agent Workbench private composition | `modules/ui-system/agent-workbench-implementation.js`, `agent-workbench-clients.js` | Main-process persistence or transport ownership |
 | Agent Workbench Views | `agent-workbench-*-view.js`, `agent-session-dock-view.js`, `agent-notification-view.js`, `agent-approval-view.js`, `agent-workspace-view.js` | preload/Runtime calls, Projection writes, cross-Session identity inference |
 | Agent Session catalog | `agent-session-catalog-coordinator.js` | stale Agent catalog replacing a newer selection, transcript/Dock ownership |
-| Agent Topic menu | `agent-topic-context-menu-view.js` | Runtime/preload calls, unowned document listeners, stale focus microtasks |
+| Agent Session menu | `agent-session-context-menu-view.js` | Runtime/preload calls, unowned document listeners, stale focus microtasks |
 | Agent Renderer instance lifecycle | `modules/ui-system/agent-presentation/fork/`, `agent-renderer-lifecycle.js` | initialization/disposal of main-chat mutable renderer singletons |
 | Agent Renderer LaTeX preprocessing | `agent-renderer-latex.js` | DOM access, global cache, Renderer Session state |
-| Legacy Agent Runtime archive | `archive/agent-runtime/` | product imports, default CI, or packaged sources |
+| Retired Agent implementations | Git history and `docs/agent-runtime/history/` only | executable Pi/Rust Agent/Grok/TUI source, package scripts, workflows, or packaged sources |
 | Agent CSS entry and owners | `styles/ui-system/agent-workbench.css`, `agent-{shell,sidebar,composer,timeline,session-dock,workspace,activity,responsive,legacy-shell-adapter}.css` | direct rules in the entry, arbitrary import order, cross-page selectors outside legacy adapter |
 | Agent JavaScript lint and complexity baseline | `eslint.agent.config.mjs`, `lint:agent`, `check:codex-governance` | canonical host code outside lint coverage, complexity ceiling increases, inline disables replacing module extraction |
 | Runtime lifecycle ordering | `runtime-host-service.js`, `runtime-lifecycle-service.js` | Repository close before approval/waiter cleanup, old-generation UI/SQLite/transport writes |
@@ -33,7 +33,6 @@ Status: **implemented**
 | Runtime external authority | Turn, Config, Host, Interaction, ToolBox and Recovery services using `RuntimeOperationContext` | old-generation UI/SQLite writes, use of replacement Bridge/Transport, deletion of a replacement dynamic call |
 | Runtime service dependency tables | frozen `RuntimeServiceContext` in each `runtime-*-service.js` | replacing service dependency functions after construction, capturing stale Repository/transport values across awaits |
 | Workbench presence and approval closure | `runtime-interaction-service.js` | Manager-owned approval cleanup, closing a panel implicitly allowing an approval |
-| Deprecated Runtime Topic methods | `runtime-topic-compatibility.js` only | canonical service graph or Workbench delegation through Topic-named methods |
 | Workbench host API boundary | Session/Projection/Interaction/Workspace clients, `agent-runtime-event-subscription.js` | direct preload calls from Views, coordinators, command controller, or presentation |
 | Workbench selection identity | `SelectedSessionIdentity`, keyed by `selectedSessionId` | fallback to cached Topic/Session display snapshots or cross-Session action routing |
 | Workbench local state owners | `ComposerStateBySession`, `SessionDockModel`, `WorkspaceViewState`, `SidebarViewState` | duplicate Session/Runtime/message truth or state shared across Session identity |

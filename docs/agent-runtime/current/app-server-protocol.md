@@ -204,7 +204,7 @@ Codex 自带模型级 system prompt，例如 `core/gpt_5_codex_prompt.md` 以
   `baseInstructions`，而不是 `developerInstructions`——否则它只会被追加、压在内置模板之下，
   仍回 Codex 自述。显式 `baseInstructions` 优先于 `systemPrompt`；显式
   `developerInstructions` 保留为独立的追加提示。
-- workbench `createSession`/`createTopic` 只传 Agent identity；Main 从 Profile 冻结完整配置。旧 `systemPrompt` 是 `baseInstructions` 的兼容别名。
+- Workbench `agentSessionCreate` 只传 Agent identity；Main 从 Profile 冻结完整配置。Profile 文件中的 `systemPrompt` 由配置 descriptor 规范化为 `baseInstructions`。
 - `thread/start` 与 `thread/resume` 都透传 `baseInstructions`，`thread/fork` 继承源
   Thread，无需重传。
 - VChat 的 Nova/ToolBox Session 使用 `executionProfile=toolbox-only`。新 Thread 固定请求

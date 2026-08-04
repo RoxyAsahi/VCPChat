@@ -49,7 +49,7 @@ VChat Session (sessionId)
 
 ### Electron 启动
 
-1. Main 注册窄 IPC，但不立即读取旧 Rust Topics。
+1. Main 注册窄 Session IPC，但不启动 App Server；旧 Rust Topic 不存在导入或自动迁移入口。
 2. 首次 projection-only 请求时打开 Projection SQLite；列表和历史不启动 App Server。
 3. 首次 runtime-required 操作（通常是发送）才解析 Codex executable 并启动 App Server。
 4. 完成 `initialize -> initialized`，验证能力；首次发送随后 resume 目标 Thread。
