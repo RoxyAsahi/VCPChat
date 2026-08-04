@@ -6,88 +6,119 @@ function blockIdentity(sessionId, block = {}) {
     return `${prefix}${block.itemId || block.messageId || 'unknown'}:${Number.isInteger(block.ordinal) ? block.ordinal : 0}`;
 }
 
+function reasoningContent(block = {}) {
+    const summary = Array.isArray(block.content?.summary) ? block.content.summary : [];
+    const legacySummary = summary.length ? summary
+        : block.content?.text ? [String(block.content.text)] : [];
+    return {
+        summary: block.schemaVersion === 2 ? summary : legacySummary,
+        content: Array.isArray(block.content?.content) ? block.content.content : [],
+    };
+}
+
+function blockContent(block = {}) {
+    if (block.kind === 'reasoning') return reasoningContent(block);
+    if (block.content && typeof block.content === 'object') return block.content;
+    return { text: String(block.content || '') };
+}
+
+function finiteNumber(value, fallback = 0) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : fallback;
+}
+
+function blockCallId(source, itemType, itemId) {
+    if (source.callId) return source.callId;
+    return itemType === 'dynamicToolCall' ? itemId : undefined;
+}
+
 function normalizeBlock(sessionId, threadId, message, block) {
-    const itemType = block?.itemType || block?.content?.item?.type || block?.content?.unknown?.type || null;
-    const content = block?.kind === 'reasoning'
-        ? {
-            summary: block.schemaVersion === 2 && Array.isArray(block.content?.summary)
-                ? block.content.summary
-                : Array.isArray(block.content?.summary) && block.content.summary.length
-                    ? block.content.summary : block.content?.text ? [String(block.content.text)] : [],
-            content: Array.isArray(block.content?.content) ? block.content.content : [],
-        }
-        : (block.content && typeof block.content === 'object' ? block.content : { text: String(block.content || '') });
+    const source = block || {};
+    const parent = message || {};
+    const itemType = source.itemType || source.content?.item?.type || source.content?.unknown?.type || null;
+    const itemId = source.itemId || parent.itemId || null;
+    const messageId = source.messageId || parent.messageId || null;
+    const now = Date.now();
     return {
         schemaVersion: 2,
         blockId: blockIdentity(sessionId, {
-            ...block,
-            itemId: block.itemId || message?.itemId,
-            messageId: block.messageId || message?.messageId,
+            ...source, itemId, messageId,
         }),
         sessionId,
-        threadId: threadId || message?.threadId || null,
-        turnId: block.turnId || message?.turnId || null,
-        itemId: block.itemId || message?.itemId || null,
-        messageId: block.messageId || message?.messageId || null,
-        callId: block.callId || (itemType === 'dynamicToolCall' ? (block.itemId || message?.itemId) : undefined),
-        kind: block.kind || 'message',
+        threadId: threadId || parent.threadId || null,
+        turnId: source.turnId || parent.turnId || null,
+        itemId,
+        messageId,
+        callId: blockCallId(source, itemType, itemId),
+        kind: source.kind || 'message',
         itemType,
-        authority: block.authority || 'codex',
-        status: block.status || message?.status || 'inProgress',
-        sourceOrder: Number.isFinite(Number(block.sourceOrder ?? message?.sourceOrder)) ? Number(block.sourceOrder ?? message.sourceOrder) : 0,
-        ordinal: Number.isInteger(block.ordinal) ? block.ordinal : 0,
-        content,
-        createdAt: block.createdAt || message?.createdAt || Date.now(),
-        updatedAt: block.updatedAt || message?.updatedAt || Date.now(),
+        authority: source.authority || 'codex',
+        status: source.status || parent.status || 'inProgress',
+        sourceOrder: finiteNumber(source.sourceOrder ?? parent.sourceOrder),
+        ordinal: Number.isInteger(source.ordinal) ? source.ordinal : 0,
+        content: blockContent(source),
+        createdAt: source.createdAt || parent.createdAt || now,
+        updatedAt: source.updatedAt || parent.updatedAt || now,
     };
+}
+
+function snapshotBlocks(snapshot, sessionId, threadId) {
+    const result = [];
+    for (const message of Array.isArray(snapshot.messages) ? snapshot.messages : []) {
+        for (const block of Array.isArray(message.blocks) ? message.blocks : []) {
+            result.push(normalizeBlock(sessionId, threadId, message, block));
+        }
+    }
+    return result;
+}
+
+function historyText(entry = {}) {
+    if (typeof entry.content === 'string') return entry.content;
+    if (!Array.isArray(entry.content)) return '';
+    return entry.content.map((part) => part?.text || '').join('');
+}
+
+function historyBlock(sessionId, threadId, entry, index) {
+    const itemId = String(entry.itemId || entry.toolCallId || entry.id || `legacy:${index}`);
+    const messageId = String(entry.messageId || entry.id || `msg:${sessionId}:${itemId}`);
+    const sourceOrder = finiteNumber(entry.snapshotOrdinal, index);
+    const status = entry.state || 'completed';
+    const message = {
+        messageId, itemId, turnId: entry.turnId || null, status, sourceOrder,
+        createdAt: entry.createdAt || entry.timestamp || 0,
+    };
+    if (entry.role !== 'tool') {
+        const text = historyText(entry);
+        const content = entry.role === 'user' ? { parts: [{ type: 'text', text }] } : { text };
+        return normalizeBlock(sessionId, threadId, message, {
+            kind: 'message', ordinal: 0, status, sourceOrder, content,
+        });
+    }
+    const payload = entry.payload && typeof entry.payload === 'object' ? entry.payload : {};
+    return normalizeBlock(sessionId, threadId, message, {
+        kind: 'tool', itemType: 'dynamicToolCall', ordinal: 0, authority: 'toolbox', status, sourceOrder,
+        content: {
+            ...payload,
+            item: { id: itemId, type: 'dynamicToolCall', tool: entry.toolName || payload.toolName || 'vcp_invoke' },
+        },
+    });
+}
+
+function historyBlocks(snapshot, sessionId, threadId) {
+    if (!Array.isArray(snapshot.history)) return [];
+    return snapshot.history.map((entry, index) => historyBlock(sessionId, threadId, entry, index));
 }
 
 function projectionToNormalized(snapshot = {}) {
     const sessionId = String(snapshot.session?.sessionId || snapshot.sessionId || '');
     const threadId = snapshot.session?.threadId || snapshot.threadId || null;
-    const blocks = [];
-    for (const message of Array.isArray(snapshot.messages) ? snapshot.messages : []) {
-        for (const block of Array.isArray(message.blocks) ? message.blocks : []) {
-            blocks.push(normalizeBlock(sessionId, threadId, message, block));
-        }
-    }
-    if (!blocks.length && Array.isArray(snapshot.history)) {
-        for (const [index, entry] of snapshot.history.entries()) {
-            const itemId = String(entry.itemId || entry.toolCallId || entry.id || `legacy:${index}`);
-            const messageId = String(entry.messageId || entry.id || `msg:${sessionId}:${itemId}`);
-            const sourceOrder = Number.isFinite(Number(entry.snapshotOrdinal)) ? Number(entry.snapshotOrdinal) : index;
-            if (entry.role === 'tool') {
-                blocks.push(normalizeBlock(sessionId, threadId, {
-                    messageId, itemId, turnId: entry.turnId || null, status: entry.state || 'completed', sourceOrder,
-                    createdAt: entry.createdAt || entry.timestamp || 0,
-                }, {
-                    blockId: `block:${sessionId}:${itemId}:0`, kind: 'tool', itemType: 'dynamicToolCall', ordinal: 0,
-                    authority: 'toolbox', status: entry.state || 'completed', sourceOrder,
-                    content: {
-                        ...(entry.payload && typeof entry.payload === 'object' ? entry.payload : {}),
-                        item: { id: itemId, type: 'dynamicToolCall', tool: entry.toolName || entry.payload?.toolName || 'vcp_invoke' },
-                    },
-                }));
-            } else {
-                const text = typeof entry.content === 'string' ? entry.content
-                    : Array.isArray(entry.content) ? entry.content.map((part) => part?.text || '').join('') : '';
-                blocks.push(normalizeBlock(sessionId, threadId, {
-                    messageId, itemId, turnId: entry.turnId || null, status: entry.state || 'completed', sourceOrder,
-                    createdAt: entry.createdAt || entry.timestamp || 0,
-                }, {
-                    blockId: `block:${sessionId}:${itemId}:0`, kind: 'message', ordinal: 0,
-                    status: entry.state || 'completed', sourceOrder,
-                    content: entry.role === 'user' ? { parts: [{ type: 'text', text }] } : { text },
-                }));
-            }
-        }
-    }
+    const projected = snapshotBlocks(snapshot, sessionId, threadId);
     return {
         schemaVersion: 2,
         sessionId,
         threadId,
         projectionRevision: Number(snapshot.projectionRevision || snapshot.projection?.mutationGeneration || 0),
-        blocks,
+        blocks: projected.length ? projected : historyBlocks(snapshot, sessionId, threadId),
     };
 }
 
