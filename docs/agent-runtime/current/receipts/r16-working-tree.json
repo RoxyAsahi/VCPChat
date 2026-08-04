@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "scope": "R16 Codex 0.146 adapter invariants and Projection V2 single-model Renderer",
+  "status": "implemented/working-tree",
+  "functionalRevisions": [
+    "1b05b7d3",
+    "d4b1f7b8",
+    "7f171a54",
+    "a16c74c1",
+    "0cc1b065",
+    "b5ef8d2e",
+    "b40612ca"
+  ],
+  "passed": [
+    "npm run test:codex-projection-v2",
+    "npm run test:codex-adapter-invariants",
+    "npm run test:codex-native",
+    "npm run test:codex-reliability",
+    "npm run check:codex-schema",
+    "npm run check:agent-runtime",
+    "npm run test:electron-codex-recovery",
+    "node scripts/test-agent-workbench.mjs",
+    "git diff --check"
+  ],
+  "blocked": {
+    "npm run check:codex-governance": [
+      "agent-sidebar.css exceeds existing owner ceiling",
+      "agent-workbench-implementation.js exceeds existing composition ceiling",
+      "agent-workbench-controller-implementation.js exceeds existing controller ceiling",
+      "projection/repository.js exceeds existing module ceiling",
+      "two existing timer registrations are not registered with lifecycle governance"
+    ],
+    "npm run test:electron-codex-smoke": "timed out in the pre-existing settings Select helper before Projection assertions",
+    "electronSessionSwitch": "recovery projection isolation/reload passed; explicit interactive A-to-B-to-A smoke remains pending",
+    "liveToolBox": "not run on the documentation commit"
+  },
+  "claims": {
+    "sqliteSchema": 11,
+    "blockContentSchema": 2,
+    "rendererPatchOnly": true,
+    "liveVerified": false,
+    "productComplete": false
+  }
+}

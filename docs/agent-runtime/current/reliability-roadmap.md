@@ -111,3 +111,17 @@ injection proves that a crash after `thread/start` or `thread/fork` ACK does not
 | VCP tools and backend approval | VCPToolBox through the bridge |
 | Selected view | Renderer `selectedSessionId` |
 | Runtime activity | Main `activeRuntimes` projection |
+
+## R16 Codex 0.146 Adapter 与 Projection V2（implemented / working-tree）
+
+- `thread/status/changed(idle)` 不再提前结束 active Turn；只有匹配的 `turn/completed` 最终收口。
+- settings apply 保存 target revision/generation/规范字段，只有匹配 `thread/settings/updated` 才确认；发送 barrier 不再被无关通知解除。
+- reconcile 校验 Thread ID 与 `itemsView`；partial history 不能删除，ToolBox/VChat authority 始终保留。
+- reasoning 使用独立 `summary[]/content[]`，Unknown Item 有界脱敏，delta-before-Item 使用 Main-only 有界缓冲。
+- Renderer 统一为 `sessionsById/blocksById/projectionRevisions`，Main 只发 revision Patch；A→B→A 与 revision-gap 均由同一 SQLite Projection 恢复。
+- 0.146 fork 返回的 `thread.sessionId` 若存在必须等于新 Thread ID；版本升级必须重新验证，不能沿用该假设。
+
+Hermetic 已通过 `test:codex-projection-v2` 与 `test:codex-adapter-invariants`。完整 governance 当前仍被既有
+CSS/composition/repository 行数和 timer registration 基线阻止。Electron recovery 已通过 projection isolation、
+reload 和 demand restart；完整 smoke 在设置 Select helper 超时，交互式 A→B→A 与 live ToolBox 仍未完成，
+因此不得升级为 live/product。

@@ -426,6 +426,23 @@ Electron 真实点击与完整 Main 进程重启已通过；真实 ToolBox provi
 - Workbench acceptance must additionally prove message-card interrupt passes `part.turnId`, retry starting hides active-turn controls, and stale `turn/completed` cannot clear another Session's running state.
 - Real App Server gate: dual-Session cancel isolation 已于 2026-08-04 通过；仍需长 Turn steer、两条相同文本 follow-up 串行 drain、confirmed interrupted completion 的独立收据后，才能关闭 R15 live 门槛。
 
+## R16 Projection V2 gates
+
+| Gate | Command | Status |
+| --- | --- | --- |
+| SQLite V2 normalization/reconcile + Renderer normalized Store | `npm run test:codex-projection-v2` | committed pass |
+| 0.146 Host/Turn/Manager invariants | `npm run test:codex-adapter-invariants` | committed pass |
+| Patch-only Workbench JSDOM | `npm run test:agent-workbench` | committed pass |
+| Schema pin | `npm run check:codex-schema` | pending broad rerun |
+| Static governance | `npm run check:codex-governance` | blocked by pre-existing line/timer baseline; R16-specific scans executed |
+| Electron crash/reload recovery | `npm run test:electron-codex-recovery` | committed pass |
+| Electron interactive A→B→A / full smoke | Session-switch smoke + `npm run test:electron-codex-smoke` | pending; smoke timed out in existing settings Select helper before Projection assertions |
+| Live ToolBox long tool call | manual `VCP_CODEX_LIVE=1` gates | pending |
+
+R16 assertions include idle-before-completed, matched settings confirmation, Thread/`itemsView` fail-closed,
+reasoning summary/content isolation, Unknown/delta-before-Item behavior, Toolbox authority preservation, fork Item ID isolation,
+background Session Patch isolation, A→B→A synchronous restoration, and revision-gap full SQLite reload.
+
 - `npm run test:agent-renderer-isolation`: Agent mount/dispose does not mutate main-chat image or visibility ownership.
 - `npm run test:agent-renderer-lifecycle`: listeners, timers, intervals, and RAF registrations are disposed idempotently.
 - `npm run test:agent-workbench-clients`: Renderer calls stay inside Session, Projection, Interaction, and Workspace client groups.

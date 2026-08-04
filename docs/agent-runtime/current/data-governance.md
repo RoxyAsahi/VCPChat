@@ -41,3 +41,19 @@ npm run test:agent-data-contracts
 ```
 
 2026-08-03 已形成真实 Electron 收据：设置 UI 的 YOLO/cwd 不回跳并持久化，且独立两阶段测试在完整 Electron Main 进程重启后恢复 Session、YOLO、模型和 workspace。同日真实 ToolBox 下一 Turn gate 已验证 model/cwd/approval/effort 及 desired/applied revision。指令模式切换和 ToolBox backend approval 尚未形成 live 收据，因此当前仍不是 `product`。
+
+## R16 Projection 单模型治理
+
+- Main SQLite 是所有实时、冷启动、Session 切换和 reconcile 的唯一持久展示入口。
+- Main 到 Renderer 只允许 `AgentProjectionPatch`；旧 `projectionMessage` Renderer 路径已删除。
+- Renderer 的跨 Session 数据只允许 `sessionsById`、`blocksById`、`projectionRevisions`；当前
+  `messages/tools` 是即时派生的选中会话渲染形状，不得作为恢复或后台 Session 缓存。
+- Patch 必须通过 schema、Session、Thread、Block prefix 和 revision 连续性校验。任何失败均完整读取 SQLite，
+  不猜测缺失增量。
+- `thread/read` 的删除权威同时受 Thread identity 与 `itemsView=full` 约束；ToolBox/VChat authority 永不因
+  Codex snapshot 缺失而删除。
+- Unknown Item、delta-before-Item 和旧 Block schema 都有有界适配；原始协议 Item 不进入 Renderer。
+
+机器门槛：`npm run test:codex-projection-v2`、`npm run test:codex-adapter-invariants`、
+`npm run check:codex-governance`。Electron Session-switch 与 live ToolBox 尚未在同一提交形成收据，R16 状态保持
+`implemented/working-tree`。`test:electron-codex-recovery` 已通过；完整 smoke 在设置页 Select helper 超时，尚未进入 Projection 断言。

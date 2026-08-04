@@ -76,14 +76,25 @@ item/started
 item/*/delta
   -> locate by sessionId + itemId + ordinal
   -> append/update block in transaction
-  -> emit projectionMessage patch
+  -> emit revision-based AgentProjectionPatch
 
 item/completed
   -> replace authoritative final item content/status
   -> emit final patch
 ```
 
-重复 `item/started` 或 `item/completed` 必须幂等。delta 到达但 Item 不存在时不能猜测 identity；应记录 projection error，并由下一次 `thread/read` 修复。
+重复 `item/started` 或 `item/completed` 必须幂等。delta 先于 Item 到达时进入 Main-only 有界缓冲；
+Item 建立后按 identity 回放，超时则记录 projection error 并调度 `thread/read`，Renderer 不持有该缓冲。
+
+## Projection V2 合同
+
+- SQLite schema 继续固定为 11；Block content/Renderer API 升为 schema 2。
+- `blockId = sessionId + itemId + ordinal`，fork Session 即使复用相同 Codex Item ID 也不共享 Block。
+- reasoning 只有一个 Block，内容为 `{ summary: string[], content: string[] }`；两个索引空间互不覆盖。
+- 已知 Item 进入专用、限长 normalizer。Unknown Item 只保存脱敏 fallback 和协议诊断，不保存 raw Item。
+- Main 在 SQLite 事务提交后发 Patch；`projectionRevision` 使用 SQLite mutation generation，不能与 Runtime generation 混用。
+- Renderer 仅在 base revision 精确匹配时应用 Patch。跳号、旧 Patch、Thread identity 冲突或外来 Block 均 fail-closed，并触发完整 SQLite reload。
+- `sessionsById + blocksById + projectionRevisions` 是跨 Session 唯一投影真相。顶层 `messages/tools` 仅是当前选中 Session 的派生渲染兼容视图，不缓存其他 Session，也不接收 Main 的旧 message patch。
 
 ## 打开 Session
 
@@ -103,6 +114,7 @@ item/completed
 - 重复 Item 不产生重复 Message。
 - `thread/read(includeTurns: true)` 未返回的 Codex-owned Item 会被事务删除；若同一 Message 还包含
   VChat/ToolBox-owned Block，则保留 Message 和本地 Block，仅删除其中 Codex-owned Block。
+- 删除规则还要求返回 Thread identity 匹配且所有 Turn 为 `itemsView=full`；partial history 一律 upsert-only。
 - 显式空字符串、空数组和 `null` 可以清除旧 Codex 字段；协议未返回的可选字段保留 live event 内容。
 - 对账期间收到 live delta 时，通过 barrier/generation 避免旧 snapshot 覆盖新 delta。
 - 成功后清空 `last_error` 并记录时间。

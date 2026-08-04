@@ -264,6 +264,19 @@ R12 当前状态只能是 `implemented/working-tree`，不得复用 R7-R10 live 
 
 R13 当前状态为 `implemented/working-tree`；代码治理目标已实现，但产品级多分辨率截图、20 文件 Tab、长流滚动和 live backend approval 仍属于 GUI-R6/R6，不因治理完成而自动升级为 product。
 
+## R16 Projection 单模型与适配可靠性
+
+- [x] 0.146 idle-before-completed、settings confirmation、Thread identity、partial `itemsView` 和 fork Session identity 已固化。
+- [x] Projection V2 Block、reasoning 双数组、Unknown fallback、delta buffer 和精确 reconcile Patch 已实现。
+- [x] Renderer normalized Store、Patch revision gate、后台 Session 更新、A→B→A 恢复和 revision-gap SQLite reload 已实现。
+- [x] 旧 `sessionSnapshots`、`snapshotCache`、`liveProjectionRevision` 与 Renderer `projectionMessage` 路径已删除并加入治理扫描。
+- [x] 新增 `test:codex-projection-v2` 与 `test:codex-adapter-invariants` 聚合门槛。
+- [x] Electron recovery 已验证双 Session projection isolation、Renderer reload、crash 后 SQLite 可读和按需重启。
+- [ ] 交互式 A→B→A smoke 与真实 ToolBox 长调用仍待；完整 smoke 当前先被设置页 Select 超时阻止。
+- [ ] 既有 governance 文件体积/timer registration 基线需单独治理后，才能形成全绿 R16 收据。
+
+状态：`implemented/working-tree`。SQLite database schema 保持 11，Block/Renderer contract 为 V2。
+
 - [x] R7: Agent Profile/Session snapshot、CAS、projection-only IPC、ToolBox latest-wins 与 Session-keyed Renderer state。
 - [x] R8: Runtime generation、InteractionRegistry 有界清理、按需重启、持久输入状态机与 pre-RPC/ACK crash fault injection。
 - [x] R9: 权威 reconcile、mutation generation barrier、Saga 日志、known-Thread lifecycle recovery、SQLite integrity/backup/read-only degraded。
