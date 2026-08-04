@@ -55,7 +55,8 @@ function waitForCompletedTurn(runtime, session, diagnostics, timeoutMs = 120_000
             if (event?.method === 'turn/completed') {
                 clearTimeout(timeout);
                 runtime.off('event', onEvent);
-                assert.equal(event.turnStatus, 'completed');
+                assert.equal(event.turnStatus, 'completed',
+                    `live ToolBox Turn failed; diagnostics=${JSON.stringify(diagnostics)}`);
                 resolve(event);
             }
         };

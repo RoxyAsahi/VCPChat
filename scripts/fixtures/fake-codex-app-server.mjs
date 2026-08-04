@@ -29,6 +29,72 @@ function rpcError(id, message) {
     send({ id, error: { code: -32000, message } });
 }
 
+function inputText(input) {
+    return (Array.isArray(input) ? input : [])
+        .map((part) => String(part?.text || ''))
+        .filter(Boolean)
+        .join('\n');
+}
+
+function projectionItems(turnId, prompt) {
+    const safePrompt = String(prompt || 'fixture turn').slice(0, 1_000);
+    return {
+        reasoning: {
+            id: `reasoning-${turnId}`,
+            type: 'reasoning',
+            status: 'completed',
+            summary: [`reasoning-summary:${safePrompt}`],
+            content: [`reasoning-content:${safePrompt}`],
+        },
+        tool: {
+            id: `tool-${turnId}`,
+            type: 'dynamicToolCall',
+            status: 'completed',
+            tool: 'vcp_invoke',
+            arguments: {
+                tool: 'FileOperator',
+                arguments: { command: 'ReadFile', filePath: `${safePrompt}.txt` },
+            },
+            contentItems: [{ type: 'inputText', text: `tool-result:${safePrompt}` }],
+            success: true,
+        },
+        assistant: {
+            id: `assistant-${turnId}`,
+            type: 'agentMessage',
+            status: 'completed',
+            text: `assistant-result:${safePrompt}`,
+        },
+    };
+}
+
+function emitProjectionLifecycle(thread, turnId, items) {
+    const common = { threadId: thread.id, turnId };
+    send({ method: 'item/started', params: { ...common, item: { ...items.reasoning, status: 'inProgress', summary: [], content: [] } } });
+    send({ method: 'item/reasoning/summaryPartAdded', params: {
+        threadId: thread.id, itemId: items.reasoning.id, summaryIndex: 0,
+    } });
+    send({ method: 'item/reasoning/summaryTextDelta', params: {
+        threadId: thread.id, itemId: items.reasoning.id, summaryIndex: 0, delta: items.reasoning.summary[0],
+    } });
+    send({ method: 'item/reasoning/textDelta', params: {
+        threadId: thread.id, itemId: items.reasoning.id, contentIndex: 0, delta: items.reasoning.content[0],
+    } });
+    send({ method: 'item/completed', params: { ...common, item: items.reasoning } });
+
+    send({ method: 'item/started', params: { ...common, item: { ...items.tool, status: 'inProgress', contentItems: [] } } });
+    send({ method: 'item/tool/call', params: {
+        ...common, itemId: items.tool.id, callId: items.tool.id,
+        tool: items.tool.tool, arguments: items.tool.arguments,
+    } });
+    send({ method: 'item/completed', params: { ...common, item: items.tool } });
+
+    send({ method: 'item/started', params: { ...common, item: { ...items.assistant, status: 'inProgress', text: '' } } });
+    send({ method: 'item/agentMessage/delta', params: {
+        threadId: thread.id, itemId: items.assistant.id, delta: items.assistant.text,
+    } });
+    send({ method: 'item/completed', params: { ...common, item: items.assistant } });
+}
+
 const state = loadState();
 state.starts += 1;
 saveState(state);
@@ -134,10 +200,12 @@ input.on('line', (line) => {
             status: 'completed',
             content: Array.isArray(params.input) ? params.input : [],
         };
+        const items = projectionItems(turnId, inputText(params.input));
         thread.turns.push({
             id: turnId,
             status: 'inProgress',
-            items: [userItem],
+            itemsView: 'full',
+            items: [userItem, items.reasoning, items.tool, items.assistant],
         });
         thread.status = { type: 'active' };
         state.turnStarts += 1;
@@ -146,6 +214,7 @@ input.on('line', (line) => {
         send({ method: 'turn/started', params: { threadId: thread.id, turn: { id: turnId, status: 'inProgress' } } });
         send({ method: 'item/started', params: { threadId: thread.id, turnId, item: userItem } });
         send({ method: 'item/completed', params: { threadId: thread.id, turnId, item: userItem } });
+        emitProjectionLifecycle(thread, turnId, items);
         send({
             id: `interaction-${turnId}`,
             method: 'item/tool/requestUserInput',

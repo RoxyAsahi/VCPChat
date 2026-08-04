@@ -337,6 +337,7 @@ const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 
 for (const script of [
     'test:codex-reliability', 'test:electron-codex-recovery', 'check:codex-governance', 'test:codex-ci',
     'test:codex-projection-v2', 'test:codex-adapter-invariants', 'test:agent-normalized-store',
+    'test:electron-codex-session-switch',
 ]) {
     if (!packageJson.scripts?.[script]) errors.push(`package.json missing ${script}`);
 }

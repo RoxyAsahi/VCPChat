@@ -13,6 +13,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const electron = path.join(root, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron');
 const fixture = path.join(root, 'scripts', 'fixtures', 'fake-codex-app-server.mjs');
 const timeoutMs = 45_000;
+const startupTimeoutMs = 90_000;
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 function withTimeout(promise, label, milliseconds = timeoutMs) {
@@ -56,8 +57,8 @@ function requestJson(url) {
     });
 }
 
-async function waitFor(predicate, message) {
-    const deadline = Date.now() + timeoutMs;
+async function waitFor(predicate, message, milliseconds = timeoutMs) {
+    const deadline = Date.now() + milliseconds;
     while (Date.now() < deadline) {
         const remaining = deadline - Date.now();
         let result;
@@ -71,6 +72,57 @@ async function waitFor(predicate, message) {
         await sleep(100);
     }
     throw new Error(message);
+}
+
+async function openAgentWorkbench(page) {
+    await page.waitForFunction(() => Boolean(window.nextUiApps?.get?.('agent-workbench')), { timeout: timeoutMs });
+    if (await page.$('#nextUiInternalAppHost .agent-workbench-root')) return;
+    await page.waitForSelector('#nextUiAddTabBtn', { visible: true, timeout: timeoutMs });
+    await page.click('#nextUiAddTabBtn');
+    await page.waitForSelector('.next-ui-internal-app-item[title="VCPBuild"]', { visible: true, timeout: timeoutMs });
+    await page.evaluate(() => document.querySelector('.next-ui-internal-app-item[title="VCPBuild"]')?.click());
+    await page.waitForSelector('#nextUiInternalAppHost .agent-workbench-root', { visible: true, timeout: timeoutMs });
+}
+
+async function selectNovaAgent(page) {
+    await page.waitForFunction(() => [...document.querySelectorAll(
+        '#nextUiInternalAppHost .sidebar-tab-button',
+    )].some((tab) => tab.textContent?.trim() === '助手'), { timeout: timeoutMs });
+    await page.evaluate(() => [...document.querySelectorAll(
+        '#nextUiInternalAppHost .sidebar-tab-button',
+    )].find((tab) => tab.textContent?.trim() === '助手')?.click());
+    await page.waitForFunction(() => [...document.querySelectorAll(
+        '#nextUiInternalAppHost .agent-chat-agent-row',
+    )].some((row) => row.querySelector('.agent-name')?.textContent?.trim() === 'Nova'), { timeout: timeoutMs });
+    await page.evaluate(() => [...document.querySelectorAll(
+        '#nextUiInternalAppHost .agent-chat-agent-row',
+    )].find((row) => row.querySelector('.agent-name')?.textContent?.trim() === 'Nova')?.click());
+}
+
+async function selectSessionProjection(page, sessionId, expectedText) {
+    await page.waitForFunction((id) => [...document.querySelectorAll(
+        '#nextUiInternalAppHost .agent-chat-session-row[data-session-id]',
+    )].some((row) => row.dataset.sessionId === id), { timeout: timeoutMs }, sessionId);
+    await page.evaluate((id) => [...document.querySelectorAll(
+        '#nextUiInternalAppHost .agent-chat-session-row[data-session-id]',
+    )].find((row) => row.dataset.sessionId === id)?.click(), sessionId);
+    await page.waitForFunction(({ id, marker }) => {
+        const active = document.querySelector('#nextUiInternalAppHost .agent-chat-session-row.active[data-session-id]');
+        const feed = document.querySelector('#nextUiInternalAppHost .agent-chat-messages');
+        return active?.dataset.sessionId === id && feed?.textContent?.includes(marker);
+    }, { timeout: timeoutMs }, { id: sessionId, marker: expectedText });
+    return page.evaluate(() => {
+        const feed = document.querySelector('#nextUiInternalAppHost .agent-chat-messages');
+        return {
+            text: feed?.textContent || '',
+            messageIds: [...(feed?.querySelectorAll('[data-message-id]') || [])]
+                .map((row) => row.dataset.messageId).filter(Boolean),
+            reasoningCards: feed?.querySelectorAll('.agent-chat-reasoning-block').length || 0,
+            toolCards: feed?.querySelectorAll('.agent-chat-tool-activity').length || 0,
+            toolText: [...(feed?.querySelectorAll('.agent-chat-tool-activity') || [])]
+                .map((card) => card.textContent || '').join('\n'),
+        };
+    });
 }
 
 const appData = await fs.mkdtemp(path.join(os.tmpdir(), 'vcpchat-codex-recovery-'));
@@ -130,7 +182,10 @@ try {
     const page = await waitFor(async () => (
         (await browser.pages()).find((candidate) => candidate.url().includes('main.html')) || null
     ), `Electron main renderer did not appear: ${startupOutput.value}`);
-    await page.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout: timeoutMs });
+    await waitFor(async () => {
+        if (child.exitCode !== null) throw new Error(`Electron exited before renderer readiness: ${startupOutput.value}`);
+        return page.evaluate(() => document.documentElement.dataset.vcpRendererReady === 'true');
+    }, `Electron renderer did not become ready: ${startupOutput.value}`, startupTimeoutMs);
     reportPhase('renderer ready');
 
     const seeded = await withTimeout(page.evaluate(async () => {
@@ -179,6 +234,27 @@ try {
     assert.doesNotMatch(projectionText(isolatedProjection.projectionA), /parallel recovery B/);
     assert.match(projectionText(isolatedProjection.projectionB), /parallel recovery B/);
     assert.doesNotMatch(projectionText(isolatedProjection.projectionB), /parallel recovery A/);
+
+    await openAgentWorkbench(page);
+    await selectNovaAgent(page);
+    const visibleA = await selectSessionProjection(page, seeded.sessionA.sessionId, 'assistant-result:parallel recovery A');
+    assert.ok(visibleA.reasoningCards >= 1, 'running Session A must render its persisted reasoning card');
+    assert.ok(visibleA.toolCards >= 1, 'running Session A must render its persisted ToolBox card');
+    assert.match(visibleA.toolText, /FileOperator/);
+    assert.doesNotMatch(visibleA.text, /parallel recovery B/,
+        'selecting Session A must not render Session B blocks');
+    const visibleB = await selectSessionProjection(page, seeded.sessionB.sessionId, 'assistant-result:parallel recovery B');
+    assert.ok(visibleB.reasoningCards >= 1, 'running Session B must render its persisted reasoning card');
+    assert.ok(visibleB.toolCards >= 1, 'running Session B must render its persisted ToolBox card');
+    assert.match(visibleB.toolText, /FileOperator/);
+    assert.doesNotMatch(visibleB.text, /parallel recovery A/,
+        'selecting Session B must not render Session A blocks');
+    const returnedA = await selectSessionProjection(page, seeded.sessionA.sessionId, 'assistant-result:parallel recovery A');
+    assert.deepEqual(returnedA.messageIds, visibleA.messageIds,
+        'A to B to A must restore the same normalized SQLite-backed Block identities');
+    assert.equal(returnedA.reasoningCards, visibleA.reasoningCards);
+    assert.equal(returnedA.toolCards, visibleA.toolCards);
+    reportPhase('interactive A-to-B-to-A projection restoration verified');
 
     const lifecycle = await withTimeout(page.evaluate(async ({ lifecycleSession, approvalBlockedSession }) => {
         const api = window.chatAPI || window.electronAPI;
@@ -280,6 +356,15 @@ try {
     assert.ok(afterRendererReload.topicIds.includes(seeded.sessionA.sessionId));
     assert.ok(afterRendererReload.topicIds.includes(seeded.sessionB.sessionId));
     assert.equal(afterRendererReload.state, 'crashed', 'Renderer reload must not silently restart App Server');
+    await openAgentWorkbench(page);
+    await selectNovaAgent(page);
+    const reloadedA = await selectSessionProjection(page, seeded.sessionA.sessionId, 'assistant-result:parallel recovery A');
+    assert.ok(reloadedA.reasoningCards >= 1 && reloadedA.toolCards >= 1,
+        'Renderer reload must restore Session A reasoning and ToolBox cards from SQLite');
+    assert.deepEqual(reloadedA.messageIds, visibleA.messageIds,
+        'Renderer reload must preserve normalized Block ordering and message identity');
+    assert.doesNotMatch(reloadedA.text, /parallel recovery B/);
+    reportPhase('renderer reload projection cards verified');
 
     const recovered = await withTimeout(page.evaluate(async (sessionId) => {
         const api = window.chatAPI || window.electronAPI;
@@ -307,6 +392,8 @@ try {
         recoveredPid: recovered.status.worker.pid,
         sqliteReadableAfterCrash: true,
         rendererReloadPreservedSessions: true,
+        interactiveSessionSwitch: true,
+        reasoningAndToolCardsRestored: true,
         lifecycleArchiveRestoreDelete: true,
         demandRestart: true,
         replayedTurns: 0,
