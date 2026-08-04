@@ -109,8 +109,11 @@ if (packageJson.build?.files?.includes('agent-runtime/**/*')
     || !packageJson.build?.files?.includes('!archive/agent-runtime/**/*')) {
     errors.push('Codex product packaging must exclude archived Pi/Rust runtime sources');
 }
-if (!packageJson.build?.extraResources?.some((item) => String(item.from).includes('vcp-toolbox-bridge'))) {
-    errors.push('Codex product packaging must include vcp-toolbox-bridge');
+if (!packageJson.build?.extraResources?.some((item) => (
+    item.from === 'rust/toolbox-bridge/target/release/vcp-toolbox-bridge.exe'
+    && item.to === 'vcp-toolbox-bridge.exe'
+))) {
+    errors.push('Codex product packaging must include the canonical ToolBox Bridge release binary');
 }
 if (!packageJson.scripts?.['test:codex-stack']) errors.push('package scripts must define test:codex-stack');
 if (!packageJson.scripts?.['test:codex-toolbox-responses-adapter']) errors.push('package scripts must define the VChat-owned Responses adapter test');

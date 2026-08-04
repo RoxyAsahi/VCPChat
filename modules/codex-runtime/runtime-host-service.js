@@ -2,6 +2,10 @@
 
 const fs = require('fs');
 const path = require('path');
+const {
+    developmentBridgePath,
+    packagedBridgePath,
+} = require('./toolboxBridgePaths');
 const { CodexAppServerError } = require('./appServerTransport');
 const {
     hasToolboxConfiguration,
@@ -431,11 +435,10 @@ class RuntimeHostService {
     async ensureBridge(settings = this.context.getSettings() || {}) {
         const current = this.context.bridge();
         if (current) return current.start();
-        const bridgeName = process.platform === 'win32' ? 'vcp-toolbox-bridge.exe' : 'vcp-toolbox-bridge';
         const candidates = [
             process.env.VCP_TOOLBOX_BRIDGE,
-            process.resourcesPath && path.join(process.resourcesPath, bridgeName),
-            path.join(this.context.projectRoot(), 'rust', 'target', 'release', bridgeName),
+            packagedBridgePath(process.resourcesPath),
+            developmentBridgePath(this.context.projectRoot()),
         ].filter(Boolean);
         const bridgePath = candidates.find((candidate) => fs.existsSync(candidate)) || candidates[0];
         if (!settings.vcpServerUrl || !settings.vcpApiKey || !fs.existsSync(bridgePath)) return null;

@@ -8,6 +8,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { CodexRuntimeManager, vcpInvokeTool } = require('../modules/codex-runtime/runtimeManager.js');
 const { AgentProjectionRepository } = require('../modules/codex-runtime/projection');
+const { developmentBridgePath } = require('../modules/codex-runtime/toolboxBridgePaths');
 
 class FakeTransport extends EventEmitter {
     constructor() {
@@ -291,9 +292,9 @@ assert.equal(adapterStopped, true, 'stopping the runtime must close the loopback
 // loopback adapter must receive only the new upstream configuration.  This is
 // deliberately a Main-only test; no key is projected to UI/SQLite.
 const reconfigureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'vcp-codex-reconfigure-'));
-const bridgeDir = path.join(reconfigureRoot, 'rust', 'target', 'release');
-fs.mkdirSync(bridgeDir, { recursive: true });
-fs.writeFileSync(path.join(bridgeDir, process.platform === 'win32' ? 'vcp-toolbox-bridge.exe' : 'vcp-toolbox-bridge'), 'fixture');
+const reconfigureBridgePath = developmentBridgePath(reconfigureRoot);
+fs.mkdirSync(path.dirname(reconfigureBridgePath), { recursive: true });
+fs.writeFileSync(reconfigureBridgePath, 'fixture');
 let changingSettings = { vcpServerUrl: 'http://toolbox-one.invalid:6005', vcpApiKey: 'first-key' };
 const adapterChanges = [];
 let blockNextAdapterChange = false;

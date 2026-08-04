@@ -258,7 +258,7 @@
     ],
     "extraResources": [
       {
-        "from": "rust/target/release/vcp-toolbox-bridge.exe",
+        "from": "rust/toolbox-bridge/target/release/vcp-toolbox-bridge.exe",
         "to": "vcp-toolbox-bridge.exe"
       }
     ],
