@@ -515,8 +515,8 @@ assert.equal(restoredReasoningBubble.classList.contains('expanded'), false,
 restoredReasoningHeader.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: ' ', bubbles: true }));
 assert.equal(restoredReasoningBubble.classList.contains('expanded'), true,
     'restored reasoning must support Space-key expansion');
-assert.ok(restoredReasoning.querySelector('.agent-chat-reasoning-copy'),
-    'restored completed reasoning must expose the copy action');
+assert.equal(restoredReasoning.querySelector('.agent-chat-reasoning-copy'), null,
+    'restored completed reasoning must not render a duplicate copy action');
 const restoredToolCard = host.querySelector('.agent-chat-tool-activity[data-tool-call-id="tool_saved"]');
 assert.ok(restoredToolCard,
     'a SQLite-first cold mount must restore structured tool activity instead of flattening it into text');
@@ -1439,8 +1439,8 @@ await new Promise((resolve) => setTimeout(resolve, 30));
 const completedLiveMessage = host.querySelector('[data-message-id="msg_live"]');
 assert.match(completedLiveMessage.querySelector('.agent-chat-reasoning-block .vcp-thought-chain-label').textContent, /已深度思考.*s/,
     'a completed thought card must collapse to a concise duration summary');
-assert.ok(completedLiveMessage.querySelector('.agent-chat-reasoning-copy'),
-    'completed reasoning must expose a small copy action, matching the Cherry-style review workflow');
+assert.equal(completedLiveMessage.querySelector('.agent-chat-reasoning-copy'), null,
+    'completed reasoning must not render a duplicate copy action');
 
 const projectedEventSessionId = host.querySelector('.agent-chat-session-row.active')?.dataset.sessionId
     || JSON.parse(window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1') || '{}').sessionId;

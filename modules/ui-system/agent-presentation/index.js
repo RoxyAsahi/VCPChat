@@ -153,18 +153,6 @@ function syncStreamingReasoning(row, message, markedInstance) {
             header.setAttribute('aria-expanded', String(bubble?.classList.contains('expanded')));
         });
     }
-    if (!message.isStreaming) {
-        const copy = row.ownerDocument.createElement('button');
-        copy.type = 'button';
-        copy.className = 'agent-chat-reasoning-copy';
-        copy.title = '复制推理过程';
-        copy.setAttribute('aria-label', '复制推理过程');
-        copy.textContent = '复制';
-        copy.addEventListener('click', () => {
-            globalThis.navigator?.clipboard?.writeText?.(String(message.reasoning));
-        });
-        wrapper.append(copy);
-    }
 }
 
 function syncReasoningOnlyContent(row, message) {
