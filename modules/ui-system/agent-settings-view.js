@@ -1,5 +1,6 @@
 import './avatar-picker.js';
 import { selectedSessionId } from './agent-selected-session.js';
+import { configOptions } from '../agent-config-descriptors.js';
 
 export function renderAgentSettingsPane(context) {
     const {
@@ -124,19 +125,22 @@ export function renderAgentSettingsPane(context) {
             state.model = value;
             void persistWorkbenchSettings({ model: String(value || '').trim(), reasoningEffort: null }, sessionId,
                 sessionId ? `已自动保存模型：${value}` : `已自动保存默认模型：${value}`);
-        }, modelOptions(state.modelCatalog, model)));
+        }, configOptions('model', { modelCatalog: state.modelCatalog }).concat(
+            model && !configOptions('model', { modelCatalog: state.modelCatalog }).some((item) => item.value === model)
+                ? [{ value: model, label: model }] : [],
+        )));
         fields.push(field('本地工具审批', permissionMode, (value) => {
             const next = value === 'always-approve' ? 'always-approve' : 'ask';
             state.permissionMode = next;
             void persistWorkbenchSettings({ permissionMode: next }, sessionId,
                 next === 'always-approve' ? '已自动保存本地 YOLO' : '已自动保存逐次确认');
-        }, [{ value: 'ask', label: '每次确认（推荐）' }, { value: 'always-approve', label: 'YOLO：本地自动允许' }]));
+        }, configOptions('permissionMode')));
         const metadata = state.modelCatalog.find((item) => item.id === model);
         const efforts = Array.isArray(metadata?.reasoningEfforts) ? metadata.reasoningEfforts : [];
         fields.push(field('推理强度', reasoningEffort || '', (value) => {
             void persistWorkbenchSettings({ reasoningEffort: value || null }, sessionId,
                 value ? `已自动保存推理强度：${value}` : '已恢复模型默认推理强度');
-        }, [{ value: '', label: '模型默认' }, ...efforts.map((value) => ({ value, label: value }))], {
+        }, configOptions('reasoningEffort', { reasoningEfforts: efforts }), {
             disabled: efforts.length === 0,
             title: efforts.length ? '' : '该模型没有提供 reasoning effort capability，只能使用模型默认值。',
         }));
@@ -148,7 +152,7 @@ export function renderAgentSettingsPane(context) {
             )) return;
             void persistWorkbenchSettings({ instructionMode: value, ...(createDerivedSession ? { createDerivedSession: true } : {}) }, sessionId,
                 value === 'codex-managed' ? '已切换为 Codex 管理指令' : '已切换为 VChat 身份指令');
-        }, [{ value: 'vchat-identity', label: 'VChat 身份' }, { value: 'codex-managed', label: 'Codex 0.146 管理' }]));
+        }, configOptions('instructionMode')));
         form.append(...fields);
 
         if (instructionMode === 'vchat-identity') {

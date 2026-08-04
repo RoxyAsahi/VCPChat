@@ -20,6 +20,10 @@ const {
     serializeError,
     sessionConfigResult,
 } = require('./runtime-normalizers');
+const {
+    hasConfigField,
+    normalizeConfigField,
+} = require('../agent-config-descriptors.js');
 
 class RuntimeConfigService {
     constructor(context) {
@@ -55,19 +59,20 @@ class RuntimeConfigService {
     async updateWorkbenchSettings(settings = {}) {
         this.context.ensureProjectionStore();
         this.context.assertProjectionWritable();
-        const hasPermissionUpdate = Object.prototype.hasOwnProperty.call(settings, 'permissionMode');
+        const hasPermissionUpdate = hasConfigField(settings, 'permissionMode');
         const permissionMode = hasPermissionUpdate
-            ? (settings.permissionMode === 'always-approve' ? 'always-approve' : 'ask') : null;
-        const requestedModel = typeof settings.model === 'string' && settings.model.trim() ? settings.model.trim() : null;
-        const hasReasoningUpdate = Object.prototype.hasOwnProperty.call(settings, 'reasoningEffort');
+            ? normalizeConfigField('permissionMode', settings.permissionMode).value : null;
+        const requestedModel = hasConfigField(settings, 'model')
+            ? normalizeConfigField('model', settings.model).value || null : null;
+        const hasReasoningUpdate = hasConfigField(settings, 'reasoningEffort');
         const hasSystemPromptUpdate = Object.prototype.hasOwnProperty.call(settings, 'systemPrompt');
-        const hasBaseInstructionsUpdate = Object.prototype.hasOwnProperty.call(settings, 'baseInstructions');
+        const hasBaseInstructionsUpdate = hasConfigField(settings, 'baseInstructions');
         const requestedSystemPrompt = (hasSystemPromptUpdate || hasBaseInstructionsUpdate)
-            ? String(settings.baseInstructions ?? settings.systemPrompt ?? '').trim() : null;
-        const hasInstructionModeUpdate = Object.prototype.hasOwnProperty.call(settings, 'instructionMode');
+            ? normalizeConfigField('baseInstructions', settings.baseInstructions ?? settings.systemPrompt).value : null;
+        const hasInstructionModeUpdate = hasConfigField(settings, 'instructionMode');
         const hasDeveloperInstructionsUpdate = Object.prototype.hasOwnProperty.call(settings, 'developerInstructions');
         const hasPersonalityUpdate = Object.prototype.hasOwnProperty.call(settings, 'personality');
-        const hasWorkspaceUpdate = Object.prototype.hasOwnProperty.call(settings, 'workspaceRoot');
+        const hasWorkspaceUpdate = hasConfigField(settings, 'workspaceRoot');
         let requestedWorkspaceRoot = null;
         if (hasWorkspaceUpdate) {
             requestedWorkspaceRoot = path.resolve(

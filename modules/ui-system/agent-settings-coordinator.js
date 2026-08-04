@@ -1,4 +1,5 @@
 import { profileSettingsTarget, sessionSettingsTarget } from './agent-settings-state.js';
+import { PROFILE_CONFIG_FIELDS, normalizeAgentConfig } from '../agent-config-descriptors.js';
 
 function createAgentSettingsCoordinator({
     state,
@@ -18,28 +19,28 @@ function createAgentSettingsCoordinator({
     async function persistAgentProfileDefaults(payload) {
         const profile = selectedAgentProfile();
         if (!profile) throw new Error('请先选择 Build Agent');
+        const normalized = normalizeAgentConfig(payload, {
+            fallback: profile,
+            fields: PROFILE_CONFIG_FIELDS,
+            context: { reasoningEfforts: profile.reasoningEfforts || [] },
+        });
+        if (normalized.errors.length) throw new Error(normalized.errors[0].message);
+        const values = normalized.values;
         const result = await saveAgentProfile({
             agentId: profile.id || profile.name,
             expectedProfileRevision: Number(profile.profileRevision || profile.revision || 1),
             name: Object.prototype.hasOwnProperty.call(payload, 'name')
                 ? payload.name : profile.name || profile.id,
-            instructionMode: Object.prototype.hasOwnProperty.call(payload, 'instructionMode')
-                ? payload.instructionMode : profile.instructionMode || 'vchat-identity',
-            baseInstructions: Object.prototype.hasOwnProperty.call(payload, 'baseInstructions')
-                ? payload.baseInstructions
-                : Object.prototype.hasOwnProperty.call(payload, 'systemPrompt')
-                    ? payload.systemPrompt : profile.baseInstructions || profile.systemPrompt || '',
+            instructionMode: values.instructionMode,
+            baseInstructions: values.baseInstructions,
             developerInstructions: Object.prototype.hasOwnProperty.call(payload, 'developerInstructions')
                 ? payload.developerInstructions : profile.developerInstructions || '',
             personality: Object.prototype.hasOwnProperty.call(payload, 'personality')
                 ? payload.personality : profile.personality || 'none',
-            model: Object.prototype.hasOwnProperty.call(payload, 'model') ? payload.model : profile.model,
-            reasoningEffort: Object.prototype.hasOwnProperty.call(payload, 'reasoningEffort')
-                ? payload.reasoningEffort : profile.reasoningEffort,
-            workspaceRoot: Object.prototype.hasOwnProperty.call(payload, 'workspaceRoot')
-                ? payload.workspaceRoot : profile.workspaceRoot,
-            permissionMode: Object.prototype.hasOwnProperty.call(payload, 'permissionMode')
-                ? payload.permissionMode : profile.permissionMode,
+            model: values.model,
+            reasoningEffort: values.reasoningEffort,
+            workspaceRoot: values.workspaceRoot,
+            permissionMode: values.permissionMode,
         });
         if (!result?.success || !result.profile?.id) throw new Error(result?.error || 'Build Agent Profile 保存失败');
         const savedProfile = {
