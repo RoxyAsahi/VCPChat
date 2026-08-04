@@ -47,4 +47,14 @@ assert.equal(applyProjectionPatch(state, {
     sessionId: 'session-a', threadId: 'thread-a', baseProjectionRevision: 3, projectionRevision: 4,
     upsertBlocks: [{ schemaVersion: 2, blockId: 'block:session-b:foreign:0', sessionId: 'session-b', threadId: 'thread-b' }],
 }).reason, 'identity-mismatch', 'foreign Blocks must fail closed before mutating the Store');
+state = { ...state, ...applyProjectionSnapshot(state, {
+    session: { sessionId: 'session-a' }, projectionRevision: 5,
+    messages: [{ messageId: 'm3', itemId: 'i3', blocks: [{ kind: 'message', content: { text: 'sparse identity snapshot' } }] }],
+}) };
+assert.equal(state.sessionsById.get('session-a').threadId, 'thread-a',
+    'a sparse legacy snapshot must not erase an already verified Thread identity');
+assert.equal(applyProjectionPatch(state, {
+    schemaVersion: 1, sessionId: 'session-a', threadId: 'thread-b', baseProjectionRevision: 5,
+    projectionRevision: 6, upsertBlocks: [],
+}).reason, 'identity-mismatch');
 console.log('Agent normalized store tests passed.');

@@ -133,6 +133,8 @@ function ensureNormalizedState(state) {
 function applyProjectionSnapshot(state, snapshot) {
     const normalized = snapshot?.normalized?.blocks ? snapshot.normalized : projectionToNormalized(snapshot);
     const next = ensureNormalizedState(state);
+    const existingSession = next.sessionsById.get(normalized.sessionId);
+    const resolvedThreadId = normalized.threadId || snapshot?.session?.threadId || existingSession?.threadId || null;
     const blocksById = new Map(next.blocksById);
     for (const [id, block] of blocksById) if (block.sessionId === normalized.sessionId) blocksById.delete(id);
     for (const block of normalized.blocks) blocksById.set(block.blockId, block);
@@ -141,7 +143,7 @@ function applyProjectionSnapshot(state, snapshot) {
         ...(sessionsById.get(normalized.sessionId) || {}),
         ...(snapshot.session || {}),
         sessionId: normalized.sessionId,
-        threadId: normalized.threadId,
+        threadId: resolvedThreadId,
         projection: snapshot.projection || sessionsById.get(normalized.sessionId)?.projection || null,
         storage: snapshot.storage || sessionsById.get(normalized.sessionId)?.storage || null,
     });
