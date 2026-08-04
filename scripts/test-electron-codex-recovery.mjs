@@ -103,14 +103,17 @@ async function selectSessionProjection(page, sessionId, expectedText) {
     await page.waitForFunction((id) => [...document.querySelectorAll(
         '#nextUiInternalAppHost .agent-chat-session-row[data-session-id]',
     )].some((row) => row.dataset.sessionId === id), { timeout: timeoutMs }, sessionId);
-    await page.evaluate((id) => [...document.querySelectorAll(
-        '#nextUiInternalAppHost .agent-chat-session-row[data-session-id]',
-    )].find((row) => row.dataset.sessionId === id)?.click(), sessionId);
-    await page.waitForFunction(({ id, marker }) => {
+    await waitFor(async () => page.evaluate(({ id, marker }) => {
+        const rows = [...document.querySelectorAll(
+            '#nextUiInternalAppHost .agent-chat-session-row[data-session-id]',
+        )];
+        const target = rows.find((row) => row.dataset.sessionId === id);
         const active = document.querySelector('#nextUiInternalAppHost .agent-chat-session-row.active[data-session-id]');
         const feed = document.querySelector('#nextUiInternalAppHost .agent-chat-messages');
-        return active?.dataset.sessionId === id && feed?.textContent?.includes(marker);
-    }, { timeout: timeoutMs }, { id: sessionId, marker: expectedText });
+        if (active?.dataset.sessionId === id && feed?.textContent?.includes(marker)) return true;
+        target?.click();
+        return false;
+    }, { id: sessionId, marker: expectedText }), `Session ${sessionId} projection did not render`);
     return page.evaluate(() => {
         const feed = document.querySelector('#nextUiInternalAppHost .agent-chat-messages');
         return {
