@@ -544,6 +544,8 @@ assert.deepEqual(JSON.parse(window.localStorage.getItem('vcpchat.agentWorkbench.
 assert.ok([...host.querySelectorAll('.message-item .md-content')]
     .some((node) => node.textContent.includes('restored answer')),
     'a restored Codex Session must render its saved history rather than an empty feed');
+assert.equal(host.querySelector('.agent-chat-build-empty-state'), null,
+    'restored messages must remove the Build visual empty state even when hydration completes asynchronously');
 const restoredReasoning = host.querySelector('[data-message-id="msg_reason_saved"] .agent-chat-reasoning-block');
 assert.ok(restoredReasoning, 'a SQLite-first cold mount must restore reasoning as a compact thought card');
 assert.equal(restoredReasoning.closest('.message-item')?.querySelector('.md-content')?.textContent?.trim() || '', '',
@@ -652,6 +654,11 @@ assert.match(host.querySelector('.agent-chat-title')?.textContent || '', /123/,
 assert.equal([...host.querySelectorAll('.message-item .md-content')]
     .some((node) => node.textContent.includes('restored answer')), false,
     'switching Build Agents must not retain the previous Agent transcript in the main pane');
+const buildEmptyVisual = host.querySelector('.agent-chat-build-empty-state');
+assert.equal(buildEmptyVisual?.querySelector('[role="img"]')?.getAttribute('aria-label'), 'VCPBuild',
+    'entering Build without a selected conversation must render the VCPBUILD visual identity');
+assert.equal(buildEmptyVisual?.querySelectorAll('.next-ui-empty-brand-text')[0]?.textContent, 'VCPBUILD');
+assert.match(buildEmptyVisual?.querySelector('.agent-chat-build-empty-tagline')?.textContent || '', /创建一个 Agent 会话/);
 await new Promise((resolve) => setTimeout(resolve, 300));
 const profileSettingsTab = [...host.querySelectorAll('.agent-chat-sidebar .sidebar-tab-button')]
     .find((tab) => tab.textContent.trim() === '设置');
