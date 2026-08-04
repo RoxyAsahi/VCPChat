@@ -18,7 +18,9 @@ function createInitialState() {
     return {
         runtime: { state: 'unknown', worker: null, lastError: null },
         selectedSessionId: null,
-        sessionSnapshots: new Map(),
+        sessionsById: new Map(),
+        blocksById: new Map(),
+        projectionRevisions: new Map(),
         activeRuntimes: new Map(),
         selectedTopic: null,
         sessionUi: createAgentSessionUiState(),

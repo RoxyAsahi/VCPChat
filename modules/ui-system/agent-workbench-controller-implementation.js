@@ -10,6 +10,12 @@ import { createAgentRuntimeEventSubscription, createWorkbenchClients } from './a
 import { codexSnapshotToProjection } from './agent-workbench-snapshot-projection.js';
 import { createWorkbenchCommandController } from './agent-workbench-command-controller.js';
 import { selectedSessionIdentity, selectedSessionId as selectedSessionIdFromState } from './agent-selected-session.js';
+import {
+    applyProjectionPatch,
+    applyProjectionSnapshot,
+    projectionToNormalized,
+    sessionProjectionFromState,
+} from './agent-normalized-store.js';
 
 function durableSnapshotState(snapshot) {
     return snapshot?.session && typeof snapshot.session === 'object'
@@ -55,18 +61,6 @@ function createWorkbenchController(runtimeApi) {
     const store = createWorkbenchStore();
     let selectionVersion = 0;
     let snapshotBarrier = null;
-    // Renderer-only, bounded cache. SQLite is the durable presentation source;
-    // this only prevents a visible flash while a background `thread/read`
-    // revalidates the projection.
-    const snapshotCache = new Map();
-    const MAX_SNAPSHOT_CACHE_ENTRIES = 16;
-    const MAX_SNAPSHOT_CACHE_BYTES = 16 * 1024 * 1024;
-    let snapshotCacheBytes = 0;
-    // A `thread/read` reply is allowed to replace a local SQLite projection
-    // only when no newer live item patch for that Session has reached the
-    // renderer.  SelectionVersion handles A -> B navigation; this counter
-    // handles live A deltas arriving while A's reconcile is in flight.
-    const liveProjectionRevision = new Map();
     const sessionWarmPromises = new Map();
 
     function requireApi(name) {
@@ -190,6 +184,37 @@ function createWorkbenchController(runtimeApi) {
 
     function applyCodexProjectionMessage(sessionId, entry) {
         if (!sessionId || !entry) return;
+        let before = store.getState();
+        let session = before.sessionsById?.get(sessionId) || null;
+        if (!session) {
+            const seeded = applyProjectionSnapshot(before, {
+                session: { sessionId, threadId: entry.threadId || `legacy:${sessionId}` },
+                messages: [],
+                projectionRevision: Number(before.projectionRevisions?.get(sessionId) || 0),
+            });
+            store.setState(seeded);
+            before = store.getState();
+            session = before.sessionsById.get(sessionId);
+        }
+        const threadId = entry.threadId || session.threadId || `legacy:${sessionId}`;
+        const normalized = projectionToNormalized({
+            session: { ...session, sessionId, threadId },
+            messages: [entry],
+        });
+        const baseProjectionRevision = Number(before.projectionRevisions?.get(sessionId) || 0);
+        const normalizedResult = applyProjectionPatch(before, {
+            schemaVersion: 1,
+            sessionId,
+            threadId,
+            baseProjectionRevision,
+            projectionRevision: baseProjectionRevision + 1,
+            upsertBlocks: normalized.blocks,
+            deleteBlockIds: [],
+        });
+        if (normalizedResult.applied) {
+            store.setState(normalizedResult.state);
+            if (applySelectedNormalizedProjection(sessionId)) return;
+        }
         const patch = codexSnapshotToProjection({ messages: [entry] });
         const current = store.getState();
         const messages = [...current.messages];
@@ -241,9 +266,29 @@ function createWorkbenchController(runtimeApi) {
                 : current.context,
             plan: patch.plan || current.plan || null,
         };
-        const sessionSnapshots = new Map(current.sessionSnapshots);
-        sessionSnapshots.set(sessionId, nextProjection);
-        store.setState({ ...nextProjection, sessionSnapshots });
+        store.setState(nextProjection);
+    }
+
+    function applySelectedNormalizedProjection(sessionId) {
+        const current = store.getState();
+        const selected = sessionProjectionFromState(current, sessionId)?.projection;
+        if (!selected) return false;
+        const pendingByTurn = new Map((current.messages || [])
+            .filter((message) => String(message.id || '').startsWith('pending-user:') && message.turnId)
+            .map((message) => [message.turnId, message]));
+        const confirmedMessages = selected.messages.map((message) => {
+            const pendingMessage = message.role === 'user' ? pendingByTurn.get(message.turnId) : null;
+            return pendingMessage ? { ...pendingMessage, ...message, deliveryState: 'confirmed', deliveryDetail: '' } : message;
+        });
+        const pending = (current.messages || []).filter((message) => (
+            String(message.id || '').startsWith('pending-user:')
+            && !confirmedMessages.some((candidate) => candidate.role === 'user' && candidate.turnId === message.turnId)
+        ));
+        store.setState({
+            ...selected,
+            messages: [...confirmedMessages, ...pending],
+        });
+        return true;
     }
 
     function applyCodexRuntimeEvent(event) {
@@ -264,11 +309,25 @@ function createWorkbenchController(runtimeApi) {
             activeRuntimes: runtimes,
             ...(selected ? { activeTurnId: event.activity === 'running' ? event.turnId : null } : {}),
         });
-        if (event.projectionMessage && event.sessionId) {
-            liveProjectionRevision.set(event.sessionId, (liveProjectionRevision.get(event.sessionId) || 0) + 1);
+        if (event.projectionPatch && event.sessionId) {
+            const result = applyProjectionPatch(store.getState(), event.projectionPatch);
+            if (result.applied) store.setState(result.state);
+            else void reloadNormalizedSession(event.sessionId);
         }
-        if (selected && event.projectionMessage) applyCodexProjectionMessage(event.sessionId, event.projectionMessage);
+        if (selected && event.projectionPatch) applySelectedNormalizedProjection(event.sessionId);
+        else if (selected && event.projectionMessage) applyCodexProjectionMessage(event.sessionId, event.projectionMessage);
         applySessionUiEvent(event);
+    }
+
+    async function reloadNormalizedSession(sessionId) {
+        try {
+            const snapshot = await requireApi('agentRuntimeReadProjection')({ sessionId });
+            const normalizedState = applyProjectionSnapshot(store.getState(), snapshot);
+            store.setState(normalizedState);
+            if (selectedSessionIdFromState(store.getState()) === sessionId) applySelectedNormalizedProjection(sessionId);
+        } catch (_error) {
+            // The next durable Session read remains the recovery path.
+        }
     }
 
     function applySessionUiEvent(event) {
@@ -286,29 +345,8 @@ function createWorkbenchController(runtimeApi) {
         if (reduced !== current.sessionUi) store.setState({ sessionUi: reduced });
     }
 
-    function cacheSnapshot(sessionId, snapshot) {
-        if (!sessionId || !snapshot) return;
-        const projection = codexSnapshotToProjection(snapshot);
-        const bytes = Math.min(MAX_SNAPSHOT_CACHE_BYTES, JSON.stringify(snapshot.messages || snapshot.history || []).length * 2);
-        const existing = snapshotCache.get(sessionId);
-        if (existing) snapshotCacheBytes -= existing.bytes;
-        snapshotCache.set(sessionId, { projection, snapshotSequence: Number(snapshot.snapshotSequence) || 0, bytes });
-        snapshotCacheBytes += bytes;
-        while (snapshotCache.size > MAX_SNAPSHOT_CACHE_ENTRIES || snapshotCacheBytes > MAX_SNAPSHOT_CACHE_BYTES) {
-            const [oldestSessionId, oldest] = snapshotCache.entries().next().value;
-            snapshotCache.delete(oldestSessionId);
-            snapshotCacheBytes -= oldest.bytes;
-        }
-    }
-
     function cachedProjection(sessionId) {
-        const inMemory = store.getState().sessionSnapshots.get(sessionId);
-        if (inMemory) return inMemory;
-        const cached = snapshotCache.get(sessionId);
-        if (!cached) return null;
-        snapshotCache.delete(sessionId);
-        snapshotCache.set(sessionId, cached);
-        return cached.projection;
+        return sessionProjectionFromState(store.getState(), sessionId)?.projection || null;
     }
 
     function canReconcileSession(sessionId, state = store.getState()) {
@@ -328,13 +366,10 @@ function createWorkbenchController(runtimeApi) {
         const selectedSessionId = requireMatchingProjectionSession(
             selectedTopic?.sessionId, projectionSessionId,
         );
-        const sessionSnapshots = new Map(current.sessionSnapshots);
-        sessionSnapshots.set(selectedSessionId, projection);
         store.setState({
             ...projection,
             selectedTopic,
             selectedSessionId,
-            sessionSnapshots,
             activeTurnId: null,
             context: projection.context || current.context,
             plan: projection.plan || null,
@@ -401,29 +436,36 @@ function createWorkbenchController(runtimeApi) {
             ? nextRuntime.sessionId : sessionId;
         const activeRuntimes = new Map(current.activeRuntimes);
         if (nextRuntime) activeRuntimes.set(runtimeSessionId, { ...nextRuntime, sessionId: runtimeSessionId });
-        const projection = codexSnapshotToProjection(snapshot);
-        cacheSnapshot(sessionId, snapshot);
-        const sessionSnapshots = new Map(current.sessionSnapshots);
-        sessionSnapshots.set(sessionId, projection);
+        const normalizedState = applyProjectionSnapshot(current, snapshot);
+        const normalizedCurrent = { ...current, ...normalizedState };
+        const projection = Array.isArray(snapshot?.messages)
+            ? (sessionProjectionFromState(normalizedCurrent, sessionId)?.projection || codexSnapshotToProjection(snapshot))
+            : codexSnapshotToProjection(snapshot);
         const selectedSessionId = durableState.sessionId
             ? durableState.sessionId : runtimeSessionId;
         store.setState({
             ...projection,
+            ...normalizedState,
             selectedSessionId,
             activeTurnId: nextRuntime?.activeTurnId || projection.activeTurnId || null,
-            sessionSnapshots,
             activeRuntimes,
             selectedTopic: hydratedTopicProjection(durableState, nextRuntime, durableAgentId, selectedSessionId),
         });
         return nextRuntime;
     }
 
-    async function reconcileHydratedTopic(sessionId, runtimeHint, agentId, version, revisionAtStart) {
+    function snapshotIsStale(sessionId, snapshot, state = store.getState()) {
+        const currentRevision = Number(state.projectionRevisions?.get(sessionId) || 0);
+        const snapshotRevision = Number(snapshot?.projectionRevision || snapshot?.projection?.mutationGeneration || 0);
+        return snapshotRevision < currentRevision;
+    }
+
+    async function reconcileHydratedTopic(sessionId, runtimeHint, agentId, version) {
         try {
             const snapshot = await requireApi('agentSessionRead')({ sessionId: sessionId, ...(agentId ? { agentId } : {}) });
             const current = store.getState();
             if (version !== selectionVersion || current.selectedTopic?.sessionId !== sessionId) return null;
-            if ((liveProjectionRevision.get(sessionId) || 0) !== revisionAtStart) return null;
+            if (snapshotIsStale(sessionId, snapshot, current)) return null;
             applyHydratedSnapshot(sessionId, snapshot, runtimeHint || runtimeForTopic(sessionId), agentId);
             return snapshot;
         } catch (_error) {
@@ -448,8 +490,7 @@ function createWorkbenchController(runtimeApi) {
             const nextRuntime = applyHydratedSnapshot(sessionId, snapshot, runtimeHint, agentId);
             releaseSnapshotBarrier(barrier, snapshot, nextRuntime);
             if (canReconcileSession(sessionId)) {
-                const revisionAtStart = liveProjectionRevision.get(sessionId) || 0;
-                void reconcileHydratedTopic(sessionId, runtimeHint, agentId, version, revisionAtStart);
+                void reconcileHydratedTopic(sessionId, runtimeHint, agentId, version);
             }
             return snapshot;
         } catch (error) {
@@ -487,9 +528,13 @@ function createWorkbenchController(runtimeApi) {
                 return null;
             }
             const resolvedTopic = resolvePreviewTopic(localSnapshot, selectedTopic);
-            cacheSnapshot(sessionId, localSnapshot);
+            const normalizedState = applyProjectionSnapshot(store.getState(), localSnapshot);
+            store.setState(normalizedState);
+            const projection = Array.isArray(localSnapshot?.messages)
+                ? (sessionProjectionFromState(store.getState(), sessionId)?.projection || codexSnapshotToProjection(localSnapshot))
+                : codexSnapshotToProjection(localSnapshot);
             applyPreviewProjection(
-                codexSnapshotToProjection(localSnapshot),
+                projection,
                 resolvedTopic,
                 localSnapshot?.session?.sessionId,
             );
@@ -498,8 +543,7 @@ function createWorkbenchController(runtimeApi) {
             // reconciliation begins. The guards in reconcilePreviewTopic make
             // an A response harmless after the user selects B.
             if (canReconcileSession(sessionId)) {
-                const revisionAtStart = liveProjectionRevision.get(sessionId) || 0;
-                void reconcilePreviewTopic(sessionId, agentId, resolvedTopic, version, revisionAtStart);
+                void reconcilePreviewTopic(sessionId, agentId, resolvedTopic, version);
             }
             return localSnapshot;
         } catch (error) {
@@ -559,18 +603,19 @@ function createWorkbenchController(runtimeApi) {
         };
     }
 
-    async function reconcilePreviewTopic(sessionId, agentId, selectedTopic, version, revisionAtStart) {
+    async function reconcilePreviewTopic(sessionId, agentId, selectedTopic, version) {
         try {
             const snapshot = await requireApi('agentSessionRead')({ sessionId: sessionId, ...(agentId ? { agentId } : {}) });
             const current = store.getState();
             if (version !== selectionVersion || current.selectedTopic?.sessionId !== sessionId) return null;
-            // Do not let an older `thread/read` snapshot erase a delta/tool
-            // patch that arrived after reconciliation began.  The next view
-            // entry will perform a fresh SQLite read and reconcile again.
-            if ((liveProjectionRevision.get(sessionId) || 0) !== revisionAtStart) return null;
-            cacheSnapshot(sessionId, snapshot);
+            if (snapshotIsStale(sessionId, snapshot, current)) return null;
+            const normalizedState = applyProjectionSnapshot(current, snapshot);
+            store.setState(normalizedState);
+            const projection = Array.isArray(snapshot?.messages)
+                ? (sessionProjectionFromState(store.getState(), sessionId)?.projection || codexSnapshotToProjection(snapshot))
+                : codexSnapshotToProjection(snapshot);
             applyPreviewProjection(
-                codexSnapshotToProjection(snapshot),
+                projection,
                 resolvePreviewTopic(snapshot, selectedTopic),
                 snapshot?.session?.sessionId,
             );

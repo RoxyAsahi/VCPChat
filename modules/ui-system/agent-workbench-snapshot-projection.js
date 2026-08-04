@@ -115,7 +115,13 @@ function projectSnapshotEntry(entry, output) {
             reasoning: () => { const text = textFromContent(block.content); if (text) reasoning.push({ ordinal: Number(block.ordinal) || 0, text }); },
             plan: () => { output.plan = { text: block.content.text, turnId: entry.turnId || null, itemId: entry.itemId, updatedAt: entry.updatedAt || entry.createdAt || null }; },
             compaction: () => { output.context.compactionState = block.content.phase; output.context.compacting = block.content.phase === 'inProgress'; output.context.summary = block.content.text || output.context.summary; },
-            message: () => { const content = textFromContent(block.content); const fallbackContent = content || (block.content?.item ? `Codex ${block.content.item.type || 'unknown'} Item\n\n${JSON.stringify(block.content.item, null, 2).slice(0, 16_384)}` : ''); if (fallbackContent) output.messages.push({ id: blockId, messageId: entry.messageId, itemId: entry.itemId, turnId: entry.turnId || null, role: entry.role === 'user' ? 'user' : entry.role === 'system' ? 'system' : 'assistant', content: fallbackContent, state: messageState(entry.status), createdAt: entry.createdAt || 0, firstSequence: null, lastSequence: null, snapshotOrdinal: entry.sourceOrder || null }); },
+            message: () => {
+                const content = textFromContent(block.content);
+                const unknown = block.content?.unknown || block.content?.item;
+                const fallbackContent = content || (unknown
+                    ? `Codex ${unknown.type || 'unknown'} Item\n\n${JSON.stringify(unknown).slice(0, 16_384)}` : '');
+                if (fallbackContent) output.messages.push({ id: blockId, messageId: entry.messageId, itemId: entry.itemId, turnId: entry.turnId || null, role: entry.role === 'user' ? 'user' : entry.role === 'system' ? 'system' : 'assistant', content: fallbackContent, state: messageState(entry.status), createdAt: entry.createdAt || 0, firstSequence: null, lastSequence: null, snapshotOrdinal: entry.sourceOrder || null });
+            },
         };
         const key = block.kind === 'observation' && block.content?.marker ? 'marker'
             : block.kind === 'observation' && block.content?.phase ? 'compaction'
