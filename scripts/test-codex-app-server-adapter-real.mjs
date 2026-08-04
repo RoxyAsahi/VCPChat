@@ -149,6 +149,21 @@ try {
     assert.match(JSON.stringify(reasoningMessage), /Checked the ToolBox result before answering/);
     assert.ok(runtimeEvents.some((event) => event.method === 'item/reasoning/textDelta'),
         'the Chat reasoning stream must emerge from App Server as item/reasoning/textDelta');
+    const retrySession = await manager.forkSession({
+        sessionId: session.sessionId,
+        beforeTurnId: completion.turnId,
+        title: 'Codex App Server adapter retry',
+    });
+    assert.notEqual(retrySession.threadId, session.threadId,
+        'retry must receive a distinct Codex Thread');
+    const retryCompleted = waitForTurn(retrySession);
+    await manager.startTurn({ sessionId: retrySession.sessionId, prompt: 'Retry the request on the new branch.' });
+    const retryCompletion = await retryCompleted;
+    assert.equal(retryCompletion.turnStatus, 'completed',
+        'a forked Thread must accept and complete its first replacement Turn');
+    const retryProjection = await manager.readSession({ sessionId: retrySession.sessionId, reconcile: false });
+    assert.match(JSON.stringify(retryProjection), /adapter-real-sentinel/,
+        'the replacement Turn must receive projected output on the forked Session');
     console.log('Real Codex App Server -> VChat Responses adapter -> Chat tool call continuation passed.');
 } finally {
     await manager.stop().catch(() => null);

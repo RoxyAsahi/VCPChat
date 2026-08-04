@@ -89,6 +89,17 @@ Revision `a13a3410e09252aeabfcb4c160d8d974df4582a5` closes three audit gaps: aut
 pre-transport read-only mutation rejection, and explicit recovery of acknowledged-but-unbound start/fork operations. Fault
 injection proves that a crash after `thread/start` or `thread/fork` ACK does not issue a replacement remote mutation.
 
+## R15 Turn 控制可靠性（working-tree）
+
+- Retry/edit 使用 `thread/fork(beforeTurnId)`，普通分支使用 `lastTurnId`；fork Session 在权威 `turn/started` 前保持 starting，不显示 steering 控件。
+- `turn/steer`、follow-up、interrupt 都要求精确 `sessionId + turnId`；steer 另带 `submissionId`，in-flight 重复提交只共享同一 Promise。
+- follow-up 记录 `kind/submissionId/targetTurnId`，只在匹配目标 Turn 完成且 Main 确认 Thread idle 后 drain；同文本不同 submission 可显式排队多次。
+- interrupt 将 App Server、Responses、Bridge 和该 Turn 的审批/交互作为独立取消通道；App Server 失败时结果为 uncertain，不能伪造已停止。
+- Runtime 与 Renderer 的迟到 `turn/completed` 都必须匹配当前 active Turn；旧 Turn 事件只能落入旧投影，不能清除新 Turn 的 activeTurnId。
+- R15 hermetic 证据：`npm run test:codex-runtime-turn-service` 覆盖 steer 并发幂等、相同文本双 follow-up、unknown 不 drain、跨 Turn 拒绝和 interrupt fan-out；`npm run test:agent-composer-state` 通过。
+- 2026-08-04 live 部分收据：固定 Codex 0.146.0 + 未修改 ToolBox，以 `deepseek-v4-flash` 运行 `VCP_CODEX_LIVE=1 npm run test:codex-concurrent-live`，双 Session 长 Turn、A 中止/B 完成、cancel isolation 和 projection isolation 通过；steer/follow-up live 与完整 Electron Workbench 仍待。
+- 当前整体 Workbench 回归仍受并行设置页工作树影响；没有同一 commit 的完整 Electron、steer/follow-up 和 backend approval 收据前，状态保持 `working-tree`，不升级为 live/product。
+
 ## Authority Boundary
 
 | Concern | Authority |

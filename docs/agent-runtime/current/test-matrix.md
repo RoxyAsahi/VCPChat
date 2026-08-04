@@ -83,7 +83,7 @@ npm run test:codex-toolbox-live
 | Electron Codex smoke | hermetic Electron | preload/IPC、Session/Thread 创建、projection-only SQLite read、Runtime identity、Workspace list/preview、内部应用注册/挂载、Full Fork 诊断标记、旧模式 API 不暴露与主要 DOM | working-tree pass | `npm run test:electron-codex-smoke`；真实 Main/preload IPC 列出 Session workspace 并读取 `package.json` 预览。该命令不替代真实 Nova/ToolBox 长任务验收。 |
 | ToolBox model via adapter | explicit live Nova | 身份回答包含 Nova 且不含 Codex；随机 sentinel；公开 reasoning 持久投影；restart/resume、fork、interrupt | 0.146 live pass | 2026-08-03：测试基线 `ea4a2e73` 运行 `test:codex-nova-live`，耗时 49.6 s；身份、reasoning、sentinel、restart/resume、fork、interrupt 全部通过。Codex `0.146.0`；ToolBox HEAD `024f8780` 有用户既有改动，本次未修改 ToolBox。 |
 | VCP dynamic tool via adapter | live Nova + VChat DistributedServer | `item/tool/call -> bridge -> /v1/human/tool -> FileOperator`，结构化结果与 Projection | 0.146 live pass | 2026-08-03：测试基线 `ea4a2e73` 运行 `test:codex-toolbox-live`，耗时 24.8 s；FileOperator ReadFile 恰好调用一次，dynamicCall、bridgeCompleted 和 Projection 全部通过。临时 DistributedServer 节点在测试后关闭。 |
-| Concurrent Nova Thread + cancel isolation | explicit live Nova | 同一 App Server PID；A/B 均为长任务并收到 `turn/started`；中断 A；A=`interrupted`、B=`completed`；两个 SQLite projection 不串线 | 0.146 live pass | 2026-08-03：强化测试 revision `46e2ce41` 运行 `test:codex-concurrent-live`，耗时 76.1 s；A 请求 30 段工作区架构说明并在启动后中断，B 完成 8,558 字符可靠性审查和随机 sentinel；PID、取消和 Projection 隔离均通过。 |
+| Concurrent Nova Thread + cancel isolation | explicit live Nova | 同一 App Server PID；A/B 均为长任务并收到 `turn/started`；中断 A；A=`interrupted`、B=`completed`；两个 SQLite projection 不串线 | 0.146 live pass (working-tree) | 2026-08-04 当前工作树以 `deepseek-v4-flash` 重跑 `VCP_CODEX_LIVE=1 npm run test:codex-concurrent-live`，A/B 均 started，A interrupted、B completed，cancel/projection isolation 通过；steer、双 follow-up 和完整 Electron gate 仍待。历史 revision `46e2ce41` 收据仍保留。 |
 | Native approval | real Codex | command/file approval 显示、allow/deny、close fail-closed | pending | fake manager 测试不能替代真实 Codex。 |
 | ToolBox backend approval | live ToolBox | 独立 approval id、TTL/replay、只响应一次 | implemented, pending live | Rust/manager 基础闭环与 replay 去重单测已通过；真实 VCPLog 未执行。 |
 | VCPInfo/VCPLog | live ToolBox | 限长、重连、去重、只读结构化卡片 | partial live | 2026-08-03：测试基线 `ea4a2e73` 运行 `VCP_CODEX_LIVE=1 npm run test:codex-toolbox-ws-live`，VCPLog/VCPInfo 双 observer connect+clean shutdown 通过；真实断线重连、replay、approval payload 和通知内容仍未执行。 |
@@ -417,6 +417,14 @@ gate against the existing ToolBox process, and the temporary node was stopped. T
 
 Electron 真实点击与完整 Main 进程重启已通过；真实 ToolBox provider payload 和 backend approval 仍 pending。本表不是 live/product 收据。
 # Agent governance gates
+
+## R15 Turn control gates
+
+- `npm run test:codex-runtime-turn-service`: exact Turn identity, steer in-flight dedupe, same-text distinct follow-up submissions, unknown-state no-drain, interrupt fan-out and uncertain result.
+- `npm run test:codex-runtime-manager`: manager/controller payloads include `sessionId`, `turnId`, `afterTurnId` and `submissionId`.
+- `npm run test:agent-composer-state`: composer mode and draft state remain Session-local.
+- Workbench acceptance must additionally prove message-card interrupt passes `part.turnId`, retry starting hides active-turn controls, and stale `turn/completed` cannot clear another Session's running state.
+- Real App Server gate: dual-Session cancel isolation 已于 2026-08-04 通过；仍需长 Turn steer、两条相同文本 follow-up 串行 drain、confirmed interrupted completion 的独立收据后，才能关闭 R15 live 门槛。
 
 - `npm run test:agent-renderer-isolation`: Agent mount/dispose does not mutate main-chat image or visibility ownership.
 - `npm run test:agent-renderer-lifecycle`: listeners, timers, intervals, and RAF registrations are disposed idempotently.

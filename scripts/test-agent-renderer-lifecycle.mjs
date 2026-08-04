@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createRendererLifecycleScope } from '../modules/ui-system/agent-renderer-lifecycle.js';
+import { createRendererLifecycleScope } from '../modules/ui-system/agent-workbench-lifecycle.js';
 import { createWorkbenchLifecycle } from '../modules/ui-system/agent-workbench-lifecycle.js';
 import { createAgentRendererSession } from '../modules/ui-system/agent-presentation/fork/agent-renderer-session.js';
 

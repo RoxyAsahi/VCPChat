@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createAgentComposerState } from '../modules/ui-system/agent-composer-state.js';
+import { createAgentComposerState } from '../modules/ui-system/agent-workbench-state.js';
 
 const composers = createAgentComposerState();
 composers.setDraft('session-a', 'draft A');
@@ -32,4 +32,3 @@ assert.equal(composers.get('session-a').draft, '', 'archived/deleted Sessions mu
 assert.equal(composers.entries().some(([sessionId]) => sessionId === 'session-b'), true);
 
 console.log('Agent Session composer state tests passed.');
-

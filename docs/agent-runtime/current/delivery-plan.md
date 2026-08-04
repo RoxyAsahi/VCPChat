@@ -224,7 +224,7 @@
 
 ## R12 Settings and Data Governance
 
-- [~] ProfileV2/SessionConfigV2、schema 8 migration、Profile/Session CAS 和 desired/applied revision 已实现。
+- [~] ProfileV2/SessionConfigV2、schema 9 migration、Profile/Session CAS 和 desired/applied revision 已实现。
 - [~] 字段级 Draft/queue、Codex 0.146 settings apply、发送 barrier、空闲指令 reload、附件 capability 与有界 event dedupe 已实现并有专项测试。
 - [~] 内部 Runtime/Workbench 已移除隐式 `sessionId || topicId` 路由，并对冲突 identity fail-closed；旧 `topicId` 仅保留在 IPC/展示兼容边界。Runtime/Workbench 大文件继续拆分。
 - [x] 2026-08-03 真实 Electron 设置交互已验证 YOLO/cwd 不回跳并写入 SQLite；独立两阶段测试彻底关闭并重启 Electron Main 后，Session、YOLO、模型和 workspace 均从同一 Projection SQLite 恢复。
@@ -252,6 +252,15 @@ R12 当前状态只能是 `implemented/working-tree`，不得复用 R7-R10 live 
 - [x] Runtime Manager 仅保留组合与委托：附件导入归 `RuntimeSessionService`，Workbench presence 与审批 fail-close 归 `RuntimeInteractionService`；所有 Runtime service 的依赖表冻结，当前行数为 Manager 493、Controller 565、Workbench composition 748、Renderer runtime facade 328。
 - [x] canonical Runtime、Workbench 与 Agent presentation JS 已纳入 `lint:agent`；ESLint correctness 规则和当前复杂度防回退上限 170 由 `test:codex-ci` 强制执行，循环依赖继续由完整 import graph 门禁拒绝。
 - [~] 人工多分辨率、20 文件 Tab、长流视觉与真实 ToolBox backend approval 仍属于产品/GUI 验收，不阻塞代码治理的 hermetic 完成，但阻止状态升级为 product。
+
+## R15 Turn Control Reliability
+
+- [~] Retry/edit 已固定为 `thread/fork(beforeTurnId)`；普通分支继续使用 `lastTurnId`，并在新 Session 收到 `turn/started` 前隐藏 steering 控件。
+- [~] `turn/steer`、follow-up、interrupt 使用完整 Session/Turn identity；steer 的 `submissionId` in-flight 去重和持久 pending ledger 已接线。
+- [~] Follow-up 使用 schema 9 的 `kind/submissionId/targetTurnId`，只在匹配 Turn 完成且 Thread idle 后 drain；相同文本的不同 submission 不再永久合并。
+- [~] Interrupt 对 App Server、Responses、Bridge 和 Turn 交互执行独立取消，重复停止返回原结果；只有匹配 `turn/completed` 才最终收口为 stopped。
+- [x] Hermetic：`test:codex-runtime-turn-service`、`test:codex-runtime-manager`、`test:agent-composer-state`、`test:codex-projection-store`、`check:agent-runtime`、`check:codex-schema` 已通过。
+- [~] Live 部分通过：2026-08-04 使用固定 Codex 0.146.0、未修改 ToolBox、`deepseek-v4-flash` 运行 `VCP_CODEX_LIVE=1 npm run test:codex-concurrent-live`；同一 App Server PID 下 A/B 长 Turn 均 started，中止 A 不影响 B，A=`interrupted`、B=`completed`，取消与 Projection 隔离通过。长 Turn steer、相同文本双 follow-up 和完整 Electron Workbench 仍待；当前并行设置页/选择器回归仍会阻塞整体 UI 门槛，因此状态保持 `working-tree`。
 
 R13 当前状态为 `implemented/working-tree`；代码治理目标已实现，但产品级多分辨率截图、20 文件 Tab、长流滚动和 live backend approval 仍属于 GUI-R6/R6，不因治理完成而自动升级为 product。
 

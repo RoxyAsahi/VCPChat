@@ -98,7 +98,9 @@ VChat Session 首次发送前创建 Codex Thread。参数来自 Session 冻结�
 
 ### `thread/fork`
 
-编辑、从旧消息重试、分支均创建新的 Codex Thread 和新的 VChat Session。可用 `lastTurnId` 限定 fork 截点。不得直接修改 SQLite 历史并继续原 Thread。
+编辑、从旧消息重试、分支均创建新的 Codex Thread 和新的 VChat Session。`lastTurnId` 是**包含**该 Turn 的截点，适合“保留到此处”的普通分支；编辑或重试某条消息必须使用 `beforeTurnId`，排除该 Turn 和其后的历史，再以新 `turn/start` 发送替换文本。不得直接修改 SQLite 历史并继续原 Thread。
+
+`thread/fork` 返回的新 Thread 已有独立历史，但不能假设它会复制 VChat 的运行时 provider 绑定。fork 请求必须显式携带同一 Session 的 `modelProvider`、`config`、`cwd`、审批和可信指令；fork schema 不接受 `dynamicTools`。持久化新 Session 后，`toolbox-only` Profile 还要执行一次 `thread/resume` 建立当前连接的 live subscription 并重新应用 resume-safe policy，再开始第一个 `turn/start`。这不是重启恢复，而是本 Profile 的运行时绑定步骤；不得跳过。
 
 ### resume/restart
 
@@ -115,8 +117,20 @@ error，绝不标 orphaned。
 ## Turn 操作
 
 - `turn/start`：必须携带 `threadId`、`clientUserMessageId` 和规范 `UserInput[]`。
-- `turn/steer`：必须携带 `expectedTurnId`，防止插入错误 Turn。
-- `turn/interrupt`：只取消指定 `threadId + turnId`。
+- `turn/steer`：必须携带 `expectedTurnId`，防止插入错误 Turn；它修改当前 Turn，不创建新的 Turn。
+- `turn/interrupt`：只取消指定 `threadId + turnId`。App Server、Responses 请求、动态 ToolBox call 和该 Turn 的审批/交互分别取消，最终只有匹配的 `turn/completed(status=interrupted)` 才能把 UI 标为已停止。
+
+VChat 的 Turn 控制合同始终包含完整 Session/Turn identity：
+
+```text
+steer      { sessionId, turnId, prompt, submissionId }
+follow-up  { sessionId, afterTurnId, prompt, submissionId }
+cancel     { sessionId, turnId }
+```
+
+`submissionId` 只用于同一次 IPC/按钮重复提交的幂等保护；相同文本使用不同 submission 可以被用户明确排队多次。follow-up 先进入 VChat 持久队列，只有收到匹配 `afterTurnId` 的 `turn/completed` 且 Thread 已确认 idle 后才调用下一次 `turn/start`。未知、重连中或仍 active 的 Thread 不得 drain。ACK 后崩溃的 `dispatching` 输入必须以 `clientUserMessageId` 经 `thread/read` 对账，不能自动重放。
+
+`turn/completed` 只有在其 Turn ID 等于当前 active Turn 时才能结束运行态、应用 pending config 和 drain follow-up；旧 Turn 的迟到事件只能更新旧投影。
 
 文本输入包含 `text_elements: []`。图片使用 `image/localImage`，音频使用 `audio/localAudio`，普通文件使用受控 mention/descriptor；文件 path/Base64 不写入 transcript localStorage。
 

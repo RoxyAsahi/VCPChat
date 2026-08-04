@@ -38,14 +38,14 @@ migrationDb.exec(`
     );
 `);
 const migratedRepository = new AgentProjectionRepository({ db: migrationDb });
-assert.equal(migratedRepository.schemaVersion, 8, 'schema 5 databases must migrate to schema 8');
+assert.equal(migratedRepository.schemaVersion, 9, 'schema 5 databases must migrate to schema 9');
 assert.ok(migrationDb.prepare("PRAGMA table_info('projection_state')").all()
     .some((column) => column.name === 'activity_json' && String(column.dflt_value).includes('{}')),
     'schema 5 migration must add the durable Activity projection column');
 migratedRepository.close();
 
 const repository = new AgentProjectionRepository({ databasePath: path.join(root, 'projection.sqlite') });
-assert.equal(repository.schemaVersion, 8);
+assert.equal(repository.schemaVersion, 9);
 repository.saveSession({
     sessionId: 'session_1',
     threadId: 'thr_1',
@@ -255,9 +255,9 @@ repository.setPinned('session_1', false);
 assert.equal(repository.getSession('session_1').pinnedAt, null);
 const pending = repository.enqueuePendingInput('session_1', { dedupeKey: 'same-message', prompt: 'continue after this turn' });
 const repeated = repository.enqueuePendingInput('session_1', { dedupeKey: 'same-message', prompt: 'continue after this turn' });
-assert.equal(pending.input_id, repeated.input_id, 'queued follow-ups must dedupe per Session');
+assert.equal(pending.inputId, repeated.inputId, 'queued follow-ups must dedupe per Session');
 assert.equal(repository.listPendingInputs('session_1')[0].prompt, 'continue after this turn');
-repository.removePendingInput(pending.input_id);
+repository.removePendingInput(pending.inputId);
 assert.equal(repository.listPendingInputs('session_1').length, 0);
 repository.close();
 const reopenedRepository = new AgentProjectionRepository({ databasePath: path.join(root, 'projection.sqlite') });
@@ -280,7 +280,7 @@ const downgraded = new Database(backupDatabasePath);
 downgraded.prepare('UPDATE projection_schema SET version = 6').run();
 downgraded.close();
 const migratedFromDisk = new AgentProjectionRepository({ databasePath: backupDatabasePath });
-assert.equal(migratedFromDisk.schemaVersion, 8);
+assert.equal(migratedFromDisk.schemaVersion, 9);
 migratedFromDisk.close();
 assert.equal(fs.existsSync(`${backupDatabasePath}.schema-6.bak`), true,
     'an on-disk schema migration must create a versioned backup before mutation');

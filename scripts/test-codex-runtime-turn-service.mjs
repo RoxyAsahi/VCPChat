@@ -18,12 +18,45 @@ const sessions = new Map([
     [session.sessionId, session],
     [secondSession.sessionId, secondSession],
 ]);
+const pendingInputs = new Map();
+let pendingSequence = 0;
 const repository = {
     getSession: (sessionId) => sessions.get(sessionId) || null,
     markSessionConfigApplied: (sessionId, revision, config) => ({
         ...sessions.get(sessionId), sessionId, configRevision: revision, configSnapshot: config,
     }),
-    listPendingInputs: () => [],
+    enqueuePendingInput: (sessionId, input) => {
+        const existing = [...pendingInputs.values()].find((entry) => (
+            entry.sessionId === sessionId && entry.submissionId === input.submissionId
+        ));
+        if (existing) return { ...existing };
+        const entry = {
+            inputId: `pending-${++pendingSequence}`,
+            sessionId,
+            submissionId: input.submissionId,
+            dedupeKey: input.submissionId,
+            kind: input.kind || 'follow-up',
+            targetTurnId: input.targetTurnId || null,
+            prompt: input.prompt,
+            state: 'queued',
+            clientMessageId: `client-${pendingSequence}`,
+            turnId: null,
+            attemptCount: 0,
+            lastError: null,
+        };
+        pendingInputs.set(entry.inputId, entry);
+        return { ...entry };
+    },
+    listPendingInputs: (sessionId) => [...pendingInputs.values()]
+        .filter((entry) => entry.sessionId === sessionId).map((entry) => ({ ...entry })),
+    updatePendingInput: (inputId, patch) => {
+        const current = pendingInputs.get(inputId);
+        if (!current) return null;
+        const next = { ...current, ...patch };
+        pendingInputs.set(inputId, next);
+        return { ...next };
+    },
+    removePendingInput: (inputId) => pendingInputs.delete(inputId),
 };
 const threadStates = new Map([
     ['thread-turn', { activity: 'idle', activeTurnId: null }],
@@ -31,12 +64,20 @@ const threadStates = new Map([
 ]);
 const resumedThreadIds = new Set(['thread-turn', 'thread-second']);
 const turnStartPromises = new Map();
+const steerPromises = new Map();
+const followUpDrainPromises = new Map();
+const turnCancellationStates = new Map();
+const dynamicCalls = new Map();
 const calls = [];
+const responseCancels = [];
+const bridgeInterrupts = [];
+const failedClosedTurns = [];
 let generation = 4;
 let activeTransport = {
     async request(method, params) {
         calls.push({ method, params });
         if (method === 'turn/start') return { turn: { id: `turn-${params.threadId}` } };
+        if (method === 'turn/steer') return { turnId: params.expectedTurnId };
         if (method === 'turn/interrupt') return {};
         throw new Error(`unexpected ${method}`);
     },
@@ -52,10 +93,10 @@ const service = new RuntimeTurnService({
     assertProjectionWritable: () => {},
     repository: () => repository,
     transport: () => activeTransport,
-    bridge: () => null,
-    responsesAdapter: () => null,
+    bridge: () => ({ interrupt: async (requestId) => { bridgeInterrupts.push(requestId); return { interrupted: true }; } }),
+    responsesAdapter: () => ({ cancelTurn: async (identity) => { responseCancels.push(identity); return 1; } }),
     attachments: () => ({ resolveMany: () => [] }),
-    dynamicCalls: () => new Map(),
+    dynamicCalls: () => dynamicCalls,
     start: async () => {},
     captureGeneration,
     assertGeneration: (scope) => scope.assertCurrent(generation),
@@ -78,7 +119,10 @@ const service = new RuntimeTurnService({
     faultInjection: () => ({}),
     sessionWarmPromises: () => new Map(),
     turnStartPromises: () => turnStartPromises,
-    followUpDrainPromises: () => new Map(),
+    steerPromises: () => steerPromises,
+    followUpDrainPromises: () => followUpDrainPromises,
+    turnCancellationStates: () => turnCancellationStates,
+    failClosedTurnInteractions: async (identity) => { failedClosedTurns.push(identity); return { resolved: ['approval-1'] }; },
     compactionWaiters: () => new Map(),
     resumedThreadIds: () => resumedThreadIds,
     resumingThreads: () => new Map(),
@@ -131,4 +175,92 @@ await assert.rejects(staleStart, (error) => error.code === 'STALE_RUNTIME_GENERA
 assert.equal(threadStates.get(staleSession.threadId).activeTurnId, null,
     'an old generation Turn ACK must not update replacement Runtime state');
 activeTransport = originalTransport;
+
+threadStates.set(session.threadId, { activity: 'running', activeTurnId: 'turn-steer' });
+let releaseSteer;
+activeTransport = {
+    request(method, params) {
+        calls.push({ method, params });
+        if (method !== 'turn/steer') throw new Error(`unexpected ${method}`);
+        return new Promise((resolve) => { releaseSteer = () => resolve({ turnId: params.expectedTurnId }); });
+    },
+};
+const firstSteer = service.steer({
+    sessionId: session.sessionId, turnId: 'turn-steer', prompt: 'adjust now', submissionId: 'steer-submit-1',
+});
+const duplicateSteer = service.steer({
+    sessionId: session.sessionId, turnId: 'turn-steer', prompt: 'adjust now', submissionId: 'steer-submit-1',
+});
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(calls.filter((call) => call.method === 'turn/steer'
+    && call.params.expectedTurnId === 'turn-steer').length, 1,
+    'the same in-flight steering submission must issue one App Server request');
+releaseSteer();
+assert.deepEqual(await firstSteer, await duplicateSteer);
+assert.equal(repository.listPendingInputs(session.sessionId).length, 0,
+    'an acknowledged steering command must leave no pending queue row');
+await assert.rejects(service.steer({
+    sessionId: session.sessionId, turnId: 'turn-stale', prompt: 'wrong turn', submissionId: 'steer-stale',
+}), (error) => error.code === 'STALE_TURN');
+
+activeTransport = originalTransport;
+await service.followUp({
+    sessionId: session.sessionId, afterTurnId: 'turn-steer', prompt: 'same follow-up', submissionId: 'follow-submit-1',
+});
+await service.followUp({
+    sessionId: session.sessionId, afterTurnId: 'turn-steer', prompt: 'same follow-up', submissionId: 'follow-submit-2',
+});
+assert.equal(repository.listPendingInputs(session.sessionId).filter((entry) => entry.kind === 'follow-up').length, 2,
+    'the same follow-up text with distinct submission IDs must remain two explicit queue entries');
+threadStates.set(session.threadId, { activity: 'unknown', activeTurnId: null });
+const startsBeforeUnknownDrain = calls.filter((call) => call.method === 'turn/start').length;
+assert.equal(await service.drainFollowUpQueue(session, { completedTurnId: 'turn-steer' }), null);
+assert.equal(calls.filter((call) => call.method === 'turn/start').length, startsBeforeUnknownDrain,
+    'an unconfirmed Thread state must never drain the follow-up queue');
+
+threadStates.set(session.threadId, { activity: 'idle', activeTurnId: null });
+activeTransport = {
+    async request(method, params) {
+        calls.push({ method, params });
+        if (method === 'turn/start') {
+            const error = new Error('active turn is not steerable');
+            error.code = 'ACTIVE_TURN_NOT_STEERABLE';
+            throw error;
+        }
+        throw new Error(`unexpected ${method}`);
+    },
+};
+await service.drainFollowUpQueue(session, { completedTurnId: 'turn-steer' });
+assert.equal(repository.listPendingInputs(session.sessionId)[0]?.state, 'queued',
+    'a recoverable active-turn race must return the follow-up to queued instead of losing it');
+
+threadStates.set(session.threadId, { activity: 'running', activeTurnId: 'turn-cancel' });
+dynamicCalls.set('dynamic-cancel', {
+    threadId: session.threadId, turnId: 'turn-cancel', bridgeRequestId: 'bridge-request-1',
+});
+activeTransport = {
+    async request(method, params) {
+        calls.push({ method, params });
+        if (method === 'turn/interrupt') throw new Error('App Server interrupt failed');
+        throw new Error(`unexpected ${method}`);
+    },
+};
+const cancelled = await service.cancel({
+    sessionId: session.sessionId, turnId: 'turn-cancel',
+});
+const interruptCount = calls.filter((call) => call.method === 'turn/interrupt').length;
+assert.deepEqual(await service.cancel({
+    sessionId: session.sessionId, turnId: 'turn-cancel',
+}), cancelled, 'repeated stop for the same Turn must return the original cancellation result');
+assert.equal(calls.filter((call) => call.method === 'turn/interrupt').length, interruptCount,
+    'repeated stop must not issue a second App Server interrupt');
+assert.equal(cancelled.state, 'uncertain');
+assert.equal(cancelled.channels.appServer, 'rejected');
+assert.equal(cancelled.channels.responses, 'fulfilled');
+assert.equal(cancelled.channels.bridge, 'fulfilled');
+assert.equal(cancelled.channels.interactions, 'fulfilled');
+assert.deepEqual(responseCancels.at(-1), { threadId: session.threadId, turnId: 'turn-cancel' });
+assert.deepEqual(bridgeInterrupts, ['bridge-request-1']);
+assert.equal(failedClosedTurns.at(-1).turnId, 'turn-cancel');
+
 console.log('Codex Runtime turn service tests passed.');

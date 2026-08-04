@@ -1,7 +1,6 @@
 const correctnessRules = {
-    // Initial no-regression ceiling. The event reducer currently peaks at 169;
-    // lower this only alongside a behavior-preserving reducer split.
-    complexity: ['error', 170],
+    // All canonical Agent host code is governed by the final complexity ceiling.
+    complexity: ['error', 29],
     'constructor-super': 'error',
     'for-direction': 'error',
     'getter-return': 'error',

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { createAgentRendererHtmlCache } from '../modules/ui-system/agent-presentation/fork/agent-renderer-html-cache.js';
+import { createAgentRendererHtmlCache } from '../modules/ui-system/agent-presentation/fork/agent-renderer-markdown-pipeline.js';
 
 let renders = 0;
 const cache = createAgentRendererHtmlCache({

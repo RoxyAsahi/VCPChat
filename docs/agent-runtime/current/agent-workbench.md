@@ -132,11 +132,20 @@ R4.2 优先复用 vcp-code `vcp-content.ts` 的 `VCP_DYNAMIC_FOLD`、`VCPINFO` d
 | 复制消息/代码 | 只读展示内容。 |
 | 转发 | 生成普通聊天/目标输入的内容副本，不修改 Codex Thread。 |
 | 取消 | `turn/interrupt(threadId, turnId)`。 |
-| 编辑旧消息 | `thread/fork(lastTurnId)` 后在新 Session 发送编辑内容。 |
-| 从旧消息重试 | `thread/fork(lastTurnId)` 后新 Turn。 |
-| 分支 | `thread/fork` 创建新 VChat Session。 |
+| 编辑旧消息 | `thread/fork(beforeTurnId)` 后在新 Session 发送编辑内容。 |
+| 从旧消息重试 | `thread/fork(beforeTurnId)` 后新 Turn。 |
+| 分支 | `thread/fork(lastTurnId)` 创建保留到该 Turn 的新 VChat Session。 |
 | 删除 Session | 先 VChat archive；Codex archive/delete 单独确认。 |
 | 工具详情 | 展示原生 item/bridge 结构化结果，不重新执行。 |
+
+### Turn 控制与重试
+
+- 从旧消息重试/编辑先 `thread/fork(beforeTurnId)`，在新 Session 收到权威 `turn/started` 前不显示“立即调整/排队后续”。
+- 普通分支使用 `thread/fork(lastTurnId)`；fork 显式继承源 Session 的 provider、模型、cwd、审批和可信指令。
+- “立即调整”是当前 Turn 的 `turn/steer`，需要消息所属的精确 `turnId` 和一次性 `submissionId`，不会生成第二个 Turn。
+- “排队后续”写入 Session 级持久队列，记录 `afterTurnId`；只有目标 Turn 完成且 Thread idle 才发送下一 Turn。相同文本的不同 submission 不会被永久合并。
+- 停止按钮只取消当前 Session 的精确 `turnId`，并分别请求 App Server、Responses、VCP 动态调用和该 Turn 交互 fail-closed；在 Codex 完成事件确认前显示“停止请求中/未确认”。
+- A/B Session 的 steer、follow-up、interrupt、运行胶囊和草稿均按 `sessionId` 隔离；迟到的旧 Turn 完成事件不得结束新 Turn。
 
 任何动作都不得仅修改 SQLite 并声称改变了 Codex 上下文。
 
@@ -152,7 +161,7 @@ R11 的设置作用域、两类指令来源与 Composer 状态机以 [agent-sett
   Item 到达后由 keyed timeline 移除临时 Part。
 - 图片/音频/文件只通过 Main 选择和验证，Renderer 持有 descriptor。
 - 草稿、附件和运行中输入模式按 Session 保存在 Renderer 生命周期内；切换失败不清空，归档/永久删除清理对应 entry。
-- active Turn 显式选择“立即调整”或“排队后续”，停止是独立按钮；空输入不再隐式取消，`/steer` 只保留兼容语义。
+- active Turn 仅在当前 Session 的 `activeRuntimes[sessionId]` 有目标 Turn 时显式选择“立即调整”或“排队后续”；停止是独立按钮。其他 Session 的运行态不得显示在当前 Composer，`/steer` 只保留兼容语义。
 - App Server ACK 后显示 sending；Codex user Item/SQLite projection 确认后转 durable。
 - crash 时显示 unconfirmed，不自动重放，重连后以 `thread/read` 对账。
 

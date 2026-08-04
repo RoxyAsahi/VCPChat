@@ -577,9 +577,23 @@ manager.resumedThreadIds.clear();
 await manager.createSession({ sessionId: session.sessionId });
 assert.equal(manager.repository.getSession(session.sessionId).orphaned, false,
     'a successful explicit resume clears a previously stale orphan marker');
-const fork = await manager.forkSession({ sessionId: session.sessionId, turnId: 'turn_test' });
+const resumesBeforeRetryFork = fake.calls.filter((call) => call.method === 'thread/resume').length;
+const fork = await manager.forkSession({ sessionId: session.sessionId, beforeTurnId: 'turn_test' });
 assert.equal(fork.threadId, 'thr_fork');
 assert.equal(manager.getStatus().runtimes.some((runtime) => runtime.sessionId === session.sessionId), true);
+const retryForkRequest = fake.calls.filter((call) => call.method === 'thread/fork').at(-1);
+assert.equal(retryForkRequest.params.threadId, 'thr_test');
+assert.equal(retryForkRequest.params.beforeTurnId, 'turn_test',
+    'retry/edit forks must exclude the selected Turn instead of copying it and resubmitting the same input');
+assert.equal(retryForkRequest.params.model, manager.repository.getSession(session.sessionId).configSnapshot.model,
+    'forks must carry the Session model instead of falling back to an unrelated provider default');
+assert.equal(retryForkRequest.params.baseInstructions, manager.repository.getSession(session.sessionId).configSnapshot.baseInstructions,
+    'forks must carry the trusted VChat identity into the replacement Thread');
+assert.equal(manager.resumedThreadIds.has('thr_fork'), false,
+    'a freshly forked Thread must be resumed once to bind toolbox-only dynamic tools and provider policy');
+await manager.startTurn({ sessionId: fork.sessionId, prompt: 'retry input' });
+assert.equal(fake.calls.filter((call) => call.method === 'thread/resume').length, resumesBeforeRetryFork + 1,
+    'sending the first replacement Turn must resume the fork once to bind toolbox-only runtime configuration');
 // Archive/unarchive must move the actual Codex Thread, while pinning remains
 // VChat-only presentation metadata. None of these navigation operations may
 // infer or replace a Thread identity.
@@ -660,7 +674,10 @@ resolveDeferred({ sessionId: lifecycleSession.sessionId, threadId: lifecycleSess
 assert.deepEqual(await firstSubmit, await sameSubmit);
 manager._startTurn = originalStartTurn;
 manager.threadStates.set(lifecycleSession.threadId, { activity: 'running', activeTurnId: 'active-turn' });
-const queuedFollowUp = await manager.followUpTurn({ sessionId: lifecycleSession.sessionId, prompt: 'run after current turn' });
+const queuedFollowUp = await manager.followUpTurn({
+    sessionId: lifecycleSession.sessionId, turnId: 'active-turn', submissionId: 'follow-up-test-1',
+    prompt: 'run after current turn',
+});
 assert.equal(queuedFollowUp.queued, true);
 assert.equal(manager.repository.listPendingInputs(lifecycleSession.sessionId).length, 1);
 fake.emit('notification', { method: 'turn/completed', params: { threadId: lifecycleSession.threadId, turn: { id: 'active-turn' } } });

@@ -38,8 +38,18 @@ const eventService = new RuntimeEventService({
     drainFollowUpQueue: async () => {},
     sendEvent: (event) => envelopes.push(event),
 });
-eventService.updateThreadState({ method: 'turn/completed', params: {} }, sessions.get('session-a'));
+eventService.updateThreadState({
+    method: 'turn/completed',
+    params: { threadId: 'thread-a', turn: { id: 'turn-a', status: 'completed' } },
+}, sessions.get('session-a'));
 assert.equal(states.get('thread-a').activity, 'idle');
+
+states.set('thread-a', { activity: 'running', activeTurnId: 'turn-b' });
+eventService.updateThreadState({
+    method: 'turn/completed',
+    params: { threadId: 'thread-a', turn: { id: 'turn-a', status: 'completed' } },
+}, sessions.get('session-a'));
+assert.deepEqual(states.get('thread-a'), { activity: 'running', activeTurnId: 'turn-b' });
 eventService.sendUiEvent({ type: 'context.usage', sessionId: 'session-a', payload: { totalTokens: 10 } });
 assert.equal(activity[0].patch.usage.totalTokens, '[redacted]');
 assert.equal(envelopes[0].sequence, 1);

@@ -229,11 +229,8 @@ for (const file of [
         errors.push(`${file} bypasses the formal Workbench client boundary`);
     }
 }
-if (!fs.existsSync(path.join(root, 'modules/ui-system/agent-runtime-event-subscription.js'))) {
-    errors.push('Workbench Runtime event subscription owner is missing');
-}
-for (const file of ['agent-session-client.js', 'agent-projection-client.js', 'agent-interaction-client.js', 'agent-workspace-client.js']) {
-    if (!fs.existsSync(path.join(root, 'modules/ui-system', file))) errors.push(`missing Workbench client module: ${file}`);
+if (!fs.existsSync(path.join(root, 'modules/ui-system/agent-workbench-clients.js'))) {
+    errors.push('Workbench client boundary is missing');
 }
 if (!fs.existsSync(path.join(root, 'modules/ui-system/agent-workbench-lifecycle.js'))) {
     errors.push('missing Workbench lifecycle module');
@@ -285,7 +282,7 @@ assertAcyclic(governedAgentModules, 'Agent host integration');
 for (const file of filesUnder(path.join(root, 'modules/ui-system'), /agent-.*\.js$/)) {
     const relative = path.relative(root, file);
     const source = fs.readFileSync(file, 'utf8');
-    if (!/(?:agent-workbench-lifecycle|agent-renderer-lifecycle|agent-renderer-session|agent-settings-state|agent-session-catalog-coordinator)\.js$/.test(file)
+    if (!/(?:agent-workbench-lifecycle|agent-renderer-session|agent-session-catalog-coordinator)\.js$/.test(file)
         && /\b(?:setInterval|setTimeout|requestAnimationFrame|requestIdleCallback)\s*\(/.test(source)) {
         errors.push(`${relative} owns an unregistered timer or frame`);
     }
@@ -312,10 +309,7 @@ for (const file of formalWorkbenchViews) {
         errors.push(`${file} does not expose the standard View lifecycle contract`);
     }
 }
-for (const file of [
-    'agent-composer-state.js', 'agent-session-dock.js', 'agent-workspace-view-state.js',
-    'agent-sidebar-view-state.js',
-]) {
+for (const file of ['agent-workbench-state.js', 'agent-session-dock.js']) {
     if (!fs.existsSync(path.join(root, 'modules/ui-system', file))) {
         errors.push(`missing Renderer state owner: ${file}`);
     }
@@ -364,8 +358,8 @@ if (!fs.existsSync(agentEslintConfigPath)) {
     errors.push('canonical Agent ESLint config is missing');
 } else {
     const agentEslintSource = fs.readFileSync(agentEslintConfigPath, 'utf8');
-    if (!/complexity:\s*\['error',\s*170\]/.test(agentEslintSource)) {
-        errors.push('Agent ESLint must enforce the accepted complexity ceiling');
+    if (!/complexity:\s*\['error',\s*29\]/.test(agentEslintSource)) {
+        errors.push('Agent ESLint must enforce the final complexity ceiling of 29');
     }
     if (!/agent-store\/\*\*\/\*\.js[\s\S]*complexity:\s*\['error',\s*29\]/.test(agentEslintSource)) {
         errors.push('Agent Store reducers must enforce complexity below 30');

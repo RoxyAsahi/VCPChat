@@ -376,7 +376,11 @@ window.chatAPI = {
             },
         };
     },
-    agentRuntimeRenameTopic: async ({ sessionId, title }) => { renamedTopics.push({ sessionId, title }); return { ok: true, sessionId, title }; },
+    agentRuntimeRenameTopic: async ({ sessionId, title }) => {
+        renamedTopics.push({ sessionId, title });
+        topicCatalog = topicCatalog.map((topic) => topic.id === sessionId ? { ...topic, title } : topic);
+        return { ok: true, sessionId, title };
+    },
     agentRuntimeDeleteTopic: async ({ sessionId }) => ({ ok: true, sessionId }),
     agentRuntimeRestoreSession: async ({ sessionId }) => ({ restored: true, sessionId }),
     agentRuntimePermanentlyDeleteSession: async ({ sessionId }) => ({ deleted: true, sessionId }),
@@ -395,6 +399,7 @@ window.chatAPI.agentRuntimeUpdateSessionConfig = async ({ sessionId, expectedCon
 );
 window.chatAPI.agentSessionCreate = window.chatAPI.agentRuntimeCreateTopic;
 window.chatAPI.agentSessionList = window.chatAPI.agentRuntimeListTopics;
+window.chatAPI.agentSessionRename = window.chatAPI.agentRuntimeRenameTopic;
 function canonicalSessionProjection(snapshot) {
     if (snapshot?.session?.sessionId) return snapshot;
     const sessionId = String(snapshot?.sessionId || '').trim();
@@ -854,6 +859,21 @@ assert.equal(host.querySelector('.agent-chat-topic-conflict-dialog'), null,
 assert.equal(host.querySelector('.agent-chat-persisted-topic[data-session-id="topic-in-use"]')?.classList.contains('active'), true,
     'legacy inUse metadata must not prevent immediate SQLite projection selection');
 assert.ok(host.querySelector('.agent-chat-header-actions'), 'Tool and approval activity must remain reachable from the redesigned header');
+const editableTitle = host.querySelector('.agent-chat-title.is-editable');
+assert.ok(editableTitle, 'the active durable Session title must expose an inline rename affordance');
+editableTitle.click();
+const inlineRenameInput = host.querySelector('.agent-chat-title-input');
+assert.ok(inlineRenameInput, 'clicking the active Session title must replace it with an inline editor');
+const headerRenameCount = renamedTopics.filter((entry) => entry.sessionId === 'topic-in-use').length;
+inlineRenameInput.value = 'Header 内联重命名';
+inlineRenameInput.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+await waitFor(() => renamedTopics.filter((entry) => entry.sessionId === 'topic-in-use').length > headerRenameCount);
+const renamedHeaderTitle = await waitFor(() => {
+    const value = host.querySelector('.agent-chat-title')?.textContent || '';
+    return value.includes('Header 内联重命名') ? value : null;
+}, 3_000);
+assert.match(renamedHeaderTitle || '', /Header 内联重命名/,
+    'an inline header rename must persist through the narrow Session rename IPC and return to display mode');
 const compactButton = host.querySelector('.agent-chat-compact');
 assert.ok(compactButton?.disabled,
     'a projection-only Session preview must not infer an active runtime or enable compaction');
@@ -928,10 +948,10 @@ assert.ok([...host.querySelectorAll('.message-item.user .md-content')]
     .some((node) => node.textContent.includes('请介绍一下自己')),
     'Codex turn.started must render the submitted user message immediately');
 const activeSendButton = host.querySelector('.agent-chat-send-button');
-const activeRunStatus = host.querySelector('.agent-chat-run-status');
-assert.equal(activeRunStatus.hidden, false, 'an active Turn must expose a dedicated status rail above the composer');
-assert.match(activeRunStatus.textContent, /正在运行.*Agent 正在处理当前任务.*\d+\.\d+s/s,
-    'the status rail must show explicit running state and elapsed time without relying on the send button');
+const activeStatusChip = host.querySelector('.agent-chat-status-chip');
+assert.equal(activeStatusChip?.dataset.state, 'running', 'an active Turn must expose running state in the header');
+assert.match(activeStatusChip?.textContent || '', /运行中\s*\d+s/,
+    'the header status must show explicit running state and elapsed time');
 const runningSessionRow = host.querySelector('.agent-chat-session-row[data-session-id="topic-in-use"]');
 assert.ok(runningSessionRow?.classList.contains('is-running'),
     'the owning Session row must expose its own running state');
@@ -945,8 +965,8 @@ await new Promise((resolve) => setTimeout(resolve, 30));
 assert.equal(prompt.value, '', 'switching Session must not show the running Session draft in another Session');
 prompt.value = 'idle-session draft';
 prompt.dispatchEvent(new window.Event('input', { bubbles: true }));
-assert.equal(activeRunStatus.hidden, true,
-    'switching to an idle Session must hide another Session\'s running status rail');
+assert.notEqual(host.querySelector('.agent-chat-status-chip')?.dataset.state, 'running',
+    'switching to an idle Session must hide another Session\'s running status');
 assert.ok(runningSessionRow.classList.contains('is-running'),
     'switching away must preserve the background glow on the running Session row');
 assert.equal(idleSessionRow.querySelector('.agent-chat-session-avatar')?.classList.contains('is-running'), false,
@@ -957,16 +977,14 @@ assert.equal(prompt.value, 'running-session draft',
     'switching back must restore the draft bound to that durable Session ID');
 prompt.value = '';
 prompt.dispatchEvent(new window.Event('input', { bubbles: true }));
-assert.equal(activeRunStatus.hidden, false,
-    'switching back to the owning Session must restore its Session-scoped running rail');
-const runStatusStop = activeRunStatus.querySelector('.agent-chat-run-status-stop');
-assert.ok(runStatusStop, 'the running rail must expose an independent stop action');
-runStatusStop.click();
+assert.equal(host.querySelector('.agent-chat-status-chip')?.dataset.state, 'running',
+    'switching back to the owning Session must restore its Session-scoped running status');
+host.querySelector('.agent-chat-status-chip')?.click();
 await new Promise((resolve) => setTimeout(resolve, 0));
-assert.deepEqual(cancelledTurns, [{ sessionId: 'topic-in-use', turnId: 'turn_test' }],
-    'the status-rail stop action must cancel the authoritative active Turn');
+assert.deepEqual(cancelledTurns, [],
+    'the header status chip must remain read-only and must never cancel the active Turn');
 assert.equal(activeSendButton.querySelector('.vcp-ui-icon')?.textContent, 'arrow_upward',
-    'the send action must remain distinct from the explicit running-rail stop control');
+    'the running composer send action must remain available for explicit steer and follow-up input');
 assert.equal(activeSendButton.disabled, true,
     'an empty running composer must not implicitly cancel the Turn');
 const runningModes = host.querySelector('.agent-chat-composer-modes');
@@ -976,8 +994,14 @@ prompt.value = '完成后再列出风险';
 prompt.dispatchEvent(new window.Event('input', { bubbles: true }));
 host.querySelector('.agent-chat-send-button').click();
 await new Promise((resolve) => setTimeout(resolve, 0));
-assert.deepEqual(followUpTurns, [{ sessionId: 'topic-in-use', turnId: 'turn_test', prompt: '完成后再列出风险' }],
-    'while a turn is active, normal composer input must queue a Codex follow-up instead of cancelling the task');
+assert.equal(followUpTurns.length, 1,
+    'while a turn is active, normal composer input must queue exactly one Codex follow-up');
+assert.equal(followUpTurns[0].sessionId, 'topic-in-use');
+assert.equal(followUpTurns[0].turnId, 'turn_test');
+assert.equal(followUpTurns[0].afterTurnId, 'turn_test');
+assert.equal(followUpTurns[0].prompt, '完成后再列出风险');
+assert.match(String(followUpTurns[0].submissionId || ''), /.+/,
+    'follow-up submission must carry a stable submissionId');
 const steerMode = [...host.querySelectorAll('.agent-chat-composer-mode')]
     .find((button) => button.textContent === '立即调整');
 steerMode.click();
@@ -985,18 +1009,22 @@ prompt.value = '先检查风险';
 prompt.dispatchEvent(new window.Event('input', { bubbles: true }));
 host.querySelector('.agent-chat-send-button').click();
 await new Promise((resolve) => setTimeout(resolve, 0));
-assert.deepEqual(steeringTurns, [{ sessionId: 'topic-in-use', turnId: 'turn_test', prompt: '先检查风险' }],
-    'the explicit running mode must insert immediate steering rather than a follow-up');
+assert.equal(steeringTurns.length, 1,
+    'the explicit running mode must insert exactly one immediate steering command');
+assert.equal(steeringTurns[0].sessionId, 'topic-in-use');
+assert.equal(steeringTurns[0].turnId, 'turn_test');
+assert.equal(steeringTurns[0].prompt, '先检查风险');
+assert.match(String(steeringTurns[0].submissionId || ''), /.+/,
+    'steering submission must carry a stable submissionId');
 await new Promise((resolve) => setTimeout(resolve, 30));
 const queueToggle = host.querySelector('.agent-chat-queue-toggle');
 assert.ok(queueToggle, 'the header must expose the persisted interaction queue');
 queueToggle.click();
-assert.match(host.querySelector('.agent-chat-queue-popover').textContent, /完成后再列出风险/,
+assert.match(host.querySelector('.agent-chat-queue-panel').textContent, /完成后再列出风险/,
     'the queue panel must render follow-up prompts from Main state');
-assert.match(host.querySelector('.agent-chat-queue-popover').textContent, /先检查风险/,
+assert.match(host.querySelector('.agent-chat-queue-panel').textContent, /先检查风险/,
     'the queue panel must distinguish steering prompts from Main state');
-const removeQueueButton = [...host.querySelectorAll('.agent-chat-queue-item-actions button')]
-    .find((button) => button.textContent === '移除');
+const removeQueueButton = host.querySelector('.agent-chat-queue-remove');
 assert.ok(removeQueueButton, 'queue items must provide a safe remove operation when Main exposes replacement');
 removeQueueButton.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
@@ -1010,8 +1038,7 @@ prompt.value = '刷新队列投影';
 prompt.dispatchEvent(new window.Event('input', { bubbles: true }));
 host.querySelector('.agent-chat-send-button').click();
 await new Promise((resolve) => setTimeout(resolve, 30));
-const resendQueueButton = [...host.querySelectorAll('.agent-chat-queue-item-actions button')]
-    .find((button) => button.textContent === '重新发送');
+const resendQueueButton = host.querySelector('.agent-chat-queue-edit[title="重新发送"]');
 assert.ok(resendQueueButton, 'uncertain input must expose an explicit resend decision');
 resendQueueButton.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
@@ -1338,6 +1365,8 @@ assert.equal(host.querySelectorAll('.agent-chat-readiness-card').length, 0,
 // in place rather than replace the feed, composer or focused draft.
 const liveMessage = host.querySelector('[data-message-id="msg_live"]');
 const stableComposer = host.querySelector('.agent-chat-message-input');
+assert.equal(stableComposer.disabled, false,
+    `the active Session composer must remain focusable before a streaming delta (placeholder: ${stableComposer.placeholder})`);
 stableComposer.value = '保持中的草稿';
 stableComposer.dispatchEvent(new window.Event('input', { bubbles: true }));
 stableComposer.focus();

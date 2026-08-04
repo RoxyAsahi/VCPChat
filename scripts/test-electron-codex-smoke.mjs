@@ -203,6 +203,51 @@ try {
     assert.match(directCreateState.title, /^新会话 /, 'Direct Session creation must use the standard generated title');
     assert.equal(directCreateState.composerDisabled, false, 'A directly created Session preview must be immediately send-capable');
 
+    // The active durable Session title is an inline editor, not a prompt or
+    // renderer-only label. Verify the visible click -> input -> Enter path.
+    const renamedTitle = 'Electron Header Rename';
+    const titleHitTest = await page.evaluate(() => {
+        const title = document.querySelector('#nextUiInternalAppHost .agent-chat-title.is-editable');
+        const rect = title?.getBoundingClientRect();
+        const hit = rect ? document.elementFromPoint(rect.left + (rect.width / 2), rect.top + (rect.height / 2)) : null;
+        return {
+            rect: rect ? { left: rect.left, top: rect.top, width: rect.width, height: rect.height } : null,
+            hitTag: hit?.tagName || null,
+            hitClass: hit?.className || null,
+            isTitleOrDescendant: Boolean(title && hit && (hit === title || title.contains(hit))),
+        };
+    });
+    assert.ok(titleHitTest.isTitleOrDescendant, `the visible inline title must receive pointer events: ${JSON.stringify(titleHitTest)}`);
+    assert.equal(await page.evaluate(() => {
+        const title = document.querySelector('#nextUiInternalAppHost .agent-chat-title.is-editable');
+        title?.click();
+        return Boolean(title);
+    }), true, 'the active Session title must remain connected long enough to enter edit mode');
+    await sleep(100);
+    const inlineEditState = await page.evaluate(() => {
+        const header = document.querySelector('#nextUiInternalAppHost .agent-chat-header');
+        const title = header?.querySelector('.agent-chat-title');
+        const input = header?.querySelector('.agent-chat-title-input');
+        return {
+            hasInput: Boolean(input),
+            titleMarkup: title?.outerHTML || null,
+            headerMarkup: header?.innerHTML || null,
+            titlePointerEvents: title ? getComputedStyle(title).pointerEvents : null,
+        };
+    });
+    assert.ok(inlineEditState.hasInput, `clicking the visible Session title must enter inline edit mode: ${JSON.stringify(inlineEditState)}`);
+    await page.focus('#nextUiInternalAppHost .agent-chat-title-input');
+    await page.keyboard.down('Control');
+    await page.keyboard.press('A');
+    await page.keyboard.up('Control');
+    await page.keyboard.type(renamedTitle);
+    await page.keyboard.press('Enter');
+    await page.waitForFunction((title) => {
+        const headerTitle = document.querySelector('#nextUiInternalAppHost .agent-chat-title');
+        const selectedRow = document.querySelector('#nextUiInternalAppHost .agent-chat-session-row.active .topic-title-display');
+        return headerTitle?.textContent?.trim() === title && selectedRow?.textContent?.trim() === title;
+    }, { timeout: timeoutMs }, renamedTitle);
+
     // R12 real UI contract: a current-Session Select must retain the user's
     // value while the async SQLite save is pending, and the saved workspace
     // must be scoped to this Session rather than the Agent Profile.
