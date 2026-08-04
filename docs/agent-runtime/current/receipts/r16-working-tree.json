@@ -13,7 +13,8 @@
     "587b6350",
     "f127d4a6",
     "0c63895e",
-    "6dafc457"
+    "6dafc457",
+    "ea4738f1"
   ],
   "passed": [
     "npm run test:codex-ci",
@@ -23,6 +24,9 @@
     "npm run test:codex-reliability",
     "npm run test:agent-settings-ux",
     "npm run test:agent-workbench",
+    "npm run test:codex-app-server-real",
+    "npm run test:codex-app-server-adapter-real",
+    "npm run test:electron-codex-session-switch",
     "npm run test:electron-codex-smoke",
     "npm run check:ui-system",
     "npm run check:codex-governance",
@@ -32,13 +36,14 @@
     "git diff --check"
   ],
   "blocked": {
-    "electronSessionSwitch": "normalized-store and recovery isolation passed; explicit interactive A-to-B-to-A live smoke remains pending",
-    "liveToolBox": "real long-running ToolBox Session-switch validation was not run on these commits"
+    "liveToolBox": "2026-08-04 deepseek-v4-flash returned HTTP 502 through the Adapter; a direct authenticated control request to the same ToolBox model endpoint reproduced HTTP 502, so no live pass is claimed"
   },
   "observations": {
     "settingsScopes": "Agent defaults, current Session, and advanced recovery are distinct rendered scopes",
     "settingsPersistence": "Electron smoke verified current-Session YOLO, model, and workspace values through the Select/input UI into SQLite",
     "asyncSave": "saving and session.config events update status in place instead of rebuilding controls from an older Snapshot",
+    "electronSessionSwitch": "two running Sessions retained isolated reasoning, ToolBox cards, answers, message identity, and ordering across A-to-B-to-A, App Server crash, and Renderer reload",
+    "realAdapter": "Codex App Server 0.146 real adapter fixture confirmed that the upstream ToolBox request exposes exactly vcp_invoke after filtering native additional_tools",
     "rendererForkAudit": "upstream 19fdff5f was reviewed; main-chat async history guards were not copied because Agent owns revision/session guards in its normalized store"
   },
   "claims": {

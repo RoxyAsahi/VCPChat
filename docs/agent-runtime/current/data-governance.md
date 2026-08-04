@@ -55,5 +55,6 @@ npm run test:agent-data-contracts
 - Unknown Item、delta-before-Item 和旧 Block schema 都有有界适配；原始协议 Item 不进入 Renderer。
 
 机器门槛：`npm run test:codex-projection-v2`、`npm run test:codex-adapter-invariants`、
-`npm run check:codex-governance`。Electron Session-switch 与 live ToolBox 尚未在同一提交形成收据，R16 状态保持
-`implemented/working-tree`。`test:electron-codex-recovery` 已通过；完整 smoke 在设置页 Select helper 超时，尚未进入 Projection 断言。
+`npm run check:codex-governance`。`test:electron-codex-session-switch` 已验证运行中 A→B→A、reasoning/ToolBox
+卡片隔离以及 reload 后 SQLite 恢复；完整设置 smoke 也已通过。真实 ToolBox `deepseek-v4-flash` 长调用仍因
+模型端点 HTTP 502 未形成通过收据，因此 R16 状态保持 `implemented/working-tree`。

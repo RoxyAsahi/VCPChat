@@ -433,11 +433,11 @@ Electron 真实点击与完整 Main 进程重启已通过；真实 ToolBox provi
 | SQLite V2 normalization/reconcile + Renderer normalized Store | `npm run test:codex-projection-v2` | committed pass |
 | 0.146 Host/Turn/Manager invariants | `npm run test:codex-adapter-invariants` | committed pass |
 | Patch-only Workbench JSDOM | `npm run test:agent-workbench` | committed pass |
-| Schema pin | `npm run check:codex-schema` | pending broad rerun |
-| Static governance | `npm run check:codex-governance` | blocked by pre-existing line/timer baseline; R16-specific scans executed |
+| Schema pin | `npm run check:codex-schema` | committed pass |
+| Static governance | `npm run check:codex-governance` | committed pass |
 | Electron crash/reload recovery | `npm run test:electron-codex-recovery` | committed pass |
-| Electron interactive A→B→A / full smoke | Session-switch smoke + `npm run test:electron-codex-smoke` | pending; smoke timed out in existing settings Select helper before Projection assertions |
-| Live ToolBox long tool call | manual `VCP_CODEX_LIVE=1` gates | pending |
+| Electron interactive A→B→A / full smoke | `npm run test:electron-codex-session-switch` + `npm run test:electron-codex-smoke` | committed pass; reasoning/tool cards and message identity survive switch/reload |
+| Live ToolBox long tool call | `VCP_CODEX_LIVE=1 VCP_CODEX_LIVE_MODEL=deepseek-v4-flash npm run test:codex-toolbox-live` | external model endpoint returned HTTP 502; direct control request reproduced the same 502, so no pass claimed |
 
 R16 assertions include idle-before-completed, matched settings confirmation, Thread/`itemsView` fail-closed,
 reasoning summary/content isolation, Unknown/delta-before-Item behavior, Toolbox authority preservation, fork Item ID isolation,

@@ -121,7 +121,8 @@ injection proves that a crash after `thread/start` or `thread/fork` ACK does not
 - Renderer 统一为 `sessionsById/blocksById/projectionRevisions`，Main 只发 revision Patch；A→B→A 与 revision-gap 均由同一 SQLite Projection 恢复。
 - 0.146 fork 返回的 `thread.sessionId` 若存在必须等于新 Thread ID；版本升级必须重新验证，不能沿用该假设。
 
-Hermetic 已通过 `test:codex-projection-v2` 与 `test:codex-adapter-invariants`。完整 governance 当前仍被既有
-CSS/composition/repository 行数和 timer registration 基线阻止。Electron recovery 已通过 projection isolation、
-reload 和 demand restart；完整 smoke 在设置 Select helper 超时，交互式 A→B→A 与 live ToolBox 仍未完成，
-因此不得升级为 live/product。
+Hermetic 已通过 `test:codex-projection-v2`、`test:codex-adapter-invariants`、`check:codex-governance` 和
+`check:ui-system`。真实 Electron 已验证运行中 A→B→A、reasoning/ToolBox 卡片隔离、crash、reload、SQLite
+恢复和 demand restart；设置 Select smoke 也已通过。真实 ToolBox 长调用尚未形成通过收据：2026-08-04
+指定 `deepseek-v4-flash` 时模型端点对 Adapter 和直接控制请求均返回 HTTP 502，因此状态仍不得升级为
+live/product。

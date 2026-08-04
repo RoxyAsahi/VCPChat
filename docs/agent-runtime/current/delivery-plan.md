@@ -272,8 +272,9 @@ R13 当前状态为 `implemented/working-tree`；代码治理目标已实现，�
 - [x] 旧 `sessionSnapshots`、`snapshotCache`、`liveProjectionRevision` 与 Renderer `projectionMessage` 路径已删除并加入治理扫描。
 - [x] 新增 `test:codex-projection-v2` 与 `test:codex-adapter-invariants` 聚合门槛。
 - [x] Electron recovery 已验证双 Session projection isolation、Renderer reload、crash 后 SQLite 可读和按需重启。
-- [ ] 交互式 A→B→A smoke 与真实 ToolBox 长调用仍待；完整 smoke 当前先被设置页 Select 超时阻止。
-- [ ] 既有 governance 文件体积/timer registration 基线需单独治理后，才能形成全绿 R16 收据。
+- [x] 真实 Electron 已验证运行中 A→B→A：两个 Session 的 reasoning、ToolBox 卡片和回答严格隔离，App Server crash 与 Renderer reload 后从 SQLite 恢复相同消息身份和顺序。
+- [x] 设置页 Select smoke、文件体积、CSS owner 和 timer lifecycle governance 阻塞已修复，`test:electron-codex-smoke`、`check:ui-system` 与 `check:codex-governance` 通过。
+- [ ] 真实 ToolBox 长调用仍待 live 通过。2026-08-04 使用 `deepseek-v4-flash` 时，Adapter gate 与绕过 Codex 的直接控制请求均收到 ToolBox 模型端点 HTTP 502；该外部状态不计为通过，也不归因于 Projection。
 
 状态：`implemented/working-tree`。SQLite database schema 保持 11，Block/Renderer contract 为 V2。
 
