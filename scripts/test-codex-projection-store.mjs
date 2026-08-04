@@ -38,14 +38,14 @@ migrationDb.exec(`
     );
 `);
 const migratedRepository = new AgentProjectionRepository({ db: migrationDb });
-assert.equal(migratedRepository.schemaVersion, 9, 'schema 5 databases must migrate to schema 9');
+assert.equal(migratedRepository.schemaVersion, 10, 'schema 5 databases must migrate to schema 10');
 assert.ok(migrationDb.prepare("PRAGMA table_info('projection_state')").all()
     .some((column) => column.name === 'activity_json' && String(column.dflt_value).includes('{}')),
     'schema 5 migration must add the durable Activity projection column');
 migratedRepository.close();
 
 const repository = new AgentProjectionRepository({ databasePath: path.join(root, 'projection.sqlite') });
-assert.equal(repository.schemaVersion, 9);
+assert.equal(repository.schemaVersion, 10);
 repository.saveSession({
     sessionId: 'session_1',
     threadId: 'thr_1',
@@ -172,6 +172,17 @@ assert.deepEqual(fileChange.blocks[0].content.changes.files[0], {
 projector.projectNotification({
     method: 'item/completed',
     params: { threadId: 'thr_1', turnId: 'turn_1', item: {
+        id: 'dynamic_tool_1', type: 'dynamicToolCall', status: 'completed',
+        tool: 'vcp_invoke', arguments: { tool: 'FileOperator', arguments: { action: 'list' } },
+        contentItems: [{ type: 'inputText', text: 'tool result' }], success: true,
+    } },
+});
+const dynamicTool = repository.readProjection('session_1').messages.find((message) => message.itemId === 'dynamic_tool_1');
+assert.equal(dynamicTool.blocks[0].authority, 'toolbox',
+    'VCP dynamic tool display Blocks must remain outside Codex snapshot deletion');
+projector.projectNotification({
+    method: 'item/completed',
+    params: { threadId: 'thr_1', turnId: 'turn_1', item: {
         id: 'plan_1', type: 'plan', status: 'completed', text: '1. 收集证据\n2. 只读汇总',
     } },
 });
@@ -207,6 +218,10 @@ assert.equal(reconciled.messages.some((message) => message.itemId === 'reason_1'
     'thread/read reconciliation must remove Codex items absent from the authoritative snapshot');
 assert.equal(reconciled.messages.some((message) => message.itemId === 'file_1'), false,
     'thread/read reconciliation must remove stale tool and diff items absent from the authoritative snapshot');
+const preservedDynamicTool = reconciled.messages.find((message) => message.itemId === 'dynamic_tool_1');
+assert.ok(preservedDynamicTool,
+    'thread/read reconciliation must preserve a completed VCP dynamic tool omitted by App Server history');
+assert.equal(preservedDynamicTool.blocks[0].authority, 'toolbox');
 const localObservation = reconciled.messages.find((message) => message.itemId === 'local_observation');
 assert.equal(localObservation.blocks.length, 1,
     'thread/read reconciliation must preserve local-only observations absent from the Codex snapshot');
@@ -280,7 +295,7 @@ const downgraded = new Database(backupDatabasePath);
 downgraded.prepare('UPDATE projection_schema SET version = 6').run();
 downgraded.close();
 const migratedFromDisk = new AgentProjectionRepository({ databasePath: backupDatabasePath });
-assert.equal(migratedFromDisk.schemaVersion, 9);
+assert.equal(migratedFromDisk.schemaVersion, 10);
 migratedFromDisk.close();
 assert.equal(fs.existsSync(`${backupDatabasePath}.schema-6.bak`), true,
     'an on-disk schema migration must create a versioned backup before mutation');

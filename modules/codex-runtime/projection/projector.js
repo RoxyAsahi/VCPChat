@@ -118,9 +118,14 @@ class CodexProjectionProjector {
         const [role, kind] = ITEM_KIND[item.type] || ['system', 'observation'];
         const status = completed ? (item.status || 'completed') : (item.status || 'inProgress');
         const explicitFields = authoritativeContentFields(item);
+        // Codex emits the dynamic-tool lifecycle, but the actual invocation and
+        // result are owned by the VCPToolBox bridge. App Server 0.146 may omit
+        // client-executed dynamicToolCall Items from a later thread/read, so
+        // keep their display Blocks outside Codex snapshot deletion.
+        const blockAuthority = item.type === 'dynamicToolCall' ? 'toolbox' : 'codex';
         const decorateBlock = (block) => ({
             ...block,
-            authority: 'codex',
+            authority: blockAuthority,
             ...(options.authoritative && explicitFields.replaceContent ? { replaceContent: true } : {}),
             ...(options.authoritative && explicitFields.replaceFields.length ? { replaceFields: explicitFields.replaceFields } : {}),
         });

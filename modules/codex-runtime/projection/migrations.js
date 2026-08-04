@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 
-const SCHEMA_VERSION = 9;
+const SCHEMA_VERSION = 10;
 
 function hasColumn(db, table, column) {
     return db.prepare(`PRAGMA table_info('${table}')`).all().some((entry) => entry.name === column);
@@ -190,6 +190,18 @@ function migrate(db, options = {}) {
                 config_apply_state = CASE WHEN codex_thread_id IS NULL THEN 'unmaterialized' ELSE 'applied' END,
                 config_apply_error = NULL,
                 config_apply_updated_at = updated_at
+        `);
+    }
+    if (Number(existingVersion || 0) < 10) {
+        // Dynamic tool calls are executed by the VCPToolBox bridge. Older
+        // projections recorded them as Codex-owned, which allowed a sparse
+        // thread/read snapshot to delete their durable display cards.
+        db.exec(`
+            UPDATE agent_blocks
+            SET authority = 'toolbox'
+            WHERE kind = 'tool'
+                AND authority = 'codex'
+                AND json_extract(content_json, '$.item.type') = 'dynamicToolCall'
         `);
     }
     addColumn(db, 'agent_pending_inputs', "state TEXT NOT NULL DEFAULT 'queued'");
