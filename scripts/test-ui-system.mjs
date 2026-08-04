@@ -357,6 +357,10 @@ const behaviorWindowControls = VCPUI.create('WindowControls', {
 assert.equal(behaviorWindowControls.element.querySelectorAll('.vcp-ui-window-control-button').length, 3,
     'WindowControls must mark every clickable host as a no-drag control');
 const uiComponentsCss = fs.readFileSync(new URL('../styles/ui-system/components.css', import.meta.url), 'utf8');
+const nextUiCss = fs.readFileSync(new URL('../styles/ui-next.css', import.meta.url), 'utf8');
+assert.match(nextUiCss,
+    /html\[data-ui-mode="next"\] \.main-content\s*\{[\s\S]*clip-path:\s*inset\(1px 0 0 1px round 13px 0 0 0\);/s,
+    'the shared chat and Build wallpaper surface must stay inside the rounded panel edge');
 assert.match(uiComponentsCss,
     /\.vcp-ui-window-control-button\s*\{[^}]*-webkit-app-region:\s*no-drag/s,
     'WindowControls must keep the no-drag contract in next-UI scoped CSS rather than inline mutation');

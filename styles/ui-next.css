@@ -506,7 +506,7 @@ html[data-ui-mode="next"] #resizerRight {
 html[data-ui-mode="next"] .main-content {
     overflow: hidden;
     border-radius: 14px 0 0 0;
-    clip-path: inset(0 round 14px 0 0 0);
+    clip-path: inset(1px 0 0 1px round 13px 0 0 0);
     background-color: var(--primary-bg, var(--next-surface));
     background-image:
         linear-gradient(var(--next-chat-surface), var(--next-chat-surface)),
