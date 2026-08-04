@@ -100,7 +100,7 @@ export function createAgentWorkbenchSidebarView({
         row.append(avatar, title, count);
         row.addEventListener('click', () => actions.hydrateSession(session));
         if (!model.topicManaging && session.sessionId) {
-            actions.appendTopicActions(row, {
+            actions.appendSessionActions(row, {
                 id: session.sessionId,
                 title: session.title,
                 agentId: session.agentId,
@@ -137,7 +137,7 @@ export function createAgentWorkbenchSidebarView({
             if (model.topicManaging) actions.toggleTopicSelection(topic.id);
             else actions.previewSession(topic);
         });
-        if (!model.topicManaging) actions.appendTopicActions(row, topic);
+        if (!model.topicManaging) actions.appendSessionActions(row, topic);
         return row;
     }
 

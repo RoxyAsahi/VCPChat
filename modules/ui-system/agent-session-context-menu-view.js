@@ -1,4 +1,4 @@
-function createAgentTopicContextMenuView({ document, window, node, visualActionButton, run, actions }) {
+function createAgentSessionContextMenuView({ document, window, node, visualActionButton, run, actions }) {
     let current = null;
     let instance = 0;
 
@@ -17,7 +17,7 @@ function createAgentTopicContextMenuView({ document, window, node, visualActionB
         try {
             if (!window.navigator?.clipboard?.writeText) throw new Error('clipboard API unavailable');
             await window.navigator.clipboard.writeText(sessionId);
-            actions.notify('Topic ID 已复制。', 'success');
+            actions.notify('Session ID 已复制。', 'success');
         } catch {
             const temporary = document.createElement('textarea');
             temporary.value = sessionId;
@@ -27,8 +27,8 @@ function createAgentTopicContextMenuView({ document, window, node, visualActionB
             temporary.select();
             const copied = document.execCommand?.('copy');
             temporary.remove();
-            if (copied) actions.notify('Topic ID 已复制。', 'success');
-            else actions.notify(`无法访问系统剪贴板；Topic ID：${sessionId}`, 'warning');
+            if (copied) actions.notify('Session ID 已复制。', 'success');
+            else actions.notify(`无法访问系统剪贴板；Session ID：${sessionId}`, 'warning');
         }
     }
 
@@ -73,7 +73,7 @@ function createAgentTopicContextMenuView({ document, window, node, visualActionB
         close();
         const menu = node('div', 'context-menu agent-chat-topic-context-menu');
         menu.setAttribute('role', 'menu');
-        menu.setAttribute('aria-label', `管理 Topic：${topic.title || topic.id}`);
+        menu.setAttribute('aria-label', `管理 Session：${topic.title || topic.id}`);
         menu.hidden = true;
         const archived = Boolean(topic.archivedAt);
         if (live) addItem(menu, 'folder-open', '打开当前会话', () => actions.openLive(topic));
@@ -81,7 +81,7 @@ function createAgentTopicContextMenuView({ document, window, node, visualActionB
             addItem(menu, 'folder-open', archived ? '查看归档会话' : '打开会话', () => actions.open(topic));
             if (!archived) addItem(menu, 'edit', '重命名', () => actions.rename(topic));
         }
-        addItem(menu, 'copy', '复制 Topic ID', () => copySessionId(topic.id));
+        addItem(menu, 'copy', '复制 Session ID', () => copySessionId(topic.id));
         if (!live) addItem(menu, 'file-export', '导出 Markdown', () => actions.exportMarkdown(topic));
         if (!live && !archived) addItem(menu, 'archive', '归档会话', () => actions.archive(topic));
         else if (!live && archived) {
@@ -108,7 +108,7 @@ function createAgentTopicContextMenuView({ document, window, node, visualActionB
     }
 
     function appendActions(row, topic, { live = false } = {}) {
-        const button = visualActionButton('more', `管理 Topic：${topic.title || topic.id}`, 'agent-chat-session-menu');
+        const button = visualActionButton('more', `管理 Session：${topic.title || topic.id}`, 'agent-chat-session-menu');
         button.addEventListener('click', (event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -126,4 +126,4 @@ function createAgentTopicContextMenuView({ document, window, node, visualActionB
     return Object.freeze({ show, close, appendActions, dispose: close });
 }
 
-export { createAgentTopicContextMenuView };
+export { createAgentSessionContextMenuView };

@@ -240,10 +240,10 @@ const governedUiModules = [
     'agent-session-dock-view.js',
     'agent-notification-view.js',
     'agent-approval-view.js',
-    'agent-workbench-topic-flow.js',
+    'agent-profile-flow-view.js',
     'agent-session-catalog-coordinator.js',
     'agent-settings-coordinator.js',
-    'agent-topic-context-menu-view.js',
+    'agent-session-context-menu-view.js',
     'agent-session-operations-coordinator.js',
     'agent-activity-coordinator.js',
     'agent-composer-coordinator.js',
@@ -290,7 +290,7 @@ for (const file of filesUnder(path.join(root, 'modules/ui-system'), /agent-.*\.j
         && /(?:window\.requestAnimationFrame|setTimeout\s*\()/.test(source)) {
         errors.push(`${relative} bypasses the injected Workbench lifecycle frame scheduler`);
     }
-    if (!/(?:agent-session-dock-view|agent-topic-context-menu-view|agent-renderer-session)\.js$/.test(file)
+    if (!/(?:agent-session-dock-view|agent-session-context-menu-view|agent-renderer-session)\.js$/.test(file)
         && /\b(?:document|window)\.addEventListener\s*\(/.test(source)) {
         errors.push(`${relative} owns an unregistered document/window listener`);
     }

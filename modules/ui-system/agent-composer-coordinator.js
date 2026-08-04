@@ -19,7 +19,7 @@ function createAgentComposerCoordinator({
     state, store, controller, composerView, runStatusView, refs, run, notify,
     selectedSessionKey, selectedComposerState, selectedTurnStart, selectedActiveTurnId,
     renderFeed, renderJumpToLatest, queueRender, settleTurnStartIndicator,
-    refreshControlPlane, uxMark, openNewTopicFlow, isFollowingContainer, scrollFeed,
+    refreshControlPlane, uxMark, openNewSession, isFollowingContainer, scrollFeed,
 }) {
     const { input, feed, jumpToLatest, attachButton, sendButton, newButton } = refs;
     const disposers = [];
@@ -229,7 +229,7 @@ function createAgentComposerCoordinator({
     });
     listen(attachButton, 'click', () => run(selectAttachments));
     listen(sendButton, 'click', () => run(send));
-    listen(newButton, 'click', openNewTopicFlow);
+    listen(newButton, 'click', openNewSession);
 
     return Object.freeze({ render, syncRunStatus, dispose() {
         disposed = true;

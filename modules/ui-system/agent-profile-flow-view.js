@@ -1,6 +1,6 @@
 import { button, node } from './agent-workbench-dom.js';
 
-export function createAgentWorkbenchTopicFlow({ element, document, actions }) {
+export function createAgentProfileFlowView({ element, document, actions }) {
     let model = null;
 
     function field(label, control) {

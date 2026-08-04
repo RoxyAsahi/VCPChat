@@ -5,8 +5,8 @@ import { selectedSessionId } from './agent-selected-session.js';
 export function createAgentWorkbenchSidebarCoordinator({
     state, store, controller, element, accountView, lifecycle, document, run, notify,
     sameAgent, agentCacheKey, selectedAgentProfile, profileNeedsConfiguration,
-    sessionActivity, createSessionAvatar, appendTopicActions, closeTopicContextMenu,
-    openNewTopicFlow, openNewAgentFlow, refreshControlPlane, refreshRecoveryOperations,
+    sessionActivity, createSessionAvatar, appendSessionActions, closeSessionContextMenu,
+    openNewSession, openNewAgentFlow, refreshControlPlane, refreshRecoveryOperations,
     refreshTopicsForAgent, selectAgent, rememberTopic, forgetTopic, syncModel, host,
     renderSettings, queueRender, uxMark,
 }) {
@@ -81,22 +81,22 @@ export function createAgentWorkbenchSidebarCoordinator({
             lifecycle,
             actions: {
                 selectTab(id) {
-                    closeTopicContextMenu();
+                    closeSessionContextMenu();
                     state.tab = id;
                     if (id !== 'sessions') resetSessionTools();
                     render();
                     if (id === 'sessions') run(() => refreshControlPlane());
                     else if (id === 'settings') void refreshRecoveryOperations();
                 },
-                openNewSession: openNewTopicFlow,
+                openNewSession,
                 toggleTopicManagement() {
-                    closeTopicContextMenu();
+                    closeSessionContextMenu();
                     state.topicManaging = !state.topicManaging;
                     if (!state.topicManaging) state.topicSelectedIds.clear();
                     render();
                 },
                 toggleArchivedSessions() {
-                    closeTopicContextMenu();
+                    closeSessionContextMenu();
                     state.showArchivedTopics = !state.showArchivedTopics;
                     resetSessionTools();
                     render();
@@ -134,7 +134,7 @@ export function createAgentWorkbenchSidebarCoordinator({
                     });
                 },
                 createSessionAvatar,
-                appendTopicActions,
+                appendSessionActions,
                 hydrateSession: (session) => run(() => controller.hydrateTopic(
                     session.sessionId, session, null, session.agentId,
                 )),

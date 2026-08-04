@@ -29,10 +29,10 @@ import { createAgentActivityReadonlyView } from './agent-activity-readonly-view.
 import { createAgentSessionDockView } from './agent-session-dock-view.js';
 import { createAgentNotificationView } from './agent-notification-view.js';
 import { createAgentApprovalView } from './agent-approval-view.js';
-import { createAgentWorkbenchTopicFlow } from './agent-workbench-topic-flow.js';
+import { createAgentProfileFlowView } from './agent-profile-flow-view.js';
 import { createAgentWorkspaceCoordinator } from './agent-workspace-coordinator.js';
 import { createAgentSettingsCoordinator } from './agent-settings-coordinator.js';
-import { createAgentTopicContextMenuView } from './agent-topic-context-menu-view.js';
+import { createAgentSessionContextMenuView } from './agent-session-context-menu-view.js';
 import { createAgentSessionOperationsCoordinator } from './agent-session-operations-coordinator.js';
 import { createAgentActivityCoordinator } from './agent-activity-coordinator.js';
 import { createAgentComposerCoordinator } from './agent-composer-coordinator.js';
@@ -354,11 +354,11 @@ function mountWorkbench(container) {
             notifyInvalidJson: () => notify('MCP 表单 JSON 无效。', 'error'),
         },
     });
-    const topicFlowView = createAgentWorkbenchTopicFlow({
+    const profileFlowView = createAgentProfileFlowView({
         element: topicFlowLayer,
         document,
         actions: {
-            close: closeTopicFlow,
+            close: closeProfileFlow,
             updateDraft(patch) {
                 if (state.topicFlow?.kind === 'agent') Object.assign(state.topicFlow, patch);
             },
@@ -422,13 +422,13 @@ function mountWorkbench(container) {
         rememberTopicTitle, forgetTopic,
     } = sessionOperations;
 
-    function openNewTopicFlow() {
+    function openNewSession() {
         // New Session inherits the selected Profile and is created immediately;
         // only the separate New Build Agent flow remains modal.
         void run(createNewTopicDirectly);
     }
 
-    function closeTopicFlow() {
+    function closeProfileFlow() {
         state.topicFlow = null;
         queueRender({ topicFlow: true });
     }
@@ -446,7 +446,7 @@ function mountWorkbench(container) {
         queueRender({ topicFlow: true });
     }
 
-    const topicContextMenuView = createAgentTopicContextMenuView({
+    const sessionContextMenuView = createAgentSessionContextMenuView({
         document,
         window,
         node,
@@ -471,7 +471,7 @@ function mountWorkbench(container) {
                 await controller.renameSession(topic.id, title, topic.agentId);
                 rememberTopicTitle(topic, title.trim());
                 await refreshControlPlane();
-                notify('Agent Topic 已重命名。', 'success');
+                notify('Agent Session 已重命名。', 'success');
             },
             async exportMarkdown(topic) {
                 const result = await controller.exportSession(topic.id, 'markdown');
@@ -545,8 +545,8 @@ function mountWorkbench(container) {
         search: scheduleWorkspaceSearch,
         render: renderActivity,
     } = activityCoordinator;
-    const closeTopicContextMenu = topicContextMenuView.close;
-    const appendTopicActions = topicContextMenuView.appendActions;
+    const closeSessionContextMenu = sessionContextMenuView.close;
+    const appendSessionActions = sessionContextMenuView.appendActions;
 
     function renderSettingsSidebarContent() {
         return renderAgentSettingsPane({
@@ -600,15 +600,15 @@ function mountWorkbench(container) {
     sidebarCoordinator = createAgentWorkbenchSidebarCoordinator({
         state, store, controller, element: sidebar, accountView, lifecycle, document, run, notify,
         sameAgent, agentCacheKey, selectedAgentProfile, profileNeedsConfiguration,
-        sessionActivity, createSessionAvatar, appendTopicActions, closeTopicContextMenu,
-        openNewTopicFlow, openNewAgentFlow, refreshControlPlane, refreshRecoveryOperations,
+        sessionActivity, createSessionAvatar, appendSessionActions, closeSessionContextMenu,
+        openNewSession, openNewAgentFlow, refreshControlPlane, refreshRecoveryOperations,
         refreshTopicsForAgent, selectAgent, rememberTopic, forgetTopic, host,
         syncModel: syncModelFromSelectedSession, renderSettings: renderSettingsSidebarContent,
         queueRender, uxMark,
     });
 
     function renderTopicFlow() {
-        topicFlowView.update(state.topicFlow?.kind === 'agent'
+        profileFlowView.update(state.topicFlow?.kind === 'agent'
             ? { ...state.topicFlow, modelCatalog: state.modelCatalog } : null);
     }
 
@@ -648,7 +648,7 @@ function mountWorkbench(container) {
         state, store, controller, composerView, runStatusView, refs: shellView.refs, run, notify,
         selectedSessionKey, selectedComposerState, selectedTurnStart, selectedActiveTurnId,
         renderFeed, renderJumpToLatest, queueRender, settleTurnStartIndicator,
-        refreshControlPlane, uxMark, openNewTopicFlow, isFollowingContainer, scrollFeed: scopedScrollFeed,
+        refreshControlPlane, uxMark, openNewSession, isFollowingContainer, scrollFeed: scopedScrollFeed,
     });
     const renderComposer = composerCoordinator.render;
 
@@ -714,13 +714,13 @@ function mountWorkbench(container) {
         sidebarCoordinator.dispose();
         workspaceCoordinator.dispose();
         settingsState.dispose();
-        topicContextMenuView.dispose();
+        sessionContextMenuView.dispose();
         timelineCoordinator.dispose();
         activityReadonlyView.dispose();
         approvalView.dispose();
         notificationView.dispose();
         sessionDockView.dispose();
-        topicFlowView.dispose();
+        profileFlowView.dispose();
         workspaceView.dispose();
         headerView.dispose();
         accountView.dispose();
