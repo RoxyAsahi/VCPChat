@@ -7,7 +7,7 @@ export function createAgentWorkbenchSidebarCoordinator({
     sameAgent, agentCacheKey, selectedAgentProfile, profileNeedsConfiguration,
     sessionActivity, createSessionAvatar, appendTopicActions, closeTopicContextMenu,
     openNewTopicFlow, openNewAgentFlow, refreshControlPlane, refreshRecoveryOperations,
-    refreshTopicsForAgent, selectAgent, rememberTopic, forgetTopic, syncModel,
+    refreshTopicsForAgent, selectAgent, rememberTopic, forgetTopic, syncModel, host,
     renderSettings, queueRender, uxMark,
 }) {
     let view = null;
@@ -155,7 +155,12 @@ export function createAgentWorkbenchSidebarCoordinator({
                 },
                 archiveSelectedSessions(topics) {
                     run(async () => {
-                        if (!topics.length || !window.confirm?.(`确定归档选中的 ${topics.length} 个 Agent 会话吗？`)) return;
+                        if (!topics.length) return;
+                        const accepted = await host.feedback.confirm({
+                            title: '批量归档 Agent 会话',
+                            message: `确定归档选中的 ${topics.length} 个 Agent 会话吗？`,
+                        });
+                        if (accepted !== true) return;
                         for (const topic of topics) {
                             await controller.archiveSession(topic.id);
                             if (disposed) return;

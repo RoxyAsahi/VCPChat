@@ -6,7 +6,7 @@ const QUEUE_STATE_LABELS = Object.freeze({
     failed: '发送失败',
 });
 
-function renderPendingInputQueue({ state, controller, refresh, notify, run, button, node }) {
+function renderPendingInputQueue({ state, controller, refresh, notify, run, button, node, host }) {
     if (!state.queueOpen) return null;
     const panel = node('section', 'agent-chat-queue-popover');
     const title = node('div', 'agent-chat-queue-heading');
@@ -47,7 +47,7 @@ function renderPendingInputQueue({ state, controller, refresh, notify, run, butt
             && ['queued', 'uncertain', 'failed'].includes(queueState));
         edit.disabled = !actionable;
         remove.disabled = !actionable;
-        edit.addEventListener('click', () => {
+        edit.addEventListener('click', async () => {
             if (requiresDecision) {
                 run(async () => {
                     await controller.resolvePendingInput(inputId, 'resend');
@@ -56,7 +56,8 @@ function renderPendingInputQueue({ state, controller, refresh, notify, run, butt
                 });
                 return;
             }
-            const nextPrompt = window.prompt?.('编辑后续指令', prompt);
+            const nextPrompt = await host.feedback.edit({ title: '编辑后续指令', value: prompt, multiline: true });
+            if (nextPrompt?.available === false) { notify(nextPrompt.reason, 'error'); return; }
             if (nextPrompt === null || nextPrompt === undefined || nextPrompt.trim() === prompt.trim()) return;
             run(async () => {
                 const interactions = state.queue.map((candidate) => (

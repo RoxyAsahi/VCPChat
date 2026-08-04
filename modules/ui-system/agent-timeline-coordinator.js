@@ -5,7 +5,7 @@ import { selectedSessionId } from './agent-selected-session.js';
 export function createAgentTimelineCoordinator({
     state, store, controller, lifecycle, window, document, root, refs, rendererHost,
     blockPresentation, approvalRegistry, cssEscape, selectedAgentProfile, activeSession,
-    selectedSessionKey, selectedTurnStart, run, notify, scrollFeed, isFollowingContainer,
+    selectedSessionKey, selectedTurnStart, run, notify, scrollFeed, isFollowingContainer, host,
 }) {
     let approvalTicker = null;
 
@@ -27,7 +27,7 @@ export function createAgentTimelineCoordinator({
                 config: profile.config || profile,
             },
             messages: current.messages || [],
-            settings: window.globalSettings || {},
+            settings: { chatPresentationMode: host.presentation.read() },
         };
     }
 
@@ -55,7 +55,7 @@ export function createAgentTimelineCoordinator({
         notify,
         actions: {
             copy: async ({ text }) => {
-                await navigator.clipboard.writeText(text);
+                await host.clipboard.writeText(text);
                 notify('已复制渲染后的文本。', 'success');
             },
             interrupt: ({ part }) => run(async () => {
@@ -72,17 +72,20 @@ export function createAgentTimelineCoordinator({
                 await forkAndSend(part, promptForPart(part), '从消息重试');
                 notify('已在新 Codex 分支重试。', 'success');
             }),
-            edit: ({ part }) => {
-                const edited = window.prompt?.('编辑并在新 Codex 分支发送', promptForPart(part));
+            edit: ({ part }) => void (async () => {
+                const edited = await host.feedback.edit({
+                    title: '编辑并在新 Codex 分支发送', value: promptForPart(part), multiline: true,
+                });
+                if (edited?.available === false) { notify(edited.reason, 'error'); return; }
                 if (edited === null || edited === undefined || !edited.trim()) return;
                 run(async () => {
                     await forkAndSend(part, edited, '编辑消息分支');
                     notify('已在新 Codex 分支发送编辑内容。', 'success');
                 });
-            },
+            })(),
             forward: ({ part }) => run(async () => {
                 const value = typeof part.value?.content === 'string' ? part.value.content : promptForPart(part);
-                await navigator.clipboard.writeText(value || '');
+                await host.clipboard.writeText(value || '');
                 notify('Agent 消息已复制；可粘贴到目标 VChat 会话。', 'success');
             }),
         },

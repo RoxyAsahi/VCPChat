@@ -471,6 +471,11 @@ mainAgentList.innerHTML = '<li data-item-type="agent" data-item-id="123"><img cl
 document.body.append(mainAgentList);
 window.prompt = () => '重命名后的 Topic';
 window.confirm = () => true;
+window.VCPUI = { feedback: {
+    confirm: async () => true,
+    prompt: async () => '重命名后的 Topic',
+    toast: () => {},
+} };
 window.localStorage.setItem('vcpchat.agentWorkbench.lastTopic.v1', JSON.stringify({
     sessionId: 'topic-restored', title: '可恢复的 Codex Session', agentId: 'Nova',
     model: 'gpt-5.6-terra', workspaceRoot: root,

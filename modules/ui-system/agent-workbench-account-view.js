@@ -1,6 +1,6 @@
 import { button, icon, iconButton, node } from './agent-workbench-dom.js';
 
-function createAgentWorkbenchAccountView({ window, document, actions = {} }) {
+function createAgentWorkbenchAccountView({ window, document, actions = {}, host = null }) {
     const dock = node('div', 'next-ui-account-dock agent-chat-account-dock', undefined, document);
     const menu = node('div', 'next-ui-account-menu agent-chat-account-menu', undefined, document);
     menu.hidden = true;
@@ -14,7 +14,7 @@ function createAgentWorkbenchAccountView({ window, document, actions = {} }) {
     const getPresentationMode = () => {
         if (document.body.classList.contains('chat-presentation-panel')) return 'panel';
         if (document.body.classList.contains('chat-presentation-immersive')) return 'immersive';
-        return window.globalSettings?.chatPresentationMode || 'bubble';
+        return host?.presentation?.read?.() || 'bubble';
     };
     const presentationItem = node('button', 'agent-chat-button next-ui-account-menu-item', undefined, document);
     presentationItem.type = 'button';
@@ -89,8 +89,8 @@ function createAgentWorkbenchAccountView({ window, document, actions = {} }) {
             option.classList.toggle('active', active);
             option.setAttribute('aria-pressed', String(active));
         });
-        avatar.src = window.globalSettings?.userAvatarUrl || 'assets/default_user_avatar.png';
-        name.textContent = window.globalSettings?.userName?.trim() || '用户';
+        avatar.src = host?.account?.avatarUrl || 'assets/default_user_avatar.png';
+        name.textContent = host?.account?.userName?.trim() || '用户';
     }
     update();
     let observer = null;

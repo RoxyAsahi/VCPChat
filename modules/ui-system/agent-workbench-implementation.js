@@ -41,6 +41,7 @@ import { createAgentWorkbenchSidebarCoordinator } from './agent-workbench-sideba
 import { createAgentTimelineCoordinator } from './agent-timeline-coordinator.js';
 import { createAgentSessionViewContext } from './agent-session-view-context.js';
 import { createAgentWorkbenchState } from './agent-workbench-state.js';
+import { createAgentWorkbenchHostAdapter } from './agent-workbench-host-adapter.js';
 import {
     agentCacheKey,
     createAgentSessionCatalogCoordinator,
@@ -129,40 +130,38 @@ function formatTime(value) {
     try { return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' }).format(new Date(value)); } catch { return ''; }
 }
 
-function renderMarkdown(text) {
-    const bridge = window.vcpRenderBridge;
+function renderMarkdown(text, markdown = {}) {
     if (!text) return '';
-    if (bridge) return bridge.renderContent(text);
-    if (typeof window.parseAgentMarkdown === 'function') return window.parseAgentMarkdown(text);
-    return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return markdown.render?.(text) || String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function postRender(contentDiv) {
-    window.vcpRenderBridge?.runPostRender(contentDiv);
+function postRender(contentDiv, markdown = {}) {
+    markdown.postProcess?.(contentDiv);
 }
 
-function scrollFeed(container, force, scheduleFrame) {
-    const bridge = window.vcpRenderBridge;
+function scrollFeed(container, force, scheduleFrame, bridge = {}) {
     if (force) {
         scheduleFrame(() => { if (container?.isConnected) container.scrollTop = container.scrollHeight; });
         return;
     }
     if (bridge) {
-        bridge.autoScrollToBottom(container);
+        bridge.autoScrollToBottom?.(container);
     } else if (container && isFollowingContainer(container)) {
         container.scrollTop = container.scrollHeight;
     }
 }
 
-function isFollowingContainer(container) {
-    const bridge = window.vcpRenderBridge;
-    return bridge ? bridge.isNearBottom(container, 48) : (container.scrollTop + container.clientHeight >= container.scrollHeight - 48);
+function isFollowingContainer(container, bridge = {}) {
+    return bridge.isNearBottom
+        ? bridge.isNearBottom(container, 48)
+        : (container.scrollTop + container.clientHeight >= container.scrollHeight - 48);
 }
 
 function mountWorkbench(container) {
+    const host = createAgentWorkbenchHostAdapter({ windowRef: window, documentRef: document });
     const lifecycle = createWorkbenchLifecycle(window);
     const scopedScrollFeed = (target, force) => scrollFeed(
-        target, force, (callback) => lifecycle.frame('scroll-feed', callback),
+        target, force, (callback) => lifecycle.frame('scroll-feed', callback), host.vcpBridge,
     );
     const controller = createWorkbenchController(runtimeApi());
     const { store } = controller;
@@ -244,6 +243,7 @@ function mountWorkbench(container) {
     const accountView = createAgentWorkbenchAccountView({
         window,
         document,
+        host,
         actions: {
             openThemes: () => controller.openThemes(),
             toggleTheme: () => proxyMainButton('themeToggleBtn'),
@@ -388,8 +388,8 @@ function mountWorkbench(container) {
     let timelineCoordinator = null;
     const blockPresentation = createAgentBlockPresentation({
         document,
-        renderContent: renderMarkdown,
-        postRender,
+        renderContent: (text) => renderMarkdown(text, host.markdown),
+        postRender: (node) => postRender(node, host.markdown),
         actions: {
             cancelTool: (tool) => run(() => controller.cancelTool(tool.toolCallId, tool.turnId)),
             respondToolboxApproval: (approvalId, decision, approval) => run(() => controller.respondToolboxApproval(approvalId, decision, approval?.generation)),
@@ -466,7 +466,8 @@ function mountWorkbench(container) {
             showImageContextMenu: (src) => controller.showImageContextMenu(src),
         }, blockPresentation, approvalRegistry, cssEscape,
         selectedAgentProfile, activeSession, selectedSessionKey, selectedTurnStart,
-        run, notify, scrollFeed: scopedScrollFeed, isFollowingContainer,
+        run, notify, scrollFeed: scopedScrollFeed,
+        isFollowingContainer: (target) => isFollowingContainer(target, host.vcpBridge), host,
     });
 
     const sessionOperations = createAgentSessionOperationsCoordinator({
@@ -521,7 +522,12 @@ function mountWorkbench(container) {
                 rememberTopic({ sessionId: topic.id });
             },
             async rename(topic) {
-                const title = window.prompt?.('重命名 Agent Topic', topic.title || '');
+                const title = await host.feedback.edit({
+                    title: '重命名 Agent 会话',
+                    value: topic.title || '',
+                    required: true,
+                });
+                if (title?.available === false) { notify(title.reason, 'error'); return; }
                 if (title === null || title === undefined || title.trim() === (topic.title || '').trim()) return;
                 await controller.renameSession(topic.id, title, topic.agentId);
                 rememberTopicTitle(topic, title.trim());
@@ -533,7 +539,11 @@ function mountWorkbench(container) {
                 if (result?.exported) notify('Agent 会话已导出。', 'success');
             },
             async archive(topic) {
-                if (!window.confirm?.(`确定归档「${topic.title || topic.id}」吗？之后可从归档会话中恢复。`)) return;
+                const accepted = await host.feedback.confirm({
+                    title: '归档 Agent 会话',
+                    message: `确定归档「${topic.title || topic.id}」吗？之后可从归档会话中恢复。`,
+                });
+                if (accepted !== true) return;
                 await controller.archiveSession(topic.id);
                 state.composerStateBySession.delete(topic.id);
                 forgetTopic(topic.id);
@@ -547,7 +557,12 @@ function mountWorkbench(container) {
                 notify('Agent 会话已恢复。', 'success');
             },
             async remove(topic) {
-                if (!window.confirm?.(`永久删除「${topic.title || topic.id}」及其本地投影吗？此操作不可恢复。`)) return;
+                const accepted = await host.feedback.confirm({
+                    title: '永久删除 Agent 会话',
+                    message: `永久删除「${topic.title || topic.id}」及其本地投影吗？此操作不可恢复。`,
+                    danger: true,
+                });
+                if (accepted !== true) return;
                 await controller.permanentlyDeleteSession(topic.id);
                 state.composerStateBySession.delete(topic.id);
                 forgetTopic(topic.id);
@@ -619,6 +634,7 @@ function mountWorkbench(container) {
             settingStatus(targetKey, fields) {
                 return settingsState.status(targetKey, fields);
             },
+            host,
             scheduleTextSave(targetKey, field, callback) {
                 settingsState.schedule(targetKey, field, callback);
             },
@@ -637,7 +653,7 @@ function mountWorkbench(container) {
         sameAgent, agentCacheKey, selectedAgentProfile, profileNeedsConfiguration,
         sessionActivity, createSessionAvatar, appendTopicActions, closeTopicContextMenu,
         openNewTopicFlow, openNewAgentFlow, refreshControlPlane, refreshRecoveryOperations,
-        refreshTopicsForAgent, selectAgent, rememberTopic, forgetTopic,
+        refreshTopicsForAgent, selectAgent, rememberTopic, forgetTopic, host,
         syncModel: syncModelFromSelectedSession, renderSettings: renderSettingsSidebarContent,
         queueRender, uxMark,
     });
@@ -658,7 +674,7 @@ function mountWorkbench(container) {
             || (selectedHasRuntime ? session?.title : '')
             || `与 ${selected?.agentId || state.selectedAgent || 'Nova'} 聊天中`;
         const queuePanel = renderPendingInputQueue({
-            state, controller, refresh: refreshControlPlane, notify, run, button, node,
+            state, controller, refresh: refreshControlPlane, notify, run, button, node, host,
         });
         headerView.update({
             title: headingTitle,

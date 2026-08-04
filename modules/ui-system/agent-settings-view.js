@@ -8,7 +8,7 @@ export function renderAgentSettingsPane(context) {
         profileNeedsConfiguration, persistWorkbenchSettings, renderSidebar,
         run, refreshControlPlane, notify, controller, refreshRecoveryOperations,
         refreshTopicsForAgent, node, button, sameAgent, scheduleTextSave, scheduleBudgetSave,
-        settingValue, settingStatus,
+        settingValue, settingStatus, host,
     } = context;
     const pane = node('div', 'agent-chat-settings-pane');
     const form = node('div', 'agent-chat-settings-form');
@@ -144,12 +144,13 @@ export function renderAgentSettingsPane(context) {
             disabled: efforts.length === 0,
             title: efforts.length ? '' : '该模型没有提供 reasoning effort capability，只能使用模型默认值。',
         }));
-        fields.push(field('指令来源', instructionMode, (value) => {
+        fields.push(field('指令来源', instructionMode, async (value) => {
             const createDerivedSession = Boolean(sessionId && materialized
                 && instructionMode === 'vchat-identity' && value === 'codex-managed');
-            if (createDerivedSession && !window.confirm(
-                'Codex 0.146 无法可靠清除这个 Thread 已保存的 VChat 身份指令。将保留原会话，并创建一个继承当前配置的新会话。是否继续？',
-            )) return;
+            if (createDerivedSession && !(await host.feedback.confirm({
+                title: '创建派生会话',
+                message: 'Codex 0.146 无法可靠清除这个 Thread 已保存的 VChat 身份指令。将保留原会话，并创建一个继承当前配置的新会话。是否继续？',
+            }))) return;
             void persistWorkbenchSettings({ instructionMode: value, ...(createDerivedSession ? { createDerivedSession: true } : {}) }, sessionId,
                 value === 'codex-managed' ? '已切换为 Codex 管理指令' : '已切换为 VChat 身份指令');
         }, configOptions('instructionMode')));
@@ -175,13 +176,13 @@ export function renderAgentSettingsPane(context) {
             }), node('p', 'agent-chat-setting-help', 'Codex 完整内部 prompt 不由协议返回，因此这里只显示可配置来源，不伪造隐藏内容。'));
         }
         if (sessionId && snapshot?.profileId) form.append(renderSessionProfileAction({
-            sessionId, snapshot, projection, workspace, controller, run, notify, renderSidebar, node, button,
+            sessionId, snapshot, projection, workspace, controller, run, notify, renderSidebar, node, button, host,
         }));
         form.append(node('p', 'agent-chat-settings-placeholder', 'YOLO 仅跳过 Codex 本地审批；VCPToolBox 的后端审批不会被关闭或绕过。'));
     } else {
         form.append(renderAdvanced({
             state, store, persistWorkbenchSettings, scheduleBudgetSave, refreshRecoveryOperations,
-            controller, run, notify, refreshTopicsForAgent, renderSidebar, node, button,
+            controller, run, notify, refreshTopicsForAgent, renderSidebar, node, button, host,
         }));
     }
 
@@ -232,7 +233,7 @@ function renderAvatar({ state, profile, controller, run, refreshControlPlane, no
     return section;
 }
 
-function renderSessionProfileAction({ sessionId, snapshot, projection, workspace, controller, run, notify, renderSidebar, node, button }) {
+function renderSessionProfileAction({ sessionId, snapshot, projection, workspace, controller, run, notify, renderSidebar, node, button, host }) {
     const fragment = document.createDocumentFragment();
     const summary = node('section', 'agent-chat-settings-summary');
     summary.append(node('strong', 'agent-chat-setting-label', '会话冻结快照'),
@@ -245,7 +246,7 @@ function renderSessionProfileAction({ sessionId, snapshot, projection, workspace
         if (!preview?.differences?.length) { notify('当前 Session 已使用 Profile 最新配置。', 'success'); return; }
         const detail = preview.differences.map((item) => `${item.field}: ${item.current ?? '空'} → ${item.next ?? '空'}`).join('\n');
         const action = preview.requiresNewSession ? '身份字段发生变化，将创建派生 Session。' : '模型、推理和权限将从下一 Turn 生效。';
-        if (!window.confirm?.(`${action}\n\n${detail}`)) return;
+        if (!(await host.feedback.confirm({ title: action, message: detail, danger: preview.requiresNewSession }))) return;
         const result = await controller.applyAgentProfile({ sessionId, expectedConfigRevision, createNewSession: preview.requiresNewSession });
         if (result?.createdNewSession && result.session?.sessionId) {
             await controller.previewTopic(result.session.sessionId, result.session.agentId, result.session);
@@ -256,7 +257,7 @@ function renderSessionProfileAction({ sessionId, snapshot, projection, workspace
     fragment.append(summary, apply); return fragment;
 }
 
-function renderAdvanced({ state, store, persistWorkbenchSettings, scheduleBudgetSave, refreshRecoveryOperations, controller, run, notify, refreshTopicsForAgent, node, button }) {
+function renderAdvanced({ state, store, persistWorkbenchSettings, scheduleBudgetSave, refreshRecoveryOperations, controller, run, notify, refreshTopicsForAgent, node, button, host }) {
     const fragment = document.createDocumentFragment();
     const runtime = node('section', 'agent-chat-settings-budget agent-chat-settings-runtime-info');
     runtime.append(node('strong', 'agent-chat-setting-label', 'Runtime 与协议'),
@@ -302,7 +303,7 @@ function renderAdvanced({ state, store, persistWorkbenchSettings, scheduleBudget
             }
             const bind = button('绑定到 VChat Session', 'primary agent-chat-settings-save');
             bind.addEventListener('click', () => run(async () => {
-                if (!window.confirm?.('确认该 Codex Thread 属于这次未完成操作吗？')) return;
+                if (!(await host.feedback.confirm({ title: '确认 Thread 归属', message: '确认该 Codex Thread 属于这次未完成操作吗？' }))) return;
                 const result = await controller.resolveRecoveryOperation(operation.operationId, 'bind', select.value);
                 if (result?.session?.sessionId) await controller.previewTopic(result.session.sessionId, result.session.agentId, result.session);
                 await Promise.all([refreshRecoveryOperations(), refreshTopicsForAgent(state.selectedAgent, false)]);
@@ -310,7 +311,7 @@ function renderAdvanced({ state, store, persistWorkbenchSettings, scheduleBudget
             }));
             const remove = button('删除未绑定 Thread', 'secondary agent-chat-settings-save');
             remove.addEventListener('click', () => run(async () => {
-                if (!window.confirm?.('永久删除选中的未绑定 Codex Thread 吗？')) return;
+                if (!(await host.feedback.confirm({ title: '删除未绑定 Thread', message: '永久删除选中的未绑定 Codex Thread 吗？', danger: true }))) return;
                 await controller.resolveRecoveryOperation(operation.operationId, 'delete', select.value);
                 await refreshRecoveryOperations({ scanThreads: true });
                 notify('未绑定 Thread 已删除。', 'success');
