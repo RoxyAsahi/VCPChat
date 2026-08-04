@@ -38,6 +38,7 @@ export function createAgentWorkbenchSidebarCoordinator({
             tab: state.tab,
             selectedAgent: state.selectedAgent,
             selectedAgentName: selectedAgentProfile()?.name || state.selectedAgent,
+            profileHistorical: Boolean(selectedAgentProfile()?.historical),
             agentCatalog: state.agentCatalog,
             agentSearch: state.agentSearch,
             topics: state.topics,

@@ -53,6 +53,12 @@ function createAgentSessionOperationsCoordinator({
             renderSidebar();
             return null;
         }
+        if (profile.historical) {
+            state.profileConfigurationNotice = '历史会话仅用于查看旧记录，不能新建会话。请选择或创建一个正式 Build Agent。';
+            state.tab = 'agents';
+            renderSidebar();
+            return null;
+        }
         if (profileNeedsConfiguration(profile)) {
             state.profileConfigurationNotice = `Agent「${profile.name || profile.id}」尚未配置提示词。请先在“设置”中填写提示词，避免用错误身份启动 Codex。`;
             state.tab = 'settings';

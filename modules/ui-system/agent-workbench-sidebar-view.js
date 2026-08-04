@@ -183,7 +183,11 @@ export function createAgentWorkbenchSidebarView({
         const header = node('div', 'topics-header-container');
         const tools = node('div', 'next-ui-topic-tools');
         const add = visualActionButton('add', '新建会话', 'next-ui-create-topic-trigger', '新建会话');
-        add.disabled = model.topicCreating;
+        add.disabled = model.topicCreating || model.profileHistorical;
+        if (model.profileHistorical) {
+            add.title = '历史会话仅可查看，不能新建会话';
+            add.setAttribute('aria-label', '历史会话不能新建会话');
+        }
         add.addEventListener('click', actions.openNewSession);
         const manage = visualActionButton('checklist', '管理会话', 'next-ui-topic-icon-trigger');
         manage.disabled = model.showArchivedTopics;
@@ -331,13 +335,19 @@ export function createAgentWorkbenchSidebarView({
             const agentId = agent.id || agent.name;
             const row = node('li', `agent-chat-agent-row${normalized(agentId) === normalized(model.selectedAgent) ? ' active' : ''}${agent.configurationRequired ? ' configuration-required' : ''}`);
             row.tabIndex = 0;
-            row.dataset.agentSearch = `${agent.name || ''} ${agentId || ''}`.toLocaleLowerCase();
+            row.dataset.agentSearch = `${agent.name || ''} ${agentId || ''} ${agent.historicalLabel || ''}`.toLocaleLowerCase();
             const avatar = document.createElement('img');
             avatar.className = 'avatar';
             avatar.src = agent.avatarUrl || 'assets/default_avatar.png';
             avatar.alt = `${agent.name || agentId} 头像`;
             avatar.onerror = () => { avatar.src = 'assets/default_avatar.png'; };
-            row.append(avatar, node('span', 'agent-name', agent.name || agentId));
+            const displayName = agent.historical
+                ? `${agent.name || agentId}（${agent.historicalLabel || '历史会话'}）`
+                : (agent.name || agentId);
+            row.append(avatar, node('span', 'agent-name', displayName));
+            if (agent.historical) {
+                row.title = '仅用于打开此 Agent 的历史会话；不能作为新的 Build Agent 配置。';
+            }
             if (agent.configurationRequired) {
                 const warning = node('span', 'vcp-ui-icon agent-chat-agent-configuration-icon', 'warning');
                 warning.title = '缺少 Agent 提示词';

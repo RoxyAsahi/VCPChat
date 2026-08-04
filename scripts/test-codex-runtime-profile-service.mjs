@@ -51,6 +51,19 @@ sessions.set('session-a', {
     workspaceRoot: root,
     configSnapshot: { instructionMode: 'vchat-identity', baseInstructions: '{{Nova}}', profileRevision: 1 },
 });
+sessions.set('historical-session', {
+    sessionId: 'historical-session',
+    agentId: 'Retired-Nova',
+    agentCatalogId: 'Retired-Nova',
+    agentNameSnapshot: 'Nova',
+    configRevision: 1,
+    threadId: null,
+    workspaceRoot: root,
+    configSnapshot: { instructionMode: 'vchat-identity', baseInstructions: '{{Nova}}', profileRevision: 1 },
+});
+const historicalProfile = service.listAgentProfiles().find((profile) => profile.id === 'Retired-Nova');
+assert.equal(historicalProfile.historical, true);
+assert.equal(historicalProfile.historicalLabel, '历史会话');
 const applied = await service.applyAgentProfileToSession({ sessionId: 'session-a', expectedConfigRevision: 1 });
 assert.equal(applied.applied, true);
 assert.equal(sessions.get('session-a').configSnapshot.profileId, 'Researcher');

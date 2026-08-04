@@ -2,7 +2,11 @@
 
 const fs = require('fs');
 
-const SCHEMA_VERSION = 10;
+const SCHEMA_VERSION = 11;
+const LEGACY_TOOL_CARD_BACKUP_SCHEMA = 6;
+const MAX_LEGACY_TOOL_CARD_COUNT = 512;
+const MAX_LEGACY_TOOL_CARD_BYTES = 1024 * 1024;
+const MAX_LEGACY_TOOL_CARD_TOTAL_BYTES = 8 * 1024 * 1024;
 
 function hasColumn(db, table, column) {
     return db.prepare(`PRAGMA table_info('${table}')`).all().some((entry) => entry.name === column);
@@ -24,6 +28,100 @@ function backupBeforeMigration(db, databasePath, currentVersion) {
         return backupPath;
     } catch (error) {
         throw new Error(`Could not back up Agent projection database before migration: ${error.message}`);
+    }
+}
+
+function restoreVerifiedLegacyToolCards(db, databasePath) {
+    // Schema 6 was the last on-disk projection known to contain a subset of
+    // VCP dynamic-tool receipts that a later sparse Codex snapshot removed.
+    // This deliberately recovers only those receipts; assistant prose is not
+    // evidence of a tool call and is never converted into a display card.
+    if (!databasePath || databasePath === ':memory:') return 0;
+    const backupPath = `${databasePath}.schema-${LEGACY_TOOL_CARD_BACKUP_SCHEMA}.bak`;
+    if (!fs.existsSync(backupPath) || fs.statSync(backupPath).size > 64 * 1024 * 1024) return 0;
+
+    let legacy = null;
+    try {
+        const Database = require('better-sqlite3');
+        legacy = new Database(backupPath, { readonly: true, fileMustExist: true });
+        const version = Number(legacy.prepare('SELECT version FROM projection_schema LIMIT 1').get()?.version || 0);
+        if (version !== LEGACY_TOOL_CARD_BACKUP_SCHEMA) return 0;
+        const tables = new Set(legacy.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((row) => row.name));
+        if (!tables.has('agent_messages') || !tables.has('agent_blocks')) return 0;
+        const rows = legacy.prepare(`
+            SELECT m.message_id, m.session_id, m.codex_thread_id, m.codex_turn_id, m.codex_item_id,
+                   m.role, m.status AS message_status, m.source_order, m.created_at AS message_created_at,
+                   m.updated_at AS message_updated_at, b.block_id, b.kind, b.status AS block_status,
+                   b.ordinal, b.content_json, b.created_at AS block_created_at, b.updated_at AS block_updated_at
+            FROM agent_messages AS m
+            JOIN agent_blocks AS b ON b.message_id = m.message_id
+            WHERE b.kind = 'tool'
+              AND json_valid(b.content_json)
+              AND json_extract(b.content_json, '$.item.type') = 'dynamicToolCall'
+            LIMIT ?
+        `).all(MAX_LEGACY_TOOL_CARD_COUNT);
+        if (!rows.length) return 0;
+
+        const hasSession = db.prepare('SELECT 1 FROM agent_sessions WHERE session_id = ?');
+        const hasItem = db.prepare('SELECT 1 FROM agent_messages WHERE session_id = ? AND codex_item_id = ?');
+        const hasMessageId = db.prepare('SELECT 1 FROM agent_messages WHERE message_id = ?');
+        const insertMessage = db.prepare(`
+            INSERT INTO agent_messages (
+                message_id, session_id, codex_thread_id, codex_turn_id, codex_item_id,
+                role, status, source_order, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        const insertBlock = db.prepare(`
+            INSERT INTO agent_blocks (
+                block_id, message_id, kind, status, ordinal, content_json, content_schema_version,
+                authority, created_at, updated_at
+            ) VALUES (?, ?, 'tool', ?, ?, ?, 1, 'toolbox', ?, ?)
+        `);
+        const advanceSessionOrder = db.prepare(`
+            UPDATE projection_state
+            SET next_source_order = MAX(next_source_order, ?),
+                mutation_generation = mutation_generation + 1,
+                updated_at = ?
+            WHERE session_id = ?
+        `);
+        let restored = 0;
+        let totalBytes = 0;
+        const restore = db.transaction(() => {
+            for (const row of rows) {
+                const content = String(row.content_json || '');
+                if (!row.session_id || !row.codex_item_id || content.length > MAX_LEGACY_TOOL_CARD_BYTES
+                    || totalBytes + content.length > MAX_LEGACY_TOOL_CARD_TOTAL_BYTES
+                    || !hasSession.get(row.session_id) || hasItem.get(row.session_id, row.codex_item_id)
+                    || hasMessageId.get(row.message_id)) continue;
+                let parsed;
+                try { parsed = JSON.parse(content); } catch { continue; }
+                if (parsed?.item?.type !== 'dynamicToolCall') continue;
+                const now = Date.now();
+                insertMessage.run(
+                    row.message_id, row.session_id, row.codex_thread_id || '', row.codex_turn_id || null,
+                    row.codex_item_id, row.role || 'tool', row.message_status || 'completed',
+                    Number.isInteger(row.source_order) ? row.source_order : 0,
+                    Number(row.message_created_at) || now, Number(row.message_updated_at) || now,
+                );
+                insertBlock.run(
+                    row.block_id || `block:${row.session_id}:${row.codex_item_id}:${row.ordinal || 0}`,
+                    row.message_id, row.block_status || row.message_status || 'completed',
+                    Number.isInteger(row.ordinal) ? row.ordinal : 0, content,
+                    Number(row.block_created_at) || now, Number(row.block_updated_at) || now,
+                );
+                advanceSessionOrder.run((Number.isInteger(row.source_order) ? row.source_order : 0) + 1, now, row.session_id);
+                totalBytes += content.length;
+                restored += 1;
+            }
+        });
+        restore();
+        return restored;
+    } catch (_error) {
+        // The backup is optional recovery material. A malformed or unavailable
+        // backup must not block access to the current projection.
+        return 0;
+    } finally {
+        try { legacy?.close(); } catch {}
     }
 }
 
@@ -203,6 +301,9 @@ function migrate(db, options = {}) {
                 AND authority = 'codex'
                 AND json_extract(content_json, '$.item.type') = 'dynamicToolCall'
         `);
+    }
+    if (Number(existingVersion || 0) < 11) {
+        restoreVerifiedLegacyToolCards(db, options.databasePath);
     }
     addColumn(db, 'agent_pending_inputs', "state TEXT NOT NULL DEFAULT 'queued'");
     addColumn(db, 'agent_pending_inputs', "submission_id TEXT");

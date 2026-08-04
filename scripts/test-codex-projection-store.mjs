@@ -38,14 +38,14 @@ migrationDb.exec(`
     );
 `);
 const migratedRepository = new AgentProjectionRepository({ db: migrationDb });
-assert.equal(migratedRepository.schemaVersion, 10, 'schema 5 databases must migrate to schema 10');
+assert.equal(migratedRepository.schemaVersion, 11, 'schema 5 databases must migrate to schema 11');
 assert.ok(migrationDb.prepare("PRAGMA table_info('projection_state')").all()
     .some((column) => column.name === 'activity_json' && String(column.dflt_value).includes('{}')),
     'schema 5 migration must add the durable Activity projection column');
 migratedRepository.close();
 
 const repository = new AgentProjectionRepository({ databasePath: path.join(root, 'projection.sqlite') });
-assert.equal(repository.schemaVersion, 10);
+assert.equal(repository.schemaVersion, 11);
 repository.saveSession({
     sessionId: 'session_1',
     threadId: 'thr_1',
@@ -295,10 +295,56 @@ const downgraded = new Database(backupDatabasePath);
 downgraded.prepare('UPDATE projection_schema SET version = 6').run();
 downgraded.close();
 const migratedFromDisk = new AgentProjectionRepository({ databasePath: backupDatabasePath });
-assert.equal(migratedFromDisk.schemaVersion, 10);
+assert.equal(migratedFromDisk.schemaVersion, 11);
 migratedFromDisk.close();
 assert.equal(fs.existsSync(`${backupDatabasePath}.schema-6.bak`), true,
     'an on-disk schema migration must create a versioned backup before mutation');
+
+const recoveryDatabasePath = path.join(root, 'projection-legacy-tool-recovery.sqlite');
+const recoverySeed = new AgentProjectionRepository({ databasePath: recoveryDatabasePath });
+recoverySeed.saveSession({ sessionId: 'legacy-session', threadId: 'legacy-thread', agentId: 'Nova' });
+recoverySeed.close();
+const recoveryCurrent = new Database(recoveryDatabasePath);
+recoveryCurrent.prepare('UPDATE projection_schema SET version = 10').run();
+recoveryCurrent.close();
+const legacyBackup = new Database(`${recoveryDatabasePath}.schema-6.bak`);
+legacyBackup.exec(`
+    CREATE TABLE projection_schema (version INTEGER NOT NULL);
+    INSERT INTO projection_schema(version) VALUES (6);
+    CREATE TABLE agent_messages (
+        message_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, codex_thread_id TEXT NOT NULL,
+        codex_turn_id TEXT, codex_item_id TEXT NOT NULL, role TEXT NOT NULL, status TEXT NOT NULL,
+        source_order INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+    );
+    CREATE TABLE agent_blocks (
+        block_id TEXT PRIMARY KEY, message_id TEXT NOT NULL, kind TEXT NOT NULL, status TEXT NOT NULL,
+        ordinal INTEGER NOT NULL, content_json TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+    );
+`);
+const legacyNow = Date.now();
+legacyBackup.prepare(`INSERT INTO agent_messages VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run('legacy-tool-message', 'legacy-session', 'legacy-thread', 'legacy-turn', 'legacy-tool-item',
+        'tool', 'completed', 4, legacyNow, legacyNow);
+legacyBackup.prepare(`INSERT INTO agent_blocks VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run('legacy-tool-block', 'legacy-tool-message', 'tool', 'completed', 0, JSON.stringify({
+        item: { id: 'legacy-tool-item', type: 'dynamicToolCall', tool: 'vcp_invoke', arguments: { tool: 'FileOperator' } },
+    }), legacyNow, legacyNow);
+legacyBackup.close();
+const recoveredRepository = new AgentProjectionRepository({ databasePath: recoveryDatabasePath });
+assert.equal(recoveredRepository.schemaVersion, 11);
+const recoveredTool = recoveredRepository.readProjection('legacy-session').messages
+    .find((message) => message.itemId === 'legacy-tool-item');
+assert.equal(recoveredTool?.blocks[0]?.authority, 'toolbox',
+    'schema 11 may recover only a verified dynamic tool receipt from the fixed schema 6 backup');
+assert.ok(recoveredRepository.db.prepare('SELECT next_source_order FROM projection_state WHERE session_id = ?')
+    .get('legacy-session').next_source_order >= 5,
+    'legacy recovery must advance the Session source-order watermark before future live events arrive');
+recoveredRepository.close();
+const reopenedRecoveredRepository = new AgentProjectionRepository({ databasePath: recoveryDatabasePath });
+assert.equal(reopenedRecoveredRepository.readProjection('legacy-session').messages
+    .filter((message) => message.itemId === 'legacy-tool-item').length, 1,
+    'legacy tool recovery must be idempotent after the schema is upgraded');
+reopenedRecoveredRepository.close();
 const foreignKeyDatabasePath = path.join(root, 'projection-foreign-key.sqlite');
 const foreignKeySeed = new AgentProjectionRepository({ databasePath: foreignKeyDatabasePath });
 foreignKeySeed.close();

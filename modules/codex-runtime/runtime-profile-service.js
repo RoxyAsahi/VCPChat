@@ -48,6 +48,8 @@ function sessionProfileProjection(session, idValue) {
     return {
         id: idValue,
         name: session.agentNameSnapshot || config.agentName || idValue,
+        historical: true,
+        historicalLabel: '历史会话',
         revision: Number(config.profileRevision || 1),
         model: config.model || '',
         instructionMode: normalizeInstructionMode(config.instructionMode, config.baseInstructions),
