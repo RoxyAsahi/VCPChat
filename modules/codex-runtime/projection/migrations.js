@@ -1,12 +1,10 @@
 'use strict';
 
 const fs = require('fs');
+const { normalizeContent, stableBlockId } = require('./v2');
 
-const SCHEMA_VERSION = 11;
-const LEGACY_TOOL_CARD_BACKUP_SCHEMA = 6;
-const MAX_LEGACY_TOOL_CARD_COUNT = 512;
-const MAX_LEGACY_TOOL_CARD_BYTES = 1024 * 1024;
-const MAX_LEGACY_TOOL_CARD_TOTAL_BYTES = 8 * 1024 * 1024;
+const SCHEMA_VERSION = 12;
+const MINIMUM_MIGRATABLE_SCHEMA = 6;
 
 function hasColumn(db, table, column) {
     return db.prepare(`PRAGMA table_info('${table}')`).all().some((entry) => entry.name === column);
@@ -31,98 +29,61 @@ function backupBeforeMigration(db, databasePath, currentVersion) {
     }
 }
 
-function restoreVerifiedLegacyToolCards(db, databasePath) {
-    // Schema 6 was the last on-disk projection known to contain a subset of
-    // VCP dynamic-tool receipts that a later sparse Codex snapshot removed.
-    // This deliberately recovers only those receipts; assistant prose is not
-    // evidence of a tool call and is never converted into a display card.
-    if (!databasePath || databasePath === ':memory:') return 0;
-    const backupPath = `${databasePath}.schema-${LEGACY_TOOL_CARD_BACKUP_SCHEMA}.bak`;
-    if (!fs.existsSync(backupPath) || fs.statSync(backupPath).size > 64 * 1024 * 1024) return 0;
+function legacyReasoningContent(content) {
+    const summary = Array.isArray(content?.summary) ? content.summary : [];
+    if (summary.length || typeof content?.text !== 'string' || !content.text) return content;
+    return { ...content, summary: [content.text] };
+}
 
-    let legacy = null;
-    try {
-        const Database = require('better-sqlite3');
-        legacy = new Database(backupPath, { readonly: true, fileMustExist: true });
-        const version = Number(legacy.prepare('SELECT version FROM projection_schema LIMIT 1').get()?.version || 0);
-        if (version !== LEGACY_TOOL_CARD_BACKUP_SCHEMA) return 0;
-        const tables = new Set(legacy.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((row) => row.name));
-        if (!tables.has('agent_messages') || !tables.has('agent_blocks')) return 0;
-        const rows = legacy.prepare(`
-            SELECT m.message_id, m.session_id, m.codex_thread_id, m.codex_turn_id, m.codex_item_id,
-                   m.role, m.status AS message_status, m.source_order, m.created_at AS message_created_at,
-                   m.updated_at AS message_updated_at, b.block_id, b.kind, b.status AS block_status,
-                   b.ordinal, b.content_json, b.created_at AS block_created_at, b.updated_at AS block_updated_at
-            FROM agent_messages AS m
-            JOIN agent_blocks AS b ON b.message_id = m.message_id
-            WHERE b.kind = 'tool'
-              AND json_valid(b.content_json)
-              AND json_extract(b.content_json, '$.item.type') = 'dynamicToolCall'
-            LIMIT ?
-        `).all(MAX_LEGACY_TOOL_CARD_COUNT);
-        if (!rows.length) return 0;
-
-        const hasSession = db.prepare('SELECT 1 FROM agent_sessions WHERE session_id = ?');
-        const hasItem = db.prepare('SELECT 1 FROM agent_messages WHERE session_id = ? AND codex_item_id = ?');
-        const hasMessageId = db.prepare('SELECT 1 FROM agent_messages WHERE message_id = ?');
-        const insertMessage = db.prepare(`
-            INSERT INTO agent_messages (
-                message_id, session_id, codex_thread_id, codex_turn_id, codex_item_id,
-                role, status, source_order, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-        const insertBlock = db.prepare(`
-            INSERT INTO agent_blocks (
-                block_id, message_id, kind, status, ordinal, content_json, content_schema_version,
-                authority, created_at, updated_at
-            ) VALUES (?, ?, 'tool', ?, ?, ?, 1, 'toolbox', ?, ?)
-        `);
-        const advanceSessionOrder = db.prepare(`
-            UPDATE projection_state
-            SET next_source_order = MAX(next_source_order, ?),
-                mutation_generation = mutation_generation + 1,
-                updated_at = ?
-            WHERE session_id = ?
-        `);
-        let restored = 0;
-        let totalBytes = 0;
-        const restore = db.transaction(() => {
-            for (const row of rows) {
-                const content = String(row.content_json || '');
-                if (!row.session_id || !row.codex_item_id || content.length > MAX_LEGACY_TOOL_CARD_BYTES
-                    || totalBytes + content.length > MAX_LEGACY_TOOL_CARD_TOTAL_BYTES
-                    || !hasSession.get(row.session_id) || hasItem.get(row.session_id, row.codex_item_id)
-                    || hasMessageId.get(row.message_id)) continue;
-                let parsed;
-                try { parsed = JSON.parse(content); } catch { continue; }
-                if (parsed?.item?.type !== 'dynamicToolCall') continue;
-                const now = Date.now();
-                insertMessage.run(
-                    row.message_id, row.session_id, row.codex_thread_id || '', row.codex_turn_id || null,
-                    row.codex_item_id, row.role || 'tool', row.message_status || 'completed',
-                    Number.isInteger(row.source_order) ? row.source_order : 0,
-                    Number(row.message_created_at) || now, Number(row.message_updated_at) || now,
-                );
-                insertBlock.run(
-                    row.block_id || `block:${row.session_id}:${row.codex_item_id}:${row.ordinal || 0}`,
-                    row.message_id, row.block_status || row.message_status || 'completed',
-                    Number.isInteger(row.ordinal) ? row.ordinal : 0, content,
-                    Number(row.block_created_at) || now, Number(row.block_updated_at) || now,
-                );
-                advanceSessionOrder.run((Number.isInteger(row.source_order) ? row.source_order : 0) + 1, now, row.session_id);
-                totalBytes += content.length;
-                restored += 1;
-            }
+function canonicalizeBlocks(db) {
+    const rows = db.prepare(`
+        SELECT b.rowid, b.block_id, b.kind, b.ordinal, b.content_json, b.authority,
+               m.session_id, m.codex_item_id
+        FROM agent_blocks AS b
+        JOIN agent_messages AS m ON m.message_id = b.message_id
+        ORDER BY b.rowid
+    `).all();
+    const plans = [];
+    const identities = new Set();
+    for (const row of rows) {
+        const sessionId = String(row.session_id || '').trim();
+        const itemId = String(row.codex_item_id || '').trim();
+        const ordinal = Number(row.ordinal);
+        if (!sessionId || !itemId || !Number.isInteger(ordinal) || ordinal < 0) {
+            throw new Error(`Agent projection schema 12 cannot normalize block identity ${row.block_id || '<missing>'}`);
+        }
+        let content;
+        try { content = JSON.parse(row.content_json); } catch (_error) {
+            throw new Error(`Agent projection schema 12 found malformed Block JSON: ${row.block_id}`);
+        }
+        if (!content || typeof content !== 'object' || Array.isArray(content)) {
+            throw new Error(`Agent projection schema 12 requires object Block content: ${row.block_id}`);
+        }
+        const prepared = row.kind === 'reasoning' ? legacyReasoningContent(content) : content;
+        const itemType = prepared?.item?.type || prepared?.unknown?.type
+            || (row.kind === 'reasoning' ? 'reasoning' : null);
+        const blockId = stableBlockId(sessionId, itemId, ordinal);
+        if (identities.has(blockId)) {
+            throw new Error(`Agent projection schema 12 found duplicate Block identity: ${blockId}`);
+        }
+        identities.add(blockId);
+        plans.push({
+            rowid: row.rowid,
+            blockId,
+            contentJson: JSON.stringify(normalizeContent(prepared, itemType)),
+            authority: itemType === 'dynamicToolCall' ? 'toolbox' : (row.authority || 'codex'),
         });
-        restore();
-        return restored;
-    } catch (_error) {
-        // The backup is optional recovery material. A malformed or unavailable
-        // backup must not block access to the current projection.
-        return 0;
-    } finally {
-        try { legacy?.close(); } catch {}
     }
+    const park = db.prepare('UPDATE agent_blocks SET block_id = ? WHERE rowid = ?');
+    const update = db.prepare(`
+        UPDATE agent_blocks
+        SET block_id = ?, content_json = ?, content_schema_version = 2, authority = ?
+        WHERE rowid = ?
+    `);
+    for (const plan of plans) park.run(`__schema12__:${plan.rowid}`, plan.rowid);
+    for (const plan of plans) update.run(
+        plan.blockId, plan.contentJson, plan.authority, plan.rowid,
+    );
 }
 
 function migrate(db, options = {}) {
@@ -136,7 +97,12 @@ function migrate(db, options = {}) {
     const existingVersion = existingSchema
         ? Number(db.prepare('SELECT version FROM projection_schema LIMIT 1').get()?.version)
         : null;
+    if (existingVersion != null && (!Number.isInteger(existingVersion)
+        || existingVersion < MINIMUM_MIGRATABLE_SCHEMA)) {
+        throw new Error(`Unsupported Agent projection schema ${existingVersion}; minimum migratable schema is ${MINIMUM_MIGRATABLE_SCHEMA}`);
+    }
     backupBeforeMigration(db, options.databasePath, existingVersion);
+    const applyMigration = db.transaction(() => {
     db.exec(`
         CREATE TABLE IF NOT EXISTS projection_schema (
             version INTEGER NOT NULL
@@ -190,7 +156,7 @@ function migrate(db, options = {}) {
             status TEXT NOT NULL,
             ordinal INTEGER NOT NULL,
             content_json TEXT NOT NULL,
-            content_schema_version INTEGER NOT NULL DEFAULT 1,
+            content_schema_version INTEGER NOT NULL DEFAULT 2,
             authority TEXT NOT NULL DEFAULT 'codex',
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL,
@@ -270,7 +236,7 @@ function migrate(db, options = {}) {
     addColumn(db, 'agent_sessions', 'config_apply_error TEXT');
     addColumn(db, 'agent_sessions', 'config_apply_updated_at INTEGER');
     addColumn(db, 'agent_blocks', "authority TEXT NOT NULL DEFAULT 'codex'");
-    addColumn(db, 'agent_blocks', 'content_schema_version INTEGER NOT NULL DEFAULT 1');
+    addColumn(db, 'agent_blocks', 'content_schema_version INTEGER NOT NULL DEFAULT 2');
     if (Number(existingVersion || 0) < 8) {
         db.exec(`
             UPDATE agent_sessions
@@ -302,9 +268,7 @@ function migrate(db, options = {}) {
                 AND json_extract(content_json, '$.item.type') = 'dynamicToolCall'
         `);
     }
-    if (Number(existingVersion || 0) < 11) {
-        restoreVerifiedLegacyToolCards(db, options.databasePath);
-    }
+    if (Number(existingVersion || 0) < 12) canonicalizeBlocks(db);
     addColumn(db, 'agent_pending_inputs', "state TEXT NOT NULL DEFAULT 'queued'");
     addColumn(db, 'agent_pending_inputs', "submission_id TEXT");
     addColumn(db, 'agent_pending_inputs', "kind TEXT NOT NULL DEFAULT 'follow-up'");
@@ -320,6 +284,8 @@ function migrate(db, options = {}) {
     db.prepare('UPDATE projection_schema SET version = ?').run(SCHEMA_VERSION);
     const foreignKeyErrors = db.pragma('foreign_key_check');
     if (foreignKeyErrors.length) throw new Error('Agent projection foreign_key_check failed after migration');
+    });
+    applyMigration();
     return SCHEMA_VERSION;
 }
 

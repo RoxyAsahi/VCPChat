@@ -24,10 +24,16 @@ assert.throws(() => migrate(quickCheckFailure), /quick_check failed: fixture-cor
     'projection startup must fail before schema mutation when SQLite quick_check is not ok');
 quickCheckDatabase.close();
 
-const migrationDb = new Database(path.join(root, 'projection-v5.sqlite'));
+const unsupportedDb = new Database(':memory:');
+unsupportedDb.exec('CREATE TABLE projection_schema (version INTEGER NOT NULL); INSERT INTO projection_schema VALUES (5)');
+assert.throws(() => migrate(unsupportedDb), /minimum migratable schema is 6/,
+    'schemas older than the supported migration floor must fail closed');
+unsupportedDb.close();
+
+const migrationDb = new Database(path.join(root, 'projection-v6.sqlite'));
 migrationDb.exec(`
     CREATE TABLE projection_schema (version INTEGER NOT NULL);
-    INSERT INTO projection_schema(version) VALUES (5);
+    INSERT INTO projection_schema(version) VALUES (6);
     CREATE TABLE projection_state (
         session_id TEXT PRIMARY KEY,
         next_source_order INTEGER NOT NULL DEFAULT 1,
@@ -38,14 +44,14 @@ migrationDb.exec(`
     );
 `);
 const migratedRepository = new AgentProjectionRepository({ db: migrationDb });
-assert.equal(migratedRepository.schemaVersion, 11, 'schema 5 databases must migrate to schema 11');
+assert.equal(migratedRepository.schemaVersion, 12, 'schema 6 databases must migrate to schema 12');
 assert.ok(migrationDb.prepare("PRAGMA table_info('projection_state')").all()
     .some((column) => column.name === 'activity_json' && String(column.dflt_value).includes('{}')),
-    'schema 5 migration must add the durable Activity projection column');
+    'schema 6 migration must add the durable Activity projection column');
 migratedRepository.close();
 
 const repository = new AgentProjectionRepository({ databasePath: path.join(root, 'projection.sqlite') });
-assert.equal(repository.schemaVersion, 11);
+assert.equal(repository.schemaVersion, 12);
 repository.saveSession({
     sessionId: 'session_1',
     threadId: 'thr_1',
@@ -473,56 +479,72 @@ const downgraded = new Database(backupDatabasePath);
 downgraded.prepare('UPDATE projection_schema SET version = 6').run();
 downgraded.close();
 const migratedFromDisk = new AgentProjectionRepository({ databasePath: backupDatabasePath });
-assert.equal(migratedFromDisk.schemaVersion, 11);
+assert.equal(migratedFromDisk.schemaVersion, 12);
 migratedFromDisk.close();
 assert.equal(fs.existsSync(`${backupDatabasePath}.schema-6.bak`), true,
     'an on-disk schema migration must create a versioned backup before mutation');
 
-const recoveryDatabasePath = path.join(root, 'projection-legacy-tool-recovery.sqlite');
-const recoverySeed = new AgentProjectionRepository({ databasePath: recoveryDatabasePath });
-recoverySeed.saveSession({ sessionId: 'legacy-session', threadId: 'legacy-thread', agentId: 'Nova' });
-recoverySeed.close();
-const recoveryCurrent = new Database(recoveryDatabasePath);
-recoveryCurrent.prepare('UPDATE projection_schema SET version = 10').run();
-recoveryCurrent.close();
-const legacyBackup = new Database(`${recoveryDatabasePath}.schema-6.bak`);
-legacyBackup.exec(`
-    CREATE TABLE projection_schema (version INTEGER NOT NULL);
-    INSERT INTO projection_schema(version) VALUES (6);
-    CREATE TABLE agent_messages (
-        message_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, codex_thread_id TEXT NOT NULL,
-        codex_turn_id TEXT, codex_item_id TEXT NOT NULL, role TEXT NOT NULL, status TEXT NOT NULL,
-        source_order INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
-    );
-    CREATE TABLE agent_blocks (
-        block_id TEXT PRIMARY KEY, message_id TEXT NOT NULL, kind TEXT NOT NULL, status TEXT NOT NULL,
-        ordinal INTEGER NOT NULL, content_json TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
-    );
-`);
-const legacyNow = Date.now();
-legacyBackup.prepare(`INSERT INTO agent_messages VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run('legacy-tool-message', 'legacy-session', 'legacy-thread', 'legacy-turn', 'legacy-tool-item',
-        'tool', 'completed', 4, legacyNow, legacyNow);
-legacyBackup.prepare(`INSERT INTO agent_blocks VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
-    .run('legacy-tool-block', 'legacy-tool-message', 'tool', 'completed', 0, JSON.stringify({
-        item: { id: 'legacy-tool-item', type: 'dynamicToolCall', tool: 'vcp_invoke', arguments: { tool: 'FileOperator' } },
-    }), legacyNow, legacyNow);
-legacyBackup.close();
-const recoveredRepository = new AgentProjectionRepository({ databasePath: recoveryDatabasePath });
-assert.equal(recoveredRepository.schemaVersion, 11);
-const recoveredTool = recoveredRepository.readProjection('legacy-session').messages
-    .find((message) => message.itemId === 'legacy-tool-item');
-assert.equal(recoveredTool?.blocks[0]?.authority, 'toolbox',
-    'schema 11 may recover only a verified dynamic tool receipt from the fixed schema 6 backup');
-assert.ok(recoveredRepository.db.prepare('SELECT next_source_order FROM projection_state WHERE session_id = ?')
-    .get('legacy-session').next_source_order >= 5,
-    'legacy recovery must advance the Session source-order watermark before future live events arrive');
-recoveredRepository.close();
-const reopenedRecoveredRepository = new AgentProjectionRepository({ databasePath: recoveryDatabasePath });
-assert.equal(reopenedRecoveredRepository.readProjection('legacy-session').messages
-    .filter((message) => message.itemId === 'legacy-tool-item').length, 1,
-    'legacy tool recovery must be idempotent after the schema is upgraded');
-reopenedRecoveredRepository.close();
+const canonicalDatabasePath = path.join(root, 'projection-schema-12.sqlite');
+const canonicalSeed = new AgentProjectionRepository({ databasePath: canonicalDatabasePath });
+canonicalSeed.saveSession({ sessionId: 'legacy-session', threadId: 'legacy-thread', agentId: 'Nova' });
+canonicalSeed.upsertItem('legacy-session', {
+    threadId: 'legacy-thread', turnId: 'legacy-turn', itemId: 'legacy-reasoning',
+    role: 'assistant', status: 'completed',
+}, { kind: 'reasoning', ordinal: 0, content: { summary: ['placeholder'], content: [] } });
+canonicalSeed.upsertItem('legacy-session', {
+    threadId: 'legacy-thread', turnId: 'legacy-turn', itemId: 'legacy-tool',
+    role: 'tool', status: 'completed',
+}, { kind: 'tool', ordinal: 0, authority: 'codex', content: {
+    item: { id: 'legacy-tool', type: 'dynamicToolCall', tool: 'vcp_invoke' },
+} });
+canonicalSeed.close();
+const canonicalLegacy = new Database(canonicalDatabasePath);
+canonicalLegacy.prepare('UPDATE projection_schema SET version = 11').run();
+canonicalLegacy.prepare(`
+    UPDATE agent_blocks SET block_id = 'legacy-reasoning-block', content_schema_version = 1,
+        content_json = '{"text":"legacy reasoning"}'
+    WHERE message_id = (SELECT message_id FROM agent_messages WHERE codex_item_id = 'legacy-reasoning')
+`).run();
+canonicalLegacy.prepare(`
+    UPDATE agent_blocks SET block_id = 'legacy-tool-block', content_schema_version = 1, authority = 'codex'
+    WHERE message_id = (SELECT message_id FROM agent_messages WHERE codex_item_id = 'legacy-tool')
+`).run();
+canonicalLegacy.close();
+const canonicalRepository = new AgentProjectionRepository({ databasePath: canonicalDatabasePath });
+assert.equal(canonicalRepository.schemaVersion, 12);
+const canonicalProjection = canonicalRepository.readProjection('legacy-session');
+assert.deepEqual(canonicalProjection.messages.find((message) => message.itemId === 'legacy-reasoning')
+    .blocks[0].content.summary, ['legacy reasoning']);
+assert.equal(canonicalProjection.messages.find((message) => message.itemId === 'legacy-tool')
+    .blocks[0].authority, 'toolbox');
+for (const row of canonicalRepository.db.prepare(`
+    SELECT b.block_id, b.content_schema_version, m.session_id, m.codex_item_id, b.ordinal
+    FROM agent_blocks AS b JOIN agent_messages AS m ON m.message_id = b.message_id
+`).all()) {
+    assert.equal(row.content_schema_version, 2);
+    assert.equal(row.block_id, `block:${row.session_id}:${row.codex_item_id}:${row.ordinal}`);
+}
+canonicalRepository.close();
+
+const malformedDatabasePath = path.join(root, 'projection-malformed-v11.sqlite');
+const malformedSeed = new AgentProjectionRepository({ databasePath: malformedDatabasePath });
+malformedSeed.saveSession({ sessionId: 'malformed-session', threadId: 'malformed-thread', agentId: 'Nova' });
+malformedSeed.upsertItem('malformed-session', {
+    threadId: 'malformed-thread', itemId: 'malformed-item', role: 'assistant', status: 'completed',
+}, { kind: 'message', ordinal: 0, content: { text: 'valid before corruption' } });
+malformedSeed.close();
+const malformedLegacy = new Database(malformedDatabasePath);
+malformedLegacy.prepare('UPDATE projection_schema SET version = 11').run();
+malformedLegacy.prepare("UPDATE agent_blocks SET content_schema_version = 1, content_json = '{bad json'").run();
+malformedLegacy.close();
+assert.throws(() => new AgentProjectionRepository({ databasePath: malformedDatabasePath }), /malformed Block JSON/,
+    'schema 12 migration must fail closed on malformed Block content');
+assert.equal(fs.existsSync(`${malformedDatabasePath}.schema-11.bak`), true,
+    'a failed schema 12 migration must retain its pre-migration backup');
+const malformedAfterFailure = new Database(malformedDatabasePath, { readonly: true });
+assert.equal(malformedAfterFailure.prepare('SELECT version FROM projection_schema').get().version, 11,
+    'a failed schema 12 migration must roll back the schema version');
+malformedAfterFailure.close();
 const foreignKeyDatabasePath = path.join(root, 'projection-foreign-key.sqlite');
 const foreignKeySeed = new AgentProjectionRepository({ databasePath: foreignKeyDatabasePath });
 foreignKeySeed.close();

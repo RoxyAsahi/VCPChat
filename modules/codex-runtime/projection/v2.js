@@ -117,6 +117,7 @@ function projectionPatchBetween(before, after, { runtimeGeneration = 0 } = {}) {
 
 module.exports = {
     CONTENT_SCHEMA_VERSION,
+    normalizeContent,
     stableBlockId,
     sanitizeUnknownItem,
     normalizeTimelineBlock,

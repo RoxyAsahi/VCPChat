@@ -2,7 +2,7 @@
 
 const PROFILE_SCHEMA_VERSION = 2;
 const SESSION_CONFIG_SCHEMA_VERSION = 2;
-const BLOCK_CONTENT_SCHEMA_VERSION = 1;
+const BLOCK_CONTENT_SCHEMA_VERSION = 2;
 const APPLY_STATES = new Set(['unmaterialized', 'pending', 'applying', 'applied', 'error']);
 const DENIED_KEYS = new Set(['path', 'absolutePath', 'filePath', 'base64', 'buffer', 'transcript']);
 
