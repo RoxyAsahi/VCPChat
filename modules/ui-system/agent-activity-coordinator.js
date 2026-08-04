@@ -134,6 +134,9 @@ function createAgentActivityCoordinator({
         if (open) activityPanel.removeAttribute('inert');
         else activityPanel.setAttribute('inert', '');
         activityPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
+        // The Activity column consumes part of the Workbench flex row. Reapply
+        // the sidebar's effective width as soon as that reservation changes.
+        refs.refreshSidebarWidth?.();
         queueRender({ activity: true, header: true });
     }
 

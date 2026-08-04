@@ -415,3 +415,138 @@ html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .message-attachment-vide
         animation: none;
     }
 }
+
+/* Build is mounted inside an internal-app host rather than the document-level
+ * chat shell. Reassert the same flex shrink contract at every boundary so a
+ * wide sidebar, long tool payload, or composer never gives the main column a
+ * content-derived minimum width. */
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root.container {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+}
+/* The shared sidebar has a legacy 300ms width transition. Agent drives both
+ * this flex item and the global elevated panel edge from one physical width,
+ * so animation would make their boundaries visibly diverge while dragging. */
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar {
+    transition: none;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-main-content.agent-chat-pane {
+    width: auto;
+    min-width: 0;
+    max-width: 100%;
+    flex: 1 1 0;
+    box-sizing: border-box;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root :is(
+    .agent-chat-main-column,
+    .agent-chat-header,
+    .agent-chat-messages-container,
+    .agent-chat-messages,
+    .agent-chat-composer,
+    .chat-input-card,
+    .chat-input-actions,
+    .agent-chat-composer-attachments,
+    .agent-chat-activity-splitter
+) {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-main-column {
+    width: auto;
+    flex: 1 1 0;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-messages-container,
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-messages {
+    width: 100%;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-composer {
+    padding-inline: clamp(16px, 8%, 52px);
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .chat-input-actions {
+    flex-wrap: wrap;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .message-item,
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .details-and-bubble-wrapper,
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .message-item .md-content {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .message-item .md-content {
+    overflow-wrap: anywhere;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .message-item .md-content :is(img, video, audio, iframe, canvas) {
+    max-width: 100%;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .message-item .md-content :is(pre, .vcp-tool-result-bubble, .vcp-tool-use-bubble) {
+    max-width: 100%;
+    overflow-x: auto;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .message-item .md-content table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+/* Agent sidebar subviews are renderer-owned, so the legacy main-chat ID
+ * selectors do not protect them. Keep every inner surface sized to the
+ * sidebar's actual content box while preserving per-view vertical scrolling. */
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar :is(
+    .sidebar-tabs,
+    .sidebar-tab-button,
+    .sidebar-tab-content,
+    .agent-chat-sidebar-content,
+    .agents-header,
+    .topics-header-container,
+    .sidebar-list-scroll,
+    .agent-list,
+    .topic-list,
+    .agent-chat-settings-pane,
+    .agent-chat-settings-form,
+    .agent-chat-account-dock
+) {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .sidebar-tabs,
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .sidebar-tab-content,
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-chat-sidebar-content,
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-chat-settings-pane {
+    width: 100%;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar :is(
+    .agent-settings-section,
+    .agent-settings-section-header,
+    .agent-settings-section-content,
+    .agent-settings-section-summary,
+    .agent-settings-card-shell,
+    .agent-identity-container,
+    .agent-identity-main,
+    .agent-chat-settings-avatar,
+    .agent-chat-settings-avatar-copy,
+    .agent-chat-setting-field
+) {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar .agent-identity-main {
+    flex-wrap: wrap;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar :is(input, select, textarea) {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-sidebar :is(
+    .agent-settings-section-summary,
+    .agent-settings-summary-label,
+    .topic-title-display,
+    .agent-name
+) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}

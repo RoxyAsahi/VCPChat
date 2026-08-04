@@ -116,7 +116,10 @@ html[data-ui-mode="next"] body.next-ui-internal-app-open:has(.agent-chat-root) .
    so retain the main chat's 260px geometry for the navigation cut-out and
    panel-elevation layer. */
 html[data-ui-mode="next"] body.next-ui-internal-app-open:has(.agent-chat-root) {
-    --next-sidebar-width: 260px;
+    /* The Agent Workbench owns a resizable sidebar. Its shell updates this
+       value with the effective (not merely preferred) width so the shared
+       elevated panel edge stays aligned while the viewport is constrained. */
+    --next-sidebar-width: var(--agent-chat-sidebar-width, 260px);
 }
 
 html[data-ui-mode="next"] body.next-ui-internal-app-open:has(

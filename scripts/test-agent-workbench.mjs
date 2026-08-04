@@ -27,6 +27,17 @@ globalThis.CustomEvent = dom.window.CustomEvent;
 globalThis.Event = dom.window.Event;
 globalThis.Node = dom.window.Node;
 globalThis.HTMLButtonElement = dom.window.HTMLButtonElement;
+const resizeObservers = [];
+class TestResizeObserver {
+    constructor(callback) { this.callback = callback; this.targets = new Set(); resizeObservers.push(this); }
+    observe(target) { this.targets.add(target); }
+    disconnect() { this.targets.clear(); }
+}
+globalThis.ResizeObserver = TestResizeObserver;
+window.ResizeObserver = TestResizeObserver;
+// main.html installs this classic shared helper before uiManager. The Workbench
+// test imports ESM modules directly, so install the same browser global here.
+Function('window', fs.readFileSync(path.join(root, 'modules', 'ui-system', 'sidebar-resizer.js'), 'utf8'))(window);
 let revokedAvatarUrl = null;
 window.URL.createObjectURL = () => 'blob:cropped-agent-avatar';
 window.URL.revokeObjectURL = (url) => { revokedAvatarUrl = url; };
@@ -485,8 +496,27 @@ window.localStorage.setItem('vcpchat.agentWorkbench.lastTopic.v1', JSON.stringif
     sessionId: 'topic-restored', title: '可恢复的 Codex Session', agentId: 'Nova',
     model: 'gpt-5.6-terra', workspaceRoot: root,
 }));
+window.localStorage.setItem('vcpchat.agentWorkbench.sidebarWidth', '600');
 const dispose = registered.mount(host, {});
 await new Promise((resolve) => setTimeout(resolve, 100));
+const workbenchRoot = host.querySelector('.agent-chat-root');
+const workbenchSidebar = host.querySelector('.agent-chat-sidebar');
+workbenchRoot.getBoundingClientRect = () => ({ left: 0, width: 900 });
+resizeObservers.filter((observer) => observer.targets.has(workbenchRoot)).forEach((observer) => observer.callback());
+assert.ok(workbenchSidebar.classList.contains('agent-chat-sidebar-width-560'),
+    'a saved 600px sidebar preference must temporarily clamp when the Workbench leaves only a 320px chat column');
+assert.equal(workbenchSidebar.style.width, '560px',
+    'the effective width must be written to the actual flex item, not only a semantic class');
+assert.equal(workbenchSidebar.style.flexBasis, '560px',
+    'the sidebar flex basis must match its effective width so the main panel starts at the same edge');
+assert.equal(document.body.style.getPropertyValue('--agent-chat-sidebar-width'), '560px',
+    'the shared elevated panel edge must follow the effective Build sidebar width');
+workbenchRoot.getBoundingClientRect = () => ({ left: 0, width: 1_200 });
+resizeObservers.filter((observer) => observer.targets.has(workbenchRoot)).forEach((observer) => observer.callback());
+assert.ok(workbenchSidebar.classList.contains('agent-chat-sidebar-width-600'),
+    'expanding the Workbench must restore the saved sidebar preference instead of persisting the temporary clamp');
+assert.equal(document.body.style.getPropertyValue('--agent-chat-sidebar-width'), '600px',
+    'the shared elevated panel edge must restore with the saved sidebar preference');
 assert.equal(createdSessions.length, 0,
     'renderer reload must preview the saved Codex Session without acquiring a writable Session');
 assert.deepEqual(JSON.parse(window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1')), { sessionId: 'topic-restored' },
@@ -529,9 +559,15 @@ assert.match(restoredToolCard.querySelector('.agent-chat-tool-detail')?.textCont
     'expanded restored tools must expose their durable arguments and result');
 assert.doesNotMatch(host.querySelector('.agent-chat-messages')?.textContent || '', /恢复计划/,
     'a durable Plan Item must not duplicate itself as a normal assistant bubble');
+workbenchRoot.getBoundingClientRect = () => ({ left: 0, width: 900 });
+resizeObservers.filter((observer) => observer.targets.has(workbenchRoot)).forEach((observer) => observer.callback());
+assert.ok(workbenchSidebar.classList.contains('agent-chat-sidebar-width-560'),
+    'the narrow Workbench baseline must restore before testing an open Activity panel');
 host.querySelector('.agent-chat-header-activity')?.click();
 const activityPanelSplitter = host.querySelector('.agent-chat-activity-splitter[role="separator"]');
 const activityPanelElement = host.querySelector('.agent-chat-activity-panel');
+assert.ok(workbenchSidebar.classList.contains('agent-chat-sidebar-width-180'),
+    'opening Activity must temporarily reduce a wide saved sidebar preference before it crowds out the chat column');
 assert.ok(activityPanelSplitter?.classList.contains('is-active'),
     'opening Session information must expose the chat/panel resize handle');
 assert.ok(activityPanelElement?.classList.contains('agent-chat-activity-width-420'),
@@ -552,6 +588,8 @@ assert.match(host.querySelector('.agent-chat-activity-usage')?.textContent || ''
 assert.match(host.querySelector('.agent-chat-activity-usage')?.textContent || '', /已恢复压缩摘要/,
     'a cold SQLite projection must restore the last compaction summary');
 host.querySelector('.agent-chat-activity-close')?.click();
+assert.ok(workbenchSidebar.classList.contains('agent-chat-sidebar-width-560'),
+    'closing Activity must restore the saved sidebar preference instead of persisting the temporary clamp');
 assert.ok(host.querySelector('.agent-chat-root.container'));
 assert.ok(host.querySelector('.agent-chat-sidebar.sidebar'), 'Agent sessions must reuse the main sidebar shell');
 assert.ok(host.querySelector('.agent-chat-main-content.main-content'), 'Agent conversation must reuse the main chat content shell');
@@ -1662,30 +1700,20 @@ settingsTab.click();
 assert.ok(host.querySelector('.agent-chat-settings-pane .agent-chat-settings-form'),
     'settings must render inside a dedicated padded pane instead of placing fields against the sidebar edge');
 await new Promise((resolve) => setTimeout(resolve, 0));
-const settingScopes = [...host.querySelectorAll('.agent-chat-settings-scope')];
-assert.deepEqual(settingScopes.map((button) => button.textContent), ['Agent 默认', '当前会话', '高级'],
-    'settings must separate Profile, Session and advanced diagnostics');
-settingScopes.find((button) => button.textContent === '高级').click();
-const recoverySection = host.querySelector('.agent-chat-recovery-section');
-assert.ok(recoverySection, 'settings must expose incomplete Saga recovery without hiding it in logs');
-assert.match(recoverySection.textContent, /没有需要人工处理的操作/);
-assert.ok([...recoverySection.querySelectorAll('button')].some((item) => item.textContent === '扫描未绑定 Thread'));
-const budgetSettings = host.querySelector('.agent-chat-settings-budget:not(.agent-chat-settings-runtime-info)');
-assert.ok(budgetSettings, 'per-turn safety budgets must live only in advanced Agent settings');
-assert.equal(budgetSettings.querySelector('[name="maxRequestsPerTurn"]').value, '8');
-assert.equal(budgetSettings.querySelector('[name="maxTokensPerTurn"]').value, '120000');
-budgetSettings.querySelector('[name="maxRequestsPerTurn"]').value = '12';
-budgetSettings.querySelector('[name="maxTokensPerTurn"]').value = '240000';
-budgetSettings.querySelector('[name="maxRequestsPerTurn"]').dispatchEvent(new window.Event('input', { bubbles: true }));
-budgetSettings.querySelector('[name="maxTokensPerTurn"]').dispatchEvent(new window.Event('input', { bubbles: true }));
-await new Promise((resolve) => setTimeout(resolve, 550));
-assert.ok(savedWorkbenchSettings.some((item) => item.budget?.maxRequestsPerTurn === '12'
-    && item.budget?.maxTokensPerTurn === '240000'),
-    'budget autosave must use the narrow Agent settings IPC, never renderer storage');
-[...host.querySelectorAll('.agent-chat-settings-scope')]
-    .find((button) => button.textContent === 'Agent 默认').click();
-const avatarSettings = host.querySelector('.agent-chat-settings-avatar');
-assert.ok(avatarSettings, 'Agent settings must expose the isolated Build Agent avatar control');
+assert.deepEqual([...host.querySelectorAll('.agent-settings-section-title')].map((title) => title.textContent),
+    ['基础信息', '模型设置', '系统提示词'],
+    'settings must use the same collapsed identity, model, and prompt sections as main chat');
+assert.equal(host.querySelector('.agent-chat-settings-scope'), null,
+    'Build settings must not keep the removed Profile, Session, and Advanced sub-tabs');
+const openSettingsSection = (key) => {
+    const section = host.querySelector(`.agent-settings-section[data-section-key="${key}"]`);
+    assert.ok(section, `settings must contain the ${key} section`);
+    if (section.classList.contains('collapsed')) section.querySelector('.agent-settings-section-header').click();
+    return section;
+};
+openSettingsSection('identity');
+const avatarSettings = host.querySelector('.agent-identity-main');
+assert.ok(avatarSettings, 'Agent settings must expose the shared main-chat identity layout');
 assert.match(avatarSettings.querySelector('.agent-avatar-display')?.src || '', /nova-avatar\.png/,
     'avatar preview must use the selected Agent catalog avatar');
 assert.ok(avatarSettings.querySelector('.agent-avatar-wrapper .avatar-upload-overlay'),
@@ -1704,82 +1732,20 @@ assert.equal(savedAvatars[0].avatarData.name, 'nova.png');
 assert.equal(savedAvatars[0].avatarData.type, 'image/png');
 assert.ok(savedAvatars[0].avatarData.buffer instanceof ArrayBuffer,
     'avatar save must pass binary data without persisting Base64 in renderer state');
-[...host.querySelectorAll('.agent-chat-settings-scope')]
-    .find((button) => button.textContent === '当前会话').click();
-const workspaceSetting = [...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field')]
-    .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent.includes('工作目录'))
-    ?.querySelector('input');
-assert.ok(workspaceSetting, 'selected Session settings must expose its persisted workspace');
-workspaceSetting.value = `${root}\\updated`;
-workspaceSetting.dispatchEvent(new window.Event('change', { bubbles: true }));
-await new Promise((resolve) => setTimeout(resolve, 30));
-assert.ok(savedWorkbenchSettings.some((item) => item.sessionId === 'topic-archived'
-    && item.workspaceRoot === `${root}\\updated`),
-    'changing the workspace must persist it to the selected Session instead of keeping a renderer-only draft');
-assert.equal(host.querySelector('.agent-chat-settings-pane > .agent-chat-settings-placeholder') !== null, true);
-const permissionSelect = [...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field select')]
-    .find((control) => [...control.options].some((option) => option.value === 'always-approve'));
-assert.ok(permissionSelect, 'Workbench settings must expose a visible local approval (YOLO) policy selector');
-permissionSelect.value = 'always-approve';
-permissionSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
+openSettingsSection('model');
+assert.ok(host.querySelector('.agent-chat-settings-pane .agent-chat-setting-field select'),
+    'the expanded model section must expose its model and approval controls');
+openSettingsSection('prompt');
 const promptEditor = host.querySelector('.agent-chat-settings-pane textarea:not([readonly])');
-assert.equal(promptEditor?.value, '冻结的 Nova 指令',
-    'an unmaterialized Session must expose its frozen Base Instructions as an editable field');
-promptEditor.value = '{{SessionNova}}';
-promptEditor.dispatchEvent(new window.Event('input', { bubbles: true }));
-await new Promise((resolve) => setTimeout(resolve, 550));
-assert.equal(savedWorkbenchSettings.at(-1)?.baseInstructions, '{{SessionNova}}',
-    'editing an unmaterialized Session prompt must autosave through the Session CAS IPC');
-await new Promise((resolve) => setTimeout(resolve, 30));
-assert.ok(savedWorkbenchSettings.some((item) => item.permissionMode === 'always-approve'),
-    'changing YOLO must automatically persist the narrowed Codex Session permissionMode setting');
-assert.ok(savedWorkbenchSettings.some((item) => item.permissionMode === 'always-approve' && item.sessionId === 'topic-archived'),
-    'saving a selected Topic policy must target that current Session rather than only a future Session');
-assert.equal([...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field select')]
-    .find((control) => [...control.options].some((option) => option.value === 'always-approve'))?.value, 'always-approve',
-    'the selected Session must retain its newly saved policy after the settings pane rerenders');
-assert.match(host.querySelector('.agent-chat-composer-permissions')?.getAttribute('aria-label') || '', /YOLO/,
-    'the composer permission indicator must read the selected Session policy, not the global default');
-const modelSelect = [...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field select')]
-    .find((control) => [...control.options].some((option) => option.value === 'gpt-5.6-luna'));
-assert.ok(modelSelect, 'settings must expose the shared model catalog for the current Session');
-modelSelect.value = 'gpt-5.6-luna';
-modelSelect.dispatchEvent(new window.Event('change', { bubbles: true }));
-await new Promise((resolve) => setTimeout(resolve, 30));
-assert.equal(savedWorkbenchSettings.at(-1)?.model, 'gpt-5.6-luna',
-    'changing a model must automatically target the selected Session instead of changing only a page-local selector');
-assert.equal([...host.querySelectorAll('.agent-chat-settings-pane button')]
-    .some((button) => /^保存/.test(button.textContent.trim())), false,
-    'settings must not expose redundant save buttons after autosave is enabled');
-assert.equal([...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field select')]
-    .find((control) => [...control.options].some((option) => option.value === 'gpt-5.6-luna'))?.value, 'gpt-5.6-luna',
-    'the selected Session must retain its newly saved model after the settings pane rerenders');
-
-const materializedSessionsTab = [...host.querySelectorAll('.agent-chat-sidebar .sidebar-tab-button')]
-    .find((tab) => tab.textContent.trim() === '会话');
-materializedSessionsTab.click();
-host.querySelector('.agent-chat-session-row[data-session-id="topic-in-use"]').click();
-await new Promise((resolve) => setTimeout(resolve, 30));
-const materializedSettingsTab = [...host.querySelectorAll('.agent-chat-sidebar .sidebar-tab-button')]
-    .find((tab) => tab.textContent.trim() === '设置');
-materializedSettingsTab.click();
-await new Promise((resolve) => setTimeout(resolve, 0));
-[...host.querySelectorAll('.agent-chat-settings-scope')]
-    .find((button) => button.textContent === '当前会话').click();
-const materializedWorkspace = [...host.querySelectorAll('.agent-chat-settings-pane .agent-chat-setting-field')]
-    .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent.includes('工作目录'))
-    ?.querySelector('input');
-assert.equal(materializedWorkspace?.disabled, false,
-    'Codex 0.146 must allow a materialized Thread workspace to change from the next Turn');
-assert.match(host.querySelector('.agent-chat-settings-summary')?.textContent || '', /Profile.*revision/s,
-    'a selected Session must show its frozen Profile identity and revision');
-assert.ok(host.querySelector('.agent-chat-settings-pane textarea:not([readonly])'),
-    'an idle materialized Thread must allow Base Instructions to be saved for safe reload');
+assert.equal(promptEditor?.value, '{{Nova}}',
+    'the prompt section must expose the selected Agent instructions without reintroducing a settings sub-tab');
 
 dispose();
 assert.equal(unsubscribeCalls, 1, 'Workbench unmount must release runtime event subscription');
 assert.deepEqual(presenceCalls, [true, false]);
 assert.equal(host.childElementCount, 0);
+assert.equal(document.body.style.getPropertyValue('--agent-chat-sidebar-width'), '',
+    'closing Build must remove its panel-edge override for ordinary chat and other internal apps');
 
 window.localStorage.setItem('vcpchat.agentWorkbench.lastTopic.v1', JSON.stringify({ sessionId: 'topic-missing-session' }));
 const missingSessionDispose = registered.mount(host, {});

@@ -98,52 +98,79 @@ function createAgentWorkbenchShellView({ document, container, state, actions = {
     activityInner.append(activityTabRow, activityContent);
     activityPanel.append(activityInner);
 
-    let sidebarDragCleanup = null;
-    const applySidebarWidth = (width) => {
-        state.agentSidebarWidth = Math.round(Math.max(180, Math.min(600, width)) / 20) * 20;
+    const sidebarStep = 20;
+    const sidebarMinWidth = 180;
+    const sidebarMaxWidth = 600;
+    const mainMinimumWidth = 320;
+    let preferredSidebarWidth = Math.round(Math.max(sidebarMinWidth,
+        Math.min(sidebarMaxWidth, state.agentSidebarWidth)) / sidebarStep) * sidebarStep;
+
+    const getSidebarMaximumWidth = () => {
+        const rootWidth = root.getBoundingClientRect().width;
+        if (!Number.isFinite(rootWidth) || rootWidth <= 0) return sidebarMaxWidth;
+        const splitterWidth = sidebarSplitter.getBoundingClientRect().width || 5;
+        const activityReservedWidth = state.activityOpen
+            ? Math.max(320, Math.min(760, Number(state.activityPanelWidth) || 420))
+                + (activitySplitter.getBoundingClientRect().width || 7)
+            : 0;
+        const available = rootWidth - splitterWidth - mainMinimumWidth - activityReservedWidth;
+        return Math.max(sidebarMinWidth, Math.min(sidebarMaxWidth,
+            Math.floor(available / sidebarStep) * sidebarStep));
+    };
+
+    const syncPanelElevationWidth = (fallbackWidth) => {
+        const measuredWidth = sidebar.getBoundingClientRect().width;
+        const physicalWidth = Number.isFinite(measuredWidth) && measuredWidth > 0
+            ? measuredWidth
+            : fallbackWidth;
+        document.body.style.setProperty('--agent-chat-sidebar-width', `${Math.round(physicalWidth)}px`);
+    };
+    const renderSidebarWidth = () => {
+        const effectiveWidth = Math.max(sidebarMinWidth, Math.min(getSidebarMaximumWidth(), preferredSidebarWidth));
         [...sidebar.classList]
             .filter((name) => name.startsWith('agent-chat-sidebar-width-'))
             .forEach((name) => sidebar.classList.remove(name));
-        sidebar.classList.add(`agent-chat-sidebar-width-${state.agentSidebarWidth}`);
-        sidebarSplitter.setAttribute('aria-valuemin', '180');
-        sidebarSplitter.setAttribute('aria-valuemax', '600');
-        sidebarSplitter.setAttribute('aria-valuenow', String(state.agentSidebarWidth));
+        sidebar.classList.add(`agent-chat-sidebar-width-${effectiveWidth}`);
+        // Keep the flex item and the global Next panel elevation on one
+        // physical width. Class names remain for compact test/selector hooks.
+        sidebar.style.width = `${effectiveWidth}px`;
+        sidebar.style.flexBasis = `${effectiveWidth}px`;
+        syncPanelElevationWidth(effectiveWidth);
+        sidebarSplitter.setAttribute('aria-valuemin', String(sidebarMinWidth));
+        sidebarSplitter.setAttribute('aria-valuemax', String(getSidebarMaximumWidth()));
+        sidebarSplitter.setAttribute('aria-valuenow', String(effectiveWidth));
+    };
+    const applySidebarWidth = (width) => {
+        preferredSidebarWidth = Math.round(Math.max(sidebarMinWidth, Math.min(sidebarMaxWidth, width)) / sidebarStep) * sidebarStep;
+        state.agentSidebarWidth = preferredSidebarWidth;
+        renderSidebarWidth();
     };
     const persistSidebarWidth = () => {
-        try { window.localStorage?.setItem('vcpchat.agentWorkbench.sidebarWidth', String(state.agentSidebarWidth)); } catch { /* storage is optional */ }
+        try { window.localStorage?.setItem('vcpchat.agentWorkbench.sidebarWidth', String(preferredSidebarWidth)); } catch { /* storage is optional */ }
     };
-    applySidebarWidth(state.agentSidebarWidth);
-    listen(sidebarSplitter, 'pointerdown', (event) => {
-        event.preventDefault();
-        sidebarDragCleanup?.();
-        sidebarSplitter.setPointerCapture?.(event.pointerId);
-        const bounds = root.getBoundingClientRect();
-        sidebar.classList.add('agent-chat-sidebar-resizing');
-        document.body.classList.add('vcp-sidebar-resizing');
-        const onMove = (moveEvent) => applySidebarWidth(Math.min(bounds.width - 280, moveEvent.clientX - bounds.left));
-        const onUp = (upEvent) => {
-            sidebarSplitter.releasePointerCapture?.(upEvent.pointerId);
-            persistSidebarWidth();
-            sidebarDragCleanup?.();
-        };
-        sidebarDragCleanup = () => {
-            sidebarSplitter.removeEventListener('pointermove', onMove);
-            sidebarSplitter.removeEventListener('pointerup', onUp);
-            sidebarSplitter.removeEventListener('pointercancel', onUp);
-            sidebar.classList.remove('agent-chat-sidebar-resizing');
-            document.body.classList.remove('vcp-sidebar-resizing');
-            sidebarDragCleanup = null;
-        };
-        sidebarSplitter.addEventListener('pointermove', onMove);
-        sidebarSplitter.addEventListener('pointerup', onUp);
-        sidebarSplitter.addEventListener('pointercancel', onUp);
+    applySidebarWidth(preferredSidebarWidth);
+    const sidebarResizer = window.VCPSidebarResizer?.create({
+        handle: sidebarSplitter,
+        document,
+        eventNames: { down: 'pointerdown', move: 'pointermove', up: 'pointerup', cancel: 'pointercancel' },
+        getValue: () => preferredSidebarWidth,
+        getBounds: () => ({ min: sidebarMinWidth, max: getSidebarMaximumWidth() }),
+        applyValue: applySidebarWidth,
+        step: sidebarStep,
+        onCommit: persistSidebarWidth,
+        onActiveChange: (active) => {
+            sidebar.classList.toggle('agent-chat-sidebar-resizing', active);
+            document.body.classList.toggle('vcp-sidebar-resizing', active);
+        },
     });
-    listen(sidebarSplitter, 'keydown', (event) => {
-        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-        event.preventDefault();
-        applySidebarWidth(state.agentSidebarWidth + (event.key === 'ArrowRight' ? 20 : -20));
-        persistSidebarWidth();
-    });
+    const sidebarResizeObserver = typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => renderSidebarWidth());
+    sidebarResizeObserver?.observe(root);
+    const sidebarPanelEdgeObserver = typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => syncPanelElevationWidth(preferredSidebarWidth));
+    sidebarPanelEdgeObserver?.observe(sidebar);
 
     let dragCleanup = null;
     const applyActivityPanelWidth = (width) => {
@@ -193,6 +220,7 @@ function createAgentWorkbenchShellView({ document, container, state, actions = {
         runningModes, steerModeButton, followUpModeButton, queuePanelHost, inputCard, input,
         newButton, attachButton, emoticonButton, permissionsButton, sendButton, attachmentTray,
         activityPanel, activitySplitter, activityClose, activityTabs, activityAdd, activityContent,
+        refreshSidebarWidth: renderSidebarWidth,
         activityTabRow,
     };
     return {
@@ -203,7 +231,12 @@ function createAgentWorkbenchShellView({ document, container, state, actions = {
         },
         dispose() {
             dragCleanup?.();
-            sidebarDragCleanup?.();
+            sidebarResizer?.dispose();
+            sidebarResizeObserver?.disconnect();
+            sidebarPanelEdgeObserver?.disconnect();
+            sidebar.style.width = '';
+            sidebar.style.flexBasis = '';
+            document.body.style.removeProperty('--agent-chat-sidebar-width');
             for (const dispose of disposers.splice(0).reverse()) dispose();
             root.remove();
             topicFlowLayer.remove();
