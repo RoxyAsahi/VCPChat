@@ -250,7 +250,7 @@ function initialize(options) {
     }));
     ipcMain.handle(IPC_CHANNELS.START_TURN, (event, payload) => toolboxGuard(event, () => manager.startTurn(payload || {})));
     ipcMain.handle(IPC_CHANNELS.STEER_TURN, (event, payload) => runtimeGuard(event, () => manager.steerTurn(payload || {})));
-    ipcMain.handle(IPC_CHANNELS.FOLLOW_UP_TURN, (event, payload) => toolboxGuard(event, () => manager.followUpTurn(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.FOLLOW_UP_TURN, (event, payload) => runtimeGuard(event, () => manager.followUpTurn(payload || {})));
     ipcMain.handle(IPC_CHANNELS.CANCEL_TURN, (event, payload) => runtimeGuard(event, () => manager.cancelTurn(payload || {})));
     ipcMain.handle(IPC_CHANNELS.RESPOND_APPROVAL, (event, payload) => runtimeGuard(event, () => manager.respondApproval(payload || {})));
     ipcMain.handle(IPC_CHANNELS.RESPOND_INTERACTION, (event, payload) => runtimeGuard(event, () => manager.respondInteraction(payload || {})));

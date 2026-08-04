@@ -32,6 +32,27 @@ class RuntimeTurnService {
         return this._repository(operation.generation);
     }
 
+    _requireSubmissionId(submissionId) {
+        const value = String(submissionId || '').trim();
+        if (!value) throw new CodexAppServerError('INVALID_SUBMISSION_ID', 'Turn command requires a submissionId');
+        return value;
+    }
+
+    _requireActiveTurn(session, turnId, action) {
+        const expectedTurnId = String(turnId || '').trim();
+        if (!expectedTurnId) {
+            throw new CodexAppServerError('INVALID_TURN_ID', `${action} requires an explicit Codex turnId`);
+        }
+        const state = this.context.threadStates().get(session.threadId);
+        if (state?.activity !== 'running' || state.activeTurnId !== expectedTurnId) {
+            throw new CodexAppServerError(
+                'STALE_TURN', `${action} target is not the active Turn for this Session`,
+                { expectedTurnId, activeTurnId: state?.activeTurnId || null, activity: state?.activity || 'unknown' },
+            );
+        }
+        return expectedTurnId;
+    }
+
     async ensureSessionRuntime({
         sessionId, reason = 'send', recoverPendingInputs = true, ...options
     } = {}) {
@@ -195,22 +216,90 @@ class RuntimeTurnService {
         return { sessionId: session.sessionId, threadId: session.threadId, turnId: acceptedTurnId };
     }
 
-    async steer({ sessionId, turnId, prompt } = {}) {
+    async steer({ sessionId, turnId, prompt, submissionId } = {}) {
         this.context.assertProjectionWritable();
         const session = this.context.repository().getSession(requireSessionId(sessionId));
         if (!session?.threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached');
-        const operation = this._operation({ sessionId: session.sessionId, threadId: session.threadId, turnId });
-        const result = await this.context.transport().request('turn/steer', {
-            threadId: session.threadId,
-            expectedTurnId: turnId,
-            clientUserMessageId: this.context.createId('client_msg'),
-            input: [{ type: 'text', text: String(prompt || ''), text_elements: [] }],
+        const expectedTurnId = this._requireActiveTurn(session, turnId, 'turn/steer');
+        const text = String(prompt || '').trim();
+        if (!text) throw new CodexAppServerError('INVALID_INPUT', 'Steering message must not be empty');
+        const stableSubmissionId = this._requireSubmissionId(submissionId);
+        const requestKey = `${expectedTurnId}:${stableSubmissionId}`;
+        const steerPromises = this.context.steerPromises?.() || new Map();
+        const existing = steerPromises.get(session.sessionId);
+        if (existing) {
+            if (existing.requestKey === requestKey) return existing.promise;
+            throw new CodexAppServerError('SESSION_BUSY', 'Another steering command is already being submitted for this Session');
+        }
+        const promise = this._steerInternal({
+            session, turnId: expectedTurnId, prompt: text, submissionId: stableSubmissionId,
         });
-        this._operationRepository(operation);
-        return { sessionId: session.sessionId, threadId: session.threadId, turnId: result?.turnId || turnId };
+        steerPromises.set(session.sessionId, { requestKey, promise });
+        try {
+            return await promise;
+        } finally {
+            if (steerPromises.get(session.sessionId)?.promise === promise) steerPromises.delete(session.sessionId);
+        }
     }
 
-    async followUp({ sessionId, prompt, attachments = [] } = {}) {
+    async _steerInternal({ session, turnId, prompt, submissionId, pendingInput = null }) {
+        const operation = this._operation({ sessionId: session.sessionId, threadId: session.threadId, turnId });
+        let repository = this._operationRepository(operation);
+        const pending = pendingInput || repository.enqueuePendingInput(session.sessionId, {
+            submissionId,
+            kind: 'steer',
+            targetTurnId: turnId,
+            prompt,
+        });
+        if (!pending) throw new CodexAppServerError('PENDING_INPUT_WRITE_FAILED', 'Could not persist steering command');
+        if (!['queued', 'failed'].includes(pending.state)) {
+            throw new CodexAppServerError('PENDING_INPUT_BUSY', 'Steering command is already pending confirmation');
+        }
+        repository.updatePendingInput(pending.inputId, {
+            state: 'dispatching', attemptCount: pending.attemptCount + 1, lastError: null,
+        });
+        try {
+            const result = await this.context.transport().request('turn/steer', {
+                threadId: session.threadId,
+                expectedTurnId: turnId,
+                clientUserMessageId: pending.clientMessageId,
+                input: [{ type: 'text', text: prompt, text_elements: [] }],
+            });
+            repository = this._operationRepository(operation);
+            repository.updatePendingInput(pending.inputId, {
+                state: 'accepted', turnId: result?.turnId || turnId, lastError: null,
+            });
+            repository.removePendingInput(pending.inputId);
+            return {
+                sessionId: session.sessionId,
+                threadId: session.threadId,
+                turnId: result?.turnId || turnId,
+                submissionId,
+            };
+        } catch (error) {
+            if (error?.code === 'STALE_RUNTIME_GENERATION') throw error;
+            repository = this._operationRepository(operation);
+            repository.updatePendingInput(pending.inputId, {
+                state: isUncertainRemoteMutation(error) ? 'uncertain' : 'failed',
+                lastError: error?.message || String(error),
+            });
+            throw error;
+        }
+    }
+
+    async retrySteerPendingInput(session, pendingInput) {
+        if (!session?.sessionId || !pendingInput?.inputId) {
+            throw new CodexAppServerError('INVALID_INPUT', 'Steering recovery requires a Session and pending input');
+        }
+        return this.steer({
+            sessionId: session.sessionId,
+            turnId: pendingInput.targetTurnId,
+            prompt: pendingInput.prompt,
+            submissionId: pendingInput.submissionId,
+        });
+    }
+
+    async followUp({ sessionId, afterTurnId, prompt, submissionId, attachments = [] } = {}) {
         this.context.assertProjectionWritable();
         if (Array.isArray(attachments) && attachments.length) {
             throw new CodexAppServerError(
@@ -223,46 +312,118 @@ class RuntimeTurnService {
         const text = String(prompt || '').trim();
         if (!session?.threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached');
         if (!text) throw new CodexAppServerError('INVALID_INPUT', 'Follow-up message must not be empty');
-        const queued = repository.enqueuePendingInput(idValue, { dedupeKey: submissionDedupeKey(text, []), prompt: text });
-        if (this.context.threadStates().get(session.threadId)?.activity !== 'running') void this.drainFollowUpQueue(session);
-        return { sessionId: idValue, threadId: session.threadId, inputId: queued.input_id, queued: true };
+        const targetTurnId = this._requireActiveTurn(session, afterTurnId, 'follow-up');
+        const stableSubmissionId = this._requireSubmissionId(submissionId);
+        const queued = repository.enqueuePendingInput(idValue, {
+            submissionId: stableSubmissionId,
+            kind: 'follow-up',
+            targetTurnId,
+            prompt: text,
+        });
+        return {
+            sessionId: idValue,
+            threadId: session.threadId,
+            inputId: queued.inputId,
+            submissionId: stableSubmissionId,
+            afterTurnId: targetTurnId,
+            queued: true,
+        };
     }
 
     async cancel({ sessionId, turnId } = {}) {
         this.context.assertProjectionWritable();
         const session = this.context.repository().getSession(requireSessionId(sessionId));
         if (!session?.threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached');
-        const operation = this._operation({ sessionId: session.sessionId, threadId: session.threadId, turnId });
-        await this.context.transport().request('turn/interrupt', { threadId: session.threadId, turnId });
-        this.context.assertOperationContext(operation);
-        await this.context.responsesAdapter()?.cancelTurn?.({ threadId: session.threadId, turnId });
-        this.context.assertOperationContext(operation);
+        const expectedTurnId = this._requireActiveTurn(session, turnId, 'turn/interrupt');
+        const operation = this._operation({ sessionId: session.sessionId, threadId: session.threadId, turnId: expectedTurnId });
+        const cancellationKey = `${session.threadId}:${expectedTurnId}`;
+        const cancellations = this.context.turnCancellationStates?.() || new Map();
+        const existing = cancellations.get(cancellationKey);
+        if (existing) return existing.promise || existing.result || existing;
         const interrupts = [...this.context.dynamicCalls().values()]
-            .filter((call) => call.threadId === session.threadId && (!turnId || call.turnId === turnId))
-            .map((call) => this.context.bridge()?.interrupt(call.bridgeRequestId).catch(() => false));
-        await Promise.all(interrupts);
-        this._operationRepository(operation);
-        return { sessionId: session.sessionId, threadId: session.threadId, turnId, interrupted: true };
+            .filter((call) => call.threadId === session.threadId && call.turnId === expectedTurnId)
+            .map((call) => Promise.resolve().then(() => this.context.bridge()?.interrupt(call.bridgeRequestId)));
+        const promise = (async () => {
+            const [appServer, responses, bridge, interactions] = await Promise.allSettled([
+                this.context.transport().request('turn/interrupt', {
+                    threadId: session.threadId, turnId: expectedTurnId,
+                }),
+                this.context.responsesAdapter()?.cancelTurn?.({
+                    threadId: session.threadId, turnId: expectedTurnId,
+                }) || Promise.resolve(0),
+                Promise.allSettled(interrupts),
+                this.context.failClosedTurnInteractions?.({
+                    sessionId: session.sessionId, threadId: session.threadId, turnId: expectedTurnId,
+                }, 'The owning Codex Turn was interrupted') || Promise.resolve({ resolved: [] }),
+            ]);
+            this._operationRepository(operation);
+            const result = {
+                sessionId: session.sessionId,
+                threadId: session.threadId,
+                turnId: expectedTurnId,
+                state: appServer.status === 'fulfilled' ? 'requested' : 'uncertain',
+                interrupted: false,
+                channels: {
+                    appServer: appServer.status,
+                    responses: responses.status,
+                    bridge: bridge.status,
+                    interactions: interactions.status,
+                },
+                error: appServer.status === 'rejected'
+                    ? (appServer.reason?.message || String(appServer.reason)) : null,
+            };
+            cancellations.set(cancellationKey, { ...result, result, promise: null, updatedAt: Date.now() });
+            return result;
+        })();
+        cancellations.set(cancellationKey, { state: 'requesting', promise, updatedAt: Date.now() });
+        return promise;
     }
 
-    async fork({ sessionId, turnId, title } = {}) {
+    async fork({ sessionId, turnId, beforeTurnId, title } = {}) {
         this.context.assertProjectionWritable();
         let repository = this.context.repository();
-        const source = repository.getSession(requireSessionId(sessionId));
+        let source = repository.getSession(requireSessionId(sessionId));
         if (!source?.threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached');
+        source = this.context.repairSessionIdentity(this.context.repairSessionConfig(source));
+        const config = source.configSnapshot || {};
+        const forkBeforeTurnId = String(beforeTurnId || '').trim();
+        const forkLastTurnId = String(turnId || '').trim();
+        if (forkBeforeTurnId && forkLastTurnId) {
+            throw new CodexAppServerError(
+                'INVALID_INPUT', 'thread/fork accepts either beforeTurnId or lastTurnId, not both',
+            );
+        }
         const operationContext = this._operation({
-            sessionId: source.sessionId, threadId: source.threadId, turnId,
+            sessionId: source.sessionId,
+            threadId: source.threadId,
+            turnId: forkBeforeTurnId || forkLastTurnId || null,
         });
         const targetSessionId = this.context.createId('session');
         const operation = repository.createOperation({
             sessionId: source.sessionId, kind: 'thread-fork',
-            payload: { targetSessionId, sourceThreadId: source.threadId, lastTurnId: turnId || null },
+            payload: {
+                targetSessionId,
+                sourceThreadId: source.threadId,
+                lastTurnId: forkLastTurnId || null,
+                beforeTurnId: forkBeforeTurnId || null,
+            },
         });
         let threadId;
         try {
             repository.updateOperation(operation.operationId, { state: 'dispatching' });
             const result = await this.context.transport().request('thread/fork', {
-                threadId: source.threadId, ...(turnId ? { lastTurnId: turnId } : {}),
+                threadId: source.threadId,
+                // A fork copies history, not VChat's ephemeral provider
+                // binding. Carry the effective toolbox-only configuration so
+                // the first replacement Turn uses our Responses adapter.
+                model: config.model || undefined,
+                ...this.context.runtimePolicyParams(config),
+                cwd: source.workspaceRoot || undefined,
+                approvalPolicy: normalizeApprovalPolicy(config.permissionMode || config.approvalPolicy),
+                sandbox: normalizeSandboxMode(config.sandbox),
+                ...this.context.threadInstructionParams(config),
+                ...(forkBeforeTurnId ? { beforeTurnId: forkBeforeTurnId }
+                    : (forkLastTurnId ? { lastTurnId: forkLastTurnId } : {})),
             });
             repository = this._operationRepository(operationContext);
             threadId = result?.thread?.id;
@@ -285,6 +446,12 @@ class RuntimeTurnService {
                 configRevision: source.configRevision,
             });
             repository.updateOperation(operation.operationId, { state: 'completed', threadId });
+            // `thread/fork` loads the history, but its schema has no
+            // `dynamicTools` parameter. Our toolbox-only profile must still
+            // run through resume before its first Turn to establish this
+            // connection's live subscription and reapply resume-safe policy.
+            // Do not mark it resumed here.
+            this.context.threadStates().set(threadId, { activity: 'idle', activeTurnId: null });
             return fork;
         } catch (error) {
             repository = this._operationRepository(operationContext);
@@ -369,7 +536,26 @@ class RuntimeTurnService {
                     throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/resume returned a mismatched thread id');
                 }
                 const activity = result?.thread?.status?.type === 'active' ? 'running' : 'idle';
-                this.context.threadStates().set(threadId, { activity, activeTurnId: null });
+                let activeTurnId = null;
+                if (activity === 'running') {
+                    try {
+                        const read = await this.context.transport().request('thread/read', {
+                            threadId, includeTurns: true,
+                        });
+                        this.context.assertOperationContext(operation);
+                        const turns = read?.thread?.turns || read?.turns || [];
+                        activeTurnId = [...turns].reverse().find((turn) => (
+                            String(turn?.status || '').toLowerCase() === 'inprogress'
+                        ))?.id || null;
+                    } catch (error) {
+                        this.context.diagnostic('thread-active-turn-unresolved', {
+                            sessionId: session.sessionId,
+                            threadId,
+                            error: error?.message || String(error),
+                        });
+                    }
+                }
+                this.context.threadStates().set(threadId, { activity, activeTurnId });
                 resumed.add(threadId);
                 const applied = repository.markSessionConfigApplied(
                     session.sessionId, session.configRevision, session.configSnapshot,
@@ -396,14 +582,20 @@ class RuntimeTurnService {
         return promise;
     }
 
-    async drainFollowUpQueue(session) {
+    async drainFollowUpQueue(session, { completedTurnId = null, forceInputId = null } = {}) {
         const drains = this.context.followUpDrainPromises();
         if (!session?.sessionId || drains.has(session.sessionId)) return drains.get(session?.sessionId) || null;
         const operation = this._operation({ sessionId: session.sessionId, threadId: session.threadId });
         const drain = (async () => {
-            if (this.context.threadStates().get(session.threadId)?.activity === 'running') return null;
+            const threadState = this.context.threadStates().get(session.threadId);
+            if (threadState?.activity !== 'idle' || threadState.activeTurnId) return null;
             let repository = this._operationRepository(operation);
-            const next = repository.listPendingInputs(session.sessionId).find((entry) => entry.state === 'queued');
+            const next = repository.listPendingInputs(session.sessionId).find((entry) => (
+                entry.kind === 'follow-up'
+                && entry.state === 'queued'
+                && (forceInputId ? entry.inputId === forceInputId
+                    : (!entry.targetTurnId || entry.targetTurnId === completedTurnId))
+            ));
             if (!next) return null;
             repository.updatePendingInput(next.inputId, {
                 state: 'dispatching', attemptCount: next.attemptCount + 1, lastError: null,
@@ -421,6 +613,12 @@ class RuntimeTurnService {
                 repository = this._operationRepository(operation);
                 repository.updatePendingInput(next.inputId, { state: 'accepted', turnId: accepted.turnId, lastError: null });
                 repository.removePendingInput(next.inputId);
+                for (const remaining of repository.listPendingInputs(session.sessionId)) {
+                    if (remaining.kind === 'follow-up' && remaining.state === 'queued'
+                        && remaining.targetTurnId === next.targetTurnId) {
+                        repository.updatePendingInput(remaining.inputId, { targetTurnId: accepted.turnId });
+                    }
+                }
                 this.context.sendUiEvent({
                     type: 'input.dequeued', sessionId: session.sessionId,
                     turnId: accepted.turnId, payload: { inputId: next.inputId },
@@ -429,13 +627,24 @@ class RuntimeTurnService {
             } catch (error) {
                 if (error?.simulateProcessCrash === true || error?.code === 'STALE_RUNTIME_GENERATION') throw error;
                 repository = this._operationRepository(operation);
+                const retryableTurnRace = [
+                    'ACTIVE_TURN_NOT_STEERABLE',
+                    'TURN_NOT_STEERABLE',
+                    'SESSION_BUSY',
+                ].includes(String(error?.code || '').toUpperCase())
+                    || /active.?turn.*not.?steerable/i.test(String(error?.message || ''));
+                const currentThreadState = this.context.threadStates().get(session.threadId);
+                const nextState = retryableTurnRace
+                    ? (currentThreadState?.activity === 'idle' && !currentThreadState.activeTurnId
+                        ? 'queued' : 'uncertain')
+                    : (isUncertainRemoteMutation(error) ? 'uncertain' : 'failed');
                 repository.updatePendingInput(next.inputId, {
-                    state: isUncertainRemoteMutation(error) ? 'uncertain' : 'failed',
+                    state: nextState,
                     lastError: error?.message || String(error),
                 });
-                this.context.sendUiEvent({
+                if (nextState !== 'queued') this.context.sendUiEvent({
                     type: 'input.queue.failed', sessionId: session.sessionId,
-                    payload: { inputId: next.inputId, error: error.message },
+                    payload: { inputId: next.inputId, error: error.message, state: nextState },
                 });
                 return null;
             }
