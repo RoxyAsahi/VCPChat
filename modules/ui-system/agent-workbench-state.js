@@ -59,10 +59,14 @@ function createSidebarViewState() {
 
 export function createAgentWorkbenchState({ window, agentCatalog, rememberedTopic }) {
     let storedSidebarWidth = NaN;
-    try { storedSidebarWidth = Number(window?.localStorage?.getItem('vcpchat.agentWorkbench.sidebarWidth')); } catch { /* storage is optional */ }
-    const agentSidebarWidth = Number.isFinite(storedSidebarWidth)
-        ? Math.max(180, Math.min(600, Math.round(storedSidebarWidth)))
-        : 260;
+    try {
+        const storedValue = window?.localStorage?.getItem('vcpchat.agentWorkbench.sidebarWidth');
+        if (storedValue !== null && storedValue !== '') storedSidebarWidth = Number(storedValue);
+    } catch { /* storage is optional */ }
+    const mainSidebarWidth = Number(window?.globalSettings?.sidebarWidth);
+    const preferredSidebarWidth = Number.isFinite(storedSidebarWidth)
+        ? storedSidebarWidth : Number.isFinite(mainSidebarWidth) ? mainSidebarWidth : 260;
+    const agentSidebarWidth = Math.max(180, Math.min(600, Math.round(preferredSidebarWidth)));
     return {
         ...createSidebarViewState(),
         selectedAgent: 'Nova', agentCatalog, modelCatalog: [],
@@ -79,7 +83,7 @@ export function createAgentWorkbenchState({ window, agentCatalog, rememberedTopi
         recoveryOperations: [], recoveryThreads: [], recoveryLoading: false, recoveryError: '',
         permissionMode: 'ask', permissionSaving: false, modelSaving: false, avatarSaving: false,
         modelDraft: null, modelDraftSessionId: null, recovering: false, activityOpen: false,
-        activityPanelWidth: 420, agentSidebarWidth, activityTab: 'notifications',
+        activityPanelWidth: 320, agentSidebarWidth, activityTab: 'notifications',
         sessionDock: createSessionDockModel(window.sessionStorage), dockMenuOpen: false,
         lastViewState: null, hadApprovals: false, workspace: '',
         workspaceBrowser: createWorkspaceViewState(),

@@ -44,6 +44,13 @@ window.URL.revokeObjectURL = (url) => { revokedAvatarUrl = url; };
 window.uiHelperFunctions = {
     openAvatarCropper: (file, callback) => callback(file),
 };
+const { createAgentWorkbenchState } = await import('../modules/ui-system/agent-workbench-state.js');
+window.globalSettings = { sidebarWidth: 300 };
+const defaultWorkbenchState = createAgentWorkbenchState({ window, agentCatalog: [], rememberedTopic: null });
+assert.equal(defaultWorkbenchState.agentSidebarWidth, 300,
+    'Build must inherit the main chat sidebar width when it has no saved resize preference');
+assert.equal(defaultWorkbenchState.activityPanelWidth, 320,
+    'Build Session information must start at the minimum supported width');
 
 let registered = null;
 let unsubscribeCalls = 0;
@@ -579,18 +586,18 @@ assert.ok(workbenchSidebar.classList.contains('agent-chat-sidebar-width-560'),
 host.querySelector('.agent-chat-header-activity')?.click();
 const activityPanelSplitter = host.querySelector('.agent-chat-activity-splitter[role="separator"]');
 const activityPanelElement = host.querySelector('.agent-chat-activity-panel');
-assert.ok(workbenchSidebar.classList.contains('agent-chat-sidebar-width-180'),
-    'opening Activity must temporarily reduce a wide saved sidebar preference before it crowds out the chat column');
+assert.ok(workbenchSidebar.classList.contains('agent-chat-sidebar-width-240'),
+    'the minimum-width Activity panel must preserve more of the sidebar while protecting the chat column');
 assert.ok(activityPanelSplitter?.classList.contains('is-active'),
     'opening Session information must expose the chat/panel resize handle');
-assert.ok(activityPanelElement?.classList.contains('agent-chat-activity-width-420'),
-    'Session information must retain the original compact default width');
+assert.ok(activityPanelElement?.classList.contains('agent-chat-activity-width-320'),
+    'Session information must start at the minimum supported width');
 activityPanelSplitter.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
-assert.ok(activityPanelElement.classList.contains('agent-chat-activity-width-440'),
+assert.ok(activityPanelElement.classList.contains('agent-chat-activity-width-340'),
     'moving the outer splitter left must widen Session information');
 activityPanelSplitter.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-assert.ok(activityPanelElement.classList.contains('agent-chat-activity-width-420'),
-    'moving the outer splitter right must restore the compact panel width');
+assert.ok(activityPanelElement.classList.contains('agent-chat-activity-width-320'),
+    'moving the outer splitter right must restore the minimum panel width');
 assert.equal(host.querySelector('.agent-chat-activity-tab[data-tab="plan"]'), null,
     'the toolbox-only product must hide Plan until collaboration mode is wired to turn/start');
 assert.equal(host.querySelector('.agent-chat-inspector-plan'), null,
