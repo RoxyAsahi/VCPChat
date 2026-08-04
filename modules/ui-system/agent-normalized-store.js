@@ -130,6 +130,38 @@ function ensureNormalizedState(state) {
     };
 }
 
+function orderMessagesForTimeline(messages = []) {
+    const ordered = [...messages].sort((left, right) => (
+        (left.sourceOrder - right.sourceOrder) || (left.createdAt - right.createdAt)
+    ));
+    const groups = new Map();
+    ordered.forEach((message, index) => {
+        const key = message.turnId ? `turn:${message.turnId}` : `message:${message.messageId}`;
+        const group = groups.get(key) || { key, index, messages: [] };
+        group.messages.push(message);
+        groups.set(key, group);
+    });
+    let changed = false;
+    const repaired = [...groups.values()].map((group) => {
+        const firstUser = group.messages.findIndex((message) => message.role === 'user');
+        if (firstUser > 0) changed = true;
+        const messagesInTurn = firstUser > 0 ? [
+            group.messages[firstUser],
+            ...group.messages.slice(0, firstUser),
+            ...group.messages.slice(firstUser + 1),
+        ] : group.messages;
+        return {
+            ...group,
+            order: firstUser >= 0
+                ? Number(group.messages[firstUser].sourceOrder)
+                : Math.min(...group.messages.map((message) => Number(message.sourceOrder) || 0)),
+            messages: messagesInTurn,
+        };
+    }).sort((left, right) => (left.order - right.order) || (left.index - right.index));
+    const flattened = repaired.flatMap((group) => group.messages);
+    return changed ? flattened.map((message, index) => ({ ...message, displayOrder: index + 1 })) : flattened;
+}
+
 function applyProjectionSnapshot(state, snapshot) {
     const normalized = snapshot?.normalized?.blocks ? snapshot.normalized : projectionToNormalized(snapshot);
     const next = ensureNormalizedState(state);
@@ -184,7 +216,7 @@ function sessionProjectionFromState(state, sessionId) {
     }
     const snapshot = {
         session,
-        messages: [...grouped.values()].sort((left, right) => left.sourceOrder - right.sourceOrder),
+        messages: orderMessagesForTimeline([...grouped.values()]),
         projection: session.projection || null,
         storage: session.storage || null,
         projectionRevision: Number(normalized.projectionRevisions.get(id) || 0),
@@ -251,6 +283,7 @@ export {
     applyProjectionSnapshot,
     projectionToNormalized,
     normalizeBlock,
+    orderMessagesForTimeline,
     selectedProjectionView,
     sessionProjectionFromState,
 };

@@ -5,6 +5,7 @@ import {
     projectionToNormalized,
     sessionProjectionFromState,
 } from '../modules/ui-system/agent-normalized-store.js';
+import { createAgentTimelineParts } from '../modules/ui-system/agent-workbench-timeline.js';
 
 let state = { sessionsById: new Map(), blocksById: new Map(), projectionRevisions: new Map() };
 state = { ...state, ...applyProjectionSnapshot(state, {
@@ -57,4 +58,21 @@ assert.equal(applyProjectionPatch(state, {
     schemaVersion: 1, sessionId: 'session-a', threadId: 'thread-b', baseProjectionRevision: 5,
     projectionRevision: 6, upsertBlocks: [],
 }).reason, 'identity-mismatch');
+
+let damagedOrderState = { sessionsById: new Map(), blocksById: new Map(), projectionRevisions: new Map() };
+damagedOrderState = { ...damagedOrderState, ...applyProjectionSnapshot(damagedOrderState, {
+    session: { sessionId: 'session-order', threadId: 'thread-order' }, projectionRevision: 1,
+    messages: [
+        { messageId: 'tool-message', itemId: 'tool-item', turnId: 'turn-order', role: 'assistant', sourceOrder: 1,
+            blocks: [{ kind: 'tool', authority: 'toolbox', itemType: 'dynamicToolCall', content: { item: { type: 'dynamicToolCall', tool: 'FileOperator' } } }] },
+        { messageId: 'user-message', itemId: 'user-item', turnId: 'turn-order', role: 'user', sourceOrder: 10,
+            blocks: [{ kind: 'message', content: { parts: [{ type: 'text', text: 'inspect' }] } }] },
+        { messageId: 'assistant-message', itemId: 'assistant-item', turnId: 'turn-order', role: 'assistant', sourceOrder: 11,
+            blocks: [{ kind: 'message', content: { text: 'finished' } }] },
+    ],
+}) };
+const repairedProjection = sessionProjectionFromState(damagedOrderState, 'session-order').projection;
+assert.deepEqual(createAgentTimelineParts(repairedProjection).map((part) => part.kind), [
+    'message', 'tool', 'message',
+], 'cold-open projection must place a retained tool inside its Turn instead of at the global page top');
 console.log('Agent normalized store tests passed.');

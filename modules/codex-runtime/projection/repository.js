@@ -347,6 +347,7 @@ class AgentProjectionRepository {
             if (Number.isInteger(expectedGeneration) && state?.mutation_generation !== expectedGeneration) {
                 return false;
             }
+            const rowsBefore = this.stmt.listMessages.all(sessionId);
             if (deleteMissing) {
                 const incomingItemIds = new Set(entries.map((entry) => String(entry.record.itemId)));
                 for (const row of this.stmt.listMessageAuthorities.all(sessionId)) {
@@ -374,7 +375,7 @@ class AgentProjectionRepository {
                     });
                 }
             }
-            if (deleteMissing) reorderReconciledMessages(this.stmt, sessionId, entries);
+            reorderReconciledMessages(this.stmt, sessionId, entries, rowsBefore);
             this.stmt.setReconciled.run({ session_id: sessionId, now: Date.now() });
             this.stmt.advanceGeneration.run({ session_id: sessionId, now: Date.now() });
             return true;

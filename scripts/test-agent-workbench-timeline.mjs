@@ -28,6 +28,12 @@ const state = {
 };
 
 const parts = createAgentTimelineParts(state);
+const persistedParts = createAgentTimelineParts({
+    messages: [{ id: 'persisted', role: 'assistant', firstSequence: null, snapshotOrdinal: 1 }],
+    tools: new Map(),
+});
+assert.equal(persistedParts[0].sequence, null,
+    'null persisted sequence values must remain non-live so snapshot order remains authoritative');
 assert.deepEqual(parts.map(timelinePartKey), [
     'message:message-before', 'tool:tool-1', 'message:message-after',
 ]);

@@ -404,6 +404,33 @@ assert.ok(repository.readProjection('session_1').messages.some((message) => mess
     'partial history may upsert returned Items');
 assert.ok(repository.readProjection('session_1').messages.some((message) => message.itemId === 'item_live'),
     'summary/notLoaded thread/read payloads cannot delete durable Items');
+
+const damagedOrderRepository = new AgentProjectionRepository({ databasePath: ':memory:' });
+damagedOrderRepository.saveSession({
+    sessionId: 'session_order', threadId: 'thread_order', agentId: 'Nova', title: 'Order repair',
+});
+const damagedOrderProjector = new CodexProjectionProjector(damagedOrderRepository);
+damagedOrderProjector.projectNotification({
+    method: 'item/completed',
+    params: { threadId: 'thread_order', turnId: 'turn_order', item: {
+        id: 'tool_before_history', type: 'dynamicToolCall', status: 'completed',
+        tool: 'vcp_invoke', arguments: { tool: 'FileOperator', arguments: { action: 'read' } },
+        contentItems: [{ type: 'inputText', text: 'done' }], success: true,
+    } },
+});
+const repairedPartialOrder = damagedOrderProjector.reconcileThread('session_order', {
+    id: 'thread_order', turns: [{ id: 'turn_order', items: [
+        { id: 'user_after_reopen', type: 'userMessage', content: [{ type: 'text', text: 'inspect' }] },
+        { id: 'assistant_after_reopen', type: 'agentMessage', text: 'finished', status: 'completed' },
+    ] }],
+});
+assert.equal(repairedPartialOrder.partial, true);
+assert.deepEqual(damagedOrderRepository.readProjection('session_order').messages.map((message) => message.itemId), [
+    'user_after_reopen', 'tool_before_history', 'assistant_after_reopen',
+], 'partial history must re-anchor an omitted ToolBox card inside its Turn instead of leaving it at the page top');
+damagedOrderProjector.dispose();
+damagedOrderRepository.close();
+
 assert.equal(projector.projectNotification({
     method: 'item/agentMessage/delta',
     params: { threadId: 'thr_missing', itemId: 'item_1', delta: 'x' },

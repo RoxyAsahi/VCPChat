@@ -5,6 +5,7 @@
 // and reconciles their DOM nodes in place.
 
 function sequenceOf(value) {
+    if (value == null || value === '') return null;
     const sequence = Number(value);
     return Number.isFinite(sequence) ? sequence : null;
 }

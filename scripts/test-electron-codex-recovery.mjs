@@ -121,6 +121,8 @@ async function selectSessionProjection(page, sessionId, expectedText) {
             toolCards: feed?.querySelectorAll('.agent-chat-tool-activity').length || 0,
             toolText: [...(feed?.querySelectorAll('.agent-chat-tool-activity') || [])]
                 .map((card) => card.textContent || '').join('\n'),
+            timelineKinds: [...(feed?.querySelectorAll('[data-agent-timeline-kind]') || [])]
+                .map((row) => row.dataset.agentTimelineKind),
         };
     });
 }
@@ -241,6 +243,11 @@ try {
     assert.ok(visibleA.reasoningCards >= 1, 'running Session A must render its persisted reasoning card');
     assert.ok(visibleA.toolCards >= 1, 'running Session A must render its persisted ToolBox card');
     assert.match(visibleA.toolText, /FileOperator/);
+    assert.ok(visibleA.timelineKinds.indexOf('tool') > 0 || visibleA.timelineKinds.indexOf('tool-group') > 0,
+        'ToolBox cards must remain inside the Turn timeline instead of moving to the page top');
+    const visibleAToolIndex = Math.max(visibleA.timelineKinds.indexOf('tool'), visibleA.timelineKinds.indexOf('tool-group'));
+    assert.ok(visibleA.timelineKinds.slice(visibleAToolIndex + 1).includes('message'),
+        'the assistant output following a tool call must remain after the tool card');
     assert.doesNotMatch(visibleA.text, /parallel recovery B/,
         'selecting Session A must not render Session B blocks');
     const visibleB = await selectSessionProjection(page, seeded.sessionB.sessionId, 'assistant-result:parallel recovery B');
@@ -363,6 +370,8 @@ try {
         'Renderer reload must restore Session A reasoning and ToolBox cards from SQLite');
     assert.deepEqual(reloadedA.messageIds, visibleA.messageIds,
         'Renderer reload must preserve normalized Block ordering and message identity');
+    assert.deepEqual(reloadedA.timelineKinds, visibleA.timelineKinds,
+        'Renderer reload must preserve the tool card timeline position, not only its existence');
     assert.doesNotMatch(reloadedA.text, /parallel recovery B/);
     reportPhase('renderer reload projection cards verified');
 

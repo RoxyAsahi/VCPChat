@@ -60,6 +60,11 @@ function messageState(status) {
     return status || 'complete';
 }
 
+function snapshotOrder(entry) {
+    const value = entry?.displayOrder ?? entry?.sourceOrder;
+    return Number.isFinite(Number(value)) ? Number(value) : null;
+}
+
 /*
 function projectSnapshotEntryLegacy(entry, output) {
     const reasoning = [];
@@ -110,8 +115,8 @@ function projectSnapshotEntry(entry, output) {
         const blockId = block.blockId || `${entry.messageId}:${block.ordinal || 0}`;
         const handlers = {
             marker: () => { const marker = block.content.marker; output.markerObservations.push({ id: `marker:${entry.messageId}:${block.ordinal || 0}`, kind: String(marker.kind || 'unknown'), summary: typeof marker.summary === 'string' ? marker.summary : '', detail: typeof marker.detail === 'string' ? marker.detail : '', messageId: entry.messageId, turnId: entry.turnId || null, timestamp: entry.updatedAt || entry.createdAt || null }); },
-            tool: () => { const item = block.content?.item || {}; output.tools.set(entry.itemId, { toolCallId: entry.itemId, turnId: entry.turnId || null, name: item.tool || item.command || item.type || 'codex_tool', state: entry.status === 'completed' ? 'completed' : entry.status === 'failed' ? 'failed' : 'running', payload: block.content || {}, events: [], firstSequence: null, lastSequence: null, firstTimestamp: entry.createdAt || 0, lastTimestamp: entry.updatedAt || entry.createdAt || 0, snapshotOrdinal: entry.sourceOrder || null }); },
-            attachment: () => { const item = block.content?.item || block.content || {}; output.messages.push({ id: blockId, messageId: entry.messageId, itemId: entry.itemId, turnId: entry.turnId || null, role: 'assistant', content: item.message || '', attachments: [{ id: blockId, itemId: entry.itemId, kind: item.type === 'imageView' ? 'image' : (item.kind || 'file'), displayName: item.path || item.url || item.name || 'Codex 资源', path: item.path || null, url: item.url || null }], state: messageState(entry.status), createdAt: entry.createdAt || 0, snapshotOrdinal: entry.sourceOrder || null }); },
+            tool: () => { const item = block.content?.item || {}; output.tools.set(entry.itemId, { toolCallId: entry.itemId, turnId: entry.turnId || null, name: item.tool || item.command || item.type || 'codex_tool', state: entry.status === 'completed' ? 'completed' : entry.status === 'failed' ? 'failed' : 'running', payload: block.content || {}, events: [], firstSequence: null, lastSequence: null, firstTimestamp: entry.createdAt || 0, lastTimestamp: entry.updatedAt || entry.createdAt || 0, snapshotOrdinal: snapshotOrder(entry) }); },
+            attachment: () => { const item = block.content?.item || block.content || {}; output.messages.push({ id: blockId, messageId: entry.messageId, itemId: entry.itemId, turnId: entry.turnId || null, role: 'assistant', content: item.message || '', attachments: [{ id: blockId, itemId: entry.itemId, kind: item.type === 'imageView' ? 'image' : (item.kind || 'file'), displayName: item.path || item.url || item.name || 'Codex 资源', path: item.path || null, url: item.url || null }], state: messageState(entry.status), createdAt: entry.createdAt || 0, snapshotOrdinal: snapshotOrder(entry) }); },
             reasoning: () => { const text = textFromContent(block.content); if (text) reasoning.push({ ordinal: Number(block.ordinal) || 0, text }); },
             plan: () => { output.plan = { text: block.content.text, turnId: entry.turnId || null, itemId: entry.itemId, updatedAt: entry.updatedAt || entry.createdAt || null }; },
             compaction: () => { output.context.compactionState = block.content.phase; output.context.compacting = block.content.phase === 'inProgress'; output.context.summary = block.content.text || output.context.summary; },
@@ -120,7 +125,7 @@ function projectSnapshotEntry(entry, output) {
                 const unknown = block.content?.unknown || block.content?.item;
                 const fallbackContent = content || (unknown
                     ? `Codex ${unknown.type || 'unknown'} Item\n\n${JSON.stringify(unknown).slice(0, 16_384)}` : '');
-                if (fallbackContent) output.messages.push({ id: blockId, messageId: entry.messageId, itemId: entry.itemId, turnId: entry.turnId || null, role: entry.role === 'user' ? 'user' : entry.role === 'system' ? 'system' : 'assistant', content: fallbackContent, state: messageState(entry.status), createdAt: entry.createdAt || 0, firstSequence: null, lastSequence: null, snapshotOrdinal: entry.sourceOrder || null });
+                if (fallbackContent) output.messages.push({ id: blockId, messageId: entry.messageId, itemId: entry.itemId, turnId: entry.turnId || null, role: entry.role === 'user' ? 'user' : entry.role === 'system' ? 'system' : 'assistant', content: fallbackContent, state: messageState(entry.status), createdAt: entry.createdAt || 0, firstSequence: null, lastSequence: null, snapshotOrdinal: snapshotOrder(entry) });
             },
         };
         const key = block.kind === 'observation' && block.content?.marker ? 'marker'
@@ -128,7 +133,7 @@ function projectSnapshotEntry(entry, output) {
                 : block.kind === 'observation' && typeof block.content?.text === 'string' && entry.role === 'assistant' ? 'plan' : block.kind;
         (handlers[key] || handlers.message)();
     }
-    if (reasoning.length) output.messages.push({ id: entry.messageId, messageId: entry.messageId, itemId: entry.itemId, turnId: entry.turnId || null, role: 'assistant', content: '', reasoning: reasoning.sort((left, right) => left.ordinal - right.ordinal).map((part) => part.text).join('\n'), state: messageState(entry.status), createdAt: entry.createdAt || 0, firstSequence: null, lastSequence: null, snapshotOrdinal: entry.sourceOrder || null });
+    if (reasoning.length) output.messages.push({ id: entry.messageId, messageId: entry.messageId, itemId: entry.itemId, turnId: entry.turnId || null, role: 'assistant', content: '', reasoning: reasoning.sort((left, right) => left.ordinal - right.ordinal).map((part) => part.text).join('\n'), state: messageState(entry.status), createdAt: entry.createdAt || 0, firstSequence: null, lastSequence: null, snapshotOrdinal: snapshotOrder(entry) });
 }
 
 function restoredContext(snapshot) {
