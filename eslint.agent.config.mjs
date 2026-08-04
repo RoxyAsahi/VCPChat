@@ -45,6 +45,7 @@ export default [
     {
         files: [
             'modules/ui-system/agent-*.js',
+            'modules/ui-system/agent-store/**/*.js',
             'modules/ui-system/agent-presentation/**/*.js',
         ],
         languageOptions: {

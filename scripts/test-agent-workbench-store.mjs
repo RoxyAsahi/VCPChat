@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createWorkbenchController as createRawWorkbenchController } from '../modules/ui-system/agent-workbench-controller.js';
-import { createWorkbenchStore, deriveWorkbenchViewState } from '../modules/ui-system/agent-workbench-store.js';
+import { createInitialState, createWorkbenchStore, deriveWorkbenchViewState, reduceEvent } from '../modules/ui-system/agent-workbench-store.js';
+import { ROUTES, reducersForEvent } from '../modules/ui-system/agent-store/event-router.js';
 import { projectSession, projectTool } from '../modules/ui-system/agent-workbench-projections.js';
 
 function createWorkbenchController(api) {
@@ -44,6 +45,22 @@ function createWorkbenchController(api) {
 assert.equal(projectSession({ sessionId: 's-running', activeTurnId: 'turn-running' }).activity, 'running',
     'Session projection must preserve per-Session running identity for the sidebar avatar');
 assert.equal(projectSession({ sessionId: 's-idle' }).activity, 'idle');
+
+const routedEventFamilies = [
+    'runtime.state_changed', 'session.created', 'turn.started', 'assistant.delta',
+    'tool.requested', 'approval.requested', 'interaction.requested', 'toolbox.ws',
+    'context.usage', 'plan.updated',
+];
+for (const type of routedEventFamilies) {
+    assert.ok(reducersForEvent(type).length > 0, `${type} must have an explicit Store route`);
+}
+assert.equal(ROUTES.has('runtime.interrupt_result'), false,
+    'transport-only diagnostics must not accidentally become a Store slice route');
+const unknownBase = createInitialState();
+const unknownResult = reduceEvent(unknownBase, { type: 'runtime.interrupt_result', sequence: 7 });
+assert.equal(unknownResult.lastSequence, 7, 'unknown valid events retain the projection waterline');
+assert.deepEqual({ ...unknownResult, lastSequence: 0 }, unknownBase,
+    'unknown events must not mutate any business slice');
 
 const store = createWorkbenchStore();
 let eventNumber = 0;

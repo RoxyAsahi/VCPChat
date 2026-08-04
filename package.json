@@ -22,7 +22,7 @@
     "start:desktop": "electron . --desktop-only",
     "start:rag-observer": "electron . --rag-observer-only",
     "lint:ui-system": "stylelint \"styles/ui-system/**/*.css\" --config stylelint.ui-system.config.cjs",
-    "lint:agent": "eslint --config eslint.agent.config.mjs \"modules/codex-runtime/**/*.js\" \"modules/ui-system/agent-*.js\" \"modules/ui-system/agent-presentation/**/*.js\"",
+    "lint:agent": "eslint --config eslint.agent.config.mjs \"modules/codex-runtime/**/*.js\" \"modules/ui-system/agent-*.js\" \"modules/ui-system/agent-store/**/*.js\" \"modules/ui-system/agent-presentation/**/*.js\"",
     "guard:ui-system": "node scripts/check-ui-system.mjs",
     "check:ui-applications": "node scripts/check-ui-applications.mjs && node scripts/test-page-runtime.mjs",
     "pack:check": "node scripts/check-webawesome-pack.mjs",
