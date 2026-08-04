@@ -112,7 +112,7 @@ injection proves that a crash after `thread/start` or `thread/fork` ACK does not
 | Selected view | Renderer `selectedSessionId` |
 | Runtime activity | Main `activeRuntimes` projection |
 
-## R16 Codex 0.146 Adapter 与 Projection V2（implemented / working-tree）
+## R16 Codex 0.146 Adapter 与 Projection V2（live）
 
 - `thread/status/changed(idle)` 不再提前结束 active Turn；只有匹配的 `turn/completed` 最终收口。
 - settings apply 保存 target revision/generation/规范字段，只有匹配 `thread/settings/updated` 才确认；发送 barrier 不再被无关通知解除。
@@ -122,9 +122,10 @@ injection proves that a crash after `thread/start` or `thread/fork` ACK does not
 - `ephemeralStateBySession` 只持有未进入持久 Projection 的用户发送状态；Session 失败、Runtime crash 和持久 Block 确认均按完整 Session/Turn identity 收口。
 - snapshot barrier 会把 waterline 后的 `projection.updated` 重新送入同一个 revision Patch reducer，不再通过普通事件路由丢弃实时 reasoning/tool Block。
 - 0.146 fork 返回的 `thread.sessionId` 若存在必须等于新 Thread ID；版本升级必须重新验证，不能沿用该假设。
+- 工具卡位置是 Projection 合同的一部分：live source order 能保留时必须精确保留；旧损坏数据缺少锚点时只做 Turn 内确定性恢复，不允许继续聚合到全局顶部，也不伪造更细的历史顺序。
 
-Revision `0191e670` / `6ac356f1` 已通过 `test:codex-ci`、`test:codex-projection-v2`、`test:codex-adapter-invariants`、`check:codex-governance` 和
+Revision `24af22c3` / `bcc3455f` 已通过 `test:codex-ci`、`test:codex-projection-v2`、`test:codex-adapter-invariants`、`check:codex-governance` 和
 `check:ui-system`。真实 Electron 已验证运行中 A→B→A、reasoning/ToolBox 卡片隔离、crash、reload、SQLite
-恢复和 demand restart；设置 Select smoke 也已通过。真实 ToolBox 长调用尚未形成通过收据：2026-08-04
-指定 `deepseek-v4-flash` 时模型端点对 Adapter 和直接控制请求均返回 HTTP 502，因此状态仍不得升级为
-live/product。
+恢复、工具卡位置和 demand restart；设置 Select smoke 也已通过。2026-08-04 指定 `deepseek-v4-flash`
+的真实 ToolBox gate 完成 `vcp_invoke -> FileOperator.ReadFile -> Bridge -> Projection`。该收据支持 R16 `live`，
+不代表 native approval、backend approval 或整个 Agent 产品已经完成。

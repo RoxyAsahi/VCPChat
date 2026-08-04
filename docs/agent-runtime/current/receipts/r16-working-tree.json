@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "scope": "R16 Codex 0.146 adapter invariants and Projection V2 single-model Renderer",
-  "status": "implemented/working-tree",
+  "status": "live",
   "functionalRevisions": [
     "1b05b7d3",
     "d4b1f7b8",
@@ -16,7 +16,9 @@
     "6dafc457",
     "ea4738f1",
     "0191e670",
-    "6ac356f1"
+    "6ac356f1",
+    "24af22c3",
+    "bcc3455f"
   ],
   "passed": [
     "npm run test:codex-ci",
@@ -35,11 +37,12 @@
     "npm run check:codex-schema",
     "npm run check:agent-runtime",
     "npm run test:electron-codex-recovery",
+    "npm run test:agent-normalized-store",
+    "npm run test:agent-workbench-timeline",
+    "npm run test:codex-toolbox-live (deepseek-v4-flash)",
     "git diff --check"
   ],
-  "blocked": {
-    "liveToolBox": "2026-08-04 after revisions 0191e670/6ac356f1, deepseek-v4-flash exhausted Adapter provider retries and completed failed with no Bridge call; a direct authenticated control request to the same ToolBox model endpoint returned HTTP 502, so no live pass is claimed"
-  },
+  "blocked": {},
   "observations": {
     "settingsScopes": "Agent defaults, current Session, and advanced recovery are distinct rendered scopes",
     "settingsPersistence": "Electron smoke verified current-Session YOLO, model, and workspace values through the Select/input UI into SQLite",
@@ -49,13 +52,14 @@
     "rendererForkAudit": "upstream 19fdff5f was reviewed; main-chat async history guards were not copied because Agent owns revision/session guards in its normalized store",
     "rendererSingleModel": "Renderer Store owns only Session-scoped normalized Blocks; messages/tools are read-only selected-Session views and the retired message/tool reducers are deleted",
     "snapshotBarrier": "waterline-newer projection.updated events buffered during cold read or Session switch are replayed through the same revision Patch reducer as ordinary live events",
-    "liveRetry": "deepseek-v4-flash reached turn/started, emitted repeated provider attempts, ended turn/completed=failed, produced zero server requests and zero Bridge invocations; direct control returned HTTP 502"
+    "timelineOrder": "partial and full reconciliation preserve live Turn anchors; damaged legacy rows are immediately derived as user -> retained tool -> later assistant instead of aggregating tools at the page top",
+    "liveToolBox": "2026-08-04 deepseek-v4-flash completed vcp_invoke -> FileOperator.ReadFile -> Bridge -> Projection in 22.9 seconds after the repository test node registered FileOperator; the temporary node was stopped after the gate"
   },
   "claims": {
     "sqliteSchema": 11,
     "blockContentSchema": 2,
     "rendererPatchOnly": true,
-    "liveVerified": false,
+    "liveVerified": true,
     "productComplete": false
   }
 }

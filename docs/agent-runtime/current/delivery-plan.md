@@ -276,9 +276,10 @@ R13 当前状态为 `implemented/working-tree`；代码治理目标已实现，�
 - [x] Electron recovery 已验证双 Session projection isolation、Renderer reload、crash 后 SQLite 可读和按需重启。
 - [x] 真实 Electron 已验证运行中 A→B→A：两个 Session 的 reasoning、ToolBox 卡片和回答严格隔离，App Server crash 与 Renderer reload 后从 SQLite 恢复相同消息身份和顺序。
 - [x] 设置页 Select smoke、文件体积、CSS owner 和 timer lifecycle governance 阻塞已修复，`test:electron-codex-smoke`、`check:ui-system` 与 `check:codex-governance` 通过。
-- [ ] 真实 ToolBox 长调用仍待 live 通过。2026-08-04 使用 `deepseek-v4-flash` 时，Adapter gate 与绕过 Codex 的直接控制请求均收到 ToolBox 模型端点 HTTP 502；该外部状态不计为通过，也不归因于 Projection。
+- [x] 2026-08-04 使用 `deepseek-v4-flash` 完成真实 `vcp_invoke -> FileOperator.ReadFile -> Bridge -> Projection`，耗时 22.9 秒；测试节点仅用于向现有 ToolBox 注册仓库内 `FileOperator`，验证后已停止。
+- [x] 重开顺序门槛覆盖工具卡位置而不只覆盖存在性：partial/full reconcile 保留 Turn 内 live 锚点；旧损坏数据立即恢复为“用户消息 → 所属工具卡 → 后续 assistant”，不再聚合到页面顶端。
 
-当前实现 revision 为 `0191e670`，治理/测试 revision 为 `6ac356f1`；`test:codex-ci`（121.6 秒）、真实 0.146 App Server/Adapter、Electron smoke 与 Session-switch 均通过。状态仍为 `implemented/working-tree`。SQLite database schema 保持 11，Block/Renderer contract 为 V2。
+当前补强 revision 为 `24af22c3` / `bcc3455f`；`test:codex-ci`、真实 0.146 App Server/Adapter、Electron smoke、Session-switch 和真实 ToolBox 均通过。R16 状态为 `live`，但不等于整个 Agent 产品完成。SQLite database schema 保持 11，Block/Renderer contract 为 V2。
 
 - [x] R7: Agent Profile/Session snapshot、CAS、projection-only IPC、ToolBox latest-wins 与 Session-keyed Renderer state。
 - [x] R8: Runtime generation、InteractionRegistry 有界清理、按需重启、持久输入状态机与 pre-RPC/ACK crash fault injection。

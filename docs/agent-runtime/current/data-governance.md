@@ -61,7 +61,7 @@ npm run test:agent-data-contracts
 - Unknown Item、delta-before-Item 和旧 Block schema 都有有界适配；原始协议 Item 不进入 Renderer。
 
 机器门槛：`npm run test:codex-projection-v2`、`npm run test:codex-adapter-invariants`、
-`npm run check:codex-governance`。Revision `0191e670` / `6ac356f1` 的 `test:codex-ci`、
+`npm run check:codex-governance`。Revision `24af22c3` / `bcc3455f` 的 `test:codex-ci`、
 `test:electron-codex-session-switch` 已验证运行中 A→B→A、reasoning/ToolBox
-卡片隔离以及 reload 后 SQLite 恢复；完整设置 smoke 也已通过。真实 ToolBox `deepseek-v4-flash` 长调用仍因
-模型端点 HTTP 502 未形成通过收据，因此 R16 状态保持 `implemented/working-tree`。
+卡片隔离、reload 后 SQLite 恢复及工具卡 Turn 内位置；完整设置 smoke 也已通过。真实 ToolBox
+`deepseek-v4-flash` 已完成 FileOperator/Bridge/Projection 长调用。R16 可标记 `live`，但不继承为整个 Agent 的产品完成声明。

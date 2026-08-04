@@ -437,12 +437,13 @@ Electron 真实点击与完整 Main 进程重启已通过；真实 ToolBox provi
 | Static governance | `npm run check:codex-governance` | committed pass |
 | Electron crash/reload recovery | `npm run test:electron-codex-recovery` | committed pass |
 | Electron interactive A→B→A / full smoke | `npm run test:electron-codex-session-switch` + `npm run test:electron-codex-smoke` | committed pass; reasoning/tool cards and message identity survive switch/reload |
-| Live ToolBox long tool call | `VCP_CODEX_LIVE=1 VCP_CODEX_LIVE_MODEL=deepseek-v4-flash npm run test:codex-toolbox-live` | external model endpoint returned HTTP 502; direct control request reproduced the same 502, so no pass claimed |
+| Live ToolBox long tool call | `VCP_CODEX_LIVE=1 VCP_CODEX_LIVE_MODEL=deepseek-v4-flash npm run test:codex-toolbox-live` | 2026-08-04 pass in 22.9 s: `vcp_invoke -> FileOperator.ReadFile -> Bridge -> Projection`; repository test node registered FileOperator and was stopped after verification |
+| Historical tool position | `npm run test:codex-projection-store` + `npm run test:agent-normalized-store` + `npm run test:electron-codex-session-switch` | partial/full reconcile and cold-open view keep cards inside their owning Turn; reload asserts the same timeline kind order, not only card count |
 
 R16 assertions include idle-before-completed, matched settings confirmation, Thread/`itemsView` fail-closed,
 reasoning summary/content isolation, Unknown/delta-before-Item behavior, Toolbox authority preservation, fork Item ID isolation,
 background Session Patch isolation, A→B→A synchronous restoration, revision-gap full SQLite reload, snapshot-barrier Patch replay,
-read-only derived `messages/tools`, and Session-local pending delivery recovery.
+read-only derived `messages/tools`, Session-local pending delivery recovery, and durable tool-card placement across cold reopen.
 
 - `npm run test:agent-renderer-isolation`: Agent mount/dispose does not mutate main-chat image or visibility ownership.
 - `npm run test:agent-renderer-lifecycle`: listeners, timers, intervals, and RAF registrations are disposed idempotently.
