@@ -183,6 +183,7 @@ function attachRuntimeServiceGraph(runtime) {
         setLastError: (error) => { runtime.lastError = error; },
         configApplyPromises: () => runtime.configApplyPromises,
         configApplyTargets: () => runtime.configApplyTargets,
+        configApplyConfirmationTimeoutMs: () => runtime.configApplyConfirmationTimeoutMs,
         resumedThreadIds: () => runtime.resumedThreadIds,
         threadStates: () => runtime.threadStates,
         runtimeGeneration: () => runtime.runtimeGeneration,

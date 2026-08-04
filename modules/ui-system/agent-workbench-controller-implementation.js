@@ -9,6 +9,7 @@ import {
 import { createAgentRuntimeEventSubscription, createWorkbenchClients } from './agent-workbench-clients.js';
 import { codexSnapshotToProjection } from './agent-workbench-snapshot-projection.js';
 import { createWorkbenchCommandController } from './agent-workbench-command-controller.js';
+import { createProjectionReloadCoordinator } from './agent-workbench-projection-reload.js';
 import { selectedSessionIdentity, selectedSessionId as selectedSessionIdFromState } from './agent-selected-session.js';
 import {
     applyProjectionPatch,
@@ -168,6 +169,12 @@ function createWorkbenchController(runtimeApi) {
         return true;
     }
 
+    const projectionReloader = createProjectionReloadCoordinator({
+        store,
+        readProjection: (sessionId) => requireApi('agentSessionReadProjection')({ sessionId }),
+        onApplied: (sessionId) => pruneConfirmedEphemeralProjection(sessionId),
+    });
+
     function applyCodexRuntimeEvent(event) {
         const current = store.getState();
         const runtimes = new Map(current.activeRuntimes);
@@ -192,7 +199,7 @@ function createWorkbenchController(runtimeApi) {
                 store.setState(result.state, event);
                 pruneConfirmedEphemeralProjection(event.sessionId);
             } else {
-                void reloadNormalizedSession(event.sessionId);
+                void projectionReloader.reload(event.sessionId, event.projectionPatch.projectionRevision);
             }
         }
         if (event.method === 'turn/started' || event.method === 'turn/completed') {
@@ -203,17 +210,6 @@ function createWorkbenchController(runtimeApi) {
             });
         }
         applySessionUiEvent(event);
-    }
-
-    async function reloadNormalizedSession(sessionId) {
-        try {
-            const snapshot = await requireApi('agentSessionReadProjection')({ sessionId });
-            const normalizedState = applyProjectionSnapshot(store.getState(), snapshot);
-            store.setState(normalizedState);
-            pruneConfirmedEphemeralProjection(sessionId);
-        } catch (_error) {
-            // The next durable Session read remains the recovery path.
-        }
     }
 
     function applySessionUiEvent(event) {
@@ -567,6 +563,7 @@ function createWorkbenchController(runtimeApi) {
 
     function dispose() {
         selectionVersion += 1;
+        projectionReloader.dispose();
         void optionalApi('agentRuntimeSetWorkbenchPresence')?.(false);
         runtimeSubscription.dispose();
     }

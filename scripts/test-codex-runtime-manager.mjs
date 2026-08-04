@@ -112,6 +112,20 @@ await fastManager.ensureSessionRuntime({ sessionId: warmTopicC.sessionId, reason
 assert.equal(fastManager.idleWarmSessions.size, 2, 'proactive idle Thread warm set must remain bounded at two Sessions');
 assert.equal(fastManager.resumedThreadIds.has(warmA.threadId), false,
     'LRU eviction must remove the oldest Session from VChat\'s warm/resume set');
+let scheduledDeltaReconcile = null;
+const originalFastRead = fastManager.sessionService.read.bind(fastManager.sessionService);
+fastManager.sessionService.read = async (options) => {
+    scheduledDeltaReconcile = options;
+    return fastManager.repository.readProjection(options.sessionId);
+};
+await fastManager.projector.scheduleReconcile({
+    sessionId: warmTopicC.sessionId,
+    itemId: 'delta-without-item',
+    reason: 'pending delta expired before item/started',
+});
+assert.deepEqual(scheduledDeltaReconcile, { sessionId: warmTopicC.sessionId, reconcile: true },
+    'expired Main-only delta buffers must schedule an authoritative Session reconcile');
+fastManager.sessionService.read = originalFastRead;
 await fastManager.stop();
 fs.rmSync(fastRoot, { recursive: true, force: true });
 const fake = new FakeTransport();

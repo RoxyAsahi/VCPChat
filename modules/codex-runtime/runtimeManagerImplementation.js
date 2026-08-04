@@ -5,7 +5,8 @@ const fs = require('fs');
 const { EventEmitter } = require('events');
 const { RuntimeLifecycleService } = require('./runtime-lifecycle-service');
 const { CodexAppServerTransport, CodexAppServerError } = require('./appServerTransport');
-const { AgentProjectionRepository, CodexProjectionProjector } = require('./projection');
+const { AgentProjectionRepository } = require('./projection');
+const { createRuntimeProjector } = require('./projection/runtime-projector');
 const { ToolboxBridgeTransport } = require('./toolboxBridgeTransport');
 const { ToolboxResponsesAdapter } = require('./toolboxResponsesAdapter');
 const { AttachmentRegistry } = require('./attachmentRegistry');
@@ -64,6 +65,8 @@ class CodexRuntimeManager extends EventEmitter {
         this.turnCancellationStates = new Map();
         this.configApplyPromises = new Map();
         this.configApplyTargets = new Map();
+        this.configApplyConfirmationTimeoutMs = Math.max(50,
+            Number(options.configApplyConfirmationTimeoutMs) || 5_000);
         this.compactionWaiters = new Map();
         this.idleWarmSessions = new Map();
         this.maxIdleWarmSessions = Number.isInteger(options.maxIdleWarmSessions)
@@ -140,7 +143,7 @@ class CodexRuntimeManager extends EventEmitter {
                 this.lastError = serializeError(error);
             }
         }
-        this.projector = this.projector || new CodexProjectionProjector(this.repository);
+        this.projector = this.projector || createRuntimeProjector(this, this.repository);
         return this.repository;
     }
 
@@ -153,6 +156,7 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     _clearHostResources() {
+        this.projector?.dispose?.();
         this.transport = null;
         this.repository = null;
         this.projector = null;

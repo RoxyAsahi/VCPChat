@@ -369,6 +369,68 @@ class RuntimeConfigService {
         throw error;
     }
 
+    async _recoverConfirmationTimeout({ error, operation, session, sessionId }) {
+        if (error?.code !== 'SESSION_CONFIG_CONFIRMATION_TIMEOUT') return null;
+        if (this.context.threadStates().get(session.threadId)?.activity !== 'idle') return null;
+        let repository = this._operationRepository(operation);
+        const current = repository.getSession(sessionId);
+        if (!current || current.configRevision !== session.configRevision) {
+            throw new CodexAppServerError(
+                'SESSION_CONFIG_CONFLICT', 'Session config changed during Runtime confirmation recovery',
+            );
+        }
+        await this.context.transport().request('thread/unsubscribe', { threadId: session.threadId });
+        repository = this._operationRepository(operation);
+        this.context.resumedThreadIds().delete(session.threadId);
+        const rebound = await this.context.resumeSession(repository.getSession(sessionId));
+        return rebound?.appliedRuntimeConfigRevision === session.configRevision ? rebound : null;
+    }
+
+    async _requestSettingsUpdate({ barrier, desired, operation, session, sessionId, targetSettings }) {
+        let resolveConfirmation;
+        let rejectConfirmation;
+        const confirmation = barrier ? new Promise((resolve, reject) => {
+            resolveConfirmation = resolve;
+            rejectConfirmation = reject;
+        }) : null;
+        const timeout = setTimeout(() => {
+            const target = this.context.configApplyTargets().get(session.threadId);
+            if (target?.revision !== session.configRevision) return;
+            this.context.configApplyTargets().delete(session.threadId);
+            const error = new CodexAppServerError(
+                'SESSION_CONFIG_CONFIRMATION_TIMEOUT', 'Codex did not confirm the requested Thread settings',
+            );
+            if (rejectConfirmation) rejectConfirmation(error);
+            else {
+                const failed = this.context.repository()?.markSessionConfigFailed(
+                    sessionId, session.configRevision, error.message,
+                );
+                if (failed) this.sendSessionConfigEvent('session.config.failed', failed, error.message);
+            }
+        }, this.context.configApplyConfirmationTimeoutMs?.() || 5_000);
+        timeout.unref?.();
+        this.context.configApplyTargets().set(session.threadId, {
+            sessionId,
+            revision: session.configRevision,
+            snapshot: desired,
+            settings: targetSettings,
+            runtimeGeneration: this.context.runtimeGeneration(),
+            resolve: resolveConfirmation,
+            reject: rejectConfirmation,
+            timeout,
+        });
+        await this.context.transport().request('thread/settings/update', threadSettingsPatch(session, desired));
+        if (!confirmation) return null;
+        try {
+            await confirmation;
+            return null;
+        } catch (error) {
+            const rebound = await this._recoverConfirmationTimeout({ error, operation, session, sessionId });
+            if (!rebound) throw error;
+            return rebound;
+        }
+    }
+
     async applySessionRuntimeConfig(sessionId, { barrier = false } = {}) {
         const idValue = String(sessionId || '').trim();
         const applyPromises = this.context.configApplyPromises();
@@ -418,41 +480,10 @@ class RuntimeConfigService {
                     this.sendSessionConfigEvent('session.config.applied', confirmed);
                     return confirmed;
                 }
-                let resolveConfirmation;
-                let rejectConfirmation;
-                const confirmation = barrier ? new Promise((resolve, reject) => {
-                    resolveConfirmation = resolve;
-                    rejectConfirmation = reject;
-                }) : null;
-                const timeout = setTimeout(() => {
-                    const target = this.context.configApplyTargets().get(session.threadId);
-                    if (target?.revision !== session.configRevision) return;
-                    this.context.configApplyTargets().delete(session.threadId);
-                    const error = new CodexAppServerError(
-                        'SESSION_CONFIG_CONFIRMATION_TIMEOUT',
-                        'Codex did not confirm the requested Thread settings',
-                    );
-                    if (rejectConfirmation) rejectConfirmation(error);
-                    else {
-                        const failed = this.context.repository()?.markSessionConfigFailed(
-                            idValue, session.configRevision, error.message,
-                        );
-                        if (failed) this.sendSessionConfigEvent('session.config.failed', failed, error.message);
-                    }
-                }, 5_000);
-                timeout.unref?.();
-                this.context.configApplyTargets().set(session.threadId, {
-                    sessionId: idValue,
-                    revision: session.configRevision,
-                    snapshot: desired,
-                    settings: targetSettings,
-                    runtimeGeneration: this.context.runtimeGeneration(),
-                    resolve: resolveConfirmation,
-                    reject: rejectConfirmation,
-                    timeout,
+                const rebound = await this._requestSettingsUpdate({
+                    barrier, desired, operation, session, sessionId: idValue, targetSettings,
                 });
-                await this.context.transport().request('thread/settings/update', threadSettingsPatch(session, desired));
-                if (confirmation) await confirmation;
+                if (rebound) return rebound;
                 return this._operationRepository(operation).getSession(idValue);
             } catch (error) {
                 if (error?.code === 'STALE_RUNTIME_GENERATION' || !this.context.repository()) throw error;

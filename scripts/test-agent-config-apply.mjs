@@ -62,6 +62,7 @@ const manager = new CodexRuntimeManager({
     getModels: () => [{ id: 'model-a', reasoning_efforts: ['low', 'high'] }, { id: 'model-b', reasoning_efforts: ['low', 'high'] }],
     transportFactory: () => transport,
     repositoryFactory: () => new AgentProjectionRepository({ databasePath: path.join(root, 'projection.sqlite') }),
+    configApplyConfirmationTimeoutMs: 100,
     responsesAdapterFactory: (options) => {
         resolveToolboxInstructions = options.resolveInstructions;
         return {
@@ -172,6 +173,20 @@ assert.equal(transport.calls.filter((call) => call.method === 'turn/start'
     'a failed config barrier must block the user Turn');
 
 transport.failSettings = false;
+manager.threadStates.set('thread-config', { activity: 'idle', activeTurnId: null });
+const unsubscribeCount = transport.calls.filter((call) => call.method === 'thread/unsubscribe').length;
+const confirmationKeepAlive = setTimeout(() => {}, 1_000);
+try {
+    await manager._applySessionRuntimeConfig(topic.sessionId, { barrier: true });
+} finally {
+    clearTimeout(confirmationKeepAlive);
+}
+const reboundConfig = manager.readSessionConfig({ sessionId: topic.sessionId });
+assert.equal(reboundConfig.applyState, 'applied');
+assert.equal(reboundConfig.appliedRuntimeConfigRevision, reboundConfig.configRevision,
+    'an idle confirmation timeout must perform one full resume and confirm the desired revision');
+assert.equal(transport.calls.filter((call) => call.method === 'thread/unsubscribe').length,
+    unsubscribeCount + 1, 'confirmation recovery must unsubscribe exactly once');
 await manager.stop();
 fs.rmSync(root, { recursive: true, force: true });
 console.log('Agent Runtime config apply tests passed.');

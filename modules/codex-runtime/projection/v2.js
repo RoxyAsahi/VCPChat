@@ -17,8 +17,9 @@ function sanitizeUnknownItem(item = {}) {
         type: boundedText(item.type || 'unknown', 128),
         id: boundedText(item.id || '', 256),
         status: boundedText(item.status || '', 64),
+        fields: Object.keys(item).slice(0, 32).map((key) => boundedText(key, 128)).sort(),
     };
-    for (const key of ['name', 'tool', 'command', 'title', 'path', 'query']) {
+    for (const key of ['name', 'tool', 'title']) {
         if (typeof item[key] === 'string') safe[key] = boundedText(item[key], 2_048);
     }
     return safe;

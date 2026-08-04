@@ -806,6 +806,97 @@ assert.equal(revisionGap.store.getState().messages.some((message) => message.con
 assert.equal(revisionGap.store.getState().messages.some((message) => message.content === 'gap patch must be discarded'), false);
 revisionGap.dispose();
 
+let staleReloadEvent;
+let staleReloadReads = 0;
+let resolveStaleReload;
+const staleReload = createWorkbenchController({
+    agentRuntimeReadProjection: async () => {
+        staleReloadReads += 1;
+        if (staleReloadReads === 1) return {
+            session: { sessionId: 'stale-reload-session', threadId: 'stale-reload-thread', agentId: 'Nova' },
+            projectionRevision: 2,
+            messages: [],
+        };
+        if (staleReloadReads === 2) return new Promise((resolve) => { resolveStaleReload = resolve; });
+        return {
+            session: { sessionId: 'stale-reload-session', threadId: 'stale-reload-thread', agentId: 'Nova' },
+            projectionRevision: 5,
+            messages: [{
+                messageId: 'fresh-reload-message', itemId: 'fresh-reload-item', role: 'assistant', status: 'completed',
+                blocks: [{ kind: 'message', content: { text: 'fresh revision five' } }],
+            }],
+        };
+    },
+    onAgentRuntimeEvent(callback) { staleReloadEvent = callback; return () => {}; },
+});
+staleReload.subscribeRuntime();
+await staleReload.previewTopic('stale-reload-session', 'Nova');
+staleReloadEvent({
+    runtime: 'codex', type: 'projection.updated', sessionId: 'stale-reload-session',
+    threadId: 'stale-reload-thread', activity: 'running',
+    projectionPatch: projectionPatch({ sessionId: 'stale-reload-session', threadId: 'stale-reload-thread', revision: 5,
+        messageId: 'gap-five', itemId: 'gap-five', kind: 'message', content: { text: 'discard gap five' } }),
+});
+staleReloadEvent({
+    runtime: 'codex', type: 'projection.updated', sessionId: 'stale-reload-session',
+    threadId: 'stale-reload-thread', activity: 'running',
+    projectionPatch: projectionPatch({ sessionId: 'stale-reload-session', threadId: 'stale-reload-thread', revision: 3,
+        messageId: 'live-three', itemId: 'live-three', kind: 'message', content: { text: 'live revision three' } }),
+});
+resolveStaleReload({
+    session: { sessionId: 'stale-reload-session', threadId: 'stale-reload-thread', agentId: 'Nova' },
+    projectionRevision: 2,
+    messages: [{
+        messageId: 'stale-message', itemId: 'stale-item', role: 'assistant', status: 'completed',
+        blocks: [{ kind: 'message', content: { text: 'must not overwrite live revision three' } }],
+    }],
+});
+for (let attempt = 0; attempt < 20 && staleReloadReads < 3; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+}
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(staleReloadReads, 3,
+    'a newer rejected Patch arriving during reload must raise the deduplicated target revision');
+assert.equal(staleReload.store.getState().projectionRevisions.get('stale-reload-session'), 5);
+assert.equal(staleReload.store.getState().messages.some((message) => message.content === 'fresh revision five'), true);
+assert.equal(staleReload.store.getState().messages.some((message) => message.content?.includes('must not overwrite')), false,
+    'an async stale SQLite snapshot must never overwrite a newer live revision');
+staleReload.dispose();
+
+let mismatchedReloadEvent;
+let mismatchedReloadReads = 0;
+const mismatchedReload = createWorkbenchController({
+    agentRuntimeReadProjection: async () => {
+        mismatchedReloadReads += 1;
+        return mismatchedReloadReads === 1 ? {
+            session: { sessionId: 'reload-session-a', threadId: 'reload-thread-a', agentId: 'Nova' },
+            projectionRevision: 1, messages: [],
+        } : {
+            session: { sessionId: 'reload-session-b', threadId: 'reload-thread-b', agentId: 'Nova' },
+            projectionRevision: 3,
+            messages: [{ messageId: 'wrong-session', itemId: 'wrong-session', role: 'assistant',
+                blocks: [{ kind: 'message', content: { text: 'must remain isolated' } }] }],
+        };
+    },
+    onAgentRuntimeEvent(callback) { mismatchedReloadEvent = callback; return () => {}; },
+});
+mismatchedReload.subscribeRuntime();
+await mismatchedReload.previewTopic('reload-session-a', 'Nova');
+mismatchedReloadEvent({
+    runtime: 'codex', type: 'projection.updated', sessionId: 'reload-session-a',
+    threadId: 'reload-thread-a', activity: 'idle',
+    projectionPatch: projectionPatch({ sessionId: 'reload-session-a', threadId: 'reload-thread-a', revision: 3,
+        messageId: 'gap-a', itemId: 'gap-a', kind: 'message', content: { text: 'gap' } }),
+});
+for (let attempt = 0; attempt < 20 && mismatchedReloadReads < 2; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+}
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(mismatchedReload.store.getState().sessionsById.has('reload-session-b'), false,
+    'revision reload must reject a Snapshot belonging to another Session');
+assert.equal(mismatchedReload.store.getState().projectionRevisions.get('reload-session-a'), 1);
+mismatchedReload.dispose();
+
 // Codex Session identity is authoritative. A compatibility sessionId must never
 // let another Session mutate an existing runtime slot or the visible status.
 let strictIdentityEvent;

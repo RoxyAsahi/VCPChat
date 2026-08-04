@@ -10,6 +10,7 @@ const {
     normalizeApplyState,
 } = require('../dataContracts');
 const { normalizeProjectionSnapshot, projectionPatchBetween } = require('./v2');
+const { reorderReconciledMessages } = require('./reconcile-order');
 const { mapBlockRow, mapOperationRow, mapSessionRow } = require('./rowMappers');
 const { mergeProjectionContent } = require('./contentMerge');
 
@@ -213,6 +214,9 @@ class AgentProjectionRepository {
             listMessages: this.db.prepare(`
                 SELECT * FROM agent_messages WHERE session_id = ? ORDER BY source_order, message_id
             `),
+            setMessageSourceOrder: this.db.prepare(`
+                UPDATE agent_messages SET source_order = @source_order WHERE message_id = @message_id
+            `),
             listMessageAuthorities: this.db.prepare(`
                 SELECT messages.codex_item_id, messages.message_id,
                     SUM(CASE WHEN blocks.authority = 'codex' THEN 1 ELSE 0 END) AS codex_block_count,
@@ -252,6 +256,10 @@ class AgentProjectionRepository {
             `),
             advanceOrder: this.db.prepare(`
                 UPDATE projection_state SET next_source_order = next_source_order + 1, updated_at = @now
+                WHERE session_id = @session_id
+            `),
+            setNextSourceOrder: this.db.prepare(`
+                UPDATE projection_state SET next_source_order = @next_source_order, updated_at = @now
                 WHERE session_id = @session_id
             `),
             advanceGeneration: this.db.prepare(`
@@ -366,6 +374,7 @@ class AgentProjectionRepository {
                     });
                 }
             }
+            if (deleteMissing) reorderReconciledMessages(this.stmt, sessionId, entries);
             this.stmt.setReconciled.run({ session_id: sessionId, now: Date.now() });
             this.stmt.advanceGeneration.run({ session_id: sessionId, now: Date.now() });
             return true;

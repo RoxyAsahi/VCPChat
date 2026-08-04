@@ -20,6 +20,12 @@ const ITEM_KIND = Object.freeze({
     contextCompaction: ['system', 'observation'],
 });
 
+const DEFAULT_PENDING_DELTA_TTL_MS = 30_000;
+const DEFAULT_MAX_PENDING_DELTA_ITEMS = 128;
+const DEFAULT_MAX_PENDING_DELTAS_PER_ITEM = 32;
+const DEFAULT_MAX_PENDING_DELTA_BYTES_PER_ITEM = 64 * 1024;
+const DEFAULT_MAX_PENDING_DELTA_BYTES = 1024 * 1024;
+
 function boundedJson(value, depth = 0) {
     if (depth > 6) return '[truncated]';
     if (value == null || typeof value === 'boolean' || typeof value === 'number') return value;
@@ -88,10 +94,39 @@ function itemContent(item) {
 }
 
 class CodexProjectionProjector {
-    constructor(repository) {
+    constructor(repository, options = {}) {
         this.repository = repository;
         this.streaming = new StreamingAccumulatorRegistry();
         this.pendingDeltas = new Map();
+        this.pendingDeltaBytes = 0;
+        this.pendingDeltaTimer = null;
+        this.pendingDeltaTtlMs = Math.max(1, Number(options.pendingDeltaTtlMs)
+            || DEFAULT_PENDING_DELTA_TTL_MS);
+        this.maxPendingDeltaItems = Math.max(1, Number(options.maxPendingDeltaItems)
+            || DEFAULT_MAX_PENDING_DELTA_ITEMS);
+        this.maxPendingDeltasPerItem = Math.max(1, Number(options.maxPendingDeltasPerItem)
+            || DEFAULT_MAX_PENDING_DELTAS_PER_ITEM);
+        this.maxPendingDeltaBytesPerItem = Math.max(1, Number(options.maxPendingDeltaBytesPerItem)
+            || DEFAULT_MAX_PENDING_DELTA_BYTES_PER_ITEM);
+        this.maxPendingDeltaBytes = Math.max(this.maxPendingDeltaBytesPerItem,
+            Number(options.maxPendingDeltaBytes) || DEFAULT_MAX_PENDING_DELTA_BYTES);
+        this.clock = options.clock || Date.now;
+        this.setTimer = options.setTimer || setTimeout;
+        this.clearTimer = options.clearTimer || clearTimeout;
+        this.scheduleReconcile = typeof options.scheduleReconcile === 'function'
+            ? options.scheduleReconcile : null;
+        this.reconcileScheduledSessions = new Set();
+    }
+
+    dispose() {
+        if (this.pendingDeltaTimer) this.clearTimer(this.pendingDeltaTimer);
+        this.pendingDeltaTimer = null;
+        for (const bucket of this.pendingDeltas.values()) {
+            this.streaming.clearItem(bucket.threadId, bucket.itemId);
+        }
+        this.pendingDeltas.clear();
+        this.pendingDeltaBytes = 0;
+        this.reconcileScheduledSessions.clear();
     }
 
     projectNotification(message) {
@@ -136,7 +171,7 @@ class CodexProjectionProjector {
             return { applied: false, reason: 'thread-identity-mismatch' };
         }
         const turns = Array.isArray(thread.turns) ? thread.turns : [];
-        const hasPartialItems = turns.some((turn) => turn && turn.itemsView && turn.itemsView !== 'full');
+        const hasPartialItems = !turns.every((turn) => turn?.itemsView === 'full');
         const entries = [];
         for (const turn of turns) {
             for (const item of turn.items || []) {
@@ -242,7 +277,8 @@ class CodexProjectionProjector {
         const session = this.repository.getSessionByThread(params.threadId);
         if (!params.itemId || !Number.isInteger(index) || index < 0) return false;
         if (!session) return false;
-        return this.repository.ensureReasoningPart(session.sessionId, params.itemId, field, index);
+        const applied = this.repository.ensureReasoningPart(session.sessionId, params.itemId, field, index);
+        return applied || this._bufferDelta(params, { field, index, delta: '', kind: 'reasoning' });
     }
 
     _appendReasoning(params, field, index, delta) {
@@ -263,20 +299,57 @@ class CodexProjectionProjector {
     }
 
     _bufferDelta(params, delta) {
+        this.prunePendingDeltas();
         const key = this._deltaKey(params.threadId, params.itemId);
-        const list = this.pendingDeltas.get(key) || [];
-        if (list.length >= 32 || list.reduce((sum, entry) => sum + String(entry.delta || '').length, 0) > 64_000) return false;
-        list.push({ ...delta, receivedAt: Date.now() });
-        this.pendingDeltas.set(key, list);
+        const session = this.repository.getSessionByThread(params.threadId);
+        const receivedAt = this.clock();
+        const deltaBytes = Buffer.byteLength(String(delta.delta || ''), 'utf8');
+        let bucket = this.pendingDeltas.get(key);
+        if (!bucket) {
+            while (this.pendingDeltas.size >= this.maxPendingDeltaItems) {
+                this._discardOldestPendingDelta('pending delta item limit exceeded');
+            }
+            bucket = {
+                key,
+                threadId: String(params.threadId || ''),
+                itemId: String(params.itemId || ''),
+                sessionId: session?.sessionId || null,
+                entries: [],
+                bytes: 0,
+                createdAt: receivedAt,
+                expiresAt: receivedAt + this.pendingDeltaTtlMs,
+            };
+            this.pendingDeltas.set(key, bucket);
+        }
+        if (bucket.entries.length >= this.maxPendingDeltasPerItem
+            || bucket.bytes + deltaBytes > this.maxPendingDeltaBytesPerItem) {
+            this._discardPendingDelta(key, 'pending delta per-item limit exceeded');
+            return false;
+        }
+        while (this.pendingDeltaBytes + deltaBytes > this.maxPendingDeltaBytes
+            && this.pendingDeltas.size > 0) {
+            const evicted = this._discardOldestPendingDelta('pending delta global byte limit exceeded', key);
+            if (!evicted) break;
+        }
+        if (!this.pendingDeltas.has(key) || this.pendingDeltaBytes + deltaBytes > this.maxPendingDeltaBytes) {
+            this._discardPendingDelta(key, 'pending delta global byte limit exceeded');
+            return false;
+        }
+        bucket.entries.push({ ...delta, receivedAt });
+        bucket.bytes += deltaBytes;
+        this.pendingDeltaBytes += deltaBytes;
+        this._schedulePendingDeltaExpiry();
         return true;
     }
 
     _replayBuffered(threadId, itemId, sessionId) {
         const key = this._deltaKey(threadId, itemId);
-        const list = this.pendingDeltas.get(key);
-        if (!list?.length) return;
+        const bucket = this.pendingDeltas.get(key);
+        if (!bucket?.entries?.length) return;
         this.pendingDeltas.delete(key);
-        for (const entry of list) {
+        this.pendingDeltaBytes = Math.max(0, this.pendingDeltaBytes - bucket.bytes);
+        this._schedulePendingDeltaExpiry();
+        for (const entry of bucket.entries) {
             if (entry.kind === 'reasoning') {
                 if (entry.delta) this.appendReasoningTextSafely(sessionId, itemId, entry.field, entry.index, entry.delta);
                 else this.repository.ensureReasoningPart(sessionId, itemId, entry.field, entry.index);
@@ -284,6 +357,61 @@ class CodexProjectionProjector {
                 this.repository.appendBlockText(sessionId, itemId, entry.index, entry.delta, entry.kind);
             }
         }
+    }
+
+    prunePendingDeltas(now = this.clock()) {
+        const expired = [...this.pendingDeltas.values()]
+            .filter((bucket) => bucket.expiresAt <= now)
+            .map((bucket) => bucket.key);
+        for (const key of expired) this._discardPendingDelta(key, 'pending delta expired before item/started');
+        this._schedulePendingDeltaExpiry();
+        return expired.length;
+    }
+
+    _discardOldestPendingDelta(reason, excludedKey = null) {
+        const bucket = [...this.pendingDeltas.values()]
+            .filter((candidate) => candidate.key !== excludedKey)
+            .sort((left, right) => left.createdAt - right.createdAt)[0];
+        if (!bucket) return false;
+        this._discardPendingDelta(bucket.key, reason);
+        return true;
+    }
+
+    _discardPendingDelta(key, reason) {
+        const bucket = this.pendingDeltas.get(key);
+        if (!bucket) return false;
+        this.pendingDeltas.delete(key);
+        this.pendingDeltaBytes = Math.max(0, this.pendingDeltaBytes - bucket.bytes);
+        this.streaming.clearItem(bucket.threadId, bucket.itemId);
+        const message = `${reason}: ${bucket.itemId}`;
+        if (bucket.sessionId) {
+            try { this.repository.markProjectionError(bucket.sessionId, message); } catch (_error) { /* read-only */ }
+            this._scheduleReconcile(bucket.sessionId, bucket.threadId, bucket.itemId, reason);
+        }
+        return true;
+    }
+
+    _schedulePendingDeltaExpiry() {
+        if (this.pendingDeltaTimer) this.clearTimer(this.pendingDeltaTimer);
+        this.pendingDeltaTimer = null;
+        if (this.pendingDeltas.size === 0) return;
+        const expiresAt = Math.min(...[...this.pendingDeltas.values()].map((bucket) => bucket.expiresAt));
+        const timer = this.setTimer(() => {
+            if (this.pendingDeltaTimer === timer) this.pendingDeltaTimer = null;
+            this.prunePendingDeltas();
+        }, Math.max(1, expiresAt - this.clock()));
+        timer?.unref?.();
+        this.pendingDeltaTimer = timer;
+    }
+
+    _scheduleReconcile(sessionId, threadId, itemId, reason) {
+        if (!this.scheduleReconcile || this.reconcileScheduledSessions.has(sessionId)) return;
+        this.reconcileScheduledSessions.add(sessionId);
+        Promise.resolve().then(() => this.scheduleReconcile({ sessionId, threadId, itemId, reason }))
+            .catch((error) => {
+                try { this.repository.markProjectionError(sessionId, error?.message || String(error)); } catch (_ignored) { /* read-only */ }
+            })
+            .finally(() => this.reconcileScheduledSessions.delete(sessionId));
     }
 
     appendReasoningTextSafely(sessionId, itemId, field, index, delta) {

@@ -112,4 +112,43 @@ oldTransport.emit('exit', new Error('stale transport exited'));
 await new Promise((resolve) => setImmediate(resolve));
 assert.deepEqual([projectedNotifications, acceptedRequests, dynamicRequests, diagnostics, crashes], [1, 1, 1, 1, 0],
     'a replaced transport must not mutate the current Runtime generation');
+
+const beforeMessage = {
+    messageId: 'message-a', itemId: 'item-a', threadId: 'thread-a', turnId: 'turn-a',
+    status: 'inProgress', sourceOrder: 1, createdAt: 1, updatedAt: 1,
+    blocks: [
+        { kind: 'message', ordinal: 0, authority: 'codex', content: { text: 'final' } },
+        { kind: 'observation', ordinal: 1, authority: 'codex', content: { text: 'stale warning' } },
+    ],
+};
+const afterMessage = {
+    ...beforeMessage, status: 'completed', updatedAt: 2,
+    blocks: [{ kind: 'message', ordinal: 0, authority: 'codex', content: { text: 'final' } }],
+};
+let projectionRevision = 7;
+let messageReadCount = 0;
+let emittedPatch = null;
+const patchRepository = {
+    getSessionByThread: () => sessions.get('thread-a'),
+    projectionGeneration: () => projectionRevision,
+    getProjectedMessageByItem: () => (messageReadCount++ === 0 ? beforeMessage : afterMessage),
+};
+const patchService = new RuntimeHostService({
+    repository: () => patchRepository,
+    projector: () => ({ projectNotification: () => { projectionRevision += 1; return true; } }),
+    compactionWaiters: () => new Map(),
+    updateThreadState: () => {},
+    threadStates: () => new Map(),
+    runtimeGeneration: () => 4,
+    sendEvent: (event) => { emittedPatch = event.projectionPatch; },
+});
+patchService.handleNotification({
+    method: 'item/completed',
+    params: { threadId: 'thread-a', turnId: 'turn-a', item: { id: 'item-a', type: 'agentMessage' } },
+});
+assert.equal(emittedPatch.baseProjectionRevision, 7);
+assert.equal(emittedPatch.projectionRevision, 8);
+assert.deepEqual(emittedPatch.deleteBlockIds, ['block:session-a:item-a:1'],
+    'live item completion must delete stale Blocks through the same revision Patch contract as reconcile');
+assert.equal(emittedPatch.upsertBlocks.length, 1);
 console.log('Codex Runtime host service tests passed.');

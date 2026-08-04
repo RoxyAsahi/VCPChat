@@ -80,6 +80,77 @@ projector.projectNotification({
 assert.equal(repository.readProjection('session_1').messages
     .find((message) => message.itemId === 'delta_before_item').blocks[0].content.text, 'buffered first',
     'a bounded delta received before item/started must replay after Item creation');
+assert.equal(projector.projectNotification({
+    method: 'item/reasoning/summaryPartAdded',
+    params: { threadId: 'thr_1', itemId: 'reasoning_before_item', summaryIndex: 0 },
+}), true);
+assert.equal(projector.projectNotification({
+    method: 'item/reasoning/summaryTextDelta',
+    params: { threadId: 'thr_1', itemId: 'reasoning_before_item', summaryIndex: 0, delta: 'buffered reasoning' },
+}), true);
+projector.projectNotification({
+    method: 'item/started',
+    params: { threadId: 'thr_1', turnId: 'turn_1', item: {
+        id: 'reasoning_before_item', type: 'reasoning', summary: [], content: [], status: 'inProgress',
+    } },
+});
+assert.deepEqual(repository.readProjection('session_1').messages
+    .find((message) => message.itemId === 'reasoning_before_item').blocks[0].content.summary,
+['buffered reasoning'], 'reasoning slots and deltas must replay together after Item creation');
+
+let pendingClock = 1_000;
+const pendingTimers = [];
+const scheduledReconciles = [];
+const pendingProjector = new CodexProjectionProjector(repository, {
+    pendingDeltaTtlMs: 10,
+    maxPendingDeltaItems: 1,
+    maxPendingDeltasPerItem: 2,
+    maxPendingDeltaBytesPerItem: 32,
+    maxPendingDeltaBytes: 32,
+    clock: () => pendingClock,
+    setTimer: (callback, delay) => {
+        const timer = { callback, delay, cleared: false, unref() {} };
+        pendingTimers.push(timer);
+        return timer;
+    },
+    clearTimer: (timer) => { timer.cleared = true; },
+    scheduleReconcile: async (details) => { scheduledReconciles.push(details); },
+});
+assert.equal(pendingProjector.projectNotification({
+    method: 'item/agentMessage/delta',
+    params: { threadId: 'thr_1', itemId: 'expires_before_start', delta: 'orphaned' },
+}), true);
+assert.equal(pendingProjector.pendingDeltas.size, 1);
+assert.equal(pendingTimers.at(-1).delay, 10);
+pendingClock += 11;
+pendingTimers.at(-1).callback();
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(pendingProjector.pendingDeltas.size, 0);
+assert.match(repository.readProjection('session_1').projection.lastError,
+    /pending delta expired before item\/started/);
+assert.deepEqual(scheduledReconciles.map(({ sessionId, itemId }) => ({ sessionId, itemId })), [{
+    sessionId: 'session_1', itemId: 'expires_before_start',
+}], 'an expired delta buffer must schedule one Session-scoped reconcile');
+
+assert.equal(pendingProjector.projectNotification({
+    method: 'item/agentMessage/delta',
+    params: { threadId: 'thr_1', itemId: 'capacity_oldest', delta: 'first' },
+}), true);
+assert.equal(pendingProjector.projectNotification({
+    method: 'item/agentMessage/delta',
+    params: { threadId: 'thr_1', itemId: 'capacity_newest', delta: 'second' },
+}), true);
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(pendingProjector.pendingDeltas.size, 1,
+    'the Main-only pending delta map must remain globally bounded');
+assert.equal(pendingProjector.pendingDeltas.has('thr_1:capacity_newest'), true,
+    'capacity pressure must retain the newest pending Item');
+assert.match(repository.readProjection('session_1').projection.lastError,
+    /pending delta item limit exceeded/);
+const activeTimer = pendingProjector.pendingDeltaTimer;
+pendingProjector.dispose();
+assert.equal(activeTimer.cleared, true, 'Runtime disposal must release pending delta timers');
+assert.equal(pendingProjector.pendingDeltas.size, 0);
 projector.projectNotification({ method: 'item/agentMessage/delta', params: {
     threadId: 'thr_1', itemId: 'item_1', delta: 'hello',
 } });
@@ -219,6 +290,7 @@ projector.projectNotification({
     params: { threadId: 'thr_1', turnId: 'turn_1', item: {
         id: 'future_item', type: 'futureProtocolItem', status: 'inProgress',
         arguments: { secret: 'must-not-persist' }, name: 'bounded future item',
+        path: 'C:\\private\\absolute.txt', command: 'print-sensitive-command', query: 'private search terms',
     } },
 });
 const unknown = repository.readProjection('session_1').messages
@@ -226,6 +298,13 @@ const unknown = repository.readProjection('session_1').messages
 assert.equal(unknown.unknown.type, 'futureProtocolItem');
 assert.equal(Object.prototype.hasOwnProperty.call(unknown.unknown, 'arguments'), false,
     'unknown protocol Items must use a bounded sanitized fallback');
+assert.equal(Object.prototype.hasOwnProperty.call(unknown.unknown, 'path'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(unknown.unknown, 'command'), false);
+assert.equal(Object.prototype.hasOwnProperty.call(unknown.unknown, 'query'), false);
+assert.ok(unknown.unknown.fields.includes('path'),
+    'unknown protocol diagnostics may retain bounded field names but never their values');
+assert.doesNotMatch(JSON.stringify(unknown), /private|sensitive/i,
+    'unknown protocol values must not reach SQLite or the Renderer contract');
 repository.upsertItem('session_1', {
     threadId: 'thr_1', turnId: 'turn_local', itemId: 'local_observation', role: 'system', status: 'completed',
 }, {
@@ -242,9 +321,10 @@ const authoritativeReconcile = projector.reconcileThread('session_1', {
     id: 'thr_1',
     turns: [{
         id: 'turn_1',
+        itemsView: 'full',
         items: [
-            { id: 'item_1', type: 'agentMessage', text: 'authoritative text', status: 'completed' },
             { id: 'marker_reconcile', type: 'agentMessage', text: 'plain authoritative text', status: 'completed' },
+            { id: 'item_1', type: 'agentMessage', text: 'authoritative text', status: 'completed' },
             { id: 'reason_clear', type: 'reasoning', status: 'completed', summary: [] },
             { id: 'compact_clear', type: 'contextCompaction', status: null, summary: '' },
         ],
@@ -256,6 +336,12 @@ assert.ok(authoritativeReconcile.patch.deleteBlockIds.length > 0,
 assert.equal(authoritativeReconcile.patch.deleteBlockIds.includes('block:session_1:dynamic_tool_1:0'), false,
     'ToolBox-owned Blocks are outside Codex deletion authority');
 const reconciled = repository.readProjection('session_1');
+assert.ok(reconciled.messages.findIndex((message) => message.itemId === 'marker_reconcile')
+    < reconciled.messages.findIndex((message) => message.itemId === 'item_1'),
+    'full reconciliation must repair Codex Item order from the authoritative Turn snapshot');
+assert.ok(reconciled.messages.findIndex((message) => message.itemId === 'local_observation')
+    < reconciled.messages.findIndex((message) => message.itemId === 'mixed_observation'),
+    'full reconciliation must preserve the relative order of VChat/ToolBox local messages');
 assert.equal(reconciled.messages.some((message) => message.itemId === 'reason_1'), false,
     'thread/read reconciliation must remove Codex items absent from the authoritative snapshot');
 assert.equal(reconciled.messages.some((message) => message.itemId === 'file_1'), false,
@@ -298,6 +384,15 @@ assert.ok(repository.readProjection('session_1').messages.some((message) => mess
 assert.equal(projector.reconcileThread('session_1', {
     id: 'wrong-thread', turns: [{ id: 'turn_1', itemsView: 'full', items: [] }],
 }).reason, 'thread-identity-mismatch');
+const missingItemsViewReconcile = projector.reconcileThread('session_1', {
+    id: 'thr_1', turns: [{ id: 'turn_1', items: [{
+        id: 'missing-view-item', type: 'agentMessage', text: 'unverified history shape', status: 'completed',
+    }] }],
+});
+assert.equal(missingItemsViewReconcile.partial, true,
+    'a Turn without explicit itemsView=full must not receive deletion authority');
+assert.ok(repository.readProjection('session_1').messages.some((message) => message.itemId === 'item_live'),
+    'missing itemsView must preserve durable Items that were not returned');
 const partialReconcile = projector.reconcileThread('session_1', {
     id: 'thr_1', turns: [{ id: 'turn_1', itemsView: 'summary', items: [{
         id: 'partial-summary-item', type: 'agentMessage', text: 'summary only', status: 'completed',
