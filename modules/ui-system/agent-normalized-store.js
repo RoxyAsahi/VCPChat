@@ -192,6 +192,23 @@ function sessionProjectionFromState(state, sessionId) {
     return { snapshot, projection: codexSnapshotToProjection(snapshot) };
 }
 
+function selectedProjectionView(state, sessionId = state?.selectedSessionId) {
+    const selected = sessionProjectionFromState(state, sessionId)?.projection || { messages: [], tools: new Map() };
+    const ephemeral = state?.ephemeralStateBySession instanceof Map
+        ? state.ephemeralStateBySession.get(String(sessionId || '')) : null;
+    const pendingMessages = Array.isArray(ephemeral?.pendingMessages) ? ephemeral.pendingMessages : [];
+    const confirmedTurns = new Set(selected.messages
+        .filter((message) => message.role === 'user' && message.turnId)
+        .map((message) => message.turnId));
+    return {
+        messages: [
+            ...selected.messages,
+            ...pendingMessages.filter((message) => !confirmedTurns.has(message.turnId)),
+        ],
+        tools: selected.tools instanceof Map ? selected.tools : new Map(),
+    };
+}
+
 function applyProjectionPatch(state, patch = {}) {
     const next = ensureNormalizedState(state);
     const sessionId = String(patch.sessionId || '');
@@ -234,5 +251,6 @@ export {
     applyProjectionSnapshot,
     projectionToNormalized,
     normalizeBlock,
+    selectedProjectionView,
     sessionProjectionFromState,
 };

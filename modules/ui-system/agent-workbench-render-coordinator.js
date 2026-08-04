@@ -40,6 +40,11 @@ function updateTurnTiming(event, state, selectedSessionKey) {
 function routeStoreEvent(event, deps) {
     const { queueRender, noteTimelineActivity, maybeAutoOpenActivity, refreshControlPlane, patchSidebarTopicSelection } = deps;
     if (!event?.type) { patchSidebarTopicSelection(); queueRender({ header: true, feed: true, composer: true }); return; }
+    if (event.type === 'projection.updated') {
+        noteTimelineActivity();
+        queueRender({ feed: true, header: true, composer: true });
+        return;
+    }
     if (event.type === 'assistant.delta' || event.type === 'reasoning.delta') {
         const tokenKey = `first-visible-delta:${event.turnId || event.messageId || 'current'}`;
         if (!deps.state.uxTimings.has(tokenKey)) deps.state.uxTimings.set(tokenKey, deps.uxMark('first-visible-delta', event.turnId || event.messageId));
@@ -128,7 +133,7 @@ export function createAgentWorkbenchRenderCoordinator({
         }
         if (sessionMatches && turnMatches && [
             'assistant.started', 'assistant.delta', 'reasoning.delta', 'turn.completed',
-            'turn.failed', 'turn.cancelled', 'runtime.crashed',
+            'turn.failed', 'turn.cancelled', 'runtime.crashed', 'projection.updated',
         ].includes(event.type)) {
             state.turnStarts.delete(turnStart.sessionId);
             return true;

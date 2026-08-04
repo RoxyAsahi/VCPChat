@@ -147,25 +147,24 @@ function createWorkbenchController(runtimeApi) {
         refreshStatus: () => refreshStatus(),
     });
 
-    function applySelectedNormalizedProjection(sessionId) {
+    function pruneConfirmedEphemeralProjection(sessionId) {
         const current = store.getState();
         const selected = sessionProjectionFromState(current, sessionId)?.projection;
         if (!selected) return false;
-        const pendingByTurn = new Map((current.messages || [])
-            .filter((message) => String(message.id || '').startsWith('pending-user:') && message.turnId)
-            .map((message) => [message.turnId, message]));
-        const confirmedMessages = selected.messages.map((message) => {
-            const pendingMessage = message.role === 'user' ? pendingByTurn.get(message.turnId) : null;
-            return pendingMessage ? { ...pendingMessage, ...message, deliveryState: 'confirmed', deliveryDetail: '' } : message;
-        });
-        const pending = (current.messages || []).filter((message) => (
-            String(message.id || '').startsWith('pending-user:')
-            && !confirmedMessages.some((candidate) => candidate.role === 'user' && candidate.turnId === message.turnId)
-        ));
-        store.setState({
-            ...selected,
-            messages: [...confirmedMessages, ...pending],
-        });
+        const ephemeralStateBySession = current.ephemeralStateBySession instanceof Map
+            ? new Map(current.ephemeralStateBySession) : new Map();
+        const ephemeral = ephemeralStateBySession.get(sessionId);
+        const pendingMessages = Array.isArray(ephemeral?.pendingMessages) ? ephemeral.pendingMessages : [];
+        if (!pendingMessages.length) return true;
+        const confirmedTurns = new Set(selected.messages
+            .filter((message) => message.role === 'user' && message.turnId)
+            .map((message) => message.turnId));
+        const remaining = pendingMessages.filter((message) => !confirmedTurns.has(message.turnId));
+        if (remaining.length !== pendingMessages.length) {
+            if (remaining.length) ephemeralStateBySession.set(sessionId, { ...ephemeral, pendingMessages: remaining });
+            else ephemeralStateBySession.delete(sessionId);
+            store.setState({ ephemeralStateBySession });
+        }
         return true;
     }
 
@@ -190,11 +189,18 @@ function createWorkbenchController(runtimeApi) {
         if (event.projectionPatch && event.sessionId) {
             const result = applyProjectionPatch(store.getState(), event.projectionPatch);
             if (result.applied) {
-                store.setState(result.state);
-                if (selected) applySelectedNormalizedProjection(event.sessionId);
+                store.setState(result.state, event);
+                pruneConfirmedEphemeralProjection(event.sessionId);
             } else {
                 void reloadNormalizedSession(event.sessionId);
             }
+        }
+        if (event.method === 'turn/started' || event.method === 'turn/completed') {
+            store.applyEphemeralEvent({
+                type: event.method === 'turn/started' ? 'turn.started' : 'turn.completed',
+                sessionId: event.sessionId,
+                turnId: event.turnId,
+            });
         }
         applySessionUiEvent(event);
     }
@@ -204,7 +210,7 @@ function createWorkbenchController(runtimeApi) {
             const snapshot = await requireApi('agentSessionReadProjection')({ sessionId });
             const normalizedState = applyProjectionSnapshot(store.getState(), snapshot);
             store.setState(normalizedState);
-            if (selectedSessionIdFromState(store.getState()) === sessionId) applySelectedNormalizedProjection(sessionId);
+            pruneConfirmedEphemeralProjection(sessionId);
         } catch (_error) {
             // The next durable Session read remains the recovery path.
         }
@@ -295,6 +301,12 @@ function createWorkbenchController(runtimeApi) {
             }
             if (!eventBelongsToTopicRuntime(event, runtime)) continue;
             if (Number.isFinite(minimumSequence) && Number(event.sequence) <= minimumSequence) continue;
+            if (event?.runtime === 'codex' && event?.type === 'projection.updated') {
+                applyCodexRuntimeEvent(event);
+                continue;
+            }
+            applySessionUiEvent(event);
+            projectRuntimeActivity(event);
             store.dispatch(event);
         }
     }
