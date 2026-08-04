@@ -43,9 +43,16 @@ export default [
         rules: correctnessRules,
     },
     {
+        files: ['modules/ui-system/agent-store/**/*.js'],
+        languageOptions: {
+            ecmaVersion: 'latest',
+            sourceType: 'module',
+        },
+        rules: { ...correctnessRules, complexity: ['error', 29] },
+    },
+    {
         files: [
             'modules/ui-system/agent-*.js',
-            'modules/ui-system/agent-store/**/*.js',
             'modules/ui-system/agent-presentation/**/*.js',
         ],
         languageOptions: {

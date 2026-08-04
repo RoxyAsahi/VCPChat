@@ -367,6 +367,9 @@ if (!fs.existsSync(agentEslintConfigPath)) {
     if (!/complexity:\s*\['error',\s*170\]/.test(agentEslintSource)) {
         errors.push('Agent ESLint must enforce the accepted complexity ceiling');
     }
+    if (!/agent-store\/\*\*\/\*\.js[\s\S]*complexity:\s*\['error',\s*29\]/.test(agentEslintSource)) {
+        errors.push('Agent Store reducers must enforce complexity below 30');
+    }
 }
 
 const dataContracts = fs.readFileSync(path.join(root, 'modules/codex-runtime/dataContracts.js'), 'utf8');
@@ -462,6 +465,10 @@ for (const entry of canonicalWorkbenchFiles) {
     }
     if (/\b(?:createTopic|listTopics|readTopic|renameTopic|deleteTopic)\b/.test(source)) {
         errors.push(`modules/ui-system/${entry.name} exposes deprecated Topic operations`);
+    }
+    if (entry.name !== 'agent-workbench-host-adapter.js'
+        && /window\.(?:prompt|confirm|globalSettings|vcpRenderBridge)/.test(source)) {
+        errors.push(`modules/ui-system/${entry.name} bypasses Workbench Host Adapter`);
     }
 }
 const runtimeFacadeLineCount = fs.readFileSync(path.join(root, 'modules/codex-runtime/runtimeManager.js'), 'utf8').split(/\r?\n/).length;
