@@ -56,7 +56,7 @@ function assertAcyclic(files, label) {
     for (const file of files) visit(file);
 }
 const agentCssOwners = [
-    'agent-shell.css', 'agent-sidebar.css', 'agent-composer.css', 'agent-timeline.css',
+    'agent-shell.css', 'agent-sidebar-layout.css', 'agent-sidebar.css', 'agent-composer.css', 'agent-timeline.css',
     'agent-session-dock.css', 'agent-workspace.css', 'agent-activity.css',
     'agent-responsive.css', 'agent-legacy-shell-adapter.css',
 ];

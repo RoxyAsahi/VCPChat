@@ -114,7 +114,7 @@
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-queue-item-actions svg {
         width: 16px;
         height: 16px;
-        font-size: 16px;
+        font-size: var(--vcp-ui-icon-sm);
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-composer-config {

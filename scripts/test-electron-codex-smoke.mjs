@@ -266,9 +266,18 @@ try {
             .find((button) => button.textContent?.trim() === '当前会话');
         sessionScope?.click();
     });
-    await page.waitForFunction(() => Boolean(document.querySelector(
-        '#nextUiInternalAppHost .agent-chat-settings-pane .agent-chat-setting-field select',
-    )), { timeout: timeoutMs });
+    await page.waitForFunction(() => {
+        const section = document.querySelector(
+            '#nextUiInternalAppHost .agent-chat-settings-pane .agent-settings-section[data-section-key="model"]',
+        );
+        if (!section) return false;
+        if (section.classList.contains('collapsed')) section.querySelector('.agent-settings-section-header')?.click();
+        return !section.classList.contains('collapsed');
+    }, { timeout: timeoutMs });
+    await page.waitForSelector(
+        '#nextUiInternalAppHost .agent-chat-settings-pane .agent-settings-section[data-section-key="model"] wa-select.vcp-ui-select-proxy',
+        { visible: true, timeout: timeoutMs },
+    );
     const setLabeledControl = async (labelText, value, eventType = 'change') => page.evaluate(({ labelText: targetLabel, value: nextValue, eventType: type }) => {
         const host = document.querySelector('#nextUiInternalAppHost');
         const field = [...(host?.querySelectorAll('.agent-chat-setting-field') || [])]
@@ -297,12 +306,21 @@ try {
         await page.click(proxySelector);
         await page.waitForFunction((selector) => document.querySelector(selector)?.open === true,
             { timeout: timeoutMs }, proxySelector);
-        await page.click(`${proxySelector} > wa-option[value="${value}"]`);
+        const optionSelector = `${proxySelector} > wa-option[value="${value}"]`;
         await page.waitForFunction((selector) => {
+            const option = document.querySelector(selector);
+            const rect = option?.getBoundingClientRect?.();
+            return Boolean(rect && rect.width > 0 && rect.height > 0);
+        }, { timeout: timeoutMs }, optionSelector);
+        await page.click(optionSelector);
+        await page.waitForFunction(({ selector, targetLabel, expectedValue }) => {
             const proxy = document.querySelector(selector);
-            return !proxy || proxy.open === false;
-        },
-            { timeout: timeoutMs }, proxySelector);
+            const host = document.querySelector('#nextUiInternalAppHost');
+            const field = [...(host?.querySelectorAll('.agent-chat-setting-field') || [])]
+                .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent?.includes(targetLabel));
+            const native = field?.querySelector('select.vcp-ui-select-source');
+            return native?.value === expectedValue && (!proxy || proxy.open === false);
+        }, { timeout: timeoutMs }, { selector: proxySelector, targetLabel: labelText, expectedValue: value });
         return page.evaluate(({ targetLabel, expectedValue }) => {
             const host = document.querySelector('#nextUiInternalAppHost');
             const field = [...(host?.querySelectorAll('.agent-chat-setting-field') || [])]
@@ -349,12 +367,28 @@ try {
     });
     assert.equal(immediatePermission, 'always-approve', 'YOLO Select must not jump back to the old Snapshot during save');
     assert.equal(await setLabeledControl('工作目录（可留空）', settingsWorkspace), true);
-    await page.waitForFunction(async (sessionId, workspaceRoot) => {
-        const config = await (window.chatAPI || window.electronAPI).agentRuntimeReadSessionConfig({ sessionId });
-        return config?.desiredConfig?.permissionMode === 'always-approve'
-            && config?.desiredConfig?.model === 'electron-visible-select-model'
-            && config?.desiredConfig?.workspaceRoot === workspaceRoot;
-    }, { timeout: timeoutMs }, settingsSessionId, settingsWorkspace);
+    try {
+        await page.waitForFunction(async (sessionId, workspaceRoot) => {
+            const config = await (window.chatAPI || window.electronAPI).agentRuntimeReadSessionConfig({ sessionId });
+            return config?.desiredConfig?.permissionMode === 'always-approve'
+                && config?.desiredConfig?.model === 'electron-visible-select-model'
+                && config?.desiredConfig?.workspaceRoot === workspaceRoot;
+        }, { timeout: timeoutMs }, settingsSessionId, settingsWorkspace);
+    } catch (error) {
+        const observed = await page.evaluate(async (sessionId) => {
+            const host = document.querySelector('#nextUiInternalAppHost');
+            const config = await (window.chatAPI || window.electronAPI).agentRuntimeReadSessionConfig({ sessionId });
+            return {
+                config,
+                status: host?.querySelector('.agent-chat-settings-save-status')?.textContent || '',
+                controls: [...(host?.querySelectorAll('.agent-chat-setting-field') || [])].map((field) => ({
+                    label: field.querySelector('.agent-chat-setting-label')?.textContent || '',
+                    value: field.querySelector('select, input, textarea')?.value || '',
+                })),
+            };
+        }, settingsSessionId);
+        throw new Error(`Session settings did not persist: ${JSON.stringify(observed)}; ${error.message}`);
+    }
     const persistedSettings = await page.evaluate(async (sessionId) => {
         const config = await (window.chatAPI || window.electronAPI).agentRuntimeReadSessionConfig({ sessionId });
         return {

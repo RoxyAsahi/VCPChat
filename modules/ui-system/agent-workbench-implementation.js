@@ -48,98 +48,21 @@ import {
     sameAgent,
     seedBuildAgentCatalog,
 } from './agent-session-catalog-coordinator.js';
-
-const runtimeApi = () => window.chatAPI || window.electronAPI || {};
-const LAST_TOPIC_STORAGE_KEY = 'vcpchat.agentWorkbench.lastTopic.v1';
-
-const WORKBENCH_VIEW_STATE_LABELS = {
-    disconnected: '未连接',
-    starting: '启动中',
-    idle: '空闲',
-    running: '运行中',
-    'awaiting-approval': '待审批',
-    reconnecting: '重连中',
-    error: '错误',
-};
-
-function loadRememberedTopic() {
-    try {
-        const value = window.localStorage?.getItem(LAST_TOPIC_STORAGE_KEY);
-        const parsed = value ? JSON.parse(value) : null;
-        const sessionId = String(parsed?.sessionId || '').trim();
-        if (!sessionId) return null;
-        const pointer = { sessionId };
-        return pointer;
-    } catch {
-        return null;
-    }
-}
-
-function rememberTopic(session) {
-    if (!session?.sessionId) return;
-    try {
-        window.localStorage?.setItem(LAST_TOPIC_STORAGE_KEY, JSON.stringify({ sessionId: session.sessionId }));
-    } catch {
-    }
-}
-
-function proxyMainButton(id) {
-    // The Agent Workbench is a separate product page.  The only shared piece
-    // here is the VCPChat Agent/Group configuration flow, which belongs to
-    // main chat rather than Codex Sessions. Ask the owning module to open it
-    // directly: a synthetic click can silently hit a replaced sidebar button
-    // whose original event listener is no longer attached after a UI redraw.
-    if (id === 'nextUiCreateItemBtn' && typeof window.topTabManager?.openCreateDialog === 'function') {
-        return window.topTabManager.openCreateDialog();
-    }
-    return document.getElementById(id)?.click();
-}
-
-function notify(message, variant = 'info') {
-    if (window.VCPUI?.feedback?.toast) window.VCPUI.feedback.toast(message, { variant });
-    else window.uiHelperFunctions?.showToastNotification?.(message, variant === 'error' ? 'error' : 'success');
-}
-
-function nextSessionTitle() {
-    // Keep the same friction-free convention as VCPChat's normal “新话题”
-    // action. A first user prompt may become the durable VChat Session title.
-    const time = new Date().toLocaleTimeString([], {
-        hour: '2-digit', minute: '2-digit', second: '2-digit',
-    });
-    return `新会话 ${time}`;
-}
-
-function formatTime(value) {
-    if (!value) return '';
-    try { return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' }).format(new Date(value)); } catch { return ''; }
-}
-
-function renderMarkdown(text, markdown = {}) {
-    if (!text) return '';
-    return markdown.render?.(text) || String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-function postRender(contentDiv, markdown = {}) {
-    markdown.postProcess?.(contentDiv);
-}
-
-function scrollFeed(container, force, scheduleFrame, bridge = {}) {
-    if (force) {
-        scheduleFrame(() => { if (container?.isConnected) container.scrollTop = container.scrollHeight; });
-        return;
-    }
-    if (bridge) {
-        bridge.autoScrollToBottom?.(container);
-    } else if (container && isFollowingContainer(container)) {
-        container.scrollTop = container.scrollHeight;
-    }
-}
-
-function isFollowingContainer(container, bridge = {}) {
-    return bridge.isNearBottom
-        ? bridge.isNearBottom(container, 48)
-        : (container.scrollTop + container.clientHeight >= container.scrollHeight - 48);
-}
+import {
+    buildWorkbenchHeaderModel,
+    clearRememberedTopic,
+    formatTime,
+    isFollowingContainer,
+    loadRememberedTopic,
+    nextSessionTitle,
+    notify,
+    postRender,
+    proxyMainButton,
+    rememberTopic,
+    renderMarkdown,
+    runtimeApi,
+    scrollFeed,
+} from './agent-workbench-runtime-helpers.js';
 
 function mountWorkbench(container) {
     const host = createAgentWorkbenchHostAdapter({ windowRef: window, documentRef: document });
@@ -201,6 +124,7 @@ function mountWorkbench(container) {
     const headerView = createAgentWorkbenchHeaderView({
         element: header,
         document,
+        lifecycle,
         actions: {
             reconnect: () => run(recoverRuntime),
             renameTitle: async ({ sessionId, agentId, title }) => {
@@ -353,7 +277,7 @@ function mountWorkbench(container) {
         },
     });
     let budgetAutosaveTimer = null;
-    const settingsState = createAgentSettingsState();
+    const settingsState = createAgentSettingsState({ lifecycle });
     runStatusStop.addEventListener('click', () => run(async () => {
         runStatusStop.disabled = true;
         await controller.cancelTurn();
@@ -388,8 +312,14 @@ function mountWorkbench(container) {
         saveAgentProfile: (request) => controller.saveAgentProfile(request),
         refreshTopicsForAgent,
         notify,
-        refreshViews: () => {
-            renderSidebar();
+        refreshViews: ({ phase, payload } = {}) => {
+            const structuralChange = phase === 'settled' && payload && (
+                Object.prototype.hasOwnProperty.call(payload, 'instructionMode')
+                || Object.prototype.hasOwnProperty.call(payload, 'name')
+                || payload.createDerivedSession === true
+            );
+            if (structuralChange) renderSidebar();
+            else refreshSettingsStatus();
             renderHeader();
         },
     });
@@ -484,9 +414,7 @@ function mountWorkbench(container) {
     const sessionOperations = createAgentSessionOperationsCoordinator({
         state, store, controller, selectedAgentProfile, profileNeedsConfiguration,
         refreshControlPlane, queueRender, renderSidebar, notify, rememberTopic,
-        clearRememberedTopic: () => {
-            try { window.localStorage?.removeItem(LAST_TOPIC_STORAGE_KEY); } catch {}
-        },
+        clearRememberedTopic,
         nextSessionTitle, activeSession,
     });
     const {
@@ -659,6 +587,16 @@ function mountWorkbench(container) {
         sidebarCoordinator?.render();
     }
 
+    function refreshSettingsStatus() {
+        if (state.tab !== 'settings') return;
+        const statusNode = sidebar.querySelector('.agent-chat-settings-save-status');
+        if (!statusNode) return;
+        const status = state.settingsSaveByScope.get(state.settingsScope)
+            || { state: 'idle', message: '修改后自动保存' };
+        statusNode.className = `agent-chat-settings-save-status is-${status.state}`;
+        statusNode.textContent = status.message || '修改后自动保存';
+    }
+
     sidebarCoordinator = createAgentWorkbenchSidebarCoordinator({
         state, store, controller, element: sidebar, accountView, lifecycle, document, run, notify,
         sameAgent, agentCacheKey, selectedAgentProfile, profileNeedsConfiguration,
@@ -679,12 +617,7 @@ function mountWorkbench(container) {
         const session = activeSession();
         const current = store.getState();
         const viewState = deriveWorkbenchViewState(current);
-        const selected = current.selectedTopic;
         const activeTurnId = selectedActiveTurnId(current);
-        const selectedHasRuntime = selected?.sessionId && selected.sessionId === session?.sessionId;
-        const headingTitle = selected?.title
-            || (selectedHasRuntime ? session?.title : '')
-            || `与 ${selected?.agentId || state.selectedAgent || 'Nova'} 聊天中`;
         const queuePanel = renderPendingInputQueue({
             state, controller, refresh: refreshControlPlane, notify, run, button, node, host,
             guidePrompt: (prompt) => {
@@ -697,29 +630,10 @@ function mountWorkbench(container) {
         });
         queuePanelHost.replaceChildren();
         if (queuePanel) queuePanelHost.append(queuePanel);
-        headerView.update({
-            title: headingTitle,
-            sessionId: selected?.sessionId || null,
-            agentId: selected?.agentId || session?.agentId || null,
-            canRename: Boolean(selected?.sessionId),
-            state: viewState,
-            stateLabel: WORKBENCH_VIEW_STATE_LABELS[viewState] || viewState,
-            statusLabel: viewState === 'idle' && state.turnElapsedBySession?.has(selected?.sessionId)
-                ? '已完成' : WORKBENCH_VIEW_STATE_LABELS[viewState] || viewState,
-            statusStartedAt: viewState === 'running'
-                ? state.turnStartedAt.get(activeTurnId) || state.turnStarts.get(selected?.sessionId)?.startedAt : null,
-            statusElapsedMs: viewState === 'idle' ? state.turnElapsedBySession?.get(selected?.sessionId) : null,
-            codexRuntime: current.runtime?.runtime === 'codex-app-server',
-            pendingApprovals: (current.approvals || []).length,
-            activityUnread: Number(current.activityUnread) || 0,
-            alert: viewState === 'error' || viewState === 'reconnecting',
-            activityOpen: state.activityOpen,
-            queueLength: state.queue.length,
-            queueOpen: state.queueOpen,
-            usage: current.context,
+        headerView.update(buildWorkbenchHeaderModel({
+            state, current, session, viewState, activeTurnId,
             contextExpanded: state.activityOpen && normalizeDockKind(state.activityTab) === 'context',
-            hasSession: Boolean(session),
-        });
+        }));
     }
 
     function renderFeed() {

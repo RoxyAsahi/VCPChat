@@ -2,7 +2,11 @@ import './avatar-picker.js';
 import { selectedSessionId } from './agent-selected-session.js';
 import { configOptions } from '../agent-config-descriptors.js';
 
-const SETTINGS_SCOPE_LABELS = Object.freeze(['Agent 默认', '当前会话', '高级']);
+const SETTINGS_SCOPES = Object.freeze([
+    { id: 'profile', label: 'Agent 默认' },
+    { id: 'session', label: '当前会话' },
+    { id: 'advanced', label: '高级' },
+]);
 
 function approvalPermission(snapshot, fallback) {
     if (snapshot?.approvalPolicy === 'never') return 'always-approve';
@@ -80,6 +84,33 @@ export function renderAgentSettingsPane(context) {
     } = context;
     const pane = node('div', 'agent-chat-settings-pane');
     const form = node('div', 'agent-chat-settings-form');
+    const hasSelectedSession = Boolean(selectedSessionId(store.getState()));
+    if (state.settingsScope === 'session' && !hasSelectedSession) state.settingsScope = 'profile';
+    const scopes = node('div', 'agent-chat-settings-scopes');
+    scopes.setAttribute('role', 'tablist');
+    for (const scope of SETTINGS_SCOPES) {
+        const scopeButton = button(scope.label, `agent-chat-settings-scope${state.settingsScope === scope.id ? ' is-active' : ''}`);
+        scopeButton.setAttribute('role', 'tab');
+        scopeButton.setAttribute('aria-selected', String(state.settingsScope === scope.id));
+        scopeButton.disabled = scope.id === 'session' && !hasSelectedSession;
+        scopeButton.addEventListener('click', () => {
+            if (state.settingsScope === scope.id) return;
+            state.settingsScope = scope.id;
+            renderSidebar();
+            if (scope.id === 'advanced') void refreshRecoveryOperations();
+        });
+        scopes.append(scopeButton);
+    }
+    pane.append(scopes);
+    if (state.settingsScope === 'advanced') {
+        form.append(renderAdvanced({
+            state, store, persistWorkbenchSettings, scheduleBudgetSave, refreshRecoveryOperations,
+            controller, run, notify, refreshTopicsForAgent, node, button, host,
+        }));
+        appendSettingsStatus(context, { targetKey: 'advanced:global' }, form);
+        pane.append(form);
+        return pane;
+    }
     const {
         sessionId, projection, snapshot, profile, targetKey, materialized, workspace,
         permissionMode, model, instructionMode, baseInstructions, developerInstructions,
@@ -181,16 +212,18 @@ export function renderAgentSettingsPane(context) {
     };
 
     {
-        const identityNameField = field('Agent 名称', profile.name || profile.id || '', (value) => {
-            void persistWorkbenchSettings({ name: String(value || '').trim() }, '', '已自动保存 Agent 名称');
-        });
-        identityNameField.classList.add('agent-name-wrapper');
-        const identityMain = node('div', 'agent-identity-main');
-        identityMain.append(renderAvatar({ state, profile, controller, run, refreshControlPlane, notify, node, sameAgent }), identityNameField);
-        form.append(settingsGroup('基础信息', [identityMain], '', false, {
-            identity: true,
-            identitySummary: { name: profile.name || profile.id, avatarUrl: profile.avatarUrl },
-        }));
+        if (!sessionId) {
+            const identityNameField = field('Agent 名称', profile.name || profile.id || '', (value) => {
+                void persistWorkbenchSettings({ name: String(value || '').trim() }, '', '已自动保存 Agent 名称');
+            });
+            identityNameField.classList.add('agent-name-wrapper');
+            const identityMain = node('div', 'agent-identity-main');
+            identityMain.append(renderAvatar({ state, profile, controller, run, refreshControlPlane, notify, node, sameAgent }), identityNameField);
+            form.append(settingsGroup('基础信息', [identityMain], '', false, {
+                identity: true,
+                identitySummary: { name: profile.name || profile.id, avatarUrl: profile.avatarUrl },
+            }));
+        }
         const modelFields = [field('工作目录（可留空）', workspace, (value) => {
             if (!sessionId) state.workspace = value;
             void persistWorkbenchSettings({ workspaceRoot: value }, sessionId,

@@ -118,24 +118,12 @@ function createAgentWorkbenchShellView({ document, container, state, actions = {
             Math.floor(available / sidebarStep) * sidebarStep));
     };
 
-    const syncPanelElevationWidth = (fallbackWidth) => {
-        const measuredWidth = sidebar.getBoundingClientRect().width;
-        const physicalWidth = Number.isFinite(measuredWidth) && measuredWidth > 0
-            ? measuredWidth
-            : fallbackWidth;
-        document.body.style.setProperty('--agent-chat-sidebar-width', `${Math.round(physicalWidth)}px`);
-    };
     const renderSidebarWidth = () => {
         const effectiveWidth = Math.max(sidebarMinWidth, Math.min(getSidebarMaximumWidth(), preferredSidebarWidth));
         [...sidebar.classList]
             .filter((name) => name.startsWith('agent-chat-sidebar-width-'))
             .forEach((name) => sidebar.classList.remove(name));
         sidebar.classList.add(`agent-chat-sidebar-width-${effectiveWidth}`);
-        // Keep the flex item and the global Next panel elevation on one
-        // physical width. Class names remain for compact test/selector hooks.
-        sidebar.style.width = `${effectiveWidth}px`;
-        sidebar.style.flexBasis = `${effectiveWidth}px`;
-        syncPanelElevationWidth(effectiveWidth);
         sidebarSplitter.setAttribute('aria-valuemin', String(sidebarMinWidth));
         sidebarSplitter.setAttribute('aria-valuemax', String(getSidebarMaximumWidth()));
         sidebarSplitter.setAttribute('aria-valuenow', String(effectiveWidth));
@@ -167,11 +155,6 @@ function createAgentWorkbenchShellView({ document, container, state, actions = {
         ? null
         : new ResizeObserver(() => renderSidebarWidth());
     sidebarResizeObserver?.observe(root);
-    const sidebarPanelEdgeObserver = typeof ResizeObserver === 'undefined'
-        ? null
-        : new ResizeObserver(() => syncPanelElevationWidth(preferredSidebarWidth));
-    sidebarPanelEdgeObserver?.observe(sidebar);
-
     let dragCleanup = null;
     const applyActivityPanelWidth = (width) => {
         state.activityPanelWidth = Math.round(Math.max(320, Math.min(760, width)) / 20) * 20;
@@ -233,10 +216,6 @@ function createAgentWorkbenchShellView({ document, container, state, actions = {
             dragCleanup?.();
             sidebarResizer?.dispose();
             sidebarResizeObserver?.disconnect();
-            sidebarPanelEdgeObserver?.disconnect();
-            sidebar.style.width = '';
-            sidebar.style.flexBasis = '';
-            document.body.style.removeProperty('--agent-chat-sidebar-width');
             for (const dispose of disposers.splice(0).reverse()) dispose();
             root.remove();
             topicFlowLayer.remove();

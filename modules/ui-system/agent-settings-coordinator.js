@@ -138,6 +138,7 @@ function createAgentSettingsCoordinator({
         state.settingsSaveState = 'saving';
         state.settingsSaveMessage = '正在自动保存…';
         state.settingsSaveByScope.set(saveScope, { state: 'saving', message: '正在自动保存…' });
+        refreshViews?.({ phase: 'saving', payload, selectedSession, saveScope });
         const projectionAtEnqueue = store.getState().selectedTopic;
         if (selectedSession && projectionAtEnqueue?.sessionId === selectedSession) {
             sessionConfigRevisions.set(selectedSession, Number(projectionAtEnqueue.configRevision || 1));
@@ -171,7 +172,9 @@ function createAgentSettingsCoordinator({
             }
             return null;
         }).finally(() => {
-            if (!disposed && !state.disposed) refreshViews();
+            if (!disposed && !state.disposed) {
+                refreshViews?.({ phase: 'settled', payload, selectedSession, saveScope });
+            }
         });
     }
 

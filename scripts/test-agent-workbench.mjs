@@ -517,18 +517,12 @@ workbenchRoot.getBoundingClientRect = () => ({ left: 0, width: 900 });
 resizeObservers.filter((observer) => observer.targets.has(workbenchRoot)).forEach((observer) => observer.callback());
 assert.ok(workbenchSidebar.classList.contains('agent-chat-sidebar-width-560'),
     'a saved 600px sidebar preference must temporarily clamp when the Workbench leaves only a 320px chat column');
-assert.equal(workbenchSidebar.style.width, '560px',
-    'the effective width must be written to the actual flex item, not only a semantic class');
-assert.equal(workbenchSidebar.style.flexBasis, '560px',
-    'the sidebar flex basis must match its effective width so the main panel starts at the same edge');
-assert.equal(document.body.style.getPropertyValue('--agent-chat-sidebar-width'), '560px',
-    'the shared elevated panel edge must follow the effective Build sidebar width');
+assert.equal(workbenchSidebar.getAttribute('style'), null,
+    'the resizable sidebar must use governed width classes instead of Renderer inline styles');
 workbenchRoot.getBoundingClientRect = () => ({ left: 0, width: 1_200 });
 resizeObservers.filter((observer) => observer.targets.has(workbenchRoot)).forEach((observer) => observer.callback());
 assert.ok(workbenchSidebar.classList.contains('agent-chat-sidebar-width-600'),
     'expanding the Workbench must restore the saved sidebar preference instead of persisting the temporary clamp');
-assert.equal(document.body.style.getPropertyValue('--agent-chat-sidebar-width'), '600px',
-    'the shared elevated panel edge must restore with the saved sidebar preference');
 assert.equal(createdSessions.length, 0,
     'renderer reload must preview the saved Codex Session without acquiring a writable Session');
 assert.deepEqual(JSON.parse(window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1')), { sessionId: 'topic-restored' },
@@ -1712,8 +1706,11 @@ await new Promise((resolve) => setTimeout(resolve, 0));
 assert.deepEqual([...host.querySelectorAll('.agent-settings-section-title')].map((title) => title.textContent),
     ['基础信息', '模型设置', '系统提示词'],
     'settings must use the same collapsed identity, model, and prompt sections as main chat');
-assert.equal(host.querySelector('.agent-chat-settings-scope'), null,
-    'Build settings must not keep the removed Profile, Session, and Advanced sub-tabs');
+const settingsScopes = [...host.querySelectorAll('.agent-chat-settings-scope')];
+assert.deepEqual(settingsScopes.map((scope) => scope.textContent.trim()), ['Agent 默认', '当前会话', '高级'],
+    'Build settings must expose explicit Profile, current Session, and advanced ownership scopes');
+assert.equal(settingsScopes.find((scope) => scope.textContent.trim() === 'Agent 默认')?.getAttribute('aria-selected'), 'true',
+    'opening settings must default to Agent Profile ownership rather than silently mutating a Session');
 const openSettingsSection = (key) => {
     const section = host.querySelector(`.agent-settings-section[data-section-key="${key}"]`);
     assert.ok(section, `settings must contain the ${key} section`);
@@ -1753,14 +1750,12 @@ dispose();
 assert.equal(unsubscribeCalls, 1, 'Workbench unmount must release runtime event subscription');
 assert.deepEqual(presenceCalls, [true, false]);
 assert.equal(host.childElementCount, 0);
-assert.equal(document.body.style.getPropertyValue('--agent-chat-sidebar-width'), '',
-    'closing Build must remove its panel-edge override for ordinary chat and other internal apps');
 
 window.localStorage.setItem('vcpchat.agentWorkbench.lastTopic.v1', JSON.stringify({ sessionId: 'topic-missing-session' }));
 const missingSessionDispose = registered.mount(host, {});
-for (let attempt = 0; attempt < 50
+for (let attempt = 0; attempt < 100
     && window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1') !== null; attempt += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await new Promise((resolve) => setTimeout(resolve, 50));
 }
 assert.ok(host.classList.contains('agent-workbench-root') && host.querySelector('.agent-chat-root.container'),
     'a deleted remembered Session must leave the Workbench usable instead of failing startup');

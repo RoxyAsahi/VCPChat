@@ -51,6 +51,10 @@ function routeStoreEvent(event, deps) {
         maybeAutoOpenActivity(); queueRender({ feed: true, header: true, activity: true, composer: true }); return;
     }
     if (event.type === 'toolbox.ws') { queueRender({ activity: true }); return; }
+    if (event.type.startsWith('session.config.')) {
+        queueRender({ header: true, activity: true, composer: true });
+        return;
+    }
     if (event.type.startsWith('session.')) { queueRender({ shell: true, header: true, feed: true, composer: true }); return; }
     if (event.type.startsWith('runtime.') || event.type.startsWith('context.')) { maybeAutoOpenActivity(); queueRender({ header: true, activity: true, composer: true }); return; }
     queueRender({ feed: true, activity: true, composer: true });
