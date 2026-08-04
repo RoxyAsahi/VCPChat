@@ -16,14 +16,17 @@ async function waitFor(predicate, timeoutMs = 1_000) {
 }
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-function workbenchProjectionPatch({ sessionId, threadId, revision, messageId, itemId, turnId, kind, content, sourceOrder = revision }) {
+function workbenchProjectionPatch({
+    sessionId, threadId, revision, messageId, itemId, turnId, kind, content,
+    sourceOrder = revision, status = 'completed',
+}) {
     return {
         schemaVersion: 1, sessionId, threadId, runtimeGeneration: 1,
         baseProjectionRevision: revision - 1, projectionRevision: revision,
         upsertBlocks: [{
             schemaVersion: 2, blockId: `block:${sessionId}:${itemId}:0`, sessionId, threadId,
             turnId, itemId, messageId, kind, itemType: kind === 'tool' ? 'dynamicToolCall' : null,
-            authority: kind === 'tool' ? 'toolbox' : 'codex', status: 'completed', sourceOrder, ordinal: 0,
+            authority: kind === 'tool' ? 'toolbox' : 'codex', status, sourceOrder, ordinal: 0,
             content, createdAt: revision, updatedAt: revision,
         }], deleteBlockIds: [],
     };
@@ -461,6 +464,24 @@ function emitDaemonEvent(event) {
         ...event,
         sequence: runtimeEventNumber,
     });
+}
+
+const fixtureProjectionRevisionBySession = new Map();
+function emitProjectionBlock({
+    sessionId = 'topic-in-use', threadId = 'thread-active', method = 'item/updated',
+    activity = 'running', messageId, itemId, turnId, kind, content, sourceOrder, status,
+}) {
+    const revision = Number(fixtureProjectionRevisionBySession.get(sessionId) || 0) + 1;
+    fixtureProjectionRevisionBySession.set(sessionId, revision);
+    emitDaemonEvent({
+        runtime: 'codex', type: 'projection.updated', method, sessionId, threadId, turnId,
+        itemId, activity,
+        projectionPatch: workbenchProjectionPatch({
+            sessionId, threadId, revision, messageId, itemId, turnId, kind, content,
+            sourceOrder, status,
+        }),
+    });
+    return revision;
 }
 
 await import(`${pathToFileURL(path.join(root, 'modules/ui-system/next-ui-apps.js')).href}?test=${Date.now()}`);
@@ -977,7 +998,9 @@ assert.deepEqual(startedTurns[1], { sessionId: 'topic-in-use', prompt: '请介�
 assert.ok([...host.querySelectorAll('.message-item.user .md-content')]
     .some((node) => node.textContent.includes('请介绍一下自己')),
     'an accepted start-turn ACK must project the user message before the first runtime event arrives');
-assert.match(host.querySelector('.message-item.user')?.textContent || '', /发送中/,
+const pendingUserRow = [...host.querySelectorAll('.message-item.user')]
+    .find((row) => row.textContent.includes('请介绍一下自己'));
+assert.match(pendingUserRow?.textContent || '', /发送中/,
     'the temporary local projection must disclose that durable confirmation is still pending');
 // A command ACK only confirms acceptance.  The Workbench must not infer a
 // running Turn from it; only Codex's authoritative event may establish
@@ -1393,9 +1416,9 @@ emitDaemonEvent({
         capability: { state: 'unknown', detail: '等待 VCPLog 节点事件' },
     },
 });
-emitDaemonEvent({
-    sessionId: 'topic-in-use', turnId: 'turn_live', messageId: 'msg_live', sequence: 2,
-    type: 'assistant.delta', payload: { text: 'live Codex delta' },
+emitProjectionBlock({
+    turnId: 'turn_live', messageId: 'msg_live', itemId: 'assistant-live-item', kind: 'message',
+    sourceOrder: 20, status: 'inProgress', content: { text: 'live Codex delta' },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
 assert.equal(host.querySelector('.agent-wb-runtime-dock'), null, 'Runtime lifecycle controls must stay out of the Agent UI');
@@ -1405,40 +1428,43 @@ assert.equal(host.querySelector('.agent-chat-status-chip')?.dataset.action, unde
 assert.equal(host.querySelectorAll('.agent-chat-readiness-card').length, 0,
     'internal readiness details must not render after the Diagnostics tab is hidden');
 
-// Streaming is the hot path.  A second delta must update the existing message
+// Streaming is the hot path. A replacement Block Patch must update the existing message
 // in place rather than replace the feed, composer or focused draft.
-const liveMessage = host.querySelector('[data-message-id="msg_live"]');
+const liveMessage = host.querySelector('[data-message-id="block:topic-in-use:assistant-live-item:0"]');
+assert.ok(liveMessage, 'the Main-authored assistant Block must own the visible message identity');
 const stableComposer = host.querySelector('.agent-chat-message-input');
 assert.equal(stableComposer.disabled, false,
     `the active Session composer must remain focusable before a streaming delta (placeholder: ${stableComposer.placeholder})`);
 stableComposer.value = '保持中的草稿';
 stableComposer.dispatchEvent(new window.Event('input', { bubbles: true }));
 stableComposer.focus();
-emitDaemonEvent({
-    sessionId: 'topic-in-use', turnId: 'turn_live', messageId: 'msg_live', sequence: 3,
-    type: 'assistant.delta', payload: { text: ' and another delta' },
+emitProjectionBlock({
+    turnId: 'turn_live', messageId: 'msg_live', itemId: 'assistant-live-item', kind: 'message',
+    sourceOrder: 20, status: 'inProgress', content: { text: 'live Codex delta and another delta' },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
-assert.equal(host.querySelector('[data-message-id="msg_live"]'), liveMessage,
-    'streaming deltas must retain the existing assistant DOM node');
+assert.equal(host.querySelector('[data-message-id="block:topic-in-use:assistant-live-item:0"]'), liveMessage,
+    'streaming Block Patches must retain the existing assistant DOM node');
 assert.equal(host.querySelector('.agent-chat-message-input'), stableComposer,
-    'streaming deltas must not replace the composer node');
+    'streaming Block Patches must not replace the composer node');
 assert.equal(document.activeElement, stableComposer,
-    'streaming deltas must preserve focused input');
+    'streaming Block Patches must preserve focused input');
 assert.equal(stableComposer.value, '保持中的草稿',
-    'streaming deltas must preserve the user draft');
+    'streaming Block Patches must preserve the user draft');
 assert.match(liveMessage.querySelector('.md-content').textContent, /live Codex delta and another delta/,
-    'streaming deltas must append to the existing assistant message');
+    'streaming Block Patches must preserve the complete Main-authored assistant text');
 
-emitDaemonEvent({
-    sessionId: 'topic-in-use', turnId: 'turn_live', messageId: 'msg_live', sequence: 4,
-    type: 'reasoning.delta', payload: { text: 'Inspecting the VCPToolBox environment before choosing the next safe action.' },
+emitProjectionBlock({
+    turnId: 'turn_live', messageId: 'msg_reason_live', itemId: 'reason-live-item', kind: 'reasoning',
+    sourceOrder: 19, status: 'inProgress',
+    content: { summary: ['Inspecting the VCPToolBox environment before choosing the next safe action.'], content: [] },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
-const reasoningCard = liveMessage.querySelector('.agent-chat-reasoning-block');
-assert.ok(reasoningCard, 'reasoning deltas must render the dedicated compact thinking card');
+const reasoningMessage = host.querySelector('[data-message-id="msg_reason_live"]');
+const reasoningCard = reasoningMessage?.querySelector('.agent-chat-reasoning-block');
+assert.ok(reasoningCard, 'reasoning Blocks must render the dedicated compact thinking card');
 assert.equal(liveMessage.querySelector('.md-content').hidden, false,
-    'a message that already has assistant text must keep its standard bubble beside the reasoning card');
+    'assistant text must keep its standard bubble beside the separate Codex reasoning Item');
 assert.match(reasoningCard.querySelector('.vcp-thought-chain-label').textContent, /思考中.*s/,
     'a streaming thought card must show a Cherry-style thinking status and live duration');
 assert.equal(reasoningCard.querySelector('.vcp-thought-chain-icon').textContent, 'lightbulb',
@@ -1475,26 +1501,22 @@ reasoningCard.querySelector('.vcp-thought-chain-header').click();
 assert.equal(reasoningCard.querySelector('.vcp-thought-chain-bubble').classList.contains('expanded'), false,
     'the fallback thinking header must remain explicitly collapsible');
 reasoningCard.querySelector('.vcp-thought-chain-header').click();
-emitDaemonEvent({
-    sessionId: 'topic-in-use', turnId: 'turn_live', messageId: 'msg_live', sequence: 5,
-    type: 'assistant.completed', payload: {},
+emitProjectionBlock({
+    method: 'item/completed', turnId: 'turn_live', messageId: 'msg_reason_live', itemId: 'reason-live-item',
+    kind: 'reasoning', sourceOrder: 19, status: 'completed',
+    content: { summary: ['Inspecting the VCPToolBox environment before choosing the next safe action.'], content: [] },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
-const completedLiveMessage = host.querySelector('[data-message-id="msg_live"]');
-assert.match(completedLiveMessage.querySelector('.agent-chat-reasoning-block .vcp-thought-chain-label').textContent, /已深度思考.*s/,
+const completedReasoningMessage = host.querySelector('[data-message-id="msg_reason_live"]');
+assert.match(completedReasoningMessage.querySelector('.agent-chat-reasoning-block .vcp-thought-chain-label').textContent, /已深度思考.*s/,
     'a completed thought card must collapse to a concise duration summary');
-assert.equal(completedLiveMessage.querySelector('.agent-chat-reasoning-copy'), null,
+assert.equal(completedReasoningMessage.querySelector('.agent-chat-reasoning-copy'), null,
     'completed reasoning must not render a duplicate copy action');
 
-const projectedEventSessionId = host.querySelector('.agent-chat-session-row.active')?.dataset.sessionId
-    || JSON.parse(window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1') || '{}').sessionId;
-emitDaemonEvent({
-    runtime: 'codex', type: 'projection.updated', method: 'item/completed',
-    sessionId: 'topic-in-use', threadId: 'thread-active', turnId: 'turn_projected',
-    itemId: 'reason_projected', activity: 'idle',
-    projectionPatch: workbenchProjectionPatch({ sessionId: 'topic-in-use', threadId: 'thread-active', revision: 1,
-        messageId: 'msg_reason_projected', itemId: 'reason_projected', turnId: 'turn_projected', kind: 'reasoning', sourceOrder: 19,
-        content: { summary: ['reasoning delivered through the real projection.updated path'], content: [] } }),
+emitProjectionBlock({
+    method: 'item/completed', activity: 'idle', turnId: 'turn_projected',
+    messageId: 'msg_reason_projected', itemId: 'reason_projected', kind: 'reasoning', sourceOrder: 21,
+    status: 'completed', content: { summary: ['reasoning delivered through the real projection.updated path'], content: [] },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
 const projectedReasoning = host.querySelector('[data-message-id="msg_reason_projected"] .agent-chat-reasoning-block');
@@ -1508,35 +1530,39 @@ assert.equal(projectedReasoning.closest('.message-item')?.querySelector('.md-con
 // turn can include assistant text, a tool call, then more assistant text.  The
 // Workbench must preserve Main's sequence order instead of batching all
 // tools beside the first user message for that turn.
-emitDaemonEvent({
-    sessionId: 'topic-in-use', turnId: 'turn-order', messageId: 'msg-order-before', sequence: 20,
-    type: 'assistant.started', payload: {},
+emitProjectionBlock({
+    turnId: 'turn-order', messageId: 'msg-order-before', itemId: 'order-before-item', kind: 'message',
+    sourceOrder: 30, status: 'inProgress', content: { text: 'before tool' },
 });
-emitDaemonEvent({
-    sessionId: 'topic-in-use', turnId: 'turn-order', toolCallId: 'tool-order', sequence: 21,
-    type: 'tool.requested', payload: { toolName: 'vcp_invoke', argumentSummary: 'FileOperator.ReadFile package.json' },
+emitProjectionBlock({
+    turnId: 'turn-order', messageId: 'msg-tool-order', itemId: 'tool-order', kind: 'tool',
+    sourceOrder: 31, status: 'inProgress', content: {
+        toolName: 'vcp_invoke', argumentSummary: 'FileOperator.ReadFile package.json',
+        item: { type: 'dynamicToolCall', tool: 'vcp_invoke' },
+    },
 });
-emitDaemonEvent({
-    sessionId: 'topic-in-use', turnId: 'turn-order', messageId: 'msg-order-after', sequence: 22,
-    type: 'assistant.started', payload: {},
+emitProjectionBlock({
+    turnId: 'turn-order', messageId: 'msg-order-after', itemId: 'order-after-item', kind: 'message',
+    sourceOrder: 32, status: 'inProgress', content: { text: 'after tool' },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
 const sequenceParts = [...host.querySelector('.agent-chat-messages').children];
-const beforeIndex = sequenceParts.findIndex((element) => element.dataset.messageId === 'msg-order-before');
+const beforeIndex = sequenceParts.findIndex((element) => element.dataset.messageId === 'block:topic-in-use:order-before-item:0');
 const toolIndex = sequenceParts.findIndex((element) => element.dataset.toolCallId === 'tool-order');
-const afterIndex = sequenceParts.findIndex((element) => element.dataset.messageId === 'msg-order-after');
+const afterIndex = sequenceParts.findIndex((element) => element.dataset.messageId === 'block:topic-in-use:order-after-item:0');
 assert.ok(beforeIndex >= 0 && beforeIndex < toolIndex && toolIndex < afterIndex,
     'message → tool → message must retain runtime sequence order in the visible timeline');
 const requestedToolCard = host.querySelector('[data-tool-call-id="tool-order"]');
-emitDaemonEvent({
-    sessionId: 'topic-in-use', turnId: 'turn-order', toolCallId: 'tool-order', sequence: 23,
-    type: 'tool.completed', payload: {
+emitProjectionBlock({
+    method: 'item/completed', turnId: 'turn-order', messageId: 'msg-tool-order', itemId: 'tool-order',
+    kind: 'tool', sourceOrder: 31, status: 'completed', content: {
         toolName: 'vcp_invoke',
         outputSummary: 'FileOperator 已返回 package.json',
         result: 'x'.repeat(1_024),
         resources: [{ type: 'file', name: 'package.json', url: 'file-ref:package.json' }],
         warnings: ['只读预览'],
         task: { status: 'accepted', id: 'task-1' },
+        item: { type: 'dynamicToolCall', tool: 'vcp_invoke' },
     },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
@@ -1555,13 +1581,19 @@ assert.match(completedToolCard.querySelector('.agent-chat-tool-resource-list').t
 assert.match(completedToolCard.querySelector('.agent-chat-tool-warning-list').textContent, /只读预览/);
 assert.match(completedToolCard.querySelector('.agent-chat-tool-task').textContent, /task-1/);
 
-emitDaemonEvent({
-    sessionId: 'topic-in-use', turnId: 'turn-tool-group', toolCallId: 'tool-group-a', sequence: 24,
-    type: 'tool.requested', payload: { toolName: 'FileOperator', argumentSummary: 'ReadFile README.md' },
+emitProjectionBlock({
+    turnId: 'turn-tool-group', messageId: 'msg-tool-group-a', itemId: 'tool-group-a', kind: 'tool',
+    sourceOrder: 40, status: 'inProgress', content: {
+        toolName: 'FileOperator', argumentSummary: 'ReadFile README.md',
+        item: { type: 'dynamicToolCall', tool: 'FileOperator' },
+    },
 });
-emitDaemonEvent({
-    sessionId: 'topic-in-use', turnId: 'turn-tool-group', toolCallId: 'tool-group-b', sequence: 25,
-    type: 'tool.requested', payload: { toolName: 'DeepWikiVCP', argumentSummary: 'Inspect repository' },
+emitProjectionBlock({
+    turnId: 'turn-tool-group', messageId: 'msg-tool-group-b', itemId: 'tool-group-b', kind: 'tool',
+    sourceOrder: 41, status: 'inProgress', content: {
+        toolName: 'DeepWikiVCP', argumentSummary: 'Inspect repository',
+        item: { type: 'dynamicToolCall', tool: 'DeepWikiVCP' },
+    },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
 const groupedTools = host.querySelector('.agent-chat-tool-group[data-turn-id="turn-tool-group"]');
@@ -1574,9 +1606,12 @@ groupedTools.querySelector('.agent-chat-tool-group-toggle').click();
 assert.equal(groupedTools.querySelector('.agent-chat-tool-group-body').hidden, false,
     'the group header must reveal the preserved structured tool cards');
 const groupedFirstCard = groupedTools.querySelector('[data-tool-call-id="tool-group-a"]');
-emitDaemonEvent({
-    sessionId: 'topic-in-use', turnId: 'turn-tool-group', toolCallId: 'tool-group-a', sequence: 26,
-    type: 'tool.completed', payload: { toolName: 'FileOperator', outputSummary: 'README.md loaded' },
+emitProjectionBlock({
+    method: 'item/completed', turnId: 'turn-tool-group', messageId: 'msg-tool-group-a', itemId: 'tool-group-a',
+    kind: 'tool', sourceOrder: 40, status: 'completed', content: {
+        toolName: 'FileOperator', outputSummary: 'README.md loaded',
+        item: { type: 'dynamicToolCall', tool: 'FileOperator' },
+    },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
 assert.strictEqual(groupedTools.querySelector('[data-tool-call-id="tool-group-a"]'), groupedFirstCard,
@@ -1584,9 +1619,8 @@ assert.strictEqual(groupedTools.querySelector('[data-tool-call-id="tool-group-a"
 assert.equal(groupedTools.querySelector('.agent-chat-tool-group-body').hidden, false,
     'patching a child tool must preserve the group expansion state');
 
-// `assistant.completed` intentionally requests a full durable projection.
-// Let that frame settle before the following scroll-anchor regression probe
-// installs its synthetic geometry.
+// Let the final normalized tool Patch settle before the following scroll-anchor
+// regression probe installs its synthetic geometry.
 await new Promise((resolve) => setTimeout(resolve, 50));
 
 // Run this after the preceding streaming frame has settled. A full rerender
@@ -1648,9 +1682,9 @@ assert.equal(host.querySelector('[data-message-id="assistant-marker"]'), null,
 
 // A new transcript Part while reading older output must not steal the anchor,
 // but must give the reader an explicit route back to the live edge.
-emitDaemonEvent({
-    sessionId: 'topic-in-use', turnId: 'turn-order', messageId: 'msg-reader-new', sequence: 24,
-    type: 'assistant.started', payload: {},
+emitProjectionBlock({
+    turnId: 'turn-order', messageId: 'msg-reader-new', itemId: 'reader-new-item', kind: 'message',
+    sourceOrder: 50, status: 'inProgress', content: { text: 'new live timeline item' },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
 const jumpToLatest = host.querySelector('.agent-chat-jump-to-latest');

@@ -411,6 +411,30 @@ const workbenchStore = fs.readFileSync(path.join(root, 'modules/ui-system/agent-
 if (!workbenchStore.includes('createAgentEventDeduper') || workbenchStore.includes('const seenEvents = new Set')) {
     errors.push('Workbench event dedupe must be Session-scoped and bounded');
 }
+const initialStateBody = workbenchStore.match(/function createInitialState\(\)\s*\{([\s\S]*?)\n\}/)?.[1] || '';
+if (/\bmessages\s*:|\btools\s*:/.test(initialStateBody)) {
+    errors.push('Workbench owned state must not contain Renderer transcript messages/tools slices');
+}
+if (!workbenchStore.includes('selectedProjectionView(state)')
+    || !/const\s*\{\s*messages:\s*_messages,\s*tools:\s*_tools/.test(workbenchStore)) {
+    errors.push('Workbench messages/tools must be derived read-only views and rejected from Store patches');
+}
+for (const retired of ['message-reducer.js', 'tool-reducer.js']) {
+    if (fs.existsSync(path.join(root, 'modules/ui-system/agent-store', retired))) {
+        errors.push(`retired Renderer transcript reducer still exists: ${retired}`);
+    }
+}
+const rendererEventRouter = fs.readFileSync(path.join(root, 'modules/ui-system/agent-store/event-router.js'), 'utf8');
+if (/assistant\.(?:started|delta|completed)|reasoning\.delta|startsWith\(['"]tool\./.test(rendererEventRouter)) {
+    errors.push('Renderer Store must not route legacy assistant/reasoning/tool transcript events');
+}
+if (/message-reducer|tool-reducer/.test(rendererEventRouter)) {
+    errors.push('Renderer Store reintroduced a retired transcript reducer import');
+}
+if (!projectionControllerSource.includes("event?.runtime === 'codex' && event?.type === 'projection.updated'")
+    || !/releaseSnapshotBarrier[\s\S]*applyCodexRuntimeEvent\(event\)/.test(projectionControllerSource)) {
+    errors.push('snapshot barriers must replay Codex projection.updated events through the normalized Patch reducer');
+}
 
 const identityBoundaryFiles = [
     'modules/codex-runtime/runtimeManager.js',
