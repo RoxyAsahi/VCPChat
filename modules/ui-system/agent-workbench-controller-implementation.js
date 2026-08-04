@@ -13,7 +13,6 @@ import { selectedSessionIdentity, selectedSessionId as selectedSessionIdFromStat
 import {
     applyProjectionPatch,
     applyProjectionSnapshot,
-    projectionToNormalized,
     sessionProjectionFromState,
 } from './agent-normalized-store.js';
 
@@ -182,93 +181,6 @@ function createWorkbenchController(runtimeApi) {
         refreshStatus: () => refreshStatus(),
     });
 
-    function applyCodexProjectionMessage(sessionId, entry) {
-        if (!sessionId || !entry) return;
-        let before = store.getState();
-        let session = before.sessionsById?.get(sessionId) || null;
-        if (!session) {
-            const seeded = applyProjectionSnapshot(before, {
-                session: { sessionId, threadId: entry.threadId || `legacy:${sessionId}` },
-                messages: [],
-                projectionRevision: Number(before.projectionRevisions?.get(sessionId) || 0),
-            });
-            store.setState(seeded);
-            before = store.getState();
-            session = before.sessionsById.get(sessionId);
-        }
-        const threadId = entry.threadId || session.threadId || `legacy:${sessionId}`;
-        const normalized = projectionToNormalized({
-            session: { ...session, sessionId, threadId },
-            messages: [entry],
-        });
-        const baseProjectionRevision = Number(before.projectionRevisions?.get(sessionId) || 0);
-        const normalizedResult = applyProjectionPatch(before, {
-            schemaVersion: 1,
-            sessionId,
-            threadId,
-            baseProjectionRevision,
-            projectionRevision: baseProjectionRevision + 1,
-            upsertBlocks: normalized.blocks,
-            deleteBlockIds: [],
-        });
-        if (normalizedResult.applied) {
-            store.setState(normalizedResult.state);
-            if (applySelectedNormalizedProjection(sessionId)) return;
-        }
-        const patch = codexSnapshotToProjection({ messages: [entry] });
-        const current = store.getState();
-        const messages = [...current.messages];
-        for (const candidate of patch.messages) {
-            const durableIndex = messages.findIndex((message) => message.id === candidate.id);
-            // `turn/start` is allowed to render a clearly-labelled temporary
-            // user row before App Server has emitted its authoritative item.
-            // Once that item arrives it must *replace* the temporary row.  A
-            // Codex item id is intentionally not guessed by the Renderer, so
-            // the only safe bridge identity is the turn id supplied by both
-            // the command ACK and the item notification.
-            const pendingIndex = durableIndex < 0 && candidate.role === 'user' && candidate.turnId
-                ? messages.findIndex((message) => (
-                    message.role === 'user'
-                    && message.turnId === candidate.turnId
-                    && String(message.id || '').startsWith('pending-user:')
-                ))
-                : -1;
-            if (durableIndex >= 0) {
-                messages[durableIndex] = { ...messages[durableIndex], ...candidate };
-            } else if (pendingIndex >= 0) {
-                messages[pendingIndex] = {
-                    ...messages[pendingIndex],
-                    ...candidate,
-                    state: candidate.state === 'inProgress' ? 'pending' : candidate.state,
-                    deliveryState: 'confirmed',
-                    deliveryDetail: '',
-                };
-            } else {
-                messages.push(candidate);
-            }
-        }
-        const tools = new Map(current.tools);
-        for (const [toolCallId, tool] of patch.tools) {
-            tools.set(toolCallId, { ...(tools.get(toolCallId) || {}), ...tool });
-        }
-        const markerObservations = [...(current.markerObservations || [])];
-        for (const marker of patch.markerObservations || []) {
-            const index = markerObservations.findIndex((item) => item.id === marker.id);
-            if (index >= 0) markerObservations[index] = marker;
-            else markerObservations.push(marker);
-        }
-        const nextProjection = {
-            messages,
-            tools,
-            markerObservations: markerObservations.slice(-100),
-            context: patch.context && Object.keys(patch.context).length
-                ? { ...current.context, ...patch.context }
-                : current.context,
-            plan: patch.plan || current.plan || null,
-        };
-        store.setState(nextProjection);
-    }
-
     function applySelectedNormalizedProjection(sessionId) {
         const current = store.getState();
         const selected = sessionProjectionFromState(current, sessionId)?.projection;
@@ -311,17 +223,19 @@ function createWorkbenchController(runtimeApi) {
         });
         if (event.projectionPatch && event.sessionId) {
             const result = applyProjectionPatch(store.getState(), event.projectionPatch);
-            if (result.applied) store.setState(result.state);
-            else void reloadNormalizedSession(event.sessionId);
+            if (result.applied) {
+                store.setState(result.state);
+                if (selected) applySelectedNormalizedProjection(event.sessionId);
+            } else {
+                void reloadNormalizedSession(event.sessionId);
+            }
         }
-        if (selected && event.projectionPatch) applySelectedNormalizedProjection(event.sessionId);
-        else if (selected && event.projectionMessage) applyCodexProjectionMessage(event.sessionId, event.projectionMessage);
         applySessionUiEvent(event);
     }
 
     async function reloadNormalizedSession(sessionId) {
         try {
-            const snapshot = await requireApi('agentRuntimeReadProjection')({ sessionId });
+            const snapshot = await requireApi('agentSessionReadProjection')({ sessionId });
             const normalizedState = applyProjectionSnapshot(store.getState(), snapshot);
             store.setState(normalizedState);
             if (selectedSessionIdFromState(store.getState()) === sessionId) applySelectedNormalizedProjection(sessionId);
@@ -528,6 +442,10 @@ function createWorkbenchController(runtimeApi) {
                 return null;
             }
             const resolvedTopic = resolvePreviewTopic(localSnapshot, selectedTopic);
+            if (snapshotIsStale(sessionId, localSnapshot, store.getState())) {
+                releaseSnapshotBarrier(barrier, localSnapshot, runtimeForTopic(sessionId));
+                return localSnapshot;
+            }
             const normalizedState = applyProjectionSnapshot(store.getState(), localSnapshot);
             store.setState(normalizedState);
             const projection = Array.isArray(localSnapshot?.messages)

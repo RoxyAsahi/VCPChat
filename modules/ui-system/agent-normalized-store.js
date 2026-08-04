@@ -1,21 +1,29 @@
 import { codexSnapshotToProjection } from './agent-workbench-snapshot-projection.js';
 
 function blockIdentity(sessionId, block = {}) {
-    return block.blockId || `block:${sessionId}:${block.itemId || block.messageId || 'unknown'}:${Number.isInteger(block.ordinal) ? block.ordinal : 0}`;
+    const prefix = `block:${sessionId}:`;
+    if (block.schemaVersion === 2 && String(block.blockId || '').startsWith(prefix)) return block.blockId;
+    return `${prefix}${block.itemId || block.messageId || 'unknown'}:${Number.isInteger(block.ordinal) ? block.ordinal : 0}`;
 }
 
 function normalizeBlock(sessionId, threadId, message, block) {
     const itemType = block?.itemType || block?.content?.item?.type || block?.content?.unknown?.type || null;
     const content = block?.kind === 'reasoning'
         ? {
-            summary: Array.isArray(block.content?.summary) ? block.content.summary
-                : block.content?.text ? [String(block.content.text)] : [],
+            summary: block.schemaVersion === 2 && Array.isArray(block.content?.summary)
+                ? block.content.summary
+                : Array.isArray(block.content?.summary) && block.content.summary.length
+                    ? block.content.summary : block.content?.text ? [String(block.content.text)] : [],
             content: Array.isArray(block.content?.content) ? block.content.content : [],
         }
         : (block.content && typeof block.content === 'object' ? block.content : { text: String(block.content || '') });
     return {
         schemaVersion: 2,
-        blockId: blockIdentity(sessionId, block),
+        blockId: blockIdentity(sessionId, {
+            ...block,
+            itemId: block.itemId || message?.itemId,
+            messageId: block.messageId || message?.messageId,
+        }),
         sessionId,
         threadId: threadId || message?.threadId || null,
         turnId: block.turnId || message?.turnId || null,
@@ -154,24 +162,38 @@ function sessionProjectionFromState(state, sessionId) {
 function applyProjectionPatch(state, patch = {}) {
     const next = ensureNormalizedState(state);
     const sessionId = String(patch.sessionId || '');
-    if (!sessionId || !patch.threadId) return { applied: false, reason: 'identity-mismatch', state };
+    const threadId = String(patch.threadId || '');
+    if (patch.schemaVersion !== 1 || !sessionId || !threadId) {
+        return { applied: false, reason: 'identity-mismatch', state };
+    }
     const session = next.sessionsById.get(sessionId);
-    if (session?.threadId && session.threadId !== patch.threadId) {
+    if (session?.threadId && session.threadId !== threadId) {
         return { applied: false, reason: 'identity-mismatch', state };
     }
     const currentRevision = Number(next.projectionRevisions.get(sessionId) || 0);
-    if (Number(patch.baseProjectionRevision) !== currentRevision) return { applied: false, reason: 'revision-gap', state };
+    const baseRevision = Number(patch.baseProjectionRevision);
+    const projectionRevision = Number(patch.projectionRevision);
+    if (baseRevision !== currentRevision || !Number.isInteger(projectionRevision)
+        || projectionRevision <= baseRevision) {
+        return { applied: false, reason: 'revision-gap', state };
+    }
     const blocksById = new Map(next.blocksById);
     for (const id of patch.deleteBlockIds || []) {
         const existing = blocksById.get(id);
         if (existing?.sessionId === sessionId) blocksById.delete(id);
     }
     for (const block of patch.upsertBlocks || []) {
-        if (block.sessionId === sessionId && block.threadId === patch.threadId) blocksById.set(block.blockId, block);
+        if (block?.schemaVersion !== 2 || block.sessionId !== sessionId || block.threadId !== threadId
+            || !String(block.blockId || '').startsWith(`block:${sessionId}:`)) {
+            return { applied: false, reason: 'identity-mismatch', state };
+        }
+        blocksById.set(block.blockId, block);
     }
+    const sessionsById = new Map(next.sessionsById);
+    sessionsById.set(sessionId, { ...(session || {}), sessionId, threadId });
     const projectionRevisions = new Map(next.projectionRevisions);
-    projectionRevisions.set(sessionId, Number(patch.projectionRevision));
-    return { applied: true, state: { blocksById, sessionsById: next.sessionsById, projectionRevisions } };
+    projectionRevisions.set(sessionId, projectionRevision);
+    return { applied: true, state: { blocksById, sessionsById, projectionRevisions } };
 }
 
 export {

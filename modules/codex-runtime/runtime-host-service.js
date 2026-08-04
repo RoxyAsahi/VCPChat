@@ -42,14 +42,14 @@ function applySettingsNotification(context, repository, session, message) {
     }
 }
 
-function notificationEvent(context, message, projected, session, threadId, itemId, projectionMessage, projectionPatch) {
+function notificationEvent(context, message, projected, session, threadId, itemId, projectionPatch) {
     if (!session) return { runtime: 'codex', ...message };
     return {
         runtime: 'codex', type: 'projection.updated', method: message.method,
         sessionId: session.sessionId, threadId,
         turnId: message?.params?.turnId || message?.params?.turn?.id || null,
         turnStatus: message?.params?.turn?.status || null,
-        itemId, projectionMessage, projectionPatch,
+        itemId, projectionPatch,
         activity: context.threadStates().get(threadId)?.activity || 'idle',
     };
 }
@@ -366,7 +366,7 @@ class RuntimeHostService {
                 })),
                 deleteBlockIds: [],
             } : null;
-        const event = notificationEvent(this.context, message, projected, session, threadId, itemId, projectionMessage, projectionPatch);
+        const event = notificationEvent(this.context, message, projected, session, threadId, itemId, projectionPatch);
         this.context.sendEvent(event);
     }
 

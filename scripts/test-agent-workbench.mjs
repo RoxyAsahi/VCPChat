@@ -16,6 +16,18 @@ async function waitFor(predicate, timeoutMs = 1_000) {
 }
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+function workbenchProjectionPatch({ sessionId, threadId, revision, messageId, itemId, turnId, kind, content, sourceOrder = revision }) {
+    return {
+        schemaVersion: 1, sessionId, threadId, runtimeGeneration: 1,
+        baseProjectionRevision: revision - 1, projectionRevision: revision,
+        upsertBlocks: [{
+            schemaVersion: 2, blockId: `block:${sessionId}:${itemId}:0`, sessionId, threadId,
+            turnId, itemId, messageId, kind, itemType: kind === 'tool' ? 'dynamicToolCall' : null,
+            authority: kind === 'tool' ? 'toolbox' : 'codex', status: 'completed', sourceOrder, ordinal: 0,
+            content, createdAt: revision, updatedAt: revision,
+        }], deleteBlockIds: [],
+    };
+}
 const dom = new JSDOM('<!doctype html><html><body><div id="host"></div></body></html>', {
     url: 'http://localhost/',
     pretendToBeVisual: true,
@@ -1484,14 +1496,11 @@ const projectedEventSessionId = host.querySelector('.agent-chat-session-row.acti
     || JSON.parse(window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1') || '{}').sessionId;
 emitDaemonEvent({
     runtime: 'codex', type: 'projection.updated', method: 'item/completed',
-    sessionId: 'topic-in-use', threadId: 'thread_test', turnId: 'turn_projected',
+    sessionId: 'topic-in-use', threadId: 'thread-active', turnId: 'turn_projected',
     itemId: 'reason_projected', activity: 'idle',
-    projectionMessage: {
-        messageId: 'msg_reason_projected', itemId: 'reason_projected', turnId: 'turn_projected',
-        role: 'assistant', status: 'completed', sourceOrder: 19, createdAt: 19,
-        blocks: [{ blockId: 'block_reason_projected', kind: 'reasoning', ordinal: 0,
-            content: { text: 'reasoning delivered through the real projection.updated path' } }],
-    },
+    projectionPatch: workbenchProjectionPatch({ sessionId: 'topic-in-use', threadId: 'thread-active', revision: 1,
+        messageId: 'msg_reason_projected', itemId: 'reason_projected', turnId: 'turn_projected', kind: 'reasoning', sourceOrder: 19,
+        content: { summary: ['reasoning delivered through the real projection.updated path'], content: [] } }),
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
 const projectedReasoning = host.querySelector('[data-message-id="msg_reason_projected"] .agent-chat-reasoning-block');

@@ -53,6 +53,8 @@
     "test:agent-data-contracts": "node scripts/test-agent-data-contracts.mjs",
     "test:agent-composer-state": "node scripts/test-agent-composer-state.mjs",
     "test:agent-normalized-store": "node scripts/test-agent-normalized-store.mjs",
+    "test:codex-projection-v2": "npm run test:codex-projection-store && npm run test:agent-normalized-store && npm run test:agent-workbench-store",
+    "test:codex-adapter-invariants": "npm run test:codex-runtime-host-service && npm run test:codex-runtime-turn-service && npm run test:codex-runtime-manager",
     "test:agent-presentation": "node scripts/test-agent-renderer-html-cache.mjs && node scripts/test-agent-renderer-latex.mjs && node scripts/test-agent-message-renderer-fork.mjs && node scripts/test-agent-message-presentation-api.mjs && node scripts/test-agent-renderer-golden-parity.mjs && node scripts/test-agent-markdown-stream.mjs && node scripts/test-agent-presentation.mjs && node scripts/test-agent-presentation-fork.mjs && node scripts/test-agent-presentation-blocks.mjs",
     "test:agent-renderer-isolation": "node scripts/test-agent-renderer-isolation.mjs",
     "test:agent-renderer-lifecycle": "node scripts/test-agent-renderer-lifecycle.mjs",

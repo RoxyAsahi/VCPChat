@@ -42,6 +42,19 @@ function createWorkbenchController(api) {
     });
 }
 
+function projectionPatch({ sessionId, threadId, revision, messageId, itemId, turnId, kind, content, sourceOrder = revision, role = 'assistant' }) {
+    return {
+        schemaVersion: 1, sessionId, threadId, runtimeGeneration: 1,
+        baseProjectionRevision: revision - 1, projectionRevision: revision,
+        upsertBlocks: [{
+            schemaVersion: 2, blockId: `block:${sessionId}:${itemId}:0`, sessionId, threadId,
+            turnId, itemId, messageId, kind, itemType: kind === 'tool' ? 'dynamicToolCall' : null,
+            authority: kind === 'tool' ? 'toolbox' : 'codex', status: 'inProgress', sourceOrder, ordinal: 0,
+            content, createdAt: revision, updatedAt: revision,
+        }], deleteBlockIds: [],
+    };
+}
+
 assert.equal(projectSession({ sessionId: 's-running', activeTurnId: 'turn-running' }).activity, 'running',
     'Session projection must preserve per-Session running identity for the sidebar avatar');
 assert.equal(projectSession({ sessionId: 's-idle' }).activity, 'idle');
@@ -554,22 +567,16 @@ await liveSwitch.previewTopic('live-session-a', 'Nova', { title: 'Live A' });
 liveSwitchEvent({
     eventId: 'live-reasoning-event', sequence: 1, timestamp: 1, runtime: 'codex',
     type: 'projection.updated', sessionId: 'live-session-a', turnId: 'live-turn-a', activity: 'running',
-    projectionMessage: {
-        messageId: 'live-reasoning-message', itemId: 'live-reasoning-item', turnId: 'live-turn-a',
-        role: 'assistant', status: 'inProgress', sourceOrder: 1,
-        blocks: [{ blockId: 'live-reasoning:0', kind: 'reasoning', content: { text: 'still thinking' } }],
-    },
+    projectionPatch: projectionPatch({ sessionId: 'live-session-a', threadId: 'thread-live-a', revision: 1,
+        messageId: 'live-reasoning-message', itemId: 'live-reasoning-item', turnId: 'live-turn-a', kind: 'reasoning',
+        content: { summary: ['still thinking'], content: [] } }),
 });
 liveSwitchEvent({
     eventId: 'live-tool-event', sequence: 2, timestamp: 2, runtime: 'codex',
     type: 'projection.updated', sessionId: 'live-session-a', turnId: 'live-turn-a', activity: 'running',
-    projectionMessage: {
-        messageId: 'live-tool-message', itemId: 'live-tool-item', turnId: 'live-turn-a',
-        role: 'assistant', status: 'inProgress', sourceOrder: 2,
-        blocks: [{ blockId: 'live-tool:0', kind: 'tool', content: {
-            item: { type: 'dynamicToolCall', tool: 'Browser', arguments: { url: 'https://vcptoolbox.com' } },
-        } }],
-    },
+    projectionPatch: projectionPatch({ sessionId: 'live-session-a', threadId: 'thread-live-a', revision: 2,
+        messageId: 'live-tool-message', itemId: 'live-tool-item', turnId: 'live-turn-a', kind: 'tool',
+        content: { item: { type: 'dynamicToolCall', tool: 'Browser', arguments: { url: 'https://vcptoolbox.com' } } } }),
 });
 assert.equal(liveSwitch.store.getState().messages[0].reasoning, 'still thinking');
 assert.equal(liveSwitch.store.getState().tools.has('live-tool-item'), true);
@@ -645,10 +652,9 @@ await liveGuard.previewTopic('live-guard-topic', 'Nova');
 liveGuardEvent({
     runtime: 'codex', type: 'projection.updated', sessionId: 'live-guard-topic',
     threadId: 'thread-live-guard', turnId: 'turn-live-guard', activity: 'running',
-    projectionMessage: {
-        messageId: 'live-guard-message', itemId: 'live-guard-item', turnId: 'turn-live-guard', role: 'assistant', status: 'inProgress',
-        blocks: [{ blockId: 'live-guard:0', kind: 'message', content: { text: 'live delta must survive' } }],
-    },
+    projectionPatch: projectionPatch({ sessionId: 'live-guard-topic', threadId: 'thread-live-guard', revision: 1,
+        messageId: 'live-guard-message', itemId: 'live-guard-item', turnId: 'turn-live-guard', kind: 'message',
+        content: { text: 'live delta must survive' } }),
 });
 resolveLiveGuardThread({
     session: { sessionId: 'live-guard-topic', agentId: 'Nova', title: 'stale thread result' },
@@ -672,6 +678,43 @@ await assert.rejects(
     'a projection for Session B must not populate the selected Session A',
 );
 conflictingPreview.dispose();
+
+let revisionGapEvent;
+let revisionGapReads = 0;
+const revisionGap = createWorkbenchController({
+    agentRuntimeReadProjection: async () => {
+        revisionGapReads += 1;
+        return {
+            session: { sessionId: 'revision-gap-session', threadId: 'revision-gap-thread', agentId: 'Nova' },
+            projectionRevision: revisionGapReads === 1 ? 2 : 4,
+            messages: [{
+                messageId: 'revision-gap-message', itemId: 'revision-gap-item', role: 'assistant', status: 'completed',
+                blocks: [{ blockId: 'legacy-revision-gap', kind: 'message', content: {
+                    text: revisionGapReads === 1 ? 'before gap' : 'reloaded after gap',
+                } }],
+            }],
+        };
+    },
+    onAgentRuntimeEvent(callback) { revisionGapEvent = callback; return () => {}; },
+});
+revisionGap.subscribeRuntime();
+await revisionGap.previewTopic('revision-gap-session', 'Nova');
+assert.equal(revisionGap.store.getState().projectionRevisions.get('revision-gap-session'), 2);
+revisionGapEvent({
+    runtime: 'codex', type: 'projection.updated', sessionId: 'revision-gap-session',
+    threadId: 'revision-gap-thread', activity: 'idle',
+    projectionPatch: projectionPatch({ sessionId: 'revision-gap-session', threadId: 'revision-gap-thread', revision: 4,
+        messageId: 'must-not-apply', itemId: 'must-not-apply', turnId: 'turn-gap', kind: 'message',
+        content: { text: 'gap patch must be discarded' } }),
+});
+for (let attempt = 0; attempt < 20 && revisionGapReads < 2; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+}
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(revisionGapReads, 2, 'a revision gap must trigger one full SQLite projection reload');
+assert.equal(revisionGap.store.getState().messages.some((message) => message.content === 'reloaded after gap'), true);
+assert.equal(revisionGap.store.getState().messages.some((message) => message.content === 'gap patch must be discarded'), false);
+revisionGap.dispose();
 
 // Codex Session identity is authoritative. A compatibility sessionId must never
 // let another Session mutate an existing runtime slot or the visible status.
@@ -732,16 +775,14 @@ assert.equal(duplicateGuard.store.getState().messages.filter((message) => messag
 duplicateGuardEvent({
     runtime: 'codex', type: 'projection.updated', sessionId: 'codex-topic',
     turnId: 'codex-turn-1', activity: 'running',
-    projectionMessage: {
-        messageId: 'durable-user-message', itemId: 'durable-user-item', turnId: 'codex-turn-1',
-        role: 'user', status: 'completed',
-        blocks: [{ blockId: 'durable-user-block', kind: 'message', content: { parts: [{ text: '只显示一次' }] } }],
-    },
+    projectionPatch: projectionPatch({ sessionId: 'codex-topic', threadId: 'thread-codex-topic', revision: 1,
+        messageId: 'durable-user-message', itemId: 'durable-user-item', turnId: 'codex-turn-1', kind: 'message',
+        content: { parts: [{ type: 'text', text: '只显示一次' }] } }),
 });
 const reconciledUserMessages = duplicateGuard.store.getState().messages.filter((message) => message.role === 'user');
 assert.equal(reconciledUserMessages.length, 1,
     'the App Server user item must replace—not append to—the temporary row');
-assert.equal(reconciledUserMessages[0].id, 'durable-user-block');
+assert.equal(reconciledUserMessages[0].id, 'block:codex-topic:durable-user-item:0');
 assert.equal(reconciledUserMessages[0].deliveryState, 'confirmed');
 duplicateGuard.dispose();
 

@@ -24,6 +24,8 @@ function createInitialState() {
         activeRuntimes: new Map(),
         selectedTopic: null,
         sessionUi: createAgentSessionUiState(),
+        // Selected-Session render projection only. Durable and cross-Session
+        // ownership lives exclusively in sessionsById/blocksById.
         messages: [],
         tools: new Map(),
         approvals: [],

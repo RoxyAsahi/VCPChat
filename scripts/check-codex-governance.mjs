@@ -334,13 +334,41 @@ for (const [relative, pattern] of [
     }
 }
 const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-for (const script of ['test:codex-reliability', 'test:electron-codex-recovery', 'check:codex-governance', 'test:codex-ci']) {
+for (const script of [
+    'test:codex-reliability', 'test:electron-codex-recovery', 'check:codex-governance', 'test:codex-ci',
+    'test:codex-projection-v2', 'test:codex-adapter-invariants', 'test:agent-normalized-store',
+]) {
     if (!packageJson.scripts?.[script]) errors.push(`package.json missing ${script}`);
 }
 if (!String(packageJson.scripts?.['test:e2e'] || '').includes('test:codex-stack')) {
     errors.push('default test:e2e must run the Codex Agent stack');
 }
 if (packageJson.devDependencies?.['@openai/codex'] !== '0.146.0') errors.push('@openai/codex must remain pinned to 0.146.0');
+
+const projectionControllerSource = fs.readFileSync(
+    path.join(root, 'modules/ui-system/agent-workbench-controller-implementation.js'), 'utf8',
+);
+for (const retired of ['sessionSnapshots', 'snapshotCache', 'liveProjectionRevision']) {
+    if (projectionControllerSource.includes(retired)) {
+        errors.push(`Renderer projection controller reintroduced retired cache: ${retired}`);
+    }
+}
+if (projectionControllerSource.includes('event.projectionMessage')) {
+    errors.push('Renderer projection updates must consume revision Patch, not legacy projectionMessage');
+}
+const runtimeHostSource = fs.readFileSync(path.join(root, 'modules/codex-runtime/runtime-host-service.js'), 'utf8');
+if (/itemId\s*,\s*projectionMessage\s*,\s*projectionPatch/.test(runtimeHostSource)) {
+    errors.push('Main runtime events must not expose the legacy projectionMessage payload');
+}
+const normalizedStoreSource = fs.readFileSync(path.join(root, 'modules/ui-system/agent-normalized-store.js'), 'utf8');
+if (!normalizedStoreSource.includes("block:${sessionId}:")
+    || !normalizedStoreSource.includes("block.sessionId !== sessionId")) {
+    errors.push('Normalized Store must enforce Session-scoped Block identity');
+}
+const turnServiceSource = fs.readFileSync(path.join(root, 'modules/codex-runtime/runtime-turn-service.js'), 'utf8');
+if (/turn\/start[\s\S]{0,2500}desiredConfig/.test(turnServiceSource)) {
+    errors.push('turn/start must not read desiredConfig directly');
+}
 for (const script of ['test:agent-settings-interaction', 'test:agent-config-apply', 'test:agent-data-contracts']) {
     if (!packageJson.scripts?.[script]) errors.push(`package.json missing R12 gate ${script}`);
 }
