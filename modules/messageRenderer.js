@@ -3027,6 +3027,10 @@ async function renderPostProcessedHtml(contentDiv, rawHtml, options = {}) {
 }
 
 async function renderMessage(message, isInitialLoad = false, appendToDom = true, renderSessionId = getActiveRenderSessionId(), renderContext = {}) {
+    if (renderSessionId !== null && !isRenderSessionActive(renderSessionId)) {
+        return null;
+    }
+
     // console.debug('[MessageRenderer renderMessage] Received message:', JSON.parse(JSON.stringify(message)));
     const { chatMessagesDiv, electronAPI, markedInstance, uiHelper } = mainRendererReferences;
     const globalSettings = mainRendererReferences.globalSettingsRef.get();
@@ -3119,7 +3123,11 @@ async function renderMessage(message, isInitialLoad = false, appendToDom = true,
 
     // 先添加到DOM
     if (appendToDom) {
+        if (renderSessionId !== null && !isRenderSessionActive(renderSessionId)) {
+            return null;
+        }
         chatMessagesDiv.appendChild(messageItem);
+        window.chatManager?.syncNextUiEmptyStateWithMessages?.();
         // 观察新消息的可见性
         visibilityOptimizer.observeMessage(messageItem);
     }
@@ -3806,6 +3814,7 @@ async function renderMessageBatch(messages, scrollToBottom = false, renderSessio
 
             // Step 1: Append all elements to the DOM at once.
             mainRendererReferences.chatMessagesDiv.appendChild(fragment);
+            window.chatManager?.syncNextUiEmptyStateWithMessages?.();
 
             // Step 2: Now that they are in the DOM, run the deferred processing for each.
             messageElements.forEach(el => processDeferredMessageElement(el, renderSessionId, renderContext));
@@ -3870,6 +3879,7 @@ async function renderOlderMessagesInBatches(olderMessages, batchSize, batchDelay
                 } else {
                     chatMessagesDiv.appendChild(batchFragment);
                 }
+                window.chatManager?.syncNextUiEmptyStateWithMessages?.();
 
                 elementsForProcessing.forEach(el => processDeferredMessageElement(el, renderSessionId, {
                     ...renderContext,
@@ -3931,6 +3941,7 @@ async function renderHistoryLegacy(history, renderSessionId = getActiveRenderSes
 
             // Step 1: Append all elements to the DOM.
             mainRendererReferences.chatMessagesDiv.appendChild(fragment);
+            window.chatManager?.syncNextUiEmptyStateWithMessages?.();
 
             // Step 2: Run the deferred processing for each element now that it's attached.
             allMessageElements.forEach(el => processDeferredMessageElement(el, renderSessionId, renderContext));
@@ -4031,4 +4042,3 @@ window.messageRenderer = {
         }
     }
 };
-

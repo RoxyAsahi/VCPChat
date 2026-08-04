@@ -70,6 +70,18 @@ assert.equal(window.chatManager.displayNoItemSelected(), true);
 assert.equal(mainContent.dataset.chatEmpty, 'true');
 assert.equal(mainContent.dataset.chatEmptyReason, 'no-selection');
 
+// Reproduce the late-render race: an empty state may be active before an
+// asynchronous history renderer appends the first real message.
+const lateMessage = window.document.createElement('div');
+lateMessage.className = 'message-item assistant';
+lateMessage.textContent = 'history message';
+window.document.getElementById('chatMessages').appendChild(lateMessage);
+await new Promise(resolve => window.setTimeout(resolve, 0));
+assert.equal(mainContent.classList.contains('next-ui-empty-state-active'), false);
+assert.equal(mainContent.dataset.chatEmpty, 'false');
+assert.equal(window.document.getElementById('nextUiEmptyState').getAttribute('aria-hidden'), 'true');
+
+assert.equal(window.chatManager.displayNoItemSelected(), true);
 void window.chatManager.selectItem('nova', 'agent', 'Nova', null, {});
 assert.equal(mainContent.dataset.chatEmpty, 'false', 'selection must hide the empty state immediately');
 assert.equal(

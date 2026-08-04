@@ -26,6 +26,7 @@ window.chatManager = (() => {
     let activeHistoryLoadToken = 0;
     let itemSelectionGeneration = 0;
     let pendingItemSelectionToken = null;
+    let emptyStateObserver = null;
 
     function setCurrentItemActionButtonText(button, text) {
         if (!button) return;
@@ -257,6 +258,20 @@ window.chatManager = (() => {
 
         // DOM Elements
         elements = config.elements;
+
+        // The empty-state visual is a projection of the chat DOM.  History
+        // loads and file-watcher updates can complete out of order, so keep a
+        // final DOM-level guard against showing it over a real message.
+        if (emptyStateObserver) {
+            emptyStateObserver.disconnect();
+            emptyStateObserver = null;
+        }
+        if (elements.chatMessagesDiv && typeof MutationObserver !== 'undefined') {
+            emptyStateObserver = new MutationObserver(() => {
+                syncNextUiEmptyStateWithMessages();
+            });
+            emptyStateObserver.observe(elements.chatMessagesDiv, { childList: true, subtree: true });
+        }
         
         // Main Renderer Functions
         mainRendererFunctions = config.mainRendererFunctions;
@@ -336,6 +351,11 @@ window.chatManager = (() => {
     // --- Functions moved from renderer.js ---
 
     function setNextUiEmptyStateActive(isActive, reason = null) {
+        if (isActive && hasRenderableChatMessages()) {
+            isActive = false;
+            reason = null;
+        }
+
         const mainContent = document.querySelector('.main-content');
         const emptyState = document.getElementById('nextUiEmptyState');
 
@@ -349,6 +369,20 @@ window.chatManager = (() => {
             }
         }
         emptyState?.setAttribute('aria-hidden', String(!isActive));
+    }
+
+    function hasRenderableChatMessages() {
+        const chatMessagesDiv = elements.chatMessagesDiv;
+        if (!chatMessagesDiv) return false;
+        return Boolean(chatMessagesDiv.querySelector(
+            '.message-item:not(.welcome-bubble):not(.topic-timestamp-bubble)'
+        ));
+    }
+
+    function syncNextUiEmptyStateWithMessages() {
+        if (hasRenderableChatMessages()) {
+            setNextUiEmptyStateActive(false);
+        }
     }
 
     function displayNoItemSelected() {
@@ -1830,6 +1864,7 @@ window.chatManager = (() => {
         handleSendMessage,
         createNewTopicForItem,
         displayNoItemSelected,
+        syncNextUiEmptyStateWithMessages,
         attemptTopicSummarizationIfNeeded,
         handleCreateBranch,
         handleForwardMessage,
