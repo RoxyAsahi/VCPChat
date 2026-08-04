@@ -33,3 +33,13 @@ Workbench selection is represented by a canonical `SelectedSessionIdentity`. `se
 - Final composition and service ceilings are enforced by `check:codex-governance`; they may not be relaxed to accept new feature growth.
 - SQLite schema, Codex App Server protocol, ToolBox configuration, and main-chat renderer remain unchanged.
 - CSS owner files and Runtime/Renderer/Controller facades have enforceable physical-line ceilings; legacy shell selectors outside the dedicated adapter fail governance checks.
+
+## R14 amendment
+
+R14 removes the old Topic IPC/preload surface and Runtime prototype adapter. Product code now exposes only canonical `agent-session:*` CRUD and Session-keyed Runtime operations.
+
+Store events route through runtime, session, message, tool, approval, and activity slice reducers. `agent-store/**` has an enforced cyclomatic complexity ceiling of 29. The broader ceiling remains temporarily at 170 while Settings and projection conversion hotspots are extracted; inline disables are not permitted.
+
+Runtime services receive named frozen capability contexts. A context cannot expose `manager` or `runtime` authority and dependency functions cannot be replaced after construction.
+
+Workbench Views and coordinators use `agent-workbench-host-adapter.js` for VCPUI confirm/edit, account/theme/presentation state, clipboard, Markdown, and the narrow VCP render bridge. Native prompt/confirm and direct host globals outside the adapter fail governance.

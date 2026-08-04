@@ -265,3 +265,13 @@ R13 当前状态为 `implemented/working-tree`；代码治理目标已实现，�
 - [x] Hermetic revision `cc6496f4` 的 Windows 聚合与独立 reliability gate 已通过；功能 revision 保持 `c0143f64`。
 - [x] Live revision `46e2ce41` 的双 Thread 长任务 gate 已通过：A 中断，B 完成 8,558 字符响应；真实 Nova、FileOperator 单次调用与 VCPLog/VCPInfo observer connect 同样通过，R7-R10 状态为 `live`。
 - [ ] 整体产品 release gate 仍需 Codex native approval、ToolBox backend approval replay/恰好一次、VCPInfo/VCPLog reconnect/replay，以及 Electron 富消息与性能验收；这些待办不回退 R7-R10 的完成状态。
+
+## R14 Agent 状态、配置与 Host Context 治理（2026-08-04）
+
+- [x] Store 事件处理拆为六个 slice reducer；显式 route table 负责 fan-out，`agent-store/**` complexity 门禁为 29。
+- [x] 首批 Agent 配置字段建立 descriptor/validator 真源，并接入 Runtime config、Profile autosave 与 Settings select options。
+- [x] Runtime Service 使用命名冻结 capability context，拒绝 Manager/runtime 字段和可变依赖表。
+- [x] Workbench Host Adapter 替代 native prompt/confirm、直接 account/presentation settings 与旧 VCP render fallback。
+- [x] 旧 Topic IPC、preload API、Runtime prototype adapter 和 compatibility test 已删除；Electron fixture 改用 canonical Session API。
+- [~] 中等文件收缩尚未执行。当前 Runtime 31 个 JS、Workbench 顶层 57 个 JS；后续只按内聚域合并，不以文件数为单一门禁。
+- [~] 本轮 `test:codex-native` 的全部 hermetic Runtime 子门禁通过；随后 Electron smoke 在 Puppeteer `Runtime.callFunctionOn` 226.5 秒超时，未出现产品断言失败，因此 R14 仍为 `implemented/working-tree`。
