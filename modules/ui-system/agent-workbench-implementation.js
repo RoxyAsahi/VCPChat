@@ -73,12 +73,9 @@ function loadRememberedTopic() {
     try {
         const value = window.localStorage?.getItem(LAST_TOPIC_STORAGE_KEY);
         const parsed = value ? JSON.parse(value) : null;
-        const sessionId = String(parsed?.sessionId || parsed?.topicId || '').trim();
+        const sessionId = String(parsed?.sessionId || '').trim();
         if (!sessionId) return null;
         const pointer = { sessionId };
-        // Normalize legacy values immediately; no async runtime/catalog read
-        // may leave transcript, Agent or workspace metadata in localStorage.
-        window.localStorage?.setItem(LAST_TOPIC_STORAGE_KEY, JSON.stringify(pointer));
         return pointer;
     } catch {
         return null;

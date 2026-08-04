@@ -56,7 +56,6 @@
     "test:agent-renderer-isolation": "node scripts/test-agent-renderer-isolation.mjs",
     "test:agent-renderer-lifecycle": "node scripts/test-agent-renderer-lifecycle.mjs",
     "test:agent-workspace-requests": "node scripts/test-agent-workspace-requests.mjs && node scripts/test-agent-workspace-coordinator.mjs",
-    "test:agent-session-compatibility": "node scripts/test-agent-session-compatibility.mjs",
     "test:codex-app-server-transport": "node scripts/test-codex-app-server-transport.mjs",
     "test:codex-app-server-capabilities": "node scripts/test-codex-app-server-capabilities.mjs",
     "sync:codex-schema": "node scripts/sync-codex-app-server-schema.mjs",

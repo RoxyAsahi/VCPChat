@@ -128,7 +128,7 @@ try {
         }
     };
 
-    const topic = await manager.createTopic({
+    const topic = await manager.createSessionRecord({
         agentId: 'Nova',
         title: 'Codex ToolBox FileOperator live check',
         model,
@@ -161,7 +161,7 @@ try {
     });
     assert.equal(fileOperatorCall.response?.result?.ok, true, 'distributed VCP FileOperator must complete successfully');
 
-    const projection = await manager.readTopic({ sessionId: session.sessionId, reconcile: false });
+    const projection = await manager.readSession({ sessionId: session.sessionId, reconcile: false });
     const projectionText = JSON.stringify(projection);
     assert.match(projectionText, new RegExp(packageName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
         'the completed ToolBox result or final assistant reply must reach the SQLite projection');

@@ -91,13 +91,13 @@ try {
     const result = await page.evaluate(async () => {
         const api = window.chatAPI || window.electronAPI;
         await api.agentRuntimeStart();
-        const topic = await api.agentRuntimeCreateTopic({
+        const topic = await api.agentSessionCreate({
             agentId: 'codex',
             title: 'Electron Codex Smoke',
             workspaceRoot: '.',
         });
-        const session = await api.agentRuntimeCreateSession({ resume: topic.topicId });
-        const projection = await api.agentRuntimeReadProjection({ sessionId: session.sessionId });
+        const session = await api.agentRuntimeEnsureSessionRuntime({ sessionId: topic.sessionId });
+        const projection = await api.agentSessionReadProjection({ sessionId: session.sessionId });
         const status = await api.agentRuntimeGetStatus();
         const workspace = await api.agentWorkspaceListDirectory({ sessionId: session.sessionId, relativePath: '', limit: 1000 });
         const packagePreview = await api.agentWorkspaceReadPreview({
@@ -106,7 +106,7 @@ try {
             relativePath: 'package.json',
         });
         return {
-            topicId: topic.topicId,
+            createdSessionId: topic.sessionId,
             sessionId: session.sessionId,
             threadId: session.threadId,
             runtime: status.runtime,
@@ -123,7 +123,7 @@ try {
             packagePreviewHasName: packagePreview.content.includes('vcp-chat-desktop'),
         };
     });
-    assert.equal(result.topicId, result.sessionId);
+    assert.equal(result.createdSessionId, result.sessionId);
     assert.match(result.threadId, /^[0-9a-f-]{36}$/i);
     assert.equal(result.runtime, 'codex-app-server');
     assert.equal(result.messageCount, 0);

@@ -101,8 +101,8 @@ try {
     const created = await first.page.evaluate(async () => {
         const api = window.chatAPI || window.electronAPI;
         await api.agentRuntimeStart();
-        const topic = await api.agentRuntimeCreateTopic({ agentId: 'codex', title: 'Process restart persistence' });
-        const session = await api.agentRuntimeCreateSession({ resume: topic.topicId });
+        const topic = await api.agentSessionCreate({ agentId: 'codex', title: 'Process restart persistence' });
+        const session = await api.agentRuntimeEnsureSessionRuntime({ sessionId: topic.sessionId });
         const before = await api.agentRuntimeReadSessionConfig({ sessionId: session.sessionId });
         const desired = await api.agentRuntimeUpdateSessionConfig({
             sessionId: session.sessionId,
@@ -131,13 +131,13 @@ try {
     const restored = await second.page.evaluate(async (sessionId) => {
         const api = window.chatAPI || window.electronAPI;
         const config = await api.agentRuntimeReadSessionConfig({ sessionId });
-        const topics = await api.agentRuntimeListTopics({ agentId: 'codex' });
+        const topics = await api.agentSessionList({ agentId: 'codex' });
         return {
             configRevision: config.configRevision,
             permissionMode: config.desiredConfig?.permissionMode,
             workspaceRoot: config.desiredConfig?.workspaceRoot,
             model: config.desiredConfig?.model,
-            sessionVisible: topics.some((topic) => topic.sessionId === sessionId || topic.topicId === sessionId),
+            sessionVisible: topics.some((topic) => topic.sessionId === sessionId),
         };
     }, created.sessionId);
     assert.equal(restored.configRevision, created.configRevision);

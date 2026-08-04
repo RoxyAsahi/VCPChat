@@ -72,7 +72,7 @@ fastManager.ensureProjectionStore().saveSession({
     workspaceRoot: fastRoot, configSnapshot: { agentName: 'Nova', baseInstructions: '{{Nova}}' },
 });
 const fastListStartedAt = performance.now();
-const fastTopics = await fastManager.listTopics({ agentId: '_Agent_Nova' });
+const fastTopics = await fastManager.listSessions({ agentId: '_Agent_Nova' });
 assert.ok(performance.now() - fastListStartedAt < 150,
     'a cold local SQLite Session list must remain inside the UX-R1 150ms gate');
 assert.equal(fastTransport.startCount, 0, 'listing SQLite Sessions must not start Codex App Server');
@@ -89,14 +89,14 @@ for (let index = 1; index < 50; index += 1) {
 const listDurations = [];
 for (let sample = 0; sample < 30; sample += 1) {
     const sampleStartedAt = performance.now();
-    const listed = await fastManager.listTopics({ agentId: '_Agent_Nova' });
+    const listed = await fastManager.listSessions({ agentId: '_Agent_Nova' });
     listDurations.push(performance.now() - sampleStartedAt);
     assert.equal(listed.length, 50);
 }
 listDurations.sort((left, right) => left - right);
 assert.ok(listDurations[Math.ceil(listDurations.length * 0.95) - 1] < 150,
     '50-Session SQLite list P95 must remain below the UX-R1 150ms gate');
-await fastManager.readTopic({ sessionId: 'legacy-nova-session', reconcile: false });
+await fastManager.readSession({ sessionId: 'legacy-nova-session', reconcile: false });
 assert.equal(fastTransport.startCount, 0, 'projection-only read must remain available with no App Server process');
 const [warmA, warmB] = await Promise.all([
     fastManager.ensureSessionRuntime({ sessionId: 'legacy-nova-session', reason: 'selection' }),
@@ -105,8 +105,8 @@ const [warmA, warmB] = await Promise.all([
 assert.equal(warmA.threadId, warmB.threadId);
 assert.equal(fastTransport.calls.filter((call) => call.method === 'thread/start').length, 1,
     'selection warm and immediate send must share one Session warm promise');
-const warmTopicB = await fastManager.createTopic({ agentId: '_Agent_Nova', title: 'Warm B', systemPrompt: '{{Nova}}' });
-const warmTopicC = await fastManager.createTopic({ agentId: '_Agent_Nova', title: 'Warm C', systemPrompt: '{{Nova}}' });
+const warmTopicB = await fastManager.createSessionRecord({ agentId: '_Agent_Nova', title: 'Warm B', systemPrompt: '{{Nova}}' });
+const warmTopicC = await fastManager.createSessionRecord({ agentId: '_Agent_Nova', title: 'Warm C', systemPrompt: '{{Nova}}' });
 await fastManager.ensureSessionRuntime({ sessionId: warmTopicB.sessionId, reason: 'selection' });
 await fastManager.ensureSessionRuntime({ sessionId: warmTopicC.sessionId, reason: 'selection' });
 assert.equal(fastManager.idleWarmSessions.size, 2, 'proactive idle Thread warm set must remain bounded at two Sessions');
@@ -143,7 +143,7 @@ assert.equal(manager.listAgentProfiles().some((profile) => profile.id === 'Resea
     'a saved Build Agent profile must immediately appear in the isolated catalog');
 assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'CodexAgents', 'Research-Agent', 'config.json'), 'utf8')).systemPrompt,
     '{{Research}}', 'Build Agent creation must persist its prompt outside the normal-chat Agent directory');
-const inheritedProfileTopic = await manager.createTopic({ agentId: 'Research-Agent', title: 'Profile inheritance' });
+const inheritedProfileTopic = await manager.createSessionRecord({ agentId: 'Research-Agent', title: 'Profile inheritance' });
 const inheritedProfileSession = manager.repository.getSession(inheritedProfileTopic.sessionId);
 assert.equal(inheritedProfileSession.workspaceRoot, researchWorkspace,
     'a new Session must inherit its Build Agent Profile workspace when the caller provides no override');
@@ -164,7 +164,7 @@ const savedBuildAvatar = manager.saveAgentAvatar({
 });
 assert.match(savedBuildAvatar.avatarUrl, /CodexAgents\/Nova\/avatar-r\d+\.png/i,
     'Build avatars must be versioned under CodexAgents rather than overwriting normal-chat or prior Session assets');
-const avatarFrozenTopic = await manager.createTopic({ agentId: 'Nova', title: 'Avatar snapshot' });
+const avatarFrozenTopic = await manager.createSessionRecord({ agentId: 'Nova', title: 'Avatar snapshot' });
 const firstAvatarSnapshot = manager.repository.getSession(avatarFrozenTopic.sessionId).configSnapshot.agentAvatar;
 assert.equal(firstAvatarSnapshot, savedBuildAvatar.avatarUrl,
     'Session creation must freeze the current Profile avatar URL');
@@ -178,10 +178,10 @@ assert.ok(secondBuildAvatar.revision > savedBuildAvatar.revision,
     'avatar changes must advance the Agent Profile revision');
 assert.equal(manager.repository.getSession(avatarFrozenTopic.sessionId).configSnapshot.agentAvatar, firstAvatarSnapshot,
     'updating a Profile avatar must not mutate an existing Session snapshot');
-const latestAvatarTopic = await manager.createTopic({ agentId: 'Nova', title: 'Latest avatar snapshot' });
+const latestAvatarTopic = await manager.createSessionRecord({ agentId: 'Nova', title: 'Latest avatar snapshot' });
 assert.equal(manager.repository.getSession(latestAvatarTopic.sessionId).configSnapshot.agentAvatar, secondBuildAvatar.avatarUrl,
     'new Sessions must freeze the latest versioned Profile avatar');
-const workspaceTopic = await manager.createTopic({
+const workspaceTopic = await manager.createSessionRecord({
     agentId: 'Research-Agent', title: 'Workspace settings', workspaceRoot: root,
 });
 const nextWorkspace = path.join(root, 'next-workspace');
@@ -244,7 +244,7 @@ const providerManager = new CodexRuntimeManager({
 });
 providerManager.bridge = { async start() {}, async stop() {} };
 await providerManager.start();
-const providerTopic = await providerManager.createTopic({ title: 'Adapter provider' });
+const providerTopic = await providerManager.createSessionRecord({ title: 'Adapter provider' });
 await providerManager.createSession({ resume: providerTopic.topicId });
 const providerStart = providerTransport.calls.find((call) => call.method === 'thread/start');
 assert.equal(providerStart.params.config['model_providers.vcp_toolbox.base_url'], localAdapter.baseUrl);
@@ -349,7 +349,7 @@ await reconfigureManager.stop();
 fs.rmSync(reconfigureRoot, { recursive: true, force: true });
 await manager.start();
 await manager.setWorkbenchPresence(true);
-const topic = await manager.createTopic({ agentId: 'Nova', title: 'Test', model: 'Nova', systemPrompt: '{{Nova}}' });
+const topic = await manager.createSessionRecord({ agentId: 'Nova', title: 'Test', model: 'Nova', systemPrompt: '{{Nova}}' });
 const session = await manager.createSession({ sessionId: topic.sessionId });
 assert.equal(session.threadId, 'thr_test');
 const resumed = await manager.createSession({ sessionId: topic.sessionId });
@@ -360,7 +360,7 @@ assert.equal(fake.calls.filter((call) => call.method === 'thread/start').length,
 // its built-in "You are Codex" system prompt instead of appending a hint.
 // The Agent catalog's `systemPrompt` (e.g. `{{Nova}}`, expanded by VCPToolBox)
 // maps to `baseInstructions`, never to the appending `developerInstructions`.
-const baseInstructionsTopic = await manager.createTopic({
+const baseInstructionsTopic = await manager.createSessionRecord({
     agentId: 'Nova',
     title: 'Persona',
     systemPrompt: '{{Nova}}',
@@ -375,7 +375,7 @@ assert.equal(personaStart.params.developerInstructions, undefined,
     'VChat identity mode must not expose an ineffective second instruction source');
 assert.equal(personaStart.params.personality, undefined,
     'personality is effective only when Codex manages the identity');
-const managedTopic = await manager.createTopic({
+const managedTopic = await manager.createSessionRecord({
     agentId: 'Nova',
     title: 'Codex managed',
     instructionMode: 'codex-managed',
@@ -389,7 +389,7 @@ assert.equal(managedStart.params.baseInstructions, undefined,
     'Codex-managed identity must not inject a VChat baseInstructions replacement');
 assert.equal(managedStart.params.personality, 'friendly');
 // An explicit `baseInstructions` wins over `systemPrompt` when both are given.
-const explicitBaseTopic = await manager.createTopic({
+const explicitBaseTopic = await manager.createSessionRecord({
     agentId: 'Nova',
     title: 'Explicit base',
     baseInstructions: 'You are Nova, VChat\'s coding agent.',
@@ -541,7 +541,7 @@ fake.emit('notification', {
     method: 'item/completed',
     params: { threadId: 'thr_test', turnId: 'turn_test', item: { id: 'item_a', type: 'agentMessage', text: 'done' } },
 });
-const projection = await manager.readTopic({ sessionId: session.sessionId });
+const projection = await manager.readSession({ sessionId: session.sessionId });
 assert.equal(projection.messages[0].blocks[0].content.text, 'done');
 fake.emit('notification', { method: 'turn/completed', params: { threadId: 'thr_test', turn: { id: 'turn_test', status: 'completed' } } });
 let compactionSettled = false;
@@ -564,12 +564,12 @@ assert.equal(compacted.itemId, 'compact_1');
 assert.equal(compacted.snapshot.session.sessionId, session.sessionId,
     'terminal compaction must reconcile the durable SQLite projection before resolving');
 fake.readError = new Error('temporary App Server transport failure');
-const temporaryFailureProjection = await manager.readTopic({ sessionId: session.sessionId });
+const temporaryFailureProjection = await manager.readSession({ sessionId: session.sessionId });
 assert.equal(temporaryFailureProjection.session.orphaned, false,
     'a temporary read failure must preserve a writable Session instead of inventing an orphan');
 assert.match(temporaryFailureProjection.projection.lastError, /temporary App Server transport failure/);
 fake.readError = new Error('No rollout found for thread thr_test');
-const missingThreadProjection = await manager.readTopic({ sessionId: session.sessionId });
+const missingThreadProjection = await manager.readSession({ sessionId: session.sessionId });
 assert.equal(missingThreadProjection.session.orphaned, true,
     'only an explicit missing Codex Thread may mark the local Session orphaned');
 fake.readError = null;
@@ -589,12 +589,12 @@ assert.equal(pinned.session.pinnedAt > 0, true);
 const archived = await manager.closeSession({ sessionId: lifecycleSession.sessionId });
 assert.equal(archived.archived, true);
 assert.ok(fake.calls.some((call) => call.method === 'thread/archive' && call.params.threadId === lifecycleSession.threadId));
-assert.equal((await manager.listTopics()).some((entry) => entry.sessionId === lifecycleSession.sessionId), false);
-assert.equal((await manager.listTopics({ archived: true })).some((entry) => entry.sessionId === lifecycleSession.sessionId), true);
+assert.equal((await manager.listSessions()).some((entry) => entry.sessionId === lifecycleSession.sessionId), false);
+assert.equal((await manager.listSessions({ archived: true })).some((entry) => entry.sessionId === lifecycleSession.sessionId), true);
 const restored = await manager.restoreSession({ sessionId: lifecycleSession.sessionId });
 assert.equal(restored.restored, true);
 assert.ok(fake.calls.some((call) => call.method === 'thread/unarchive' && call.params.threadId === lifecycleSession.threadId));
-assert.equal((await manager.listTopics()).find((entry) => entry.sessionId === lifecycleSession.sessionId).pinnedAt > 0, true);
+assert.equal((await manager.listSessions()).find((entry) => entry.sessionId === lifecycleSession.sessionId).pinnedAt > 0, true);
 // Main is the last idempotency boundary: two renderer sends with the exact
 // same payload share one request, while a different payload never becomes an
 // accidental second concurrent Turn.
@@ -888,7 +888,7 @@ manager._handleBridgeEvent({
 assert.equal(uiEvents.at(-1).payload.kind, 'rag-retrieval');
 assert.equal(uiEvents.at(-1).payload.value.apiKey, '[redacted]');
 assert.equal(uiEvents.at(-1).payload.value.detail.length, 16_384);
-const deletionTopic = await manager.createTopic({
+const deletionTopic = await manager.createSessionRecord({
     agentId: 'Nova', title: 'Permanent delete fixture', systemPrompt: '{{NovaV2}}',
 });
 const deletionSession = await manager.createSession({ sessionId: deletionTopic.sessionId });
@@ -905,7 +905,7 @@ assert.equal(manager.repository.getSession(deletionSession.sessionId), null,
 assert.ok(fake.calls.some((call) => call.method === 'thread/delete' && call.params.threadId === deletionSession.threadId));
 assert.doesNotMatch(JSON.stringify(deletion.receipt), new RegExp(deletionSession.sessionId),
     'the retained deletion receipt must not contain raw Session identity');
-const blockedDeleteTopic = await manager.createTopic({
+const blockedDeleteTopic = await manager.createSessionRecord({
     agentId: 'Nova', title: 'Blocked delete fixture', systemPrompt: '{{NovaV2}}',
 });
 const blockedDeleteSession = await manager.createSession({ sessionId: blockedDeleteTopic.sessionId });
@@ -916,7 +916,7 @@ const blockedPending = manager.repository.enqueuePendingInput(blockedDeleteSessi
 manager.repository.updatePendingInput(blockedPending.input_id, { state: 'uncertain' });
 await assert.rejects(() => manager.permanentlyDeleteSession({ sessionId: blockedDeleteSession.sessionId }),
     (error) => error.code === 'SESSION_HAS_PENDING_INPUT');
-const approvalBlockedTopic = await manager.createTopic({
+const approvalBlockedTopic = await manager.createSessionRecord({
     agentId: 'Nova', title: 'Approval blocked delete fixture', systemPrompt: '{{NovaV2}}',
 });
 const approvalBlockedSession = await manager.createSession({ sessionId: approvalBlockedTopic.sessionId });
@@ -1010,7 +1010,7 @@ const sagaManager = new CodexRuntimeManager({
     transportFactory: () => uncertainTransport,
     repositoryFactory: () => new AgentProjectionRepository({ databasePath: path.join(sagaRoot, 'codex-agent-projection.sqlite') }),
 });
-const uncertainTopic = await sagaManager.createTopic({ agentId: 'Nova', title: 'Uncertain start', systemPrompt: '{{Nova}}' });
+const uncertainTopic = await sagaManager.createSessionRecord({ agentId: 'Nova', title: 'Uncertain start', systemPrompt: '{{Nova}}' });
 await assert.rejects(() => sagaManager.createSession({ sessionId: uncertainTopic.sessionId }), /connection lost/);
 const uncertainOperations = sagaManager.listRecoveryOperations();
 assert.ok(uncertainOperations.some((operation) => operation.kind === 'thread-start' && operation.state === 'uncertain'));
@@ -1057,7 +1057,7 @@ const acknowledgedStartManager = new CodexRuntimeManager({
         databasePath: path.join(acknowledgedStartRoot, 'codex-agent-projection.sqlite'),
     }),
 });
-const acknowledgedStartTopic = await acknowledgedStartManager.createTopic({
+const acknowledgedStartTopic = await acknowledgedStartManager.createSessionRecord({
     agentId: 'Nova', title: 'Acknowledged start', systemPrompt: '{{Nova}}',
 });
 await assert.rejects(
@@ -1107,7 +1107,7 @@ const acknowledgedForkManager = new CodexRuntimeManager({
         databasePath: path.join(acknowledgedForkRoot, 'codex-agent-projection.sqlite'),
     }),
 });
-const acknowledgedForkTopic = await acknowledgedForkManager.createTopic({
+const acknowledgedForkTopic = await acknowledgedForkManager.createSessionRecord({
     agentId: 'Nova', title: 'Fork source', systemPrompt: '{{Nova}}',
 });
 const acknowledgedForkSource = await acknowledgedForkManager.createSession({ sessionId: acknowledgedForkTopic.sessionId });
@@ -1200,7 +1200,7 @@ const archiveManager = makeLifecycleManager(archiveTransport, {
         throw error;
     },
 });
-const lifecycleSagaTopic = await archiveManager.createTopic({ agentId: 'Nova', title: 'Lifecycle Saga', systemPrompt: '{{Nova}}' });
+const lifecycleSagaTopic = await archiveManager.createSessionRecord({ agentId: 'Nova', title: 'Lifecycle Saga', systemPrompt: '{{Nova}}' });
 const lifecycleSagaSession = await archiveManager.createSession({ sessionId: lifecycleSagaTopic.sessionId });
 await assert.rejects(() => archiveManager.archiveSession({ sessionId: lifecycleSagaSession.sessionId }), /after archive ACK/);
 assert.equal(archiveManager.repository.getSession(lifecycleSagaSession.sessionId).archivedAt, null);
@@ -1279,13 +1279,13 @@ const degradedManager = new CodexRuntimeManager({
         return new FakeTransport();
     },
 });
-assert.equal((await degradedManager.listTopics())[0]?.sessionId, 'degraded-session');
+assert.equal((await degradedManager.listSessions())[0]?.sessionId, 'degraded-session');
 assert.equal(degradedManager.getStatus().storage.readOnly, true);
-assert.equal((await degradedManager.readTopic({ sessionId: 'degraded-session' })).session.sessionId, 'degraded-session',
+assert.equal((await degradedManager.readSession({ sessionId: 'degraded-session' })).session.sessionId, 'degraded-session',
     'read-only degraded mode must retain projection reads without starting App Server');
 assert.match(degradedManager.exportSession({ sessionId: 'degraded-session' }).content, /Readable history/,
     'read-only degraded mode must retain explicit projection export');
-await assert.rejects(() => degradedManager.createTopic({ title: 'must fail' }),
+await assert.rejects(() => degradedManager.createSessionRecord({ title: 'must fail' }),
     (error) => error.code === 'PROJECTION_READ_ONLY');
 for (const mutation of [
     () => degradedManager.start(),

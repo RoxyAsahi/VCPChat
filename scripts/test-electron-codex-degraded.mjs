@@ -114,8 +114,8 @@ try {
     writer = await launch(appData, launcherPath, statePath);
     const seeded = await writer.page.evaluate(async () => {
         const api = window.chatAPI || window.electronAPI;
-        const topic = await api.agentRuntimeCreateTopic({ agentId: 'Nova', title: 'Degraded readable history', workspaceRoot: '.' });
-        return { sessionId: topic.sessionId || topic.topicId };
+        const topic = await api.agentSessionCreate({ agentId: 'Nova', title: 'Degraded readable history', workspaceRoot: '.' });
+        return { sessionId: topic.sessionId };
     });
     await close(writer);
     writer = null;
@@ -126,13 +126,13 @@ try {
     const degraded = await reader.page.evaluate(async (sessionId) => {
         const api = window.chatAPI || window.electronAPI;
         const [topics, projection, status] = await Promise.all([
-            api.agentRuntimeListTopics({}),
-            api.agentRuntimeReadProjection({ sessionId }),
+            api.agentSessionList({}),
+            api.agentSessionReadProjection({ sessionId }),
             api.agentRuntimeGetStatus(),
         ]);
         const mutationErrors = [];
         for (const operation of [
-            () => api.agentRuntimeCreateTopic({ agentId: 'Nova', title: 'must fail', workspaceRoot: '.' }),
+            () => api.agentSessionCreate({ agentId: 'Nova', title: 'must fail', workspaceRoot: '.' }),
             () => api.agentRuntimeStartTurn({ sessionId, prompt: 'must not start' }),
         ]) {
             try { await operation(); } catch (error) { mutationErrors.push(error?.message || String(error)); }

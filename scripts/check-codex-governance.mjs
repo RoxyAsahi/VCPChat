@@ -351,7 +351,7 @@ for (const script of ['test:agent-settings-interaction', 'test:agent-config-appl
     if (!packageJson.scripts?.[script]) errors.push(`package.json missing R12 gate ${script}`);
 }
 for (const script of ['test:agent-renderer-isolation', 'test:agent-renderer-lifecycle',
-    'test:agent-workbench-clients', 'test:agent-session-compatibility']) {
+    'test:agent-workbench-clients']) {
     if (!packageJson.scripts?.[script]) errors.push(`package.json missing governance gate ${script}`);
 }
 if (!packageJson.scripts?.['lint:agent']) {
@@ -433,7 +433,7 @@ if (/runtime\.(?:createTopic|readTopic)\(/.test(runtimeServiceGraph)) {
     errors.push('canonical Runtime service graph delegates through deprecated Topic methods');
 }
 const runtimeTopicCompatibility = path.join(canonicalRuntimeDir, 'runtime-topic-compatibility.js');
-if (!fs.existsSync(runtimeTopicCompatibility)) errors.push('deprecated Runtime Topic compatibility adapter is missing');
+if (fs.existsSync(runtimeTopicCompatibility)) errors.push('deprecated Runtime Topic compatibility adapter must be removed');
 const topicMethodPattern = /\b(?:createTopic|listTopics|readTopic|renameTopic|deleteTopic)\b/;
 for (const entry of fs.readdirSync(canonicalRuntimeDir, { withFileTypes: true })) {
     if (!entry.isFile() || !/\.js$/.test(entry.name)) continue;
@@ -444,7 +444,7 @@ for (const entry of fs.readdirSync(canonicalRuntimeDir, { withFileTypes: true })
     if (/\b(?:compatibilitySession|compatibilityRuntime|resolveSessionIdInput)\b/.test(source)) {
         errors.push(`modules/codex-runtime/${entry.name} imports legacy Session compatibility helpers`);
     }
-    if (entry.name !== 'runtime-topic-compatibility.js' && topicMethodPattern.test(source)) {
+    if (topicMethodPattern.test(source)) {
         errors.push(`modules/codex-runtime/${entry.name} exposes deprecated Topic methods outside compatibility adapter`);
     }
 }
@@ -452,9 +452,7 @@ const canonicalWorkbenchFiles = fs.readdirSync(path.join(root, 'modules/ui-syste
     .filter((entry) => entry.isFile() && /^agent-.*\.js$/.test(entry.name));
 for (const entry of canonicalWorkbenchFiles) {
     const source = fs.readFileSync(path.join(root, 'modules/ui-system', entry.name), 'utf8');
-    const withoutLegacyPointerMigration = entry.name === 'agent-workbench-implementation.js'
-        ? source.replace("parsed?.topicId", "parsed?.legacySessionId") : source;
-    if (/\btopicId\b|data-topic-id/.test(withoutLegacyPointerMigration)) {
+    if (/\btopicId\b|data-topic-id/.test(source)) {
         errors.push(`modules/ui-system/${entry.name} contains legacy Topic identity`);
     }
     if (/\b(?:createTopic|listTopics|readTopic|renameTopic|deleteTopic)\b/.test(source)) {
@@ -554,15 +552,11 @@ if (!fs.existsSync(runtimeNormalizersPath)) {
 }
 const runtimeHostServiceSource = fs.existsSync(path.join(root, 'modules/codex-runtime/runtime-host-service.js'))
     ? fs.readFileSync(path.join(root, 'modules/codex-runtime/runtime-host-service.js'), 'utf8') : '';
-const sessionCompatibilitySource = fs.readFileSync(
-    path.join(root, 'modules/ipc/agentSessionCompatibility.js'), 'utf8',
-);
 if (!runtimeManagerSource.includes('async updateSessionConfig(')) {
     errors.push('Runtime manager must expose an explicit Session config API');
 }
-if (!sessionCompatibilitySource.includes('SESSION_IDENTITY_MISMATCH')
-    || !sessionCompatibilitySource.includes('legacySessionProjection')) {
-    errors.push('Topic compatibility adapter must reject conflicts and own legacy response projection');
+if (fs.existsSync(path.join(root, 'modules/ipc/agentSessionCompatibility.js'))) {
+    errors.push('Topic IPC compatibility adapter must be removed');
 }
 const sharedCatalog = fs.readFileSync(path.join(root, 'preloads/shared/catalog.js'), 'utf8');
 for (const method of ['agentRuntimeReadSessionConfig', 'agentRuntimeUpdateSessionConfig']) {

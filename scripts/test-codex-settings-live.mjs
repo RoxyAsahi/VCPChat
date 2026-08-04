@@ -63,7 +63,7 @@ function waitForTurn(runtime, session, timeoutMs = 180_000) {
 
 try {
     await manager.start();
-    const topic = await manager.createTopic({
+    const topic = await manager.createSessionRecord({
         agentId: 'Nova',
         title: 'Codex live Session settings',
         model,
@@ -117,7 +117,7 @@ try {
     assert.equal(applied.appliedRuntimeConfigRevision, applied.configRevision);
     assert.equal(applied.appliedRuntimeConfig.workspaceRoot, workspace);
     assert.equal(applied.appliedRuntimeConfig.permissionMode, 'always-approve');
-    const projection = await manager.readTopic({ sessionId: session.sessionId, reconcile: false });
+    const projection = await manager.readSession({ sessionId: session.sessionId, reconcile: false });
     assert.match(JSON.stringify(projection), new RegExp(sentinel));
     console.log(JSON.stringify({
         runtime: 'codex-app-server',

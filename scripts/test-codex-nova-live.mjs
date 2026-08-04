@@ -86,7 +86,7 @@ function waitForTurnStarted(runtime, sessionId, threadId, timeoutMs = 30_000) {
 try {
     console.log(JSON.stringify({ stage: 'start', runtime: 'codex-app-server', model }));
     await manager.start();
-    const topic = await manager.createTopic({
+    const topic = await manager.createSessionRecord({
         agentId: 'Nova',
         title: 'Codex Nova live sentinel',
         model,
@@ -103,7 +103,7 @@ try {
     });
     await identityCompletion;
     console.log(JSON.stringify({ stage: 'identity-turn-completed' }));
-    const identityProjection = await manager.readTopic({ sessionId: session.sessionId, reconcile: false });
+    const identityProjection = await manager.readSession({ sessionId: session.sessionId, reconcile: false });
     const identityReply = identityProjection.messages
         .filter((message) => message.role === 'assistant')
         .flatMap((message) => message.blocks)
@@ -131,7 +131,7 @@ try {
     });
     await sentinelCompletion;
     console.log(JSON.stringify({ stage: 'sentinel-turn-completed' }));
-    const projection = await manager.readTopic({ sessionId: session.sessionId });
+    const projection = await manager.readSession({ sessionId: session.sessionId });
     const transcript = projection.messages
         .flatMap((message) => message.blocks)
         .map((block) => String(block.content?.text || ''))

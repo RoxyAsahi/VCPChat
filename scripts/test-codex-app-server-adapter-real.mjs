@@ -125,7 +125,7 @@ function waitForTurn(session, timeoutMs = 45_000) {
 try {
     manager.on('event', (event) => runtimeEvents.push(event));
     await manager.start();
-    const topic = await manager.createTopic({
+    const topic = await manager.createSessionRecord({
         title: 'Codex App Server adapter real',
         model: 'gpt-5.6-luna',
         baseInstructions: pureBaseInstructions,
@@ -142,7 +142,7 @@ try {
     }]);
     assert.ok(requests.length >= 2, 'function_call_output must make Codex issue a continuation request through the adapter');
     assert.ok(requests.at(-1).messages.some((message) => message.role === 'tool' && message.tool_call_id === 'call_adapter_file'));
-    const projection = await manager.readTopic({ sessionId: session.sessionId, reconcile: false });
+    const projection = await manager.readSession({ sessionId: session.sessionId, reconcile: false });
     assert.match(JSON.stringify(projection), /adapter-real-sentinel/);
     const reasoningMessage = projection.messages.find((message) => message.blocks?.some((block) => block.kind === 'reasoning'));
     assert.ok(reasoningMessage, 'real App Server notifications must materialize a reasoning projection item');

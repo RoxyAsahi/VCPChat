@@ -61,7 +61,7 @@ const manager = new CodexRuntimeManager({
     sendEvent: (event) => events.push(event),
 });
 
-const topic = await manager.createTopic({
+const topic = await manager.createSessionRecord({
     agentId: 'Nova', title: 'Config apply', workspaceRoot: workspaceA,
     model: 'model-a', reasoningEffort: 'low', permissionMode: 'ask', baseInstructions: '{{Nova}}',
 });

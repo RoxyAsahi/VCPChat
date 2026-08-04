@@ -136,14 +136,14 @@ try {
     const seeded = await withTimeout(page.evaluate(async () => {
         const api = window.chatAPI || window.electronAPI;
         api.agentRuntimeSetWorkbenchPresence(true);
-        const topicA = await api.agentRuntimeCreateTopic({ agentId: 'Nova', title: 'Recovery A', workspaceRoot: '.' });
-        const topicB = await api.agentRuntimeCreateTopic({ agentId: 'Nova', title: 'Recovery B', workspaceRoot: '.' });
-        const lifecycleTopic = await api.agentRuntimeCreateTopic({ agentId: 'Nova', title: 'Lifecycle', workspaceRoot: '.' });
-        const approvalBlockedTopic = await api.agentRuntimeCreateTopic({ agentId: 'Nova', title: 'Approval blocked', workspaceRoot: '.' });
-        const sessionA = await api.agentRuntimeCreateSession({ resume: topicA.topicId });
-        const sessionB = await api.agentRuntimeCreateSession({ resume: topicB.topicId });
-        const lifecycleSession = await api.agentRuntimeCreateSession({ resume: lifecycleTopic.topicId });
-        const approvalBlockedSession = await api.agentRuntimeCreateSession({ resume: approvalBlockedTopic.topicId });
+        const topicA = await api.agentSessionCreate({ agentId: 'Nova', title: 'Recovery A', workspaceRoot: '.' });
+        const topicB = await api.agentSessionCreate({ agentId: 'Nova', title: 'Recovery B', workspaceRoot: '.' });
+        const lifecycleTopic = await api.agentSessionCreate({ agentId: 'Nova', title: 'Lifecycle', workspaceRoot: '.' });
+        const approvalBlockedTopic = await api.agentSessionCreate({ agentId: 'Nova', title: 'Approval blocked', workspaceRoot: '.' });
+        const sessionA = await api.agentRuntimeEnsureSessionRuntime({ sessionId: topicA.sessionId });
+        const sessionB = await api.agentRuntimeEnsureSessionRuntime({ sessionId: topicB.sessionId });
+        const lifecycleSession = await api.agentRuntimeEnsureSessionRuntime({ sessionId: lifecycleTopic.sessionId });
+        const approvalBlockedSession = await api.agentRuntimeEnsureSessionRuntime({ sessionId: approvalBlockedTopic.sessionId });
         const [turnA, turnB] = await Promise.all([
             api.agentRuntimeStartTurn({ sessionId: sessionA.sessionId, prompt: 'parallel recovery A' }),
             api.agentRuntimeStartTurn({ sessionId: sessionB.sessionId, prompt: 'parallel recovery B' }),
@@ -168,8 +168,8 @@ try {
     const isolatedProjection = await withTimeout(page.evaluate(async ({ sessionA, sessionB }) => {
         const api = window.chatAPI || window.electronAPI;
         const [projectionA, projectionB] = await Promise.all([
-            api.agentRuntimeReadTopic({ sessionId: sessionA }),
-            api.agentRuntimeReadTopic({ sessionId: sessionB }),
+            api.agentSessionRead({ sessionId: sessionA }),
+            api.agentSessionRead({ sessionId: sessionB }),
         ]);
         return { projectionA, projectionB };
     }, { sessionA: seeded.sessionA.sessionId, sessionB: seeded.sessionB.sessionId }), 'read isolated projections');
@@ -182,15 +182,15 @@ try {
 
     const lifecycle = await withTimeout(page.evaluate(async ({ lifecycleSession, approvalBlockedSession }) => {
         const api = window.chatAPI || window.electronAPI;
-        await api.agentRuntimeCloseSession({ sessionId: lifecycleSession });
-        const archivedOnce = await api.agentRuntimeListTopics({ archived: true });
-        await api.agentRuntimeRestoreSession({ sessionId: lifecycleSession });
-        const activeAgain = await api.agentRuntimeListTopics({});
-        await api.agentRuntimeCloseSession({ sessionId: lifecycleSession });
-        const deleted = await api.agentRuntimePermanentlyDeleteSession({ sessionId: lifecycleSession });
+        await api.agentSessionArchive({ sessionId: lifecycleSession });
+        const archivedOnce = await api.agentSessionList({ archived: true });
+        await api.agentSessionRestore({ sessionId: lifecycleSession });
+        const activeAgain = await api.agentSessionList({});
+        await api.agentSessionArchive({ sessionId: lifecycleSession });
+        const deleted = await api.agentSessionDelete({ sessionId: lifecycleSession });
 
-        await api.agentRuntimeCloseSession({ sessionId: approvalBlockedSession });
-        await api.agentRuntimeReadTopic({ sessionId: approvalBlockedSession });
+        await api.agentSessionArchive({ sessionId: approvalBlockedSession });
+        await api.agentSessionRead({ sessionId: approvalBlockedSession });
         return {
             archivedOnce: archivedOnce.some((entry) => entry.sessionId === lifecycleSession),
             activeAgain: activeAgain.some((entry) => entry.sessionId === lifecycleSession),
@@ -208,7 +208,7 @@ try {
     }, seeded.approvalBlockedSession.sessionId), 'archived Session interaction was not routed to its Session');
     const blockedDelete = await page.evaluate(async (sessionId) => {
         try {
-            await (window.chatAPI || window.electronAPI).agentRuntimePermanentlyDeleteSession({ sessionId });
+            await (window.chatAPI || window.electronAPI).agentSessionDelete({ sessionId });
             return null;
         } catch (error) {
             return { message: error?.message || String(error) };
@@ -224,7 +224,7 @@ try {
         response: { answers: { confirm: { answers: [] } } },
     }), archivedInteraction), 'respond to archived session interaction');
     assert.equal(await withTimeout(page.evaluate(async (sessionId) => (
-        (window.chatAPI || window.electronAPI).agentRuntimePermanentlyDeleteSession({ sessionId })
+        (window.chatAPI || window.electronAPI).agentSessionDelete({ sessionId })
     ).then((result) => result.deleted), seeded.approvalBlockedSession.sessionId), 'delete archived session after interaction'), true);
     reportPhase('busy deletion safety verified');
 
@@ -238,9 +238,9 @@ try {
     const localAfterCrash = await withTimeout(page.evaluate(async ({ sessionA, sessionB }) => {
         const api = window.chatAPI || window.electronAPI;
         const [projectionA, projectionB, topics, status] = await Promise.all([
-            api.agentRuntimeReadProjection({ sessionId: sessionA }),
-            api.agentRuntimeReadProjection({ sessionId: sessionB }),
-            api.agentRuntimeListTopics({}),
+            api.agentSessionReadProjection({ sessionId: sessionA }),
+            api.agentSessionReadProjection({ sessionId: sessionB }),
+            api.agentSessionList({}),
             api.agentRuntimeGetStatus(),
         ]);
         return {
@@ -263,9 +263,9 @@ try {
     const afterRendererReload = await withTimeout(page.evaluate(async ({ sessionA, sessionB }) => {
         const api = window.chatAPI || window.electronAPI;
         const [projectionA, projectionB, topics, status] = await Promise.all([
-            api.agentRuntimeReadProjection({ sessionId: sessionA }),
-            api.agentRuntimeReadProjection({ sessionId: sessionB }),
-            api.agentRuntimeListTopics({}),
+            api.agentSessionReadProjection({ sessionId: sessionA }),
+            api.agentSessionReadProjection({ sessionId: sessionB }),
+            api.agentSessionList({}),
             api.agentRuntimeGetStatus(),
         ]);
         return {

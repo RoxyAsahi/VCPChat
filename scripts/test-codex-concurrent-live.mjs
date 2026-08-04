@@ -145,11 +145,11 @@ try {
     }
 
     const [topicA, topicB] = await Promise.all([
-        manager.createTopic({
+        manager.createSessionRecord({
             agentId: 'Nova', title: 'Concurrent live A', model, baseInstructions,
             workspaceRoot: path.resolve(import.meta.dirname, '..'),
         }),
-        manager.createTopic({
+        manager.createSessionRecord({
             agentId: 'Nova', title: 'Concurrent live B', model, baseInstructions,
             workspaceRoot: path.resolve(import.meta.dirname, '..'),
         }),
@@ -194,8 +194,8 @@ try {
     assert.equal(manager.getStatus().worker?.pid, processPid,
         'two live Threads and one interrupt must not restart the App Server process');
     const [projectionA, projectionB] = await Promise.all([
-        manager.readTopic({ sessionId: sessionA.sessionId }),
-        manager.readTopic({ sessionId: sessionB.sessionId }),
+        manager.readSession({ sessionId: sessionA.sessionId }),
+        manager.readSession({ sessionId: sessionB.sessionId }),
     ]);
     assert.equal(projectionA.session.threadId, sessionA.threadId);
     assert.equal(projectionB.session.threadId, sessionB.threadId);

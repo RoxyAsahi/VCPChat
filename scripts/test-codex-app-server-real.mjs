@@ -18,12 +18,12 @@ let recoveredManager = null;
 
 try {
     await manager.start();
-    const topic = await manager.createTopic({
+    const topic = await manager.createSessionRecord({
         agentId: 'codex',
         title: 'Codex App Server hermetic smoke A',
         workspaceRoot: path.resolve(import.meta.dirname, '..'),
     });
-    const secondTopic = await manager.createTopic({
+    const secondTopic = await manager.createSessionRecord({
         agentId: 'codex',
         title: 'Codex App Server hermetic smoke B',
         workspaceRoot: path.resolve(import.meta.dirname, '..'),
@@ -36,8 +36,8 @@ try {
     assert.match(secondSession.threadId, /^[0-9a-f-]{36}$/i);
     assert.notEqual(session.threadId, secondSession.threadId, 'parallel VChat Sessions must not share a Codex Thread');
     const [projection, secondProjection] = await Promise.all([
-        manager.readTopic({ sessionId: topic.sessionId }),
-        manager.readTopic({ sessionId: secondTopic.sessionId }),
+        manager.readSession({ sessionId: topic.sessionId }),
+        manager.readSession({ sessionId: secondTopic.sessionId }),
     ]);
     assert.equal(projection.messages.length, 0);
     assert.equal(secondProjection.messages.length, 0);
@@ -54,7 +54,7 @@ try {
     const resumedSession = await recoveredManager.createSession({ sessionId: topic.sessionId });
     assert.notEqual(resumedSession.threadId, session.threadId,
         'an empty pre-turn Thread is not yet a persisted rollout and must be safely recreated');
-    const resumedProjection = await recoveredManager.readTopic({ sessionId: topic.sessionId });
+    const resumedProjection = await recoveredManager.readSession({ sessionId: topic.sessionId });
     assert.equal(resumedProjection.session.orphaned, false);
     console.log(JSON.stringify({
         runtime: recoveredManager.getStatus().runtime,
