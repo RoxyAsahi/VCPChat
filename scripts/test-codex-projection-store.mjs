@@ -67,6 +67,19 @@ assert.equal(projector.projectNotification({
         item: { id: 'item_1', type: 'agentMessage', text: '' },
     },
 }), true);
+assert.equal(projector.projectNotification({
+    method: 'item/agentMessage/delta',
+    params: { threadId: 'thr_1', itemId: 'delta_before_item', delta: 'buffered first' },
+}), true);
+projector.projectNotification({
+    method: 'item/started',
+    params: { threadId: 'thr_1', turnId: 'turn_1', item: {
+        id: 'delta_before_item', type: 'agentMessage', text: '', status: 'inProgress',
+    } },
+});
+assert.equal(repository.readProjection('session_1').messages
+    .find((message) => message.itemId === 'delta_before_item').blocks[0].content.text, 'buffered first',
+    'a bounded delta received before item/started must replay after Item creation');
 projector.projectNotification({ method: 'item/agentMessage/delta', params: {
     threadId: 'thr_1', itemId: 'item_1', delta: 'hello',
 } });
@@ -88,10 +101,10 @@ projector.projectNotification({
     },
 });
 const projection = repository.readProjection('session_1');
-assert.equal(projection.messages.length, 1);
-assert.equal(projection.messages[0].blocks[0].content.text, 'hello world!',
+const projectedItem = projection.messages.find((message) => message.itemId === 'item_1');
+assert.equal(projectedItem.blocks[0].content.text, 'hello world!',
     'incremental, cumulative, and overlapping deltas must not duplicate projection text');
-assert.equal(projection.messages[0].status, 'completed');
+assert.equal(projectedItem.status, 'completed');
 projector.projectNotification({
     method: 'item/completed',
     params: { threadId: 'thr_1', turnId: 'turn_1', item: {
@@ -127,16 +140,24 @@ projector.projectNotification({
     params: { threadId: 'thr_1', itemId: 'reason_1', summaryIndex: 1, delta: 'second summary' },
 });
 projector.projectNotification({
+    method: 'item/reasoning/textDelta',
+    params: { threadId: 'thr_1', itemId: 'reason_1', contentIndex: 0, delta: 'private detail' },
+});
+const liveReasoning = repository.readProjection('session_1').messages.find((message) => message.itemId === 'reason_1');
+assert.deepEqual(liveReasoning.blocks[0].content.summary, ['first summary', 'second summary']);
+assert.deepEqual(liveReasoning.blocks[0].content.content, ['private detail'],
+    'summaryIndex and contentIndex must never collide');
+projector.projectNotification({
     method: 'item/completed',
     params: { threadId: 'thr_1', turnId: 'turn_1', item: {
         id: 'reason_1', type: 'reasoning', status: 'completed', summary: [], content: [],
     } },
 });
 const reasoning = repository.readProjection('session_1').messages.find((message) => message.itemId === 'reason_1');
-assert.deepEqual(reasoning.blocks[0].content.summary, ['first summary', 'second summary'],
-    'summaryIndex values must remain separate entries in one reasoning Block');
+assert.deepEqual(reasoning.blocks[0].content.summary, [],
+    'an explicit completed summary array may clear streamed summary parts');
 assert.deepEqual(reasoning.blocks[0].content.content, [],
-    'reasoning content uses a separate array from summary parts');
+    'an explicit completed content array may clear streamed reasoning content');
 projector.projectNotification({
     method: 'item/started',
     params: {
@@ -181,6 +202,9 @@ projector.projectNotification({
 const dynamicTool = repository.readProjection('session_1').messages.find((message) => message.itemId === 'dynamic_tool_1');
 assert.equal(dynamicTool.blocks[0].authority, 'toolbox',
     'VCP dynamic tool display Blocks must remain outside Codex snapshot deletion');
+assert.equal(dynamicTool.blocks[0].content.item.wrapperTool, 'vcp_invoke');
+assert.equal(dynamicTool.blocks[0].content.item.tool, 'FileOperator');
+assert.deepEqual(dynamicTool.blocks[0].content.item.arguments, { action: 'list' });
 projector.projectNotification({
     method: 'item/completed',
     params: { threadId: 'thr_1', turnId: 'turn_1', item: {
@@ -190,6 +214,18 @@ projector.projectNotification({
 const plan = repository.readProjection('session_1').messages.find((message) => message.itemId === 'plan_1');
 assert.equal(plan.blocks[0].kind, 'observation');
 assert.equal(plan.blocks[0].content.text, '1. 收集证据\n2. 只读汇总');
+projector.projectNotification({
+    method: 'item/started',
+    params: { threadId: 'thr_1', turnId: 'turn_1', item: {
+        id: 'future_item', type: 'futureProtocolItem', status: 'inProgress',
+        arguments: { secret: 'must-not-persist' }, name: 'bounded future item',
+    } },
+});
+const unknown = repository.readProjection('session_1').messages
+    .find((message) => message.itemId === 'future_item').blocks[0].content;
+assert.equal(unknown.unknown.type, 'futureProtocolItem');
+assert.equal(Object.prototype.hasOwnProperty.call(unknown.unknown, 'arguments'), false,
+    'unknown protocol Items must use a bounded sanitized fallback');
 repository.upsertItem('session_1', {
     threadId: 'thr_1', turnId: 'turn_local', itemId: 'local_observation', role: 'system', status: 'completed',
 }, {
@@ -202,7 +238,7 @@ repository.upsertItem('session_1', {
 }, {
     kind: 'observation', status: 'completed', ordinal: 1, authority: 'toolbox', content: { text: 'durable local observation' },
 }]);
-projector.reconcileThread('session_1', {
+const authoritativeReconcile = projector.reconcileThread('session_1', {
     id: 'thr_1',
     turns: [{
         id: 'turn_1',
@@ -214,6 +250,11 @@ projector.reconcileThread('session_1', {
         ],
     }],
 });
+assert.equal(authoritativeReconcile.patch.baseProjectionRevision < authoritativeReconcile.patch.projectionRevision, true);
+assert.ok(authoritativeReconcile.patch.deleteBlockIds.length > 0,
+    'full reconciliation must report exact deleted Codex Blocks');
+assert.equal(authoritativeReconcile.patch.deleteBlockIds.includes('block:session_1:dynamic_tool_1:0'), false,
+    'ToolBox-owned Blocks are outside Codex deletion authority');
 const reconciled = repository.readProjection('session_1');
 assert.equal(reconciled.messages.some((message) => message.itemId === 'reason_1'), false,
     'thread/read reconciliation must remove Codex items absent from the authoritative snapshot');
@@ -257,9 +298,15 @@ assert.ok(repository.readProjection('session_1').messages.some((message) => mess
 assert.equal(projector.reconcileThread('session_1', {
     id: 'wrong-thread', turns: [{ id: 'turn_1', itemsView: 'full', items: [] }],
 }).reason, 'thread-identity-mismatch');
-assert.equal(projector.reconcileThread('session_1', {
-    id: 'thr_1', turns: [{ id: 'turn_1', itemsView: 'summary', items: [] }],
-}).reason, 'partial-items-view');
+const partialReconcile = projector.reconcileThread('session_1', {
+    id: 'thr_1', turns: [{ id: 'turn_1', itemsView: 'summary', items: [{
+        id: 'partial-summary-item', type: 'agentMessage', text: 'summary only', status: 'completed',
+    }] }],
+});
+assert.equal(partialReconcile.applied, true);
+assert.equal(partialReconcile.partial, true);
+assert.ok(repository.readProjection('session_1').messages.some((message) => message.itemId === 'partial-summary-item'),
+    'partial history may upsert returned Items');
 assert.ok(repository.readProjection('session_1').messages.some((message) => message.itemId === 'item_live'),
     'summary/notLoaded thread/read payloads cannot delete durable Items');
 assert.equal(projector.projectNotification({

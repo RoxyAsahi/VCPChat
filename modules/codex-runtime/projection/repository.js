@@ -9,7 +9,7 @@ const {
     normalizeSessionConfig,
     normalizeApplyState,
 } = require('../dataContracts');
-const { normalizeProjectionSnapshot } = require('./v2');
+const { normalizeProjectionSnapshot, projectionPatchBetween } = require('./v2');
 
 function parseJson(value, fallback) {
     try {
@@ -351,25 +351,27 @@ class AgentProjectionRepository {
                 VALUES (@receipt_id, @session_hash, @codex_thread_hash, @deleted_at)
             `),
         };
-        this.upsertItemTransaction = this.db.transaction((sessionId, record, block) => {
-            this._upsertItem(sessionId, record, block);
+        this.upsertItemTransaction = this.db.transaction((sessionId, record, block, options = {}) => {
+            this._upsertItem(sessionId, record, block, options);
             this.stmt.advanceGeneration.run({ session_id: sessionId, now: Date.now() });
         });
-        this.reconcileItemsTransaction = this.db.transaction((sessionId, entries, expectedGeneration) => {
+        this.reconcileItemsTransaction = this.db.transaction((sessionId, entries, expectedGeneration, deleteMissing = true) => {
             const state = this.stmt.getState.get(sessionId);
             if (Number.isInteger(expectedGeneration) && state?.mutation_generation !== expectedGeneration) {
                 return false;
             }
-            const incomingItemIds = new Set(entries.map((entry) => String(entry.record.itemId)));
-            for (const row of this.stmt.listMessageAuthorities.all(sessionId)) {
-                if (!incomingItemIds.has(String(row.codex_item_id))) {
-                    if (Number(row.local_block_count) > 0) {
-                        this.stmt.deleteCodexBlocksExcept.run({
-                            message_id: row.message_id,
-                            ordinals_json: '[]',
-                        });
-                    } else {
-                        this.stmt.deleteMessage.run(sessionId, row.codex_item_id);
+            if (deleteMissing) {
+                const incomingItemIds = new Set(entries.map((entry) => String(entry.record.itemId)));
+                for (const row of this.stmt.listMessageAuthorities.all(sessionId)) {
+                    if (!incomingItemIds.has(String(row.codex_item_id))) {
+                        if (Number(row.local_block_count) > 0) {
+                            this.stmt.deleteCodexBlocksExcept.run({
+                                message_id: row.message_id,
+                                ordinals_json: '[]',
+                            });
+                        } else {
+                            this.stmt.deleteMessage.run(sessionId, row.codex_item_id);
+                        }
                     }
                 }
             }
@@ -540,14 +542,14 @@ class AgentProjectionRepository {
         };
     }
 
-    upsertItem(sessionId, record, block) {
+    upsertItem(sessionId, record, block, options = {}) {
         if (Array.isArray(block)) {
             this.db.transaction(() => {
-                for (const entry of block.filter(Boolean)) this._upsertItem(sessionId, record, entry);
+                for (const entry of block.filter(Boolean)) this._upsertItem(sessionId, record, entry, options);
                 this.stmt.advanceGeneration.run({ session_id: sessionId, now: Date.now() });
             })();
         } else {
-            this.upsertItemTransaction(sessionId, record, block);
+            this.upsertItemTransaction(sessionId, record, block, options);
         }
         return this.stmt.getMessageByItem.get(sessionId, record.itemId);
     }
@@ -569,9 +571,13 @@ class AgentProjectionRepository {
         return activity;
     }
 
-    reconcileItems(sessionId, entries, expectedGeneration = undefined) {
-        const applied = this.reconcileItemsTransaction(sessionId, entries, expectedGeneration);
-        return { applied, projection: this.readProjection(sessionId) };
+    reconcileItems(sessionId, entries, expectedGeneration = undefined, options = {}) {
+        const before = this.readProjection(sessionId);
+        const applied = this.reconcileItemsTransaction(
+            sessionId, entries, expectedGeneration, options.deleteMissing !== false,
+        );
+        const projection = this.readProjection(sessionId);
+        return { applied, projection, patch: applied ? projectionPatchBetween(before, projection) : null };
     }
 
     _upsertItem(sessionId, record, block, options = {}) {

@@ -537,6 +537,12 @@ fake.emit('notification', {
     params: { threadId: 'thr_test', turnId: 'turn_test', itemId: 'item_a', delta: 'partial' },
 });
 assert.equal(uiEvents.at(-1).projectionMessage.blocks[0].content.text, 'partial');
+assert.equal(uiEvents.at(-1).projectionPatch.schemaVersion, 1);
+assert.equal(uiEvents.at(-1).projectionPatch.sessionId, session.sessionId);
+assert.equal(uiEvents.at(-1).projectionPatch.threadId, 'thr_test');
+assert.equal(uiEvents.at(-1).projectionPatch.upsertBlocks[0].schemaVersion, 2);
+assert.equal(uiEvents.at(-1).projectionPatch.upsertBlocks[0].blockId,
+    `block:${session.sessionId}:item_a:0`);
 fake.emit('notification', {
     method: 'item/completed',
     params: { threadId: 'thr_test', turnId: 'turn_test', item: { id: 'item_a', type: 'agentMessage', text: 'done' } },

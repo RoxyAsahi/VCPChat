@@ -20,6 +20,32 @@ const ITEM_KIND = Object.freeze({
     contextCompaction: ['system', 'observation'],
 });
 
+function boundedJson(value, depth = 0) {
+    if (depth > 6) return '[truncated]';
+    if (value == null || typeof value === 'boolean' || typeof value === 'number') return value;
+    if (typeof value === 'string') return value.slice(0, 16_384);
+    if (Array.isArray(value)) return value.slice(0, 100).map((entry) => boundedJson(entry, depth + 1));
+    if (typeof value !== 'object') return String(value).slice(0, 1_024);
+    return Object.fromEntries(Object.entries(value).slice(0, 100)
+        .map(([key, entry]) => [String(key).slice(0, 256), boundedJson(entry, depth + 1)]));
+}
+
+function normalizedToolItem(item, fields) {
+    return { type: item.type, id: item.id, ...Object.fromEntries(fields
+        .filter((field) => Object.prototype.hasOwnProperty.call(item, field))
+        .map((field) => [field, boundedJson(item[field])])) };
+}
+
+function normalizedDynamicToolItem(item) {
+    const wrapped = item.tool === 'vcp_invoke' && item.arguments && typeof item.arguments === 'object';
+    return {
+        ...normalizedToolItem(item, ['namespace', 'status', 'contentItems', 'success', 'durationMs']),
+        tool: wrapped ? String(item.arguments.tool || 'vcp_invoke').slice(0, 256) : String(item.tool || 'vcp_invoke').slice(0, 256),
+        wrapperTool: String(item.tool || 'vcp_invoke').slice(0, 256),
+        arguments: boundedJson(wrapped ? item.arguments.arguments : item.arguments),
+    };
+}
+
 function itemContent(item) {
     switch (item.type) {
         case 'userMessage': return { parts: item.content || [] };
@@ -42,6 +68,21 @@ function itemContent(item) {
             return { text: summary, phase: hasStatus ? item.status : 'inProgress' };
         }
         case 'fileChange': return { changes: normalizeCodexFileChanges(item.changes), status: item.status || 'inProgress' };
+        case 'commandExecution': return { item: normalizedToolItem(item, [
+            'pluginId', 'scriptPath', 'command', 'cwd', 'processId', 'source', 'status',
+            'commandActions', 'aggregatedOutput', 'exitCode', 'durationMs',
+        ]) };
+        case 'mcpToolCall': return { item: normalizedToolItem(item, [
+            'server', 'tool', 'status', 'arguments', 'appContext', 'pluginId', 'readOnlyHint',
+            'result', 'error', 'durationMs',
+        ]) };
+        case 'dynamicToolCall': return { item: normalizedDynamicToolItem(item) };
+        case 'collabAgentToolCall': return { item: normalizedToolItem(item, [
+            'tool', 'status', 'senderThreadId', 'receiverThreadIds', 'prompt', 'model',
+            'reasoningEffort', 'agentsStates',
+        ]) };
+        case 'webSearch': return { item: normalizedToolItem(item, ['action', 'query', 'status']) };
+        case 'imageView': return { item: normalizedToolItem(item, ['path']) };
         default: return { unknown: sanitizeUnknownItem(item) };
     }
 }
@@ -96,7 +137,6 @@ class CodexProjectionProjector {
         }
         const turns = Array.isArray(thread.turns) ? thread.turns : [];
         const hasPartialItems = turns.some((turn) => turn && turn.itemsView && turn.itemsView !== 'full');
-        if (hasPartialItems) return { applied: false, reason: 'partial-items-view' };
         const entries = [];
         for (const turn of turns) {
             for (const item of turn.items || []) {
@@ -106,16 +146,23 @@ class CodexProjectionProjector {
                     sessionId,
                     { authoritative: true },
                 );
-                if (entry) entries.push(entry);
+                if (entry) entries.push({ ...entry, authoritativeOrdinals: !hasPartialItems });
             }
         }
-        return this.repository.reconcileItems(sessionId, entries, expectedGeneration);
+        return {
+            ...this.repository.reconcileItems(sessionId, entries, expectedGeneration, {
+                deleteMissing: !hasPartialItems,
+            }),
+            partial: hasPartialItems,
+        };
     }
 
     _projectItem(params, completed, knownSessionId) {
-        const entry = this._itemEntry(params, completed, knownSessionId);
+        const entry = this._itemEntry(params, completed, knownSessionId, { authoritative: completed });
         if (!entry) return false;
-        this.repository.upsertItem(entry.sessionId, entry.record, entry.blocks || entry.block);
+        this.repository.upsertItem(
+            entry.sessionId, entry.record, entry.blocks || entry.block, { authoritative: completed },
+        );
         this._replayBuffered(params.threadId, params.item.id, entry.sessionId);
         if (!completed && entry.itemText !== undefined) {
             this.streaming.seed(this._streamKey(params.threadId, params.item.id, 0, entry.block.kind), entry.itemText);

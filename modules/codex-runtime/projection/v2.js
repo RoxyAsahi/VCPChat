@@ -24,6 +24,16 @@ function sanitizeUnknownItem(item = {}) {
     return safe;
 }
 
+function boundedJson(value, depth = 0) {
+    if (depth > 6) return '[truncated]';
+    if (value == null || typeof value === 'boolean' || typeof value === 'number') return value;
+    if (typeof value === 'string') return boundedText(value);
+    if (Array.isArray(value)) return value.slice(0, 100).map((entry) => boundedJson(entry, depth + 1));
+    if (typeof value !== 'object') return boundedText(value, 1_024);
+    return Object.fromEntries(Object.entries(value).slice(0, 100)
+        .map(([key, entry]) => [boundedText(key, 256), boundedJson(entry, depth + 1)]));
+}
+
 function normalizeContent(content, itemType) {
     if (itemType === 'reasoning') {
         return {
@@ -32,7 +42,11 @@ function normalizeContent(content, itemType) {
         };
     }
     if (!content || typeof content !== 'object') return { text: boundedText(content) };
-    if (content.item && !content.unknown) return { ...content, item: sanitizeUnknownItem(content.item) };
+    if (content.item && !content.unknown) {
+        const known = ['commandExecution', 'fileChange', 'mcpToolCall', 'collabAgentToolCall',
+            'dynamicToolCall', 'webSearch', 'imageView'].includes(String(content.item.type || ''));
+        return { ...boundedJson(content), item: known ? boundedJson(content.item) : sanitizeUnknownItem(content.item) };
+    }
     return content;
 }
 
@@ -78,10 +92,33 @@ function normalizeProjectionSnapshot(snapshot) {
     };
 }
 
+function projectionPatchBetween(before, after, { runtimeGeneration = 0 } = {}) {
+    const previous = before?.normalized || normalizeProjectionSnapshot(before || {});
+    const next = after?.normalized || normalizeProjectionSnapshot(after || {});
+    const previousById = new Map(previous.blocks.map((block) => [block.blockId, block]));
+    const nextById = new Map(next.blocks.map((block) => [block.blockId, block]));
+    const upsertBlocks = [];
+    for (const block of next.blocks) {
+        const existing = previousById.get(block.blockId);
+        if (!existing || JSON.stringify(existing) !== JSON.stringify(block)) upsertBlocks.push(block);
+    }
+    return {
+        schemaVersion: 1,
+        sessionId: next.sessionId,
+        threadId: next.threadId,
+        runtimeGeneration,
+        baseProjectionRevision: Number(previous.projectionRevision || 0),
+        projectionRevision: Number(next.projectionRevision || 0),
+        upsertBlocks,
+        deleteBlockIds: [...previousById.keys()].filter((id) => !nextById.has(id)),
+    };
+}
+
 module.exports = {
     CONTENT_SCHEMA_VERSION,
     stableBlockId,
     sanitizeUnknownItem,
     normalizeTimelineBlock,
     normalizeProjectionSnapshot,
+    projectionPatchBetween,
 };
