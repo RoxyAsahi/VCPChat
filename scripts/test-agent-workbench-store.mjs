@@ -505,6 +505,102 @@ assert.equal(cold.store.getState().messages[0].content, 'SQLite B', 'late A reco
 resolveThreadB({ session: { sessionId: 'topic-b', agentId: 'Nova', title: 'Thread B' }, messages: [] });
 cold.dispose();
 
+// Live reasoning and tools belong to the selected Session projection, not only
+// to the currently mounted DOM. Switching A -> B -> A must restore them on the
+// synchronous cached frame, before the second SQLite read resolves. An active
+// Turn must also not be reconciled from a potentially sparse thread/read.
+let liveSwitchEvent;
+let resolveSecondLiveSqlite;
+const liveSwitchThreadReads = [];
+let liveSqliteAReads = 0;
+const liveSwitch = createWorkbenchController({
+    agentRuntimeReadProjection: ({ sessionId }) => {
+        if (sessionId === 'live-session-a') {
+            liveSqliteAReads += 1;
+            if (liveSqliteAReads > 1) {
+                return new Promise((resolve) => { resolveSecondLiveSqlite = resolve; });
+            }
+            return Promise.resolve({
+                session: { sessionId, agentId: 'Nova', title: 'Live A' }, messages: [],
+            });
+        }
+        return Promise.resolve({
+            session: { sessionId, agentId: 'Nova', title: 'Idle B' },
+            messages: [{
+                messageId: 'idle-b-message', itemId: 'idle-b-item', role: 'assistant', status: 'completed',
+                blocks: [{ blockId: 'idle-b:0', kind: 'message', content: { text: 'Idle B' } }],
+            }],
+        });
+    },
+    agentRuntimeReadTopic: async ({ sessionId }) => {
+        liveSwitchThreadReads.push(sessionId);
+        return {
+            session: { sessionId, agentId: 'Nova', title: sessionId },
+            messages: sessionId === 'idle-session-b' ? [{
+                messageId: 'idle-b-message', itemId: 'idle-b-item', role: 'assistant', status: 'completed',
+                blocks: [{ blockId: 'idle-b:0', kind: 'message', content: { text: 'Idle B' } }],
+            }] : [],
+        };
+    },
+    onAgentRuntimeEvent(callback) { liveSwitchEvent = callback; return () => {}; },
+});
+liveSwitch.subscribeRuntime();
+liveSwitch.store.setState({
+    activeRuntimes: new Map([['live-session-a', {
+        sessionId: 'live-session-a', activity: 'running', activeTurnId: 'live-turn-a',
+    }]]),
+});
+await liveSwitch.previewTopic('live-session-a', 'Nova', { title: 'Live A' });
+liveSwitchEvent({
+    eventId: 'live-reasoning-event', sequence: 1, timestamp: 1, runtime: 'codex',
+    type: 'projection.updated', sessionId: 'live-session-a', turnId: 'live-turn-a', activity: 'running',
+    projectionMessage: {
+        messageId: 'live-reasoning-message', itemId: 'live-reasoning-item', turnId: 'live-turn-a',
+        role: 'assistant', status: 'inProgress', sourceOrder: 1,
+        blocks: [{ blockId: 'live-reasoning:0', kind: 'reasoning', content: { text: 'still thinking' } }],
+    },
+});
+liveSwitchEvent({
+    eventId: 'live-tool-event', sequence: 2, timestamp: 2, runtime: 'codex',
+    type: 'projection.updated', sessionId: 'live-session-a', turnId: 'live-turn-a', activity: 'running',
+    projectionMessage: {
+        messageId: 'live-tool-message', itemId: 'live-tool-item', turnId: 'live-turn-a',
+        role: 'assistant', status: 'inProgress', sourceOrder: 2,
+        blocks: [{ blockId: 'live-tool:0', kind: 'tool', content: {
+            item: { type: 'dynamicToolCall', tool: 'Browser', arguments: { url: 'https://vcptoolbox.com' } },
+        } }],
+    },
+});
+assert.equal(liveSwitch.store.getState().messages[0].reasoning, 'still thinking');
+assert.equal(liveSwitch.store.getState().tools.has('live-tool-item'), true);
+await liveSwitch.previewTopic('idle-session-b', 'Nova', { title: 'Idle B' });
+const returningToLiveA = liveSwitch.previewTopic('live-session-a', 'Nova', { title: 'Live A' });
+assert.equal(liveSwitch.store.getState().messages.some((message) => message.reasoning === 'still thinking'), true,
+    'switching back must synchronously restore live reasoning from the Session projection cache');
+assert.equal(liveSwitch.store.getState().tools.has('live-tool-item'), true,
+    'switching back must synchronously restore live tool cards from the Session projection cache');
+resolveSecondLiveSqlite({
+    session: { sessionId: 'live-session-a', agentId: 'Nova', title: 'Live A' },
+    messages: [{
+        messageId: 'live-reasoning-message', itemId: 'live-reasoning-item', turnId: 'live-turn-a',
+        role: 'assistant', status: 'inProgress', sourceOrder: 1,
+        blocks: [{ blockId: 'live-reasoning:0', kind: 'reasoning', content: { text: 'still thinking' } }],
+    }, {
+        messageId: 'live-tool-message', itemId: 'live-tool-item', turnId: 'live-turn-a',
+        role: 'assistant', status: 'inProgress', sourceOrder: 2,
+        blocks: [{ blockId: 'live-tool:0', kind: 'tool', content: {
+            item: { type: 'dynamicToolCall', tool: 'Browser', arguments: { url: 'https://vcptoolbox.com' } },
+        } }],
+    }],
+});
+await returningToLiveA;
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(liveSwitchThreadReads.includes('live-session-a'), false,
+    'an active Turn must not run thread/read reconciliation that can erase streaming reasoning or tools');
+assert.equal(liveSwitch.store.getState().messages.some((message) => message.reasoning === 'still thinking'), true);
+assert.equal(liveSwitch.store.getState().tools.has('live-tool-item'), true);
+liveSwitch.dispose();
+
 const hydrateCalls = [];
 let resolveHydrateSqlite;
 let resolveHydrateThread;

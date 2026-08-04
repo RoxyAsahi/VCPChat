@@ -188,8 +188,8 @@ function createWorkbenchController(runtimeApi) {
         refreshStatus: () => refreshStatus(),
     });
 
-    function applyCodexProjectionMessage(entry) {
-        if (!entry) return;
+    function applyCodexProjectionMessage(sessionId, entry) {
+        if (!sessionId || !entry) return;
         const patch = codexSnapshotToProjection({ messages: [entry] });
         const current = store.getState();
         const messages = [...current.messages];
@@ -232,9 +232,18 @@ function createWorkbenchController(runtimeApi) {
             if (index >= 0) markerObservations[index] = marker;
             else markerObservations.push(marker);
         }
-        store.setState({ messages, tools, markerObservations: markerObservations.slice(-100),
-            ...(patch.plan ? { plan: patch.plan } : {}),
-            ...(patch.context && Object.keys(patch.context).length ? { context: { ...current.context, ...patch.context } } : {}) });
+        const nextProjection = {
+            messages,
+            tools,
+            markerObservations: markerObservations.slice(-100),
+            context: patch.context && Object.keys(patch.context).length
+                ? { ...current.context, ...patch.context }
+                : current.context,
+            plan: patch.plan || current.plan || null,
+        };
+        const sessionSnapshots = new Map(current.sessionSnapshots);
+        sessionSnapshots.set(sessionId, nextProjection);
+        store.setState({ ...nextProjection, sessionSnapshots });
     }
 
     function applyCodexRuntimeEvent(event) {
@@ -258,7 +267,7 @@ function createWorkbenchController(runtimeApi) {
         if (event.projectionMessage && event.sessionId) {
             liveProjectionRevision.set(event.sessionId, (liveProjectionRevision.get(event.sessionId) || 0) + 1);
         }
-        if (selected && event.projectionMessage) applyCodexProjectionMessage(event.projectionMessage);
+        if (selected && event.projectionMessage) applyCodexProjectionMessage(event.sessionId, event.projectionMessage);
         applySessionUiEvent(event);
     }
 
@@ -293,11 +302,25 @@ function createWorkbenchController(runtimeApi) {
     }
 
     function cachedProjection(sessionId) {
+        const inMemory = store.getState().sessionSnapshots.get(sessionId);
+        if (inMemory) return inMemory;
         const cached = snapshotCache.get(sessionId);
         if (!cached) return null;
         snapshotCache.delete(sessionId);
         snapshotCache.set(sessionId, cached);
         return cached.projection;
+    }
+
+    function canReconcileSession(sessionId, state = store.getState()) {
+        const runtime = runtimeForTopic(sessionId, state);
+        if (runtime?.activeTurnId) return false;
+        if (['running', 'awaiting-approval', 'starting', 'reconnecting', 'unknown']
+            .includes(String(runtime?.activity || '').trim())) return false;
+        const sessionState = state.sessionUi?.bySessionId?.[sessionId]?.state;
+        return ![
+            'warming', 'starting', 'streaming', 'waiting-native-approval',
+            'waiting-vcp-approval', 'waiting-user-input', 'interrupting', 'reconnecting',
+        ].includes(sessionState);
     }
 
     function applyPreviewProjection(projection, selectedTopic, projectionSessionId) {
@@ -424,8 +447,10 @@ function createWorkbenchController(runtimeApi) {
             }
             const nextRuntime = applyHydratedSnapshot(sessionId, snapshot, runtimeHint, agentId);
             releaseSnapshotBarrier(barrier, snapshot, nextRuntime);
-            const revisionAtStart = liveProjectionRevision.get(sessionId) || 0;
-            void reconcileHydratedTopic(sessionId, runtimeHint, agentId, version, revisionAtStart);
+            if (canReconcileSession(sessionId)) {
+                const revisionAtStart = liveProjectionRevision.get(sessionId) || 0;
+                void reconcileHydratedTopic(sessionId, runtimeHint, agentId, version, revisionAtStart);
+            }
             return snapshot;
         } catch (error) {
             releaseSnapshotBarrier(barrier, null, runtimeForTopic(sessionId));
@@ -472,8 +497,10 @@ function createWorkbenchController(runtimeApi) {
             // Deliberately detached: navigation is complete before App Server
             // reconciliation begins. The guards in reconcilePreviewTopic make
             // an A response harmless after the user selects B.
-            const revisionAtStart = liveProjectionRevision.get(sessionId) || 0;
-            void reconcilePreviewTopic(sessionId, agentId, resolvedTopic, version, revisionAtStart);
+            if (canReconcileSession(sessionId)) {
+                const revisionAtStart = liveProjectionRevision.get(sessionId) || 0;
+                void reconcilePreviewTopic(sessionId, agentId, resolvedTopic, version, revisionAtStart);
+            }
             return localSnapshot;
         } catch (error) {
             releaseSnapshotBarrier(barrier, null, runtimeForTopic(sessionId));
