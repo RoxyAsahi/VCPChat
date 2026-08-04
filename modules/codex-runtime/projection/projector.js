@@ -65,7 +65,7 @@ function itemContent(item) {
             else summary = item.status === 'failed' ? '上下文压缩失败。'
                 : item.status === 'completed' ? '上下文压缩完成。'
                     : '正在整理上下文。';
-            return { text: summary, phase: hasStatus ? item.status : 'inProgress' };
+            return { text: summary, ...(hasStatus ? { phase: item.status } : {}) };
         }
         case 'fileChange': return { changes: normalizeCodexFileChanges(item.changes), status: item.status || 'inProgress' };
         case 'commandExecution': return { item: normalizedToolItem(item, [

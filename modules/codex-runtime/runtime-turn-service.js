@@ -430,6 +430,12 @@ class RuntimeTurnService {
             repository = this._operationRepository(operationContext);
             threadId = result?.thread?.id;
             if (!threadId) throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/fork returned no thread id');
+            if (result?.thread?.sessionId && result.thread.sessionId !== threadId) {
+                throw new CodexAppServerError(
+                    'INVALID_RESPONSE',
+                    'Codex 0.146 thread/fork returned an unexpected Session identity',
+                );
+            }
             repository.updateOperation(operation.operationId, { state: 'remote-applied', threadId });
             await this.context.faultInjection().afterThreadForkRemoteApplied?.({
                 operation, source, threadId, targetSessionId,

@@ -38,7 +38,7 @@ class FakeTransport extends EventEmitter {
                 }],
             },
         };
-        if (method === 'thread/fork') return { thread: { id: 'thr_fork' } };
+        if (method === 'thread/fork') return { thread: { id: 'thr_fork', sessionId: 'thr_fork' } };
         return {};
     }
     respond(id, result) { this.responses.push({ id, result }); }
