@@ -38,7 +38,7 @@
     "git diff --check"
   ],
   "blocked": {
-    "liveToolBox": "2026-08-04 deepseek-v4-flash returned HTTP 502 through the Adapter; a direct authenticated control request to the same ToolBox model endpoint reproduced HTTP 502, so no live pass is claimed"
+    "liveToolBox": "2026-08-04 after revisions 0191e670/6ac356f1, deepseek-v4-flash exhausted Adapter provider retries and completed failed with no Bridge call; a direct authenticated control request to the same ToolBox model endpoint returned HTTP 502, so no live pass is claimed"
   },
   "observations": {
     "settingsScopes": "Agent defaults, current Session, and advanced recovery are distinct rendered scopes",
@@ -48,7 +48,8 @@
     "realAdapter": "Codex App Server 0.146 real adapter fixture confirmed that the upstream ToolBox request exposes exactly vcp_invoke after filtering native additional_tools",
     "rendererForkAudit": "upstream 19fdff5f was reviewed; main-chat async history guards were not copied because Agent owns revision/session guards in its normalized store",
     "rendererSingleModel": "Renderer Store owns only Session-scoped normalized Blocks; messages/tools are read-only selected-Session views and the retired message/tool reducers are deleted",
-    "snapshotBarrier": "waterline-newer projection.updated events buffered during cold read or Session switch are replayed through the same revision Patch reducer as ordinary live events"
+    "snapshotBarrier": "waterline-newer projection.updated events buffered during cold read or Session switch are replayed through the same revision Patch reducer as ordinary live events",
+    "liveRetry": "deepseek-v4-flash reached turn/started, emitted repeated provider attempts, ended turn/completed=failed, produced zero server requests and zero Bridge invocations; direct control returned HTTP 502"
   },
   "claims": {
     "sqliteSchema": 11,
