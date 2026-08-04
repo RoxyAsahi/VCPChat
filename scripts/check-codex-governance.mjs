@@ -622,9 +622,18 @@ for (const method of ['agentRuntimeReadSessionConfig', 'agentRuntimeUpdateSessio
     if (!sharedCatalog.includes(method)) errors.push(`shared preload catalog missing ${method}`);
 }
 
-const archivedRustWorkflow = fs.readFileSync(path.join(root, '.github/workflows/rust_agent_runtime.yml'), 'utf8');
-if (/^\s{2}(push|pull_request):/m.test(archivedRustWorkflow)) {
-    errors.push('archived Rust workflow must be manual-only on the Codex branch');
+for (const removedPath of [
+    'archive/agent-runtime',
+    '.github/workflows/rust_agent_runtime.yml',
+    'rust/Cargo.toml',
+]) {
+    if (fs.existsSync(path.join(root, removedPath))) {
+        errors.push(`removed Agent route must stay absent: ${removedPath}`);
+    }
+}
+const packageScripts = Object.keys(JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).scripts || {});
+if (packageScripts.some((name) => /^archive:(?:rust|pi):/.test(name))) {
+    errors.push('root package must not expose removed Pi/Rust Agent commands');
 }
 
 const ipcContracts = require(path.join(root, 'modules/ipc/ipcContracts.js'));

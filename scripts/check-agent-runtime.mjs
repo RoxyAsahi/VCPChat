@@ -105,9 +105,16 @@ if (packageJson.build?.extraResources?.some((item) => String(item.from).includes
     errors.push('Codex product packaging must not ship the old vcp-agentd daemon');
 }
 if (packageJson.build?.files?.includes('agent-runtime/**/*')
-    || packageJson.build?.files?.includes('modules/agent-runtime/**/*')
-    || !packageJson.build?.files?.includes('!archive/agent-runtime/**/*')) {
-    errors.push('Codex product packaging must exclude archived Pi/Rust runtime sources');
+    || packageJson.build?.files?.includes('modules/agent-runtime/**/*')) {
+    errors.push('Codex product packaging must not include removed Pi/Rust runtime sources');
+}
+if (Object.keys(packageJson.scripts || {}).some((name) => /^archive:(?:rust|pi):/.test(name))) {
+    errors.push('removed Pi/Rust runtime commands must not return to the root package');
+}
+if (fs.existsSync(path.join(root, 'archive/agent-runtime'))
+    || fs.existsSync(path.join(root, '.github/workflows/rust_agent_runtime.yml'))
+    || fs.existsSync(path.join(root, 'rust/Cargo.toml'))) {
+    errors.push('removed Pi/Rust runtime source or workflow has re-entered the product tree');
 }
 if (!packageJson.build?.extraResources?.some((item) => (
     item.from === 'rust/toolbox-bridge/target/release/vcp-toolbox-bridge.exe'
