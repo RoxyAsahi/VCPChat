@@ -118,10 +118,12 @@ injection proves that a crash after `thread/start` or `thread/fork` ACK does not
 - settings apply 保存 target revision/generation/规范字段，只有匹配 `thread/settings/updated` 才确认；发送 barrier 不再被无关通知解除。
 - reconcile 校验 Thread ID 与 `itemsView`；partial history 不能删除，ToolBox/VChat authority 始终保留。
 - reasoning 使用独立 `summary[]/content[]`，Unknown Item 有界脱敏，delta-before-Item 使用 Main-only 有界缓冲。
-- Renderer 统一为 `sessionsById/blocksById/projectionRevisions`，Main 只发 revision Patch；A→B→A 与 revision-gap 均由同一 SQLite Projection 恢复。
+- Renderer 统一为 `sessionsById/blocksById/projectionRevisions`，Main 只发 revision Patch；`messages/tools` 只读派生，旧消息/工具事件 reducers 已删除。
+- `ephemeralStateBySession` 只持有未进入持久 Projection 的用户发送状态；Session 失败、Runtime crash 和持久 Block 确认均按完整 Session/Turn identity 收口。
+- snapshot barrier 会把 waterline 后的 `projection.updated` 重新送入同一个 revision Patch reducer，不再通过普通事件路由丢弃实时 reasoning/tool Block。
 - 0.146 fork 返回的 `thread.sessionId` 若存在必须等于新 Thread ID；版本升级必须重新验证，不能沿用该假设。
 
-Hermetic 已通过 `test:codex-projection-v2`、`test:codex-adapter-invariants`、`check:codex-governance` 和
+Revision `0191e670` / `6ac356f1` 已通过 `test:codex-ci`、`test:codex-projection-v2`、`test:codex-adapter-invariants`、`check:codex-governance` 和
 `check:ui-system`。真实 Electron 已验证运行中 A→B→A、reasoning/ToolBox 卡片隔离、crash、reload、SQLite
 恢复和 demand restart；设置 Select smoke 也已通过。真实 ToolBox 长调用尚未形成通过收据：2026-08-04
 指定 `deepseek-v4-flash` 时模型端点对 Adapter 和直接控制请求均返回 HTTP 502，因此状态仍不得升级为

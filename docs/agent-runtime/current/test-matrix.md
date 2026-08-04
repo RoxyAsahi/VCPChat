@@ -430,9 +430,9 @@ Electron 真实点击与完整 Main 进程重启已通过；真实 ToolBox provi
 
 | Gate | Command | Status |
 | --- | --- | --- |
-| SQLite V2 normalization/reconcile + Renderer normalized Store | `npm run test:codex-projection-v2` | committed pass |
+| SQLite V2 normalization/reconcile + Renderer normalized Store | `npm run test:codex-projection-v2` | committed pass on `6ac356f1`; Store owns no `messages/tools` transcript slices |
 | 0.146 Host/Turn/Manager invariants | `npm run test:codex-adapter-invariants` | committed pass |
-| Patch-only Workbench JSDOM | `npm run test:agent-workbench` | committed pass |
+| Patch-only Workbench JSDOM | `npm run test:agent-workbench` | committed pass on `6ac356f1`; streaming/tool/reasoning fixtures use revision Patches rather than synthetic transcript events |
 | Schema pin | `npm run check:codex-schema` | committed pass |
 | Static governance | `npm run check:codex-governance` | committed pass |
 | Electron crash/reload recovery | `npm run test:electron-codex-recovery` | committed pass |
@@ -441,7 +441,8 @@ Electron 真实点击与完整 Main 进程重启已通过；真实 ToolBox provi
 
 R16 assertions include idle-before-completed, matched settings confirmation, Thread/`itemsView` fail-closed,
 reasoning summary/content isolation, Unknown/delta-before-Item behavior, Toolbox authority preservation, fork Item ID isolation,
-background Session Patch isolation, A→B→A synchronous restoration, and revision-gap full SQLite reload.
+background Session Patch isolation, A→B→A synchronous restoration, revision-gap full SQLite reload, snapshot-barrier Patch replay,
+read-only derived `messages/tools`, and Session-local pending delivery recovery.
 
 - `npm run test:agent-renderer-isolation`: Agent mount/dispose does not mutate main-chat image or visibility ownership.
 - `npm run test:agent-renderer-lifecycle`: listeners, timers, intervals, and RAF registrations are disposed idempotently.

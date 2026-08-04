@@ -48,6 +48,12 @@ npm run test:agent-data-contracts
 - Main 到 Renderer 只允许 `AgentProjectionPatch`；旧 `projectionMessage` Renderer 路径已删除。
 - Renderer 的跨 Session 数据只允许 `sessionsById`、`blocksById`、`projectionRevisions`；当前
   `messages/tools` 是即时派生的选中会话渲染形状，不得作为恢复或后台 Session 缓存。
+- `createInitialState`、Store initial payload 和 `setState` 均禁止持有或写入 `messages/tools`；旧
+  `message-reducer.js` / `tool-reducer.js` 已删除并由治理检查阻止回归。
+- 未持久化的用户发送行只允许进入 `ephemeralStateBySession`；projection 确认后清理，Runtime crash 时转为
+  `unconfirmed`，跨 Session 失败只更新目标 Session。
+- snapshot transaction 释放 waterline 后事件时，`projection.updated` 必须调用 normalized Patch reducer，
+  不得降级为普通 Renderer event replay。
 - Patch 必须通过 schema、Session、Thread、Block prefix 和 revision 连续性校验。任何失败均完整读取 SQLite，
   不猜测缺失增量。
 - `thread/read` 的删除权威同时受 Thread identity 与 `itemsView=full` 约束；ToolBox/VChat authority 永不因
@@ -55,6 +61,7 @@ npm run test:agent-data-contracts
 - Unknown Item、delta-before-Item 和旧 Block schema 都有有界适配；原始协议 Item 不进入 Renderer。
 
 机器门槛：`npm run test:codex-projection-v2`、`npm run test:codex-adapter-invariants`、
-`npm run check:codex-governance`。`test:electron-codex-session-switch` 已验证运行中 A→B→A、reasoning/ToolBox
+`npm run check:codex-governance`。Revision `0191e670` / `6ac356f1` 的 `test:codex-ci`、
+`test:electron-codex-session-switch` 已验证运行中 A→B→A、reasoning/ToolBox
 卡片隔离以及 reload 后 SQLite 恢复；完整设置 smoke 也已通过。真实 ToolBox `deepseek-v4-flash` 长调用仍因
 模型端点 HTTP 502 未形成通过收据，因此 R16 状态保持 `implemented/working-tree`。

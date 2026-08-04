@@ -268,7 +268,9 @@ R13 当前状态为 `implemented/working-tree`；代码治理目标已实现，�
 
 - [x] 0.146 idle-before-completed、settings confirmation、Thread identity、partial `itemsView` 和 fork Session identity 已固化。
 - [x] Projection V2 Block、reasoning 双数组、Unknown fallback、delta buffer 和精确 reconcile Patch 已实现。
-- [x] Renderer normalized Store、Patch revision gate、后台 Session 更新、A→B→A 恢复和 revision-gap SQLite reload 已实现。
+- [x] Renderer normalized Store、Patch revision gate、后台 Session 更新、A→B→A 恢复和 revision-gap SQLite reload 已实现；Store 不再拥有 `messages/tools`，两者只由当前 Session Blocks 即时派生。
+- [x] 旧 `message-reducer` / `tool-reducer` 已删除；Session-local pending user row 仅存在于 `ephemeralStateBySession`，crash/failure 不会重建第二条 transcript。
+- [x] 冷启动/切换期间 snapshot barrier 内的 `projection.updated` 与正常实时事件走同一 Patch reducer，waterline 之后的 reasoning/tool Block 不再因绕过 reducer 而丢失。
 - [x] 旧 `sessionSnapshots`、`snapshotCache`、`liveProjectionRevision` 与 Renderer `projectionMessage` 路径已删除并加入治理扫描。
 - [x] 新增 `test:codex-projection-v2` 与 `test:codex-adapter-invariants` 聚合门槛。
 - [x] Electron recovery 已验证双 Session projection isolation、Renderer reload、crash 后 SQLite 可读和按需重启。
@@ -276,7 +278,7 @@ R13 当前状态为 `implemented/working-tree`；代码治理目标已实现，�
 - [x] 设置页 Select smoke、文件体积、CSS owner 和 timer lifecycle governance 阻塞已修复，`test:electron-codex-smoke`、`check:ui-system` 与 `check:codex-governance` 通过。
 - [ ] 真实 ToolBox 长调用仍待 live 通过。2026-08-04 使用 `deepseek-v4-flash` 时，Adapter gate 与绕过 Codex 的直接控制请求均收到 ToolBox 模型端点 HTTP 502；该外部状态不计为通过，也不归因于 Projection。
 
-状态：`implemented/working-tree`。SQLite database schema 保持 11，Block/Renderer contract 为 V2。
+当前实现 revision 为 `0191e670`，治理/测试 revision 为 `6ac356f1`；`test:codex-ci`（121.6 秒）、真实 0.146 App Server/Adapter、Electron smoke 与 Session-switch 均通过。状态仍为 `implemented/working-tree`。SQLite database schema 保持 11，Block/Renderer contract 为 V2。
 
 - [x] R7: Agent Profile/Session snapshot、CAS、projection-only IPC、ToolBox latest-wins 与 Session-keyed Renderer state。
 - [x] R8: Runtime generation、InteractionRegistry 有界清理、按需重启、持久输入状态机与 pre-RPC/ACK crash fault injection。
