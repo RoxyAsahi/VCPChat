@@ -9,7 +9,8 @@
     "a16c74c1",
     "0cc1b065",
     "b5ef8d2e",
-    "b40612ca"
+    "b40612ca",
+    "587b6350"
   ],
   "passed": [
     "npm run test:codex-projection-v2",
