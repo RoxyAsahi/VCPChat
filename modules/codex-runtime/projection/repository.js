@@ -10,6 +10,8 @@ const {
     normalizeApplyState,
 } = require('../dataContracts');
 const { normalizeProjectionSnapshot, projectionPatchBetween } = require('./v2');
+const { mapBlockRow, mapOperationRow, mapSessionRow } = require('./rowMappers');
+const { mergeProjectionContent } = require('./contentMerge');
 
 function parseJson(value, fallback) {
     try {
@@ -59,29 +61,6 @@ function upsertItemBlock(stmt, sessionId, record, block, existing, session, now,
         created_at: existingBlock?.created_at || block.createdAt || now,
         updated_at: now,
     });
-}
-
-function hasProjectionValue(value) {
-    if (value == null) return false;
-    if (typeof value === 'string') return value.length > 0;
-    if (Array.isArray(value)) return value.some(hasProjectionValue);
-    if (typeof value === 'object') return Object.values(value).some(hasProjectionValue);
-    return true;
-}
-
-function mergeProjectionContent(existing, incoming) {
-    if (!hasProjectionValue(incoming)) return existing;
-    if (Array.isArray(incoming)) return incoming;
-    if (!incoming || typeof incoming !== 'object') return incoming;
-    const base = existing && typeof existing === 'object' && !Array.isArray(existing) ? existing : {};
-    const merged = { ...base };
-    for (const [key, value] of Object.entries(incoming)) {
-        if (!hasProjectionValue(value)) continue;
-        merged[key] = value && typeof value === 'object' && !Array.isArray(value)
-            ? mergeProjectionContent(base[key], value)
-            : value;
-    }
-    return merged;
 }
 
 class AgentProjectionRepository {
@@ -886,57 +865,15 @@ class AgentProjectionRepository {
     }
 
     _session(row) {
-        return {
-            sessionId: row.session_id,
-            threadId: row.codex_thread_id,
-            agentId: row.agent_id,
-            agentCatalogId: row.agent_catalog_id || null,
-            agentNameSnapshot: row.agent_name_snapshot || null,
-            title: row.title,
-            workspaceRoot: row.workspace_root,
-            state: row.state,
-            pinnedAt: row.pinned_at || null,
-            configSnapshot: normalizeSessionConfig(parseJson(row.config_snapshot_json, {})),
-            configRevision: Number(row.config_revision || 1),
-            appliedRuntimeConfig: normalizeSessionConfig(parseJson(row.applied_config_snapshot_json, {})),
-            appliedRuntimeConfigRevision: Number(row.applied_config_revision || 0),
-            configApplyState: normalizeApplyState(row.config_apply_state,
-                row.codex_thread_id ? 'pending' : 'unmaterialized'),
-            configApplyError: row.config_apply_error || null,
-            configApplyUpdatedAt: row.config_apply_updated_at || null,
-            orphaned: row.orphaned === 1,
-            createdAt: row.created_at,
-            updatedAt: row.updated_at,
-            archivedAt: row.archived_at,
-        };
+        return mapSessionRow(row);
     }
 
     _block(row) {
-        return {
-            blockId: row.block_id,
-            kind: row.kind,
-            status: row.status,
-            ordinal: row.ordinal,
-            content: parseJson(row.content_json, {}),
-            contentSchemaVersion: Number(row.content_schema_version || BLOCK_CONTENT_SCHEMA_VERSION),
-            authority: row.authority || 'codex',
-            createdAt: row.created_at,
-            updatedAt: row.updated_at,
-        };
+        return mapBlockRow(row);
     }
 
     _operation(row) {
-        return {
-            operationId: row.operation_id,
-            sessionId: row.session_id || null,
-            kind: row.kind,
-            state: row.state,
-            threadId: row.codex_thread_id || null,
-            payload: parseJson(row.payload_json, {}),
-            lastError: row.last_error || null,
-            createdAt: row.created_at,
-            updatedAt: row.updated_at,
-        };
+        return mapOperationRow(row);
     }
 }
 

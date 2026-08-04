@@ -356,6 +356,19 @@ class RuntimeConfigService {
         this.scheduledApplies.clear();
     }
 
+    _assertApplicableInstructionMode(repository, session, desired, applied) {
+        if (!requiresFreshCodexManagedSession(desired, applied)) return;
+        const error = new CodexAppServerError(
+            'IDENTITY_CHANGE_REQUIRES_NEW_SESSION',
+            'Codex-managed instructions require a derived Session for this Thread',
+        );
+        const failed = repository.markSessionConfigFailed(
+            session.sessionId, session.configRevision, error.message,
+        );
+        this.sendSessionConfigEvent('session.config.failed', failed, error.message);
+        throw error;
+    }
+
     async applySessionRuntimeConfig(sessionId, { barrier = false } = {}) {
         const idValue = String(sessionId || '').trim();
         const applyPromises = this.context.configApplyPromises();
@@ -369,15 +382,7 @@ class RuntimeConfigService {
                 && session.configApplyState === 'applied') return session;
             const desired = normalizeSessionConfig(session.configSnapshot || {});
             const applied = normalizeSessionConfig(session.appliedRuntimeConfig || {});
-            if (requiresFreshCodexManagedSession(desired, applied)) {
-                const error = new CodexAppServerError(
-                    'IDENTITY_CHANGE_REQUIRES_NEW_SESSION',
-                    'Codex-managed instructions require a derived Session for this Thread',
-                );
-                session = repository.markSessionConfigFailed(idValue, session.configRevision, error.message);
-                this.sendSessionConfigEvent('session.config.failed', session, error.message);
-                throw error;
-            }
+            this._assertApplicableInstructionMode(repository, session, desired, applied);
             session = repository.markSessionConfigApplying(idValue, session.configRevision);
             this.sendSessionConfigEvent('session.config.pending', session);
             let operation = null;

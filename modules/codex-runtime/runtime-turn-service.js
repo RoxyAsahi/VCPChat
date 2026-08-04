@@ -14,6 +14,61 @@ const {
     vcpInvokeTool,
 } = require('./runtime-normalizers');
 
+function resolveForkBoundary({ turnId, beforeTurnId }) {
+    const before = String(beforeTurnId || '').trim();
+    const last = String(turnId || '').trim();
+    if (before && last) {
+        throw new CodexAppServerError(
+            'INVALID_INPUT', 'thread/fork accepts either beforeTurnId or lastTurnId, not both',
+        );
+    }
+    return { beforeTurnId: before, lastTurnId: last, targetTurnId: before || last || null };
+}
+
+function forkRequestParams(context, source, config, boundary) {
+    return {
+        threadId: source.threadId,
+        model: config.model || undefined,
+        ...context.runtimePolicyParams(config),
+        cwd: source.workspaceRoot || undefined,
+        approvalPolicy: normalizeApprovalPolicy(config.permissionMode || config.approvalPolicy),
+        sandbox: normalizeSandboxMode(config.sandbox),
+        ...context.threadInstructionParams(config),
+        ...(boundary.beforeTurnId ? { beforeTurnId: boundary.beforeTurnId }
+            : (boundary.lastTurnId ? { lastTurnId: boundary.lastTurnId } : {})),
+    };
+}
+
+function requireForkThreadId(result) {
+    const threadId = result?.thread?.id;
+    if (!threadId) throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/fork returned no thread id');
+    if (result?.thread?.sessionId && result.thread.sessionId !== threadId) {
+        throw new CodexAppServerError(
+            'INVALID_RESPONSE', 'Codex 0.146 thread/fork returned an unexpected Session identity',
+        );
+    }
+    return threadId;
+}
+
+function forkFailureState(threadId, error) {
+    return threadId || isUncertainRemoteMutation(error) ? 'uncertain' : 'failed';
+}
+
+function resumeRequestParams(context, session, threadId) {
+    const config = session.configSnapshot || {};
+    return {
+        threadId,
+        model: config.model || undefined,
+        ...context.runtimePolicyParams(config),
+        cwd: session.workspaceRoot || undefined,
+        approvalPolicy: normalizeApprovalPolicy(config.permissionMode || config.approvalPolicy),
+        sandbox: normalizeSandboxMode(config.sandbox),
+        ...context.threadInstructionParams(config),
+        ...(config.executionProfile === 'toolbox-only' ? { dynamicTools: [vcpInvokeTool()] } : {}),
+        excludeTurns: true,
+    };
+}
+
 class RuntimeTurnService {
     constructor(context) {
         this.context = Object.freeze(context);
@@ -388,17 +443,11 @@ class RuntimeTurnService {
         if (!source?.threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached');
         source = this.context.repairSessionIdentity(this.context.repairSessionConfig(source));
         const config = source.configSnapshot || {};
-        const forkBeforeTurnId = String(beforeTurnId || '').trim();
-        const forkLastTurnId = String(turnId || '').trim();
-        if (forkBeforeTurnId && forkLastTurnId) {
-            throw new CodexAppServerError(
-                'INVALID_INPUT', 'thread/fork accepts either beforeTurnId or lastTurnId, not both',
-            );
-        }
+        const boundary = resolveForkBoundary({ turnId, beforeTurnId });
         const operationContext = this._operation({
             sessionId: source.sessionId,
             threadId: source.threadId,
-            turnId: forkBeforeTurnId || forkLastTurnId || null,
+            turnId: boundary.targetTurnId,
         });
         const targetSessionId = this.context.createId('session');
         const operation = repository.createOperation({
@@ -406,36 +455,18 @@ class RuntimeTurnService {
             payload: {
                 targetSessionId,
                 sourceThreadId: source.threadId,
-                lastTurnId: forkLastTurnId || null,
-                beforeTurnId: forkBeforeTurnId || null,
+                lastTurnId: boundary.lastTurnId || null,
+                beforeTurnId: boundary.beforeTurnId || null,
             },
         });
         let threadId;
         try {
             repository.updateOperation(operation.operationId, { state: 'dispatching' });
-            const result = await this.context.transport().request('thread/fork', {
-                threadId: source.threadId,
-                // A fork copies history, not VChat's ephemeral provider
-                // binding. Carry the effective toolbox-only configuration so
-                // the first replacement Turn uses our Responses adapter.
-                model: config.model || undefined,
-                ...this.context.runtimePolicyParams(config),
-                cwd: source.workspaceRoot || undefined,
-                approvalPolicy: normalizeApprovalPolicy(config.permissionMode || config.approvalPolicy),
-                sandbox: normalizeSandboxMode(config.sandbox),
-                ...this.context.threadInstructionParams(config),
-                ...(forkBeforeTurnId ? { beforeTurnId: forkBeforeTurnId }
-                    : (forkLastTurnId ? { lastTurnId: forkLastTurnId } : {})),
-            });
+            const result = await this.context.transport().request(
+                'thread/fork', forkRequestParams(this.context, source, config, boundary),
+            );
             repository = this._operationRepository(operationContext);
-            threadId = result?.thread?.id;
-            if (!threadId) throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/fork returned no thread id');
-            if (result?.thread?.sessionId && result.thread.sessionId !== threadId) {
-                throw new CodexAppServerError(
-                    'INVALID_RESPONSE',
-                    'Codex 0.146 thread/fork returned an unexpected Session identity',
-                );
-            }
+            threadId = requireForkThreadId(result);
             repository.updateOperation(operation.operationId, { state: 'remote-applied', threadId });
             await this.context.faultInjection().afterThreadForkRemoteApplied?.({
                 operation, source, threadId, targetSessionId,
@@ -464,7 +495,7 @@ class RuntimeTurnService {
         } catch (error) {
             repository = this._operationRepository(operationContext);
             repository.updateOperation(operation.operationId, {
-                state: (threadId || isUncertainRemoteMutation(error)) ? 'uncertain' : 'failed',
+                state: forkFailureState(threadId, error),
                 threadId: threadId || null,
                 lastError: error?.message || String(error),
             });
@@ -516,6 +547,70 @@ class RuntimeTurnService {
         return completion;
     }
 
+    async _readResumedActiveTurnId(session, threadId, operation) {
+        try {
+            const read = await this.context.transport().request('thread/read', {
+                threadId, includeTurns: true,
+            });
+            this.context.assertOperationContext(operation);
+            const readThread = read?.thread || read;
+            if (String(readThread?.id || '').trim() !== threadId) {
+                throw new CodexAppServerError(
+                    'INVALID_RESPONSE', 'Codex thread/read returned a mismatched Thread',
+                );
+            }
+            return [...(readThread?.turns || [])].reverse().find((turn) => (
+                String(turn?.status || '').toLowerCase() === 'inprogress'
+            ))?.id || null;
+        } catch (error) {
+            this.context.diagnostic('thread-active-turn-unresolved', {
+                sessionId: session.sessionId,
+                threadId,
+                error: error?.message || String(error),
+            });
+            return null;
+        }
+    }
+
+    async _handleResumeFailure(error, session, operation) {
+        if (error?.code === 'STALE_RUNTIME_GENERATION' || !this.context.repository()) throw error;
+        const repository = this._operationRepository(operation);
+        const projection = repository.readProjection(session.sessionId);
+        if (isConfirmedThreadNotFound(error) && !hasDurableProjection(projection)) {
+            return this.startThreadForSession(session);
+        }
+        if (isConfirmedThreadNotFound(error)) repository.markOrphaned(session.sessionId, true);
+        repository.markProjectionError(session.sessionId, error.message);
+        throw error;
+    }
+
+    async _resumeAttachedSession(session, threadId, operation, resumed) {
+        try {
+            const result = await this.context.transport().request(
+                'thread/resume', resumeRequestParams(this.context, session, threadId),
+            );
+            const repository = this._operationRepository(operation);
+            const resumedThreadId = String(result?.thread?.id || '').trim();
+            if (resumedThreadId !== threadId) {
+                throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/resume returned a mismatched thread id');
+            }
+            const activity = result?.thread?.status?.type === 'active' ? 'running' : 'idle';
+            const activeTurnId = activity === 'running'
+                ? await this._readResumedActiveTurnId(session, threadId, operation) : null;
+            this.context.threadStates().set(threadId, { activity, activeTurnId });
+            resumed.add(threadId);
+            const applied = repository.markSessionConfigApplied(
+                session.sessionId, session.configRevision, session.configSnapshot,
+            );
+            this.context.configApplyTargets().delete(threadId);
+            this.context.sendSessionConfigEvent('session.config.applied', applied);
+            if (session.orphaned) repository.markOrphaned(session.sessionId, false);
+            return repository.getSession(session.sessionId) || applied || session;
+        } catch (error) {
+            return this._handleResumeFailure(error, session, operation);
+        }
+    }
+
     async resumeSession(session) {
         const threadId = String(session?.threadId || '').trim();
         if (!threadId) throw new CodexAppServerError('NOT_FOUND', 'Agent Session is not attached to a Codex Thread');
@@ -524,74 +619,8 @@ class RuntimeTurnService {
         const resuming = this.context.resumingThreads();
         if (resumed.has(threadId)) return this._operationRepository(operation).getSession(session.sessionId) || session;
         if (resuming.has(threadId)) return resuming.get(threadId);
-        const promise = (async () => {
-            const config = session.configSnapshot || {};
-            try {
-                const result = await this.context.transport().request('thread/resume', {
-                    threadId,
-                    model: config.model || undefined,
-                    ...this.context.runtimePolicyParams(config),
-                    cwd: session.workspaceRoot || undefined,
-                    approvalPolicy: normalizeApprovalPolicy(config.permissionMode || config.approvalPolicy),
-                    sandbox: normalizeSandboxMode(config.sandbox),
-                    ...this.context.threadInstructionParams(config),
-                    ...(config.executionProfile === 'toolbox-only' ? { dynamicTools: [vcpInvokeTool()] } : {}),
-                    excludeTurns: true,
-                });
-                const repository = this._operationRepository(operation);
-                const resumedThreadId = String(result?.thread?.id || '').trim();
-                if (resumedThreadId !== threadId) {
-                    throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/resume returned a mismatched thread id');
-                }
-                const activity = result?.thread?.status?.type === 'active' ? 'running' : 'idle';
-                let activeTurnId = null;
-                if (activity === 'running') {
-                    try {
-                        const read = await this.context.transport().request('thread/read', {
-                            threadId, includeTurns: true,
-                        });
-                        this.context.assertOperationContext(operation);
-                        const readThread = read?.thread || read;
-                        if (String(readThread?.id || '').trim() !== threadId) {
-                            throw new CodexAppServerError(
-                                'INVALID_RESPONSE', 'Codex thread/read returned a mismatched Thread',
-                            );
-                        }
-                        const turns = readThread?.turns || [];
-                        activeTurnId = [...turns].reverse().find((turn) => (
-                            String(turn?.status || '').toLowerCase() === 'inprogress'
-                        ))?.id || null;
-                    } catch (error) {
-                        this.context.diagnostic('thread-active-turn-unresolved', {
-                            sessionId: session.sessionId,
-                            threadId,
-                            error: error?.message || String(error),
-                        });
-                    }
-                }
-                this.context.threadStates().set(threadId, { activity, activeTurnId });
-                resumed.add(threadId);
-                const applied = repository.markSessionConfigApplied(
-                    session.sessionId, session.configRevision, session.configSnapshot,
-                );
-                this.context.configApplyTargets().delete(threadId);
-                this.context.sendSessionConfigEvent('session.config.applied', applied);
-                if (session.orphaned) repository.markOrphaned(session.sessionId, false);
-                return repository.getSession(session.sessionId) || applied || session;
-            } catch (error) {
-                if (error?.code === 'STALE_RUNTIME_GENERATION' || !this.context.repository()) throw error;
-                const repository = this._operationRepository(operation);
-                const projection = repository.readProjection(session.sessionId);
-                if (isConfirmedThreadNotFound(error) && !hasDurableProjection(projection)) {
-                    return this.startThreadForSession(session);
-                }
-                if (isConfirmedThreadNotFound(error)) repository.markOrphaned(session.sessionId, true);
-                repository.markProjectionError(session.sessionId, error.message);
-                throw error;
-            } finally {
-                resuming.delete(threadId);
-            }
-        })();
+        const promise = this._resumeAttachedSession(session, threadId, operation, resumed)
+            .finally(() => resuming.delete(threadId));
         resuming.set(threadId, promise);
         return promise;
     }

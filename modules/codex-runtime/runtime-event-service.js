@@ -3,6 +3,35 @@
 const crypto = require('crypto');
 const { sanitizeInteractionPayload } = require('./runtime-normalizers');
 
+function nextThreadState(message, previous) {
+    if (message.method === 'turn/started') {
+        return { next: {
+            ...previous,
+            activity: 'running',
+            activeTurnId: message.params?.turn?.id || previous.activeTurnId || null,
+            observedThreadStatus: 'active',
+        }, completedTurnId: null };
+    }
+    if (message.method === 'turn/completed') {
+        const eventTurnId = String(message.params?.turn?.id || message.params?.turnId || '').trim();
+        if (!eventTurnId || previous.activeTurnId !== eventTurnId) {
+            return { next: previous, completedTurnId: null };
+        }
+        return { next: {
+            ...previous, activity: 'idle', activeTurnId: null, observedThreadStatus: 'idle',
+        }, completedTurnId: eventTurnId };
+    }
+    if (message.method === 'thread/status/changed') {
+        const statusType = String(message.params?.status?.type || 'unknown');
+        return { next: {
+            ...previous,
+            activity: statusType === 'active' || previous.activeTurnId ? 'running' : 'idle',
+            observedThreadStatus: statusType,
+        }, completedTurnId: null };
+    }
+    return { next: previous, completedTurnId: null };
+}
+
 class RuntimeEventService {
     constructor(context) {
         this.context = Object.freeze(context);
@@ -30,38 +59,9 @@ class RuntimeEventService {
         const previous = states.get(session.threadId) || {
             activity: 'idle', activeTurnId: null, observedThreadStatus: 'idle',
         };
-        let next = previous;
-        let completedTurnId = null;
-        if (message.method === 'turn/started') {
-            next = {
-                ...previous,
-                activity: 'running',
-                activeTurnId: message.params?.turn?.id || previous.activeTurnId || null,
-                observedThreadStatus: 'active',
-            };
-        } else if (message.method === 'turn/completed') {
-            const eventTurnId = String(message.params?.turn?.id || message.params?.turnId || '').trim();
-            if (eventTurnId && previous.activeTurnId === eventTurnId) {
-                completedTurnId = eventTurnId;
-                next = {
-                    ...previous,
-                    activity: 'idle',
-                    activeTurnId: null,
-                    observedThreadStatus: 'idle',
-                };
-                this.context.turnCancellationStates?.()?.delete(`${session.threadId}:${eventTurnId}`);
-            }
-        } else if (message.method === 'thread/status/changed') {
-            const statusType = String(message.params?.status?.type || 'unknown');
-            const active = statusType === 'active';
-            // Codex 0.146 may send idle before turn/completed. Status is an
-            // observation only; the matching turn/completed is the sole
-            // authority that clears activeTurnId and drains follow-ups.
-            next = {
-                ...previous,
-                activity: active || previous.activeTurnId ? 'running' : 'idle',
-                observedThreadStatus: statusType,
-            };
+        const { next, completedTurnId } = nextThreadState(message, previous);
+        if (completedTurnId) {
+            this.context.turnCancellationStates?.()?.delete(`${session.threadId}:${completedTurnId}`);
         }
         states.set(session.threadId, next);
         repository.saveSession({ ...durableSession, state: next.activity, updatedAt: Date.now() });
