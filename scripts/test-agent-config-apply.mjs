@@ -15,6 +15,7 @@ class ConfigTransport extends EventEmitter {
         this.status = { running: false, ready: false, pid: 146 };
         this.calls = [];
         this.failSettings = false;
+        this.autoConfirmSettings = false;
     }
     async start() { this.status = { ...this.status, running: true, ready: true }; }
     async stop() { this.status = { ...this.status, running: false, ready: false }; }
@@ -26,6 +27,18 @@ class ConfigTransport extends EventEmitter {
             const error = new Error('settings rejected');
             error.code = 'INVALID_PARAMS';
             throw error;
+        }
+        if (method === 'thread/settings/update' && this.autoConfirmSettings) {
+            queueMicrotask(() => this.emit('notification', {
+                method: 'thread/settings/updated',
+                params: {
+                    threadId: params.threadId,
+                    threadSettings: {
+                        cwd: params.cwd, model: params.model, approvalPolicy: params.approvalPolicy,
+                        effort: params.effort ?? null, personality: params.personality ?? null,
+                    },
+                },
+            }));
         }
         if (method === 'turn/start') return { turn: { id: 'turn-config' } };
         return {};
@@ -140,6 +153,17 @@ await manager.updateWorkbenchSettings({
     sessionId: topic.sessionId,
     expectedConfigRevision: afterPrompt.configRevision,
     model: 'model-a',
+});
+transport.autoConfirmSettings = true;
+await manager._applySessionRuntimeConfig(topic.sessionId, { barrier: true });
+assert.equal(manager.readSessionConfig({ sessionId: topic.sessionId }).applyState, 'applied',
+    'the send barrier must wait for the matching settings notification');
+transport.autoConfirmSettings = false;
+const afterConfirmed = manager.repository.getSession(topic.sessionId);
+await manager.updateWorkbenchSettings({
+    sessionId: topic.sessionId,
+    expectedConfigRevision: afterConfirmed.configRevision,
+    model: 'model-b',
 });
 transport.failSettings = true;
 await assert.rejects(() => manager.startTurn({ sessionId: topic.sessionId, prompt: 'must not send' }), /settings rejected/);

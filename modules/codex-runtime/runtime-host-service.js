@@ -34,9 +34,11 @@ function applySettingsNotification(context, repository, session, message) {
         && actual.personality === (expected.personality ?? null);
     if (!matches) return;
     const applied = repository.markSessionConfigApplied(target.sessionId, target.revision, target.snapshot);
+    clearTimeout(target.timeout);
     context.configApplyTargets().delete(session.threadId);
     if (applied?.appliedRuntimeConfigRevision === target.revision) {
         context.sendSessionConfigEvent('session.config.applied', applied);
+        target.resolve?.(applied);
     }
 }
 

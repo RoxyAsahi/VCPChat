@@ -181,6 +181,13 @@ class RuntimeTurnService {
         await this.context.applySessionRuntimeConfig(session.sessionId, { barrier: true });
         let repository = this._operationRepository(operation);
         session = sessionProjection(repository.getSession(session.sessionId));
+        const appliedConfig = session.appliedRuntimeConfigRevision === session.configRevision
+            ? session.appliedRuntimeConfig : null;
+        if (!appliedConfig) {
+            throw new CodexAppServerError(
+                'SESSION_CONFIG_PENDING', 'Session configuration was not confirmed before turn/start',
+            );
+        }
         const text = String(prompt || '').trim();
         if (!text && (!Array.isArray(attachments) || attachments.length === 0)) {
             throw new CodexAppServerError('INVALID_INPUT', 'Prompt or attachment must not be empty');
@@ -191,21 +198,16 @@ class RuntimeTurnService {
             clientUserMessageId: clientUserMessageId || this.context.createId('client_msg'),
             input: buildTurnInput(text, resolvedAttachments),
             cwd: session.workspaceRoot,
-            model: session.configSnapshot?.model || undefined,
-            ...(this.context.effectiveReasoningEffort(session.configSnapshot || {})
-                ? { effort: this.context.effectiveReasoningEffort(session.configSnapshot || {}) } : {}),
+            model: appliedConfig.model || undefined,
+            ...(this.context.effectiveReasoningEffort(appliedConfig)
+                ? { effort: this.context.effectiveReasoningEffort(appliedConfig) } : {}),
             approvalPolicy: normalizeApprovalPolicy(
-                session.configSnapshot?.permissionMode || session.configSnapshot?.approvalPolicy,
+                appliedConfig.permissionMode || appliedConfig.approvalPolicy,
             ),
-            sandbox: normalizeSandboxMode(session.configSnapshot?.sandbox),
+            sandbox: normalizeSandboxMode(appliedConfig.sandbox),
         });
         repository = this._operationRepository(operation);
         const acceptedTurnId = result?.turn?.id || this.context.createId('turn');
-        const appliedSession = repository.markSessionConfigApplied(
-            session.sessionId, session.configRevision, session.configSnapshot,
-        );
-        this.context.configApplyTargets().delete(session.threadId);
-        this.context.sendSessionConfigEvent('session.config.applied', appliedSession);
         this.context.idleWarmSessions().delete(session.sessionId);
         this.context.threadStates().set(session.threadId, { activity: 'running', activeTurnId: acceptedTurnId });
         this.context.diagnostic('turn-start-ack', {
@@ -543,7 +545,13 @@ class RuntimeTurnService {
                             threadId, includeTurns: true,
                         });
                         this.context.assertOperationContext(operation);
-                        const turns = read?.thread?.turns || read?.turns || [];
+                        const readThread = read?.thread || read;
+                        if (String(readThread?.id || '').trim() !== threadId) {
+                            throw new CodexAppServerError(
+                                'INVALID_RESPONSE', 'Codex thread/read returned a mismatched Thread',
+                            );
+                        }
+                        const turns = readThread?.turns || [];
                         activeTurnId = [...turns].reverse().find((turn) => (
                             String(turn?.status || '').toLowerCase() === 'inprogress'
                         ))?.id || null;

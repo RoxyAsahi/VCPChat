@@ -8,6 +8,8 @@ const { createRuntimeOperationContext } = require('../modules/codex-runtime/runt
 const session = {
     sessionId: 'session-turn', threadId: 'thread-turn', workspaceRoot: '.', archivedAt: null,
     configRevision: 2, configSnapshot: { model: 'gpt-5.6', permissionMode: 'ask', sandbox: 'none' },
+    appliedRuntimeConfigRevision: 2,
+    appliedRuntimeConfig: { model: 'gpt-5.6', permissionMode: 'ask', sandbox: 'none' },
 };
 const secondSession = {
     ...session,

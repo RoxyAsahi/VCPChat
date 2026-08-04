@@ -55,6 +55,22 @@ function threadSettingsPatch(session, desired = {}) {
     };
 }
 
+function runtimeSettingsTarget(session, config = {}) {
+    return {
+        cwd: config.workspaceRoot || session.workspaceRoot || undefined,
+        model: config.model || undefined,
+        approvalPolicy: normalizeApproval(config.permissionMode, config.approvalPolicy),
+        effort: config.reasoningEffort || null,
+        personality: config.instructionMode === 'codex-managed'
+            && config.personality && config.personality !== 'none' ? config.personality : null,
+    };
+}
+
+function sameRuntimeSettings(left = {}, right = {}) {
+    return ['cwd', 'model', 'approvalPolicy', 'effort', 'personality']
+        .every((field) => (left[field] ?? null) === (right[field] ?? null));
+}
+
 function resolveRequestedWorkspace(context, settings, hasWorkspaceUpdate) {
     if (!hasWorkspaceUpdate) return null;
     const requested = path.resolve(String(settings.workspaceRoot || '').trim() || context.projectRoot());
@@ -387,26 +403,60 @@ class RuntimeConfigService {
                     await this.context.resumeSession(repository.getSession(idValue));
                     return this._operationRepository(operation).getSession(idValue);
                 }
+                const targetSettings = runtimeSettingsTarget(session, desired);
+                const appliedSettings = runtimeSettingsTarget({
+                    ...session,
+                    workspaceRoot: applied.workspaceRoot || session.appliedRuntimeConfig?.workspaceRoot,
+                }, applied);
+                if (sameRuntimeSettings(targetSettings, appliedSettings)) {
+                    const confirmed = repository.markSessionConfigApplied(idValue, session.configRevision, desired);
+                    this.sendSessionConfigEvent('session.config.applied', confirmed);
+                    return confirmed;
+                }
+                let resolveConfirmation;
+                let rejectConfirmation;
+                const confirmation = barrier ? new Promise((resolve, reject) => {
+                    resolveConfirmation = resolve;
+                    rejectConfirmation = reject;
+                }) : null;
+                const timeout = setTimeout(() => {
+                    const target = this.context.configApplyTargets().get(session.threadId);
+                    if (target?.revision !== session.configRevision) return;
+                    this.context.configApplyTargets().delete(session.threadId);
+                    const error = new CodexAppServerError(
+                        'SESSION_CONFIG_CONFIRMATION_TIMEOUT',
+                        'Codex did not confirm the requested Thread settings',
+                    );
+                    if (rejectConfirmation) rejectConfirmation(error);
+                    else {
+                        const failed = this.context.repository()?.markSessionConfigFailed(
+                            idValue, session.configRevision, error.message,
+                        );
+                        if (failed) this.sendSessionConfigEvent('session.config.failed', failed, error.message);
+                    }
+                }, 5_000);
+                timeout.unref?.();
                 this.context.configApplyTargets().set(session.threadId, {
                     sessionId: idValue,
                     revision: session.configRevision,
                     snapshot: desired,
-                    settings: {
-                        cwd: session.workspaceRoot || undefined,
-                        model: desired.model || undefined,
-                        approvalPolicy: normalizeApproval(desired.permissionMode, desired.approvalPolicy),
-                        effort: desired.reasoningEffort || null,
-                        personality: desired.instructionMode === 'codex-managed'
-                            && desired.personality && desired.personality !== 'none'
-                            ? desired.personality : null,
-                    },
+                    settings: targetSettings,
                     runtimeGeneration: this.context.runtimeGeneration(),
+                    resolve: resolveConfirmation,
+                    reject: rejectConfirmation,
+                    timeout,
                 });
                 await this.context.transport().request('thread/settings/update', threadSettingsPatch(session, desired));
+                if (confirmation) await confirmation;
                 return this._operationRepository(operation).getSession(idValue);
             } catch (error) {
                 if (error?.code === 'STALE_RUNTIME_GENERATION' || !this.context.repository()) throw error;
                 repository = this._operationRepository(operation);
+                const target = this.context.configApplyTargets().get(session.threadId);
+                if (target?.revision === session.configRevision) {
+                    clearTimeout(target.timeout);
+                    this.context.configApplyTargets().delete(session.threadId);
+                }
                 const current = repository.getSession(idValue);
                 if (current?.configRevision === session.configRevision && error?.code !== 'SESSION_CONFIG_PENDING') {
                     const failed = repository.markSessionConfigFailed(idValue, session.configRevision, error.message);
