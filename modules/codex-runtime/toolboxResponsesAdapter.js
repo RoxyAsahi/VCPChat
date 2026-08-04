@@ -279,11 +279,68 @@ function normalizeToolboxChatUrl(value) {
     return url.toString();
 }
 
-function responsesRequestToChat(body, requestId = null, options = {}) {
-    if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Responses request body must be an object');
-    const model = String(body.model || '').trim();
-    if (!model) throw new Error('Responses request model is required');
-    const messages = [];
+function appendResponseItem(state, item, options, model) {
+    if (item.type === 'additional_tools') {
+        state.embeddedTools.push(...item.tools);
+        return;
+    }
+    if (options.stripEmbeddedInstructions && (item.role === 'system' || item.role === 'developer')) return;
+    if (item.type === 'reasoning') {
+        if (state.pendingToolCalls.length > 0) flushAssistantMessage(state, model);
+        state.pendingReasoning += item.content;
+        return;
+    }
+    if (item.type === 'function_call') {
+        if (!item.callId || !item.name) throw new Error('function_call requires call_id and name');
+        if (state.declaredCallIds.has(item.callId)) throw new Error(`duplicate function_call call_id: ${item.callId}`);
+        state.declaredCallIds.add(item.callId);
+        state.pendingToolCalls.push({
+            id: item.callId, type: 'function', function: { name: item.name, arguments: item.arguments },
+        });
+        return;
+    }
+    if (item.type === 'function_call_output') {
+        flushAssistantMessage(state, model);
+        if (!item.callId) throw new Error('function_call_output requires call_id');
+        if (!state.declaredCallIds.has(item.callId)) {
+            throw new Error(`function_call_output has no matching function_call: ${item.callId}`);
+        }
+        if (state.completedCallIds.has(item.callId)) {
+            throw new Error(`duplicate function_call_output call_id: ${item.callId}`);
+        }
+        state.completedCallIds.add(item.callId);
+        state.messages.push({ role: 'tool', tool_call_id: item.callId, content: item.output });
+        return;
+    }
+    if (item.role === 'assistant') {
+        if (state.pendingAssistantContent != null || state.pendingToolCalls.length > 0) {
+            flushAssistantMessage(state, model);
+        }
+        state.pendingAssistantContent = item.content;
+        return;
+    }
+    flushAssistantMessage(state, model);
+    state.messages.push({ role: item.role, content: item.content });
+}
+
+function flushAssistantMessage(state, model) {
+    if (state.pendingAssistantContent == null && state.pendingToolCalls.length === 0 && !state.pendingReasoning) return;
+    const assistant = {
+        role: 'assistant',
+        content: state.pendingAssistantContent == null ? null : state.pendingAssistantContent,
+    };
+    if (state.pendingReasoning
+        || (state.pendingToolCalls.length > 0 && requiresReasoningContentForToolHistory(model))) {
+        assistant.reasoning_content = state.pendingReasoning;
+    }
+    if (state.pendingToolCalls.length > 0) assistant.tool_calls = state.pendingToolCalls;
+    state.messages.push(assistant);
+    state.pendingReasoning = '';
+    state.pendingAssistantContent = null;
+    state.pendingToolCalls = [];
+}
+
+function responseInstructionMessages(body, options) {
     const trusted = options.trustedInstructions && typeof options.trustedInstructions === 'object'
         ? options.trustedInstructions : null;
     const instructions = options.stripEmbeddedInstructions
@@ -291,80 +348,19 @@ function responsesRequestToChat(body, requestId = null, options = {}) {
             ? boundedInstructionText(body.instructions)
             : boundedInstructionText(trusted?.baseInstructions ?? options.trustedBaseInstructions))
         : boundedInstructionText(body.instructions);
-    if (instructions) messages.push({ role: 'system', content: instructions });
+    const messages = instructions ? [{ role: 'system', content: instructions }] : [];
     if (options.stripEmbeddedInstructions && trusted?.mode === 'codex-managed'
         && boundedInstructionText(trusted.developerInstructions)) {
         messages.push({ role: 'developer', content: boundedInstructionText(trusted.developerInstructions) });
     }
-    const declaredCallIds = new Set();
-    const completedCallIds = new Set();
-    const embeddedTools = [];
-    let pendingReasoning = '';
-    let pendingAssistantContent = null;
-    let pendingToolCalls = [];
-    const flushAssistant = () => {
-        if (pendingAssistantContent == null && pendingToolCalls.length === 0 && !pendingReasoning) return;
-        const assistant = {
-            role: 'assistant',
-            content: pendingAssistantContent == null ? null : pendingAssistantContent,
-        };
-        // Reasoning-capable Chat providers commonly require the public
-        // reasoning_content from the tool-calling response to be replayed on
-        // the assistant history message. DeepSeek/Console Go rejects the tool
-        // continuation with invalid_request_error when the field is absent.
-        if (pendingReasoning || (pendingToolCalls.length > 0 && requiresReasoningContentForToolHistory(model))) {
-            assistant.reasoning_content = pendingReasoning;
-        }
-        if (pendingToolCalls.length > 0) assistant.tool_calls = pendingToolCalls;
-        messages.push(assistant);
-        pendingReasoning = '';
-        pendingAssistantContent = null;
-        pendingToolCalls = [];
-    };
-    for (const item of normalizeResponsesInput(body.input)) {
-        if (item.type === 'additional_tools') {
-            embeddedTools.push(...item.tools);
-            continue;
-        }
-        if (options.stripEmbeddedInstructions && (item.role === 'system' || item.role === 'developer')) continue;
-        if (item.type === 'reasoning') {
-            if (pendingToolCalls.length > 0) flushAssistant();
-            pendingReasoning += item.content;
-        } else if (item.type === 'function_call') {
-            if (!item.callId || !item.name) throw new Error('function_call requires call_id and name');
-            if (declaredCallIds.has(item.callId)) throw new Error(`duplicate function_call call_id: ${item.callId}`);
-            declaredCallIds.add(item.callId);
-            // Responses represents parallel calls as adjacent output Items.
-            // Chat Completions requires those calls on one assistant message;
-            // emitting one assistant message per call makes the following tool
-            // results invalid for strict providers such as Console Go.
-            pendingToolCalls.push({
-                id: item.callId,
-                type: 'function',
-                function: { name: item.name, arguments: item.arguments },
-            });
-        } else if (item.type === 'function_call_output') {
-            flushAssistant();
-            if (!item.callId) throw new Error('function_call_output requires call_id');
-            if (!declaredCallIds.has(item.callId)) throw new Error(`function_call_output has no matching function_call: ${item.callId}`);
-            if (completedCallIds.has(item.callId)) throw new Error(`duplicate function_call_output call_id: ${item.callId}`);
-            completedCallIds.add(item.callId);
-            messages.push({ role: 'tool', tool_call_id: item.callId, content: item.output });
-        } else if (item.role === 'assistant') {
-            if (pendingAssistantContent != null || pendingToolCalls.length > 0) flushAssistant();
-            pendingAssistantContent = item.content;
-        } else {
-            flushAssistant();
-            messages.push({ role: item.role, content: item.content });
-        }
-    }
-    flushAssistant();
-    const chat = { model, messages, stream: body.stream === true };
+    return messages;
+}
+
+function finalizeChatRequest(chat, body, requestId, options, embeddedTools) {
     const stableRequestId = String(requestId || body.requestId || body.messageId || '').trim();
     if (stableRequestId) chat.requestId = stableRequestId;
     const tools = responsesToolsToChat([
-        ...(Array.isArray(body.tools) ? body.tools : []),
-        ...embeddedTools,
+        ...(Array.isArray(body.tools) ? body.tools : []), ...embeddedTools,
     ]);
     if (options.stripEmbeddedInstructions && tools.length === 0) tools.push(vcpInvokeChatTool());
     if (tools.length > 0) chat.tools = tools;
@@ -374,6 +370,24 @@ function responsesRequestToChat(body, requestId = null, options = {}) {
     const effort = normalizeText(body.reasoning?.effort || body.reasoning_effort);
     if (effort) chat.reasoning_effort = effort;
     return chat;
+}
+
+function responsesRequestToChat(body, requestId = null, options = {}) {
+    if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Responses request body must be an object');
+    const model = String(body.model || '').trim();
+    if (!model) throw new Error('Responses request model is required');
+    const messages = [];
+    messages.push(...responseInstructionMessages(body, options));
+    const state = {
+        messages, declaredCallIds: new Set(), completedCallIds: new Set(), embeddedTools: [],
+        pendingReasoning: '', pendingAssistantContent: null, pendingToolCalls: [],
+    };
+    for (const item of normalizeResponsesInput(body.input)) {
+        appendResponseItem(state, item, options, model);
+    }
+    flushAssistantMessage(state, model);
+    return finalizeChatRequest({ model, messages, stream: body.stream === true },
+        body, requestId, options, state.embeddedTools);
 }
 
 function responseRequestIdentity(body, requestId, headers = {}) {

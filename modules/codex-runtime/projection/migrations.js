@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 9;
 
 function hasColumn(db, table, column) {
     return db.prepare(`PRAGMA table_info('${table}')`).all().some((entry) => entry.name === column);
@@ -113,6 +113,9 @@ function migrate(db, options = {}) {
             input_id TEXT PRIMARY KEY,
             session_id TEXT NOT NULL REFERENCES agent_sessions(session_id) ON DELETE CASCADE,
             dedupe_key TEXT NOT NULL,
+            submission_id TEXT,
+            kind TEXT NOT NULL DEFAULT 'follow-up',
+            target_turn_id TEXT,
             prompt TEXT NOT NULL,
             state TEXT NOT NULL DEFAULT 'queued',
             client_message_id TEXT,
@@ -190,12 +193,17 @@ function migrate(db, options = {}) {
         `);
     }
     addColumn(db, 'agent_pending_inputs', "state TEXT NOT NULL DEFAULT 'queued'");
+    addColumn(db, 'agent_pending_inputs', "submission_id TEXT");
+    addColumn(db, 'agent_pending_inputs', "kind TEXT NOT NULL DEFAULT 'follow-up'");
+    addColumn(db, 'agent_pending_inputs', "target_turn_id TEXT");
     addColumn(db, 'agent_pending_inputs', 'client_message_id TEXT');
     addColumn(db, 'agent_pending_inputs', 'codex_turn_id TEXT');
     addColumn(db, 'agent_pending_inputs', 'attempt_count INTEGER NOT NULL DEFAULT 0');
     addColumn(db, 'agent_pending_inputs', 'updated_at INTEGER NOT NULL DEFAULT 0');
     addColumn(db, 'agent_pending_inputs', 'last_error TEXT');
     db.prepare('UPDATE agent_pending_inputs SET updated_at = created_at WHERE updated_at = 0').run();
+    db.prepare('UPDATE agent_pending_inputs SET submission_id = dedupe_key WHERE submission_id IS NULL').run();
+    db.prepare("UPDATE agent_pending_inputs SET kind = 'follow-up' WHERE kind IS NULL OR kind = ''").run();
     db.prepare('UPDATE projection_schema SET version = ?').run(SCHEMA_VERSION);
     const foreignKeyErrors = db.pragma('foreign_key_check');
     if (foreignKeyErrors.length) throw new Error('Agent projection foreign_key_check failed after migration');

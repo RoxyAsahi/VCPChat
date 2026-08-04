@@ -12,6 +12,29 @@ const {
     toolboxConfigFingerprint,
 } = require('./runtime-normalizers');
 
+function applySettingsNotification(context, repository, session, message) {
+    if (message.method !== 'thread/settings/updated' || !session) return;
+    const target = context.configApplyTargets().get(session.threadId);
+    if (!target || target.runtimeGeneration !== context.runtimeGeneration()) return;
+    const applied = repository.markSessionConfigApplied(target.sessionId, target.revision, target.snapshot);
+    context.configApplyTargets().delete(session.threadId);
+    if (applied?.appliedRuntimeConfigRevision === target.revision) {
+        context.sendSessionConfigEvent('session.config.applied', applied);
+    }
+}
+
+function notificationEvent(context, message, projected, session, threadId, itemId, projectionMessage) {
+    if (!session) return { runtime: 'codex', ...message };
+    return {
+        runtime: 'codex', type: 'projection.updated', method: message.method,
+        sessionId: session.sessionId, threadId,
+        turnId: message?.params?.turnId || message?.params?.turn?.id || null,
+        turnStatus: message?.params?.turn?.status || null,
+        itemId, projectionMessage,
+        activity: context.threadStates().get(threadId)?.activity || 'idle',
+    };
+}
+
 class RuntimeHostService {
     constructor(context) {
         this.context = Object.freeze(context);
@@ -302,32 +325,12 @@ class RuntimeHostService {
         this.observeCompactionNotification(message);
         const threadId = message?.params?.threadId || message?.params?.thread?.id || null;
         const session = threadId ? repository?.getSessionByThread(threadId) : null;
-        if (message.method === 'thread/settings/updated' && session) {
-            const target = this.context.configApplyTargets().get(threadId);
-            if (target && target.runtimeGeneration === this.context.runtimeGeneration()) {
-                const applied = repository.markSessionConfigApplied(target.sessionId, target.revision, target.snapshot);
-                this.context.configApplyTargets().delete(threadId);
-                if (applied?.appliedRuntimeConfigRevision === target.revision) {
-                    this.context.sendSessionConfigEvent('session.config.applied', applied);
-                }
-            }
-        }
+        applySettingsNotification(this.context, repository, session, message);
         this.context.updateThreadState(message, session);
         const itemId = notificationItemId(message);
         const projectionMessage = projected && session && itemId
             ? repository.getProjectedMessageByItem(session.sessionId, itemId) : null;
-        const event = session ? {
-            runtime: 'codex',
-            type: 'projection.updated',
-            method: message.method,
-            sessionId: session.sessionId,
-            threadId,
-            turnId: message?.params?.turnId || message?.params?.turn?.id || null,
-            turnStatus: message?.params?.turn?.status || null,
-            itemId,
-            projectionMessage,
-            activity: this.context.threadStates().get(threadId)?.activity || 'idle',
-        } : { runtime: 'codex', ...message };
+        const event = notificationEvent(this.context, message, projected, session, threadId, itemId, projectionMessage);
         this.context.sendEvent(event);
     }
 

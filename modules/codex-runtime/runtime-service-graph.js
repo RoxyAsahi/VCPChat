@@ -28,7 +28,8 @@ function attachRuntimeServiceGraph(runtime) {
         resumedThreadIds: () => runtime.resumedThreadIds,
         maxIdleWarmSessions: () => runtime.maxIdleWarmSessions,
         scheduleSessionConfigApply: (sessionId) => runtime._scheduleSessionConfigApply(sessionId),
-        drainFollowUpQueue: (session) => runtime._drainFollowUpQueue(session),
+        drainFollowUpQueue: (session, options) => runtime.turnService.drainFollowUpQueue(session, options),
+        turnCancellationStates: () => runtime.turnCancellationStates,
         sendEvent: (event) => { runtime.sendEvent(event); runtime.emit('event', event); },
     }));
     runtime.interactionService = new RuntimeInteractionService(createRuntimeServiceContext('interaction', {
@@ -47,7 +48,8 @@ function attachRuntimeServiceGraph(runtime) {
         assertProjectionWritable: () => runtime._assertProjectionWritable(),
         ensureSessionRuntime: (options) => runtime.ensureSessionRuntime(options),
         threadStates: () => runtime.threadStates,
-        drainFollowUpQueue: (session) => runtime._drainFollowUpQueue(session),
+        drainFollowUpQueue: (session, options) => runtime.turnService.drainFollowUpQueue(session, options),
+        retrySteerPendingInput: (session, pending) => runtime.turnService.retrySteerPendingInput(session, pending),
     }));
     runtime.serverRequests = runtime.interactionService.serverRequests;
     runtime.interactions = runtime.interactionService.interactions;
@@ -144,7 +146,9 @@ function attachRuntimeServiceGraph(runtime) {
         faultInjection: () => runtime.faultInjection,
         sessionWarmPromises: () => runtime.sessionWarmPromises,
         turnStartPromises: () => runtime.turnStartPromises,
+        steerPromises: () => runtime.steerPromises,
         followUpDrainPromises: () => runtime.followUpDrainPromises,
+        turnCancellationStates: () => runtime.turnCancellationStates,
         compactionWaiters: () => runtime.compactionWaiters,
         resumedThreadIds: () => runtime.resumedThreadIds,
         resumingThreads: () => runtime.resumingThreads,
@@ -153,6 +157,8 @@ function attachRuntimeServiceGraph(runtime) {
         idleWarmSessions: () => runtime.idleWarmSessions,
         startTurnOverride: () => runtime._startTurn,
         defaultStartTurnMethod: () => runtime._defaultStartTurnMethod,
+        failClosedTurnInteractions: (identity, reason) => runtime.interactionService
+            .failClosedTurnInteractions(identity, reason),
     }));
 
     runtime.configService = new RuntimeConfigService(createRuntimeServiceContext('config', {

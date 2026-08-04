@@ -22,6 +22,40 @@ function json(value) {
     return JSON.stringify(value ?? null);
 }
 
+function mergeStoredBlockContent(existingContent, block, options) {
+    if (options.authoritative && block.replaceContent === true) return block.content || {};
+    if (!options.authoritative || !Array.isArray(block.replaceFields)) {
+        return mergeProjectionContent(existingContent, block.content || {});
+    }
+    const content = { ...existingContent };
+    const fields = new Set(block.replaceFields);
+    for (const field of fields) {
+        if (Object.prototype.hasOwnProperty.call(block.content || {}, field)) content[field] = block.content[field];
+    }
+    for (const [field, value] of Object.entries(block.content || {})) {
+        if (!fields.has(field)) content[field] = mergeProjectionContent(content[field], value);
+    }
+    return content;
+}
+
+function upsertItemBlock(stmt, sessionId, record, block, existing, session, now, options) {
+    const ordinal = Number.isInteger(block.ordinal) ? block.ordinal : 0;
+    const existingBlock = stmt.getBlock.get(existing.message_id, ordinal);
+    const content = mergeStoredBlockContent(parseJson(existingBlock?.content_json, {}), block, options);
+    stmt.upsertBlock.run({
+        block_id: block.blockId || existingBlock?.block_id || `block:${sessionId}:${record.itemId}:${ordinal}`,
+        message_id: existing.message_id,
+        kind: block.kind || existingBlock?.kind,
+        status: block.status || record.status || 'inProgress',
+        ordinal,
+        content_json: json(content),
+        content_schema_version: BLOCK_CONTENT_SCHEMA_VERSION,
+        authority: block.authority || existingBlock?.authority || 'codex',
+        created_at: existingBlock?.created_at || block.createdAt || now,
+        updated_at: now,
+    });
+}
+
 function hasProjectionValue(value) {
     if (value == null) return false;
     if (typeof value === 'string') return value.length > 0;
@@ -253,10 +287,12 @@ class AgentProjectionRepository {
             `),
             insertPendingInput: this.db.prepare(`
                 INSERT OR IGNORE INTO agent_pending_inputs(
-                    input_id, session_id, dedupe_key, prompt, state, client_message_id,
+                    input_id, session_id, dedupe_key, submission_id, kind, target_turn_id,
+                    prompt, state, client_message_id,
                     attempt_count, created_at, updated_at
                 ) VALUES (
-                    @input_id, @session_id, @dedupe_key, @prompt, 'queued', @client_message_id,
+                    @input_id, @session_id, @dedupe_key, @submission_id, @kind, @target_turn_id,
+                    @prompt, 'queued', @client_message_id,
                     0, @created_at, @created_at
                 )
             `),
@@ -270,6 +306,9 @@ class AgentProjectionRepository {
             updatePendingInput: this.db.prepare(`
                 UPDATE agent_pending_inputs SET state = @state,
                     dedupe_key = @dedupe_key,
+                    submission_id = @submission_id,
+                    kind = @kind,
+                    target_turn_id = @target_turn_id,
                     prompt = @prompt,
                     client_message_id = @client_message_id,
                     codex_turn_id = @codex_turn_id,
@@ -553,37 +592,7 @@ class AgentProjectionRepository {
             created_at: existing.created_at,
             updated_at: now,
         });
-        if (block) {
-            const ordinal = Number.isInteger(block.ordinal) ? block.ordinal : 0;
-            const existingBlock = this.stmt.getBlock.get(existing.message_id, ordinal);
-            const existingContent = parseJson(existingBlock?.content_json, {});
-            let content;
-            if (options.authoritative && block.replaceContent === true) {
-                content = block.content || {};
-            } else if (options.authoritative && Array.isArray(block.replaceFields)) {
-                content = { ...existingContent };
-                for (const field of block.replaceFields) {
-                    if (Object.prototype.hasOwnProperty.call(block.content || {}, field)) content[field] = block.content[field];
-                }
-                for (const [field, value] of Object.entries(block.content || {})) {
-                    if (!block.replaceFields.includes(field)) content[field] = mergeProjectionContent(content[field], value);
-                }
-            } else {
-                content = mergeProjectionContent(existingContent, block.content || {});
-            }
-            this.stmt.upsertBlock.run({
-                block_id: block.blockId || existingBlock?.block_id || `block:${sessionId}:${record.itemId}:${ordinal}`,
-                message_id: existing.message_id,
-                kind: block.kind || existingBlock?.kind,
-                status: block.status || record.status || 'inProgress',
-                ordinal,
-                content_json: json(content),
-                content_schema_version: BLOCK_CONTENT_SCHEMA_VERSION,
-                authority: block.authority || existingBlock?.authority || 'codex',
-                created_at: existingBlock?.created_at || block.createdAt || now,
-                updated_at: now,
-            });
-        }
+        if (block) upsertItemBlock(this.stmt, sessionId, record, block, existing, session, now, options);
     }
 
     appendBlockText(sessionId, itemId, ordinal, delta, kind = 'message') {
@@ -665,19 +674,26 @@ class AgentProjectionRepository {
         return this.getSession(sessionId);
     }
 
-    enqueuePendingInput(sessionId, { dedupeKey, prompt }) {
+    enqueuePendingInput(sessionId, {
+        dedupeKey, submissionId, kind = 'follow-up', targetTurnId = null, prompt, clientMessageId,
+    }) {
         const inputId = `pending:${crypto.randomUUID()}`;
-        const clientMessageId = `client_msg:${crypto.randomUUID()}`;
+        const stableSubmissionId = String(submissionId || dedupeKey || `submission:${crypto.randomUUID()}`);
+        const stableClientMessageId = String(clientMessageId || `client_msg:${crypto.randomUUID()}`);
         const now = Date.now();
         this.stmt.insertPendingInput.run({
             input_id: inputId,
             session_id: sessionId,
-            dedupe_key: String(dedupeKey),
+            dedupe_key: stableSubmissionId,
+            submission_id: stableSubmissionId,
+            kind: String(kind || 'follow-up'),
+            target_turn_id: targetTurnId ? String(targetTurnId) : null,
             prompt: String(prompt),
-            client_message_id: clientMessageId,
+            client_message_id: stableClientMessageId,
             created_at: now,
         });
-        return this.stmt.getPendingInputByKey.get(sessionId, String(dedupeKey));
+        return this.listPendingInputs(sessionId)
+            .find((entry) => entry.submissionId === stableSubmissionId) || null;
     }
 
     listPendingInputs(sessionId) {
@@ -685,6 +701,9 @@ class AgentProjectionRepository {
             inputId: row.input_id,
             sessionId: row.session_id,
             dedupeKey: row.dedupe_key,
+            submissionId: row.submission_id || row.dedupe_key,
+            kind: row.kind || 'follow-up',
+            targetTurnId: row.target_turn_id || null,
             prompt: row.prompt,
             state: row.state,
             clientMessageId: row.client_message_id,
@@ -702,7 +721,13 @@ class AgentProjectionRepository {
         this.stmt.updatePendingInput.run({
             input_id: String(inputId),
             state: patch.state || row.state,
-            dedupe_key: Object.prototype.hasOwnProperty.call(patch, 'dedupeKey') ? String(patch.dedupeKey) : row.dedupe_key,
+            dedupe_key: Object.prototype.hasOwnProperty.call(patch, 'submissionId')
+                ? String(patch.submissionId) : row.dedupe_key,
+            submission_id: Object.prototype.hasOwnProperty.call(patch, 'submissionId')
+                ? String(patch.submissionId) : (row.submission_id || row.dedupe_key),
+            kind: Object.prototype.hasOwnProperty.call(patch, 'kind') ? String(patch.kind) : (row.kind || 'follow-up'),
+            target_turn_id: Object.prototype.hasOwnProperty.call(patch, 'targetTurnId')
+                ? (patch.targetTurnId ? String(patch.targetTurnId) : null) : row.target_turn_id,
             prompt: Object.prototype.hasOwnProperty.call(patch, 'prompt') ? String(patch.prompt) : row.prompt,
             client_message_id: Object.prototype.hasOwnProperty.call(patch, 'clientMessageId')
                 ? String(patch.clientMessageId) : row.client_message_id,

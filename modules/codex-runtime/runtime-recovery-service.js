@@ -10,6 +10,72 @@ const {
 
 const KNOWN_OPERATION_KINDS = new Set(['thread-archive', 'thread-unarchive', 'thread-delete']);
 
+async function deleteRecoveryThread(service, operationContext, operation, threadId) {
+    try {
+        await service.context.transport().request('thread/delete', { threadId });
+    } catch (error) {
+        if (!isConfirmedThreadNotFound(error)) throw error;
+    }
+    const repository = service._operationRepository(operationContext);
+    const current = repository.getOperation(String(operation.operationId || ''));
+    if (!current || !['uncertain', 'remote-applied'].includes(current.state)) {
+        throw new CodexAppServerError('RECOVERY_TARGET_CHANGED', 'Recovery operation changed during Thread deletion');
+    }
+    repository.updateOperation(current.operationId, {
+        state: 'completed', threadId,
+        payload: { ...current.payload, resolution: 'deleted-unbound-thread' }, lastError: null,
+    });
+    return { operationId: current.operationId, resolved: true, action: 'delete', threadId };
+}
+
+async function bindRecoveryThread(service, operationContext, operation, threadId) {
+    const result = await service.context.transport().request('thread/read', { threadId, includeTurns: true });
+    const repository = service._operationRepository(operationContext);
+    const current = repository.getOperation(String(operation.operationId || ''));
+    if (!current || !['uncertain', 'remote-applied'].includes(current.state)) {
+        throw new CodexAppServerError('RECOVERY_TARGET_CHANGED', 'Recovery operation changed during Thread read');
+    }
+    const thread = result?.thread || result;
+    if (String(thread?.id || '') !== threadId) {
+        throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/read returned a mismatched Thread');
+    }
+    const rebound = [...repository.listSessions({ archived: false }), ...repository.listSessions({ archived: true })]
+        .find((candidate) => candidate.threadId === threadId);
+    if (rebound) throw new CodexAppServerError('THREAD_ALREADY_BOUND', 'The selected Codex Thread was bound during recovery');
+    let session;
+    if (current.kind === 'thread-start') {
+        session = repository.getSession(current.sessionId);
+        if (!session || session.threadId) {
+            throw new CodexAppServerError('RECOVERY_TARGET_CHANGED', 'The VChat Session is missing or already materialized');
+        }
+        session = repository.replaceUnmaterializedThread(session.sessionId, threadId);
+    } else {
+        const source = repository.getSession(current.sessionId);
+        const targetSessionId = String(current.payload?.targetSessionId || '').trim();
+        if (!source || !targetSessionId || repository.getSession(targetSessionId)) {
+            throw new CodexAppServerError('RECOVERY_TARGET_CHANGED', 'The fork recovery target is no longer available');
+        }
+        session = repository.saveSession({
+            sessionId: targetSessionId, threadId,
+            agentId: source.agentId, agentCatalogId: source.agentCatalogId,
+            agentNameSnapshot: source.agentNameSnapshot,
+            title: thread.name || `${source.title || 'Codex Agent'} (recovered branch)`,
+            workspaceRoot: thread.cwd || source.workspaceRoot,
+            state: 'ready', configSnapshot: source.configSnapshot, configRevision: source.configRevision,
+        });
+    }
+    const projectionGeneration = repository.projectionGeneration(session.sessionId);
+    service.context.projector().reconcileThread(session.sessionId, thread, projectionGeneration);
+    repository.updateOperation(current.operationId, {
+        state: 'completed', threadId,
+        payload: { ...current.payload, resolution: 'bound-thread', boundSessionId: session.sessionId },
+        lastError: null,
+    });
+    service.context.threadStates().set(threadId, { activity: 'idle', activeTurnId: null });
+    return { operationId: current.operationId, resolved: true, action: 'bind', threadId,
+        session: sessionProjection(session) };
+}
+
 class RuntimeRecoveryService {
     constructor(context) {
         this.context = Object.freeze(context);
@@ -213,69 +279,9 @@ class RuntimeRecoveryService {
         const bound = [...repository.listSessions({ archived: false }), ...repository.listSessions({ archived: true })]
             .find((session) => session.threadId === selectedThreadId);
         if (bound) throw new CodexAppServerError('THREAD_ALREADY_BOUND', 'The selected Codex Thread already belongs to a VChat Session');
-        if (action === 'delete') {
-            try {
-                await this.context.transport().request('thread/delete', { threadId: selectedThreadId });
-            } catch (error) {
-                if (!isConfirmedThreadNotFound(error)) throw error;
-            }
-            repository = this._operationRepository(operationContext);
-            operation = repository.getOperation(String(operationId || ''));
-            if (!operation || !['uncertain', 'remote-applied'].includes(operation.state)) {
-                throw new CodexAppServerError('RECOVERY_TARGET_CHANGED', 'Recovery operation changed during Thread deletion');
-            }
-            repository.updateOperation(operation.operationId, {
-                state: 'completed', threadId: selectedThreadId,
-                payload: { ...operation.payload, resolution: 'deleted-unbound-thread' }, lastError: null,
-            });
-            return { operationId: operation.operationId, resolved: true, action: 'delete', threadId: selectedThreadId };
-        }
+        if (action === 'delete') return deleteRecoveryThread(this, operationContext, operation, selectedThreadId);
         if (action !== 'bind') throw new CodexAppServerError('INVALID_INPUT', 'Recovery action must be bind or delete');
-        const result = await this.context.transport().request('thread/read', { threadId: selectedThreadId, includeTurns: true });
-        repository = this._operationRepository(operationContext);
-        operation = repository.getOperation(String(operationId || ''));
-        if (!operation || !['uncertain', 'remote-applied'].includes(operation.state)) {
-            throw new CodexAppServerError('RECOVERY_TARGET_CHANGED', 'Recovery operation changed during Thread read');
-        }
-        const thread = result?.thread || result;
-        if (String(thread?.id || '') !== selectedThreadId) {
-            throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/read returned a mismatched Thread');
-        }
-        const rebound = [...repository.listSessions({ archived: false }), ...repository.listSessions({ archived: true })]
-            .find((candidate) => candidate.threadId === selectedThreadId);
-        if (rebound) throw new CodexAppServerError('THREAD_ALREADY_BOUND', 'The selected Codex Thread was bound during recovery');
-        let session;
-        if (operation.kind === 'thread-start') {
-            session = repository.getSession(operation.sessionId);
-            if (!session || session.threadId) {
-                throw new CodexAppServerError('RECOVERY_TARGET_CHANGED', 'The VChat Session is missing or already materialized');
-            }
-            session = repository.replaceUnmaterializedThread(session.sessionId, selectedThreadId);
-        } else {
-            const source = repository.getSession(operation.sessionId);
-            const targetSessionId = String(operation.payload?.targetSessionId || '').trim();
-            if (!source || !targetSessionId || repository.getSession(targetSessionId)) {
-                throw new CodexAppServerError('RECOVERY_TARGET_CHANGED', 'The fork recovery target is no longer available');
-            }
-            session = repository.saveSession({
-                sessionId: targetSessionId, threadId: selectedThreadId,
-                agentId: source.agentId, agentCatalogId: source.agentCatalogId,
-                agentNameSnapshot: source.agentNameSnapshot,
-                title: thread.name || `${source.title || 'Codex Agent'} (recovered branch)`,
-                workspaceRoot: thread.cwd || source.workspaceRoot,
-                state: 'ready', configSnapshot: source.configSnapshot, configRevision: source.configRevision,
-            });
-        }
-        const projectionGeneration = repository.projectionGeneration(session.sessionId);
-        this.context.projector().reconcileThread(session.sessionId, thread, projectionGeneration);
-        repository.updateOperation(operation.operationId, {
-            state: 'completed', threadId: selectedThreadId,
-            payload: { ...operation.payload, resolution: 'bound-thread', boundSessionId: session.sessionId },
-            lastError: null,
-        });
-        this.context.threadStates().set(selectedThreadId, { activity: 'idle', activeTurnId: null });
-        return { operationId: operation.operationId, resolved: true, action: 'bind', threadId: selectedThreadId,
-            session: sessionProjection(session) };
+        return bindRecoveryThread(this, operationContext, operation, selectedThreadId);
     }
 }
 

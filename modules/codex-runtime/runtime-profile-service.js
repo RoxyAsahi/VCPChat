@@ -19,6 +19,216 @@ const {
     sameIdentity,
 } = require('./runtime-normalizers');
 
+function profileProjection(entry, avatarUrl) {
+    const profile = entry.profile || {};
+    const baseInstructions = profile.baseInstructions || profile.systemPrompt || '';
+    return {
+        id: entry.catalogId,
+        name: entry.name,
+        revision: Number(profile.revision || 1),
+        profileRevision: Number(profile.profileRevision || profile.revision || 1),
+        schemaVersion: PROFILE_SCHEMA_VERSION,
+        model: profile.model || '',
+        instructionMode: normalizeInstructionMode(profile.instructionMode, baseInstructions),
+        baseInstructions,
+        systemPrompt: baseInstructions,
+        developerInstructions: profile.developerInstructions || '',
+        personality: normalizePersonality(profile.personality),
+        workspaceRoot: profile.workspaceRoot || '',
+        permissionMode: normalizePermissionMode(profile.permissionMode),
+        reasoningEffort: normalizeReasoningEffort(profile.reasoningEffort),
+        reasoningEfforts: Array.isArray(profile.reasoningEfforts) ? profile.reasoningEfforts : [],
+        executionProfile: 'toolbox-only',
+        avatarUrl,
+    };
+}
+
+function sessionProfileProjection(session, idValue) {
+    const config = session.configSnapshot || {};
+    return {
+        id: idValue,
+        name: session.agentNameSnapshot || config.agentName || idValue,
+        revision: Number(config.profileRevision || 1),
+        model: config.model || '',
+        instructionMode: normalizeInstructionMode(config.instructionMode, config.baseInstructions),
+        baseInstructions: config.baseInstructions || '',
+        systemPrompt: config.baseInstructions || '',
+        developerInstructions: config.developerInstructions || '',
+        personality: normalizePersonality(config.personality),
+        workspaceRoot: session.workspaceRoot || '',
+        permissionMode: normalizePermissionMode(config.permissionMode),
+        reasoningEffort: normalizeReasoningEffort(config.reasoningEffort),
+        reasoningEfforts: Array.isArray(config.reasoningEfforts) ? config.reasoningEfforts : [],
+        executionProfile: 'toolbox-only',
+        avatarUrl: config.agentAvatar || '',
+    };
+}
+
+function normalizedWorkspaceRoot(workspaceRoot) {
+    if (!String(workspaceRoot || '').trim()) return '';
+    const resolved = path.resolve(String(workspaceRoot).trim());
+    let stat = null;
+    try { stat = fs.statSync(resolved); } catch { /* validated below */ }
+    if (!stat?.isDirectory()) {
+        throw new CodexAppServerError('INVALID_WORKSPACE', 'Workspace directory does not exist');
+    }
+    return resolved;
+}
+
+function requireProfileIdentity({ displayName, idValue, instructionMode, prompt, existing, requestedId, input }) {
+    if (!displayName || !idValue || idValue === '.' || idValue === '..' || /[\\/:*?"<>|]/.test(idValue)) {
+        throw new CodexAppServerError('INVALID_INPUT', 'Build Agent name is invalid');
+    }
+    if (instructionMode === 'vchat-identity' && !prompt) {
+        throw new CodexAppServerError('INVALID_INPUT', 'VChat identity mode requires baseInstructions');
+    }
+    if (existing && (!requestedId || !sameIdentity(existing.catalogId, requestedId))) {
+        throw new CodexAppServerError('ALREADY_EXISTS', `Build Agent ${displayName} already exists`);
+    }
+    if (!existing) return;
+    const expected = Number(input.expectedProfileRevision);
+    const actual = Number(existing.profile?.profileRevision || existing.profile?.revision || 1);
+    if (!Number.isInteger(expected) || expected !== actual) {
+        throw new CodexAppServerError('PROFILE_CONFIG_CONFLICT', 'Agent Profile changed in another view', {
+            current: { id: existing.catalogId, ...normalizeProfile(existing.profile, existing.catalogId) },
+        });
+    }
+}
+
+function profileDifferences(session, profile) {
+    const differences = [];
+    const add = (field, current, next, identity = false) => {
+        if (String(current ?? '') !== String(next ?? '')) {
+            differences.push({ field, current: current ?? null, next: next ?? null, identity });
+        }
+    };
+    const config = session.configSnapshot || {};
+    const profileMode = normalizeInstructionMode(profile.instructionMode, profile.baseInstructions || profile.systemPrompt);
+    const profileWorkspace = profile.workspaceRoot ? path.resolve(profile.workspaceRoot) : session.workspaceRoot;
+    add('instructionMode', normalizeInstructionMode(config.instructionMode, config.baseInstructions), profileMode, true);
+    add('baseInstructions', config.baseInstructions || '', profile.baseInstructions || profile.systemPrompt || '',
+        profileMode === 'vchat-identity');
+    add('developerInstructions', config.developerInstructions || '', profile.developerInstructions || '',
+        profileMode === 'codex-managed');
+    add('personality', normalizePersonality(config.personality), normalizePersonality(profile.personality),
+        profileMode === 'codex-managed');
+    add('workspaceRoot', session.workspaceRoot || '', profileWorkspace || '', true);
+    add('name', session.agentNameSnapshot || config.agentName || '', profile.name || '');
+    add('avatar', config.agentAvatar || '', profile.avatarUrl || '');
+    add('model', config.model || '', profile.model || config.model || '');
+    add('reasoningEffort', config.reasoningEffort || '', profile.reasoningEffort || '');
+    add('permissionMode', normalizePermissionMode(config.permissionMode), normalizePermissionMode(profile.permissionMode));
+    add('profileRevision', Number(config.profileRevision || 1), Number(profile.revision || 1));
+    return { differences, profileMode, profileWorkspace };
+}
+
+function profileSessionPatch(session, profile, profileMode) {
+    const permissionMode = normalizePermissionMode(profile.permissionMode);
+    return {
+        agentNameSnapshot: profile.name || session.agentNameSnapshot,
+        configSnapshot: {
+            ...(session.configSnapshot || {}),
+            profileId: profile.id,
+            profileRevision: Number(profile.revision || 1),
+            instructionMode: profileMode,
+            baseInstructions: profile.baseInstructions || profile.systemPrompt || '',
+            developerInstructions: String(profile.developerInstructions || ''),
+            personality: normalizePersonality(profile.personality),
+            agentName: profile.name || session.agentNameSnapshot || '',
+            agentAvatar: profile.avatarUrl || session.configSnapshot?.agentAvatar || '',
+            model: profile.model || session.configSnapshot?.model,
+            reasoningEffort: normalizeReasoningEffort(profile.reasoningEffort),
+            reasoningEfforts: Array.isArray(profile.reasoningEfforts) ? profile.reasoningEfforts : [],
+            permissionMode,
+            approvalPolicy: normalizeApprovalPolicy(permissionMode),
+            provider: 'vcp_toolbox',
+            executionProfile: 'toolbox-only',
+        },
+    };
+}
+
+function defaultInstructionMode(requested, baseInstructions, agentId) {
+    if (requested) return normalizeInstructionMode(requested, baseInstructions);
+    return !String(baseInstructions || '').trim() && sameIdentity(agentId, 'codex')
+        ? 'codex-managed' : 'vchat-identity';
+}
+
+function resolveExistingProfile(service, input, incomingPatch) {
+    const requestedId = String(input.profileId || input.agentId || '').trim();
+    const requestedDisplayName = String(incomingPatch.name || '').trim();
+    const direct = requestedId ? service.resolveCanonicalAgent(requestedId, { failOnAmbiguous: true }) : null;
+    const named = requestedDisplayName
+        ? service.resolveCanonicalAgent(requestedDisplayName, { failOnAmbiguous: true }) : null;
+    return { requestedId, existing: direct?.profile ? direct : named?.profile ? named : null };
+}
+
+function requestedPrompt(incomingPatch, patch) {
+    if (Object.prototype.hasOwnProperty.call(incomingPatch, 'baseInstructions')) {
+        return String(incomingPatch.baseInstructions || '').trim();
+    }
+    if (Object.prototype.hasOwnProperty.call(incomingPatch, 'systemPrompt')) {
+        return String(incomingPatch.systemPrompt || '').trim();
+    }
+    return String(patch.baseInstructions ?? patch.systemPrompt ?? '').trim();
+}
+
+function snapshotAuthority(service, options) {
+    const settings = service.context.getSettings() || {};
+    const toolboxConfigured = Boolean(settings.vcpServerUrl && settings.vcpApiKey);
+    const agentId = explicitAgent(options.agentId || options.agent) || 'codex';
+    const profile = service.resolveAgentProfile(agentId);
+    return {
+        settings, toolboxConfigured, agentId, profile,
+        provider: options.provider || (profile || toolboxConfigured ? 'vcp_toolbox' : 'codex'),
+    };
+}
+
+function snapshotConfigValues(service, options, authority) {
+    const { settings, toolboxConfigured, agentId, profile } = authority;
+    const permissionMode = normalizePermissionMode(
+        options.permissionMode || options.approvalPolicy || profile?.permissionMode,
+    );
+    const model = options.model || profile?.model || settings.agentRuntime?.codex?.model
+        || settings.agentRuntime?.tui?.defaultModel || (toolboxConfigured ? 'Nova' : 'gpt-5.1-codex');
+    const baseInstructions = options.baseInstructions ?? options.systemPrompt
+        ?? profile?.baseInstructions ?? profile?.systemPrompt ?? '';
+    const instructionMode = defaultInstructionMode(
+        options.instructionMode ?? profile?.instructionMode, baseInstructions, agentId,
+    );
+    const reasoning = service.validateReasoningEffort(
+        model,
+        options.reasoningEffort ?? profile?.reasoningEffort,
+        { supported: options.reasoningEfforts || profile?.reasoningEfforts },
+    );
+    return { permissionMode, model, baseInstructions, instructionMode, reasoning };
+}
+
+function snapshotProjection(service, options, authority, values) {
+    const { agentId, profile, provider } = authority;
+    const { permissionMode, model, baseInstructions, instructionMode, reasoning } = values;
+    const avatarIdentity = profile?.id || agentId;
+    return {
+        model,
+        instructionMode,
+        personality: normalizePersonality(options.personality ?? profile?.personality),
+        permissionMode,
+        approvalPolicy: normalizeApprovalPolicy(permissionMode),
+        sandbox: normalizeSandboxMode(options.sandbox),
+        baseInstructions: String(baseInstructions || '').trim(),
+        developerInstructions: String(options.developerInstructions ?? profile?.developerInstructions ?? '').trim(),
+        reasoningEffort: reasoning.effort,
+        reasoningEfforts: reasoning.supported,
+        agentName: options.agentName || options.name || profile?.name || '',
+        agentAvatar: options.agentAvatar || options.avatar || profile?.avatarUrl
+            || service.agentAvatarUrl(avatarIdentity),
+        profileId: avatarIdentity,
+        profileRevision: Number(profile?.revision || 1),
+        provider,
+        executionProfile: options.executionProfile
+            || (profile || provider === 'vcp_toolbox' ? 'toolbox-only' : 'codex-native'),
+    };
+}
+
 class RuntimeProfileService {
     constructor(context) {
         this.context = Object.freeze(context);
@@ -27,52 +237,13 @@ class RuntimeProfileService {
     listAgentProfiles() {
         const repository = this._repository();
         this.ensureDefaultAgentProfile();
-        const profiles = this.agentCatalog().map((entry) => ({
-            id: entry.catalogId,
-            name: entry.name,
-            revision: Number(entry.profile?.revision || 1),
-            profileRevision: Number(entry.profile?.profileRevision || entry.profile?.revision || 1),
-            schemaVersion: PROFILE_SCHEMA_VERSION,
-            model: entry.profile?.model || '',
-            instructionMode: normalizeInstructionMode(
-                entry.profile?.instructionMode,
-                entry.profile?.baseInstructions || entry.profile?.systemPrompt,
-            ),
-            baseInstructions: entry.profile?.baseInstructions || entry.profile?.systemPrompt || '',
-            systemPrompt: entry.profile?.baseInstructions || entry.profile?.systemPrompt || '',
-            developerInstructions: entry.profile?.developerInstructions || '',
-            personality: normalizePersonality(entry.profile?.personality),
-            workspaceRoot: entry.profile?.workspaceRoot || '',
-            permissionMode: normalizePermissionMode(entry.profile?.permissionMode),
-            reasoningEffort: normalizeReasoningEffort(entry.profile?.reasoningEffort),
-            reasoningEfforts: Array.isArray(entry.profile?.reasoningEfforts) ? entry.profile.reasoningEfforts : [],
-            executionProfile: 'toolbox-only',
-            avatarUrl: this.agentAvatarUrl(entry.catalogId, entry.profile),
-        }));
+        const profiles = this.agentCatalog().map((entry) => (
+            profileProjection(entry, this.agentAvatarUrl(entry.catalogId, entry.profile))
+        ));
         for (const session of repository.listSessions({ archived: false })) {
             const idValue = session.agentCatalogId || session.agentId;
             if (!idValue || profiles.some((profile) => sameIdentity(profile.id, idValue))) continue;
-            profiles.push({
-                id: idValue,
-                name: session.agentNameSnapshot || session.configSnapshot?.agentName || idValue,
-                revision: Number(session.configSnapshot?.profileRevision || 1),
-                model: session.configSnapshot?.model || '',
-                instructionMode: normalizeInstructionMode(
-                    session.configSnapshot?.instructionMode,
-                    session.configSnapshot?.baseInstructions,
-                ),
-                baseInstructions: session.configSnapshot?.baseInstructions || '',
-                systemPrompt: session.configSnapshot?.baseInstructions || '',
-                developerInstructions: session.configSnapshot?.developerInstructions || '',
-                personality: normalizePersonality(session.configSnapshot?.personality),
-                workspaceRoot: session.workspaceRoot || '',
-                permissionMode: normalizePermissionMode(session.configSnapshot?.permissionMode),
-                reasoningEffort: normalizeReasoningEffort(session.configSnapshot?.reasoningEffort),
-                reasoningEfforts: Array.isArray(session.configSnapshot?.reasoningEfforts)
-                    ? session.configSnapshot.reasoningEfforts : [],
-                executionProfile: 'toolbox-only',
-                avatarUrl: session.configSnapshot?.agentAvatar || '',
-            });
+            profiles.push(sessionProfileProjection(session, idValue));
         }
         return profiles;
     }
@@ -81,26 +252,14 @@ class RuntimeProfileService {
         this._repository();
         this.context.assertProjectionWritable();
         const incomingPatch = input.patch && typeof input.patch === 'object' ? input.patch : input;
-        const requestedId = String(input.profileId || input.agentId || '').trim();
-        const requestedDisplayName = String(incomingPatch.name || '').trim();
-        const directIdentity = requestedId
-            ? this.resolveCanonicalAgent(requestedId, { failOnAmbiguous: true }) : null;
-        const namedIdentity = requestedDisplayName
-            ? this.resolveCanonicalAgent(requestedDisplayName, { failOnAmbiguous: true }) : null;
-        const existing = directIdentity?.profile ? directIdentity : namedIdentity?.profile ? namedIdentity : null;
+        const { requestedId, existing } = resolveExistingProfile(this, input, incomingPatch);
         const patch = existing ? { ...existing.profile, ...incomingPatch } : incomingPatch;
         const {
             name, systemPrompt, instructionMode, baseInstructions, developerInstructions,
             personality, model, reasoningEffort, workspaceRoot, permissionMode,
         } = patch;
         const displayName = String(name || '').trim();
-        const prompt = String(
-            Object.prototype.hasOwnProperty.call(incomingPatch, 'baseInstructions')
-                ? incomingPatch.baseInstructions
-                : Object.prototype.hasOwnProperty.call(incomingPatch, 'systemPrompt')
-                    ? incomingPatch.systemPrompt
-                    : baseInstructions ?? systemPrompt ?? '',
-        ).trim();
+        const prompt = requestedPrompt(incomingPatch, { baseInstructions, systemPrompt });
         const normalizedInstructionMode = normalizeInstructionMode(instructionMode, prompt);
         const normalizedDeveloperInstructions = String(developerInstructions || '').trim();
         const normalizedPersonality = normalizePersonality(personality);
@@ -108,35 +267,13 @@ class RuntimeProfileService {
             .replace(/[\\/:*?"<>|]+/g, '-')
             .replace(/\s+/g, '-')
             .replace(/^-+|-+$/g, '');
-        if (!displayName || !idValue || idValue === '.' || idValue === '..' || /[\\/:*?"<>|]/.test(idValue)) {
-            throw new CodexAppServerError('INVALID_INPUT', 'Build Agent name is invalid');
-        }
-        if (normalizedInstructionMode === 'vchat-identity' && !prompt) {
-            throw new CodexAppServerError('INVALID_INPUT', 'VChat identity mode requires baseInstructions');
-        }
-        if (existing && (!requestedId || !sameIdentity(existing.catalogId, requestedId))) {
-            throw new CodexAppServerError('ALREADY_EXISTS', `Build Agent ${displayName} already exists`);
-        }
-        if (existing) {
-            const expected = Number(input.expectedProfileRevision);
-            const actual = Number(existing.profile?.profileRevision || existing.profile?.revision || 1);
-            if (!Number.isInteger(expected) || expected !== actual) {
-                throw new CodexAppServerError('PROFILE_CONFIG_CONFLICT', 'Agent Profile changed in another view', {
-                    current: { id: existing.catalogId, ...normalizeProfile(existing.profile, existing.catalogId) },
-                });
-            }
-        }
+        requireProfileIdentity({
+            displayName, idValue, instructionMode: normalizedInstructionMode, prompt,
+            existing, requestedId, input,
+        });
         const directory = path.join(this.context.agentsDir(), idValue);
         fs.mkdirSync(directory, { recursive: true });
-        let normalizedWorkspace = '';
-        if (String(workspaceRoot || '').trim()) {
-            normalizedWorkspace = path.resolve(String(workspaceRoot).trim());
-            let stat = null;
-            try { stat = fs.statSync(normalizedWorkspace); } catch { /* validated below */ }
-            if (!stat?.isDirectory()) {
-                throw new CodexAppServerError('INVALID_WORKSPACE', 'Workspace directory does not exist');
-            }
-        }
+        const normalizedWorkspace = normalizedWorkspaceRoot(workspaceRoot);
         const previousRevision = Number(existing?.profile?.profileRevision || existing?.profile?.revision || 0);
         const avatarFile = safeAvatarFile(existing?.profile?.avatarFile);
         const normalizedModel = String(model || '').trim();
@@ -227,36 +364,7 @@ class RuntimeProfileService {
         if (!session) throw new CodexAppServerError('NOT_FOUND', 'Agent Session was not found');
         const profile = this.resolveAgentProfile(session.agentCatalogId || session.agentId);
         if (!profile) throw new CodexAppServerError('NOT_FOUND', 'Build Agent Profile was not found');
-        const differences = [];
-        const addDifference = (field, current, next, identity = false) => {
-            if (String(current ?? '') !== String(next ?? '')) {
-                differences.push({ field, current: current ?? null, next: next ?? null, identity });
-            }
-        };
-        const profileMode = normalizeInstructionMode(
-            profile.instructionMode,
-            profile.baseInstructions || profile.systemPrompt,
-        );
-        addDifference('instructionMode', normalizeInstructionMode(
-            session.configSnapshot?.instructionMode,
-            session.configSnapshot?.baseInstructions,
-        ), profileMode, true);
-        addDifference('baseInstructions', session.configSnapshot?.baseInstructions || '',
-            profile.baseInstructions || profile.systemPrompt || '', profileMode === 'vchat-identity');
-        addDifference('developerInstructions', session.configSnapshot?.developerInstructions || '',
-            profile.developerInstructions || '', profileMode === 'codex-managed');
-        addDifference('personality', normalizePersonality(session.configSnapshot?.personality),
-            normalizePersonality(profile.personality), profileMode === 'codex-managed');
-        const profileWorkspace = profile.workspaceRoot ? path.resolve(profile.workspaceRoot) : session.workspaceRoot;
-        addDifference('workspaceRoot', session.workspaceRoot || '', profileWorkspace || '', true);
-        addDifference('name', session.agentNameSnapshot || session.configSnapshot?.agentName || '', profile.name || '');
-        addDifference('avatar', session.configSnapshot?.agentAvatar || '', profile.avatarUrl || '');
-        addDifference('model', session.configSnapshot?.model || '', profile.model || session.configSnapshot?.model || '');
-        addDifference('reasoningEffort', session.configSnapshot?.reasoningEffort || '', profile.reasoningEffort || '');
-        addDifference('permissionMode', normalizePermissionMode(session.configSnapshot?.permissionMode),
-            normalizePermissionMode(profile.permissionMode));
-        addDifference('profileRevision', Number(session.configSnapshot?.profileRevision || 1),
-            Number(profile.revision || 1));
+        const { differences, profileMode, profileWorkspace } = profileDifferences(session, profile);
         const identityChanges = differences.filter((entry) => entry.identity).map((entry) => entry.field);
         if (previewOnly) {
             return {
@@ -291,28 +399,9 @@ class RuntimeProfileService {
             });
             return { applied: false, createdNewSession: true, requiresNewSession: true, differences, session: created };
         }
-        const permissionMode = normalizePermissionMode(profile.permissionMode);
         const updated = repository.updateSessionConfig(session.sessionId, Number(expectedConfigRevision), {
             workspaceRoot: profileWorkspace,
-            agentNameSnapshot: profile.name || session.agentNameSnapshot,
-            configSnapshot: {
-                ...(session.configSnapshot || {}),
-                profileId: profile.id,
-                profileRevision: Number(profile.revision || 1),
-                instructionMode: profileMode,
-                baseInstructions: profile.baseInstructions || profile.systemPrompt || '',
-                developerInstructions: String(profile.developerInstructions || ''),
-                personality: normalizePersonality(profile.personality),
-                agentName: profile.name || session.agentNameSnapshot || '',
-                agentAvatar: profile.avatarUrl || session.configSnapshot?.agentAvatar || '',
-                model: profile.model || session.configSnapshot?.model,
-                reasoningEffort: normalizeReasoningEffort(profile.reasoningEffort),
-                reasoningEfforts: Array.isArray(profile.reasoningEfforts) ? profile.reasoningEfforts : [],
-                permissionMode,
-                approvalPolicy: normalizeApprovalPolicy(permissionMode),
-                provider: 'vcp_toolbox',
-                executionProfile: 'toolbox-only',
-            },
+            ...profileSessionPatch(session, profile, profileMode),
         });
         if (!updated.updated) {
             throw new CodexAppServerError('SESSION_CONFIG_CONFLICT', 'Session settings changed in another view', {
@@ -323,48 +412,8 @@ class RuntimeProfileService {
     }
 
     configSnapshot(options = {}) {
-        const settings = this.context.getSettings() || {};
-        const toolboxConfigured = Boolean(settings.vcpServerUrl && settings.vcpApiKey);
-        const agentId = explicitAgent(options.agentId || options.agent) || 'codex';
-        const profile = this.resolveAgentProfile(agentId);
-        const provider = options.provider || (profile ? 'vcp_toolbox' : (toolboxConfigured ? 'vcp_toolbox' : 'codex'));
-        const permissionMode = normalizePermissionMode(
-            options.permissionMode || options.approvalPolicy || profile?.permissionMode,
-        );
-        const model = options.model || profile?.model || settings.agentRuntime?.codex?.model
-            || settings.agentRuntime?.tui?.defaultModel || (toolboxConfigured ? 'Nova' : 'gpt-5.1-codex');
-        const baseInstructions = options.baseInstructions ?? options.systemPrompt
-            ?? profile?.baseInstructions ?? profile?.systemPrompt ?? '';
-        const requestedInstructionMode = options.instructionMode ?? profile?.instructionMode;
-        const instructionMode = requestedInstructionMode
-            ? normalizeInstructionMode(requestedInstructionMode, baseInstructions)
-            : (!String(baseInstructions || '').trim() && sameIdentity(agentId, 'codex')
-                ? 'codex-managed' : 'vchat-identity');
-        const reasoning = this.validateReasoningEffort(
-            model,
-            options.reasoningEffort ?? profile?.reasoningEffort,
-            { supported: options.reasoningEfforts || profile?.reasoningEfforts },
-        );
-        return {
-            model,
-            instructionMode,
-            personality: normalizePersonality(options.personality ?? profile?.personality),
-            permissionMode,
-            approvalPolicy: normalizeApprovalPolicy(permissionMode),
-            sandbox: normalizeSandboxMode(options.sandbox),
-            baseInstructions: String(baseInstructions || '').trim(),
-            developerInstructions: String(options.developerInstructions ?? profile?.developerInstructions ?? '').trim(),
-            reasoningEffort: reasoning.effort,
-            reasoningEfforts: reasoning.supported,
-            agentName: options.agentName || options.name || profile?.name || '',
-            agentAvatar: options.agentAvatar || options.avatar || profile?.avatarUrl
-                || this.agentAvatarUrl(profile?.id || agentId),
-            profileId: profile?.id || agentId,
-            profileRevision: Number(profile?.revision || 1),
-            provider,
-            executionProfile: options.executionProfile
-                || (profile || provider === 'vcp_toolbox' ? 'toolbox-only' : 'codex-native'),
-        };
+        const authority = snapshotAuthority(this, options);
+        return snapshotProjection(this, options, authority, snapshotConfigValues(this, options, authority));
     }
 
     resolveAgentProfile(agentId) {

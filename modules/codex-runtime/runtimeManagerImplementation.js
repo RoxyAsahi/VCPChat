@@ -59,7 +59,9 @@ class CodexRuntimeManager extends EventEmitter {
         this.intentionalStop = false;
         this.sessionWarmPromises = new Map();
         this.turnStartPromises = new Map();
+        this.steerPromises = new Map();
         this.followUpDrainPromises = new Map();
+        this.turnCancellationStates = new Map();
         this.configApplyPromises = new Map();
         this.configApplyTargets = new Map();
         this.compactionWaiters = new Map();
@@ -164,7 +166,9 @@ class CodexRuntimeManager extends EventEmitter {
         this.configApplyTargets.clear();
         this.sessionWarmPromises.clear();
         this.turnStartPromises.clear();
+        this.steerPromises.clear();
         this.followUpDrainPromises.clear();
+        this.turnCancellationStates.clear();
         this.idleWarmSessions.clear();
         this.dynamicCalls.clear();
         this.toolboxApprovals.clear();
@@ -266,20 +270,26 @@ class CodexRuntimeManager extends EventEmitter {
         });
     }
 
-    async steerTurn({ sessionId, turnId, prompt } = {}) {
-        return this.turnService.steer({ sessionId: requireSessionId(sessionId), turnId, prompt });
+    async steerTurn({ sessionId, turnId, prompt, submissionId } = {}) {
+        return this.turnService.steer({ sessionId: requireSessionId(sessionId), turnId, prompt, submissionId });
     }
 
-    async followUpTurn({ sessionId, prompt, attachments = [] } = {}) {
-        return this.turnService.followUp({ sessionId: requireSessionId(sessionId), prompt, attachments });
+    async followUpTurn({ sessionId, turnId, afterTurnId, prompt, submissionId, attachments = [] } = {}) {
+        return this.turnService.followUp({
+            sessionId: requireSessionId(sessionId),
+            afterTurnId: afterTurnId || turnId,
+            prompt,
+            submissionId,
+            attachments,
+        });
     }
 
     async cancelTurn({ sessionId, turnId } = {}) {
         return this.turnService.cancel({ sessionId: requireSessionId(sessionId), turnId });
     }
 
-    async forkSession({ sessionId, turnId, title } = {}) {
-        return this.turnService.fork({ sessionId: requireSessionId(sessionId), turnId, title });
+    async forkSession({ sessionId, turnId, beforeTurnId, title } = {}) {
+        return this.turnService.fork({ sessionId: requireSessionId(sessionId), turnId, beforeTurnId, title });
     }
 
     _assertLifecycleIdle(session) {

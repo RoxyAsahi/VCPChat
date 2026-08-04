@@ -189,11 +189,13 @@ function pendingInputProjection(input) {
         interactionId: input.inputId,
         inputId: input.inputId,
         sessionId: input.sessionId,
-        kind: 'follow-up',
+        kind: input.kind || 'follow-up',
+        submissionId: input.submissionId || input.dedupeKey || null,
         prompt: input.prompt,
         state: input.state,
         clientUserMessageId: input.clientMessageId,
         turnId: input.turnId || null,
+        targetTurnId: input.targetTurnId || null,
         attempt: Number(input.attemptCount || 0),
         error: input.lastError || null,
         createdAt: input.createdAt,
@@ -346,42 +348,47 @@ function sanitizeInteractionPayload(value, depth = 0) {
 function normalizeInteractionResponse(request, response) {
     const method = request?.method;
     const params = request?.params || {};
-    if (method === 'item/tool/requestUserInput') {
-        const questions = Array.isArray(params.questions) ? params.questions : [];
-        const submitted = response?.answers && typeof response.answers === 'object' ? response.answers : {};
-        const answers = {};
-        for (const question of questions.slice(0, 16)) {
-            const id = String(question?.id || '').trim();
-            if (!id) continue;
-            const raw = submitted[id]?.answers ?? submitted[id] ?? [];
-            const values = (Array.isArray(raw) ? raw : [raw])
-                .map((value) => String(value ?? '').slice(0, 16_384))
-                .filter((value) => value.length > 0)
-                .slice(0, 8);
-            if (values.length) answers[id] = { answers: values };
-        }
-        return { answers };
-    }
-    if (method === 'item/permissions/requestApproval') {
-        if (response?.decision !== 'accept') return { permissions: {}, scope: 'turn' };
-        const requested = params.permissions && typeof params.permissions === 'object' ? params.permissions : {};
-        const permissions = {};
-        if (requested.network) permissions.network = sanitizeInteractionPayload(requested.network);
-        if (requested.fileSystem) permissions.fileSystem = sanitizeInteractionPayload(requested.fileSystem);
-        return {
-            permissions,
-            scope: response?.scope === 'session' ? 'session' : 'turn',
-            strictAutoReview: response?.strictAutoReview === true ? true : undefined,
-        };
-    }
-    if (method === 'mcpServer/elicitation/request') {
-        const action = ['accept', 'decline', 'cancel'].includes(response?.action) ? response.action : 'cancel';
-        const content = action === 'accept' && params.mode !== 'url' && response?.content && typeof response.content === 'object'
-            ? validateMcpElicitationContent(params.requestedSchema, response.content)
-            : null;
-        return { action, content, _meta: null };
-    }
+    if (method === 'item/tool/requestUserInput') return normalizeUserInputResponse(params, response);
+    if (method === 'item/permissions/requestApproval') return normalizeApprovalResponse(params, response);
+    if (method === 'mcpServer/elicitation/request') return normalizeElicitationResponse(params, response);
     throw new CodexAppServerError('UNSUPPORTED_INTERACTION', `Unsupported Codex interaction: ${method || '(empty)'}`);
+}
+
+function normalizeUserInputResponse(params, response) {
+    const questions = Array.isArray(params.questions) ? params.questions : [];
+    const submitted = response?.answers && typeof response.answers === 'object' ? response.answers : {};
+    const answers = {};
+    for (const question of questions.slice(0, 16)) {
+        const id = String(question?.id || '').trim();
+        if (!id) continue;
+        const raw = submitted[id]?.answers ?? submitted[id] ?? [];
+        const values = (Array.isArray(raw) ? raw : [raw])
+            .map((value) => String(value ?? '').slice(0, 16_384))
+            .filter((value) => value.length > 0).slice(0, 8);
+        if (values.length) answers[id] = { answers: values };
+    }
+    return { answers };
+}
+
+function normalizeApprovalResponse(params, response) {
+    if (response?.decision !== 'accept') return { permissions: {}, scope: 'turn' };
+    const requested = params.permissions && typeof params.permissions === 'object' ? params.permissions : {};
+    const permissions = {};
+    if (requested.network) permissions.network = sanitizeInteractionPayload(requested.network);
+    if (requested.fileSystem) permissions.fileSystem = sanitizeInteractionPayload(requested.fileSystem);
+    return {
+        permissions,
+        scope: response?.scope === 'session' ? 'session' : 'turn',
+        strictAutoReview: response?.strictAutoReview === true ? true : undefined,
+    };
+}
+
+function normalizeElicitationResponse(params, response) {
+    const action = ['accept', 'decline', 'cancel'].includes(response?.action) ? response.action : 'cancel';
+    const content = action === 'accept' && params.mode !== 'url' && response?.content
+        && typeof response.content === 'object'
+        ? validateMcpElicitationContent(params.requestedSchema, response.content) : null;
+    return { action, content, _meta: null };
 }
 
 function validateMcpElicitationContent(schema, input) {

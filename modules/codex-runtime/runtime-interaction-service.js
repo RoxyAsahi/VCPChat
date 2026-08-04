@@ -16,7 +16,6 @@ const {
     pendingInputProjection,
     requireSessionId,
     sanitizeInteractionPayload,
-    submissionDedupeKey,
 } = require('./runtime-normalizers');
 
 class RuntimeInteractionService {
@@ -263,7 +262,7 @@ class RuntimeInteractionService {
             const prompt = String(next.prompt || next.text || '').trim();
             if (!prompt) throw new CodexAppServerError('INVALID_INPUT', 'Queued follow-up message must not be empty');
             if (prompt !== current.prompt) {
-                repository.updatePendingInput(current.inputId, { prompt, dedupeKey: submissionDedupeKey(prompt, []) });
+                repository.updatePendingInput(current.inputId, { prompt });
             }
         }
         return this.listQueue({ sessionId: idValue });
@@ -306,8 +305,11 @@ class RuntimeInteractionService {
             reason: 'explicit-input-resend',
         });
         this.context.assertOperationContext(operation);
-        if (this.context.threadStates().get(runtimeSession.threadId)?.activity !== 'running') {
-            await this.context.drainFollowUpQueue(runtimeSession);
+        if (retried?.kind === 'steer') {
+            await this.context.retrySteerPendingInput(runtimeSession, retried);
+            this.context.assertOperationContext(operation);
+        } else if (this.context.threadStates().get(runtimeSession.threadId)?.activity === 'idle') {
+            await this.context.drainFollowUpQueue(runtimeSession, { forceInputId: targetId });
             this.context.assertOperationContext(operation);
         }
         const currentRepository = this.context.repository();
@@ -317,6 +319,21 @@ class RuntimeInteractionService {
             input: retried ? pendingInputProjection(retried) : null,
             items: currentRepository.listPendingInputs(idValue).map(pendingInputProjection),
         };
+    }
+
+    async failClosedTurnInteractions({ threadId, turnId } = {}, reason = 'Codex Turn ended') {
+        const resolved = [];
+        for (const [requestId, request] of [...this.serverRequests.entries()]) {
+            if (request.method === 'item/tool/call') continue;
+            if (request?.params?.threadId !== threadId || request?.params?.turnId !== turnId) continue;
+            try {
+                this.failClosedServerRequest({ ...request, id: requestId }, reason);
+                resolved.push(requestId);
+            } catch (error) {
+                this.context.diagnostic(`Could not fail-close Turn interaction ${requestId}: ${error.message}`);
+            }
+        }
+        return { resolved };
     }
 
     async failClosedNativeApprovals(reason, { respond = true } = {}) {

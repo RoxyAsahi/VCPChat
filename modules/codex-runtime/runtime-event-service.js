@@ -29,24 +29,32 @@ class RuntimeEventService {
         const states = this.context.threadStates();
         const previous = states.get(session.threadId) || { activity: 'idle', activeTurnId: null };
         let next = previous;
+        let completedTurnId = null;
         if (message.method === 'turn/started') {
             next = { activity: 'running', activeTurnId: message.params?.turn?.id || null };
         } else if (message.method === 'turn/completed') {
-            next = { activity: 'idle', activeTurnId: null };
+            const eventTurnId = String(message.params?.turn?.id || message.params?.turnId || '').trim();
+            if (eventTurnId && previous.activeTurnId === eventTurnId) {
+                completedTurnId = eventTurnId;
+                next = { activity: 'idle', activeTurnId: null };
+                this.context.turnCancellationStates?.()?.delete(`${session.threadId}:${eventTurnId}`);
+            }
         } else if (message.method === 'thread/status/changed') {
             const active = message.params?.status?.type === 'active';
-            next = { ...previous, activity: active ? 'running' : 'idle', activeTurnId: active ? previous.activeTurnId : null };
+            next = active
+                ? { ...previous, activity: 'running' }
+                : { ...previous, activity: 'idle', activeTurnId: null };
         }
         states.set(session.threadId, next);
         repository.saveSession({ ...durableSession, state: next.activity, updatedAt: Date.now() });
         if (next.activity === 'idle') this.rememberIdleWarmSession(durableSession.sessionId);
         else this.context.idleWarmSessions().delete(durableSession.sessionId);
-        if (message.method === 'turn/completed' && next.activity === 'idle') {
+        if (completedTurnId && next.activity === 'idle') {
             const latest = repository.getSession(durableSession.sessionId);
             if (latest && latest.appliedRuntimeConfigRevision !== latest.configRevision) {
                 this.context.scheduleSessionConfigApply(latest.sessionId);
             }
-            void this.context.drainFollowUpQueue(latest || durableSession);
+            void this.context.drainFollowUpQueue(latest || durableSession, { completedTurnId });
         }
     }
 
