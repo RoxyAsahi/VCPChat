@@ -47,10 +47,12 @@ function createWorkbenchCommandController(context) {
         return { ...session, sessionId, agentId };
     }
 
-    async function forkSession({ sessionId, turnId, title } = {}) {
+    async function forkSession({ sessionId, turnId, beforeTurnId, title } = {}) {
         const sourceSessionId = sessionId || selectedSessionId();
         if (!sourceSessionId) throw new Error('请先选择要创建分支的会话');
-        const fork = await requireApi('agentSessionFork')({ sessionId: sourceSessionId, turnId, title });
+        const fork = await requireApi('agentSessionFork')({
+            sessionId: sourceSessionId, turnId, beforeTurnId, title,
+        });
         const forkSessionId = fork?.sessionId;
         if (!forkSessionId) throw new Error('Codex thread/fork 未返回新会话身份');
         await previewTopic(forkSessionId, fork.agentId, fork);
@@ -117,6 +119,47 @@ function createWorkbenchCommandController(context) {
     });
     const getWorkbenchSettings = () => requireApi('agentRuntimeGetWorkbenchSettings')();
 
+    function mergeSelectedTopicConfig(topic, saved, configSnapshot) {
+        return {
+            ...topic,
+            model: configSnapshot?.model || saved.model || topic?.model || '',
+            workspaceRoot: saved.workspaceRoot || topic?.workspaceRoot || '',
+            workspaceRef: saved.workspaceRoot || topic?.workspaceRef || '',
+            configSnapshot,
+            configRevision: saved.configRevision || topic?.configRevision,
+            appliedRuntimeConfig: saved.appliedRuntimeConfig || topic?.appliedRuntimeConfig || null,
+            appliedRuntimeConfigRevision: saved.appliedRuntimeConfigRevision
+                ?? topic?.appliedRuntimeConfigRevision ?? 0,
+            configApplyState: saved.configApplyState || saved.applyState || topic?.configApplyState || null,
+            configApplyError: saved.configApplyError || saved.applyError || null,
+        };
+    }
+
+    function applyConfigResult(saved) {
+        if (!saved?.sessionId) return;
+        const current = store.getState();
+        const configSnapshot = saved.configSnapshot || null;
+        const activeRuntimes = new Map(current.activeRuntimes);
+        const runtime = activeRuntimes.get(saved.sessionId);
+        if (runtime) activeRuntimes.set(saved.sessionId, {
+            ...runtime,
+            model: configSnapshot?.model || saved.model || runtime.model || '',
+            workspaceRoot: saved.workspaceRoot || runtime.workspaceRoot,
+            configSnapshot,
+            appliedRuntimeConfig: saved.appliedRuntimeConfig || runtime.appliedRuntimeConfig || null,
+            configRevision: saved.configRevision || runtime.configRevision,
+            appliedRuntimeConfigRevision: saved.appliedRuntimeConfigRevision
+                ?? runtime.appliedRuntimeConfigRevision ?? 0,
+            configApplyState: saved.configApplyState || saved.applyState || runtime.configApplyState,
+            configApplyError: saved.configApplyError || saved.applyError || null,
+        });
+        const selected = current.selectedSessionId === saved.sessionId;
+        store.setState({
+            activeRuntimes,
+            ...(selected ? { selectedTopic: mergeSelectedTopicConfig(current.selectedTopic, saved, configSnapshot) } : {}),
+        });
+    }
+
     async function updateWorkbenchSettings(settings) {
         const result = settings?.sessionId
             ? await requireApi('agentRuntimeUpdateSessionConfig')({
@@ -127,44 +170,7 @@ function createWorkbenchCommandController(context) {
                 ].includes(key))),
             })
             : await requireApi('agentRuntimeUpdateWorkbenchSettings')(settings);
-        const saved = result?.session;
-        const current = store.getState();
-        if (saved?.sessionId) {
-            const configSnapshot = saved.configSnapshot || null;
-            const activeRuntimes = new Map(current.activeRuntimes);
-            const runtime = activeRuntimes.get(saved.sessionId);
-            if (runtime) activeRuntimes.set(saved.sessionId, {
-                ...runtime,
-                model: configSnapshot?.model || saved.model || runtime.model || '',
-                workspaceRoot: saved.workspaceRoot || runtime.workspaceRoot,
-                configSnapshot,
-                appliedRuntimeConfig: saved.appliedRuntimeConfig || runtime.appliedRuntimeConfig || null,
-                configRevision: saved.configRevision || runtime.configRevision,
-                appliedRuntimeConfigRevision: saved.appliedRuntimeConfigRevision
-                    ?? runtime.appliedRuntimeConfigRevision ?? 0,
-                configApplyState: saved.configApplyState || saved.applyState || runtime.configApplyState,
-                configApplyError: saved.configApplyError || saved.applyError || null,
-            });
-            const selected = current.selectedSessionId === saved.sessionId;
-            const model = configSnapshot?.model || saved.model || current.selectedTopic?.model || '';
-            store.setState({
-                activeRuntimes,
-                ...(selected ? { selectedTopic: {
-                    ...current.selectedTopic,
-                    model,
-                    workspaceRoot: saved.workspaceRoot || current.selectedTopic?.workspaceRoot || '',
-                    workspaceRef: saved.workspaceRoot || current.selectedTopic?.workspaceRef || '',
-                    configSnapshot,
-                    configRevision: saved.configRevision || current.selectedTopic?.configRevision,
-                    appliedRuntimeConfig: saved.appliedRuntimeConfig || current.selectedTopic?.appliedRuntimeConfig || null,
-                    appliedRuntimeConfigRevision: saved.appliedRuntimeConfigRevision
-                        ?? current.selectedTopic?.appliedRuntimeConfigRevision ?? 0,
-                    configApplyState: saved.configApplyState || saved.applyState
-                        || current.selectedTopic?.configApplyState || null,
-                    configApplyError: saved.configApplyError || saved.applyError || null,
-                } } : {}),
-            });
-        }
+        applyConfigResult(result?.session);
         return result;
     }
 
@@ -214,10 +220,10 @@ function createWorkbenchCommandController(context) {
         return accepted;
     }
 
-    async function cancelTurn() {
+    async function cancelTurn(turnId = selectedTurnId()) {
         const sessionId = selectedRuntime()?.sessionId;
-        if (!sessionId) return null;
-        return requireApi('agentRuntimeCancelTurn')({ sessionId, turnId: selectedTurnId() || undefined });
+        if (!sessionId || !turnId) throw new Error('当前没有可停止的 Codex Turn');
+        return requireApi('agentRuntimeCancelTurn')({ sessionId, turnId });
     }
     async function cancelTool(toolCallId, turnId) {
         const sessionId = selectedRuntime()?.sessionId;
@@ -227,17 +233,21 @@ function createWorkbenchCommandController(context) {
         if (!turnId) throw new Error('该工具事件缺少 Codex turnId，不能猜测并取消其他任务');
         return requireApi('agentRuntimeCancelTurn')({ sessionId, turnId });
     }
-    async function steerTurn(prompt) {
+    async function steerTurn(prompt, submissionId) {
         const sessionId = selectedRuntime()?.sessionId;
         const turnId = selectedTurnId();
         if (!sessionId || !turnId) throw new Error('当前没有可插入指令的任务');
-        return requireApi('agentRuntimeSteerTurn')({ sessionId, turnId, prompt });
+        if (!submissionId) throw new Error('即时调整指令缺少 submissionId');
+        return requireApi('agentRuntimeSteerTurn')({ sessionId, turnId, prompt, submissionId });
     }
-    async function followUpTurn(prompt) {
+    async function followUpTurn(prompt, submissionId) {
         const sessionId = selectedRuntime()?.sessionId;
         const turnId = selectedTurnId();
         if (!sessionId || !turnId) throw new Error('当前没有可追加后续指令的任务');
-        return requireApi('agentRuntimeFollowUpTurn')({ sessionId, turnId, prompt });
+        if (!submissionId) throw new Error('后续指令缺少 submissionId');
+        return requireApi('agentRuntimeFollowUpTurn')({
+            sessionId, turnId, afterTurnId: turnId, prompt, submissionId,
+        });
     }
 
     async function respondApproval(approval, decision) {

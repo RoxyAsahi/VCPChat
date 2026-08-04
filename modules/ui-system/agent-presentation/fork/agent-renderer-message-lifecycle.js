@@ -44,6 +44,39 @@ function createAgentRendererMessageLifecycle(options) {
         options.requestIdle(run, { timeout: 300 });
     }
 
+    function renderMessageBody({ message, messageItem, contentDiv, participant, settings,
+        history, renderContext, renderSessionId, chatMessagesDiv }) {
+        const precomputedDepth = renderContext.depthMap?.get?.(message.id);
+        const depth = precomputedDepth !== undefined
+            ? precomputedDepth
+            : options.calculateDepthByTurns(message.id, history.some((entry) => entry.id === message.id)
+                ? [...history] : [...history, message]);
+        const text = applyMessageTransforms(normalizeContent(message), message, messageItem, depth, participant);
+        const html = options.renderMarkdownToHtml(text, { settings, messageRole: message.role, depth })
+            .replace(/viewBox="0 "/g, 'viewBox="0 0 24 24"');
+        contentDiv.innerHTML = html;
+        schedulePretextEstimate(message.id, text, chatMessagesDiv);
+        const postProcess = (postOptions = {}) => {
+            if (!options.isRenderSessionActive(renderSessionId) || !messageItem.isConnected || !contentDiv.isConnected) return;
+            return options.renderPostProcessedHtml(contentDiv, html, {
+                messageId: message.id, message, settings, renderSessionId,
+                runHeavy: postOptions.runHeavy !== false, includeAttachments: true,
+            });
+        };
+        messageItem._vcp_activateHeavy = () => {
+            if (messageItem.dataset.vcpHeavyActivated === 'true') return;
+            return postProcess({ runHeavy: true });
+        };
+        if (messageItem._vcp_appendToDom) {
+            options.requestFrame(() => {
+                if (options.isRenderSessionActive(renderSessionId) && messageItem.isConnected) postProcess();
+            });
+        } else {
+            messageItem._vcp_process = postProcess;
+            messageItem._vcp_renderSessionId = renderSessionId;
+        }
+    }
+
     function renderMessage(message, isInitialLoad = false, appendToDom = true, renderSessionId = options.getActiveRenderSessionId(), renderContext = {}) {
         const context = options.getContext();
         const { chatMessagesDiv, electronAPI, markedInstance } = context;
@@ -66,46 +99,15 @@ function createAgentRendererMessageLifecycle(options) {
 
         const activeStream = message.role === 'assistant'
             && (message.state === 'streaming' || message.isStreaming === true || options.getStreamController().has(message.id));
-        const empty = message.content === null || message.content === undefined
-            || (typeof message.content === 'string' && message.content.trim() === '');
+        const empty = message.content == null || (typeof message.content === 'string' && message.content.trim() === '');
         if (message.isThinking || (activeStream && empty)) {
             contentDiv.innerHTML = `<span class="thinking-indicator">${message.content || '思考中'}<span class="thinking-indicator-dots">...</span></span>`;
             messageItem.classList.add(message.isThinking ? 'thinking' : 'streaming');
         } else {
             if (activeStream) messageItem.classList.add('streaming');
-            const precomputedDepth = renderContext.depthMap?.get?.(message.id);
-            const depth = precomputedDepth !== undefined
-                ? precomputedDepth
-                : options.calculateDepthByTurns(message.id, history.some((entry) => entry.id === message.id) ? [...history] : [...history, message]);
-            const text = applyMessageTransforms(normalizeContent(message), message, messageItem, depth, participant);
-            const html = options.renderMarkdownToHtml(text, { settings, messageRole: message.role, depth })
-                .replace(/viewBox="0 "/g, 'viewBox="0 0 24 24"');
-            contentDiv.innerHTML = html;
-            schedulePretextEstimate(message.id, text, chatMessagesDiv);
-
-            const postProcess = (postOptions = {}) => {
-                if (!options.isRenderSessionActive(renderSessionId) || !messageItem.isConnected || !contentDiv.isConnected) return;
-                return options.renderPostProcessedHtml(contentDiv, html, {
-                    messageId: message.id,
-                    message,
-                    settings,
-                    renderSessionId,
-                    runHeavy: postOptions.runHeavy !== false,
-                    includeAttachments: true,
-                });
-            };
-            messageItem._vcp_activateHeavy = () => {
-                if (messageItem.dataset.vcpHeavyActivated === 'true') return;
-                return postProcess({ runHeavy: true });
-            };
-            if (appendToDom) {
-                options.requestFrame(() => {
-                    if (options.isRenderSessionActive(renderSessionId) && messageItem.isConnected) postProcess();
-                });
-            } else {
-                messageItem._vcp_process = postProcess;
-                messageItem._vcp_renderSessionId = renderSessionId;
-            }
+            messageItem._vcp_appendToDom = appendToDom;
+            renderMessageBody({ message, messageItem, contentDiv, participant, settings,
+                history, renderContext, renderSessionId, chatMessagesDiv });
         }
 
         options.applyAvatar({ message, messageItem, avatarImg, senderNameDiv, settings, participant });

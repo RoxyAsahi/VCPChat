@@ -1,10 +1,12 @@
 import * as contentProcessor from '../../../renderer/contentProcessor.js';
 import * as emoticonUrlFixer from '../../../renderer/emoticonUrlFixer.js';
-import { createAgentRendererMarkdownPipeline } from './agent-renderer-markdown-pipeline.js';
+import {
+    createAgentRendererMarkdownPipeline,
+    createAgentRendererScopedHtml,
+    createAgentRendererTextTransforms,
+} from './agent-renderer-markdown-pipeline.js';
 import { createAgentRendererMermaid } from './agent-renderer-mermaid.js';
-import { createAgentRendererScopedHtml } from './agent-renderer-scoped-html.js';
 import { createAgentRendererSpecialBlocks } from './agent-renderer-special-blocks.js';
-import { createAgentRendererTextTransforms } from './agent-renderer-text-transforms.js';
 import { createAgentRendererToolResults } from './agent-renderer-tool-results.js';
 
 const RENDER_PIPELINE_VERSION = '2026-07-26-dollar-guard-v3';

@@ -1,3 +1,5 @@
+import { visualActionButton } from './agent-workbench-dom.js';
+
 const QUEUE_STATE_LABELS = Object.freeze({
     queued: '等待发送',
     dispatching: '正在发送',
@@ -6,24 +8,9 @@ const QUEUE_STATE_LABELS = Object.freeze({
     failed: '发送失败',
 });
 
-function renderPendingInputQueue({ state, controller, refresh, notify, run, button, node, host }) {
-    if (!state.queueOpen) return null;
-    const panel = node('section', 'agent-chat-queue-popover');
-    const title = node('div', 'agent-chat-queue-heading');
-    title.append(node('strong', '', '后续指令队列'));
-    const clear = button('清空', 'agent-chat-queue-clear');
-    clear.disabled = !state.queue.some((item) => ['queued', 'failed'].includes(item?.state || 'queued'));
-    clear.addEventListener('click', () => run(async () => {
-        await controller.clearInteractionQueue();
-        await refresh();
-        notify('已清空后续指令队列。', 'success');
-    }));
-    title.append(clear);
-    panel.append(title);
-    if (!state.queue.length) {
-        panel.append(node('p', 'agent-chat-muted', '没有排队的 steering / follow-up。'));
-        return panel;
-    }
+function renderPendingInputQueue({ state, controller, refresh, notify, run, button, node, host, guidePrompt }) {
+    if (!state.queue.length) return null;
+    const panel = node('section', 'agent-chat-queue-panel');
 
     const list = node('ol', 'agent-chat-queue-list');
     for (const item of state.queue) {
@@ -32,21 +19,27 @@ function renderPendingInputQueue({ state, controller, refresh, notify, run, butt
         const inputId = typeof item === 'object' ? (item.inputId || item.interactionId) : '';
         const queueState = typeof item === 'object' ? (item.state || 'queued') : 'queued';
         const row = node('li', 'agent-chat-queue-item');
-        row.append(
-            node('span', 'agent-chat-queue-kind', kind === 'steer' ? '即时指导' : '后续指令'),
-            node('span', 'agent-chat-queue-state', QUEUE_STATE_LABELS[queueState] || queueState),
-            node('span', 'agent-chat-queue-prompt', prompt),
-        );
+        const body = node('div', 'agent-chat-queue-item-body');
+        body.append(node('span', 'agent-chat-queue-kind', kind === 'steer' ? '即时指导' : '后续指令'),
+            node('span', 'agent-chat-queue-prompt', prompt));
+        row.append(body);
+        const stateLabel = node('span', 'agent-chat-queue-state', QUEUE_STATE_LABELS[queueState] || queueState);
+        body.append(stateLabel);
         if (item?.error) row.append(node('span', 'agent-chat-queue-error', item.error));
 
         const itemActions = node('div', 'agent-chat-queue-item-actions');
         const requiresDecision = queueState === 'uncertain' || queueState === 'failed';
-        const edit = button(requiresDecision ? '重新发送' : '编辑');
-        const remove = button(requiresDecision ? '丢弃' : '移除', 'danger');
+        const guide = button('引导', 'agent-chat-queue-guide');
+        const remove = visualActionButton('delete', requiresDecision ? '丢弃' : '删除', 'agent-chat-queue-remove danger', '', host.document);
+        const edit = visualActionButton('more', requiresDecision ? '重新发送' : '编辑消息', 'agent-chat-queue-edit', '', host.document);
         const actionable = Boolean(inputId && (kind === 'steer' || kind === 'follow-up')
             && ['queued', 'uncertain', 'failed'].includes(queueState));
+        guide.disabled = !actionable;
         edit.disabled = !actionable;
         remove.disabled = !actionable;
+        guide.addEventListener('click', () => {
+            if (actionable) guidePrompt?.(prompt);
+        });
         edit.addEventListener('click', async () => {
             if (requiresDecision) {
                 run(async () => {
@@ -84,7 +77,7 @@ function renderPendingInputQueue({ state, controller, refresh, notify, run, butt
             await refresh();
             notify('后续指令已移除。', 'success');
         }));
-        itemActions.append(edit, remove);
+        itemActions.append(guide, remove, edit);
         row.append(itemActions);
         list.append(row);
     }

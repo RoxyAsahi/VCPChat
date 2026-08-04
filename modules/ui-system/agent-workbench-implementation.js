@@ -49,16 +49,9 @@ import {
     seedBuildAgentCatalog,
 } from './agent-session-catalog-coordinator.js';
 
-// This is deliberately a view over AgentRuntime, not a second chat/session
-// implementation. Session, message, tool, approval and runtime state all come
-// from Electron Main's Codex runtime and projection services through narrow IPC.
 const runtimeApi = () => window.chatAPI || window.electronAPI || {};
-// This is deliberately only a pointer. The renderer remembers which durable
-// VChat Agent Session to display after Ctrl+R; transcript data stays in SQLite
-// and execution context stays in the Codex Thread Store.
 const LAST_TOPIC_STORAGE_KEY = 'vcpchat.agentWorkbench.lastTopic.v1';
 
-// R3 fixed lifecycle state machine — labels shown in the Workbench header.
 const WORKBENCH_VIEW_STATE_LABELS = {
     disconnected: '未连接',
     starting: '启动中',
@@ -87,8 +80,6 @@ function rememberTopic(session) {
     try {
         window.localStorage?.setItem(LAST_TOPIC_STORAGE_KEY, JSON.stringify({ sessionId: session.sessionId }));
     } catch {
-        // Local storage is only a convenience pointer; Topic recovery must
-        // never fail because a locked-down renderer refuses preferences.
     }
 }
 
@@ -104,10 +95,6 @@ function proxyMainButton(id) {
     return document.getElementById(id)?.click();
 }
 
-// Agent Workbench owns its DOM and behavior.  It deliberately uses the shared
-// sidebar/composer *classes* and design tokens, but never clones a main-chat
-// element: copying it also copied incidental IDs/listeners and made this page
-// depend on whichever main-chat markup happened to be mounted.
 function notify(message, variant = 'info') {
     if (window.VCPUI?.feedback?.toast) window.VCPUI.feedback.toast(message, { variant });
     else window.uiHelperFunctions?.showToastNotification?.(message, variant === 'error' ? 'error' : 'success');
@@ -205,7 +192,7 @@ function mountWorkbench(container) {
     const {
         root, topicFlowLayer, sidebar, main, feed, feedItems, jumpToLatest, header,
         runStatus, runStatusLabel, runStatusDetail, runStatusElapsed, runStatusStop,
-        composerConfig, runningModes, steerModeButton, followUpModeButton, inputCard, input,
+        runningModes, steerModeButton, followUpModeButton, queuePanelHost, inputCard, input,
         newButton, attachButton, permissionsButton, sendButton, attachmentTray,
         activityPanel, activitySplitter,
     } = shellView.refs;
@@ -216,6 +203,33 @@ function mountWorkbench(container) {
         document,
         actions: {
             reconnect: () => run(recoverRuntime),
+            renameTitle: async ({ sessionId, agentId, title }) => {
+                const selected = store.getState().selectedTopic;
+                if (!selected?.sessionId || selected.sessionId !== sessionId) {
+                    throw new Error('当前会话已切换，未保存重命名。');
+                }
+                await controller.renameSession(sessionId, title, agentId);
+                const current = store.getState();
+                if (current.selectedTopic?.sessionId === sessionId) {
+                    store.setState({ selectedTopic: { ...current.selectedTopic, title } });
+                }
+                rememberTopicTitle(selected, title);
+                // A catalog refresh schedules a full shell render, which can replace a focused
+                // Composer during a concurrent stream. The rename is already durable; patch
+                // only the locally cached session rows needed by the sidebar.
+                const patchTitle = (topic) => {
+                    if (!topic || String(topic.sessionId || topic.id || '') !== String(sessionId)) return topic;
+                    return { ...topic, title };
+                };
+                state.topics = state.topics.map(patchTitle);
+                const cacheKey = agentCacheKey(agentId || state.selectedAgent);
+                const cachedTopics = state.topicsByAgent.get(cacheKey);
+                if (Array.isArray(cachedTopics)) {
+                    state.topicsByAgent.set(cacheKey, cachedTopics.map(patchTitle));
+                }
+                renderSidebar();
+                notify('会话已重命名。', 'success');
+            },
             toggleActivity: () => setActivityOpen(!state.activityOpen),
             toggleQueue: () => {
                 state.queueOpen = !state.queueOpen;
@@ -463,7 +477,7 @@ function mountWorkbench(container) {
             showImageContextMenu: (src) => controller.showImageContextMenu(src),
         }, blockPresentation, approvalRegistry, cssEscape,
         selectedAgentProfile, activeSession, selectedSessionKey, selectedTurnStart,
-        run, notify, scrollFeed: scopedScrollFeed,
+        run, notify, queueRender, scrollFeed: scopedScrollFeed,
         isFollowingContainer: (target) => isFollowingContainer(target, host.vcpBridge), host,
     });
 
@@ -666,17 +680,35 @@ function mountWorkbench(container) {
         const current = store.getState();
         const viewState = deriveWorkbenchViewState(current);
         const selected = current.selectedTopic;
+        const activeTurnId = selectedActiveTurnId(current);
         const selectedHasRuntime = selected?.sessionId && selected.sessionId === session?.sessionId;
         const headingTitle = selected?.title
             || (selectedHasRuntime ? session?.title : '')
             || `与 ${selected?.agentId || state.selectedAgent || 'Nova'} 聊天中`;
         const queuePanel = renderPendingInputQueue({
             state, controller, refresh: refreshControlPlane, notify, run, button, node, host,
+            guidePrompt: (prompt) => {
+                const sessionId = selectedSessionKey(current);
+                if (!sessionId) return;
+                state.composerStateBySession.setDraft(sessionId, prompt);
+                renderComposer();
+                input.focus();
+            },
         });
+        queuePanelHost.replaceChildren();
+        if (queuePanel) queuePanelHost.append(queuePanel);
         headerView.update({
             title: headingTitle,
+            sessionId: selected?.sessionId || null,
+            agentId: selected?.agentId || session?.agentId || null,
+            canRename: Boolean(selected?.sessionId),
             state: viewState,
             stateLabel: WORKBENCH_VIEW_STATE_LABELS[viewState] || viewState,
+            statusLabel: viewState === 'idle' && state.turnElapsedBySession?.has(selected?.sessionId)
+                ? '已完成' : WORKBENCH_VIEW_STATE_LABELS[viewState] || viewState,
+            statusStartedAt: viewState === 'running'
+                ? state.turnStartedAt.get(activeTurnId) || state.turnStarts.get(selected?.sessionId)?.startedAt : null,
+            statusElapsedMs: viewState === 'idle' ? state.turnElapsedBySession?.get(selected?.sessionId) : null,
             codexRuntime: current.runtime?.runtime === 'codex-app-server',
             pendingApprovals: (current.approvals || []).length,
             activityUnread: Number(current.activityUnread) || 0,
@@ -687,7 +719,6 @@ function mountWorkbench(container) {
             usage: current.context,
             contextExpanded: state.activityOpen && normalizeDockKind(state.activityTab) === 'context',
             hasSession: Boolean(session),
-            queuePanel,
         });
     }
 

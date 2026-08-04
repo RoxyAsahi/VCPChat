@@ -30,6 +30,62 @@ const CLIENT_METHODS = Object.freeze({
     ]),
 });
 
+function createClient(runtimeApi, methods) {
+    return Object.freeze(Object.fromEntries(methods.map((name) => [name,
+        typeof runtimeApi?.[name] === 'function' ? runtimeApi[name].bind(runtimeApi) : null])));
+}
+
+function createAgentSessionClient(runtimeApi) {
+    return createClient(runtimeApi, CLIENT_METHODS.session);
+}
+
+function createAgentProjectionClient(runtimeApi) {
+    return createClient(runtimeApi, CLIENT_METHODS.projection);
+}
+
+function createAgentInteractionClient(runtimeApi) {
+    return createClient(runtimeApi, CLIENT_METHODS.interaction);
+}
+
+function createAgentWorkspaceClient(runtimeApi) {
+    return createClient(runtimeApi, CLIENT_METHODS.workspace);
+}
+
+function createAgentRuntimeEventSubscription({
+    subscribe, snapshotBarrier, store, applyCodexRuntimeEvent, applySessionUiEvent,
+    projectRuntimeActivity, refreshStatus,
+}) {
+    let unsubscribe = null;
+    return Object.freeze({
+        start() {
+            if (unsubscribe || typeof subscribe !== 'function') return;
+            unsubscribe = subscribe((event) => {
+                const barrier = snapshotBarrier();
+                if (barrier) { barrier.events.push(event); return; }
+                const current = store.getState();
+                if (event?.runtime === 'codex' && event?.type === 'projection.updated') {
+                    applyCodexRuntimeEvent(event);
+                    return;
+                }
+                applySessionUiEvent(event);
+                projectRuntimeActivity(event);
+                const selectedSession = current.selectedSessionId;
+                const processGlobal = event?.type?.startsWith('runtime.') || event?.type === 'toolbox.ws';
+                if (!event?.type?.startsWith('approval.') && !processGlobal && event?.sessionId
+                    && selectedSession && event.sessionId !== selectedSession) {
+                    void refreshStatus().catch(() => {});
+                    return;
+                }
+                store.dispatch(event);
+            });
+        },
+        dispose() {
+            if (typeof unsubscribe === 'function') unsubscribe();
+            unsubscribe = null;
+        },
+    });
+}
+
 function createWorkbenchClients(runtimeApi) {
     const clients = {
         session: createAgentSessionClient(runtimeApi),
@@ -58,8 +114,12 @@ function createWorkbenchClients(runtimeApi) {
     });
 }
 
-export { CLIENT_METHODS, createWorkbenchClients };
-import { createAgentSessionClient } from './agent-session-client.js';
-import { createAgentProjectionClient } from './agent-projection-client.js';
-import { createAgentInteractionClient } from './agent-interaction-client.js';
-import { createAgentWorkspaceClient } from './agent-workspace-client.js';
+export {
+    CLIENT_METHODS,
+    createAgentInteractionClient,
+    createAgentProjectionClient,
+    createAgentRuntimeEventSubscription,
+    createAgentSessionClient,
+    createAgentWorkspaceClient,
+    createWorkbenchClients,
+};

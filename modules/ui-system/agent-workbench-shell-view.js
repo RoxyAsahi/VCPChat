@@ -11,6 +11,11 @@ function createAgentWorkbenchShellView({ document, container, state, actions = {
     root.dataset.presentationRenderer = 'fork';
     const topicFlowLayer = node('div', 'vcp-ui-scope agent-chat-topic-flow-layer', undefined, document);
     const sidebar = node('aside', 'sidebar active vcp-ui-scope agent-chat-sidebar', undefined, document);
+    const sidebarSplitter = node('div', 'agent-chat-sidebar-splitter', undefined, document);
+    sidebarSplitter.tabIndex = 0;
+    sidebarSplitter.setAttribute('role', 'separator');
+    sidebarSplitter.setAttribute('aria-orientation', 'vertical');
+    sidebarSplitter.setAttribute('aria-label', '调整 Agent 侧栏宽度');
     const main = node('main', 'main-content agent-chat-main-content agent-chat-pane', undefined, document);
     const feed = node('div', 'chat-messages-container vcp-ui-scope agent-chat-messages-container', undefined, document);
     const feedItems = node('div', 'chat-messages agent-chat-messages', undefined, document);
@@ -30,9 +35,6 @@ function createAgentWorkbenchShellView({ document, container, state, actions = {
     const runStatusStop = visualActionButton('stop', '停止当前任务', 'agent-chat-run-status-stop', '', document);
     runStatus.append(runStatusIcon, runStatusLabel, runStatusDetail, runStatusElapsed, runStatusStop);
 
-    const composerConfig = node('button', 'agent-chat-composer-config', undefined, document);
-    composerConfig.type = 'button';
-    listen(composerConfig, 'click', () => actions.openSessionSettings?.());
     const runningModes = node('div', 'agent-chat-composer-modes', undefined, document);
     runningModes.setAttribute('role', 'group');
     runningModes.setAttribute('aria-label', '运行中输入模式');
@@ -41,6 +43,7 @@ function createAgentWorkbenchShellView({ document, container, state, actions = {
     listen(steerModeButton, 'click', () => actions.setInputMode?.('steer'));
     listen(followUpModeButton, 'click', () => actions.setInputMode?.('follow-up'));
     runningModes.append(steerModeButton, followUpModeButton);
+    const queuePanelHost = node('div', 'agent-chat-composer-queue', undefined, document);
 
     const inputCard = node('div', 'chat-input-card', undefined, document);
     const input = document.createElement('textarea');
@@ -59,7 +62,11 @@ function createAgentWorkbenchShellView({ document, container, state, actions = {
     listen(permissionsButton, 'click', () => actions.openPermissionSettings?.());
     composerActions.append(newButton, attachButton, emoticonButton, permissionsButton, sendButton);
     inputCard.append(attachmentTray, input, composerActions);
-    composer.append(runStatus, composerConfig, runningModes, inputCard);
+    // Runtime progress is presented in the header status chip. Keep the legacy
+    // node available for controller compatibility, but do not show a second
+    // status strip above the Composer.
+    runStatus.hidden = true;
+    composer.append(queuePanelHost, runningModes, inputCard);
     feed.append(feedItems);
 
     const mainColumn = node('div', 'agent-chat-main-column', undefined, document);
@@ -90,6 +97,53 @@ function createAgentWorkbenchShellView({ document, container, state, actions = {
     activityTabRow.append(activityTabs, activityTabTools);
     activityInner.append(activityTabRow, activityContent);
     activityPanel.append(activityInner);
+
+    let sidebarDragCleanup = null;
+    const applySidebarWidth = (width) => {
+        state.agentSidebarWidth = Math.round(Math.max(180, Math.min(600, width)) / 20) * 20;
+        [...sidebar.classList]
+            .filter((name) => name.startsWith('agent-chat-sidebar-width-'))
+            .forEach((name) => sidebar.classList.remove(name));
+        sidebar.classList.add(`agent-chat-sidebar-width-${state.agentSidebarWidth}`);
+        sidebarSplitter.setAttribute('aria-valuemin', '180');
+        sidebarSplitter.setAttribute('aria-valuemax', '600');
+        sidebarSplitter.setAttribute('aria-valuenow', String(state.agentSidebarWidth));
+    };
+    const persistSidebarWidth = () => {
+        try { window.localStorage?.setItem('vcpchat.agentWorkbench.sidebarWidth', String(state.agentSidebarWidth)); } catch { /* storage is optional */ }
+    };
+    applySidebarWidth(state.agentSidebarWidth);
+    listen(sidebarSplitter, 'pointerdown', (event) => {
+        event.preventDefault();
+        sidebarDragCleanup?.();
+        sidebarSplitter.setPointerCapture?.(event.pointerId);
+        const bounds = root.getBoundingClientRect();
+        sidebar.classList.add('agent-chat-sidebar-resizing');
+        document.body.classList.add('vcp-sidebar-resizing');
+        const onMove = (moveEvent) => applySidebarWidth(Math.min(bounds.width - 280, moveEvent.clientX - bounds.left));
+        const onUp = (upEvent) => {
+            sidebarSplitter.releasePointerCapture?.(upEvent.pointerId);
+            persistSidebarWidth();
+            sidebarDragCleanup?.();
+        };
+        sidebarDragCleanup = () => {
+            sidebarSplitter.removeEventListener('pointermove', onMove);
+            sidebarSplitter.removeEventListener('pointerup', onUp);
+            sidebarSplitter.removeEventListener('pointercancel', onUp);
+            sidebar.classList.remove('agent-chat-sidebar-resizing');
+            document.body.classList.remove('vcp-sidebar-resizing');
+            sidebarDragCleanup = null;
+        };
+        sidebarSplitter.addEventListener('pointermove', onMove);
+        sidebarSplitter.addEventListener('pointerup', onUp);
+        sidebarSplitter.addEventListener('pointercancel', onUp);
+    });
+    listen(sidebarSplitter, 'keydown', (event) => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        event.preventDefault();
+        applySidebarWidth(state.agentSidebarWidth + (event.key === 'ArrowRight' ? 20 : -20));
+        persistSidebarWidth();
+    });
 
     let dragCleanup = null;
     const applyActivityPanelWidth = (width) => {
@@ -129,14 +183,14 @@ function createAgentWorkbenchShellView({ document, container, state, actions = {
 
     mainColumn.append(header, feed, jumpToLatest, composer);
     main.append(mainColumn, activitySplitter, activityPanel);
-    root.append(sidebar, main);
+    root.append(sidebar, sidebarSplitter, main);
     container.classList.add('agent-workbench-root', 'agent-chat-root');
     container.append(root, topicFlowLayer);
 
     const refs = {
-        root, topicFlowLayer, sidebar, main, feed, feedItems, jumpToLatest, header, composer,
+        root, topicFlowLayer, sidebar, sidebarSplitter, main, feed, feedItems, jumpToLatest, header, composer,
         runStatus, runStatusIcon, runStatusLabel, runStatusDetail, runStatusElapsed, runStatusStop,
-        composerConfig, runningModes, steerModeButton, followUpModeButton, inputCard, input,
+        runningModes, steerModeButton, followUpModeButton, queuePanelHost, inputCard, input,
         newButton, attachButton, emoticonButton, permissionsButton, sendButton, attachmentTray,
         activityPanel, activitySplitter, activityClose, activityTabs, activityAdd, activityContent,
         activityTabRow,
@@ -149,6 +203,7 @@ function createAgentWorkbenchShellView({ document, container, state, actions = {
         },
         dispose() {
             dragCleanup?.();
+            sidebarDragCleanup?.();
             for (const dispose of disposers.splice(0).reverse()) dispose();
             root.remove();
             topicFlowLayer.remove();

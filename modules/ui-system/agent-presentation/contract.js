@@ -64,23 +64,28 @@ function blocksFromTool(tool) {
     }];
 }
 
+function presentationIdentity(part, kind, value) {
+    if (kind === 'message') {
+        return requireIdentity(part.messageId || part.presentationKey || part.id || value.id || value.messageId || value.presentationKey,
+            part.presentationKey || value.presentationKey ? 'presentationKey' : 'messageId');
+    }
+    if (kind === 'tool') return requireIdentity(part.toolCallId || part.id || value.toolCallId || value.callId, 'toolCallId');
+    return requireIdentity(part.id, 'part identity');
+}
+
+function presentationBlocks(part, kind, value, sourceId) {
+    if (Array.isArray(value.blocks) && value.blocks.length > 0) return value.blocks;
+    if (kind === 'message') return blocksFromMessage(value);
+    if (kind === 'tool') return blocksFromTool(value);
+    return [{ ...value, kind, id: sourceId }];
+}
+
 function normalizeAgentPresentationPart(part) {
     if (!part || typeof part !== 'object') throw new TypeError('AgentTimelinePart must be an object');
     const kind = String(part.kind || '');
     const value = part.value && typeof part.value === 'object' ? part.value : {};
-    const sourceId = kind === 'message'
-        ? requireIdentity(part.messageId || part.presentationKey || part.id || value.id || value.messageId || value.presentationKey,
-            part.presentationKey || value.presentationKey ? 'presentationKey' : 'messageId')
-        : kind === 'tool'
-            ? requireIdentity(part.toolCallId || part.id || value.toolCallId || value.callId, 'toolCallId')
-            : requireIdentity(part.id, 'part identity');
-    const sourceBlocks = Array.isArray(value.blocks) && value.blocks.length > 0
-        ? value.blocks
-        : kind === 'message'
-            ? blocksFromMessage(value)
-            : kind === 'tool'
-                ? blocksFromTool(value)
-                : [{ ...value, kind, id: sourceId }];
+    const sourceId = presentationIdentity(part, kind, value);
+    const sourceBlocks = presentationBlocks(part, kind, value, sourceId);
 
     return {
         kind,

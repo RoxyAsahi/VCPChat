@@ -2,6 +2,74 @@ import './avatar-picker.js';
 import { selectedSessionId } from './agent-selected-session.js';
 import { configOptions } from '../agent-config-descriptors.js';
 
+const SETTINGS_SCOPE_LABELS = Object.freeze(['Agent 默认', '当前会话', '高级']);
+
+function approvalPermission(snapshot, fallback) {
+    if (snapshot?.approvalPolicy === 'never') return 'always-approve';
+    return snapshot?.approvalPolicy ? 'ask' : fallback;
+}
+
+function resolveSettingsAuthority(context) {
+    const { state, store, activeSession, sessionConfigRevisions, selectedAgentProfile } = context;
+    const current = store.getState();
+    const selected = selectedSessionId(current) || '';
+    const sessionId = state.settingsScope === 'session' ? selected : '';
+    const projection = sessionId ? current.selectedTopic : null;
+    const runtime = activeSession();
+    const snapshot = projection?.configSnapshot || (sessionId ? runtime?.configSnapshot : null) || null;
+    if (sessionId && projection?.configRevision) sessionConfigRevisions.set(sessionId, Number(projection.configRevision));
+    const profile = selectedAgentProfile() || {};
+    const targetKey = sessionId ? `session:${sessionId}` : `profile:${profile.id || profile.name || 'unselected'}`;
+    const runtimeWorkspace = runtime?.sessionId === sessionId ? runtime.workspaceRoot : '';
+    const workspaceFallback = projection?.workspaceRef || projection?.workspaceRoot
+        || runtimeWorkspace || profile.workspaceRoot || state.workspace;
+    return { current, sessionId, projection, runtime, snapshot, profile, targetKey, workspaceFallback };
+}
+
+function resolveSettingsPaneModel(context) {
+    const { state, settingValue } = context;
+    const authority = resolveSettingsAuthority(context);
+    const { sessionId, projection, runtime, snapshot, profile, targetKey, workspaceFallback } = authority;
+    const instructionValue = settingValue(
+        targetKey, 'instructionMode', snapshot?.instructionMode || profile.instructionMode,
+    );
+    return {
+        ...authority,
+        materialized: Boolean(sessionId && (runtime?.threadId || projection?.threadId || projection?.session?.threadId)),
+        workspace: settingValue(targetKey, 'workspaceRoot', workspaceFallback),
+        permissionMode: settingValue(targetKey, 'permissionMode',
+            snapshot?.permissionMode || approvalPermission(snapshot, state.permissionMode)),
+        model: settingValue(targetKey, 'model', snapshot?.model || profile.model || state.model),
+        instructionMode: instructionValue === 'codex-managed' ? 'codex-managed' : 'vchat-identity',
+        baseInstructions: settingValue(targetKey, 'baseInstructions',
+            snapshot?.baseInstructions ?? profile.baseInstructions ?? profile.systemPrompt ?? ''),
+        developerInstructions: settingValue(targetKey, 'developerInstructions',
+            snapshot?.developerInstructions ?? profile.developerInstructions ?? ''),
+        personality: settingValue(targetKey, 'personality', snapshot?.personality || profile.personality || 'none'),
+        reasoningEffort: settingValue(targetKey, 'reasoningEffort',
+            snapshot?.reasoningEffort ?? profile.reasoningEffort ?? ''),
+    };
+}
+
+function appendConfigurationWarning(context, pane) {
+    if (context.state.settingsScope !== 'profile' || !context.profileNeedsConfiguration()) return;
+    const warning = context.node('section', 'agent-chat-profile-configuration-warning is-settings');
+    warning.setAttribute('role', 'alert');
+    warning.append(context.node('strong', '', '此 Agent 还不能创建会话'), context.node('span', '',
+        context.state.profileConfigurationNotice || '请填写下方 Agent 提示词。保存完成后即可直接新建会话。'));
+    pane.append(warning);
+}
+
+function appendSettingsStatus(context, model, form) {
+    const status = context.settingStatus(model.targetKey)
+        || context.state.settingsSaveByScope.get(context.state.settingsScope)
+        || { state: 'idle', message: '' };
+    const statusNode = context.node('p', `agent-chat-settings-save-status is-${status.state}`,
+        status.message || '修改后自动保存');
+    statusNode.setAttribute('role', 'status');
+    form.append(statusNode);
+}
+
 export function renderAgentSettingsPane(context) {
     const {
         state, store, activeSession, sessionConfigRevisions, selectedAgentProfile,
@@ -12,57 +80,14 @@ export function renderAgentSettingsPane(context) {
     } = context;
     const pane = node('div', 'agent-chat-settings-pane');
     const form = node('div', 'agent-chat-settings-form');
-    const current = store.getState();
-    const rawSessionId = selectedSessionId(current) || '';
-    const sessionId = state.settingsScope === 'session' ? rawSessionId : '';
-    const projection = sessionId ? current.selectedTopic : null;
-    const runtime = activeSession();
-    const snapshot = projection?.configSnapshot || (sessionId ? runtime?.configSnapshot : null) || null;
-    if (sessionId && projection?.configRevision) {
-        sessionConfigRevisions.set(sessionId, Number(projection.configRevision));
-    }
-    const threadId = runtime?.threadId || projection?.threadId || projection?.session?.threadId || null;
-    const materialized = Boolean(sessionId && threadId);
-    const profile = selectedAgentProfile() || {};
-    const targetKey = sessionId ? `session:${sessionId}` : `profile:${profile.id || profile.name || 'unselected'}`;
-    const workspaceFallback = projection?.workspaceRef || projection?.workspaceRoot
-        || (runtime?.sessionId === sessionId ? runtime.workspaceRoot : '')
-        || profile.workspaceRoot || state.workspace;
-    const permissionFallback = snapshot?.permissionMode
-        || (snapshot?.approvalPolicy === 'never' ? 'always-approve'
-            : snapshot?.approvalPolicy ? 'ask' : state.permissionMode);
-    const workspace = settingValue(targetKey, 'workspaceRoot', workspaceFallback);
-    const permissionMode = settingValue(targetKey, 'permissionMode', permissionFallback);
-    const model = settingValue(targetKey, 'model', snapshot?.model || profile.model || state.model);
+    const {
+        sessionId, projection, snapshot, profile, targetKey, materialized, workspace,
+        permissionMode, model, instructionMode, baseInstructions, developerInstructions,
+        personality, reasoningEffort,
+    } = resolveSettingsPaneModel(context);
     state.permissionMode = permissionMode;
-    const instructionMode = settingValue(targetKey, 'instructionMode', snapshot?.instructionMode || profile.instructionMode) === 'codex-managed'
-        ? 'codex-managed' : 'vchat-identity';
-    const baseInstructions = settingValue(targetKey, 'baseInstructions', snapshot?.baseInstructions ?? profile.baseInstructions ?? profile.systemPrompt ?? '');
-    const developerInstructions = settingValue(targetKey, 'developerInstructions', snapshot?.developerInstructions ?? profile.developerInstructions ?? '');
-    const personality = settingValue(targetKey, 'personality', snapshot?.personality || profile.personality || 'none');
-    const reasoningEffort = settingValue(targetKey, 'reasoningEffort', snapshot?.reasoningEffort ?? profile.reasoningEffort ?? '');
 
-    const scopes = node('div', 'agent-chat-settings-scopes');
-    for (const [scope, label] of [['profile', 'Agent 默认'], ['session', '当前会话'], ['advanced', '高级']]) {
-        const control = button(label, `agent-chat-settings-scope${state.settingsScope === scope ? ' is-active' : ''}`);
-        control.setAttribute('aria-pressed', String(state.settingsScope === scope));
-        control.disabled = scope === 'session' && !rawSessionId;
-        control.addEventListener('click', () => { state.settingsScope = scope; renderSidebar(); });
-        scopes.append(control);
-    }
-    pane.append(scopes, node('p', 'agent-chat-settings-placeholder', state.settingsScope === 'advanced'
-        ? '运行预算、版本、恢复和导出入口。这里不改变 Agent 身份。'
-        : sessionId
-        ? '模型、推理和审批从下一 Turn 生效；身份字段修改需要创建派生会话。'
-        : '这里是新会话的 Agent Profile 模板；新建会话会一键继承全部默认值。'));
-
-    if (state.settingsScope === 'profile' && profileNeedsConfiguration()) {
-        const warning = node('section', 'agent-chat-profile-configuration-warning is-settings');
-        warning.setAttribute('role', 'alert');
-        warning.append(node('strong', '', '此 Agent 还不能创建会话'), node('span', '',
-            state.profileConfigurationNotice || '请填写下方 Agent 提示词。保存完成后即可直接新建会话。'));
-        pane.append(warning);
-    }
+    appendConfigurationWarning(context, pane);
 
     const field = (label, value, onChange, options = null, controlOptions = {}) => {
         const wrap = node('label', 'agent-chat-setting-field');
@@ -82,6 +107,51 @@ export function renderAgentSettingsPane(context) {
         control.addEventListener('change', () => onChange(control.value));
         wrap.append(control);
         return wrap;
+    };
+
+    const settingsGroup = (label, children, summaryText = '', open = false, options = {}) => {
+        const group = node('div', `agent-settings-collapsible-container agent-settings-section${open ? '' : ' collapsed'}`);
+        group.dataset.sectionKey = label === '基础信息' ? 'identity' : label === '系统提示词' || label === '提示词' ? 'prompt' : label === '模型设置' ? 'model' : 'agent';
+        const header = node('div', 'agent-settings-section-header');
+        const title = node('span', 'agent-settings-section-title', label);
+        const summary = node('div', 'agent-settings-section-summary');
+        if (options.identitySummary) {
+            summary.id = 'agent-build-identity-summary';
+            summary.classList.add('summary-with-avatar');
+            const avatar = document.createElement('img');
+            avatar.className = 'agent-settings-summary-avatar';
+            avatar.src = options.identitySummary.avatarUrl || 'assets/default_avatar.png';
+            avatar.alt = '';
+            avatar.width = 30;
+            avatar.height = 30;
+            summary.append(avatar, node('span', 'agent-settings-summary-label', options.identitySummary.name || '未命名 Agent'));
+        } else {
+            summary.textContent = summaryText || '未设置';
+        }
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'agent-settings-toggle-btn';
+        toggle.setAttribute('aria-label', `展开或收起${label}`);
+        toggle.innerHTML = '<svg class="toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+        header.append(title, summary, toggle);
+        const content = node('div', 'agent-settings-section-content');
+        const shell = options.identity ? node('div', 'agent-identity-container') : node('div', 'agent-settings-card-shell');
+        shell.append(...children.filter(Boolean));
+        content.append(shell);
+        group.append(header, content);
+        const setCollapsed = (collapsed) => {
+            group.classList.toggle('collapsed', collapsed);
+            toggle.setAttribute('aria-expanded', String(!collapsed));
+        };
+        setCollapsed(!open);
+        header.addEventListener('click', (event) => {
+            if (event.target.closest('input, select, textarea, button')) {
+                if (event.target.closest('button')) setCollapsed(!group.classList.contains('collapsed'));
+                return;
+            }
+            setCollapsed(!group.classList.contains('collapsed'));
+        });
+        return group;
     };
 
     const textarea = ({ label, value, placeholder, payloadKey, message, readOnly = false }) => {
@@ -110,41 +180,44 @@ export function renderAgentSettingsPane(context) {
         return wrap;
     };
 
-    if (state.settingsScope !== 'advanced') {
-        if (!sessionId) form.append(renderAvatar({ state, profile, controller, run, refreshControlPlane, notify, node, sameAgent }));
-        const fields = [];
-        if (!sessionId) fields.push(field('名称', profile.name || profile.id || '', (value) => {
+    {
+        const identityNameField = field('Agent 名称', profile.name || profile.id || '', (value) => {
             void persistWorkbenchSettings({ name: String(value || '').trim() }, '', '已自动保存 Agent 名称');
+        });
+        identityNameField.classList.add('agent-name-wrapper');
+        const identityMain = node('div', 'agent-identity-main');
+        identityMain.append(renderAvatar({ state, profile, controller, run, refreshControlPlane, notify, node, sameAgent }), identityNameField);
+        form.append(settingsGroup('基础信息', [identityMain], '', false, {
+            identity: true,
+            identitySummary: { name: profile.name || profile.id, avatarUrl: profile.avatarUrl },
         }));
-        fields.push(field('工作目录（可留空）', workspace, (value) => {
+        const modelFields = [field('工作目录（可留空）', workspace, (value) => {
             if (!sessionId) state.workspace = value;
             void persistWorkbenchSettings({ workspaceRoot: value }, sessionId,
                 sessionId ? '已自动保存当前 Session 工作目录' : '已自动保存 Agent 默认工作目录');
-        }, null, { title: materialized ? 'Codex 0.146 会从下一 Turn 使用新的工作目录。' : '' }));
-        fields.push(field('模型', model, (value) => {
+        }, null, { title: materialized ? 'Codex 0.146 会从下一 Turn 使用新的工作目录。' : '' }), field('模型', model, (value) => {
             state.model = value;
             void persistWorkbenchSettings({ model: String(value || '').trim(), reasoningEffort: null }, sessionId,
                 sessionId ? `已自动保存模型：${value}` : `已自动保存默认模型：${value}`);
         }, configOptions('model', { modelCatalog: state.modelCatalog }).concat(
             model && !configOptions('model', { modelCatalog: state.modelCatalog }).some((item) => item.value === model)
                 ? [{ value: model, label: model }] : [],
-        )));
-        fields.push(field('本地工具审批', permissionMode, (value) => {
+        )), field('本地工具审批', permissionMode, (value) => {
             const next = value === 'always-approve' ? 'always-approve' : 'ask';
             state.permissionMode = next;
             void persistWorkbenchSettings({ permissionMode: next }, sessionId,
                 next === 'always-approve' ? '已自动保存本地 YOLO' : '已自动保存逐次确认');
-        }, configOptions('permissionMode')));
+        }, configOptions('permissionMode'))];
         const metadata = state.modelCatalog.find((item) => item.id === model);
         const efforts = Array.isArray(metadata?.reasoningEfforts) ? metadata.reasoningEfforts : [];
-        fields.push(field('推理强度', reasoningEffort || '', (value) => {
+        modelFields.push(field('推理强度', reasoningEffort || '', (value) => {
             void persistWorkbenchSettings({ reasoningEffort: value || null }, sessionId,
                 value ? `已自动保存推理强度：${value}` : '已恢复模型默认推理强度');
         }, configOptions('reasoningEffort', { reasoningEfforts: efforts }), {
             disabled: efforts.length === 0,
             title: efforts.length ? '' : '该模型没有提供 reasoning effort capability，只能使用模型默认值。',
         }));
-        fields.push(field('指令来源', instructionMode, async (value) => {
+        modelFields.push(field('指令来源', instructionMode, async (value) => {
             const createDerivedSession = Boolean(sessionId && materialized
                 && instructionMode === 'vchat-identity' && value === 'codex-managed');
             if (createDerivedSession && !(await host.feedback.confirm({
@@ -154,43 +227,34 @@ export function renderAgentSettingsPane(context) {
             void persistWorkbenchSettings({ instructionMode: value, ...(createDerivedSession ? { createDerivedSession: true } : {}) }, sessionId,
                 value === 'codex-managed' ? '已切换为 Codex 管理指令' : '已切换为 VChat 身份指令');
         }, configOptions('instructionMode')));
-        form.append(...fields);
+        form.append(settingsGroup('模型设置', modelFields, model || '未选择模型'));
 
         if (instructionMode === 'vchat-identity') {
-            form.append(textarea({
+            form.append(settingsGroup('系统提示词', [textarea({
                 label: materialized ? 'VChat 身份提示词（下一轮应用）' : 'VChat 身份提示词',
                 value: baseInstructions, placeholder: '例如：{{Nova}}', payloadKey: 'baseInstructions',
                 message: sessionId ? '已自动保存当前 Session 身份提示词' : '已自动保存 Agent 身份提示词',
                 readOnly: false,
-            }), node('p', 'agent-chat-setting-help', 'ToolBox 占位符会原样保存并在 ToolBox 请求边界展开；Codex 内置身份不会同时发送。'));
+            }), node('p', 'agent-chat-setting-help', 'ToolBox 占位符会在请求边界展开。')],
+                baseInstructions || '未设置'));
         } else {
             form.append(field('Personality', personality, (value) => {
                 void persistWorkbenchSettings({ personality: value }, sessionId, '已自动保存 Codex personality');
             }, [{ value: 'none', label: '不指定' }, { value: 'friendly', label: 'Friendly' }, { value: 'pragmatic', label: 'Pragmatic' }]));
-            form.append(textarea({
+            form.append(settingsGroup('系统提示词', [textarea({
                 label: materialized ? '附加 Developer Instructions（冻结快照）' : '附加 Developer Instructions',
                 value: developerInstructions, placeholder: '可选；追加到 Codex 0.146 管理的身份',
                 payloadKey: 'developerInstructions',
                 message: sessionId ? '已自动保存当前 Session 附加指令' : '已自动保存 Agent 附加指令',
                 readOnly: false,
-            }), node('p', 'agent-chat-setting-help', 'Codex 完整内部 prompt 不由协议返回，因此这里只显示可配置来源，不伪造隐藏内容。'));
+            })], developerInstructions || '未设置'));
         }
         if (sessionId && snapshot?.profileId) form.append(renderSessionProfileAction({
             sessionId, snapshot, projection, workspace, controller, run, notify, renderSidebar, node, button, host,
         }));
-        form.append(node('p', 'agent-chat-settings-placeholder', 'YOLO 仅跳过 Codex 本地审批；VCPToolBox 的后端审批不会被关闭或绕过。'));
-    } else {
-        form.append(renderAdvanced({
-            state, store, persistWorkbenchSettings, scheduleBudgetSave, refreshRecoveryOperations,
-            controller, run, notify, refreshTopicsForAgent, renderSidebar, node, button, host,
-        }));
     }
 
-    const status = settingStatus(targetKey) || state.settingsSaveByScope.get(state.settingsScope)
-        || { state: 'idle', message: '' };
-    const statusNode = node('p', `agent-chat-settings-save-status is-${status.state}`, status.message || '修改后自动保存');
-    statusNode.setAttribute('role', 'status');
-    form.append(statusNode);
+    appendSettingsStatus(context, { targetKey }, form);
     pane.append(form);
     return pane;
 }
@@ -207,9 +271,6 @@ function modelOptions(catalog, selected) {
 function renderAvatar({ state, profile, controller, run, refreshControlPlane, notify, node, sameAgent }) {
     const agentId = profile.id || profile.name || state.selectedAgent;
     const section = node('section', 'agent-chat-settings-avatar');
-    const copy = node('div', 'agent-chat-settings-avatar-copy');
-    copy.append(node('strong', 'agent-chat-setting-label', 'Agent 头像'),
-        node('span', 'agent-chat-setting-help', state.avatarSaving ? '正在保存头像…' : '点击头像选择并裁剪；仅用于 Build Agent，不影响主聊天助手。'));
     const picker = window.VCPAvatarPicker?.create({
         src: profile.avatarUrl,
         alt: `${profile.name || agentId || 'Agent'} 头像`,
@@ -229,16 +290,13 @@ function renderAvatar({ state, profile, controller, run, refreshControlPlane, no
             notify(`${target?.name || agentId} 的头像已更新。`, 'success');
         }),
     });
-    if (picker) section.append(picker.element, copy);
-    return section;
+    return picker?.element || section;
 }
 
 function renderSessionProfileAction({ sessionId, snapshot, projection, workspace, controller, run, notify, renderSidebar, node, button, host }) {
     const fragment = document.createDocumentFragment();
     const summary = node('section', 'agent-chat-settings-summary');
-    summary.append(node('strong', 'agent-chat-setting-label', '会话冻结快照'),
-        node('span', 'agent-chat-setting-help', `Profile ${snapshot.profileId} · revision ${snapshot.profileRevision || 1} · Session config ${projection?.configRevision || 1}`),
-        node('span', 'agent-chat-setting-help', `Workspace：${workspace || '未设置'}`));
+    summary.append(node('strong', 'agent-chat-setting-label', '当前会话配置'));
     const apply = button('应用 Profile 最新配置', 'secondary agent-chat-settings-save');
     apply.addEventListener('click', () => run(async () => {
         const expectedConfigRevision = Number(projection?.configRevision || 1);
@@ -260,12 +318,10 @@ function renderSessionProfileAction({ sessionId, snapshot, projection, workspace
 function renderAdvanced({ state, store, persistWorkbenchSettings, scheduleBudgetSave, refreshRecoveryOperations, controller, run, notify, refreshTopicsForAgent, node, button, host }) {
     const fragment = document.createDocumentFragment();
     const runtime = node('section', 'agent-chat-settings-budget agent-chat-settings-runtime-info');
-    runtime.append(node('strong', 'agent-chat-setting-label', 'Runtime 与协议'),
-        node('span', 'agent-chat-setting-help', 'Codex App Server 0.146 · schema pinned · execution profile toolbox-only'),
-        node('span', 'agent-chat-setting-help', `Runtime：${store.getState().runtime?.state || 'unknown'} · Projection：SQLite`));
+    runtime.append(node('strong', 'agent-chat-setting-label', '运行状态'),
+        node('span', 'agent-chat-setting-help', store.getState().runtime?.state || 'unknown'));
     const budget = node('section', 'agent-chat-settings-budget');
-    budget.append(node('strong', 'agent-chat-setting-label', '新 Session 每轮安全预算'),
-        node('p', 'agent-chat-settings-placeholder', '留空表示不设客户端上限。预算属于运行配置，不属于用量统计。'));
+    budget.append(node('strong', 'agent-chat-setting-label', '每轮预算'));
     const budgetFields = node('div', 'agent-chat-settings-budget-fields');
     for (const [label, name] of [['模型请求数', 'maxRequestsPerTurn'], ['累计 token', 'maxTokensPerTurn']]) {
         const wrap = node('label', 'agent-chat-setting-field');

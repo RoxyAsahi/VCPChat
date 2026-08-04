@@ -31,18 +31,8 @@ function normalizeArguments(value) {
 function toolDetailPayload(tool) {
     const payload = tool?.payload || {};
     const item = payload.item && typeof payload.item === 'object' ? payload.item : {};
-    const args = normalizeArguments(payload.arguments ?? payload.args ?? payload.parameters
-        ?? item.arguments ?? item.args ?? item.parameters ?? item.input);
-    const result = payload.result ?? payload.output ?? payload.response
-        ?? item.result ?? item.output ?? item.response;
-    const error = payload.error ?? item.error ?? item.failure?.message
-        ?? (item.status === 'failed' ? item.message : null);
-    const resources = Array.isArray(payload.resources) ? payload.resources
-        : Array.isArray(item.resources) ? item.resources : [];
-    const warnings = Array.isArray(payload.warnings) ? payload.warnings
-        : Array.isArray(item.warnings) ? item.warnings : [];
-    const taskValue = payload.task ?? item.task;
-    const task = taskValue && typeof taskValue === 'object' ? taskValue : null;
+    const values = toolDetailValues(payload, item);
+    const { args, result, error, resources, warnings, task } = values;
     return {
         args,
         result,
@@ -57,10 +47,48 @@ function toolDetailPayload(tool) {
     };
 }
 
+function toolDetailValues(payload, item) {
+    const args = normalizeArguments(payload.arguments ?? payload.args ?? payload.parameters
+        ?? item.arguments ?? item.args ?? item.parameters ?? item.input);
+    const result = payload.result ?? payload.output ?? payload.response
+        ?? item.result ?? item.output ?? item.response;
+    const error = payload.error ?? item.error ?? item.failure?.message
+        ?? (item.status === 'failed' ? item.message : null);
+    const resources = Array.isArray(payload.resources) ? payload.resources
+        : Array.isArray(item.resources) ? item.resources : [];
+    const warnings = Array.isArray(payload.warnings) ? payload.warnings
+        : Array.isArray(item.warnings) ? item.warnings : [];
+    const taskValue = payload.task ?? item.task;
+    return {
+        args, result, error, resources, warnings,
+        task: taskValue && typeof taskValue === 'object' ? taskValue : null,
+    };
+}
+
 function canExpandTool(tool) {
     const detail = toolDetailPayload(tool);
     return Boolean(detail.hasArgs || detail.hasResult || detail.hasError || detail.resources.length || detail.warnings.length
         || detail.task || detail.summary);
+}
+
+function syncWorkspacePathActions({ card, header, tool, document, onWorkspacePath }) {
+    card.querySelector('.agent-chat-tool-path-actions')?.remove();
+    const paths = structuredWorkspacePaths(tool?.payload || tool);
+    if (!paths.length || typeof onWorkspacePath !== 'function') return;
+    const pathActions = createNode(document, 'span', 'agent-chat-tool-path-actions');
+    for (const relativePath of paths.slice(0, 3)) {
+        const open = createNode(document, 'button', 'agent-chat-tool-path-action');
+        open.type = 'button';
+        open.title = `在工作区预览 ${relativePath}`;
+        open.setAttribute('aria-label', `在工作区预览 ${relativePath}`);
+        open.dataset.agentWorkspacePath = relativePath;
+        open.append(...createIcon(document, 'draft'));
+        open.addEventListener('click', (event) => {
+            event.stopPropagation(); onWorkspacePath(relativePath, 'preview', tool);
+        });
+        pathActions.append(open);
+    }
+    header.append(pathActions);
 }
 
 function buildToolArgsTable(document, args) {
@@ -146,6 +174,35 @@ function createToolBlockRenderer(options = {}) {
         if (expanded) mountDetail(card);
     }
 
+    function syncToolControls(card, tool, value, header, terminal) {
+        let cancel = card.querySelector('.agent-chat-tool-cancel');
+        if (!terminal && typeof onCancel === 'function' && !cancel) {
+            cancel = createNode(document, 'button', 'agent-chat-tool-cancel');
+            cancel.type = 'button';
+            cancel.title = '取消该工具调用';
+            cancel.setAttribute('aria-label', '取消该工具调用');
+            cancel.append(...createIcon(document, 'cancel'));
+            cancel.addEventListener('click', () => onCancel(card.__agentToolValue));
+            header.append(cancel);
+        } else if (terminal) cancel?.remove();
+        let chevron = card.querySelector('.agent-chat-tool-chevron');
+        const expandable = terminal && canExpandTool(tool);
+        if (expandable && !chevron) {
+            chevron = createNode(document, 'button', 'agent-chat-tool-chevron');
+            chevron.type = 'button';
+            chevron.setAttribute('aria-label', '展开/折叠工具详情');
+            chevron.append(...createIcon(document, 'expand_more'));
+            chevron.addEventListener('click', () => toggleDetail(card));
+            header.append(chevron);
+        } else if (!expandable) {
+            chevron?.remove();
+            card.classList.remove('expanded');
+            card.querySelector(':scope > .agent-chat-tool-detail, :scope > .agent-chat-tool-output')?.remove();
+            delete card.dataset.toolDetailMounted;
+        } else if (card.classList.contains('expanded')) mountDetail(card);
+        return value;
+    }
+
     function syncHeader(card, tool) {
         const value = projectTool(tool);
         const presentation = projectVcpToolPresentation(tool);
@@ -185,22 +242,7 @@ function createToolBlockRenderer(options = {}) {
         duration.textContent = first && last >= first ? `${Math.max(0, (last - first) / 1000).toFixed(1)}s` : '';
 
         const header = card.querySelector('.agent-chat-tool-header');
-        card.querySelector('.agent-chat-tool-path-actions')?.remove();
-        const workspacePaths = structuredWorkspacePaths(tool?.payload || tool);
-        if (workspacePaths.length && typeof onWorkspacePath === 'function') {
-            const pathActions = createNode(document, 'span', 'agent-chat-tool-path-actions');
-            for (const relativePath of workspacePaths.slice(0, 3)) {
-                const open = createNode(document, 'button', 'agent-chat-tool-path-action');
-                open.type = 'button';
-                open.title = `在工作区预览 ${relativePath}`;
-                open.setAttribute('aria-label', `在工作区预览 ${relativePath}`);
-                open.dataset.agentWorkspacePath = relativePath;
-                open.append(...createIcon(document, 'draft'));
-                open.addEventListener('click', (event) => { event.stopPropagation(); onWorkspacePath(relativePath, 'preview', tool); });
-                pathActions.append(open);
-            }
-            header.append(pathActions);
-        }
+        syncWorkspacePathActions({ card, header, tool, document, onWorkspacePath });
         let risk = card.querySelector('.agent-chat-tool-risk');
         const riskValue = value.riskLevel && value.riskLevel !== 'unknown' ? value.riskLevel : '';
         if (riskValue && !risk) {
@@ -210,36 +252,7 @@ function createToolBlockRenderer(options = {}) {
         if (riskValue) risk.textContent = riskValue;
         else risk?.remove();
 
-        let cancel = card.querySelector('.agent-chat-tool-cancel');
-        if (!terminal && typeof onCancel === 'function' && !cancel) {
-            cancel = createNode(document, 'button', 'agent-chat-tool-cancel');
-            cancel.type = 'button';
-            cancel.title = '取消该工具调用';
-            cancel.setAttribute('aria-label', '取消该工具调用');
-            cancel.append(...createIcon(document, 'cancel'));
-            cancel.addEventListener('click', () => onCancel(card.__agentToolValue));
-            header.append(cancel);
-        } else if (terminal) {
-            cancel?.remove();
-        }
-
-        let chevron = card.querySelector('.agent-chat-tool-chevron');
-        const expandable = terminal && canExpandTool(tool);
-        if (expandable && !chevron) {
-            chevron = createNode(document, 'button', 'agent-chat-tool-chevron');
-            chevron.type = 'button';
-            chevron.setAttribute('aria-label', '展开/折叠工具详情');
-            chevron.append(...createIcon(document, 'expand_more'));
-            chevron.addEventListener('click', () => toggleDetail(card));
-            header.append(chevron);
-        } else if (!expandable) {
-            chevron?.remove();
-            card.classList.remove('expanded');
-            card.querySelector(':scope > .agent-chat-tool-detail, :scope > .agent-chat-tool-output')?.remove();
-            delete card.dataset.toolDetailMounted;
-        } else if (card.classList.contains('expanded')) {
-            mountDetail(card);
-        }
+        syncToolControls(card, tool, value, header, terminal);
     }
 
     return {

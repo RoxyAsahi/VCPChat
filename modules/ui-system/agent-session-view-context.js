@@ -25,7 +25,10 @@ export function createAgentSessionViewContext({ state, store, document, sameAgen
         const sessionId = selectedSessionKey(current);
         const runtime = sessionId && current.activeRuntimes instanceof Map
             ? current.activeRuntimes.get(sessionId) : null;
-        return current.activeTurnId || runtime?.activeTurnId || null;
+        // `activeTurnId` is a legacy selected-view cache. It is not a Session
+        // identity and can lag behind a sidebar/session switch. The Composer
+        // must only ever expose steer/follow-up controls for its own runtime.
+        return runtime?.activeTurnId || null;
     }
 
     function syncPermissionMode() {

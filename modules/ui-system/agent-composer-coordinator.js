@@ -1,6 +1,20 @@
 import { deriveWorkbenchViewState } from './agent-workbench-store.js';
 import { projectVcpToolPresentation } from './agent-workbench-timeline.js';
 
+function composerReadiness(current, composerState, pending, activeTurnId = null) {
+    const viewState = deriveWorkbenchViewState(current);
+    const previewReady = Boolean(current.selectedTopic?.mode === 'preview'
+        && ['idle', 'running', 'awaiting-approval'].includes(viewState));
+    const archived = Boolean(current.selectedTopic?.archivedAt);
+    const hasActiveTurn = Boolean(activeTurnId);
+    const starting = Boolean(pending && !hasActiveTurn);
+    const ready = Boolean(!archived && (current.selectedSessionId || previewReady)
+        && ['idle', 'running', 'awaiting-approval'].includes(viewState));
+    const canSend = Boolean(ready && (composerState.draft.trim()
+        || (!hasActiveTurn && composerState.attachments.length)));
+    return { viewState, previewReady, archived, activeTurnId, hasActiveTurn, starting, ready, canSend, pending };
+}
+
 function createAgentComposerCoordinator({
     state, store, controller, composerView, runStatusView, refs, run, notify,
     selectedSessionKey, selectedComposerState, selectedTurnStart, selectedActiveTurnId,
@@ -9,7 +23,13 @@ function createAgentComposerCoordinator({
 }) {
     const { input, feed, jumpToLatest, attachButton, sendButton, newButton } = refs;
     const disposers = [];
+    const activeTurnCommands = new Map();
     let disposed = false;
+
+    function createSubmissionId() {
+        return globalThis.crypto?.randomUUID?.()
+            || `submission_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    }
 
     function listen(element, type, handler, options) {
         element.addEventListener(type, handler, options);
@@ -53,25 +73,13 @@ function createAgentComposerCoordinator({
         const current = store.getState();
         const sessionId = selectedSessionKey(current);
         const composerState = selectedComposerState(current);
-        const viewState = deriveWorkbenchViewState(current);
-        const previewReady = Boolean(current.selectedTopic?.mode === 'preview'
-            && ['idle', 'running', 'awaiting-approval'].includes(viewState));
-        const archived = Boolean(current.selectedTopic?.archivedAt);
-        const ready = Boolean(!archived && (current.selectedSessionId || previewReady)
-            && ['idle', 'running', 'awaiting-approval'].includes(viewState));
-        const activeTurnId = selectedActiveTurnId(current);
-        const hasActiveTurn = Boolean(activeTurnId);
-        const pending = selectedTurnStart(current);
-        const starting = Boolean(pending && !hasActiveTurn);
-        const canSend = Boolean(ready && (composerState.draft.trim()
-            || (!hasActiveTurn && composerState.attachments.length)));
-        const snapshot = current.selectedTopic?.configSnapshot || {};
-        const instructionLabel = snapshot.instructionMode === 'codex-managed' ? 'Codex 指令' : 'VChat 身份';
-        const reasoningLabel = snapshot.reasoningEffort ? `推理 ${snapshot.reasoningEffort}` : '推理 默认';
+        const readiness = composerReadiness(current, composerState, selectedTurnStart(current), selectedActiveTurnId(current));
+        const { viewState, previewReady, archived, ready, activeTurnId, hasActiveTurn, pending, starting, canSend } = readiness;
+        const commandBusy = activeTurnCommands.has(sessionId);
         composerView.update({
             draft: composerState.draft,
-            inputDisabled: !ready || starting,
-            sendDisabled: !ready || starting || !canSend,
+            inputDisabled: !ready || starting || commandBusy,
+            sendDisabled: !ready || starting || commandBusy || !canSend,
             attachDisabled: !ready || hasActiveTurn || composerState.attachments.length >= 8,
             attachments: composerState.attachments,
             removeAttachment: (index) => {
@@ -96,8 +104,6 @@ function createAgentComposerCoordinator({
             busy: hasActiveTurn,
             ready: canSend,
             inputMode: composerState.activeInputMode,
-            configText: `${snapshot.model || state.model || '模型默认'} · ${state.permissionMode === 'always-approve' ? '本地自动允许' : '逐次审批'} · ${instructionLabel} · ${reasoningLabel}`,
-            configDisabled: !sessionId,
             permissionLabel: state.permissionMode === 'always-approve' ? '本地审批：YOLO（设置）' : '本地审批：逐次确认（设置）',
             permissionActive: state.permissionMode === 'always-approve',
             newDisabled: state.topicCreating,
@@ -124,6 +130,42 @@ function createAgentComposerCoordinator({
         render();
     }
 
+    async function sendActiveTurn(prompt, composerState, sessionId) {
+        if (!prompt) return false;
+        const turnId = selectedActiveTurnId(store.getState());
+        if (!turnId) throw new Error('当前 Turn 已结束，请重新发送。');
+        const existing = activeTurnCommands.get(sessionId);
+        if (existing) {
+            if (existing.turnId === turnId && existing.prompt === prompt
+                && existing.mode === composerState.activeInputMode) return existing.promise;
+            throw new Error('当前 Session 正在提交另一条插队指令，请稍候。');
+        }
+        const submissionId = createSubmissionId();
+        const steering = prompt.match(/^\/steer\s+([\s\S]+)$/i);
+        const mode = steering || composerState.activeInputMode === 'steer' ? 'steer' : 'follow-up';
+        const command = (async () => {
+            if (mode === 'steer') {
+                await controller.steerTurn(steering ? steering[1].trim() : prompt, submissionId);
+            } else {
+                await controller.followUpTurn(prompt, submissionId);
+            }
+            return true;
+        })();
+        activeTurnCommands.set(sessionId, { turnId, prompt, mode, promise: command });
+        try {
+            await command;
+        } finally {
+            if (activeTurnCommands.get(sessionId)?.promise === command) activeTurnCommands.delete(sessionId);
+            if (!disposed) render();
+        }
+        if (disposed) return true;
+        notify(mode === 'steer' ? '已插入即时 steering 指令。' : '已加入后续指令队列。', 'success');
+        state.composerStateBySession.setDraft(sessionId, '');
+        render();
+        await refreshControlPlane();
+        return true;
+    }
+
     async function send() {
         const current = store.getState();
         const sessionId = selectedSessionKey(current);
@@ -131,19 +173,7 @@ function createAgentComposerCoordinator({
         const prompt = composerState.draft.trim();
         const activeTurnId = selectedActiveTurnId(current);
         if (activeTurnId) {
-            if (!prompt) return;
-            const steering = prompt.match(/^\/steer\s+([\s\S]+)$/i);
-            if (steering || composerState.activeInputMode === 'steer') {
-                await controller.steerTurn(steering ? steering[1].trim() : prompt);
-                if (!disposed) notify('已插入即时 steering 指令。', 'success');
-            } else {
-                await controller.followUpTurn(prompt);
-                if (!disposed) notify('已加入后续指令队列。', 'success');
-            }
-            if (disposed) return;
-            state.composerStateBySession.setDraft(sessionId, '');
-            render();
-            await refreshControlPlane();
+            await sendActiveTurn(prompt, composerState, sessionId);
             return;
         }
         if (!prompt && !composerState.attachments.length) return;

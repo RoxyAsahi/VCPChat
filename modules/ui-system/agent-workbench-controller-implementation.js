@@ -1,11 +1,55 @@
 import { createWorkbenchStore } from './agent-workbench-store.js';
-import { createAgentSessionUiState, reconcileAgentSessionUiState, reduceAgentSessionUiState } from './agent-session-state.js';
-import { createWorkbenchClients } from './agent-workbench-clients.js';
+import {
+    createAgentSessionUiState,
+    reconcileAgentSessionUiState,
+    reduceAgentSessionUiState,
+    requireMatchingProjectionSession,
+    requireSnapshotSession,
+} from './agent-session-state.js';
+import { createAgentRuntimeEventSubscription, createWorkbenchClients } from './agent-workbench-clients.js';
 import { codexSnapshotToProjection } from './agent-workbench-snapshot-projection.js';
 import { createWorkbenchCommandController } from './agent-workbench-command-controller.js';
-import { createAgentRuntimeEventSubscription } from './agent-runtime-event-subscription.js';
 import { selectedSessionIdentity, selectedSessionId as selectedSessionIdFromState } from './agent-selected-session.js';
-import { requireMatchingProjectionSession, requireSnapshotSession } from './agent-session-projection-identity.js';
+
+function durableSnapshotState(snapshot) {
+    return snapshot?.session && typeof snapshot.session === 'object'
+        ? snapshot.session : snapshot?.state && typeof snapshot.state === 'object' ? snapshot.state : {};
+}
+
+function snapshotAgentId(snapshot, durableState, agentId, active) {
+    return typeof snapshot?.session?.agentId === 'string' && snapshot.session.agentId.trim()
+        ? snapshot.session.agentId
+        : typeof snapshot?.agentId === 'string' && snapshot.agentId.trim()
+            ? snapshot.agentId : agentId || active?.agentId || null;
+}
+
+function hydratedRuntime(active, sessionId, durableState, durableAgentId) {
+    if (!active) return null;
+    return {
+        ...active, sessionId,
+        title: typeof durableState.title === 'string' && durableState.title.trim() ? durableState.title : active.title,
+        model: typeof durableState.model === 'string' && durableState.model.trim() ? durableState.model : active.model,
+        workspaceRoot: typeof durableState.workspaceRef === 'string' && durableState.workspaceRef.trim()
+            ? durableState.workspaceRef : active.workspaceRoot,
+        agentId: durableAgentId || active.agentId,
+        configSnapshot: durableState.configSnapshot || active.configSnapshot || null,
+    };
+}
+
+function hydratedTopicProjection(durableState, nextRuntime, durableAgentId, selectedSessionId) {
+    return {
+        sessionId: selectedSessionId,
+        threadId: durableState.threadId || nextRuntime?.threadId || null,
+        agentId: durableAgentId,
+        title: nextRuntime?.title || durableState.title || '',
+        model: nextRuntime?.model || durableState.configSnapshot?.model || '',
+        workspaceRoot: nextRuntime?.workspaceRoot || durableState.workspaceRoot || '',
+        configSnapshot: durableState.configSnapshot || null,
+        configRevision: Number(durableState.configRevision || 1),
+        archivedAt: durableState.archivedAt || null,
+        mode: nextRuntime ? 'runtime-active' : 'preview',
+    };
+}
 function createWorkbenchController(runtimeApi) {
     const clients = createWorkbenchClients(runtimeApi);
     const store = createWorkbenchStore();
@@ -48,7 +92,7 @@ function createWorkbenchController(runtimeApi) {
     }
 
     function selectedTurnId(state = store.getState()) {
-        return state.activeTurnId || selectedRuntime(state)?.activeTurnId || null;
+        return selectedRuntime(state)?.activeTurnId || null;
     }
 
     function projectRuntimeActivity(event) {
@@ -59,10 +103,21 @@ function createWorkbenchController(runtimeApi) {
         if (!runtime || runtime.sessionId !== event.sessionId) return;
         let activity = null;
         if (event.type === 'turn.started') activity = 'running';
-        else if (event.type === 'approval.requested') activity = 'awaiting-approval';
-        else if (['turn.completed', 'turn.failed', 'turn.cancelled'].includes(event.type)) activity = 'idle';
+        else if (event.type === 'approval.requested') {
+            if (!event.turnId || runtime.activeTurnId !== event.turnId) return;
+            activity = 'awaiting-approval';
+        }
+        else if (['turn.completed', 'turn.failed', 'turn.cancelled'].includes(event.type)) {
+            if (!event.turnId || runtime.activeTurnId !== event.turnId) return;
+            activity = 'idle';
+        }
         if (!activity) return;
-        activeRuntimes.set(event.sessionId, { ...runtime, activity, activeTurnId: activity === 'running' ? event.turnId : null });
+        activeRuntimes.set(event.sessionId, {
+            ...runtime,
+            activity,
+            activeTurnId: activity === 'running' ? event.turnId
+                : activity === 'idle' ? null : runtime.activeTurnId,
+        });
         store.setState({ activeRuntimes });
     }
 
@@ -316,25 +371,9 @@ function createWorkbenchController(runtimeApi) {
         // `read-topic` / `read-projection` is the durable metadata source
         // after a reload. Main's runtime status intentionally has only a
         // small identity shell, never a transcript cache.
-        const durableState = snapshot?.session && typeof snapshot.session === 'object'
-            ? snapshot.session
-            : snapshot?.state && typeof snapshot.state === 'object' ? snapshot.state : {};
-        const durableAgentId = typeof snapshot?.session?.agentId === 'string' && snapshot.session.agentId.trim()
-            ? snapshot.session.agentId
-            : typeof snapshot?.agentId === 'string' && snapshot.agentId.trim() ? snapshot.agentId
-                : agentId || active?.agentId || null;
-        const nextRuntime = active ? {
-            ...active,
-            sessionId,
-            title: typeof durableState.title === 'string' && durableState.title.trim()
-                ? durableState.title : active.title,
-            model: typeof durableState.model === 'string' && durableState.model.trim()
-                ? durableState.model : active.model,
-            workspaceRoot: typeof durableState.workspaceRef === 'string' && durableState.workspaceRef.trim()
-                ? durableState.workspaceRef : active.workspaceRoot,
-            agentId: durableAgentId || active.agentId,
-            configSnapshot: durableState.configSnapshot || active.configSnapshot || null,
-        } : null;
+        const durableState = durableSnapshotState(snapshot);
+        const durableAgentId = snapshotAgentId(snapshot, durableState, agentId, active);
+        const nextRuntime = hydratedRuntime(active, sessionId, durableState, durableAgentId);
         const runtimeSessionId = nextRuntime?.sessionId && String(nextRuntime.sessionId).trim()
             ? nextRuntime.sessionId : sessionId;
         const activeRuntimes = new Map(current.activeRuntimes);
@@ -351,18 +390,7 @@ function createWorkbenchController(runtimeApi) {
             activeTurnId: nextRuntime?.activeTurnId || projection.activeTurnId || null,
             sessionSnapshots,
             activeRuntimes,
-            selectedTopic: {
-                sessionId: selectedSessionId,
-                threadId: durableState.threadId || nextRuntime?.threadId || null,
-                agentId: durableAgentId,
-                title: nextRuntime?.title || durableState.title || '',
-                model: nextRuntime?.model || durableState.configSnapshot?.model || '',
-                workspaceRoot: nextRuntime?.workspaceRoot || durableState.workspaceRoot || '',
-                configSnapshot: durableState.configSnapshot || null,
-                configRevision: Number(durableState.configRevision || 1),
-                archivedAt: durableState.archivedAt || null,
-                mode: nextRuntime ? 'runtime-active' : 'preview',
-            },
+            selectedTopic: hydratedTopicProjection(durableState, nextRuntime, durableAgentId, selectedSessionId),
         });
         return nextRuntime;
     }

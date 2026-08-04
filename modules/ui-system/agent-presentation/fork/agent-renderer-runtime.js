@@ -9,11 +9,13 @@ import { createAgentAnimationLifecycle } from './agentAnimationLifecycle.js';
 import { createAgentRendererSession } from './agent-renderer-session.js';
 import { createAgentRendererStream } from './agent-renderer-stream.js';
 import { renderAttachments as renderResourceAttachments } from './agent-renderer-resource-dom.js';
-import { createAgentMessageDom } from './agent-renderer-message-dom.js';
+import {
+    createAgentMessageDom,
+    createAgentRendererAvatarStyle,
+    createAgentRendererHistory,
+} from './agent-renderer-message-dom.js';
 import { createAgentRendererContent } from './agent-renderer-content.js';
-import { createAgentRendererHistory } from './agent-renderer-history.js';
 import { createAgentRendererActions } from './agent-renderer-actions.js';
-import { createAgentRendererAvatarStyle } from './agent-renderer-avatar-style.js';
 import { createAgentRendererMessageLifecycle } from './agent-renderer-message-lifecycle.js';
 import { createAgentRendererPipeline } from './agent-renderer-pipeline.js';
 const colorExtractionPromises = new Map();

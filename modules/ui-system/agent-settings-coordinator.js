@@ -1,6 +1,95 @@
 import { profileSettingsTarget, sessionSettingsTarget } from './agent-settings-state.js';
 import { PROFILE_CONFIG_FIELDS, normalizeAgentConfig } from '../agent-config-descriptors.js';
 
+function normalizedSavedProfile(profile) {
+    const instructionMode = profile.instructionMode === 'codex-managed' ? 'codex-managed' : 'vchat-identity';
+    const baseInstructions = profile.baseInstructions || profile.systemPrompt || '';
+    return {
+        ...profile,
+        instructionMode,
+        baseInstructions,
+        systemPrompt: profile.systemPrompt || '',
+        developerInstructions: profile.developerInstructions || '',
+        personality: profile.personality || 'none',
+        reasoningEffort: profile.reasoningEffort || null,
+        reasoningEfforts: Array.isArray(profile.reasoningEfforts) ? profile.reasoningEfforts : [],
+        model: profile.model || '',
+        workspaceRoot: profile.workspaceRoot || '',
+        permissionMode: profile.permissionMode === 'always-approve' ? 'always-approve' : 'ask',
+        configurationRequired: instructionMode !== 'codex-managed' && !String(baseInstructions).trim(),
+    };
+}
+
+function profileSavePayload(payload, profile, values) {
+    const own = (key) => Object.prototype.hasOwnProperty.call(payload, key);
+    return {
+        agentId: profile.id || profile.name,
+        expectedProfileRevision: Number(profile.profileRevision || profile.revision || 1),
+        name: own('name') ? payload.name : profile.name || profile.id,
+        instructionMode: values.instructionMode,
+        baseInstructions: values.baseInstructions,
+        developerInstructions: own('developerInstructions') ? payload.developerInstructions : profile.developerInstructions || '',
+        personality: own('personality') ? payload.personality : profile.personality || 'none',
+        model: values.model,
+        reasoningEffort: values.reasoningEffort,
+        workspaceRoot: values.workspaceRoot,
+        permissionMode: values.permissionMode,
+    };
+}
+
+async function applySavedSettings(context, saved, payload, selectedSession, saveScope,
+    projectionAtEnqueue, successMessage) {
+    const { state, store, controller, refreshTopicsForAgent, notify, sessionConfigRevisions } = context;
+    if (context.isDisposed()) return saved;
+    if (saved?.profile && !saved.profile.configurationRequired) state.profileConfigurationNotice = '';
+    await applyDerivedSession(context, saved);
+    if (saved?.session?.configRevision) {
+        sessionConfigRevisions.set(saved.session.sessionId, Number(saved.session.configRevision));
+    }
+    applyScalarSettings(context, saved, payload, selectedSession);
+    updateSelectedSession(context, saved, selectedSession);
+    state.settingsSaveState = 'saved';
+    state.settingsSaveMessage = successMessage || '已自动保存';
+    state.settingsSaveByScope.set(saveScope, { state: 'saved', message: successMessage || '已自动保存' });
+    return saved;
+}
+
+async function applyDerivedSession(context, saved) {
+    if (!saved?.createdDerivedSession || !saved?.session?.sessionId) return;
+    const { state, controller, refreshTopicsForAgent, notify } = context;
+    await refreshTopicsForAgent(saved.session.agentId || state.selectedAgent, false);
+    if (context.isDisposed()) return;
+    await controller.hydrateTopic(saved.session.sessionId, saved.session, null,
+        saved.session.agentId || state.selectedAgent);
+    if (!context.isDisposed()) notify('已保留原会话，并创建 Codex 管理指令派生会话。', 'success');
+}
+
+function applyScalarSettings(context, saved, payload, selectedSession) {
+    const { state, store } = context;
+    const stillSelected = !selectedSession || store.getState().selectedSessionId === selectedSession;
+    if (stillSelected && Object.prototype.hasOwnProperty.call(payload, 'permissionMode')) {
+        state.permissionMode = saved?.settings?.permissionMode === 'always-approve' ? 'always-approve' : 'ask';
+    }
+    if (stillSelected && Object.prototype.hasOwnProperty.call(payload, 'model')) {
+        state.model = saved?.settings?.model || saved?.session?.configSnapshot?.model || payload.model;
+        state.modelDraft = null;
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, 'budget')) state.budget = { ...state.budget, ...payload.budget };
+}
+
+function updateSelectedSession(context, saved, selectedSession) {
+    if (!selectedSession || !saved?.session?.configSnapshot) return;
+    const current = context.store.getState();
+    if (current.selectedSessionId !== selectedSession) return;
+    context.store.setState({ selectedTopic: {
+        ...current.selectedTopic,
+        configSnapshot: saved.session.configSnapshot,
+        configRevision: saved.session.configRevision,
+        workspaceRef: saved.session.workspaceRoot || current.selectedTopic.workspaceRef,
+        workspaceRoot: saved.session.workspaceRoot || current.selectedTopic.workspaceRoot,
+    } });
+}
+
 function createAgentSettingsCoordinator({
     state,
     store,
@@ -26,39 +115,9 @@ function createAgentSettingsCoordinator({
         });
         if (normalized.errors.length) throw new Error(normalized.errors[0].message);
         const values = normalized.values;
-        const result = await saveAgentProfile({
-            agentId: profile.id || profile.name,
-            expectedProfileRevision: Number(profile.profileRevision || profile.revision || 1),
-            name: Object.prototype.hasOwnProperty.call(payload, 'name')
-                ? payload.name : profile.name || profile.id,
-            instructionMode: values.instructionMode,
-            baseInstructions: values.baseInstructions,
-            developerInstructions: Object.prototype.hasOwnProperty.call(payload, 'developerInstructions')
-                ? payload.developerInstructions : profile.developerInstructions || '',
-            personality: Object.prototype.hasOwnProperty.call(payload, 'personality')
-                ? payload.personality : profile.personality || 'none',
-            model: values.model,
-            reasoningEffort: values.reasoningEffort,
-            workspaceRoot: values.workspaceRoot,
-            permissionMode: values.permissionMode,
-        });
+        const result = await saveAgentProfile(profileSavePayload(payload, profile, values));
         if (!result?.success || !result.profile?.id) throw new Error(result?.error || 'Build Agent Profile 保存失败');
-        const savedProfile = {
-            ...result.profile,
-            instructionMode: result.profile.instructionMode === 'codex-managed'
-                ? 'codex-managed' : 'vchat-identity',
-            baseInstructions: result.profile.baseInstructions || result.profile.systemPrompt || '',
-            systemPrompt: result.profile.systemPrompt || '',
-            developerInstructions: result.profile.developerInstructions || '',
-            personality: result.profile.personality || 'none',
-            reasoningEffort: result.profile.reasoningEffort || null,
-            reasoningEfforts: Array.isArray(result.profile.reasoningEfforts) ? result.profile.reasoningEfforts : [],
-            model: result.profile.model || '',
-            workspaceRoot: result.profile.workspaceRoot || '',
-            permissionMode: result.profile.permissionMode === 'always-approve' ? 'always-approve' : 'ask',
-            configurationRequired: result.profile.instructionMode !== 'codex-managed'
-                && !String(result.profile.baseInstructions || result.profile.systemPrompt || '').trim(),
-        };
+        const savedProfile = normalizedSavedProfile(result.profile);
         if (!disposed) {
             Object.assign(profile, savedProfile);
             selectAgent(savedProfile.id);
@@ -99,45 +158,10 @@ function createAgentSettingsCoordinator({
             const saved = profileUpdate
                 ? await persistAgentProfileDefaults(payload)
                 : await controller.updateWorkbenchSettings(request);
-            if (disposed) return saved;
-            if (saved?.profile && !saved.profile.configurationRequired) state.profileConfigurationNotice = '';
-            if (saved?.createdDerivedSession && saved?.session?.sessionId) {
-                await refreshTopicsForAgent(saved.session.agentId || state.selectedAgent, false);
-                if (disposed) return saved;
-                await controller.hydrateTopic(saved.session.sessionId, saved.session, null,
-                    saved.session.agentId || state.selectedAgent);
-                if (!disposed) notify('已保留原会话，并创建 Codex 管理指令派生会话。', 'success');
-            }
-            if (saved?.session?.configRevision) {
-                sessionConfigRevisions.set(saved.session.sessionId, Number(saved.session.configRevision));
-            }
-            const stillSelected = !selectedSession || store.getState().selectedSessionId === selectedSession;
-            if (stillSelected && Object.prototype.hasOwnProperty.call(payload, 'permissionMode')) {
-                state.permissionMode = saved?.settings?.permissionMode === 'always-approve' ? 'always-approve' : 'ask';
-            }
-            if (stillSelected && Object.prototype.hasOwnProperty.call(payload, 'model')) {
-                state.model = saved?.settings?.model || saved?.session?.configSnapshot?.model || payload.model;
-                state.modelDraft = null;
-            }
-            if (Object.prototype.hasOwnProperty.call(payload, 'budget')) state.budget = { ...state.budget, ...payload.budget };
-            if (stillSelected && selectedSession && saved?.session?.configSnapshot) {
-                const current = store.getState();
-                if (current.selectedSessionId === selectedSession) {
-                    store.setState({
-                        selectedTopic: {
-                            ...current.selectedTopic,
-                            configSnapshot: saved.session.configSnapshot,
-                            configRevision: saved.session.configRevision,
-                            workspaceRef: saved.session.workspaceRoot || current.selectedTopic.workspaceRef,
-                            workspaceRoot: saved.session.workspaceRoot || current.selectedTopic.workspaceRoot,
-                        },
-                    });
-                }
-            }
-            state.settingsSaveState = 'saved';
-            state.settingsSaveMessage = successMessage || '已自动保存';
-            state.settingsSaveByScope.set(saveScope, { state: 'saved', message: successMessage || '已自动保存' });
-            return saved;
+            return applySavedSettings({
+                state, store, controller, refreshTopicsForAgent, notify, sessionConfigRevisions,
+                isDisposed: () => disposed,
+            }, saved, payload, selectedSession, saveScope, projectionAtEnqueue, successMessage);
         }, successMessage || '已自动保存').catch((error) => {
             if (!disposed) {
                 state.settingsSaveState = 'error';

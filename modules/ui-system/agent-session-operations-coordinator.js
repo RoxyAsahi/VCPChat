@@ -99,8 +99,10 @@ function createAgentSessionOperationsCoordinator({
     }
 
     function rememberTopicTitle(topic, title) {
-        if (state.rememberedTopic?.sessionId === topic.id) state.rememberedTopic = { ...state.rememberedTopic, title };
-        rememberTopic({ sessionId: topic.id, title, agentId: topic.agentId || state.selectedAgent || 'Nova' });
+        const sessionId = topic?.sessionId || topic?.id;
+        if (!sessionId) return;
+        if (state.rememberedTopic?.sessionId === sessionId) state.rememberedTopic = { ...state.rememberedTopic, title };
+        rememberTopic({ sessionId, title, agentId: topic.agentId || state.selectedAgent || 'Nova' });
     }
 
     function forgetTopic(sessionId) {

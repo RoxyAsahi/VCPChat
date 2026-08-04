@@ -1,3 +1,5 @@
+import { PROFILE_CONFIG_FIELDS, normalizeAgentConfig } from '../agent-config-descriptors.js';
+
 const NOVA_CATALOG_FALLBACK = Object.freeze({
     id: 'Nova', name: 'Nova', model: '', systemPrompt: '{{Nova}}', avatarUrl: null,
 });
@@ -32,32 +34,109 @@ function reasoningEffortsForModel(model) {
 
 function normalizeAgentProfile(agent) {
     const config = agent?.config || {};
-    const instructionMode = (config.instructionMode || agent?.instructionMode) === 'codex-managed'
-        ? 'codex-managed' : 'vchat-identity';
-    const baseInstructions = config.baseInstructions || agent?.baseInstructions
-        || config.systemPrompt || agent?.systemPrompt || '';
+    const normalized = normalizeProfileFields(agent, config);
+    return {
+        ...profileIdentityProjection(agent, config, normalized),
+        ...profileRuntimeProjection(agent, config, normalized),
+    };
+}
+
+function profileIdentityProjection(agent, config, normalized) {
+    const personalityValue = config.personality || agent?.personality;
     return {
         id: agent?.id || agent?.name,
         name: agent?.name || agent?.id,
-        model: config.model || agent?.model || '',
-        instructionMode,
-        baseInstructions,
-        systemPrompt: config.systemPrompt || agent?.systemPrompt || '',
+        model: normalized.model || '',
+        instructionMode: normalized.instructionMode,
+        baseInstructions: normalized.baseInstructions || '',
+        systemPrompt: config.systemPrompt || agent?.systemPrompt || normalized.baseInstructions,
         developerInstructions: config.developerInstructions || agent?.developerInstructions || '',
-        personality: ['friendly', 'pragmatic'].includes(config.personality || agent?.personality)
-            ? (config.personality || agent.personality) : 'none',
-        reasoningEffort: config.reasoningEffort || agent?.reasoningEffort || null,
-        reasoningEfforts: Array.isArray(config.reasoningEfforts || agent?.reasoningEfforts)
-            ? (config.reasoningEfforts || agent.reasoningEfforts) : [],
-        workspaceRoot: config.workspaceRoot || agent?.workspaceRoot || '',
-        permissionMode: (config.permissionMode || agent?.permissionMode) === 'always-approve'
-            ? 'always-approve' : 'ask',
+        personality: ['friendly', 'pragmatic'].includes(personalityValue) ? personalityValue : 'none',
+    };
+}
+
+function profileRuntimeProjection(agent, config, normalized) {
+    const reasoningEfforts = config.reasoningEfforts || agent?.reasoningEfforts;
+    return {
+        reasoningEffort: normalized.reasoningEffort || null,
+        reasoningEfforts: Array.isArray(reasoningEfforts) ? reasoningEfforts : [],
+        workspaceRoot: normalized.workspaceRoot || '',
+        permissionMode: normalized.permissionMode,
         revision: Number(config.revision || agent?.revision || 1),
         profileRevision: Number(config.profileRevision || agent?.profileRevision
             || config.revision || agent?.revision || 1),
         avatarUrl: agent?.avatarUrl || null,
-        configurationRequired: instructionMode !== 'codex-managed' && !String(baseInstructions).trim(),
+        configurationRequired: normalized.instructionMode !== 'codex-managed'
+            && !String(normalized.baseInstructions).trim(),
     };
+}
+
+function modelCatalogProjection(models) {
+    const raw = Array.isArray(models) ? models : models?.models || [];
+    return raw.map((model) => typeof model === 'string'
+        ? { id: model, name: model }
+        : {
+            ...model,
+            id: model?.id || model?.name || '',
+            name: model?.name || model?.id || '',
+            reasoningEfforts: reasoningEffortsForModel(model),
+        }).filter((model) => model.id);
+}
+
+function controlPlaneCurrent(disposed, state, request, currentRequest, agentId) {
+    return !disposed && !state.disposed && request === currentRequest
+        && sameAgent(agentId, state.selectedAgent);
+}
+
+function installAgentCatalog(state, sharedAgents, selectedAgentProfile, selectAgent, store) {
+    const normalizedAgents = Array.isArray(sharedAgents) ? sharedAgents.map(normalizeAgentProfile) : [];
+    if (!normalizedAgents.some((agent) => sameAgent(agent.id || agent.name, 'Nova'))) {
+        normalizedAgents.unshift({ ...NOVA_CATALOG_FALLBACK });
+    }
+    state.agentCatalog = normalizedAgents;
+    if (!selectedAgentProfile()) {
+        const fallback = state.agentCatalog.find((agent) => sameAgent(agent.id || agent.name, 'Nova'))
+            || state.agentCatalog[0];
+        if (fallback) selectAgent(fallback.id || fallback.name);
+    } else if (!store.getState().selectedSessionId) {
+        selectAgent(state.selectedAgent);
+    }
+    return state.selectedAgent || 'Nova';
+}
+
+function applyControlPlaneState({ state, store, selectedAgentId, topics, queue, workbenchSettings,
+    selectedAgentProfile, syncPermissionModeFromSelectedSession, syncModelFromSelectedSession }) {
+    const receivedTopics = Array.isArray(topics) ? topics : topics?.topics || [];
+    state.topics = receivedTopics;
+    (state.showArchivedTopics ? state.archivedTopicsByAgent : state.topicsByAgent)
+        .set(agentCacheKey(selectedAgentId), receivedTopics);
+    state.topicListLoading = false;
+    state.queue = Array.isArray(queue) ? queue : queue?.items || queue?.queue || [];
+    if (workbenchSettings && typeof workbenchSettings === 'object') {
+        const budget = workbenchSettings.budget && typeof workbenchSettings.budget === 'object'
+            ? workbenchSettings.budget : {};
+        state.budget = {
+            maxRequestsPerTurn: budget.maxRequestsPerTurn ?? null,
+            maxTokensPerTurn: budget.maxTokensPerTurn ?? null,
+        };
+        const selectedTopic = store.getState().selectedTopic;
+        if (!selectedAgentProfile() && !selectedTopic?.configSnapshot) {
+            state.permissionMode = workbenchSettings.permissionMode === 'always-approve' ? 'always-approve' : 'ask';
+        }
+        if (!selectedAgentProfile() && !selectedTopic?.configSnapshot?.model && workbenchSettings.model) {
+            state.model = String(workbenchSettings.model);
+        }
+    }
+    syncPermissionModeFromSelectedSession();
+    syncModelFromSelectedSession();
+}
+
+function normalizeProfileFields(agent, config) {
+    return normalizeAgentConfig({ ...agent, ...config }, {
+        fallback: agent,
+        fields: PROFILE_CONFIG_FIELDS,
+        context: { reasoningEfforts: config.reasoningEfforts || agent?.reasoningEfforts || [] },
+    }).values;
 }
 
 function createAgentSessionCatalogCoordinator({
@@ -139,34 +218,13 @@ function createAgentSessionCatalogCoordinator({
         const request = ++controlPlaneRequest;
         const optional = (fn) => Promise.resolve().then(fn).catch(() => []);
         const sharedAgents = await optional(listAgentProfiles);
-        if (disposed || state.disposed || request !== controlPlaneRequest) return;
-        const normalizedAgents = Array.isArray(sharedAgents) ? sharedAgents.map(normalizeAgentProfile) : [];
-        if (!normalizedAgents.some((agent) => sameAgent(agent.id || agent.name, 'Nova'))) {
-            normalizedAgents.unshift({ ...NOVA_CATALOG_FALLBACK });
-        }
-        state.agentCatalog = normalizedAgents;
-        if (!selectedAgentProfile()) {
-            const fallback = state.agentCatalog.find((agent) => sameAgent(agent.id || agent.name, 'Nova'))
-                || state.agentCatalog[0];
-            if (fallback) selectAgent(fallback.id || fallback.name);
-        } else if (!store.getState().selectedSessionId) {
-            selectAgent(state.selectedAgent);
-        }
-        const selectedAgentId = state.selectedAgent || 'Nova';
+        if (!controlPlaneCurrent(disposed, state, request, controlPlaneRequest, state.selectedAgent)) return;
+        const selectedAgentId = installAgentCatalog(state, sharedAgents, selectedAgentProfile, selectAgent, store);
         queueRender({ shell: true, header: true, composer: true });
 
         void optional(getCachedModels).then((models) => {
-            if (disposed || state.disposed || request !== controlPlaneRequest
-                || !sameAgent(selectedAgentId, state.selectedAgent)) return;
-            const rawModels = Array.isArray(models) ? models : models?.models || [];
-            state.modelCatalog = rawModels.map((model) => typeof model === 'string'
-                ? { id: model, name: model }
-                : {
-                    ...model,
-                    id: model?.id || model?.name || '',
-                    name: model?.name || model?.id || '',
-                    reasoningEfforts: reasoningEffortsForModel(model),
-                }).filter((model) => model.id);
+            if (!controlPlaneCurrent(disposed, state, request, controlPlaneRequest, selectedAgentId)) return;
+            state.modelCatalog = modelCatalogProjection(models);
             if (!state.modelDraft && !state.model) state.model = state.modelCatalog[0]?.id || '';
             queueRender({ shell: true, header: true, composer: true });
         });
@@ -176,30 +234,11 @@ function createAgentSessionCatalogCoordinator({
             optional(() => controller.listInteractionQueue()),
             optional(() => controller.getWorkbenchSettings()),
         ]);
-        if (disposed || state.disposed || request !== controlPlaneRequest
-            || !sameAgent(selectedAgentId, state.selectedAgent)) return;
-        const receivedTopics = Array.isArray(topics) ? topics : topics?.topics || [];
-        state.topics = receivedTopics;
-        (state.showArchivedTopics ? state.archivedTopicsByAgent : state.topicsByAgent)
-            .set(agentCacheKey(selectedAgentId), receivedTopics);
-        state.topicListLoading = false;
-        state.queue = Array.isArray(queue) ? queue : queue?.items || queue?.queue || [];
-        if (workbenchSettings && typeof workbenchSettings === 'object') {
-            const budget = workbenchSettings.budget && typeof workbenchSettings.budget === 'object'
-                ? workbenchSettings.budget : {};
-            state.budget = {
-                maxRequestsPerTurn: budget.maxRequestsPerTurn ?? null,
-                maxTokensPerTurn: budget.maxTokensPerTurn ?? null,
-            };
-            if (!selectedAgentProfile() && !store.getState().selectedTopic?.configSnapshot) {
-                state.permissionMode = workbenchSettings.permissionMode === 'always-approve'
-                    ? 'always-approve' : 'ask';
-            }
-            if (!selectedAgentProfile() && !store.getState().selectedTopic?.configSnapshot?.model
-                && workbenchSettings.model) state.model = String(workbenchSettings.model);
-        }
-        syncPermissionModeFromSelectedSession();
-        syncModelFromSelectedSession();
+        if (!controlPlaneCurrent(disposed, state, request, controlPlaneRequest, selectedAgentId)) return;
+        applyControlPlaneState({
+            state, store, selectedAgentId, topics, queue, workbenchSettings,
+            selectedAgentProfile, syncPermissionModeFromSelectedSession, syncModelFromSelectedSession,
+        });
         queueRender({ shell: true, header: true, composer: true });
     }
 

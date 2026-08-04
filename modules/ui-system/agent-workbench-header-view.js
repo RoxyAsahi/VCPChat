@@ -28,10 +28,128 @@ function createContextRing(document, percentage) {
 }
 
 function createAgentWorkbenchHeaderView({ element, document = globalThis.document, actions = {} }) {
+    let lastModel = {};
+    let editingSessionId = null;
+    let statusTimer = null;
+
+    function formatElapsed(milliseconds) {
+        const seconds = Math.max(0, Math.floor(Number(milliseconds || 0) / 1000));
+        if (seconds < 60) return `${seconds}s`;
+        const minutes = Math.floor(seconds / 60);
+        if (minutes < 60) return `${minutes}m${String(seconds % 60).padStart(2, '0')}s`;
+        return `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, '0')}m`;
+    }
+
+    function updateStatusText() {
+        const chip = element.querySelector('.agent-chat-status-chip');
+        if (!chip || !lastModel.statusStartedAt && !lastModel.statusElapsedMs) return;
+        const elapsed = lastModel.statusElapsedMs != null
+            ? lastModel.statusElapsedMs
+            : Date.now() - lastModel.statusStartedAt;
+        const label = chip.querySelector('.agent-chat-status-label');
+        const elapsedNode = chip.querySelector('.agent-chat-status-elapsed');
+        if (label) label.textContent = lastModel.statusLabel || lastModel.stateLabel || lastModel.state || '';
+        if (elapsedNode) elapsedNode.textContent = `${formatElapsed(elapsed)}`;
+    }
+
+    function restoreTitle() {
+        editingSessionId = null;
+        update(lastModel);
+    }
+
+    function startTitleEditor(model, title) {
+        if (!model.canRename || !model.sessionId || editingSessionId) return;
+        editingSessionId = model.sessionId;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'agent-chat-title-input';
+        input.value = title;
+        input.maxLength = 160;
+        input.setAttribute('aria-label', '重命名当前会话');
+        input.setAttribute('autocomplete', 'off');
+
+        let settled = false;
+        const cancel = () => {
+            if (settled) return;
+            settled = true;
+            restoreTitle();
+        };
+        const commit = async () => {
+            if (settled) return;
+            const nextTitle = input.value.trim();
+            if (!nextTitle || nextTitle === title) {
+                cancel();
+                return;
+            }
+            settled = true;
+            input.disabled = true;
+            input.setAttribute('aria-busy', 'true');
+            try {
+                await actions.renameTitle?.({
+                    sessionId: model.sessionId,
+                    agentId: model.agentId,
+                    title: nextTitle,
+                });
+                // A control-plane refresh may have rendered while the editor
+                // was active. Use the durable result as the immediate title.
+                lastModel = { ...lastModel, title: nextTitle };
+                restoreTitle();
+            } catch (error) {
+                settled = false;
+                input.disabled = false;
+                input.removeAttribute('aria-busy');
+                input.setAttribute('aria-invalid', 'true');
+                input.title = error?.message || '会话重命名失败';
+                input.focus();
+            }
+        };
+        input.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                void commit();
+            } else if (event.key === 'Escape') {
+                event.preventDefault();
+                cancel();
+            }
+        });
+        input.addEventListener('blur', () => { void commit(); });
+        const currentTitle = element.querySelector('.agent-chat-title');
+        currentTitle?.replaceWith(input);
+        queueMicrotask(() => {
+            input.focus();
+            input.select();
+        });
+    }
+
     function update(model = {}) {
+        lastModel = model;
+        if (statusTimer) { clearInterval(statusTimer); statusTimer = null; }
+        if (editingSessionId) {
+            // A selection change must never save into the newly selected Session.
+            if (editingSessionId !== model.sessionId) restoreTitle();
+            return;
+        }
         element.replaceChildren();
         const title = node('h3', 'agent-chat-title', model.title || '', document);
-        const statusChip = node('span', 'agent-chat-status-chip', model.stateLabel || model.state || '', document);
+        if (model.canRename) {
+            title.classList.add('is-editable');
+            title.tabIndex = 0;
+            title.setAttribute('role', 'button');
+            title.title = '点击重命名会话';
+            const beginRename = () => startTitleEditor(model, model.title || '');
+            title.addEventListener('click', beginRename);
+            title.addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                beginRename();
+            });
+        }
+        const statusChip = node('span', 'agent-chat-status-chip', undefined, document);
+        statusChip.append(
+            node('span', 'agent-chat-status-label', model.statusLabel || model.stateLabel || model.state || '', document),
+            ...(model.statusStartedAt || model.statusElapsedMs != null
+                ? [node('span', 'agent-chat-status-elapsed', '', document)] : []),
+        );
         statusChip.dataset.state = model.state || 'idle';
         statusChip.setAttribute('role', 'status');
         statusChip.setAttribute('aria-live', 'polite');
@@ -46,7 +164,7 @@ function createAgentWorkbenchHeaderView({ element, document = globalThis.documen
                 event.preventDefault();
                 reconnect();
             });
-        } else statusChip.title = '当前运行状态';
+        } else statusChip.title = model.statusElapsedMs != null ? '本次任务耗时' : '当前运行状态';
 
         const controls = node('div', 'chat-actions agent-chat-header-actions', undefined, document);
         const activityButton = iconButton(
@@ -104,9 +222,11 @@ function createAgentWorkbenchHeaderView({ element, document = globalThis.documen
         controls.append(activityButton, ...(queueButton ? [queueButton] : []), usageButton, compact);
         element.append(title, statusChip, controls);
         if (model.queuePanel) element.append(model.queuePanel);
+        updateStatusText();
+        if (model.statusStartedAt) statusTimer = setInterval(updateStatusText, 1000);
     }
 
-    return { element, update, dispose() { element.replaceChildren(); } };
+    return { element, update, dispose() { if (statusTimer) clearInterval(statusTimer); element.replaceChildren(); } };
 }
 
 export { createAgentWorkbenchHeaderView };

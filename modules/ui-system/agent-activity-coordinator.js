@@ -6,6 +6,78 @@ function normalizeDockKind(tab) {
     return ({ usage: 'context', workspace: 'files', activity: 'notifications' })[tab] || tab || 'context';
 }
 
+function renderActivityContent({ kind, content, current, definition, state, selectedSessionId, approvals,
+    activityReadonlyView, approvalView, notificationView, workspaceView, syncWorkspace,
+    createWorkspacePathRef, openPreview, run, queueMicrotask, disposed, node }) {
+    if (kind === 'connection') {
+        content.append(activityReadonlyView.buildConnection(current, deriveWorkbenchViewState(current)));
+        return;
+    }
+    if (kind === 'approvals') {
+        approvalView.update({
+            localApprovals: approvals.local,
+            backendApprovals: approvals.backend,
+            interactions: approvals.passive,
+        });
+        content.append(approvalView.element);
+        return;
+    }
+    if (kind === 'context') {
+        content.append(activityReadonlyView.buildUsage(current));
+        return;
+    }
+    if (kind === 'plan') {
+        content.append(activityReadonlyView.buildPlan(current));
+        return;
+    }
+    if (kind === 'changes') {
+        content.append(activityReadonlyView.buildChanges(current, {
+            sessionId: selectedSessionId(current),
+            workspaceRevision: state.workspaceBrowser.sessionId === selectedSessionId(current)
+                ? state.workspaceBrowser.workspaceRevision : '',
+        }));
+        return;
+    }
+    if (kind === 'files') {
+        workspaceView.update({ identity: syncWorkspace(current), browser: state.workspaceBrowser });
+        content.append(workspaceView.element);
+        return;
+    }
+    if (kind === 'file') {
+        syncWorkspace(current);
+        const ref = createWorkspacePathRef({
+            sessionId: definition.sessionId,
+            workspaceRevision: definition.workspaceRevision,
+            relativePath: definition.relativePath,
+            source: 'tree',
+        });
+        const preview = state.workspaceBrowser.preview;
+        const loaded = preview?.relativePath === definition.relativePath
+            && preview?.workspaceRevision === definition.workspaceRevision;
+        if (!loaded) {
+            content.append(node('div', 'agent-chat-activity-empty', '正在读取文件…'));
+            if (!state.workspaceBrowser.previewLoading && !disposed) {
+                queueMicrotask(() => { if (!disposed) run(() => openPreview(ref)); });
+            }
+        } else content.append(workspaceView.renderPreview(state.workspaceBrowser));
+        return;
+    }
+    notificationView.update(current);
+    content.append(notificationView.element);
+}
+
+function restoreActivityRenderState({ content, kind, openKeys, scrollTop, searchFocused, searchSelection }) {
+    for (const details of content.querySelectorAll('details[data-activity-key]')) {
+        if (openKeys.has(details.dataset.activityKey)) details.open = true;
+    }
+    const scrollTarget = kind === 'notifications' ? content.querySelector('.agent-chat-activity-list') : content;
+    if (scrollTarget) scrollTarget.scrollTop = scrollTop;
+    if (!searchFocused) return;
+    const nextSearch = content.querySelector('.agent-chat-activity-filters input[type="search"]');
+    nextSearch?.focus();
+    if (searchSelection) nextSearch?.setSelectionRange?.(...searchSelection);
+}
+
 function createAgentActivityCoordinator({
     state, store, document, node, refs, sessionDockView, activityReadonlyView,
     approvalView, notificationView, workspaceView, workspaceCoordinator,
@@ -168,50 +240,11 @@ function createAgentActivityCoordinator({
         content.replaceChildren();
         const definition = tabs.find((tab) => tab.id === state.activityTab) || tabs[0];
         const kind = definition?.kind || 'context';
-        if (kind === 'connection') content.append(activityReadonlyView.buildConnection(current, deriveWorkbenchViewState(current)));
-        else if (kind === 'approvals') {
-            approvalView.update({ localApprovals, backendApprovals, interactions: passiveInteractions });
-            content.append(approvalView.element);
-        }
-        else if (kind === 'context') content.append(activityReadonlyView.buildUsage(current));
-        else if (kind === 'plan') content.append(activityReadonlyView.buildPlan(current));
-        else if (kind === 'changes') content.append(activityReadonlyView.buildChanges(current, {
-            sessionId: selectedSessionId(current),
-            workspaceRevision: state.workspaceBrowser.sessionId === selectedSessionId(current)
-                ? state.workspaceBrowser.workspaceRevision : '',
-        }));
-        else if (kind === 'files') {
-            workspaceView.update({ identity: syncWorkspace(current), browser: state.workspaceBrowser });
-            content.append(workspaceView.element);
-        } else if (kind === 'file') {
-            syncWorkspace(current);
-            const ref = createWorkspacePathRef({
-                sessionId: definition.sessionId,
-                workspaceRevision: definition.workspaceRevision,
-                relativePath: definition.relativePath,
-                source: 'tree',
-            });
-            if (state.workspaceBrowser.preview?.relativePath !== definition.relativePath
-                || state.workspaceBrowser.preview?.workspaceRevision !== definition.workspaceRevision) {
-                content.append(node('div', 'agent-chat-activity-empty', '正在读取文件…'));
-                if (!state.workspaceBrowser.previewLoading) queueMicrotask(() => {
-                    if (!disposed) run(() => openPreview(ref));
-                });
-            } else content.append(workspaceView.renderPreview(state.workspaceBrowser));
-        } else {
-            notificationView.update(current);
-            content.append(notificationView.element);
-        }
-        for (const details of content.querySelectorAll('details[data-activity-key]')) {
-            if (openKeys.has(details.dataset.activityKey)) details.open = true;
-        }
-        const scrollTarget = kind === 'notifications' ? content.querySelector('.agent-chat-activity-list') : content;
-        if (scrollTarget) scrollTarget.scrollTop = scrollTop;
-        if (searchFocused) {
-            const nextSearch = content.querySelector('.agent-chat-activity-filters input[type="search"]');
-            nextSearch?.focus();
-            if (searchSelection) nextSearch?.setSelectionRange?.(...searchSelection);
-        }
+        renderActivityContent({ kind, content, current, definition, state, selectedSessionId,
+            approvals: { local: localApprovals, backend: backendApprovals, passive: passiveInteractions },
+            activityReadonlyView, approvalView, notificationView, workspaceView, syncWorkspace,
+            createWorkspacePathRef, openPreview, run, queueMicrotask, disposed, node });
+        restoreActivityRenderState({ content, kind, openKeys, scrollTop, searchFocused, searchSelection });
     }
 
     return Object.freeze({

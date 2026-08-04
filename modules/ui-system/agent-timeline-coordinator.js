@@ -6,6 +6,7 @@ export function createAgentTimelineCoordinator({
     state, store, controller, lifecycle, window, document, root, refs, rendererHost,
     blockPresentation, approvalRegistry, cssEscape, selectedAgentProfile, activeSession,
     selectedSessionKey, selectedTurnStart, run, notify, scrollFeed, isFollowingContainer, host,
+    queueRender,
 }) {
     let approvalTicker = null;
 
@@ -40,8 +41,43 @@ export function createAgentTimelineCoordinator({
     }
 
     async function forkAndSend(part, prompt, title) {
-        await controller.forkSession({ sessionId: sessionContext().sessionId, turnId: part.turnId, title });
-        if (prompt?.trim()) await controller.startTurn(prompt.trim(), []);
+        const text = String(prompt || '').trim();
+        if (!text) throw new Error('找不到可重试的用户消息内容');
+        const beforeTurnId = String(part?.turnId || '').trim();
+        if (!beforeTurnId) {
+            throw new Error('该消息缺少 Codex Turn 身份，不能安全地创建重试分支');
+        }
+        const fork = await controller.forkSession({
+            // A retry replaces the selected Turn. `lastTurnId` would copy the
+            // original user input and answer, then submit that input again.
+            // App Server 0.146 provides `beforeTurnId` for this exact case.
+            sessionId: sessionContext().sessionId, beforeTurnId, title,
+        });
+        const sessionId = String(fork?.sessionId || '').trim();
+        if (!sessionId) throw new Error('重试分支未返回新的 Session 身份');
+        const pending = {
+            sessionId, prompt: text, attachments: [], phase: 'starting', turnId: null,
+            startedAt: Date.now(), createdAt: Date.now(), source: 'message-retry',
+        };
+        state.turnStarts.set(sessionId, pending);
+        queueRender?.({ header: true, composer: true });
+        try {
+            const accepted = await controller.startTurn(text, []);
+            const current = state.turnStarts.get(sessionId);
+            if (current === pending) state.turnStarts.set(sessionId, {
+                ...current, phase: accepted?.turnId ? 'thinking' : 'starting',
+                turnId: accepted?.turnId || null,
+            });
+            if (accepted?.turnId && !state.turnStartedAt.has(accepted.turnId)) {
+                state.turnStartedAt.set(accepted.turnId, pending.startedAt);
+            }
+            queueRender?.({ header: true, feed: true, composer: true });
+            return accepted;
+        } catch (error) {
+            if (state.turnStarts.get(sessionId) === pending) state.turnStarts.delete(sessionId);
+            queueRender?.({ header: true, composer: true });
+            throw error;
+        }
     }
 
     const presentation = createAgentMessagePresentation({
@@ -59,8 +95,10 @@ export function createAgentTimelineCoordinator({
                 notify('已复制渲染后的文本。', 'success');
             },
             interrupt: ({ part }) => run(async () => {
-                await controller.cancelTurn();
-                notify(`已请求中止 ${part.turnId || '当前 Turn'}。`, 'success');
+                const result = await controller.cancelTurn(part.turnId);
+                notify(result?.state === 'requested'
+                    ? `已请求中止 ${part.turnId || '当前 Turn'}，等待 Codex 最终确认。`
+                    : `中止状态未确认：${result?.error || '请等待 Turn 终态事件。'}`, result?.state === 'requested' ? 'success' : 'warning');
             }),
             fork: ({ part }) => run(async () => {
                 await controller.forkSession({

@@ -183,9 +183,67 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        font-size: var(--vcp-ui-font-title);
-        font-weight: 600;
+        /* Keep the Agent session title visually identical to the main chat title. */
+        font-size: 1.08em;
+        font-weight: 500;
+        line-height: normal;
+        text-shadow: var(--panel-text-shadow);
         color: var(--vcp-ui-text-0);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-status-label,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-status-elapsed {
+        white-space: nowrap;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-status-elapsed {
+        color: var(--vcp-ui-text-2);
+        font-variant-numeric: tabular-nums;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-header .agent-chat-title.is-editable {
+        margin: -4px -6px;
+        padding: 4px 6px;
+        border-radius: var(--vcp-ui-radius-sm);
+        cursor: text;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-header .agent-chat-title.is-editable:hover {
+        background: var(--vcp-ui-fill-1);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-header .agent-chat-title.is-editable:focus-visible {
+        outline: 2px solid var(--vcp-ui-accent);
+        outline-offset: 2px;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-header .agent-chat-title-input {
+        flex: 0 1 auto;
+        width: clamp(92px, 12vw, 156px);
+        min-width: 0;
+        height: 24px;
+        margin: 0;
+        padding: 0 var(--vcp-ui-space-2);
+        border: 1px solid var(--vcp-ui-accent);
+        border-radius: var(--vcp-ui-radius-sm);
+        outline: none;
+        color: var(--vcp-ui-text-0);
+        background: var(--vcp-ui-bg-1);
+        font-family: inherit;
+        font-size: 1.08em;
+        font-weight: 500;
+        line-height: normal;
+        box-sizing: border-box;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-header .agent-chat-title-input:focus-visible {
+        border-color: var(--vcp-ui-accent);
+        outline: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-header .agent-chat-title-input[aria-invalid="true"] {
+        border-color: var(--vcp-ui-danger);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--vcp-ui-danger) 18%, transparent);
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-header-actions {
