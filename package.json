@@ -65,7 +65,7 @@
     "test:codex-reliability": "npm run test:codex-interaction-registry && npm run test:codex-projection-store && npm run test:codex-runtime-manager && npm run test:agent-config-apply && npm run test:agent-data-contracts && npm run test:agent-workspace-service && npm run test:agent-workbench-store",
     "test:electron-codex-session-switch": "node scripts/test-electron-codex-recovery.mjs",
     "test:electron-codex-recovery": "npm run test:electron-codex-session-switch && node scripts/test-electron-codex-degraded.mjs",
-    "check:codex-governance": "node scripts/check-codex-governance.mjs",
+    "check:codex-governance": "node scripts/check-codex-governance.mjs && node scripts/check-agent-debt-boundaries.mjs",
     "test:codex-toolbox-bridge": "node scripts/test-codex-toolbox-bridge.mjs",
     "test:codex-toolbox-ws-live": "node scripts/test-codex-toolbox-ws-live.mjs",
     "test:codex-toolbox-responses-adapter": "node scripts/test-codex-toolbox-responses-adapter.mjs",
