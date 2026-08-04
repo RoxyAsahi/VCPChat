@@ -44,7 +44,6 @@ const requiredFiles = [
     'modules/ui-system/agent-presentation/contract.js',
     'modules/ui-system/agent-presentation/renderer.js',
     'modules/ui-system/agent-presentation/fork/agent-renderer-markdown-pipeline.js',
-    'modules/ui-system/agent-presentation/fork/agent-renderer-markdown-stream.js',
     'modules/ui-system/agent-presentation/stream-batcher.js',
     'scripts/run-electron-node.mjs',
     'scripts/test-codex-nova-live.mjs',
