@@ -133,9 +133,10 @@ projector.projectNotification({
     } },
 });
 const reasoning = repository.readProjection('session_1').messages.find((message) => message.itemId === 'reason_1');
-assert.equal(reasoning.blocks[0].content.text, 'first summary',
-    'an empty completed reasoning item must not erase its streamed first block');
-assert.equal(reasoning.blocks[1].content.text, 'second summary', 'reasoning deltas may create later summary blocks');
+assert.deepEqual(reasoning.blocks[0].content.summary, ['first summary', 'second summary'],
+    'summaryIndex values must remain separate entries in one reasoning Block');
+assert.deepEqual(reasoning.blocks[0].content.content, [],
+    'reasoning content uses a separate array from summary parts');
 projector.projectNotification({
     method: 'item/started',
     params: {
@@ -253,6 +254,14 @@ const staleReconcile = projector.reconcileThread('session_1', {
 }, generationBeforeStaleRead);
 assert.equal(staleReconcile.applied, false, 'a stale thread/read must not mutate the SQLite projection');
 assert.ok(repository.readProjection('session_1').messages.some((message) => message.itemId === 'item_live'));
+assert.equal(projector.reconcileThread('session_1', {
+    id: 'wrong-thread', turns: [{ id: 'turn_1', itemsView: 'full', items: [] }],
+}).reason, 'thread-identity-mismatch');
+assert.equal(projector.reconcileThread('session_1', {
+    id: 'thr_1', turns: [{ id: 'turn_1', itemsView: 'summary', items: [] }],
+}).reason, 'partial-items-view');
+assert.ok(repository.readProjection('session_1').messages.some((message) => message.itemId === 'item_live'),
+    'summary/notLoaded thread/read payloads cannot delete durable Items');
 assert.equal(projector.projectNotification({
     method: 'item/agentMessage/delta',
     params: { threadId: 'thr_missing', itemId: 'item_1', delta: 'x' },

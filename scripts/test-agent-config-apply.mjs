@@ -101,6 +101,17 @@ transport.emit('notification', {
     method: 'thread/settings/updated',
     params: { threadId: 'thread-config' },
 });
+assert.notEqual(manager.readSessionConfig({ sessionId: topic.sessionId }).applyState, 'applied',
+    'an empty settings notification cannot confirm a target revision');
+transport.emit('notification', {
+    method: 'thread/settings/updated',
+    params: {
+        threadId: 'thread-config',
+        threadSettings: {
+            cwd: workspaceB, model: 'model-b', approvalPolicy: 'never', effort: 'high', personality: null,
+        },
+    },
+});
 const applied = manager.readSessionConfig({ sessionId: topic.sessionId });
 assert.equal(applied.applyState, 'applied');
 assert.equal(applied.appliedRuntimeConfigRevision, applied.configRevision);

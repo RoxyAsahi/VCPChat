@@ -27,23 +27,41 @@ class RuntimeEventService {
         const repository = this.context.repository();
         const durableSession = repository.getSession(session.sessionId) || session;
         const states = this.context.threadStates();
-        const previous = states.get(session.threadId) || { activity: 'idle', activeTurnId: null };
+        const previous = states.get(session.threadId) || {
+            activity: 'idle', activeTurnId: null, observedThreadStatus: 'idle',
+        };
         let next = previous;
         let completedTurnId = null;
         if (message.method === 'turn/started') {
-            next = { activity: 'running', activeTurnId: message.params?.turn?.id || null };
+            next = {
+                ...previous,
+                activity: 'running',
+                activeTurnId: message.params?.turn?.id || previous.activeTurnId || null,
+                observedThreadStatus: 'active',
+            };
         } else if (message.method === 'turn/completed') {
             const eventTurnId = String(message.params?.turn?.id || message.params?.turnId || '').trim();
             if (eventTurnId && previous.activeTurnId === eventTurnId) {
                 completedTurnId = eventTurnId;
-                next = { activity: 'idle', activeTurnId: null };
+                next = {
+                    ...previous,
+                    activity: 'idle',
+                    activeTurnId: null,
+                    observedThreadStatus: 'idle',
+                };
                 this.context.turnCancellationStates?.()?.delete(`${session.threadId}:${eventTurnId}`);
             }
         } else if (message.method === 'thread/status/changed') {
-            const active = message.params?.status?.type === 'active';
-            next = active
-                ? { ...previous, activity: 'running' }
-                : { ...previous, activity: 'idle', activeTurnId: null };
+            const statusType = String(message.params?.status?.type || 'unknown');
+            const active = statusType === 'active';
+            // Codex 0.146 may send idle before turn/completed. Status is an
+            // observation only; the matching turn/completed is the sole
+            // authority that clears activeTurnId and drains follow-ups.
+            next = {
+                ...previous,
+                activity: active || previous.activeTurnId ? 'running' : 'idle',
+                observedThreadStatus: statusType,
+            };
         }
         states.set(session.threadId, next);
         repository.saveSession({ ...durableSession, state: next.activity, updatedAt: Date.now() });

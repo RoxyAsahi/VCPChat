@@ -9,6 +9,7 @@ const {
     normalizeSessionConfig,
     normalizeApplyState,
 } = require('../dataContracts');
+const { normalizeProjectionSnapshot } = require('./v2');
 
 function parseJson(value, fallback) {
     try {
@@ -42,6 +43,10 @@ function upsertItemBlock(stmt, sessionId, record, block, existing, session, now,
     const ordinal = Number.isInteger(block.ordinal) ? block.ordinal : 0;
     const existingBlock = stmt.getBlock.get(existing.message_id, ordinal);
     const content = mergeStoredBlockContent(parseJson(existingBlock?.content_json, {}), block, options);
+    if (block.kind === 'reasoning') {
+        if (!Array.isArray(content.summary)) content.summary = [];
+        if (!Array.isArray(content.content)) content.content = [];
+    }
     stmt.upsertBlock.run({
         block_id: block.blockId || existingBlock?.block_id || `block:${sessionId}:${record.itemId}:${ordinal}`,
         message_id: existing.message_id,
@@ -501,16 +506,20 @@ class AgentProjectionRepository {
             blocks: this.stmt.listBlocks.all(row.message_id).map((block) => this._block(block)),
         }));
         const state = this.stmt.getState.get(sessionId);
-        return {
+        const result = {
             session,
             messages,
+            projectionRevision: Number(state?.mutation_generation || 0),
             storage: { readOnly: this.readOnly, degradedReason: this.degradedReason },
             projection: state ? {
                 lastReconciledAt: state.last_reconciled_at,
                 lastError: state.last_error,
                 activity: parseJson(state.activity_json, {}),
+                mutationGeneration: Number(state.mutation_generation || 0),
             } : null,
         };
+        result.normalized = normalizeProjectionSnapshot(result);
+        return result;
     }
 
     getProjectedMessageByItem(sessionId, itemId) {
@@ -627,6 +636,57 @@ class AgentProjectionRepository {
             updated_at: Date.now(),
         });
         this.stmt.advanceGeneration.run({ session_id: sessionId, now: Date.now() });
+    }
+
+    ensureReasoningPart(sessionId, itemId, field, index) {
+        if (!['summary', 'content'].includes(field) || !Number.isInteger(index) || index < 0) return false;
+        const message = this.stmt.getMessageByItem.get(sessionId, itemId);
+        if (!message) return false;
+        const block = this.stmt.getBlock.get(message.message_id, 0);
+        const content = block ? parseJson(block.content_json, {}) : { summary: [], content: [] };
+        const values = Array.isArray(content[field]) ? [...content[field]] : [];
+        while (values.length <= index) values.push('');
+        content[field] = values;
+        this.stmt.upsertBlock.run({
+            block_id: block?.block_id || `block:${sessionId}:${itemId}:0`,
+            message_id: message.message_id,
+            kind: 'reasoning',
+            status: block?.status || 'inProgress',
+            ordinal: 0,
+            content_json: json(content),
+            content_schema_version: BLOCK_CONTENT_SCHEMA_VERSION,
+            authority: block?.authority || 'codex',
+            created_at: block?.created_at || Date.now(),
+            updated_at: Date.now(),
+        });
+        this.stmt.advanceGeneration.run({ session_id: sessionId, now: Date.now() });
+        return true;
+    }
+
+    appendReasoningText(sessionId, itemId, field, index, delta) {
+        if (!['summary', 'content'].includes(field) || !Number.isInteger(index) || index < 0) return false;
+        const message = this.stmt.getMessageByItem.get(sessionId, itemId);
+        if (!message) return false;
+        const block = this.stmt.getBlock.get(message.message_id, 0);
+        const content = block ? parseJson(block.content_json, {}) : { summary: [], content: [] };
+        const values = Array.isArray(content[field]) ? [...content[field]] : [];
+        while (values.length <= index) values.push('');
+        values[index] = `${values[index] || ''}${String(delta || '')}`;
+        content[field] = values;
+        this.stmt.upsertBlock.run({
+            block_id: block?.block_id || `block:${sessionId}:${itemId}:0`,
+            message_id: message.message_id,
+            kind: 'reasoning',
+            status: block?.status || 'inProgress',
+            ordinal: 0,
+            content_json: json(content),
+            content_schema_version: BLOCK_CONTENT_SCHEMA_VERSION,
+            authority: block?.authority || 'codex',
+            created_at: block?.created_at || Date.now(),
+            updated_at: Date.now(),
+        });
+        this.stmt.advanceGeneration.run({ session_id: sessionId, now: Date.now() });
+        return true;
     }
 
     markReconciled(sessionId) {

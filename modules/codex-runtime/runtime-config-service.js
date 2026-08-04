@@ -391,6 +391,15 @@ class RuntimeConfigService {
                     sessionId: idValue,
                     revision: session.configRevision,
                     snapshot: desired,
+                    settings: {
+                        cwd: session.workspaceRoot || undefined,
+                        model: desired.model || undefined,
+                        approvalPolicy: normalizeApproval(desired.permissionMode, desired.approvalPolicy),
+                        effort: desired.reasoningEffort || null,
+                        personality: desired.instructionMode === 'codex-managed'
+                            && desired.personality && desired.personality !== 'none'
+                            ? desired.personality : null,
+                    },
                     runtimeGeneration: this.context.runtimeGeneration(),
                 });
                 await this.context.transport().request('thread/settings/update', threadSettingsPatch(session, desired));

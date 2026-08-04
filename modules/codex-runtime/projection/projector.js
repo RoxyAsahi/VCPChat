@@ -3,6 +3,7 @@
 const { StreamingAccumulatorRegistry } = require('../streamingAccumulator');
 const { normalizeCodexFileChanges } = require('../diffModel');
 const { projectVcpContent } = require('../vcpContentProjection');
+const { sanitizeUnknownItem } = require('./v2');
 
 const ITEM_KIND = Object.freeze({
     userMessage: ['user', 'message'],
@@ -23,7 +24,10 @@ function itemContent(item) {
     switch (item.type) {
         case 'userMessage': return { parts: item.content || [] };
         case 'agentMessage': return projectVcpContent(item.text || '');
-        case 'reasoning': return { summary: item.summary || [], content: item.content || [] };
+        case 'reasoning': return {
+            summary: Array.isArray(item.summary) ? item.summary : [],
+            content: Array.isArray(item.content) ? item.content : [],
+        };
         case 'plan': return { text: item.text || '' };
         case 'contextCompaction': {
             const hasSummary = Object.prototype.hasOwnProperty.call(item, 'summary');
@@ -38,7 +42,7 @@ function itemContent(item) {
             return { text: summary, phase: hasStatus ? item.status : 'inProgress' };
         }
         case 'fileChange': return { changes: normalizeCodexFileChanges(item.changes), status: item.status || 'inProgress' };
-        default: return { item };
+        default: return { unknown: sanitizeUnknownItem(item) };
     }
 }
 
@@ -46,6 +50,7 @@ class CodexProjectionProjector {
     constructor(repository) {
         this.repository = repository;
         this.streaming = new StreamingAccumulatorRegistry();
+        this.pendingDeltas = new Map();
     }
 
     projectNotification(message) {
@@ -67,11 +72,14 @@ class CodexProjectionProjector {
         if (method === 'item/commandExecution/outputDelta') {
             return this._append(params, 0, params.delta, 'tool');
         }
-        if (method === 'item/reasoning/summaryTextDelta' || method === 'item/reasoning/textDelta') {
-            const ordinal = Number.isInteger(params.summaryIndex)
-                ? params.summaryIndex
-                : (Number.isInteger(params.contentIndex) ? params.contentIndex : 0);
-            return this._append(params, ordinal, params.delta, 'reasoning');
+        if (method === 'item/reasoning/summaryPartAdded') {
+            return this._ensureReasoningPart(params, 'summary', params.summaryIndex);
+        }
+        if (method === 'item/reasoning/summaryTextDelta') {
+            return this._appendReasoning(params, 'summary', params.summaryIndex, params.delta);
+        }
+        if (method === 'item/reasoning/textDelta') {
+            return this._appendReasoning(params, 'content', params.contentIndex, params.delta);
         }
         if (method === 'turn/completed') {
             const session = this.repository.getSessionByThread(params.threadId);
@@ -82,8 +90,15 @@ class CodexProjectionProjector {
     }
 
     reconcileThread(sessionId, thread, expectedGeneration = undefined) {
+        const session = this.repository.getSession(sessionId);
+        if (!session || !thread || String(thread.id || '').trim() !== String(session.threadId || '').trim()) {
+            return { applied: false, reason: 'thread-identity-mismatch' };
+        }
+        const turns = Array.isArray(thread.turns) ? thread.turns : [];
+        const hasPartialItems = turns.some((turn) => turn && turn.itemsView && turn.itemsView !== 'full');
+        if (hasPartialItems) return { applied: false, reason: 'partial-items-view' };
         const entries = [];
-        for (const turn of thread?.turns || []) {
+        for (const turn of turns) {
             for (const item of turn.items || []) {
                 const entry = this._itemEntry(
                     { threadId: thread.id, turnId: turn.id, item },
@@ -101,6 +116,7 @@ class CodexProjectionProjector {
         const entry = this._itemEntry(params, completed, knownSessionId);
         if (!entry) return false;
         this.repository.upsertItem(entry.sessionId, entry.record, entry.blocks || entry.block);
+        this._replayBuffered(params.threadId, params.item.id, entry.sessionId);
         if (!completed && entry.itemText !== undefined) {
             this.streaming.seed(this._streamKey(params.threadId, params.item.id, 0, entry.block.kind), entry.itemText);
         }
@@ -159,15 +175,75 @@ class CodexProjectionProjector {
 
     _append(params, ordinal, delta, kind) {
         const session = this.repository.getSessionByThread(params.threadId);
-        if (!session || !params.itemId) return false;
+        if (!params.itemId) return false;
+        if (!session) return false;
         try {
             const novel = this.streaming.append(this._streamKey(params.threadId, params.itemId, ordinal, kind), delta);
-            if (novel) this.repository.appendBlockText(session.sessionId, params.itemId, ordinal, novel, kind);
+            if (!novel) return true;
+            if (!this.repository.getProjectedMessageByItem(session.sessionId, params.itemId)) {
+                this._bufferDelta(params, { field: 'text', index: ordinal, delta: novel, kind });
+                return true;
+            }
+            this.repository.appendBlockText(session.sessionId, params.itemId, ordinal, novel, kind);
             return true;
         } catch (_error) {
             return false;
         }
     }
+
+    _ensureReasoningPart(params, field, index) {
+        const session = this.repository.getSessionByThread(params.threadId);
+        if (!params.itemId || !Number.isInteger(index) || index < 0) return false;
+        if (!session) return false;
+        return this.repository.ensureReasoningPart(session.sessionId, params.itemId, field, index);
+    }
+
+    _appendReasoning(params, field, index, delta) {
+        const session = this.repository.getSessionByThread(params.threadId);
+        if (!params.itemId || !Number.isInteger(index) || index < 0) return false;
+        if (!session) return false;
+        try {
+            const novel = this.streaming.append(
+                this._streamKey(params.threadId, params.itemId, `${field}:${index}`, 'reasoning'), delta,
+            );
+            if (!novel) return true;
+            const applied = this.repository.appendReasoningText(session.sessionId, params.itemId, field, index, novel);
+            if (!applied) this._bufferDelta(params, { field, index, delta: novel, kind: 'reasoning' });
+            return true;
+        } catch (_error) {
+            return false;
+        }
+    }
+
+    _bufferDelta(params, delta) {
+        const key = this._deltaKey(params.threadId, params.itemId);
+        const list = this.pendingDeltas.get(key) || [];
+        if (list.length >= 32 || list.reduce((sum, entry) => sum + String(entry.delta || '').length, 0) > 64_000) return false;
+        list.push({ ...delta, receivedAt: Date.now() });
+        this.pendingDeltas.set(key, list);
+        return true;
+    }
+
+    _replayBuffered(threadId, itemId, sessionId) {
+        const key = this._deltaKey(threadId, itemId);
+        const list = this.pendingDeltas.get(key);
+        if (!list?.length) return;
+        this.pendingDeltas.delete(key);
+        for (const entry of list) {
+            if (entry.kind === 'reasoning') {
+                if (entry.delta) this.appendReasoningTextSafely(sessionId, itemId, entry.field, entry.index, entry.delta);
+                else this.repository.ensureReasoningPart(sessionId, itemId, entry.field, entry.index);
+            } else if (entry.delta) {
+                this.repository.appendBlockText(sessionId, itemId, entry.index, entry.delta, entry.kind);
+            }
+        }
+    }
+
+    appendReasoningTextSafely(sessionId, itemId, field, index, delta) {
+        return this.repository.appendReasoningText(sessionId, itemId, field, index, delta);
+    }
+
+    _deltaKey(threadId, itemId) { return `${String(threadId || '')}:${String(itemId || '')}`; }
 
     _streamKey(threadId, itemId, ordinal, kind) {
         return `${kind}:${threadId || ''}:${itemId || ''}:${ordinal}`;

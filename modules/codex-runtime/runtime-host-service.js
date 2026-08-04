@@ -11,11 +11,28 @@ const {
     serializeError,
     toolboxConfigFingerprint,
 } = require('./runtime-normalizers');
+const { normalizeTimelineBlock } = require('./projection/v2');
 
 function applySettingsNotification(context, repository, session, message) {
     if (message.method !== 'thread/settings/updated' || !session) return;
     const target = context.configApplyTargets().get(session.threadId);
     if (!target || target.runtimeGeneration !== context.runtimeGeneration()) return;
+    const settings = message.params?.threadSettings || message.params?.thread_settings;
+    if (!settings || String(message.params?.threadId || '').trim() !== session.threadId) return;
+    const expected = target.settings || {};
+    const actual = {
+        cwd: settings.cwd,
+        model: settings.model,
+        approvalPolicy: settings.approvalPolicy,
+        effort: settings.effort ?? null,
+        personality: settings.personality ?? null,
+    };
+    const matches = actual.cwd === expected.cwd
+        && actual.model === expected.model
+        && actual.approvalPolicy === expected.approvalPolicy
+        && actual.effort === (expected.effort ?? null)
+        && actual.personality === (expected.personality ?? null);
+    if (!matches) return;
     const applied = repository.markSessionConfigApplied(target.sessionId, target.revision, target.snapshot);
     context.configApplyTargets().delete(session.threadId);
     if (applied?.appliedRuntimeConfigRevision === target.revision) {
@@ -23,14 +40,14 @@ function applySettingsNotification(context, repository, session, message) {
     }
 }
 
-function notificationEvent(context, message, projected, session, threadId, itemId, projectionMessage) {
+function notificationEvent(context, message, projected, session, threadId, itemId, projectionMessage, projectionPatch) {
     if (!session) return { runtime: 'codex', ...message };
     return {
         runtime: 'codex', type: 'projection.updated', method: message.method,
         sessionId: session.sessionId, threadId,
         turnId: message?.params?.turnId || message?.params?.turn?.id || null,
         turnStatus: message?.params?.turn?.status || null,
-        itemId, projectionMessage,
+        itemId, projectionMessage, projectionPatch,
         activity: context.threadStates().get(threadId)?.activity || 'idle',
     };
 }
@@ -321,16 +338,33 @@ class RuntimeHostService {
 
     handleNotification(message) {
         const repository = this.context.repository();
+        const threadId = message?.params?.threadId || message?.params?.thread?.id || null;
+        const sessionBefore = threadId ? repository?.getSessionByThread(threadId) : null;
+        const baseProjectionRevision = sessionBefore
+            ? repository.projectionGeneration(sessionBefore.sessionId) : 0;
         const projected = this.context.projector()?.projectNotification(message);
         this.observeCompactionNotification(message);
-        const threadId = message?.params?.threadId || message?.params?.thread?.id || null;
         const session = threadId ? repository?.getSessionByThread(threadId) : null;
         applySettingsNotification(this.context, repository, session, message);
         this.context.updateThreadState(message, session);
         const itemId = notificationItemId(message);
         const projectionMessage = projected && session && itemId
             ? repository.getProjectedMessageByItem(session.sessionId, itemId) : null;
-        const event = notificationEvent(this.context, message, projected, session, threadId, itemId, projectionMessage);
+        const projectionRevision = session ? repository.projectionGeneration(session.sessionId) : baseProjectionRevision;
+        const projectionPatch = projectionMessage && projectionRevision > baseProjectionRevision
+            ? {
+                schemaVersion: 1,
+                sessionId: session.sessionId,
+                threadId,
+                runtimeGeneration: this.context.runtimeGeneration(),
+                baseProjectionRevision,
+                projectionRevision,
+                upsertBlocks: projectionMessage.blocks.map((block) => normalizeTimelineBlock({
+                    sessionId: session.sessionId, threadId, message: projectionMessage, block,
+                })),
+                deleteBlockIds: [],
+            } : null;
+        const event = notificationEvent(this.context, message, projected, session, threadId, itemId, projectionMessage, projectionPatch);
         this.context.sendEvent(event);
     }
 
