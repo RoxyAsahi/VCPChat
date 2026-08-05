@@ -82,7 +82,8 @@ function reduceAgentSessionUiState(state, event) {
         case 'turn.started': next.state = 'streaming'; next.turnId = event.turnId || record.turnId; break;
         case 'turn.interrupting': next.state = 'interrupting'; break;
         case 'turn.completed': next.state = 'completed'; next.turnId = null; next.pendingInteractionId = null; break;
-        case 'turn.interrupted': next.state = 'interrupted'; next.turnId = null; next.pendingInteractionId = null; break;
+        case 'turn.interrupted':
+        case 'turn.cancelled': next.state = 'interrupted'; next.turnId = null; next.pendingInteractionId = null; break;
         case 'turn.failed': next.state = 'error'; next.turnId = null; next.pendingInteractionId = null; break;
         case 'runtime.reconnecting': next.state = 'reconnecting'; break;
         case 'session.orphaned': next.state = 'orphaned'; next.turnId = null; next.pendingInteractionId = null; break;

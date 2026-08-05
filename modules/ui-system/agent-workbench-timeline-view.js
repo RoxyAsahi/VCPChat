@@ -30,11 +30,22 @@ export function createAgentWorkbenchTimelineView({ refs, rows, callbacks, action
         const timeline = createAgentTimelineParts(current);
         const pending = model.pendingTurnStart;
         if (pending) {
-            const alreadyHasAssistant = pending.turnId && current.messages.some((message) => (
-                message.role === 'assistant' && message.turnId === pending.turnId
-            ));
+            const alreadyHasAssistant = pending.turnId && current.messages.some((message) => {
+                const content = typeof message.content === 'string' ? message.content.trim() : '';
+                const reasoning = typeof message.reasoning === 'string' ? message.reasoning.trim() : '';
+                return message.role === 'assistant' && message.turnId === pending.turnId
+                    && Boolean(content || reasoning || message.attachments?.length);
+            });
             if (model.selectedSessionId && pending.sessionId === model.selectedSessionId && !alreadyHasAssistant) {
                 const id = `turn-start:${model.selectedSessionId}`;
+                const terminal = ['failed', 'interrupted', 'empty'].includes(pending.phase);
+                const labels = {
+                    starting: '正在启动 Agent…',
+                    thinking: '思考中',
+                    failed: pending.detail || '任务执行失败。',
+                    interrupted: pending.detail || '任务已停止。',
+                    empty: pending.detail || '任务已结束，但没有返回可显示内容。',
+                };
                 timeline.push({
                     kind: 'message',
                     id,
@@ -43,8 +54,8 @@ export function createAgentWorkbenchTimelineView({ refs, rows, callbacks, action
                     value: {
                         id,
                         role: 'assistant',
-                        state: 'streaming',
-                        content: pending.phase === 'starting' ? '正在启动 Agent…' : '思考中',
+                        state: terminal ? 'complete' : 'streaming',
+                        content: labels[pending.phase] || labels.thinking,
                         presentationRole: 'turn-start',
                         presentationKey: id,
                         presentationPhase: pending.phase,

@@ -90,27 +90,36 @@ function syncDeliveryState(row, message) {
 
 function syncEphemeralTurnState(row, message) {
     const ephemeral = message.presentationRole === 'turn-start';
-    row.classList.toggle('agent-chat-turn-starting', ephemeral);
-    row.classList.toggle('thinking', ephemeral);
+    const active = ephemeral && ['starting', 'thinking'].includes(message.presentationPhase);
+    row.classList.toggle('agent-chat-turn-starting', active);
+    row.classList.toggle('agent-chat-turn-terminal', ephemeral && !active);
+    row.classList.toggle('thinking', active);
     if (!ephemeral) {
         row.removeAttribute('aria-live');
+        row.removeAttribute('role');
+        delete row.dataset.agentEphemeral;
+        delete row.dataset.agentTurnPhase;
         return;
     }
     row.setAttribute('aria-live', 'polite');
-    row.dataset.agentEphemeral = 'turn-starting';
+    row.setAttribute('role', message.presentationPhase === 'failed' ? 'alert' : 'status');
+    row.dataset.agentEphemeral = active ? 'turn-starting' : 'turn-terminal';
+    row.dataset.agentTurnPhase = message.presentationPhase || 'thinking';
     const content = row.querySelector('.md-content');
     if (!content) return;
-    const label = message.presentationPhase === 'starting' ? '正在启动 Agent…' : '思考中';
+    const label = String(message.content || (message.presentationPhase === 'starting' ? '正在启动 Agent…' : '思考中'));
     content.dataset.agentSourceText = label;
     delete content.__agentMarkdownProjection;
     content.replaceChildren();
     const indicator = row.ownerDocument.createElement('span');
     indicator.className = 'thinking-indicator';
     indicator.append(row.ownerDocument.createTextNode(label));
-    const dots = row.ownerDocument.createElement('span');
-    dots.className = 'thinking-indicator-dots';
-    dots.textContent = '...';
-    indicator.append(dots);
+    if (active) {
+        const dots = row.ownerDocument.createElement('span');
+        dots.className = 'thinking-indicator-dots';
+        dots.textContent = '...';
+        indicator.append(dots);
+    }
     content.append(indicator);
 }
 

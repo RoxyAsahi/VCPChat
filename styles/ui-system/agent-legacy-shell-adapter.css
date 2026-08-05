@@ -415,6 +415,20 @@ html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .message-attachment-vide
         animation: none;
     }
 }
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-turn-terminal {
+    animation: none;
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-turn-terminal .thinking-indicator {
+    display: inline-flex;
+    align-items: center;
+    color: var(--vcp-ui-text-2);
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-turn-terminal[data-agent-turn-phase="failed"] .thinking-indicator {
+    color: var(--vcp-ui-danger);
+}
+html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-turn-terminal[data-agent-turn-phase="interrupted"] .thinking-indicator {
+    color: var(--vcp-ui-warning);
+}
 
 /* Build is mounted inside an internal-app host rather than the document-level
  * chat shell. Reassert the same flex shrink contract at every boundary so a

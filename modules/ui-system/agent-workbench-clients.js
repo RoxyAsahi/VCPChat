@@ -4,7 +4,9 @@ const CLIENT_METHODS = Object.freeze({
         'agentSessionRename', 'agentSessionArchive', 'agentSessionRestore', 'agentSessionDelete', 'agentSessionFork',
         'agentRuntimeEnsureSessionRuntime', 'agentRuntimeSetSessionPinned', 'agentRuntimeCompactSession',
         'agentRuntimeExportSession', 'agentRuntimeApplyAgentProfile', 'agentRuntimeSelectAttachments',
-        'agentRuntimeUpdateSessionConfig', 'agentRuntimeListAgentProfiles', 'agentRuntimeSaveAgentProfile',
+        'agentRuntimeReadSessionConfig', 'agentRuntimeUpdateSessionConfig', 'agentRuntimeReapplySessionConfig',
+        'agentRuntimeReadSessionDiagnostics',
+        'agentRuntimeListAgentProfiles', 'agentRuntimeSaveAgentProfile',
         'agentRuntimeSaveAgentAvatar', 'getCachedModels',
     ]),
     projection: Object.freeze([

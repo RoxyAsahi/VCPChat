@@ -1,5 +1,5 @@
-import * as contentProcessor from '../../../renderer/contentProcessor.js';
-import * as emoticonUrlFixer from '../../../renderer/emoticonUrlFixer.js';
+import * as contentProcessor from './agent-renderer-content-utils.js';
+import * as emoticonUrlFixer from './agent-renderer-emoticons.js';
 import {
     createAgentRendererMarkdownPipeline,
     createAgentRendererScopedHtml,

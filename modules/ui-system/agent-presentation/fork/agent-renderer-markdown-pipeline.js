@@ -1,4 +1,4 @@
-import { createContentPipeline, PIPELINE_MODES } from '../../../renderer/contentPipeline.js';
+import { createAgentContentPipeline, PIPELINE_MODES } from './agent-renderer-content-pipeline.js';
 import { protectLatexBlocks, restoreLatexBlocks } from './agent-renderer-latex.js';
 
 function createAgentRendererHtmlCache({
@@ -81,7 +81,7 @@ function createAgentRendererMarkdownPipeline(options) {
     }
 
     function initialize() {
-        pipeline = createContentPipeline({
+        pipeline = createAgentContentPipeline({
             escapeHtml: options.escapeHtml,
             processStartEndMarkers: options.processStartEndMarkers,
             fixEmoticonUrlsInMarkdown: fixEmoticonUrls,

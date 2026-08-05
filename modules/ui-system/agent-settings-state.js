@@ -1,4 +1,5 @@
 import { createWorkbenchLifecycle } from './agent-workbench-lifecycle.js';
+import { normalizeDiagnosticError } from './agent-config-diagnostics.js';
 
 const DEFAULT_DELAY_MS = 500;
 
@@ -78,6 +79,8 @@ export function createAgentSettingsState({ delayMs = DEFAULT_DELAY_MS, lifecycle
                 target.statuses.set(field, {
                     state: conflict ? 'conflict' : 'error',
                     message: error?.message || String(error),
+                    error: normalizeDiagnosticError(error, conflict
+                        ? 'SESSION_CONFIG_CONFLICT' : 'SETTINGS_SAVE_ERROR'),
                 });
             }
             throw error;

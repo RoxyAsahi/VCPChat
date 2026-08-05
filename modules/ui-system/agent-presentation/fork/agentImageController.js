@@ -1,4 +1,4 @@
-import { fixEmoticonUrl } from '../../../renderer/emoticonUrlFixer.js';
+import { fixEmoticonUrl } from './agent-renderer-emoticons.js';
 
 function createAgentImageController({ document, electronAPI }) {
     let disposed = false;

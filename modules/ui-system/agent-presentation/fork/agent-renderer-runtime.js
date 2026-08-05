@@ -1,8 +1,8 @@
 // Agent renderer composition root. Source receipt: ./FORK_RECEIPT.md.
 // Stateful helpers are instance-owned and wired here; feature behavior belongs
 // to the responsibility modules in this directory.
-import { avatarColorCache, getDominantAvatarColor } from '../../../renderer/colorUtils.js';
-import * as contentProcessor from '../../../renderer/contentProcessor.js';
+import { getDominantAvatarColor } from './agent-renderer-color.js';
+import * as contentProcessor from './agent-renderer-content-utils.js';
 import { createAgentImageController } from './agentImageController.js';
 import { createAgentVisibilityController } from './agentVisibilityController.js';
 import { createAgentAnimationLifecycle } from './agentAnimationLifecycle.js';

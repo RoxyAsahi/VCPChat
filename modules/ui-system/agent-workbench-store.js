@@ -190,12 +190,17 @@ function deriveWorkbenchViewState(state = {}) {
 
     if (runtime.state === 'failed') return 'error';
     if (state.recovering || runtime.state === 'degraded') return 'reconnecting';
+    if (runtimeRecoveryUnconfirmed(selectedRuntime)) return 'reconnecting';
     if ((runtime.state === 'unknown' || runtime.state === 'stopped') && !hasIdlePreview) return 'disconnected';
     if (!hasSession && !hasIdlePreview) return 'disconnected';
     if (hasApproval) return 'awaiting-approval';
     if (hasTurn) return 'running';
     if (selectedRuntime?.state && !['created', 'ready', 'idle'].includes(selectedRuntime.state)) return 'starting';
     return 'idle';
+}
+
+function runtimeRecoveryUnconfirmed(runtime) {
+    return runtime?.recoveryState === 'unconfirmed' || runtime?.activity === 'unknown';
 }
 
 export {

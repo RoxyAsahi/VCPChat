@@ -1,0 +1,296 @@
+@layer vcp-ui.components {
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-settings-advanced,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-diagnostics {
+        display: grid;
+        gap: var(--vcp-ui-space-3);
+        min-width: 0;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-diagnostics {
+        padding: var(--vcp-ui-space-3);
+        border-radius: var(--vcp-ui-radius-sm);
+        background: var(--vcp-ui-surface-2);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-health {
+        display: grid;
+        gap: 4px;
+        min-width: 0;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-health-heading {
+        display: grid;
+        align-items: start;
+        justify-items: start;
+        gap: var(--vcp-ui-space-2);
+        min-width: 0;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-health-title {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        color: var(--vcp-ui-text-0);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-health-title strong {
+        min-width: 0;
+        line-height: 1.4;
+        white-space: normal;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-health-title .material-symbols-rounded {
+        flex: 0 0 auto;
+        font-size: var(--vcp-ui-icon-sm);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-health.is-success .agent-chat-config-health-title {
+        color: var(--vcp-ui-success);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-health.is-warning .agent-chat-config-health-title {
+        color: var(--vcp-ui-warning);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-health.is-error .agent-chat-config-health-title {
+        color: var(--vcp-ui-danger);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-state {
+        justify-self: start;
+        flex: 0 0 auto;
+        max-width: 100%;
+        padding: 2px 7px;
+        overflow: hidden;
+        border-radius: 999px;
+        color: var(--vcp-ui-text-1);
+        background: var(--vcp-ui-surface-3);
+        font-size: var(--vcp-ui-font-caption);
+        line-height: 1.4;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-state.is-applied,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-in-sync {
+        color: var(--vcp-ui-success);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-state:is(.is-pending, .is-applying) {
+        color: var(--vcp-ui-warning);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-state.is-error {
+        color: var(--vcp-ui-danger);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-diagnostic-differences,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-difference-list,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-diagnostic-errors,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-diagnostic-request,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-diagnostic-details-content {
+        display: grid;
+        gap: var(--vcp-ui-space-2);
+        min-width: 0;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-difference,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-diagnostic-error {
+        display: grid;
+        gap: 5px;
+        min-width: 0;
+        padding: var(--vcp-ui-space-2);
+        border-radius: var(--vcp-ui-radius-sm);
+        background: var(--vcp-ui-bg-1);
+        font-size: var(--vcp-ui-font-caption);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-difference span {
+        min-width: 0;
+        overflow: hidden;
+        color: var(--vcp-ui-text-2);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-error-header {
+        display: grid;
+        justify-items: start;
+        gap: 3px;
+        min-width: 0;
+        color: var(--vcp-ui-danger);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-error-header code {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
+        color: inherit;
+        font-size: var(--vcp-ui-font-caption);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-error-message,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-diagnostic-error pre {
+        min-width: 0;
+        max-width: 100%;
+        margin: 0;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-error-details {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-error-guidance {
+        display: grid;
+        grid-template-columns: 42px minmax(0, 1fr);
+        gap: 6px;
+        min-width: 0;
+        color: var(--vcp-ui-text-2);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-error-guidance strong {
+        color: var(--vcp-ui-text-1);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-error-details summary,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-diagnostic-details > summary {
+        cursor: pointer;
+        color: var(--vcp-ui-text-1);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-diagnostic-details {
+        min-width: 0;
+        padding-top: var(--vcp-ui-space-2);
+        border-top: 1px solid var(--vcp-ui-border-subtle);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-diagnostic-details > summary > span {
+        display: grid;
+        gap: 2px;
+        min-width: 0;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-diagnostic-details > summary small {
+        overflow: hidden;
+        color: var(--vcp-ui-text-3);
+        font-size: var(--vcp-ui-font-caption);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-diagnostic-details[open] > summary {
+        margin-bottom: var(--vcp-ui-space-2);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-diagnostic-grid {
+        display: grid;
+        gap: 5px;
+        min-width: 0;
+        margin: 0;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-diagnostic-row {
+        display: grid;
+        grid-template-columns: 68px minmax(0, 1fr);
+        gap: var(--vcp-ui-space-2);
+        min-width: 0;
+        font-size: var(--vcp-ui-font-caption);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-diagnostic-row dt {
+        overflow: hidden;
+        color: var(--vcp-ui-text-2);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-diagnostic-row dd {
+        min-width: 0;
+        margin: 0;
+        overflow: hidden;
+        color: var(--vcp-ui-text-0);
+        direction: ltr;
+        text-align: start;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        word-break: normal;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-diagnostic-request {
+        padding: var(--vcp-ui-space-2);
+        border-radius: var(--vcp-ui-radius-sm);
+        background: var(--vcp-ui-bg-1);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-diagnostic-actions {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--vcp-ui-space-2);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-diagnostic-actions button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        min-width: 0;
+        padding-inline: var(--vcp-ui-space-2);
+        white-space: nowrap;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-diagnostic-actions .agent-chat-config-copy {
+        grid-column: auto;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-config-diagnostic-actions .material-symbols-rounded {
+        flex: 0 0 auto;
+        font-size: var(--vcp-ui-icon-sm);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-settings-budget {
+        display: grid;
+        gap: var(--vcp-ui-space-2);
+        padding-top: var(--vcp-ui-space-3);
+        border-top: 1px solid var(--vcp-ui-border-subtle);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-settings-section-heading,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-settings-section-heading > div {
+        display: grid;
+        gap: 3px;
+        min-width: 0;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-settings-budget-fields,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-recovery-actions {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--vcp-ui-space-2);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-recovery-content {
+        display: grid;
+        gap: var(--vcp-ui-space-2);
+        min-width: 0;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-recovery-operation {
+        min-width: 0;
+    }
+
+    @media (min-width: 1180px) {
+        html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-settings-section-heading {
+            grid-template-columns: minmax(0, 1fr);
+        }
+    }
+}

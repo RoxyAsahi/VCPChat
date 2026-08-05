@@ -1,5 +1,6 @@
 import { profileSettingsTarget, sessionSettingsTarget } from './agent-settings-state.js';
 import { PROFILE_CONFIG_FIELDS, normalizeAgentConfig } from '../agent-config-descriptors.js';
+import { normalizeDiagnosticError } from './agent-config-diagnostics.js';
 
 function normalizedSavedProfile(profile) {
     const instructionMode = profile.instructionMode === 'codex-managed' ? 'codex-managed' : 'vchat-identity';
@@ -167,7 +168,12 @@ function createAgentSettingsCoordinator({
             if (!disposed) {
                 state.settingsSaveState = 'error';
                 state.settingsSaveMessage = error?.message || String(error);
-                state.settingsSaveByScope.set(saveScope, { state: 'error', message: state.settingsSaveMessage });
+                state.settingsSaveByScope.set(saveScope, {
+                    state: error?.code === 'SESSION_CONFIG_CONFLICT' || error?.code === 'PROFILE_CONFIG_CONFLICT'
+                        ? 'conflict' : 'error',
+                    message: state.settingsSaveMessage,
+                    error: normalizeDiagnosticError(error, 'SETTINGS_SAVE_ERROR'),
+                });
                 notify(state.settingsSaveMessage, 'error');
             }
             return null;

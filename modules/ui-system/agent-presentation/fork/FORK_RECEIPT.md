@@ -8,9 +8,9 @@
 - 最近审计的源文件：4044 行，178244 字节（Windows working-tree 换行）
 - Fork 文件：`agentMessageRenderer.js`
 
-首次建立副本时，源文件与 Fork 在统一为 LF 并移除结尾换行后逐字符相等。随后只执行以下机械变更：
+首次建立副本时，源文件与 Fork 在统一为 LF 并移除结尾换行后逐字符相等。初始阶段执行了以下机械变更：
 
-1. 相对 import 从 `./renderer/` 调整为 `../../../renderer/`；
+1. 相对 import 最初调整到主聊天 `renderer/`；R16 已将全部生产依赖迁入 Agent-owned 模块，当前不再 import `modules/renderer/`；
 2. 全局导出由 `window.messageRenderer` 改为 `window.agentMessageRendererFork`；
 3. 文件头增加来源收据链接。
 
@@ -35,6 +35,8 @@
 该 Fork 已成为 Agent 专用产品实现，不再要求跟随主聊天 renderer 逐行同步。来源 commit 和初始机械裁剪继续保留用于许可证、来源和安全审计；后续两侧只共享恶意 Markdown、链接、图片、代码复制、XSS 与视觉 golden 测试语料，不共享运行时代码，也不因主聊天新增功能而自动复制实现。
 
 Agent 模块不得读取 `currentChatHistoryRef`、`currentSelectedItemRef`、`currentTopicIdRef`、`saveChatHistory` 或主聊天 `streamManager`。新增能力必须通过显式 Session context 和 Agent action adapter 接入。
+
+R16 独立化收口：Markdown 顺序协议、内容后处理、消息骨架、头像取色、表情 URL 和动画安全均由 `agent-renderer-*` 模块持有。治理检查拒绝 Agent 生产模块导入 `modules/renderer/`。Agent 输出中的按钮不得调用 `window.chatManager`，模型输出的 `<script>` 只会被移除；CSS/Web Animations 仍可显示并由 Agent 生命周期清理。
 
 2026-08-02 同步审查：上游加入主聊天音频播放器和 Python 附件的安全文本打开路径。两项不进入 Agent fork：当前 Codex/ToolBox 投影没有可信音频资源描述，而 Agent 文件动作必须经 `WorkspacePathRef` 与 Main-only workspace service，不能回退到主聊天的任意 `file:` 路径入口。来源哈希已更新；Agent 的现有 Markdown、代码、表格、链接、图片、reasoning 与工具投影能力不变。
 

@@ -37,6 +37,43 @@ function updateTurnTiming(event, state, selectedSessionKey) {
     state.turnStartedAt.delete(event.turnId);
 }
 
+function visibleText(value) {
+    if (typeof value === 'string') return value.trim();
+    if (value && typeof value.text === 'string') return value.text.trim();
+    return '';
+}
+
+function sessionHasVisibleTurnOutput(current, sessionId, turnId, selectedSessionId) {
+    if (sessionId !== selectedSessionId) return false;
+    const assistantVisible = current.messages.some((message) => message.role === 'assistant'
+        && (!turnId || message.turnId === turnId)
+        && (visibleText(message.content) || visibleText(message.reasoning)
+            || (Array.isArray(message.attachments) && message.attachments.length > 0)));
+    if (assistantVisible) return true;
+    const tools = current.tools instanceof Map ? [...current.tools.values()] : [];
+    return tools.some((tool) => !turnId || tool.turnId === turnId);
+}
+
+function terminalPhase(event) {
+    if (event?.type === 'turn.failed') return 'failed';
+    if (event?.type === 'turn.cancelled' || event?.type === 'turn.interrupted') return 'interrupted';
+    if (event?.type === 'turn.completed') return 'empty';
+    if (event?.method !== 'turn/completed') return null;
+    const status = String(event.turnStatus || '').trim().toLowerCase();
+    if (['failed', 'error'].includes(status)) return 'failed';
+    if (['interrupted', 'cancelled', 'canceled'].includes(status)) return 'interrupted';
+    return 'empty';
+}
+
+function terminalDetail(event, phase) {
+    if (phase === 'failed') {
+        return String(event?.payload?.error || event?.payload?.reason || event?.turnError
+            || '任务执行失败，请检查 Runtime 与 ToolBox 连接。');
+    }
+    if (phase === 'interrupted') return '任务已停止。';
+    return '任务已结束，但没有返回可显示内容。';
+}
+
 function routeStoreEvent(event, deps) {
     const { queueRender, noteTimelineActivity, maybeAutoOpenActivity, refreshControlPlane, patchSidebarTopicSelection } = deps;
     if (!event?.type) { patchSidebarTopicSelection(); queueRender({ header: true, feed: true, composer: true }); return; }
@@ -123,7 +160,7 @@ export function createAgentWorkbenchRenderCoordinator({
         renderers.jumpToLatest();
     }
 
-    function settleEventStart(event, turnStart) {
+    function settleEventStart(event, turnStart, current) {
         const turnMatches = !event.turnId || !turnStart.turnId || event.turnId === turnStart.turnId;
         const sessionMatches = event.sessionId === turnStart.sessionId;
         if (sessionMatches && event.type === 'turn.started') {
@@ -131,11 +168,22 @@ export function createAgentWorkbenchRenderCoordinator({
                 ...turnStart, turnId: event.turnId || turnStart.turnId, phase: 'thinking', seenRunning: true,
             });
         }
-        if (sessionMatches && turnMatches && [
-            'assistant.started', 'assistant.delta', 'reasoning.delta', 'turn.completed',
-            'turn.failed', 'turn.cancelled', 'runtime.crashed', 'projection.updated',
-        ].includes(event.type)) {
+        if (!sessionMatches || !turnMatches) return false;
+        if (sessionHasVisibleTurnOutput(
+            current, turnStart.sessionId, event.turnId || turnStart.turnId, selectedSessionKey(current),
+        )) {
             state.turnStarts.delete(turnStart.sessionId);
+            return true;
+        }
+        const phase = terminalPhase(event);
+        if (phase) {
+            state.turnStarts.set(turnStart.sessionId, {
+                ...turnStart,
+                turnId: event.turnId || turnStart.turnId,
+                phase,
+                detail: terminalDetail(event, phase),
+                seenRunning: true,
+            });
             return true;
         }
         return false;
@@ -143,27 +191,46 @@ export function createAgentWorkbenchRenderCoordinator({
 
     function settleIdleStarts(current) {
         for (const [sessionId, entry] of state.turnStarts) {
-            const hasAssistant = sessionId === selectedSessionKey(current) && entry.turnId
-                && current.messages.some((message) => message.role === 'assistant' && message.turnId === entry.turnId);
+            const hasOutput = sessionHasVisibleTurnOutput(
+                current, sessionId, entry.turnId, selectedSessionKey(current),
+            );
             const runtime = current.activeRuntimes instanceof Map ? current.activeRuntimes.get(sessionId) : null;
             if (runtime && (runtime.activity === 'running' || runtime.activeTurnId) && !entry.seenRunning) {
                 state.turnStarts.set(sessionId, { ...entry, seenRunning: true });
             }
             const terminalRuntime = Boolean(entry.turnId && entry.seenRunning && runtime
                 && runtime.activity === 'idle' && !runtime.activeTurnId);
-            if (!hasAssistant && !terminalRuntime) continue;
-            if (hasAssistant) uxMark('first-assistant-item', entry.turnId,
+            if (!hasOutput && !terminalRuntime) continue;
+            if (hasOutput) uxMark('first-assistant-item', entry.turnId,
                 state.uxTimings.get(`turn-start:${entry.sessionId || 'new'}`) || null);
-            state.turnStarts.delete(sessionId);
+            if (hasOutput) {
+                state.turnStarts.delete(sessionId);
+            } else if (!['failed', 'interrupted', 'empty'].includes(entry.phase)) {
+                state.turnStarts.set(sessionId, {
+                    ...entry,
+                    phase: 'empty',
+                    detail: '任务已结束，但没有返回可显示内容。',
+                });
+            }
         }
     }
 
     function settleTurnStartIndicator(event) {
+        const current = store.getState();
+        if (event?.type === 'runtime.crashed') {
+            for (const [sessionId, entry] of state.turnStarts) {
+                state.turnStarts.set(sessionId, {
+                    ...entry,
+                    phase: 'failed',
+                    detail: String(event?.payload?.error || event?.error || 'Codex App Server 已断开。'),
+                });
+            }
+            return;
+        }
         const eventSessionId = event?.sessionId || null;
         const turnStart = eventSessionId ? state.turnStarts.get(eventSessionId) : selectedTurnStart();
-        if (event && turnStart) { settleEventStart(event, turnStart); return; }
+        if (event && turnStart) { settleEventStart(event, turnStart, current); return; }
         if (event) return;
-        const current = store.getState();
         settleIdleStarts(current);
     }
 

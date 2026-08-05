@@ -85,7 +85,7 @@ function createAgentWorkbenchComposerView({ refs, document = globalThis.document
         inputCard.classList.toggle('is-busy', Boolean(model.busy));
         sendButton.classList.remove('interrupt-mode');
         sendButton.classList.toggle('is-ready', Boolean(model.ready));
-        runningModes.hidden = !model.busy;
+        runningModes.hidden = !model.showActiveModes;
         steerModeButton.classList.toggle('is-active', model.inputMode === 'steer');
         followUpModeButton.classList.toggle('is-active', model.inputMode === 'follow-up');
         permissionsButton.title = model.permissionLabel || '本地审批';

@@ -5,7 +5,7 @@
 import {
     highlightAllPatternsInMessage,
     processRenderedContent,
-} from '../../renderer/contentProcessor.js';
+} from './fork/agent-renderer-content-utils.js';
 
 const MERMAID_FENCE_RE = /```(?:mermaid|flowchart|graph)[^\S\n]*\n([\s\S]*?)```/gi;
 const THINK_RE = /^[ \t]*<think(?:ing)?>[ \t]*(?:\r?\n|$)([\s\S]*?)^[ \t]*<\/think(?:ing)?>[ \t]*(?:\r?\n|$)/gim;
