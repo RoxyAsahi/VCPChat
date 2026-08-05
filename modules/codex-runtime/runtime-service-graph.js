@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const { CodexAppServerError } = require('./appServerTransport');
 const { RuntimeInteractionService } = require('./runtime-interaction-service');
 const { RuntimeToolboxService } = require('./runtime-toolbox-service');
 const { RuntimeRecoveryService } = require('./runtime-recovery-service');
@@ -11,6 +12,8 @@ const { RuntimeProfileService } = require('./runtime-profile-service');
 const { RuntimeHostService } = require('./runtime-host-service');
 const { RuntimePolicyService } = require('./runtime-policy-service');
 const { RuntimeEventService } = require('./runtime-event-service');
+const { RuntimeDiagnosticsService } = require('./runtime-diagnostics-service');
+const { rejectConfigApplyTargets } = require('./runtime-config-targets');
 const { createRuntimeServiceContext } = require('./runtime-service-contexts');
 
 function createId(prefix) {
@@ -18,6 +21,18 @@ function createId(prefix) {
 }
 
 function attachRuntimeServiceGraph(runtime) {
+    runtime.diagnosticsService = new RuntimeDiagnosticsService(createRuntimeServiceContext('diagnostics', {
+        ensureProjectionStore: () => runtime.ensureProjectionStore(),
+        repository: () => runtime.repository,
+        getSettings: () => runtime.getSettings() || {},
+        getModels: () => runtime.getModels?.() || [],
+        responsesAdapter: () => runtime.responsesAdapter,
+        threadStates: () => runtime.threadStates,
+        configApplyTargets: () => runtime.configApplyTargets,
+        state: () => runtime.state,
+        runtimeGeneration: () => runtime.runtimeGeneration,
+        lastError: () => runtime.lastError,
+    }));
     runtime.policyService = new RuntimePolicyService(createRuntimeServiceContext('policy', {
         providerParams: () => runtime._providerParams(),
     }));
@@ -269,13 +284,16 @@ function attachRuntimeServiceGraph(runtime) {
         threadStates: () => runtime.threadStates,
         compactionWaiters: () => runtime.compactionWaiters,
         configApplyTargets: () => runtime.configApplyTargets,
+        rejectConfigApplyTargets: (error) => rejectConfigApplyTargets(runtime.configApplyTargets, error),
         setKnownOperationRecoveryPromise: (value) => { runtime.knownOperationRecoveryPromise = value; },
         clearCrashRegistries: () => {
             runtime.threadStates.clear();
             runtime.resumedThreadIds.clear();
             runtime.resumingThreads.clear();
             runtime.configApplyPromises.clear();
-            runtime.configApplyTargets.clear();
+            rejectConfigApplyTargets(runtime.configApplyTargets, new CodexAppServerError(
+                'RUNTIME_CRASHED', 'Codex App Server crashed while applying Session settings',
+            ));
         },
         clearHostResources: () => runtime._clearHostResources(),
     }));

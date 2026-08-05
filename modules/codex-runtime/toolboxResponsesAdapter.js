@@ -13,6 +13,7 @@ const MAX_BODY_BYTES = 2 * 1024 * 1024;
 const MAX_ERROR_BYTES = 16 * 1024;
 const MAX_INSTRUCTION_BYTES = 64 * 1024;
 const CANCELLED_TURN_TTL_MS = 5 * 60 * 1000;
+const MAX_DIAGNOSTIC_REQUESTS = 8;
 const VCP_DYNAMIC_TOOL_NAME = 'vcp_invoke';
 
 class ToolboxResponsesAdapter {
@@ -38,6 +39,8 @@ class ToolboxResponsesAdapter {
         // to the Renderer.
         this.activeRequests = new Map();
         this.cancelledTurnIds = new Map();
+        this.clock = options.clock || (() => Date.now());
+        this.recentDiagnostics = [];
         // This unguessable path capability is process-local and is never the
         // ToolBox API key.  It prevents unrelated local processes from using
         // the adapter merely because it is bound to loopback.
@@ -87,6 +90,70 @@ class ToolboxResponsesAdapter {
         return this.baseUrl;
     }
 
+    getDiagnostics({ sessionId = '', threadId = '' } = {}) {
+        const expectedSessionId = String(sessionId || '').trim();
+        const expectedThreadId = String(threadId || '').trim();
+        const requests = this.recentDiagnostics.filter((request) => (
+            (!expectedSessionId || request.sessionId === expectedSessionId)
+            && (!expectedThreadId || request.threadId === expectedThreadId)
+        ));
+        return {
+            state: this.server ? 'ready' : 'stopped',
+            activeRequestCount: [...this.activeRequests.values()].filter((request) => (
+                (!expectedSessionId || request.sessionId === expectedSessionId)
+                && (!expectedThreadId || request.threadId === expectedThreadId)
+            )).length,
+            recentRequests: requests.map((request) => ({
+                sessionId: request.sessionId,
+                threadId: request.threadId,
+                turnId: request.turnId,
+                model: request.model,
+                status: request.status,
+                httpStatus: request.httpStatus,
+                startedAt: request.startedAt,
+                completedAt: request.completedAt,
+                durationMs: request.durationMs,
+                incomingTools: request.incomingTools.map((tool) => ({ ...tool })),
+                forwardedTools: request.forwardedTools.map((tool) => ({ ...tool })),
+                error: request.error ? { ...request.error } : null,
+            })),
+        };
+    }
+
+    _startDiagnostic(identity, body, chatRequest) {
+        const record = {
+            sessionId: identity.sessionId || null,
+            threadId: identity.threadId || null,
+            turnId: identity.turnId || null,
+            model: String(body?.model || chatRequest?.model || '').slice(0, 160) || null,
+            status: 'running',
+            httpStatus: null,
+            startedAt: this.clock(),
+            completedAt: null,
+            durationMs: null,
+            incomingTools: [...identity.tools, ...identity.input.flatMap((item) => item.tools || [])],
+            forwardedTools: chatRequestToolSummary(chatRequest),
+            error: null,
+        };
+        this.recentDiagnostics.unshift(record);
+        if (this.recentDiagnostics.length > MAX_DIAGNOSTIC_REQUESTS) {
+            this.recentDiagnostics.length = MAX_DIAGNOSTIC_REQUESTS;
+        }
+        return record;
+    }
+
+    _finishDiagnostic(record, { status, httpStatus = null, code = null, message = null } = {}) {
+        if (!record || record.status !== 'running') return;
+        record.status = status || 'failed';
+        record.httpStatus = Number.isInteger(httpStatus) ? httpStatus : null;
+        record.completedAt = this.clock();
+        record.durationMs = Math.max(0, record.completedAt - record.startedAt);
+        record.error = code || message ? {
+            code: String(code || 'ADAPTER_ERROR').slice(0, 96),
+            message: String(message || 'Adapter request failed').slice(0, 320),
+        } : null;
+    }
+
     async _handle(request, response) {
         if (request.method !== 'POST' || request.url !== `/v1/${this.capability}/responses`) {
             response.writeHead(404).end();
@@ -102,6 +169,7 @@ class ToolboxResponsesAdapter {
             return;
         }
         let chatRequest;
+        let diagnosticRecord = null;
         try {
             // ToolBox owns the active-request table used by `/v1/interrupt`
             // and transport-disconnect cleanup.  A Responses request has no
@@ -117,7 +185,11 @@ class ToolboxResponsesAdapter {
                 stripEmbeddedInstructions: Boolean(this.resolveInstructions),
                 trustedInstructions,
             });
-            this.onRequest?.(identity);
+            diagnosticRecord = this._startDiagnostic(identity, body, chatRequest);
+            this.onRequest?.({
+                ...identity,
+                forwardedTools: chatRequestToolSummary(chatRequest),
+            });
         } catch (error) {
             writeJson(response, 400, { error: { code: 'invalid_request', message: error.message } });
             return;
@@ -170,6 +242,11 @@ class ToolboxResponsesAdapter {
                 signal: upstreamAbort.signal,
             });
         } catch (_error) {
+            this._finishDiagnostic(diagnosticRecord, {
+                status: clientDetached ? 'interrupted' : 'failed',
+                code: clientDetached ? 'REQUEST_INTERRUPTED' : 'TOOLBOX_UNAVAILABLE',
+                message: clientDetached ? 'ToolBox request was interrupted' : 'ToolBox model endpoint is unavailable',
+            });
             if (!response.destroyed && !response.writableEnded) {
                 writeJson(response, clientDetached
                     ? 499
@@ -180,6 +257,10 @@ class ToolboxResponsesAdapter {
         }
         if (!upstream.ok) {
             const details = await readLimitedText(upstream, MAX_ERROR_BYTES);
+            this._finishDiagnostic(diagnosticRecord, {
+                status: 'failed', httpStatus: upstream.status,
+                code: 'TOOLBOX_ERROR', message: `ToolBox model endpoint returned ${upstream.status}`,
+            });
             writeJson(response, upstream.status, {
                 error: { code: 'toolbox_error', message: `ToolBox model endpoint returned ${upstream.status}`, details },
             });
@@ -189,6 +270,17 @@ class ToolboxResponsesAdapter {
         if (chatRequest.stream) {
             try {
                 await relayChatStreamAsResponses(upstream, response, body.model || chatRequest.model);
+                this._finishDiagnostic(diagnosticRecord, { status: 'completed', httpStatus: upstream.status });
+            } catch (error) {
+                this._finishDiagnostic(diagnosticRecord, {
+                    status: 'failed', httpStatus: upstream.status,
+                    code: 'INVALID_TOOLBOX_STREAM', message: error?.message || 'ToolBox stream failed',
+                });
+                if (!response.destroyed && !response.writableEnded) {
+                    writeJson(response, 502, {
+                        error: { code: 'invalid_toolbox_stream', message: 'ToolBox returned an invalid stream' },
+                    });
+                }
             } finally {
                 cleanupClientDetached();
             }
@@ -198,11 +290,16 @@ class ToolboxResponsesAdapter {
         try {
             chatResponse = await upstream.json();
         } catch (_error) {
+            this._finishDiagnostic(diagnosticRecord, {
+                status: 'failed', httpStatus: upstream.status,
+                code: 'INVALID_TOOLBOX_RESPONSE', message: 'ToolBox returned invalid JSON',
+            });
             writeJson(response, 502, { error: { code: 'invalid_toolbox_response', message: 'ToolBox returned invalid JSON' } });
             cleanupClientDetached();
             return;
         }
         writeJson(response, 200, chatResponseToResponses(chatResponse, body.model || chatRequest.model));
+        this._finishDiagnostic(diagnosticRecord, { status: 'completed', httpStatus: upstream.status });
         cleanupClientDetached();
     }
 
@@ -421,6 +518,13 @@ function responseRequestIdentity(body, requestId, headers = {}) {
     };
 }
 
+function chatRequestToolSummary(chatRequest) {
+    return (Array.isArray(chatRequest?.tools) ? chatRequest.tools : []).slice(0, 16).map((tool) => ({
+        type: typeof tool?.type === 'string' ? tool.type : null,
+        name: typeof tool?.function?.name === 'string' ? tool.function.name : null,
+    }));
+}
+
 function parseTurnMetadata(value) {
     const text = Array.isArray(value) ? value[0] : value;
     if (typeof text !== 'string' || text.length > 16 * 1024) return { threadId: null, turnId: null, sessionId: null };
@@ -510,14 +614,12 @@ function responsesToolsToChat(tools) {
         // Codex may include its native shell/MCP/utility definitions even
         // when a particular installed App Server does not honor every
         // thread-scoped tool override.  This loopback provider boundary is
-        // authoritative for Nova: ToolBox and the model see only vcp_invoke.
+        // authoritative for Nova: ToolBox and the model see only VChat's
+        // own fixed vcp_invoke contract.  Do not let App Server-supplied
+        // description/schema text alter the capability exposed upstream.
         if (name !== VCP_DYNAMIC_TOOL_NAME || emittedVcpInvoke) return [];
         emittedVcpInvoke = true;
-        return [{ type: 'function', function: {
-            ...vcpInvokeChatTool().function,
-            ...(tool.description ? { description: String(tool.description) } : {}),
-            parameters: tool.parameters || tool.input_schema || vcpInvokeChatTool().function.parameters,
-        } }];
+        return [vcpInvokeChatTool()];
     });
 }
 
@@ -586,37 +688,70 @@ function publicReasoningText(message) {
     return '';
 }
 
-function reasoningItem(text, id = `rs_${crypto.randomUUID()}`) {
+function reasoningItem(text, id = `rs_${crypto.randomUUID()}`, status = null) {
     return {
         id,
         type: 'reasoning',
         summary: [],
         content: [{ type: 'reasoning_text', text: String(text || '') }],
         encrypted_content: null,
+        ...(status ? { status } : {}),
     };
 }
 
 async function relayChatStreamAsResponses(upstream, response, model) {
     response.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache', connection: 'keep-alive' });
     const state = new ResponsesStreamState(model);
-    writeSse(response, 'response.created', { type: 'response.created', response: state.payload('in_progress') });
+    state.emit(response, 'response.created', { type: 'response.created', response: state.payload('in_progress') });
     let buffer = '';
-    for await (const chunk of upstream.body) {
+    let terminal = false;
+    const consumeChunk = (chunk) => {
         buffer += Buffer.from(chunk).toString('utf8');
-        let boundary = buffer.indexOf('\n\n');
-        while (boundary >= 0) {
-            const frame = buffer.slice(0, boundary);
-            buffer = buffer.slice(boundary + 2);
+        let boundary = nextSseFrameBoundary(buffer);
+        while (boundary) {
+            const frame = buffer.slice(0, boundary.index);
+            buffer = buffer.slice(boundary.end);
             const data = frame.split(/\r?\n/).filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trim()).join('\n');
             if (data === '[DONE]') continue;
             if (data) {
-                try { state.accept(JSON.parse(data), response); } catch (_error) { /* malformed upstream chunk is ignored until terminal error */ }
+                try { terminal = state.accept(JSON.parse(data), response) || terminal; } catch (_error) { /* malformed upstream chunk is ignored until terminal error */ }
             }
-            boundary = buffer.indexOf('\n\n');
+            if (terminal) break;
+            boundary = nextSseFrameBoundary(buffer);
+        }
+    };
+    // Electron's fetch exposes a WHATWG ReadableStream. Its async iterator
+    // can continue yielding decoded chunks yet fail to resolve the final EOF
+    // on some Windows builds. Drive the reader explicitly so a ToolBox [DONE]
+    // or closed response always reaches `finish` and therefore closes Codex's
+    // active Turn. Keep the iterator fallback for injected test transports.
+    const stream = upstream.body;
+    if (!stream) throw new Error('ToolBox stream body is missing');
+    if (typeof stream.getReader === 'function') {
+        const reader = stream.getReader();
+        try {
+            while (!terminal) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                consumeChunk(value);
+            }
+        } finally {
+            if (terminal) await reader.cancel().catch(() => null);
+            reader.releaseLock?.();
+        }
+    } else {
+        for await (const chunk of stream) {
+            consumeChunk(chunk);
+            if (terminal) break;
         }
     }
     state.finish(response);
     response.end();
+}
+
+function nextSseFrameBoundary(buffer) {
+    const match = /\r?\n\r?\n/.exec(buffer);
+    return match ? { index: match.index, end: match.index + match[0].length } : null;
 }
 
 class ResponsesStreamState {
@@ -632,12 +767,16 @@ class ResponsesStreamState {
         this.calls = new Map();
         this.usage = null;
         this.nextOutputIndex = 0;
+        this.nextSequenceNumber = 1;
+    }
+    emit(response, event, payload) {
+        writeSse(response, event, { ...payload, sequence_number: this.nextSequenceNumber++ });
     }
     payload(status) { return { id: this.id, object: 'response', created_at: Math.floor(Date.now() / 1000), status, model: this.model, output: this.output(), output_text: this.text, usage: responsesUsage(this.usage) }; }
     output() {
         const output = [];
-        if (this.reasoningItem) output.push({ index: this.reasoningIndex, item: reasoningItem(this.reasoning, this.reasoningItem.id) });
-        if (this.textItem) output.push({ index: this.textIndex, item: { ...this.textItem, content: [{ ...this.textItem.content[0], text: this.text }] } });
+        if (this.reasoningItem) output.push({ index: this.reasoningIndex, item: reasoningItem(this.reasoning, this.reasoningItem.id, 'completed') });
+        if (this.textItem) output.push({ index: this.textIndex, item: { ...this.textItem, status: 'completed', content: [{ ...this.textItem.content[0], text: this.text }] } });
         for (const call of this.calls.values()) if (call.name) output.push({ index: call.index, item: call.item() });
         return output.sort((left, right) => left.index - right.index).map((entry) => entry.item);
     }
@@ -649,8 +788,8 @@ class ResponsesStreamState {
     ensureReasoning(response) {
         if (this.reasoningItem) return;
         this.reasoningIndex = this.allocateOutputIndex();
-        this.reasoningItem = reasoningItem('');
-        writeSse(response, 'response.output_item.added', {
+        this.reasoningItem = { ...reasoningItem(''), content: [] };
+        this.emit(response, 'response.output_item.added', {
             type: 'response.output_item.added',
             output_index: this.reasoningIndex,
             item: this.reasoningItem,
@@ -660,8 +799,8 @@ class ResponsesStreamState {
         if (this.textItem) return;
         this.textIndex = this.allocateOutputIndex();
         this.textItem = { id: `msg_${crypto.randomUUID()}`, type: 'message', role: 'assistant', content: [{ type: 'output_text', text: '', annotations: [] }] };
-        writeSse(response, 'response.output_item.added', { type: 'response.output_item.added', output_index: this.textIndex, item: { ...this.textItem, content: [] } });
-        writeSse(response, 'response.content_part.added', { type: 'response.content_part.added', item_id: this.textItem.id, output_index: this.textIndex, content_index: 0, part: { type: 'output_text', text: '' } });
+        this.emit(response, 'response.output_item.added', { type: 'response.output_item.added', output_index: this.textIndex, item: { ...this.textItem, content: [] } });
+        this.emit(response, 'response.content_part.added', { type: 'response.content_part.added', item_id: this.textItem.id, output_index: this.textIndex, content_index: 0, part: { type: 'output_text', text: '' } });
     }
     accept(event, response) {
         const choice = event?.choices?.[0] || {};
@@ -670,7 +809,7 @@ class ResponsesStreamState {
         if (reasoningDelta) {
             this.ensureReasoning(response);
             this.reasoning += reasoningDelta;
-            writeSse(response, 'response.reasoning_text.delta', {
+            this.emit(response, 'response.reasoning_text.delta', {
                 type: 'response.reasoning_text.delta',
                 item_id: this.reasoningItem.id,
                 output_index: this.reasoningIndex,
@@ -680,7 +819,7 @@ class ResponsesStreamState {
         }
         if (typeof delta.content === 'string' && delta.content) {
             this.ensureText(response); this.text += delta.content;
-            writeSse(response, 'response.output_text.delta', { type: 'response.output_text.delta', item_id: this.textItem.id, output_index: this.textIndex, content_index: 0, delta: delta.content });
+            this.emit(response, 'response.output_text.delta', { type: 'response.output_text.delta', item_id: this.textItem.id, output_index: this.textIndex, content_index: 0, delta: delta.content });
         }
         for (const [fallback, callDelta] of (Array.isArray(delta.tool_calls) ? delta.tool_calls : []).entries()) {
             const key = String(callDelta.index ?? callDelta.id ?? fallback);
@@ -691,27 +830,38 @@ class ResponsesStreamState {
             this.calls.set(key, call);
         }
         if (event?.usage) this.usage = event.usage;
+        // Chat Completions providers are allowed to leave the HTTP stream
+        // open after a terminal chunk. The finish reason is authoritative;
+        // waiting for transport EOF would leave the Codex Turn running.
+        return typeof choice.finish_reason === 'string' && choice.finish_reason.length > 0;
     }
     finish(response) {
         if (this.reasoningItem) {
-            writeSse(response, 'response.output_item.done', {
+            this.emit(response, 'response.reasoning_text.done', {
+                type: 'response.reasoning_text.done',
+                item_id: this.reasoningItem.id,
+                output_index: this.reasoningIndex,
+                content_index: 0,
+                text: this.reasoning,
+            });
+            this.emit(response, 'response.output_item.done', {
                 type: 'response.output_item.done',
                 output_index: this.reasoningIndex,
-                item: reasoningItem(this.reasoning, this.reasoningItem.id),
+                item: reasoningItem(this.reasoning, this.reasoningItem.id, 'completed'),
             });
         }
         if (this.textItem) {
-            const textItem = { ...this.textItem, content: [{ ...this.textItem.content[0], text: this.text }] };
-            writeSse(response, 'response.output_text.done', { type: 'response.output_text.done', item_id: this.textItem.id, output_index: this.textIndex, content_index: 0, text: this.text });
-            writeSse(response, 'response.content_part.done', { type: 'response.content_part.done', item_id: this.textItem.id, output_index: this.textIndex, content_index: 0, part: { type: 'output_text', text: this.text } });
-            writeSse(response, 'response.output_item.done', { type: 'response.output_item.done', output_index: this.textIndex, item: textItem });
+            const textItem = { ...this.textItem, status: 'completed', content: [{ ...this.textItem.content[0], text: this.text }] };
+            this.emit(response, 'response.output_text.done', { type: 'response.output_text.done', item_id: this.textItem.id, output_index: this.textIndex, content_index: 0, text: this.text });
+            this.emit(response, 'response.content_part.done', { type: 'response.content_part.done', item_id: this.textItem.id, output_index: this.textIndex, content_index: 0, part: { type: 'output_text', text: this.text } });
+            this.emit(response, 'response.output_item.done', { type: 'response.output_item.done', output_index: this.textIndex, item: textItem });
         }
         for (const call of this.calls.values()) if (call.name) {
             const item = call.item();
-            writeSse(response, 'response.output_item.added', { type: 'response.output_item.added', output_index: call.index, item });
-            writeSse(response, 'response.output_item.done', { type: 'response.output_item.done', output_index: call.index, item });
+            this.emit(response, 'response.output_item.added', { type: 'response.output_item.added', output_index: call.index, item });
+            this.emit(response, 'response.output_item.done', { type: 'response.output_item.done', output_index: call.index, item });
         }
-        writeSse(response, 'response.completed', { type: 'response.completed', response: this.payload('completed') });
+        this.emit(response, 'response.completed', { type: 'response.completed', response: this.payload('completed') });
     }
 }
 

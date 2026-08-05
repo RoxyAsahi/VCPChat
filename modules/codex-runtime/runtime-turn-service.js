@@ -13,6 +13,11 @@ const {
     submissionDedupeKey,
     vcpInvokeTool,
 } = require('./runtime-normalizers');
+const {
+    runtimeSettingsFromResume,
+    runtimeSettingsTarget,
+    sameRuntimeSettings,
+} = require('./runtime-settings-contract');
 
 function resolveForkBoundary({ turnId, beforeTurnId }) {
     const before = String(beforeTurnId || '').trim();
@@ -559,16 +564,18 @@ class RuntimeTurnService {
                     'INVALID_RESPONSE', 'Codex thread/read returned a mismatched Thread',
                 );
             }
-            return [...(readThread?.turns || [])].reverse().find((turn) => (
+            const activeTurnId = [...(readThread?.turns || [])].reverse().find((turn) => (
                 String(turn?.status || '').toLowerCase() === 'inprogress'
             ))?.id || null;
+            return { activeTurnId, confirmed: Boolean(activeTurnId) };
         } catch (error) {
+            if (error?.code === 'STALE_RUNTIME_GENERATION') throw error;
             this.context.diagnostic('thread-active-turn-unresolved', {
                 sessionId: session.sessionId,
                 threadId,
                 error: error?.message || String(error),
             });
-            return null;
+            return { activeTurnId: null, confirmed: false };
         }
     }
 
@@ -594,16 +601,38 @@ class RuntimeTurnService {
             if (resumedThreadId !== threadId) {
                 throw new CodexAppServerError('INVALID_RESPONSE', 'Codex thread/resume returned a mismatched thread id');
             }
-            const activity = result?.thread?.status?.type === 'active' ? 'running' : 'idle';
-            const activeTurnId = activity === 'running'
-                ? await this._readResumedActiveTurnId(session, threadId, operation) : null;
-            this.context.threadStates().set(threadId, { activity, activeTurnId });
+            const observedThreadStatus = String(result?.thread?.status?.type || 'unknown');
+            const active = observedThreadStatus === 'active';
+            const recovered = active
+                ? await this._readResumedActiveTurnId(session, threadId, operation)
+                : { activeTurnId: null, confirmed: true };
+            this.context.assertOperationContext(operation);
+            this.context.threadStates().set(threadId, active && !recovered.confirmed ? {
+                activity: 'unknown', activeTurnId: null, observedThreadStatus,
+                recoveryState: 'unconfirmed',
+            } : {
+                activity: active ? 'running' : 'idle',
+                activeTurnId: recovered.activeTurnId,
+                observedThreadStatus,
+                recoveryState: 'confirmed',
+            });
             resumed.add(threadId);
-            const applied = repository.markSessionConfigApplied(
-                session.sessionId, session.configRevision, session.configSnapshot,
-            );
             this.context.configApplyTargets().delete(threadId);
-            this.context.sendSessionConfigEvent('session.config.applied', applied);
+            const desiredSettings = runtimeSettingsTarget(session, session.configSnapshot || {});
+            const actualSettings = runtimeSettingsFromResume(result);
+            const appliedPersonality = runtimeSettingsTarget(
+                { ...session, workspaceRoot: session.appliedRuntimeConfig?.workspaceRoot || session.workspaceRoot },
+                session.appliedRuntimeConfig || {},
+            ).personality;
+            const personalityChanged = desiredSettings.personality !== appliedPersonality;
+            const resumeConfirmed = sameRuntimeSettings(actualSettings, desiredSettings, { includePersonality: false })
+                && !personalityChanged;
+            const applied = resumeConfirmed
+                ? repository.markSessionConfigApplied(session.sessionId, session.configRevision, session.configSnapshot)
+                : repository.markSessionConfigApplying(session.sessionId, session.configRevision);
+            this.context.sendSessionConfigEvent(
+                resumeConfirmed ? 'session.config.applied' : 'session.config.pending', applied,
+            );
             if (session.orphaned) repository.markOrphaned(session.sessionId, false);
             return repository.getSession(session.sessionId) || applied || session;
         } catch (error) {

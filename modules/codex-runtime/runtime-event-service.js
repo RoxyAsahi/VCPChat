@@ -10,6 +10,7 @@ function nextThreadState(message, previous) {
             activity: 'running',
             activeTurnId: message.params?.turn?.id || previous.activeTurnId || null,
             observedThreadStatus: 'active',
+            recoveryState: 'confirmed',
         }, completedTurnId: null };
     }
     if (message.method === 'turn/completed') {
@@ -19,6 +20,7 @@ function nextThreadState(message, previous) {
         }
         return { next: {
             ...previous, activity: 'idle', activeTurnId: null, observedThreadStatus: 'idle',
+            recoveryState: 'confirmed',
         }, completedTurnId: eventTurnId };
     }
     if (message.method === 'thread/status/changed') {

@@ -19,11 +19,10 @@ const {
     hasConfigField,
     normalizeConfigField,
 } = require('../agent-config-descriptors.js');
-
-function normalizeApproval(permissionMode, approvalPolicy) {
-    if (permissionMode === 'always-approve' || approvalPolicy === 'never') return 'never';
-    return 'on-request';
-}
+const {
+    runtimeSettingsTarget,
+    threadSettingsPatch,
+} = require('./runtime-settings-contract');
 
 function instructionShape(config = {}) {
     return {
@@ -41,34 +40,6 @@ function requiresFreshCodexManagedSession(desired = {}, applied = {}) {
     return applied.instructionMode !== 'codex-managed'
         && desired.instructionMode === 'codex-managed'
         && Boolean(String(applied.baseInstructions || '').trim());
-}
-
-function threadSettingsPatch(session, desired = {}) {
-    return {
-        threadId: session.threadId,
-        cwd: session.workspaceRoot || undefined,
-        model: desired.model || undefined,
-        approvalPolicy: normalizeApproval(desired.permissionMode, desired.approvalPolicy),
-        ...(desired.reasoningEffort ? { effort: desired.reasoningEffort } : {}),
-        ...(desired.instructionMode === 'codex-managed' && desired.personality && desired.personality !== 'none'
-            ? { personality: desired.personality } : {}),
-    };
-}
-
-function runtimeSettingsTarget(session, config = {}) {
-    return {
-        cwd: config.workspaceRoot || session.workspaceRoot || undefined,
-        model: config.model || undefined,
-        approvalPolicy: normalizeApproval(config.permissionMode, config.approvalPolicy),
-        effort: config.reasoningEffort || null,
-        personality: config.instructionMode === 'codex-managed'
-            && config.personality && config.personality !== 'none' ? config.personality : null,
-    };
-}
-
-function sameRuntimeSettings(left = {}, right = {}) {
-    return ['cwd', 'model', 'approvalPolicy', 'effort', 'personality']
-        .every((field) => (left[field] ?? null) === (right[field] ?? null));
 }
 
 function resolveRequestedWorkspace(context, settings, hasWorkspaceUpdate) {
@@ -434,7 +405,21 @@ class RuntimeConfigService {
     async applySessionRuntimeConfig(sessionId, { barrier = false } = {}) {
         const idValue = String(sessionId || '').trim();
         const applyPromises = this.context.configApplyPromises();
-        if (applyPromises.has(idValue)) return applyPromises.get(idValue);
+        if (applyPromises.has(idValue)) {
+            let previousError = null;
+            try {
+                await applyPromises.get(idValue);
+            } catch (error) {
+                previousError = error;
+            }
+            const current = this.context.repository()?.getSession(idValue);
+            if (current && (current.appliedRuntimeConfigRevision !== current.configRevision
+                || current.configApplyState !== 'applied')) {
+                return this.applySessionRuntimeConfig(idValue, { barrier });
+            }
+            if (previousError) throw previousError;
+            return current;
+        }
         const apply = (async () => {
             let repository = this.context.repository();
             let session = repository.getSession(idValue);
@@ -467,19 +452,12 @@ class RuntimeConfigService {
                     await this.context.transport().request('thread/unsubscribe', { threadId: session.threadId });
                     repository = this._operationRepository(operation);
                     this.context.resumedThreadIds().delete(session.threadId);
-                    await this.context.resumeSession(repository.getSession(idValue));
-                    return this._operationRepository(operation).getSession(idValue);
+                    const resumed = await this.context.resumeSession(repository.getSession(idValue));
+                    repository = this._operationRepository(operation);
+                    if (resumed?.appliedRuntimeConfigRevision === session.configRevision) return resumed;
+                    session = repository.getSession(idValue);
                 }
                 const targetSettings = runtimeSettingsTarget(session, desired);
-                const appliedSettings = runtimeSettingsTarget({
-                    ...session,
-                    workspaceRoot: applied.workspaceRoot || session.appliedRuntimeConfig?.workspaceRoot,
-                }, applied);
-                if (sameRuntimeSettings(targetSettings, appliedSettings)) {
-                    const confirmed = repository.markSessionConfigApplied(idValue, session.configRevision, desired);
-                    this.sendSessionConfigEvent('session.config.applied', confirmed);
-                    return confirmed;
-                }
                 const rebound = await this._requestSettingsUpdate({
                     barrier, desired, operation, session, sessionId: idValue, targetSettings,
                 });

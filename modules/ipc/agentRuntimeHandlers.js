@@ -76,6 +76,7 @@ function removeHandlers() {
         IPC_CHANNELS.UPDATE_WORKBENCH_SETTINGS,
         IPC_CHANNELS.READ_SESSION_CONFIG,
         IPC_CHANNELS.UPDATE_SESSION_CONFIG,
+        IPC_CHANNELS.REAPPLY_SESSION_CONFIG,
         IPC_CHANNELS.SELECT_ATTACHMENTS,
         IPC_CHANNELS.START_TURN,
         IPC_CHANNELS.STEER_TURN,
@@ -220,7 +221,9 @@ function initialize(options) {
     ipcMain.handle(IPC_CHANNELS.GET_WORKBENCH_SETTINGS, (event) => projectionGuard(event, () => manager.getWorkbenchSettings()));
     ipcMain.handle(IPC_CHANNELS.UPDATE_WORKBENCH_SETTINGS, (event, payload) => projectionGuard(event, () => manager.updateWorkbenchSettings(payload || {})));
     ipcMain.handle(IPC_CHANNELS.READ_SESSION_CONFIG, (event, payload) => projectionGuard(event, () => manager.readSessionConfig(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.READ_SESSION_DIAGNOSTICS, (event, payload) => projectionGuard(event, () => manager.readSessionDiagnostics(payload || {})));
     ipcMain.handle(IPC_CHANNELS.UPDATE_SESSION_CONFIG, (event, payload) => projectionGuard(event, () => manager.updateSessionConfig(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.REAPPLY_SESSION_CONFIG, (event, payload) => runtimeGuard(event, () => manager.reapplySessionConfig(payload || {})));
     ipcMain.handle(IPC_CHANNELS.SELECT_ATTACHMENTS, (event, payload) => projectionGuard(event, async () => {
         const mainWindow = assertMainWindowSender(event);
         const sessionId = String(payload?.sessionId || '').trim();
