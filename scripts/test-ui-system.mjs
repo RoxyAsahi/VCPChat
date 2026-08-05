@@ -357,6 +357,28 @@ const behaviorWindowControls = VCPUI.create('WindowControls', {
 assert.equal(behaviorWindowControls.element.querySelectorAll('.vcp-ui-window-control-button').length, 3,
     'WindowControls must mark every clickable host as a no-drag control');
 const uiComponentsCss = fs.readFileSync(new URL('../styles/ui-system/components.css', import.meta.url), 'utf8');
+const nextUiCss = fs.readFileSync(new URL('../styles/ui-next.css', import.meta.url), 'utf8');
+assert.match(nextUiCss,
+    /html\[data-ui-mode="next"\] \.main-content\s*\{[^}]*overflow:\s*hidden;[^}]*border-radius:\s*14px 0 0 0;[^}]*clip-path:\s*inset\(0 round 14px 0 0 0\);[^}]*isolation:\s*isolate;/s,
+    'the shared chat and Build panel must apply one final rounded compositor clip');
+assert.match(nextUiCss,
+    /html\[data-ui-mode="next"\] \.chat-header\s*\{[^}]*border-radius:\s*14px 0 0 0;/s,
+    'the opaque chat and Build header surface must not cover the panel corner');
+assert.doesNotMatch(nextUiCss,
+    /html\[data-ui-mode="next"\] \.main-content\s*\{[^}]*(?:border-width|background-clip):/s,
+    'the panel corner fix must not create a visible inset between the panel edge and wallpaper');
+assert.match(nextUiCss,
+    /\.next-ui-navigation-material\s*\{[\s\S]*clip-path:\s*polygon\([\s\S]*\+ 10\.7px[\s\S]*\+ 7px[\s\S]*\+ 4\.1px[\s\S]*\+ 2px[\s\S]*\+ 0\.4px[\s\S]*\);/s,
+    'the navigation material cutout must follow the rounded panel corner instead of leaving a square underlay');
+assert.match(nextUiCss,
+    /\.next-ui-panel-elevation\s*\{[^}]*border-radius:\s*14px 0 0 0;[^}]*box-shadow:\s*none;/s,
+    'the panel edge must not cast a rectangular shadow across the rounded cutout');
+assert.match(nextUiCss,
+    /\.next-ui-panel-elevation::before\s*\{[^}]*width:\s*15px;[^}]*height:\s*15px;[^}]*background-color:\s*var\(--next-shell-bg\);[^}]*background-image:\s*var\(--next-material-sheen\);[^}]*backdrop-filter:\s*var\(--next-backdrop-filter\);[^}]*mask-image:\s*radial-gradient\(circle at 15px 15px, transparent 0 13\.5px, #000 14px\);/s,
+    'the exposed outer-corner triangle must be painted with the topbar and sidebar shell material');
+assert.match(nextUiCss,
+    /\.next-ui-panel-elevation::after\s*\{[^}]*width:\s*15px;[^}]*height:\s*15px;[^}]*border-top:\s*1px solid var\(--next-panel-edge\);[^}]*border-left:\s*1px solid var\(--next-panel-edge\);[^}]*border-radius:\s*14px 0 0 0;/s,
+    'the corner patch must redraw the rounded edge above the shell-colored triangle');
 assert.match(uiComponentsCss,
     /\.vcp-ui-window-control-button\s*\{[^}]*-webkit-app-region:\s*no-drag/s,
     'WindowControls must keep the no-drag contract in next-UI scoped CSS rather than inline mutation');
