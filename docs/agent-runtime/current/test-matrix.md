@@ -52,8 +52,8 @@ npm run test:codex-toolbox-live
 | Projection SQLite | Electron ABI | migration、WAL、delta、generation-gated 权威 reconcile、orphan、事务恢复 | working-tree pass | `npm run test:codex-projection-store` 通过 Electron Node mode 执行；尚缺无 source offset 的重复 delta、复杂乱序和磁盘错误。 |
 | Runtime Manager | hermetic fake | resume 不误建、Thread/Turn/fork/interrupt、approval/dynamic tool 分流、persona 迁移、ToolBox-only 工具面 | working-tree pass | 2026-07-31：`npm run test:codex-runtime-manager`；断言 `baseInstructions`、旧 placeholder 安全迁移、`environments=[]`、utility/MCP/web/collab 禁用与 `vcp_invoke` 保留。 |
 | ToolBox bridge process | local process | release binary ready、frame、shutdown、无凭据泄漏 | working-tree pass | `npm run test:codex-toolbox-bridge`；不代表真实 ToolBox 调用通过。 |
-| VChat Responses adapter | hermetic local HTTP + real 0.146 App Server | loopback capability、Thread-bound frozen identity、0.146 developer/`additional_tools` 净化、唯一 `requestId`、断开时同 ID `/v1/interrupt`、模型工具精确为 `[vcp_invoke]`、tool continuation、reasoning 与 SQLite projection | working-tree pass | 2026-08-01：`npm run test:codex-toolbox-responses-adapter`、`npm run test:codex-app-server-adapter-real`。真实 0.146 request 顶层 dynamic tools 为空时由最终 allowlist 边界补出 `vcp_invoke`；Codex 随后仍产生原生 `item/tool/call` 并完成 continuation。Nova/双 Thread live 尚未重跑。 |
-| Bridge endpoint/reconnect reuse | Rust + local bridge process fixture | URL normalization、log/info candidate、latency、退避、config reconnect、dispose、限长、jitter、replay 去重、TTL | working-tree pass | 2026-07-31：`cargo test --manifest-path rust/Cargo.toml -p vcp-agent-vcp --features direct-host host::tests`、`cargo test --manifest-path rust/Cargo.toml -p vcp-toolbox-bridge`、`npm run test:codex-toolbox-bridge`、`npm run test:codex-runtime-manager`；真实 ToolBox WebSocket reconnect 仍 pending。 |
+| VChat Responses adapter | hermetic local HTTP + real 0.146 App Server | loopback capability、Thread-bound frozen identity、0.146 developer/`additional_tools` 净化、唯一 `requestId`、断开时同 ID `/v1/interrupt`、模型工具精确为 `[vcp_invoke]`、tool continuation、reasoning 与 SQLite projection | working-tree pass | `test:codex-toolbox-responses-adapter` 以 namespace/MCP/native/goal/view-image 混合输入验证最终出站仅 `[vcp_invoke]`；`test:codex-app-server-adapter-real` 的 metadata-only 诊断分别记录 incoming `tools` 和实际 `forwardedTools`。 |
+| Bridge endpoint/reconnect reuse | isolated Rust workspace + local bridge process fixture | URL normalization、log/info candidate、latency、退避、config reconnect、dispose、限长、jitter、replay 去重、TTL | working-tree pass | `cargo test --manifest-path rust/toolbox-bridge/Cargo.toml --workspace`、`npm run test:codex-toolbox-bridge`、`npm run test:codex-runtime-manager`；真实 ToolBox WebSocket reconnect 仍 pending。 |
 | VCP marker projection reuse | Node + Projection SQLite | fold/info 的 display/history/notification 分离、未闭合/CJK/HTML、SQLite roundtrip | working-tree pass | 2026-08-01：`npm run test:vcp-content-projection`、`npm run test:codex-projection-store`。嵌套 marker 与 Electron 卡片视觉 gate 仍待。 |
 | TOOL_REQUEST safety | hermetic + Electron | marker 只产生 protocol-warning、正文净化、Bridge invoke 次数为 0、重开/重试也不执行 | partial / working-tree pass | 当前 parser 不具备任何执行出口，`test:vcp-content-projection` 断言工具名不进入普通正文。仍缺 Bridge invoke=0、重开/重试和 Electron gate，产品阻塞未解除。 |
 | Codex native aggregate | hermetic | transport + projection + manager + bridge | working-tree pass | `npm run test:codex-native`。 |
@@ -426,8 +426,30 @@ Electron 真实点击与完整 Main 进程重启已通过；真实 ToolBox provi
 - Workbench acceptance must additionally prove message-card interrupt passes `part.turnId`, retry starting hides active-turn controls, and stale `turn/completed` cannot clear another Session's running state.
 - Real App Server gate: dual-Session cancel isolation 已于 2026-08-04 通过；仍需长 Turn steer、两条相同文本 follow-up 串行 drain、confirmed interrupted completion 的独立收据后，才能关闭 R15 live 门槛。
 
+## R16 Projection V2 gates
+
+| Gate | Command | Status |
+| --- | --- | --- |
+| SQLite V2 normalization/reconcile + Renderer normalized Store | `npm run test:codex-projection-v2` | committed pass on `6ac356f1`; Store owns no `messages/tools` transcript slices |
+| 0.146 Host/Turn/Manager invariants | `npm run test:codex-adapter-invariants` | committed pass |
+| Patch-only Workbench JSDOM | `npm run test:agent-workbench` | committed pass on `6ac356f1`; streaming/tool/reasoning fixtures use revision Patches rather than synthetic transcript events |
+| Schema pin | `npm run check:codex-schema` | committed pass |
+| Static governance | `npm run check:codex-governance` | committed pass |
+| Electron crash/reload recovery | `npm run test:electron-codex-recovery` | committed pass |
+| Electron interactive A→B→A / full smoke | `npm run test:electron-codex-session-switch` + `npm run test:electron-codex-smoke` | committed pass; reasoning/tool cards and message identity survive switch/reload |
+| Full Electron cold reopen | `npm run test:electron-codex-cold-reopen` | working-tree pass on base `679c8fde`; same AppData survives process exit/relaunch while `thread/read` omits dynamic tools and rewrites Item identity. The Electron fixture now includes the real 11-card/five-batch shape and asserts identical normalized order, visible DOM order, DOM identity and assistant continuations before/after restart. |
+| Live ToolBox long tool call | `VCP_CODEX_LIVE=1 VCP_CODEX_LIVE_MODEL=deepseek-v4-flash npm run test:codex-toolbox-live` | current-worktree pass in 20.4 s: `vcp_invoke -> FileOperator.ReadFile -> Bridge -> Projection`; self-contained node exposes only repository `package.json` ReadFile and disconnects after verification |
+| Historical tool position | `npm run test:codex-projection-store` + `npm run test:agent-workbench-timeline` + `npm run test:agent-normalized-store` + `npm run test:electron-codex-cold-reopen` | partial/full reconcile, startup repair, and first-read transactional repair keep cards at their original Turn-local positions; the 11-call regression restores five distinct tool batches separated by assistant Items. Message presentation patches must reassert coordinator-owned DOM keys so completed-message rendering cannot leave only tool rows with stable Timeline identity. |
+| Config/error diagnostics | `npm run test:agent-config-diagnostics` + `npm run test:agent-settings-interaction` + `npm run test:electron-codex-smoke` | working-tree pass; desired/applied revisions, Runtime generation, sanitized endpoint/errors, stale-Session rejection and explicit reapply are covered. Real Electron additionally renders the structured apply-error state in the 139 px sidebar, checks collapsed and expanded sanitized details for horizontal overflow, and captures light/dark evidence. |
+| Projection UI modularity | `npm run test:agent-workbench` + `npm run test:electron-codex-session-switch` + `npm run check:codex-governance` | working-tree pass; hydration/barrier/switch logic moved to a 279-line coordinator, Controller is 321 lines, and 320/360 line ceilings are enforced. Advanced settings, diagnostics, health, details, errors, budget and recovery have independent Agent-only View owners; four composition Views are machine-checked for `element/update/dispose`. |
+
+R16 assertions include idle-before-completed, matched settings confirmation, Thread/`itemsView` fail-closed,
+reasoning summary/content isolation, Unknown/delta-before-Item behavior, Toolbox authority preservation, fork Item ID isolation,
+background Session Patch isolation, A→B→A synchronous restoration, revision-gap full SQLite reload, snapshot-barrier Patch replay,
+read-only derived `messages/tools`, Session-local pending delivery recovery, and durable tool-card placement across cold reopen.
+
 - `npm run test:agent-renderer-isolation`: Agent mount/dispose does not mutate main-chat image or visibility ownership.
 - `npm run test:agent-renderer-lifecycle`: listeners, timers, intervals, and RAF registrations are disposed idempotently.
 - `npm run test:agent-workbench-clients`: Renderer calls stay inside Session, Projection, Interaction, and Workspace client groups.
-- `npm run test:agent-session-compatibility`: deprecated Topic IPC maps once, warns once, and rejects conflicting identity.
+- Removed Topic IPC/preload symbols are covered by static Runtime and debt-boundary governance; no compatibility test or executable adapter remains.
 - `npm run test:codex-runtime-lifecycle`: stopped or crashed Runtime generations cannot write into the next generation.

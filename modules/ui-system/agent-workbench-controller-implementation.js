@@ -3,70 +3,39 @@ import {
     createAgentSessionUiState,
     reconcileAgentSessionUiState,
     reduceAgentSessionUiState,
-    requireMatchingProjectionSession,
-    requireSnapshotSession,
 } from './agent-session-state.js';
 import { createAgentRuntimeEventSubscription, createWorkbenchClients } from './agent-workbench-clients.js';
-import { codexSnapshotToProjection } from './agent-workbench-snapshot-projection.js';
 import { createWorkbenchCommandController } from './agent-workbench-command-controller.js';
+import { createProjectionReloadCoordinator } from './agent-workbench-projection-reload.js';
 import { selectedSessionIdentity, selectedSessionId as selectedSessionIdFromState } from './agent-selected-session.js';
+import {
+    applyProjectionPatch,
+    sessionProjectionFromState,
+} from './agent-normalized-store.js';
+import { createAgentProjectionHydrationCoordinator } from './agent-projection-hydration-coordinator.js';
 
-function durableSnapshotState(snapshot) {
-    return snapshot?.session && typeof snapshot.session === 'object'
-        ? snapshot.session : snapshot?.state && typeof snapshot.state === 'object' ? snapshot.state : {};
-}
-
-function snapshotAgentId(snapshot, durableState, agentId, active) {
-    return typeof snapshot?.session?.agentId === 'string' && snapshot.session.agentId.trim()
-        ? snapshot.session.agentId
-        : typeof snapshot?.agentId === 'string' && snapshot.agentId.trim()
-            ? snapshot.agentId : agentId || active?.agentId || null;
-}
-
-function hydratedRuntime(active, sessionId, durableState, durableAgentId) {
-    if (!active) return null;
+function codexTurnEvent(event) {
+    if (event?.method === 'turn/started') return { ...event, type: 'turn.started' };
+    if (event?.method !== 'turn/completed') return event;
+    const status = String(event.turnStatus || '').trim().toLowerCase();
+    const type = ['failed', 'error'].includes(status) ? 'turn.failed'
+        : ['interrupted', 'cancelled', 'canceled'].includes(status) ? 'turn.cancelled'
+            : 'turn.completed';
     return {
-        ...active, sessionId,
-        title: typeof durableState.title === 'string' && durableState.title.trim() ? durableState.title : active.title,
-        model: typeof durableState.model === 'string' && durableState.model.trim() ? durableState.model : active.model,
-        workspaceRoot: typeof durableState.workspaceRef === 'string' && durableState.workspaceRef.trim()
-            ? durableState.workspaceRef : active.workspaceRoot,
-        agentId: durableAgentId || active.agentId,
-        configSnapshot: durableState.configSnapshot || active.configSnapshot || null,
+        ...event,
+        type,
+        payload: {
+            ...(event.payload || {}),
+            ...(event.turnError ? { error: event.turnError } : {}),
+            turnStatus: status || 'completed',
+        },
     };
 }
 
-function hydratedTopicProjection(durableState, nextRuntime, durableAgentId, selectedSessionId) {
-    return {
-        sessionId: selectedSessionId,
-        threadId: durableState.threadId || nextRuntime?.threadId || null,
-        agentId: durableAgentId,
-        title: nextRuntime?.title || durableState.title || '',
-        model: nextRuntime?.model || durableState.configSnapshot?.model || '',
-        workspaceRoot: nextRuntime?.workspaceRoot || durableState.workspaceRoot || '',
-        configSnapshot: durableState.configSnapshot || null,
-        configRevision: Number(durableState.configRevision || 1),
-        archivedAt: durableState.archivedAt || null,
-        mode: nextRuntime ? 'runtime-active' : 'preview',
-    };
-}
 function createWorkbenchController(runtimeApi) {
     const clients = createWorkbenchClients(runtimeApi);
     const store = createWorkbenchStore();
-    let selectionVersion = 0;
-    let snapshotBarrier = null;
-    // Renderer-only, bounded cache. SQLite is the durable presentation source;
-    // this only prevents a visible flash while a background `thread/read`
-    // revalidates the projection.
-    const snapshotCache = new Map();
-    const MAX_SNAPSHOT_CACHE_ENTRIES = 16;
-    const MAX_SNAPSHOT_CACHE_BYTES = 16 * 1024 * 1024;
-    let snapshotCacheBytes = 0;
-    // A `thread/read` reply is allowed to replace a local SQLite projection
-    // only when no newer live item patch for that Session has reached the
-    // renderer.  SelectionVersion handles A -> B navigation; this counter
-    // handles live A deltas arriving while A's reconcile is in flight.
-    const liveProjectionRevision = new Map();
+    let projectionHydration = null;
     const sessionWarmPromises = new Map();
 
     function requireApi(name) {
@@ -129,6 +98,10 @@ function createWorkbenchController(runtimeApi) {
                 runtime: status?.runtime || 'unknown',
                 worker: status?.worker || null,
                 lastError: status?.lastError || null,
+                generation: Number(status?.generation || 0),
+                toolbox: status?.toolbox || { configured: false, endpoint: null },
+                storage: status?.storage || { readOnly: false, degradedReason: null },
+                capabilities: status?.capabilities || null,
             },
             activeRuntimes: new Map((Array.isArray(status?.runtimes) ? status.runtimes : [])
                 .filter((runtime) => typeof runtime?.sessionId === 'string' && runtime.sessionId.trim())
@@ -182,60 +155,38 @@ function createWorkbenchController(runtimeApi) {
 
     const runtimeSubscription = createAgentRuntimeEventSubscription({
         subscribe: clients.optional('onAgentRuntimeEvent'),
-        snapshotBarrier: () => snapshotBarrier,
+        snapshotBarrier: () => projectionHydration?.activeBarrier() || null,
         store, applyCodexRuntimeEvent: (event) => applyCodexRuntimeEvent(event),
         applySessionUiEvent: (event) => applySessionUiEvent(event), projectRuntimeActivity,
         refreshStatus: () => refreshStatus(),
     });
 
-    function applyCodexProjectionMessage(entry) {
-        if (!entry) return;
-        const patch = codexSnapshotToProjection({ messages: [entry] });
+    function pruneConfirmedEphemeralProjection(sessionId) {
         const current = store.getState();
-        const messages = [...current.messages];
-        for (const candidate of patch.messages) {
-            const durableIndex = messages.findIndex((message) => message.id === candidate.id);
-            // `turn/start` is allowed to render a clearly-labelled temporary
-            // user row before App Server has emitted its authoritative item.
-            // Once that item arrives it must *replace* the temporary row.  A
-            // Codex item id is intentionally not guessed by the Renderer, so
-            // the only safe bridge identity is the turn id supplied by both
-            // the command ACK and the item notification.
-            const pendingIndex = durableIndex < 0 && candidate.role === 'user' && candidate.turnId
-                ? messages.findIndex((message) => (
-                    message.role === 'user'
-                    && message.turnId === candidate.turnId
-                    && String(message.id || '').startsWith('pending-user:')
-                ))
-                : -1;
-            if (durableIndex >= 0) {
-                messages[durableIndex] = { ...messages[durableIndex], ...candidate };
-            } else if (pendingIndex >= 0) {
-                messages[pendingIndex] = {
-                    ...messages[pendingIndex],
-                    ...candidate,
-                    state: candidate.state === 'inProgress' ? 'pending' : candidate.state,
-                    deliveryState: 'confirmed',
-                    deliveryDetail: '',
-                };
-            } else {
-                messages.push(candidate);
-            }
+        const selected = sessionProjectionFromState(current, sessionId)?.projection;
+        if (!selected) return false;
+        const ephemeralStateBySession = current.ephemeralStateBySession instanceof Map
+            ? new Map(current.ephemeralStateBySession) : new Map();
+        const ephemeral = ephemeralStateBySession.get(sessionId);
+        const pendingMessages = Array.isArray(ephemeral?.pendingMessages) ? ephemeral.pendingMessages : [];
+        if (!pendingMessages.length) return true;
+        const confirmedTurns = new Set(selected.messages
+            .filter((message) => message.role === 'user' && message.turnId)
+            .map((message) => message.turnId));
+        const remaining = pendingMessages.filter((message) => !confirmedTurns.has(message.turnId));
+        if (remaining.length !== pendingMessages.length) {
+            if (remaining.length) ephemeralStateBySession.set(sessionId, { ...ephemeral, pendingMessages: remaining });
+            else ephemeralStateBySession.delete(sessionId);
+            store.setState({ ephemeralStateBySession });
         }
-        const tools = new Map(current.tools);
-        for (const [toolCallId, tool] of patch.tools) {
-            tools.set(toolCallId, { ...(tools.get(toolCallId) || {}), ...tool });
-        }
-        const markerObservations = [...(current.markerObservations || [])];
-        for (const marker of patch.markerObservations || []) {
-            const index = markerObservations.findIndex((item) => item.id === marker.id);
-            if (index >= 0) markerObservations[index] = marker;
-            else markerObservations.push(marker);
-        }
-        store.setState({ messages, tools, markerObservations: markerObservations.slice(-100),
-            ...(patch.plan ? { plan: patch.plan } : {}),
-            ...(patch.context && Object.keys(patch.context).length ? { context: { ...current.context, ...patch.context } } : {}) });
+        return true;
     }
+
+    const projectionReloader = createProjectionReloadCoordinator({
+        store,
+        readProjection: (sessionId) => requireApi('agentSessionReadProjection')({ sessionId }),
+        onApplied: (sessionId) => pruneConfirmedEphemeralProjection(sessionId),
+    });
 
     function applyCodexRuntimeEvent(event) {
         const current = store.getState();
@@ -255,231 +206,45 @@ function createWorkbenchController(runtimeApi) {
             activeRuntimes: runtimes,
             ...(selected ? { activeTurnId: event.activity === 'running' ? event.turnId : null } : {}),
         });
-        if (event.projectionMessage && event.sessionId) {
-            liveProjectionRevision.set(event.sessionId, (liveProjectionRevision.get(event.sessionId) || 0) + 1);
+        if (event.projectionPatch && event.sessionId) {
+            const result = applyProjectionPatch(store.getState(), event.projectionPatch);
+            if (result.applied) {
+                store.setState(result.state, event);
+                pruneConfirmedEphemeralProjection(event.sessionId);
+            } else {
+                void projectionReloader.reload(event.sessionId, event.projectionPatch.projectionRevision);
+            }
         }
-        if (selected && event.projectionMessage) applyCodexProjectionMessage(event.projectionMessage);
-        applySessionUiEvent(event);
+        const sessionEvent = codexTurnEvent(event);
+        if (sessionEvent !== event) store.applyEphemeralEvent(sessionEvent);
+        applySessionUiEvent(sessionEvent);
     }
 
     function applySessionUiEvent(event) {
         const current = store.getState();
-        const method = event?.method;
-        const mappedType = method === 'turn/started' ? 'turn.started'
-            : method === 'turn/completed' ? 'turn.completed'
-                : event?.type;
         const sessionEvent = {
             ...event,
-            type: mappedType,
             requestId: event?.payload?.approval?.approvalId || event?.approvalId || null,
         };
         const reduced = reduceAgentSessionUiState(current.sessionUi || createAgentSessionUiState(), sessionEvent);
         if (reduced !== current.sessionUi) store.setState({ sessionUi: reduced });
     }
 
-    function cacheSnapshot(sessionId, snapshot) {
-        if (!sessionId || !snapshot) return;
-        const projection = codexSnapshotToProjection(snapshot);
-        const bytes = Math.min(MAX_SNAPSHOT_CACHE_BYTES, JSON.stringify(snapshot.messages || snapshot.history || []).length * 2);
-        const existing = snapshotCache.get(sessionId);
-        if (existing) snapshotCacheBytes -= existing.bytes;
-        snapshotCache.set(sessionId, { projection, snapshotSequence: Number(snapshot.snapshotSequence) || 0, bytes });
-        snapshotCacheBytes += bytes;
-        while (snapshotCache.size > MAX_SNAPSHOT_CACHE_ENTRIES || snapshotCacheBytes > MAX_SNAPSHOT_CACHE_BYTES) {
-            const [oldestSessionId, oldest] = snapshotCache.entries().next().value;
-            snapshotCache.delete(oldestSessionId);
-            snapshotCacheBytes -= oldest.bytes;
-        }
-    }
-
-    function cachedProjection(sessionId) {
-        const cached = snapshotCache.get(sessionId);
-        if (!cached) return null;
-        snapshotCache.delete(sessionId);
-        snapshotCache.set(sessionId, cached);
-        return cached.projection;
-    }
-
-    function applyPreviewProjection(projection, selectedTopic, projectionSessionId) {
-        const current = store.getState();
-        const selectedSessionId = requireMatchingProjectionSession(
-            selectedTopic?.sessionId, projectionSessionId,
-        );
-        const sessionSnapshots = new Map(current.sessionSnapshots);
-        sessionSnapshots.set(selectedSessionId, projection);
-        store.setState({
-            ...projection,
-            selectedTopic,
-            selectedSessionId,
-            sessionSnapshots,
-            activeTurnId: null,
-            context: projection.context || current.context,
-            plan: projection.plan || null,
-        });
-    }
-
-    function beginSnapshotBarrier() {
-        const barrier = { events: [] };
-        snapshotBarrier = barrier;
-        return barrier;
-    }
-
-    function eventBelongsToTopicRuntime(event, runtime) {
-        if (!event || typeof event !== 'object') return false;
-        if (event.type?.startsWith('runtime.')) return true;
-        return Boolean(runtime?.sessionId
-            && event.sessionId === runtime.sessionId
-            && event.sessionId === runtime.sessionId);
-    }
-
-    function releaseSnapshotBarrier(barrier, snapshot, runtime) {
-        if (snapshotBarrier !== barrier) return;
-        snapshotBarrier = null;
-        // `snapshotSequence` is supplied with the projection snapshot. It is
-        // the durable-snapshot waterline: stale buffered events are never
-        // replayed by JS after a reload, switch or reconnect.
-        const minimumSequence = Number(snapshot?.snapshotSequence);
-        for (const event of barrier.events) {
-            // Runtime diagnostics are process-global rather than a Session
-            // transcript mutation. A selected Session Runtime can legitimately
-            // be absent while the control transport is being created, so a
-            // Session-identity snapshot filter would otherwise drop
-            // the asynchronous ToolBox readiness result and leave the UI at
-            // a permanent “checking” state. They remain Main-authored and
-            // reducer-owned; this is not a Main/Renderer probe or inference.
-            if (event?.type?.startsWith('runtime.')) {
-                store.dispatch(event);
-                continue;
-            }
-            if (event?.type?.startsWith('approval.')) {
-                store.dispatch(event);
-                continue;
-            }
-            if (!eventBelongsToTopicRuntime(event, runtime)) continue;
-            if (Number.isFinite(minimumSequence) && Number(event.sequence) <= minimumSequence) continue;
-            store.dispatch(event);
-        }
-    }
-
-    function applyHydratedSnapshot(sessionId, snapshot, runtimeHint, agentId) {
-        requireSnapshotSession(snapshot, sessionId);
-        const current = store.getState();
-        // A sidebar row may have been created before a background Turn
-        // started. The identity-keyed runtime Map is fresher than that DOM
-        // closure, so never let a stale row hint erase activeTurnId/activity.
-        const active = runtimeForTopic(sessionId, current) || runtimeHint;
-        // `read-topic` / `read-projection` is the durable metadata source
-        // after a reload. Main's runtime status intentionally has only a
-        // small identity shell, never a transcript cache.
-        const durableState = durableSnapshotState(snapshot);
-        const durableAgentId = snapshotAgentId(snapshot, durableState, agentId, active);
-        const nextRuntime = hydratedRuntime(active, sessionId, durableState, durableAgentId);
-        const runtimeSessionId = nextRuntime?.sessionId && String(nextRuntime.sessionId).trim()
-            ? nextRuntime.sessionId : sessionId;
-        const activeRuntimes = new Map(current.activeRuntimes);
-        if (nextRuntime) activeRuntimes.set(runtimeSessionId, { ...nextRuntime, sessionId: runtimeSessionId });
-        const projection = codexSnapshotToProjection(snapshot);
-        cacheSnapshot(sessionId, snapshot);
-        const sessionSnapshots = new Map(current.sessionSnapshots);
-        sessionSnapshots.set(sessionId, projection);
-        const selectedSessionId = durableState.sessionId
-            ? durableState.sessionId : runtimeSessionId;
-        store.setState({
-            ...projection,
-            selectedSessionId,
-            activeTurnId: nextRuntime?.activeTurnId || projection.activeTurnId || null,
-            sessionSnapshots,
-            activeRuntimes,
-            selectedTopic: hydratedTopicProjection(durableState, nextRuntime, durableAgentId, selectedSessionId),
-        });
-        return nextRuntime;
-    }
-
-    async function reconcileHydratedTopic(sessionId, runtimeHint, agentId, version, revisionAtStart) {
-        try {
-            const snapshot = await requireApi('agentSessionRead')({ sessionId: sessionId, ...(agentId ? { agentId } : {}) });
-            const current = store.getState();
-            if (version !== selectionVersion || current.selectedTopic?.sessionId !== sessionId) return null;
-            if ((liveProjectionRevision.get(sessionId) || 0) !== revisionAtStart) return null;
-            applyHydratedSnapshot(sessionId, snapshot, runtimeHint || runtimeForTopic(sessionId), agentId);
-            return snapshot;
-        } catch (_error) {
-            // The SQLite projection remains visible; Main records a sync
-            // error and only a confirmed Thread-not-found becomes orphaned.
-            return null;
-        }
-    }
-
-    async function hydrateTopic(sessionId, runtimeHint = null, existingBarrier = null, agentId = undefined) {
-        if (!sessionId) return null;
-        const version = ++selectionVersion;
-        const barrier = existingBarrier || beginSnapshotBarrier();
-        try {
-            const snapshot = await requireApi('agentSessionReadProjection')({
-                sessionId: sessionId, ...(agentId ? { agentId } : {}),
-            });
-            if (version !== selectionVersion) {
-                releaseSnapshotBarrier(barrier, null, runtimeHint || runtimeForTopic(sessionId));
-                return null;
-            }
-            const nextRuntime = applyHydratedSnapshot(sessionId, snapshot, runtimeHint, agentId);
-            releaseSnapshotBarrier(barrier, snapshot, nextRuntime);
-            const revisionAtStart = liveProjectionRevision.get(sessionId) || 0;
-            void reconcileHydratedTopic(sessionId, runtimeHint, agentId, version, revisionAtStart);
-            return snapshot;
-        } catch (error) {
-            releaseSnapshotBarrier(barrier, null, runtimeForTopic(sessionId));
-            throw error;
-        }
-    }
-
-    // View selection reads the durable SQLite projection first. It does not
-    // resume, stop, or otherwise mutate any Codex Thread.
-    async function previewTopic(sessionId, agentId = undefined, metadata = {}) {
-        if (!sessionId) return null;
-        const version = ++selectionVersion;
-        const barrier = beginSnapshotBarrier();
-        const selectedTopic = {
-            sessionId,
-            agentId: agentId || metadata.agentId || null,
-            model: metadata.model || '',
-            workspaceRoot: metadata.workspaceRef || metadata.workspaceRoot || '',
-            title: metadata.title || '',
-            archivedAt: metadata.archivedAt || null,
-            mode: 'preview',
-        };
-        const cached = cachedProjection(sessionId);
-        if (cached) applyPreviewProjection(cached, selectedTopic, sessionId);
-        let localSnapshot;
-        try {
-            // This is the only awaited cold-open read in the Codex path. It
-            // is a local SQLite query and must not request a Codex Thread.
-            localSnapshot = await requireApi('agentSessionReadProjection')({
-                sessionId: sessionId, ...(agentId ? { agentId } : {}),
-            });
-            if (version !== selectionVersion) {
-                releaseSnapshotBarrier(barrier, null, runtimeForTopic(sessionId));
-                return null;
-            }
-            const resolvedTopic = resolvePreviewTopic(localSnapshot, selectedTopic);
-            cacheSnapshot(sessionId, localSnapshot);
-            applyPreviewProjection(
-                codexSnapshotToProjection(localSnapshot),
-                resolvedTopic,
-                localSnapshot?.session?.sessionId,
-            );
-            releaseSnapshotBarrier(barrier, localSnapshot, runtimeForTopic(sessionId));
-            // Deliberately detached: navigation is complete before App Server
-            // reconciliation begins. The guards in reconcilePreviewTopic make
-            // an A response harmless after the user selects B.
-            const revisionAtStart = liveProjectionRevision.get(sessionId) || 0;
-            void reconcilePreviewTopic(sessionId, agentId, resolvedTopic, version, revisionAtStart);
-            return localSnapshot;
-        } catch (error) {
-            releaseSnapshotBarrier(barrier, null, runtimeForTopic(sessionId));
-            throw error;
-        }
-    }
+    projectionHydration = createAgentProjectionHydrationCoordinator({
+        store,
+        requireApi,
+        runtimeForSession: runtimeForTopic,
+        applyProjectionEvent: applyCodexRuntimeEvent,
+        applySessionUiEvent,
+        projectRuntimeActivity,
+    });
+    const {
+        beginSnapshotBarrier,
+        releaseSnapshotBarrier,
+        hydrateTopic,
+        previewTopic,
+        clearSelection,
+    } = projectionHydration;
 
     const commands = createWorkbenchCommandController({
         store,
@@ -500,77 +265,17 @@ function createWorkbenchController(runtimeApi) {
         readSession, renameSession, archiveSession, restoreSession, permanentlyDeleteSession,
         exportSession, listRecoveryOperations, listRecoveryCandidates, resolveRecoveryOperation, setSessionPinned,
         listInteractionQueue, replaceInteractionQueue, clearInteractionQueue, resolvePendingInput,
-        getWorkbenchSettings, updateWorkbenchSettings, applyAgentProfile, selectAttachments,
+        getWorkbenchSettings, updateWorkbenchSettings, readSessionConfig, readSessionDiagnostics,
+        reapplySessionConfig, applyAgentProfile, selectAttachments,
         startTurn, cancelTurn, cancelTool, steerTurn, followUpTurn,
         respondApproval, respondInteraction, respondToolboxApproval,
         workspaceListDirectory, workspaceReadPreview, workspaceSearchFiles,
         workspaceStatPath, workspacePerformPathAction, workspaceCancel,
-        listAgentProfiles, getCachedModels, refreshModels, onModelsUpdated, saveAgentProfile, saveAgentAvatar,
+        listAgentProfiles, listToolCatalog, getCachedModels, refreshModels, onModelsUpdated,
+        saveAgentProfile, saveAgentAvatar,
         openExternal, launchVchatApp, openThemes, openImageViewer, showImageContextMenu,
     } = commands;
 
-    function resolvePreviewTopic(snapshot, selectedTopic) {
-        const durableAgentId = typeof snapshot?.session?.agentId === 'string' && snapshot.session.agentId.trim()
-            ? snapshot.session.agentId
-            : typeof snapshot?.agentId === 'string' && snapshot.agentId.trim() ? snapshot.agentId
-                : selectedTopic.agentId;
-        const durableState = snapshot?.session && typeof snapshot.session === 'object'
-            ? snapshot.session
-            : snapshot?.state && typeof snapshot.state === 'object' ? snapshot.state : {};
-        return {
-            ...selectedTopic,
-            agentId: durableAgentId,
-            title: typeof durableState.title === 'string' && durableState.title.trim()
-                ? durableState.title : selectedTopic.title,
-            model: typeof durableState.model === 'string' && durableState.model.trim()
-                ? durableState.model : selectedTopic.model,
-            workspaceRoot: typeof durableState.workspaceRef === 'string' && durableState.workspaceRef.trim()
-                ? durableState.workspaceRef : selectedTopic.workspaceRoot,
-            configSnapshot: durableState.configSnapshot || null,
-            configRevision: Number(durableState.configRevision || selectedTopic.configRevision || 1),
-            archivedAt: durableState.archivedAt || selectedTopic.archivedAt || null,
-        };
-    }
-
-    async function reconcilePreviewTopic(sessionId, agentId, selectedTopic, version, revisionAtStart) {
-        try {
-            const snapshot = await requireApi('agentSessionRead')({ sessionId: sessionId, ...(agentId ? { agentId } : {}) });
-            const current = store.getState();
-            if (version !== selectionVersion || current.selectedTopic?.sessionId !== sessionId) return null;
-            // Do not let an older `thread/read` snapshot erase a delta/tool
-            // patch that arrived after reconciliation began.  The next view
-            // entry will perform a fresh SQLite read and reconcile again.
-            if ((liveProjectionRevision.get(sessionId) || 0) !== revisionAtStart) return null;
-            cacheSnapshot(sessionId, snapshot);
-            applyPreviewProjection(
-                codexSnapshotToProjection(snapshot),
-                resolvePreviewTopic(snapshot, selectedTopic),
-                snapshot?.session?.sessionId,
-            );
-            return snapshot;
-        } catch (_error) {
-            // A background sync failure preserves the SQLite projection. Main
-            // records the sync error; only an explicit Thread-not-found may
-            // make the Session orphaned.
-            return null;
-        }
-    }
-
-    function clearSelection() {
-        selectionVersion += 1;
-        if (snapshotBarrier) releaseSnapshotBarrier(snapshotBarrier, null, null);
-        const current = store.getState();
-        const globalProjection = {
-            approvals: current.approvals,
-            interactions: current.interactions,
-            toolboxWs: current.toolboxWs,
-            readiness: current.readiness,
-            activityUnread: current.activityUnread,
-            activityUnreadByTab: current.activityUnreadByTab,
-        };
-        store.selectSession(null);
-        store.setState(globalProjection);
-    }
     async function initialize() {
         // Subscribe before reading the SQLite projection. The barrier belongs
         // to the Renderer and buffers any live Runtime frame that arrives
@@ -598,7 +303,8 @@ function createWorkbenchController(runtimeApi) {
     }
 
     function dispose() {
-        selectionVersion += 1;
+        projectionHydration.dispose();
+        projectionReloader.dispose();
         void optionalApi('agentRuntimeSetWorkbenchPresence')?.(false);
         runtimeSubscription.dispose();
     }
@@ -610,13 +316,15 @@ function createWorkbenchController(runtimeApi) {
         readSession, renameSession, archiveSession, restoreSession, permanentlyDeleteSession,
         exportSession, listRecoveryOperations, listRecoveryCandidates, resolveRecoveryOperation, setSessionPinned,
         listInteractionQueue, replaceInteractionQueue, clearInteractionQueue, resolvePendingInput,
-        getWorkbenchSettings, updateWorkbenchSettings, applyAgentProfile, selectAttachments,
+        getWorkbenchSettings, updateWorkbenchSettings, readSessionConfig, readSessionDiagnostics,
+        reapplySessionConfig, applyAgentProfile, selectAttachments,
         startTurn, steerTurn, followUpTurn, cancelTurn, cancelTool, respondApproval, respondInteraction,
         respondToolboxApproval,
         workspaceListDirectory, workspaceReadPreview, workspaceSearchFiles,
         workspaceStatPath, workspacePerformPathAction,
         workspaceCancel,
-        listAgentProfiles, getCachedModels, refreshModels, onModelsUpdated, saveAgentProfile, saveAgentAvatar,
+        listAgentProfiles, listToolCatalog, getCachedModels, refreshModels, onModelsUpdated,
+        saveAgentProfile, saveAgentAvatar,
         openExternal, launchVchatApp, openThemes, openImageViewer, showImageContextMenu,
     };
 }

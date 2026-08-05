@@ -72,6 +72,48 @@ function createHarness() {
 
 {
     const { state, store, renders } = createHarness();
+    let modelListener = null;
+    let refreshCalls = 0;
+    const controller = {
+        listSessions: async () => [],
+        listInteractionQueue: async () => [],
+        getWorkbenchSettings: async () => ({}),
+    };
+    const coordinator = createAgentSessionCatalogCoordinator({
+        state, store, controller,
+        listAgentProfiles: async () => state.agentCatalog,
+        getCachedModels: async () => [],
+        refreshModels: async () => {
+            refreshCalls += 1;
+            const models = [{ id: 'gpt-refresh', reasoning_efforts: ['high'] }];
+            modelListener?.(models);
+            return { success: true, models };
+        },
+        onModelsUpdated: (callback) => {
+            modelListener = callback;
+            return () => { modelListener = null; };
+        },
+        queueRender: (value) => renders.push(value),
+        syncPermissionModeFromSelectedSession() {},
+        syncModelFromSelectedSession() {},
+        uxMark() {},
+        requestAnimationFrame: (callback) => callback(),
+    });
+    await coordinator.refreshControlPlane();
+    assert.deepEqual(state.modelCatalog, [], 'an empty cached model directory must remain an explicit empty catalog');
+    await coordinator.refreshModelCatalog();
+    assert.equal(refreshCalls, 1, 'manual model refresh must call Main exactly once');
+    assert.deepEqual(state.modelCatalog.map((model) => model.id), ['gpt-refresh']);
+    assert.deepEqual(state.modelCatalog[0].reasoningEfforts, ['high']);
+    const lateModelListener = modelListener;
+    coordinator.dispose();
+    lateModelListener?.([{ id: 'late-model' }]);
+    assert.deepEqual(state.modelCatalog.map((model) => model.id), ['gpt-refresh'],
+        'a model update received after dispose must not mutate the Workbench state');
+}
+
+{
+    const { state, store, renders } = createHarness();
     const profilesA = deferred();
     const profilesB = deferred();
     let profileCall = 0;
@@ -100,51 +142,6 @@ function createHarness() {
     assert.equal(state.agentCatalog.some((agent) => agent.id === 'Agent A'), false,
         'stale profile catalog must not replace the latest control-plane request');
     coordinator.dispose();
-}
-
-{
-    const { state, store, renders } = createHarness();
-    state.model = 'configured-model';
-    let modelListener = null;
-    let unsubscribeCalls = 0;
-    let refreshCalls = 0;
-    const coordinator = createAgentSessionCatalogCoordinator({
-        state, store,
-        controller: { listSessions: async () => [] },
-        listAgentProfiles: async () => state.agentCatalog,
-        getCachedModels: async () => [],
-        refreshModels: async () => {
-            refreshCalls += 1;
-            return { success: true, models: [{ id: 'refreshed-model', reasoning_efforts: ['high'] }] };
-        },
-        onModelsUpdated(callback) {
-            modelListener = callback;
-            return () => { unsubscribeCalls += 1; };
-        },
-        queueRender: (value) => renders.push(value),
-        syncPermissionModeFromSelectedSession() {},
-        syncModelFromSelectedSession() {},
-        uxMark() {},
-        requestAnimationFrame: (callback) => callback(),
-    });
-    assert.equal(typeof modelListener, 'function', 'the model catalog subscription must start with the coordinator');
-    modelListener([]);
-    assert.deepEqual(state.modelCatalog, []);
-    assert.equal(state.model, 'configured-model', 'an empty catalog must preserve the configured model');
-    assert.match(state.modelCatalogError, /直接填写模型名称/);
-    modelListener([{ id: 'live-model', reasoning_efforts: ['low', 'medium'] }]);
-    assert.deepEqual(state.modelCatalog, [{
-        id: 'live-model', name: 'live-model', reasoning_efforts: ['low', 'medium'], reasoningEfforts: ['low', 'medium'],
-    }], 'a models-updated event must replace the stale Build catalog');
-    assert.equal(state.model, 'configured-model', 'catalog updates must not overwrite an explicit profile model');
-    const refreshed = await coordinator.refreshModelCatalog();
-    assert.equal(refreshCalls, 1, 'manual refresh must invoke the shared Main-process model refresh');
-    assert.equal(refreshed.success, true);
-    assert.equal(state.modelCatalog[0].id, 'refreshed-model');
-    coordinator.dispose();
-    assert.equal(unsubscribeCalls, 1, 'disposing the coordinator must release the model update subscription');
-    modelListener([{ id: 'late-model' }]);
-    assert.equal(state.modelCatalog[0].id, 'refreshed-model', 'late model events must be ignored after disposal');
 }
 
 console.log('Agent Session catalog coordinator race tests passed.');

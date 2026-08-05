@@ -11,6 +11,7 @@ Agent 展示边界按职责拆分：
 | Boundary | Modules |
 | --- | --- |
 | Message/Markdown/stream | `agent-presentation/renderer.js`、`markdown-stream*.js`、`stream-batcher.js` |
+| Fork content/runtime helpers | `agent-renderer-content-{pipeline,utils}.js`、`agent-renderer-message-skeleton.js`、`agent-renderer-{color,emoticons,animation-safety}.js` |
 | Tool/approval/observation | `agent-presentation/blocks/` |
 | Dock | `agent-session-dock.js` |
 | Workspace | `agent-workspace-model.js`、Main-only `workspaceService.js` |
@@ -23,6 +24,8 @@ Agent 展示边界按职责拆分：
 
 - 主聊天修复不会自动进入 Agent Renderer；安全与视觉一致性由共享语料和 golden contract 检测。
 - Agent 可以按 Codex Message/Block、审批和 Session identity 独立演进。
+- Agent 生产代码不得 import `modules/renderer/`；主聊天模块只可在测试中作为 golden/隔离对照读取。
+- Agent HTML 按钮不得回退到 `window.chatManager`，模型输出脚本不得执行。交互必须通过显式 Agent action adapter，CSS/Web Animations 由 Agent 生命周期管理。
 - 文件体量由治理脚本设置增长上限；超过上限必须继续提取职责模块，不能把新功能堆回 Workbench 或 fork 文件。
 - 编辑、重试、分支、取消等动作必须通过 Agent action adapter 调用 Codex Thread/Turn API，不能修改 SQLite 投影伪造上下文。
 

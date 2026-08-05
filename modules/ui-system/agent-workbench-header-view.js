@@ -1,4 +1,5 @@
 import { button, iconButton, node } from './agent-workbench-dom.js';
+import { createWorkbenchLifecycle } from './agent-workbench-lifecycle.js';
 
 function createContextRing(document, percentage) {
     const ring = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -27,10 +28,16 @@ function createContextRing(document, percentage) {
     return ring;
 }
 
-function createAgentWorkbenchHeaderView({ element, document = globalThis.document, actions = {} }) {
+function createAgentWorkbenchHeaderView({
+    element,
+    document = globalThis.document,
+    actions = {},
+    lifecycle: injectedLifecycle,
+}) {
+    const lifecycle = injectedLifecycle || createWorkbenchLifecycle(globalThis);
+    const ownsLifecycle = !injectedLifecycle;
     let lastModel = {};
     let editingSessionId = null;
-    let statusTimer = null;
 
     function formatElapsed(milliseconds) {
         const seconds = Math.max(0, Math.floor(Number(milliseconds || 0) / 1000));
@@ -123,7 +130,7 @@ function createAgentWorkbenchHeaderView({ element, document = globalThis.documen
 
     function update(model = {}) {
         lastModel = model;
-        if (statusTimer) { clearInterval(statusTimer); statusTimer = null; }
+        lifecycle.clear('agent-header-status');
         if (editingSessionId) {
             // A selection change must never save into the newly selected Session.
             if (editingSessionId !== model.sessionId) restoreTitle();
@@ -223,10 +230,14 @@ function createAgentWorkbenchHeaderView({ element, document = globalThis.documen
         element.append(title, statusChip, controls);
         if (model.queuePanel) element.append(model.queuePanel);
         updateStatusText();
-        if (model.statusStartedAt) statusTimer = setInterval(updateStatusText, 1000);
+        if (model.statusStartedAt) lifecycle.interval('agent-header-status', updateStatusText, 1000);
     }
 
-    return { element, update, dispose() { if (statusTimer) clearInterval(statusTimer); element.replaceChildren(); } };
+    return { element, update, dispose() {
+        lifecycle.clear('agent-header-status');
+        if (ownsLifecycle) lifecycle.dispose();
+        element.replaceChildren();
+    } };
 }
 
 export { createAgentWorkbenchHeaderView };

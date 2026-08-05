@@ -1,6 +1,6 @@
 {
-  "sourceCommit": "ce0aaeb36d70bfcc44ead5422fa6b9dd87323e8f",
-  "sourceSha256": "14cd9128fd51f0797d335de4b3d96da9f9d3a36c62fbdfe1168c2622400490c9",
+  "sourceCommit": "79e360573b2682b439ba87ab06f3ba9d6c927b8a",
+  "sourceSha256": "b98acebaa868e80f3984380560d1be06362d5434eda6b9f950fee47b9845ec02",
   "requiredCapabilities": [
     "renderMessage",
     "parseFullMarkdown",

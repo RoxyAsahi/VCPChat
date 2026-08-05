@@ -1,5 +1,7 @@
 'use strict';
 
+const { displayPath } = require('./projection/content-policy');
+
 // Clean-room data-only port of the normalization boundary used by OpenCode's
 // session-diff (MIT, a45c2b917e). It never applies a patch and never guesses
 // a diff from Markdown; Codex fileChange.changes is the sole source.
@@ -29,7 +31,7 @@ function normalizeCodexFileChanges(changes) {
     let remaining = MAX_PATCH_CHARS;
     const files = [];
     for (const change of Array.isArray(changes) ? changes.slice(0, MAX_FILES) : []) {
-        const path = String(change?.path || '').trim();
+        const path = displayPath(change?.path).trim();
         const patch = String(change?.diff || '');
         if (!path || !patch) continue;
         const visiblePatch = patch.slice(0, Math.max(0, remaining));

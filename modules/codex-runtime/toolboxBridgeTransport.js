@@ -2,7 +2,7 @@
 
 const { EventEmitter } = require('events');
 const { spawn } = require('child_process');
-const path = require('path');
+const { developmentBridgePath } = require('./toolboxBridgePaths');
 
 const MAX_LINE_BYTES = 2 * 1024 * 1024;
 const START_TIMEOUT_MS = 10_000;
@@ -12,7 +12,7 @@ class ToolboxBridgeTransport extends EventEmitter {
     constructor(options = {}) {
         super();
         this.projectRoot = options.projectRoot || process.cwd();
-        this.executable = options.executable || path.join(this.projectRoot, 'rust', 'target', 'release', 'vcp-toolbox-bridge.exe');
+        this.executable = options.executable || developmentBridgePath(this.projectRoot);
         this.env = options.env || {};
         this.child = null;
         this.buffer = '';

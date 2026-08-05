@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { CodexAppServerError } = require('./appServerTransport');
 const { normalizeSessionConfig } = require('./dataContracts');
+const { normalizeToolPolicy } = require('./tool-policy');
 const {
     normalizeApprovalPolicy,
     normalizeInstructionMode,
@@ -19,11 +20,10 @@ const {
     hasConfigField,
     normalizeConfigField,
 } = require('../agent-config-descriptors.js');
-
-function normalizeApproval(permissionMode, approvalPolicy) {
-    if (permissionMode === 'always-approve' || approvalPolicy === 'never') return 'never';
-    return 'on-request';
-}
+const {
+    runtimeSettingsTarget,
+    threadSettingsPatch,
+} = require('./runtime-settings-contract');
 
 function instructionShape(config = {}) {
     return {
@@ -37,22 +37,15 @@ function instructionConfigChanged(desired = {}, applied = {}) {
     return JSON.stringify(instructionShape(desired)) !== JSON.stringify(instructionShape(applied));
 }
 
+function toolPolicyChanged(desired = {}, applied = {}) {
+    return JSON.stringify(normalizeToolPolicy(desired.toolPolicy))
+        !== JSON.stringify(normalizeToolPolicy(applied.toolPolicy));
+}
+
 function requiresFreshCodexManagedSession(desired = {}, applied = {}) {
     return applied.instructionMode !== 'codex-managed'
         && desired.instructionMode === 'codex-managed'
         && Boolean(String(applied.baseInstructions || '').trim());
-}
-
-function threadSettingsPatch(session, desired = {}) {
-    return {
-        threadId: session.threadId,
-        cwd: session.workspaceRoot || undefined,
-        model: desired.model || undefined,
-        approvalPolicy: normalizeApproval(desired.permissionMode, desired.approvalPolicy),
-        ...(desired.reasoningEffort ? { effort: desired.reasoningEffort } : {}),
-        ...(desired.instructionMode === 'codex-managed' && desired.personality && desired.personality !== 'none'
-            ? { personality: desired.personality } : {}),
-    };
 }
 
 function resolveRequestedWorkspace(context, settings, hasWorkspaceUpdate) {
@@ -84,6 +77,7 @@ function settingsMutationRequest(context, settings) {
         hasInstructionModeUpdate: hasConfigField(settings, 'instructionMode'),
         hasDeveloperInstructionsUpdate: Object.prototype.hasOwnProperty.call(settings, 'developerInstructions'),
         hasPersonalityUpdate: Object.prototype.hasOwnProperty.call(settings, 'personality'),
+        hasToolPolicyUpdate: Object.prototype.hasOwnProperty.call(settings, 'toolPolicy'),
         hasPromptUpdate: hasSystemPromptUpdate || hasBaseInstructionsUpdate,
         requestedSystemPrompt: (hasSystemPromptUpdate || hasBaseInstructionsUpdate)
             ? normalizeConfigField('baseInstructions', settings.baseInstructions ?? settings.systemPrompt).value : null,
@@ -108,6 +102,9 @@ function requestedSessionConfig(current, request) {
         personality: request.hasPersonalityUpdate
             ? normalizePersonality(request.settings.personality)
             : normalizePersonality(currentConfig.personality),
+        toolPolicy: request.hasToolPolicyUpdate
+            ? normalizeToolPolicy(request.settings.toolPolicy)
+            : normalizeToolPolicy(currentConfig.toolPolicy),
     };
 }
 
@@ -121,6 +118,10 @@ function requireExpectedConfigRevision(settings) {
     return expected;
 }
 
+function sessionToolPolicy(session) {
+    return normalizeToolPolicy(session?.configSnapshot?.toolPolicy);
+}
+
 function configUpdateResult(defaults, session, request) {
     const permissionMode = session
         ? normalizePermissionMode(session.configSnapshot?.permissionMode || session.configSnapshot?.approvalPolicy)
@@ -132,6 +133,7 @@ function configUpdateResult(defaults, session, request) {
             permissionMode,
             ...(model ? { model } : {}),
             reasoningEffort: normalizeReasoningEffort(session?.configSnapshot?.reasoningEffort),
+            toolPolicy: sessionToolPolicy(session),
         },
         session: session ? sessionProjection(session) : null,
         desiredConfig: session?.configSnapshot || null,
@@ -293,7 +295,8 @@ class RuntimeConfigService {
         }
         const allowedFields = new Set([
             'instructionMode', 'baseInstructions', 'systemPrompt', 'developerInstructions', 'personality',
-            'model', 'reasoningEffort', 'workspaceRoot', 'permissionMode', 'createDerivedSession',
+                'model', 'reasoningEffort', 'workspaceRoot', 'permissionMode', 'createDerivedSession',
+                'toolPolicy',
         ]);
         const unknownFields = Object.keys(patch).filter((field) => !allowedFields.has(field));
         if (unknownFields.length) {
@@ -340,10 +343,99 @@ class RuntimeConfigService {
         this.scheduledApplies.clear();
     }
 
+    _assertApplicableInstructionMode(repository, session, desired, applied) {
+        if (!requiresFreshCodexManagedSession(desired, applied)) return;
+        const error = new CodexAppServerError(
+            'IDENTITY_CHANGE_REQUIRES_NEW_SESSION',
+            'Codex-managed instructions require a derived Session for this Thread',
+        );
+        const failed = repository.markSessionConfigFailed(
+            session.sessionId, session.configRevision, error.message,
+        );
+        this.sendSessionConfigEvent('session.config.failed', failed, error.message);
+        throw error;
+    }
+
+    async _recoverConfirmationTimeout({ error, operation, session, sessionId }) {
+        if (error?.code !== 'SESSION_CONFIG_CONFIRMATION_TIMEOUT') return null;
+        if (this.context.threadStates().get(session.threadId)?.activity !== 'idle') return null;
+        let repository = this._operationRepository(operation);
+        const current = repository.getSession(sessionId);
+        if (!current || current.configRevision !== session.configRevision) {
+            throw new CodexAppServerError(
+                'SESSION_CONFIG_CONFLICT', 'Session config changed during Runtime confirmation recovery',
+            );
+        }
+        await this.context.transport().request('thread/unsubscribe', { threadId: session.threadId });
+        repository = this._operationRepository(operation);
+        this.context.resumedThreadIds().delete(session.threadId);
+        const rebound = await this.context.resumeSession(repository.getSession(sessionId));
+        return rebound?.appliedRuntimeConfigRevision === session.configRevision ? rebound : null;
+    }
+
+    async _requestSettingsUpdate({ barrier, desired, operation, session, sessionId, targetSettings }) {
+        let resolveConfirmation;
+        let rejectConfirmation;
+        const confirmation = barrier ? new Promise((resolve, reject) => {
+            resolveConfirmation = resolve;
+            rejectConfirmation = reject;
+        }) : null;
+        const timeout = setTimeout(() => {
+            const target = this.context.configApplyTargets().get(session.threadId);
+            if (target?.revision !== session.configRevision) return;
+            this.context.configApplyTargets().delete(session.threadId);
+            const error = new CodexAppServerError(
+                'SESSION_CONFIG_CONFIRMATION_TIMEOUT', 'Codex did not confirm the requested Thread settings',
+            );
+            if (rejectConfirmation) rejectConfirmation(error);
+            else {
+                const failed = this.context.repository()?.markSessionConfigFailed(
+                    sessionId, session.configRevision, error.message,
+                );
+                if (failed) this.sendSessionConfigEvent('session.config.failed', failed, error.message);
+            }
+        }, this.context.configApplyConfirmationTimeoutMs?.() || 5_000);
+        timeout.unref?.();
+        this.context.configApplyTargets().set(session.threadId, {
+            sessionId,
+            revision: session.configRevision,
+            snapshot: desired,
+            settings: targetSettings,
+            runtimeGeneration: this.context.runtimeGeneration(),
+            resolve: resolveConfirmation,
+            reject: rejectConfirmation,
+            timeout,
+        });
+        await this.context.transport().request('thread/settings/update', threadSettingsPatch(session, desired));
+        if (!confirmation) return null;
+        try {
+            await confirmation;
+            return null;
+        } catch (error) {
+            const rebound = await this._recoverConfirmationTimeout({ error, operation, session, sessionId });
+            if (!rebound) throw error;
+            return rebound;
+        }
+    }
+
     async applySessionRuntimeConfig(sessionId, { barrier = false } = {}) {
         const idValue = String(sessionId || '').trim();
         const applyPromises = this.context.configApplyPromises();
-        if (applyPromises.has(idValue)) return applyPromises.get(idValue);
+        if (applyPromises.has(idValue)) {
+            let previousError = null;
+            try {
+                await applyPromises.get(idValue);
+            } catch (error) {
+                previousError = error;
+            }
+            const current = this.context.repository()?.getSession(idValue);
+            if (current && (current.appliedRuntimeConfigRevision !== current.configRevision
+                || current.configApplyState !== 'applied')) {
+                return this.applySessionRuntimeConfig(idValue, { barrier });
+            }
+            if (previousError) throw previousError;
+            return current;
+        }
         const apply = (async () => {
             let repository = this.context.repository();
             let session = repository.getSession(idValue);
@@ -353,15 +445,7 @@ class RuntimeConfigService {
                 && session.configApplyState === 'applied') return session;
             const desired = normalizeSessionConfig(session.configSnapshot || {});
             const applied = normalizeSessionConfig(session.appliedRuntimeConfig || {});
-            if (requiresFreshCodexManagedSession(desired, applied)) {
-                const error = new CodexAppServerError(
-                    'IDENTITY_CHANGE_REQUIRES_NEW_SESSION',
-                    'Codex-managed instructions require a derived Session for this Thread',
-                );
-                session = repository.markSessionConfigFailed(idValue, session.configRevision, error.message);
-                this.sendSessionConfigEvent('session.config.failed', session, error.message);
-                throw error;
-            }
+            this._assertApplicableInstructionMode(repository, session, desired, applied);
             session = repository.markSessionConfigApplying(idValue, session.configRevision);
             this.sendSessionConfigEvent('session.config.pending', session);
             let operation = null;
@@ -373,7 +457,7 @@ class RuntimeConfigService {
                     await this.context.resumeSession(session);
                     return this._operationRepository(operation).getSession(idValue);
                 }
-                if (instructionConfigChanged(desired, applied)) {
+                if (instructionConfigChanged(desired, applied) || toolPolicyChanged(desired, applied)) {
                     const activity = this.context.threadStates().get(session.threadId)?.activity;
                     if (activity === 'running') {
                         if (barrier) throw new CodexAppServerError(
@@ -384,20 +468,25 @@ class RuntimeConfigService {
                     await this.context.transport().request('thread/unsubscribe', { threadId: session.threadId });
                     repository = this._operationRepository(operation);
                     this.context.resumedThreadIds().delete(session.threadId);
-                    await this.context.resumeSession(repository.getSession(idValue));
-                    return this._operationRepository(operation).getSession(idValue);
+                    const resumed = await this.context.resumeSession(repository.getSession(idValue));
+                    repository = this._operationRepository(operation);
+                    if (resumed?.appliedRuntimeConfigRevision === session.configRevision) return resumed;
+                    session = repository.getSession(idValue);
                 }
-                this.context.configApplyTargets().set(session.threadId, {
-                    sessionId: idValue,
-                    revision: session.configRevision,
-                    snapshot: desired,
-                    runtimeGeneration: this.context.runtimeGeneration(),
+                const targetSettings = runtimeSettingsTarget(session, desired);
+                const rebound = await this._requestSettingsUpdate({
+                    barrier, desired, operation, session, sessionId: idValue, targetSettings,
                 });
-                await this.context.transport().request('thread/settings/update', threadSettingsPatch(session, desired));
+                if (rebound) return rebound;
                 return this._operationRepository(operation).getSession(idValue);
             } catch (error) {
                 if (error?.code === 'STALE_RUNTIME_GENERATION' || !this.context.repository()) throw error;
                 repository = this._operationRepository(operation);
+                const target = this.context.configApplyTargets().get(session.threadId);
+                if (target?.revision === session.configRevision) {
+                    clearTimeout(target.timeout);
+                    this.context.configApplyTargets().delete(session.threadId);
+                }
                 const current = repository.getSession(idValue);
                 if (current?.configRevision === session.configRevision && error?.code !== 'SESSION_CONFIG_PENDING') {
                     const failed = repository.markSessionConfigFailed(idValue, session.configRevision, error.message);

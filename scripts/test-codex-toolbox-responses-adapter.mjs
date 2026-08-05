@@ -4,6 +4,22 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const { ToolboxResponsesAdapter, responsesRequestToChat } = require('../modules/codex-runtime/toolboxResponsesAdapter.js');
+const expectedVcpInvokeTool = {
+    type: 'function',
+    function: {
+        name: 'vcp_invoke',
+        description: 'Invoke one named VCPToolBox capability through the VCP bridge.',
+        parameters: {
+            type: 'object',
+            properties: {
+                tool: { type: 'string' },
+                arguments: { type: 'object', additionalProperties: true },
+            },
+            required: ['tool', 'arguments'],
+            additionalProperties: false,
+        },
+    },
+};
 
 const managedMapping = responsesRequestToChat({
     model: 'reasoning-model',
@@ -62,6 +78,7 @@ async function waitFor(predicate, timeoutMs = 1_000) {
 }
 
 const received = [];
+const diagnostics = [];
 const interrupted = [];
 let markCancellationUpstreamSeen;
 const cancellationUpstreamSeen = new Promise((resolve) => { markCancellationUpstreamSeen = resolve; });
@@ -83,6 +100,12 @@ const upstream = http.createServer(async (request, response) => {
     }
     if (body.stream) {
         response.writeHead(200, { 'content-type': 'text/event-stream' });
+        if (body.messages?.some((message) => String(message.content || '').includes('Terminal frame without EOF.'))) {
+            response.write('data: {"choices":[{"delta":{"content":"terminal answer"},"finish_reason":"stop"}]}\r\n\r\n');
+            const delayedDone = setTimeout(() => response.end('data: [DONE]\n\n'), 750);
+            delayedDone.unref?.();
+            return;
+        }
         if (body.messages?.some((message) => String(message.content || '').includes('No reasoning expected.'))) {
             response.end('data: {"choices":[{"delta":{"content":"plain answer"}}]}\n\ndata: [DONE]\n\n');
             return;
@@ -111,6 +134,7 @@ const adapter = new ToolboxResponsesAdapter({
     toolboxUrl: `${upstreamBase}/v1/responses`,
     toolboxApiKey: 'upstream-test-key',
     resolveBaseInstructions: () => 'Use supplied tools only.',
+    onRequest: (identity) => diagnostics.push(identity),
 });
 await adapter.start();
 
@@ -124,8 +148,13 @@ try {
             { type: 'function_call_output', call_id: 'call_previous', output: [{ type: 'input_text', text: 'completed' }] },
         ],
         tools: [
+            { type: 'namespace', name: 'codex', namespace: 'codex', tools: [{ name: 'shell_command' }] },
+            { type: 'mcp', name: 'mcp_read', server_label: 'fixture-mcp' },
+            { type: 'web_search_preview', name: 'web_search' },
             { type: 'function', name: 'shell_command', description: 'must be removed', parameters: { type: 'object' } },
             { type: 'function', name: 'update_plan', description: 'must be removed', parameters: { type: 'object' } },
+            { type: 'function', name: 'create_goal', description: 'must be removed', parameters: { type: 'object' } },
+            { type: 'function', name: 'view_image', description: 'must be removed', parameters: { type: 'object' } },
             { type: 'function', name: 'vcp_invoke', description: 'VCP wrapper', parameters: { type: 'object', additionalProperties: true } },
         ],
     };
@@ -148,9 +177,31 @@ try {
         { role: 'assistant', content: null, tool_calls: [{ id: 'call_previous', type: 'function', function: { name: 'vcp_invoke', arguments: '{"tool":"FileOperator"}' } }] },
         { role: 'tool', tool_call_id: 'call_previous', content: 'completed' },
     ]);
-    assert.deepEqual(received[0].tools, [{ type: 'function', function: { name: 'vcp_invoke', description: 'VCP wrapper', parameters: { type: 'object', additionalProperties: true } } }]);
+    assert.deepEqual(received[0].tools, [expectedVcpInvokeTool],
+        'the ToolBox boundary must own the fixed vcp_invoke contract');
+    assert.deepEqual(diagnostics[0].forwardedTools, [{ type: 'function', name: 'vcp_invoke' }],
+        'metadata-only diagnostics must describe the actual ToolBox-bound tool list');
+    assert.deepEqual(diagnostics[0].tools.map(({ type, name, namespace }) => ({ type, name, namespace })), [
+        { type: 'namespace', name: 'codex', namespace: 'codex' },
+        { type: 'mcp', name: 'mcp_read', namespace: null },
+        { type: 'web_search_preview', name: 'web_search', namespace: null },
+        { type: 'function', name: 'shell_command', namespace: null },
+        { type: 'function', name: 'update_plan', namespace: null },
+        { type: 'function', name: 'create_goal', namespace: null },
+        { type: 'function', name: 'view_image', namespace: null },
+        { type: 'function', name: 'vcp_invoke', namespace: null },
+    ], 'incoming diagnostics may report bounded names but must remain distinct from forwarded tools');
     assert.match(received[0].requestId, /^vcp_codex_[0-9a-f-]{36}$/i,
         'each loopback Responses request must register a non-empty ToolBox interrupt identity');
+    const completedDiagnostics = adapter.getDiagnostics();
+    assert.equal(completedDiagnostics.state, 'ready');
+    assert.equal(completedDiagnostics.activeRequestCount, 0);
+    assert.equal(completedDiagnostics.recentRequests[0].status, 'completed');
+    assert.equal(completedDiagnostics.recentRequests[0].httpStatus, 200);
+    assert.deepEqual(completedDiagnostics.recentRequests[0].forwardedTools,
+        [{ type: 'function', name: 'vcp_invoke' }]);
+    assert.equal(JSON.stringify(completedDiagnostics).includes(received[0].requestId), false,
+        'Renderer-facing Adapter diagnostics must not expose internal request ids');
 
     const codex146RequestIndex = received.length;
     const codex146Response = await fetch(`${adapter.baseUrl}/responses`, {
@@ -173,9 +224,8 @@ try {
         { role: 'system', content: 'Use supplied tools only.' },
         { role: 'user', content: 'Read package.json' },
     ], 'Codex 0.146 additional_tools and developer context must not replace or append to the frozen VChat identity');
-    assert.deepEqual(received[codex146RequestIndex].tools, [
-        { type: 'function', function: { name: 'vcp_invoke', description: 'VCP wrapper', parameters: { type: 'object', additionalProperties: true } } },
-    ], 'Codex 0.146 additional_tools must still expose exactly the allowlisted VCP dynamic tool');
+    assert.deepEqual(received[codex146RequestIndex].tools, [expectedVcpInvokeTool],
+        'Codex 0.146 additional_tools must still expose VChat\'s fixed VCP dynamic-tool contract');
 
     const parallelInput = [
         { type: 'message', role: 'user', content: 'Inspect the project.' },
@@ -258,12 +308,15 @@ try {
     });
     const reasoningAdded = events.find((event) => event.type === 'response.output_item.added' && event.item?.type === 'reasoning');
     const reasoningDeltas = events.filter((event) => event.type === 'response.reasoning_text.delta');
+    const reasoningTextDone = events.find((event) => event.type === 'response.reasoning_text.done');
     const reasoningDone = events.find((event) => event.type === 'response.output_item.done' && event.item?.type === 'reasoning');
     const textAdded = events.find((event) => event.type === 'response.output_item.added' && event.item?.type === 'message');
     const call = events.find((event) => event.type === 'response.output_item.done' && event.item?.type === 'function_call');
     assert.equal(reasoningAdded.output_index, 0);
     assert.equal(textAdded.output_index, 1);
     assert.deepEqual(reasoningDeltas.map((event) => event.delta), ['inspect ', 'carefully']);
+    assert.equal(reasoningTextDone.text, 'inspect carefully');
+    assert.equal(reasoningTextDone.output_index, 0);
     assert.equal(reasoningDone.item.content[0].text, 'inspect carefully');
     assert.equal(reasoningDone.output_index, 0);
     assert.equal(call.output_index, 2, 'tool output index must remain stable after interleaved reasoning and text');
@@ -271,6 +324,9 @@ try {
         id: 'fc_call_stream', type: 'function_call', call_id: 'call_stream', name: 'vcp_invoke', arguments: '{"tool":"FileOperator"}',
     });
     assert.equal(events.at(-1).type, 'response.completed');
+    assert.deepEqual(events.map((event) => event.sequence_number),
+        events.map((_event, index) => index + 1),
+        'Responses streaming events must carry contiguous sequence numbers');
     assert.deepEqual(events.at(-1).response.output.map((item) => item.type), ['reasoning', 'message', 'function_call']);
     assert.equal(events.at(-1).response.output_text, 'answer complete');
     assert.equal(events.at(-1).response.usage.output_tokens_details.reasoning_tokens, 4);
@@ -285,6 +341,20 @@ try {
     const noReasoningText = await noReasoningResponse.text();
     assert.equal(noReasoningText.includes('response.reasoning_text.delta'), false,
         'a provider response without public reasoning must not create an empty reasoning item');
+
+    const terminalStartedAt = Date.now();
+    const terminalResponse = await fetch(`${adapter.baseUrl}/responses`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...baseRequest, stream: true, input: 'Terminal frame without EOF.' }),
+    });
+    const terminalEvents = (await terminalResponse.text()).split(/\r?\n\r?\n/).filter(Boolean).map((chunk) => {
+        const data = chunk.split(/\r?\n/).find((line) => line.startsWith('data: '));
+        return JSON.parse(data.slice(6));
+    });
+    assert.ok(Date.now() - terminalStartedAt < 600,
+        'a Chat finish_reason must close the Responses stream without waiting for upstream EOF');
+    assert.equal(terminalEvents.at(-1).type, 'response.completed');
+    assert.equal(terminalEvents.at(-1).response.output_text, 'terminal answer');
 
     // Codex interruption closes the loopback Responses request.  The adapter
     // must fan that out to the same ToolBox request identity, not merely abort

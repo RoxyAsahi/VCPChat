@@ -416,8 +416,8 @@ export function createAgentRendererSpecialBlocks(deps) {
             return renderThoughtChain(theme, rawContent);
         });
     
-        // Process Conventional Thought Chains (<think>...</think>)
-        processed = processed.replace(CONVENTIONAL_THOUGHT_REGEX, (match, rawContent) => {
+        // Process Conventional Thought Chains (<think>...</think> / <thinking>...</thinking>)
+        processed = processed.replace(CONVENTIONAL_THOUGHT_REGEX, (match, tagName, rawContent) => {
             return renderThoughtChain("思维链", rawContent);
         });
     

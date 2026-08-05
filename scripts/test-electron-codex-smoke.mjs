@@ -39,6 +39,7 @@ await fs.writeFile(path.join(appData, 'settings.json'), JSON.stringify({
     uiMode: 'next',
     enableDistributedServer: false,
     ChatDataServiceEnabled: false,
+    vcpServerUrl: 'http://diagnostic-user:diagnostic-pass@localhost:6005/v1/chat/completions?api_key=must-not-render',
 }), 'utf8');
 const port = await freePort();
 const stderr = { value: '' };
@@ -266,9 +267,18 @@ try {
             .find((button) => button.textContent?.trim() === '当前会话');
         sessionScope?.click();
     });
-    await page.waitForFunction(() => Boolean(document.querySelector(
-        '#nextUiInternalAppHost .agent-chat-settings-pane .agent-chat-setting-field select',
-    )), { timeout: timeoutMs });
+    await page.waitForFunction(() => {
+        const section = document.querySelector(
+            '#nextUiInternalAppHost .agent-chat-settings-pane .agent-settings-section[data-section-key="model"]',
+        );
+        if (!section) return false;
+        if (section.classList.contains('collapsed')) section.querySelector('.agent-settings-section-header')?.click();
+        return !section.classList.contains('collapsed');
+    }, { timeout: timeoutMs });
+    await page.waitForSelector(
+        '#nextUiInternalAppHost .agent-chat-settings-pane .agent-settings-section[data-section-key="model"] wa-select.vcp-ui-select-proxy',
+        { visible: true, timeout: timeoutMs },
+    );
     const setLabeledControl = async (labelText, value, eventType = 'change') => page.evaluate(({ labelText: targetLabel, value: nextValue, eventType: type }) => {
         const host = document.querySelector('#nextUiInternalAppHost');
         const field = [...(host?.querySelectorAll('.agent-chat-setting-field') || [])]
@@ -297,12 +307,21 @@ try {
         await page.click(proxySelector);
         await page.waitForFunction((selector) => document.querySelector(selector)?.open === true,
             { timeout: timeoutMs }, proxySelector);
-        await page.click(`${proxySelector} > wa-option[value="${value}"]`);
+        const optionSelector = `${proxySelector} > wa-option[value="${value}"]`;
         await page.waitForFunction((selector) => {
+            const option = document.querySelector(selector);
+            const rect = option?.getBoundingClientRect?.();
+            return Boolean(rect && rect.width > 0 && rect.height > 0);
+        }, { timeout: timeoutMs }, optionSelector);
+        await page.click(optionSelector);
+        await page.waitForFunction(({ selector, targetLabel, expectedValue }) => {
             const proxy = document.querySelector(selector);
-            return !proxy || proxy.open === false;
-        },
-            { timeout: timeoutMs }, proxySelector);
+            const host = document.querySelector('#nextUiInternalAppHost');
+            const field = [...(host?.querySelectorAll('.agent-chat-setting-field') || [])]
+                .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent?.includes(targetLabel));
+            const native = field?.querySelector('select.vcp-ui-select-source');
+            return native?.value === expectedValue && (!proxy || proxy.open === false);
+        }, { timeout: timeoutMs }, { selector: proxySelector, targetLabel: labelText, expectedValue: value });
         return page.evaluate(({ targetLabel, expectedValue }) => {
             const host = document.querySelector('#nextUiInternalAppHost');
             const field = [...(host?.querySelectorAll('.agent-chat-setting-field') || [])]
@@ -349,12 +368,28 @@ try {
     });
     assert.equal(immediatePermission, 'always-approve', 'YOLO Select must not jump back to the old Snapshot during save');
     assert.equal(await setLabeledControl('工作目录（可留空）', settingsWorkspace), true);
-    await page.waitForFunction(async (sessionId, workspaceRoot) => {
-        const config = await (window.chatAPI || window.electronAPI).agentRuntimeReadSessionConfig({ sessionId });
-        return config?.desiredConfig?.permissionMode === 'always-approve'
-            && config?.desiredConfig?.model === 'electron-visible-select-model'
-            && config?.desiredConfig?.workspaceRoot === workspaceRoot;
-    }, { timeout: timeoutMs }, settingsSessionId, settingsWorkspace);
+    try {
+        await page.waitForFunction(async (sessionId, workspaceRoot) => {
+            const config = await (window.chatAPI || window.electronAPI).agentRuntimeReadSessionConfig({ sessionId });
+            return config?.desiredConfig?.permissionMode === 'always-approve'
+                && config?.desiredConfig?.model === 'electron-visible-select-model'
+                && config?.desiredConfig?.workspaceRoot === workspaceRoot;
+        }, { timeout: timeoutMs }, settingsSessionId, settingsWorkspace);
+    } catch (error) {
+        const observed = await page.evaluate(async (sessionId) => {
+            const host = document.querySelector('#nextUiInternalAppHost');
+            const config = await (window.chatAPI || window.electronAPI).agentRuntimeReadSessionConfig({ sessionId });
+            return {
+                config,
+                status: host?.querySelector('.agent-chat-settings-save-status')?.textContent || '',
+                controls: [...(host?.querySelectorAll('.agent-chat-setting-field') || [])].map((field) => ({
+                    label: field.querySelector('.agent-chat-setting-label')?.textContent || '',
+                    value: field.querySelector('select, input, textarea')?.value || '',
+                })),
+            };
+        }, settingsSessionId);
+        throw new Error(`Session settings did not persist: ${JSON.stringify(observed)}; ${error.message}`);
+    }
     const persistedSettings = await page.evaluate(async (sessionId) => {
         const config = await (window.chatAPI || window.electronAPI).agentRuntimeReadSessionConfig({ sessionId });
         return {
@@ -371,6 +406,226 @@ try {
     assert.equal(persistedSettings.workspaceRoot, settingsWorkspace);
     assert.ok(['unmaterialized', 'pending', 'applying', 'applied'].includes(persistedSettings.applyState),
         `unexpected Session config apply state: ${persistedSettings.applyState}`);
+
+    await page.evaluate(() => {
+        const host = document.querySelector('#nextUiInternalAppHost');
+        [...(host?.querySelectorAll('.agent-chat-settings-scope') || [])]
+            .find((button) => button.textContent?.trim() === '高级')?.click();
+    });
+    await page.waitForFunction((sessionId) => {
+        const diagnostics = document.querySelector('#nextUiInternalAppHost .agent-chat-config-diagnostics');
+        return diagnostics?.textContent?.includes(sessionId)
+            && diagnostics.textContent.includes('配置与 Runtime 诊断');
+    }, { timeout: timeoutMs }, settingsSessionId);
+    const advancedDiagnostics = await page.evaluate(() => {
+        const root = document.querySelector('#nextUiInternalAppHost .agent-chat-config-diagnostics');
+        const text = root?.textContent || '';
+        return {
+            text,
+            hasEndpoint: text.includes('http://localhost:6005/v1/chat/completions'),
+            hasRevisions: text.includes('已保存 r') && text.includes('Runtime r'),
+            actions: [...(root?.querySelectorAll('button') || [])].map((button) => button.textContent.trim()),
+            healthTone: root?.querySelector('.agent-chat-config-health')?.dataset.healthTone || '',
+            detailsOpen: root?.querySelector('.agent-chat-config-diagnostic-details')?.open ?? true,
+            valuesSingleLine: [...(root?.querySelectorAll('.agent-chat-config-value') || [])]
+                .every((value) => getComputedStyle(value).whiteSpace === 'nowrap'),
+            valuesHaveTooltips: [...(root?.querySelectorAll('.agent-chat-config-value') || [])]
+                .every((value) => Boolean(value.title)),
+            rootFits: !root || root.scrollWidth <= root.clientWidth + 1,
+            rootWidth: root?.clientWidth || 0,
+            rootScrollWidth: root?.scrollWidth || 0,
+            overflowing: [...(root?.querySelectorAll('*') || [])]
+                .filter((element) => element.scrollWidth > element.clientWidth + 1
+                    && getComputedStyle(element).overflowX === 'visible')
+                .slice(0, 12)
+                .map((element) => ({
+                    tag: element.tagName,
+                    className: element.className,
+                    width: element.clientWidth,
+                    scrollWidth: element.scrollWidth,
+                    text: String(element.textContent || '').trim().slice(0, 80),
+                })),
+            actionsOneColumn: getComputedStyle(root?.querySelector('.agent-chat-config-diagnostic-actions'))
+                .gridTemplateColumns.split(' ').filter(Boolean).length === 1,
+        };
+    });
+    assert.equal(advancedDiagnostics.hasEndpoint, true,
+        'the diagnostic UI must display the sanitized Main-owned ToolBox endpoint');
+    assert.equal(advancedDiagnostics.text.includes('diagnostic-user'), false);
+    assert.equal(advancedDiagnostics.text.includes('diagnostic-pass'), false);
+    assert.equal(advancedDiagnostics.text.includes('must-not-render'), false);
+    assert.equal(advancedDiagnostics.hasRevisions, true);
+    assert.deepEqual(advancedDiagnostics.actions, ['重新读取', '重新应用', '复制脱敏诊断']);
+    assert.ok(['success', 'warning', 'neutral'].includes(advancedDiagnostics.healthTone));
+    assert.equal(advancedDiagnostics.detailsOpen, false,
+        'technical Session/Thread/Endpoint details must be collapsed by default');
+    assert.equal(advancedDiagnostics.valuesSingleLine, true,
+        'technical values must use single-line ellipsis instead of per-character wrapping');
+    assert.equal(advancedDiagnostics.valuesHaveTooltips, true,
+        'ellipsized diagnostic values must expose their full sanitized value as a tooltip');
+    assert.equal(advancedDiagnostics.rootFits, true,
+        `the diagnostic panel must not overflow the narrow settings sidebar: ${JSON.stringify(advancedDiagnostics)}`);
+    assert.equal(advancedDiagnostics.actionsOneColumn, true,
+        'diagnostic actions must use a stable one-column layout in the narrow sidebar');
+    const authoritativeDiagnostics = await page.evaluate(async (sessionId) => {
+        const api = window.chatAPI || window.electronAPI;
+        const diagnostics = await api.agentRuntimeReadSessionDiagnostics({ sessionId });
+        return {
+            schemaVersion: diagnostics.schemaVersion,
+            sessionId: diagnostics.sessionId,
+            endpoint: diagnostics.toolbox?.endpoint,
+            configured: diagnostics.toolbox?.configured,
+            adapterState: diagnostics.toolbox?.adapter?.state,
+            modelCount: diagnostics.modelCatalog?.cachedCount,
+            storageSchema: diagnostics.runtime?.storage?.schemaVersion,
+        };
+    }, settingsSessionId);
+    assert.equal(authoritativeDiagnostics.schemaVersion, 1);
+    assert.equal(authoritativeDiagnostics.sessionId, settingsSessionId);
+    assert.equal(authoritativeDiagnostics.endpoint, 'http://localhost:6005/v1/chat/completions');
+    assert.equal(authoritativeDiagnostics.configured, false);
+    assert.equal(authoritativeDiagnostics.adapterState, 'not-started');
+    assert.equal(authoritativeDiagnostics.storageSchema, 12);
+    assert.ok(Number.isInteger(authoritativeDiagnostics.modelCount));
+    await page.evaluate(() => {
+        const root = document.querySelector('#nextUiInternalAppHost .agent-chat-config-diagnostics');
+        [...(root?.querySelectorAll('button') || [])]
+            .find((button) => button.textContent.trim() === '重新应用')?.click();
+    });
+    await page.waitForFunction((sessionId) => {
+        const root = document.querySelector('#nextUiInternalAppHost .agent-chat-config-diagnostics');
+        return root?.textContent?.includes(sessionId)
+            && ![...(root.querySelectorAll('button') || [])]
+                .some((button) => button.textContent.trim() === '正在应用');
+    }, { timeout: timeoutMs }, settingsSessionId);
+
+    await page.click('#nextUiInternalAppHost .agent-chat-composer-new');
+    await page.waitForFunction((previousSessionId) => {
+        const active = document.querySelector('#nextUiInternalAppHost .agent-chat-session-row.active');
+        return Boolean(active?.dataset.sessionId && active.dataset.sessionId !== previousSessionId);
+    }, { timeout: timeoutMs }, settingsSessionId);
+    const diagnosticSessionB = await page.evaluate(() => ({
+        sessionId: document.querySelector('#nextUiInternalAppHost .agent-chat-session-row.active')?.dataset.sessionId || '',
+    }));
+    assert.ok(diagnosticSessionB.sessionId, 'the one-click Session action must select Session B');
+    await page.evaluate(() => {
+        const host = document.querySelector('#nextUiInternalAppHost');
+        [...(host?.querySelectorAll('.sidebar-tab-button') || [])]
+            .find((tab) => tab.textContent?.trim() === '设置')?.click();
+        [...(host?.querySelectorAll('.agent-chat-settings-scope') || [])]
+            .find((button) => button.textContent?.trim() === '高级')?.click();
+    });
+    await page.waitForFunction((sessionId) => {
+        const root = document.querySelector('#nextUiInternalAppHost .agent-chat-config-diagnostics');
+        return root?.textContent?.includes(sessionId);
+    }, { timeout: timeoutMs }, diagnosticSessionB.sessionId);
+    const staleIdentityVisible = await page.evaluate((oldSessionId) => {
+        const root = document.querySelector('#nextUiInternalAppHost .agent-chat-config-diagnostics');
+        return root?.textContent?.includes(oldSessionId) || false;
+    }, settingsSessionId);
+    assert.equal(staleIdentityVisible, false,
+        'switching Sessions while Advanced is visible must not retain the previous diagnostic identity');
+    const diagnosticErrorFixture = await page.evaluate(async () => {
+        const original = document.querySelector('#nextUiInternalAppHost .agent-chat-config-diagnostics');
+        if (!original?.parentElement) return { mounted: false };
+        const moduleUrl = new URL('modules/ui-system/agent-settings-diagnostics-view.js', window.location.href);
+        moduleUrl.searchParams.set('electron-error-fixture', String(Date.now()));
+        const { createAgentSettingsDiagnosticsView } = await import(moduleUrl.href);
+        const view = createAgentSettingsDiagnosticsView({ document });
+        view.element.classList.add('agent-chat-config-diagnostics-error-fixture');
+        view.update({
+            sessionId: 'diagnostic-error-session',
+            threadId: 'thread-diagnostic-error',
+            applyState: 'error',
+            desiredRevision: 4,
+            appliedRevision: 3,
+            differences: [{ label: '本地工具审批', desired: 'YOLO', applied: '逐次审批' }],
+            canRefresh: true,
+            canReapply: true,
+            runtimeState: 'ready',
+            runtimeGeneration: 7,
+            toolboxConfigured: true,
+            endpoint: 'http://localhost:6005/v1/chat/completions',
+            adapterState: 'failed',
+            adapterActiveRequests: 0,
+            modelCatalogCount: 2,
+            selectedModelAvailable: true,
+            storageSchemaVersion: 12,
+            applyError: {
+                code: 'THREAD_SETTINGS_TIMEOUT',
+                message: 'Runtime 未在超时前确认目标配置。',
+                details: {
+                    sessionId: 'diagnostic-error-session',
+                    endpoint: 'http://localhost:6005/v1/chat/completions',
+                    targetRevision: 4,
+                },
+            },
+        }, { loading: false, applying: false, error: null });
+        original.style.display = 'none';
+        original.parentElement.insertBefore(view.element, original.nextSibling);
+        view.element.scrollIntoView({ block: 'start' });
+        const errorDetails = view.element.querySelector('.agent-chat-config-error-details');
+        const beforeOpen = {
+            mounted: true,
+            healthTone: view.element.querySelector('.agent-chat-config-health')?.dataset.healthTone || '',
+            issueCount: Number(view.element.querySelector('.agent-chat-config-health')?.dataset.issueCount || 0),
+            text: view.element.textContent || '',
+            rootFits: view.element.scrollWidth <= view.element.clientWidth + 1,
+            detailsOpen: errorDetails?.open ?? true,
+            actionColumns: getComputedStyle(view.element.querySelector('.agent-chat-config-diagnostic-actions'))
+                .gridTemplateColumns.split(' ').filter(Boolean).length,
+        };
+        errorDetails?.querySelector('summary')?.click();
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        return {
+            ...beforeOpen,
+            detailsOpened: errorDetails?.open ?? false,
+            rootFitsWhenOpen: view.element.scrollWidth <= view.element.clientWidth + 1,
+            rootWidth: view.element.clientWidth,
+            rootScrollWidth: view.element.scrollWidth,
+        };
+    });
+    assert.equal(diagnosticErrorFixture.mounted, true);
+    assert.equal(diagnosticErrorFixture.healthTone, 'error');
+    assert.ok(diagnosticErrorFixture.issueCount >= 2,
+        'the health summary must count the apply failure and unapplied field difference');
+    assert.match(diagnosticErrorFixture.text, /配置应用错误/);
+    assert.match(diagnosticErrorFixture.text, /下一个 Turn 可能仍使用旧配置/);
+    assert.match(diagnosticErrorFixture.text, /确认当前 Turn 已结束，然后使用“重新应用”/);
+    assert.equal(diagnosticErrorFixture.detailsOpen, false,
+        'sanitized technical error details must remain collapsed by default');
+    assert.equal(diagnosticErrorFixture.detailsOpened, true,
+        'the real Electron error card must expose technical details on demand');
+    assert.equal(diagnosticErrorFixture.actionColumns, 1);
+    assert.equal(diagnosticErrorFixture.rootFits, true,
+        `the collapsed diagnostic error state must fit the narrow sidebar: ${JSON.stringify(diagnosticErrorFixture)}`);
+    assert.equal(diagnosticErrorFixture.rootFitsWhenOpen, true,
+        `expanded sanitized details must not create horizontal overflow: ${JSON.stringify(diagnosticErrorFixture)}`);
+    const diagnosticScreenshotDir = process.env.VCP_CODEX_SCREENSHOT_DIR;
+    if (diagnosticScreenshotDir) {
+        await fs.mkdir(diagnosticScreenshotDir, { recursive: true });
+        const originalTheme = await page.evaluate(() => (
+            document.body.classList.contains('dark-theme') ? 'dark' : 'light'
+        ));
+        for (const theme of ['light', 'dark']) {
+            await page.evaluate((nextTheme) => (window.chatAPI || window.electronAPI).setTheme(nextTheme), theme);
+            await page.waitForFunction((nextTheme) => document.body.classList.contains(`${nextTheme}-theme`),
+                { timeout: timeoutMs }, theme);
+            await sleep(200);
+            await page.screenshot({
+                path: path.join(diagnosticScreenshotDir, `agent-workbench-diagnostics-error-${theme}.png`),
+                type: 'png',
+            });
+        }
+        await page.evaluate((theme) => (window.chatAPI || window.electronAPI).setTheme(theme), originalTheme);
+        await page.waitForFunction((theme) => document.body.classList.contains(`${theme}-theme`),
+            { timeout: timeoutMs }, originalTheme);
+    }
+    await page.evaluate(() => {
+        document.querySelector('#nextUiInternalAppHost .agent-chat-config-diagnostics-error-fixture')?.remove();
+        const original = document.querySelector('#nextUiInternalAppHost .agent-chat-config-diagnostics');
+        original?.style.removeProperty('display');
+    });
     await page.screenshot({ path: path.join(root, 'screenshots', 'agent-direct-new-session.png') });
     const knownThemeAssets = [
         'styles/assets/wallpaper/themes_snow_realm_light.jpg',
@@ -489,6 +744,49 @@ try {
         && toolGroupLayout.childAligned
         && toolGroupLayout.childWidthRatio >= 0.98,
     `expanded tool groups must stack full-width child cards without nested indentation: ${JSON.stringify(toolGroupLayout)}`);
+
+    await page.click('#nextUiInternalAppHost .agent-chat-composer-tools');
+    await page.waitForSelector('#nextUiInternalAppHost .agent-tool-settings-dialog', {
+        timeout: timeoutMs,
+    });
+    await page.waitForFunction(() => {
+        const dialog = document.querySelector('#nextUiInternalAppHost .agent-tool-settings-dialog');
+        return dialog?.matches('wa-dialog') ? dialog.open === true : Boolean(dialog);
+    }, { timeout: timeoutMs });
+    const toolDialogState = await page.evaluate(() => {
+        const host = document.querySelector('#nextUiInternalAppHost');
+        const dialog = host?.querySelector('.agent-tool-settings-dialog');
+        const content = dialog?.querySelector('.agent-tool-modal-content');
+        const settings = dialog?.querySelector('.agent-tool-settings');
+        const modalBody = dialog?.querySelector('.vcp-ui-modal-body');
+        const dialogSurface = dialog?.shadowRoot?.querySelector('[part="dialog"]') || dialog;
+        const rect = dialogSurface?.getBoundingClientRect();
+        return {
+            scopes: [...(dialog?.querySelectorAll('.agent-tool-modal-scope') || [])]
+                .map((button) => button.textContent.trim()),
+            presets: [...(dialog?.querySelectorAll('.agent-tool-preset') || [])]
+                .map((button) => button.textContent.trim()),
+            nativeTools: dialog?.querySelectorAll('.agent-tool-category:first-of-type .agent-tool-row').length || 0,
+            pluginGroups: dialog?.querySelectorAll('.agent-tool-plugin').length || 0,
+            contentWidth: content?.getBoundingClientRect().width || 0,
+            dialogWidth: rect?.width || 0,
+            settingsScrollable: Boolean(settings && getComputedStyle(settings).overflowY === 'auto'),
+            modalBodyFits: !modalBody || modalBody.scrollWidth <= modalBody.clientWidth + 1,
+            composerStillVisible: Boolean(host?.querySelector('.agent-chat-composer-tools')),
+        };
+    });
+    assert.deepEqual(toolDialogState.scopes, ['Agent 默认', '当前会话']);
+    assert.deepEqual(toolDialogState.presets, ['全部开启', '只读', '自定义']);
+    assert.ok(toolDialogState.nativeTools >= 4,
+        `the real catalog must expose Codex native tools: ${JSON.stringify(toolDialogState)}`);
+    assert.ok(toolDialogState.contentWidth >= 650 && toolDialogState.dialogWidth >= 650,
+        `the tool picker must use a settings-sized dialog: ${JSON.stringify(toolDialogState)}`);
+    assert.equal(toolDialogState.settingsScrollable, true,
+        'a long plugin catalog must scroll inside the dialog instead of growing past the viewport');
+    assert.equal(toolDialogState.modalBodyFits, true,
+        'the settings-sized tool dialog must not introduce a second horizontal scroller');
+    assert.equal(toolDialogState.composerStillVisible, true,
+        'the tool picker entry must remain owned by the composer toolbar');
     const screenshotDir = process.env.VCP_CODEX_SCREENSHOT_DIR;
     if (screenshotDir) {
         await fs.mkdir(screenshotDir, { recursive: true });
@@ -509,6 +807,17 @@ try {
             }
         }
     }
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => {
+        const dialog = document.querySelector('#nextUiInternalAppHost .agent-tool-settings-dialog');
+        return !dialog || (dialog.matches('wa-dialog') && dialog.open === false);
+    }, { timeout: timeoutMs });
+    await page.click('#nextUiInternalAppHost .agent-chat-composer-tools');
+    await page.waitForFunction(() => {
+        const dialog = document.querySelector('#nextUiInternalAppHost .agent-tool-settings-dialog');
+        return dialog?.matches('wa-dialog') ? dialog.open === true : Boolean(dialog);
+    }, { timeout: timeoutMs });
+    await page.keyboard.press('Escape');
     await page.reload({ waitUntil: 'domcontentloaded', timeout: timeoutMs });
     await page.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout: timeoutMs });
     const settingsAfterReload = await page.evaluate(async (sessionId) => {

@@ -96,9 +96,16 @@ class RuntimeSessionService {
                         includeTurns: true,
                     });
                     repository = this._operationRepository(operation);
-                    applied = this.context.projector().reconcileThread(
-                        session.sessionId, result.thread || result, projectionGeneration,
-                    ).applied;
+                    const thread = result?.thread || result;
+                    if (String(thread?.id || '').trim() !== session.threadId) {
+                        throw new CodexAppServerError(
+                            'INVALID_RESPONSE', 'Codex thread/read returned a mismatched Thread',
+                        );
+                    }
+                    const reconciled = this.context.projector().reconcileThread(
+                        session.sessionId, thread, projectionGeneration,
+                    );
+                    applied = reconciled.applied;
                 }
                 if (!applied) throw new CodexAppServerError(
                     'RECONCILE_GENERATION_CHANGED', 'Projection changed during reconciliation; retry later',

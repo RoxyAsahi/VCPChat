@@ -3,12 +3,15 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { createRequire } from 'node:module';
 import { WebSocketServer } from 'ws';
+
+const require = createRequire(import.meta.url);
+const { developmentBridgePath } = require('../modules/codex-runtime/toolboxBridgePaths');
 
 const projectRoot = path.resolve(import.meta.dirname, '..');
 const executable = process.env.VCP_TOOLBOX_BRIDGE
-    || path.join(projectRoot, 'rust', 'target', 'release', process.platform === 'win32'
-        ? 'vcp-toolbox-bridge.exe' : 'vcp-toolbox-bridge');
+    || developmentBridgePath(projectRoot);
 const testKey = 'test-key-not-logged';
 
 assert.equal(fs.existsSync(executable), true, `ToolBox bridge binary is missing: ${executable}`);

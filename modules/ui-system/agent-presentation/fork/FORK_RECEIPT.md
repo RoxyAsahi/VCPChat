@@ -3,14 +3,14 @@
 ## 来源
 
 - 来源文件：`modules/messageRenderer.js`
-- VChat commit：`ce0aaeb36d70bfcc44ead5422fa6b9dd87323e8f`
-- 源文件 SHA-256：`14cd9128fd51f0797d335de4b3d96da9f9d3a36c62fbdfe1168c2622400490c9`
-- 源文件基线：3451 行，177730 字节（Windows working-tree 换行）
+- 最近审计的 VChat commit：`79e360573b2682b439ba87ab06f3ba9d6c927b8a`
+- 最近审计的源文件 SHA-256：`b98acebaa868e80f3984380560d1be06362d5434eda6b9f950fee47b9845ec02`
+- 最近审计的源文件：4045 行，178362 字节（Windows working-tree 换行）
 - Fork 文件：`agentMessageRenderer.js`
 
-首次建立副本时，源文件与 Fork 在统一为 LF 并移除结尾换行后逐字符相等。随后只执行以下机械变更：
+首次建立副本时，源文件与 Fork 在统一为 LF 并移除结尾换行后逐字符相等。初始阶段执行了以下机械变更：
 
-1. 相对 import 从 `./renderer/` 调整为 `../../../renderer/`；
+1. 相对 import 最初调整到主聊天 `renderer/`；R16 已将全部生产依赖迁入 Agent-owned 模块，当前不再 import `modules/renderer/`；
 2. 全局导出由 `window.messageRenderer` 改为 `window.agentMessageRendererFork`；
 3. 文件头增加来源收据链接。
 
@@ -36,4 +36,10 @@
 
 Agent 模块不得读取 `currentChatHistoryRef`、`currentSelectedItemRef`、`currentTopicIdRef`、`saveChatHistory` 或主聊天 `streamManager`。新增能力必须通过显式 Session context 和 Agent action adapter 接入。
 
+R16 独立化收口：Markdown 顺序协议、内容后处理、消息骨架、头像取色、表情 URL 和动画安全均由 `agent-renderer-*` 模块持有。治理检查拒绝 Agent 生产模块导入 `modules/renderer/`。Agent 输出中的按钮不得调用 `window.chatManager`，模型输出的 `<script>` 只会被移除；CSS/Web Animations 仍可显示并由 Agent 生命周期清理。
+
 2026-08-02 同步审查：上游加入主聊天音频播放器和 Python 附件的安全文本打开路径。两项不进入 Agent fork：当前 Codex/ToolBox 投影没有可信音频资源描述，而 Agent 文件动作必须经 `WorkspacePathRef` 与 Main-only workspace service，不能回退到主聊天的任意 `file:` 路径入口。来源哈希已更新；Agent 的现有 Markdown、代码、表格、链接、图片、reasoning 与工具投影能力不变。
+
+2026-08-04 同步审查：主聊天增加异步历史加载的 render-session guard，并在追加消息后同步主界面 empty state。Agent 不复制这两处实现：Agent Timeline 已按 `sessionId + projectionRevision` 做 generation/revision 隔离，非当前 Session Patch 只进入 normalized store；Agent Workbench 也不使用主聊天的 `chatManager` empty-state owner。安全语料与 Session 切换测试继续作为两侧共享合同。
+
+2026-08-05 同步审查：上游扩展常规思维链解析，兼容单行或多行的 `<think>` 与 `<thinking>`，并通过反向引用拒绝不匹配的开始/结束标签。该解析安全修复同步进入 Agent-owned special-block pipeline；其余主聊天 Renderer 状态和历史逻辑仍不共享。

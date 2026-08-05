@@ -81,6 +81,9 @@ export function createAgentWorkbenchState({ window, agentCatalog, rememberedTopi
             ['advanced', { state: 'idle', message: '' }],
         ]),
         recoveryOperations: [], recoveryThreads: [], recoveryLoading: false, recoveryError: '',
+        settingsDiagnostics: {
+            sessionId: '', state: 'idle', config: null, error: null, requestId: 0, readAt: 0,
+        },
         permissionMode: 'ask', permissionSaving: false, modelSaving: false, avatarSaving: false,
         modelDraft: null, modelDraftSessionId: null, recovering: false, activityOpen: false,
         activityPanelWidth: 320, agentSidebarWidth, activityTab: 'notifications',

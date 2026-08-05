@@ -6,6 +6,7 @@ const {
     decodeVcpInvokeCall,
     sanitizeToolboxValue,
 } = require('./runtime-normalizers');
+const { isVcpToolEnabled } = require('./tool-policy');
 
 class RuntimeToolboxService {
     constructor(context) {
@@ -49,6 +50,25 @@ class RuntimeToolboxService {
         } catch (error) {
             respond({
                 contentItems: [{ type: 'inputText', text: `Invalid vcp_invoke request: ${error.message}` }],
+                success: false,
+            });
+            return;
+        }
+        const repository = typeof this.context.repository === 'function' ? this.context.repository() : null;
+        const session = repository?.getSessionByThread(params.threadId);
+        const appliedConfig = session?.appliedRuntimeConfigRevision > 0
+            ? session.appliedRuntimeConfig : session?.configSnapshot;
+        const command = String(invocation.targetArguments?.command || '').trim();
+        if (repository && (!session || !isVcpToolEnabled(
+            appliedConfig?.toolPolicy,
+            invocation.targetToolName,
+            command,
+        ))) {
+            respond({
+                contentItems: [{
+                    type: 'inputText',
+                    text: `VCP tool is disabled for this Session: ${invocation.targetToolName}${command ? `/${command}` : ''}`,
+                }],
                 success: false,
             });
             return;

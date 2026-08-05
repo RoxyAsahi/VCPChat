@@ -2,6 +2,10 @@
 
 const fs = require('fs');
 const path = require('path');
+const {
+    developmentBridgePath,
+    packagedBridgePath,
+} = require('./toolboxBridgePaths');
 const { CodexAppServerError } = require('./appServerTransport');
 const {
     hasToolboxConfiguration,
@@ -11,26 +15,54 @@ const {
     serializeError,
     toolboxConfigFingerprint,
 } = require('./runtime-normalizers');
+const { projectionPatchBetween } = require('./projection/v2');
+const {
+    runtimeSettingsFromNotification,
+    sameRuntimeSettings,
+} = require('./runtime-settings-contract');
 
 function applySettingsNotification(context, repository, session, message) {
     if (message.method !== 'thread/settings/updated' || !session) return;
     const target = context.configApplyTargets().get(session.threadId);
     if (!target || target.runtimeGeneration !== context.runtimeGeneration()) return;
+    if (target.sessionId !== session.sessionId) return;
+    const settings = message.params?.threadSettings || message.params?.thread_settings;
+    if (!settings || String(message.params?.threadId || '').trim() !== session.threadId) return;
+    if (session.configRevision !== target.revision) {
+        clearTimeout(target.timeout);
+        context.configApplyTargets().delete(session.threadId);
+        target.reject?.(new CodexAppServerError(
+            'SESSION_CONFIG_CONFLICT', 'Session config changed before Codex confirmed the previous revision',
+        ));
+        return;
+    }
+    const expected = target.settings || {};
+    if (!sameRuntimeSettings(runtimeSettingsFromNotification(settings), expected)) return;
     const applied = repository.markSessionConfigApplied(target.sessionId, target.revision, target.snapshot);
-    context.configApplyTargets().delete(session.threadId);
     if (applied?.appliedRuntimeConfigRevision === target.revision) {
+        clearTimeout(target.timeout);
+        context.configApplyTargets().delete(session.threadId);
         context.sendSessionConfigEvent('session.config.applied', applied);
+        target.resolve?.(applied);
     }
 }
 
-function notificationEvent(context, message, projected, session, threadId, itemId, projectionMessage) {
+function notificationEvent(context, message, projected, session, threadId, itemId, projectionPatch) {
     if (!session) return { runtime: 'codex', ...message };
+    const rawTurnError = message?.params?.turn?.error?.message
+        || message?.params?.turn?.error
+        || message?.params?.error?.message
+        || message?.params?.error
+        || message?.params?.reason;
+    const turnError = typeof rawTurnError === 'string'
+        ? rawTurnError.replace(/[\r\n\t]+/g, ' ').trim().slice(0, 2_000) : null;
     return {
         runtime: 'codex', type: 'projection.updated', method: message.method,
         sessionId: session.sessionId, threadId,
         turnId: message?.params?.turnId || message?.params?.turn?.id || null,
         turnStatus: message?.params?.turn?.status || null,
-        itemId, projectionMessage,
+        turnError,
+        itemId, projectionPatch,
         activity: context.threadStates().get(threadId)?.activity || 'idle',
     };
 }
@@ -116,6 +148,9 @@ class RuntimeHostService {
         this.context.setState('stopping');
         this.context.setIntentionalStop(true);
         this.context.invalidateGeneration('VChat Agent Runtime stopped');
+        this.context.rejectConfigApplyTargets(new CodexAppServerError(
+            'RUNTIME_STOPPED', 'VChat Agent Runtime stopped while applying Session settings',
+        ));
         await this.context.failClosedNativeApprovals('VChat Agent Runtime stopped');
         await this.context.failClosedToolboxApprovals('VChat Agent Runtime stopped');
         this.context.clearInteractions('codex-native');
@@ -184,8 +219,13 @@ class RuntimeHostService {
                         mode,
                         developerInstructions: String(appliedConfig?.developerInstructions || ''),
                         personality: normalizePersonality(appliedConfig?.personality),
+                        ...(appliedConfig?.toolPolicy ? { toolPolicy: appliedConfig.toolPolicy } : {}),
                     }
-                    : { mode, baseInstructions: String(appliedConfig?.baseInstructions || '') };
+                    : {
+                        mode,
+                        baseInstructions: String(appliedConfig?.baseInstructions || ''),
+                        ...(appliedConfig?.toolPolicy ? { toolPolicy: appliedConfig.toolPolicy } : {}),
+                    };
             },
         });
         this.context.setResponsesAdapter(adapter);
@@ -321,16 +361,32 @@ class RuntimeHostService {
 
     handleNotification(message) {
         const repository = this.context.repository();
+        const threadId = message?.params?.threadId || message?.params?.thread?.id || null;
+        const sessionBefore = threadId ? repository?.getSessionByThread(threadId) : null;
+        const baseProjectionRevision = sessionBefore
+            ? repository.projectionGeneration(sessionBefore.sessionId) : 0;
+        const itemId = notificationItemId(message);
+        const projectionMessageBefore = sessionBefore && itemId
+            ? repository.getProjectedMessageByItem(sessionBefore.sessionId, itemId) : null;
         const projected = this.context.projector()?.projectNotification(message);
         this.observeCompactionNotification(message);
-        const threadId = message?.params?.threadId || message?.params?.thread?.id || null;
         const session = threadId ? repository?.getSessionByThread(threadId) : null;
         applySettingsNotification(this.context, repository, session, message);
         this.context.updateThreadState(message, session);
-        const itemId = notificationItemId(message);
         const projectionMessage = projected && session && itemId
             ? repository.getProjectedMessageByItem(session.sessionId, itemId) : null;
-        const event = notificationEvent(this.context, message, projected, session, threadId, itemId, projectionMessage);
+        const projectionRevision = session ? repository.projectionGeneration(session.sessionId) : baseProjectionRevision;
+        const projectionPatch = projectionMessage && projectionRevision > baseProjectionRevision
+            ? projectionPatchBetween({
+                session: { sessionId: session.sessionId, threadId },
+                messages: projectionMessageBefore ? [projectionMessageBefore] : [],
+                projectionRevision: baseProjectionRevision,
+            }, {
+                session: { sessionId: session.sessionId, threadId },
+                messages: [projectionMessage],
+                projectionRevision,
+            }, { runtimeGeneration: this.context.runtimeGeneration() }) : null;
+        const event = notificationEvent(this.context, message, projected, session, threadId, itemId, projectionPatch);
         this.context.sendEvent(event);
     }
 
@@ -396,11 +452,10 @@ class RuntimeHostService {
     async ensureBridge(settings = this.context.getSettings() || {}) {
         const current = this.context.bridge();
         if (current) return current.start();
-        const bridgeName = process.platform === 'win32' ? 'vcp-toolbox-bridge.exe' : 'vcp-toolbox-bridge';
         const candidates = [
             process.env.VCP_TOOLBOX_BRIDGE,
-            process.resourcesPath && path.join(process.resourcesPath, bridgeName),
-            path.join(this.context.projectRoot(), 'rust', 'target', 'release', bridgeName),
+            packagedBridgePath(process.resourcesPath),
+            developmentBridgePath(this.context.projectRoot()),
         ].filter(Boolean);
         const bridgePath = candidates.find((candidate) => fs.existsSync(candidate)) || candidates[0];
         if (!settings.vcpServerUrl || !settings.vcpApiKey || !fs.existsSync(bridgePath)) return null;
@@ -425,6 +480,9 @@ class RuntimeHostService {
         const serialized = serializeError(error);
         this.context.setLastError(serialized);
         this.context.invalidateGeneration('Codex App Server crashed');
+        this.context.rejectConfigApplyTargets(new CodexAppServerError(
+            'RUNTIME_CRASHED', 'Codex App Server crashed while applying Session settings',
+        ));
         const repository = this.context.repository();
         if (repository && !repository.readOnly) {
             for (const [threadId, threadState] of this.context.threadStates()) {

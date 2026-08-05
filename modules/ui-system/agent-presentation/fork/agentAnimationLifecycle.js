@@ -1,4 +1,4 @@
-import { processAnimationsInContent, cleanupAnimationsInContent } from '../../../renderer/animation.js';
+import { processAnimationsInContent, cleanupAnimationsInContent } from './agent-renderer-animation-safety.js';
 
 function createAgentAnimationLifecycle({ root }) {
     const contents = new Set();

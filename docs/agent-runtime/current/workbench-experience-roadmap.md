@@ -109,7 +109,7 @@ Tool call
 - 将 Projection SQLite bootstrap 从 `CodexRuntimeManager.start()` 拆开，提供幂等
   `ensureProjectionStore()`；`listSessions/readProjection/searchSessions` 只打开数据库，不启动 App Server、
   adapter 或 bridge。
-- `agent-runtime:list-topics` 在 Main 按 canonical Agent identity 返回已经过滤好的 Session，不再把全部
+- `agent-session:list` 在 Main 按 canonical Agent identity 返回已经过滤好的 Session，不再把全部
   Session 交给 Renderer 用字符串猜测。
 - Session 快照新增/补全：
   - `agentCatalogId`：Agent 目录稳定 ID；

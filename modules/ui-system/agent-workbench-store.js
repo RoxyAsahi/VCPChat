@@ -1,8 +1,10 @@
 import { createAgentSessionUiState } from './agent-session-state.js';
 import { createAgentEventDeduper } from './agent-event-deduper.js';
+import { selectedProjectionView } from './agent-normalized-store.js';
 import { selectedSessionId as selectedSessionIdFromState } from './agent-selected-session.js';
+import { reduceEphemeralEvent } from './agent-store/ephemeral-reducer.js';
 import { reduceEvent } from './agent-store/event-router.js';
-import { pendingUserMessageId, upsertMessage } from './agent-store/reducer-shared.js';
+import { pendingUserMessageId } from './agent-store/reducer-shared.js';
 
 const SESSION_EVENT_TYPES = new Set([
     'session.created',
@@ -13,17 +15,21 @@ const SESSION_EVENT_TYPES = new Set([
     'session.config.applied',
     'session.config.failed',
 ]);
+const EPHEMERAL_EVENT_TYPES = new Set([
+    'turn.started', 'turn.completed', 'turn.failed', 'turn.cancelled',
+]);
 
 function createInitialState() {
     return {
         runtime: { state: 'unknown', worker: null, lastError: null },
         selectedSessionId: null,
-        sessionSnapshots: new Map(),
+        sessionsById: new Map(),
+        blocksById: new Map(),
+        projectionRevisions: new Map(),
         activeRuntimes: new Map(),
+        ephemeralStateBySession: new Map(),
         selectedTopic: null,
         sessionUi: createAgentSessionUiState(),
-        messages: [],
-        tools: new Map(),
         approvals: [],
         interactions: [],
         toolboxWs: [],
@@ -47,35 +53,64 @@ function acceptsVisibleEvent(state, event) {
     const isInteraction = event.type?.startsWith('interaction.');
     const selectedSessionId = state.selectedSessionId || null;
     return isRuntimeEvent || isSessionEvent || isApproval || isInteraction
+        || EPHEMERAL_EVENT_TYPES.has(event.type)
         || Boolean(selectedSessionId && event.sessionId === selectedSessionId);
 }
 
+function ownedInitialState(initial) {
+    const { messages: _messages, tools: _tools, ...owned } = initial || {};
+    const defaults = createInitialState();
+    return {
+        ...defaults,
+        ...owned,
+        sessionsById: owned.sessionsById instanceof Map ? owned.sessionsById : defaults.sessionsById,
+        blocksById: owned.blocksById instanceof Map ? owned.blocksById : defaults.blocksById,
+        projectionRevisions: owned.projectionRevisions instanceof Map
+            ? owned.projectionRevisions : defaults.projectionRevisions,
+        activeRuntimes: owned.activeRuntimes instanceof Map ? owned.activeRuntimes : defaults.activeRuntimes,
+        ephemeralStateBySession: owned.ephemeralStateBySession instanceof Map
+            ? owned.ephemeralStateBySession : defaults.ephemeralStateBySession,
+    };
+}
+
 function createWorkbenchStore(initial = createInitialState()) {
-    let state = initial;
+    let state = ownedInitialState(initial);
     const listeners = new Set();
     const eventDeduper = createAgentEventDeduper();
 
+    function viewState() {
+        return { ...state, ...selectedProjectionView(state) };
+    }
+
     function notify(event) {
-        listeners.forEach((listener) => listener(state, event));
+        const current = viewState();
+        listeners.forEach((listener) => listener(current, event));
     }
 
     return {
-        getState: () => state,
+        getState: viewState,
         subscribe(listener) {
             listeners.add(listener);
             return () => listeners.delete(listener);
         },
-        setState(patch) {
-            state = { ...state, ...patch };
-            notify();
+        setState(patch, event) {
+            const { messages: _messages, tools: _tools, ...ownedPatch } = patch || {};
+            state = { ...state, ...ownedPatch };
+            notify(event);
         },
         addPendingUserMessage({ turnId, prompt, attachments = [], createdAt = Date.now() } = {}) {
             if (!turnId || (!String(prompt || '').trim() && !attachments.length)) return state;
-            const existing = state.messages.find((message) => message.turnId === turnId && message.role === 'user');
+            const sessionId = String(state.selectedSessionId || '').trim();
+            if (!sessionId) return state;
+            const ephemeralStateBySession = state.ephemeralStateBySession instanceof Map
+                ? new Map(state.ephemeralStateBySession) : new Map();
+            const ephemeral = ephemeralStateBySession.get(sessionId) || { pendingMessages: [] };
+            const pendingMessages = Array.isArray(ephemeral.pendingMessages) ? ephemeral.pendingMessages : [];
+            const existing = pendingMessages.find((message) => message.turnId === turnId && message.role === 'user');
             if (existing) return state;
-            state = {
-                ...state,
-                messages: upsertMessage(state.messages, {
+            ephemeralStateBySession.set(sessionId, {
+                ...ephemeral,
+                pendingMessages: [...pendingMessages, {
                     id: pendingUserMessageId(turnId),
                     turnId,
                     role: 'user',
@@ -87,9 +122,18 @@ function createWorkbenchStore(initial = createInitialState()) {
                     createdAt,
                     firstSequence: null,
                     lastSequence: null,
-                }),
-            };
+                }],
+            });
+            state = { ...state, ephemeralStateBySession };
             notify({ type: 'ui.user_message.pending', turnId });
+            return state;
+        },
+        applyEphemeralEvent(event) {
+            const next = reduceEphemeralEvent(state, event || {});
+            if (next !== state) {
+                state = next;
+                notify(event);
+            }
             return state;
         },
         dispatch(event) {
@@ -108,8 +152,6 @@ function createWorkbenchStore(initial = createInitialState()) {
                 ...state,
                 selectedSessionId: sessionId,
                 selectedTopic: session ? { ...session, sessionId } : null,
-                messages: [],
-                tools: new Map(),
                 approvals: [],
                 toolboxWs: [],
                 markerObservations: [],
@@ -148,12 +190,17 @@ function deriveWorkbenchViewState(state = {}) {
 
     if (runtime.state === 'failed') return 'error';
     if (state.recovering || runtime.state === 'degraded') return 'reconnecting';
+    if (runtimeRecoveryUnconfirmed(selectedRuntime)) return 'reconnecting';
     if ((runtime.state === 'unknown' || runtime.state === 'stopped') && !hasIdlePreview) return 'disconnected';
     if (!hasSession && !hasIdlePreview) return 'disconnected';
     if (hasApproval) return 'awaiting-approval';
     if (hasTurn) return 'running';
     if (selectedRuntime?.state && !['created', 'ready', 'idle'].includes(selectedRuntime.state)) return 'starting';
     return 'idle';
+}
+
+function runtimeRecoveryUnconfirmed(runtime) {
+    return runtime?.recoveryState === 'unconfirmed' || runtime?.activity === 'unknown';
 }
 
 export {

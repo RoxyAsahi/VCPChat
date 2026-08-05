@@ -6,10 +6,7 @@ import { renderPendingInputQueue } from './agent-workbench-queue.js';
 import { createWorkspaceRequestCoordinator } from './agent-workspace-requests.js';
 import { createWorkbenchLifecycle } from './agent-workbench-lifecycle.js';
 import { selectedSessionId } from './agent-selected-session.js';
-import { renderAgentSettingsPane } from './agent-settings-view.js';
-import {
-    createAgentSettingsState,
-} from './agent-settings-state.js';
+import { createAgentSettingsState } from './agent-settings-state.js';
 import {
     button,
     createSidebarSearchPanel,
@@ -29,10 +26,13 @@ import { createAgentActivityReadonlyView } from './agent-activity-readonly-view.
 import { createAgentSessionDockView } from './agent-session-dock-view.js';
 import { createAgentNotificationView } from './agent-notification-view.js';
 import { createAgentApprovalView } from './agent-approval-view.js';
-import { createAgentWorkbenchTopicFlow } from './agent-workbench-topic-flow.js';
 import { createAgentWorkspaceCoordinator } from './agent-workspace-coordinator.js';
 import { createAgentSettingsCoordinator } from './agent-settings-coordinator.js';
-import { createAgentTopicContextMenuView } from './agent-topic-context-menu-view.js';
+import { createAgentSettingsAdvancedFeature } from './agent-settings-advanced-feature.js';
+import { createAgentProfileFlowFeature } from './agent-profile-flow-feature.js';
+import { createAgentSessionManagementFeature } from './agent-session-management-feature.js';
+import { createAgentSettingsPaneFeature } from './agent-settings-pane-feature.js';
+import { createAgentToolSettingsModal } from './agent-tool-settings-modal.js';
 import { createAgentSessionOperationsCoordinator } from './agent-session-operations-coordinator.js';
 import { createAgentActivityCoordinator } from './agent-activity-coordinator.js';
 import { createAgentComposerCoordinator } from './agent-composer-coordinator.js';
@@ -48,99 +48,21 @@ import {
     sameAgent,
     seedBuildAgentCatalog,
 } from './agent-session-catalog-coordinator.js';
-
-const runtimeApi = () => window.chatAPI || window.electronAPI || {};
-const LAST_TOPIC_STORAGE_KEY = 'vcpchat.agentWorkbench.lastTopic.v1';
-
-const WORKBENCH_VIEW_STATE_LABELS = {
-    disconnected: '未连接',
-    starting: '启动中',
-    idle: '空闲',
-    running: '运行中',
-    'awaiting-approval': '待审批',
-    reconnecting: '重连中',
-    error: '错误',
-};
-
-function loadRememberedTopic() {
-    try {
-        const value = window.localStorage?.getItem(LAST_TOPIC_STORAGE_KEY);
-        const parsed = value ? JSON.parse(value) : null;
-        const sessionId = String(parsed?.sessionId || '').trim();
-        if (!sessionId) return null;
-        const pointer = { sessionId };
-        return pointer;
-    } catch {
-        return null;
-    }
-}
-
-function rememberTopic(session) {
-    if (!session?.sessionId) return;
-    try {
-        window.localStorage?.setItem(LAST_TOPIC_STORAGE_KEY, JSON.stringify({ sessionId: session.sessionId }));
-    } catch {
-    }
-}
-
-function proxyMainButton(id) {
-    // The Agent Workbench is a separate product page.  The only shared piece
-    // here is the VCPChat Agent/Group configuration flow, which belongs to
-    // main chat rather than Codex Sessions. Ask the owning module to open it
-    // directly: a synthetic click can silently hit a replaced sidebar button
-    // whose original event listener is no longer attached after a UI redraw.
-    if (id === 'nextUiCreateItemBtn' && typeof window.topTabManager?.openCreateDialog === 'function') {
-        return window.topTabManager.openCreateDialog();
-    }
-    return document.getElementById(id)?.click();
-}
-
-function notify(message, variant = 'info') {
-    if (window.VCPUI?.feedback?.toast) window.VCPUI.feedback.toast(message, { variant });
-    else window.uiHelperFunctions?.showToastNotification?.(message, variant === 'error' ? 'error' : 'success');
-}
-
-function nextSessionTitle() {
-    // Keep the same friction-free convention as VCPChat's normal “新话题”
-    // action. A first user prompt may become the durable VChat Session title.
-    const time = new Date().toLocaleTimeString([], {
-        hour: '2-digit', minute: '2-digit', second: '2-digit',
-    });
-    return `新会话 ${time}`;
-}
-
-function formatTime(value) {
-    if (!value) return '';
-    try { return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' }).format(new Date(value)); } catch { return ''; }
-}
-
-function renderMarkdown(text, markdown = {}) {
-    if (!text) return '';
-    return markdown.render?.(text) || String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-function postRender(contentDiv, markdown = {}) {
-    markdown.postProcess?.(contentDiv);
-}
-
-function scrollFeed(container, force, scheduleFrame, bridge = {}) {
-    if (force) {
-        scheduleFrame(() => { if (container?.isConnected) container.scrollTop = container.scrollHeight; });
-        return;
-    }
-    if (bridge) {
-        bridge.autoScrollToBottom?.(container);
-    } else if (container && isFollowingContainer(container)) {
-        container.scrollTop = container.scrollHeight;
-    }
-}
-
-function isFollowingContainer(container, bridge = {}) {
-    return bridge.isNearBottom
-        ? bridge.isNearBottom(container, 48)
-        : (container.scrollTop + container.clientHeight >= container.scrollHeight - 48);
-}
-
+import {
+    buildWorkbenchHeaderModel,
+    clearRememberedTopic,
+    formatTime,
+    isFollowingContainer,
+    loadRememberedTopic,
+    nextSessionTitle,
+    notify,
+    postRender,
+    proxyMainButton,
+    rememberTopic,
+    renderMarkdown,
+    runtimeApi,
+    scrollFeed,
+} from './agent-workbench-runtime-helpers.js';
 function mountWorkbench(container) {
     const host = createAgentWorkbenchHostAdapter({ windowRef: window, documentRef: document });
     const lifecycle = createWorkbenchLifecycle(window);
@@ -159,7 +81,7 @@ function mountWorkbench(container) {
     } = sessionViewContext;
     const syncPermissionModeFromSelectedSession = sessionViewContext.syncPermissionMode;
     const syncModelFromSelectedSession = sessionViewContext.syncModel;
-    let renderCoordinator = null;
+    let renderCoordinator = null, toolSettingsModal = null;
     const queueRender = (parts) => renderCoordinator?.queueRender(parts);
     const settleTurnStartIndicator = (event) => renderCoordinator?.settleTurnStartIndicator(event);
 
@@ -186,6 +108,7 @@ function mountWorkbench(container) {
                 state.settingsScope = selectedSessionKey() ? 'session' : 'profile';
                 queueRender({ shell: true });
             },
+            openToolSettings: () => void toolSettingsModal?.open(),
             setActivityOpen: (open) => setActivityOpen(open),
         },
     });
@@ -201,6 +124,7 @@ function mountWorkbench(container) {
     const headerView = createAgentWorkbenchHeaderView({
         element: header,
         document,
+        lifecycle,
         actions: {
             reconnect: () => run(recoverRuntime),
             renameTitle: async ({ sessionId, agentId, title }) => {
@@ -352,8 +276,7 @@ function mountWorkbench(container) {
             searchFiles: (request) => controller.workspaceSearchFiles(request),
         },
     });
-    let budgetAutosaveTimer = null;
-    const settingsState = createAgentSettingsState();
+    const settingsState = createAgentSettingsState({ lifecycle });
     runStatusStop.addEventListener('click', () => run(async () => {
         runStatusStop.disabled = true;
         await controller.cancelTurn();
@@ -391,12 +314,19 @@ function mountWorkbench(container) {
         saveAgentProfile: (request) => controller.saveAgentProfile(request),
         refreshTopicsForAgent,
         notify,
-        refreshViews: () => {
-            renderSidebar();
+        refreshViews: ({ phase, payload } = {}) => {
+            const structuralChange = phase === 'settled' && payload && (
+                Object.prototype.hasOwnProperty.call(payload, 'instructionMode')
+                || Object.prototype.hasOwnProperty.call(payload, 'name')
+                || payload.createDerivedSession === true
+            );
+            if (structuralChange) renderSidebar();
+            else refreshSettingsStatus();
             renderHeader();
         },
     });
     const { persist: persistWorkbenchSettings, sessionConfigRevisions } = settingsCoordinator;
+    toolSettingsModal = createAgentToolSettingsModal({ store, controller, settingsState, activeSession, selectedSessionKey, selectedAgentProfile, persistWorkbenchSettings, host, root, document, node, notify });
 
     const approvalRegistry = new Map();
     let timelineCoordinator = null;
@@ -427,34 +357,15 @@ function mountWorkbench(container) {
             notifyInvalidJson: () => notify('MCP 表单 JSON 无效。', 'error'),
         },
     });
-    const topicFlowView = createAgentWorkbenchTopicFlow({
+    const profileFlowFeature = createAgentProfileFlowFeature({
+        state,
+        controller,
         element: topicFlowLayer,
         document,
-        actions: {
-            close: closeTopicFlow,
-            updateDraft(patch) {
-                if (state.topicFlow?.kind === 'agent') Object.assign(state.topicFlow, patch);
-            },
-            submit(request) {
-                run(async () => {
-                    if (!state.topicFlow || state.topicFlow.kind !== 'agent' || state.topicFlow.saving) return;
-                    state.topicFlow = { ...state.topicFlow, saving: true };
-                    queueRender({ topicFlow: true });
-                    try {
-                        const result = await controller.saveAgentProfile(request);
-                        if (!result?.success || !result.profile?.id) throw new Error(result?.error || 'Build Agent 创建失败。');
-                        state.selectedAgent = result.profile.id;
-                        state.topicFlow = null;
-                        await refreshControlPlane();
-                        state.tab = 'agents';
-                        notify(`已创建 Build Agent「${result.profile.name || result.profile.id}」。`, 'success');
-                    } finally {
-                        if (state.topicFlow?.kind === 'agent') state.topicFlow = { ...state.topicFlow, saving: false };
-                        queueRender({ shell: true, header: true, composer: true, topicFlow: true });
-                    }
-                });
-            },
-        },
+        run,
+        queueRender,
+        refreshControlPlane,
+        notify,
     });
 
     function isMissingRememberedSessionError(error) {
@@ -487,9 +398,7 @@ function mountWorkbench(container) {
     const sessionOperations = createAgentSessionOperationsCoordinator({
         state, store, controller, selectedAgentProfile, profileNeedsConfiguration,
         refreshControlPlane, queueRender, renderSidebar, notify, rememberTopic,
-        clearRememberedTopic: () => {
-            try { window.localStorage?.removeItem(LAST_TOPIC_STORAGE_KEY); } catch {}
-        },
+        clearRememberedTopic,
         nextSessionTitle, activeSession,
     });
     const {
@@ -497,93 +406,19 @@ function mountWorkbench(container) {
         rememberTopicTitle, forgetTopic,
     } = sessionOperations;
 
-    function openNewTopicFlow() {
+    const advancedSettingsFeature = createAgentSettingsAdvancedFeature({
+        state, store, settingsState, controller, document, lifecycle, host, run, notify,
+        refreshControlPlane, renderSidebar, persistWorkbenchSettings,
+        refreshRecoveryOperations, refreshTopicsForAgent,
+    });
+    function openNewSession() {
         // New Session inherits the selected Profile and is created immediately;
         // only the separate New Build Agent flow remains modal.
         void run(createNewTopicDirectly);
     }
-
-    function closeTopicFlow() {
-        state.topicFlow = null;
-        queueRender({ topicFlow: true });
-    }
-
-    function openNewAgentFlow() {
-        state.topicFlow = {
-            kind: 'agent',
-            name: '',
-            systemPrompt: '',
-            model: state.model || '',
-            workspaceRoot: '',
-            permissionMode: 'ask',
-            saving: false,
-        };
-        queueRender({ topicFlow: true });
-    }
-
-    const topicContextMenuView = createAgentTopicContextMenuView({
-        document,
-        window,
-        node,
-        visualActionButton,
-        run,
-        actions: {
-            canOpen: () => !state.topicManaging,
-            notify,
-            openLive: (topic) => controller.hydrateTopic(topic.id, null, null, topic.agentId),
-            async open(topic) {
-                await controller.previewTopic(topic.id, topic.agentId, topic);
-                rememberTopic({ sessionId: topic.id });
-            },
-            async rename(topic) {
-                const title = await host.feedback.edit({
-                    title: '重命名 Agent 会话',
-                    value: topic.title || '',
-                    required: true,
-                });
-                if (title?.available === false) { notify(title.reason, 'error'); return; }
-                if (title === null || title === undefined || title.trim() === (topic.title || '').trim()) return;
-                await controller.renameSession(topic.id, title, topic.agentId);
-                rememberTopicTitle(topic, title.trim());
-                await refreshControlPlane();
-                notify('Agent Topic 已重命名。', 'success');
-            },
-            async exportMarkdown(topic) {
-                const result = await controller.exportSession(topic.id, 'markdown');
-                if (result?.exported) notify('Agent 会话已导出。', 'success');
-            },
-            async archive(topic) {
-                const accepted = await host.feedback.confirm({
-                    title: '归档 Agent 会话',
-                    message: `确定归档「${topic.title || topic.id}」吗？之后可从归档会话中恢复。`,
-                });
-                if (accepted !== true) return;
-                await controller.archiveSession(topic.id);
-                state.composerStateBySession.delete(topic.id);
-                forgetTopic(topic.id);
-                await refreshControlPlane();
-                notify('Agent 会话已归档。', 'success');
-            },
-            async restore(topic) {
-                await controller.restoreSession(topic.id);
-                forgetTopic(topic.id);
-                await refreshControlPlane();
-                notify('Agent 会话已恢复。', 'success');
-            },
-            async remove(topic) {
-                const accepted = await host.feedback.confirm({
-                    title: '永久删除 Agent 会话',
-                    message: `永久删除「${topic.title || topic.id}」及其本地投影吗？此操作不可恢复。`,
-                    danger: true,
-                });
-                if (accepted !== true) return;
-                await controller.permanentlyDeleteSession(topic.id);
-                state.composerStateBySession.delete(topic.id);
-                forgetTopic(topic.id);
-                await refreshControlPlane();
-                notify('Agent 会话已永久删除。', 'success');
-            },
-        },
+    const sessionManagementFeature = createAgentSessionManagementFeature({
+        state, controller, document, window, node, visualActionButton, run, host, notify,
+        rememberTopic, rememberTopicTitle, forgetTopic, refreshControlPlane,
     });
     const activityCoordinator = createAgentActivityCoordinator({
         state,
@@ -620,62 +455,34 @@ function mountWorkbench(container) {
         search: scheduleWorkspaceSearch,
         render: renderActivity,
     } = activityCoordinator;
-    const closeTopicContextMenu = topicContextMenuView.close;
-    const appendTopicActions = topicContextMenuView.appendActions;
-
-    function renderSettingsSidebarContent() {
-        return renderAgentSettingsPane({
-            state,
-            store,
-            activeSession,
-            sessionConfigRevisions,
-            selectedAgentProfile,
-            profileNeedsConfiguration,
-            persistWorkbenchSettings,
-            renderSidebar,
-            run,
-            refreshControlPlane,
-            refreshModelCatalog,
-            notify,
-            controller,
-            refreshRecoveryOperations,
-            refreshTopicsForAgent,
-            node,
-            button,
-            sameAgent,
-            settingValue(targetKey, field, fallback) {
-                return settingsState.value(targetKey, field, fallback);
-            },
-            settingStatus(targetKey, fields) {
-                return settingsState.status(targetKey, fields);
-            },
-            host,
-            scheduleTextSave(targetKey, field, callback) {
-                settingsState.schedule(targetKey, field, callback);
-            },
-            scheduleBudgetSave(callback) {
-                budgetAutosaveTimer = lifecycle.timeout('budget-autosave', callback, 500);
-            },
-        });
-    }
+    const closeSessionContextMenu = sessionManagementFeature.close;
+    const appendSessionActions = sessionManagementFeature.appendActions;
+    const settingsPaneFeature = createAgentSettingsPaneFeature({
+        state, store, sidebar, settingsState, advancedSettingsFeature, activeSession,
+        sessionConfigRevisions, selectedAgentProfile, profileNeedsConfiguration,
+        persistWorkbenchSettings, renderSidebar, run, refreshControlPlane, refreshModelCatalog, notify, controller,
+        refreshRecoveryOperations, refreshTopicsForAgent, node, button, sameAgent, host,
+    });
+    const renderSettingsSidebarContent = settingsPaneFeature.render;
 
     function renderSidebar() {
         sidebarCoordinator?.render();
     }
 
+    const refreshSettingsStatus = settingsPaneFeature.refreshStatus;
+
     sidebarCoordinator = createAgentWorkbenchSidebarCoordinator({
         state, store, controller, element: sidebar, accountView, lifecycle, document, run, notify,
         sameAgent, agentCacheKey, selectedAgentProfile, profileNeedsConfiguration,
-        sessionActivity, createSessionAvatar, appendTopicActions, closeTopicContextMenu,
-        openNewTopicFlow, openNewAgentFlow, refreshControlPlane, refreshRecoveryOperations,
+        sessionActivity, createSessionAvatar, appendSessionActions, closeSessionContextMenu,
+        openNewSession, openNewAgentFlow: profileFlowFeature.open, refreshControlPlane, refreshRecoveryOperations,
         refreshTopicsForAgent, selectAgent, rememberTopic, forgetTopic, host,
         syncModel: syncModelFromSelectedSession, renderSettings: renderSettingsSidebarContent,
         queueRender, uxMark,
     });
 
     function renderTopicFlow() {
-        topicFlowView.update(state.topicFlow?.kind === 'agent'
-            ? { ...state.topicFlow, modelCatalog: state.modelCatalog } : null);
+        profileFlowFeature.render();
     }
 
     function renderHeader() {
@@ -683,12 +490,7 @@ function mountWorkbench(container) {
         const session = activeSession();
         const current = store.getState();
         const viewState = deriveWorkbenchViewState(current);
-        const selected = current.selectedTopic;
         const activeTurnId = selectedActiveTurnId(current);
-        const selectedHasRuntime = selected?.sessionId && selected.sessionId === session?.sessionId;
-        const headingTitle = selected?.title
-            || (selectedHasRuntime ? session?.title : '')
-            || `与 ${selected?.agentId || state.selectedAgent || 'Nova'} 聊天中`;
         const queuePanel = renderPendingInputQueue({
             state, controller, refresh: refreshControlPlane, notify, run, button, node, host,
             guidePrompt: (prompt) => {
@@ -701,29 +503,10 @@ function mountWorkbench(container) {
         });
         queuePanelHost.replaceChildren();
         if (queuePanel) queuePanelHost.append(queuePanel);
-        headerView.update({
-            title: headingTitle,
-            sessionId: selected?.sessionId || null,
-            agentId: selected?.agentId || session?.agentId || null,
-            canRename: Boolean(selected?.sessionId),
-            state: viewState,
-            stateLabel: WORKBENCH_VIEW_STATE_LABELS[viewState] || viewState,
-            statusLabel: viewState === 'idle' && state.turnElapsedBySession?.has(selected?.sessionId)
-                ? '已完成' : WORKBENCH_VIEW_STATE_LABELS[viewState] || viewState,
-            statusStartedAt: viewState === 'running'
-                ? state.turnStartedAt.get(activeTurnId) || state.turnStarts.get(selected?.sessionId)?.startedAt : null,
-            statusElapsedMs: viewState === 'idle' ? state.turnElapsedBySession?.get(selected?.sessionId) : null,
-            codexRuntime: current.runtime?.runtime === 'codex-app-server',
-            pendingApprovals: (current.approvals || []).length,
-            activityUnread: Number(current.activityUnread) || 0,
-            alert: viewState === 'error' || viewState === 'reconnecting',
-            activityOpen: state.activityOpen,
-            queueLength: state.queue.length,
-            queueOpen: state.queueOpen,
-            usage: current.context,
+        headerView.update(buildWorkbenchHeaderModel({
+            state, current, session, viewState, activeTurnId,
             contextExpanded: state.activityOpen && normalizeDockKind(state.activityTab) === 'context',
-            hasSession: Boolean(session),
-        });
+        }));
     }
 
     function renderFeed() {
@@ -738,7 +521,7 @@ function mountWorkbench(container) {
         state, store, controller, composerView, runStatusView, refs: shellView.refs, run, notify,
         selectedSessionKey, selectedComposerState, selectedTurnStart, selectedActiveTurnId,
         renderFeed, renderJumpToLatest, queueRender, settleTurnStartIndicator,
-        refreshControlPlane, uxMark, openNewTopicFlow, isFollowingContainer, scrollFeed: scopedScrollFeed,
+        refreshControlPlane, uxMark, openNewSession, isFollowingContainer, scrollFeed: scopedScrollFeed,
     });
     const renderComposer = composerCoordinator.render;
 
@@ -767,7 +550,7 @@ function mountWorkbench(container) {
         renderTopicFlow();
     }
 
-    const unsubscribe = store.subscribe((_nextState, event) => renderCoordinator.renderForStoreEvent(event));
+    const unsubscribe = advancedSettingsFeature.subscribe((event) => renderCoordinator.renderForStoreEvent(event), () => state.tab === 'settings' && state.settingsScope === 'advanced');
     render();
     controller.initialize()
         .then(async () => {
@@ -798,19 +581,21 @@ function mountWorkbench(container) {
         sessionCatalog.dispose();
         sessionOperations.dispose();
         settingsCoordinator.dispose();
+        toolSettingsModal.dispose();
+        advancedSettingsFeature.dispose();
         activityCoordinator.dispose();
         composerCoordinator.dispose();
         renderCoordinator.dispose();
         sidebarCoordinator.dispose();
         workspaceCoordinator.dispose();
         settingsState.dispose();
-        topicContextMenuView.dispose();
+        sessionManagementFeature.dispose();
         timelineCoordinator.dispose();
         activityReadonlyView.dispose();
         approvalView.dispose();
         notificationView.dispose();
         sessionDockView.dispose();
-        topicFlowView.dispose();
+        profileFlowFeature.dispose();
         workspaceView.dispose();
         headerView.dispose();
         accountView.dispose();

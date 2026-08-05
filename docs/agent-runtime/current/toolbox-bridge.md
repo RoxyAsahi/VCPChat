@@ -163,9 +163,9 @@ vcp-code 的 `TOOL_REQUEST` 执行路径明确禁止复用。任何 `TOOL_REQUES
 R4.1 hermetic receipt（2026-07-31，`codex/vcpchat-codex-app-server` working tree，尚无 commit revision）：
 
 ```text
-cargo test --manifest-path rust/Cargo.toml -p vcp-agent-vcp --features direct-host host::tests
-cargo test --manifest-path rust/Cargo.toml -p vcp-toolbox-bridge
-cargo build --manifest-path rust/Cargo.toml --release -p vcp-toolbox-bridge
+cargo test --manifest-path rust/toolbox-bridge/Cargo.toml -p vcp-agent-vcp --features direct-host host::tests
+cargo test --manifest-path rust/toolbox-bridge/Cargo.toml -p vcp-toolbox-bridge
+cargo build --manifest-path rust/toolbox-bridge/Cargo.toml --release -p vcp-toolbox-bridge
 npm run test:codex-toolbox-bridge
 npm run test:codex-runtime-manager
 ```

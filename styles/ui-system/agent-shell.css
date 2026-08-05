@@ -184,7 +184,7 @@
         text-overflow: ellipsis;
         white-space: nowrap;
         /* Keep the Agent session title visually identical to the main chat title. */
-        font-size: 1.08em;
+        font-size: var(--vcp-ui-font-emphasis);
         font-weight: 500;
         line-height: normal;
         text-shadow: var(--panel-text-shadow);
@@ -230,7 +230,7 @@
         color: var(--vcp-ui-text-0);
         background: var(--vcp-ui-bg-1);
         font-family: inherit;
-        font-size: 1.08em;
+        font-size: var(--vcp-ui-font-emphasis);
         font-weight: 500;
         line-height: normal;
         box-sizing: border-box;

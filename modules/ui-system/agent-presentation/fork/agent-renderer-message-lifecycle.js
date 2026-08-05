@@ -1,4 +1,4 @@
-import { createMessageSkeleton, formatMessageTimestamp } from '../../../renderer/domBuilder.js';
+import { createMessageSkeleton, formatMessageTimestamp } from './agent-renderer-message-skeleton.js';
 
 function createAgentRendererMessageLifecycle(options) {
     function normalizeContent(message) {

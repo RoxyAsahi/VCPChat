@@ -94,7 +94,9 @@ VChat Session 首次发送前创建 Codex Thread。参数来自 Session 冻结�
 
 ### `thread/read`
 
-用于后台对账，不是 Session 切换前置条件。`includeTurns: true` 返回的 Turn/Item 是重建 SQLite projection 的权威输入。
+用于后台对账，不是 Session 切换前置条件。`includeTurns: true` 只有在返回 Thread ID 与本地
+`session.threadId` 完全一致，且所有 Turn 的 `itemsView=full` 时，才对 Codex-owned Item 的存在性具有删除权威。
+`summary` / `notLoaded` 只能 upsert 已返回内容，不能删除 SQLite Item 或 ToolBox/VChat authority Block。
 
 ### `thread/fork`
 
@@ -132,6 +134,9 @@ cancel     { sessionId, turnId }
 
 `turn/completed` 只有在其 Turn ID 等于当前 active Turn 时才能结束运行态、应用 pending config 和 drain follow-up；旧 Turn 的迟到事件只能更新旧投影。
 
+Codex 0.146 可能先发送 `thread/status/changed(idle)`，后发送 `turn/completed`。因此 Thread status
+只更新 `observedThreadStatus`；它不能清除 `activeTurnId`、确认停止、应用配置或 drain follow-up。
+
 文本输入包含 `text_elements: []`。图片使用 `image/localImage`，音频使用 `audio/localAudio`，普通文件使用受控 mention/descriptor；文件 path/Base64 不写入 transcript localStorage。
 
 ## Notification 投影
@@ -150,7 +155,14 @@ cancel     { sessionId, turnId }
 | `thread/status/changed` | 更新后台 Session 状态，不切换当前视图。 |
 | `thread/tokenUsage/updated` | 待接入 usage Block/状态，不得伪造 ToolBox usage。 |
 
-SQLite 更新成功后，Main 发送包含单个 `projectionMessage` 的 keyed patch。Renderer 不在每个 token 调用 `thread/read`。
+SQLite 更新成功后，Main 只发送 revision-based `AgentProjectionPatch`。Patch 携带 Session/Thread identity、
+`baseProjectionRevision`、`projectionRevision` 和 V2 Block upsert/delete；Renderer 不消费旧
+`projectionMessage`，也不在每个 token 调用 `thread/read`。revision 跳号或 identity 不匹配时丢弃增量并
+重新读取该 Session 的完整 SQLite Projection。
+
+0.146 reasoning 的 `summaryIndex` 与 `contentIndex` 属于同一个 reasoning Item 的两个独立数组，不能共用
+Block ordinal。`dynamicToolCall.itemId === callId` 只适用于 Codex Item/call identity；JSON-RPC request ID、
+Bridge request ID 和 Responses request ID 始终独立。
 
 ## Server Request 路由
 
@@ -192,7 +204,7 @@ Codex 自带模型级 system prompt，例如 `core/gpt_5_codex_prompt.md` 以
   `baseInstructions`，而不是 `developerInstructions`——否则它只会被追加、压在内置模板之下，
   仍回 Codex 自述。显式 `baseInstructions` 优先于 `systemPrompt`；显式
   `developerInstructions` 保留为独立的追加提示。
-- workbench `createSession`/`createTopic` 只传 Agent identity；Main 从 Profile 冻结完整配置。旧 `systemPrompt` 是 `baseInstructions` 的兼容别名。
+- Workbench `agentSessionCreate` 只传 Agent identity；Main 从 Profile 冻结完整配置。Profile 文件中的 `systemPrompt` 由配置 descriptor 规范化为 `baseInstructions`。
 - `thread/start` 与 `thread/resume` 都透传 `baseInstructions`，`thread/fork` 继承源
   Thread，无需重传。
 - VChat 的 Nova/ToolBox Session 使用 `executionProfile=toolbox-only`。新 Thread 固定请求

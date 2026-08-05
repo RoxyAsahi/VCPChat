@@ -264,6 +264,27 @@ R12 当前状态只能是 `implemented/working-tree`，不得复用 R7-R10 live 
 
 R13 当前状态为 `implemented/working-tree`；代码治理目标已实现，但产品级多分辨率截图、20 文件 Tab、长流滚动和 live backend approval 仍属于 GUI-R6/R6，不因治理完成而自动升级为 product。
 
+## R16 Projection 单模型与适配可靠性
+
+- [x] 0.146 idle-before-completed、settings confirmation、Thread identity、partial `itemsView` 和 fork Session identity 已固化。
+- [x] Projection V2 Block、reasoning 双数组、Unknown fallback、delta buffer 和精确 reconcile Patch 已实现。
+- [x] Renderer normalized Store、Patch revision gate、后台 Session 更新、A→B→A 恢复和 revision-gap SQLite reload 已实现；Store 不再拥有 `messages/tools`，两者只由当前 Session Blocks 即时派生。
+- [x] 旧 `message-reducer` / `tool-reducer` 已删除；Session-local pending user row 仅存在于 `ephemeralStateBySession`，crash/failure 不会重建第二条 transcript。
+- [x] 冷启动/切换期间 snapshot barrier 内的 `projection.updated` 与正常实时事件走同一 Patch reducer，waterline 之后的 reasoning/tool Block 不再因绕过 reducer 而丢失。
+- [x] 旧 `sessionSnapshots`、`snapshotCache`、`liveProjectionRevision` 与 Renderer `projectionMessage` 路径已删除并加入治理扫描。
+- [x] 新增 `test:codex-projection-v2` 与 `test:codex-adapter-invariants` 聚合门槛。
+- [x] Electron recovery 已验证双 Session projection isolation、Renderer reload、crash 后 SQLite 可读和按需重启。
+- [x] 真实 Electron 已验证运行中 A→B→A：两个 Session 的 reasoning、ToolBox 卡片和回答严格隔离，App Server crash 与 Renderer reload 后从 SQLite 恢复相同消息身份和顺序。
+- [x] 设置页 Select smoke、文件体积、CSS owner 和 timer lifecycle governance 阻塞已修复，`test:electron-codex-smoke`、`check:ui-system` 与 `check:codex-governance` 通过。
+- [x] 高级设置已形成独立 diagnostics feature：权威读取 desired/applied 配置、revision、Runtime generation、脱敏 ToolBox endpoint 和结构化错误；重新应用只接受 Session ID，由 Main 解析 Thread identity。
+- [x] 诊断 UI 已拆为 health/details/errors、budget、recovery 独立 View，并在真实 Electron 139 px 侧栏验证错误影响、下一步、完整错误码 tooltip、脱敏详情折叠/展开以及深浅主题；展开 JSON 不再横向撑宽 Sidebar。
+- [x] Responses Adapter 诊断明确区分 Codex 原始 `tools` 与实际 `forwardedTools`；真实 0.146 请求即使携带 MCP、namespace、goal、view-image 等工具，6005 出站仍严格为 `[vcp_invoke]`。
+- [x] 2026-08-04 当前工作树使用 `deepseek-v4-flash` 完成真实 `vcp_invoke -> FileOperator.ReadFile -> Bridge -> Projection`，耗时 20.4 秒；自包含测试节点只注册仓库 `package.json` 的 `ReadFile` 能力，验证后立即断开。
+- [x] 重开顺序门槛覆盖工具卡位置而不只覆盖存在性：partial/full reconcile 保留 Turn 内 live 锚点；Main 启动时事务修复旧损坏顺序；完整 Electron 退出并使用同一 AppData 重启后仍保持“用户消息/助手段 → 所属工具卡 → 后续 assistant”。
+- [x] Projection hydration/snapshot barrier/Session switch 从 Controller 抽为独立协调器；Controller 从 593 行降至 321 行，协调器 279 行，并以 360/320 行治理门槛防止职责重新聚合。
+
+当前工作树基于 `679c8fde`；`test:codex-ci`、真实 0.146 App Server/Adapter、Electron smoke/recovery/cold-reopen、UI/治理门槛和 `deepseek-v4-flash` ToolBox live gate 均在当前源码上通过。由于尚未形成同一提交 revision，R16 状态保持 `implemented/working-tree`，不得升级为 `live` 或 `product`。Projection SQLite database schema 为 12，Block/Renderer contract 为 V2。
+
 - [x] R7: Agent Profile/Session snapshot、CAS、projection-only IPC、ToolBox latest-wins 与 Session-keyed Renderer state。
 - [x] R8: Runtime generation、InteractionRegistry 有界清理、按需重启、持久输入状态机与 pre-RPC/ACK crash fault injection。
 - [x] R9: 权威 reconcile、mutation generation barrier、Saga 日志、known-Thread lifecycle recovery、SQLite integrity/backup/read-only degraded。

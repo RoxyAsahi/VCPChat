@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { CodexRuntimeManager } = require('../codex-runtime/runtimeManager');
 const { AgentWorkspaceService } = require('../codex-runtime/workspaceService');
+const { listAgentToolCatalog } = require('../codex-runtime/toolCatalogService');
 const { AGENT_CHANNELS: IPC_CHANNELS } = require('./ipcContracts');
 
 let manager = null;
@@ -51,6 +52,7 @@ function removeHandlers() {
     settingsUpdatedListener = null;
     for (const channel of [
         IPC_CHANNELS.LIST_AGENT_PROFILES,
+        IPC_CHANNELS.LIST_TOOL_CATALOG,
         IPC_CHANNELS.SAVE_AGENT_PROFILE,
         IPC_CHANNELS.SAVE_AGENT_AVATAR,
         IPC_CHANNELS.APPLY_AGENT_PROFILE,
@@ -76,6 +78,7 @@ function removeHandlers() {
         IPC_CHANNELS.UPDATE_WORKBENCH_SETTINGS,
         IPC_CHANNELS.READ_SESSION_CONFIG,
         IPC_CHANNELS.UPDATE_SESSION_CONFIG,
+        IPC_CHANNELS.REAPPLY_SESSION_CONFIG,
         IPC_CHANNELS.SELECT_ATTACHMENTS,
         IPC_CHANNELS.START_TURN,
         IPC_CHANNELS.STEER_TURN,
@@ -174,6 +177,8 @@ function initialize(options) {
     settingsManagerWithListener = settingsManager;
 
     ipcMain.handle(IPC_CHANNELS.LIST_AGENT_PROFILES, (event) => projectionGuard(event, () => manager.listAgentProfiles()));
+    ipcMain.handle(IPC_CHANNELS.LIST_TOOL_CATALOG,
+        (event) => projectionGuard(event, () => listAgentToolCatalog(projectRoot)));
     ipcMain.handle(IPC_CHANNELS.SAVE_AGENT_PROFILE, (event, payload) => projectionGuard(event, () => manager.saveAgentProfile(payload || {})));
     ipcMain.handle(IPC_CHANNELS.SAVE_AGENT_AVATAR, (event, payload) => projectionGuard(event, () => manager.saveAgentAvatar(payload || {})));
     ipcMain.handle(IPC_CHANNELS.APPLY_AGENT_PROFILE, (event, payload) => projectionGuard(event, () => manager.applyAgentProfileToSession(payload || {})));
@@ -220,7 +225,9 @@ function initialize(options) {
     ipcMain.handle(IPC_CHANNELS.GET_WORKBENCH_SETTINGS, (event) => projectionGuard(event, () => manager.getWorkbenchSettings()));
     ipcMain.handle(IPC_CHANNELS.UPDATE_WORKBENCH_SETTINGS, (event, payload) => projectionGuard(event, () => manager.updateWorkbenchSettings(payload || {})));
     ipcMain.handle(IPC_CHANNELS.READ_SESSION_CONFIG, (event, payload) => projectionGuard(event, () => manager.readSessionConfig(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.READ_SESSION_DIAGNOSTICS, (event, payload) => projectionGuard(event, () => manager.readSessionDiagnostics(payload || {})));
     ipcMain.handle(IPC_CHANNELS.UPDATE_SESSION_CONFIG, (event, payload) => projectionGuard(event, () => manager.updateSessionConfig(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.REAPPLY_SESSION_CONFIG, (event, payload) => runtimeGuard(event, () => manager.reapplySessionConfig(payload || {})));
     ipcMain.handle(IPC_CHANNELS.SELECT_ATTACHMENTS, (event, payload) => projectionGuard(event, async () => {
         const mainWindow = assertMainWindowSender(event);
         const sessionId = String(payload?.sessionId || '').trim();

@@ -59,6 +59,7 @@ export function createAgentSessionViewContext({ state, store, document, sameAgen
         const current = store.getState();
         const runtime = sessionId && current.activeRuntimes instanceof Map
             ? current.activeRuntimes.get(sessionId) : null;
+        if (runtime?.recoveryState === 'unconfirmed') return 'reconnecting';
         if (runtime?.activity) return runtime.activity;
         if (runtime?.activeTurnId) return 'running';
         if (sessionId && state.turnStarts.has(sessionId)) return 'starting';

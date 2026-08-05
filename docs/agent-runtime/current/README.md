@@ -18,7 +18,7 @@ VChat Workbench
         -> VCPLog / VCPInfo / backend approval
 ```
 
-VChat 不 fork、不 vendor Codex，也不读取或修改 Codex rollout。旧 Rust daemon、Rust Topic、Pi、`vcp_delegate`、SQLite Runtime Repository 和多 Driver 仅保留在 `../history/rust/` 与 `../history/pi/`，不在本分支恢复或迁移。
+VChat 不 fork、不 vendor Codex，也不读取或修改 Codex rollout。旧 Rust daemon、Rust Topic、Pi、Grok、TUI、`vcp_delegate`、SQLite Runtime Repository 和多 Driver 的可执行源码与入口已从产品树删除；仅 Git 历史和 `../history/` 审计文档可用于追溯。
 
 ## Codex 0.146.0 升级基线
 
@@ -39,10 +39,10 @@ ToolBox backend approval 和富消息 Electron live gate 仍待，因此产品�
 |---|---|---|
 | R0 分支与基线 | 已完成 | Rust R3-M 位于 `d441675a`；Codex App Server 首个功能 checkpoint 为 `29c2068a`；旧文档已归档。 |
 | App Server transport | 0.146 working-tree pass | JSONL、initialize、waiter、server request、退出清理已有测试；项目内 `codex-cli 0.146.0` 已真实完成 Thread start/read/restart。 |
-| Projection SQLite | checkpoint pass | WAL、迁移、Session/Message/Block、delta、权威 reconcile 清理、orphan 基础路径已有测试；SQLite 测试与产品统一使用 Electron ABI。 |
+| Projection SQLite | schema 12 working-tree pass | WAL、schema 6-11 事务迁移、canonical schema-2 Block、delta、权威 reconcile 清理、orphan 基础路径已有测试；低于 6 或高于 12 fail-closed。 |
 | Runtime Manager | 0.146 deepseek live pass | Agent `systemPrompt -> baseInstructions`、旧 placeholder 快照安全迁移、Thread start/read/fork、Turn start/steer/interrupt 与 resume 已接线；`deepseek-v4-flash` 的 Nova identity、reasoning、恢复、fork 和 interrupt 已真实通过。 |
-| ToolBox bridge 进程 | checkpoint pass | Rust bridge 可构建、ready、bounded JSONL、shutdown；`/v1/human/tool`、interrupt、VCPLog/VCPInfo 观察代码路径存在。 |
-| Workbench 兼容接线 | checkpoint pass，仍在迁移 | SQLite snapshot、keyed delta、Full Fork Message 与结构化 Block 已进入 `29c2068a`；仍有 Rust Topic 兼容文案和完整 Electron 富消息流程需要清理。 |
+| ToolBox bridge 进程 | isolated workspace pass | 唯一 Rust 产品 workspace 为 `rust/toolbox-bridge/`；Bridge 可构建、ready、bounded JSONL、shutdown，且打包路径由共享 owner 统一。 |
+| Workbench Session 接线 | checkpoint pass | SQLite schema-2 snapshot、keyed delta、Full Fork Message 与结构化 Block 已接线；旧 Topic IPC/preload/UI compatibility 已删除，完整 Electron 富消息流程仍需持续验收。 |
 | ToolBox backend approval | implemented，未 live 验证 | Bridge 已有独立 approval ID、TTL、replay 去重、双向响应和关闭 fail-closed；尚未连接真实 ToolBox 验证补发与恰好一次响应。 |
 | VCPInfo/VCPLog 展示 | implemented，未 live 验证 | 单连接观察、类型分类、限长脱敏和 Workbench 全局卡片已接线；尚缺真实通知、重连和完整内容净化验收。 |
 | VChat Responses adapter | 0.146 real hermetic pass | 兼容 0.146 的 developer instruction 与 `additional_tools` wire shape；只从 VChat Session 冻结快照注入唯一 system identity，并在最终 provider 边界只暴露 `[vcp_invoke]`。真实 App Server 的 tool call、bridge continuation、reasoning 与 SQLite 投影已通过；0.146 Nova live 仍待。 |
@@ -73,6 +73,7 @@ ToolBox backend approval 和富消息 Electron live gate 仍待，因此产品�
 - [ADR-007](adr/ADR-007-codex-sqlite-saga.md)：Codex/SQLite Saga 与 uncertain 边界。
 - [ADR-008](adr/ADR-008-agent-renderer-independence.md)：Agent Renderer 独立演进与模块拆分边界。
 - [ADR-009](adr/ADR-009-agent-config-desired-applied.md)：Session desired/applied 配置分离与发送 barrier。
+- [subtraction-release.md](subtraction-release.md)：废弃路线物理退场、Projection v12、Bridge workspace 与治理边界。
 
 Workbench 当前已完成 SQLite 快路径、canonical Agent identity、Thread warm、Full Fork Message renderer、首发 thinking/streaming 骨架与基础 Block registry。下一阶段不重复 UX-R0–R4，而按 GUI-R0–R6 补齐协议能力矩阵、Session 状态机、完整 Composer、规范 Block、审批/交互中心、Inspector 和真实视觉性能门槛。当前正式执行 profile 仍只有 `toolbox-only`；App Server 支持但 VChat 未启用的能力不得直接暴露为 GUI 开关。
 

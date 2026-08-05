@@ -15,17 +15,60 @@ class ConfigTransport extends EventEmitter {
         this.status = { running: false, ready: false, pid: 146 };
         this.calls = [];
         this.failSettings = false;
+        this.autoConfirmSettings = false;
+        this.threadCounter = 0;
+        this.threadSettings = new Map();
     }
     async start() { this.status = { ...this.status, running: true, ready: true }; }
     async stop() { this.status = { ...this.status, running: false, ready: false }; }
     async request(method, params) {
         this.calls.push({ method, params });
-        if (method === 'thread/start') return { thread: { id: 'thread-config' } };
-        if (method === 'thread/resume') return { thread: { id: params.threadId, status: { type: 'idle' } } };
+        if (method === 'thread/start') {
+            this.threadCounter += 1;
+            const threadId = this.threadCounter === 1 ? 'thread-config' : `thread-config-${this.threadCounter}`;
+            this.threadSettings.set(threadId, {
+                cwd: params.cwd, model: params.model, approvalPolicy: params.approvalPolicy,
+                effort: null, personality: params.personality ?? null,
+            });
+            return { thread: { id: threadId } };
+        }
+        if (method === 'thread/resume') {
+            const current = this.threadSettings.get(params.threadId) || {};
+            const settings = {
+                ...current, cwd: params.cwd, model: params.model,
+                approvalPolicy: params.approvalPolicy, personality: params.personality ?? null,
+            };
+            this.threadSettings.set(params.threadId, settings);
+            return {
+                thread: { id: params.threadId, status: { type: 'idle' } },
+                cwd: settings.cwd, model: settings.model,
+                approvalPolicy: settings.approvalPolicy,
+                reasoningEffort: settings.effort,
+            };
+        }
         if (method === 'thread/settings/update' && this.failSettings) {
             const error = new Error('settings rejected');
             error.code = 'INVALID_PARAMS';
             throw error;
+        }
+        if (method === 'thread/settings/update') {
+            const settings = {
+                cwd: params.cwd, model: params.model, approvalPolicy: params.approvalPolicy,
+                effort: params.effort ?? null, personality: params.personality ?? null,
+            };
+            this.threadSettings.set(params.threadId, settings);
+        }
+        if (method === 'thread/settings/update' && this.autoConfirmSettings) {
+            queueMicrotask(() => this.emit('notification', {
+                method: 'thread/settings/updated',
+                params: {
+                    threadId: params.threadId,
+                    threadSettings: {
+                        cwd: params.cwd, model: params.model, approvalPolicy: params.approvalPolicy,
+                        effort: params.effort ?? null, personality: params.personality ?? null,
+                    },
+                },
+            }));
         }
         if (method === 'turn/start') return { turn: { id: 'turn-config' } };
         return {};
@@ -49,6 +92,7 @@ const manager = new CodexRuntimeManager({
     getModels: () => [{ id: 'model-a', reasoning_efforts: ['low', 'high'] }, { id: 'model-b', reasoning_efforts: ['low', 'high'] }],
     transportFactory: () => transport,
     repositoryFactory: () => new AgentProjectionRepository({ databasePath: path.join(root, 'projection.sqlite') }),
+    configApplyConfirmationTimeoutMs: 100,
     responsesAdapterFactory: (options) => {
         resolveToolboxInstructions = options.resolveInstructions;
         return {
@@ -96,10 +140,22 @@ await manager._applySessionRuntimeConfig(topic.sessionId);
 const update = transport.calls.filter((call) => call.method === 'thread/settings/update').at(-1);
 assert.deepEqual(update.params, {
     threadId: 'thread-config', cwd: workspaceB, model: 'model-b', approvalPolicy: 'never', effort: 'high',
+    personality: null,
 });
 transport.emit('notification', {
     method: 'thread/settings/updated',
     params: { threadId: 'thread-config' },
+});
+assert.notEqual(manager.readSessionConfig({ sessionId: topic.sessionId }).applyState, 'applied',
+    'an empty settings notification cannot confirm a target revision');
+transport.emit('notification', {
+    method: 'thread/settings/updated',
+    params: {
+        threadId: 'thread-config',
+        threadSettings: {
+            cwd: workspaceB, model: 'model-b', approvalPolicy: 'never', effort: 'high', personality: null,
+        },
+    },
 });
 const applied = manager.readSessionConfig({ sessionId: topic.sessionId });
 assert.equal(applied.applyState, 'applied');
@@ -124,11 +180,93 @@ assert.ok(transport.calls.some((call) => call.method === 'thread/unsubscribe'));
 assert.equal(manager.readSessionConfig({ sessionId: topic.sessionId }).applyState, 'applied',
     'an idle unsubscribe/resume reload must preserve threadId and mark instructions applied');
 
+const afterInstructionResume = manager.repository.getSession(topic.sessionId);
+transport.autoConfirmSettings = true;
+await manager.updateWorkbenchSettings({
+    sessionId: topic.sessionId,
+    expectedConfigRevision: afterInstructionResume.configRevision,
+    baseInstructions: '{{NovaV3}}',
+    reasoningEffort: 'low',
+});
+await manager._applySessionRuntimeConfig(topic.sessionId, { barrier: true });
+const instructionAndEffort = manager.readSessionConfig({ sessionId: topic.sessionId });
+assert.equal(instructionAndEffort.applyState, 'applied');
+assert.equal(instructionAndEffort.appliedRuntimeConfig.reasoningEffort, 'low',
+    'resume cannot falsely confirm a simultaneous reasoning change that only settings/update can apply');
+assert.ok(transport.calls.some((call) => call.method === 'thread/settings/update' && call.params.effort === 'low'),
+    'instruction reload must continue through settings/update when resume does not confirm the target effort');
+
+const beforeReasoningClear = manager.repository.getSession(topic.sessionId);
+await manager.updateWorkbenchSettings({
+    sessionId: topic.sessionId,
+    expectedConfigRevision: beforeReasoningClear.configRevision,
+    reasoningEffort: null,
+});
+transport.autoConfirmSettings = true;
+await manager._applySessionRuntimeConfig(topic.sessionId, { barrier: true });
+const reasoningCleared = manager.readSessionConfig({ sessionId: topic.sessionId });
+assert.equal(reasoningCleared.applyState, 'applied');
+assert.equal(reasoningCleared.appliedRuntimeConfig.reasoningEffort, null,
+    'model-default reasoning must be persisted as an explicit cleared Runtime setting');
+assert.equal(transport.calls.filter((call) => call.method === 'thread/settings/update').at(-1).params.effort, null,
+    'clearing reasoning must send effort:null instead of omitting the previous override');
+
+transport.autoConfirmSettings = false;
+const beforeRevisionRace = manager.repository.getSession(topic.sessionId);
+await manager.updateWorkbenchSettings({
+    sessionId: topic.sessionId,
+    expectedConfigRevision: beforeRevisionRace.configRevision,
+    model: 'model-a',
+});
+await new Promise((resolve) => setImmediate(resolve));
+const oldBarrier = manager._applySessionRuntimeConfig(topic.sessionId, { barrier: true });
+await new Promise((resolve) => setImmediate(resolve));
+const oldTargetCall = transport.calls.filter((call) => call.method === 'thread/settings/update').at(-1);
+const revisionA = manager.repository.getSession(topic.sessionId);
+await manager.updateWorkbenchSettings({
+    sessionId: topic.sessionId,
+    expectedConfigRevision: revisionA.configRevision,
+    model: 'model-b',
+});
+transport.emit('notification', {
+    method: 'thread/settings/updated',
+    params: {
+        threadId: oldTargetCall.params.threadId,
+        threadSettings: {
+            cwd: oldTargetCall.params.cwd,
+            model: oldTargetCall.params.model,
+            approvalPolicy: oldTargetCall.params.approvalPolicy,
+            effort: oldTargetCall.params.effort ?? null,
+            personality: oldTargetCall.params.personality ?? null,
+        },
+    },
+});
+await assert.rejects(oldBarrier, (error) => error.code === 'SESSION_CONFIG_CONFLICT',
+    'a notification for an obsolete revision must reject its waiter instead of confirming the latest config');
+transport.autoConfirmSettings = true;
+await manager._applySessionRuntimeConfig(topic.sessionId, { barrier: true });
+const revisionRaceApplied = manager.readSessionConfig({ sessionId: topic.sessionId });
+assert.equal(revisionRaceApplied.applyState, 'applied');
+assert.equal(revisionRaceApplied.appliedRuntimeConfigRevision, revisionRaceApplied.configRevision);
+assert.equal(revisionRaceApplied.appliedRuntimeConfig.model, 'model-b',
+    'latest-wins apply must continue with the newest Session revision after an obsolete waiter is rejected');
+
 const afterPrompt = manager.repository.getSession(topic.sessionId);
 await manager.updateWorkbenchSettings({
     sessionId: topic.sessionId,
     expectedConfigRevision: afterPrompt.configRevision,
     model: 'model-a',
+});
+transport.autoConfirmSettings = true;
+await manager._applySessionRuntimeConfig(topic.sessionId, { barrier: true });
+assert.equal(manager.readSessionConfig({ sessionId: topic.sessionId }).applyState, 'applied',
+    'the send barrier must wait for the matching settings notification');
+transport.autoConfirmSettings = false;
+const afterConfirmed = manager.repository.getSession(topic.sessionId);
+await manager.updateWorkbenchSettings({
+    sessionId: topic.sessionId,
+    expectedConfigRevision: afterConfirmed.configRevision,
+    model: 'model-b',
 });
 transport.failSettings = true;
 await assert.rejects(() => manager.startTurn({ sessionId: topic.sessionId, prompt: 'must not send' }), /settings rejected/);
@@ -137,6 +275,55 @@ assert.equal(transport.calls.filter((call) => call.method === 'turn/start'
     'a failed config barrier must block the user Turn');
 
 transport.failSettings = false;
+manager.threadStates.set('thread-config', { activity: 'idle', activeTurnId: null });
+const unsubscribeCount = transport.calls.filter((call) => call.method === 'thread/unsubscribe').length;
+const confirmationKeepAlive = setTimeout(() => {}, 1_000);
+try {
+    await manager._applySessionRuntimeConfig(topic.sessionId, { barrier: true });
+} finally {
+    clearTimeout(confirmationKeepAlive);
+}
+const reboundConfig = manager.readSessionConfig({ sessionId: topic.sessionId });
+assert.equal(reboundConfig.applyState, 'applied');
+assert.equal(reboundConfig.appliedRuntimeConfigRevision, reboundConfig.configRevision,
+    'an idle confirmation timeout must perform one full resume and confirm the desired revision');
+assert.equal(transport.calls.filter((call) => call.method === 'thread/unsubscribe').length,
+    unsubscribeCount + 1, 'confirmation recovery must unsubscribe exactly once');
+
+const managedTopic = await manager.createSessionRecord({
+    agentId: 'CodexManaged', title: 'Managed personality', workspaceRoot: workspaceA,
+    model: 'model-a', reasoningEffort: null, permissionMode: 'ask',
+    instructionMode: 'codex-managed', baseInstructions: '', personality: 'friendly',
+});
+await manager.ensureSessionRuntime({ sessionId: managedTopic.sessionId });
+const managedMaterialized = manager.repository.getSession(managedTopic.sessionId);
+assert.equal(managedMaterialized.appliedRuntimeConfig.personality, 'friendly');
+transport.autoConfirmSettings = true;
+await manager.updateWorkbenchSettings({
+    sessionId: managedTopic.sessionId,
+    expectedConfigRevision: managedMaterialized.configRevision,
+    personality: 'none',
+});
+await manager._applySessionRuntimeConfig(managedTopic.sessionId, { barrier: true });
+const personalityCleared = manager.readSessionConfig({ sessionId: managedTopic.sessionId });
+assert.equal(personalityCleared.applyState, 'applied');
+assert.equal(personalityCleared.appliedRuntimeConfig.personality, 'none');
+const personalityUpdate = transport.calls.filter((call) => call.method === 'thread/settings/update'
+    && call.params.threadId === managedMaterialized.threadId).at(-1);
+assert.equal(personalityUpdate.params.personality, null,
+    'clearing a managed personality must send personality:null to Codex 0.146');
+
+transport.autoConfirmSettings = false;
+const beforeStopBarrier = manager.repository.getSession(managedTopic.sessionId);
+await manager.updateWorkbenchSettings({
+    sessionId: managedTopic.sessionId,
+    expectedConfigRevision: beforeStopBarrier.configRevision,
+    model: 'model-b',
+});
+const stoppedBarrier = manager._applySessionRuntimeConfig(managedTopic.sessionId, { barrier: true });
+await new Promise((resolve) => setImmediate(resolve));
 await manager.stop();
+await assert.rejects(stoppedBarrier, (error) => ['RUNTIME_STOPPED', 'STALE_RUNTIME_GENERATION'].includes(error.code),
+    'Runtime stop must reject an in-flight config barrier instead of leaving it pending');
 fs.rmSync(root, { recursive: true, force: true });
 console.log('Agent Runtime config apply tests passed.');

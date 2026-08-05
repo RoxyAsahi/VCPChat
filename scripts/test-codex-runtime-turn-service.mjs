@@ -8,6 +8,8 @@ const { createRuntimeOperationContext } = require('../modules/codex-runtime/runt
 const session = {
     sessionId: 'session-turn', threadId: 'thread-turn', workspaceRoot: '.', archivedAt: null,
     configRevision: 2, configSnapshot: { model: 'gpt-5.6', permissionMode: 'ask', sandbox: 'none' },
+    appliedRuntimeConfigRevision: 2,
+    appliedRuntimeConfig: { model: 'gpt-5.6', permissionMode: 'ask', sandbox: 'none' },
 };
 const secondSession = {
     ...session,
@@ -22,9 +24,22 @@ const pendingInputs = new Map();
 let pendingSequence = 0;
 const repository = {
     getSession: (sessionId) => sessions.get(sessionId) || null,
-    markSessionConfigApplied: (sessionId, revision, config) => ({
-        ...sessions.get(sessionId), sessionId, configRevision: revision, configSnapshot: config,
-    }),
+    readProjection: () => ({ messages: [] }),
+    markSessionConfigApplying: (sessionId, revision) => {
+        const next = {
+            ...sessions.get(sessionId), configRevision: revision, configApplyState: 'applying',
+        };
+        sessions.set(sessionId, next);
+        return next;
+    },
+    markSessionConfigApplied: (sessionId, revision, config) => {
+        const next = {
+            ...sessions.get(sessionId), sessionId, configRevision: revision, configSnapshot: config,
+            appliedRuntimeConfigRevision: revision, appliedRuntimeConfig: config, configApplyState: 'applied',
+        };
+        sessions.set(sessionId, next);
+        return next;
+    },
     enqueuePendingInput: (sessionId, input) => {
         const existing = [...pendingInputs.values()].find((entry) => (
             entry.sessionId === sessionId && entry.submissionId === input.submissionId
@@ -174,6 +189,66 @@ releaseStaleTurn({ turn: { id: 'turn-stale' } });
 await assert.rejects(staleStart, (error) => error.code === 'STALE_RUNTIME_GENERATION');
 assert.equal(threadStates.get(staleSession.threadId).activeTurnId, null,
     'an old generation Turn ACK must not update replacement Runtime state');
+activeTransport = originalTransport;
+
+const recoverySession = {
+    ...session,
+    sessionId: 'session-recovery-unconfirmed',
+    threadId: 'thread-recovery-unconfirmed',
+};
+sessions.set(recoverySession.sessionId, recoverySession);
+resumedThreadIds.delete(recoverySession.threadId);
+activeTransport = {
+    async request(method, params) {
+        calls.push({ method, params });
+        if (method === 'thread/resume') {
+            return {
+                thread: { id: params.threadId, status: { type: 'active' } },
+                cwd: params.cwd, model: params.model, approvalPolicy: params.approvalPolicy,
+                reasoningEffort: null,
+            };
+        }
+        if (method === 'thread/read') throw new Error('temporary read failure');
+        throw new Error(`unexpected ${method}`);
+    },
+};
+await service.resumeSession(recoverySession);
+assert.deepEqual(threadStates.get(recoverySession.threadId), {
+    activity: 'unknown', activeTurnId: null, observedThreadStatus: 'active', recoveryState: 'unconfirmed',
+}, 'an active resumed Thread without a confirmed Turn id must remain fail-closed and unconfirmed');
+assert.equal(await service.drainFollowUpQueue(recoverySession), null,
+    'an unconfirmed resumed Thread must not drain follow-up input');
+
+const staleRecoverySession = {
+    ...session,
+    sessionId: 'session-recovery-stale',
+    threadId: 'thread-recovery-stale',
+};
+sessions.set(staleRecoverySession.sessionId, staleRecoverySession);
+resumedThreadIds.delete(staleRecoverySession.threadId);
+let releaseRecoveryRead;
+activeTransport = {
+    async request(method, params) {
+        calls.push({ method, params });
+        if (method === 'thread/resume') {
+            return {
+                thread: { id: params.threadId, status: { type: 'active' } },
+                cwd: params.cwd, model: params.model, approvalPolicy: params.approvalPolicy,
+                reasoningEffort: null,
+            };
+        }
+        if (method === 'thread/read') return new Promise((resolve) => { releaseRecoveryRead = resolve; });
+        throw new Error(`unexpected ${method}`);
+    },
+};
+const staleRecovery = service.resumeSession(staleRecoverySession);
+await new Promise((resolve) => setImmediate(resolve));
+generation += 1;
+releaseRecoveryRead({ thread: { id: staleRecoverySession.threadId, turns: [] } });
+await assert.rejects(staleRecovery, (error) => error.code === 'STALE_RUNTIME_GENERATION');
+assert.equal(threadStates.has(staleRecoverySession.threadId), false,
+    'a stale recovery read must not write state into the replacement Runtime generation');
+
 activeTransport = originalTransport;
 
 threadStates.set(session.threadId, { activity: 'running', activeTurnId: 'turn-steer' });

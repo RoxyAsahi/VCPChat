@@ -1,17 +1,49 @@
 import assert from 'node:assert/strict';
 import { createWorkbenchController as createRawWorkbenchController } from '../modules/ui-system/agent-workbench-controller.js';
 import { createInitialState, createWorkbenchStore, deriveWorkbenchViewState, reduceEvent } from '../modules/ui-system/agent-workbench-store.js';
+import { applyProjectionPatch } from '../modules/ui-system/agent-normalized-store.js';
 import { ROUTES, reducersForEvent } from '../modules/ui-system/agent-store/event-router.js';
 import { projectSession, projectTool } from '../modules/ui-system/agent-workbench-projections.js';
+
+function withNormalizedProjection(snapshot) {
+    const sessionId = String(snapshot?.session?.sessionId || snapshot?.sessionId || '').trim();
+    const threadId = String(snapshot?.session?.threadId || snapshot?.threadId || `thread:${sessionId}`).trim();
+    if (!sessionId || snapshot?.normalized) return snapshot;
+    const blocks = [];
+    for (const message of snapshot.messages || []) {
+        for (const [index, source] of (message.blocks || []).entries()) {
+            const ordinal = Number.isInteger(source.ordinal) ? source.ordinal : index;
+            const itemId = String(message.itemId || source.itemId || message.messageId);
+            blocks.push({
+                schemaVersion: 2, blockId: `block:${sessionId}:${itemId}:${ordinal}`,
+                sessionId, threadId, turnId: message.turnId || null, itemId,
+                messageId: String(message.messageId), kind: source.kind || 'message',
+                itemType: source.itemType || source.content?.item?.type || null,
+                authority: source.authority || 'codex', status: source.status || message.status || 'completed',
+                sourceOrder: Number(message.sourceOrder || 0), ordinal, content: source.content || {},
+                createdAt: message.createdAt || 1, updatedAt: message.updatedAt || message.createdAt || 1,
+            });
+        }
+    }
+    return {
+        ...snapshot,
+        session: { ...(snapshot.session || {}), sessionId, threadId },
+        normalized: {
+            schemaVersion: 2, sessionId, threadId,
+            projectionRevision: Number(snapshot.projectionRevision || snapshot.projection?.mutationGeneration || 0),
+            blocks,
+        },
+    };
+}
 
 function createWorkbenchController(api) {
     const topicPayload = (payload = {}) => ({ ...payload, sessionId: payload.sessionId || payload.sessionId });
     const canonicalProjection = async (reader, payload) => {
         const snapshot = await reader(topicPayload(payload));
-        if (snapshot?.session?.sessionId) return snapshot;
+        if (snapshot?.session?.sessionId) return withNormalizedProjection(snapshot);
         const sessionId = String(snapshot?.sessionId || '').trim();
         if (!sessionId) return snapshot;
-        return {
+        return withNormalizedProjection({
             ...snapshot,
             session: {
                 sessionId,
@@ -20,7 +52,7 @@ function createWorkbenchController(api) {
                 configSnapshot: snapshot?.state?.configSnapshot || (snapshot?.state?.model
                     ? { model: snapshot.state.model } : null),
             },
-        };
+        });
     };
     return createRawWorkbenchController({
         ...api,
@@ -42,17 +74,45 @@ function createWorkbenchController(api) {
     });
 }
 
+function projectionPatch({
+    sessionId, threadId, revision, messageId, itemId, turnId, kind, content,
+    sourceOrder = revision, status = 'inProgress',
+}) {
+    return {
+        schemaVersion: 1, sessionId, threadId, runtimeGeneration: 1,
+        baseProjectionRevision: revision - 1, projectionRevision: revision,
+        upsertBlocks: [{
+            schemaVersion: 2, blockId: `block:${sessionId}:${itemId}:0`, sessionId, threadId,
+            turnId, itemId, messageId, kind, itemType: kind === 'tool' ? 'dynamicToolCall' : null,
+            authority: kind === 'tool' ? 'toolbox' : 'codex', status, sourceOrder, ordinal: 0,
+            content, createdAt: revision, updatedAt: revision,
+        }], deleteBlockIds: [],
+    };
+}
+
+function applyStoreProjection(target, patch) {
+    const result = applyProjectionPatch(target.getState(), patch);
+    assert.equal(result.applied, true, `projection patch rejected: ${result.reason || 'unknown'}`);
+    target.setState(result.state);
+}
+
 assert.equal(projectSession({ sessionId: 's-running', activeTurnId: 'turn-running' }).activity, 'running',
     'Session projection must preserve per-Session running identity for the sidebar avatar');
 assert.equal(projectSession({ sessionId: 's-idle' }).activity, 'idle');
+assert.equal(projectSession({ sessionId: 's-uncertain', activity: 'unknown', recoveryState: 'unconfirmed' })
+    .recoveryState, 'unconfirmed');
 
 const routedEventFamilies = [
-    'runtime.state_changed', 'session.created', 'turn.started', 'assistant.delta',
-    'tool.requested', 'approval.requested', 'interaction.requested', 'toolbox.ws',
+    'runtime.state_changed', 'session.created', 'turn.started',
+    'approval.requested', 'interaction.requested', 'toolbox.ws',
     'context.usage', 'plan.updated',
 ];
 for (const type of routedEventFamilies) {
     assert.ok(reducersForEvent(type).length > 0, `${type} must have an explicit Store route`);
+}
+for (const type of ['assistant.started', 'assistant.delta', 'reasoning.delta', 'tool.requested', 'tool.completed']) {
+    assert.equal(reducersForEvent(type).length, 0,
+        `${type} must not recreate the retired Renderer transcript path`);
 }
 assert.equal(ROUTES.has('runtime.interrupt_result'), false,
     'transport-only diagnostics must not accidentally become a Store slice route');
@@ -69,7 +129,7 @@ function dispatch(event) {
     store.dispatch({
         eventId: `event-${eventNumber}`,
         sessionId: 's1',
-        timestamp: 1_700_000_000_000 + eventNumber,
+        timestamp: 1_700_000_000_000 + (Number(event.sequence) || eventNumber),
         runtime: 'codex',
         ...event,
     });
@@ -89,6 +149,23 @@ assert.equal(deriveWorkbenchViewState(store.getState()), 'running',
 store.setState({ activeRuntimes: new Map([['s1', { sessionId: 's1', state: 'idle' }]]) });
 assert.equal('sessions' in store.getState(), false);
 assert.equal('artifacts' in store.getState(), false);
+
+const ownershipStore = createWorkbenchStore({
+    ...createInitialState(),
+    selectedSessionId: 'ownership-session',
+    messages: [{ id: 'forbidden-message', role: 'assistant', content: 'must be discarded' }],
+    tools: new Map([['forbidden-tool', { toolCallId: 'forbidden-tool' }]]),
+});
+assert.deepEqual(ownershipStore.getState().messages, []);
+assert.equal(ownershipStore.getState().tools.size, 0,
+    'legacy transcript slices must be discarded even when supplied through initial state');
+ownershipStore.setState({
+    messages: [{ id: 'forbidden-patch', role: 'assistant', content: 'must be discarded' }],
+    tools: new Map([['forbidden-patch-tool', { toolCallId: 'forbidden-patch-tool' }]]),
+});
+assert.deepEqual(ownershipStore.getState().messages, []);
+assert.equal(ownershipStore.getState().tools.size, 0,
+    'production Store patches must not write transcript state outside the normalized reducer');
 
 const previewOnlyStore = createWorkbenchStore();
 previewOnlyStore.setState({
@@ -168,11 +245,11 @@ deliveryStore.dispatch({
     type: 'turn.started', payload: { prompt: '请先显示我，再等待 Codex 确认' },
 });
 assert.deepEqual(deliveryStore.getState().messages, [{
-    id: 'msg_delivery-turn_user', messageId: 'msg_delivery-turn_user', turnId: 'delivery-turn', role: 'user',
-    content: '请先显示我，再等待 Codex 确认', attachments: [], state: 'complete', deliveryState: 'confirmed',
-    deliveryDetail: '', createdAt: 124,
-    firstSequence: 1, lastSequence: 1,
-}], 'turn.started must confirm and replace the temporary user item');
+    id: 'pending-user:delivery-turn', turnId: 'delivery-turn', role: 'user',
+    content: '请先显示我，再等待 Codex 确认', attachments: [], state: 'pending', deliveryState: 'confirmed',
+    deliveryDetail: 'Codex 已接受消息，正在等待持久投影确认...', createdAt: 123,
+    firstSequence: null, lastSequence: null,
+}], 'turn.started may confirm delivery but must not manufacture a durable transcript item');
 deliveryStore.addPendingUserMessage({ turnId: 'delivery-crash', prompt: '可能已经到达 App Server', createdAt: 125 });
 deliveryStore.dispatch({
     eventId: 'runtime-crashed', sequence: 2, timestamp: 126, runtime: 'codex', sessionId: 'runtime', type: 'runtime.crashed', payload: { error: 'pipe closed' },
@@ -193,34 +270,72 @@ missingAssetStore.dispatch({
 assert.equal(missingAssetStore.getState().messages[0].deliveryState, 'failed',
     'a missing durable attachment must be distinct from an interrupted model turn');
 assert.match(missingAssetStore.getState().messages[0].deliveryDetail, /重新选择附件/);
-deliveryStore.dispatch({
-    eventId: 'assistant-part-one', sequence: 3, timestamp: 127, runtime: 'codex',
-    sessionId: 'delivery-session', turnId: 'delivery-turn',
-    messageId: 'assistant-part-one', type: 'assistant.started', payload: {},
+const multiSessionDeliveryStore = createWorkbenchStore();
+multiSessionDeliveryStore.selectSession({ sessionId: 'delivery-a', state: 'idle' });
+multiSessionDeliveryStore.addPendingUserMessage({ turnId: 'turn-a', prompt: 'A pending' });
+multiSessionDeliveryStore.selectSession({ sessionId: 'delivery-b', state: 'idle' });
+multiSessionDeliveryStore.addPendingUserMessage({ turnId: 'turn-b', prompt: 'B pending' });
+multiSessionDeliveryStore.dispatch({
+    eventId: 'delivery-a-failed', sequence: 1, timestamp: 1, runtime: 'codex',
+    sessionId: 'delivery-a', turnId: 'turn-a', type: 'turn.failed', payload: { error: 'A failed' },
 });
-deliveryStore.dispatch({
-    eventId: 'assistant-part-two', sequence: 4, timestamp: 128, runtime: 'codex',
-    sessionId: 'delivery-session', turnId: 'delivery-turn',
-    messageId: 'assistant-part-two', type: 'assistant.started', payload: {},
+assert.equal(multiSessionDeliveryStore.getState().ephemeralStateBySession
+    .get('delivery-a').pendingMessages[0].deliveryState, 'interrupted');
+assert.equal(multiSessionDeliveryStore.getState().messages[0].deliveryState, 'sending',
+    'a background Session failure must not alter the selected Session pending row');
+multiSessionDeliveryStore.dispatch({
+    eventId: 'delivery-runtime-crash', sequence: 2, timestamp: 2, runtime: 'codex',
+    sessionId: 'runtime', type: 'runtime.crashed', payload: { error: 'pipe closed' },
 });
+assert.equal(multiSessionDeliveryStore.getState().messages[0].deliveryState, 'unconfirmed',
+    'a process crash must mark every still-sending Session row uncertain without replaying it');
+deliveryStore.dispatch({
+    eventId: 'legacy-assistant-part', sequence: 3, timestamp: 127, runtime: 'codex',
+    sessionId: 'delivery-session', turnId: 'delivery-turn',
+    messageId: 'legacy-assistant-part', type: 'assistant.started', payload: {},
+});
+assert.equal(deliveryStore.getState().messages.filter((message) => message.role === 'assistant').length, 0,
+    'legacy assistant events must not create Renderer-owned transcript rows');
+applyStoreProjection(deliveryStore, projectionPatch({
+    sessionId: 'delivery-session', threadId: 'thread-delivery', revision: 1,
+    messageId: 'assistant-part-one', itemId: 'assistant-item-one', turnId: 'delivery-turn', kind: 'message',
+    sourceOrder: 1, content: { text: 'first' },
+}));
+applyStoreProjection(deliveryStore, projectionPatch({
+    sessionId: 'delivery-session', threadId: 'thread-delivery', revision: 2,
+    messageId: 'assistant-part-two', itemId: 'assistant-item-two', turnId: 'delivery-turn', kind: 'message',
+    sourceOrder: 2, content: { text: 'second' },
+}));
 assert.equal(deliveryStore.getState().messages.filter((message) => message.role === 'assistant').length, 2,
-    'distinct Runtime message ids in one turn must remain distinct timeline items');
+    'distinct normalized Block message ids in one turn must remain distinct timeline items');
 
 dispatch({ type: 'session.created', sessionId: 's1', sequence: 1, payload: { model: 'm1' } });
-dispatch({ type: 'turn.started', sessionId: 's1', turnId: 't1', messageId: 'msg_t1_user', sequence: 2, payload: { prompt: 'hello' } });
-dispatch({ type: 'assistant.started', sessionId: 's1', turnId: 't1', messageId: 'assistant-1', sequence: 3, payload: {} });
-dispatch({ type: 'assistant.delta', sessionId: 's1', turnId: 't1', messageId: 'assistant-1', sequence: 4, payload: { text: 'hel' } });
-dispatch({ type: 'assistant.delta', sessionId: 's1', turnId: 't1', messageId: 'assistant-1', sequence: 5, payload: { text: 'lo' } });
+applyStoreProjection(store, projectionPatch({
+    sessionId: 's1', threadId: 'thread-s1', revision: 1, messageId: 'assistant-1', itemId: 'assistant-item-1',
+    turnId: 't1', kind: 'message', content: { text: 'hel' },
+}));
+applyStoreProjection(store, projectionPatch({
+    sessionId: 's1', threadId: 'thread-s1', revision: 2, messageId: 'assistant-1', itemId: 'assistant-item-1',
+    turnId: 't1', kind: 'message', content: { text: 'hello' },
+}));
 assert.equal(store.getState().messages.find((message) => message.role === 'assistant').content, 'hello');
 
-dispatch({ type: 'tool.requested', sessionId: 's1', turnId: 't1', toolCallId: 'tc1', sequence: 6, payload: { toolName: 'vcp_invoke', argumentSummary: 'FileOperator.ReadFile README.md' } });
-dispatch({ type: 'tool.completed', sessionId: 's1', turnId: 't1', toolCallId: 'tc1', sequence: 7, payload: { toolName: 'vcp_invoke', outputSummary: 'done' } });
+applyStoreProjection(store, projectionPatch({
+    sessionId: 's1', threadId: 'thread-s1', revision: 3, messageId: 'tool-message-1', itemId: 'tc1',
+    turnId: 't1', kind: 'tool', status: 'inProgress',
+    content: { toolName: 'vcp_invoke', argumentSummary: 'FileOperator.ReadFile README.md', item: { type: 'dynamicToolCall', tool: 'vcp_invoke' } },
+}));
+applyStoreProjection(store, projectionPatch({
+    sessionId: 's1', threadId: 'thread-s1', revision: 4, messageId: 'tool-message-1', itemId: 'tc1',
+    turnId: 't1', kind: 'tool', status: 'completed', sourceOrder: 3,
+    content: { toolName: 'vcp_invoke', outputSummary: 'done', item: { type: 'dynamicToolCall', tool: 'vcp_invoke' } },
+}));
 const tool = projectTool(store.getState().tools.get('tc1'));
 assert.equal(tool.name, 'vcp_invoke');
 assert.equal(tool.state, 'completed');
-assert.equal(tool.eventCount, 2);
-assert.equal(store.getState().tools.get('tc1').firstSequence, 6, 'tool timeline position must come from the first Runtime event');
-assert.equal(store.getState().tools.get('tc1').lastSequence, 7, 'tool updates must not rewrite the first timeline position');
+assert.equal(tool.eventCount, 0, 'normalized tool cards do not retain Renderer event histories');
+assert.equal(store.getState().tools.get('tc1').snapshotOrdinal, 3,
+    'tool timeline position must come from the Main-authored Block source order');
 
 dispatch({ type: 'approval.requested', sessionId: 's1', turnId: 't1', toolCallId: 'tool-1', approvalId: 'a1', sequence: 8, payload: { approval: { approvalId: 'a1', toolName: 'vcp_invoke', argumentsHash: 'hash-1', expiresAtMs: 1234 } } });
 assert.equal(store.getState().approvals.length, 1);
@@ -275,7 +390,8 @@ assert.deepEqual({
 
 const messageCount = store.getState().messages.length;
 store.dispatch({ eventId: 'event-5', type: 'assistant.delta', sessionId: 's1', turnId: 't1', messageId: 'assistant-1', sequence: 5, timestamp: 1_700_000_000_005, runtime: 'codex', payload: { text: 'lo' } });
-assert.equal(store.getState().messages.length, messageCount, 'eventId is the only replay key');
+assert.equal(store.getState().messages.length, messageCount,
+    'legacy transcript deltas must be inert even when they carry valid event identity');
 dispatch({ type: 'assistant.delta', sessionId: 'other', turnId: 't2', messageId: 'assistant-2', sequence: 13, payload: { text: 'ignore' } });
 assert.equal(store.getState().messages.length, messageCount, 'events from inactive sessions must be filtered');
 store.dispatch({ type: 'assistant.delta', sessionId: 's1', turnId: 't1', sequence: 14, timestamp: 1_700_000_000_014, runtime: 'codex', payload: { text: 'invalid' } });
@@ -310,9 +426,13 @@ assert.deepEqual(controller.store.getState().interactions, [pendingInteraction],
 assert.equal(typeof liveEvent, 'function', 'Renderer must subscribe before it starts reading a Session projection');
 assert.deepEqual(calls.find(([name]) => name === 'topic')[1], { sessionId: 'restored' });
 liveEvent({
-    eventId: 'initial-live-event', sequence: 5, timestamp: 5, runtime: 'codex',
-    sessionId: 'restored', turnId: 'turn-restored',
-    messageId: 'assistant-live', type: 'assistant.delta', payload: { text: 'snapshot 期间的 live delta' },
+    eventId: 'initial-live-event', sequence: 5, timestamp: 5, runtime: 'codex', type: 'projection.updated',
+    sessionId: 'restored', threadId: 'thread-restored', turnId: 'turn-restored', activity: 'running',
+    projectionPatch: projectionPatch({
+        sessionId: 'restored', threadId: 'thread-restored', revision: 1,
+        messageId: 'assistant-live', itemId: 'assistant-live-item', turnId: 'turn-restored', kind: 'message',
+        content: { text: 'snapshot 期间的 live delta' },
+    }),
 });
 liveEvent({
     eventId: 'initial-readiness-event', sequence: 6, timestamp: 6, runtime: 'codex',
@@ -320,19 +440,18 @@ liveEvent({
     payload: { toolbox: { state: 'unavailable', detail: 'Main readiness settled during snapshot' } },
 });
 resolveInitialRead({
-    sessionId: 'restored', snapshotSequence: 4,
+    sessionId: 'restored', threadId: 'thread-restored', snapshotSequence: 4,
     state: { title: '恢复的 Codex Session 标题', model: 'gpt-5.6-terra', workspaceRef: 'C:\\workspace\\restored' },
-    history: [
-        { id: 'history-1', role: 'assistant', content: '来自 Codex Session', snapshotOrdinal: 0 },
-        {
-            id: 'tool-call-restored', role: 'tool', toolCallId: 'call-restored', toolName: 'FileOperator',
-            state: 'completed', timestamp: 2, snapshotOrdinal: 1,
-            payload: {
-                toolName: 'FileOperator', result: 'package.json',
+    messages: [
+        { messageId: 'history-1', itemId: 'history-1', role: 'assistant', status: 'completed', sourceOrder: 0,
+            blocks: [{ kind: 'message', content: { text: '来自 Codex Session' } }] },
+        { messageId: 'tool-call-restored', itemId: 'call-restored', role: 'tool', status: 'completed', sourceOrder: 1,
+            blocks: [{ kind: 'tool', authority: 'toolbox', content: {
+                item: { id: 'call-restored', type: 'dynamicToolCall', tool: 'FileOperator' },
+                result: 'package.json',
                 resources: [{ name: 'package.json', url: 'file-ref:package.json' }],
                 warnings: ['只读预览'], task: { id: 'task-restored', status: 'completed' },
-            },
-        },
+            } }] },
     ],
 });
 await initializing;
@@ -344,8 +463,8 @@ const restoredTool = controller.store.getState().tools.get('call-restored');
 assert.equal(restoredTool?.name, 'FileOperator', 'read-topic must rebuild tool artifacts from the Codex projection');
 assert.equal(restoredTool?.payload.resources[0].name, 'package.json');
 assert.equal(restoredTool?.snapshotOrdinal, 1);
-assert.ok(controller.store.getState().messages.some((message) => message.id === 'assistant-live'),
-    'a live event arriving during initial read-topic must be buffered and projected after the snapshot');
+assert.ok(controller.store.getState().messages.some((message) => message.id === 'block:restored:assistant-live-item:0'),
+    'a normalized Patch arriving during initial read-topic must be buffered and applied after the snapshot');
 assert.equal(controller.store.getState().readiness.toolbox.state, 'unavailable',
     'process-global readiness must survive a Session-less snapshot barrier instead of remaining at checking');
 // An App Server crash is global, not a transcript event. It must still reach the
@@ -379,13 +498,35 @@ const switching = createWorkbenchController({
 switching.subscribeRuntime();
 const sessionRuntime = { sessionId: 'switch-session', state: 'idle' };
 const hydrating = switching.hydrateTopic(sessionRuntime.sessionId, sessionRuntime);
-switchEvent({ eventId: 'old-event', sequence: 4, timestamp: 4, runtime: 'codex', sessionId: sessionRuntime.sessionId, turnId: 'turn-1', messageId: 'old-message', type: 'assistant.delta', payload: { text: 'stale' } });
-switchEvent({ eventId: 'new-event', sequence: 5, timestamp: 5, runtime: 'codex', sessionId: sessionRuntime.sessionId, turnId: 'turn-1', messageId: 'new-message', type: 'assistant.delta', payload: { text: 'live' } });
-deferredRead({ sessionId: sessionRuntime.sessionId, snapshotSequence: 4, history: [{ id: 'checkpoint-message', role: 'assistant', content: 'checkpoint' }] });
+switchEvent({
+    eventId: 'old-event', sequence: 4, timestamp: 4, runtime: 'codex', type: 'projection.updated',
+    sessionId: sessionRuntime.sessionId, threadId: 'thread-switch', turnId: 'turn-1', activity: 'running',
+    projectionPatch: projectionPatch({
+        sessionId: sessionRuntime.sessionId, threadId: 'thread-switch', revision: 1,
+        messageId: 'old-message', itemId: 'old-item', turnId: 'turn-1', kind: 'message', content: { text: 'stale' },
+    }),
+});
+switchEvent({
+    eventId: 'new-event', sequence: 5, timestamp: 5, runtime: 'codex', type: 'projection.updated',
+    sessionId: sessionRuntime.sessionId, threadId: 'thread-switch', turnId: 'turn-1', activity: 'running',
+    projectionPatch: projectionPatch({
+        sessionId: sessionRuntime.sessionId, threadId: 'thread-switch', revision: 1,
+        messageId: 'new-message', itemId: 'new-item', turnId: 'turn-1', kind: 'message', content: { text: 'live' },
+    }),
+});
+deferredRead({
+    sessionId: sessionRuntime.sessionId, threadId: 'thread-switch', snapshotSequence: 4,
+    messages: [{
+        messageId: 'checkpoint-message', itemId: 'checkpoint-message', role: 'assistant',
+        status: 'completed', sourceOrder: 0, blocks: [{ kind: 'message', content: { text: 'checkpoint' } }],
+    }],
+});
 await hydrating;
 assert.ok(switching.store.getState().messages.some((message) => message.content === 'checkpoint'), 'snapshot must become the base projection');
-assert.ok(switching.store.getState().messages.some((message) => message.id === 'new-message'), 'newer buffered events must follow the snapshot');
-assert.equal(switching.store.getState().messages.some((message) => message.id === 'old-message'), false, 'stale events must not be replayed after snapshot restore');
+assert.ok(switching.store.getState().messages.some((message) => message.id === 'block:switch-session:new-item:0'),
+    'newer buffered Projection Patches must follow the snapshot');
+assert.equal(switching.store.getState().messages.some((message) => message.id === 'block:switch-session:old-item:0'), false,
+    'stale Projection Patches must not be replayed after snapshot restore');
 switching.dispose();
 
 // A fresh Topic is a valid no-checkpoint state.  The renderer must still own
@@ -407,7 +548,11 @@ fresh.dispose();
 const previewCalls = [];
 const preview = createWorkbenchController({
     agentRuntimeGetStatus: async () => ({ state: 'ready', pendingApprovals: [] }),
-    agentRuntimeReadTopic: async ({ sessionId }) => ({ sessionId, snapshotSequence: 0, history: [{ id: 'preview-history', role: 'assistant', content: 'preview only' }] }),
+    agentRuntimeReadTopic: async ({ sessionId }) => ({
+        sessionId, threadId: `thread:${sessionId}`, snapshotSequence: 0,
+        messages: [{ messageId: 'preview-history', itemId: 'preview-history', role: 'assistant',
+            status: 'completed', sourceOrder: 0, blocks: [{ kind: 'message', content: { text: 'preview only' } }] }],
+    }),
     agentRuntimeCreateSession: async (payload) => {
         previewCalls.push(['runtime', payload]);
         return { sessionId: payload.sessionId, state: 'idle' };
@@ -505,6 +650,97 @@ assert.equal(cold.store.getState().messages[0].content, 'SQLite B', 'late A reco
 resolveThreadB({ session: { sessionId: 'topic-b', agentId: 'Nova', title: 'Thread B' }, messages: [] });
 cold.dispose();
 
+// Live reasoning and tools belong to the selected Session projection, not only
+// to the currently mounted DOM. Switching A -> B -> A must restore them on the
+// synchronous cached frame, before the second SQLite read resolves. An active
+// Turn must also not be reconciled from a potentially sparse thread/read.
+let liveSwitchEvent;
+let resolveSecondLiveSqlite;
+const liveSwitchThreadReads = [];
+let liveSqliteAReads = 0;
+const liveSwitch = createWorkbenchController({
+    agentRuntimeReadProjection: ({ sessionId }) => {
+        if (sessionId === 'live-session-a') {
+            liveSqliteAReads += 1;
+            if (liveSqliteAReads > 1) {
+                return new Promise((resolve) => { resolveSecondLiveSqlite = resolve; });
+            }
+            return Promise.resolve({
+                session: { sessionId, threadId: 'thread-live-a', agentId: 'Nova', title: 'Live A' }, messages: [],
+            });
+        }
+        return Promise.resolve({
+            session: { sessionId, threadId: 'thread-idle-b', agentId: 'Nova', title: 'Idle B' },
+            messages: [{
+                messageId: 'idle-b-message', itemId: 'idle-b-item', role: 'assistant', status: 'completed',
+                blocks: [{ blockId: 'idle-b:0', kind: 'message', content: { text: 'Idle B' } }],
+            }],
+        });
+    },
+    agentRuntimeReadTopic: async ({ sessionId }) => {
+        liveSwitchThreadReads.push(sessionId);
+        return {
+            session: { sessionId, agentId: 'Nova', title: sessionId },
+            messages: sessionId === 'idle-session-b' ? [{
+                messageId: 'idle-b-message', itemId: 'idle-b-item', role: 'assistant', status: 'completed',
+                blocks: [{ blockId: 'idle-b:0', kind: 'message', content: { text: 'Idle B' } }],
+            }] : [],
+        };
+    },
+    onAgentRuntimeEvent(callback) { liveSwitchEvent = callback; return () => {}; },
+});
+liveSwitch.subscribeRuntime();
+liveSwitch.store.setState({
+    activeRuntimes: new Map([['live-session-a', {
+        sessionId: 'live-session-a', activity: 'running', activeTurnId: 'live-turn-a',
+        threadId: 'thread-live-a',
+    }]]),
+});
+await liveSwitch.previewTopic('live-session-a', 'Nova', { title: 'Live A' });
+liveSwitchEvent({
+    eventId: 'live-reasoning-event', sequence: 1, timestamp: 1, runtime: 'codex',
+    type: 'projection.updated', sessionId: 'live-session-a', turnId: 'live-turn-a', activity: 'running',
+    projectionPatch: projectionPatch({ sessionId: 'live-session-a', threadId: 'thread-live-a', revision: 1,
+        messageId: 'live-reasoning-message', itemId: 'live-reasoning-item', turnId: 'live-turn-a', kind: 'reasoning',
+        content: { summary: ['still thinking'], content: [] } }),
+});
+liveSwitchEvent({
+    eventId: 'live-tool-event', sequence: 2, timestamp: 2, runtime: 'codex',
+    type: 'projection.updated', sessionId: 'live-session-a', turnId: 'live-turn-a', activity: 'running',
+    projectionPatch: projectionPatch({ sessionId: 'live-session-a', threadId: 'thread-live-a', revision: 2,
+        messageId: 'live-tool-message', itemId: 'live-tool-item', turnId: 'live-turn-a', kind: 'tool',
+        content: { item: { type: 'dynamicToolCall', tool: 'Browser', arguments: { url: 'https://vcptoolbox.com' } } } }),
+});
+assert.equal(liveSwitch.store.getState().messages[0].reasoning, 'still thinking');
+assert.equal(liveSwitch.store.getState().tools.has('live-tool-item'), true);
+await liveSwitch.previewTopic('idle-session-b', 'Nova', { title: 'Idle B' });
+const returningToLiveA = liveSwitch.previewTopic('live-session-a', 'Nova', { title: 'Live A' });
+assert.equal(liveSwitch.store.getState().messages.some((message) => message.reasoning === 'still thinking'), true,
+    'switching back must synchronously restore live reasoning from the Session projection cache');
+assert.equal(liveSwitch.store.getState().tools.has('live-tool-item'), true,
+    'switching back must synchronously restore live tool cards from the Session projection cache');
+resolveSecondLiveSqlite({
+    session: { sessionId: 'live-session-a', agentId: 'Nova', title: 'Live A' },
+    messages: [{
+        messageId: 'live-reasoning-message', itemId: 'live-reasoning-item', turnId: 'live-turn-a',
+        role: 'assistant', status: 'inProgress', sourceOrder: 1,
+        blocks: [{ blockId: 'live-reasoning:0', kind: 'reasoning', content: { text: 'still thinking' } }],
+    }, {
+        messageId: 'live-tool-message', itemId: 'live-tool-item', turnId: 'live-turn-a',
+        role: 'assistant', status: 'inProgress', sourceOrder: 2,
+        blocks: [{ blockId: 'live-tool:0', kind: 'tool', content: {
+            item: { type: 'dynamicToolCall', tool: 'Browser', arguments: { url: 'https://vcptoolbox.com' } },
+        } }],
+    }],
+});
+await returningToLiveA;
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(liveSwitchThreadReads.includes('live-session-a'), false,
+    'an active Turn must not run thread/read reconciliation that can erase streaming reasoning or tools');
+assert.equal(liveSwitch.store.getState().messages.some((message) => message.reasoning === 'still thinking'), true);
+assert.equal(liveSwitch.store.getState().tools.has('live-tool-item'), true);
+liveSwitch.dispose();
+
 const hydrateCalls = [];
 let resolveHydrateSqlite;
 let resolveHydrateThread;
@@ -538,7 +774,7 @@ let liveGuardEvent;
 let resolveLiveGuardThread;
 const liveGuard = createWorkbenchController({
     agentRuntimeReadProjection: async () => ({
-        session: { sessionId: 'live-guard-topic', agentId: 'Nova', title: 'SQLite live guard' },
+        session: { sessionId: 'live-guard-topic', threadId: 'thread-live-guard', agentId: 'Nova', title: 'SQLite live guard' },
         messages: [{ messageId: 'sqlite-guard', itemId: 'item-guard', role: 'assistant', status: 'completed', blocks: [{ blockId: 'guard:0', kind: 'message', content: { text: 'SQLite base' } }] }],
     }),
     agentRuntimeReadTopic: async () => new Promise((resolve) => { resolveLiveGuardThread = resolve; }),
@@ -549,13 +785,12 @@ await liveGuard.previewTopic('live-guard-topic', 'Nova');
 liveGuardEvent({
     runtime: 'codex', type: 'projection.updated', sessionId: 'live-guard-topic',
     threadId: 'thread-live-guard', turnId: 'turn-live-guard', activity: 'running',
-    projectionMessage: {
-        messageId: 'live-guard-message', itemId: 'live-guard-item', turnId: 'turn-live-guard', role: 'assistant', status: 'inProgress',
-        blocks: [{ blockId: 'live-guard:0', kind: 'message', content: { text: 'live delta must survive' } }],
-    },
+    projectionPatch: projectionPatch({ sessionId: 'live-guard-topic', threadId: 'thread-live-guard', revision: 1,
+        messageId: 'live-guard-message', itemId: 'live-guard-item', turnId: 'turn-live-guard', kind: 'message',
+        content: { text: 'live delta must survive' } }),
 });
 resolveLiveGuardThread({
-    session: { sessionId: 'live-guard-topic', agentId: 'Nova', title: 'stale thread result' },
+    session: { sessionId: 'live-guard-topic', threadId: 'thread-live-guard', agentId: 'Nova', title: 'stale thread result' },
     messages: [{ messageId: 'stale-guard-message', itemId: 'stale-guard-item', role: 'assistant', status: 'completed', blocks: [{ blockId: 'stale-guard:0', kind: 'message', content: { text: 'must not replace live delta' } }] }],
 });
 await new Promise((resolve) => setImmediate(resolve));
@@ -576,6 +811,134 @@ await assert.rejects(
     'a projection for Session B must not populate the selected Session A',
 );
 conflictingPreview.dispose();
+
+let revisionGapEvent;
+let revisionGapReads = 0;
+const revisionGap = createWorkbenchController({
+    agentRuntimeReadProjection: async () => {
+        revisionGapReads += 1;
+        return {
+            session: { sessionId: 'revision-gap-session', threadId: 'revision-gap-thread', agentId: 'Nova' },
+            projectionRevision: revisionGapReads === 1 ? 2 : 4,
+            messages: [{
+                messageId: 'revision-gap-message', itemId: 'revision-gap-item', role: 'assistant', status: 'completed',
+                blocks: [{ blockId: 'legacy-revision-gap', kind: 'message', content: {
+                    text: revisionGapReads === 1 ? 'before gap' : 'reloaded after gap',
+                } }],
+            }],
+        };
+    },
+    onAgentRuntimeEvent(callback) { revisionGapEvent = callback; return () => {}; },
+});
+revisionGap.subscribeRuntime();
+await revisionGap.previewTopic('revision-gap-session', 'Nova');
+assert.equal(revisionGap.store.getState().projectionRevisions.get('revision-gap-session'), 2);
+revisionGapEvent({
+    runtime: 'codex', type: 'projection.updated', sessionId: 'revision-gap-session',
+    threadId: 'revision-gap-thread', activity: 'idle',
+    projectionPatch: projectionPatch({ sessionId: 'revision-gap-session', threadId: 'revision-gap-thread', revision: 4,
+        messageId: 'must-not-apply', itemId: 'must-not-apply', turnId: 'turn-gap', kind: 'message',
+        content: { text: 'gap patch must be discarded' } }),
+});
+for (let attempt = 0; attempt < 20 && revisionGapReads < 2; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+}
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(revisionGapReads, 2, 'a revision gap must trigger one full SQLite projection reload');
+assert.equal(revisionGap.store.getState().messages.some((message) => message.content === 'reloaded after gap'), true);
+assert.equal(revisionGap.store.getState().messages.some((message) => message.content === 'gap patch must be discarded'), false);
+revisionGap.dispose();
+
+let staleReloadEvent;
+let staleReloadReads = 0;
+let resolveStaleReload;
+const staleReload = createWorkbenchController({
+    agentRuntimeReadProjection: async () => {
+        staleReloadReads += 1;
+        if (staleReloadReads === 1) return {
+            session: { sessionId: 'stale-reload-session', threadId: 'stale-reload-thread', agentId: 'Nova' },
+            projectionRevision: 2,
+            messages: [],
+        };
+        if (staleReloadReads === 2) return new Promise((resolve) => { resolveStaleReload = resolve; });
+        return {
+            session: { sessionId: 'stale-reload-session', threadId: 'stale-reload-thread', agentId: 'Nova' },
+            projectionRevision: 5,
+            messages: [{
+                messageId: 'fresh-reload-message', itemId: 'fresh-reload-item', role: 'assistant', status: 'completed',
+                blocks: [{ kind: 'message', content: { text: 'fresh revision five' } }],
+            }],
+        };
+    },
+    onAgentRuntimeEvent(callback) { staleReloadEvent = callback; return () => {}; },
+});
+staleReload.subscribeRuntime();
+await staleReload.previewTopic('stale-reload-session', 'Nova');
+staleReloadEvent({
+    runtime: 'codex', type: 'projection.updated', sessionId: 'stale-reload-session',
+    threadId: 'stale-reload-thread', activity: 'running',
+    projectionPatch: projectionPatch({ sessionId: 'stale-reload-session', threadId: 'stale-reload-thread', revision: 5,
+        messageId: 'gap-five', itemId: 'gap-five', kind: 'message', content: { text: 'discard gap five' } }),
+});
+staleReloadEvent({
+    runtime: 'codex', type: 'projection.updated', sessionId: 'stale-reload-session',
+    threadId: 'stale-reload-thread', activity: 'running',
+    projectionPatch: projectionPatch({ sessionId: 'stale-reload-session', threadId: 'stale-reload-thread', revision: 3,
+        messageId: 'live-three', itemId: 'live-three', kind: 'message', content: { text: 'live revision three' } }),
+});
+resolveStaleReload({
+    session: { sessionId: 'stale-reload-session', threadId: 'stale-reload-thread', agentId: 'Nova' },
+    projectionRevision: 2,
+    messages: [{
+        messageId: 'stale-message', itemId: 'stale-item', role: 'assistant', status: 'completed',
+        blocks: [{ kind: 'message', content: { text: 'must not overwrite live revision three' } }],
+    }],
+});
+for (let attempt = 0; attempt < 20 && staleReloadReads < 3; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+}
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(staleReloadReads, 3,
+    'a newer rejected Patch arriving during reload must raise the deduplicated target revision');
+assert.equal(staleReload.store.getState().projectionRevisions.get('stale-reload-session'), 5);
+assert.equal(staleReload.store.getState().messages.some((message) => message.content === 'fresh revision five'), true);
+assert.equal(staleReload.store.getState().messages.some((message) => message.content?.includes('must not overwrite')), false,
+    'an async stale SQLite snapshot must never overwrite a newer live revision');
+staleReload.dispose();
+
+let mismatchedReloadEvent;
+let mismatchedReloadReads = 0;
+const mismatchedReload = createWorkbenchController({
+    agentRuntimeReadProjection: async () => {
+        mismatchedReloadReads += 1;
+        return mismatchedReloadReads === 1 ? {
+            session: { sessionId: 'reload-session-a', threadId: 'reload-thread-a', agentId: 'Nova' },
+            projectionRevision: 1, messages: [],
+        } : {
+            session: { sessionId: 'reload-session-b', threadId: 'reload-thread-b', agentId: 'Nova' },
+            projectionRevision: 3,
+            messages: [{ messageId: 'wrong-session', itemId: 'wrong-session', role: 'assistant',
+                blocks: [{ kind: 'message', content: { text: 'must remain isolated' } }] }],
+        };
+    },
+    onAgentRuntimeEvent(callback) { mismatchedReloadEvent = callback; return () => {}; },
+});
+mismatchedReload.subscribeRuntime();
+await mismatchedReload.previewTopic('reload-session-a', 'Nova');
+mismatchedReloadEvent({
+    runtime: 'codex', type: 'projection.updated', sessionId: 'reload-session-a',
+    threadId: 'reload-thread-a', activity: 'idle',
+    projectionPatch: projectionPatch({ sessionId: 'reload-session-a', threadId: 'reload-thread-a', revision: 3,
+        messageId: 'gap-a', itemId: 'gap-a', kind: 'message', content: { text: 'gap' } }),
+});
+for (let attempt = 0; attempt < 20 && mismatchedReloadReads < 2; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+}
+await new Promise((resolve) => setImmediate(resolve));
+assert.equal(mismatchedReload.store.getState().sessionsById.has('reload-session-b'), false,
+    'revision reload must reject a Snapshot belonging to another Session');
+assert.equal(mismatchedReload.store.getState().projectionRevisions.get('reload-session-a'), 1);
+mismatchedReload.dispose();
 
 // Codex Session identity is authoritative. A compatibility sessionId must never
 // let another Session mutate an existing runtime slot or the visible status.
@@ -636,17 +999,16 @@ assert.equal(duplicateGuard.store.getState().messages.filter((message) => messag
 duplicateGuardEvent({
     runtime: 'codex', type: 'projection.updated', sessionId: 'codex-topic',
     turnId: 'codex-turn-1', activity: 'running',
-    projectionMessage: {
-        messageId: 'durable-user-message', itemId: 'durable-user-item', turnId: 'codex-turn-1',
-        role: 'user', status: 'completed',
-        blocks: [{ blockId: 'durable-user-block', kind: 'message', content: { parts: [{ text: '只显示一次' }] } }],
-    },
+    projectionPatch: projectionPatch({ sessionId: 'codex-topic', threadId: 'thread-codex-topic', revision: 1,
+        messageId: 'durable-user-message', itemId: 'durable-user-item', turnId: 'codex-turn-1', kind: 'message',
+        content: { parts: [{ type: 'text', text: '只显示一次' }] } }),
 });
 const reconciledUserMessages = duplicateGuard.store.getState().messages.filter((message) => message.role === 'user');
 assert.equal(reconciledUserMessages.length, 1,
     'the App Server user item must replace—not append to—the temporary row');
-assert.equal(reconciledUserMessages[0].id, 'durable-user-block');
-assert.equal(reconciledUserMessages[0].deliveryState, 'confirmed');
+assert.equal(reconciledUserMessages[0].id, 'block:codex-topic:durable-user-item:0');
+assert.equal(duplicateGuard.store.getState().ephemeralStateBySession.has('codex-topic'), false,
+    'a durable user Block must prune the Session-local temporary delivery row');
 duplicateGuard.dispose();
 
 console.log('Agent Workbench store/reducer/controller projection tests passed.');

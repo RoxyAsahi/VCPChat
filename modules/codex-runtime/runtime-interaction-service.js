@@ -58,7 +58,9 @@ class RuntimeInteractionService {
         const repository = this.context.repository();
         const session = threadId ? repository?.getSessionByThread(threadId) : null;
         const profile = session?.configSnapshot?.executionProfile || 'toolbox-only';
-        const policy = serverRequestPolicy(request.method, profile);
+        const appliedConfig = session?.appliedRuntimeConfigRevision > 0
+            ? session.appliedRuntimeConfig : session?.configSnapshot;
+        const policy = serverRequestPolicy(request.method, profile, appliedConfig?.toolPolicy);
         if (policy.state !== 'supported') {
             this.failClosedServerRequest(request, policy.reason);
             return { accepted: false, reason: policy.reason };

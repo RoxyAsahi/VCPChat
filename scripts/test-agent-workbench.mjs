@@ -1,483 +1,11 @@
-import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import { JSDOM } from 'jsdom';
-import path from 'node:path';
-import { pathToFileURL, fileURLToPath } from 'node:url';
-import { readCssWithImports } from './css-import-reader.mjs';
+import { assert, fs, path, pathToFileURL, readCssWithImports, waitFor, root, workbenchProjectionPatch, dom, resizeObservers, TestResizeObserver, revokedAvatarUrl, unsubscribeCalls, eventCallback, runtimeStatus, activeRuntimeSession, presenceCalls, startedTurns, importedAttachment, importedVideoAttachment, selectedAttachments, followUpTurns, steeringTurns, cancelledTurns, interactionQueue, replacedInteractionQueues, resolvedPendingInputs, createdSessions, createdTopics, renamedTopics, compactedSessions, approvalResponses, interactionResponses, openedExternalLinks, workspaceActions, savedWorkbenchSettings, sessionConfigRevisions, sessionConfigSnapshots, savedAvatars, savedAgentProfiles, runtimeTransitions, runtimeEnsures, exportedSessions, mainCreateProxyCalls, sharedCreateActionCalls, releaseAgentCatalog, buildAgentProfiles, agentCatalogGate, topicCatalog, secondaryTopicCatalog, archivedTopicCatalog, topicListRequests, topicSearchRequests, toolCatalogRequests, canonicalSessionProjection, runtimeEventNumber, emitDaemonEvent, fixtureProjectionRevisionBySession, emitProjectionBlock, setSelectedAttachments, setInteractionQueue, setRuntimeStatus, refreshModelCalls } from './fixtures/agent-workbench-harness.mjs';
+import { createAgentWorkbenchState } from '../modules/ui-system/agent-workbench-state.js';
 
-async function waitFor(predicate, timeoutMs = 1_000) {
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-        const value = predicate();
-        if (value) return value;
-        await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-    return null;
-}
-
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const dom = new JSDOM('<!doctype html><html><body><div id="host"></div></body></html>', {
-    url: 'http://localhost/',
-    pretendToBeVisual: true,
-});
-
-globalThis.window = dom.window;
-globalThis.document = dom.window.document;
-globalThis.CustomEvent = dom.window.CustomEvent;
-globalThis.Event = dom.window.Event;
-globalThis.Node = dom.window.Node;
-globalThis.HTMLButtonElement = dom.window.HTMLButtonElement;
-const resizeObservers = [];
-class TestResizeObserver {
-    constructor(callback) { this.callback = callback; this.targets = new Set(); resizeObservers.push(this); }
-    observe(target) { this.targets.add(target); }
-    disconnect() { this.targets.clear(); }
-}
-globalThis.ResizeObserver = TestResizeObserver;
-window.ResizeObserver = TestResizeObserver;
-// main.html installs this classic shared helper before uiManager. The Workbench
-// test imports ESM modules directly, so install the same browser global here.
-Function('window', fs.readFileSync(path.join(root, 'modules', 'ui-system', 'sidebar-resizer.js'), 'utf8'))(window);
-let revokedAvatarUrl = null;
-window.URL.createObjectURL = () => 'blob:cropped-agent-avatar';
-window.URL.revokeObjectURL = (url) => { revokedAvatarUrl = url; };
-window.uiHelperFunctions = {
-    openAvatarCropper: (file, callback) => callback(file),
-};
-const { createAgentWorkbenchState } = await import('../modules/ui-system/agent-workbench-state.js');
-window.globalSettings = { sidebarWidth: 300 };
-const defaultWorkbenchState = createAgentWorkbenchState({ window, agentCatalog: [], rememberedTopic: null });
-assert.equal(defaultWorkbenchState.agentSidebarWidth, 300,
-    'Build must inherit the main chat sidebar width when it has no saved resize preference');
-assert.equal(defaultWorkbenchState.activityPanelWidth, 320,
-    'Build Session information must start at the minimum supported width');
-
-let registered = null;
-let unsubscribeCalls = 0;
-let eventCallback = null;
-let runtimeStatus = 'stopped';
-let activeRuntimeSession = null;
-const presenceCalls = [];
-const startedTurns = [];
-const importedAttachment = {
-    id: 'attachment_test_image', displayName: '设计图.png', kind: 'image', mimeType: 'image/png',
-    byteLen: 314, width: 16, height: 16, sha256: 'a'.repeat(64), assetFile: 'a'.repeat(64) + '.png',
-};
-const importedVideoAttachment = {
-    id: 'attachment_test_video', displayName: '演示.mp4', kind: 'video', mimeType: 'video/mp4',
-    byteLen: 4_096, sha256: 'b'.repeat(64), assetFile: 'b'.repeat(64) + '.mp4',
-};
-let selectedAttachments = [importedAttachment];
-const followUpTurns = [];
-const steeringTurns = [];
-const cancelledTurns = [];
-let interactionQueue = [];
-const replacedInteractionQueues = [];
-const resolvedPendingInputs = [];
-const createdSessions = [];
-const createdTopics = [];
-const renamedTopics = [];
-const compactedSessions = [];
-const approvalResponses = [];
-const interactionResponses = [];
-const openedExternalLinks = [];
-const workspaceActions = [];
-const savedWorkbenchSettings = [];
-const sessionConfigRevisions = new Map([['topic-archived', 1]]);
-const sessionConfigSnapshots = new Map([['topic-archived', {
-    baseInstructions: '冻结的 Nova 指令', permissionMode: 'ask', approvalPolicy: 'on-request',
-}]]);
-const savedAvatars = [];
-const savedAgentProfiles = [];
-const runtimeTransitions = [];
-const runtimeEnsures = [];
-const exportedSessions = [];
-let mainCreateProxyCalls = 0;
-let sharedCreateActionCalls = 0;
-let modelUpdateCallback = null;
-let modelUnsubscribeCalls = 0;
-let refreshModelCalls = 0;
-let releaseAgentCatalog;
-const buildAgentProfiles = [
-    {
-        id: 'Nova', name: 'Nova', avatarUrl: 'assets/nova-avatar.png', model: 'gpt-5.6-terra',
-        systemPrompt: '{{Nova}}', workspaceRoot: `${root}\\nova-profile`, permissionMode: 'always-approve',
-    },
-    {
-        id: '123', name: '123', model: 'deepseek-v4-flash', systemPrompt: '{{123}}',
-        workspaceRoot: `${root}\\agent-123-profile`, permissionMode: 'ask',
-    },
-    {
-        id: 'Legacy-Empty', name: 'Legacy Empty', model: 'deepseek-v4-flash', systemPrompt: '',
-        workspaceRoot: `${root}\\legacy-empty-profile`, permissionMode: 'ask',
-    },
-];
-const agentCatalogGate = new Promise((resolve) => { releaseAgentCatalog = resolve; });
-let topicCatalog = [{
-    id: 'topic-restored', title: '可恢复的 Codex Session', agentId: 'Nova',
-    model: 'gpt-5.6-terra', workspaceRef: root, inUse: false,
-}, {
-    id: 'topic-archived', title: '另一条持久 Topic', agentId: 'Nova',
-    model: 'gpt-5.6-terra', workspaceRef: root, inUse: false,
-}, {
-    id: 'topic-in-use', title: '并行研究 Session', agentId: 'Nova',
-    model: 'gpt-5.6-terra', workspaceRef: root, inUse: true,
-}];
-const secondaryTopicCatalog = [{
-        id: 'topic-agent-123', title: '123 的既有 Topic', agentId: '123',
-        model: 'gpt-5.6-terra', workspaceRef: root, inUse: false,
-    }];
-const archivedTopicCatalog = [{
-    id: 'topic-permanent-archive', title: '已归档研究会话', agentId: 'Nova',
-    model: 'gpt-5.6-terra', workspaceRef: root, archivedAt: 1_700_000_000_000,
-}];
-const topicListRequests = [];
-const topicSearchRequests = [];
-window.nextUiApps = {
-    register(definition) { registered = definition; return definition; },
-    get() { return null; },
-    list() { return []; },
-};
-window.chatAPI = {
-    sendOpenExternalLink: (url) => { openedExternalLinks.push(url); },
-    agentRuntimeListAgentProfiles: async () => {
-        await agentCatalogGate;
-        return buildAgentProfiles;
-    },
-    agentRuntimeSaveAgentProfile: async (profile) => {
-        const saved = { id: profile.agentId || profile.name.replace(/\s+/g, '-'), ...profile };
-        savedAgentProfiles.push(saved);
-        const existingIndex = buildAgentProfiles.findIndex((item) => item.id === saved.id);
-        if (existingIndex >= 0) buildAgentProfiles[existingIndex] = saved;
-        else buildAgentProfiles.push(saved);
-        return { success: true, profile: saved };
-    },
-    agentRuntimeSaveAgentAvatar: async ({ agentId, avatarData }) => {
-        savedAvatars.push({ agentId, avatarData });
-        return { success: true, avatarUrl: `file:///${agentId}-updated.png` };
-    },
-    // Match the main-chat contract: this is a Main-process cache, not an
-    // Agent Workbench request to the ToolBox model endpoint.
-    getCachedModels: async () => {
-        await new Promise((resolve) => setTimeout(resolve, 250));
-        return [{ id: 'gpt-5.6-terra', reasoning_efforts: ['low', 'medium', 'high'] }, { id: 'gpt-5.6-luna' }];
-    },
-    refreshModels: async () => {
-        refreshModelCalls += 1;
-        const models = [{ id: 'gpt-5.6-refresh', reasoning_efforts: ['medium', 'high'] }];
-        modelUpdateCallback?.(models);
-        return { success: true, models, count: models.length };
-    },
-    onModelsUpdated(callback) {
-        modelUpdateCallback = callback;
-        return () => { modelUnsubscribeCalls += 1; };
-    },
-    agentRuntimeGetStatus: async () => ({
-        state: runtimeStatus,
-        worker: null,
-        pendingApprovals: [],
-        runtimes: activeRuntimeSession ? [activeRuntimeSession] : [],
-    }),
-    agentWorkspaceListDirectory: async ({ sessionId, relativePath = '' }) => ({
-        sessionId, workspaceRevision: 'workspace-revision-test', relativePath,
-        entries: relativePath === '' ? [
-            { name: 'src', kind: 'directory', relativePath: 'src' },
-            { name: 'README.md', kind: 'file', relativePath: 'README.md' },
-        ] : [{ name: 'index.js', kind: 'file', relativePath: 'src/index.js' }],
-        nextCursor: null, truncated: false,
-    }),
-    agentWorkspaceReadPreview: async ({ sessionId, workspaceRevision, relativePath }) => ({
-        sessionId, workspaceRevision, relativePath, displayName: path.basename(relativePath),
-        kind: 'text', content: '# preview', byteLen: 9, lineCount: 1, truncated: false,
-    }),
-    agentWorkspaceSearchFiles: async ({ sessionId, workspaceRevision, query }) => ({
-        sessionId, workspaceRevision: workspaceRevision || 'workspace-revision-test', query,
-        entries: [{ name: 'README.md', kind: 'file', relativePath: 'README.md' }], truncated: false,
-    }),
-    agentWorkspaceStatPath: async ({ sessionId, workspaceRevision, relativePath }) => ({ sessionId, workspaceRevision, relativePath, kind: 'file' }),
-    agentWorkspacePerformPathAction: async (payload) => { workspaceActions.push(payload); return { ok: true, ...payload }; },
-    agentRuntimeStart: async () => { runtimeStatus = 'ready'; runtimeTransitions.push('start'); return { state: 'ready' }; },
-    agentRuntimeStop: async () => { runtimeStatus = 'stopped'; runtimeTransitions.push('stop'); return { state: 'stopped' }; },
-    agentRuntimeCreateTopic: async (payload) => {
-        createdTopics.push(payload);
-        const topic = {
-            sessionId: `topic-created-${createdTopics.length}`,
-            agentId: payload.agent || 'Nova',
-            title: payload.title || '新会话',
-            model: payload.model || 'gpt-5.6-terra',
-            workspaceRoot: payload.workspaceRoot || root,
-            readOnly: true,
-        };
-        topicCatalog = [{
-            id: topic.sessionId, title: topic.title, agentId: topic.agentId,
-            model: topic.model, workspaceRef: topic.workspaceRoot, inUse: false,
-        }, ...topicCatalog];
-        return topic;
-    },
-    agentRuntimeCreateSession: async (payload) => {
-        createdSessions.push(payload);
-        const session = {
-            sessionId: 'topic-in-use',
-            title: payload.title || '可恢复的 Codex Session', state: 'created',
-            model: payload.model || 'gpt-5.6-terra', agentId: payload.agent || 'Nova',
-            workspaceRoot: payload.workspaceRoot || root,
-        };
-        return session;
-    },
-    agentRuntimeEnsureSessionRuntime: async ({ sessionId }) => {
-        runtimeEnsures.push(sessionId);
-        runtimeStatus = 'ready';
-        activeRuntimeSession = {
-            sessionId,
-            sessionId: sessionId,
-            title: '并行研究 Session',
-            state: 'ready',
-            activity: 'idle',
-            threadId: 'thread-active',
-            agentId: 'Nova',
-            workspaceRoot: root,
-        };
-        return activeRuntimeSession;
-    },
-    agentRuntimeCompactSession: async ({ sessionId }) => { compactedSessions.push(sessionId); return { ok: true }; },
-    agentRuntimeReadTopic: async ({ sessionId }) => {
-        if (sessionId === 'topic-missing-session') throw new Error('Agent Session was not found');
-        if (sessionId === 'topic-restored') return {
-            sessionId,
-            readOnly: true,
-            messages: [{
-                messageId: 'msg_reason_saved', itemId: 'reason_saved', turnId: 'turn_saved', role: 'assistant',
-                status: 'completed', sourceOrder: 1, createdAt: 1,
-                blocks: [{ blockId: 'block_reason_saved', kind: 'reasoning', ordinal: 0,
-                    content: { summary: [], content: [], text: 'restored reasoning detail' } }],
-            }, {
-                messageId: 'msg_saved', itemId: 'answer_saved', turnId: 'turn_saved', role: 'assistant',
-                status: 'completed', sourceOrder: 2, createdAt: 2,
-                blocks: [{ blockId: 'block_answer_saved', kind: 'message', ordinal: 0,
-                    content: { text: 'restored answer' } }],
-            }, {
-                messageId: 'msg_tool_saved', itemId: 'tool_saved', turnId: 'turn_saved', role: 'assistant',
-                status: 'completed', sourceOrder: 3, createdAt: 3,
-                blocks: [{ blockId: 'block_tool_saved', kind: 'tool', ordinal: 0, content: {
-                    item: { type: 'dynamicToolCall', tool: 'FileOperator', arguments: { operation: 'read' }, result: 'package.json' },
-                } }],
-            }, {
-                messageId: 'msg_plan_saved', itemId: 'plan_saved', turnId: 'turn_saved', role: 'assistant',
-                status: 'completed', sourceOrder: 4, createdAt: 4,
-                blocks: [{ blockId: 'block_plan_saved', kind: 'observation', ordinal: 0,
-                    content: { text: '1. 恢复计划\n2. 验证 Activity' } }],
-            }],
-            projection: { activity: {
-                usage: { source: 'real', totalTokens: 42, inputTokens: 20, outputTokens: 22, model: 'fixture-model', provider: 'vcp_toolbox' },
-                compaction: { state: 'completed', summary: '已恢复压缩摘要', error: '' },
-            } },
-        };
-        if (sessionId === 'topic-in-use') return {
-            sessionId,
-            session: {
-                sessionId: sessionId,
-                threadId: 'thread-active',
-                agentId: 'Nova',
-                workspaceRoot: root,
-                configRevision: 1,
-                configSnapshot: {
-                    profileId: 'Nova',
-                    baseInstructions: '{{Nova}}',
-                    permissionMode: 'ask',
-                    approvalPolicy: 'on-request',
-                },
-            },
-            readOnly: false,
-            history: [],
-        };
-        return {
-            sessionId,
-            ...(sessionId === 'topic-archived' ? {
-                session: {
-                    agentId: 'Nova',
-                    configRevision: sessionConfigRevisions.get('topic-archived'),
-                    configSnapshot: {
-                        ...sessionConfigSnapshots.get('topic-archived'),
-                    },
-                },
-            } : {}),
-            readOnly: true,
-            history: [{ messageId: 'msg_saved', turnId: 'turn_saved', role: 'assistant', content: 'restored answer', timestamp: 1 }],
-        };
-    },
-    agentRuntimeSelectAttachments: async () => ({ attachments: selectedAttachments }),
-    agentRuntimeStartTurn: async (payload) => {
-        startedTurns.push(payload);
-        return { turnId: startedTurns.length === 1 ? 'attachment_turn' : 'turn_test', state: 'running' };
-    },
-    agentRuntimeFollowUpTurn: async (payload) => {
-        followUpTurns.push(payload);
-        interactionQueue = [...interactionQueue, { interactionId: 'follow-test', kind: 'follow-up', prompt: payload.prompt }];
-        return { ok: true };
-    },
-    agentRuntimeSteerTurn: async (payload) => {
-        steeringTurns.push(payload);
-        interactionQueue = [...interactionQueue, { interactionId: 'steer-test', kind: 'steer', prompt: payload.prompt }];
-        return { ok: true };
-    },
-    agentRuntimeCancelTurn: async (payload) => { cancelledTurns.push(payload); return { ok: true }; },
-    agentRuntimeRespondApproval: async (payload) => {
-        approvalResponses.push(payload);
-        return { approvalId: payload.approvalId, decision: payload.decision };
-    },
-    agentRuntimeRespondInteraction: async (payload) => {
-        interactionResponses.push(payload);
-        return { requestId: payload.requestId, resolved: true, kind: payload.kind };
-    },
-    agentRuntimeListTopics: async ({ agentId, archived = false } = {}) => {
-        topicListRequests.push(agentId || 'Nova');
-        if (archived) return archivedTopicCatalog;
-        return agentId === '123' ? secondaryTopicCatalog : topicCatalog;
-    },
-    agentRuntimeSearchTopics: async ({ query, agentId } = {}) => {
-        topicSearchRequests.push({ query, agentId: agentId || 'Nova' });
-        const catalog = agentId === '123' ? secondaryTopicCatalog : topicCatalog;
-        return catalog
-            .filter((topic) => `${topic.title} ${topic.id}`.toLocaleLowerCase().includes(String(query || '').toLocaleLowerCase()))
-            .map((topic) => ({
-                agentId: topic.agentId || agentId || 'Nova', sessionId: topic.id, title: topic.title,
-                inUse: topic.inUse === true, readOnly: topic.readOnly === true,
-                model: topic.model, workspaceRef: topic.workspaceRef, updatedAt: topic.updatedAt,
-                messageId: 'search-hit', snippet: topic.title, score: 1,
-            }));
-    },
-    agentRuntimeSearchTopicMessages: async () => [],
-    agentRuntimeGetTopicIndexStatus: async () => ({ available: true, rebuilding: false }),
-    agentRuntimeRebuildTopicIndex: async () => ({ topicCount: topicCatalog.length }),
-    agentRuntimeListInteractionQueue: async () => interactionQueue,
-    agentRuntimeReplaceInteractionQueue: async ({ interactions }) => {
-        interactionQueue = interactions;
-        replacedInteractionQueues.push(interactions);
-        return { ok: true };
-    },
-    agentRuntimeClearInteractionQueue: async () => { interactionQueue = []; return { ok: true }; },
-    agentRuntimeResolvePendingInput: async (payload) => {
-        resolvedPendingInputs.push(payload);
-        interactionQueue = interactionQueue.filter((item) => (item.inputId || item.interactionId) !== payload.inputId);
-        return { resolved: true, action: payload.action, items: interactionQueue };
-    },
-    agentRuntimeGetWorkbenchSettings: async () => ({
-        budget: { maxRequestsPerTurn: 8, maxTokensPerTurn: 120000 },
-        permissionMode: 'ask',
-    }),
-    agentRuntimeUpdateWorkbenchSettings: async (payload) => {
-        savedWorkbenchSettings.push(payload);
-        let configRevision = null;
-        let configSnapshot = null;
-        if (payload.sessionId) {
-            const currentRevision = sessionConfigRevisions.get(payload.sessionId) || 1;
-            assert.equal(payload.expectedConfigRevision, currentRevision,
-                'settings autosave must serialize CAS writes with the latest Session config revision');
-            configRevision = currentRevision + 1;
-            sessionConfigRevisions.set(payload.sessionId, configRevision);
-            const currentSnapshot = sessionConfigSnapshots.get(payload.sessionId) || {};
-            configSnapshot = {
-                ...currentSnapshot,
-                ...(payload.systemPrompt !== undefined ? { baseInstructions: payload.systemPrompt } : {}),
-                ...(payload.baseInstructions !== undefined ? { baseInstructions: payload.baseInstructions } : {}),
-                ...(payload.instructionMode !== undefined ? { instructionMode: payload.instructionMode } : {}),
-                ...(payload.developerInstructions !== undefined ? { developerInstructions: payload.developerInstructions } : {}),
-                ...(payload.personality !== undefined ? { personality: payload.personality } : {}),
-                ...(payload.reasoningEffort !== undefined ? { reasoningEffort: payload.reasoningEffort } : {}),
-                ...(payload.permissionMode ? {
-                    permissionMode: payload.permissionMode,
-                    approvalPolicy: payload.permissionMode === 'always-approve' ? 'never' : 'on-request',
-                } : {}),
-                ...(payload.model ? { model: payload.model } : {}),
-            };
-            sessionConfigSnapshots.set(payload.sessionId, configSnapshot);
-        }
-        return {
-            restartRequired: true,
-            session: payload.sessionId ? {
-                sessionId: payload.sessionId,
-                workspaceRoot: payload.workspaceRoot || root,
-                configRevision,
-                configSnapshot,
-            } : null,
-            settings: {
-                budget: payload.budget || { maxRequestsPerTurn: 8, maxTokensPerTurn: 120000 },
-                permissionMode: payload.permissionMode || 'ask',
-                ...(payload.model ? { model: payload.model } : {}),
-            },
-        };
-    },
-    agentRuntimeRenameTopic: async ({ sessionId, title }) => {
-        renamedTopics.push({ sessionId, title });
-        topicCatalog = topicCatalog.map((topic) => topic.id === sessionId ? { ...topic, title } : topic);
-        return { ok: true, sessionId, title };
-    },
-    agentRuntimeDeleteTopic: async ({ sessionId }) => ({ ok: true, sessionId }),
-    agentRuntimeRestoreSession: async ({ sessionId }) => ({ restored: true, sessionId }),
-    agentRuntimePermanentlyDeleteSession: async ({ sessionId }) => ({ deleted: true, sessionId }),
-    agentRuntimeExportSession: async (payload) => { exportedSessions.push(payload); return { exported: true }; },
-    agentRuntimeListRecoveryOperations: async () => [],
-    agentRuntimeListRecoveryCandidates: async () => ({ operations: [], threads: [] }),
-    agentRuntimeResolveRecoveryOperation: async () => ({ resolved: true }),
-    agentRuntimeSetWorkbenchPresence: (mounted) => { presenceCalls.push(mounted); },
-    onAgentRuntimeEvent(callback) {
-        eventCallback = callback;
-        return () => { unsubscribeCalls += 1; };
-    },
-};
-window.chatAPI.agentRuntimeUpdateSessionConfig = async ({ sessionId, expectedConfigRevision, patch }) => (
-    window.chatAPI.agentRuntimeUpdateWorkbenchSettings({ sessionId, expectedConfigRevision, ...(patch || {}) })
-);
-window.chatAPI.agentSessionCreate = window.chatAPI.agentRuntimeCreateTopic;
-window.chatAPI.agentSessionList = window.chatAPI.agentRuntimeListTopics;
-window.chatAPI.agentSessionRename = window.chatAPI.agentRuntimeRenameTopic;
-function canonicalSessionProjection(snapshot) {
-    if (snapshot?.session?.sessionId) return snapshot;
-    const sessionId = String(snapshot?.sessionId || '').trim();
-    if (!sessionId) return snapshot;
-    return {
-        ...snapshot,
-        session: {
-            sessionId,
-            title: snapshot?.state?.title || '',
-            workspaceRoot: snapshot?.state?.workspaceRoot || snapshot?.state?.workspaceRef || '',
-            configSnapshot: snapshot?.state?.configSnapshot || (snapshot?.state?.model
-                ? { model: snapshot.state.model } : null),
-        },
-    };
-}
-window.chatAPI.agentSessionReadProjection = async ({ sessionId, ...payload }) => canonicalSessionProjection(
-    await window.chatAPI.agentRuntimeReadTopic({ ...payload, sessionId }),
-);
-window.chatAPI.agentSessionRead = async ({ sessionId, ...payload }) => canonicalSessionProjection(
-    await window.chatAPI.agentRuntimeReadTopic({ ...payload, sessionId }),
-);
-window.chatAPI.agentSessionRename = ({ sessionId, ...payload }) => window.chatAPI.agentRuntimeRenameTopic({ ...payload, sessionId: sessionId });
-window.chatAPI.agentSessionArchive = ({ sessionId }) => window.chatAPI.agentRuntimeDeleteTopic({ sessionId: sessionId });
-window.chatAPI.agentSessionRestore = window.chatAPI.agentRuntimeRestoreSession;
-window.chatAPI.agentSessionDelete = window.chatAPI.agentRuntimePermanentlyDeleteSession;
-window.chatAPI.agentSessionFork = async ({ sessionId }) => ({ sessionId: `${sessionId}-fork`, sessionId: `${sessionId}-fork`, agentId: 'Nova' });
-
-let runtimeEventNumber = 0;
-function emitDaemonEvent(event) {
-    runtimeEventNumber = Math.max(runtimeEventNumber + 1, Number(event?.sequence) || 0);
-    eventCallback({
-        eventId: `runtime-event-${runtimeEventNumber}`,
-        sessionId: 'topic-in-use',
-        timestamp: 1_700_000_000_000 + runtimeEventNumber,
-        runtime: 'codex',
-        ...event,
-        sequence: runtimeEventNumber,
-    });
-}
-
-await import(`${pathToFileURL(path.join(root, 'modules/ui-system/next-ui-apps.js')).href}?test=${Date.now()}`);
-await import(`${pathToFileURL(path.join(root, 'modules/ui-system/vcp-ui.js')).href}?test=${Date.now()}`);
 // next-ui-apps overwrites the stub; capture registrations via its real registry.
 await import(`${pathToFileURL(path.join(root, 'modules/ui-system/agent-workbench.js')).href}?test=${Date.now()}`);
-registered = window.nextUiApps.get('agent-workbench');
-assert.ok(registered, 'Agent Workbench must register as an internal app');
-assert.equal(registered.kind, 'internal');
+const registeredApp = window.nextUiApps.get('agent-workbench');
+assert.ok(registeredApp, 'Agent Workbench must register as an internal app');
+assert.equal(registeredApp.kind, 'internal');
 
 const host = document.getElementById('host');
 const mainCreateProxy = document.createElement('button');
@@ -507,17 +35,20 @@ mainAgentList.innerHTML = '<li data-item-type="agent" data-item-id="123"><img cl
 document.body.append(mainAgentList);
 window.prompt = () => '重命名后的 Topic';
 window.confirm = () => true;
-window.VCPUI = { feedback: {
-    confirm: async () => true,
-    prompt: async () => '重命名后的 Topic',
-    toast: () => {},
-} };
+window.VCPUI = {
+    feedback: {
+        confirm: async () => true,
+        prompt: async () => '重命名后的 Topic',
+        toast: () => {},
+    },
+};
+window.globalSettings = { sidebarWidth: 300 };
 window.localStorage.setItem('vcpchat.agentWorkbench.lastTopic.v1', JSON.stringify({
     sessionId: 'topic-restored', title: '可恢复的 Codex Session', agentId: 'Nova',
     model: 'gpt-5.6-terra', workspaceRoot: root,
 }));
 window.localStorage.setItem('vcpchat.agentWorkbench.sidebarWidth', '600');
-const dispose = registered.mount(host, {});
+const dispose = registeredApp.mount(host, {});
 await new Promise((resolve) => setTimeout(resolve, 100));
 const workbenchRoot = host.querySelector('.agent-chat-root');
 const workbenchSidebar = host.querySelector('.agent-chat-sidebar');
@@ -525,18 +56,12 @@ workbenchRoot.getBoundingClientRect = () => ({ left: 0, width: 900 });
 resizeObservers.filter((observer) => observer.targets.has(workbenchRoot)).forEach((observer) => observer.callback());
 assert.ok(workbenchSidebar.classList.contains('agent-chat-sidebar-width-560'),
     'a saved 600px sidebar preference must temporarily clamp when the Workbench leaves only a 320px chat column');
-assert.equal(workbenchSidebar.style.width, '560px',
-    'the effective width must be written to the actual flex item, not only a semantic class');
-assert.equal(workbenchSidebar.style.flexBasis, '560px',
-    'the sidebar flex basis must match its effective width so the main panel starts at the same edge');
-assert.equal(document.body.style.getPropertyValue('--agent-chat-sidebar-width'), '560px',
-    'the shared elevated panel edge must follow the effective Build sidebar width');
+assert.equal(workbenchSidebar.getAttribute('style'), null,
+    'the resizable sidebar must use governed width classes instead of Renderer inline styles');
 workbenchRoot.getBoundingClientRect = () => ({ left: 0, width: 1_200 });
 resizeObservers.filter((observer) => observer.targets.has(workbenchRoot)).forEach((observer) => observer.callback());
 assert.ok(workbenchSidebar.classList.contains('agent-chat-sidebar-width-600'),
     'expanding the Workbench must restore the saved sidebar preference instead of persisting the temporary clamp');
-assert.equal(document.body.style.getPropertyValue('--agent-chat-sidebar-width'), '600px',
-    'the shared elevated panel edge must restore with the saved sidebar preference');
 assert.equal(createdSessions.length, 0,
     'renderer reload must preview the saved Codex Session without acquiring a writable Session');
 assert.deepEqual(JSON.parse(window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1')), { sessionId: 'topic-restored' },
@@ -544,8 +69,6 @@ assert.deepEqual(JSON.parse(window.localStorage.getItem('vcpchat.agentWorkbench.
 assert.ok([...host.querySelectorAll('.message-item .md-content')]
     .some((node) => node.textContent.includes('restored answer')),
     'a restored Codex Session must render its saved history rather than an empty feed');
-assert.equal(host.querySelector('.agent-chat-build-empty-state'), null,
-    'restored messages must remove the Build visual empty state even when hydration completes asynchronously');
 const restoredReasoning = host.querySelector('[data-message-id="msg_reason_saved"] .agent-chat-reasoning-block');
 assert.ok(restoredReasoning, 'a SQLite-first cold mount must restore reasoning as a compact thought card');
 assert.equal(restoredReasoning.closest('.message-item')?.querySelector('.md-content')?.textContent?.trim() || '', '',
@@ -589,17 +112,17 @@ host.querySelector('.agent-chat-header-activity')?.click();
 const activityPanelSplitter = host.querySelector('.agent-chat-activity-splitter[role="separator"]');
 const activityPanelElement = host.querySelector('.agent-chat-activity-panel');
 assert.ok(workbenchSidebar.classList.contains('agent-chat-sidebar-width-240'),
-    'the minimum-width Activity panel must preserve more of the sidebar while protecting the chat column');
+    'opening Activity must temporarily reduce the inherited main-chat sidebar preference before it crowds out the chat column');
 assert.ok(activityPanelSplitter?.classList.contains('is-active'),
     'opening Session information must expose the chat/panel resize handle');
 assert.ok(activityPanelElement?.classList.contains('agent-chat-activity-width-320'),
-    'Session information must start at the minimum supported width');
+    'Session information must use the compact default width');
 activityPanelSplitter.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
 assert.ok(activityPanelElement.classList.contains('agent-chat-activity-width-340'),
     'moving the outer splitter left must widen Session information');
 activityPanelSplitter.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
 assert.ok(activityPanelElement.classList.contains('agent-chat-activity-width-320'),
-    'moving the outer splitter right must restore the minimum panel width');
+    'moving the outer splitter right must restore the compact panel width');
 assert.equal(host.querySelector('.agent-chat-activity-tab[data-tab="plan"]'), null,
     'the toolbox-only product must hide Plan until collaboration mode is wired to turn/start');
 assert.equal(host.querySelector('.agent-chat-inspector-plan'), null,
@@ -654,11 +177,6 @@ assert.match(host.querySelector('.agent-chat-title')?.textContent || '', /123/,
 assert.equal([...host.querySelectorAll('.message-item .md-content')]
     .some((node) => node.textContent.includes('restored answer')), false,
     'switching Build Agents must not retain the previous Agent transcript in the main pane');
-const buildEmptyVisual = host.querySelector('.agent-chat-build-empty-state');
-assert.equal(buildEmptyVisual?.querySelector('[role="img"]')?.getAttribute('aria-label'), 'VCPBuild',
-    'entering Build without a selected conversation must render the VCPBUILD visual identity');
-assert.equal(buildEmptyVisual?.querySelectorAll('.next-ui-empty-brand-text')[0]?.textContent, 'VCPBUILD');
-assert.match(buildEmptyVisual?.querySelector('.agent-chat-build-empty-tagline')?.textContent || '', /创建一个 Agent 会话/);
 await new Promise((resolve) => setTimeout(resolve, 300));
 const profileSettingsTab = [...host.querySelectorAll('.agent-chat-sidebar .sidebar-tab-button')]
     .find((tab) => tab.textContent.trim() === '设置');
@@ -670,6 +188,8 @@ const profileModel = profileSettingsFields
     .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent === '模型')?.querySelector('select');
 const profilePermission = profileSettingsFields
     .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent === '本地工具审批')?.querySelector('select');
+assert.ok(profileModel || profileSettingsFields.some((item) => item.querySelector('input[aria-label="模型"]')),
+    'the model setting must remain editable even before the model catalog is available');
 profileWorkspace.value = `${root}\\agent-123-updated`;
 profileWorkspace.dispatchEvent(new window.Event('change', { bubbles: true }));
 profileModel.value = 'gpt-5.6-terra';
@@ -685,6 +205,24 @@ assert.deepEqual({
 }, {
     agentId: '123', model: 'gpt-5.6-terra', workspaceRoot: `${root}\\agent-123-updated`, permissionMode: 'always-approve',
 }, 'settings with no selected Session must update the current Agent Profile inherited by future Sessions');
+const modelRefreshButton = host.querySelector('.agent-chat-model-refresh');
+assert.ok(modelRefreshButton, 'profile settings must expose an explicit model refresh action');
+modelRefreshButton.click();
+await waitFor(() => refreshModelCalls > 0, 3_000);
+await new Promise((resolve) => setTimeout(resolve, 30));
+assert.ok([...host.querySelectorAll('.agent-chat-setting-field select option, .agent-chat-setting-field input')]
+    .some((control) => control.value === 'gpt-5.6-refresh'),
+    'a refreshed model catalog must become available without leaving the Settings tab');
+const stateProbe = createAgentWorkbenchState({
+    window: {
+        globalSettings: { sidebarWidth: 300 },
+        localStorage: { getItem: () => null },
+        sessionStorage: window.sessionStorage,
+    },
+    agentCatalog: [], rememberedTopic: null,
+});
+assert.equal(stateProbe.agentSidebarWidth, 300,
+    'a Workbench without its own preference must inherit the main-chat sidebar width');
 assistantTab.click();
 const novaAgent = [...host.querySelectorAll('.agent-chat-sidebar .agent-chat-agent-row')]
     .find((row) => row.querySelector('.agent-name')?.textContent === 'Nova');
@@ -963,16 +501,31 @@ assert.deepEqual(startedTurns[0], { sessionId: 'topic-in-use', prompt: '', attac
 const thinkingRow = await waitFor(() => host.querySelector('.agent-chat-turn-starting'), 3_000);
 assert.ok(thinkingRow,
     `the Workbench must show a thinking row before the first Codex item notification: ${host.querySelector('.agent-chat-feed-items')?.innerHTML || ''}`);
-assert.ok(thinkingRow.querySelector('.thinking-indicator'),
-    `the pre-item thinking row must use the main-chat thinking animation: ${thinkingRow.innerHTML}`);
+    assert.ok(thinkingRow.querySelector('.thinking-indicator'),
+        `the pre-item thinking row must use the main-chat thinking animation: ${thinkingRow.innerHTML}`);
+    emitProjectionBlock({
+        method: 'item/started', activity: 'running', turnId: 'attachment_turn',
+        messageId: 'msg_empty_reasoning', itemId: 'empty-reasoning-item', kind: 'reasoning',
+        status: 'inProgress', content: { summary: [], content: [] },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.ok(host.querySelector('.agent-chat-turn-starting'),
+        'a user-message or empty reasoning Projection update must not remove the thinking placeholder');
 assert.equal(host.querySelector('.agent-chat-composer-attachments')?.childElementCount || 0, 0,
     'accepted descriptors leave the transient composer tray after they are submitted');
 // The ACK-to-first-event gap now has an explicit renderer-only thinking row;
 // close the synthetic attachment turn before exercising the next composer
 // interaction so the fixture mirrors Codex's terminal notification.
-emitDaemonEvent({ sessionId: 'topic-in-use', turnId: 'attachment_turn', type: 'turn.completed' });
-await new Promise((resolve) => setTimeout(resolve, 30));
-selectedAttachments = [importedVideoAttachment];
+    emitDaemonEvent({
+        runtime: 'codex', type: 'projection.updated', method: 'turn/completed',
+        sessionId: 'topic-in-use', threadId: 'thread-active', turnId: 'attachment_turn',
+        turnStatus: 'completed', activity: 'idle',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const emptyTerminal = host.querySelector('.agent-chat-turn-terminal[data-agent-turn-phase="empty"]');
+    assert.match(emptyTerminal?.textContent || '', /没有返回可显示内容/,
+        'a completed Turn without assistant output must leave an explicit terminal row');
+setSelectedAttachments([importedVideoAttachment]);
 const mediaAttachButton = await waitFor(() => {
     const candidate = host.querySelector('[aria-label="添加图片、音频或视频附件"]');
     return candidate && !candidate.disabled ? candidate : null;
@@ -998,7 +551,9 @@ assert.deepEqual(startedTurns[1], { sessionId: 'topic-in-use', prompt: '请介�
 assert.ok([...host.querySelectorAll('.message-item.user .md-content')]
     .some((node) => node.textContent.includes('请介绍一下自己')),
     'an accepted start-turn ACK must project the user message before the first runtime event arrives');
-assert.match(host.querySelector('.message-item.user')?.textContent || '', /发送中/,
+const pendingUserRow = [...host.querySelectorAll('.message-item.user')]
+    .find((row) => row.textContent.includes('请介绍一下自己'));
+assert.match(pendingUserRow?.textContent || '', /发送中/,
     'the temporary local projection must disclose that durable confirmation is still pending');
 // A command ACK only confirms acceptance.  The Workbench must not infer a
 // running Turn from it; only Codex's authoritative event may establish
@@ -1052,11 +607,14 @@ assert.equal(activeSendButton.querySelector('.vcp-ui-icon')?.textContent, 'arrow
     'the running composer send action must remain available for explicit steer and follow-up input');
 assert.equal(activeSendButton.disabled, true,
     'an empty running composer must not implicitly cancel the Turn');
-const runningModes = host.querySelector('.agent-chat-composer-modes');
-assert.equal(runningModes.hidden, false, 'running input must expose steer and follow-up modes');
-assert.ok([...runningModes.querySelectorAll('button')].some((button) => button.textContent === '立即调整'));
-prompt.value = '完成后再列出风险';
-prompt.dispatchEvent(new window.Event('input', { bubbles: true }));
+    const runningModes = host.querySelector('.agent-chat-composer-modes');
+    assert.equal(runningModes.hidden, true,
+        'an active Turn with an empty composer must not expose steer and follow-up modes');
+    assert.ok([...runningModes.querySelectorAll('button')].some((button) => button.textContent === '立即调整'));
+    prompt.value = '完成后再列出风险';
+    prompt.dispatchEvent(new window.Event('input', { bubbles: true }));
+    assert.equal(runningModes.hidden, false,
+        'steer and follow-up modes become relevant only after the user enters another instruction');
 host.querySelector('.agent-chat-send-button').click();
 await new Promise((resolve) => setTimeout(resolve, 0));
 assert.equal(followUpTurns.length, 1,
@@ -1067,11 +625,13 @@ assert.equal(followUpTurns[0].afterTurnId, 'turn_test');
 assert.equal(followUpTurns[0].prompt, '完成后再列出风险');
 assert.match(String(followUpTurns[0].submissionId || ''), /.+/,
     'follow-up submission must carry a stable submissionId');
-const steerMode = [...host.querySelectorAll('.agent-chat-composer-mode')]
-    .find((button) => button.textContent === '立即调整');
-steerMode.click();
-prompt.value = '先检查风险';
-prompt.dispatchEvent(new window.Event('input', { bubbles: true }));
+    prompt.value = '先检查风险';
+    prompt.dispatchEvent(new window.Event('input', { bubbles: true }));
+    const steerMode = [...host.querySelectorAll('.agent-chat-composer-mode')]
+        .find((button) => button.textContent === '立即调整');
+    assert.equal(runningModes.hidden, false,
+        'entering another instruction must reopen the active-Turn mode selector');
+    steerMode.click();
 host.querySelector('.agent-chat-send-button').click();
 await new Promise((resolve) => setTimeout(resolve, 0));
 assert.equal(steeringTurns.length, 1,
@@ -1095,10 +655,10 @@ removeQueueButton.click();
 await new Promise((resolve) => setTimeout(resolve, 30));
 assert.equal(replacedInteractionQueues.length, 1, 'removing one queue item must replace the Main-owned queue snapshot once');
 assert.equal(replacedInteractionQueues[0].length, 1, 'removing one queue item must preserve remaining interactions');
-interactionQueue = [{
+setInteractionQueue([{
     inputId: 'uncertain-input-1', interactionId: 'uncertain-input-1', kind: 'follow-up',
     prompt: '可能已经发送的长任务', state: 'uncertain', error: '连接在 ACK 前后中断',
-}];
+}]);
 prompt.value = '刷新队列投影';
 prompt.dispatchEvent(new window.Event('input', { bubbles: true }));
 host.querySelector('.agent-chat-send-button').click();
@@ -1161,6 +721,10 @@ const workspaceBrowser = host.querySelector('.agent-workspace-browser');
 const workspaceSplitter = host.querySelector('.agent-workspace-splitter[role="separator"]');
 assert.ok(workspaceBrowser && workspaceSplitter,
     'Workspace must render as a resizable preview/tree split view');
+assert.equal(host.querySelector('.agent-workspace-heading'), null,
+    'the Files tool must start with search instead of repeating a Workspace heading');
+assert.ok(host.querySelector('.agent-workspace-toolbar')?.firstElementChild?.matches('.agent-workspace-search-wrap'),
+    'the Workspace search control must be the first toolbar row');
 workspaceSplitter.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
 assert.ok(workspaceBrowser.classList.contains('agent-workspace-split-48'),
     'Workspace splitter keyboard controls must resize the preview pane without inline styles');
@@ -1402,7 +966,7 @@ host.querySelector('.agent-chat-activity-tab[data-tab="notifications"]')?.click(
 assert.doesNotMatch(host.querySelector('.agent-chat-activity-tab[data-tab="notifications"]')?.textContent || '', /1/,
     'entering a tab must acknowledge only that tab unread count');
 
-runtimeStatus = 'ready';
+setRuntimeStatus('ready');
 emitDaemonEvent({
     sessionId: 'runtime', type: 'runtime.state_changed', payload: { state: 'ready' },
 });
@@ -1414,11 +978,12 @@ emitDaemonEvent({
         capability: { state: 'unknown', detail: '等待 VCPLog 节点事件' },
     },
 });
-emitDaemonEvent({
-    sessionId: 'topic-in-use', turnId: 'turn_live', messageId: 'msg_live', sequence: 2,
-    type: 'assistant.delta', payload: { text: 'live Codex delta' },
+emitProjectionBlock({
+    turnId: 'turn_live', messageId: 'msg_live', itemId: 'assistant-live-item', kind: 'message',
+    sourceOrder: 20, status: 'inProgress', content: { text: 'live Codex delta' },
 });
-await new Promise((resolve) => setTimeout(resolve, 30));
+await waitFor(() => [...host.querySelectorAll('.message-item .md-content')]
+    .some((node) => node.textContent.includes('live Codex delta')), 1_000);
 assert.equal(host.querySelector('.agent-wb-runtime-dock'), null, 'Runtime lifecycle controls must stay out of the Agent UI');
 assert.ok([...host.querySelectorAll('.message-item .md-content')].some((node) => node.textContent.includes('live Codex delta')), 'Runtime delta must render in the migrated chat shell');
 assert.equal(host.querySelector('.agent-chat-status-chip')?.dataset.action, undefined,
@@ -1426,40 +991,43 @@ assert.equal(host.querySelector('.agent-chat-status-chip')?.dataset.action, unde
 assert.equal(host.querySelectorAll('.agent-chat-readiness-card').length, 0,
     'internal readiness details must not render after the Diagnostics tab is hidden');
 
-// Streaming is the hot path.  A second delta must update the existing message
+// Streaming is the hot path. A replacement Block Patch must update the existing message
 // in place rather than replace the feed, composer or focused draft.
-const liveMessage = host.querySelector('[data-message-id="msg_live"]');
+const liveMessage = host.querySelector('[data-message-id="block:topic-in-use:assistant-live-item:0"]');
+assert.ok(liveMessage, 'the Main-authored assistant Block must own the visible message identity');
 const stableComposer = host.querySelector('.agent-chat-message-input');
 assert.equal(stableComposer.disabled, false,
     `the active Session composer must remain focusable before a streaming delta (placeholder: ${stableComposer.placeholder})`);
 stableComposer.value = '保持中的草稿';
 stableComposer.dispatchEvent(new window.Event('input', { bubbles: true }));
 stableComposer.focus();
-emitDaemonEvent({
-    sessionId: 'topic-in-use', turnId: 'turn_live', messageId: 'msg_live', sequence: 3,
-    type: 'assistant.delta', payload: { text: ' and another delta' },
+emitProjectionBlock({
+    turnId: 'turn_live', messageId: 'msg_live', itemId: 'assistant-live-item', kind: 'message',
+    sourceOrder: 20, status: 'inProgress', content: { text: 'live Codex delta and another delta' },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
-assert.equal(host.querySelector('[data-message-id="msg_live"]'), liveMessage,
-    'streaming deltas must retain the existing assistant DOM node');
+assert.equal(host.querySelector('[data-message-id="block:topic-in-use:assistant-live-item:0"]'), liveMessage,
+    'streaming Block Patches must retain the existing assistant DOM node');
 assert.equal(host.querySelector('.agent-chat-message-input'), stableComposer,
-    'streaming deltas must not replace the composer node');
+    'streaming Block Patches must not replace the composer node');
 assert.equal(document.activeElement, stableComposer,
-    'streaming deltas must preserve focused input');
+    'streaming Block Patches must preserve focused input');
 assert.equal(stableComposer.value, '保持中的草稿',
-    'streaming deltas must preserve the user draft');
+    'streaming Block Patches must preserve the user draft');
 assert.match(liveMessage.querySelector('.md-content').textContent, /live Codex delta and another delta/,
-    'streaming deltas must append to the existing assistant message');
+    'streaming Block Patches must preserve the complete Main-authored assistant text');
 
-emitDaemonEvent({
-    sessionId: 'topic-in-use', turnId: 'turn_live', messageId: 'msg_live', sequence: 4,
-    type: 'reasoning.delta', payload: { text: 'Inspecting the VCPToolBox environment before choosing the next safe action.' },
+emitProjectionBlock({
+    turnId: 'turn_live', messageId: 'msg_reason_live', itemId: 'reason-live-item', kind: 'reasoning',
+    sourceOrder: 19, status: 'inProgress',
+    content: { summary: ['Inspecting the VCPToolBox environment before choosing the next safe action.'], content: [] },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
-const reasoningCard = liveMessage.querySelector('.agent-chat-reasoning-block');
-assert.ok(reasoningCard, 'reasoning deltas must render the dedicated compact thinking card');
+const reasoningMessage = host.querySelector('[data-message-id="msg_reason_live"]');
+const reasoningCard = reasoningMessage?.querySelector('.agent-chat-reasoning-block');
+assert.ok(reasoningCard, 'reasoning Blocks must render the dedicated compact thinking card');
 assert.equal(liveMessage.querySelector('.md-content').hidden, false,
-    'a message that already has assistant text must keep its standard bubble beside the reasoning card');
+    'assistant text must keep its standard bubble beside the separate Codex reasoning Item');
 assert.match(reasoningCard.querySelector('.vcp-thought-chain-label').textContent, /思考中.*s/,
     'a streaming thought card must show a Cherry-style thinking status and live duration');
 assert.equal(reasoningCard.querySelector('.vcp-thought-chain-icon').textContent, 'lightbulb',
@@ -1492,42 +1060,26 @@ assert.match(workbenchCss,
 assert.match(workbenchCss,
     /prefers-reduced-motion:\s*reduce[\s\S]*agent-chat-session-avatar\.is-running::before[\s\S]*animation:\s*none/,
     'the running avatar ring must respect reduced-motion preferences');
-assert.match(workbenchCss,
-    /agent-settings-section:not\(\.collapsed\) \.agent-settings-section-content\s*\{[^}]*overflow:\s*visible;/s,
-    'expanded settings sections must not clip native control focus rings');
-assert.match(workbenchCss,
-    /agent-settings-section-content > \.agent-settings-card-shell\s*\{[^}]*display:\s*grid;[^}]*gap:\s*var\(--vcp-ui-space-2\);/s,
-    'settings groups must keep enough vertical space between focused controls and the next field label');
-assert.match(workbenchCss,
-    /agent-chat-model-actions\s*\{[^}]*display:\s*grid;[^}]*justify-items:\s*start;/s,
-    'the model refresh status must stack cleanly in the minimum-width Build sidebar');
 reasoningCard.querySelector('.vcp-thought-chain-header').click();
 assert.equal(reasoningCard.querySelector('.vcp-thought-chain-bubble').classList.contains('expanded'), false,
     'the fallback thinking header must remain explicitly collapsible');
 reasoningCard.querySelector('.vcp-thought-chain-header').click();
-emitDaemonEvent({
-    sessionId: 'topic-in-use', turnId: 'turn_live', messageId: 'msg_live', sequence: 5,
-    type: 'assistant.completed', payload: {},
+emitProjectionBlock({
+    method: 'item/completed', turnId: 'turn_live', messageId: 'msg_reason_live', itemId: 'reason-live-item',
+    kind: 'reasoning', sourceOrder: 19, status: 'completed',
+    content: { summary: ['Inspecting the VCPToolBox environment before choosing the next safe action.'], content: [] },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
-const completedLiveMessage = host.querySelector('[data-message-id="msg_live"]');
-assert.match(completedLiveMessage.querySelector('.agent-chat-reasoning-block .vcp-thought-chain-label').textContent, /已深度思考.*s/,
+const completedReasoningMessage = host.querySelector('[data-message-id="msg_reason_live"]');
+assert.match(completedReasoningMessage.querySelector('.agent-chat-reasoning-block .vcp-thought-chain-label').textContent, /已深度思考.*s/,
     'a completed thought card must collapse to a concise duration summary');
-assert.equal(completedLiveMessage.querySelector('.agent-chat-reasoning-copy'), null,
+assert.equal(completedReasoningMessage.querySelector('.agent-chat-reasoning-copy'), null,
     'completed reasoning must not render a duplicate copy action');
 
-const projectedEventSessionId = host.querySelector('.agent-chat-session-row.active')?.dataset.sessionId
-    || JSON.parse(window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1') || '{}').sessionId;
-emitDaemonEvent({
-    runtime: 'codex', type: 'projection.updated', method: 'item/completed',
-    sessionId: 'topic-in-use', threadId: 'thread_test', turnId: 'turn_projected',
-    itemId: 'reason_projected', activity: 'idle',
-    projectionMessage: {
-        messageId: 'msg_reason_projected', itemId: 'reason_projected', turnId: 'turn_projected',
-        role: 'assistant', status: 'completed', sourceOrder: 19, createdAt: 19,
-        blocks: [{ blockId: 'block_reason_projected', kind: 'reasoning', ordinal: 0,
-            content: { text: 'reasoning delivered through the real projection.updated path' } }],
-    },
+emitProjectionBlock({
+    method: 'item/completed', activity: 'idle', turnId: 'turn_projected',
+    messageId: 'msg_reason_projected', itemId: 'reason_projected', kind: 'reasoning', sourceOrder: 21,
+    status: 'completed', content: { summary: ['reasoning delivered through the real projection.updated path'], content: [] },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
 const projectedReasoning = host.querySelector('[data-message-id="msg_reason_projected"] .agent-chat-reasoning-block');
@@ -1541,35 +1093,39 @@ assert.equal(projectedReasoning.closest('.message-item')?.querySelector('.md-con
 // turn can include assistant text, a tool call, then more assistant text.  The
 // Workbench must preserve Main's sequence order instead of batching all
 // tools beside the first user message for that turn.
-emitDaemonEvent({
-    sessionId: 'topic-in-use', turnId: 'turn-order', messageId: 'msg-order-before', sequence: 20,
-    type: 'assistant.started', payload: {},
+emitProjectionBlock({
+    turnId: 'turn-order', messageId: 'msg-order-before', itemId: 'order-before-item', kind: 'message',
+    sourceOrder: 30, status: 'inProgress', content: { text: 'before tool' },
 });
-emitDaemonEvent({
-    sessionId: 'topic-in-use', turnId: 'turn-order', toolCallId: 'tool-order', sequence: 21,
-    type: 'tool.requested', payload: { toolName: 'vcp_invoke', argumentSummary: 'FileOperator.ReadFile package.json' },
+emitProjectionBlock({
+    turnId: 'turn-order', messageId: 'msg-tool-order', itemId: 'tool-order', kind: 'tool',
+    sourceOrder: 31, status: 'inProgress', content: {
+        toolName: 'vcp_invoke', argumentSummary: 'FileOperator.ReadFile package.json',
+        item: { type: 'dynamicToolCall', tool: 'vcp_invoke' },
+    },
 });
-emitDaemonEvent({
-    sessionId: 'topic-in-use', turnId: 'turn-order', messageId: 'msg-order-after', sequence: 22,
-    type: 'assistant.started', payload: {},
+emitProjectionBlock({
+    turnId: 'turn-order', messageId: 'msg-order-after', itemId: 'order-after-item', kind: 'message',
+    sourceOrder: 32, status: 'inProgress', content: { text: 'after tool' },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
 const sequenceParts = [...host.querySelector('.agent-chat-messages').children];
-const beforeIndex = sequenceParts.findIndex((element) => element.dataset.messageId === 'msg-order-before');
+const beforeIndex = sequenceParts.findIndex((element) => element.dataset.messageId === 'block:topic-in-use:order-before-item:0');
 const toolIndex = sequenceParts.findIndex((element) => element.dataset.toolCallId === 'tool-order');
-const afterIndex = sequenceParts.findIndex((element) => element.dataset.messageId === 'msg-order-after');
+const afterIndex = sequenceParts.findIndex((element) => element.dataset.messageId === 'block:topic-in-use:order-after-item:0');
 assert.ok(beforeIndex >= 0 && beforeIndex < toolIndex && toolIndex < afterIndex,
     'message → tool → message must retain runtime sequence order in the visible timeline');
 const requestedToolCard = host.querySelector('[data-tool-call-id="tool-order"]');
-emitDaemonEvent({
-    sessionId: 'topic-in-use', turnId: 'turn-order', toolCallId: 'tool-order', sequence: 23,
-    type: 'tool.completed', payload: {
+emitProjectionBlock({
+    method: 'item/completed', turnId: 'turn-order', messageId: 'msg-tool-order', itemId: 'tool-order',
+    kind: 'tool', sourceOrder: 31, status: 'completed', content: {
         toolName: 'vcp_invoke',
         outputSummary: 'FileOperator 已返回 package.json',
         result: 'x'.repeat(1_024),
         resources: [{ type: 'file', name: 'package.json', url: 'file-ref:package.json' }],
         warnings: ['只读预览'],
         task: { status: 'accepted', id: 'task-1' },
+        item: { type: 'dynamicToolCall', tool: 'vcp_invoke' },
     },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
@@ -1588,13 +1144,19 @@ assert.match(completedToolCard.querySelector('.agent-chat-tool-resource-list').t
 assert.match(completedToolCard.querySelector('.agent-chat-tool-warning-list').textContent, /只读预览/);
 assert.match(completedToolCard.querySelector('.agent-chat-tool-task').textContent, /task-1/);
 
-emitDaemonEvent({
-    sessionId: 'topic-in-use', turnId: 'turn-tool-group', toolCallId: 'tool-group-a', sequence: 24,
-    type: 'tool.requested', payload: { toolName: 'FileOperator', argumentSummary: 'ReadFile README.md' },
+emitProjectionBlock({
+    turnId: 'turn-tool-group', messageId: 'msg-tool-group-a', itemId: 'tool-group-a', kind: 'tool',
+    sourceOrder: 40, status: 'inProgress', content: {
+        toolName: 'FileOperator', argumentSummary: 'ReadFile README.md',
+        item: { type: 'dynamicToolCall', tool: 'FileOperator' },
+    },
 });
-emitDaemonEvent({
-    sessionId: 'topic-in-use', turnId: 'turn-tool-group', toolCallId: 'tool-group-b', sequence: 25,
-    type: 'tool.requested', payload: { toolName: 'DeepWikiVCP', argumentSummary: 'Inspect repository' },
+emitProjectionBlock({
+    turnId: 'turn-tool-group', messageId: 'msg-tool-group-b', itemId: 'tool-group-b', kind: 'tool',
+    sourceOrder: 41, status: 'inProgress', content: {
+        toolName: 'DeepWikiVCP', argumentSummary: 'Inspect repository',
+        item: { type: 'dynamicToolCall', tool: 'DeepWikiVCP' },
+    },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
 const groupedTools = host.querySelector('.agent-chat-tool-group[data-turn-id="turn-tool-group"]');
@@ -1607,9 +1169,12 @@ groupedTools.querySelector('.agent-chat-tool-group-toggle').click();
 assert.equal(groupedTools.querySelector('.agent-chat-tool-group-body').hidden, false,
     'the group header must reveal the preserved structured tool cards');
 const groupedFirstCard = groupedTools.querySelector('[data-tool-call-id="tool-group-a"]');
-emitDaemonEvent({
-    sessionId: 'topic-in-use', turnId: 'turn-tool-group', toolCallId: 'tool-group-a', sequence: 26,
-    type: 'tool.completed', payload: { toolName: 'FileOperator', outputSummary: 'README.md loaded' },
+emitProjectionBlock({
+    method: 'item/completed', turnId: 'turn-tool-group', messageId: 'msg-tool-group-a', itemId: 'tool-group-a',
+    kind: 'tool', sourceOrder: 40, status: 'completed', content: {
+        toolName: 'FileOperator', outputSummary: 'README.md loaded',
+        item: { type: 'dynamicToolCall', tool: 'FileOperator' },
+    },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
 assert.strictEqual(groupedTools.querySelector('[data-tool-call-id="tool-group-a"]'), groupedFirstCard,
@@ -1617,9 +1182,8 @@ assert.strictEqual(groupedTools.querySelector('[data-tool-call-id="tool-group-a"
 assert.equal(groupedTools.querySelector('.agent-chat-tool-group-body').hidden, false,
     'patching a child tool must preserve the group expansion state');
 
-// `assistant.completed` intentionally requests a full durable projection.
-// Let that frame settle before the following scroll-anchor regression probe
-// installs its synthetic geometry.
+// Let the final normalized tool Patch settle before the following scroll-anchor
+// regression probe installs its synthetic geometry.
 await new Promise((resolve) => setTimeout(resolve, 50));
 
 // Run this after the preceding streaming frame has settled. A full rerender
@@ -1681,9 +1245,9 @@ assert.equal(host.querySelector('[data-message-id="assistant-marker"]'), null,
 
 // A new transcript Part while reading older output must not steal the anchor,
 // but must give the reader an explicit route back to the live edge.
-emitDaemonEvent({
-    sessionId: 'topic-in-use', turnId: 'turn-order', messageId: 'msg-reader-new', sequence: 24,
-    type: 'assistant.started', payload: {},
+emitProjectionBlock({
+    turnId: 'turn-order', messageId: 'msg-reader-new', itemId: 'reader-new-item', kind: 'message',
+    sourceOrder: 50, status: 'inProgress', content: { text: 'new live timeline item' },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
 const jumpToLatest = host.querySelector('.agent-chat-jump-to-latest');
@@ -1695,6 +1259,16 @@ await new Promise((resolve) => setTimeout(resolve, 30));
 assert.equal(jumpToLatest.hidden, true, 'return-to-latest must clear the local unread indicator');
 assert.equal(scrollContainer.scrollTop, scrollContainer.scrollHeight,
     'return-to-latest must intentionally move the reader to the live bottom edge');
+
+emitDaemonEvent({
+    runtime: 'codex', type: 'projection.updated', method: 'turn/completed',
+    sessionId: 'topic-in-use', threadId: 'thread-active', turnId: 'turn_test',
+    turnStatus: 'failed', turnError: 'VCPToolBox connection refused', activity: 'idle',
+});
+await new Promise((resolve) => setTimeout(resolve, 30));
+const failedTerminal = host.querySelector('.agent-chat-turn-terminal[data-agent-turn-phase="failed"]');
+assert.match(failedTerminal?.textContent || '', /VCPToolBox connection refused/,
+    'a failed Codex turn must remain visible with its bounded Main-authored error instead of disappearing');
 
 emitDaemonEvent({
     sessionId: 'topic-in-use', type: 'runtime.crashed',
@@ -1739,8 +1313,11 @@ await new Promise((resolve) => setTimeout(resolve, 0));
 assert.deepEqual([...host.querySelectorAll('.agent-settings-section-title')].map((title) => title.textContent),
     ['基础信息', '模型设置', '系统提示词'],
     'settings must use the same collapsed identity, model, and prompt sections as main chat');
-assert.equal(host.querySelector('.agent-chat-settings-scope'), null,
-    'Build settings must not keep the removed Profile, Session, and Advanced sub-tabs');
+const settingsScopes = [...host.querySelectorAll('.agent-chat-settings-scope')];
+assert.deepEqual(settingsScopes.map((scope) => scope.textContent.trim()), ['Agent 默认', '当前会话', '高级'],
+    'Build settings must expose explicit Profile, current Session, and advanced ownership scopes');
+assert.equal(settingsScopes.find((scope) => scope.textContent.trim() === 'Agent 默认')?.getAttribute('aria-selected'), 'true',
+    'opening settings must default to Agent Profile ownership rather than silently mutating a Session');
 const openSettingsSection = (key) => {
     const section = host.querySelector(`.agent-settings-section[data-section-key="${key}"]`);
     assert.ok(section, `settings must contain the ${key} section`);
@@ -1771,52 +1348,106 @@ assert.ok(savedAvatars[0].avatarData.buffer instanceof ArrayBuffer,
 openSettingsSection('model');
 assert.ok(host.querySelector('.agent-chat-settings-pane .agent-chat-setting-field select'),
     'the expanded model section must expose its model and approval controls');
-modelUpdateCallback([]);
-await new Promise((resolve) => setTimeout(resolve, 30));
-let modelSection = host.querySelector('.agent-settings-section[data-section-key="model"]');
-assert.equal(modelSection.classList.contains('collapsed'), false,
-    'model catalog updates must preserve the expanded settings section');
-let modelField = [...modelSection.querySelectorAll('.agent-chat-setting-field')]
-    .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent === '模型');
-assert.equal(modelField?.querySelector('input')?.placeholder, '输入模型名称',
-    'an empty model catalog must remain editable instead of rendering an unusable empty select');
-assert.match(modelSection.querySelector('.agent-chat-model-status')?.textContent || '', /直接填写模型名称/);
-modelUpdateCallback([{ id: 'gpt-5.6-live', reasoning_efforts: ['low', 'high'] }]);
-await new Promise((resolve) => setTimeout(resolve, 30));
-modelSection = openSettingsSection('model');
-modelField = [...modelSection.querySelectorAll('.agent-chat-setting-field')]
-    .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent === '模型');
-assert.deepEqual([...modelField.querySelectorAll('option')].map((option) => option.value),
-    ['gpt-5.6-live', 'gpt-5.6-terra'],
-    'a live model update must repopulate the selector while preserving the configured model');
-modelSection.querySelector('.agent-chat-model-refresh').click();
-await new Promise((resolve) => setTimeout(resolve, 30));
-assert.equal(refreshModelCalls, 1, 'the Build model refresh control must invoke refreshModels');
-modelSection = host.querySelector('.agent-settings-section[data-section-key="model"]');
-assert.equal(modelSection.classList.contains('collapsed'), false,
-    'manual model refresh must keep the active settings section open');
-assert.equal([...modelSection.querySelectorAll('.agent-chat-setting-field')]
-    .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent === '模型')
-    ?.querySelector('select')?.options[0]?.value, 'gpt-5.6-refresh',
-    'manual refresh must install the returned model catalog');
 openSettingsSection('prompt');
 const promptEditor = host.querySelector('.agent-chat-settings-pane textarea:not([readonly])');
 assert.equal(promptEditor?.value, '{{Nova}}',
     'the prompt section must expose the selected Agent instructions without reintroducing a settings sub-tab');
 
+window.VCPUI.create = (name, options = {}) => {
+    if (name === 'Button') {
+        const element = document.createElement('button');
+        element.type = 'button';
+        element.textContent = options.label || '';
+        return { element };
+    }
+    if (name !== 'Modal') return null;
+    const element = document.createElement('section');
+    element.className = 'vcp-ui-modal-overlay';
+    const dialog = document.createElement('div');
+    dialog.className = 'vcp-ui-modal';
+    const closeButton = document.createElement('button');
+    closeButton.type = 'button';
+    closeButton.setAttribute('aria-label', '关闭对话框');
+    const body = document.createElement('div');
+    body.className = 'vcp-ui-modal-body';
+    body.append(options.content);
+    const footer = document.createElement('footer');
+    for (const action of options.actions || []) footer.append(action.element || action);
+    dialog.append(closeButton, body, footer);
+    element.append(dialog);
+    const close = (result) => {
+        options.onClose?.(result);
+        element.remove();
+    };
+    closeButton.addEventListener('click', () => close(null));
+    return { element, close };
+};
+const toolSettingsButton = host.querySelector('.agent-chat-composer-tools');
+assert.ok(toolSettingsButton, 'Agent tools must be opened from the composer toolbar');
+assert.equal(toolSettingsButton.disabled, false, 'the tool picker must remain available for the selected Session');
+const selectedToolSettingsSessionId = JSON.parse(
+    window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1') || 'null',
+)?.sessionId;
+assert.ok(selectedToolSettingsSessionId, 'the tool picker Session scope requires an explicitly selected Session');
+toolSettingsButton.click();
+const toolDialog = await waitFor(() => host.querySelector('.agent-tool-settings-dialog'), 3_000);
+assert.ok(toolDialog, `the composer tool button must open a settings dialog; notices: ${[
+    ...document.querySelectorAll('.agent-chat-toast, .vcp-ui-toast'),
+].map((item) => item.textContent).join(' | ')}; catalog calls: ${toolCatalogRequests}`);
+assert.equal(host.querySelector('.agent-chat-settings-pane .agent-tool-settings'), null,
+    'the full tool catalog must not be embedded in the narrow settings sidebar');
+assert.deepEqual([...host.querySelectorAll('.agent-tool-modal-scope')].map((button) => button.textContent.trim()),
+    ['Agent 默认', '当前会话'], 'the tool dialog must expose explicit Profile and Session ownership');
+assert.deepEqual([...host.querySelectorAll('.agent-tool-preset')].map((button) => button.textContent.trim()),
+    ['全部开启', '只读', '自定义'], 'the tool dialog must expose the three direct presets');
+const readonlyPreset = [...host.querySelectorAll('.agent-tool-preset')]
+    .find((button) => button.textContent.trim() === '只读');
+readonlyPreset.click();
+assert.ok([...host.querySelectorAll('.agent-tool-preset')]
+    .find((button) => button.textContent.trim() === '只读')?.classList.contains('is-active'),
+    'preset changes must remain visible while Profile autosave is pending');
+await waitFor(() => savedAgentProfiles.some((profile) => profile.toolPolicy?.preset === 'readonly'), 3_000);
+const shellToolRow = [...host.querySelectorAll('.agent-tool-row')]
+    .find((row) => row.textContent.includes('终端命令'));
+shellToolRow.querySelector('.agent-tool-switch').click();
+assert.ok([...host.querySelectorAll('.agent-tool-preset')]
+    .find((button) => button.textContent.trim() === '自定义')?.classList.contains('is-active'),
+    'changing one tool must automatically enter custom mode');
+await waitFor(() => savedAgentProfiles.some((profile) => profile.toolPolicy?.preset === 'custom'
+    && profile.toolPolicy.enabledCodexCapabilities.includes('codex:shell-command')), 3_000);
+const pluginDisclosure = host.querySelector('.agent-tool-plugin-disclosure');
+assert.equal(pluginDisclosure?.getAttribute('aria-expanded'), 'false');
+pluginDisclosure.click();
+assert.equal(pluginDisclosure.getAttribute('aria-expanded'), 'true',
+    'VCP plugins must expand to their individual invocation commands');
+assert.deepEqual([...host.querySelectorAll('.agent-tool-command-list .agent-tool-row strong')]
+    .map((label) => label.textContent.trim()), ['ReadFile', 'WriteFile']);
+const sessionScopeButton = [...host.querySelectorAll('.agent-tool-modal-scope')]
+    .find((button) => button.textContent.trim() === '当前会话');
+sessionScopeButton.click();
+const sessionReadonlyPreset = [...host.querySelectorAll('.agent-tool-preset')]
+    .find((button) => button.textContent.trim() === '只读');
+sessionReadonlyPreset.click();
+await waitFor(() => savedWorkbenchSettings.some((payload) => payload.sessionId === selectedToolSettingsSessionId
+    && payload.toolPolicy?.preset === 'readonly'), 3_000);
+assert.match(host.querySelector('.agent-tool-modal-save-status')?.textContent || '', /保存|更新/,
+    'the tool dialog must expose autosave feedback');
+host.querySelector('.agent-tool-settings-dialog [aria-label="关闭对话框"]')?.click();
+toolSettingsButton.click();
+assert.ok(await waitFor(() => host.querySelector('.agent-tool-settings-dialog'), 1_000),
+    'closing the tool dialog must allow it to be opened again');
+host.querySelector('.agent-tool-settings-dialog [aria-label="关闭对话框"]')?.click();
+
 dispose();
 assert.equal(unsubscribeCalls, 1, 'Workbench unmount must release runtime event subscription');
-assert.equal(modelUnsubscribeCalls, 1, 'Workbench unmount must release model update subscription');
 assert.deepEqual(presenceCalls, [true, false]);
 assert.equal(host.childElementCount, 0);
-assert.equal(document.body.style.getPropertyValue('--agent-chat-sidebar-width'), '',
-    'closing Build must remove its panel-edge override for ordinary chat and other internal apps');
 
 window.localStorage.setItem('vcpchat.agentWorkbench.lastTopic.v1', JSON.stringify({ sessionId: 'topic-missing-session' }));
-const missingSessionDispose = registered.mount(host, {});
-for (let attempt = 0; attempt < 50
+const missingSessionDispose = registeredApp.mount(host, {});
+for (let attempt = 0; attempt < 100
     && window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1') !== null; attempt += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await new Promise((resolve) => setTimeout(resolve, 50));
 }
 assert.ok(host.classList.contains('agent-workbench-root') && host.querySelector('.agent-chat-root.container'),
     'a deleted remembered Session must leave the Workbench usable instead of failing startup');

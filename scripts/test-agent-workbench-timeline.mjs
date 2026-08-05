@@ -28,6 +28,66 @@ const state = {
 };
 
 const parts = createAgentTimelineParts(state);
+const persistedParts = createAgentTimelineParts({
+    messages: [{ id: 'persisted', role: 'assistant', firstSequence: null, snapshotOrdinal: 1 }],
+    tools: new Map(),
+});
+assert.equal(persistedParts[0].sequence, null,
+    'null persisted sequence values must remain non-live so snapshot order remains authoritative');
+
+const burstToolOrdinals = [5, 6, 7, 9, 11, 12, 14, 15, 16, 18, 19];
+const burstMessages = [
+    ['turn-1-user', 'user', 'turn-1', 1],
+    ['turn-1-answer', 'assistant', 'turn-1', 2],
+    ['turn-2-user', 'user', 'turn-2', 3],
+    ['turn-2-intro', 'assistant', 'turn-2', 4],
+    ['turn-2-middle-1', 'assistant', 'turn-2', 8],
+    ['turn-2-middle-2', 'assistant', 'turn-2', 10],
+    ['turn-2-middle-3', 'assistant', 'turn-2', 13],
+    ['turn-2-middle-4', 'assistant', 'turn-2', 17],
+    ['turn-2-final', 'assistant', 'turn-2', 20],
+];
+function burstTimeline(mode) {
+    const orderField = mode === 'live' ? 'firstSequence' : 'snapshotOrdinal';
+    return createAgentTimelineParts({
+        messages: burstMessages.map(([id, role, turnId, order]) => ({
+            id, role, turnId, firstSequence: null, snapshotOrdinal: null, [orderField]: order,
+        })),
+        tools: new Map(burstToolOrdinals.map((order, index) => [`burst-tool-${index + 1}`, {
+            toolCallId: `burst-tool-${index + 1}`,
+            turnId: 'turn-2',
+            name: 'vcp_invoke',
+            firstSequence: null,
+            snapshotOrdinal: null,
+            [orderField]: order,
+        }])),
+    });
+}
+const expectedBurstTimeline = [
+    'message:turn-1-user',
+    'message:turn-1-answer',
+    'message:turn-2-user',
+    'message:turn-2-intro',
+    'tool-group:burst-tool-1',
+    'message:turn-2-middle-1',
+    'tool:burst-tool-4',
+    'message:turn-2-middle-2',
+    'tool-group:burst-tool-5',
+    'message:turn-2-middle-3',
+    'tool-group:burst-tool-7',
+    'message:turn-2-middle-4',
+    'tool-group:burst-tool-10',
+    'message:turn-2-final',
+];
+const liveBurstParts = burstTimeline('live');
+const reopenedBurstParts = burstTimeline('snapshot');
+assert.deepEqual(liveBurstParts.map(timelinePartKey), expectedBurstTimeline,
+    'live tool cards must appear at the exact point where each tool batch starts in the Turn');
+assert.deepEqual(reopenedBurstParts.map(timelinePartKey), expectedBurstTimeline,
+    'cold-reopened tool cards must retain the live positions instead of moving to the page top');
+assert.deepEqual(reopenedBurstParts.filter((part) => part.kind === 'tool-group')
+    .map((part) => part.toolCallIds.length), [3, 2, 3, 2],
+    'display grouping may fold only truly adjacent tools and must preserve assistant-message boundaries');
 assert.deepEqual(parts.map(timelinePartKey), [
     'message:message-before', 'tool:tool-1', 'message:message-after',
 ]);
@@ -83,7 +143,11 @@ const create = (part) => {
     }
     return node;
 };
-const patch = (node, part) => { node.textContent = `${part.value.content || part.value.name}:patched`; };
+const patch = (node, part) => {
+    node.textContent = `${part.value.content || part.value.name}:patched`;
+    delete node.dataset.agentTimelineKey;
+    delete node.dataset.agentTimelineKind;
+};
 
 reconcileAgentTimeline(feed, parts, { create, patch }, rows);
 const stableMessage = feed.firstElementChild;
@@ -97,6 +161,10 @@ reconcileAgentTimeline(feed, updated, { create, patch }, rows);
 assert.strictEqual(feed.firstElementChild, stableMessage, 'messageId must retain its existing row');
 assert.strictEqual(feed.children[1], stableTool, 'toolCallId must retain its existing row');
 assert.match(stableMessage.textContent, /before\+:patched/);
+assert.equal(stableMessage.dataset.agentTimelineKey, 'message:message-before',
+    'presentation patches must not erase the coordinator-owned timeline key');
+assert.equal(stableMessage.dataset.agentTimelineKind, 'message',
+    'presentation patches must not erase the coordinator-owned timeline kind');
 
 const groupedDomParts = [
     { kind: 'message', id: 'group-a', messageId: 'group-a', turnId: 'turn-group', value: { role: 'assistant', agentId: 'nova', content: 'a' } },

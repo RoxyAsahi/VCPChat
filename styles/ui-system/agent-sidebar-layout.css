@@ -1,0 +1,60 @@
+@layer vcp-ui.components {
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar { min-width: 0; }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar-splitter {
+        position: relative; z-index: 4; flex: 0 0 5px; width: 5px; margin: 0 -2px;
+        cursor: col-resize; touch-action: none; outline: none;
+    }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar-splitter::after {
+        position: absolute; top: 0; bottom: 0; left: 2px; width: 1px;
+        background: transparent; content: ''; transition: background-color var(--vcp-ui-transition-fast), box-shadow var(--vcp-ui-transition-fast);
+    }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar-splitter:hover::after,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar-splitter:focus-visible::after,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar-resizing + .agent-chat-sidebar-splitter::after {
+        background: var(--vcp-ui-accent); box-shadow: 0 0 8px color-mix(in srgb, var(--vcp-ui-accent) 45%, transparent);
+    }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-180 { width: 180px; flex-basis: 180px; }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-200 { width: 200px; flex-basis: 200px; }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-220 { width: 220px; flex-basis: 220px; }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-240 { width: 240px; flex-basis: 240px; }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-260 { width: 260px; flex-basis: 260px; }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-280 { width: 280px; flex-basis: 280px; }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-300 { width: 300px; flex-basis: 300px; }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-320 { width: 320px; flex-basis: 320px; }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-340 { width: 340px; flex-basis: 340px; }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-360 { width: 360px; flex-basis: 360px; }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-380 { width: 380px; flex-basis: 380px; }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-400 { width: 400px; flex-basis: 400px; }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-420 { width: 420px; flex-basis: 420px; }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-440 { width: 440px; flex-basis: 440px; }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-460 { width: 460px; flex-basis: 460px; }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-480 { width: 480px; flex-basis: 480px; }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-500 { width: 500px; flex-basis: 500px; }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-520 { width: 520px; flex-basis: 520px; }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-540 { width: 540px; flex-basis: 540px; }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-560 { width: 560px; flex-basis: 560px; }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-580 { width: 580px; flex-basis: 580px; }
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-600 { width: 600px; flex-basis: 600px; }
+    html[data-ui-mode="next"] body.next-ui-internal-app-open:has(.vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-180) { --next-sidebar-width: 180px; }
+    html[data-ui-mode="next"] body.next-ui-internal-app-open:has(.vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-200) { --next-sidebar-width: 200px; }
+    html[data-ui-mode="next"] body.next-ui-internal-app-open:has(.vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-220) { --next-sidebar-width: 220px; }
+    html[data-ui-mode="next"] body.next-ui-internal-app-open:has(.vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-240) { --next-sidebar-width: 240px; }
+    html[data-ui-mode="next"] body.next-ui-internal-app-open:has(.vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-260) { --next-sidebar-width: 260px; }
+    html[data-ui-mode="next"] body.next-ui-internal-app-open:has(.vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-280) { --next-sidebar-width: 280px; }
+    html[data-ui-mode="next"] body.next-ui-internal-app-open:has(.vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-300) { --next-sidebar-width: 300px; }
+    html[data-ui-mode="next"] body.next-ui-internal-app-open:has(.vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-320) { --next-sidebar-width: 320px; }
+    html[data-ui-mode="next"] body.next-ui-internal-app-open:has(.vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-340) { --next-sidebar-width: 340px; }
+    html[data-ui-mode="next"] body.next-ui-internal-app-open:has(.vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-360) { --next-sidebar-width: 360px; }
+    html[data-ui-mode="next"] body.next-ui-internal-app-open:has(.vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-380) { --next-sidebar-width: 380px; }
+    html[data-ui-mode="next"] body.next-ui-internal-app-open:has(.vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-400) { --next-sidebar-width: 400px; }
+    html[data-ui-mode="next"] body.next-ui-internal-app-open:has(.vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-420) { --next-sidebar-width: 420px; }
+    html[data-ui-mode="next"] body.next-ui-internal-app-open:has(.vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-440) { --next-sidebar-width: 440px; }
+    html[data-ui-mode="next"] body.next-ui-internal-app-open:has(.vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-460) { --next-sidebar-width: 460px; }
+    html[data-ui-mode="next"] body.next-ui-internal-app-open:has(.vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-480) { --next-sidebar-width: 480px; }
+    html[data-ui-mode="next"] body.next-ui-internal-app-open:has(.vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-500) { --next-sidebar-width: 500px; }
+    html[data-ui-mode="next"] body.next-ui-internal-app-open:has(.vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-520) { --next-sidebar-width: 520px; }
+    html[data-ui-mode="next"] body.next-ui-internal-app-open:has(.vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-540) { --next-sidebar-width: 540px; }
+    html[data-ui-mode="next"] body.next-ui-internal-app-open:has(.vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-560) { --next-sidebar-width: 560px; }
+    html[data-ui-mode="next"] body.next-ui-internal-app-open:has(.vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-580) { --next-sidebar-width: 580px; }
+    html[data-ui-mode="next"] body.next-ui-internal-app-open:has(.vcp-ui-scope.agent-chat-root .agent-chat-sidebar-width-600) { --next-sidebar-width: 600px; }
+}

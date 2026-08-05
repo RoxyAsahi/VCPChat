@@ -192,7 +192,8 @@ function createAgentSessionCatalogCoordinator({
             const result = await refreshModels();
             const models = Array.isArray(result) ? result : result?.models;
             const catalog = applyModelCatalog(models,
-                result?.success === false ? '模型服务暂不可用，可直接填写模型名称。' : '没有可用模型，可直接填写模型名称。');
+                result?.success === false ? '模型服务暂不可用，可直接填写模型名称。'
+                    : '没有可用模型，可直接填写模型名称。');
             return { ...result, success: result?.success !== false && catalog.length > 0, models: catalog };
         } catch (error) {
             if (!disposed && !state.disposed) {

@@ -560,6 +560,49 @@ function appendNewStableRange(stableBlocksRoot, segmentState, textForRendering, 
     return blockRecord ? [blockRecord] : [];
 }
 
+/**
+ * Session switches recreate message DOM while background streams retain their stable block state.
+ * Restore cached HTML into the new root without reparsing the stable source.
+ */
+function restoreStableBlocksForRecreatedDom(stableBlocksRoot, segmentState, options = {}) {
+    if (!stableBlocksRoot || segmentState.stableBlocks.length === 0) return false;
+
+    const recordsAreMountedHere = segmentState.stableBlocks.every((record) => {
+        return record.element?.isConnected && record.element.parentNode === stableBlocksRoot;
+    });
+    if (recordsAreMountedHere) return false;
+
+    stableBlocksRoot.replaceChildren();
+
+    for (const record of segmentState.stableBlocks) {
+        const blockEl = document.createElement('div');
+        blockEl.className = 'vcp-stream-stable-block';
+        blockEl.dataset.vcpStreamStableBlock = 'true';
+        blockEl.dataset.vcpBlockKey = record.id;
+        blockEl.dataset.vcpStableStart = String(record.start);
+        blockEl.dataset.vcpStableEnd = String(record.end);
+        stableBlocksRoot.appendChild(blockEl);
+        record.element = blockEl;
+
+        if (typeof refs.renderPostProcessedHtml === 'function') {
+            const enrichResult = refs.renderPostProcessedHtml(blockEl, record.html, {
+                messageId: options.messageId || null,
+                settings: options.settings || null,
+                renderSessionId: null,
+                runHeavy: true,
+                includeAttachments: false
+            });
+            if (enrichResult && typeof enrichResult.catch === 'function') {
+                enrichResult.catch(error => console.error('[StreamManager] Restored stable block enrichment failed:', error));
+            }
+        } else {
+            blockEl.innerHTML = record.html;
+        }
+    }
+
+    return true;
+}
+
 function startsWithAt(text, index, token) {
     return text.startsWith(token, index);
 }
@@ -1333,6 +1376,12 @@ function renderStreamFrame(messageId) {
     const { contentDiv, messageItem } = cachedDom;
     const { stableRoot, stableBlocksRoot, tailRoot } = ensureStreamingRoots(contentDiv);
     const segmentState = getOrCreateStreamSegmentState(messageId);
+    const streamRenderOptions = {
+        messageId,
+        settings: refs.globalSettingsRef?.get?.()
+    };
+
+    restoreStableBlocksForRecreatedDom(stableBlocksRoot, segmentState, streamRenderOptions);
 
     const textForRendering = accumulatedStreamText.get(messageId) || "";
     const nextStableCutoff = findExplicitStablePrefix(textForRendering, segmentState.stableCutoff);
@@ -1344,10 +1393,13 @@ function renderStreamFrame(messageId) {
     if (nextStableCutoff > segmentState.stableCutoff) {
         segmentState.stableCutoff = nextStableCutoff;
 
-        appendNewStableRange(stableBlocksRoot, segmentState, textForRendering, nextStableCutoff, {
-            messageId,
-            settings: refs.globalSettingsRef?.get?.()
-        });
+        appendNewStableRange(
+            stableBlocksRoot,
+            segmentState,
+            textForRendering,
+            nextStableCutoff,
+            streamRenderOptions
+        );
     }
 
     const tailText = textForRendering.slice(segmentState.stableCutoff);

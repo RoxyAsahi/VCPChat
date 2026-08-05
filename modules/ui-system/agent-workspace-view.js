@@ -91,8 +91,6 @@ function createAgentWorkspaceView({ document = globalThis.document, actions = {}
             return;
         }
         const toolbar = node('header', 'agent-workspace-toolbar', undefined, document);
-        const heading = node('div', 'agent-workspace-heading', undefined, document);
-        heading.append(node('span', 'vcp-ui-icon', 'account_tree', document), node('strong', '', 'Workspace', document));
         const searchWrap = node('label', 'agent-workspace-search-wrap', undefined, document);
         searchWrap.append(node('span', 'vcp-ui-icon', 'search', document));
         const search = document.createElement('input');
@@ -103,7 +101,7 @@ function createAgentWorkspaceView({ document = globalThis.document, actions = {}
         search.setAttribute('aria-label', '搜索工作区文件');
         search.addEventListener('input', () => actions.search?.(search.value));
         searchWrap.append(search);
-        toolbar.append(heading, searchWrap);
+        toolbar.append(searchWrap);
 
         const explorerPane = node('section', 'agent-workspace-explorer-pane', undefined, document);
         explorerPane.append(toolbar);

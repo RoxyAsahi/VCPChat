@@ -1,32 +1,26 @@
 import { reduceActivityEvent } from './activity-reducer.js';
 import { reduceApprovalEvent } from './approval-reducer.js';
-import { reduceMessageEvent } from './message-reducer.js';
+import { reduceEphemeralEvent } from './ephemeral-reducer.js';
 import { REJECT_EVENT } from './reducer-shared.js';
 import { reduceRuntimeEvent } from './runtime-reducer.js';
 import { reduceSessionEvent } from './session-reducer.js';
-import { reduceToolEvent } from './tool-reducer.js';
 
 const ROUTES = new Map([
     ['runtime.state_changed', [reduceRuntimeEvent]],
-    ['runtime.crashed', [reduceRuntimeEvent, reduceMessageEvent]],
+    ['runtime.crashed', [reduceRuntimeEvent, reduceEphemeralEvent]],
     ['runtime.warning', [reduceRuntimeEvent]],
     ['runtime.readiness', [reduceRuntimeEvent]],
     ['session.created', [reduceSessionEvent]],
     ['session.state_changed', [reduceSessionEvent]],
-    ['session.closed', [reduceSessionEvent]],
+    ['session.closed', [reduceSessionEvent, reduceEphemeralEvent]],
     ['session.config.saved', [reduceSessionEvent]],
     ['session.config.pending', [reduceSessionEvent]],
     ['session.config.applied', [reduceSessionEvent]],
     ['session.config.failed', [reduceSessionEvent]],
-    ['turn.started', [reduceMessageEvent]],
-    ['user.message', [reduceMessageEvent]],
-    ['assistant.started', [reduceMessageEvent]],
-    ['assistant.delta', [reduceMessageEvent]],
-    ['reasoning.delta', [reduceMessageEvent]],
-    ['assistant.completed', [reduceMessageEvent]],
-    ['turn.completed', [reduceMessageEvent]],
-    ['turn.failed', [reduceMessageEvent]],
-    ['turn.cancelled', [reduceMessageEvent]],
+    ['turn.started', [reduceEphemeralEvent]],
+    ['turn.completed', [reduceEphemeralEvent]],
+    ['turn.failed', [reduceEphemeralEvent]],
+    ['turn.cancelled', [reduceEphemeralEvent]],
     ['approval.requested', [reduceApprovalEvent, reduceActivityEvent]],
     ['approval.resolved', [reduceApprovalEvent]],
     ['approval.expired', [reduceApprovalEvent]],
@@ -46,7 +40,6 @@ const ROUTES = new Map([
 ]);
 
 function reducersForEvent(type) {
-    if (type.startsWith('tool.')) return [reduceToolEvent];
     return ROUTES.get(type) || [];
 }
 

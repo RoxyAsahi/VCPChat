@@ -44,7 +44,6 @@ const requiredFiles = [
     'modules/ui-system/agent-presentation/contract.js',
     'modules/ui-system/agent-presentation/renderer.js',
     'modules/ui-system/agent-presentation/fork/agent-renderer-markdown-pipeline.js',
-    'modules/ui-system/agent-presentation/fork/agent-renderer-markdown-stream.js',
     'modules/ui-system/agent-presentation/stream-batcher.js',
     'scripts/run-electron-node.mjs',
     'scripts/test-codex-nova-live.mjs',
@@ -82,9 +81,13 @@ for (const method of [
     'agentSessionRename', 'agentSessionArchive', 'agentSessionRestore', 'agentSessionDelete', 'agentSessionFork',
     'agentWorkspaceListDirectory', 'agentWorkspaceReadPreview', 'agentWorkspaceSearchFiles',
     'agentWorkspaceStatPath', 'agentWorkspacePerformPathAction',
+    'agentRuntimeListToolCatalog',
     'onAgentRuntimeEvent',
 ]) {
     if (!preload.includes(method)) errors.push(`chat preload missing API: ${method}`);
+}
+if (!/"agentRuntimeListToolCatalog"/.test(preload)) {
+    errors.push('chat preload tool catalog API must be included in the role allowlist');
 }
 const workbenchController = fs.readFileSync(path.join(root, 'modules/ui-system/agent-workbench-controller-implementation.js'), 'utf8');
 for (const legacyMethod of [
@@ -106,12 +109,22 @@ if (packageJson.build?.extraResources?.some((item) => String(item.from).includes
     errors.push('Codex product packaging must not ship the old vcp-agentd daemon');
 }
 if (packageJson.build?.files?.includes('agent-runtime/**/*')
-    || packageJson.build?.files?.includes('modules/agent-runtime/**/*')
-    || !packageJson.build?.files?.includes('!archive/agent-runtime/**/*')) {
-    errors.push('Codex product packaging must exclude archived Pi/Rust runtime sources');
+    || packageJson.build?.files?.includes('modules/agent-runtime/**/*')) {
+    errors.push('Codex product packaging must not include removed Pi/Rust runtime sources');
 }
-if (!packageJson.build?.extraResources?.some((item) => String(item.from).includes('vcp-toolbox-bridge'))) {
-    errors.push('Codex product packaging must include vcp-toolbox-bridge');
+if (Object.keys(packageJson.scripts || {}).some((name) => /^archive:(?:rust|pi):/.test(name))) {
+    errors.push('removed Pi/Rust runtime commands must not return to the root package');
+}
+if (fs.existsSync(path.join(root, 'archive/agent-runtime'))
+    || fs.existsSync(path.join(root, '.github/workflows/rust_agent_runtime.yml'))
+    || fs.existsSync(path.join(root, 'rust/Cargo.toml'))) {
+    errors.push('removed Pi/Rust runtime source or workflow has re-entered the product tree');
+}
+if (!packageJson.build?.extraResources?.some((item) => (
+    item.from === 'rust/toolbox-bridge/target/release/vcp-toolbox-bridge.exe'
+    && item.to === 'vcp-toolbox-bridge.exe'
+))) {
+    errors.push('Codex product packaging must include the canonical ToolBox Bridge release binary');
 }
 if (!packageJson.scripts?.['test:codex-stack']) errors.push('package scripts must define test:codex-stack');
 if (!packageJson.scripts?.['test:codex-toolbox-responses-adapter']) errors.push('package scripts must define the VChat-owned Responses adapter test');

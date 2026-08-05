@@ -3,6 +3,37 @@
 const crypto = require('crypto');
 const { sanitizeInteractionPayload } = require('./runtime-normalizers');
 
+function nextThreadState(message, previous) {
+    if (message.method === 'turn/started') {
+        return { next: {
+            ...previous,
+            activity: 'running',
+            activeTurnId: message.params?.turn?.id || previous.activeTurnId || null,
+            observedThreadStatus: 'active',
+            recoveryState: 'confirmed',
+        }, completedTurnId: null };
+    }
+    if (message.method === 'turn/completed') {
+        const eventTurnId = String(message.params?.turn?.id || message.params?.turnId || '').trim();
+        if (!eventTurnId || previous.activeTurnId !== eventTurnId) {
+            return { next: previous, completedTurnId: null };
+        }
+        return { next: {
+            ...previous, activity: 'idle', activeTurnId: null, observedThreadStatus: 'idle',
+            recoveryState: 'confirmed',
+        }, completedTurnId: eventTurnId };
+    }
+    if (message.method === 'thread/status/changed') {
+        const statusType = String(message.params?.status?.type || 'unknown');
+        return { next: {
+            ...previous,
+            activity: statusType === 'active' || previous.activeTurnId ? 'running' : 'idle',
+            observedThreadStatus: statusType,
+        }, completedTurnId: null };
+    }
+    return { next: previous, completedTurnId: null };
+}
+
 class RuntimeEventService {
     constructor(context) {
         this.context = Object.freeze(context);
@@ -27,23 +58,12 @@ class RuntimeEventService {
         const repository = this.context.repository();
         const durableSession = repository.getSession(session.sessionId) || session;
         const states = this.context.threadStates();
-        const previous = states.get(session.threadId) || { activity: 'idle', activeTurnId: null };
-        let next = previous;
-        let completedTurnId = null;
-        if (message.method === 'turn/started') {
-            next = { activity: 'running', activeTurnId: message.params?.turn?.id || null };
-        } else if (message.method === 'turn/completed') {
-            const eventTurnId = String(message.params?.turn?.id || message.params?.turnId || '').trim();
-            if (eventTurnId && previous.activeTurnId === eventTurnId) {
-                completedTurnId = eventTurnId;
-                next = { activity: 'idle', activeTurnId: null };
-                this.context.turnCancellationStates?.()?.delete(`${session.threadId}:${eventTurnId}`);
-            }
-        } else if (message.method === 'thread/status/changed') {
-            const active = message.params?.status?.type === 'active';
-            next = active
-                ? { ...previous, activity: 'running' }
-                : { ...previous, activity: 'idle', activeTurnId: null };
+        const previous = states.get(session.threadId) || {
+            activity: 'idle', activeTurnId: null, observedThreadStatus: 'idle',
+        };
+        const { next, completedTurnId } = nextThreadState(message, previous);
+        if (completedTurnId) {
+            this.context.turnCancellationStates?.()?.delete(`${session.threadId}:${completedTurnId}`);
         }
         states.set(session.threadId, next);
         repository.saveSession({ ...durableSession, state: next.activity, updatedAt: Date.now() });

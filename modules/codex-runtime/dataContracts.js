@@ -1,8 +1,10 @@
 'use strict';
 
+const { normalizeToolPolicy } = require('./tool-policy');
+
 const PROFILE_SCHEMA_VERSION = 2;
 const SESSION_CONFIG_SCHEMA_VERSION = 2;
-const BLOCK_CONTENT_SCHEMA_VERSION = 1;
+const BLOCK_CONTENT_SCHEMA_VERSION = 2;
 const APPLY_STATES = new Set(['unmaterialized', 'pending', 'applying', 'applied', 'error']);
 const DENIED_KEYS = new Set(['path', 'absolutePath', 'filePath', 'base64', 'buffer', 'transcript']);
 
@@ -53,6 +55,7 @@ function normalizeProfile(profile = {}, profileId = '') {
         profileRevision: revision,
         revision,
         executionProfile: 'toolbox-only',
+        toolPolicy: normalizeToolPolicy(source.toolPolicy),
     };
     validateNoSensitiveFields(result, 'AgentProfile');
     return result;
@@ -65,6 +68,7 @@ function normalizeSessionConfig(config = {}) {
         ...source,
         schemaVersion: SESSION_CONFIG_SCHEMA_VERSION,
         executionProfile: 'toolbox-only',
+        toolPolicy: normalizeToolPolicy(source.toolPolicy),
     };
     validateNoSensitiveFields(result, 'SessionConfig');
     return result;

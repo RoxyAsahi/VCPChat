@@ -1,3 +1,6 @@
+import { createWorkbenchLifecycle } from './agent-workbench-lifecycle.js';
+import { normalizeDiagnosticError } from './agent-config-diagnostics.js';
+
 const DEFAULT_DELAY_MS = 500;
 
 function cleanKey(value) {
@@ -14,8 +17,11 @@ export function sessionSettingsTarget(sessionId) {
     return id ? `session:${id}` : 'session:unselected';
 }
 
-export function createAgentSettingsState({ delayMs = DEFAULT_DELAY_MS } = {}) {
+export function createAgentSettingsState({ delayMs = DEFAULT_DELAY_MS, lifecycle: injectedLifecycle } = {}) {
+    const lifecycle = injectedLifecycle || createWorkbenchLifecycle(globalThis);
+    const ownsLifecycle = !injectedLifecycle;
     const entries = new Map();
+    const timerName = (targetKey, field) => `agent-settings:${cleanKey(targetKey)}:${cleanKey(field)}`;
 
     function entry(targetKey) {
         const key = cleanKey(targetKey);
@@ -73,6 +79,8 @@ export function createAgentSettingsState({ delayMs = DEFAULT_DELAY_MS } = {}) {
                 target.statuses.set(field, {
                     state: conflict ? 'conflict' : 'error',
                     message: error?.message || String(error),
+                    error: normalizeDiagnosticError(error, conflict
+                        ? 'SESSION_CONFIG_CONFLICT' : 'SETTINGS_SAVE_ERROR'),
                 });
             }
             throw error;
@@ -83,25 +91,26 @@ export function createAgentSettingsState({ delayMs = DEFAULT_DELAY_MS } = {}) {
 
     function schedule(targetKey, field, callback) {
         const target = entry(targetKey);
-        const previous = target.timers.get(field);
-        if (previous) clearTimeout(previous);
-        const timer = setTimeout(() => {
+        const name = timerName(targetKey, field);
+        lifecycle.clear(name);
+        lifecycle.timeout(name, () => {
             target.timers.delete(field);
             callback();
         }, delayMs);
-        target.timers.set(field, timer);
+        target.timers.set(field, name);
     }
 
     function clear(targetKey) {
         const key = cleanKey(targetKey);
         const target = entries.get(key);
         if (!target) return;
-        for (const timer of target.timers.values()) clearTimeout(timer);
+        for (const name of target.timers.values()) lifecycle.clear(name);
         entries.delete(key);
     }
 
     function dispose() {
         for (const key of [...entries.keys()]) clear(key);
+        if (ownsLifecycle) lifecycle.dispose();
     }
 
     return { setDraft, value, status, enqueue, schedule, clear, dispose };

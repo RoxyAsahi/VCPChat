@@ -128,7 +128,8 @@ function createAgentActivityReadonlyView({ document = globalThis.document, actio
         card.append(status);
         if (viewState === 'error') {
             const rawError = typeof current.runtime?.lastError === 'object'
-                ? current.runtime.lastError?.error : current.runtime?.lastError;
+                ? (current.runtime.lastError?.message || current.runtime.lastError?.error)
+                : current.runtime?.lastError;
             card.append(node('p', 'agent-chat-connection-message', String(rawError || 'Codex App Server 已中断').slice(0, 280), document));
             const reconnect = button('重新连接', 'primary agent-chat-connection-reconnect', document);
             reconnect.addEventListener('click', () => actions.run?.(() => actions.reconnect?.()));

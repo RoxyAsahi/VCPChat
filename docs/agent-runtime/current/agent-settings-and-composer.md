@@ -1,6 +1,6 @@
 # Agent Settings 与 Composer 合同
 
-状态：**R12 implemented / working-tree**（2026-08-03）。本页与 [data-governance.md](data-governance.md) 共同构成设置真源；高级发送不在本阶段，旧 R11 收据不覆盖 R12。
+状态：**R12/R16 implemented / working-tree**（2026-08-05）。本页与 [data-governance.md](data-governance.md) 共同构成设置真源；高级发送不在本阶段，旧 R11 收据不覆盖当前工作树。
 
 ## 三个作用域
 
@@ -17,6 +17,14 @@
 ### 高级
 
 只放安全预算、Runtime/schema/build 信息、Saga/孤立 Thread 恢复、导出与诊断。高级区不改变 Agent 身份，也不把恢复表单常驻在普通设置中。
+
+“配置与 Runtime 诊断”由 `agent-settings-advanced-feature.js` 独立组合，读取当前 Session 的权威配置，不从侧栏控件或其他 Agent Profile 猜测。它同时展示 desired/applied revision、应用状态、Runtime generation、只读存储状态和脱敏 ToolBox endpoint，并提供：
+
+- 重新读取：只读 Main/SQLite，不启动或重配 ToolBox。
+- 重新应用：Renderer 只发送 `sessionId`；Main 解析权威 Thread 并执行配置 barrier，不伪造一次保存或提升 config revision。
+- 复制诊断：提示词只输出字符数，workspace 只输出 basename，endpoint 删除凭据/query/hash；API key、完整指令、消息内容、附件和绝对路径一律不进入摘要。
+
+切换 Session 时，诊断 request generation 同步切换。Session A 的迟到读取、保存冲突或 Runtime 错误不得显示在 Session B。剪贴板不可用必须显示明确错误，不静默宣称复制成功。
 
 每个 Profile/Session 的每个字段独立显示 `dirty/saving/saved/pending-runtime/applying/conflict/error`。Select 先更新 Draft 再保存；文本输入 500 ms 去抖；workspace 由 Main 重新解析和验证。CAS 冲突保留本地输入，不允许旧 Snapshot 重绘覆盖。
 
@@ -66,6 +74,8 @@ composerStateBySession: Map<sessionId, {
 npm run test:codex-stack              PASS
 npm run test:codex-reliability        PASS
 npm run test:agent-settings-ux        PASS
+npm run test:agent-settings-interaction PASS
+npm run test:agent-config-diagnostics PASS
 npm run test:agent-composer-state     PASS
 npm run check:agent-runtime           PASS
 npm run check:codex-governance        PASS
@@ -74,4 +84,8 @@ npm run test:electron-codex-smoke     PASS
 node scripts/test-electron-codex-process-restart.mjs PASS
 ```
 
-Electron smoke 已覆盖当前 Session 的 YOLO/cwd 真实点击、异步保存和 Renderer reload；独立进程测试进一步覆盖 Electron Main 完整退出重启后的 SQLite 恢复。真实 ToolBox 下一 Turn 已验证 cwd/model/approval/effort 与 provider reasoning 参数。深浅主题、窄栏、双 Agent 并发设置交互、指令模式切换和 backend approval 仍未验收，因此不标记 `product`。
+Electron smoke 已覆盖当前 Session 的 YOLO/cwd 真实点击、异步保存、诊断读取/重新应用、Session 切换和 Renderer reload；独立进程测试进一步覆盖 Electron Main 完整退出重启后的 SQLite 恢复。真实 ToolBox 下一 Turn 已验证 cwd/model/approval/effort 与 provider reasoning 参数。
+
+2026-08-05 的 R16 诊断验收使用生产 View/CSS 在真实 Electron 中渲染 `thread/settings` 超时：139 px 侧栏下健康摘要、配置差异、影响、下一步和错误操作保持可读；脱敏 JSON 默认折叠，展开后不会推宽侧栏；错误码单行省略并提供完整 tooltip。浅色和深色截图均人工检查。诊断组合已拆为 health/details/errors、budget、recovery 等独立 Agent-only View，并纳入 `element/update/dispose` 治理。
+
+双 Agent 并发设置交互、指令模式切换和 backend approval 仍不属于本页的产品完成证据，因此整体不标记 `product`。

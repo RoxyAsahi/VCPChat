@@ -7,7 +7,8 @@ function composerReadiness(current, composerState, pending, activeTurnId = null)
         && ['idle', 'running', 'awaiting-approval'].includes(viewState));
     const archived = Boolean(current.selectedTopic?.archivedAt);
     const hasActiveTurn = Boolean(activeTurnId);
-    const starting = Boolean(pending && !hasActiveTurn);
+    const starting = Boolean(pending && !hasActiveTurn
+        && ['starting', 'thinking'].includes(pending.phase));
     const ready = Boolean(!archived && (current.selectedSessionId || previewReady)
         && ['idle', 'running', 'awaiting-approval'].includes(viewState));
     const canSend = Boolean(ready && (composerState.draft.trim()
@@ -19,7 +20,7 @@ function createAgentComposerCoordinator({
     state, store, controller, composerView, runStatusView, refs, run, notify,
     selectedSessionKey, selectedComposerState, selectedTurnStart, selectedActiveTurnId,
     renderFeed, renderJumpToLatest, queueRender, settleTurnStartIndicator,
-    refreshControlPlane, uxMark, openNewTopicFlow, isFollowingContainer, scrollFeed,
+    refreshControlPlane, uxMark, openNewSession, isFollowingContainer, scrollFeed,
 }) {
     const { input, feed, jumpToLatest, attachButton, sendButton, newButton } = refs;
     const disposers = [];
@@ -76,6 +77,7 @@ function createAgentComposerCoordinator({
         const readiness = composerReadiness(current, composerState, selectedTurnStart(current), selectedActiveTurnId(current));
         const { viewState, previewReady, archived, ready, activeTurnId, hasActiveTurn, pending, starting, canSend } = readiness;
         const commandBusy = activeTurnCommands.has(sessionId);
+        const hasActiveDraft = Boolean(hasActiveTurn && composerState.draft.trim());
         composerView.update({
             draft: composerState.draft,
             inputDisabled: !ready || starting || commandBusy,
@@ -98,10 +100,12 @@ function createAgentComposerCoordinator({
                         : previewReady ? '输入消息…（发送时启动此会话）'
                             : !current.selectedSessionId ? '请先创建 Agent 会话…'
                                 : viewState === 'starting' ? 'Agent Runtime 正在准备…'
-                                    : hasActiveTurn ? (composerState.activeInputMode === 'steer'
-                                        ? '输入要立即调整的指令…' : '输入任务完成后继续执行的指令…')
-                                        : '输入消息…（Shift + Enter 换行）',
+                    : hasActiveTurn ? (!hasActiveDraft ? '输入新的指令…'
+                        : composerState.activeInputMode === 'steer'
+                            ? '输入要立即调整的指令…' : '输入任务完成后继续执行的指令…')
+                                         : '输入消息…（Shift + Enter 换行）',
             busy: hasActiveTurn,
+            showActiveModes: hasActiveDraft,
             ready: canSend,
             inputMode: composerState.activeInputMode,
             permissionLabel: state.permissionMode === 'always-approve' ? '本地审批：YOLO（设置）' : '本地审批：逐次确认（设置）',
@@ -229,7 +233,7 @@ function createAgentComposerCoordinator({
     });
     listen(attachButton, 'click', () => run(selectAttachments));
     listen(sendButton, 'click', () => run(send));
-    listen(newButton, 'click', openNewTopicFlow);
+    listen(newButton, 'click', openNewSession);
 
     return Object.freeze({ render, syncRunStatus, dispose() {
         disposed = true;

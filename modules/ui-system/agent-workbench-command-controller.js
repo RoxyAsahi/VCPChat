@@ -174,6 +174,39 @@ function createWorkbenchCommandController(context) {
         return result;
     }
 
+    function sessionConfigProjection(result) {
+        if (!result?.sessionId) return null;
+        return {
+            sessionId: result.sessionId,
+            threadId: result.threadId || null,
+            configSnapshot: result.desiredConfig || {},
+            appliedRuntimeConfig: result.appliedRuntimeConfig || {},
+            configRevision: result.configRevision,
+            appliedRuntimeConfigRevision: result.appliedRuntimeConfigRevision,
+            configApplyState: result.applyState,
+            configApplyError: result.applyError || null,
+        };
+    }
+
+    async function readSessionConfig(sessionId = requireSelectedSession()) {
+        const requestedSessionId = String(sessionId || '').trim();
+        const result = await requireApi('agentRuntimeReadSessionConfig')({ sessionId: requestedSessionId });
+        applyConfigResult(sessionConfigProjection(result));
+        return result;
+    }
+
+    async function readSessionDiagnostics(sessionId = requireSelectedSession()) {
+        const requestedSessionId = String(sessionId || '').trim();
+        return requireApi('agentRuntimeReadSessionDiagnostics')({ sessionId: requestedSessionId });
+    }
+
+    async function reapplySessionConfig(sessionId = requireSelectedSession()) {
+        const requestedSessionId = String(sessionId || '').trim();
+        const result = await requireApi('agentRuntimeReapplySessionConfig')({ sessionId: requestedSessionId });
+        applyConfigResult(sessionConfigProjection(result));
+        return result;
+    }
+
     async function applyAgentProfile(settings) {
         const result = await requireApi('agentRuntimeApplyAgentProfile')(settings);
         if (result?.session?.sessionId && result.applied) {
@@ -288,7 +321,8 @@ function createWorkbenchCommandController(context) {
         readSession, renameSession, archiveSession, restoreSession, permanentlyDeleteSession,
         exportSession, listRecoveryOperations, listRecoveryCandidates, resolveRecoveryOperation, setSessionPinned,
         listInteractionQueue, replaceInteractionQueue, clearInteractionQueue, resolvePendingInput,
-        getWorkbenchSettings, updateWorkbenchSettings, applyAgentProfile, selectAttachments,
+        getWorkbenchSettings, updateWorkbenchSettings, readSessionConfig, readSessionDiagnostics, reapplySessionConfig,
+        applyAgentProfile, selectAttachments,
         startTurn, cancelTurn, cancelTool, steerTurn, followUpTurn,
         respondApproval, respondInteraction, respondToolboxApproval,
         workspaceListDirectory: (payload) => requireApi('agentWorkspaceListDirectory')(payload),
@@ -298,6 +332,7 @@ function createWorkbenchCommandController(context) {
         workspacePerformPathAction: (payload) => requireApi('agentWorkspacePerformPathAction')(payload),
         workspaceCancel: (payload) => requireApi('agentWorkspaceCancel')(payload),
         listAgentProfiles: () => requireApi('agentRuntimeListAgentProfiles')(),
+        listToolCatalog: () => requireApi('agentRuntimeListToolCatalog')(),
         getCachedModels: () => requireApi('getCachedModels')(),
         refreshModels: () => requireApi('refreshModels')(),
         onModelsUpdated: (callback) => requireApi('onModelsUpdated')(callback),

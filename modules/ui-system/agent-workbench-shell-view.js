@@ -55,12 +55,14 @@ function createAgentWorkbenchShellView({ document, container, state, actions = {
     const newButton = visualActionButton('add_comment', '新建 Agent 会话', 'agent-chat-composer-new', '', document);
     const attachButton = visualActionButton('attach_file', '添加图片、音频或视频附件', '', '', document);
     const emoticonButton = visualActionButton('sentiment_satisfied', '打开表情包', '', '', document);
+    const toolsButton = visualActionButton('construction', '选择 Agent 工具', 'agent-chat-composer-tools', '', document);
     const permissionsButton = visualActionButton('policy', '本地审批', 'agent-chat-composer-permissions', '', document);
     const sendButton = visualActionButton('arrow_upward', '发送消息', 'agent-chat-send-button', '', document);
     const attachmentTray = node('div', 'agent-chat-composer-attachments', undefined, document);
     listen(emoticonButton, 'click', () => actions.openEmoticons?.(emoticonButton, input));
+    listen(toolsButton, 'click', () => actions.openToolSettings?.());
     listen(permissionsButton, 'click', () => actions.openPermissionSettings?.());
-    composerActions.append(newButton, attachButton, emoticonButton, permissionsButton, sendButton);
+    composerActions.append(newButton, attachButton, emoticonButton, toolsButton, permissionsButton, sendButton);
     inputCard.append(attachmentTray, input, composerActions);
     // Runtime progress is presented in the header status chip. Keep the legacy
     // node available for controller compatibility, but do not show a second
@@ -118,24 +120,12 @@ function createAgentWorkbenchShellView({ document, container, state, actions = {
             Math.floor(available / sidebarStep) * sidebarStep));
     };
 
-    const syncPanelElevationWidth = (fallbackWidth) => {
-        const measuredWidth = sidebar.getBoundingClientRect().width;
-        const physicalWidth = Number.isFinite(measuredWidth) && measuredWidth > 0
-            ? measuredWidth
-            : fallbackWidth;
-        document.body.style.setProperty('--agent-chat-sidebar-width', `${Math.round(physicalWidth)}px`);
-    };
     const renderSidebarWidth = () => {
         const effectiveWidth = Math.max(sidebarMinWidth, Math.min(getSidebarMaximumWidth(), preferredSidebarWidth));
         [...sidebar.classList]
             .filter((name) => name.startsWith('agent-chat-sidebar-width-'))
             .forEach((name) => sidebar.classList.remove(name));
         sidebar.classList.add(`agent-chat-sidebar-width-${effectiveWidth}`);
-        // Keep the flex item and the global Next panel elevation on one
-        // physical width. Class names remain for compact test/selector hooks.
-        sidebar.style.width = `${effectiveWidth}px`;
-        sidebar.style.flexBasis = `${effectiveWidth}px`;
-        syncPanelElevationWidth(effectiveWidth);
         sidebarSplitter.setAttribute('aria-valuemin', String(sidebarMinWidth));
         sidebarSplitter.setAttribute('aria-valuemax', String(getSidebarMaximumWidth()));
         sidebarSplitter.setAttribute('aria-valuenow', String(effectiveWidth));
@@ -167,11 +157,6 @@ function createAgentWorkbenchShellView({ document, container, state, actions = {
         ? null
         : new ResizeObserver(() => renderSidebarWidth());
     sidebarResizeObserver?.observe(root);
-    const sidebarPanelEdgeObserver = typeof ResizeObserver === 'undefined'
-        ? null
-        : new ResizeObserver(() => syncPanelElevationWidth(preferredSidebarWidth));
-    sidebarPanelEdgeObserver?.observe(sidebar);
-
     let dragCleanup = null;
     const applyActivityPanelWidth = (width) => {
         state.activityPanelWidth = Math.round(Math.max(320, Math.min(760, width)) / 20) * 20;
@@ -218,7 +203,7 @@ function createAgentWorkbenchShellView({ document, container, state, actions = {
         root, topicFlowLayer, sidebar, sidebarSplitter, main, feed, feedItems, jumpToLatest, header, composer,
         runStatus, runStatusIcon, runStatusLabel, runStatusDetail, runStatusElapsed, runStatusStop,
         runningModes, steerModeButton, followUpModeButton, queuePanelHost, inputCard, input,
-        newButton, attachButton, emoticonButton, permissionsButton, sendButton, attachmentTray,
+        newButton, attachButton, emoticonButton, toolsButton, permissionsButton, sendButton, attachmentTray,
         activityPanel, activitySplitter, activityClose, activityTabs, activityAdd, activityContent,
         refreshSidebarWidth: renderSidebarWidth,
         activityTabRow,
@@ -233,10 +218,6 @@ function createAgentWorkbenchShellView({ document, container, state, actions = {
             dragCleanup?.();
             sidebarResizer?.dispose();
             sidebarResizeObserver?.disconnect();
-            sidebarPanelEdgeObserver?.disconnect();
-            sidebar.style.width = '';
-            sidebar.style.flexBasis = '';
-            document.body.style.removeProperty('--agent-chat-sidebar-width');
             for (const dispose of disposers.splice(0).reverse()) dispose();
             root.remove();
             topicFlowLayer.remove();

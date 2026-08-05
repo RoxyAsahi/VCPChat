@@ -1,0 +1,48 @@
+{
+  "status": "implemented/working-tree",
+  "scope": "agent-subtraction-release",
+  "branch": "codex/vcpchat-codex-app-server",
+  "testedCommit": "5e72c83a783f4767d089afb389ddb1e3f46de559",
+  "testedAt": "2026-08-04",
+  "codexVersion": "0.146.0",
+  "projectionSchema": 12,
+  "toolboxModified": false,
+  "mainChatRendererModified": false,
+  "protectedPaths": [
+    "modules/codex-runtime/",
+    "modules/ipc/",
+    "modules/ui-system/agent-",
+    "rust/toolbox-bridge/",
+    "scripts/check-agent-debt-boundaries.mjs",
+    "scripts/check-agent-runtime.mjs",
+    "scripts/check-codex-governance.mjs",
+    "scripts/test-agent-workbench.mjs",
+    "scripts/test-codex-runtime-manager"
+  ],
+  "commands": [
+    "cargo fmt --manifest-path rust/toolbox-bridge/Cargo.toml --all --check",
+    "cargo clippy --manifest-path rust/toolbox-bridge/Cargo.toml --workspace --all-targets -- -D warnings",
+    "cargo test --manifest-path rust/toolbox-bridge/Cargo.toml --workspace",
+    "npm run build:toolbox-bridge",
+    "npm run test:codex-toolbox-bridge",
+    "npm run test:codex-projection-store",
+    "npm run test:agent-normalized-store",
+    "npm run test:agent-presentation",
+    "npm run test:agent-workbench",
+    "npm run test:codex-ci",
+    "npm run test:electron-codex-smoke",
+    "npm run check:ui-system",
+    "npm run lint:ui-system",
+    "npm run check:agent-runtime",
+    "npm run check:codex-governance"
+  ],
+  "results": {
+    "rustWorkspaceTests": "18 passed",
+    "codexCi": "passed in 126.7 seconds; includes Electron recovery",
+    "electronSmoke": "passed in 15.9 seconds",
+    "productionReachability": "133 modules",
+    "currentDocsChecked": 28,
+    "oldRustTargetCache": "removed; 7222 files and approximately 2.94 GB before cleanup"
+  },
+  "notes": "The subtraction release physically removes the orphan Markdown stream renderer, archived Pi/Rust JavaScript Runtime, old Rust Agent/Grok/TUI crates, archive package commands, obsolete scripts and the Rust Agent workflow. The only product Rust workspace is rust/toolbox-bridge. Projection schema 12 transactionally migrates schema 6-11 to canonical schema-2 Blocks and Renderer legacy snapshot readers are removed. Runtime Manager tests are split into catalog, core, recovery and degraded-mode scenarios with one shared transport harness; Workbench keeps one continuous mount story with its JSDOM/API fixture extracted. Verification ran with pre-existing uncommitted logical timeline-order changes in Projection and normalized-store files; those changes are not part of this release commits. Status remains implemented/working-tree because this receipt is not a clean-tree same-commit product receipt, live ToolBox backend approval and manual multi-resolution review remain outside scope."
+}

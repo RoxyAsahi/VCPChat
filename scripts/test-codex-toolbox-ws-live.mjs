@@ -3,6 +3,10 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const { developmentBridgePath } = require('../modules/codex-runtime/toolboxBridgePaths');
 
 // Explicit opt-in only.  This test opens the two observer channels and then
 // closes them; it never invokes a tool, changes ToolBox configuration, or
@@ -15,8 +19,7 @@ assert.ok(toolboxApiKey, 'VCP_TOOLBOX_API_KEY is required');
 
 const projectRoot = path.resolve(import.meta.dirname, '..');
 const executable = process.env.VCP_TOOLBOX_BRIDGE
-    || path.join(projectRoot, 'rust', 'target', 'release', process.platform === 'win32'
-        ? 'vcp-toolbox-bridge.exe' : 'vcp-toolbox-bridge');
+    || developmentBridgePath(projectRoot);
 assert.equal(fs.existsSync(executable), true, `ToolBox bridge binary is missing: ${executable}`);
 
 const child = spawn(executable, [], {

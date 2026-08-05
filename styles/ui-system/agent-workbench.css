@@ -1,5 +1,9 @@
 @import url('./agent-shell.css');
+@import url('./agent-sidebar-layout.css');
 @import url('./agent-sidebar.css');
+@import url('./agent-tool-settings.css');
+@import url('./agent-sidebar-settings.css');
+@import url('./agent-settings-diagnostics.css');
 @import url('./agent-composer.css');
 @import url('./agent-timeline.css');
 @import url('./agent-session-dock.css');

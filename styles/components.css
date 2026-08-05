@@ -539,27 +539,18 @@ html:not([data-ui-mode="next"]) #sendMessageBtn, html:not([data-ui-mode="next"])
 html:not([data-ui-mode="next"]) #sendMessageBtn svg, html:not([data-ui-mode="next"]) #attachFileBtn svg, html:not([data-ui-mode="next"]) #quickNewTopicBtn svg, html:not([data-ui-mode="next"]) #emoticonTriggerBtn svg {
     width: 24px;
     height: 24px;
-    stroke: var(--secondary-text);
-    color: var(--secondary-text);
+    stroke: currentColor;
+    color: currentColor;
 }
 
 html:not([data-ui-mode="next"]) #sendMessageBtn svg {
     fill: none;
 }
 
-html:not([data-ui-mode="next"]) body:not(.light-theme) #sendMessageBtn svg {
-    stroke: rgba(255, 255, 255, 0.92);
-    color: rgba(255, 255, 255, 0.92);
-}
-
 html:not([data-ui-mode="next"]) #attachFileBtn svg, html:not([data-ui-mode="next"]) #quickNewTopicBtn svg, html:not([data-ui-mode="next"]) #emoticonTriggerBtn svg {
     width: 16px;
     height: 16px;
     fill: none;
-}
-
-html:not([data-ui-mode="next"]) body.light-theme #sendMessageBtn svg, html:not([data-ui-mode="next"]) body.light-theme #attachFileBtn svg, html:not([data-ui-mode="next"]) body.light-theme #quickNewTopicBtn svg, html:not([data-ui-mode="next"]) body.light-theme #emoticonTriggerBtn svg {
-    stroke: #ffffff; 
 }
 
 html:not([data-ui-mode="next"]) body.light-theme #sendMessageBtn svg {
@@ -586,6 +577,7 @@ html:not([data-ui-mode="next"]) #sendMessageBtn {
     padding: 0;
     border-radius: 50%;
     background-color: var(--button-bg);
+    color: var(--text-on-accent);
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
     margin-left: auto;
 }

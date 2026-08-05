@@ -76,14 +76,26 @@ item/started
 item/*/delta
   -> locate by sessionId + itemId + ordinal
   -> append/update block in transaction
-  -> emit projectionMessage patch
+  -> emit revision-based AgentProjectionPatch
 
 item/completed
   -> replace authoritative final item content/status
   -> emit final patch
 ```
 
-重复 `item/started` 或 `item/completed` 必须幂等。delta 到达但 Item 不存在时不能猜测 identity；应记录 projection error，并由下一次 `thread/read` 修复。
+重复 `item/started` 或 `item/completed` 必须幂等。delta 先于 Item 到达时进入 Main-only 有界缓冲；
+Item 建立后按 identity 回放，超时则记录 projection error 并调度 `thread/read`，Renderer 不持有该缓冲。
+
+## Projection V2 合同
+
+- SQLite schema 为 12；schema 12 将旧 Block identity/content 惰性迁移为 canonical schema-2 Block，并在迁移前创建版本备份。Block content/Renderer API 同为 schema 2。
+- `blockId = sessionId + itemId + ordinal`，fork Session 即使复用相同 Codex Item ID 也不共享 Block。
+- reasoning 只有一个 Block，内容为 `{ summary: string[], content: string[] }`；两个索引空间互不覆盖。
+- 已知 Item 进入专用、限长 normalizer。Unknown Item 只保存脱敏 fallback 和协议诊断，不保存 raw Item。
+- Main 在 SQLite 事务提交后发 Patch；`projectionRevision` 使用 SQLite mutation generation，不能与 Runtime generation 混用。
+- Renderer 仅在 base revision 精确匹配时应用 Patch。跳号、旧 Patch、Thread identity 冲突或外来 Block 均 fail-closed，并触发完整 SQLite reload。
+- `sessionsById + blocksById + projectionRevisions` 是跨 Session 唯一投影真相。顶层 `messages/tools` 仅是当前选中 Session 的派生渲染兼容视图，不缓存其他 Session，也不接收 Main 的旧 message patch。
+- 工具卡不属于页面级工具集合，而是所属 Turn 中具有稳定 `sourceOrder` 的 Block。Main 对账保留 live 锚点；启动期和首次权威 Projection 读取都会把可识别的旧顶部聚合顺序事务写回。Renderer 只按 Main 顺序渲染，不重新推断位置。
 
 ## 打开 Session
 
@@ -93,7 +105,7 @@ item/completed
 4. Main 按 `turnId/itemId` 对账。
 5. 仅更新变化的 Message/Block，不重建 sidebar/header/composer。
 
-当前兼容 API 仍使用部分 Topic 命名；语义已经是 VChat Session。后续必须清理 IPC/UI 命名，但不得因此改变数据权威。
+产品 API 与 UI 均使用 canonical Session 命名。旧 Topic IPC/preload/Runtime adapter 已物理删除；数据权威仍由 VChat Session、Codex Thread 与 Projection revision 共同约束。
 
 ## Reconcile
 
@@ -101,8 +113,12 @@ item/completed
 
 - Codex 返回的 Item 新增或权威覆盖 Codex-owned projection。
 - 重复 Item 不产生重复 Message。
-- `thread/read(includeTurns: true)` 未返回的 Codex-owned Item 会被事务删除；若同一 Message 还包含
+- `thread/read(includeTurns: true)` 未返回的普通 Codex-owned Item 会被事务删除；若同一 Message 还包含
   VChat/ToolBox-owned Block，则保留 Message 和本地 Block，仅删除其中 Codex-owned Block。
+- Codex App Server `0.146` 即使返回 `itemsView=full` 也会省略 live event 已产生的 reasoning Item，
+  因此“快照缺失”对 reasoning 不具删除权威。SQLite 保留该 reasoning；只有快照显式返回同一 Item
+  时，返回的字段才具有覆盖或清空权威。
+- 删除规则还要求返回 Thread identity 匹配且所有 Turn 为 `itemsView=full`；partial history 一律 upsert-only。
 - 显式空字符串、空数组和 `null` 可以清除旧 Codex 字段；协议未返回的可选字段保留 live event 内容。
 - 对账期间收到 live delta 时，通过 barrier/generation 避免旧 snapshot 覆盖新 delta。
 - 成功后清空 `last_error` 并记录时间。

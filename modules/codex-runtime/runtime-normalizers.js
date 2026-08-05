@@ -161,6 +161,21 @@ function toolboxConfigFingerprint(settings) {
     return crypto.createHash('sha256').update(`${url}\u0000${key}`).digest('hex');
 }
 
+function sanitizedToolboxEndpoint(value) {
+    const text = String(value || '').trim();
+    if (!text) return null;
+    try {
+        const endpoint = new URL(text);
+        endpoint.username = '';
+        endpoint.password = '';
+        endpoint.search = '';
+        endpoint.hash = '';
+        return endpoint.toString().slice(0, 512);
+    } catch {
+        return null;
+    }
+}
+
 function safeAvatarFile(value) {
     const file = String(value || '').trim();
     if (!file || path.basename(file) !== file || !/^avatar-r\d+\.(?:png|jpe?g|gif|webp)$/i.test(file)) return '';
@@ -214,6 +229,8 @@ function runtimeProjection(session, state = {}) {
         workspaceRoot: session.workspaceRoot,
         activity: state?.activity || (session.state === 'running' ? 'running' : 'idle'),
         activeTurnId: state?.activeTurnId || null,
+        observedThreadStatus: state?.observedThreadStatus || null,
+        recoveryState: state?.recoveryState || 'confirmed',
         runtime: 'codex',
     };
 }
@@ -490,6 +507,7 @@ module.exports = {
     reasoningEffortsFromModel,
     requireSessionId,
     safeAvatarFile,
+    sanitizedToolboxEndpoint,
     sanitizeInteractionPayload,
     sanitizeToolboxValue,
     serializeError,

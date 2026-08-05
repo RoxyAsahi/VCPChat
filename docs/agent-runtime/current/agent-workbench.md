@@ -223,7 +223,7 @@ Tool Block 仍保留 Agent 专用结构化 adapter 与 `agent-chat-tool-activity
 
 **Checkpoint 验收收据（VChat `29c2068a`）**：`previewTopic()` 和已存在 runtime 行使用
 `agent-runtime:read-projection` 作为唯一 awaited 冷打开步骤；随后才 detached 调用
-`agent-runtime:read-topic` / Codex `thread/read`。Renderer 同时以 selection generation 和每 Topic live projection revision
+`agent-session:read-projection` / Codex `thread/read`。Renderer 同时以 selection generation 和每 Session live projection revision
 拒绝迟到的 A 对账覆盖 B 选择或新的 Item patch。已通过 `npm run test:agent-workbench-store`、
 `npm run test:agent-workbench` 与 `npm run check:agent-runtime`。这证明 hermetic 行为，不是 10 Session 性能录制或真实 ToolBox 验收。
 

@@ -1,5 +1,6 @@
 import { profileSettingsTarget, sessionSettingsTarget } from './agent-settings-state.js';
 import { PROFILE_CONFIG_FIELDS, normalizeAgentConfig } from '../agent-config-descriptors.js';
+import { normalizeDiagnosticError } from './agent-config-diagnostics.js';
 
 function normalizedSavedProfile(profile) {
     const instructionMode = profile.instructionMode === 'codex-managed' ? 'codex-managed' : 'vchat-identity';
@@ -16,6 +17,7 @@ function normalizedSavedProfile(profile) {
         model: profile.model || '',
         workspaceRoot: profile.workspaceRoot || '',
         permissionMode: profile.permissionMode === 'always-approve' ? 'always-approve' : 'ask',
+        toolPolicy: profile.toolPolicy || { schemaVersion: 1, preset: 'full', enabledCodexCapabilities: [], enabledVcpTools: [] },
         configurationRequired: instructionMode !== 'codex-managed' && !String(baseInstructions).trim(),
     };
 }
@@ -34,6 +36,7 @@ function profileSavePayload(payload, profile, values) {
         reasoningEffort: values.reasoningEffort,
         workspaceRoot: values.workspaceRoot,
         permissionMode: values.permissionMode,
+        toolPolicy: values.toolPolicy,
     };
 }
 
@@ -138,6 +141,7 @@ function createAgentSettingsCoordinator({
         state.settingsSaveState = 'saving';
         state.settingsSaveMessage = '正在自动保存…';
         state.settingsSaveByScope.set(saveScope, { state: 'saving', message: '正在自动保存…' });
+        refreshViews?.({ phase: 'saving', payload, selectedSession, saveScope });
         const projectionAtEnqueue = store.getState().selectedTopic;
         if (selectedSession && projectionAtEnqueue?.sessionId === selectedSession) {
             sessionConfigRevisions.set(selectedSession, Number(projectionAtEnqueue.configRevision || 1));
@@ -154,6 +158,7 @@ function createAgentSettingsCoordinator({
             const profileUpdate = !selectedSession && [
                 'name', 'systemPrompt', 'baseInstructions', 'instructionMode', 'developerInstructions',
                 'personality', 'model', 'reasoningEffort', 'workspaceRoot', 'permissionMode',
+                'toolPolicy',
             ].some((key) => Object.prototype.hasOwnProperty.call(payload, key));
             const saved = profileUpdate
                 ? await persistAgentProfileDefaults(payload)
@@ -166,12 +171,19 @@ function createAgentSettingsCoordinator({
             if (!disposed) {
                 state.settingsSaveState = 'error';
                 state.settingsSaveMessage = error?.message || String(error);
-                state.settingsSaveByScope.set(saveScope, { state: 'error', message: state.settingsSaveMessage });
+                state.settingsSaveByScope.set(saveScope, {
+                    state: error?.code === 'SESSION_CONFIG_CONFLICT' || error?.code === 'PROFILE_CONFIG_CONFLICT'
+                        ? 'conflict' : 'error',
+                    message: state.settingsSaveMessage,
+                    error: normalizeDiagnosticError(error, 'SETTINGS_SAVE_ERROR'),
+                });
                 notify(state.settingsSaveMessage, 'error');
             }
             return null;
         }).finally(() => {
-            if (!disposed && !state.disposed) refreshViews();
+            if (!disposed && !state.disposed) {
+                refreshViews?.({ phase: 'settled', payload, selectedSession, saveScope });
+            }
         });
     }
 

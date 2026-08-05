@@ -5,23 +5,24 @@ const fs = require('fs');
 const { EventEmitter } = require('events');
 const { RuntimeLifecycleService } = require('./runtime-lifecycle-service');
 const { CodexAppServerTransport, CodexAppServerError } = require('./appServerTransport');
-const { AgentProjectionRepository, CodexProjectionProjector } = require('./projection');
+const { AgentProjectionRepository } = require('./projection');
+const { createRuntimeProjector } = require('./projection/runtime-projector');
 const { ToolboxBridgeTransport } = require('./toolboxBridgeTransport');
 const { ToolboxResponsesAdapter } = require('./toolboxResponsesAdapter');
 const { AttachmentRegistry } = require('./attachmentRegistry');
 const { attachRuntimeServiceGraph } = require('./runtime-service-graph');
 const { createRuntimeOperationContext } = require('./runtime-operation-context');
-const {
-    capabilityMatrix,
-} = require('./protocolCapabilities');
+const { rejectConfigApplyTargets } = require('./runtime-config-targets');
+const { capabilityMatrix } = require('./protocolCapabilities');
 const {
     approvalProjection,
     requireSessionId,
     runtimeProjection,
+    sanitizedToolboxEndpoint,
     serializeError,
+    sessionConfigResult,
     vcpInvokeTool,
 } = require('./runtime-normalizers');
-
 class CodexRuntimeManager extends EventEmitter {
     constructor(options = {}) {
         super();
@@ -64,6 +65,8 @@ class CodexRuntimeManager extends EventEmitter {
         this.turnCancellationStates = new Map();
         this.configApplyPromises = new Map();
         this.configApplyTargets = new Map();
+        this.configApplyConfirmationTimeoutMs = Math.max(50,
+            Number(options.configApplyConfirmationTimeoutMs) || 5_000);
         this.compactionWaiters = new Map();
         this.idleWarmSessions = new Map();
         this.maxIdleWarmSessions = Number.isInteger(options.maxIdleWarmSessions)
@@ -103,7 +106,9 @@ class CodexRuntimeManager extends EventEmitter {
             pendingInteractions: this.interactions.active(),
             toolbox: {
                 configured: Boolean(this.getSettings()?.vcpServerUrl && this.getSettings()?.vcpApiKey),
+                endpoint: sanitizedToolboxEndpoint(this.getSettings()?.vcpServerUrl),
             },
+            generation: this.runtimeGeneration,
             storage: this.repository ? {
                 readOnly: this.repository.readOnly === true,
                 degradedReason: this.repository.degradedReason || null,
@@ -140,7 +145,7 @@ class CodexRuntimeManager extends EventEmitter {
                 this.lastError = serializeError(error);
             }
         }
-        this.projector = this.projector || new CodexProjectionProjector(this.repository);
+        this.projector = this.projector || createRuntimeProjector(this, this.repository);
         return this.repository;
     }
 
@@ -153,6 +158,7 @@ class CodexRuntimeManager extends EventEmitter {
     }
 
     _clearHostResources() {
+        this.projector?.dispose?.();
         this.transport = null;
         this.repository = null;
         this.projector = null;
@@ -163,7 +169,8 @@ class CodexRuntimeManager extends EventEmitter {
         this.resumedThreadIds.clear();
         this.resumingThreads.clear();
         this.configApplyPromises.clear();
-        this.configApplyTargets.clear();
+        rejectConfigApplyTargets(this.configApplyTargets, new CodexAppServerError('RUNTIME_STOPPED',
+            'Agent Runtime resources were released while applying Session settings'));
         this.sessionWarmPromises.clear();
         this.turnStartPromises.clear();
         this.steerPromises.clear();
@@ -374,7 +381,6 @@ class CodexRuntimeManager extends EventEmitter {
     async updateWorkbenchSettings(settings = {}) {
         return this.configService.updateWorkbenchSettings(settings);
     }
-
     async updateSessionConfig({ sessionId, expectedConfigRevision, patch } = {}) {
         return this.configService.updateSessionConfig({ sessionId: requireSessionId(sessionId), expectedConfigRevision, patch });
     }
@@ -382,7 +388,12 @@ class CodexRuntimeManager extends EventEmitter {
     readSessionConfig({ sessionId } = {}) {
         return this.configService.readSessionConfig({ sessionId });
     }
+    readSessionDiagnostics(options = {}) { return this.diagnosticsService.readSessionDiagnostics(options); }
 
+    async reapplySessionConfig({ sessionId } = {}) {
+        const applied = await this.configService.applySessionRuntimeConfig(requireSessionId(sessionId), { barrier: true });
+        return sessionConfigResult(applied);
+    }
     _sendSessionConfigEvent(type, session, error = null) {
         return this.configService.sendSessionConfigEvent(type, session, error);
     }
