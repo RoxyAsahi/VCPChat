@@ -1,6 +1,65 @@
 import { assert, os, path, fs, CodexRuntimeManager, AgentProjectionRepository, developmentBridgePath, vcpInvokeTool, FakeTransport } from './fixtures/codex-runtime-manager-harness.mjs';
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vcp-codex-manager-'));
+fs.mkdirSync(path.join(root, 'AppData'), { recursive: true });
+const diagnosticManager = new CodexRuntimeManager({
+    projectRoot: root,
+    getSettings: () => ({
+        vcpServerUrl: 'http://user:password@localhost:6005/v1/chat/completions?api_key=secret',
+        vcpApiKey: 'must-not-leave-main',
+    }),
+});
+const diagnosticStatus = diagnosticManager.getStatus();
+assert.equal(diagnosticStatus.toolbox.endpoint, 'http://localhost:6005/v1/chat/completions');
+assert.equal(JSON.stringify(diagnosticStatus).includes('must-not-leave-main'), false,
+    'Runtime diagnostics must never expose the ToolBox API key');
+const diagnosticTopic = await diagnosticManager.createSessionRecord({
+    agentId: 'Nova', title: 'Diagnostics', model: 'deepseek-v4-flash',
+});
+diagnosticManager.repository.replaceUnmaterializedThread(diagnosticTopic.sessionId, 'thread-diagnostics');
+let diagnosticAdapterFilter = null;
+diagnosticManager.responsesAdapter = {
+    stop: async () => {},
+    getDiagnostics: (filter) => {
+        diagnosticAdapterFilter = filter;
+        return ({
+        state: 'ready', activeRequestCount: 0, recentRequests: [{
+            sessionId: 'thread-diagnostics', threadId: 'thread-diagnostics', turnId: 'turn-diagnostics',
+            model: 'deepseek-v4-flash', status: 'completed', httpStatus: 200,
+            startedAt: 1, completedAt: 21, durationMs: 20,
+            incomingTools: [{ type: 'function', name: 'shell_command' }, { type: 'function', name: 'vcp_invoke' }],
+            forwardedTools: [{ type: 'function', name: 'vcp_invoke' }], error: null,
+        }],
+        });
+    },
+};
+diagnosticManager.configApplyTargets.set('thread-diagnostics', {
+    revision: 2, runtimeGeneration: 3,
+    settings: { cwd: 'C:\\private\\workspace', model: 'deepseek-v4-flash', approvalPolicy: 'never' },
+});
+const sessionDiagnostics = diagnosticManager.readSessionDiagnostics({ sessionId: diagnosticTopic.sessionId });
+assert.deepEqual(diagnosticAdapterFilter, { threadId: 'thread-diagnostics' },
+    'Main diagnostics must query Adapter records by authoritative Codex Thread identity only');
+assert.equal(sessionDiagnostics.toolbox.endpoint, 'http://localhost:6005/v1/chat/completions');
+assert.equal(sessionDiagnostics.toolbox.adapter.recentRequests[0].sessionId, diagnosticTopic.sessionId,
+    'Main diagnostics must rewrite Codex metadata sessionId to the owning VChat Session');
+assert.equal(sessionDiagnostics.toolbox.adapter.recentRequests[0].threadId, 'thread-diagnostics');
+assert.equal(sessionDiagnostics.toolbox.adapter.recentRequests[0].forwardedTools[0].name, 'vcp_invoke');
+assert.deepEqual(sessionDiagnostics.applyBarrier.fields, ['approvalPolicy', 'cwd', 'model']);
+assert.equal(JSON.stringify(sessionDiagnostics).includes('must-not-leave-main'), false);
+assert.equal(JSON.stringify(sessionDiagnostics).includes('C:\\private'), false,
+    'diagnostics expose barrier field names without leaking the workspace path');
+const unmaterializedDiagnosticTopic = await diagnosticManager.createSessionRecord({
+    agentId: 'Nova', title: 'Unmaterialized diagnostics', model: 'deepseek-v4-flash',
+});
+const unmaterializedDiagnostics = diagnosticManager.readSessionDiagnostics({
+    sessionId: unmaterializedDiagnosticTopic.sessionId,
+});
+assert.deepEqual(diagnosticAdapterFilter, {
+    threadId: `unmaterialized:${unmaterializedDiagnosticTopic.sessionId}`,
+});
+assert.deepEqual(unmaterializedDiagnostics.toolbox.adapter.recentRequests, [],
+    'an unmaterialized Session must not receive another Thread\'s Adapter diagnostics');
 assert.equal(vcpInvokeTool().inputSchema.properties.arguments.additionalProperties, true,
     'the generic VCP argument envelope must remain open after Codex normalizes DynamicTool schemas');
 await import('./test-codex-runtime-manager-catalog.mjs');
@@ -891,6 +950,7 @@ assert.ok(uiEvents.some((event) => event.type === 'interaction.rejected'
 'toolbox-only native requests must be rejected immediately instead of surviving until a crash');
 rejectCrashInvoke(new Error('bridge interrupted after crash'));
 await manager.stop();
+await diagnosticManager.stop();
 fs.rmSync(root, { recursive: true, force: true });
 
 // A remote mutation whose acknowledgement is lost must be journaled as

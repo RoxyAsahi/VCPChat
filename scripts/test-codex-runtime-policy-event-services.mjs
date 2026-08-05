@@ -65,6 +65,15 @@ eventService.updateThreadState({
 }, sessions.get('session-a'));
 await new Promise((resolve) => setImmediate(resolve));
 assert.equal(states.get('thread-a').activeTurnId, null);
+states.set('thread-a', {
+    activity: 'unknown', activeTurnId: null, observedThreadStatus: 'active', recoveryState: 'unconfirmed',
+});
+eventService.updateThreadState({
+    method: 'turn/started', params: { turn: { id: 'turn-recovered' } },
+}, sessions.get('session-a'));
+assert.equal(states.get('thread-a').recoveryState, 'confirmed',
+    'an authoritative turn/started event must clear a prior unconfirmed recovery state');
+assert.equal(states.get('thread-a').activeTurnId, 'turn-recovered');
 assert.equal(drainCount, 2, 'the matching completion is the finalization authority');
 eventService.sendUiEvent({ type: 'context.usage', sessionId: 'session-a', payload: { totalTokens: 10 } });
 assert.equal(activity[0].patch.usage.totalTokens, '[redacted]');

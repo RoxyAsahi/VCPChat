@@ -99,6 +99,8 @@ function applyStoreProjection(target, patch) {
 assert.equal(projectSession({ sessionId: 's-running', activeTurnId: 'turn-running' }).activity, 'running',
     'Session projection must preserve per-Session running identity for the sidebar avatar');
 assert.equal(projectSession({ sessionId: 's-idle' }).activity, 'idle');
+assert.equal(projectSession({ sessionId: 's-uncertain', activity: 'unknown', recoveryState: 'unconfirmed' })
+    .recoveryState, 'unconfirmed');
 
 const routedEventFamilies = [
     'runtime.state_changed', 'session.created', 'turn.started',

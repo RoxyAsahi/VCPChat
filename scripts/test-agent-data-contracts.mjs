@@ -13,6 +13,7 @@ const {
 } = require('../modules/codex-runtime/dataContracts.js');
 const { AttachmentRegistry } = require('../modules/codex-runtime/attachmentRegistry.js');
 const { createAgentEventDeduper } = await import('../modules/ui-system/agent-event-deduper.js');
+const { codexSnapshotToProjection } = await import('../modules/ui-system/agent-workbench-snapshot-projection.js');
 
 assert.equal(normalizeProfile({ schemaVersion: 1, name: 'Nova' }, 'Nova').schemaVersion, PROFILE_SCHEMA_VERSION);
 assert.equal(normalizeSessionConfig({ schemaVersion: 1, model: 'test' }).schemaVersion, SESSION_CONFIG_SCHEMA_VERSION);
@@ -37,6 +38,20 @@ const descriptor2 = registry.register('session-a', filePath);
 now += 101;
 assert.throws(() => registry.resolve('session-a', descriptor2), (error) => error.code === 'ATTACHMENT_EXPIRED');
 fs.rmSync(root, { recursive: true, force: true });
+
+const restoredAttachment = codexSnapshotToProjection({
+    messages: [{
+        messageId: 'image-message', itemId: 'image-item', role: 'assistant', status: 'completed',
+        blocks: [{
+            blockId: 'image-block', kind: 'attachment', ordinal: 0,
+            content: { item: { type: 'imageView', path: 'C:\\private\\capture.png' } },
+        }],
+    }],
+}).messages[0].attachments[0];
+assert.equal(restoredAttachment.displayName, 'capture.png');
+assert.equal(Object.prototype.hasOwnProperty.call(restoredAttachment, 'path'), false,
+    'legacy imageView Blocks must not restore absolute paths into Renderer attachments');
+assert.equal(JSON.stringify(restoredAttachment).includes('C:\\private'), false);
 
 const deduper = createAgentEventDeduper({ eventCapacity: 2, bucketCapacity: 2 });
 const event = (sessionId, sequence, eventId) => ({ sessionId, sequence, eventId, type: 'assistant.delta' });

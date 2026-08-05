@@ -17,6 +17,7 @@ export class FakeTransport extends EventEmitter {
         this.calls = [];
         this.responses = [];
         this.startCount = 0;
+        this.threadSettings = new Map();
     }
     async start() { this.startCount += 1; this.status = { ...this.status, running: true, ready: true }; }
     async stop() { this.status = { ...this.status, running: false, ready: false }; }
@@ -24,9 +25,48 @@ export class FakeTransport extends EventEmitter {
         this.calls.push({ method, params });
         if (method === 'thread/start') {
             this.threadCounter = (this.threadCounter || 0) + 1;
-            return { thread: { id: this.threadCounter === 1 ? 'thr_test' : `thr_test_${this.threadCounter}` } };
+            const threadId = this.threadCounter === 1 ? 'thr_test' : `thr_test_${this.threadCounter}`;
+            this.threadSettings.set(threadId, {
+                cwd: params.cwd || null,
+                model: params.model || null,
+                approvalPolicy: params.approvalPolicy || null,
+                effort: null,
+                personality: params.personality ?? null,
+            });
+            return { thread: { id: threadId } };
         }
-        if (method === 'thread/resume') return { thread: { id: params.threadId, status: { type: 'idle' } } };
+        if (method === 'thread/resume') {
+            const current = this.threadSettings.get(params.threadId) || {};
+            const settings = {
+                ...current,
+                cwd: params.cwd ?? current.cwd ?? null,
+                model: params.model ?? current.model ?? null,
+                approvalPolicy: params.approvalPolicy ?? current.approvalPolicy ?? null,
+            };
+            this.threadSettings.set(params.threadId, settings);
+            return {
+                thread: { id: params.threadId, status: { type: 'idle' } },
+                cwd: settings.cwd,
+                model: settings.model,
+                approvalPolicy: settings.approvalPolicy,
+                reasoningEffort: settings.effort ?? null,
+            };
+        }
+        if (method === 'thread/settings/update') {
+            const settings = {
+                cwd: params.cwd ?? null,
+                model: params.model ?? null,
+                approvalPolicy: params.approvalPolicy ?? null,
+                effort: params.effort ?? null,
+                personality: params.personality ?? null,
+            };
+            this.threadSettings.set(params.threadId, settings);
+            queueMicrotask(() => this.emit('notification', {
+                method: 'thread/settings/updated',
+                params: { threadId: params.threadId, threadSettings: settings },
+            }));
+            return {};
+        }
         if (method === 'turn/start') return { turn: { id: 'turn_test' } };
         if (method === 'thread/read' && this.readError) throw this.readError;
         if (method === 'thread/read' && this.readResult) return this.readResult;

@@ -3,6 +3,14 @@ import fs from 'node:fs';
 
 const workbench = fs.readFileSync(new URL('../modules/ui-system/agent-workbench-implementation.js', import.meta.url), 'utf8');
 const settingsView = fs.readFileSync(new URL('../modules/ui-system/agent-settings-view.js', import.meta.url), 'utf8');
+const advancedSettingsView = fs.readFileSync(new URL('../modules/ui-system/agent-settings-advanced-view.js', import.meta.url), 'utf8');
+const diagnosticsView = fs.readFileSync(new URL('../modules/ui-system/agent-settings-diagnostics-view.js', import.meta.url), 'utf8');
+const advancedSettingsFeature = fs.readFileSync(new URL('../modules/ui-system/agent-settings-advanced-feature.js', import.meta.url), 'utf8');
+const diagnosticsHealthView = fs.readFileSync(new URL('../modules/ui-system/agent-settings-diagnostics-health-view.js', import.meta.url), 'utf8');
+const diagnosticsDetailsView = fs.readFileSync(new URL('../modules/ui-system/agent-settings-diagnostics-details-view.js', import.meta.url), 'utf8');
+const diagnosticsErrorsView = fs.readFileSync(new URL('../modules/ui-system/agent-settings-diagnostics-errors-view.js', import.meta.url), 'utf8');
+const budgetView = fs.readFileSync(new URL('../modules/ui-system/agent-settings-budget-view.js', import.meta.url), 'utf8');
+const recoveryView = fs.readFileSync(new URL('../modules/ui-system/agent-settings-recovery-view.js', import.meta.url), 'utf8');
 const sessionCatalog = fs.readFileSync(new URL('../modules/ui-system/agent-session-catalog-coordinator.js', import.meta.url), 'utf8');
 const runtime = fs.readFileSync(new URL('../modules/codex-runtime/runtimeManagerImplementation.js', import.meta.url), 'utf8');
 const turnService = fs.readFileSync(new URL('../modules/codex-runtime/runtime-turn-service.js', import.meta.url), 'utf8');
@@ -14,6 +22,24 @@ assert.ok(settingsView.includes("'vchat-identity'"));
 assert.ok(settingsView.includes("'codex-managed'"));
 assert.ok(sessionCatalog.includes('reasoningEffortsForModel'));
 assert.ok(settingsView.includes('该模型没有提供 reasoning effort capability'));
+assert.equal(settingsView.includes('function renderAdvanced'), false,
+    'the settings pane must delegate advanced UI to an independent Agent-only component');
+assert.ok(advancedSettingsView.includes('createAgentSettingsAdvancedView'));
+assert.ok(diagnosticsView.includes('createAgentSettingsDiagnosticsView'));
+assert.ok(advancedSettingsFeature.includes('createAgentSettingsAdvancedFeature'));
+assert.ok(advancedSettingsFeature.includes('当前环境无法访问系统剪贴板'));
+assert.ok(advancedSettingsView.includes('createAgentSettingsBudgetView'));
+assert.ok(advancedSettingsView.includes('createAgentSettingsRecoveryView'));
+assert.ok(diagnosticsView.includes('createDiagnosticHealthView'));
+assert.ok(diagnosticsView.includes('createDiagnosticDetailsView'));
+assert.ok(diagnosticsView.includes('createDiagnosticErrorsView'));
+assert.ok(diagnosticsHealthView.includes('diagnosticHealth'));
+assert.ok(diagnosticsDetailsView.includes('agent-chat-config-value'));
+assert.ok(diagnosticsErrorsView.includes('下一步'));
+assert.ok(budgetView.includes('createAgentSettingsBudgetView'));
+assert.ok(recoveryView.includes('createAgentSettingsRecoveryView'));
+assert.equal(workbench.includes('createAgentSettingsDiagnosticsView'), false,
+    'Workbench must not own advanced diagnostic UI wiring');
 assert.equal(`${workbench}\n${settingsView}`.includes('用此配置新建会话'), false,
     'settings must not retain the redundant create-Session action');
 assert.equal(`${workbench}\n${settingsView}`.includes('长按发送'), false,
@@ -23,6 +49,7 @@ assert.ok(turnService.includes("? { effort: this.context.effectiveReasoningEffor
     'validated effort must reach turn/start through RuntimeTurnService');
 assert.ok(profileService.includes('REASONING_EFFORT_UNSUPPORTED'));
 assert.ok(runtime.includes('_threadInstructionParams'));
+assert.ok(runtime.includes('reapplySessionConfig'));
 assert.ok(adapter.includes("trusted?.mode === 'codex-managed'"));
 assert.ok(adapter.includes('chat.reasoning_effort = effort'));
 

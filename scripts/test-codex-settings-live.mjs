@@ -11,6 +11,7 @@ const toolboxUrl = String(process.env.VCP_TOOLBOX_URL || '').trim();
 const toolboxApiKey = String(process.env.VCP_TOOLBOX_API_KEY || '').trim();
 const model = String(process.env.VCP_CODEX_LIVE_MODEL || 'deepseek-v4-flash').trim();
 const baseInstructions = String(process.env.VCP_CODEX_LIVE_BASE_INSTRUCTIONS || '{{Nova}}').trim();
+const turnTimeoutMs = Math.max(30_000, Number(process.env.VCP_CODEX_LIVE_TURN_TIMEOUT_MS) || 300_000);
 assert.ok(toolboxUrl, 'VCP_TOOLBOX_URL is required');
 assert.ok(toolboxApiKey, 'VCP_TOOLBOX_API_KEY is required');
 
@@ -35,18 +36,35 @@ const manager = new CodexRuntimeManager({
         fetchImpl: async (url, init) => {
             if (String(url).includes('/v1/chat/completions')) {
                 const body = JSON.parse(String(init?.body || '{}'));
-                upstreamRequests.push({ model: body.model, reasoningEffort: body.reasoning_effort || null });
+                upstreamRequests.push({
+                    model: body.model,
+                    reasoningEffort: body.reasoning_effort || null,
+                    stream: body.stream === true,
+                    toolChoice: body.tool_choice ?? null,
+                    maxTokens: body.max_tokens ?? null,
+                    temperature: body.temperature ?? null,
+                    messages: Array.isArray(body.messages) ? body.messages.map((message) => ({
+                        role: message.role || null,
+                        contentBytes: Buffer.byteLength(String(message.content || ''), 'utf8'),
+                    })) : [],
+                    tools: Array.isArray(body.tools) ? body.tools.map((tool) => ({
+                        name: tool.function?.name || tool.name || null,
+                        descriptionBytes: Buffer.byteLength(String(tool.function?.description || tool.description || ''), 'utf8'),
+                        parameterBytes: Buffer.byteLength(JSON.stringify(tool.function?.parameters || tool.parameters || {}), 'utf8'),
+                    })) : [],
+                });
             }
             return fetch(url, init);
         },
     }),
 });
 
-function waitForTurn(runtime, session, timeoutMs = 180_000) {
+function waitForTurn(runtime, session, diagnostics, timeoutMs = turnTimeoutMs) {
     return new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
             runtime.off('event', onEvent);
-            reject(new Error('Timed out waiting for the live settings Turn'));
+            diagnostics.adapter = runtime.readSessionDiagnostics({ sessionId: session.sessionId })?.toolbox?.adapter || null;
+            reject(new Error(`Timed out waiting for the live settings Turn; diagnostics=${JSON.stringify(diagnostics)}`));
         }, timeoutMs);
         const onEvent = (event) => {
             if (event?.sessionId !== session.sessionId || event?.threadId !== session.threadId) return;
@@ -63,6 +81,28 @@ function waitForTurn(runtime, session, timeoutMs = 180_000) {
 
 try {
     await manager.start();
+    const diagnostics = { notifications: [], stderr: [], upstreamRequests, serverRequests: [] };
+    manager.on('event', (event) => {
+        if (diagnostics.notifications.length >= 80 || !event?.method) return;
+        diagnostics.notifications.push({
+            method: event.method,
+            turnId: event.turnId || null,
+            turnStatus: event.turnStatus || null,
+            itemId: event.itemId || null,
+            error: String(event?.error?.message || event?.params?.error?.message || '').slice(0, 240) || null,
+        });
+    });
+    manager.transport.on('stderr', (line) => {
+        if (diagnostics.stderr.length < 20) diagnostics.stderr.push(String(line).slice(0, 500));
+    });
+    manager.transport.on('server-request', (request) => {
+        if (diagnostics.serverRequests.length < 10) diagnostics.serverRequests.push({
+            method: request?.method || null,
+            tool: request?.params?.tool || request?.params?.name || null,
+            hasTurnId: Boolean(request?.params?.turnId),
+            hasCallId: Boolean(request?.params?.callId),
+        });
+    });
     const topic = await manager.createSessionRecord({
         agentId: 'Nova',
         title: 'Codex live Session settings',
@@ -92,7 +132,7 @@ try {
     });
 
     const sentinel = `vcp-settings-${randomUUID()}`;
-    const completion = waitForTurn(manager, session);
+    const completion = waitForTurn(manager, session, diagnostics);
     await manager.startTurn({
         sessionId: session.sessionId,
         prompt: `Reply with exactly this sentinel and no other text: ${sentinel}`,
@@ -108,6 +148,7 @@ try {
             model,
             approvalPolicy: 'never',
             effort: 'high',
+            personality: null,
         },
     });
     assert.ok(upstreamRequests.some((entry) => entry.model === model && entry.reasoningEffort === 'high'),

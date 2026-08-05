@@ -128,6 +128,7 @@ const afterMessage = {
 let projectionRevision = 7;
 let messageReadCount = 0;
 let emittedPatch = null;
+let emittedEvent = null;
 const patchRepository = {
     getSessionByThread: () => sessions.get('thread-a'),
     projectionGeneration: () => projectionRevision,
@@ -140,7 +141,7 @@ const patchService = new RuntimeHostService({
     updateThreadState: () => {},
     threadStates: () => new Map(),
     runtimeGeneration: () => 4,
-    sendEvent: (event) => { emittedPatch = event.projectionPatch; },
+    sendEvent: (event) => { emittedEvent = event; emittedPatch = event.projectionPatch; },
 });
 patchService.handleNotification({
     method: 'item/completed',
@@ -151,4 +152,14 @@ assert.equal(emittedPatch.projectionRevision, 8);
 assert.deepEqual(emittedPatch.deleteBlockIds, ['block:session-a:item-a:1'],
     'live item completion must delete stale Blocks through the same revision Patch contract as reconcile');
 assert.equal(emittedPatch.upsertBlocks.length, 1);
+patchService.handleNotification({
+    method: 'turn/completed',
+    params: {
+        threadId: 'thread-a',
+        turn: { id: 'turn-a', status: 'failed', error: { message: 'ToolBox\nconnection\trefused' } },
+    },
+});
+assert.equal(emittedEvent.turnStatus, 'failed');
+assert.equal(emittedEvent.turnError, 'ToolBox connection refused',
+    'Main must send a bounded readable Turn error instead of a raw protocol object');
 console.log('Codex Runtime host service tests passed.');

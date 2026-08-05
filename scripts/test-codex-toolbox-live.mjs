@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -19,11 +21,123 @@ if (!toolboxUrl || !toolboxApiKey) {
 }
 
 const require = createRequire(import.meta.url);
+const WebSocket = require('ws');
 const { CodexRuntimeManager } = require('../modules/codex-runtime/runtimeManager.js');
 const projectRoot = path.resolve(import.meta.dirname, '..');
 const packagePath = path.join(projectRoot, 'package.json');
+const fileOperatorRoot = path.join(projectRoot, 'VCPDistributedServer', 'Plugin', 'FileOperator');
+const fileOperatorEntry = path.join(fileOperatorRoot, 'FileOperator.js');
+const fileOperatorManifestPath = path.join(fileOperatorRoot, 'plugin-manifest.json');
 const packageName = JSON.parse(fs.readFileSync(packagePath, 'utf8')).name;
 assert.equal(typeof packageName, 'string');
+
+function sanitizedLiveError(value) {
+    return String(value || '').replaceAll(projectRoot, '<workspace>').slice(0, 500);
+}
+
+function executeFileOperator(argumentsValue) {
+    return new Promise((resolve, reject) => {
+        const child = spawn(process.env.VCP_CODEX_NODE_EXECUTABLE || 'node', [fileOperatorEntry], {
+            cwd: fileOperatorRoot,
+            env: {
+                ...process.env,
+                ALLOWED_DIRECTORIES: projectRoot,
+                DEBUG_MODE: 'false',
+            },
+            stdio: ['pipe', 'pipe', 'pipe'],
+            windowsHide: true,
+        });
+        let stdout = '';
+        let stderr = '';
+        const timeout = setTimeout(() => {
+            child.kill();
+            reject(new Error('FileOperator live fixture timed out'));
+        }, 30_000);
+        child.stdout.setEncoding('utf8');
+        child.stderr.setEncoding('utf8');
+        child.stdout.on('data', (chunk) => { stdout = `${stdout}${chunk}`.slice(-2 * 1024 * 1024); });
+        child.stderr.on('data', (chunk) => { stderr = `${stderr}${chunk}`.slice(-16 * 1024); });
+        child.once('error', (error) => {
+            clearTimeout(timeout);
+            reject(error);
+        });
+        child.once('exit', (code) => {
+            clearTimeout(timeout);
+            if (code === 0) resolve(stdout.trim());
+            else reject(new Error(`FileOperator exited with code ${code}: ${sanitizedLiveError(stderr)}`));
+        });
+        child.stdin.end(JSON.stringify(argumentsValue));
+    });
+}
+
+async function startFileOperatorTestNode() {
+    const manifest = JSON.parse(fs.readFileSync(fileOperatorManifestPath, 'utf8'));
+    const readFileCommands = (manifest.capabilities?.invocationCommands || [])
+        .filter((entry) => entry.command === 'ReadFile');
+    const registeredManifest = {
+        ...manifest,
+        capabilities: { ...manifest.capabilities, invocationCommands: readFileCommands },
+    };
+    const endpoint = new URL(toolboxUrl);
+    endpoint.protocol = endpoint.protocol === 'https:' ? 'wss:' : 'ws:';
+    endpoint.pathname = `/vcp-distributed-server/VCP_Key=${toolboxApiKey}`;
+    endpoint.search = '';
+    endpoint.hash = '';
+    const serverName = `Codex-R16-FileOperator-${process.pid}-${randomUUID()}`;
+    const socket = new WebSocket(endpoint.toString());
+    const activeExecutions = new Set();
+    let fatalError = null;
+    socket.on('message', (message) => {
+        let payload;
+        try { payload = JSON.parse(String(message)); } catch { return; }
+        if (payload?.type !== 'execute_tool' || payload?.data?.toolName !== 'FileOperator') return;
+        const requestId = payload.data.requestId;
+        const args = payload.data.toolArgs;
+        const execution = (async () => {
+            try {
+                if (args?.command !== 'ReadFile' || path.resolve(String(args?.filePath || '')) !== packagePath) {
+                    throw new Error('R16 FileOperator fixture accepts only ReadFile for the repository package.json');
+                }
+                const result = await executeFileOperator(args);
+                socket.send(JSON.stringify({
+                    type: 'tool_result', data: { requestId, status: 'success', result },
+                }));
+            } catch (error) {
+                socket.send(JSON.stringify({
+                    type: 'tool_result', data: {
+                        requestId, status: 'error', error: sanitizedLiveError(error?.message || error),
+                    },
+                }));
+            }
+        })();
+        activeExecutions.add(execution);
+        void execution.finally(() => activeExecutions.delete(execution));
+    });
+    socket.on('error', (error) => { fatalError = error; });
+    await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Timed out connecting the R16 FileOperator test node')), 10_000);
+        socket.once('open', () => {
+            clearTimeout(timeout);
+            socket.send(JSON.stringify({
+                type: 'register_tools', data: { serverName, tools: [registeredManifest] },
+            }));
+            resolve();
+        });
+        socket.once('error', (error) => {
+            clearTimeout(timeout);
+            reject(error);
+        });
+    });
+    await new Promise((resolve) => setTimeout(resolve, 750));
+    if (fatalError) throw fatalError;
+    return {
+        serverName,
+        async stop() {
+            await Promise.allSettled([...activeExecutions]);
+            if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) socket.close();
+        },
+    };
+}
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'vcp-codex-toolbox-live-'));
 const manager = new CodexRuntimeManager({
@@ -35,6 +149,7 @@ const manager = new CodexRuntimeManager({
         agentRuntime: { codex: { model } },
     }),
 });
+let fileOperatorNode = null;
 
 function waitForCompletedTurn(runtime, session, diagnostics, timeoutMs = 120_000) {
     return new Promise((resolve, reject) => {
@@ -65,6 +180,7 @@ function waitForCompletedTurn(runtime, session, diagnostics, timeoutMs = 120_000
 }
 
 try {
+    fileOperatorNode = await startFileOperatorTestNode();
     await manager.start();
     assert.ok(manager.bridge, 'live ToolBox settings must start the standalone bridge');
 
@@ -118,13 +234,13 @@ try {
                 diagnostics.bridgeCompleted.push({
                     toolName: request?.toolName || null,
                     ok: response?.result?.ok ?? response?.ok ?? null,
-                    error: String(response?.result?.error || response?.error || '').slice(0, 500) || null,
+                    error: sanitizedLiveError(response?.result?.error || response?.error) || null,
                 });
             }
             calls.push({ request, response });
             return response;
         } catch (error) {
-            if (diagnostics.bridgeErrors.length < 5) diagnostics.bridgeErrors.push(String(error?.message || error).slice(0, 500));
+            if (diagnostics.bridgeErrors.length < 5) diagnostics.bridgeErrors.push(sanitizedLiveError(error?.message || error));
             throw error;
         }
     };
@@ -160,22 +276,39 @@ try {
         filePath: packagePath,
         encoding: 'utf8',
     });
-    assert.equal(fileOperatorCall.response?.result?.ok, true, 'distributed VCP FileOperator must complete successfully');
+    assert.equal(fileOperatorCall.response?.result?.ok, true,
+        `distributed VCP FileOperator must complete successfully; error=${sanitizedLiveError(fileOperatorCall.response?.result?.error) || 'none'}`);
 
     const projection = await manager.readSession({ sessionId: session.sessionId, reconcile: false });
     const projectionText = JSON.stringify(projection);
     assert.match(projectionText, new RegExp(packageName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
         'the completed ToolBox result or final assistant reply must reach the SQLite projection');
+    const sessionDiagnostics = manager.readSessionDiagnostics({ sessionId: session.sessionId });
+    const latestAdapterRequest = sessionDiagnostics.toolbox.adapter.recentRequests[0];
+    assert.equal(sessionDiagnostics.toolbox.endpoint, 'http://localhost:6005/v1/chat/completions');
+    assert.equal(sessionDiagnostics.toolbox.configured, true);
+    assert.equal(latestAdapterRequest?.status, 'completed');
+    assert.equal(latestAdapterRequest?.model, model);
+    assert.deepEqual((latestAdapterRequest?.forwardedTools || []).map((tool) => tool.name), ['vcp_invoke'],
+        'authoritative diagnostics must report the actual ToolBox-bound tool list');
+    const serializedDiagnostics = JSON.stringify(sessionDiagnostics);
+    assert.equal(serializedDiagnostics.includes(packagePath), false,
+        'Session diagnostics must not expose absolute FileOperator arguments');
+    assert.equal(serializedDiagnostics.includes(baseInstructions), false,
+        'Session diagnostics must not expose the frozen identity prompt');
     console.log(JSON.stringify({
         runtime: 'codex-app-server',
         model,
         tool: 'FileOperator',
         operation: 'ReadFile',
+        testNode: fileOperatorNode.serverName,
         dynamicCall: 'passed',
         bridgeCompleted: 'passed',
         projection: 'passed',
+        diagnostics: 'passed',
     }));
 } finally {
     await manager.stop().catch(() => null);
+    await fileOperatorNode?.stop().catch(() => null);
     fs.rmSync(scratch, { recursive: true, force: true });
 }

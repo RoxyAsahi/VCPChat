@@ -38,6 +38,8 @@ await assert.rejects(() => state.enqueue(sessionA, { model: 'new-model' }, async
 assert.equal(state.value(sessionA, 'model', 'old-model'), 'new-model',
     'CAS conflicts must preserve the user draft for an explicit retry');
 assert.equal(state.status(sessionA, ['model']).state, 'conflict');
+assert.equal(state.status(sessionA, ['model']).error.code, 'SESSION_CONFIG_CONFLICT',
+    'field status must retain a structured error code for diagnostics');
 
 const profile = profileSettingsTarget('Nova');
 let scheduled = false;

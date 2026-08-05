@@ -477,15 +477,30 @@ assert.deepEqual(startedTurns[0], { sessionId: 'topic-in-use', prompt: '', attac
 const thinkingRow = await waitFor(() => host.querySelector('.agent-chat-turn-starting'), 3_000);
 assert.ok(thinkingRow,
     `the Workbench must show a thinking row before the first Codex item notification: ${host.querySelector('.agent-chat-feed-items')?.innerHTML || ''}`);
-assert.ok(thinkingRow.querySelector('.thinking-indicator'),
-    `the pre-item thinking row must use the main-chat thinking animation: ${thinkingRow.innerHTML}`);
+    assert.ok(thinkingRow.querySelector('.thinking-indicator'),
+        `the pre-item thinking row must use the main-chat thinking animation: ${thinkingRow.innerHTML}`);
+    emitProjectionBlock({
+        method: 'item/started', activity: 'running', turnId: 'attachment_turn',
+        messageId: 'msg_empty_reasoning', itemId: 'empty-reasoning-item', kind: 'reasoning',
+        status: 'inProgress', content: { summary: [], content: [] },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.ok(host.querySelector('.agent-chat-turn-starting'),
+        'a user-message or empty reasoning Projection update must not remove the thinking placeholder');
 assert.equal(host.querySelector('.agent-chat-composer-attachments')?.childElementCount || 0, 0,
     'accepted descriptors leave the transient composer tray after they are submitted');
 // The ACK-to-first-event gap now has an explicit renderer-only thinking row;
 // close the synthetic attachment turn before exercising the next composer
 // interaction so the fixture mirrors Codex's terminal notification.
-emitDaemonEvent({ sessionId: 'topic-in-use', turnId: 'attachment_turn', type: 'turn.completed' });
-await new Promise((resolve) => setTimeout(resolve, 30));
+    emitDaemonEvent({
+        runtime: 'codex', type: 'projection.updated', method: 'turn/completed',
+        sessionId: 'topic-in-use', threadId: 'thread-active', turnId: 'attachment_turn',
+        turnStatus: 'completed', activity: 'idle',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const emptyTerminal = host.querySelector('.agent-chat-turn-terminal[data-agent-turn-phase="empty"]');
+    assert.match(emptyTerminal?.textContent || '', /没有返回可显示内容/,
+        'a completed Turn without assistant output must leave an explicit terminal row');
 setSelectedAttachments([importedVideoAttachment]);
 const mediaAttachButton = await waitFor(() => {
     const candidate = host.querySelector('[aria-label="添加图片、音频或视频附件"]');
@@ -568,11 +583,14 @@ assert.equal(activeSendButton.querySelector('.vcp-ui-icon')?.textContent, 'arrow
     'the running composer send action must remain available for explicit steer and follow-up input');
 assert.equal(activeSendButton.disabled, true,
     'an empty running composer must not implicitly cancel the Turn');
-const runningModes = host.querySelector('.agent-chat-composer-modes');
-assert.equal(runningModes.hidden, false, 'running input must expose steer and follow-up modes');
-assert.ok([...runningModes.querySelectorAll('button')].some((button) => button.textContent === '立即调整'));
-prompt.value = '完成后再列出风险';
-prompt.dispatchEvent(new window.Event('input', { bubbles: true }));
+    const runningModes = host.querySelector('.agent-chat-composer-modes');
+    assert.equal(runningModes.hidden, true,
+        'an active Turn with an empty composer must not expose steer and follow-up modes');
+    assert.ok([...runningModes.querySelectorAll('button')].some((button) => button.textContent === '立即调整'));
+    prompt.value = '完成后再列出风险';
+    prompt.dispatchEvent(new window.Event('input', { bubbles: true }));
+    assert.equal(runningModes.hidden, false,
+        'steer and follow-up modes become relevant only after the user enters another instruction');
 host.querySelector('.agent-chat-send-button').click();
 await new Promise((resolve) => setTimeout(resolve, 0));
 assert.equal(followUpTurns.length, 1,
@@ -583,11 +601,13 @@ assert.equal(followUpTurns[0].afterTurnId, 'turn_test');
 assert.equal(followUpTurns[0].prompt, '完成后再列出风险');
 assert.match(String(followUpTurns[0].submissionId || ''), /.+/,
     'follow-up submission must carry a stable submissionId');
-const steerMode = [...host.querySelectorAll('.agent-chat-composer-mode')]
-    .find((button) => button.textContent === '立即调整');
-steerMode.click();
-prompt.value = '先检查风险';
-prompt.dispatchEvent(new window.Event('input', { bubbles: true }));
+    prompt.value = '先检查风险';
+    prompt.dispatchEvent(new window.Event('input', { bubbles: true }));
+    const steerMode = [...host.querySelectorAll('.agent-chat-composer-mode')]
+        .find((button) => button.textContent === '立即调整');
+    assert.equal(runningModes.hidden, false,
+        'entering another instruction must reopen the active-Turn mode selector');
+    steerMode.click();
 host.querySelector('.agent-chat-send-button').click();
 await new Promise((resolve) => setTimeout(resolve, 0));
 assert.equal(steeringTurns.length, 1,
@@ -1210,6 +1230,16 @@ await new Promise((resolve) => setTimeout(resolve, 30));
 assert.equal(jumpToLatest.hidden, true, 'return-to-latest must clear the local unread indicator');
 assert.equal(scrollContainer.scrollTop, scrollContainer.scrollHeight,
     'return-to-latest must intentionally move the reader to the live bottom edge');
+
+emitDaemonEvent({
+    runtime: 'codex', type: 'projection.updated', method: 'turn/completed',
+    sessionId: 'topic-in-use', threadId: 'thread-active', turnId: 'turn_test',
+    turnStatus: 'failed', turnError: 'VCPToolBox connection refused', activity: 'idle',
+});
+await new Promise((resolve) => setTimeout(resolve, 30));
+const failedTerminal = host.querySelector('.agent-chat-turn-terminal[data-agent-turn-phase="failed"]');
+assert.match(failedTerminal?.textContent || '', /VCPToolBox connection refused/,
+    'a failed Codex turn must remain visible with its bounded Main-authored error instead of disappearing');
 
 emitDaemonEvent({
     sessionId: 'topic-in-use', type: 'runtime.crashed',

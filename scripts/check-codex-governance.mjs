@@ -56,7 +56,8 @@ function assertAcyclic(files, label) {
     for (const file of files) visit(file);
 }
 const agentCssOwners = [
-    'agent-shell.css', 'agent-sidebar-layout.css', 'agent-sidebar.css', 'agent-composer.css', 'agent-timeline.css',
+    'agent-shell.css', 'agent-sidebar-layout.css', 'agent-sidebar.css', 'agent-settings-diagnostics.css',
+    'agent-composer.css', 'agent-timeline.css',
     'agent-session-dock.css', 'agent-workspace.css', 'agent-activity.css',
     'agent-responsive.css', 'agent-legacy-shell-adapter.css',
 ];
@@ -125,6 +126,7 @@ if (fs.existsSync(receiptPath)) {
 
 const rendererFiles = [
     'modules/ui-system/agent-workbench-store.js',
+    'modules/ui-system/agent-projection-hydration-coordinator.js',
     'modules/ui-system/agent-workbench-controller-implementation.js',
     'modules/ui-system/agent-workbench-implementation.js',
 ];
@@ -153,10 +155,12 @@ const workbenchLineCount = fs.readFileSync(path.join(root, 'modules/ui-system/ag
 const workbenchImplementationLineCount = fs.readFileSync(path.join(root, 'modules/ui-system/agent-workbench-implementation.js'), 'utf8').split(/\r?\n/).length;
 const controllerFacadeLineCount = fs.readFileSync(path.join(root, 'modules/ui-system/agent-workbench-controller.js'), 'utf8').split(/\r?\n/).length;
 const controllerImplementationLineCount = fs.readFileSync(path.join(root, 'modules/ui-system/agent-workbench-controller-implementation.js'), 'utf8').split(/\r?\n/).length;
+const projectionHydrationLineCount = fs.readFileSync(path.join(root, 'modules/ui-system/agent-projection-hydration-coordinator.js'), 'utf8').split(/\r?\n/).length;
 if (workbenchLineCount > 800) errors.push(`agent-workbench.js exceeds composition facade ceiling: ${workbenchLineCount} lines`);
-if (workbenchImplementationLineCount > 800) errors.push(`agent-workbench-implementation.js exceeds composition ceiling: ${workbenchImplementationLineCount} lines`);
+if (workbenchImplementationLineCount > 620) errors.push(`agent-workbench-implementation.js exceeds composition ceiling: ${workbenchImplementationLineCount} lines`);
 if (controllerFacadeLineCount > 800) errors.push(`agent-workbench-controller.js exceeds controller facade ceiling: ${controllerFacadeLineCount} lines`);
-if (controllerImplementationLineCount > 600) errors.push(`agent-workbench-controller-implementation.js exceeds controller ceiling: ${controllerImplementationLineCount} lines`);
+if (controllerImplementationLineCount > 360) errors.push(`agent-workbench-controller-implementation.js exceeds controller ceiling: ${controllerImplementationLineCount} lines`);
+if (projectionHydrationLineCount > 320) errors.push(`agent-projection-hydration-coordinator.js exceeds coordinator ceiling: ${projectionHydrationLineCount} lines`);
 const commandControllerPath = path.join(root, 'modules/ui-system/agent-workbench-command-controller.js');
 if (!fs.existsSync(commandControllerPath)) errors.push('Workbench command controller is missing');
 else if (fs.readFileSync(commandControllerPath, 'utf8').split(/\r?\n/).length > 900) errors.push('agent-workbench-command-controller.js exceeds module ceiling');
@@ -274,9 +278,13 @@ const governedAgentModules = governedAgentModuleDirectories.flatMap((directory) 
     .filter((absolute) => absolute.includes(`${path.sep}codex-runtime${path.sep}`)
         || path.basename(absolute).startsWith('agent-')
         || absolute.includes(`${path.sep}agent-presentation${path.sep}`));
+const mainRendererDirectory = path.join(root, 'modules/renderer');
 for (const absolute of governedAgentModules) {
     const lineCount = fs.readFileSync(absolute, 'utf8').split(/\r?\n/).length;
     if (lineCount > 900) errors.push(`${path.relative(root, absolute)} exceeds module ceiling: ${lineCount} lines`);
+    for (const dependency of localDependencies(absolute, [mainRendererDirectory])) {
+        errors.push(`${path.relative(root, absolute)} imports main-chat Renderer runtime code: ${path.relative(root, dependency)}`);
+    }
 }
 assertAcyclic(governedAgentModules, 'Agent host integration');
 for (const file of filesUnder(path.join(root, 'modules/ui-system'), /agent-.*\.js$/)) {
@@ -301,6 +309,8 @@ const formalWorkbenchViews = [
     'agent-workbench-composer-view.js', 'agent-workbench-timeline-view.js',
     'agent-session-dock-view.js', 'agent-workspace-view.js',
     'agent-notification-view.js', 'agent-approval-view.js', 'agent-workbench-account-view.js',
+    'agent-settings-advanced-view.js', 'agent-settings-diagnostics-view.js',
+    'agent-settings-budget-view.js', 'agent-settings-recovery-view.js',
 ];
 for (const file of formalWorkbenchViews) {
     const absolute = path.join(root, 'modules/ui-system', file);
@@ -349,12 +359,16 @@ if (packageJson.devDependencies?.['@openai/codex'] !== '0.146.0') errors.push('@
 const projectionControllerSource = fs.readFileSync(
     path.join(root, 'modules/ui-system/agent-workbench-controller-implementation.js'), 'utf8',
 );
+const projectionHydrationSource = fs.readFileSync(
+    path.join(root, 'modules/ui-system/agent-projection-hydration-coordinator.js'), 'utf8',
+);
+const projectionBoundarySource = `${projectionControllerSource}\n${projectionHydrationSource}`;
 for (const retired of ['sessionSnapshots', 'snapshotCache', 'liveProjectionRevision']) {
-    if (projectionControllerSource.includes(retired)) {
+    if (projectionBoundarySource.includes(retired)) {
         errors.push(`Renderer projection controller reintroduced retired cache: ${retired}`);
     }
 }
-if (projectionControllerSource.includes('event.projectionMessage')) {
+if (projectionBoundarySource.includes('event.projectionMessage')) {
     errors.push('Renderer projection updates must consume revision Patch, not legacy projectionMessage');
 }
 const runtimeHostSource = fs.readFileSync(path.join(root, 'modules/codex-runtime/runtime-host-service.js'), 'utf8');
@@ -363,8 +377,46 @@ if (/itemId\s*,\s*projectionMessage\s*,\s*projectionPatch/.test(runtimeHostSourc
 }
 const normalizedStoreSource = fs.readFileSync(path.join(root, 'modules/ui-system/agent-normalized-store.js'), 'utf8');
 if (!normalizedStoreSource.includes("block:${sessionId}:")
-    || !normalizedStoreSource.includes("block.sessionId !== sessionId")) {
+    || !normalizedStoreSource.includes('function canonicalBlock')
+    || !normalizedStoreSource.includes('block.sessionId === sessionId')) {
     errors.push('Normalized Store must enforce Session-scoped Block identity');
+}
+const snapshotProjectionSource = fs.readFileSync(
+    path.join(root, 'modules/ui-system/agent-workbench-snapshot-projection.js'), 'utf8',
+);
+if (snapshotProjectionSource.includes('projectSnapshotEntryLegacy')
+    || /attachments\s*:\s*\[[\s\S]{0,500}\bpath\s*:/.test(snapshotProjectionSource)) {
+    errors.push('Agent Snapshot projection must not retain legacy duplicate code or expose attachment paths');
+}
+const workbenchImplementationSource = fs.readFileSync(
+    path.join(root, 'modules/ui-system/agent-workbench-implementation.js'), 'utf8',
+);
+if (!workbenchImplementationSource.includes('createAgentSettingsAdvancedFeature')
+    || workbenchImplementationSource.includes('createAgentSettingsDiagnosticsView')) {
+    errors.push('Workbench must compose the Agent advanced-settings feature instead of owning diagnostic UI wiring');
+}
+for (const [file, factory, ceiling] of [
+    ['agent-profile-flow-feature.js', 'createAgentProfileFlowFeature', 140],
+    ['agent-session-management-feature.js', 'createAgentSessionManagementFeature', 160],
+    ['agent-settings-pane-feature.js', 'createAgentSettingsPaneFeature', 90],
+]) {
+    const absolute = path.join(root, 'modules/ui-system', file);
+    if (!fs.existsSync(absolute)) {
+        errors.push(`Agent Workbench feature is missing: ${file}`);
+        continue;
+    }
+    const source = fs.readFileSync(absolute, 'utf8');
+    const lines = source.split(/\r?\n/).length;
+    if (!source.includes(factory)) errors.push(`${file} does not expose ${factory}`);
+    if (!workbenchImplementationSource.includes(factory)) errors.push(`Workbench does not compose ${factory}`);
+    if (lines > ceiling) errors.push(`${file} exceeds feature ceiling: ${lines} lines`);
+}
+for (const retiredFactory of [
+    'createAgentProfileFlowView', 'createAgentSessionContextMenuView', 'renderAgentSettingsPane',
+]) {
+    if (workbenchImplementationSource.includes(retiredFactory)) {
+        errors.push(`Workbench composition entry still owns feature detail: ${retiredFactory}`);
+    }
 }
 const turnServiceSource = fs.readFileSync(path.join(root, 'modules/codex-runtime/runtime-turn-service.js'), 'utf8');
 if (/turn\/start[\s\S]{0,2500}desiredConfig/.test(turnServiceSource)) {
@@ -431,8 +483,8 @@ if (/assistant\.(?:started|delta|completed)|reasoning\.delta|startsWith\(['"]too
 if (/message-reducer|tool-reducer/.test(rendererEventRouter)) {
     errors.push('Renderer Store reintroduced a retired transcript reducer import');
 }
-if (!projectionControllerSource.includes("event?.runtime === 'codex' && event?.type === 'projection.updated'")
-    || !/releaseSnapshotBarrier[\s\S]*applyCodexRuntimeEvent\(event\)/.test(projectionControllerSource)) {
+if (!projectionHydrationSource.includes("event?.runtime === 'codex' && event?.type === 'projection.updated'")
+    || !/releaseSnapshotBarrier[\s\S]*applyProjectionEvent\(event\)/.test(projectionHydrationSource)) {
     errors.push('snapshot barriers must replay Codex projection.updated events through the normalized Patch reducer');
 }
 
@@ -618,7 +670,12 @@ if (fs.existsSync(path.join(root, 'modules/ipc/agentSessionCompatibility.js'))) 
     errors.push('Topic IPC compatibility adapter must be removed');
 }
 const sharedCatalog = fs.readFileSync(path.join(root, 'preloads/shared/catalog.js'), 'utf8');
-for (const method of ['agentRuntimeReadSessionConfig', 'agentRuntimeUpdateSessionConfig']) {
+for (const method of [
+    'agentRuntimeReadSessionConfig',
+    'agentRuntimeReadSessionDiagnostics',
+    'agentRuntimeUpdateSessionConfig',
+    'agentRuntimeReapplySessionConfig',
+]) {
     if (!sharedCatalog.includes(method)) errors.push(`shared preload catalog missing ${method}`);
 }
 
@@ -640,6 +697,10 @@ const ipcContracts = require(path.join(root, 'modules/ipc/ipcContracts.js'));
 for (const channel of [
     ipcContracts.CHANNELS.AGENT_RUNTIME_LIST_RECOVERY_CANDIDATES,
     ipcContracts.CHANNELS.AGENT_RUNTIME_RESOLVE_RECOVERY_OPERATION,
+    ipcContracts.CHANNELS.AGENT_RUNTIME_READ_SESSION_CONFIG,
+    ipcContracts.CHANNELS.AGENT_RUNTIME_READ_SESSION_DIAGNOSTICS,
+    ipcContracts.CHANNELS.AGENT_RUNTIME_UPDATE_SESSION_CONFIG,
+    ipcContracts.CHANNELS.AGENT_RUNTIME_REAPPLY_SESSION_CONFIG,
 ]) {
     if (!ipcContracts.getChannelMeta(channel)) errors.push(`IPC registry missing recovery channel: ${channel}`);
 }

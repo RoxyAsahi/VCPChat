@@ -28,6 +28,9 @@ const sharedImages = await import('../modules/renderer/imageHandler.js');
 const sharedVisibility = await import('../modules/renderer/visibilityOptimizer.js');
 const { createAgentImageController } = await import('../modules/ui-system/agent-presentation/fork/agentImageController.js');
 const { createAgentVisibilityController } = await import('../modules/ui-system/agent-presentation/fork/agentVisibilityController.js');
+const { getDominantAvatarColor } = await import('../modules/ui-system/agent-presentation/fork/agent-renderer-color.js');
+const { processRenderedContent } = await import('../modules/ui-system/agent-presentation/fork/agent-renderer-content-utils.js');
+const { processAnimationsInContent } = await import('../modules/ui-system/agent-presentation/fork/agent-renderer-animation-safety.js');
 
 sharedImages.initializeImageHandler({
     electronAPI: {
@@ -57,6 +60,24 @@ document.querySelector('#main img').dispatchEvent(new dom.window.MouseEvent('cli
 document.querySelector('#agent img').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
 assert.equal(mainCalls.length, 1, 'Agent image initialization must not overwrite main-chat image actions');
 assert.equal(agentCalls.length, 1, 'Agent image actions must remain scoped to the Agent controller');
+
+assert.equal(await getDominantAvatarColor('https://example.com/avatar.png', {}), null,
+    'Agent avatar color extraction must degrade without browser image APIs');
+let mainChatButtonSends = 0;
+dom.window.chatManager = { handleSendMessage: () => { mainChatButtonSends += 1; } };
+const generatedButton = document.createElement('button');
+generatedButton.textContent = 'send elsewhere';
+agentRoot.append(generatedButton);
+processRenderedContent(agentRoot);
+generatedButton.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+assert.equal(mainChatButtonSends, 0,
+    'Agent-rendered buttons must never route through the main-chat manager');
+const script = document.createElement('script');
+script.textContent = 'window.__agentScriptExecuted = true';
+agentRoot.append(script);
+processAnimationsInContent(agentRoot);
+assert.equal(agentRoot.querySelector('script'), null,
+    'Agent presentation must remove model-provided scripts instead of executing them');
 
 visibilityController.dispose();
 imageController.dispose();
