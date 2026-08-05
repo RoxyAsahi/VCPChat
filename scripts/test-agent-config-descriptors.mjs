@@ -24,6 +24,7 @@ const normalized = normalizeAgentConfig({
 assert.deepEqual(normalized.values, {
     model: 'gpt-5.6-terra', workspaceRoot: '', permissionMode: 'always-approve',
     baseInstructions: '{{Nova}}', instructionMode: 'vchat-identity', reasoningEffort: null,
+    toolPolicy: { schemaVersion: 1, preset: 'full', enabledCodexCapabilities: [], enabledVcpTools: [] },
 });
 assert.equal(normalized.errors.length, 0);
 assert.ok(Object.keys(AGENT_CONFIG_DESCRIPTORS).includes('budget.maxRequestsPerTurn'));

@@ -81,9 +81,13 @@ for (const method of [
     'agentSessionRename', 'agentSessionArchive', 'agentSessionRestore', 'agentSessionDelete', 'agentSessionFork',
     'agentWorkspaceListDirectory', 'agentWorkspaceReadPreview', 'agentWorkspaceSearchFiles',
     'agentWorkspaceStatPath', 'agentWorkspacePerformPathAction',
+    'agentRuntimeListToolCatalog',
     'onAgentRuntimeEvent',
 ]) {
     if (!preload.includes(method)) errors.push(`chat preload missing API: ${method}`);
+}
+if (!/"agentRuntimeListToolCatalog"/.test(preload)) {
+    errors.push('chat preload tool catalog API must be included in the role allowlist');
 }
 const workbenchController = fs.readFileSync(path.join(root, 'modules/ui-system/agent-workbench-controller-implementation.js'), 'utf8');
 for (const legacyMethod of [

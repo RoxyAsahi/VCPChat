@@ -32,6 +32,7 @@ import { createAgentSettingsAdvancedFeature } from './agent-settings-advanced-fe
 import { createAgentProfileFlowFeature } from './agent-profile-flow-feature.js';
 import { createAgentSessionManagementFeature } from './agent-session-management-feature.js';
 import { createAgentSettingsPaneFeature } from './agent-settings-pane-feature.js';
+import { createAgentToolSettingsModal } from './agent-tool-settings-modal.js';
 import { createAgentSessionOperationsCoordinator } from './agent-session-operations-coordinator.js';
 import { createAgentActivityCoordinator } from './agent-activity-coordinator.js';
 import { createAgentComposerCoordinator } from './agent-composer-coordinator.js';
@@ -80,7 +81,7 @@ function mountWorkbench(container) {
     } = sessionViewContext;
     const syncPermissionModeFromSelectedSession = sessionViewContext.syncPermissionMode;
     const syncModelFromSelectedSession = sessionViewContext.syncModel;
-    let renderCoordinator = null;
+    let renderCoordinator = null, toolSettingsModal = null;
     const queueRender = (parts) => renderCoordinator?.queueRender(parts);
     const settleTurnStartIndicator = (event) => renderCoordinator?.settleTurnStartIndicator(event);
 
@@ -107,6 +108,7 @@ function mountWorkbench(container) {
                 state.settingsScope = selectedSessionKey() ? 'session' : 'profile';
                 queueRender({ shell: true });
             },
+            openToolSettings: () => void toolSettingsModal?.open(),
             setActivityOpen: (open) => setActivityOpen(open),
         },
     });
@@ -324,6 +326,7 @@ function mountWorkbench(container) {
         },
     });
     const { persist: persistWorkbenchSettings, sessionConfigRevisions } = settingsCoordinator;
+    toolSettingsModal = createAgentToolSettingsModal({ store, controller, settingsState, activeSession, selectedSessionKey, selectedAgentProfile, persistWorkbenchSettings, host, root, document, node, notify });
 
     const approvalRegistry = new Map();
     let timelineCoordinator = null;
@@ -578,6 +581,7 @@ function mountWorkbench(container) {
         sessionCatalog.dispose();
         sessionOperations.dispose();
         settingsCoordinator.dispose();
+        toolSettingsModal.dispose();
         advancedSettingsFeature.dispose();
         activityCoordinator.dispose();
         composerCoordinator.dispose();

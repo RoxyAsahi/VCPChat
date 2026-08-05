@@ -16,6 +16,8 @@ const clients = createWorkbenchClients(api);
 assert.deepEqual(clients.session.agentSessionRead({ sessionId: 'session-a' }), { sessionId: 'session-a' });
 assert.equal(Object.prototype.hasOwnProperty.call(clients.session, 'agentRuntimeReadSessionDiagnostics'), true,
     'authoritative Session diagnostics must stay inside the Session client boundary');
+assert.equal(Object.prototype.hasOwnProperty.call(clients.projection, 'agentRuntimeListToolCatalog'), true,
+    'the read-only tool catalog must stay inside the projection client boundary');
 assert.equal(clients.workspace.agentWorkspaceReadPreview, null);
 assert.throws(() => clients.require('agentRuntimeReadTopic'), /outside Workbench client boundary/);
 assert.throws(() => clients.require('agentWorkspaceReadPreview'), /unavailable/);

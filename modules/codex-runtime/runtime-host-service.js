@@ -219,8 +219,13 @@ class RuntimeHostService {
                         mode,
                         developerInstructions: String(appliedConfig?.developerInstructions || ''),
                         personality: normalizePersonality(appliedConfig?.personality),
+                        ...(appliedConfig?.toolPolicy ? { toolPolicy: appliedConfig.toolPolicy } : {}),
                     }
-                    : { mode, baseInstructions: String(appliedConfig?.baseInstructions || '') };
+                    : {
+                        mode,
+                        baseInstructions: String(appliedConfig?.baseInstructions || ''),
+                        ...(appliedConfig?.toolPolicy ? { toolPolicy: appliedConfig.toolPolicy } : {}),
+                    };
             },
         });
         this.context.setResponsesAdapter(adapter);

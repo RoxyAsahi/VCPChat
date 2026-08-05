@@ -1,4 +1,4 @@
-import { assert, fs, path, pathToFileURL, readCssWithImports, waitFor, root, workbenchProjectionPatch, dom, resizeObservers, TestResizeObserver, revokedAvatarUrl, unsubscribeCalls, eventCallback, runtimeStatus, activeRuntimeSession, presenceCalls, startedTurns, importedAttachment, importedVideoAttachment, selectedAttachments, followUpTurns, steeringTurns, cancelledTurns, interactionQueue, replacedInteractionQueues, resolvedPendingInputs, createdSessions, createdTopics, renamedTopics, compactedSessions, approvalResponses, interactionResponses, openedExternalLinks, workspaceActions, savedWorkbenchSettings, sessionConfigRevisions, sessionConfigSnapshots, savedAvatars, savedAgentProfiles, runtimeTransitions, runtimeEnsures, exportedSessions, mainCreateProxyCalls, sharedCreateActionCalls, releaseAgentCatalog, buildAgentProfiles, agentCatalogGate, topicCatalog, secondaryTopicCatalog, archivedTopicCatalog, topicListRequests, topicSearchRequests, canonicalSessionProjection, runtimeEventNumber, emitDaemonEvent, fixtureProjectionRevisionBySession, emitProjectionBlock, setSelectedAttachments, setInteractionQueue, setRuntimeStatus, refreshModelCalls } from './fixtures/agent-workbench-harness.mjs';
+import { assert, fs, path, pathToFileURL, readCssWithImports, waitFor, root, workbenchProjectionPatch, dom, resizeObservers, TestResizeObserver, revokedAvatarUrl, unsubscribeCalls, eventCallback, runtimeStatus, activeRuntimeSession, presenceCalls, startedTurns, importedAttachment, importedVideoAttachment, selectedAttachments, followUpTurns, steeringTurns, cancelledTurns, interactionQueue, replacedInteractionQueues, resolvedPendingInputs, createdSessions, createdTopics, renamedTopics, compactedSessions, approvalResponses, interactionResponses, openedExternalLinks, workspaceActions, savedWorkbenchSettings, sessionConfigRevisions, sessionConfigSnapshots, savedAvatars, savedAgentProfiles, runtimeTransitions, runtimeEnsures, exportedSessions, mainCreateProxyCalls, sharedCreateActionCalls, releaseAgentCatalog, buildAgentProfiles, agentCatalogGate, topicCatalog, secondaryTopicCatalog, archivedTopicCatalog, topicListRequests, topicSearchRequests, toolCatalogRequests, canonicalSessionProjection, runtimeEventNumber, emitDaemonEvent, fixtureProjectionRevisionBySession, emitProjectionBlock, setSelectedAttachments, setInteractionQueue, setRuntimeStatus, refreshModelCalls } from './fixtures/agent-workbench-harness.mjs';
 import { createAgentWorkbenchState } from '../modules/ui-system/agent-workbench-state.js';
 
 // next-ui-apps overwrites the stub; capture registrations via its real registry.
@@ -35,11 +35,13 @@ mainAgentList.innerHTML = '<li data-item-type="agent" data-item-id="123"><img cl
 document.body.append(mainAgentList);
 window.prompt = () => '重命名后的 Topic';
 window.confirm = () => true;
-window.VCPUI = { feedback: {
-    confirm: async () => true,
-    prompt: async () => '重命名后的 Topic',
-    toast: () => {},
-} };
+window.VCPUI = {
+    feedback: {
+        confirm: async () => true,
+        prompt: async () => '重命名后的 Topic',
+        toast: () => {},
+    },
+};
 window.globalSettings = { sidebarWidth: 300 };
 window.localStorage.setItem('vcpchat.agentWorkbench.lastTopic.v1', JSON.stringify({
     sessionId: 'topic-restored', title: '可恢复的 Codex Session', agentId: 'Nova',
@@ -980,7 +982,8 @@ emitProjectionBlock({
     turnId: 'turn_live', messageId: 'msg_live', itemId: 'assistant-live-item', kind: 'message',
     sourceOrder: 20, status: 'inProgress', content: { text: 'live Codex delta' },
 });
-await new Promise((resolve) => setTimeout(resolve, 30));
+await waitFor(() => [...host.querySelectorAll('.message-item .md-content')]
+    .some((node) => node.textContent.includes('live Codex delta')), 1_000);
 assert.equal(host.querySelector('.agent-wb-runtime-dock'), null, 'Runtime lifecycle controls must stay out of the Agent UI');
 assert.ok([...host.querySelectorAll('.message-item .md-content')].some((node) => node.textContent.includes('live Codex delta')), 'Runtime delta must render in the migrated chat shell');
 assert.equal(host.querySelector('.agent-chat-status-chip')?.dataset.action, undefined,
@@ -1349,6 +1352,91 @@ openSettingsSection('prompt');
 const promptEditor = host.querySelector('.agent-chat-settings-pane textarea:not([readonly])');
 assert.equal(promptEditor?.value, '{{Nova}}',
     'the prompt section must expose the selected Agent instructions without reintroducing a settings sub-tab');
+
+window.VCPUI.create = (name, options = {}) => {
+    if (name === 'Button') {
+        const element = document.createElement('button');
+        element.type = 'button';
+        element.textContent = options.label || '';
+        return { element };
+    }
+    if (name !== 'Modal') return null;
+    const element = document.createElement('section');
+    element.className = 'vcp-ui-modal-overlay';
+    const dialog = document.createElement('div');
+    dialog.className = 'vcp-ui-modal';
+    const closeButton = document.createElement('button');
+    closeButton.type = 'button';
+    closeButton.setAttribute('aria-label', '关闭对话框');
+    const body = document.createElement('div');
+    body.className = 'vcp-ui-modal-body';
+    body.append(options.content);
+    const footer = document.createElement('footer');
+    for (const action of options.actions || []) footer.append(action.element || action);
+    dialog.append(closeButton, body, footer);
+    element.append(dialog);
+    const close = (result) => {
+        options.onClose?.(result);
+        element.remove();
+    };
+    closeButton.addEventListener('click', () => close(null));
+    return { element, close };
+};
+const toolSettingsButton = host.querySelector('.agent-chat-composer-tools');
+assert.ok(toolSettingsButton, 'Agent tools must be opened from the composer toolbar');
+assert.equal(toolSettingsButton.disabled, false, 'the tool picker must remain available for the selected Session');
+const selectedToolSettingsSessionId = JSON.parse(
+    window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1') || 'null',
+)?.sessionId;
+assert.ok(selectedToolSettingsSessionId, 'the tool picker Session scope requires an explicitly selected Session');
+toolSettingsButton.click();
+const toolDialog = await waitFor(() => host.querySelector('.agent-tool-settings-dialog'), 3_000);
+assert.ok(toolDialog, `the composer tool button must open a settings dialog; notices: ${[
+    ...document.querySelectorAll('.agent-chat-toast, .vcp-ui-toast'),
+].map((item) => item.textContent).join(' | ')}; catalog calls: ${toolCatalogRequests}`);
+assert.equal(host.querySelector('.agent-chat-settings-pane .agent-tool-settings'), null,
+    'the full tool catalog must not be embedded in the narrow settings sidebar');
+assert.deepEqual([...host.querySelectorAll('.agent-tool-modal-scope')].map((button) => button.textContent.trim()),
+    ['Agent 默认', '当前会话'], 'the tool dialog must expose explicit Profile and Session ownership');
+assert.deepEqual([...host.querySelectorAll('.agent-tool-preset')].map((button) => button.textContent.trim()),
+    ['全部开启', '只读', '自定义'], 'the tool dialog must expose the three direct presets');
+const readonlyPreset = [...host.querySelectorAll('.agent-tool-preset')]
+    .find((button) => button.textContent.trim() === '只读');
+readonlyPreset.click();
+assert.ok([...host.querySelectorAll('.agent-tool-preset')]
+    .find((button) => button.textContent.trim() === '只读')?.classList.contains('is-active'),
+    'preset changes must remain visible while Profile autosave is pending');
+await waitFor(() => savedAgentProfiles.some((profile) => profile.toolPolicy?.preset === 'readonly'), 3_000);
+const shellToolRow = [...host.querySelectorAll('.agent-tool-row')]
+    .find((row) => row.textContent.includes('终端命令'));
+shellToolRow.querySelector('.agent-tool-switch').click();
+assert.ok([...host.querySelectorAll('.agent-tool-preset')]
+    .find((button) => button.textContent.trim() === '自定义')?.classList.contains('is-active'),
+    'changing one tool must automatically enter custom mode');
+await waitFor(() => savedAgentProfiles.some((profile) => profile.toolPolicy?.preset === 'custom'
+    && profile.toolPolicy.enabledCodexCapabilities.includes('codex:shell-command')), 3_000);
+const pluginDisclosure = host.querySelector('.agent-tool-plugin-disclosure');
+assert.equal(pluginDisclosure?.getAttribute('aria-expanded'), 'false');
+pluginDisclosure.click();
+assert.equal(pluginDisclosure.getAttribute('aria-expanded'), 'true',
+    'VCP plugins must expand to their individual invocation commands');
+assert.deepEqual([...host.querySelectorAll('.agent-tool-command-list .agent-tool-row strong')]
+    .map((label) => label.textContent.trim()), ['ReadFile', 'WriteFile']);
+const sessionScopeButton = [...host.querySelectorAll('.agent-tool-modal-scope')]
+    .find((button) => button.textContent.trim() === '当前会话');
+sessionScopeButton.click();
+const sessionReadonlyPreset = [...host.querySelectorAll('.agent-tool-preset')]
+    .find((button) => button.textContent.trim() === '只读');
+sessionReadonlyPreset.click();
+await waitFor(() => savedWorkbenchSettings.some((payload) => payload.sessionId === selectedToolSettingsSessionId
+    && payload.toolPolicy?.preset === 'readonly'), 3_000);
+assert.match(host.querySelector('.agent-tool-modal-save-status')?.textContent || '', /保存|更新/,
+    'the tool dialog must expose autosave feedback');
+host.querySelector('.agent-tool-settings-dialog [aria-label="关闭对话框"]')?.click();
+toolSettingsButton.click();
+assert.ok(await waitFor(() => host.querySelector('.agent-tool-settings-dialog'), 1_000),
+    'closing the tool dialog must allow it to be opened again');
+host.querySelector('.agent-tool-settings-dialog [aria-label="关闭对话框"]')?.click();
 
 dispose();
 assert.equal(unsubscribeCalls, 1, 'Workbench unmount must release runtime event subscription');

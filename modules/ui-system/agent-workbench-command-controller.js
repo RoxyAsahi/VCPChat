@@ -332,6 +332,7 @@ function createWorkbenchCommandController(context) {
         workspacePerformPathAction: (payload) => requireApi('agentWorkspacePerformPathAction')(payload),
         workspaceCancel: (payload) => requireApi('agentWorkspaceCancel')(payload),
         listAgentProfiles: () => requireApi('agentRuntimeListAgentProfiles')(),
+        listToolCatalog: () => requireApi('agentRuntimeListToolCatalog')(),
         getCachedModels: () => requireApi('getCachedModels')(),
         refreshModels: () => requireApi('refreshModels')(),
         onModelsUpdated: (callback) => requireApi('onModelsUpdated')(callback),

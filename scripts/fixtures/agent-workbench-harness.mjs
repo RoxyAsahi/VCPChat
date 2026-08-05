@@ -138,6 +138,26 @@ const archivedTopicCatalog = [{
 }];
 const topicListRequests = [];
 const topicSearchRequests = [];
+let toolCatalogRequests = 0;
+const toolCatalog = {
+    schemaVersion: 1,
+    presets: [
+        { id: 'full', label: '全部开启' },
+        { id: 'readonly', label: '只读' },
+        { id: 'custom', label: '自定义' },
+    ],
+    native: [
+        { id: 'codex:shell-command', title: '终端命令', description: '运行项目命令', icon: 'terminal' },
+        { id: 'codex:view-image', title: '查看图片', description: '读取本地图片', icon: 'image' },
+    ],
+    plugins: [{
+        id: 'vcp:FileOperator', pluginId: 'FileOperator', title: '文件操作', icon: 'extension',
+        commands: [
+            { id: 'vcp:FileOperator:ReadFile', command: 'ReadFile', description: '读取文件' },
+            { id: 'vcp:FileOperator:WriteFile', command: 'WriteFile', description: '写入文件' },
+        ],
+    }],
+};
 let modelUpdateCallback = null;
 let modelUnsubscribeCalls = 0;
 let refreshModelCalls = 0;
@@ -164,6 +184,7 @@ window.chatAPI = {
         savedAvatars.push({ agentId, avatarData });
         return { success: true, avatarUrl: `file:///${agentId}-updated.png` };
     },
+    agentRuntimeListToolCatalog: async () => { toolCatalogRequests += 1; return toolCatalog; },
     // Match the main-chat contract: this is a Main-process cache, not an
     // Agent Workbench request to the ToolBox model endpoint.
     getCachedModels: async () => {
@@ -391,6 +412,7 @@ window.chatAPI = {
                     approvalPolicy: payload.permissionMode === 'always-approve' ? 'never' : 'on-request',
                 } : {}),
                 ...(payload.model ? { model: payload.model } : {}),
+                ...(payload.toolPolicy ? { toolPolicy: payload.toolPolicy } : {}),
             };
             sessionConfigSnapshots.set(payload.sessionId, configSnapshot);
         }
@@ -523,4 +545,4 @@ function setSelectedAttachments(value) { selectedAttachments = value; }
 function setInteractionQueue(value) { interactionQueue = value; }
 function setRuntimeStatus(value) { runtimeStatus = value; }
 
-export { assert, fs, path, pathToFileURL, readCssWithImports, waitFor, root, workbenchProjectionPatch, dom, resizeObservers, TestResizeObserver, revokedAvatarUrl, unsubscribeCalls, eventCallback, runtimeStatus, activeRuntimeSession, presenceCalls, startedTurns, importedAttachment, importedVideoAttachment, selectedAttachments, followUpTurns, steeringTurns, cancelledTurns, interactionQueue, replacedInteractionQueues, resolvedPendingInputs, createdSessions, createdTopics, renamedTopics, compactedSessions, approvalResponses, interactionResponses, openedExternalLinks, workspaceActions, savedWorkbenchSettings, sessionConfigRevisions, sessionConfigSnapshots, savedAvatars, savedAgentProfiles, runtimeTransitions, runtimeEnsures, exportedSessions, mainCreateProxyCalls, sharedCreateActionCalls, releaseAgentCatalog, buildAgentProfiles, agentCatalogGate, topicCatalog, secondaryTopicCatalog, archivedTopicCatalog, topicListRequests, topicSearchRequests, canonicalSessionProjection, runtimeEventNumber, emitDaemonEvent, fixtureProjectionRevisionBySession, emitProjectionBlock, setSelectedAttachments, setInteractionQueue, setRuntimeStatus, modelUpdateCallback, modelUnsubscribeCalls, refreshModelCalls };
+export { assert, fs, path, pathToFileURL, readCssWithImports, waitFor, root, workbenchProjectionPatch, dom, resizeObservers, TestResizeObserver, revokedAvatarUrl, unsubscribeCalls, eventCallback, runtimeStatus, activeRuntimeSession, presenceCalls, startedTurns, importedAttachment, importedVideoAttachment, selectedAttachments, followUpTurns, steeringTurns, cancelledTurns, interactionQueue, replacedInteractionQueues, resolvedPendingInputs, createdSessions, createdTopics, renamedTopics, compactedSessions, approvalResponses, interactionResponses, openedExternalLinks, workspaceActions, savedWorkbenchSettings, sessionConfigRevisions, sessionConfigSnapshots, savedAvatars, savedAgentProfiles, runtimeTransitions, runtimeEnsures, exportedSessions, mainCreateProxyCalls, sharedCreateActionCalls, releaseAgentCatalog, buildAgentProfiles, agentCatalogGate, topicCatalog, secondaryTopicCatalog, archivedTopicCatalog, topicListRequests, topicSearchRequests, toolCatalogRequests, canonicalSessionProjection, runtimeEventNumber, emitDaemonEvent, fixtureProjectionRevisionBySession, emitProjectionBlock, setSelectedAttachments, setInteractionQueue, setRuntimeStatus, modelUpdateCallback, modelUnsubscribeCalls, refreshModelCalls };

@@ -211,7 +211,9 @@ assert.equal(providerStart.params.config.project_doc_max_bytes, 0);
 assert.equal(providerStart.params.config['skills.include_instructions'], false,
     'ToolBox-backed Sessions must not inject the Codex skills catalog');
 assert.equal(providerStart.params.config.model_reasoning_summary, 'detailed');
-assert.equal(providerStart.params.config['tools.update_plan.enabled'], false);
+assert.equal(providerStart.params.config['tools.update_plan.enabled'], true,
+    'new Agent Sessions should expose the simple full-tool preset by default');
+assert.equal(providerStart.params.config['features.shell_tool'], true);
 assert.equal(providerStart.params.config['tools.experimental_request_user_input.enabled'], false);
 assert.equal(providerStart.params.config['features.collab'], false);
 assert.equal(providerStart.params.config['features.multi_agent_v2'], false);
@@ -762,7 +764,25 @@ fake.readResult = null;
 const approvalSession = manager.repository.getSession(session.sessionId);
 manager.repository.saveSession({
     ...approvalSession,
-    configSnapshot: { ...approvalSession.configSnapshot, executionProfile: 'codex-native-legacy' },
+    configSnapshot: {
+        ...approvalSession.configSnapshot,
+        executionProfile: 'codex-native-legacy',
+        toolPolicy: {
+            schemaVersion: 1,
+            preset: 'custom',
+            enabledCodexCapabilities: [],
+            enabledVcpTools: ['vcp:*'],
+        },
+    },
+    appliedRuntimeConfig: {
+        ...(approvalSession.appliedRuntimeConfig || approvalSession.configSnapshot),
+        toolPolicy: {
+            schemaVersion: 1,
+            preset: 'custom',
+            enabledCodexCapabilities: [],
+            enabledVcpTools: ['vcp:*'],
+        },
+    },
     updatedAt: Date.now(),
 });
 fake.emit('server-request', {
@@ -771,7 +791,7 @@ fake.emit('server-request', {
     params: { threadId: 'thr_test', turnId: 'turn_test', itemId: 'cmd_a', command: 'Get-Location' },
 });
 assert.equal(uiEvents.at(-1).type, 'interaction.rejected',
-    'R12 schema normalization must not let persisted legacy fields reopen Codex-native tools');
+    'legacy executionProfile fields must not override the explicit per-Session tool policy');
 assert.deepEqual(fake.responses.at(-1), { id: 'req_approval', result: { decision: 'decline' } });
 fake.emit('server-request', { id: 'req_tool', method: 'item/tool/call', params: { callId: 'call_a' } });
 await new Promise((resolve) => setImmediate(resolve));

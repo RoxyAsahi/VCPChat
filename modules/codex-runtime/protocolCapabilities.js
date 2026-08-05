@@ -1,6 +1,7 @@
 'use strict';
 
 const fixture = require('../../fixtures/codex-app-server-v0.146.json');
+const { CODEX_CAPABILITIES, isCodexCapabilityEnabled } = require('./tool-policy');
 
 const TOOLBOX_ONLY = 'toolbox-only';
 const CODEX_NATIVE = 'codex-native';
@@ -45,18 +46,22 @@ function capabilityMatrix(profile = TOOLBOX_ONLY) {
     };
 }
 
-function serverRequestPolicy(method, profile = TOOLBOX_ONLY) {
+function serverRequestPolicy(method, profile = TOOLBOX_ONLY, toolPolicy = null) {
     const value = fixture.serverRequests[method];
     if (method === 'item/tool/call') {
         return { state: 'supported', kind: 'dynamic-tool' };
     }
     if (NATIVE_APPROVAL_METHODS.has(method)) {
-        return profile === TOOLBOX_ONLY
+        const capability = method === 'item/fileChange/requestApproval'
+            ? CODEX_CAPABILITIES.WORKSPACE_WRITE : CODEX_CAPABILITIES.SHELL;
+        return profile === TOOLBOX_ONLY && !(toolPolicy && isCodexCapabilityEnabled(toolPolicy, capability))
             ? { state: 'disabled', reason: 'Codex native execution is disabled by the toolbox-only profile' }
             : { state: 'supported', kind: 'native-approval' };
     }
     if (LEGACY_NATIVE_APPROVAL_METHODS.has(method)) {
-        return profile === TOOLBOX_ONLY
+        const capability = method === 'applyPatchApproval'
+            ? CODEX_CAPABILITIES.WORKSPACE_WRITE : CODEX_CAPABILITIES.SHELL;
+        return profile === TOOLBOX_ONLY && !(toolPolicy && isCodexCapabilityEnabled(toolPolicy, capability))
             ? { state: 'disabled', reason: 'Legacy Codex native execution is disabled by the toolbox-only profile' }
             : { state: 'supported', kind: 'legacy-native-approval' };
     }

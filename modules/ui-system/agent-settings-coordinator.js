@@ -17,6 +17,7 @@ function normalizedSavedProfile(profile) {
         model: profile.model || '',
         workspaceRoot: profile.workspaceRoot || '',
         permissionMode: profile.permissionMode === 'always-approve' ? 'always-approve' : 'ask',
+        toolPolicy: profile.toolPolicy || { schemaVersion: 1, preset: 'full', enabledCodexCapabilities: [], enabledVcpTools: [] },
         configurationRequired: instructionMode !== 'codex-managed' && !String(baseInstructions).trim(),
     };
 }
@@ -35,6 +36,7 @@ function profileSavePayload(payload, profile, values) {
         reasoningEffort: values.reasoningEffort,
         workspaceRoot: values.workspaceRoot,
         permissionMode: values.permissionMode,
+        toolPolicy: values.toolPolicy,
     };
 }
 
@@ -156,6 +158,7 @@ function createAgentSettingsCoordinator({
             const profileUpdate = !selectedSession && [
                 'name', 'systemPrompt', 'baseInstructions', 'instructionMode', 'developerInstructions',
                 'personality', 'model', 'reasoningEffort', 'workspaceRoot', 'permissionMode',
+                'toolPolicy',
             ].some((key) => Object.prototype.hasOwnProperty.call(payload, key));
             const saved = profileUpdate
                 ? await persistAgentProfileDefaults(payload)

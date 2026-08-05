@@ -121,6 +121,7 @@ function createCatalog(ops) {
         onVCPStreamChunk: subscription(ops.subscribe('vcp-stream-chunk', (_event, chunkData) => chunkData)),
         interruptVcpRequest: query((data) => ops.invoke('interrupt-vcp-request', data)),
         agentRuntimeListAgentProfiles: query(() => ops.invoke('agent-runtime:list-agent-profiles')),
+        agentRuntimeListToolCatalog: query(() => ops.invoke('agent-runtime:list-tool-catalog')),
         agentRuntimeSaveAgentProfile: query((data) => ops.invoke('agent-runtime:save-agent-profile', data)),
         agentRuntimeSaveAgentAvatar: query((data) => ops.invoke('agent-runtime:save-agent-avatar', data)),
         agentRuntimeApplyAgentProfile: query((data) => ops.invoke('agent-runtime:apply-agent-profile', data)),

@@ -62,7 +62,7 @@ function createAttachmentChips(attachments, actions = {}, documentRef = globalTh
 function createAgentWorkbenchComposerView({ refs, document = globalThis.document }) {
     const {
         input, sendButton, attachButton, attachmentTray, inputCard, runningModes,
-        steerModeButton, followUpModeButton, permissionsButton, newButton,
+        steerModeButton, followUpModeButton, permissionsButton, toolsButton, newButton,
     } = refs;
 
     function update(model = {}) {
@@ -91,6 +91,7 @@ function createAgentWorkbenchComposerView({ refs, document = globalThis.document
         permissionsButton.title = model.permissionLabel || '本地审批';
         permissionsButton.setAttribute('aria-label', model.permissionLabel || '本地审批');
         permissionsButton.classList.toggle('is-active', Boolean(model.permissionActive));
+        if (toolsButton) toolsButton.disabled = Boolean(model.toolsDisabled);
         newButton.disabled = Boolean(model.newDisabled);
     }
 

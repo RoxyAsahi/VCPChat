@@ -13,6 +13,7 @@ const CLIENT_METHODS = Object.freeze({
         'agentRuntimeGetStatus', 'agentRuntimeSearchTopics', 'agentRuntimeSearchTopicMessages',
         'agentRuntimeGetTopicIndexStatus', 'agentRuntimeRebuildTopicIndex',
         'agentRuntimeGetWorkbenchSettings', 'agentRuntimeUpdateWorkbenchSettings',
+        'agentRuntimeListToolCatalog',
         'agentRuntimeListRecoveryOperations', 'agentRuntimeListRecoveryCandidates',
         'agentRuntimeResolveRecoveryOperation',
         'agentRuntimeSetWorkbenchPresence', 'onAgentRuntimeEvent',

@@ -744,6 +744,49 @@ try {
         && toolGroupLayout.childAligned
         && toolGroupLayout.childWidthRatio >= 0.98,
     `expanded tool groups must stack full-width child cards without nested indentation: ${JSON.stringify(toolGroupLayout)}`);
+
+    await page.click('#nextUiInternalAppHost .agent-chat-composer-tools');
+    await page.waitForSelector('#nextUiInternalAppHost .agent-tool-settings-dialog', {
+        timeout: timeoutMs,
+    });
+    await page.waitForFunction(() => {
+        const dialog = document.querySelector('#nextUiInternalAppHost .agent-tool-settings-dialog');
+        return dialog?.matches('wa-dialog') ? dialog.open === true : Boolean(dialog);
+    }, { timeout: timeoutMs });
+    const toolDialogState = await page.evaluate(() => {
+        const host = document.querySelector('#nextUiInternalAppHost');
+        const dialog = host?.querySelector('.agent-tool-settings-dialog');
+        const content = dialog?.querySelector('.agent-tool-modal-content');
+        const settings = dialog?.querySelector('.agent-tool-settings');
+        const modalBody = dialog?.querySelector('.vcp-ui-modal-body');
+        const dialogSurface = dialog?.shadowRoot?.querySelector('[part="dialog"]') || dialog;
+        const rect = dialogSurface?.getBoundingClientRect();
+        return {
+            scopes: [...(dialog?.querySelectorAll('.agent-tool-modal-scope') || [])]
+                .map((button) => button.textContent.trim()),
+            presets: [...(dialog?.querySelectorAll('.agent-tool-preset') || [])]
+                .map((button) => button.textContent.trim()),
+            nativeTools: dialog?.querySelectorAll('.agent-tool-category:first-of-type .agent-tool-row').length || 0,
+            pluginGroups: dialog?.querySelectorAll('.agent-tool-plugin').length || 0,
+            contentWidth: content?.getBoundingClientRect().width || 0,
+            dialogWidth: rect?.width || 0,
+            settingsScrollable: Boolean(settings && getComputedStyle(settings).overflowY === 'auto'),
+            modalBodyFits: !modalBody || modalBody.scrollWidth <= modalBody.clientWidth + 1,
+            composerStillVisible: Boolean(host?.querySelector('.agent-chat-composer-tools')),
+        };
+    });
+    assert.deepEqual(toolDialogState.scopes, ['Agent 默认', '当前会话']);
+    assert.deepEqual(toolDialogState.presets, ['全部开启', '只读', '自定义']);
+    assert.ok(toolDialogState.nativeTools >= 4,
+        `the real catalog must expose Codex native tools: ${JSON.stringify(toolDialogState)}`);
+    assert.ok(toolDialogState.contentWidth >= 650 && toolDialogState.dialogWidth >= 650,
+        `the tool picker must use a settings-sized dialog: ${JSON.stringify(toolDialogState)}`);
+    assert.equal(toolDialogState.settingsScrollable, true,
+        'a long plugin catalog must scroll inside the dialog instead of growing past the viewport');
+    assert.equal(toolDialogState.modalBodyFits, true,
+        'the settings-sized tool dialog must not introduce a second horizontal scroller');
+    assert.equal(toolDialogState.composerStillVisible, true,
+        'the tool picker entry must remain owned by the composer toolbar');
     const screenshotDir = process.env.VCP_CODEX_SCREENSHOT_DIR;
     if (screenshotDir) {
         await fs.mkdir(screenshotDir, { recursive: true });
@@ -764,6 +807,17 @@ try {
             }
         }
     }
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => {
+        const dialog = document.querySelector('#nextUiInternalAppHost .agent-tool-settings-dialog');
+        return !dialog || (dialog.matches('wa-dialog') && dialog.open === false);
+    }, { timeout: timeoutMs });
+    await page.click('#nextUiInternalAppHost .agent-chat-composer-tools');
+    await page.waitForFunction(() => {
+        const dialog = document.querySelector('#nextUiInternalAppHost .agent-tool-settings-dialog');
+        return dialog?.matches('wa-dialog') ? dialog.open === true : Boolean(dialog);
+    }, { timeout: timeoutMs });
+    await page.keyboard.press('Escape');
     await page.reload({ waitUntil: 'domcontentloaded', timeout: timeoutMs });
     await page.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout: timeoutMs });
     const settingsAfterReload = await page.evaluate(async (sessionId) => {

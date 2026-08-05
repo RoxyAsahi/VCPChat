@@ -18,6 +18,7 @@ const {
     runtimeSettingsTarget,
     sameRuntimeSettings,
 } = require('./runtime-settings-contract');
+const { allowsAnyVcpTool } = require('./tool-policy');
 
 function resolveForkBoundary({ turnId, beforeTurnId }) {
     const before = String(beforeTurnId || '').trim();
@@ -69,7 +70,8 @@ function resumeRequestParams(context, session, threadId) {
         approvalPolicy: normalizeApprovalPolicy(config.permissionMode || config.approvalPolicy),
         sandbox: normalizeSandboxMode(config.sandbox),
         ...context.threadInstructionParams(config),
-        ...(config.executionProfile === 'toolbox-only' ? { dynamicTools: [vcpInvokeTool()] } : {}),
+        ...(config.executionProfile === 'toolbox-only' && allowsAnyVcpTool(config.toolPolicy)
+            ? { dynamicTools: [vcpInvokeTool()] } : {}),
         excludeTurns: true,
     };
 }
@@ -170,7 +172,7 @@ class RuntimeTurnService {
                 approvalPolicy: normalizeApprovalPolicy(config.permissionMode || config.approvalPolicy),
                 sandbox: normalizeSandboxMode(config.sandbox),
                 ...this.context.threadInstructionParams(config),
-                dynamicTools: [vcpInvokeTool()],
+                ...(allowsAnyVcpTool(config.toolPolicy) ? { dynamicTools: [vcpInvokeTool()] } : {}),
             });
             repository = this._operationRepository(operationContext);
             threadId = result?.thread?.id;

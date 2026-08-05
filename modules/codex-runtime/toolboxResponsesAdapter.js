@@ -8,6 +8,11 @@
 
 const crypto = require('crypto');
 const http = require('http');
+const {
+    allowsAnyVcpTool,
+    responsesToolsToChat,
+    vcpInvokeChatTool,
+} = require('./toolboxToolPolicyAdapter');
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 const MAX_ERROR_BYTES = 16 * 1024;
@@ -458,8 +463,9 @@ function finalizeChatRequest(chat, body, requestId, options, embeddedTools) {
     if (stableRequestId) chat.requestId = stableRequestId;
     const tools = responsesToolsToChat([
         ...(Array.isArray(body.tools) ? body.tools : []), ...embeddedTools,
-    ]);
-    if (options.stripEmbeddedInstructions && tools.length === 0) tools.push(vcpInvokeChatTool());
+    ], options.trustedInstructions?.toolPolicy);
+    if (options.stripEmbeddedInstructions && tools.length === 0
+        && allowsAnyVcpTool(options.trustedInstructions?.toolPolicy)) tools.push(vcpInvokeChatTool());
     if (tools.length > 0) chat.tools = tools;
     if (body.tool_choice != null) chat.tool_choice = body.tool_choice;
     if (Number.isFinite(body.temperature)) chat.temperature = body.temperature;
@@ -603,40 +609,6 @@ function boundedInstructionText(value) {
         throw new Error('App Server instructions exceed the 64 KiB safety limit');
     }
     return text;
-}
-
-function responsesToolsToChat(tools) {
-    if (!Array.isArray(tools)) return [];
-    let emittedVcpInvoke = false;
-    return tools.flatMap((tool) => {
-        if (!tool || tool.type !== 'function') return [];
-        const name = String(tool.name || '').trim();
-        // Codex may include its native shell/MCP/utility definitions even
-        // when a particular installed App Server does not honor every
-        // thread-scoped tool override.  This loopback provider boundary is
-        // authoritative for Nova: ToolBox and the model see only VChat's
-        // own fixed vcp_invoke contract.  Do not let App Server-supplied
-        // description/schema text alter the capability exposed upstream.
-        if (name !== VCP_DYNAMIC_TOOL_NAME || emittedVcpInvoke) return [];
-        emittedVcpInvoke = true;
-        return [vcpInvokeChatTool()];
-    });
-}
-
-function vcpInvokeChatTool() {
-    return { type: 'function', function: {
-        name: VCP_DYNAMIC_TOOL_NAME,
-        description: 'Invoke one named VCPToolBox capability through the VCP bridge.',
-        parameters: {
-            type: 'object',
-            properties: {
-                tool: { type: 'string' },
-                arguments: { type: 'object', additionalProperties: true },
-            },
-            required: ['tool', 'arguments'],
-            additionalProperties: false,
-        },
-    } };
 }
 
 function chatResponseToResponses(chatResponse, fallbackModel) {

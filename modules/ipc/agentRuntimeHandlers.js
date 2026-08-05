@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { CodexRuntimeManager } = require('../codex-runtime/runtimeManager');
 const { AgentWorkspaceService } = require('../codex-runtime/workspaceService');
+const { listAgentToolCatalog } = require('../codex-runtime/toolCatalogService');
 const { AGENT_CHANNELS: IPC_CHANNELS } = require('./ipcContracts');
 
 let manager = null;
@@ -51,6 +52,7 @@ function removeHandlers() {
     settingsUpdatedListener = null;
     for (const channel of [
         IPC_CHANNELS.LIST_AGENT_PROFILES,
+        IPC_CHANNELS.LIST_TOOL_CATALOG,
         IPC_CHANNELS.SAVE_AGENT_PROFILE,
         IPC_CHANNELS.SAVE_AGENT_AVATAR,
         IPC_CHANNELS.APPLY_AGENT_PROFILE,
@@ -175,6 +177,8 @@ function initialize(options) {
     settingsManagerWithListener = settingsManager;
 
     ipcMain.handle(IPC_CHANNELS.LIST_AGENT_PROFILES, (event) => projectionGuard(event, () => manager.listAgentProfiles()));
+    ipcMain.handle(IPC_CHANNELS.LIST_TOOL_CATALOG,
+        (event) => projectionGuard(event, () => listAgentToolCatalog(projectRoot)));
     ipcMain.handle(IPC_CHANNELS.SAVE_AGENT_PROFILE, (event, payload) => projectionGuard(event, () => manager.saveAgentProfile(payload || {})));
     ipcMain.handle(IPC_CHANNELS.SAVE_AGENT_AVATAR, (event, payload) => projectionGuard(event, () => manager.saveAgentAvatar(payload || {})));
     ipcMain.handle(IPC_CHANNELS.APPLY_AGENT_PROFILE, (event, payload) => projectionGuard(event, () => manager.applyAgentProfileToSession(payload || {})));

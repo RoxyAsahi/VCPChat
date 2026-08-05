@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { CodexAppServerError } = require('./appServerTransport');
 const { normalizeSessionConfig } = require('./dataContracts');
+const { normalizeToolPolicy } = require('./tool-policy');
 const {
     normalizeApprovalPolicy,
     normalizeInstructionMode,
@@ -34,6 +35,11 @@ function instructionShape(config = {}) {
 
 function instructionConfigChanged(desired = {}, applied = {}) {
     return JSON.stringify(instructionShape(desired)) !== JSON.stringify(instructionShape(applied));
+}
+
+function toolPolicyChanged(desired = {}, applied = {}) {
+    return JSON.stringify(normalizeToolPolicy(desired.toolPolicy))
+        !== JSON.stringify(normalizeToolPolicy(applied.toolPolicy));
 }
 
 function requiresFreshCodexManagedSession(desired = {}, applied = {}) {
@@ -71,6 +77,7 @@ function settingsMutationRequest(context, settings) {
         hasInstructionModeUpdate: hasConfigField(settings, 'instructionMode'),
         hasDeveloperInstructionsUpdate: Object.prototype.hasOwnProperty.call(settings, 'developerInstructions'),
         hasPersonalityUpdate: Object.prototype.hasOwnProperty.call(settings, 'personality'),
+        hasToolPolicyUpdate: Object.prototype.hasOwnProperty.call(settings, 'toolPolicy'),
         hasPromptUpdate: hasSystemPromptUpdate || hasBaseInstructionsUpdate,
         requestedSystemPrompt: (hasSystemPromptUpdate || hasBaseInstructionsUpdate)
             ? normalizeConfigField('baseInstructions', settings.baseInstructions ?? settings.systemPrompt).value : null,
@@ -95,6 +102,9 @@ function requestedSessionConfig(current, request) {
         personality: request.hasPersonalityUpdate
             ? normalizePersonality(request.settings.personality)
             : normalizePersonality(currentConfig.personality),
+        toolPolicy: request.hasToolPolicyUpdate
+            ? normalizeToolPolicy(request.settings.toolPolicy)
+            : normalizeToolPolicy(currentConfig.toolPolicy),
     };
 }
 
@@ -108,6 +118,10 @@ function requireExpectedConfigRevision(settings) {
     return expected;
 }
 
+function sessionToolPolicy(session) {
+    return normalizeToolPolicy(session?.configSnapshot?.toolPolicy);
+}
+
 function configUpdateResult(defaults, session, request) {
     const permissionMode = session
         ? normalizePermissionMode(session.configSnapshot?.permissionMode || session.configSnapshot?.approvalPolicy)
@@ -119,6 +133,7 @@ function configUpdateResult(defaults, session, request) {
             permissionMode,
             ...(model ? { model } : {}),
             reasoningEffort: normalizeReasoningEffort(session?.configSnapshot?.reasoningEffort),
+            toolPolicy: sessionToolPolicy(session),
         },
         session: session ? sessionProjection(session) : null,
         desiredConfig: session?.configSnapshot || null,
@@ -280,7 +295,8 @@ class RuntimeConfigService {
         }
         const allowedFields = new Set([
             'instructionMode', 'baseInstructions', 'systemPrompt', 'developerInstructions', 'personality',
-            'model', 'reasoningEffort', 'workspaceRoot', 'permissionMode', 'createDerivedSession',
+                'model', 'reasoningEffort', 'workspaceRoot', 'permissionMode', 'createDerivedSession',
+                'toolPolicy',
         ]);
         const unknownFields = Object.keys(patch).filter((field) => !allowedFields.has(field));
         if (unknownFields.length) {
@@ -441,7 +457,7 @@ class RuntimeConfigService {
                     await this.context.resumeSession(session);
                     return this._operationRepository(operation).getSession(idValue);
                 }
-                if (instructionConfigChanged(desired, applied)) {
+                if (instructionConfigChanged(desired, applied) || toolPolicyChanged(desired, applied)) {
                     const activity = this.context.threadStates().get(session.threadId)?.activity;
                     if (activity === 'running') {
                         if (barrier) throw new CodexAppServerError(

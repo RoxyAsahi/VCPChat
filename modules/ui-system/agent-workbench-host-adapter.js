@@ -51,6 +51,9 @@ function createAgentWorkbenchHostAdapter({ windowRef = globalThis, documentRef =
                 return vcpUi.feedback.prompt(typeof options === 'string' ? { message: options } : options);
             },
         },
+        ui: {
+            create: (name, options) => vcpUi?.create?.(name, options) || null,
+        },
         clipboard: { writeText: (value) => hostWindow.navigator?.clipboard?.writeText?.(String(value ?? '')) },
         markdown: {
             render: (value) => hostWindow.vcpRenderBridge?.renderContent?.(value)

@@ -2,6 +2,7 @@
 
 const { CodexAppServerError } = require('./appServerTransport');
 const { normalizeInstructionMode, normalizePersonality } = require('./runtime-normalizers');
+const { CODEX_CAPABILITIES, isCodexCapabilityEnabled, normalizeToolPolicy } = require('./tool-policy');
 
 class RuntimePolicyService {
     constructor(context) {
@@ -11,6 +12,12 @@ class RuntimePolicyService {
     runtimePolicyParams(config = {}, { starting = false } = {}) {
         const provider = this.context.providerParams();
         if (config.executionProfile !== 'toolbox-only') return provider;
+        const toolPolicy = normalizeToolPolicy(config.toolPolicy == null ? {
+            preset: 'custom', enabledCodexCapabilities: [], enabledVcpTools: ['vcp:*'],
+        } : config.toolPolicy);
+        const shellEnabled = isCodexCapabilityEnabled(toolPolicy, CODEX_CAPABILITIES.SHELL)
+            || isCodexCapabilityEnabled(toolPolicy, CODEX_CAPABILITIES.WORKSPACE_WRITE);
+        const planEnabled = isCodexCapabilityEnabled(toolPolicy, CODEX_CAPABILITIES.PLAN);
         return {
             ...provider,
             config: {
@@ -24,9 +31,9 @@ class RuntimePolicyService {
                 model_reasoning_summary: 'detailed',
                 web_search: 'disabled',
                 mcp_servers: {},
-                'tools.update_plan.enabled': false,
+                'tools.update_plan.enabled': planEnabled,
                 'tools.experimental_request_user_input.enabled': false,
-                'features.shell_tool': false,
+                'features.shell_tool': shellEnabled,
                 'features.deferred_executor': false,
                 'features.request_permissions_tool': false,
                 'features.standalone_web_search': false,

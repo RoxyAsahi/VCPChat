@@ -12,6 +12,18 @@ const positiveInteger = (value) => {
     const number = Number(value);
     return Number.isInteger(number) && number > 0 ? number : Number.NaN;
 };
+const toolPolicy = (value) => {
+    const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const preset = ['full', 'readonly', 'custom'].includes(source.preset) ? source.preset : 'full';
+    const strings = (items) => Array.isArray(items)
+        ? [...new Set(items.map((item) => String(item || '').trim()).filter(Boolean))] : [];
+    return {
+        schemaVersion: 1,
+        preset,
+        enabledCodexCapabilities: strings(source.enabledCodexCapabilities),
+        enabledVcpTools: strings(source.enabledVcpTools),
+    };
+};
 
 const AGENT_CONFIG_DESCRIPTORS = Object.freeze({
     model: Object.freeze({
@@ -64,6 +76,13 @@ const AGENT_CONFIG_DESCRIPTORS = Object.freeze({
             ...(context.reasoningEfforts || []).map((value) => ({ value, label: value })),
         ],
         cas: true, runtimeApply: true, allowEmpty: true,
+    }),
+    toolPolicy: Object.freeze({
+        key: 'toolPolicy', label: '工具', scopes: ['profile', 'session'], control: 'custom',
+        defaultValue: null, normalize: toolPolicy,
+        validate: (value) => value && value.schemaVersion === 1
+            && ['full', 'readonly', 'custom'].includes(value.preset),
+        cas: true, runtimeApply: true, allowEmpty: false,
     }),
     'budget.maxRequestsPerTurn': Object.freeze({
         key: 'budget.maxRequestsPerTurn', label: '模型请求数', scopes: ['advanced'], control: 'number',
