@@ -4,6 +4,14 @@ const { StreamingAccumulatorRegistry } = require('../streamingAccumulator');
 const { normalizeCodexFileChanges } = require('../diffModel');
 const { projectVcpContent } = require('../vcpContentProjection');
 const { sanitizeUnknownItem } = require('./v2');
+const {
+    LIMITS,
+    boundedJson,
+    boundedText,
+    displayPath,
+    normalizeReasoningContent,
+    normalizeUserInputParts,
+} = require('./content-policy');
 
 const ITEM_KIND = Object.freeze({
     userMessage: ['user', 'message'],
@@ -25,19 +33,10 @@ const DEFAULT_MAX_PENDING_DELTA_ITEMS = 128;
 const DEFAULT_MAX_PENDING_DELTAS_PER_ITEM = 32;
 const DEFAULT_MAX_PENDING_DELTA_BYTES_PER_ITEM = 64 * 1024;
 const DEFAULT_MAX_PENDING_DELTA_BYTES = 1024 * 1024;
-
-function boundedJson(value, depth = 0) {
-    if (depth > 6) return '[truncated]';
-    if (value == null || typeof value === 'boolean' || typeof value === 'number') return value;
-    if (typeof value === 'string') return value.slice(0, 16_384);
-    if (Array.isArray(value)) return value.slice(0, 100).map((entry) => boundedJson(entry, depth + 1));
-    if (typeof value !== 'object') return String(value).slice(0, 1_024);
-    return Object.fromEntries(Object.entries(value).slice(0, 100)
-        .map(([key, entry]) => [String(key).slice(0, 256), boundedJson(entry, depth + 1)]));
-}
+const DEFAULT_MAX_UNKNOWN_ITEM_DIAGNOSTICS = 256;
 
 function normalizedToolItem(item, fields) {
-    return { type: item.type, id: item.id, ...Object.fromEntries(fields
+    return { type: boundedText(item.type, 128), id: boundedText(item.id, 256), ...Object.fromEntries(fields
         .filter((field) => Object.prototype.hasOwnProperty.call(item, field))
         .map((field) => [field, boundedJson(item[field])])) };
 }
@@ -46,21 +45,22 @@ function normalizedDynamicToolItem(item) {
     const wrapped = item.tool === 'vcp_invoke' && item.arguments && typeof item.arguments === 'object';
     return {
         ...normalizedToolItem(item, ['namespace', 'status', 'contentItems', 'success', 'durationMs']),
-        tool: wrapped ? String(item.arguments.tool || 'vcp_invoke').slice(0, 256) : String(item.tool || 'vcp_invoke').slice(0, 256),
-        wrapperTool: String(item.tool || 'vcp_invoke').slice(0, 256),
+        tool: boundedText(wrapped ? item.arguments.tool || 'vcp_invoke' : item.tool || 'vcp_invoke', 256),
+        wrapperTool: boundedText(item.tool || 'vcp_invoke', 256),
         arguments: boundedJson(wrapped ? item.arguments.arguments : item.arguments),
     };
 }
 
+function displayFileName(value) {
+    return displayPath(value) || 'Codex image';
+}
+
 function itemContent(item) {
     switch (item.type) {
-        case 'userMessage': return { parts: item.content || [] };
+        case 'userMessage': return { parts: normalizeUserInputParts(item.content) };
         case 'agentMessage': return projectVcpContent(item.text || '');
-        case 'reasoning': return {
-            summary: Array.isArray(item.summary) ? item.summary : [],
-            content: Array.isArray(item.content) ? item.content : [],
-        };
-        case 'plan': return { text: item.text || '' };
+        case 'reasoning': return normalizeReasoningContent(item);
+        case 'plan': return { text: boundedText(item.text, 64 * 1024) };
         case 'contextCompaction': {
             const hasSummary = Object.prototype.hasOwnProperty.call(item, 'summary');
             const hasMessage = Object.prototype.hasOwnProperty.call(item, 'message');
@@ -88,7 +88,11 @@ function itemContent(item) {
             'reasoningEffort', 'agentsStates',
         ]) };
         case 'webSearch': return { item: normalizedToolItem(item, ['action', 'query', 'status']) };
-        case 'imageView': return { item: normalizedToolItem(item, ['path']) };
+        case 'imageView': return { item: {
+            type: item.type,
+            id: item.id,
+            name: displayFileName(item.path),
+        } };
         default: return { unknown: sanitizeUnknownItem(item) };
     }
 }
@@ -115,6 +119,11 @@ class CodexProjectionProjector {
         this.clearTimer = options.clearTimer || clearTimeout;
         this.scheduleReconcile = typeof options.scheduleReconcile === 'function'
             ? options.scheduleReconcile : null;
+        this.onProtocolDiagnostic = typeof options.onProtocolDiagnostic === 'function'
+            ? options.onProtocolDiagnostic : null;
+        this.maxUnknownItemDiagnostics = Math.max(1, Number(options.maxUnknownItemDiagnostics)
+            || DEFAULT_MAX_UNKNOWN_ITEM_DIAGNOSTICS);
+        this.unknownItemDiagnostics = new Map();
         this.reconcileScheduledSessions = new Set();
     }
 
@@ -126,6 +135,7 @@ class CodexProjectionProjector {
         }
         this.pendingDeltas.clear();
         this.pendingDeltaBytes = 0;
+        this.unknownItemDiagnostics.clear();
         this.reconcileScheduledSessions.clear();
     }
 
@@ -172,6 +182,11 @@ class CodexProjectionProjector {
         }
         const turns = Array.isArray(thread.turns) ? thread.turns : [];
         const hasPartialItems = !turns.every((turn) => turn?.itemsView === 'full');
+        // In 0.146, `itemsView=full` is not complete for reasoning Items: a
+        // thread/read response may contain the surrounding user/assistant
+        // messages while omitting reasoning that was observed live. The
+        // repository keeps those omitted reasoning Blocks, while an explicitly
+        // returned reasoning Item remains authoritative for its supplied fields.
         const entries = [];
         for (const turn of turns) {
             for (const item of turn.items || []) {
@@ -213,6 +228,7 @@ class CodexProjectionProjector {
             ? this.repository.getSession(knownSessionId)
             : this.repository.getSessionByThread(threadId);
         if (!session) return null;
+        if (!ITEM_KIND[item.type]) this._diagnoseUnknownItem(session, params, item);
         const [role, kind] = ITEM_KIND[item.type] || ['system', 'observation'];
         const status = completed ? (item.status || 'completed') : (item.status || 'inProgress');
         const explicitFields = authoritativeContentFields(item);
@@ -273,9 +289,27 @@ class CodexProjectionProjector {
         }
     }
 
+    _diagnoseUnknownItem(session, params, item) {
+        if (!this.onProtocolDiagnostic) return;
+        const key = `${String(params.threadId || '')}:${String(item.id || '')}:${String(item.type || '')}`;
+        if (this.unknownItemDiagnostics.has(key)) return;
+        this.unknownItemDiagnostics.set(key, true);
+        while (this.unknownItemDiagnostics.size > this.maxUnknownItemDiagnostics) {
+            this.unknownItemDiagnostics.delete(this.unknownItemDiagnostics.keys().next().value);
+        }
+        this.onProtocolDiagnostic({
+            sessionId: session.sessionId,
+            threadId: String(params.threadId || ''),
+            turnId: params.turnId || null,
+            itemId: String(item.id || '').slice(0, 256),
+            itemType: String(item.type || 'unknown').slice(0, 128),
+            fields: Object.keys(item).slice(0, 32).map((field) => String(field).slice(0, 128)).sort(),
+        });
+    }
+
     _ensureReasoningPart(params, field, index) {
         const session = this.repository.getSessionByThread(params.threadId);
-        if (!params.itemId || !Number.isInteger(index) || index < 0) return false;
+        if (!params.itemId || !Number.isInteger(index) || index < 0 || index >= LIMITS.reasoningParts) return false;
         if (!session) return false;
         const applied = this.repository.ensureReasoningPart(session.sessionId, params.itemId, field, index);
         return applied || this._bufferDelta(params, { field, index, delta: '', kind: 'reasoning' });
@@ -283,7 +317,7 @@ class CodexProjectionProjector {
 
     _appendReasoning(params, field, index, delta) {
         const session = this.repository.getSessionByThread(params.threadId);
-        if (!params.itemId || !Number.isInteger(index) || index < 0) return false;
+        if (!params.itemId || !Number.isInteger(index) || index < 0 || index >= LIMITS.reasoningParts) return false;
         if (!session) return false;
         try {
             const novel = this.streaming.append(

@@ -13,6 +13,7 @@ function projectSession(summary = {}) {
             || (summary.activeTurnId ? 'running' : 'idle'),
         updatedAt: summary.updatedAt || summary.createdAt || 0,
         activeTurnId: summary.activeTurnId || null,
+        recoveryState: summary.recoveryState || 'confirmed',
         parentSessionId: summary.parentSessionId || summary.metadata?.forkedFrom || null,
     };
 }

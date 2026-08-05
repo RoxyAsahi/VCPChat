@@ -238,19 +238,21 @@ function reconcileAgentTimeline(container, parts, callbacks, rows = new Map()) {
         if (!row || row.dataset.agentTimelineKind !== part.kind) {
             row?.remove();
             row = callbacks.create(part);
-            row.dataset.agentTimelineKey = key;
-            row.dataset.agentTimelineKind = part.kind;
             rows.set(key, row);
         } else {
             const patched = callbacks.patch?.(row, part);
             if (patched && patched !== row) {
                 row.replaceWith(patched);
                 row = patched;
-                row.dataset.agentTimelineKey = key;
-                row.dataset.agentTimelineKind = part.kind;
                 rows.set(key, row);
             }
         }
+        // Message presentation patches synchronize their renderer-owned root
+        // attributes and may discard coordinator metadata. Reassert the
+        // canonical timeline identity after every create/patch so messages and
+        // tool cards remain equally stable across reloads and keyed reorders.
+        row.dataset.agentTimelineKey = key;
+        row.dataset.agentTimelineKind = part.kind;
         // append() moves an existing node instead of recreating it, which also
         // gives sequence reordering a deterministic, keyed implementation.
         container.append(row);

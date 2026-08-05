@@ -11,8 +11,13 @@ const {
 } = require('../dataContracts');
 const { normalizeProjectionSnapshot, projectionPatchBetween } = require('./v2');
 const { reorderReconciledMessages } = require('./reconcile-order');
+const {
+    readPersistedTimelineOrder,
+    repairPersistedTimelineOrder,
+} = require('./timeline-repair');
 const { mapBlockRow, mapOperationRow, mapSessionRow } = require('./rowMappers');
 const { mergeProjectionContent } = require('./contentMerge');
+const { createProjectionStreamContentStore } = require('./stream-content-store');
 
 function parseJson(value, fallback) {
     try {
@@ -85,6 +90,8 @@ class AgentProjectionRepository {
                 this.schemaVersion = migrate(this.db, { databasePath: options.db ? null : this.databasePath });
             }
             this._prepare();
+            this.streamContent = createProjectionStreamContentStore(this.stmt);
+            if (!this.readOnly) repairPersistedTimelineOrder(this.db, this.stmt, (row) => this._block(row));
         } catch (error) {
             if (!options.db) {
                 try { this.db.close(); } catch {}
@@ -92,7 +99,6 @@ class AgentProjectionRepository {
             throw error;
         }
     }
-
     assertWritable() {
         if (!this.readOnly) return;
         const error = new Error('Agent projection database is in read-only degraded mode');
@@ -220,8 +226,12 @@ class AgentProjectionRepository {
             listMessageAuthorities: this.db.prepare(`
                 SELECT messages.codex_item_id, messages.message_id,
                     SUM(CASE WHEN blocks.authority = 'codex' THEN 1 ELSE 0 END) AS codex_block_count,
+                    SUM(CASE WHEN blocks.kind = 'reasoning' AND blocks.authority = 'codex'
+                        THEN 1 ELSE 0 END) AS codex_reasoning_count,
                     SUM(CASE WHEN blocks.authority IS NOT NULL AND blocks.authority != 'codex' THEN 1 ELSE 0 END)
-                        AS local_block_count
+                        AS local_block_count,
+                    SUM(CASE WHEN blocks.kind = 'tool' AND blocks.authority IS NOT NULL
+                        AND blocks.authority != 'codex' THEN 1 ELSE 0 END) AS local_tool_count
                 FROM agent_messages AS messages
                 LEFT JOIN agent_blocks AS blocks ON blocks.message_id = messages.message_id
                 WHERE messages.session_id = ?
@@ -347,11 +357,20 @@ class AgentProjectionRepository {
             if (Number.isInteger(expectedGeneration) && state?.mutation_generation !== expectedGeneration) {
                 return false;
             }
-            const rowsBefore = this.stmt.listMessages.all(sessionId);
+            const authoritiesBefore = this.stmt.listMessageAuthorities.all(sessionId);
+            const localToolItemIds = new Set(authoritiesBefore
+                .filter((row) => Number(row.local_tool_count) > 0)
+                .map((row) => String(row.codex_item_id)));
+            const rowsBefore = this.stmt.listMessages.all(sessionId)
+                .map((row) => ({ ...row, isLocalTool: localToolItemIds.has(String(row.codex_item_id)) }));
             if (deleteMissing) {
                 const incomingItemIds = new Set(entries.map((entry) => String(entry.record.itemId)));
                 for (const row of this.stmt.listMessageAuthorities.all(sessionId)) {
                     if (!incomingItemIds.has(String(row.codex_item_id))) {
+                        // Codex App Server 0.146 omits reasoning Items from thread/read even when
+                        // itemsView is full. Live reasoning is therefore outside absence-based
+                        // deletion authority and must remain available for Session restoration.
+                        if (Number(row.codex_reasoning_count) > 0) continue;
                         if (Number(row.local_block_count) > 0) {
                             this.stmt.deleteCodexBlocksExcept.run({
                                 message_id: row.message_id,
@@ -375,7 +394,7 @@ class AgentProjectionRepository {
                     });
                 }
             }
-            reorderReconciledMessages(this.stmt, sessionId, entries, rowsBefore);
+            reorderReconciledMessages(this.stmt, sessionId, entries, rowsBefore, localToolItemIds);
             this.stmt.setReconciled.run({ session_id: sessionId, now: Date.now() });
             this.stmt.advanceGeneration.run({ session_id: sessionId, now: Date.now() });
             return true;
@@ -483,19 +502,9 @@ class AgentProjectionRepository {
     readProjection(sessionId) {
         const session = this.getSession(sessionId);
         if (!session) return null;
-        const messages = this.stmt.listMessages.all(sessionId).map((row) => ({
-            messageId: row.message_id,
-            sessionId: row.session_id,
-            threadId: row.codex_thread_id,
-            turnId: row.codex_turn_id,
-            itemId: row.codex_item_id,
-            role: row.role,
-            status: row.status,
-            sourceOrder: row.source_order,
-            createdAt: row.created_at,
-            updatedAt: row.updated_at,
-            blocks: this.stmt.listBlocks.all(row.message_id).map((block) => this._block(block)),
-        }));
+        const messages = readPersistedTimelineOrder(
+            this.db, this.stmt, sessionId, (block) => this._block(block), { readOnly: this.readOnly },
+        );
         const state = this.stmt.getState.get(sessionId);
         const result = {
             session,
@@ -600,88 +609,15 @@ class AgentProjectionRepository {
     }
 
     appendBlockText(sessionId, itemId, ordinal, delta, kind = 'message') {
-        const message = this.stmt.getMessageByItem.get(sessionId, itemId);
-        if (!message) throw new Error(`Unknown Codex item: ${itemId}`);
-        let block = this.stmt.getBlock.get(message.message_id, ordinal);
-        if (!block) {
-            const now = Date.now();
-            block = {
-                block_id: `block:${sessionId}:${itemId}:${ordinal}`,
-                message_id: message.message_id,
-                kind,
-                status: 'inProgress',
-                ordinal,
-                content_json: '{}',
-                created_at: now,
-                updated_at: now,
-            };
-        }
-        const content = parseJson(block.content_json, {});
-        content.text = `${content.text || ''}${String(delta || '')}`;
-        this.stmt.upsertBlock.run({
-            block_id: block.block_id,
-            message_id: block.message_id,
-            kind: block.kind || kind,
-            status: block.status,
-            ordinal,
-            content_json: json(content),
-            content_schema_version: BLOCK_CONTENT_SCHEMA_VERSION,
-            authority: block.authority || 'codex',
-            created_at: block.created_at,
-            updated_at: Date.now(),
-        });
-        this.stmt.advanceGeneration.run({ session_id: sessionId, now: Date.now() });
+        return this.streamContent.appendBlockText(sessionId, itemId, ordinal, delta, kind);
     }
 
     ensureReasoningPart(sessionId, itemId, field, index) {
-        if (!['summary', 'content'].includes(field) || !Number.isInteger(index) || index < 0) return false;
-        const message = this.stmt.getMessageByItem.get(sessionId, itemId);
-        if (!message) return false;
-        const block = this.stmt.getBlock.get(message.message_id, 0);
-        const content = block ? parseJson(block.content_json, {}) : { summary: [], content: [] };
-        const values = Array.isArray(content[field]) ? [...content[field]] : [];
-        while (values.length <= index) values.push('');
-        content[field] = values;
-        this.stmt.upsertBlock.run({
-            block_id: block?.block_id || `block:${sessionId}:${itemId}:0`,
-            message_id: message.message_id,
-            kind: 'reasoning',
-            status: block?.status || 'inProgress',
-            ordinal: 0,
-            content_json: json(content),
-            content_schema_version: BLOCK_CONTENT_SCHEMA_VERSION,
-            authority: block?.authority || 'codex',
-            created_at: block?.created_at || Date.now(),
-            updated_at: Date.now(),
-        });
-        this.stmt.advanceGeneration.run({ session_id: sessionId, now: Date.now() });
-        return true;
+        return this.streamContent.ensureReasoningPart(sessionId, itemId, field, index);
     }
 
     appendReasoningText(sessionId, itemId, field, index, delta) {
-        if (!['summary', 'content'].includes(field) || !Number.isInteger(index) || index < 0) return false;
-        const message = this.stmt.getMessageByItem.get(sessionId, itemId);
-        if (!message) return false;
-        const block = this.stmt.getBlock.get(message.message_id, 0);
-        const content = block ? parseJson(block.content_json, {}) : { summary: [], content: [] };
-        const values = Array.isArray(content[field]) ? [...content[field]] : [];
-        while (values.length <= index) values.push('');
-        values[index] = `${values[index] || ''}${String(delta || '')}`;
-        content[field] = values;
-        this.stmt.upsertBlock.run({
-            block_id: block?.block_id || `block:${sessionId}:${itemId}:0`,
-            message_id: message.message_id,
-            kind: 'reasoning',
-            status: block?.status || 'inProgress',
-            ordinal: 0,
-            content_json: json(content),
-            content_schema_version: BLOCK_CONTENT_SCHEMA_VERSION,
-            authority: block?.authority || 'codex',
-            created_at: block?.created_at || Date.now(),
-            updated_at: Date.now(),
-        });
-        this.stmt.advanceGeneration.run({ session_id: sessionId, now: Date.now() });
-        return true;
+        return this.streamContent.appendReasoningText(sessionId, itemId, field, index, delta);
     }
 
     markReconciled(sessionId) {

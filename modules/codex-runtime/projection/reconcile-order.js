@@ -1,7 +1,36 @@
 'use strict';
 
+const { hasClusteredToolTurn, logicalTimelineOrder } = require('./timeline-order');
+
 function turnKey(value) {
     return String(value || '');
+}
+
+function sourceOrder(row) {
+    const value = Number(row?.source_order);
+    return Number.isFinite(value) ? value : 0;
+}
+
+function assignRowsToSlots(rows, slots) {
+    if (!rows.length || !slots.length) return rows;
+    const assigned = [];
+    const assignRole = (role) => {
+        const matchingRows = rows.filter((row) => (row.role === 'user') === (role === 'user'));
+        const matchingSlots = slots.filter((row) => (row.role === 'user') === (role === 'user'));
+        if (!matchingRows.length) return;
+        const available = matchingSlots.length ? matchingSlots : slots;
+        matchingRows.forEach((row, index) => {
+            const slotIndex = matchingRows.length === 1 ? (role === 'user' ? 0 : available.length - 1)
+                : Math.round((index * (available.length - 1)) / (matchingRows.length - 1));
+            assigned.push({
+                ...row,
+                source_order: sourceOrder(available[Math.max(0, slotIndex)]) + (index * 0.0001),
+            });
+        });
+    };
+    assignRole('user');
+    assignRole('assistant');
+    return assigned;
 }
 
 function mergeTurnRows(incomingRows, retainedRows, rowsBefore, incomingSet) {
@@ -37,6 +66,21 @@ function mergeTurnRows(incomingRows, retainedRows, rowsBefore, incomingSet) {
         return result;
     }
 
+    // Identity-rewriting snapshots need the old Codex rows only as slots for
+    // their replacements. Retained rows (ToolBox calls and 0.146-omitted
+    // reasoning) keep their own live source_order and must not also be reused
+    // as replacement slots, otherwise the replacement assistant message and
+    // retained reasoning collapse onto the same position.
+    const priorCodexSlots = rowsBefore.filter((row) => (
+        !row.isLocalTool && !retainedById.has(String(row.codex_item_id))
+    ));
+    if (priorCodexSlots.length) {
+        return [
+            ...assignRowsToSlots(incomingRows, priorCodexSlots),
+            ...retainedRows,
+        ].sort((left, right) => sourceOrder(left) - sourceOrder(right));
+    }
+
     // App Server 0.146 may omit client-executed dynamicToolCall Items from a
     // later thread/read. If the Codex Items were not projected live, the only
     // durable rows before reconciliation are those tools. Re-anchor them after
@@ -50,7 +94,7 @@ function mergeTurnRows(incomingRows, retainedRows, rowsBefore, incomingSet) {
     ];
 }
 
-function reorderReconciledMessages(statements, sessionId, entries, rowsBefore = []) {
+function reorderReconciledMessages(statements, sessionId, entries, rowsBefore = [], localToolItemIds = new Set()) {
     const rows = statements.listMessages.all(sessionId);
     const incomingIds = [...new Set(entries.map((entry) => String(entry.record.itemId)))];
     const incomingSet = new Set(incomingIds);
@@ -87,11 +131,15 @@ function reorderReconciledMessages(statements, sessionId, entries, rowsBefore = 
     const insertionIndex = firstIncomingIndex < 0 ? rows.length : rows.slice(0, firstIncomingIndex)
         .filter((row) => !knownTurns.has(turnKey(row.codex_turn_id))).length;
     const outsideRows = rows.filter((row) => !knownTurns.has(turnKey(row.codex_turn_id)));
-    const orderedRows = [
+    const mergedRows = [
         ...outsideRows.slice(0, insertionIndex),
         ...reconciledRows,
         ...outsideRows.slice(insertionIndex),
-    ];
+    ].map((row) => ({
+        ...row,
+        isLocalTool: localToolItemIds.has(String(row.codex_item_id)),
+    }));
+    const orderedRows = hasClusteredToolTurn(mergedRows) ? logicalTimelineOrder(mergedRows) : mergedRows;
     orderedRows.forEach((row, index) => statements.setMessageSourceOrder.run({
         message_id: row.message_id,
         source_order: index + 1,

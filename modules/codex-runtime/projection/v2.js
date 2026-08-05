@@ -1,15 +1,16 @@
 'use strict';
 
 const crypto = require('crypto');
+const {
+    boundedJson,
+    boundedText,
+    normalizeProjectionContent,
+} = require('./content-policy');
 
 const CONTENT_SCHEMA_VERSION = 2;
 
 function stableBlockId(sessionId, itemId, ordinal = 0) {
     return `block:${String(sessionId)}:${String(itemId)}:${Number.isInteger(ordinal) ? ordinal : 0}`;
-}
-
-function boundedText(value, max = 16_384) {
-    return String(value == null ? '' : value).slice(0, max);
 }
 
 function sanitizeUnknownItem(item = {}) {
@@ -25,30 +26,16 @@ function sanitizeUnknownItem(item = {}) {
     return safe;
 }
 
-function boundedJson(value, depth = 0) {
-    if (depth > 6) return '[truncated]';
-    if (value == null || typeof value === 'boolean' || typeof value === 'number') return value;
-    if (typeof value === 'string') return boundedText(value);
-    if (Array.isArray(value)) return value.slice(0, 100).map((entry) => boundedJson(entry, depth + 1));
-    if (typeof value !== 'object') return boundedText(value, 1_024);
-    return Object.fromEntries(Object.entries(value).slice(0, 100)
-        .map(([key, entry]) => [boundedText(key, 256), boundedJson(entry, depth + 1)]));
-}
-
 function normalizeContent(content, itemType) {
-    if (itemType === 'reasoning') {
-        return {
-            summary: Array.isArray(content?.summary) ? content.summary.map((value) => boundedText(value)) : [],
-            content: Array.isArray(content?.content) ? content.content.map((value) => boundedText(value)) : [],
-        };
-    }
-    if (!content || typeof content !== 'object') return { text: boundedText(content) };
+    if (!content || typeof content !== 'object') return normalizeProjectionContent(content, itemType);
     if (content.item && !content.unknown) {
         const known = ['commandExecution', 'fileChange', 'mcpToolCall', 'collabAgentToolCall',
             'dynamicToolCall', 'webSearch', 'imageView'].includes(String(content.item.type || ''));
-        return { ...boundedJson(content), item: known ? boundedJson(content.item) : sanitizeUnknownItem(content.item) };
+        return known
+            ? normalizeProjectionContent(content, itemType)
+            : { ...boundedJson(content), item: sanitizeUnknownItem(content.item) };
     }
-    return content;
+    return normalizeProjectionContent(content, itemType);
 }
 
 function normalizeTimelineBlock({ sessionId, threadId, message, block }) {

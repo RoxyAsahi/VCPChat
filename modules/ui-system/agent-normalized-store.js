@@ -6,6 +6,18 @@ function invalidSnapshot(message) {
     return error;
 }
 
+function canonicalBlock(block, sessionId, threadId) {
+    const itemId = String(block?.itemId || '').trim();
+    const messageId = String(block?.messageId || '').trim();
+    const ordinal = Number(block?.ordinal);
+    const expectedId = `block:${sessionId}:${itemId}:${ordinal}`;
+    return Boolean(block?.schemaVersion === 2 && threadId
+        && block.sessionId === sessionId && block.threadId === threadId
+        && itemId && messageId && Number.isInteger(ordinal) && ordinal >= 0
+        && block.blockId === expectedId
+        && block.content && typeof block.content === 'object' && !Array.isArray(block.content));
+}
+
 function projectionToNormalized(snapshot = {}) {
     const normalized = snapshot.normalized;
     if (!normalized || normalized.schemaVersion !== 2 || !Array.isArray(normalized.blocks)) {
@@ -17,14 +29,7 @@ function projectionToNormalized(snapshot = {}) {
         throw invalidSnapshot('Agent projection snapshot Session identity is invalid');
     }
     const blocks = normalized.blocks.map((block) => {
-        const itemId = String(block?.itemId || '').trim();
-        const messageId = String(block?.messageId || '').trim();
-        const ordinal = Number(block?.ordinal);
-        const expectedId = `block:${sessionId}:${itemId}:${ordinal}`;
-        if (block?.schemaVersion !== 2 || !threadId || block.sessionId !== sessionId
-            || block.threadId !== threadId || !itemId || !messageId
-            || !Number.isInteger(ordinal) || ordinal < 0 || block.blockId !== expectedId
-            || !block.content || typeof block.content !== 'object' || Array.isArray(block.content)) {
+        if (!canonicalBlock(block, sessionId, threadId)) {
             throw invalidSnapshot(`Agent projection snapshot contains an invalid Block: ${block?.blockId || '<missing>'}`);
         }
         return block;
@@ -47,35 +52,9 @@ function ensureNormalizedState(state) {
 }
 
 function orderMessagesForTimeline(messages = []) {
-    const ordered = [...messages].sort((left, right) => (
+    return [...messages].sort((left, right) => (
         (left.sourceOrder - right.sourceOrder) || (left.createdAt - right.createdAt)
     ));
-    const groups = new Map();
-    ordered.forEach((message, index) => {
-        const key = message.turnId ? `turn:${message.turnId}` : `message:${message.messageId}`;
-        const group = groups.get(key) || { key, index, messages: [] };
-        group.messages.push(message);
-        groups.set(key, group);
-    });
-    let changed = false;
-    const repaired = [...groups.values()].map((group) => {
-        const firstUser = group.messages.findIndex((message) => message.role === 'user');
-        if (firstUser > 0) changed = true;
-        const messagesInTurn = firstUser > 0 ? [
-            group.messages[firstUser],
-            ...group.messages.slice(0, firstUser),
-            ...group.messages.slice(firstUser + 1),
-        ] : group.messages;
-        return {
-            ...group,
-            order: firstUser >= 0
-                ? Number(group.messages[firstUser].sourceOrder)
-                : Math.min(...group.messages.map((message) => Number(message.sourceOrder) || 0)),
-            messages: messagesInTurn,
-        };
-    }).sort((left, right) => (left.order - right.order) || (left.index - right.index));
-    const flattened = repaired.flatMap((group) => group.messages);
-    return changed ? flattened.map((message, index) => ({ ...message, displayOrder: index + 1 })) : flattened;
 }
 
 function applyProjectionSnapshot(state, snapshot) {
@@ -157,6 +136,20 @@ function selectedProjectionView(state, sessionId = state?.selectedSessionId) {
     };
 }
 
+function projectionPatchRuntime(state, patch) {
+    const known = Number(state?.runtime?.generation || 0);
+    const incoming = Number(patch.runtimeGeneration);
+    if (known > 0 && (!Number.isInteger(incoming) || incoming < known)) {
+        return { accepted: false, runtime: state.runtime };
+    }
+    return {
+        accepted: true,
+        runtime: Number.isInteger(incoming) && incoming > known
+            ? { ...(state.runtime || {}), generation: incoming }
+            : state.runtime,
+    };
+}
+
 function applyProjectionPatch(state, patch = {}) {
     const next = ensureNormalizedState(state);
     const sessionId = String(patch.sessionId || '');
@@ -167,6 +160,10 @@ function applyProjectionPatch(state, patch = {}) {
     const session = next.sessionsById.get(sessionId);
     if (session?.threadId && session.threadId !== threadId) {
         return { applied: false, reason: 'identity-mismatch', state };
+    }
+    const patchRuntime = projectionPatchRuntime(state, patch);
+    if (!patchRuntime.accepted) {
+        return { applied: false, reason: 'stale-runtime-generation', state };
     }
     const currentRevision = Number(next.projectionRevisions.get(sessionId) || 0);
     const baseRevision = Number(patch.baseProjectionRevision);
@@ -181,8 +178,7 @@ function applyProjectionPatch(state, patch = {}) {
         if (existing?.sessionId === sessionId) blocksById.delete(id);
     }
     for (const block of patch.upsertBlocks || []) {
-        if (block?.schemaVersion !== 2 || block.sessionId !== sessionId || block.threadId !== threadId
-            || !String(block.blockId || '').startsWith(`block:${sessionId}:`)) {
+        if (!canonicalBlock(block, sessionId, threadId)) {
             return { applied: false, reason: 'identity-mismatch', state };
         }
         blocksById.set(block.blockId, block);
@@ -191,7 +187,10 @@ function applyProjectionPatch(state, patch = {}) {
     sessionsById.set(sessionId, { ...(session || {}), sessionId, threadId });
     const projectionRevisions = new Map(next.projectionRevisions);
     projectionRevisions.set(sessionId, projectionRevision);
-    return { applied: true, state: { blocksById, sessionsById, projectionRevisions } };
+    return { applied: true, state: {
+        blocksById, sessionsById, projectionRevisions,
+        ...(patchRuntime.runtime ? { runtime: patchRuntime.runtime } : {}),
+    } };
 }
 
 export {
