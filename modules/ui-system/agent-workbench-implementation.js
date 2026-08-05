@@ -286,6 +286,8 @@ function mountWorkbench(container) {
         controller,
         listAgentProfiles: () => controller.listAgentProfiles(),
         getCachedModels: () => controller.getCachedModels(),
+        refreshModels: () => controller.refreshModels(),
+        onModelsUpdated: (callback) => controller.onModelsUpdated(callback),
         queueRender,
         syncPermissionModeFromSelectedSession,
         syncModelFromSelectedSession,
@@ -298,6 +300,7 @@ function mountWorkbench(container) {
         selectAgent,
         refreshTopicsForAgent,
         refreshControlPlane,
+        refreshModelCatalog,
     } = sessionCatalog;
     const settingsCoordinator = createAgentSettingsCoordinator({
         state,
@@ -454,7 +457,7 @@ function mountWorkbench(container) {
     const settingsPaneFeature = createAgentSettingsPaneFeature({
         state, store, sidebar, settingsState, advancedSettingsFeature, activeSession,
         sessionConfigRevisions, selectedAgentProfile, profileNeedsConfiguration,
-        persistWorkbenchSettings, renderSidebar, run, refreshControlPlane, notify, controller,
+        persistWorkbenchSettings, renderSidebar, run, refreshControlPlane, refreshModelCatalog, notify, controller,
         refreshRecoveryOperations, refreshTopicsForAgent, node, button, sameAgent, host,
     });
     const renderSettingsSidebarContent = settingsPaneFeature.render;

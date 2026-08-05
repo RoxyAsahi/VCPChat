@@ -680,6 +680,26 @@
         text-align: center;
     }
 
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-build-empty-state {
+        width: 100%;
+        min-height: 100%;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        padding: 0;
+        pointer-events: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-build-empty-content {
+        width: min(760px, calc(100% - 48px));
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-build-empty-state .next-ui-empty-brand-base {
+            stroke: url("#agentBuildEmptyStaticStroke");
+        }
+    }
+
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-attachment-list {
         display: flex;
         flex-wrap: wrap;

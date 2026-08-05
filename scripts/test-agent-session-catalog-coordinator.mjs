@@ -72,6 +72,48 @@ function createHarness() {
 
 {
     const { state, store, renders } = createHarness();
+    let modelListener = null;
+    let refreshCalls = 0;
+    const controller = {
+        listSessions: async () => [],
+        listInteractionQueue: async () => [],
+        getWorkbenchSettings: async () => ({}),
+    };
+    const coordinator = createAgentSessionCatalogCoordinator({
+        state, store, controller,
+        listAgentProfiles: async () => state.agentCatalog,
+        getCachedModels: async () => [],
+        refreshModels: async () => {
+            refreshCalls += 1;
+            const models = [{ id: 'gpt-refresh', reasoning_efforts: ['high'] }];
+            modelListener?.(models);
+            return { success: true, models };
+        },
+        onModelsUpdated: (callback) => {
+            modelListener = callback;
+            return () => { modelListener = null; };
+        },
+        queueRender: (value) => renders.push(value),
+        syncPermissionModeFromSelectedSession() {},
+        syncModelFromSelectedSession() {},
+        uxMark() {},
+        requestAnimationFrame: (callback) => callback(),
+    });
+    await coordinator.refreshControlPlane();
+    assert.deepEqual(state.modelCatalog, [], 'an empty cached model directory must remain an explicit empty catalog');
+    await coordinator.refreshModelCatalog();
+    assert.equal(refreshCalls, 1, 'manual model refresh must call Main exactly once');
+    assert.deepEqual(state.modelCatalog.map((model) => model.id), ['gpt-refresh']);
+    assert.deepEqual(state.modelCatalog[0].reasoningEfforts, ['high']);
+    const lateModelListener = modelListener;
+    coordinator.dispose();
+    lateModelListener?.([{ id: 'late-model' }]);
+    assert.deepEqual(state.modelCatalog.map((model) => model.id), ['gpt-refresh'],
+        'a model update received after dispose must not mutate the Workbench state');
+}
+
+{
+    const { state, store, renders } = createHarness();
     const profilesA = deferred();
     const profilesB = deferred();
     let profileCall = 0;

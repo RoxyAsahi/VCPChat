@@ -1,4 +1,5 @@
-import { assert, fs, path, pathToFileURL, readCssWithImports, waitFor, root, workbenchProjectionPatch, dom, resizeObservers, TestResizeObserver, revokedAvatarUrl, unsubscribeCalls, eventCallback, runtimeStatus, activeRuntimeSession, presenceCalls, startedTurns, importedAttachment, importedVideoAttachment, selectedAttachments, followUpTurns, steeringTurns, cancelledTurns, interactionQueue, replacedInteractionQueues, resolvedPendingInputs, createdSessions, createdTopics, renamedTopics, compactedSessions, approvalResponses, interactionResponses, openedExternalLinks, workspaceActions, savedWorkbenchSettings, sessionConfigRevisions, sessionConfigSnapshots, savedAvatars, savedAgentProfiles, runtimeTransitions, runtimeEnsures, exportedSessions, mainCreateProxyCalls, sharedCreateActionCalls, releaseAgentCatalog, buildAgentProfiles, agentCatalogGate, topicCatalog, secondaryTopicCatalog, archivedTopicCatalog, topicListRequests, topicSearchRequests, canonicalSessionProjection, runtimeEventNumber, emitDaemonEvent, fixtureProjectionRevisionBySession, emitProjectionBlock, setSelectedAttachments, setInteractionQueue, setRuntimeStatus } from './fixtures/agent-workbench-harness.mjs';
+import { assert, fs, path, pathToFileURL, readCssWithImports, waitFor, root, workbenchProjectionPatch, dom, resizeObservers, TestResizeObserver, revokedAvatarUrl, unsubscribeCalls, eventCallback, runtimeStatus, activeRuntimeSession, presenceCalls, startedTurns, importedAttachment, importedVideoAttachment, selectedAttachments, followUpTurns, steeringTurns, cancelledTurns, interactionQueue, replacedInteractionQueues, resolvedPendingInputs, createdSessions, createdTopics, renamedTopics, compactedSessions, approvalResponses, interactionResponses, openedExternalLinks, workspaceActions, savedWorkbenchSettings, sessionConfigRevisions, sessionConfigSnapshots, savedAvatars, savedAgentProfiles, runtimeTransitions, runtimeEnsures, exportedSessions, mainCreateProxyCalls, sharedCreateActionCalls, releaseAgentCatalog, buildAgentProfiles, agentCatalogGate, topicCatalog, secondaryTopicCatalog, archivedTopicCatalog, topicListRequests, topicSearchRequests, canonicalSessionProjection, runtimeEventNumber, emitDaemonEvent, fixtureProjectionRevisionBySession, emitProjectionBlock, setSelectedAttachments, setInteractionQueue, setRuntimeStatus, refreshModelCalls } from './fixtures/agent-workbench-harness.mjs';
+import { createAgentWorkbenchState } from '../modules/ui-system/agent-workbench-state.js';
 
 // next-ui-apps overwrites the stub; capture registrations via its real registry.
 await import(`${pathToFileURL(path.join(root, 'modules/ui-system/agent-workbench.js')).href}?test=${Date.now()}`);
@@ -39,6 +40,7 @@ window.VCPUI = { feedback: {
     prompt: async () => '重命名后的 Topic',
     toast: () => {},
 } };
+window.globalSettings = { sidebarWidth: 300 };
 window.localStorage.setItem('vcpchat.agentWorkbench.lastTopic.v1', JSON.stringify({
     sessionId: 'topic-restored', title: '可恢复的 Codex Session', agentId: 'Nova',
     model: 'gpt-5.6-terra', workspaceRoot: root,
@@ -107,17 +109,17 @@ assert.ok(workbenchSidebar.classList.contains('agent-chat-sidebar-width-560'),
 host.querySelector('.agent-chat-header-activity')?.click();
 const activityPanelSplitter = host.querySelector('.agent-chat-activity-splitter[role="separator"]');
 const activityPanelElement = host.querySelector('.agent-chat-activity-panel');
-assert.ok(workbenchSidebar.classList.contains('agent-chat-sidebar-width-180'),
-    'opening Activity must temporarily reduce a wide saved sidebar preference before it crowds out the chat column');
+assert.ok(workbenchSidebar.classList.contains('agent-chat-sidebar-width-240'),
+    'opening Activity must temporarily reduce the inherited main-chat sidebar preference before it crowds out the chat column');
 assert.ok(activityPanelSplitter?.classList.contains('is-active'),
     'opening Session information must expose the chat/panel resize handle');
-assert.ok(activityPanelElement?.classList.contains('agent-chat-activity-width-420'),
-    'Session information must retain the original compact default width');
+assert.ok(activityPanelElement?.classList.contains('agent-chat-activity-width-320'),
+    'Session information must use the compact default width');
 activityPanelSplitter.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
-assert.ok(activityPanelElement.classList.contains('agent-chat-activity-width-440'),
+assert.ok(activityPanelElement.classList.contains('agent-chat-activity-width-340'),
     'moving the outer splitter left must widen Session information');
 activityPanelSplitter.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-assert.ok(activityPanelElement.classList.contains('agent-chat-activity-width-420'),
+assert.ok(activityPanelElement.classList.contains('agent-chat-activity-width-320'),
     'moving the outer splitter right must restore the compact panel width');
 assert.equal(host.querySelector('.agent-chat-activity-tab[data-tab="plan"]'), null,
     'the toolbox-only product must hide Plan until collaboration mode is wired to turn/start');
@@ -184,6 +186,8 @@ const profileModel = profileSettingsFields
     .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent === '模型')?.querySelector('select');
 const profilePermission = profileSettingsFields
     .find((item) => item.querySelector('.agent-chat-setting-label')?.textContent === '本地工具审批')?.querySelector('select');
+assert.ok(profileModel || profileSettingsFields.some((item) => item.querySelector('input[aria-label="模型"]')),
+    'the model setting must remain editable even before the model catalog is available');
 profileWorkspace.value = `${root}\\agent-123-updated`;
 profileWorkspace.dispatchEvent(new window.Event('change', { bubbles: true }));
 profileModel.value = 'gpt-5.6-terra';
@@ -199,6 +203,24 @@ assert.deepEqual({
 }, {
     agentId: '123', model: 'gpt-5.6-terra', workspaceRoot: `${root}\\agent-123-updated`, permissionMode: 'always-approve',
 }, 'settings with no selected Session must update the current Agent Profile inherited by future Sessions');
+const modelRefreshButton = host.querySelector('.agent-chat-model-refresh');
+assert.ok(modelRefreshButton, 'profile settings must expose an explicit model refresh action');
+modelRefreshButton.click();
+await waitFor(() => refreshModelCalls > 0, 3_000);
+await new Promise((resolve) => setTimeout(resolve, 30));
+assert.ok([...host.querySelectorAll('.agent-chat-setting-field select option, .agent-chat-setting-field input')]
+    .some((control) => control.value === 'gpt-5.6-refresh'),
+    'a refreshed model catalog must become available without leaving the Settings tab');
+const stateProbe = createAgentWorkbenchState({
+    window: {
+        globalSettings: { sidebarWidth: 300 },
+        localStorage: { getItem: () => null },
+        sessionStorage: window.sessionStorage,
+    },
+    agentCatalog: [], rememberedTopic: null,
+});
+assert.equal(stateProbe.agentSidebarWidth, 300,
+    'a Workbench without its own preference must inherit the main-chat sidebar width');
 assistantTab.click();
 const novaAgent = [...host.querySelectorAll('.agent-chat-sidebar .agent-chat-agent-row')]
     .find((row) => row.querySelector('.agent-name')?.textContent === 'Nova');
@@ -697,6 +719,10 @@ const workspaceBrowser = host.querySelector('.agent-workspace-browser');
 const workspaceSplitter = host.querySelector('.agent-workspace-splitter[role="separator"]');
 assert.ok(workspaceBrowser && workspaceSplitter,
     'Workspace must render as a resizable preview/tree split view');
+assert.equal(host.querySelector('.agent-workspace-heading'), null,
+    'the Files tool must start with search instead of repeating a Workspace heading');
+assert.ok(host.querySelector('.agent-workspace-toolbar')?.firstElementChild?.matches('.agent-workspace-search-wrap'),
+    'the Workspace search control must be the first toolbar row');
 workspaceSplitter.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
 assert.ok(workspaceBrowser.classList.contains('agent-workspace-split-48'),
     'Workspace splitter keyboard controls must resize the preview pane without inline styles');

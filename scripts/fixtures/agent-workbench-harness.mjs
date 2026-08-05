@@ -138,6 +138,9 @@ const archivedTopicCatalog = [{
 }];
 const topicListRequests = [];
 const topicSearchRequests = [];
+let modelUpdateCallback = null;
+let modelUnsubscribeCalls = 0;
+let refreshModelCalls = 0;
 window.nextUiApps = {
     register(definition) { registered = definition; return definition; },
     get() { return null; },
@@ -166,6 +169,16 @@ window.chatAPI = {
     getCachedModels: async () => {
         await new Promise((resolve) => setTimeout(resolve, 250));
         return [{ id: 'gpt-5.6-terra', reasoning_efforts: ['low', 'medium', 'high'] }, { id: 'gpt-5.6-luna' }];
+    },
+    refreshModels: async () => {
+        refreshModelCalls += 1;
+        const models = [{ id: 'gpt-5.6-refresh', reasoning_efforts: ['medium', 'high'] }];
+        modelUpdateCallback?.(models);
+        return { success: true, models, count: models.length };
+    },
+    onModelsUpdated(callback) {
+        modelUpdateCallback = callback;
+        return () => { modelUnsubscribeCalls += 1; };
     },
     agentRuntimeGetStatus: async () => ({
         state: runtimeStatus,
@@ -510,4 +523,4 @@ function setSelectedAttachments(value) { selectedAttachments = value; }
 function setInteractionQueue(value) { interactionQueue = value; }
 function setRuntimeStatus(value) { runtimeStatus = value; }
 
-export { assert, fs, path, pathToFileURL, readCssWithImports, waitFor, root, workbenchProjectionPatch, dom, resizeObservers, TestResizeObserver, revokedAvatarUrl, unsubscribeCalls, eventCallback, runtimeStatus, activeRuntimeSession, presenceCalls, startedTurns, importedAttachment, importedVideoAttachment, selectedAttachments, followUpTurns, steeringTurns, cancelledTurns, interactionQueue, replacedInteractionQueues, resolvedPendingInputs, createdSessions, createdTopics, renamedTopics, compactedSessions, approvalResponses, interactionResponses, openedExternalLinks, workspaceActions, savedWorkbenchSettings, sessionConfigRevisions, sessionConfigSnapshots, savedAvatars, savedAgentProfiles, runtimeTransitions, runtimeEnsures, exportedSessions, mainCreateProxyCalls, sharedCreateActionCalls, releaseAgentCatalog, buildAgentProfiles, agentCatalogGate, topicCatalog, secondaryTopicCatalog, archivedTopicCatalog, topicListRequests, topicSearchRequests, canonicalSessionProjection, runtimeEventNumber, emitDaemonEvent, fixtureProjectionRevisionBySession, emitProjectionBlock, setSelectedAttachments, setInteractionQueue, setRuntimeStatus };
+export { assert, fs, path, pathToFileURL, readCssWithImports, waitFor, root, workbenchProjectionPatch, dom, resizeObservers, TestResizeObserver, revokedAvatarUrl, unsubscribeCalls, eventCallback, runtimeStatus, activeRuntimeSession, presenceCalls, startedTurns, importedAttachment, importedVideoAttachment, selectedAttachments, followUpTurns, steeringTurns, cancelledTurns, interactionQueue, replacedInteractionQueues, resolvedPendingInputs, createdSessions, createdTopics, renamedTopics, compactedSessions, approvalResponses, interactionResponses, openedExternalLinks, workspaceActions, savedWorkbenchSettings, sessionConfigRevisions, sessionConfigSnapshots, savedAvatars, savedAgentProfiles, runtimeTransitions, runtimeEnsures, exportedSessions, mainCreateProxyCalls, sharedCreateActionCalls, releaseAgentCatalog, buildAgentProfiles, agentCatalogGate, topicCatalog, secondaryTopicCatalog, archivedTopicCatalog, topicListRequests, topicSearchRequests, canonicalSessionProjection, runtimeEventNumber, emitDaemonEvent, fixtureProjectionRevisionBySession, emitProjectionBlock, setSelectedAttachments, setInteractionQueue, setRuntimeStatus, modelUpdateCallback, modelUnsubscribeCalls, refreshModelCalls };

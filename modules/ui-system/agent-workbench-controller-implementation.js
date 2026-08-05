@@ -271,7 +271,7 @@ function createWorkbenchController(runtimeApi) {
         respondApproval, respondInteraction, respondToolboxApproval,
         workspaceListDirectory, workspaceReadPreview, workspaceSearchFiles,
         workspaceStatPath, workspacePerformPathAction, workspaceCancel,
-        listAgentProfiles, getCachedModels, saveAgentProfile, saveAgentAvatar,
+        listAgentProfiles, getCachedModels, refreshModels, onModelsUpdated, saveAgentProfile, saveAgentAvatar,
         openExternal, launchVchatApp, openThemes, openImageViewer, showImageContextMenu,
     } = commands;
 
@@ -322,7 +322,7 @@ function createWorkbenchController(runtimeApi) {
         workspaceListDirectory, workspaceReadPreview, workspaceSearchFiles,
         workspaceStatPath, workspacePerformPathAction,
         workspaceCancel,
-        listAgentProfiles, getCachedModels, saveAgentProfile, saveAgentAvatar,
+        listAgentProfiles, getCachedModels, refreshModels, onModelsUpdated, saveAgentProfile, saveAgentAvatar,
         openExternal, launchVchatApp, openThemes, openImageViewer, showImageContextMenu,
     };
 }
