@@ -127,15 +127,6 @@
         background: var(--vcp-ui-bg-1);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-workspace-heading {
-        display: flex;
-        align-items: center;
-        gap: var(--vcp-ui-space-2);
-        color: var(--vcp-ui-text-0);
-        font-size: var(--vcp-ui-font-caption);
-        letter-spacing: 0;
-    }
-
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-workspace-search-wrap {
         height: 32px;
         display: flex;
