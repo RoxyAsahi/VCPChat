@@ -1,6 +1,6 @@
 # Codex Agent Ownership
 
-Status: **implemented**
+Status: **implemented / working-tree**
 
 | Area | Owner boundary | Forbidden dependency |
 | --- | --- | --- |
@@ -8,25 +8,29 @@ Status: **implemented**
 | Projection schema and reconciliation | `modules/codex-runtime/projection/` | Codex rollout internals, local transcript in Renderer |
 | Agent IPC and workspace security | `modules/ipc/agentRuntimeHandlers.js`, `modules/ipc/ipcContracts.js`, `modules/codex-runtime/workspacePolicy.js`, `workspaceService.js` | archived Runtime contracts, undefined channels, arbitrary root/path from Renderer, generic exec/read/write IPC |
 | Workbench state | `modules/ui-system/agent-workbench-store.js` | main-chat global refs, global attachment inference |
+| Projection hydration and Session switching | `agent-projection-hydration-coordinator.js` | Runtime process ownership, direct preload calls, stale Snapshot overwrite, a second transcript cache |
 | Settings Draft state | `agent-settings-state.js`, `agent-settings-view.js` | page-global timer/queue, stale Snapshot overwrite |
 | Settings persistence and CAS | `agent-settings-coordinator.js` | Session A completion mutating Session B UI, page-global revision ownership |
+| Advanced settings and diagnostics composition | `agent-settings-advanced-feature.js`, `agent-settings-advanced-view.js`, `agent-settings-diagnostics-coordinator.js`, `agent-settings-diagnostics-view.js`, `agent-settings-diagnostics-{health,details,errors}-view.js`, `agent-settings-{budget,recovery}-view.js`, `agent-config-diagnostics.js` | diagnostic wiring in Workbench root, raw prompt/path/key display, Session A response mutating Session B, a single oversized diagnostics View |
+| Authoritative Runtime diagnostics | `modules/codex-runtime/runtime-diagnostics-service.js` | Renderer-provided Thread identity, Codex metadata `sessionId` exposed as VChat Session identity, raw credentials/prompts/arguments/absolute paths |
 | Runtime config apply | `runtimeConfig.js`, Runtime Manager apply coordinator | desired config entering Responses Adapter before confirmation |
 | Attachment capabilities | `runtime-session-service.js`, `attachmentRegistry.js` | Manager-owned file validation, absolute paths in Renderer, SQLite, transcript or logs |
 | Agent presentation facade | `modules/ui-system/agent-presentation/fork/agentMessageRenderer.js`, `agent-renderer-runtime.js` | main renderer runtime state and persistence; feature logic in the composition root |
-| Agent presentation content and lifecycle | `agent-renderer-markdown-pipeline.js`, `agent-renderer-message-lifecycle.js`, `agent-renderer-mermaid.js`, `agent-renderer-tool-results.js`, existing stream/session/DOM/action modules | shared mutable renderer singletons, global container cleanup, hidden Session reads |
+| Agent presentation content and lifecycle | `agent-renderer-content-{pipeline,utils}.js`, `agent-renderer-markdown-pipeline.js`, `agent-renderer-message-{lifecycle,skeleton}.js`, `agent-renderer-{color,emoticons,animation-safety}.js`, `agent-renderer-mermaid.js`, `agent-renderer-tool-results.js`, existing stream/session/DOM/action modules | imports from `modules/renderer/`, shared mutable renderer singletons, `window.chatManager`, model-provided script execution, global container cleanup, hidden Session reads |
 | Dock and Workspace view state | `agent-session-dock.js`, `agent-session-dock-view.js`, `agent-workspace-model.js`, `agent-workspace-view.js` | arbitrary absolute paths, cross-Session file refs |
 | Workspace async coordination | `agent-workspace-requests.js`, `agent-workspace-coordinator.js` | Store mutation, Dock ownership, stale request completion clearing a newer request |
 | VCP tools | existing bridge boundary | modifications to VCPToolBox, a second tool catalog |
 | Release evidence | `docs/agent-runtime/current/receipts/` | status promotion without same-commit commands |
 | Agent Workbench public entrypoints | `modules/ui-system/agent-workbench.js`, `agent-workbench-controller.js` | UI feature logic or Runtime protocol details |
-| Agent Workbench private composition | `modules/ui-system/agent-workbench-implementation.js`, `agent-workbench-clients.js` | Main-process persistence or transport ownership |
+| Agent Workbench private composition | `modules/ui-system/agent-workbench-implementation.js`, `agent-workbench-controller-implementation.js`, `agent-workbench-clients.js` | Main-process persistence or transport ownership, Projection hydration logic outside its coordinator |
+| Agent Workbench profile/session/settings features | `agent-profile-flow-feature.js`, `agent-session-management-feature.js`, `agent-settings-pane-feature.js` | feature-specific Views or event wiring returning to the Workbench composition root, direct Main persistence or transport access |
 | Agent Workbench Views | `agent-workbench-*-view.js`, `agent-session-dock-view.js`, `agent-notification-view.js`, `agent-approval-view.js`, `agent-workspace-view.js` | preload/Runtime calls, Projection writes, cross-Session identity inference |
 | Agent Session catalog | `agent-session-catalog-coordinator.js` | stale Agent catalog replacing a newer selection, transcript/Dock ownership |
 | Agent Session menu | `agent-session-context-menu-view.js` | Runtime/preload calls, unowned document listeners, stale focus microtasks |
 | Agent Renderer instance lifecycle | `modules/ui-system/agent-presentation/fork/`, `agent-renderer-lifecycle.js` | initialization/disposal of main-chat mutable renderer singletons |
 | Agent Renderer LaTeX preprocessing | `agent-renderer-latex.js` | DOM access, global cache, Renderer Session state |
 | Retired Agent implementations | Git history and `docs/agent-runtime/history/` only | executable Pi/Rust Agent/Grok/TUI source, package scripts, workflows, or packaged sources |
-| Agent CSS entry and owners | `styles/ui-system/agent-workbench.css`, `agent-{shell,sidebar,composer,timeline,session-dock,workspace,activity,responsive,legacy-shell-adapter}.css` | direct rules in the entry, arbitrary import order, cross-page selectors outside legacy adapter |
+| Agent CSS entry and owners | `styles/ui-system/agent-workbench.css`, `agent-{shell,sidebar,settings-diagnostics,composer,timeline,session-dock,workspace,activity,responsive,legacy-shell-adapter}.css` | direct rules in the entry, arbitrary import order, fixed typography outside tokens, cross-page selectors outside legacy adapter |
 | Agent JavaScript lint and complexity baseline | `eslint.agent.config.mjs`, `lint:agent`, `check:codex-governance` | canonical host code outside lint coverage, complexity ceiling increases, inline disables replacing module extraction |
 | Runtime lifecycle ordering | `runtime-host-service.js`, `runtime-lifecycle-service.js` | Repository close before approval/waiter cleanup, old-generation UI/SQLite/transport writes |
 | Runtime operation identity | `runtime-operation-context.js`; Session/Recovery services | remote await without generation + Session/Thread/Turn identity, writes through a closed Repository |
@@ -39,6 +43,8 @@ Status: **implemented**
 
 Reviewers should reject new modules that read `currentChatHistoryRef`, `currentSelectedItemRef`, `currentTopicIdRef`, `saveChatHistory`, or the main-chat `streamManager`.
 
-`agent-workbench.js` and `agent-workbench-implementation.js` are composition roots, not destinations for new message, Markdown, tool, approval, Dock, Workspace or action logic. Both are within the final 800-line gate; new behavior must enter the owned modules above rather than grow the composition files.
+Reviewers and `check:codex-governance` must also reject Agent production imports from `modules/renderer/`. Main-chat modules may appear only in comparison/security fixtures; the Agent runtime owns its own content pipeline and lifecycle helpers.
+
+`agent-workbench.js` and `agent-workbench-implementation.js` are composition roots, not destinations for new message, Markdown, tool, approval, Dock, Workspace or action logic. `agent-workbench-implementation.js` is within the final 620-line gate; new behavior must enter the owned modules above rather than grow the composition files.
 
 Every Workbench CSS owner is also capped at 900 physical lines. Shared shell selectors belong only to `agent-legacy-shell-adapter.css`; owner files may use Agent-scoped structural class names but may not patch unrelated pages.

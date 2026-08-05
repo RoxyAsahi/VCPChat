@@ -1,6 +1,6 @@
 # ADR-011: Projection V2 Single Model
 
-Status: accepted for R16 implementation; product verification pending.
+Status: accepted and implemented; current-worktree live gate passed, same-commit receipt pending.
 
 ## Context
 
@@ -25,6 +25,8 @@ Turn completion, partial `itemsView` is not deletion-authoritative, and reasonin
 
 - Streaming, cold-open, reload, reconcile, and Session switching use one reducer and one durable source.
 - Revision gaps are observable and recoverable instead of silently merging incompatible snapshots.
-- SQLite database schema remains 11; only Block content and Renderer contracts move to V2.
+- SQLite database schema is 12; Block content and Renderer contracts are V2. Schema 12 canonicalizes legacy Block identity/content and retains a pre-migration backup.
+- Tool cards are first-class Timeline entries, not a Turn-level collection. A live card is shown between the assistant Items that surround its tool event; Session switching and cold reopen must reproduce that same position. Only adjacent cards from the same Turn may be visually folded into one batch. Main owns legacy order repair; Renderer does not infer a second order or move a Turn's cards to its beginning/end.
 - A later removal of the derived `messages/tools` view is a presentation API migration, not another data-model migration.
-- Electron and live ToolBox evidence remain required before R16 can be called live or product complete.
+- Projection hydration, snapshot barriers and stale Session-switch guards are isolated in `agent-projection-hydration-coordinator.js`; the Workbench Controller owns only Runtime event and command composition.
+- The current worktree has hermetic, Electron, real App Server and ToolBox evidence. A committed same-revision receipt remains required before this revision can be called live; product completion remains broader still.

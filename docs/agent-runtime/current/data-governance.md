@@ -59,9 +59,14 @@ npm run test:agent-data-contracts
 - `thread/read` 的删除权威同时受 Thread identity 与 `itemsView=full` 约束；ToolBox/VChat authority 永不因
   Codex snapshot 缺失而删除。
 - Unknown Item、delta-before-Item 和旧 Block schema 都有有界适配；原始协议 Item 不进入 Renderer。
+- 工具卡属于其 `turnId` 的时间线 Block。实时、Session 切换、Renderer reload 和完整 Electron 重启必须保持同一 `sourceOrder`；Renderer 不再运行第二套工具卡位置修复。
+- 可识别的旧“工具卡聚合在顶部”数据由 Main 启动期事务修复并写回 SQLite。完全缺失历史锚点的数据只能在所属 Turn 内确定性恢复，不伪造不存在的协议顺序。
+- 高级设置诊断只展示 desired/applied 差异、revision、Runtime generation、存储状态和脱敏 endpoint。提示词只显示字符数，workspace 只显示 basename，API key、完整指令、消息内容和绝对路径禁止进入诊断或剪贴板摘要。
+- 诊断 UI 由 health/details/errors、budget 和 recovery 独立 View 组成；真实 Electron 错误态必须在窄栏和深浅主题下验证。展开脱敏详情只能在自身容器内换行或滚动，不得扩大 Sidebar，也不得用固定字号绕过 UI token。
+- Agent presentation 已移除对主聊天 `modules/renderer/` 的生产依赖。Markdown、消息骨架、头像取色、表情 URL、内容后处理和动画清理由 Agent-owned 模块负责；测试可继续读取主聊天模块做 golden 对照。Agent HTML 按钮不得调用主聊天发送入口，模型输出脚本不得执行。
 
 机器门槛：`npm run test:codex-projection-v2`、`npm run test:codex-adapter-invariants`、
-`npm run check:codex-governance`。Revision `24af22c3` / `bcc3455f` 的 `test:codex-ci`、
-`test:electron-codex-session-switch` 已验证运行中 A→B→A、reasoning/ToolBox
-卡片隔离、reload 后 SQLite 恢复及工具卡 Turn 内位置；完整设置 smoke 也已通过。真实 ToolBox
-`deepseek-v4-flash` 已完成 FileOperator/Bridge/Projection 长调用。R16 可标记 `live`，但不继承为整个 Agent 的产品完成声明。
+`npm run check:codex-governance`。当前工作树的 `test:codex-ci`、`test:electron-codex-session-switch`、
+`test:electron-codex-cold-reopen` 已验证运行中 A→B→A、reasoning/ToolBox 卡片隔离、Renderer reload、
+完整 Electron 重启和 SQLite 恢复；完整设置 smoke 也已通过。真实 ToolBox `deepseek-v4-flash` 的
+FileOperator/Bridge/Projection 长调用收据来自更早 revision，当前状态保持 `implemented/working-tree`。
