@@ -200,6 +200,12 @@ try {
     assert.equal(completedDiagnostics.recentRequests[0].httpStatus, 200);
     assert.deepEqual(completedDiagnostics.recentRequests[0].forwardedTools,
         [{ type: 'function', name: 'vcp_invoke' }]);
+    assert.deepEqual(completedDiagnostics.recentRequests[0].forwardedToolSchemas, [{
+        type: 'function',
+        name: 'vcp_invoke',
+        description: expectedVcpInvokeTool.function.description,
+        parameters: expectedVcpInvokeTool.function.parameters,
+    }], 'Renderer diagnostics must expose the bounded schema actually forwarded to the model');
     assert.equal(JSON.stringify(completedDiagnostics).includes(received[0].requestId), false,
         'Renderer-facing Adapter diagnostics must not expose internal request ids');
 

@@ -120,6 +120,7 @@ class ToolboxResponsesAdapter {
                 durationMs: request.durationMs,
                 incomingTools: request.incomingTools.map((tool) => ({ ...tool })),
                 forwardedTools: request.forwardedTools.map((tool) => ({ ...tool })),
+                forwardedToolSchemas: (request.forwardedToolSchemas || []).map((tool) => structuredClone(tool)),
                 error: request.error ? { ...request.error } : null,
             })),
         };
@@ -138,6 +139,7 @@ class ToolboxResponsesAdapter {
             durationMs: null,
             incomingTools: [...identity.tools, ...identity.input.flatMap((item) => item.tools || [])],
             forwardedTools: chatRequestToolSummary(chatRequest),
+            forwardedToolSchemas: chatRequestToolSchemas(chatRequest),
             error: null,
         };
         this.recentDiagnostics.unshift(record);
@@ -528,6 +530,28 @@ function chatRequestToolSummary(chatRequest) {
     return (Array.isArray(chatRequest?.tools) ? chatRequest.tools : []).slice(0, 16).map((tool) => ({
         type: typeof tool?.type === 'string' ? tool.type : null,
         name: typeof tool?.function?.name === 'string' ? tool.function.name : null,
+    }));
+}
+
+function boundedSchemaValue(value, depth = 0) {
+    if (depth > 8) return '[truncated]';
+    if (value == null || typeof value === 'boolean' || typeof value === 'number') return value;
+    if (typeof value === 'string') return value.length > 2000 ? `${value.slice(0, 1999)}…` : value;
+    if (Array.isArray(value)) return value.slice(0, 64).map((entry) => boundedSchemaValue(entry, depth + 1));
+    if (typeof value !== 'object') return String(value).slice(0, 2000);
+    return Object.fromEntries(Object.entries(value).slice(0, 64)
+        .map(([key, entry]) => [String(key).slice(0, 160), boundedSchemaValue(entry, depth + 1)]));
+}
+
+function chatRequestToolSchemas(chatRequest) {
+    return (Array.isArray(chatRequest?.tools) ? chatRequest.tools : []).slice(0, 16).map((tool) => ({
+        type: typeof tool?.type === 'string' ? tool.type : null,
+        name: typeof tool?.function?.name === 'string' ? tool.function.name : null,
+        description: typeof tool?.function?.description === 'string'
+            ? tool.function.description.slice(0, 2000) : '',
+        parameters: boundedSchemaValue(tool?.function?.parameters || {
+            type: 'object', properties: {},
+        }),
     }));
 }
 

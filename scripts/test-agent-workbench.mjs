@@ -978,6 +978,9 @@ emitDaemonEvent({
         capability: { state: 'unknown', detail: '等待 VCPLog 节点事件' },
     },
 });
+// Earlier lifecycle coverage deliberately reloads the authoritative empty Snapshot.
+// Keep the synthetic patch source on the same revision before resuming live deltas.
+fixtureProjectionRevisionBySession.set('topic-in-use', 0);
 emitProjectionBlock({
     turnId: 'turn_live', messageId: 'msg_live', itemId: 'assistant-live-item', kind: 'message',
     sourceOrder: 20, status: 'inProgress', content: { text: 'live Codex delta' },
@@ -1398,6 +1401,8 @@ assert.equal(host.querySelector('.agent-chat-settings-pane .agent-tool-settings'
     'the full tool catalog must not be embedded in the narrow settings sidebar');
 assert.deepEqual([...host.querySelectorAll('.agent-tool-modal-scope')].map((button) => button.textContent.trim()),
     ['Agent 默认', '当前会话'], 'the tool dialog must expose explicit Profile and Session ownership');
+assert.deepEqual([...host.querySelectorAll('.agent-tool-modal-page')].map((button) => button.textContent.trim()),
+    ['工具开关', '实际 Schema'], 'the tool dialog must expose the effective model schema page');
 assert.deepEqual([...host.querySelectorAll('.agent-tool-preset')].map((button) => button.textContent.trim()),
     ['全部开启', '只读', '自定义'], 'the tool dialog must expose the three direct presets');
 const readonlyPreset = [...host.querySelectorAll('.agent-tool-preset')]
@@ -1432,6 +1437,13 @@ await waitFor(() => savedWorkbenchSettings.some((payload) => payload.sessionId =
     && payload.toolPolicy?.preset === 'readonly'), 3_000);
 assert.match(host.querySelector('.agent-tool-modal-save-status')?.textContent || '', /保存|更新/,
     'the tool dialog must expose autosave feedback');
+[...host.querySelectorAll('.agent-tool-modal-page')]
+    .find((button) => button.textContent.trim() === '实际 Schema').click();
+await waitFor(() => host.querySelector('.agent-tool-schema-card'), 1_000);
+assert.match(host.querySelector('.agent-tool-schema-card')?.textContent || '', /vcp_invoke/,
+    'the schema page must render the actual Adapter-forwarded tool name');
+assert.match(host.querySelector('.agent-tool-schema-card')?.textContent || '', /2 个字段/,
+    'the schema page must summarize the actual JSON schema fields');
 host.querySelector('.agent-tool-settings-dialog [aria-label="关闭对话框"]')?.click();
 toolSettingsButton.click();
 assert.ok(await waitFor(() => host.querySelector('.agent-tool-settings-dialog'), 1_000),

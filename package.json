@@ -38,6 +38,7 @@
     "test:agent-config-diagnostics": "node scripts/test-agent-config-diagnostics.mjs",
     "test:agent-settings-coordinator": "node scripts/test-agent-settings-coordinator.mjs",
     "test:agent-tool-policy": "node scripts/test-agent-tool-policy.mjs",
+    "test:agent-tool-schema": "node scripts/test-agent-tool-schema.mjs",
     "test:agent-config-apply": "node scripts/run-electron-node.mjs scripts/test-agent-config-apply.mjs",
     "test:agent-config-descriptors": "node scripts/test-agent-config-descriptors.mjs",
     "test:agent-workbench-host-adapter": "node scripts/test-agent-workbench-host-adapter.mjs",

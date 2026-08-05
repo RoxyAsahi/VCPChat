@@ -1,4 +1,5 @@
 import { renderAgentToolSettings } from './agent-tool-settings-view.js';
+import { renderAgentToolSchema } from './agent-tool-schema-view.js';
 
 const DEFAULT_POLICY = Object.freeze({
     schemaVersion: 1,
@@ -58,6 +59,8 @@ function createAgentToolSettingsModal({
             return;
         }
         let scope = selectedSessionKey() ? 'session' : 'profile';
+        let page = 'tools';
+        let schemaState = { sessionId: '', loading: false, diagnostics: null, error: '' };
         const content = node('div', 'agent-tool-modal-content');
         const close = host.ui.create('Button', { label: '完成', variant: 'primary', size: 'sm' });
         if (!close) {
@@ -80,11 +83,74 @@ function createAgentToolSettingsModal({
         modal.element.addEventListener('wa-after-hide', () => {
             if (activeModal === modal) activeModal = null;
         }, { once: true });
+        const loadSchema = async () => {
+            const sessionId = selectedSessionKey();
+            if (!sessionId) {
+                schemaState = { sessionId: '', loading: false, diagnostics: null, error: '' };
+                render();
+                return;
+            }
+            schemaState = { sessionId, loading: true, diagnostics: null, error: '' };
+            render();
+            try {
+                const diagnostics = await controller.readSessionDiagnostics(sessionId);
+                if (page !== 'schema' || selectedSessionKey() !== sessionId) return;
+                schemaState = { sessionId, loading: false, diagnostics, error: '' };
+            } catch (error) {
+                if (page !== 'schema' || selectedSessionKey() !== sessionId) return;
+                schemaState = {
+                    sessionId, loading: false, diagnostics: null,
+                    error: error?.message || '无法读取当前会话诊断。',
+                };
+            }
+            render();
+        };
         const render = () => {
             const authority = policyForScope({
                 scope, store, activeSession, selectedAgentProfile, settingsState, selectedSessionKey,
             });
             const shell = node('div', 'agent-tool-modal-shell');
+            const pageTabs = node('div', 'agent-tool-modal-pages');
+            pageTabs.setAttribute('role', 'tablist');
+            for (const option of [
+                { id: 'tools', label: '工具开关' },
+                { id: 'schema', label: '实际 Schema' },
+            ]) {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = `agent-tool-modal-page${page === option.id ? ' is-active' : ''}`;
+                button.textContent = option.label;
+                button.setAttribute('role', 'tab');
+                button.setAttribute('aria-selected', String(page === option.id));
+                button.addEventListener('click', () => {
+                    if (page === option.id) return;
+                    page = option.id;
+                    render();
+                    if (page === 'schema') void loadSchema();
+                });
+                pageTabs.append(button);
+            }
+            shell.append(pageTabs);
+
+            if (page === 'schema') {
+                const schemaMeta = node('div', 'agent-tool-modal-meta');
+                schemaMeta.append(node('p', 'agent-tool-modal-summary',
+                    '这里展示最后一次真实请求中，Responses Adapter 实际转发给模型的 tools Schema。'));
+                const refresh = document.createElement('button');
+                refresh.type = 'button';
+                refresh.className = 'agent-tool-schema-refresh';
+                refresh.title = '刷新实际 Schema';
+                refresh.setAttribute('aria-label', '刷新实际 Schema');
+                refresh.append(node('span', 'vcp-ui-icon', 'refresh'));
+                refresh.addEventListener('click', () => void loadSchema());
+                schemaMeta.append(refresh);
+                shell.append(schemaMeta, renderAgentToolSchema({ node, document }, {
+                    ...schemaState,
+                    sessionId: selectedSessionKey(),
+                }));
+                content.replaceChildren(shell);
+                return;
+            }
             const scopeTabs = node('div', 'agent-tool-modal-scopes');
             scopeTabs.setAttribute('role', 'tablist');
             for (const option of [

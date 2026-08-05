@@ -18,10 +18,10 @@ async function waitFor(predicate, timeoutMs = 1_000) {
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 function workbenchProjectionPatch({
     sessionId, threadId, revision, messageId, itemId, turnId, kind, content,
-    sourceOrder = revision, status = 'completed',
+    sourceOrder = revision, status = 'completed', runtimeGeneration = 1,
 }) {
     return {
-        schemaVersion: 1, sessionId, threadId, runtimeGeneration: 1,
+        schemaVersion: 1, sessionId, threadId, runtimeGeneration,
         baseProjectionRevision: revision - 1, projectionRevision: revision,
         upsertBlocks: [{
             schemaVersion: 2, blockId: `block:${sessionId}:${itemId}:0`, sessionId, threadId,
@@ -185,6 +185,31 @@ window.chatAPI = {
         return { success: true, avatarUrl: `file:///${agentId}-updated.png` };
     },
     agentRuntimeListToolCatalog: async () => { toolCatalogRequests += 1; return toolCatalog; },
+    agentRuntimeReadSessionDiagnostics: async ({ sessionId }) => ({
+        schemaVersion: 1,
+        sessionId,
+        toolbox: { adapter: { recentRequests: [{
+            sessionId,
+            model: 'gpt-5.6-terra',
+            status: 'completed',
+            startedAt: Date.now(),
+            forwardedTools: [{ type: 'function', name: 'vcp_invoke' }],
+            forwardedToolSchemas: [{
+                type: 'function',
+                name: 'vcp_invoke',
+                description: 'Invoke one named VCPToolBox capability through the VCP bridge.',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        tool: { type: 'string' },
+                        arguments: { type: 'object', additionalProperties: true },
+                    },
+                    required: ['tool', 'arguments'],
+                    additionalProperties: false,
+                },
+            }],
+        }] } },
+    }),
     // Match the main-chat contract: this is a Main-process cache, not an
     // Agent Workbench request to the ToolBox model endpoint.
     getCachedModels: async () => {
@@ -521,10 +546,15 @@ function emitDaemonEvent(event) {
 }
 
 const fixtureProjectionRevisionBySession = new Map();
+const fixtureRuntimeGenerationBySession = new Map();
 function emitProjectionBlock({
     sessionId = 'topic-in-use', threadId = 'thread-active', method = 'item/updated',
     activity = 'running', messageId, itemId, turnId, kind, content, sourceOrder, status,
+    runtimeGeneration = 100,
 }) {
+    const previousGeneration = Number(fixtureRuntimeGenerationBySession.get(sessionId) || 0);
+    const generation = Math.max(previousGeneration, Number(runtimeGeneration) || 0);
+    fixtureRuntimeGenerationBySession.set(sessionId, generation);
     const revision = Number(fixtureProjectionRevisionBySession.get(sessionId) || 0) + 1;
     fixtureProjectionRevisionBySession.set(sessionId, revision);
     emitDaemonEvent({
@@ -532,7 +562,7 @@ function emitProjectionBlock({
         itemId, activity,
         projectionPatch: workbenchProjectionPatch({
             sessionId, threadId, revision, messageId, itemId, turnId, kind, content,
-            sourceOrder, status,
+            sourceOrder, status, runtimeGeneration: generation,
         }),
     });
     return revision;
