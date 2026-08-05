@@ -11,10 +11,13 @@
 }
 
 html[data-ui-mode="next"] #vchat-dynamic-wallpaper-video {
-    clip-path: inset(
-        calc(var(--next-topbar-height, 44px) + 1px) 0 0 calc(var(--next-sidebar-width, 260px) + 1px)
-        round 13px 0 0 0
-    );
+    top: var(--next-topbar-height, 44px);
+    right: auto;
+    bottom: auto;
+    left: var(--next-sidebar-width, 260px);
+    width: calc(100% - var(--next-sidebar-width, 260px));
+    height: calc(100% - var(--next-topbar-height, 44px));
+    border-radius: 14px 0 0 0;
 }
 
 body.vchat-dynamic-wallpaper-visible {

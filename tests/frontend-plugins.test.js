@@ -71,7 +71,7 @@ function prepareStatefulMedia(window) {
 test('动态壁纸插件将完整控制迁入左下角菜单并通过原生 IPC 选目录', async () => {
     const wallpaperCss = readPlugin('VCPDistributedServer/Plugin/VChatDynamicWallpaper/plugin.css');
     assert.match(wallpaperCss,
-        /html\[data-ui-mode="next"\] #vchat-dynamic-wallpaper-video\s*\{[\s\S]*clip-path:\s*inset\([\s\S]*--next-topbar-height[\s\S]*\+ 1px[\s\S]*--next-sidebar-width[\s\S]*\+ 1px[\s\S]*round 13px 0 0 0/s,
+        /html\[data-ui-mode="next"\] #vchat-dynamic-wallpaper-video\s*\{[\s\S]*top:\s*var\(--next-topbar-height, 44px\);[\s\S]*left:\s*var\(--next-sidebar-width, 260px\);[\s\S]*width:\s*calc\(100% - var\(--next-sidebar-width, 260px\)\);[\s\S]*height:\s*calc\(100% - var\(--next-topbar-height, 44px\)\);[\s\S]*border-radius:\s*14px 0 0 0;/s,
         'the video layer must follow the shared main-panel offset and top-left radius');
     const dom = new JSDOM(`<!doctype html><body>
         <header class="chat-header">
