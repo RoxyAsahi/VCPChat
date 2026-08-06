@@ -255,10 +255,12 @@ class RuntimeTurnService {
             throw new CodexAppServerError('INVALID_INPUT', 'Prompt or attachment must not be empty');
         }
         const resolvedAttachments = this.context.attachments().resolveMany(session.sessionId, attachments);
+        const skillInputs = this.context.resolveSkillInputs
+            ? await this.context.resolveSkillInputs(session, text) : [];
         const result = await this.context.transport().request('turn/start', {
             threadId: session.threadId,
             clientUserMessageId: clientUserMessageId || this.context.createId('client_msg'),
-            input: buildTurnInput(text, resolvedAttachments),
+            input: [...buildTurnInput(text, resolvedAttachments), ...skillInputs],
             cwd: session.workspaceRoot,
             model: appliedConfig.model || undefined,
             ...(this.context.effectiveReasoningEffort(appliedConfig)
@@ -323,11 +325,13 @@ class RuntimeTurnService {
             state: 'dispatching', attemptCount: pending.attemptCount + 1, lastError: null,
         });
         try {
+            const skillInputs = this.context.resolveSkillInputs
+                ? await this.context.resolveSkillInputs(session, prompt) : [];
             const result = await this.context.transport().request('turn/steer', {
                 threadId: session.threadId,
                 expectedTurnId: turnId,
                 clientUserMessageId: pending.clientMessageId,
-                input: [{ type: 'text', text: prompt, text_elements: [] }],
+                input: [{ type: 'text', text: prompt, text_elements: [] }, ...skillInputs],
             });
             repository = this._operationRepository(operation);
             repository.updatePendingInput(pending.inputId, {

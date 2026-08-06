@@ -10,7 +10,10 @@ function loadState() {
     try {
         return JSON.parse(fs.readFileSync(statePath, 'utf8'));
     } catch {
-        return { starts: 0, resumes: 0, turnStarts: 0, archives: 0, unarchives: 0, deletes: 0, threads: {} };
+        return {
+            starts: 0, resumes: 0, turnStarts: 0, forks: 0, interrupts: 0,
+            archives: 0, unarchives: 0, deletes: 0, threads: {},
+        };
     }
 }
 
@@ -154,6 +157,37 @@ function emitBurstProjectionLifecycle(thread, turnId, items) {
     } });
     send({ method: 'item/completed', params: { ...common, item: items.reasoning } });
     for (const item of items.sequence) emitProjectionItemLifecycle(thread, turnId, item);
+}
+
+const pendingTurnTimers = new Map();
+
+function completeTurn(thread, turnId, status = 'completed') {
+    const turn = thread.turns.find((candidate) => candidate.id === turnId);
+    if (!turn || ['completed', 'interrupted', 'failed'].includes(turn.status)) return false;
+    turn.status = status;
+    thread.status = { type: 'idle' };
+    pendingTurnTimers.delete(turnId);
+    saveState(state);
+    send({ method: 'thread/status/changed', params: {
+        threadId: thread.id, status: { type: 'idle' },
+    } });
+    send({ method: 'turn/completed', params: {
+        threadId: thread.id, turn: { id: turnId, status },
+    } });
+    return true;
+}
+
+function forkTurns(thread, params) {
+    const turns = Array.isArray(thread.turns) ? thread.turns : [];
+    if (params.beforeTurnId) {
+        const index = turns.findIndex((turn) => turn.id === params.beforeTurnId);
+        return index < 0 ? [] : turns.slice(0, index);
+    }
+    if (params.lastTurnId) {
+        const index = turns.findIndex((turn) => turn.id === params.lastTurnId);
+        return index < 0 ? [] : turns.slice(0, index + 1);
+    }
+    return turns;
 }
 
 const state = loadState();
@@ -315,6 +349,33 @@ input.on('line', (line) => {
         send({ id, result: {} });
         return;
     }
+    if (method === 'thread/fork') {
+        const source = state.threads[params.threadId];
+        if (!source) return rpcError(id, `Thread not found: ${params.threadId}`);
+        const threadId = randomUUID();
+        const turns = JSON.parse(JSON.stringify(forkTurns(source, params)));
+        state.threads[threadId] = {
+            ...JSON.parse(JSON.stringify(source)),
+            id: threadId,
+            sessionId: threadId,
+            forkedFromId: source.id,
+            status: { type: 'idle' },
+            archived: false,
+            turns,
+        };
+        state.forks = Number(state.forks || 0) + 1;
+        saveState(state);
+        const visible = {
+            id: threadId,
+            sessionId: threadId,
+            forkedFromId: source.id,
+            status: { type: 'idle' },
+            turns,
+        };
+        send({ id, result: { thread: visible } });
+        send({ method: 'thread/started', params: { thread: visible } });
+        return;
+    }
     if (method === 'turn/start') {
         const thread = state.threads[params.threadId];
         if (!thread) {
@@ -334,13 +395,17 @@ input.on('line', (line) => {
         const burstPrompt = String(process.env.VCP_FAKE_CODEX_TOOL_BURST_ON_PROMPT || '');
         const burst = Boolean(burstPrompt && prompt.includes(burstPrompt));
         const items = burst ? projectionBurstItems(turnId, prompt) : projectionItems(turnId, prompt);
+        const slowPrompt = String(process.env.VCP_FAKE_CODEX_SLOW_PROMPT || 'reliability pause');
+        const slow = Boolean(slowPrompt && prompt.includes(slowPrompt));
+        state.lastTurnScenario = { prompt, slowPrompt, slow };
+        const projectedItems = burst
+            ? [items.reasoning, ...items.sequence]
+            : [items.reasoning, items.tool, items.assistant];
         thread.turns.push({
             id: turnId,
             status: 'inProgress',
             itemsView: 'full',
-            items: burst
-                ? [userItem, items.reasoning, ...items.sequence]
-                : [userItem, items.reasoning, items.tool, items.assistant],
+            items: slow ? [userItem] : [userItem, ...projectedItems],
         });
         thread.status = { type: 'active' };
         state.turnStarts += 1;
@@ -349,19 +414,23 @@ input.on('line', (line) => {
         send({ method: 'turn/started', params: { threadId: thread.id, turn: { id: turnId, status: 'inProgress' } } });
         send({ method: 'item/started', params: { threadId: thread.id, turnId, item: userItem } });
         send({ method: 'item/completed', params: { threadId: thread.id, turnId, item: userItem } });
+        if (slow) {
+            const delayMs = Math.max(50, Number(process.env.VCP_FAKE_CODEX_SLOW_DELAY_MS) || 2_000);
+            const timer = setTimeout(() => {
+                const turn = thread.turns.find((candidate) => candidate.id === turnId);
+                if (!turn || turn.status !== 'inProgress') return;
+                turn.items.push(...projectedItems);
+                if (burst) emitBurstProjectionLifecycle(thread, turnId, items);
+                else emitProjectionLifecycle(thread, turnId, items);
+                completeTurn(thread, turnId, 'completed');
+            }, delayMs);
+            pendingTurnTimers.set(turnId, timer);
+            return;
+        }
         if (burst) emitBurstProjectionLifecycle(thread, turnId, items);
         else emitProjectionLifecycle(thread, turnId, items);
         if (process.env.VCP_FAKE_CODEX_AUTO_COMPLETE_TURNS === '1') {
-            const turn = thread.turns.find((candidate) => candidate.id === turnId);
-            if (turn) turn.status = 'completed';
-            thread.status = { type: 'idle' };
-            saveState(state);
-            send({ method: 'thread/status/changed', params: {
-                threadId: thread.id, status: { type: 'idle' },
-            } });
-            send({ method: 'turn/completed', params: {
-                threadId: thread.id, turn: { id: turnId, status: 'completed' },
-            } });
+            completeTurn(thread, turnId, 'completed');
             return;
         }
         send({
@@ -378,6 +447,28 @@ input.on('line', (line) => {
     }
     if (method === 'turn/interrupt') {
         send({ id, result: {} });
+        const thread = state.threads[params.threadId];
+        const turn = thread?.turns?.find((candidate) => candidate.id === params.turnId);
+        if (!thread || !turn || turn.status !== 'inProgress') return;
+        const timer = pendingTurnTimers.get(turn.id);
+        if (timer) clearTimeout(timer);
+        pendingTurnTimers.delete(turn.id);
+        state.interrupts = Number(state.interrupts || 0) + 1;
+        if (process.env.VCP_FAKE_CODEX_PARTIAL_ON_INTERRUPT === '1') {
+            const partial = {
+                id: `assistant-interrupted-${turn.id}`,
+                type: 'agentMessage', status: 'completed',
+                text: `assistant-partial:${inputText(turn.items?.[0]?.content)}`,
+            };
+            turn.items.push(partial);
+            emitProjectionItemLifecycle(thread, turn.id, partial);
+        }
+        completeTurn(thread, turn.id, 'interrupted');
+        if (process.env.VCP_FAKE_CODEX_DUPLICATE_TERMINAL === '1') {
+            setTimeout(() => send({ method: 'turn/completed', params: {
+                threadId: thread.id, turn: { id: turn.id, status: 'interrupted' },
+            } }), 25);
+        }
         return;
     }
     rpcError(id, `Unsupported recovery fixture method: ${method}`);

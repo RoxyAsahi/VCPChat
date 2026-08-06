@@ -34,6 +34,16 @@ class RuntimeSessionService {
         return this._repository(operation.generation);
     }
 
+    _isLifecycleBusy(session) {
+        try {
+            this.context.assertLifecycleIdle(session);
+            return false;
+        } catch (error) {
+            if (error?.code === 'SESSION_BUSY') return true;
+            throw error;
+        }
+    }
+
     create(options = {}) {
         this.context.ensureProjectionStore();
         this.context.assertProjectionWritable();
@@ -87,6 +97,7 @@ class RuntimeSessionService {
         const operation = this._operation({ sessionId: session.sessionId, threadId: session.threadId });
         if (session.threadId) {
             try {
+                if (this._isLifecycleBusy(session)) return localProjection;
                 let applied = false;
                 for (let attempt = 0; attempt < 3 && !applied; attempt += 1) {
                     repository = this._operationRepository(operation);
@@ -96,6 +107,10 @@ class RuntimeSessionService {
                         includeTurns: true,
                     });
                     repository = this._operationRepository(operation);
+                    const currentSession = repository.getSession(session.sessionId);
+                    if (!currentSession || this._isLifecycleBusy(currentSession)) {
+                        return repository.readProjection(session.sessionId);
+                    }
                     const thread = result?.thread || result;
                     if (String(thread?.id || '').trim() !== session.threadId) {
                         throw new CodexAppServerError(

@@ -15,6 +15,8 @@ const CHANNELS = Object.freeze({
     AGENT_RUNTIME_GET_STATUS: 'agent-runtime:get-status',
     AGENT_RUNTIME_LIST_AGENT_PROFILES: 'agent-runtime:list-agent-profiles',
     AGENT_RUNTIME_LIST_TOOL_CATALOG: 'agent-runtime:list-tool-catalog',
+    AGENT_RUNTIME_LIST_SKILLS: 'agent-runtime:list-skills',
+    AGENT_RUNTIME_READ_SKILL: 'agent-runtime:read-skill',
     AGENT_RUNTIME_SAVE_AGENT_PROFILE: 'agent-runtime:save-agent-profile',
     AGENT_RUNTIME_SAVE_AGENT_AVATAR: 'agent-runtime:save-agent-avatar',
     AGENT_RUNTIME_START: 'agent-runtime:start',
@@ -59,10 +61,15 @@ const CHANNELS = Object.freeze({
     AGENT_SESSION_RESTORE: 'agent-session:restore',
     AGENT_SESSION_DELETE: 'agent-session:delete',
     AGENT_SESSION_FORK: 'agent-session:fork',
+    AGENT_WORKSPACE_SELECT_ROOT: 'agent-workspace:select-root',
     AGENT_WORKSPACE_LIST_DIRECTORY: 'agent-workspace:list-directory',
     AGENT_WORKSPACE_READ_PREVIEW: 'agent-workspace:read-preview',
     AGENT_WORKSPACE_SEARCH_FILES: 'agent-workspace:search-files',
     AGENT_WORKSPACE_STAT_PATH: 'agent-workspace:stat-path',
+    AGENT_WORKSPACE_SAVE_TEXT: 'agent-workspace:save-text',
+    AGENT_WORKSPACE_WATCH: 'agent-workspace:watch',
+    AGENT_WORKSPACE_UNWATCH: 'agent-workspace:unwatch',
+    AGENT_WORKSPACE_CHANGED: 'agent-workspace:changed',
     AGENT_WORKSPACE_PERFORM_PATH_ACTION: 'agent-workspace:perform-path-action',
     AGENT_WORKSPACE_CANCEL: 'agent-workspace:cancel',
 });
@@ -252,6 +259,8 @@ for (const channel of [
     CHANNELS.AGENT_RUNTIME_REBUILD_TOPIC_INDEX,
     CHANNELS.AGENT_RUNTIME_LIST_AGENT_PROFILES,
     CHANNELS.AGENT_RUNTIME_LIST_TOOL_CATALOG,
+    CHANNELS.AGENT_RUNTIME_LIST_SKILLS,
+    CHANNELS.AGENT_RUNTIME_READ_SKILL,
     CHANNELS.AGENT_RUNTIME_SAVE_AGENT_PROFILE,
     CHANNELS.AGENT_RUNTIME_SAVE_AGENT_AVATAR,
     CHANNELS.AGENT_RUNTIME_APPLY_AGENT_PROFILE,
@@ -271,10 +280,14 @@ for (const channel of [
     CHANNELS.AGENT_RUNTIME_REAPPLY_SESSION_CONFIG,
     CHANNELS.AGENT_RUNTIME_STEER_TURN,
     CHANNELS.AGENT_RUNTIME_FOLLOW_UP_TURN,
+    CHANNELS.AGENT_WORKSPACE_SELECT_ROOT,
     CHANNELS.AGENT_WORKSPACE_LIST_DIRECTORY,
     CHANNELS.AGENT_WORKSPACE_READ_PREVIEW,
     CHANNELS.AGENT_WORKSPACE_SEARCH_FILES,
     CHANNELS.AGENT_WORKSPACE_STAT_PATH,
+    CHANNELS.AGENT_WORKSPACE_SAVE_TEXT,
+    CHANNELS.AGENT_WORKSPACE_WATCH,
+    CHANNELS.AGENT_WORKSPACE_UNWATCH,
     CHANNELS.AGENT_WORKSPACE_PERFORM_PATH_ACTION,
     CHANNELS.AGENT_WORKSPACE_CANCEL,
 ]) {
@@ -287,6 +300,15 @@ for (const channel of [
         supportsConcurrent: true,
     });
 }
+
+channelRegistry.set(CHANNELS.AGENT_WORKSPACE_CHANGED, {
+    channelName: CHANNELS.AGENT_WORKSPACE_CHANGED,
+    channelType: CHANNEL_TYPES.STREAM,
+    owner: 'Agent Runtime',
+    requestSchema: null,
+    responseSchema: 'workspace-change-event',
+    supportsConcurrent: true,
+});
 
 function getChannelMeta(channelName) {
     return channelRegistry.get(channelName) || null;

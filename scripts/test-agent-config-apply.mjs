@@ -165,9 +165,48 @@ assert.equal(applied.appliedRuntimeConfig.workspaceRoot, workspaceB,
 assert.ok(events.some((event) => event.type === 'session.config.saved'));
 assert.ok(events.some((event) => event.type === 'session.config.applied'));
 
+const beforeToolPolicy = manager.repository.getSession(topic.sessionId);
+const settingsUpdateCount = transport.calls.filter((call) => call.method === 'thread/settings/update').length;
+await manager.updateWorkbenchSettings({
+    sessionId: topic.sessionId,
+    expectedConfigRevision: beforeToolPolicy.configRevision,
+    toolPolicy: {
+        schemaVersion: 1,
+        preset: 'readonly',
+        enabledCodexCapabilities: [],
+        enabledVcpTools: [],
+    },
+});
+transport.autoConfirmSettings = false;
+await manager._applySessionRuntimeConfig(topic.sessionId, { barrier: true });
+const toolPolicyApplied = manager.readSessionConfig({ sessionId: topic.sessionId });
+assert.equal(toolPolicyApplied.applyState, 'applied');
+assert.equal(toolPolicyApplied.appliedRuntimeConfig.toolPolicy.preset, 'readonly');
+assert.equal(transport.calls.filter((call) => call.method === 'thread/settings/update').length, settingsUpdateCount,
+    'host-only tool policy changes must not wait for a Codex Thread settings notification');
+
+manager.threadStates.set('thread-config', { activity: 'running', activeTurnId: 'turn-policy-running' });
+await manager.updateWorkbenchSettings({
+    sessionId: topic.sessionId,
+    expectedConfigRevision: toolPolicyApplied.configRevision,
+    toolPolicy: {
+        schemaVersion: 1,
+        preset: 'custom',
+        enabledCodexCapabilities: [],
+        enabledVcpTools: [],
+    },
+});
+await manager._applySessionRuntimeConfig(topic.sessionId);
+assert.notEqual(manager.readSessionConfig({ sessionId: topic.sessionId }).applyState, 'applied',
+    'host-only policy changes must not alter the active Turn authority');
+manager.threadStates.set('thread-config', { activity: 'idle', activeTurnId: null });
+await manager._applySessionRuntimeConfig(topic.sessionId, { barrier: true });
+const deferredToolPolicyApplied = manager.readSessionConfig({ sessionId: topic.sessionId });
+assert.equal(deferredToolPolicyApplied.appliedRuntimeConfig.toolPolicy.preset, 'custom');
+
 const promptSaved = await manager.updateWorkbenchSettings({
     sessionId: topic.sessionId,
-    expectedConfigRevision: applied.configRevision,
+    expectedConfigRevision: deferredToolPolicyApplied.configRevision,
     baseInstructions: '{{NovaV2}}',
 });
 manager.threadStates.set('thread-config', { activity: 'running', activeTurnId: 'turn-running' });

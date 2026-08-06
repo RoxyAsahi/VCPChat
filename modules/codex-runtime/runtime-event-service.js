@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const { sanitizeInteractionPayload } = require('./runtime-normalizers');
+const { normalizeUsagePayload } = require('./token-usage');
 
 function nextThreadState(message, previous) {
     if (message.method === 'turn/started') {
@@ -82,7 +82,7 @@ class RuntimeEventService {
         const repository = this.context.repository();
         if (event.sessionId && repository) {
             if (event.type === 'context.usage') {
-                repository.updateActivity(event.sessionId, { usage: sanitizeInteractionPayload(event.payload || {}) });
+                repository.updateActivity(event.sessionId, { usage: normalizeUsagePayload(event.payload || {}) });
             } else if (event.type === 'compaction.started') {
                 repository.updateActivity(event.sessionId, { compaction: { state: 'started', summary: '', error: '' } });
             } else if (event.type === 'compaction.completed') {

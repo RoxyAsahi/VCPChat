@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { CodexRuntimeManager } = require('../codex-runtime/runtimeManager');
 const { AgentWorkspaceService } = require('../codex-runtime/workspaceService');
+const { canonicalizeWorkspaceRoot } = require('../codex-runtime/workspacePolicy');
 const { listAgentToolCatalog } = require('../codex-runtime/toolCatalogService');
 const { AGENT_CHANNELS: IPC_CHANNELS } = require('./ipcContracts');
 
@@ -53,6 +54,8 @@ function removeHandlers() {
     for (const channel of [
         IPC_CHANNELS.LIST_AGENT_PROFILES,
         IPC_CHANNELS.LIST_TOOL_CATALOG,
+        IPC_CHANNELS.LIST_SKILLS,
+        IPC_CHANNELS.READ_SKILL,
         IPC_CHANNELS.SAVE_AGENT_PROFILE,
         IPC_CHANNELS.SAVE_AGENT_AVATAR,
         IPC_CHANNELS.APPLY_AGENT_PROFILE,
@@ -86,10 +89,14 @@ function removeHandlers() {
         IPC_CHANNELS.CANCEL_TURN,
         IPC_CHANNELS.RESPOND_APPROVAL,
         IPC_CHANNELS.RESPOND_INTERACTION,
+        IPC_CHANNELS.WORKSPACE_SELECT_ROOT,
         IPC_CHANNELS.WORKSPACE_LIST_DIRECTORY,
         IPC_CHANNELS.WORKSPACE_READ_PREVIEW,
         IPC_CHANNELS.WORKSPACE_SEARCH_FILES,
         IPC_CHANNELS.WORKSPACE_STAT_PATH,
+        IPC_CHANNELS.WORKSPACE_SAVE_TEXT,
+        IPC_CHANNELS.WORKSPACE_WATCH,
+        IPC_CHANNELS.WORKSPACE_UNWATCH,
         IPC_CHANNELS.WORKSPACE_PERFORM_PATH_ACTION,
         IPC_CHANNELS.WORKSPACE_CANCEL,
     ]) {
@@ -179,6 +186,10 @@ function initialize(options) {
     ipcMain.handle(IPC_CHANNELS.LIST_AGENT_PROFILES, (event) => projectionGuard(event, () => manager.listAgentProfiles()));
     ipcMain.handle(IPC_CHANNELS.LIST_TOOL_CATALOG,
         (event) => projectionGuard(event, () => listAgentToolCatalog(projectRoot)));
+    ipcMain.handle(IPC_CHANNELS.LIST_SKILLS,
+        (event, payload) => runtimeGuard(event, () => manager.listSkills(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.READ_SKILL,
+        (event, payload) => runtimeGuard(event, () => manager.readSkill(payload || {})));
     ipcMain.handle(IPC_CHANNELS.SAVE_AGENT_PROFILE, (event, payload) => projectionGuard(event, () => manager.saveAgentProfile(payload || {})));
     ipcMain.handle(IPC_CHANNELS.SAVE_AGENT_AVATAR, (event, payload) => projectionGuard(event, () => manager.saveAgentAvatar(payload || {})));
     ipcMain.handle(IPC_CHANNELS.APPLY_AGENT_PROFILE, (event, payload) => projectionGuard(event, () => manager.applyAgentProfileToSession(payload || {})));
@@ -261,10 +272,34 @@ function initialize(options) {
     ipcMain.handle(IPC_CHANNELS.CANCEL_TURN, (event, payload) => runtimeGuard(event, () => manager.cancelTurn(payload || {})));
     ipcMain.handle(IPC_CHANNELS.RESPOND_APPROVAL, (event, payload) => runtimeGuard(event, () => manager.respondApproval(payload || {})));
     ipcMain.handle(IPC_CHANNELS.RESPOND_INTERACTION, (event, payload) => runtimeGuard(event, () => manager.respondInteraction(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.WORKSPACE_SELECT_ROOT, (event, payload) => projectionGuard(event, async () => {
+        const mainWindow = assertMainWindowSender(event);
+        const currentPath = String(payload?.currentPath || '').trim();
+        const result = await dialog.showOpenDialog(mainWindow, {
+            title: '选择 Agent 工作目录',
+            ...(currentPath ? { defaultPath: currentPath } : {}),
+            properties: ['openDirectory', 'createDirectory'],
+        });
+        if (result.canceled || !result.filePaths[0]) return { cancelled: true };
+        const workspaceRoot = canonicalizeWorkspaceRoot(result.filePaths[0]);
+        return { cancelled: false, workspaceRoot, displayName: path.basename(workspaceRoot) };
+    }));
     ipcMain.handle(IPC_CHANNELS.WORKSPACE_LIST_DIRECTORY, (event, payload) => workspaceGuard(event, () => workspaceService.listDirectory(payload || {})));
     ipcMain.handle(IPC_CHANNELS.WORKSPACE_READ_PREVIEW, (event, payload) => workspaceGuard(event, () => workspaceService.readPreview(payload || {})));
     ipcMain.handle(IPC_CHANNELS.WORKSPACE_SEARCH_FILES, (event, payload) => workspaceGuard(event, () => workspaceService.searchFiles(payload || {})));
     ipcMain.handle(IPC_CHANNELS.WORKSPACE_STAT_PATH, (event, payload) => workspaceGuard(event, () => workspaceService.statPath(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.WORKSPACE_SAVE_TEXT, (event, payload) => workspaceGuard(event, () => workspaceService.saveText(payload || {})));
+    ipcMain.handle(IPC_CHANNELS.WORKSPACE_WATCH, (event, payload) => workspaceGuard(event, async () => {
+        const sender = event.sender;
+        const result = await workspaceService.watch(payload || {}, (change) => {
+            if (!sender.isDestroyed()) sender.send(IPC_CHANNELS.WORKSPACE_CHANGED, change);
+        });
+        sender.once('destroyed', () => {
+            void workspaceService?.unwatch({ watchId: result.watchId, sessionId: result.sessionId }).catch(() => null);
+        });
+        return result;
+    }));
+    ipcMain.handle(IPC_CHANNELS.WORKSPACE_UNWATCH, (event, payload) => workspaceGuard(event, () => workspaceService.unwatch(payload || {})));
     ipcMain.handle(IPC_CHANNELS.WORKSPACE_PERFORM_PATH_ACTION, (event, payload) => workspaceGuard(event, () => workspaceService.performPathAction(payload || {})));
     ipcMain.handle(IPC_CHANNELS.WORKSPACE_CANCEL, (event, payload) => workspaceGuard(event, () => workspaceService.cancel(payload || {})));
     ipcMain.on(IPC_CHANNELS.SET_WORKBENCH_PRESENCE, (event, payload) => {
@@ -299,6 +334,7 @@ async function shutdown() {
         }
         manager = null;
     }
+    if (workspaceService) await workspaceService.close().catch(() => null);
     workspaceService = null;
     removeHandlers();
 }

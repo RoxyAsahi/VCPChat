@@ -375,6 +375,13 @@ projector.projectNotification({
         item: { id: 'reason_omitted_by_read', type: 'reasoning', status: 'completed' },
     },
 });
+projector.projectNotification({
+    method: 'item/completed',
+    params: {
+        threadId: 'thr_1', turnId: 'turn_1',
+        item: { id: 'assistant_omitted_by_read', type: 'agentMessage', text: 'visible intermediate reply', status: 'completed' },
+    },
+});
 const authoritativeReconcile = projector.reconcileThread('session_1', {
     id: 'thr_1',
     turns: [{
@@ -407,8 +414,11 @@ assert.deepEqual(omittedReasoning.blocks[0].content.summary, ['durable reasoning
     'a full thread/read snapshot that omits reasoning must preserve its streamed summary');
 assert.deepEqual(omittedReasoning.blocks[0].content.content, ['durable reasoning detail'],
     'a full thread/read snapshot that omits reasoning must preserve its streamed detail');
-assert.equal(reconciled.messages.some((message) => message.itemId === 'file_1'), false,
-    'thread/read reconciliation must remove stale tool and diff items absent from the authoritative snapshot');
+assert.equal(reconciled.messages.find((message) => message.itemId === 'assistant_omitted_by_read')
+    ?.blocks[0]?.content?.text, 'visible intermediate reply',
+    'thread/read omission must preserve an intermediate assistant reply that the user already saw');
+assert.equal(reconciled.messages.some((message) => message.itemId === 'file_1'), true,
+    'thread/read omission must not delete a live-observed Item without an explicit tombstone');
 const preservedDynamicTool = reconciled.messages.find((message) => message.itemId === 'dynamic_tool_1');
 assert.ok(preservedDynamicTool,
     'thread/read reconciliation must preserve a completed VCP dynamic tool omitted by App Server history');
@@ -418,10 +428,10 @@ assert.equal(localObservation.blocks.length, 1,
     'thread/read reconciliation must preserve local-only observations absent from the Codex snapshot');
 assert.equal(localObservation.blocks[0].authority, 'vchat');
 const mixedObservation = reconciled.messages.find((message) => message.itemId === 'mixed_observation');
-assert.equal(mixedObservation.blocks.length, 1,
-    'thread/read reconciliation must remove stale Codex Blocks without deleting local Blocks on the same Message');
-assert.equal(mixedObservation.blocks[0].authority, 'toolbox');
-assert.equal(mixedObservation.blocks[0].content.text, 'durable local observation');
+assert.equal(mixedObservation.blocks.length, 2,
+    'an omitted Item must retain both Codex and local Blocks until an explicit tombstone exists');
+assert.ok(mixedObservation.blocks.some((block) => block.authority === 'toolbox'
+    && block.content.text === 'durable local observation'));
 assert.equal(reconciled.messages.find((message) => message.itemId === 'item_1').blocks[0].content.text, 'authoritative text');
 assert.equal(reconciled.messages.find((message) => message.itemId === 'marker_reconcile').blocks.length, 1,
     'authoritative reconciliation must delete stale Codex-owned Blocks absent from the snapshot');

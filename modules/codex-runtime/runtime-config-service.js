@@ -5,6 +5,7 @@ const path = require('path');
 const { CodexAppServerError } = require('./appServerTransport');
 const { normalizeSessionConfig } = require('./dataContracts');
 const { normalizeToolPolicy } = require('./tool-policy');
+const { normalizeSkillPolicy } = require('./skill-policy');
 const {
     normalizeApprovalPolicy,
     normalizeInstructionMode,
@@ -22,6 +23,7 @@ const {
 } = require('../agent-config-descriptors.js');
 const {
     runtimeSettingsTarget,
+    sameRuntimeSettings,
     threadSettingsPatch,
 } = require('./runtime-settings-contract');
 
@@ -35,11 +37,6 @@ function instructionShape(config = {}) {
 
 function instructionConfigChanged(desired = {}, applied = {}) {
     return JSON.stringify(instructionShape(desired)) !== JSON.stringify(instructionShape(applied));
-}
-
-function toolPolicyChanged(desired = {}, applied = {}) {
-    return JSON.stringify(normalizeToolPolicy(desired.toolPolicy))
-        !== JSON.stringify(normalizeToolPolicy(applied.toolPolicy));
 }
 
 function requiresFreshCodexManagedSession(desired = {}, applied = {}) {
@@ -78,6 +75,7 @@ function settingsMutationRequest(context, settings) {
         hasDeveloperInstructionsUpdate: Object.prototype.hasOwnProperty.call(settings, 'developerInstructions'),
         hasPersonalityUpdate: Object.prototype.hasOwnProperty.call(settings, 'personality'),
         hasToolPolicyUpdate: Object.prototype.hasOwnProperty.call(settings, 'toolPolicy'),
+        hasSkillPolicyUpdate: Object.prototype.hasOwnProperty.call(settings, 'skillPolicy'),
         hasPromptUpdate: hasSystemPromptUpdate || hasBaseInstructionsUpdate,
         requestedSystemPrompt: (hasSystemPromptUpdate || hasBaseInstructionsUpdate)
             ? normalizeConfigField('baseInstructions', settings.baseInstructions ?? settings.systemPrompt).value : null,
@@ -105,6 +103,9 @@ function requestedSessionConfig(current, request) {
         toolPolicy: request.hasToolPolicyUpdate
             ? normalizeToolPolicy(request.settings.toolPolicy)
             : normalizeToolPolicy(currentConfig.toolPolicy),
+        skillPolicy: request.hasSkillPolicyUpdate
+            ? normalizeSkillPolicy(request.settings.skillPolicy)
+            : normalizeSkillPolicy(currentConfig.skillPolicy),
     };
 }
 
@@ -134,6 +135,7 @@ function configUpdateResult(defaults, session, request) {
             ...(model ? { model } : {}),
             reasoningEffort: normalizeReasoningEffort(session?.configSnapshot?.reasoningEffort),
             toolPolicy: sessionToolPolicy(session),
+            skillPolicy: normalizeSkillPolicy(session?.configSnapshot?.skillPolicy),
         },
         session: session ? sessionProjection(session) : null,
         desiredConfig: session?.configSnapshot || null,
@@ -297,6 +299,7 @@ class RuntimeConfigService {
             'instructionMode', 'baseInstructions', 'systemPrompt', 'developerInstructions', 'personality',
                 'model', 'reasoningEffort', 'workspaceRoot', 'permissionMode', 'createDerivedSession',
                 'toolPolicy',
+                'skillPolicy',
         ]);
         const unknownFields = Object.keys(patch).filter((field) => !allowedFields.has(field));
         if (unknownFields.length) {
@@ -418,6 +421,27 @@ class RuntimeConfigService {
         }
     }
 
+    _applyHostOnlyConfig(repository, session, desired, applied, { barrier = false } = {}) {
+        if (instructionConfigChanged(desired, applied)) return null;
+        const appliedSettings = runtimeSettingsTarget({
+            ...session,
+            workspaceRoot: applied.workspaceRoot || session.workspaceRoot,
+        }, applied);
+        const desiredSettings = runtimeSettingsTarget(session, desired);
+        if (!sameRuntimeSettings(appliedSettings, desiredSettings)) return null;
+        if (this.context.threadStates().get(session.threadId)?.activity === 'running') {
+            if (barrier) throw new CodexAppServerError(
+                'SESSION_CONFIG_PENDING', 'Host settings will be applied after the active Turn finishes',
+            );
+            return repository.getSession(session.sessionId);
+        }
+        const updated = repository.markSessionConfigApplied(
+            session.sessionId, session.configRevision, session.configSnapshot,
+        );
+        this.sendSessionConfigEvent('session.config.applied', updated);
+        return updated;
+    }
+
     async applySessionRuntimeConfig(sessionId, { barrier = false } = {}) {
         const idValue = String(sessionId || '').trim();
         const applyPromises = this.context.configApplyPromises();
@@ -457,7 +481,9 @@ class RuntimeConfigService {
                     await this.context.resumeSession(session);
                     return this._operationRepository(operation).getSession(idValue);
                 }
-                if (instructionConfigChanged(desired, applied) || toolPolicyChanged(desired, applied)) {
+                const hostOnlyApplied = this._applyHostOnlyConfig(repository, session, desired, applied, { barrier });
+                if (hostOnlyApplied) return hostOnlyApplied;
+                if (instructionConfigChanged(desired, applied)) {
                     const activity = this.context.threadStates().get(session.threadId)?.activity;
                     if (activity === 'running') {
                         if (barrier) throw new CodexAppServerError(

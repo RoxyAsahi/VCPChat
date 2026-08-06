@@ -1,6 +1,6 @@
 # Agent Workspace 浏览与统一路径动作计划
 
-状态：**implemented / working-tree hermetic pass；人工视觉与大工作区性能收据 pending**。本文定义两个 P0 能力：Session 工作区的只读文件树与预览，以及工具卡、Diff、附件和文件树共用的路径动作。
+状态：**implemented / working-tree hermetic pass；增强版人工视觉与 Electron 收据 pending**。本文定义 Session 工作区浏览、插件化预览、用户显式编辑，以及工具卡、Diff、附件和文件树共用的路径动作。
 
 2026-08-02 已完成 Main-only `AgentWorkspaceService`、`agent-workspace:*` 窄 IPC/preload、Renderer tree model、Workspace Tab、文本/图片/二进制预览、搜索、临时/固定预览、统一路径动作以及 tree/tool/diff/attachment 的保守路径入口。`npm run test:codex-stack`、`npm run test:electron-codex-smoke`、`npm run check:agent-runtime` 与 `npm run check:ui-system` 已通过；这些是未提交工作树收据，不等于版本级或产品级完成。
 
@@ -20,6 +20,22 @@ Renderer Workspace Browser
 ```
 
 Workspace Browser 是 VChat Host 能力，不是 Codex 工具。它不得开启 Codex 原生 Shell/文件工具，不得注册为模型可调用工具，也不得成为 VCPToolBox 之外的第二条工具执行通道。
+
+工作目录选择同样属于 Electron Host。Renderer 通过窄 `agent-workspace:select-root` IPC 请求原生目录选择器，Main 使用 `canonicalizeWorkspaceRoot()` 校验后只返回规范化目录；最终值仍必须经过 Agent Profile 或 Session Config 的 CAS 保存链路，选择器不得绕过配置治理。
+
+## 2026-08-05 增强版
+
+- 保留 Profile 创建 Session 时冻结 `workspaceRoot` 的现有数据合同，不引入独立 Workspace 实体或第二套持久化真源。
+- 复用 VChat 已有 `chokidar`、CodeMirror、Marked/Highlight.js、图片 descriptor 和 Chromium iframe/PDF 能力，建立 Agent Workspace 预览注册表。
+- 预览覆盖代码/文本、Markdown、HTML、图片和 PDF。HTML 使用无 same-origin 的 `sandbox=allow-scripts` 与拒绝网络访问的 CSP；相对资源不会获得任意文件系统访问。
+- 文本类文件允许用户显式编辑，保存按钮与 `Ctrl+S` 走同一 Main-only `save-text` IPC。保存要求匹配 `contentRevision`，外部修改时 fail-closed，不覆盖用户草稿。
+- Main 使用同目录临时文件和 rename 提交保存；默认编辑上限 2 MiB、PDF 内嵌上限 12 MiB。文件内容、草稿和预览数据仍不进入 Projection SQLite、Session transcript 或 sessionStorage。
+- Workspace watcher 只推送 Session-scoped 相对路径。Renderer 按 `sessionId + workspaceRevision` 校验，将事件突发按受影响父目录合并，只强制重读已加载/已展开目录；只有选中文件自身变化时重读预览。编辑中的文件发生外部变化时只显示冲突，文件被删除时保留未保存草稿。
+- watcher ready、文件页重新可见时执行有界一致性对账，覆盖 `ignoreInitial` 与初始扫描窗口；不得清空整棵树后串行重读所有展开目录。
+- Codex 原生 `fileChange` 只描述 Codex native 工具提出的改动。当前 `toolbox-only` 写入发生在 `vcp_invoke` 内部，App Server 不掌握 ToolBox 的内部文件 mutation，因此 `fileChange` 不能作为 Workspace 文件树的新鲜度来源。
+- 切换 Session 时仅在页面内存恢复搜索、展开目录、选中文件、显示模式和分隔宽度；文件正文与未保存草稿不跨 Session 持久化。
+
+Cherry Studio 仅作为 clean-room 完成度和机制参考。本实现没有复制其 AGPL 组件、Schema、服务代码或文件工具 Adapter。
 
 ## 复用结论
 
@@ -63,7 +79,7 @@ copy-absolute-path
 open-with-system
 ```
 
-`copy-absolute-path` 必须是显式动作；可执行文件、脚本和高风险类型的 `open-with-system` 必须二次确认。P0 不提供写入、删除、重命名、移动、apply patch、revert 或任意 shell command。
+`copy-absolute-path` 必须是显式动作；可执行文件、脚本和高风险类型的 `open-with-system` 必须二次确认。增强版仅提供用户显式文本保存；不提供删除、重命名、移动、apply patch、revert 或任意 shell command，也不把保存暴露为模型工具。
 
 预览返回受限类型：文本返回编码、截断标记和行数；图片返回安全 descriptor/受控 URL；音视频返回 metadata；二进制或不支持类型只返回 metadata。不得通过 IPC 返回无上限 Base64。
 

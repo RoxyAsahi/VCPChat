@@ -50,10 +50,45 @@ try {
     assert.equal(source.truncated, true);
 
     const preview = await service.readPreview({ sessionId: 'session-a', workspaceRevision: first.workspaceRevision, relativePath: 'README.md' });
-    assert.equal(preview.kind, 'text');
+    assert.equal(preview.kind, 'markdown');
     assert.equal(preview.content, '# Worksp');
     assert.equal(preview.truncated, true);
+    assert.equal(preview.editable, false);
     assert.equal((await service.readPreview({ sessionId: 'session-a', relativePath: 'binary.bin' })).kind, 'binary');
+
+    const editingService = new AgentWorkspaceService({
+        getSession: (sessionId) => sessionId === 'session-a' ? { sessionId, workspaceRoot: tempRoot } : null,
+        limits: { maxPreviewBytes: 1024, maxEditableBytes: 1024 },
+    });
+    const editable = await editingService.readPreview({ sessionId: 'session-a', relativePath: 'README.md' });
+    assert.equal(editable.editable, true);
+    const saved = await editingService.saveText({
+        sessionId: 'session-a', workspaceRevision: editable.workspaceRevision, relativePath: 'README.md',
+        content: '# Updated\n', expectedContentRevision: editable.contentRevision,
+    });
+    assert.equal(saved.content, '# Updated\n');
+    assert.notEqual(saved.contentRevision, editable.contentRevision);
+    await assert.rejects(() => editingService.saveText({
+        sessionId: 'session-a', workspaceRevision: editable.workspaceRevision, relativePath: 'README.md',
+        content: '# Stale overwrite\n', expectedContentRevision: editable.contentRevision,
+    }), (error) => error.code === 'WORKSPACE_EDIT_CONFLICT');
+
+    const watchEvents = [];
+    const watched = await editingService.watch({ sessionId: 'session-a', watchId: 'watch-a' }, (event) => watchEvents.push(event));
+    fs.writeFileSync(path.join(tempRoot, '.README.md.vchat-123e4567-e89b-12d3-a456-426614174000.tmp'), 'temporary', 'utf8');
+    fs.writeFileSync(path.join(tempRoot, 'src', 'watched.txt'), 'watch me', 'utf8');
+    const watchDeadline = Date.now() + 3_000;
+    while (!watchEvents.some((event) => event.relativePath === 'src/watched.txt') && Date.now() < watchDeadline) {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    assert.ok(watchEvents.some((event) => event.relativePath === 'src/watched.txt' && event.sessionId === 'session-a'),
+        'workspace watcher must emit Session-scoped relative paths');
+    assert.equal(watchEvents.some((event) => event.relativePath?.includes('.vchat-')), false,
+        'workspace watcher must ignore VChat atomic-save temporary files');
+    fs.rmSync(path.join(tempRoot, '.README.md.vchat-123e4567-e89b-12d3-a456-426614174000.tmp'), { force: true });
+    assert.deepEqual(await editingService.unwatch({ sessionId: 'session-a', watchId: watched.watchId }), {
+        stopped: true, watchId: 'watch-a',
+    });
 
     const search = await service.searchFiles({ sessionId: 'session-a', query: 'alpha' });
     assert.deepEqual(search.entries.map((entry) => entry.relativePath), ['src/alpha.js']);

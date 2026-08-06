@@ -134,14 +134,44 @@ const patchRepository = {
     projectionGeneration: () => projectionRevision,
     getProjectedMessageByItem: () => (messageReadCount++ === 0 ? beforeMessage : afterMessage),
 };
+const usageEvents = [];
 const patchService = new RuntimeHostService({
     repository: () => patchRepository,
-    projector: () => ({ projectNotification: () => { projectionRevision += 1; return true; } }),
+    projector: () => ({ projectNotification: (message) => {
+        if (!message?.params?.item) return false;
+        projectionRevision += 1;
+        return true;
+    } }),
     compactionWaiters: () => new Map(),
     updateThreadState: () => {},
     threadStates: () => new Map(),
     runtimeGeneration: () => 4,
+    sendUiEvent: (event) => usageEvents.push(event),
     sendEvent: (event) => { emittedEvent = event; emittedPatch = event.projectionPatch; },
+});
+patchService.handleNotification({
+    method: 'thread/tokenUsage/updated',
+    params: {
+        threadId: 'thread-a', turnId: 'turn-a',
+        tokenUsage: {
+            last: { inputTokens: 80, cachedInputTokens: 20, cacheWriteInputTokens: 4,
+                outputTokens: 12, reasoningOutputTokens: 5, totalTokens: 92 },
+            total: { inputTokens: 180, cachedInputTokens: 40, cacheWriteInputTokens: 8,
+                outputTokens: 32, reasoningOutputTokens: 9, totalTokens: 212 },
+            modelContextWindow: 1_000,
+        },
+    },
+});
+assert.deepEqual(usageEvents.at(-1), {
+    type: 'context.usage', sessionId: 'session-a', turnId: 'turn-a',
+    payload: {
+        schemaVersion: 1, source: 'real', provenance: 'codex-thread', turnId: 'turn-a',
+        inputTokens: 80, outputTokens: 12, reasoningTokens: 5, cacheReadTokens: 20,
+        cacheWriteTokens: 4, totalTokens: 92, usedTokens: 92, contextTokens: 92,
+        contextWindow: 1_000, sessionInputTokens: 180, sessionOutputTokens: 32,
+        sessionReasoningTokens: 9, sessionCacheReadTokens: 40, sessionCacheWriteTokens: 8,
+        sessionTotalTokens: 212, percentage: 9,
+    },
 });
 patchService.handleNotification({
     method: 'item/completed',

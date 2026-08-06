@@ -76,6 +76,7 @@ assert.equal(states.get('thread-a').recoveryState, 'confirmed',
 assert.equal(states.get('thread-a').activeTurnId, 'turn-recovered');
 assert.equal(drainCount, 2, 'the matching completion is the finalization authority');
 eventService.sendUiEvent({ type: 'context.usage', sessionId: 'session-a', payload: { totalTokens: 10 } });
-assert.equal(activity[0].patch.usage.totalTokens, '[redacted]');
+assert.equal(activity[0].patch.usage.totalTokens, 10);
+assert.equal(activity[0].patch.usage.source, 'unknown');
 assert.equal(envelopes[0].sequence, 1);
 console.log('Codex Runtime policy and event service tests passed.');

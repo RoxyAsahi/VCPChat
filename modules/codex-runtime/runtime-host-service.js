@@ -16,6 +16,7 @@ const {
     toolboxConfigFingerprint,
 } = require('./runtime-normalizers');
 const { projectionPatchBetween } = require('./projection/v2');
+const { normalizeThreadTokenUsage } = require('./token-usage');
 const {
     runtimeSettingsFromNotification,
     sameRuntimeSettings,
@@ -360,6 +361,11 @@ class RuntimeHostService {
     }
 
     handleNotification(message) {
+        if (message?.method === 'skills/changed') {
+            this.context.invalidateSkills();
+            this.context.sendUiEvent({ type: 'skills.changed', payload: {} });
+            return;
+        }
         const repository = this.context.repository();
         const threadId = message?.params?.threadId || message?.params?.thread?.id || null;
         const sessionBefore = threadId ? repository?.getSessionByThread(threadId) : null;
@@ -369,6 +375,13 @@ class RuntimeHostService {
         const projectionMessageBefore = sessionBefore && itemId
             ? repository.getProjectedMessageByItem(sessionBefore.sessionId, itemId) : null;
         const projected = this.context.projector()?.projectNotification(message);
+        if (message.method === 'thread/tokenUsage/updated' && sessionBefore) {
+            const usage = normalizeThreadTokenUsage(message.params);
+            if (usage) this.context.sendUiEvent({
+                type: 'context.usage', sessionId: sessionBefore.sessionId,
+                turnId: usage.turnId, payload: usage,
+            });
+        }
         this.observeCompactionNotification(message);
         const session = threadId ? repository?.getSessionByThread(threadId) : null;
         applySettingsNotification(this.context, repository, session, message);

@@ -35,6 +35,33 @@ const DEFAULT_MAX_PENDING_DELTA_BYTES_PER_ITEM = 64 * 1024;
 const DEFAULT_MAX_PENDING_DELTA_BYTES = 1024 * 1024;
 const DEFAULT_MAX_UNKNOWN_ITEM_DIAGNOSTICS = 256;
 
+function replacementSlotKey(turnId, role) {
+    return `${String(turnId || '')}:${role === 'user' ? 'user' : 'assistant'}`;
+}
+
+function incrementSlot(counts, key) {
+    counts.set(key, (counts.get(key) || 0) + 1);
+}
+
+function hasIdentityReplacementCoverage(projection, entries) {
+    const existing = new Map();
+    for (const message of projection?.messages || []) {
+        const codexBlocks = (message.blocks || []).filter((block) => (
+            block.authority === 'codex' && block.kind !== 'reasoning'
+        ));
+        if (codexBlocks.length) incrementSlot(existing, replacementSlotKey(message.turnId, message.role));
+    }
+    const incoming = new Map();
+    for (const entry of entries) {
+        const blocks = (Array.isArray(entry.blocks) ? entry.blocks : [entry.block]).filter(Boolean);
+        if (blocks.some((block) => block.authority === 'codex' && block.kind !== 'reasoning')) {
+            incrementSlot(incoming, replacementSlotKey(entry.record.turnId, entry.record.role));
+        }
+    }
+    if (!existing.size || existing.size !== incoming.size) return false;
+    return [...existing].every(([key, count]) => incoming.get(key) === count);
+}
+
 function normalizedToolItem(item, fields) {
     return { type: boundedText(item.type, 128), id: boundedText(item.id, 256), ...Object.fromEntries(fields
         .filter((field) => Object.prototype.hasOwnProperty.call(item, field))
@@ -182,11 +209,13 @@ class CodexProjectionProjector {
         }
         const turns = Array.isArray(thread.turns) ? thread.turns : [];
         const hasPartialItems = !turns.every((turn) => turn?.itemsView === 'full');
-        // In 0.146, `itemsView=full` is not complete for reasoning Items: a
-        // thread/read response may contain the surrounding user/assistant
-        // messages while omitting reasoning that was observed live. The
-        // repository keeps those omitted reasoning Blocks, while an explicitly
-        // returned reasoning Item remains authoritative for its supplied fields.
+        // `thread/read(includeTurns=true)` returns stored turns, but the App
+        // Server contract does not grant absence-based deletion authority.
+        // In 0.146 it can omit live-observed reasoning, tool and intermediate
+        // agent-message Items even when an incidental `itemsView=full` field is
+        // present. Returned Items remain authoritative for their own supplied
+        // fields; missing Items remain durable until an explicit tombstone
+        // protocol exists.
         const entries = [];
         for (const turn of turns) {
             for (const item of turn.items || []) {
@@ -199,9 +228,13 @@ class CodexProjectionProjector {
                 if (entry) entries.push({ ...entry, authoritativeOrdinals: !hasPartialItems });
             }
         }
+        const projection = this.repository.readProjection(sessionId);
+        const identityReplacement = !hasPartialItems && hasIdentityReplacementCoverage(projection, entries);
         return {
             ...this.repository.reconcileItems(sessionId, entries, expectedGeneration, {
-                deleteMissing: !hasPartialItems,
+                // This is identity de-duplication, not generic absence-based
+                // deletion. Any incomplete slot coverage remains merge-only.
+                deleteMissing: identityReplacement,
             }),
             partial: hasPartialItems,
         };

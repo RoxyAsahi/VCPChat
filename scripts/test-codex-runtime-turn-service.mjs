@@ -138,6 +138,8 @@ const service = new RuntimeTurnService({
     followUpDrainPromises: () => followUpDrainPromises,
     turnCancellationStates: () => turnCancellationStates,
     failClosedTurnInteractions: async (identity) => { failedClosedTurns.push(identity); return { resolved: ['approval-1'] }; },
+    resolveSkillInputs: async (_session, prompt) => String(prompt).includes('$document-review')
+        ? [{ type: 'skill', name: 'document-review', path: '/skills/document-review/SKILL.md' }] : [],
     compactionWaiters: () => new Map(),
     resumedThreadIds: () => resumedThreadIds,
     resumingThreads: () => new Map(),
@@ -150,6 +152,12 @@ const started = await service.startTurn({ sessionId: session.sessionId, prompt: 
 assert.equal(started.turnId, 'turn-thread-turn');
 assert.equal(threadStates.get('thread-turn').activity, 'running');
 assert.equal(calls.filter((call) => call.method === 'turn/start').length, 1);
+threadStates.set('thread-turn', { activity: 'idle', activeTurnId: null });
+await service.startTurn({ sessionId: session.sessionId, prompt: '$document-review inspect' });
+assert.deepEqual(calls.filter((call) => call.method === 'turn/start').at(-1).params.input, [
+    { type: 'text', text: '$document-review inspect', text_elements: [] },
+    { type: 'skill', name: 'document-review', path: '/skills/document-review/SKILL.md' },
+]);
 await service.cancel({ sessionId: session.sessionId, turnId: started.turnId });
 assert.equal(calls.at(-1).method, 'turn/interrupt');
 
@@ -166,7 +174,7 @@ assert.deepEqual(secondConcurrent, {
 });
 assert.equal(threadStates.get(session.threadId).activeTurnId, 'turn-thread-turn');
 assert.equal(threadStates.get(secondSession.threadId).activeTurnId, 'turn-thread-second');
-assert.equal(calls.filter((call) => call.method === 'turn/start' && call.params.threadId === session.threadId).length, 2);
+assert.equal(calls.filter((call) => call.method === 'turn/start' && call.params.threadId === session.threadId).length, 3);
 assert.equal(calls.filter((call) => call.method === 'turn/start' && call.params.threadId === secondSession.threadId).length, 1);
 
 let releaseStaleTurn;

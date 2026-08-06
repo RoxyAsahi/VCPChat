@@ -13,6 +13,7 @@ const { RuntimeHostService } = require('./runtime-host-service');
 const { RuntimePolicyService } = require('./runtime-policy-service');
 const { RuntimeEventService } = require('./runtime-event-service');
 const { RuntimeDiagnosticsService } = require('./runtime-diagnostics-service');
+const { RuntimeSkillService } = require('./runtime-skill-service');
 const { rejectConfigApplyTargets } = require('./runtime-config-targets');
 const { createRuntimeServiceContext } = require('./runtime-service-contexts');
 
@@ -21,6 +22,15 @@ function createId(prefix) {
 }
 
 function attachRuntimeServiceGraph(runtime) {
+    runtime.skillService = new RuntimeSkillService(createRuntimeServiceContext('skill', {
+        repository: () => runtime.repository,
+        transport: () => runtime.transport,
+        start: () => runtime.start(),
+        projectRoot: () => runtime.projectRoot,
+        resolveAgentProfile: (profileId) => runtime.profileService?.resolveAgentProfile(profileId),
+    }));
+    runtime.listSkills = (options = {}) => runtime.skillService.list(options);
+    runtime.readSkill = (options = {}) => runtime.skillService.detail(options);
     runtime.diagnosticsService = new RuntimeDiagnosticsService(createRuntimeServiceContext('diagnostics', {
         ensureProjectionStore: () => runtime.ensureProjectionStore(),
         repository: () => runtime.repository,
@@ -174,6 +184,7 @@ function attachRuntimeServiceGraph(runtime) {
         defaultStartTurnMethod: () => runtime._defaultStartTurnMethod,
         failClosedTurnInteractions: (identity, reason) => runtime.interactionService
             .failClosedTurnInteractions(identity, reason),
+        resolveSkillInputs: (session, prompt) => runtime.skillService.resolveTurnInputs(session, prompt),
     }));
 
     runtime.configService = new RuntimeConfigService(createRuntimeServiceContext('config', {
@@ -296,6 +307,7 @@ function attachRuntimeServiceGraph(runtime) {
             ));
         },
         clearHostResources: () => runtime._clearHostResources(),
+        invalidateSkills: () => runtime.skillService.invalidate(),
     }));
 }
 

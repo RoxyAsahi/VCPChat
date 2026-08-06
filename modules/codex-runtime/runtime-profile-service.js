@@ -6,6 +6,7 @@ const { pathToFileURL } = require('url');
 const { CodexAppServerError } = require('./appServerTransport');
 const { normalizeProfile, PROFILE_SCHEMA_VERSION } = require('./dataContracts');
 const { normalizeToolPolicy } = require('./tool-policy');
+const { normalizeSkillPolicy } = require('./skill-policy');
 const {
     explicitAgent,
     normalizeApprovalPolicy,
@@ -40,6 +41,7 @@ function profileProjection(entry, avatarUrl) {
         reasoningEffort: normalizeReasoningEffort(profile.reasoningEffort),
         reasoningEfforts: Array.isArray(profile.reasoningEfforts) ? profile.reasoningEfforts : [],
         toolPolicy: normalizeToolPolicy(profile.toolPolicy),
+        skillPolicy: normalizeSkillPolicy(profile.skillPolicy),
         executionProfile: 'toolbox-only',
         avatarUrl,
     };
@@ -64,6 +66,7 @@ function sessionProfileProjection(session, idValue) {
         reasoningEffort: normalizeReasoningEffort(config.reasoningEffort),
         reasoningEfforts: Array.isArray(config.reasoningEfforts) ? config.reasoningEfforts : [],
         toolPolicy: normalizeToolPolicy(config.toolPolicy),
+        skillPolicy: normalizeSkillPolicy(config.skillPolicy),
         executionProfile: 'toolbox-only',
         avatarUrl: config.agentAvatar || '',
     };
@@ -125,6 +128,8 @@ function profileDifferences(session, profile) {
     add('permissionMode', normalizePermissionMode(config.permissionMode), normalizePermissionMode(profile.permissionMode));
     add('toolPolicy', JSON.stringify(normalizeToolPolicy(config.toolPolicy)),
         JSON.stringify(normalizeToolPolicy(profile.toolPolicy)));
+    add('skillPolicy', JSON.stringify(normalizeSkillPolicy(config.skillPolicy)),
+        JSON.stringify(normalizeSkillPolicy(profile.skillPolicy)));
     add('profileRevision', Number(config.profileRevision || 1), Number(profile.revision || 1));
     return { differences, profileMode, profileWorkspace };
 }
@@ -147,6 +152,7 @@ function profileSessionPatch(session, profile, profileMode) {
             reasoningEffort: normalizeReasoningEffort(profile.reasoningEffort),
             reasoningEfforts: Array.isArray(profile.reasoningEfforts) ? profile.reasoningEfforts : [],
             toolPolicy: normalizeToolPolicy(profile.toolPolicy),
+            skillPolicy: normalizeSkillPolicy(profile.skillPolicy),
             permissionMode,
             approvalPolicy: normalizeApprovalPolicy(permissionMode),
             provider: 'vcp_toolbox',
@@ -227,6 +233,7 @@ function snapshotProjection(service, options, authority, values) {
         reasoningEffort: reasoning.effort,
         reasoningEfforts: reasoning.supported,
         toolPolicy: normalizeToolPolicy(options.toolPolicy ?? profile?.toolPolicy),
+        skillPolicy: normalizeSkillPolicy(options.skillPolicy ?? profile?.skillPolicy),
         agentName: options.agentName || options.name || profile?.name || '',
         agentAvatar: options.agentAvatar || options.avatar || profile?.avatarUrl
             || service.agentAvatarUrl(avatarIdentity),
@@ -267,6 +274,7 @@ class RuntimeProfileService {
             name, systemPrompt, instructionMode, baseInstructions, developerInstructions,
             personality, model, reasoningEffort, workspaceRoot, permissionMode,
             toolPolicy,
+            skillPolicy,
         } = patch;
         const displayName = String(name || '').trim();
         const prompt = requestedPrompt(incomingPatch, { baseInstructions, systemPrompt });
@@ -302,6 +310,7 @@ class RuntimeProfileService {
             executionProfile: 'toolbox-only',
             permissionMode: normalizePermissionMode(permissionMode),
             toolPolicy: normalizeToolPolicy(toolPolicy),
+            skillPolicy: normalizeSkillPolicy(skillPolicy),
             ...(normalizedModel ? { model: normalizedModel } : {}),
             ...(reasoning.effort ? { reasoningEffort: reasoning.effort } : {}),
             ...(reasoning.supported.length ? { reasoningEfforts: reasoning.supported } : {}),
@@ -408,6 +417,7 @@ class RuntimeProfileService {
                 personality: profile.personality,
                 reasoningEffort: profile.reasoningEffort,
                 toolPolicy: normalizeToolPolicy(profile.toolPolicy),
+                skillPolicy: normalizeSkillPolicy(profile.skillPolicy),
             });
             return { applied: false, createdNewSession: true, requiresNewSession: true, differences, session: created };
         }
@@ -516,6 +526,7 @@ class RuntimeProfileService {
             executionProfile: 'toolbox-only',
             permissionMode: 'ask',
             toolPolicy: normalizeToolPolicy(),
+            skillPolicy: normalizeSkillPolicy(),
         }, null, 2)}\n`, 'utf8');
     }
 

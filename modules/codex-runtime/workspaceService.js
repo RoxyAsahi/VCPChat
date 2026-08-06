@@ -4,12 +4,15 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { pathToFileURL } = require('url');
+const chokidar = require('chokidar');
 const { canonicalizeWorkspaceRoot, resolveInsideRoot } = require('./workspacePolicy');
 
 const DEFAULT_LIMITS = Object.freeze({
     maxDirectoryEntries: 1000,
     maxPreviewBytes: 1024 * 1024,
     maxImageBytes: 4 * 1024 * 1024,
+    maxPdfBytes: 12 * 1024 * 1024,
+    maxEditableBytes: 2 * 1024 * 1024,
     maxSearchResults: 200,
     maxSearchEntries: 20_000,
     operationTimeoutMs: 10_000,
@@ -32,6 +35,13 @@ const MEDIA_MIME = Object.freeze({
     '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime',
 });
 const RISKY_EXTENSIONS = new Set(['.exe', '.msi', '.bat', '.cmd', '.ps1', '.com', '.scr', '.vbs', '.js', '.jse', '.wsf', '.reg']);
+const MARKDOWN_EXTENSIONS = new Set(['.md', '.mdx', '.markdown']);
+const HTML_EXTENSIONS = new Set(['.html', '.htm']);
+const VCHAT_TEMP_FILE_PATTERN = /^\..+\.vchat-[0-9a-f-]+\.tmp$/i;
+
+function contentRevision(buffer) {
+    return crypto.createHash('sha256').update(buffer).digest('hex').slice(0, 24);
+}
 
 function workspaceError(code, message) {
     const error = new Error(message);
@@ -105,6 +115,7 @@ class AgentWorkspaceService {
         this.scheduler = new BoundedScheduler(this.limits.maxConcurrentOperations);
         this.searchScheduler = new BoundedScheduler(this.limits.maxConcurrentSearches);
         this.operations = new Map();
+        this.watchers = new Map();
     }
 
     _throwIfAborted(signal) {
@@ -226,6 +237,20 @@ class AgentWorkspaceService {
             byteLen: stat.size,
             modifiedAt: stat.mtime.toISOString(),
         };
+        if (extension === '.pdf') {
+            if (stat.size > this.limits.maxPdfBytes) {
+                return { ...base, kind: 'pdf', mimeType: 'application/pdf', truncated: true };
+            }
+            const buffer = await fs.promises.readFile(context.absolutePath, { signal });
+            this._throwIfAborted(signal);
+            return {
+                ...base,
+                kind: 'pdf',
+                mimeType: 'application/pdf',
+                dataUrl: `data:application/pdf;base64,${buffer.toString('base64')}`,
+                truncated: false,
+            };
+        }
         if (IMAGE_MIME[extension]) {
             if (stat.size > this.limits.maxImageBytes) return { ...base, kind: 'image', mimeType: IMAGE_MIME[extension], truncated: true };
             const buffer = await fs.promises.readFile(context.absolutePath, { signal });
@@ -249,12 +274,130 @@ class AgentWorkspaceService {
         const content = buffer.toString('utf8');
         return {
             ...base,
-            kind: 'text',
+            kind: MARKDOWN_EXTENSIONS.has(extension) ? 'markdown' : HTML_EXTENSIONS.has(extension) ? 'html' : 'text',
             encoding: 'utf-8',
             content,
+            contentRevision: contentRevision(buffer),
+            editable: stat.size <= this.limits.maxEditableBytes && stat.size <= buffer.length,
             lineCount: content ? content.split(/\r?\n/).length : 0,
             truncated: stat.size > buffer.length,
         };
+    }
+
+    async saveText(payload = {}) {
+        return this._run(payload, 'general', (signal) => this._saveText(payload, signal));
+    }
+
+    async watch(payload = {}, onChange) {
+        if (typeof onChange !== 'function') throw new TypeError('Workspace watcher callback is required');
+        const context = this._context({ ...payload, relativePath: '' });
+        const watchId = String(payload.watchId || crypto.randomUUID());
+        if (this.watchers.has(watchId)) throw workspaceError('WORKSPACE_WATCH_DUPLICATE', 'Workspace watchId is already active');
+        const watcher = chokidar.watch(context.root, {
+            ignoreInitial: true,
+            persistent: true,
+            followSymlinks: false,
+            awaitWriteFinish: { stabilityThreshold: 120, pollInterval: 40 },
+            ignored: (target) => {
+                const baseName = path.basename(target);
+                return baseName === '.git' || VCHAT_TEMP_FILE_PATTERN.test(baseName);
+            },
+        });
+        const emit = (eventKind, absolutePath) => {
+            let relativePath;
+            try { relativePath = normalizeRelativePath(relativeFromRoot(context.root, absolutePath)); }
+            catch { return; }
+            onChange({
+                watchId,
+                sessionId: context.sessionId,
+                workspaceRevision: context.workspaceRevision,
+                eventKind,
+                relativePath,
+            });
+        };
+        watcher.on('add', (value) => emit('add', value));
+        watcher.on('change', (value) => emit('change', value));
+        watcher.on('unlink', (value) => emit('unlink', value));
+        watcher.on('addDir', (value) => emit('add-directory', value));
+        watcher.on('unlinkDir', (value) => emit('unlink-directory', value));
+        watcher.on('error', (error) => onChange({
+            watchId,
+            sessionId: context.sessionId,
+            workspaceRevision: context.workspaceRevision,
+            eventKind: 'error',
+            error: error?.message || String(error),
+        }));
+        this.watchers.set(watchId, { watchId, sessionId: context.sessionId, watcher });
+        try {
+            await new Promise((resolve, reject) => {
+                watcher.once('ready', resolve);
+                watcher.once('error', reject);
+            });
+        } catch (error) {
+            this.watchers.delete(watchId);
+            await watcher.close().catch(() => null);
+            throw error;
+        }
+        return { watchId, sessionId: context.sessionId, workspaceRevision: context.workspaceRevision };
+    }
+
+    async unwatch(payload = {}) {
+        const watchId = String(payload.watchId || '').trim();
+        const entry = this.watchers.get(watchId);
+        if (!entry) return { stopped: false, watchId };
+        if (payload.sessionId && String(payload.sessionId) !== entry.sessionId) {
+            throw workspaceError('WORKSPACE_SESSION_MISMATCH', 'Workspace watcher belongs to another Session');
+        }
+        this.watchers.delete(watchId);
+        await entry.watcher.close();
+        return { stopped: true, watchId };
+    }
+
+    async close() {
+        const entries = [...this.watchers.values()];
+        this.watchers.clear();
+        await Promise.allSettled(entries.map((entry) => entry.watcher.close()));
+        for (const operation of this.operations.values()) {
+            operation.controller.abort(workspaceError('WORKSPACE_CANCELLED', 'Workspace service stopped'));
+        }
+    }
+
+    async _saveText(payload, signal) {
+        const context = this._context(payload);
+        this._throwIfAborted(signal);
+        if (!context.relativePath) throw workspaceError('WORKSPACE_PATH_REQUIRED', 'Select a file to save');
+        if (typeof payload.content !== 'string') throw workspaceError('WORKSPACE_CONTENT_INVALID', 'Text content is required');
+        const contentBuffer = Buffer.from(payload.content, 'utf8');
+        if (contentBuffer.length > this.limits.maxEditableBytes) {
+            throw workspaceError('WORKSPACE_EDIT_TOO_LARGE', 'Edited file exceeds the workspace edit limit');
+        }
+        const extension = path.extname(context.absolutePath).toLowerCase();
+        if (!TEXT_EXTENSIONS.has(extension)) throw workspaceError('WORKSPACE_EDIT_UNSUPPORTED', 'This file type is not editable');
+        const current = await fs.promises.readFile(context.absolutePath, { signal });
+        this._throwIfAborted(signal);
+        const actualRevision = contentRevision(current);
+        const expectedRevision = String(payload.expectedContentRevision || '').trim();
+        if (!expectedRevision || expectedRevision !== actualRevision) {
+            throw workspaceError('WORKSPACE_EDIT_CONFLICT', 'The file changed outside VChat. Reload it before saving.');
+        }
+        const stat = await fs.promises.stat(context.absolutePath);
+        const temporaryPath = path.join(path.dirname(context.absolutePath), `.${path.basename(context.absolutePath)}.vchat-${crypto.randomUUID()}.tmp`);
+        try {
+            await fs.promises.writeFile(temporaryPath, contentBuffer, { flag: 'wx', mode: stat.mode });
+            this._throwIfAborted(signal);
+            const latest = await fs.promises.readFile(context.absolutePath, { signal });
+            if (contentRevision(latest) !== expectedRevision) {
+                throw workspaceError('WORKSPACE_EDIT_CONFLICT', 'The file changed outside VChat. Reload it before saving.');
+            }
+            await fs.promises.rename(temporaryPath, context.absolutePath);
+        } finally {
+            await fs.promises.rm(temporaryPath, { force: true }).catch(() => {});
+        }
+        return this._readPreview({
+            sessionId: context.sessionId,
+            workspaceRevision: context.workspaceRevision,
+            relativePath: context.relativePath,
+        }, signal);
     }
 
     async searchFiles(payload = {}) {
@@ -343,4 +486,5 @@ module.exports = {
     DEFAULT_LIMITS,
     normalizeRelativePath,
     revisionForRoot,
+    contentRevision,
 };

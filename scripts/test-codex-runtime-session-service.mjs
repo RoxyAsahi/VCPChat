@@ -17,6 +17,9 @@ function makeRepository() {
         listSessions: ({ archived = false } = {}) => [...sessions.values()]
             .filter((session) => Boolean(session.archivedAt) === archived),
         readProjection: (sessionId) => ({ session: sessions.get(sessionId), messages: [] }),
+        projectionGeneration: () => 0,
+        markOrphaned: () => {},
+        markProjectionError: () => {},
         createOperation(operation) {
             const value = { operationId: `operation-${operations.size + 1}`, state: 'prepared', ...operation };
             operations.set(value.operationId, value);
@@ -48,12 +51,14 @@ function makeHarness(repository, request = async () => ({})) {
     const cleared = [];
     const registered = [];
     let stat = { isFile: () => true, size: 128 };
+    let lifecycleBusy = false;
+    let reconcileCount = 0;
     const service = new RuntimeSessionService({
         ensureProjectionStore: () => {},
         assertProjectionWritable: () => {},
         repository: () => repository,
         transport: () => ({ request }),
-        projector: () => ({ reconcileThread: () => ({ applied: true }) }),
+        projector: () => ({ reconcileThread: () => { reconcileCount += 1; return { applied: true }; } }),
         start: async () => {},
         captureGeneration: () => {
             const captured = generation;
@@ -100,12 +105,19 @@ function makeHarness(repository, request = async () => ({})) {
         }),
         statFile: () => stat,
         faultInjection: () => ({}),
-        assertLifecycleIdle: () => {},
+        assertLifecycleIdle: () => {
+            if (!lifecycleBusy) return;
+            const error = new Error('Session is busy');
+            error.code = 'SESSION_BUSY';
+            throw error;
+        },
         toolboxApprovalCount: () => 0,
     });
     return {
         service, cleared, registered,
         setStat: (value) => { stat = value; },
+        setLifecycleBusy: (value) => { lifecycleBusy = Boolean(value); },
+        reconcileCount: () => reconcileCount,
         advanceGeneration: () => { generation += 1; },
     };
 }
@@ -147,5 +159,25 @@ await assert.rejects(archive, (error) => error.code === 'STALE_RUNTIME_GENERATIO
 assert.deepEqual(staleRepository.writes.map((write) => write.patch.state), ['dispatching'],
     'a stale archive response must not mutate the replacement repository generation');
 assert.equal(staleRepository.getSession('session-stale').archivedAt, null);
+
+let releaseRead;
+let readRequested;
+const readStarted = new Promise((resolve) => { readRequested = resolve; });
+const busyRepository = makeRepository();
+busyRepository.saveSession({
+    sessionId: 'session-busy-read', threadId: 'thread-busy-read', agentId: 'Nova', title: 'Busy read',
+});
+const busyHarness = makeHarness(busyRepository, () => new Promise((resolve) => {
+    releaseRead = resolve;
+    readRequested();
+}));
+const busyRead = busyHarness.service.read({ sessionId: 'session-busy-read' });
+await readStarted;
+busyHarness.setLifecycleBusy(true);
+releaseRead({ thread: { id: 'thread-busy-read', turns: [] } });
+const busyProjection = await busyRead;
+assert.equal(busyProjection.session.sessionId, 'session-busy-read');
+assert.equal(busyHarness.reconcileCount(), 0,
+    'a thread/read started before a new Turn must not reconcile after that Session becomes busy');
 
 console.log('Codex Runtime session service tests passed.');

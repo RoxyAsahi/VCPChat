@@ -153,7 +153,7 @@ Codex 0.146 可能先发送 `thread/status/changed(idle)`，后发送 `turn/comp
 | `item/completed` | 以最终 Item 覆盖/封口状态。 |
 | `turn/completed` | runtime 标记 idle，记录 reconcile waterline。 |
 | `thread/status/changed` | 更新后台 Session 状态，不切换当前视图。 |
-| `thread/tokenUsage/updated` | 待接入 usage Block/状态，不得伪造 ToolBox usage。 |
+| `thread/tokenUsage/updated` | 已接入 Session usage：`last` 作为最近一轮/当前上下文锚点，`total` 作为会话累计，`modelContextWindow` 作为水位上限。 |
 
 SQLite 更新成功后，Main 只发送 revision-based `AgentProjectionPatch`。Patch 携带 Session/Thread identity、
 `baseProjectionRevision`、`projectionRevision` 和 V2 Block upsert/delete；Renderer 不消费旧
@@ -248,3 +248,10 @@ VCPToolBox。
 - token usage、raw resource、warning 的规范 Block 映射未完成。
 - VChat loopback Responses adapter 已有 hermetic fixture；真实 Nova/ToolBox live 必须额外断言
   “你是谁”返回 Nova 且不含 Codex，不能再以随机 sentinel 或非空回复代替身份验收。
+## Skills
+
+The pinned `0.146.0` experimental schema exposes `skills/list`, `skills/extraRoots/set`,
+`skills/config/write`, `skills/changed`, and native `UserInput { type: "skill", name, path }`.
+VChat uses `skills/list` for workspace-aware discovery and the native Skill input for explicit
+`$skill-name` invocation. It does not use `skills/config/write` for Agent or Session policy because
+that method is process/user configuration, not a Thread-isolated whitelist.
