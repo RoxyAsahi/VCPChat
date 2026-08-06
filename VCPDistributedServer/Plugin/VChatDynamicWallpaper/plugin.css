@@ -26,6 +26,23 @@ body.vchat-dynamic-wallpaper-visible {
     background-image: none !important;
 }
 
+/* The video is intentionally behind VChat's content.  Next UI normally
+ * paints an opaque main-panel color before its theme wallpaper, which made
+ * this layer look like a faint image instead of a wallpaper.  Keep a single
+ * readable theme scrim but remove that solid base while the plugin is shown. */
+html[data-ui-mode="next"] body.vchat-dynamic-wallpaper-visible {
+    --vchat-dynamic-wallpaper-scrim: color-mix(in srgb, var(--next-surface) 34%, transparent);
+}
+
+html[data-ui-mode="next"] body.vchat-dynamic-wallpaper-visible .main-content,
+html[data-ui-mode="next"] body.vchat-dynamic-wallpaper-visible .notifications-sidebar {
+    background-color: transparent;
+    background-image: linear-gradient(
+        var(--vchat-dynamic-wallpaper-scrim),
+        var(--vchat-dynamic-wallpaper-scrim)
+    ) !important;
+}
+
 .vchat-wallpaper-menu {
     min-width: 0;
     padding-right: 0;

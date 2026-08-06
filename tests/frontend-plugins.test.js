@@ -73,6 +73,9 @@ test('动态壁纸插件将完整控制迁入左下角菜单并通过原生 IPC 
     assert.match(wallpaperCss,
         /html\[data-ui-mode="next"\] #vchat-dynamic-wallpaper-video\s*\{[\s\S]*top:\s*var\(--next-topbar-height, 44px\);[\s\S]*left:\s*var\(--next-sidebar-width, 260px\);[\s\S]*width:\s*calc\(100% - var\(--next-sidebar-width, 260px\)\);[\s\S]*height:\s*calc\(100% - var\(--next-topbar-height, 44px\)\);[\s\S]*border-radius:\s*14px 0 0 0;/s,
         'the video layer must follow the shared main-panel offset and top-left radius');
+    assert.match(wallpaperCss,
+        /body\.vchat-dynamic-wallpaper-visible \.main-content,[\s\S]*body\.vchat-dynamic-wallpaper-visible \.notifications-sidebar\s*\{[\s\S]*background-color:\s*transparent;[\s\S]*background-image:\s*linear-gradient\(/s,
+        'visible video wallpaper must replace Next UI\'s opaque panel base with a readable scrim');
     const dom = new JSDOM(`<!doctype html><body>
         <header class="chat-header">
             <h3 id="currentChatAgentName">Agent A</h3>
