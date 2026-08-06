@@ -108,11 +108,12 @@ workbenchRoot.getBoundingClientRect = () => ({ left: 0, width: 900 });
 resizeObservers.filter((observer) => observer.targets.has(workbenchRoot)).forEach((observer) => observer.callback());
 assert.ok(workbenchSidebar.classList.contains('agent-chat-sidebar-width-560'),
     'the narrow Workbench baseline must restore before testing an open Activity panel');
+workbenchRoot.getBoundingClientRect = () => ({ left: 0, width: 907 });
 host.querySelector('.agent-chat-header-activity')?.click();
 const activityPanelSplitter = host.querySelector('.agent-chat-activity-splitter[role="separator"]');
 const activityPanelElement = host.querySelector('.agent-chat-activity-panel');
-assert.ok(workbenchSidebar.classList.contains('agent-chat-sidebar-width-240'),
-    'opening Activity must temporarily reduce the inherited main-chat sidebar preference before it crowds out the chat column');
+assert.ok(workbenchSidebar.classList.contains('agent-chat-sidebar-width-260'),
+    'opening Activity must use the splitter as an overlay instead of reserving a blank 7px layout gap');
 assert.ok(activityPanelSplitter?.classList.contains('is-active'),
     'opening Session information must expose the chat/panel resize handle');
 assert.ok(activityPanelElement?.classList.contains('agent-chat-activity-width-320'),
@@ -132,6 +133,7 @@ assert.match(host.querySelector('.agent-chat-activity-usage')?.textContent || ''
     'a cold SQLite projection must restore durable usage metrics');
 assert.match(host.querySelector('.agent-chat-activity-usage')?.textContent || '', /已恢复压缩摘要/,
     'a cold SQLite projection must restore the last compaction summary');
+workbenchRoot.getBoundingClientRect = () => ({ left: 0, width: 900 });
 host.querySelector('.agent-chat-activity-close')?.click();
 assert.ok(workbenchSidebar.classList.contains('agent-chat-sidebar-width-560'),
     'closing Activity must restore the saved sidebar preference instead of persisting the temporary clamp');
@@ -1039,6 +1041,9 @@ assert.ok(reasoningCard.querySelector('.vcp-thought-chain-icon').classList.conta
 assert.equal(reasoningCard.querySelectorAll('.vcp-result-toggle-icon').length, 1,
     'a reasoning card must render exactly one disclosure control');
 const workbenchCss = readCssWithImports(path.join(root, 'styles', 'ui-system', 'agent-workbench.css'));
+assert.match(workbenchCss,
+    /agent-chat-activity-splitter\.is-active\s*\{[^}]*width:\s*7px;[^}]*min-width:\s*7px;[^}]*margin-left:\s*-7px;/s,
+    'the Activity resize target must overlay the chat edge instead of opening a visible gutter');
 assert.match(workbenchCss,
     /:is\(\.agent-chat-reasoning-block, \.agent-chat-tool-group\) \.vcp-result-toggle-icon::after\s*\{[^}]*content:\s*none;[^}]*display:\s*none;/s,
     'reasoning and folded tools must share one rule that removes the inherited second toggle stroke');

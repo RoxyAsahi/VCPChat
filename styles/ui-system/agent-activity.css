@@ -75,9 +75,10 @@
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-activity-splitter.is-active {
+        /* Keep the resize target wide, but overlay it on the chat edge so it creates no gutter. */
         width: 7px;
         min-width: 7px;
-        border-left: 1px solid var(--vcp-ui-border-subtle);
+        margin-left: -7px;
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-activity-splitter::after {
