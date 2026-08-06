@@ -2,6 +2,14 @@
 let globalSettings = {
     sidebarWidth: 260,
     uiMode: 'classic',
+    appearanceProfile: {
+        density: 'comfortable',
+        radius: 'small',
+        typography: 'system',
+        fontScale: 'normal',
+        contentWidth: 'full',
+        surface: 'translucent'
+    },
     enableMiddleClickQuickAction: false,
     middleClickQuickAction: '',
     enableMiddleClickAdvanced: false,
@@ -1585,6 +1593,10 @@ async function loadAndApplyGlobalSettings() {
         // Settings read through Main is authoritative; update the optional
         // boot cache only after it has been successfully loaded.
         window.uiModeManager?.apply(globalSettings.uiMode, { cache: true });
+        globalSettings.appearanceProfile = window.VCPAppearance?.apply(
+            globalSettings.appearanceProfile,
+            { uiMode: globalSettings.uiMode, cache: true, source: 'settings-load' }
+        ) || globalSettings.appearanceProfile;
         applyChatBubbleLayoutSettings(globalSettings);
         
         // 🟢 优化：仅更新始终存在的 UI 元素
@@ -2172,6 +2184,13 @@ async function syncGlobalSettingsToUI() {
     safeCheck('enableAgentBubbleTheme', globalSettings.enableAgentBubbleTheme !== false);
     safeCheck('enableSmoothStreaming', globalSettings.enableSmoothStreaming === true);
     safeCheck('enableNextUi', globalSettings.uiMode === 'next');
+    const appearance = window.VCPAppearance?.normalize(globalSettings.appearanceProfile, globalSettings.uiMode);
+    safeSet('appearanceDensity', appearance?.density || 'comfortable');
+    safeSet('appearanceRadius', appearance?.radius || 'small');
+    safeSet('appearanceTypography', appearance?.typography || 'system');
+    safeSet('appearanceFontScale', appearance?.fontScale || 'normal');
+    safeSet('appearanceContentWidth', appearance?.contentWidth || 'full');
+    safeSet('appearanceSurface', appearance?.surface || 'translucent');
     safeSet('chatFontPreset', globalSettings.chatFontPreset || 'system');
     safeSet('chatFontCustom', globalSettings.chatFontCustom || '');
     safeSet('chatCodeFontPreset', globalSettings.chatCodeFontPreset || 'consolas');

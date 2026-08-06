@@ -40,6 +40,28 @@ class SettingsValidator {
             console.log('Fixed invalid chatPresentationMode');
         }
 
+        const appearanceDefaults = defaultSettings.appearanceProfile;
+        const appearanceOptions = {
+            density: new Set(['compact', 'comfortable', 'relaxed']),
+            radius: new Set(['square', 'small', 'medium', 'round']),
+            typography: new Set(['system', 'humanist', 'serif']),
+            fontScale: new Set(['small', 'normal', 'large']),
+            contentWidth: new Set(['full', 'centered']),
+            surface: new Set(['solid', 'translucent'])
+        };
+        if (!validated.appearanceProfile || typeof validated.appearanceProfile !== 'object' || Array.isArray(validated.appearanceProfile)) {
+            validated.appearanceProfile = { ...appearanceDefaults };
+            hasIssues = true;
+        } else {
+            const normalizedAppearance = {};
+            for (const [key, allowed] of Object.entries(appearanceOptions)) {
+                const value = validated.appearanceProfile[key];
+                normalizedAppearance[key] = allowed.has(value) ? value : appearanceDefaults[key];
+                if (normalizedAppearance[key] !== value) hasIssues = true;
+            }
+            validated.appearanceProfile = normalizedAppearance;
+        }
+
         // 数组检查
         if (!Array.isArray(validated.networkNotesPaths)) {
             validated.networkNotesPaths = [];
@@ -98,6 +120,14 @@ class SettingsManager extends EventEmitter {
             enableAgentBubbleTheme: false,
             enableSmoothStreaming: false,
             uiMode: 'classic',
+            appearanceProfile: {
+                density: 'comfortable',
+                radius: 'small',
+                typography: 'system',
+                fontScale: 'normal',
+                contentWidth: 'full',
+                surface: 'translucent'
+            },
             enableWideChatLayout: false,
             chatPresentationMode: 'bubble',
             chatBubbleMaxWidthDefault: 82,

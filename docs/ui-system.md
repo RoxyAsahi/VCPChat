@@ -2,7 +2,7 @@
 
 > 当前审计（2026-08-01）：UI 组件库已加入 Web Awesome 3.11.0 受控对照页，并在真实 Electron 中验证 Button、Input、Select、Tooltip 与 Dialog。该结果只证明混合设计系统可行，不代表业务页面已经迁移。应用页与全局设置的后续范围、批次和门槛见 [Web Awesome 全量重构计划](./ui-applications-webawesome-migration-plan.md)。
 
-这套设计系统只服务于 `data-ui-mode="next"`，不迁移或覆盖经典 UI。公共 API 仍使用原生 DOM、CSS Layer 和 ES Module；基础控件允许在 `VCPUI` 内部受控采用 Web Awesome Web Components，但业务页面不得直接依赖 `<wa-*>`。系统不引入 Vue、React 或新的构建步骤。
+`VCPUI` 组件库只服务于 `data-ui-mode="next"`，不迁移或覆盖经典 UI。跨模式的字体、圆角、密度、内容宽度和表面材质由上层 Appearance Profile 负责，参见 `docs/appearance-design-system.md`。公共 API 仍使用原生 DOM、CSS Layer 和 ES Module；基础控件允许在 `VCPUI` 内部受控采用 Web Awesome Web Components，但业务页面不得直接依赖 `<wa-*>`。系统不引入 Vue、React 或新的构建步骤。
 
 Web Awesome runtime 只能在新版 UI 实际需要时加载。经典模式不得加载 adapter/theme、不得改变现有页面布局；模式切回 classic 时必须销毁新版控制器并恢复原业务 DOM。当前组件库 pilot 的顶层注册将在正式迁移的 R5.0 改为 lazy-load。
 

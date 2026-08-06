@@ -65,6 +65,14 @@ export async function handleSaveGlobalSettings(e, deps) {
         enableAgentBubbleTheme: document.getElementById('enableAgentBubbleTheme').checked,
         enableSmoothStreaming: document.getElementById('enableSmoothStreaming').checked,
         uiMode: document.getElementById('enableNextUi')?.checked ? 'next' : 'classic',
+        appearanceProfile: window.VCPAppearance?.normalize({
+            density: document.getElementById('appearanceDensity')?.value,
+            radius: document.getElementById('appearanceRadius')?.value,
+            typography: document.getElementById('appearanceTypography')?.value,
+            fontScale: document.getElementById('appearanceFontScale')?.value,
+            contentWidth: document.getElementById('appearanceContentWidth')?.value,
+            surface: document.getElementById('appearanceSurface')?.value
+        }, document.getElementById('enableNextUi')?.checked ? 'next' : 'classic') || currentSettings.appearanceProfile,
         chatFontPreset: document.getElementById('chatFontPreset')?.value || currentSettings.chatFontPreset || 'system',
         chatFontCustom: document.getElementById('chatFontCustom')?.value.trim() || '',
         chatCodeFontPreset: document.getElementById('chatCodeFontPreset')?.value || currentSettings.chatCodeFontPreset || 'consolas',
@@ -239,6 +247,10 @@ export async function handleSaveGlobalSettings(e, deps) {
             // The settings write above succeeded, so this is the only point
             // at which the renderer's boot cache may be synchronized.
             window.uiModeManager?.apply(newSettings.uiMode, { cache: true });
+            newSettings.appearanceProfile = window.VCPAppearance?.apply(
+                newSettings.appearanceProfile,
+                { uiMode: newSettings.uiMode, cache: true, source: 'settings-save' }
+            ) || newSettings.appearanceProfile;
             if (typeof window.applyChatBubbleLayoutSettings === 'function') {
                 window.applyChatBubbleLayoutSettings(refs.globalSettings.get());
             }

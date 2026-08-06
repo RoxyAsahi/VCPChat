@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="styles/ui-system/agent-workbench.css">
     <link rel="stylesheet" href="styles/compact-sidebar.css">
     <script src="modules/uiModeManager.js"></script>
+    <script src="modules/ui-system/appearance-engine.js"></script>
     <link rel="stylesheet" href="Flowlockmodules/flowlock.css">
     <link rel="stylesheet" href="Promptmodules/prompt-modules.css">
     <link rel="stylesheet" href="Tavernmodules/tavern.css">
@@ -1252,6 +1253,61 @@
                                         <label class="switch">
                                             <input type="checkbox" id="enableNextUi" name="enableNextUi">
                                             <span class="slider round"></span>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="settings-subsection settings-subsection-new appearance-settings-section">
+                                    <div class="settings-subsection-heading">
+                                        <div class="settings-subsection-title">外观系统</div>
+                                        <p class="settings-subsection-description">界面版本只决定兼容 Shell；以下视觉参数可以独立组合。</p>
+                                    </div>
+                                    <div class="appearance-settings-grid">
+                                        <label class="settings-form-group" for="appearanceDensity">
+                                            <span>界面密度</span>
+                                            <select id="appearanceDensity" name="appearanceDensity">
+                                                <option value="compact">紧凑</option>
+                                                <option value="comfortable">舒适</option>
+                                                <option value="relaxed">宽松</option>
+                                            </select>
+                                        </label>
+                                        <label class="settings-form-group" for="appearanceRadius">
+                                            <span>圆角</span>
+                                            <select id="appearanceRadius" name="appearanceRadius">
+                                                <option value="square">直角</option>
+                                                <option value="small">小圆角</option>
+                                                <option value="medium">中圆角</option>
+                                                <option value="round">大圆角</option>
+                                            </select>
+                                        </label>
+                                        <label class="settings-form-group" for="appearanceTypography">
+                                            <span>界面字体</span>
+                                            <select id="appearanceTypography" name="appearanceTypography">
+                                                <option value="system">系统字体</option>
+                                                <option value="humanist">VChat 人文无衬线</option>
+                                                <option value="serif">衬线字体</option>
+                                            </select>
+                                        </label>
+                                        <label class="settings-form-group" for="appearanceFontScale">
+                                            <span>字号</span>
+                                            <select id="appearanceFontScale" name="appearanceFontScale">
+                                                <option value="small">较小</option>
+                                                <option value="normal">标准</option>
+                                                <option value="large">较大</option>
+                                            </select>
+                                        </label>
+                                        <label class="settings-form-group" for="appearanceContentWidth">
+                                            <span>内容宽度</span>
+                                            <select id="appearanceContentWidth" name="appearanceContentWidth">
+                                                <option value="full">铺满</option>
+                                                <option value="centered">居中阅读</option>
+                                            </select>
+                                        </label>
+                                        <label class="settings-form-group" for="appearanceSurface">
+                                            <span>表面材质</span>
+                                            <select id="appearanceSurface" name="appearanceSurface">
+                                                <option value="translucent">半透明</option>
+                                                <option value="solid">实色</option>
+                                            </select>
                                         </label>
                                     </div>
                                 </div>
