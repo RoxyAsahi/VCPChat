@@ -924,19 +924,194 @@ html[data-ui-mode="next"] body.next-ui-launchpad-open .next-ui-launchpad {
 
 .next-ui-launchpad-inner {
     width: min(1040px, calc(100% - 160px));
+    min-height: 100%;
     margin: 0 auto;
     padding: 84px 0 72px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
 }
 
 .next-ui-launchpad-brand {
     width: min(460px, 64vw);
-    margin: 0 auto 58px;
+    margin: 0 auto 26px;
+}
+
+.next-ui-nova-panel {
+    position: relative;
+    isolation: isolate;
+    width: min(760px, 100%);
+    min-height: 64px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin: 0 auto 52px;
+    padding: 16px 24px;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--next-empty-flow-primary) 34%, var(--next-border));
+    border-radius: 24px;
+    color: var(--next-text);
+    background:
+        linear-gradient(100deg, color-mix(in srgb, var(--next-surface) 86%, transparent), color-mix(in srgb, var(--next-surface) 64%, transparent)),
+        color-mix(in srgb, var(--next-empty-flow-primary) 7%, var(--next-surface));
+    box-shadow:
+        0 0 28px color-mix(in srgb, var(--next-empty-flow-primary) 10%, transparent),
+        inset 0 0 22px color-mix(in srgb, #ffffff 5%, transparent);
+}
+
+.next-ui-nova-panel::before {
+    content: "";
+    position: absolute;
+    inset: -30% -2% -20% auto;
+    z-index: 0;
+    width: min(320px, 54%);
+    pointer-events: none;
+    opacity: 0;
+    background:
+        radial-gradient(circle at 74% 50%, color-mix(in srgb, var(--next-empty-flow-primary) 30%, transparent), transparent 56%),
+        url("../assets/nova_button.png");
+    background-repeat: no-repeat;
+    background-position: right center;
+    background-size: contain;
+    filter: drop-shadow(0 0 18px color-mix(in srgb, var(--next-empty-flow-primary) 32%, transparent)) saturate(1.15);
+    transform: translateX(-34%) scale(0.98);
+    mask-image: linear-gradient(90deg, transparent 0%, transparent 18%, rgba(0, 0, 0, 0.08) 32%, rgba(0, 0, 0, 0.3) 50%, rgba(0, 0, 0, 0.7) 70%, #000 90%);
+    -webkit-mask-image: linear-gradient(90deg, transparent 0%, transparent 18%, rgba(0, 0, 0, 0.08) 32%, rgba(0, 0, 0, 0.3) 50%, rgba(0, 0, 0, 0.7) 70%, #000 90%);
+    animation: next-ui-nova-reveal 1.35s 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+body.light-theme .next-ui-nova-panel::before {
+    background-image:
+        radial-gradient(circle at 74% 50%, color-mix(in srgb, var(--next-empty-flow-primary) 24%, transparent), transparent 56%),
+        url("../assets/nova_button_light.png");
+    opacity: 0;
+    mix-blend-mode: multiply;
+    filter: grayscale(0.12) saturate(0.94) drop-shadow(0 0 16px color-mix(in srgb, var(--next-empty-flow-primary) 22%, transparent));
+}
+
+.next-ui-nova-panel::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+    pointer-events: none;
+    background:
+        linear-gradient(90deg, var(--next-surface) 0%, color-mix(in srgb, var(--next-surface) 82%, transparent) 24%, color-mix(in srgb, var(--next-surface) 40%, transparent) 50%, transparent 72%),
+        linear-gradient(90deg, color-mix(in srgb, var(--next-empty-flow-primary) 5.5%, transparent), transparent 34%, color-mix(in srgb, var(--next-empty-flow-secondary) 8%, transparent)),
+        linear-gradient(90deg, color-mix(in srgb, #050505 18%, transparent), transparent 58%);
+}
+
+@keyframes next-ui-nova-reveal {
+    0% {
+        opacity: 0;
+        transform: translateX(-34%) scale(0.98);
+    }
+
+    58% {
+        opacity: 0.72;
+    }
+
+    100% {
+        opacity: 0.68;
+        transform: translateX(0) scale(1);
+    }
+}
+
+.next-ui-nova-panel-label,
+.next-ui-nova-panel-actions {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+}
+
+.next-ui-nova-panel-label {
+    gap: 9px;
+    font-family: "Orbitron", "Noto Sans SC", sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    white-space: nowrap;
+}
+
+.next-ui-nova-panel-label .vcp-ui-icon {
+    color: var(--next-empty-flow-primary);
+    font-size: 19px;
+}
+
+.next-ui-nova-panel-actions {
+    gap: 8px;
+}
+
+.next-ui-nova-link {
+    min-height: 40px;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 16px;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    color: var(--next-text);
+    background: color-mix(in srgb, var(--next-surface) 73%, transparent);
+    font-family: "Orbitron", "Noto Sans SC", sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    line-height: 1;
+    text-decoration: none;
+    transition: transform 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+}
+
+.next-ui-nova-link:hover {
+    transform: translateY(-1px);
+    background: color-mix(in srgb, currentColor 15%, var(--next-surface));
+    box-shadow: 0 0 16px color-mix(in srgb, currentColor 28%, transparent);
+}
+
+.next-ui-nova-link:focus-visible {
+    outline: 2px solid var(--next-empty-flow-primary);
+    outline-offset: 2px;
+}
+
+.next-ui-nova-link-frontend {
+    color: #9d70ff;
+}
+
+.next-ui-nova-link-backend {
+    color: #00a8bd;
+}
+
+.next-ui-nova-link-fullstack {
+    color: color-mix(in srgb, var(--next-empty-flow-primary) 64%, var(--next-text));
 }
 
 .next-ui-app-grid {
     display: grid;
     grid-template-columns: repeat(6, minmax(110px, 1fr));
     gap: 38px 34px;
+}
+
+.next-ui-launchpad-epigraph {
+    display: grid;
+    gap: 5px;
+    margin: auto 0 0;
+    padding-top: 62px;
+    color: color-mix(in srgb, var(--next-text) 54%, transparent);
+    font-size: 11px;
+    line-height: 1.55;
+    letter-spacing: 0.08em;
+    text-align: center;
+}
+
+.next-ui-launchpad-epigraph span:first-child {
+    color: color-mix(in srgb, var(--next-text) 72%, transparent);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
 }
 
 .next-ui-app-item {
@@ -1012,7 +1187,11 @@ html[data-ui-mode="next"] #vchatAppTray + * {
 
     .next-ui-launchpad-brand {
         width: min(400px, 70vw);
-        margin-bottom: 44px;
+        margin-bottom: 22px;
+    }
+
+    .next-ui-nova-panel {
+        margin-bottom: 42px;
     }
 }
 
@@ -1037,7 +1216,44 @@ html[data-ui-mode="next"] #vchatAppTray + * {
 
     .next-ui-launchpad-brand {
         width: min(340px, 82vw);
+        margin-bottom: 20px;
+    }
+
+    .next-ui-nova-panel {
+        min-height: 0;
+        flex-direction: column;
+        gap: 10px;
         margin-bottom: 34px;
+        padding: 14px 16px;
+        border-radius: 8px;
+    }
+
+    .next-ui-nova-panel::before {
+        width: 42%;
+        opacity: 0.38;
+    }
+
+    .next-ui-nova-panel-label {
+        font-size: 11px;
+    }
+
+    .next-ui-nova-panel-actions {
+        width: 100%;
+        justify-content: center;
+        gap: 6px;
+    }
+
+    .next-ui-nova-link {
+        flex: 1 1 0;
+        min-width: 0;
+        padding: 0 7px;
+        font-size: 10px;
+    }
+
+    .next-ui-launchpad-epigraph {
+        padding-top: 42px;
+        font-size: 10px;
+        letter-spacing: 0.05em;
     }
 
     .next-ui-empty-state-content {
