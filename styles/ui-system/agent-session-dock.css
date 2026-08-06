@@ -21,6 +21,8 @@
         z-index: 4;
         min-width: 0;
         height: 46px;
+        min-height: 46px;
+        flex: 0 0 46px;
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
         align-items: stretch;
@@ -256,6 +258,7 @@
         flex-direction: column;
         overflow: hidden;
         padding: var(--vcp-ui-space-3) 0 0;
+        flex: 1 1 0;
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-notification-view {
@@ -266,6 +269,29 @@
         display: flex;
         flex-direction: column;
         overflow: hidden;
+    }
+
+    /* Build mounts the main notification surface here while its tab is active.
+       Keep the moved DOM in the same full-height flex contract as the main sidebar. */
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-notification-view.notifications-sidebar {
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        height: 100%;
+        flex: 1 1 auto;
+        padding: 0;
+        border: 0;
+        box-shadow: none;
+        transition: none;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-notification-view.notifications-sidebar .notifications-header {
+        flex: 0 0 auto;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-notification-view.notifications-sidebar .notifications-list {
+        min-height: 0;
+        flex: 1 1 auto;
     }
 
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-chat-notification-view .agent-chat-activity-list {

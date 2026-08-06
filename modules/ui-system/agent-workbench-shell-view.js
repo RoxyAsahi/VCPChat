@@ -111,9 +111,9 @@ function createAgentWorkbenchShellView({ document, container, state, actions = {
         const rootWidth = root.getBoundingClientRect().width;
         if (!Number.isFinite(rootWidth) || rootWidth <= 0) return sidebarMaxWidth;
         const splitterWidth = sidebarSplitter.getBoundingClientRect().width || 5;
+        // The Activity splitter overlays the main column and consumes no layout width.
         const activityReservedWidth = state.activityOpen
             ? Math.max(320, Math.min(760, Number(state.activityPanelWidth) || 320))
-                + (activitySplitter.getBoundingClientRect().width || 7)
             : 0;
         const available = rootWidth - splitterWidth - mainMinimumWidth - activityReservedWidth;
         return Math.max(sidebarMinWidth, Math.min(sidebarMaxWidth,

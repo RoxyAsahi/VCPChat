@@ -439,6 +439,11 @@ function renderVCPLogNotification(logData, originalRawMessage = null, notificati
 
     // Render Floating Toast only if the sidebar is not already active and filter allows it
     const notificationsSidebarElement = document.getElementById('notificationsSidebar');
+    const sharedBuildNotificationSurface = document.querySelector(
+        '.agent-chat-notification-view[data-shared-notification-surface="active"]'
+    );
+    const notificationSurfaceVisible = notificationsSidebarElement?.classList.contains('active')
+        || Boolean(sharedBuildNotificationSurface);
 
     // Check if message should be filtered
     const filterResult = checkMessageFilter(titleText);
@@ -446,7 +451,7 @@ function renderVCPLogNotification(logData, originalRawMessage = null, notificati
     // 如果过滤总开关未启用，或者明确匹配白名单规则，则显示通知
     const shouldShowNotification = !filterResult || (filterResult.action === 'show');
 
-    if (toastContainer && (!notificationsSidebarElement || !notificationsSidebarElement.classList.contains('active')) && shouldShowNotification) {
+    if (toastContainer && !notificationSurfaceVisible && shouldShowNotification) {
         const toastBubble = document.createElement('div');
         toastBubble.classList.add('floating-toast-notification');
         // 添加创建时间戳
@@ -485,7 +490,7 @@ function renderVCPLogNotification(logData, originalRawMessage = null, notificati
         if (autoDismissTimeout) {
             toastBubble.dataset.autoDismissTimeout = autoDismissTimeout.toString();
         }
-    } else if (toastContainer && notificationsSidebarElement && notificationsSidebarElement.classList.contains('active')) {
+    } else if (toastContainer && notificationSurfaceVisible) {
         // console.log('Notification sidebar is active, suppressing floating toast.');
     } else if (filterResult && filterResult.action === 'hide') {
         console.log('Message filtered out by rule:', filterResult.rule?.name || 'default blacklist', 'Action:', filterResult.action);
