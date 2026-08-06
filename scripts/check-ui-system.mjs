@@ -9,6 +9,19 @@ const root = process.cwd();
 const styleDir = path.join(root, 'styles', 'ui-system');
 const moduleDir = path.join(root, 'modules', 'ui-system');
 const failures = [];
+const crossModeAppearanceFiles = new Set([
+    path.join(styleDir, 'appearance-studio.css'),
+    path.join(styleDir, 'fonts.css'),
+    path.join(styleDir, 'tokens.css'),
+]);
+const crossModeGlobalSettingsFiles = new Set([
+    path.join(styleDir, 'appearance-studio.css'),
+    path.join(styleDir, 'business-modals.css'),
+    path.join(styleDir, 'components.css'),
+    path.join(styleDir, 'fonts.css'),
+    path.join(styleDir, 'settings.css'),
+    path.join(styleDir, 'tokens.css'),
+]);
 
 function filesIn(directory, extension) {
     return fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
@@ -26,7 +39,12 @@ function inspectSelectors(file, css) {
     root.walkRules(rule => {
         if (rule.parent?.type === 'atrule' && /keyframes$/i.test(rule.parent.name)) return;
         rule.selectors.forEach(selector => {
-            if (!selector.startsWith('html[data-ui-mode="next"]')) {
+            const isNextScoped = selector.startsWith('html[data-ui-mode="next"]');
+            const isAppearanceStudioHost = crossModeAppearanceFiles.has(file)
+                && selector.includes('html.vcp-appearance-studio-host');
+            const isGlobalSettingsHost = crossModeGlobalSettingsFiles.has(file)
+                && selector.includes('html.vcp-global-settings-host');
+            if (!isNextScoped && !isAppearanceStudioHost && !isGlobalSettingsHost) {
                 report(file, `selector escapes next UI scope: ${selector}`);
             }
             if (!selector.includes('.vcp-ui-scope')) {

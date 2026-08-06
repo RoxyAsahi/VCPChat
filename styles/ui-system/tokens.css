@@ -1,5 +1,5 @@
 @layer vcp-ui.tokens {
-    html[data-ui-mode="next"] .vcp-ui-scope {
+    :is(html[data-ui-mode="next"], html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope {
         color-scheme: dark;
 
         --vcp-ui-palette-cyan: oklch(0.75 0.14 230);
@@ -65,6 +65,7 @@
         --vcp-ui-space-7: 48px;
         --vcp-ui-space-8: 64px;
 
+        --vcp-ui-radius-xs: 4px;
         --vcp-ui-radius-sm: 6px;
         --vcp-ui-radius-md: 8px;
         --vcp-ui-radius-lg: 12px;
@@ -147,7 +148,7 @@
         --vcp-ui-tool-summary-min: 280px;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope[data-density="compact"] {
+    :is(html[data-ui-mode="next"], html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope[data-density="compact"] {
         --vcp-ui-control-sm: 26px;
         --vcp-ui-control-md: 30px;
         --vcp-ui-control-lg: 34px;
@@ -156,7 +157,7 @@
         --vcp-ui-density-gap: var(--vcp-ui-space-2);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope[data-density="comfortable"] {
+    :is(html[data-ui-mode="next"], html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope[data-density="comfortable"] {
         --vcp-ui-control-sm: 28px;
         --vcp-ui-control-md: 32px;
         --vcp-ui-control-lg: 36px;
@@ -165,7 +166,7 @@
         --vcp-ui-density-gap: var(--vcp-ui-space-3);
     }
 
-    html[data-ui-mode="next"] body.light-theme .vcp-ui-scope {
+    :is(html[data-ui-mode="next"], html.vcp-appearance-studio-host) body.light-theme .vcp-ui-scope {
         color-scheme: light;
         --vcp-ui-backdrop: oklch(0.2 0.01 240 / 0.28);
         --vcp-ui-shadow-sm: 0 1px 2px oklch(0.12 0.01 230 / 0.08);
@@ -174,10 +175,10 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
-        html[data-ui-mode="next"] .vcp-ui-scope,
-        html[data-ui-mode="next"] .vcp-ui-scope *,
-        html[data-ui-mode="next"] .vcp-ui-scope *::before,
-        html[data-ui-mode="next"] .vcp-ui-scope *::after {
+        :is(html[data-ui-mode="next"], html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope,
+        :is(html[data-ui-mode="next"], html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope *,
+        :is(html[data-ui-mode="next"], html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope *::before,
+        :is(html[data-ui-mode="next"], html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope *::after {
             scroll-behavior: auto;
             animation-duration: 1ms;
             animation-iteration-count: 1;

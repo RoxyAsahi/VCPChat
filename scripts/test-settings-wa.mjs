@@ -1,14 +1,14 @@
 // test-settings-wa — hermetic per-category persistence regression for the
-// global settings modal (Next UI).
+// global settings modal (the shared Next SettingsShell in either home layout).
 //
 // Uses the REAL `globalSettingsModalTemplate` from main.html and the REAL
 // `handleSaveGlobalSettings` from modules/global-settings-manager.js. For each
-// of the 7 categories it verifies: load from persisted settings, modify, save
+// of the 8 categories it verifies: load from persisted settings, modify, save
 // (the saved payload carries the expected key/value), simulated save failure
 // (the form reports vcp-settings-save-result success:false), and reopen-restore
 // (the form re-populates the saved value). Also verifies the Next-UI
-// SettingsShell interactions: category switching keeps unsaved values and the
-// search locates a matching category.
+// SettingsShell interactions: Classic/Next mode independence, modal host
+// visibility, category switching, unsaved values and category search.
 //
 // Usage: node scripts/test-settings-wa.mjs
 
@@ -21,7 +21,7 @@ import { JSDOM } from 'jsdom';
 
 const root = process.cwd();
 
-const dom = new JSDOM('<!doctype html><html data-ui-mode="next"><body><div id="modal-container"></div></body></html>', {
+const dom = new JSDOM('<!doctype html><html data-ui-mode="classic"><body><div id="modal-container"></div></body></html>', {
     url: 'https://vcpchat.local/',
 });
 Object.assign(globalThis, {
@@ -47,7 +47,8 @@ assert.ok(template, 'globalSettingsModalTemplate must exist in main.html');
 const modal = document.importNode(template.content, true);
 document.getElementById('modal-container').appendChild(modal);
 
-// Load the design system + settings bridge (Next UI).
+// Load the design system + settings bridge from the Classic home layout. The
+// global dialog must still mount the shared Next SettingsShell.
 await import(`${pathToFileURL(`${root}/modules/ui-system/vcp-ui.js`).href}?settings-wa=1`);
 await import(`${pathToFileURL(`${root}/modules/ui-system/settings-bridge.js`).href}?settings-wa=1`);
 
@@ -151,14 +152,40 @@ const populateForm = (settings) => {
 const form = document.getElementById('globalSettingsForm');
 assert.ok(form, 'globalSettingsForm must be present in the cloned template');
 
-// ---- 0. SettingsShell build (Next UI) ----
+// ---- 0. SettingsShell build (Classic and Next home layouts) ----
 window.VCPUISettingsBridge.refresh();
 await new Promise(resolve => setTimeout(resolve, 0));
 assert.ok(document.getElementById('globalSettingsModal').classList.contains('vcp-ui-scope'), 'modal scope');
+assert.ok(document.getElementById('globalSettingsModal').classList.contains('vcp-global-settings-next'), 'global settings is marked as the shared Next shell');
 assert.ok(document.querySelector('#globalSettingsModal .vcp-ui-settings-shell'), 'SettingsShell layout class applied');
-assert.equal(document.querySelectorAll('#globalSettingsModal .vcp-ui-list-item').length, 7, '7 categories in VCPUI List nav');
+assert.equal(document.querySelectorAll('#globalSettingsModal .vcp-ui-list-item').length, 8, '8 categories in VCPUI List nav');
 assert.ok(document.querySelector('#globalSettingsModal .vcp-ui-settings-search input[type="search"]'), 'search field injected in the left rail');
 assert.ok(document.querySelector('#globalSettingsModal .vcp-ui-settings-search input').classList.contains('vcp-ui-native-input'), 'search input is VCPUI-enhanced');
+
+const globalSettingsModal = document.getElementById('globalSettingsModal');
+globalSettingsModal.classList.add('active');
+document.dispatchEvent(new CustomEvent('modal-visibility-changed', {
+    detail: { modalId: 'globalSettingsModal', active: true },
+}));
+await new Promise(resolve => setTimeout(resolve, 0));
+assert.ok(document.documentElement.classList.contains('vcp-global-settings-host'), 'active modal enables the cross-mode settings host');
+
+globalSettingsModal.classList.remove('active');
+document.dispatchEvent(new CustomEvent('modal-visibility-changed', {
+    detail: { modalId: 'globalSettingsModal', active: false },
+}));
+await new Promise(resolve => setTimeout(resolve, 0));
+assert.ok(!document.documentElement.classList.contains('vcp-global-settings-host'), 'closing the modal disables the cross-mode settings host');
+
+document.documentElement.dataset.uiMode = 'next';
+window.dispatchEvent(new Event('ui-mode-changed'));
+await new Promise(resolve => setTimeout(resolve, 0));
+assert.ok(document.querySelector('#globalSettingsModal .vcp-ui-settings-shell'), 'SettingsShell survives switching the home layout to Next');
+
+document.documentElement.dataset.uiMode = 'classic';
+window.dispatchEvent(new Event('ui-mode-changed'));
+await new Promise(resolve => setTimeout(resolve, 0));
+assert.ok(document.querySelector('#globalSettingsModal .vcp-ui-settings-shell'), 'SettingsShell rebuilds after switching the home layout back to Classic');
 
 // ---- Shell interactions ----
 const setField = (id, value) => {
@@ -190,7 +217,7 @@ const visibleLabels = [...document.querySelectorAll('#globalSettingsModal .vcp-u
 assert.ok(visibleLabels.length <= 2, `search narrows the nav list: ${visibleLabels.join(',')}`);
 searchInput.value = '';
 searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-assert.equal(document.querySelectorAll('#globalSettingsModal .vcp-ui-list-item').length, 7, 'clearing search restores all categories');
+assert.equal(document.querySelectorAll('#globalSettingsModal .vcp-ui-list-item').length, 8, 'clearing search restores all categories');
 
 // ---- save helper ----
 async function submitForm() {
@@ -205,7 +232,7 @@ async function submitForm() {
     return saveResult;
 }
 
-// ---- 1..7. per-category load / modify / save / fail / reopen-restore ----
+// ---- 1..8. per-category load / modify / save / fail / reopen-restore ----
 const categories = [
     {
         name: '用户身份', key: 'user-identity',
@@ -224,8 +251,16 @@ const categories = [
         assertRestored: () => document.getElementById('vcpApiKey').value === 'sk-test-secret',
     },
     {
+        name: '界面与外观', key: 'appearance-settings',
+        initial: { chatFontPreset: 'system', enableAgentBubbleTheme: true },
+        assertLoaded: () => document.getElementById('chatFontPreset').value === 'system',
+        modify: () => setField('chatFontPreset', 'serif'),
+        savedKey: 'chatFontPreset', expected: 'serif',
+        assertRestored: () => document.getElementById('chatFontPreset').value === 'serif',
+    },
+    {
         name: '渲染设置', key: 'render-settings',
-        initial: { minChunkBufferSize: 16, smoothStreamIntervalMs: 100, chatFontPreset: 'system' },
+        initial: { minChunkBufferSize: 16, smoothStreamIntervalMs: 100 },
         assertLoaded: () => document.getElementById('minChunkBufferSize').value === '16',
         modify: () => setField('minChunkBufferSize', '32'),
         savedKey: 'minChunkBufferSize', expected: 32,
@@ -317,4 +352,4 @@ for (const category of categories) {
     console.log(`  [PASS] ${category.name} (${category.key}): load -> modify -> save -> fail -> reopen-restore`);
 }
 
-console.log('\nSettings WA persistence gate passed (7/7 categories + shell nav/search interactions).');
+console.log('\nSettings WA persistence gate passed (8/8 categories + shell nav/search interactions).');

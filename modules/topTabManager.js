@@ -472,56 +472,31 @@
         const avatar = document.getElementById('nextUiAccountAvatar');
         const userName = document.getElementById('nextUiAccountName');
         const settingsButton = document.getElementById('nextUiAccountSettingsBtn');
-        const presentationButton = document.getElementById('nextUiAccountPresentationBtn');
-        const presentationOptions = document.getElementById('nextUiAccountPresentationOptions');
-        const presentationValue = document.getElementById('nextUiAccountPresentationValue');
+        const appearanceStudioButton = document.getElementById('nextUiAccountAppearanceStudioBtn');
         const themeStoreButton = document.getElementById('nextUiAccountThemeStoreBtn');
         const themeToggleButton = document.getElementById('nextUiAccountThemeToggleBtn');
         const themeIcon = document.getElementById('nextUiAccountThemeIcon');
         const themeLabel = document.getElementById('nextUiAccountThemeLabel');
         if (!dock || !menu || !trigger || !avatar || !userName) return;
 
-        const presentationLabels = {
-            bubble: '气泡',
-            panel: '面板',
-            immersive: '沉浸'
-        };
-
-        const getPresentationMode = () => {
-            if (document.body.classList.contains('chat-presentation-panel')) return 'panel';
-            if (document.body.classList.contains('chat-presentation-immersive')) return 'immersive';
-            return window.globalSettings?.chatPresentationMode || 'bubble';
-        };
-
         const sync = () => {
             const settings = window.globalSettings || {};
             userName.textContent = settings.userName?.trim() || '用户';
             const nextAvatar = settings.userAvatarUrl || 'assets/default_user_avatar.png';
             if (avatar.getAttribute('src') !== nextAvatar) avatar.src = nextAvatar;
-
-            const presentationMode = getPresentationMode();
-            if (presentationValue) presentationValue.textContent = presentationLabels[presentationMode] || '气泡';
-            presentationOptions?.querySelectorAll('[data-presentation-mode]').forEach(option => {
-                const active = option.dataset.presentationMode === presentationMode;
-                option.classList.toggle('active', active);
-                option.setAttribute('aria-pressed', String(active));
-            });
-
+            window.VCPAppearanceStudio?.syncAccountMenuValue?.();
             const isDark = document.body.classList.contains('dark-theme');
+            const nextThemeLabel = isDark ? '切换为浅色模式' : '切换为深色模式';
             if (themeIcon) window.VCPIcons?.set(themeIcon, isDark ? 'light_mode' : 'dark_mode');
-            if (themeLabel) themeLabel.textContent = isDark ? '切换为浅色模式' : '切换为深色模式';
-        };
-
-        const setPresentationExpanded = (expanded) => {
-            if (presentationOptions) presentationOptions.hidden = !expanded;
-            presentationButton?.setAttribute('aria-expanded', String(expanded));
+            if (themeLabel) themeLabel.textContent = nextThemeLabel;
+            themeToggleButton?.setAttribute('aria-label', nextThemeLabel);
+            themeToggleButton?.setAttribute('aria-pressed', String(isDark));
         };
 
         const setOpen = (open) => {
             menu.hidden = !open;
             trigger.setAttribute('aria-expanded', String(open));
-            if (!open) setPresentationExpanded(false);
-            else sync();
+            if (open) sync();
         };
 
         avatar.addEventListener('error', () => {
@@ -537,31 +512,20 @@
             setOpen(false);
             window.uiHelperFunctions?.openModal?.('globalSettingsModal');
         });
-        presentationButton?.addEventListener('click', () => {
-            setPresentationExpanded(presentationOptions?.hidden !== false);
-        });
-        presentationOptions?.querySelectorAll('[data-presentation-mode]').forEach(option => {
-            option.addEventListener('click', async () => {
-                const mode = option.dataset.presentationMode;
-                if (typeof window.applyChatPresentationMode === 'function') {
-                    await window.applyChatPresentationMode(mode, {
-                        persist: true,
-                        preserveScroll: true,
-                        notify: false,
-                        source: 'account-menu'
-                    });
-                }
-                sync();
-                setOpen(false);
-            });
+        appearanceStudioButton?.addEventListener('click', () => {
+            setOpen(false);
+            window.VCPAppearanceStudio?.open?.({ trigger: appearanceStudioButton });
         });
         themeStoreButton?.addEventListener('click', () => {
             setOpen(false);
             (window.chatAPI || window.electronAPI)?.openThemesWindow?.();
         });
         themeToggleButton?.addEventListener('click', () => {
+            const nextTheme = document.body.classList.contains('dark-theme') ? 'light' : 'dark';
             setOpen(false);
-            proxyClick('themeToggleBtn');
+            if (!window.VCPAppearanceStudio?.setThemeMode?.(nextTheme, { source: 'account-menu' })) {
+                proxyClick('themeToggleBtn');
+            }
         });
         document.addEventListener('pointerdown', event => {
             if (!menu.hidden && !dock.contains(event.target)) setOpen(false);

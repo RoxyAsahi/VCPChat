@@ -57,7 +57,6 @@ import {
     nextSessionTitle,
     notify,
     postRender,
-    proxyMainButton,
     rememberTopic,
     renderMarkdown,
     runtimeApi,
@@ -189,15 +188,14 @@ function mountWorkbench(container) {
         document,
         host,
         actions: {
-            openThemes: () => controller.openThemes(),
-            toggleTheme: () => proxyMainButton('themeToggleBtn'),
+            openAppearanceStudio: (trigger) => window.VCPAppearanceStudio?.open?.({ trigger }),
             openGlobalSettings: () => window.uiHelperFunctions?.openModal?.('globalSettingsModal'),
-            setPresentationMode: (mode) => window.applyChatPresentationMode?.(mode, {
-                persist: true,
-                preserveScroll: true,
-                notify: false,
-                source: 'agent-account-menu',
-            }),
+            toggleTheme: () => {
+                const nextTheme = document.body.classList.contains('dark-theme') ? 'light' : 'dark';
+                if (!window.VCPAppearanceStudio?.setThemeMode?.(nextTheme, { source: 'agent-account-menu' })) {
+                    document.getElementById('themeToggleBtn')?.click();
+                }
+            },
         },
     });
     let sidebarCoordinator = null;

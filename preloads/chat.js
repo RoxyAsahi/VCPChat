@@ -537,6 +537,8 @@ const ALLOWED_KEYS = [
     "openTranslatorWindow",
     "openRAGObserverWindow",
     "openThemesWindow",
+    "getThemes",
+    "applyTheme",
     "openVoiceChatWindow",
     "openForumWindow",
     "openMemoWindow",

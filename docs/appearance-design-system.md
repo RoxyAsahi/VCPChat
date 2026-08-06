@@ -1,6 +1,6 @@
 # VChat Appearance Design System
 
-> Status: Phase 1 implemented, shell decomposition remains experimental.
+> Status: Phase 1 and the Phase 4 appearance drawer are implemented; the first shell-layout selector is available.
 
 ## Goal
 
@@ -8,7 +8,7 @@ VChat appearance is no longer defined by one `classic/next` switch. The UI mode 
 
 ```text
 uiMode
-  controls runtime compatibility, Next shell mounting and legacy fallback
+  is presented as the Classic/Next home layout choice and still controls runtime compatibility
 
 appearanceProfile
   controls density, radius, typography, font scale, content width and surface material
@@ -17,7 +17,7 @@ chatPresentationMode
   controls bubble, panel or immersive message presentation
 ```
 
-The three settings are intentionally separate. Changing message presentation must not silently change the shell, and changing radius must not mount or tear down Next runtime.
+The three settings are intentionally separate. Changing message presentation must not silently change the shell, and changing radius must not mount or tear down Next runtime. Appearance Studio owns the user-facing home-layout choice; `uiMode` remains its compatibility storage field.
 
 ## Current Schema
 
@@ -70,9 +70,9 @@ These are migration defaults, not permanent coupled modes. Once saved, every fie
 ## Boundaries
 
 - No main chat state, Agent Runtime or ToolBox behavior is changed.
-- `classic/next` is not removed yet. It still owns Next runtime loading, Web Awesome availability, child-app allowlists and legacy teardown.
+- `classic/next` is presented as two home layouts, but it is not removed internally. It still owns Next runtime loading, Web Awesome availability, child-app allowlists and legacy teardown.
 - The Appearance layer does not make classic pages VCPUI components.
-- The first phase does not expose navigation structure or shell geometry as independent controls because those still have runtime lifecycle consequences.
+- Appearance Studio and Global Settings are the two intentional cross-mode VCPUI hosts. Global Settings always uses the Next SettingsShell, independent of the selected home layout, while agent/group settings still follow the home-layout runtime. Their CSS/token exceptions are explicitly allowlisted; the UI-system guard rejects other cross-mode selectors.
 
 ## Delivery Roadmap
 
@@ -91,7 +91,13 @@ These are migration defaults, not permanent coupled modes. Once saved, every fie
 
 ### Phase 3: Shell decomposition
 
-Introduce orthogonal shell settings only after lifecycle work is complete:
+The first step exposes the existing compatibility shells as a transactional home-layout selector:
+
+```js
+uiMode: 'classic' | 'next'
+```
+
+The drawer stays mounted while previewing either layout, Cancel restores the opening mode, and Apply persists through `settings.json`. Continue decomposing it into orthogonal shell settings only after the remaining lifecycle work is complete:
 
 ```js
 shell: 'inset' | 'edge'
@@ -102,9 +108,15 @@ At that point `uiMode` becomes an internal compatibility profile rather than a u
 
 ### Phase 4: Quick appearance drawer
 
-- Add a compact live-preview drawer modeled on the ToolBox Admin Panel.
-- Provide presets plus independent overrides.
-- Cancel restores the persisted profile; save writes through Main.
+- The shared `AppearanceStudio` drawer is available from both main chat and Agent Workbench account menus.
+- The same drawer can open from Global Settings in Classic layout, so users can switch back without a separate version toggle.
+- Both account menus retain a direct light/dark toggle for the high-frequency theme switch; the full studio remains the entry for multi-setting changes.
+- It provides system presets plus independent theme, profile and chat-presentation overrides.
+- Preview is transactional: cancel restores the opening snapshot and save writes through Main.
+- Theme Store, dynamic wallpaper and the complete settings dialog remain separate authorities reached from the drawer.
+- Global Settings always mounts the Next SettingsShell in both Classic and Next home layouts. Its category navigation, search and save behavior no longer depend on `uiMode`.
+- Global Settings exposes a dedicated “界面与外观” category for appearance profile, typography and chat presentation; the former standalone UI-version switch is now a hidden compatibility field synchronized by the drawer.
+- The category presents a live appearance summary and opens Appearance Studio with the current form draft; applying in the studio synchronizes the legacy form controls and their visual proxies.
 - Support import/export only after schema versioning exists.
 
 ### Phase 5: Deprecation audit
@@ -121,3 +133,4 @@ npm run check:ui-system
 ```
 
 Visual acceptance must cover classic and next modes, light and dark themes, narrow and wide windows, wallpaper enabled/disabled, and Agent Workbench open/closed.
+Global Settings acceptance must additionally verify category switching, search, close/reopen and layout changes while the dialog is open in both home layouts.

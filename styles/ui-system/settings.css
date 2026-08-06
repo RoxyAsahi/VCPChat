@@ -6,39 +6,39 @@
      * settings modal below remains a Next UI surface.
      */
     @scope (#tabContentSettings:not([data-settings-presentation="classic"])) {
-    html[data-ui-mode="next"] .vcp-ui-scope #tabContentSettings {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #tabContentSettings {
         gap: var(--vcp-ui-space-3);
         color: var(--vcp-ui-text-1);
-        font-family: "Noto Sans SC Variable", sans-serif;
+        font-family: var(--vcp-ui-font-family);
         /* 与助手/话题 tab 的 agent-list/topic-list 左右缩进保持一致。 */
         padding-left: var(--vcp-ui-sidebar-list-gutter);
         padding-right: var(--vcp-ui-sidebar-list-gutter);
         box-sizing: border-box;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope .settings-header-bar {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope .settings-header-bar {
         /* 新版 UI 下侧栏设置 tab 的"设置"标题与"全局设置"按钮由顶栏入口承载，
            此 header 在新版隐藏，避免与顶栏重复。 */
         display: none;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope .settings-header-bar h2,
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainerTitle {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope .settings-header-bar h2,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainerTitle {
         color: var(--vcp-ui-text-0);
         font-size: var(--vcp-ui-font-emphasis);
         font-weight: 650;
         line-height: var(--vcp-ui-line-compact);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-settings-section,
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-settings-collapsible-container {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .agent-settings-section,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .agent-settings-collapsible-container {
         border: 1px solid var(--vcp-ui-border);
         border-radius: var(--vcp-ui-radius-card);
         background: var(--vcp-ui-bg-1);
         box-shadow: none;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-settings-section-header {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .agent-settings-section-header {
         min-height: var(--vcp-ui-control-lg);
         padding: 0 var(--vcp-ui-space-3);
         border-bottom: 1px solid transparent;
@@ -46,25 +46,25 @@
         background: transparent;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-settings-section:not(.collapsed) .agent-settings-section-header {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .agent-settings-section:not(.collapsed) .agent-settings-section-header {
         border-bottom-color: var(--vcp-ui-border);
         background: var(--vcp-ui-bg-2);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-settings-section-title {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .agent-settings-section-title {
         color: var(--vcp-ui-text-0);
         font-size: var(--vcp-ui-font-body);
         font-weight: 600;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-settings-section-summary,
-    html[data-ui-mode="next"] .vcp-ui-scope small,
-    html[data-ui-mode="next"] .vcp-ui-scope .form-hint {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .agent-settings-section-summary,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope small,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope .form-hint {
         color: var(--vcp-ui-text-3);
         font-size: var(--vcp-ui-font-caption);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-settings-toggle-btn {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .agent-settings-toggle-btn {
         width: var(--vcp-ui-control-sm);
         height: var(--vcp-ui-control-sm);
         border: 1px solid transparent;
@@ -73,64 +73,64 @@
         background: transparent;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-settings-toggle-btn:hover {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .agent-settings-toggle-btn:hover {
         color: var(--vcp-ui-text-0);
         background: var(--vcp-ui-fill-1);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm select,
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm textarea {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm select,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm textarea {
         min-height: var(--vcp-ui-control-md);
         border: 1px solid var(--vcp-ui-control-border);
         border-radius: var(--vcp-ui-radius-sm);
         color: var(--vcp-ui-text-0);
         background: var(--vcp-ui-control-bg);
         box-shadow: none;
-        font-family: "Noto Sans SC Variable", sans-serif;
+        font-family: var(--vcp-ui-font-family);
         font-size: var(--vcp-ui-font-helper);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm textarea {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm textarea {
         min-height: 96px;
         line-height: var(--vcp-ui-line-body);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):focus,
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm select:focus,
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm textarea:focus {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):focus,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm select:focus,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm textarea:focus {
         border-color: var(--vcp-ui-control-focus);
         box-shadow: 0 0 0 3px var(--vcp-ui-focus-ring);
         outline: none;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm label {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm label {
         color: var(--vcp-ui-text-1);
         font-size: var(--vcp-ui-font-helper);
         font-weight: 500;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm .switch .slider {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .switch .slider {
         border: 1px solid var(--vcp-ui-control-border);
         background: var(--vcp-ui-fill-1);
         box-shadow: none;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm .switch input:checked + .slider {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .switch input:checked + .slider {
         border-color: var(--vcp-ui-accent);
         background: var(--vcp-ui-accent);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm .form-actions {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .form-actions {
         gap: var(--vcp-ui-space-2);
         padding: var(--vcp-ui-space-3) 0 0;
         border-top: 1px solid var(--vcp-ui-border);
         background: transparent;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm .form-actions button,
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm .reset-colors-btn,
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm .small-button {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .form-actions button,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .reset-colors-btn,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .small-button {
         min-height: var(--vcp-ui-control-md);
         padding: 0 var(--vcp-ui-space-3);
         border: 1px solid var(--vcp-ui-control-border);
@@ -138,53 +138,53 @@
         color: var(--vcp-ui-text-1);
         background: var(--vcp-ui-fill-0);
         box-shadow: none;
-        font-family: "Noto Sans SC Variable", sans-serif;
+        font-family: var(--vcp-ui-font-family);
         font-size: var(--vcp-ui-font-helper);
         font-weight: 600;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm .form-actions button[type="submit"] {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .form-actions button[type="submit"] {
         border-color: var(--vcp-ui-accent);
         color: var(--vcp-ui-on-accent);
         background: var(--vcp-ui-accent);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm .form-actions .danger-button,
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm #deleteAgentBtn,
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm #deleteGroupBtn {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .form-actions .danger-button,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm #deleteAgentBtn,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm #deleteGroupBtn {
         border-color: color-mix(in srgb, var(--vcp-ui-danger) 52%, var(--vcp-ui-border));
         color: var(--vcp-ui-danger);
         background: var(--vcp-ui-danger-bg);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm .form-actions button:hover:not(:disabled),
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm .reset-colors-btn:hover:not(:disabled),
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm .small-button:hover:not(:disabled) {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .form-actions button:hover:not(:disabled),
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .reset-colors-btn:hover:not(:disabled),
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .small-button:hover:not(:disabled) {
         border-color: var(--vcp-ui-control-focus);
         color: var(--vcp-ui-text-0);
         background: var(--vcp-ui-fill-2);
         box-shadow: none;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm .form-actions button[type="submit"]:hover:not(:disabled) {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .form-actions button[type="submit"]:hover:not(:disabled) {
         border-color: var(--vcp-ui-accent-hover);
         color: var(--vcp-ui-on-accent);
         background: var(--vcp-ui-accent-hover);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm :is(input, select, textarea, button):focus-visible {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm :is(input, select, textarea, button):focus-visible {
         outline: 2px solid var(--vcp-ui-focus-ring);
         outline-offset: 2px;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm :is(input, select, textarea):focus,
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm :is(input, select, textarea):focus-visible {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm :is(input, select, textarea):focus,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm :is(input, select, textarea):focus-visible {
         border-color: var(--vcp-ui-control-focus);
         box-shadow: 0 0 0 var(--vcp-ui-space-1) var(--vcp-ui-focus-ring);
         outline: none;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #tabContentSettings.sidebar-tab-content.active {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #tabContentSettings.sidebar-tab-content.active {
         margin: 0;
         padding: 0 var(--vcp-ui-sidebar-list-gutter) var(--vcp-ui-space-4);
         overflow-x: hidden;
@@ -192,13 +192,13 @@
         scrollbar-gutter: auto;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope .settings-header-bar::after {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope .settings-header-bar::after {
         right: 0;
         left: 0;
         background: var(--vcp-ui-border);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope .settings-header-bar .global-settings-btn {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope .settings-header-bar .global-settings-btn {
         min-height: var(--vcp-ui-control-sm);
         height: var(--vcp-ui-control-sm);
         padding: 0 var(--vcp-ui-space-2);
@@ -210,28 +210,28 @@
         box-shadow: none;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope :is(#agentSettingsContainer, #groupSettingsContainer) {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope :is(#agentSettingsContainer, #groupSettingsContainer) {
         min-width: 0;
         padding: 0;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope :is(#agentSettingsForm, #groupSettingsForm) {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope :is(#agentSettingsForm, #groupSettingsForm) {
         display: flex;
         min-width: 0;
         flex-direction: column;
         gap: var(--vcp-ui-space-2);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsForm > .agent-settings-section,
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsForm > .group-settings-section {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm > .agent-settings-section,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsForm > .group-settings-section {
         min-width: 0;
         margin: 0;
         padding: 0;
         overflow: hidden;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-settings-section-header,
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsContainer .group-settings-section-header {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .agent-settings-section-header,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsContainer .group-settings-section-header {
         display: grid;
         grid-template-columns: minmax(0, 1fr) var(--vcp-ui-control-sm);
         grid-template-areas:
@@ -244,8 +244,8 @@
         user-select: none;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-settings-section-title,
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsContainer .group-settings-section-title {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .agent-settings-section-title,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsContainer .group-settings-section-title {
         grid-area: title;
         min-width: 0;
         overflow: hidden;
@@ -253,8 +253,8 @@
         white-space: nowrap;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-settings-section-summary,
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsContainer .group-settings-section-summary {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .agent-settings-section-summary,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsContainer .group-settings-section-summary {
         grid-area: summary;
         min-width: 0;
         overflow: hidden;
@@ -262,8 +262,8 @@
         white-space: nowrap;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-settings-toggle-btn,
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsContainer .group-settings-toggle-btn {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .agent-settings-toggle-btn,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsContainer .group-settings-toggle-btn {
         grid-area: toggle;
         display: grid;
         place-items: center;
@@ -273,36 +273,36 @@
         cursor: pointer;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope :is(.agent-settings-toggle-btn, .group-settings-toggle-btn) .toggle-icon {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope :is(.agent-settings-toggle-btn, .group-settings-toggle-btn) .toggle-icon {
         width: var(--vcp-ui-icon-sm);
         height: var(--vcp-ui-icon-sm);
         transition: transform var(--vcp-ui-transition-normal);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope .agent-settings-collapsible-container.collapsed .agent-settings-toggle-btn .toggle-icon,
-    html[data-ui-mode="next"] .vcp-ui-scope .group-settings-collapsible-container.collapsed .group-settings-toggle-btn .toggle-icon {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope .agent-settings-collapsible-container.collapsed .agent-settings-toggle-btn .toggle-icon,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope .group-settings-collapsible-container.collapsed .group-settings-toggle-btn .toggle-icon {
         transform: rotate(-90deg);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-settings-section-content,
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsContainer .group-settings-section-content {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .agent-settings-section-content,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsContainer .group-settings-section-content {
         min-width: 0;
         padding: var(--vcp-ui-space-3);
         opacity: 1;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope .agent-settings-collapsible-container.collapsed .agent-settings-section-content,
-    html[data-ui-mode="next"] .vcp-ui-scope .group-settings-collapsible-container.collapsed .group-settings-section-content {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope .agent-settings-collapsible-container.collapsed .agent-settings-section-content,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope .group-settings-collapsible-container.collapsed .group-settings-section-content {
         display: none;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope .agent-settings-collapsible-container:not(.collapsed) .agent-settings-section-summary,
-    html[data-ui-mode="next"] .vcp-ui-scope .group-settings-collapsible-container:not(.collapsed) .group-settings-section-summary {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope .agent-settings-collapsible-container:not(.collapsed) .agent-settings-section-summary,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope .group-settings-collapsible-container:not(.collapsed) .group-settings-section-summary {
         display: none;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-settings-section-content > :is(.agent-identity-container, .agent-settings-card-shell),
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsContainer .group-settings-section-content > :is(.group-settings-identity-shell, .group-settings-card-shell) {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .agent-settings-section-content > :is(.agent-identity-container, .agent-settings-card-shell),
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsContainer .group-settings-section-content > :is(.group-settings-identity-shell, .group-settings-card-shell) {
         min-width: 0;
         margin: 0;
         padding: 0;
@@ -312,16 +312,16 @@
         box-shadow: none;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-identity-main,
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsContainer .group-identity-main {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .agent-identity-main,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsContainer .group-identity-main {
         display: flex;
         min-width: 0;
         align-items: center;
         gap: var(--vcp-ui-space-3);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-avatar-display,
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsContainer .group-avatar-display {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .agent-avatar-display,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsContainer .group-avatar-display {
         width: 76px;
         min-width: 76px;
         max-width: 76px;
@@ -334,8 +334,8 @@
         object-fit: cover;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer #agentAvatarPreview,
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsContainer #groupAvatarPreview {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer #agentAvatarPreview,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsContainer #groupAvatarPreview {
         width: 76px;
         min-width: 76px;
         max-width: 76px;
@@ -345,8 +345,8 @@
         flex-basis: 76px;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-settings-section-summary.summary-with-avatar,
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsContainer .group-settings-section-summary.summary-with-avatar {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .agent-settings-section-summary.summary-with-avatar,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsContainer .group-settings-section-summary.summary-with-avatar {
         display: grid;
         grid-template-columns: 30px minmax(0, 1fr);
         align-items: center;
@@ -354,8 +354,8 @@
         white-space: normal;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-settings-summary-avatar,
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsContainer .group-settings-summary-avatar {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .agent-settings-summary-avatar,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsContainer .group-settings-summary-avatar {
         width: 30px;
         min-width: 30px;
         max-width: 30px;
@@ -367,83 +367,83 @@
         object-fit: cover;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope :is(.agent-settings-summary-copy, .group-settings-summary-copy) {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope :is(.agent-settings-summary-copy, .group-settings-summary-copy) {
         display: grid;
         min-width: 0;
         gap: var(--vcp-ui-space-1);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope :is(.agent-settings-summary-label, .group-settings-summary-label, .agent-settings-summary-meta, .group-settings-summary-meta) {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope :is(.agent-settings-summary-label, .group-settings-summary-label, .agent-settings-summary-meta, .group-settings-summary-meta) {
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope :is(.agent-name-wrapper, .group-name-wrapper) {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope :is(.agent-name-wrapper, .group-name-wrapper) {
         min-width: 0;
         flex: 1;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-style-collapsible-container {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .agent-style-collapsible-container {
         margin-top: var(--vcp-ui-space-3);
         border-top: 1px solid var(--vcp-ui-border);
         background: transparent;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .style-collapse-header {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .style-collapse-header {
         min-height: var(--vcp-ui-control-md);
         padding: 0 var(--vcp-ui-space-1);
         color: var(--vcp-ui-text-2);
         background: transparent;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-style-controls {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .agent-style-controls {
         grid-template-columns: 1fr;
         gap: var(--vcp-ui-space-3);
         padding: var(--vcp-ui-space-3) 0 0;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-style-collapsible-container.collapsed .agent-style-controls {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .agent-style-collapsible-container.collapsed .agent-style-controls {
         display: none;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope :is(#agentSettingsContainer, #groupSettingsContainer) .model-input-container {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope :is(#agentSettingsContainer, #groupSettingsContainer) .model-input-container {
         display: flex;
         min-width: 0;
         align-items: stretch;
         gap: var(--vcp-ui-space-1);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope :is(#agentSettingsContainer, #groupSettingsContainer) .model-input-container > :is(input, select) {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope :is(#agentSettingsContainer, #groupSettingsContainer) .model-input-container > :is(input, select) {
         min-width: 0;
         flex: 1;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope :is(#agentSettingsContainer, #groupSettingsContainer) .model-input-container > button {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope :is(#agentSettingsContainer, #groupSettingsContainer) .model-input-container > button {
         width: var(--vcp-ui-control-md);
         min-width: var(--vcp-ui-control-md);
         padding: 0;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .params-content {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .params-content {
         display: grid;
         gap: var(--vcp-ui-space-3);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .system-prompt-container .prompt-mode-selector {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .system-prompt-container .prompt-mode-selector {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .system-prompt-container .prompt-mode-button {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .system-prompt-container .prompt-mode-button {
         min-width: 0;
         min-height: var(--vcp-ui-control-md);
         padding: 0 var(--vcp-ui-space-1);
         font-size: var(--vcp-ui-font-caption);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope :is(#agentSettingsForm, #groupSettingsForm) .form-actions {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope :is(#agentSettingsForm, #groupSettingsForm) .form-actions {
         position: static;
         z-index: auto;
         margin: var(--vcp-ui-space-2) 0 0;
@@ -451,26 +451,26 @@
         background: transparent;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope :is(#agentSettingsForm, #groupSettingsForm) .form-actions button {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope :is(#agentSettingsForm, #groupSettingsForm) .form-actions button {
         width: 100%;
         box-sizing: border-box;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsContainer,
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsForm {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsContainer,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsForm {
         gap: var(--vcp-ui-space-3);
         color: var(--vcp-ui-text-1);
-        font-family: "Noto Sans SC Variable", sans-serif;
+        font-family: var(--vcp-ui-font-family);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsForm .group-settings-section {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsForm .group-settings-section {
         border: 1px solid var(--vcp-ui-border);
         border-radius: var(--vcp-ui-radius-card);
         background: var(--vcp-ui-bg-1);
         box-shadow: none;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsForm .group-settings-section-header {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsForm .group-settings-section-header {
         min-height: var(--vcp-ui-control-lg);
         padding: 0 var(--vcp-ui-space-3);
         border-bottom: 1px solid transparent;
@@ -478,24 +478,24 @@
         background: transparent;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsForm .group-settings-section:not(.collapsed) .group-settings-section-header {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsForm .group-settings-section:not(.collapsed) .group-settings-section-header {
         border-bottom-color: var(--vcp-ui-border);
         background: var(--vcp-ui-bg-2);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsForm :is(.group-settings-section-title, .group-settings-field-label) {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsForm :is(.group-settings-section-title, .group-settings-field-label) {
         color: var(--vcp-ui-text-0);
         font-size: var(--vcp-ui-font-body);
         font-weight: 600;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsForm .group-settings-section-summary,
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsForm .group-settings-helper-text {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsForm .group-settings-section-summary,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsForm .group-settings-helper-text {
         color: var(--vcp-ui-text-3);
         font-size: var(--vcp-ui-font-caption);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsForm .group-settings-toggle-btn {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsForm .group-settings-toggle-btn {
         width: var(--vcp-ui-control-sm);
         height: var(--vcp-ui-control-sm);
         border: 1px solid transparent;
@@ -504,12 +504,12 @@
         background: transparent;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsForm .group-settings-toggle-btn:hover {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsForm .group-settings-toggle-btn:hover {
         color: var(--vcp-ui-text-0);
         background: var(--vcp-ui-fill-1);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsForm :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsForm :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
         min-height: var(--vcp-ui-control-md);
         border: 1px solid var(--vcp-ui-control-border);
         border-radius: var(--vcp-ui-radius-sm);
@@ -519,31 +519,31 @@
         font: inherit;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsForm :is(input, select, textarea):focus-visible {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsForm :is(input, select, textarea):focus-visible {
         border-color: var(--vcp-ui-control-focus);
         box-shadow: 0 0 0 3px var(--vcp-ui-focus-ring);
         outline: none;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsForm .switch .slider {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsForm .switch .slider {
         border: 1px solid var(--vcp-ui-control-border);
         background: var(--vcp-ui-fill-1);
         box-shadow: none;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsForm .switch input:checked + .slider {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsForm .switch input:checked + .slider {
         border-color: var(--vcp-ui-accent);
         background: var(--vcp-ui-accent);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsForm .form-actions {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsForm .form-actions {
         gap: var(--vcp-ui-space-2);
         padding: var(--vcp-ui-space-3) 0 0;
         border-top: 1px solid var(--vcp-ui-border);
         background: transparent;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsForm .form-actions button {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsForm .form-actions button {
         min-height: var(--vcp-ui-control-md);
         padding: 0 var(--vcp-ui-space-3);
         border: 1px solid var(--vcp-ui-control-border);
@@ -556,25 +556,25 @@
         font-weight: 600;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsForm .form-actions button[type="submit"] {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsForm .form-actions button[type="submit"] {
         border-color: var(--vcp-ui-accent);
         color: var(--vcp-ui-on-accent);
         background: var(--vcp-ui-accent);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsForm #deleteGroupBtn {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsForm #deleteGroupBtn {
         border-color: color-mix(in srgb, var(--vcp-ui-danger) 52%, var(--vcp-ui-border));
         color: var(--vcp-ui-danger);
         background: var(--vcp-ui-danger-bg);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsForm :is(input, select, textarea, button):focus-visible {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsForm :is(input, select, textarea, button):focus-visible {
         outline: 2px solid var(--vcp-ui-focus-ring);
         outline-offset: 2px;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsForm :is(input, select, textarea):focus,
-    html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsForm :is(input, select, textarea):focus-visible {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsForm :is(input, select, textarea):focus,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsForm :is(input, select, textarea):focus-visible {
         border-color: var(--vcp-ui-control-focus);
         box-shadow: 0 0 0 var(--vcp-ui-space-1) var(--vcp-ui-focus-ring);
         outline: none;
@@ -588,18 +588,18 @@
 
     @container sidebar (max-width: 280px) {
         @scope (#tabContentSettings:not([data-settings-presentation="classic"])) {
-        html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-identity-main,
-        html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsContainer .group-identity-main {
+        :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .agent-identity-main,
+        :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsContainer .group-identity-main {
             align-items: stretch;
             flex-direction: column;
         }
 
-        html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .agent-avatar-wrapper,
-        html[data-ui-mode="next"] .vcp-ui-scope #groupSettingsContainer .group-avatar-wrapper {
+        :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .agent-avatar-wrapper,
+        :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsContainer .group-avatar-wrapper {
             align-self: center;
         }
 
-        html[data-ui-mode="next"] .vcp-ui-scope #agentSettingsContainer .system-prompt-container .prompt-mode-button-label {
+        :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsContainer .system-prompt-container .prompt-mode-button-label {
             display: none;
         }
         }
@@ -612,7 +612,7 @@
        所有规则都限定在 html[data-ui-mode="next"] + .vcp-ui-scope 内，
        classic 模式继续使用 styles/setting/* 的原始样式，一个字节不动。
        ============================================================ */
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal {
         /* 只在 modal 子树内把个别 legacy 变量映射到 token 值，使表单内联
            `var(--text-secondary)` 与经典滚动条规则吃到 token。
            注意：不能把 --secondary-bg/--primary-text/--border-color 等映射回
@@ -624,12 +624,12 @@
         --scrollbar-thumb-hover: var(--vcp-ui-scrollbar-thumb-hover);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .global-settings-modal-content {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .global-settings-modal-content {
         background: var(--vcp-ui-bg-0);
         color: var(--vcp-ui-text-0);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .global-settings-title {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .global-settings-title {
         color: var(--vcp-ui-text-0);
         font-size: var(--vcp-ui-font-title);
         font-weight: 600;
@@ -637,7 +637,7 @@
     }
 
     /* ---- shell grid: left rail | content | fixed save bar ---- */
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-settings-shell {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .vcp-ui-settings-shell {
         grid-template-columns: 228px minmax(0, 1fr);
         grid-template-rows: 1fr auto;
         gap: var(--vcp-ui-space-2) var(--vcp-ui-space-3);
@@ -645,7 +645,7 @@
     }
 
     /* ---- left rail ---- */
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .global-settings-nav {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .global-settings-nav {
         grid-column: 1;
         grid-row: 1;
         display: flex;
@@ -659,7 +659,7 @@
         overflow-y: auto;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-settings-search {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .vcp-ui-settings-search {
         display: flex;
         align-items: center;
         gap: var(--vcp-ui-space-2);
@@ -673,14 +673,14 @@
         flex-shrink: 0;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-settings-search .vcp-ui-icon {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .vcp-ui-settings-search .vcp-ui-icon {
         width: var(--vcp-ui-icon-sm);
         height: var(--vcp-ui-icon-sm);
         color: var(--vcp-ui-text-2);
         flex-shrink: 0;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-settings-search input[type="search"] {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .vcp-ui-settings-search input[type="search"] {
         min-width: 0;
         flex: 1;
         padding: 0;
@@ -688,17 +688,17 @@
         outline: 0;
         background: transparent;
         color: var(--vcp-ui-text-0);
-        font-family: "Noto Sans SC Variable", sans-serif;
+        font-family: var(--vcp-ui-font-family);
         font-size: var(--vcp-ui-font-helper);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-settings-search input[type="search"]::placeholder {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .vcp-ui-settings-search input[type="search"]::placeholder {
         color: var(--vcp-ui-text-3);
         opacity: 1;
     }
 
     /* ---- VCPUI List category navigation ---- */
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-nav-list {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .settings-nav-list {
         display: flex;
         flex-direction: column;
         gap: var(--vcp-ui-space-1);
@@ -707,13 +707,13 @@
         list-style: none;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-list {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .vcp-ui-list {
         display: flex;
         flex-direction: column;
         gap: var(--vcp-ui-space-1);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-list-item {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .vcp-ui-list-item {
         display: flex;
         align-items: center;
         gap: var(--vcp-ui-space-2);
@@ -726,48 +726,48 @@
         color: var(--vcp-ui-text-1);
         background: transparent;
         text-align: left;
-        font-family: "Noto Sans SC Variable", sans-serif;
+        font-family: var(--vcp-ui-font-family);
         font-size: var(--vcp-ui-font-body);
         cursor: pointer;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-list-item:hover {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .vcp-ui-list-item:hover {
         color: var(--vcp-ui-text-0);
         background: color-mix(in srgb, var(--vcp-ui-accent) 12%, var(--vcp-ui-bg-0));
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-list-item[data-state="selected"] {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .vcp-ui-list-item[data-state="selected"] {
         color: var(--vcp-ui-on-accent);
         background: var(--vcp-ui-accent);
         box-shadow: var(--vcp-ui-shadow-sm);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-list-item .vcp-ui-icon {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .vcp-ui-list-item .vcp-ui-icon {
         width: var(--vcp-ui-icon-md);
         height: var(--vcp-ui-icon-md);
         color: var(--vcp-ui-text-2);
         flex-shrink: 0;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-list-item[data-state="selected"] .vcp-ui-icon {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .vcp-ui-list-item[data-state="selected"] .vcp-ui-icon {
         color: var(--vcp-ui-on-accent);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-list-copy {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .vcp-ui-list-copy {
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-list-copy strong {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .vcp-ui-list-copy strong {
         color: inherit;
         font-size: var(--vcp-ui-font-helper);
         font-weight: 500;
     }
 
     /* ---- content column ---- */
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .global-settings-content {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .global-settings-content {
         grid-column: 2;
         grid-row: 1;
         min-width: 0;
@@ -779,18 +779,18 @@
     }
 
     /* ---- sections switch instantly in the shell (no legacy slide animation) ---- */
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-section {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .settings-section {
         display: none;
         opacity: 1;
         transform: none;
         transition: none;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-section.active {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .settings-section.active {
         display: block;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-section-title {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .settings-section-title {
         margin: 0 0 var(--vcp-ui-space-4);
         padding-bottom: var(--vcp-ui-space-2);
         color: var(--vcp-ui-text-0);
@@ -800,7 +800,7 @@
     }
 
     /* ---- form typography ---- */
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-form-group label {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .settings-form-group label {
         display: block;
         margin-bottom: var(--vcp-ui-space-1);
         color: var(--vcp-ui-text-1);
@@ -808,20 +808,20 @@
         font-weight: 500;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-form-group small,
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .form-group small,
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .form-group-inline small {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .settings-form-group small,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .form-group small,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .form-group-inline small {
         color: var(--vcp-ui-text-3);
         font-size: var(--vcp-ui-font-caption);
         line-height: var(--vcp-ui-line-body);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-form-group {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .settings-form-group {
         margin-bottom: var(--vcp-ui-space-3);
     }
 
     /* ---- native controls (kept enhanced through VCPUI.enhance) ---- */
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm :is(input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="file"]), select, textarea) {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm :is(input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="file"]), select, textarea) {
         min-height: var(--vcp-ui-control-md);
         box-sizing: border-box;
         padding: 0 var(--vcp-ui-space-2);
@@ -830,11 +830,11 @@
         color: var(--vcp-ui-text-0);
         background: var(--vcp-ui-fill-1);
         box-shadow: none;
-        font-family: "Noto Sans SC Variable", sans-serif;
+        font-family: var(--vcp-ui-font-family);
         font-size: var(--vcp-ui-font-helper);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm textarea {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm textarea {
         padding: var(--vcp-ui-space-2);
         min-height: 64px;
         line-height: var(--vcp-ui-line-body);
@@ -844,8 +844,8 @@
     /* Web Awesome Select is the visible next-mode control; the native select
        remains hidden as the form and business-state source. Keep both paths
        on the same compact settings geometry. */
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm select,
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm wa-select.vcp-ui-select-proxy {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm select,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm wa-select.vcp-ui-select-proxy {
         width: 100%;
         height: var(--vcp-ui-control-md);
         min-height: var(--vcp-ui-control-md);
@@ -853,13 +853,13 @@
         font-size: var(--vcp-ui-font-helper);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm wa-select.vcp-ui-select-proxy::part(form-control),
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm wa-select.vcp-ui-select-proxy::part(form-control-input) {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm wa-select.vcp-ui-select-proxy::part(form-control),
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm wa-select.vcp-ui-select-proxy::part(form-control-input) {
         min-height: 0;
         height: 100%;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm wa-select.vcp-ui-select-proxy::part(combobox) {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm wa-select.vcp-ui-select-proxy::part(combobox) {
         height: var(--vcp-ui-control-md);
         min-height: var(--vcp-ui-control-md);
         padding: 0 var(--vcp-ui-space-2);
@@ -870,70 +870,70 @@
         box-shadow: none;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm wa-select.vcp-ui-select-proxy:hover::part(combobox) {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm wa-select.vcp-ui-select-proxy:hover::part(combobox) {
         border-color: var(--vcp-ui-border);
         background: var(--vcp-ui-fill-2);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm wa-select.vcp-ui-select-proxy:focus-within::part(combobox) {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm wa-select.vcp-ui-select-proxy:focus-within::part(combobox) {
         border-color: var(--vcp-ui-control-focus);
         background: var(--vcp-ui-fill-1);
         box-shadow: 0 0 0 2px var(--vcp-ui-focus-ring);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm wa-select.vcp-ui-select-proxy::part(display-input) {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm wa-select.vcp-ui-select-proxy::part(display-input) {
         min-height: 0;
         padding: 0;
         color: var(--vcp-ui-text-0);
-        font-family: "Noto Sans SC Variable", sans-serif;
+        font-family: var(--vcp-ui-font-family);
         font-size: var(--vcp-ui-font-helper);
         line-height: var(--vcp-ui-line-compact);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm wa-select.vcp-ui-select-proxy::part(expand-icon) {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm wa-select.vcp-ui-select-proxy::part(expand-icon) {
         width: var(--vcp-ui-icon-sm);
         height: var(--vcp-ui-icon-sm);
         margin-left: var(--vcp-ui-space-2);
         color: var(--vcp-ui-text-2);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm wa-select.vcp-ui-select-proxy::part(listbox) {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm wa-select.vcp-ui-select-proxy::part(listbox) {
         border: 1px solid var(--vcp-ui-border);
         border-radius: var(--vcp-ui-radius-sm);
         background: var(--vcp-ui-bg-1);
         box-shadow: var(--vcp-ui-shadow-md);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-form-group:has(> select),
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-form-group:has(> wa-select.vcp-ui-select-proxy) {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .settings-form-group:has(> select),
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .settings-form-group:has(> wa-select.vcp-ui-select-proxy) {
         margin-bottom: var(--vcp-ui-space-2);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm :is(input, select, textarea):focus-visible,
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm :is(input, select, textarea):focus {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm :is(input, select, textarea):focus-visible,
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm :is(input, select, textarea):focus {
         border-color: var(--vcp-ui-control-focus);
         box-shadow: 0 0 0 var(--vcp-ui-space-1) var(--vcp-ui-focus-ring);
         outline: none;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm :is(input, select, textarea, button):focus-visible {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm :is(input, select, textarea, button):focus-visible {
         outline: 2px solid var(--vcp-ui-focus-ring);
         outline-offset: 2px;
     }
 
     /* ---- switches ---- */
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm .switch .slider {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm .switch .slider {
         border: 0;
         background: var(--vcp-ui-fill-1);
         box-shadow: none;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsForm .switch input:checked + .slider {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm .switch input:checked + .slider {
         background: var(--vcp-ui-accent);
     }
 
     /* ---- subsections (cards) ---- */
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-subsection {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .settings-subsection {
         margin-bottom: var(--vcp-ui-space-4);
         padding: var(--vcp-ui-space-3) var(--vcp-ui-space-4);
         border: 0;
@@ -941,36 +941,36 @@
         background: var(--vcp-ui-fill-0);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-subsection:last-child {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .settings-subsection:last-child {
         margin-bottom: 0;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-subsection-title {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .settings-subsection-title {
         color: var(--vcp-ui-text-0);
         font-size: var(--vcp-ui-font-body);
         font-weight: 600;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-subsection-description {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .settings-subsection-description {
         margin: 0;
         color: var(--vcp-ui-text-3);
         font-size: var(--vcp-ui-font-caption);
         line-height: var(--vcp-ui-line-body);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-subsection-new {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .settings-subsection-new {
         box-shadow: inset var(--vcp-ui-space-1) 0 0 var(--vcp-ui-accent);
     }
 
     /* ---- dependent / nested panels ---- */
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-dependent-panel {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .settings-dependent-panel {
         padding: var(--vcp-ui-space-3);
         border: 0;
         border-radius: var(--vcp-ui-radius-md);
         background: var(--vcp-ui-fill-1);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-nested-panel {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .settings-nested-panel {
         margin-top: var(--vcp-ui-space-3);
         padding: var(--vcp-ui-space-3);
         border: 0;
@@ -978,16 +978,16 @@
         background: var(--vcp-ui-fill-1);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .form-group-inline {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .form-group-inline {
         gap: var(--vcp-ui-space-3);
     }
 
     /* ---- chat presentation mode option cards ---- */
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .chat-presentation-mode-options {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .chat-presentation-mode-options {
         gap: var(--vcp-ui-space-2);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .chat-presentation-mode-option {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .chat-presentation-mode-option {
         gap: var(--vcp-ui-space-2);
         margin: 0;
         padding: var(--vcp-ui-space-3);
@@ -998,27 +998,27 @@
         transition: border-color var(--vcp-ui-transition-fast), background-color var(--vcp-ui-transition-fast);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .chat-presentation-mode-option:hover {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .chat-presentation-mode-option:hover {
         background: var(--vcp-ui-fill-1);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .chat-presentation-mode-option:has(input:checked) {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .chat-presentation-mode-option:has(input:checked) {
         background: var(--vcp-ui-selection-bg);
         box-shadow: inset 3px 0 0 var(--vcp-ui-accent);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .chat-presentation-mode-option strong {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .chat-presentation-mode-option strong {
         color: var(--vcp-ui-text-0);
         font-size: var(--vcp-ui-font-body);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .chat-presentation-mode-option small {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .chat-presentation-mode-option small {
         color: var(--vcp-ui-text-3);
         font-size: var(--vcp-ui-font-caption);
     }
 
     /* ---- scenario / font preview cards ---- */
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .scenario-preview-card {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .scenario-preview-card {
         min-height: 112px;
         padding: var(--vcp-ui-space-3);
         border: 0;
@@ -1026,36 +1026,36 @@
         background: var(--vcp-ui-fill-0);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .scenario-preview-title {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .scenario-preview-title {
         margin-bottom: var(--vcp-ui-space-2);
         color: var(--vcp-ui-text-2);
         font-size: var(--vcp-ui-font-caption);
         font-weight: 700;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .scenario-preview-body {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .scenario-preview-body {
         color: var(--vcp-ui-text-0);
         font-size: var(--vcp-ui-font-body);
         line-height: var(--vcp-ui-line-body);
     }
 
     /* ---- composite inputs / inline buttons ---- */
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .model-input-container {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .model-input-container {
         display: flex;
         align-items: stretch;
         gap: var(--vcp-ui-space-1);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .model-input-container > input {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .model-input-container > input {
         min-width: 0;
         flex: 1;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .network-path-input-group {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .network-path-input-group {
         gap: var(--vcp-ui-space-2);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal :is(.small-button, .reset-colors-btn, #addNetworkPathBtn, #openTopicSummaryModelSelectBtn) {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal :is(.small-button, .reset-colors-btn, #addNetworkPathBtn, #openTopicSummaryModelSelectBtn) {
         min-height: var(--vcp-ui-control-md);
         box-sizing: border-box;
         padding: 0 var(--vcp-ui-space-3);
@@ -1063,30 +1063,30 @@
         border-radius: var(--vcp-ui-radius-sm);
         color: var(--vcp-ui-text-1);
         background: var(--vcp-ui-fill-0);
-        font-family: "Noto Sans SC Variable", sans-serif;
+        font-family: var(--vcp-ui-font-family);
         font-size: var(--vcp-ui-font-helper);
         font-weight: 500;
         cursor: pointer;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal :is(.small-button, .reset-colors-btn, #addNetworkPathBtn, #openTopicSummaryModelSelectBtn):hover {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal :is(.small-button, .reset-colors-btn, #addNetworkPathBtn, #openTopicSummaryModelSelectBtn):hover {
         color: var(--vcp-ui-text-0);
         background: var(--vcp-ui-fill-2);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .model-input-container > button {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .model-input-container > button {
         width: var(--vcp-ui-control-md);
         min-width: var(--vcp-ui-control-md);
         padding: 0;
     }
 
     /* ---- avatar ---- */
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .agent-avatar-display {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .agent-avatar-display {
         border-radius: var(--vcp-ui-radius-md);
     }
 
     /* ---- fixed save bar ---- */
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .global-settings-footer {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .global-settings-footer {
         grid-column: 2;
         grid-row: 2;
         display: flex;
@@ -1099,56 +1099,56 @@
         background: var(--vcp-ui-bg-0);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .global-settings-footer button[type="submit"] {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .global-settings-footer button[type="submit"] {
         min-height: var(--vcp-ui-control-md);
         padding: 0 var(--vcp-ui-space-4);
         border: 0;
         border-radius: var(--vcp-ui-radius-sm);
         color: var(--vcp-ui-on-accent);
         background: var(--vcp-ui-accent);
-        font-family: "Noto Sans SC Variable", sans-serif;
+        font-family: var(--vcp-ui-font-family);
         font-size: var(--vcp-ui-font-helper);
         font-weight: 600;
         cursor: pointer;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .global-settings-footer button[type="submit"]:hover {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .global-settings-footer button[type="submit"]:hover {
         border-color: var(--vcp-ui-accent-hover);
         background: var(--vcp-ui-accent-hover);
     }
 
     /* ---- modal scrollbars ---- */
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal :is(.global-settings-content, .global-settings-nav)::-webkit-scrollbar {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal :is(.global-settings-content, .global-settings-nav)::-webkit-scrollbar {
         width: var(--vcp-ui-scrollbar-size);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal :is(.global-settings-content, .global-settings-nav)::-webkit-scrollbar-track {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal :is(.global-settings-content, .global-settings-nav)::-webkit-scrollbar-track {
         background: transparent;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal :is(.global-settings-content, .global-settings-nav)::-webkit-scrollbar-thumb {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal :is(.global-settings-content, .global-settings-nav)::-webkit-scrollbar-thumb {
         background: var(--vcp-ui-scrollbar-thumb);
         border-radius: var(--vcp-ui-radius-sm);
     }
 
     /* The modal itself owns .vcp-ui-scope. Keep these selectors on the same
        element so legacy global-settings rules cannot reintroduce separators. */
-    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .global-settings-modal-content {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .global-settings-modal-content {
         position: relative;
         border: 0;
         background: var(--vcp-ui-bg-0);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .global-settings-title {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .global-settings-title {
         display: none;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .vcp-ui-settings-shell {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-ui-settings-shell {
         gap: 0;
         padding: 0;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .settings-section-title {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .settings-section-title {
         display: flex;
         align-items: center;
         min-height: calc(var(--vcp-ui-control-md) + var(--vcp-ui-space-2));
@@ -1158,7 +1158,7 @@
         line-height: var(--vcp-ui-line-compact);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .close-button {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .close-button {
         z-index: 3;
         top: var(--vcp-ui-space-3);
         right: var(--vcp-ui-space-3);
@@ -1168,7 +1168,7 @@
         box-shadow: none;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .global-settings-nav {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .global-settings-nav {
         grid-row: 1 / 3;
         padding: var(--vcp-ui-space-3) var(--vcp-ui-space-2);
         border: 0;
@@ -1176,37 +1176,37 @@
         background: color-mix(in srgb, var(--vcp-ui-accent) 14%, var(--vcp-ui-bg-1));
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .vcp-ui-settings-search {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-ui-settings-search {
         border: 0;
         background: color-mix(in srgb, var(--vcp-ui-bg-0) 76%, transparent);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .settings-nav-list {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .settings-nav-list {
         padding: 0;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .vcp-ui-list {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-ui-list {
         gap: var(--vcp-ui-space-2);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .settings-nav-item {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .settings-nav-item {
         border: 0;
         color: var(--vcp-ui-text-1);
         background: transparent;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .settings-nav-item:hover {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .settings-nav-item:hover {
         color: var(--vcp-ui-text-0);
         background: color-mix(in srgb, var(--vcp-ui-accent) 12%, var(--vcp-ui-bg-0));
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .settings-nav-item.active {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .settings-nav-item.active {
         color: var(--vcp-ui-on-accent);
         background: var(--vcp-ui-accent);
         box-shadow: var(--vcp-ui-shadow-sm);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .vcp-ui-list-item {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-ui-list-item {
         min-height: var(--vcp-ui-control-md);
         padding: 0 var(--vcp-ui-space-3);
         border: 0;
@@ -1215,43 +1215,43 @@
         background: transparent;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .vcp-ui-list-item:hover {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-ui-list-item:hover {
         color: var(--vcp-ui-text-0);
         background: color-mix(in srgb, var(--vcp-ui-accent) 12%, var(--vcp-ui-bg-0));
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .vcp-ui-list-item[data-state="selected"] {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-ui-list-item[data-state="selected"] {
         color: var(--vcp-ui-on-accent);
         background: var(--vcp-ui-accent);
         box-shadow: var(--vcp-ui-shadow-sm);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .vcp-ui-list-item[data-state="selected"] .vcp-ui-icon {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-ui-list-item[data-state="selected"] .vcp-ui-icon {
         color: var(--vcp-ui-on-accent);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .global-settings-content {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .global-settings-content {
         border: 0;
         border-radius: 0;
         background: var(--vcp-ui-bg-0);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal :is(.agent-identity-container, .settings-subsection, .chat-presentation-mode-option, .scenario-preview-card) {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal :is(.agent-identity-container, .settings-subsection, .chat-presentation-mode-option, .scenario-preview-card) {
         border: 0;
         background: var(--vcp-ui-fill-0);
         box-shadow: none;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .agent-identity-container::before {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .agent-identity-container::before {
         display: none;
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal :is(.settings-dependent-panel, .settings-nested-panel) {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal :is(.settings-dependent-panel, .settings-nested-panel) {
         border: 0;
         background: var(--vcp-ui-fill-1);
     }
 
-    html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .global-settings-footer {
+    :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .global-settings-footer {
         border: 0;
         border-radius: 0;
         background: var(--vcp-ui-bg-0);
@@ -1259,7 +1259,7 @@
 
     /* 700×500 审查窗口等窄视口仍保持双栏 shell（classic 的窄屏堆叠不适用）。 */
     @media (max-width: 768px) {
-        html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .vcp-ui-settings-shell {
+        :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .vcp-ui-settings-shell {
             display: grid;
             grid-template-columns: 200px minmax(0, 1fr);
             grid-template-rows: 1fr auto;
@@ -1268,13 +1268,13 @@
             padding: 0;
         }
 
-        html[data-ui-mode="next"] .vcp-ui-scope#globalSettingsModal .global-settings-nav {
+        :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .global-settings-nav {
             border: 0;
             border-radius: var(--vcp-ui-radius-md);
             max-height: none;
         }
 
-        html[data-ui-mode="next"] .vcp-ui-scope #globalSettingsModal .settings-nav-list {
+        :is(html[data-ui-mode="next"], html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .settings-nav-list {
             flex-direction: column;
             padding: 0;
             gap: var(--vcp-ui-space-1);

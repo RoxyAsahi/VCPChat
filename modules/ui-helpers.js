@@ -343,6 +343,9 @@
 
         if (modalElement) {
             modalElement.classList.add('active');
+            document.dispatchEvent(new CustomEvent('modal-visibility-changed', {
+                detail: { modalId, active: true }
+            }));
             // 确保新打开的模态框获得焦点
             modalElement.focus();
         } else {
@@ -356,7 +359,12 @@
      */
     uiHelperFunctions.closeModal = function(modalId) {
         const modalElement = document.getElementById(modalId);
-        if (modalElement) modalElement.classList.remove('active');
+        if (modalElement) {
+            modalElement.classList.remove('active');
+            document.dispatchEvent(new CustomEvent('modal-visibility-changed', {
+                detail: { modalId, active: false }
+            }));
+        }
     };
 
     /**

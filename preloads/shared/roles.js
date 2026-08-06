@@ -160,6 +160,8 @@ const CHAT_KEYS = [
     'desktopDetachEmbeddedVchatApp',
     'desktopCloseAllEmbeddedVchatApps',
     'onEmbeddedVchatAppState',
+    'getThemes',
+    'applyTheme',
 ];
 
 const DESKTOP_KEYS = [

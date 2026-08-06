@@ -780,7 +780,9 @@
     }
 
     function isNextUiIcon(element) {
-        return document.documentElement.dataset.uiMode === 'next'
+        return (document.documentElement.dataset.uiMode === 'next'
+                || document.documentElement.classList.contains('vcp-appearance-studio-host')
+                || document.documentElement.classList.contains('vcp-global-settings-host'))
             && element instanceof Element
             && element.classList.contains('vcp-ui-icon')
             && element.closest('.vcp-ui-scope');

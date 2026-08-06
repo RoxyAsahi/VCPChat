@@ -4,11 +4,11 @@
 // their original business DOM, form ids, defaults and IPC; this module only
 // layers the VCPUI presentation on top when the mode resolves to next.
 //
-// Global settings (R5.1): in next mode the modal is rebuilt into a
+// Global settings (R5.1): the modal is always rebuilt into a
 // SettingsShell-style layout — left rail with a VCPUI-enhanced search field and
 // a VCPUI List category navigation, the original form as the content area, and
-// the existing footer as the fixed save bar. Classic mode keeps the legacy
-// sidebar/modal markup untouched; toggling back tears every injected node down.
+// the existing footer as the fixed save bar. Its host is independent from the
+// home layout, so Classic and Next use the same settings experience.
 
 const controllers = new Set();
 const injectedNodes = new Set();
@@ -30,7 +30,15 @@ function isNextUi() {
 }
 
 function isGlobalSettingsNextUi() {
-    return document.documentElement.dataset.uiMode === 'next';
+    return Boolean(document.getElementById('globalSettingsModal'));
+}
+
+function syncGlobalSettingsHost() {
+    const modal = document.getElementById('globalSettingsModal');
+    const active = Boolean(modal?.classList.contains('active'));
+    document.documentElement.classList.toggle('vcp-global-settings-host', active);
+    modal?.classList.add('vcp-global-settings-next');
+    return modal;
 }
 
 function enhance(name, element, options = {}) {
@@ -67,7 +75,8 @@ function enhanceForm(form) {
 const GLOBAL_CATEGORY_ICONS = Object.freeze({
     'user-identity': 'user',
     'server-connection': 'server',
-    'render-settings': 'settings',
+    'appearance-settings': 'palette',
+    'render-settings': 'activity',
     'selection-assistant': 'mouse-pointer-click',
     'voice-settings': 'mic',
     'advanced-features': 'layers',
@@ -278,13 +287,13 @@ function cleanupDisconnectedControllers() {
 function refresh() {
     refreshQueued = false;
     cleanupDisconnectedControllers();
+    const globalSettingsModal = syncGlobalSettingsHost();
     if (isNextUi()) {
         document.querySelectorAll('#agentSettingsForm, #groupSettingsForm').forEach(enhanceForm);
     }
     if (isGlobalSettingsNextUi()) {
-        const modal = document.getElementById('globalSettingsModal');
-        const form = modal?.querySelector('#globalSettingsForm');
-        if (modal && form) enhanceGlobalSettings(modal, form);
+        const form = globalSettingsModal?.querySelector('#globalSettingsForm');
+        if (globalSettingsModal && form) enhanceGlobalSettings(globalSettingsModal, form);
     }
 }
 
@@ -309,11 +318,12 @@ function teardown() {
     });
     shellRoots.clear();
     document.querySelectorAll('#globalSettingsModal[data-vcp-settings-icons-normalized]').forEach(restoreFormIcons);
+    document.documentElement.classList.remove('vcp-global-settings-host');
 }
 
 function syncMode() {
-    if (isNextUi() || isGlobalSettingsNextUi()) scheduleRefresh();
-    else teardown();
+    teardown();
+    scheduleRefresh();
 }
 
 observer = new window.MutationObserver(scheduleRefresh);
@@ -322,6 +332,10 @@ if (settingsHost) observer.observe(settingsHost, { childList: true, subtree: tru
 const modalContainer = document.getElementById('modal-container');
 if (modalContainer) observer.observe(modalContainer, { childList: true, subtree: true });
 window.addEventListener('ui-mode-changed', syncMode);
+const handleModalVisibility = event => {
+    if (event.detail?.modalId === 'globalSettingsModal') scheduleRefresh();
+};
+document.addEventListener('modal-visibility-changed', handleModalVisibility);
 syncMode();
 
 window.VCPUISettingsBridge = Object.freeze({
@@ -330,6 +344,7 @@ window.VCPUISettingsBridge = Object.freeze({
         observer?.disconnect();
         observer = null;
         window.removeEventListener('ui-mode-changed', syncMode);
+        document.removeEventListener('modal-visibility-changed', handleModalVisibility);
         teardown();
     },
     get enhancedCount() {
