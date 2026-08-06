@@ -37,7 +37,7 @@ function reduceUsage(state, event) {
     const hasReportedUsage = ['real', 'estimated'].includes(source)
         && ['totalTokens', 'usedTokens', 'inputTokens', 'outputTokens', 'reasoningTokens', 'cacheReadTokens', 'cacheWriteTokens']
             .some((key) => Number.isFinite(Number(payload[key])));
-    const usedTokens = Number(payload.usedTokens ?? payload.totalTokens) || 0;
+    const usedTokens = Number(payload.contextTokens ?? payload.usedTokens ?? payload.totalTokens) || 0;
     const contextWindow = Number(payload.contextWindow) || 0;
     return withUnread({
         ...state,
@@ -48,7 +48,7 @@ function reduceUsage(state, event) {
             usageAvailable: hasReportedUsage,
             usedTokens,
             contextWindow,
-            percentage: contextWindow ? Math.min(100, Math.round((usedTokens / contextWindow) * 100)) : 0,
+            percentage: contextWindow ? Math.min(100, Math.round((usedTokens / contextWindow) * 100)) : null,
         },
     }, 'usage');
 }

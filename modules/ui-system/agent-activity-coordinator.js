@@ -8,7 +8,7 @@ function normalizeDockKind(tab) {
 
 function renderActivityContent({ kind, content, current, definition, state, selectedSessionId, approvals,
     activityReadonlyView, approvalView, notificationView, workspaceView, syncWorkspace,
-    createWorkspacePathRef, openPreview, run, queueMicrotask, disposed, node }) {
+    refreshVisibleWorkspace, createWorkspacePathRef, openPreview, run, queueMicrotask, disposed, node }) {
     if (kind === 'connection') {
         content.append(activityReadonlyView.buildConnection(current, deriveWorkbenchViewState(current)));
         return;
@@ -41,6 +41,9 @@ function renderActivityContent({ kind, content, current, definition, state, sele
     if (kind === 'files') {
         workspaceView.update({ identity: syncWorkspace(current), browser: state.workspaceBrowser });
         content.append(workspaceView.element);
+        if (!disposed) queueMicrotask(() => {
+            if (!disposed) void refreshVisibleWorkspace().catch(() => null);
+        });
         return;
     }
     if (kind === 'file') {
@@ -177,8 +180,10 @@ function createAgentActivityCoordinator({
 
     function syncWorkspace(current = store.getState()) { return workspaceCoordinator.syncScope(current); }
     function loadDirectory(relativePath = '') { return workspaceCoordinator.loadDirectory(relativePath, store.getState()); }
+    function refreshVisibleWorkspace(force = false) { return workspaceCoordinator.refreshVisibleWorkspace(force); }
     function openPreview(ref) { return workspaceCoordinator.openPreview(ref); }
     function performPathAction(ref, action) { return workspaceCoordinator.performAction(ref, action); }
+    function saveText(ref) { return workspaceCoordinator.saveText(ref); }
     function search(value) { workspaceCoordinator.search(value); }
 
     async function openFileTab(ref) {
@@ -246,7 +251,7 @@ function createAgentActivityCoordinator({
         renderActivityContent({ kind, content, current, definition, state, selectedSessionId,
             approvals: { local: localApprovals, backend: backendApprovals, passive: passiveInteractions },
             activityReadonlyView, approvalView, notificationView, workspaceView, syncWorkspace,
-            createWorkspacePathRef, openPreview, run, queueMicrotask, disposed, node });
+            refreshVisibleWorkspace, createWorkspacePathRef, openPreview, run, queueMicrotask, disposed, node });
         restoreActivityRenderState({ content, kind, openKeys, scrollTop, searchFocused, searchSelection });
     }
 
@@ -261,9 +266,11 @@ function createAgentActivityCoordinator({
         maybeAutoOpen,
         syncWorkspace,
         loadDirectory,
+        refreshVisibleWorkspace,
         openPreview,
         openFileTab,
         performPathAction,
+        saveText,
         openSourcePath,
         search,
         render,

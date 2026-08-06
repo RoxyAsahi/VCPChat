@@ -20,6 +20,10 @@ const profileState = { topicFlow: null, selectedAgent: 'Nova', model: 'deepseek-
 const profileFeature = createAgentProfileFlowFeature({
     state: profileState,
     controller: {
+        workspaceSelectRoot: async () => ({
+            cancelled: false,
+            workspaceRoot: 'C:\\workspace\\research',
+        }),
         saveAgentProfile: async (request) => ({
             success: true,
             profile: { id: 'Research-Agent', name: request.name },
@@ -35,13 +39,18 @@ const profileFeature = createAgentProfileFlowFeature({
 profileFeature.open();
 profileFeature.render();
 const profileForm = profileFeature.view.element.querySelector('form');
+profileForm.querySelector('[aria-label="选择 Build Agent 默认工作目录"]').click();
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.equal(profileForm.querySelector('[aria-label="Build Agent 默认工作目录"]').value, 'C:\\workspace\\research');
+assert.equal(profileState.topicFlow.workspaceRoot, 'C:\\workspace\\research',
+    'the native workspace picker must update the isolated Agent profile draft');
 profileForm.querySelector('[aria-label="Build Agent 名称"]').value = 'Research Agent';
 profileForm.querySelector('[aria-label="Build Agent 提示词"]').value = '{{Research}}';
 profileForm.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
 await pendingRun;
 assert.equal(profileState.selectedAgent, 'Research-Agent');
 assert.equal(profileState.topicFlow, null);
-assert.equal(profileState.tab, 'agents');
+assert.equal(profileState.tab, 'sessions');
 assert.ok(profileEvents.some((event) => event.type === 'refresh'));
 assert.ok(profileEvents.some((event) => event.type === 'notify' && event.level === 'success'));
 

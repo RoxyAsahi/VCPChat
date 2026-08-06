@@ -19,7 +19,7 @@ import {
 import { createAgentWorkbenchShellView } from './agent-workbench-shell-view.js';
 import { createAgentWorkbenchRunStatusView } from './agent-workbench-run-status-view.js';
 import { createAgentWorkbenchComposerView } from './agent-workbench-composer-view.js';
-import { createAgentWorkspaceView } from './agent-workspace-view.js';
+import { createAgentWorkspaceFeatureView } from './agent-workspace-feature.js';
 import { createAgentWorkbenchHeaderView } from './agent-workbench-header-view.js';
 import { createAgentWorkbenchAccountView } from './agent-workbench-account-view.js';
 import { createAgentActivityReadonlyView } from './agent-activity-readonly-view.js';
@@ -63,6 +63,14 @@ import {
     runtimeApi,
     scrollFeed,
 } from './agent-workbench-runtime-helpers.js';
+import {
+    clearLegacyRememberedSession,
+    createNavigationIdentityObserver,
+    forgetAgentSession,
+    migrateLegacyRememberedSession,
+    rememberedSessionForAgent,
+    restoreRememberedSessionSafely,
+} from './agent-navigation-memory.js';
 function mountWorkbench(container) {
     const host = createAgentWorkbenchHostAdapter({ windowRef: window, documentRef: document });
     const lifecycle = createWorkbenchLifecycle(window);
@@ -74,6 +82,7 @@ function mountWorkbench(container) {
     const state = createAgentWorkbenchState({
         window, agentCatalog: seedBuildAgentCatalog(), rememberedTopic: loadRememberedTopic(),
     });
+    const unsubscribeNavigationIdentity = createNavigationIdentityObserver({ store, state, rememberTopic });
     const sessionViewContext = createAgentSessionViewContext({ state, store, document, sameAgent });
     const {
         activeSession, selectedSessionKey, selectedComposerState, selectedTurnStart,
@@ -202,18 +211,13 @@ function mountWorkbench(container) {
             notify(error?.message || String(error), 'error');
         }
     };
-    const workspaceView = createAgentWorkspaceView({
-        document,
-        actions: {
-            run,
-            refresh: () => renderActivity(),
-            loadDirectory: (relativePath) => loadWorkspaceDirectory(relativePath),
-            openPreview: (ref) => openWorkspacePreview(ref),
-            openFileTab: (ref) => openWorkspaceFileTab(ref),
-            performPathAction: (ref, action) => performWorkspaceAction(ref, action),
-            search: (value) => scheduleWorkspaceSearch(value),
-            onBinaryPreview: () => activitySplitter.classList.remove('is-active'),
-        },
+    const workspaceView = createAgentWorkspaceFeatureView({
+        document, run, state, render: () => renderActivity(),
+        loadDirectory: (path) => loadWorkspaceDirectory(path), openPreview: (ref) => openWorkspacePreview(ref),
+        openFileTab: (ref) => openWorkspaceFileTab(ref),
+        performPathAction: (ref, action) => performWorkspaceAction(ref, action),
+        saveText: (ref) => saveWorkspaceText(ref), search: (value) => scheduleWorkspaceSearch(value),
+        onBinaryPreview: () => activitySplitter.classList.remove('is-active'),
     });
     const activityReadonlyView = createAgentActivityReadonlyView({
         document,
@@ -272,6 +276,10 @@ function mountWorkbench(container) {
         client: {
             listDirectory: (request) => controller.workspaceListDirectory(request),
             readPreview: (request) => controller.workspaceReadPreview(request),
+            saveText: (request) => controller.workspaceSaveText(request),
+            watch: (request) => controller.workspaceWatch(request),
+            unwatch: (request) => controller.workspaceUnwatch(request),
+            subscribeChanges: (listener) => controller.workspaceSubscribeChanges(listener),
             performPathAction: (request) => controller.workspacePerformPathAction(request),
             searchFiles: (request) => controller.workspaceSearchFiles(request),
         },
@@ -368,12 +376,6 @@ function mountWorkbench(container) {
         notify,
     });
 
-    function isMissingRememberedSessionError(error) {
-        // The pointer is only a convenience preference. A Session may have
-        // been permanently deleted since the previous Renderer lifetime.
-        return /(?:Session was not found|NOT_FOUND)/i.test(String(error?.message || error || ''));
-    }
-
     function uxMark(name, identity, startedAt = null) {
         const now = window.performance?.now?.() || Date.now();
         const shortId = String(identity || '').slice(0, 8);
@@ -394,11 +396,11 @@ function mountWorkbench(container) {
         run, notify, queueRender, scrollFeed: scopedScrollFeed,
         isFollowingContainer: (target) => isFollowingContainer(target, host.vcpBridge), host,
     });
-
     const sessionOperations = createAgentSessionOperationsCoordinator({
         state, store, controller, selectedAgentProfile, profileNeedsConfiguration,
         refreshControlPlane, queueRender, renderSidebar, notify, rememberTopic,
         clearRememberedTopic,
+        forgetRememberedSession: forgetAgentSession,
         nextSessionTitle, activeSession,
     });
     const {
@@ -451,6 +453,7 @@ function mountWorkbench(container) {
         openPreview: openWorkspacePreview,
         openFileTab: openWorkspaceFileTab,
         performPathAction: performWorkspaceAction,
+        saveText: saveWorkspaceText,
         openSourcePath: openWorkspaceSourcePath,
         search: scheduleWorkspaceSearch,
         render: renderActivity,
@@ -477,6 +480,7 @@ function mountWorkbench(container) {
         sessionActivity, createSessionAvatar, appendSessionActions, closeSessionContextMenu,
         openNewSession, openNewAgentFlow: profileFlowFeature.open, refreshControlPlane, refreshRecoveryOperations,
         refreshTopicsForAgent, selectAgent, rememberTopic, forgetTopic, host,
+        rememberedSessionForAgent, forgetRememberedSession: forgetAgentSession,
         syncModel: syncModelFromSelectedSession, renderSettings: renderSettingsSidebarContent,
         queueRender, uxMark,
     });
@@ -560,17 +564,12 @@ function mountWorkbench(container) {
                 // Do not wait for model/catalog discovery before restoring
                 // the visible history. Main validates the durable Session;
                 // catalog data enriches the row in the background.
-                const sessionId = state.rememberedTopic.sessionId;
-                rememberTopic({ sessionId });
-                try {
-                    await controller.previewTopic(sessionId);
-                } catch (error) {
-                    if (!isMissingRememberedSessionError(error)) throw error;
-                    // The pointer is not durable history. Forget only it;
-                    // Main retains the empty Session and will write its first
-                    // projection normally after a future Turn.
-                    forgetTopic(sessionId);
-                }
+                await restoreRememberedSessionSafely({
+                    state, store, controller, remembered: state.rememberedTopic,
+                    rememberTopic, migrateLegacy: migrateLegacyRememberedSession,
+                    clearLegacy: clearLegacyRememberedSession,
+                    onMissing: (sessionId) => forgetTopic(sessionId),
+                });
             }
             await refreshControlPlane();
         })
@@ -578,6 +577,7 @@ function mountWorkbench(container) {
 
     return () => {
         state.disposed = true;
+        unsubscribeNavigationIdentity();
         sessionCatalog.dispose();
         sessionOperations.dispose();
         settingsCoordinator.dispose();
@@ -610,7 +610,7 @@ function mountWorkbench(container) {
 
 register({
     id: 'agent-workbench',
-    title: 'VCPBuild',
+    title: 'VCPBUILD',
     // Rounded-square "code" chip mirroring opencode's tab project-avatar:
     // a small filled tile with an inset ring and a code glyph inside.
     iconSvg: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="1.5" y="1.5" width="21" height="21" rx="5" fill="currentColor" fill-opacity="0.12"/><rect x="1.5" y="1.5" width="21" height="21" rx="5" stroke="currentColor" stroke-opacity="0.35" stroke-width="1"/><path d="m9.2 9.2-3 3 3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="m14.8 9.2 3 3-3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.2 7.5l-2.4 9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',

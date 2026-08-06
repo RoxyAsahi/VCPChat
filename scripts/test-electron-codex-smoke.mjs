@@ -154,9 +154,9 @@ try {
     rendererErrors.length = 0;
     failedRequests.length = 0;
     await page.click('#nextUiAddTabBtn');
-    await page.waitForSelector('.next-ui-internal-app-item[title="VCPBuild"]', { visible: true, timeout: timeoutMs });
+    await page.waitForSelector('.next-ui-internal-app-item[title="VCPBUILD"]', { visible: true, timeout: timeoutMs });
     assert.equal(await page.evaluate(() => {
-        const item = document.querySelector('.next-ui-internal-app-item[title="VCPBuild"]');
+        const item = document.querySelector('.next-ui-internal-app-item[title="VCPBUILD"]');
         item?.click();
         return Boolean(item);
     }), true);

@@ -1,5 +1,6 @@
 import { renderAgentToolSettings } from './agent-tool-settings-view.js';
 import { renderAgentToolSchema } from './agent-tool-schema-view.js';
+import { renderAgentSkillSettings, normalizeSkillPolicy } from './agent-skill-settings-view.js';
 
 const DEFAULT_POLICY = Object.freeze({
     schemaVersion: 1,
@@ -7,6 +8,7 @@ const DEFAULT_POLICY = Object.freeze({
     enabledCodexCapabilities: [],
     enabledVcpTools: [],
 });
+const DEFAULT_SKILL_POLICY = Object.freeze({ schemaVersion: 1, preset: 'all', enabledSkillIds: [] });
 
 function policyForScope({ scope, store, activeSession, selectedAgentProfile, settingsState, selectedSessionKey }) {
     const profile = selectedAgentProfile() || {};
@@ -21,6 +23,9 @@ function policyForScope({ scope, store, activeSession, selectedAgentProfile, set
         sessionId,
         targetKey,
         policy: settingsState.value(targetKey, 'toolPolicy', fallback || DEFAULT_POLICY),
+        skillPolicy: settingsState.value(targetKey, 'skillPolicy',
+            (sessionId ? snapshot?.skillPolicy : profile.skillPolicy) || DEFAULT_SKILL_POLICY),
+        profileId: profile.id || '',
     };
 }
 
@@ -61,6 +66,10 @@ function createAgentToolSettingsModal({
         let scope = selectedSessionKey() ? 'session' : 'profile';
         let page = 'tools';
         let schemaState = { sessionId: '', loading: false, diagnostics: null, error: '' };
+        let skillState = {
+            key: '', loading: false, catalog: null, error: '', query: '', selectedId: '',
+            detail: null, detailLoading: false, detailError: '',
+        };
         const content = node('div', 'agent-tool-modal-content');
         const close = host.ui.create('Button', { label: '完成', variant: 'primary', size: 'sm' });
         if (!close) {
@@ -105,6 +114,48 @@ function createAgentToolSettingsModal({
             }
             render();
         };
+        const skillRequest = (authority, extra = {}) => ({
+            ...(authority.sessionId ? { sessionId: authority.sessionId } : { profileId: authority.profileId }),
+            ...extra,
+        });
+        const loadSkills = async (forceReload = false) => {
+            const authority = policyForScope({
+                scope, store, activeSession, selectedAgentProfile, settingsState, selectedSessionKey,
+            });
+            const key = authority.targetKey;
+            skillState = { ...skillState, key, loading: true, error: '', catalog: forceReload ? null : skillState.catalog };
+            render();
+            try {
+                const catalog = await controller.listSkills(skillRequest(authority, { forceReload }));
+                if (page !== 'skills' || policyForScope({
+                    scope, store, activeSession, selectedAgentProfile, settingsState, selectedSessionKey,
+                }).targetKey !== key) return;
+                skillState = { ...skillState, key, loading: false, catalog, error: '' };
+            } catch (error) {
+                if (page !== 'skills') return;
+                skillState = { ...skillState, key, loading: false, catalog: null,
+                    error: error?.message || '无法读取 Codex 技能。' };
+            }
+            render();
+        };
+        const loadSkillDetail = async (skillId) => {
+            const authority = policyForScope({
+                scope, store, activeSession, selectedAgentProfile, settingsState, selectedSessionKey,
+            });
+            const key = authority.targetKey;
+            skillState = { ...skillState, selectedId: skillId, detail: null, detailLoading: true, detailError: '' };
+            render();
+            try {
+                const detail = await controller.readSkill(skillRequest(authority, { skillId }));
+                if (page !== 'skills' || skillState.selectedId !== skillId || skillState.key !== key) return;
+                skillState = { ...skillState, detail, detailLoading: false, detailError: '' };
+            } catch (error) {
+                if (page !== 'skills' || skillState.selectedId !== skillId) return;
+                skillState = { ...skillState, detail: null, detailLoading: false,
+                    detailError: error?.message || '无法读取 SKILL.md。' };
+            }
+            render();
+        };
         const render = () => {
             const authority = policyForScope({
                 scope, store, activeSession, selectedAgentProfile, settingsState, selectedSessionKey,
@@ -114,6 +165,7 @@ function createAgentToolSettingsModal({
             pageTabs.setAttribute('role', 'tablist');
             for (const option of [
                 { id: 'tools', label: '工具开关' },
+                { id: 'skills', label: '技能' },
                 { id: 'schema', label: '实际 Schema' },
             ]) {
                 const button = document.createElement('button');
@@ -127,6 +179,7 @@ function createAgentToolSettingsModal({
                     page = option.id;
                     render();
                     if (page === 'schema') void loadSchema();
+                    if (page === 'skills') void loadSkills();
                 });
                 pageTabs.append(button);
             }
@@ -167,19 +220,44 @@ function createAgentToolSettingsModal({
                 button.addEventListener('click', () => {
                     scope = option.id;
                     render();
+                    if (page === 'skills') void loadSkills();
                 });
                 scopeTabs.append(button);
             }
             const summary = node('p', 'agent-tool-modal-summary', authority.sessionId
                 ? '修改只影响当前会话，并从下一轮开始使用。'
                 : '作为这个 Agent 新建会话时的默认工具。');
-            const saveStatus = settingsState.status(authority.targetKey, ['toolPolicy']);
+            const settingField = page === 'skills' ? 'skillPolicy' : 'toolPolicy';
+            const saveStatus = settingsState.status(authority.targetKey, [settingField]);
             const status = node('span', `agent-tool-modal-save-status is-${saveStatus.state}`,
                 saveStatus.message || '修改后自动保存');
             status.setAttribute('role', 'status');
             status.setAttribute('aria-live', 'polite');
             const meta = node('div', 'agent-tool-modal-meta');
             meta.append(summary, status);
+            if (page === 'skills') {
+                shell.append(scopeTabs, meta, renderAgentSkillSettings({ node, document }, skillState,
+                    authority.skillPolicy, {
+                        setQuery(query) { skillState = { ...skillState, query }; render(); },
+                        refresh() { void loadSkills(true); },
+                        select(skillId) { void loadSkillDetail(skillId); },
+                        toggle(skillId, next) {
+                            const current = normalizeSkillPolicy(authority.skillPolicy);
+                            const available = (skillState.catalog?.skills || [])
+                                .filter((skill) => skill.enabledByCodex !== false).map((skill) => skill.id);
+                            const enabled = new Set(current.preset === 'all' ? available : current.enabledSkillIds);
+                            if (next) enabled.add(skillId); else enabled.delete(skillId);
+                            const skillPolicy = { schemaVersion: 1, preset: 'custom', enabledSkillIds: [...enabled] };
+                            settingsState.setDraft(authority.targetKey, 'skillPolicy', skillPolicy);
+                            render();
+                            void persistWorkbenchSettings({ skillPolicy }, authority.sessionId,
+                                authority.sessionId ? '已更新当前会话技能' : '已更新 Agent 默认技能')
+                                .finally(() => { if (activeModal === modal) render(); });
+                        },
+                    }));
+                content.replaceChildren(shell);
+                return;
+            }
             shell.append(scopeTabs, meta, renderAgentToolSettings({ node, catalog }, authority.policy, (toolPolicy) => {
                 settingsState.setDraft(authority.targetKey, 'toolPolicy', toolPolicy);
                 render();

@@ -13,7 +13,7 @@ const CLIENT_METHODS = Object.freeze({
         'agentRuntimeGetStatus', 'agentRuntimeSearchTopics', 'agentRuntimeSearchTopicMessages',
         'agentRuntimeGetTopicIndexStatus', 'agentRuntimeRebuildTopicIndex',
         'agentRuntimeGetWorkbenchSettings', 'agentRuntimeUpdateWorkbenchSettings',
-        'agentRuntimeListToolCatalog',
+        'agentRuntimeListToolCatalog', 'agentRuntimeListSkills', 'agentRuntimeReadSkill',
         'agentRuntimeListRecoveryOperations', 'agentRuntimeListRecoveryCandidates',
         'agentRuntimeResolveRecoveryOperation',
         'agentRuntimeSetWorkbenchPresence', 'onAgentRuntimeEvent',
@@ -28,8 +28,9 @@ const CLIENT_METHODS = Object.freeze({
         'agentRuntimeResolvePendingInput', 'agentRuntimeCancelTool',
     ]),
     workspace: Object.freeze([
-        'agentWorkspaceListDirectory', 'agentWorkspaceReadPreview', 'agentWorkspaceSearchFiles',
-        'agentWorkspaceStatPath', 'agentWorkspacePerformPathAction', 'agentWorkspaceCancel',
+        'agentWorkspaceSelectRoot', 'agentWorkspaceListDirectory', 'agentWorkspaceReadPreview', 'agentWorkspaceSearchFiles',
+        'agentWorkspaceStatPath', 'agentWorkspaceSaveText', 'agentWorkspacePerformPathAction', 'agentWorkspaceCancel',
+        'agentWorkspaceWatch', 'agentWorkspaceUnwatch', 'onAgentWorkspaceChanged',
     ]),
 });
 

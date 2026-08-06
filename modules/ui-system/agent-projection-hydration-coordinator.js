@@ -153,6 +153,7 @@ export function createAgentProjectionHydrationCoordinator({
             const snapshot = await requireApi('agentSessionRead')({ sessionId, ...(agentId ? { agentId } : {}) });
             const current = store.getState();
             if (version !== selectionVersion || current.selectedTopic?.sessionId !== sessionId) return null;
+            if (!canReconcileSession(sessionId, current)) return null;
             if (snapshotIsStale(sessionId, snapshot, current)) return null;
             applyHydratedSnapshot(sessionId, snapshot, runtimeHint || runtimeForSession(sessionId), agentId);
             return snapshot;

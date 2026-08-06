@@ -1,4 +1,9 @@
-const LAST_TOPIC_STORAGE_KEY = 'vcpchat.agentWorkbench.lastTopic.v1';
+import {
+    clearLegacyRememberedSession,
+    lastRememberedAgentSession,
+    loadLegacyRememberedSession,
+    rememberAgentSession,
+} from './agent-navigation-memory.js';
 
 const WORKBENCH_VIEW_STATE_LABELS = Object.freeze({
     disconnected: '未连接',
@@ -13,25 +18,16 @@ const WORKBENCH_VIEW_STATE_LABELS = Object.freeze({
 const runtimeApi = () => window.chatAPI || window.electronAPI || {};
 
 function loadRememberedTopic() {
-    try {
-        const value = window.localStorage?.getItem(LAST_TOPIC_STORAGE_KEY);
-        const parsed = value ? JSON.parse(value) : null;
-        const sessionId = String(parsed?.sessionId || '').trim();
-        return sessionId ? { sessionId } : null;
-    } catch {
-        return null;
-    }
+    const legacy = loadLegacyRememberedSession();
+    return legacy ? { ...legacy, legacy: true } : lastRememberedAgentSession();
 }
 
 function rememberTopic(session) {
-    if (!session?.sessionId) return;
-    try {
-        window.localStorage?.setItem(LAST_TOPIC_STORAGE_KEY, JSON.stringify({ sessionId: session.sessionId }));
-    } catch {}
+    return rememberAgentSession(session);
 }
 
 function clearRememberedTopic() {
-    try { window.localStorage?.removeItem(LAST_TOPIC_STORAGE_KEY); } catch {}
+    clearLegacyRememberedSession();
 }
 
 function proxyMainButton(id) {

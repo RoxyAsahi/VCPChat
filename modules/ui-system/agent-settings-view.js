@@ -144,6 +144,43 @@ export function renderAgentSettingsPane(context) {
         return wrap;
     };
 
+    const workspaceField = () => {
+        const wrap = node('label', 'agent-chat-setting-field');
+        wrap.append(node('span', 'agent-chat-setting-label', '工作目录（可留空）'));
+        const controlRow = node('div', 'agent-chat-workspace-control');
+        const control = document.createElement('input');
+        control.className = 'agent-chat-setting-input';
+        control.value = workspace || '';
+        control.placeholder = '留空使用 VCPChat 当前工作目录';
+        control.title = materialized ? 'Codex 0.146 会从下一 Turn 使用新的工作目录。' : '';
+        control.setAttribute('aria-label', '工作目录（可留空）');
+        const persist = (value) => {
+            if (!sessionId) state.workspace = value;
+            return persistWorkbenchSettings({ workspaceRoot: value }, sessionId,
+                sessionId ? '已自动保存当前 Session 工作目录' : '已自动保存 Agent 默认工作目录');
+        };
+        control.addEventListener('change', () => void persist(control.value.trim()));
+        const select = button('', 'agent-chat-workspace-select');
+        select.type = 'button';
+        select.title = '选择文件夹';
+        select.setAttribute('aria-label', '选择工作目录文件夹');
+        select.append(node('span', 'vcp-ui-icon', 'folder_open'));
+        select.addEventListener('click', () => run(async () => {
+            select.disabled = true;
+            try {
+                const result = await controller.workspaceSelectRoot({ currentPath: control.value.trim() });
+                if (result?.cancelled || !result?.workspaceRoot) return;
+                control.value = result.workspaceRoot;
+                await persist(result.workspaceRoot);
+            } finally {
+                select.disabled = false;
+            }
+        }));
+        controlRow.append(control, select);
+        wrap.append(controlRow);
+        return wrap;
+    };
+
     const settingsGroup = (label, children, summaryText = '', open = false, options = {}) => {
         const sectionKey = label === '基础信息' ? 'identity'
             : label === '系统提示词' || label === '提示词' ? 'prompt'
@@ -254,11 +291,7 @@ export function renderAgentSettingsPane(context) {
         modelStatus.setAttribute('role', 'status');
         const modelActions = node('div', 'agent-chat-model-actions');
         modelActions.append(refreshModelButton, modelStatus);
-        const modelFields = [field('工作目录（可留空）', workspace, (value) => {
-            if (!sessionId) state.workspace = value;
-            void persistWorkbenchSettings({ workspaceRoot: value }, sessionId,
-                sessionId ? '已自动保存当前 Session 工作目录' : '已自动保存 Agent 默认工作目录');
-        }, null, { title: materialized ? 'Codex 0.146 会从下一 Turn 使用新的工作目录。' : '' }),
+        const modelFields = [workspaceField(),
         modelControl, modelActions, field('本地工具审批', permissionMode, (value) => {
             const next = value === 'always-approve' ? 'always-approve' : 'ask';
             state.permissionMode = next;

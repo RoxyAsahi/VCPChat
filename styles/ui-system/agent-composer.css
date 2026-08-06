@@ -286,6 +286,15 @@
         box-shadow: none;
     }
 
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .chat-input-actions .agent-chat-send-button.interrupt-mode {
+        color: var(--vcp-ui-on-accent);
+        background: var(--vcp-ui-danger);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .chat-input-actions .agent-chat-send-button.interrupt-mode:hover:not(:disabled) {
+        background: color-mix(in srgb, var(--vcp-ui-danger) 86%, var(--vcp-ui-bg-0));
+    }
+
     html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .chat-input-actions .agent-chat-send-button .vcp-ui-icon {
         font-size: var(--vcp-ui-send-icon-size);
     }

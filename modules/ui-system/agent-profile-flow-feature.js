@@ -23,6 +23,12 @@ function createAgentProfileFlowFeature({
             updateDraft(patch) {
                 if (state.topicFlow?.kind === 'agent') Object.assign(state.topicFlow, patch);
             },
+            selectWorkspace(currentPath) {
+                return controller.workspaceSelectRoot({ currentPath });
+            },
+            reportError(error) {
+                notify(error?.message || '工作目录选择失败。', 'error');
+            },
             submit(request) {
                 run(async () => {
                     if (!state.topicFlow || state.topicFlow.kind !== 'agent' || state.topicFlow.saving) return;
@@ -33,10 +39,11 @@ function createAgentProfileFlowFeature({
                         if (!result?.success || !result.profile?.id) {
                             throw new Error(result?.error || 'Build Agent 创建失败。');
                         }
+                        controller.clearSelection?.();
                         state.selectedAgent = result.profile.id;
                         state.topicFlow = null;
                         await refreshControlPlane();
-                        state.tab = 'agents';
+                        state.tab = 'sessions';
                         notify(`已创建 Build Agent「${result.profile.name || result.profile.id}」。`, 'success');
                     } finally {
                         if (state.topicFlow?.kind === 'agent') {

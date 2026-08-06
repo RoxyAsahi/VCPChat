@@ -153,7 +153,7 @@ function restoredContext(snapshot) {
     const usage = projectionActivity.usage || {};
     const compaction = projectionActivity.compaction || {};
     const source = ['real', 'estimated', 'unknown'].includes(usage.source) ? usage.source : 'unknown';
-    const usedTokens = Number(usage.usedTokens ?? usage.totalTokens) || 0;
+    const usedTokens = Number(usage.contextTokens ?? usage.usedTokens ?? usage.totalTokens) || 0;
     const contextWindow = Number(usage.contextWindow) || 0;
     return {
         ...usage,
@@ -163,7 +163,7 @@ function restoredContext(snapshot) {
                 .some((key) => Number.isFinite(Number(usage[key]))),
         usedTokens,
         contextWindow,
-        percentage: contextWindow ? Math.min(100, Math.round((usedTokens / contextWindow) * 100)) : 0,
+        percentage: contextWindow ? Math.min(100, Math.round((usedTokens / contextWindow) * 100)) : null,
         compacting: compaction.state === 'started',
         compactionState: compaction.state || null,
         summary: compaction.summary || '',

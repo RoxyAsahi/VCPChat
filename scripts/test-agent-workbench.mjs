@@ -1,5 +1,22 @@
-import { assert, fs, path, pathToFileURL, readCssWithImports, waitFor, root, workbenchProjectionPatch, dom, resizeObservers, TestResizeObserver, revokedAvatarUrl, unsubscribeCalls, eventCallback, runtimeStatus, activeRuntimeSession, presenceCalls, startedTurns, importedAttachment, importedVideoAttachment, selectedAttachments, followUpTurns, steeringTurns, cancelledTurns, interactionQueue, replacedInteractionQueues, resolvedPendingInputs, createdSessions, createdTopics, renamedTopics, compactedSessions, approvalResponses, interactionResponses, openedExternalLinks, workspaceActions, savedWorkbenchSettings, sessionConfigRevisions, sessionConfigSnapshots, savedAvatars, savedAgentProfiles, runtimeTransitions, runtimeEnsures, exportedSessions, mainCreateProxyCalls, sharedCreateActionCalls, releaseAgentCatalog, buildAgentProfiles, agentCatalogGate, topicCatalog, secondaryTopicCatalog, archivedTopicCatalog, topicListRequests, topicSearchRequests, toolCatalogRequests, canonicalSessionProjection, runtimeEventNumber, emitDaemonEvent, fixtureProjectionRevisionBySession, emitProjectionBlock, setSelectedAttachments, setInteractionQueue, setRuntimeStatus, refreshModelCalls } from './fixtures/agent-workbench-harness.mjs';
+import { assert, fs, path, pathToFileURL, readCssWithImports, waitFor, root, workbenchProjectionPatch, dom, resizeObservers, TestResizeObserver, revokedAvatarUrl, unsubscribeCalls, eventCallback, runtimeStatus, activeRuntimeSession, presenceCalls, startedTurns, importedAttachment, importedVideoAttachment, selectedAttachments, followUpTurns, steeringTurns, cancelledTurns, interactionQueue, replacedInteractionQueues, resolvedPendingInputs, createdSessions, createdTopics, renamedTopics, compactedSessions, approvalResponses, interactionResponses, openedExternalLinks, workspaceActions, workspaceSaves, savedWorkbenchSettings, sessionConfigRevisions, sessionConfigSnapshots, savedAvatars, savedAgentProfiles, runtimeTransitions, runtimeEnsures, exportedSessions, mainCreateProxyCalls, sharedCreateActionCalls, releaseAgentCatalog, buildAgentProfiles, agentCatalogGate, topicCatalog, secondaryTopicCatalog, archivedTopicCatalog, topicListRequests, topicSearchRequests, toolCatalogRequests, canonicalSessionProjection, runtimeEventNumber, emitDaemonEvent, fixtureProjectionRevisionBySession, emitProjectionBlock, setSelectedAttachments, setInteractionQueue, setRuntimeStatus, refreshModelCalls } from './fixtures/agent-workbench-harness.mjs';
 import { createAgentWorkbenchState } from '../modules/ui-system/agent-workbench-state.js';
+import { deriveReplyTurnStart } from '../modules/ui-system/agent-session-view-context.js';
+
+assert.deepEqual(deriveReplyTurnStart({
+    stored: null,
+    runtime: { activity: 'running', activeTurnId: 'turn-derived-reply' },
+    sessionId: 'session-derived-reply',
+    startedAt: 123,
+}), {
+    sessionId: 'session-derived-reply', turnId: 'turn-derived-reply', phase: 'thinking',
+    seenRunning: true, startedAt: 123, createdAt: 123, derived: true,
+}, 'a running Session must derive its reply placeholder from Runtime authority after startup state settles');
+assert.equal(deriveReplyTurnStart({
+    stored: null,
+    runtime: { activity: 'awaiting-approval', activeTurnId: 'turn-awaiting-approval' },
+    sessionId: 'session-awaiting-approval',
+})?.turnId, 'turn-awaiting-approval',
+    'approval and tool sub-states must not erase the reply placeholder while Runtime still owns the Turn');
 
 // next-ui-apps overwrites the stub; capture registrations via its real registry.
 await import(`${pathToFileURL(path.join(root, 'modules/ui-system/agent-workbench.js')).href}?test=${Date.now()}`);
@@ -64,8 +81,9 @@ assert.ok(workbenchSidebar.classList.contains('agent-chat-sidebar-width-600'),
     'expanding the Workbench must restore the saved sidebar preference instead of persisting the temporary clamp');
 assert.equal(createdSessions.length, 0,
     'renderer reload must preview the saved Codex Session without acquiring a writable Session');
-assert.deepEqual(JSON.parse(window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1')), { sessionId: 'topic-restored' },
-    'localStorage must retain only the durable Topic pointer');
+assert.deepEqual(JSON.parse(window.localStorage.getItem('vcpchat.agentWorkbench.navigation.v2')), {
+    schemaVersion: 2, sessionsByAgent: { Nova: 'topic-restored' },
+}, 'localStorage must retain only the per-Agent durable Session pointer');
 assert.ok([...host.querySelectorAll('.message-item .md-content')]
     .some((node) => node.textContent.includes('restored answer')),
     'a restored Codex Session must render its saved history rather than an empty feed');
@@ -253,6 +271,8 @@ assert.ok(createdAgentProfile, 'Build Agent creation must persist through the is
 assert.equal(createdAgentProfile.systemPrompt, '{{Research}}');
 assert.equal(createdAgentProfile.workspaceRoot, `${root}\\research-profile`);
 assert.equal(createdAgentProfile.permissionMode, 'always-approve');
+ [...host.querySelectorAll('.agent-chat-sidebar .sidebar-tab-button')]
+    .find((tab) => tab.textContent.trim() === '助手').click();
 assert.ok([...host.querySelectorAll('.agent-chat-agent-row .agent-name')].some((item) => item.textContent === 'Research Agent'),
     'a successfully created Build Agent must appear in the Build Agent list');
 assert.equal(sharedCreateActionCalls, 0, 'Build Agent creation must not write to the main-chat Agent directory');
@@ -555,6 +575,13 @@ const pendingUserRow = [...host.querySelectorAll('.message-item.user')]
     .find((row) => row.textContent.includes('请介绍一下自己'));
 assert.match(pendingUserRow?.textContent || '', /发送中/,
     'the temporary local projection must disclose that durable confirmation is still pending');
+const ackPauseButton = host.querySelector('.agent-chat-send-button');
+assert.equal(ackPauseButton.querySelector('.vcp-ui-icon')?.textContent, 'pause',
+    'a start-turn ACK with an exact turnId must immediately expose Pause before turn.started arrives');
+assert.equal(ackPauseButton.disabled, false,
+    'the ACK-to-event gap must remain interruptible even while follow-up input stays locked');
+assert.equal(prompt.disabled, true,
+    'a start-turn ACK is interruptible but must not become authoritative steer/follow-up state');
 // A command ACK only confirms acceptance.  The Workbench must not infer a
 // running Turn from it; only Codex's authoritative event may establish
 // the live turn used by steering and follow-up controls.
@@ -564,6 +591,9 @@ emitDaemonEvent({
     type: 'turn.started', payload: { prompt: '请介绍一下自己' },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
+assert.ok(host.querySelector('.agent-chat-turn-starting'),
+    'an authoritative running Turn must retain the reply placeholder before assistant output arrives');
+assert.match(host.querySelector('.agent-chat-turn-starting')?.textContent || '', /回复中/);
 assert.ok([...host.querySelectorAll('.message-item.user .md-content')]
     .some((node) => node.textContent.includes('请介绍一下自己')),
     'Codex turn.started must render the submitted user message immediately');
@@ -603,16 +633,19 @@ host.querySelector('.agent-chat-status-chip')?.click();
 await new Promise((resolve) => setTimeout(resolve, 0));
 assert.deepEqual(cancelledTurns, [],
     'the header status chip must remain read-only and must never cancel the active Turn');
-assert.equal(activeSendButton.querySelector('.vcp-ui-icon')?.textContent, 'arrow_upward',
-    'the running composer send action must remain available for explicit steer and follow-up input');
-assert.equal(activeSendButton.disabled, true,
-    'an empty running composer must not implicitly cancel the Turn');
+assert.equal(activeSendButton.querySelector('.vcp-ui-icon')?.textContent, 'pause',
+    'an empty running composer must expose the same explicit pause action as Cherry and the main chat');
+assert.equal(activeSendButton.disabled, false,
+    'the running pause action must remain available while the selected Session owns an active Turn');
+assert.ok(activeSendButton.classList.contains('interrupt-mode'));
     const runningModes = host.querySelector('.agent-chat-composer-modes');
     assert.equal(runningModes.hidden, true,
         'an active Turn with an empty composer must not expose steer and follow-up modes');
     assert.ok([...runningModes.querySelectorAll('button')].some((button) => button.textContent === '立即调整'));
     prompt.value = '完成后再列出风险';
     prompt.dispatchEvent(new window.Event('input', { bubbles: true }));
+    assert.equal(activeSendButton.querySelector('.vcp-ui-icon')?.textContent, 'arrow_upward',
+        'typing a running-Turn instruction must switch the pause action back to follow-up send');
     assert.equal(runningModes.hidden, false,
         'steer and follow-up modes become relevant only after the user enters another instruction');
 host.querySelector('.agent-chat-send-button').click();
@@ -641,6 +674,12 @@ assert.equal(steeringTurns[0].turnId, 'turn_test');
 assert.equal(steeringTurns[0].prompt, '先检查风险');
 assert.match(String(steeringTurns[0].submissionId || ''), /.+/,
     'steering submission must carry a stable submissionId');
+assert.equal(activeSendButton.querySelector('.vcp-ui-icon')?.textContent, 'pause',
+    'clearing an accepted running-Turn instruction must restore the pause action');
+activeSendButton.click();
+await new Promise((resolve) => setTimeout(resolve, 0));
+assert.deepEqual(cancelledTurns, [{ sessionId: 'topic-in-use', turnId: 'turn_test' }],
+    'Pause must cancel exactly the Turn owned by the selected Session');
 await new Promise((resolve) => setTimeout(resolve, 30));
 const queueToggle = host.querySelector('.agent-chat-queue-toggle');
 assert.ok(queueToggle, 'the header must expose the persisted interaction queue');
@@ -673,8 +712,9 @@ assert.deepEqual(resolvedPendingInputs, [{
 emitDaemonEvent({
     sessionId: 'topic-in-use', turnId: 'turn_test', sequence: 4,
     type: 'context.usage',
-    payload: { source: 'real', inputTokens: 12, outputTokens: 8, cacheWriteTokens: 2,
-        totalTokens: 20, usedTokens: 20, contextWindow: 100, requests: 1 },
+    payload: { source: 'real', provenance: 'codex-thread', inputTokens: 12, outputTokens: 8,
+        reasoningTokens: 3, cacheReadTokens: 2, cacheWriteTokens: 2, totalTokens: 20,
+        contextTokens: 20, usedTokens: 20, contextWindow: 100, sessionTotalTokens: 120, requests: 1 },
 });
 await new Promise((resolve) => setTimeout(resolve, 30));
 const usageToggle = host.querySelector('.agent-chat-usage-toggle');
@@ -696,8 +736,8 @@ assert.equal(host.querySelector('.agent-chat-activity-tab[data-tab="plan"]'), nu
     'the toolbox-only product must hide Plan until Codex collaboration mode is explicitly supported');
 assert.equal(host.querySelector('.agent-chat-activity-tab[data-tab="connection"]'), null,
     'internal runtime diagnostics must not occupy a product-facing tab');
-assert.match(host.querySelector('.agent-chat-activity-usage').textContent, /Tokens/,
-    'usage panel must present the runtime-projected aggregate rather than a fake cost');
+assert.match(host.querySelector('.agent-chat-activity-usage').textContent, /当前上下文/,
+    'usage panel must distinguish current context from cumulative consumption');
 assert.match(host.querySelector('.agent-chat-activity-usage').textContent, /20/,
     'usage panel must display total tokens from the runtime event');
 assert.equal(host.querySelector('.agent-chat-usage-budget'), null,
@@ -744,8 +784,20 @@ assert.ok(host.querySelector('.agent-workspace-tree-row[data-workspace-path="src
     'expanding a directory must load its children without rebuilding the Workbench shell');
 host.querySelector('.agent-workspace-tree-row[data-workspace-path="README.md"]').click();
 await new Promise((resolve) => setTimeout(resolve, 30));
-assert.match(host.querySelector('.agent-workspace-preview-text')?.textContent || '', /preview/,
-    'selecting a file must show the bounded Main-provided preview');
+assert.match(host.querySelector('.agent-workspace-preview-rendered')?.textContent || '', /preview/,
+    'selecting a Markdown file must use the rendered preview plugin');
+host.querySelector('.agent-workspace-preview-mode[aria-pressed="false"]:last-child')?.click();
+await new Promise((resolve) => setTimeout(resolve, 0));
+const workspaceEditor = host.querySelector('.agent-workspace-editor-input');
+assert.ok(workspaceEditor, 'editable workspace text must expose the explicit editor mode');
+workspaceEditor.value = '# edited';
+workspaceEditor.dispatchEvent(new window.Event('input', { bubbles: true }));
+const workspaceSave = host.querySelector('.agent-workspace-path-action[aria-label="保存文件"]');
+assert.equal(workspaceSave?.disabled, false, 'editing must enable the explicit save action');
+workspaceSave.click();
+await new Promise((resolve) => setTimeout(resolve, 30));
+assert.equal(workspaceSaves.at(-1)?.expectedContentRevision, 'content-r1');
+assert.equal(workspaceSaves.at(-1)?.content, '# edited');
 host.querySelector('.agent-workspace-tree-row[data-workspace-path="README.md"]')
     .dispatchEvent(new dom.window.MouseEvent('dblclick', { bubbles: true }));
 await new Promise((resolve) => setTimeout(resolve, 30));
@@ -978,15 +1030,26 @@ emitDaemonEvent({
         capability: { state: 'unknown', detail: '等待 VCPLog 节点事件' },
     },
 });
-// Earlier lifecycle coverage deliberately reloads the authoritative empty Snapshot.
-// Keep the synthetic patch source on the same revision before resuming live deltas.
+// Snapshot hydration and the earlier empty reasoning Patch may settle in
+// either order. Exercise the revision-0 path first, then advance once if the
+// Store already owns revision 1; never rely on a guessed fixture revision.
 fixtureProjectionRevisionBySession.set('topic-in-use', 0);
 emitProjectionBlock({
     turnId: 'turn_live', messageId: 'msg_live', itemId: 'assistant-live-item', kind: 'message',
     sourceOrder: 20, status: 'inProgress', content: { text: 'live Codex delta' },
 });
-await waitFor(() => [...host.querySelectorAll('.message-item .md-content')]
-    .some((node) => node.textContent.includes('live Codex delta')), 1_000);
+let liveDeltaRendered = await waitFor(() => [...host.querySelectorAll('.message-item .md-content')]
+    .some((node) => node.textContent.includes('live Codex delta')), 250);
+if (!liveDeltaRendered) {
+    fixtureProjectionRevisionBySession.set('topic-in-use', 1);
+    emitProjectionBlock({
+        turnId: 'turn_live', messageId: 'msg_live', itemId: 'assistant-live-item', kind: 'message',
+        sourceOrder: 20, status: 'inProgress', content: { text: 'live Codex delta' },
+    });
+    liveDeltaRendered = await waitFor(() => [...host.querySelectorAll('.message-item .md-content')]
+        .some((node) => node.textContent.includes('live Codex delta')), 1_000);
+}
+assert.equal(liveDeltaRendered, true, 'a revision gap must recover through the authoritative Snapshot path');
 assert.equal(host.querySelector('.agent-wb-runtime-dock'), null, 'Runtime lifecycle controls must stay out of the Agent UI');
 assert.ok([...host.querySelectorAll('.message-item .md-content')].some((node) => node.textContent.includes('live Codex delta')), 'Runtime delta must render in the migrated chat shell');
 assert.equal(host.querySelector('.agent-chat-status-chip')?.dataset.action, undefined,
@@ -1388,9 +1451,10 @@ window.VCPUI.create = (name, options = {}) => {
 const toolSettingsButton = host.querySelector('.agent-chat-composer-tools');
 assert.ok(toolSettingsButton, 'Agent tools must be opened from the composer toolbar');
 assert.equal(toolSettingsButton.disabled, false, 'the tool picker must remain available for the selected Session');
-const selectedToolSettingsSessionId = JSON.parse(
-    window.localStorage.getItem('vcpchat.agentWorkbench.lastTopic.v1') || 'null',
-)?.sessionId;
+const selectedToolSettingsMemory = JSON.parse(
+    window.localStorage.getItem('vcpchat.agentWorkbench.navigation.v2') || 'null',
+);
+const selectedToolSettingsSessionId = Object.values(selectedToolSettingsMemory?.sessionsByAgent || {})[0];
 assert.ok(selectedToolSettingsSessionId, 'the tool picker Session scope requires an explicitly selected Session');
 toolSettingsButton.click();
 const toolDialog = await waitFor(() => host.querySelector('.agent-tool-settings-dialog'), 3_000);
@@ -1402,7 +1466,7 @@ assert.equal(host.querySelector('.agent-chat-settings-pane .agent-tool-settings'
 assert.deepEqual([...host.querySelectorAll('.agent-tool-modal-scope')].map((button) => button.textContent.trim()),
     ['Agent 默认', '当前会话'], 'the tool dialog must expose explicit Profile and Session ownership');
 assert.deepEqual([...host.querySelectorAll('.agent-tool-modal-page')].map((button) => button.textContent.trim()),
-    ['工具开关', '实际 Schema'], 'the tool dialog must expose the effective model schema page');
+    ['工具开关', '技能', '实际 Schema'], 'the tool dialog must expose Skills and the effective model schema page');
 assert.deepEqual([...host.querySelectorAll('.agent-tool-preset')].map((button) => button.textContent.trim()),
     ['全部开启', '只读', '自定义'], 'the tool dialog must expose the three direct presets');
 const readonlyPreset = [...host.querySelectorAll('.agent-tool-preset')]
@@ -1437,6 +1501,18 @@ await waitFor(() => savedWorkbenchSettings.some((payload) => payload.sessionId =
     && payload.toolPolicy?.preset === 'readonly'), 3_000);
 assert.match(host.querySelector('.agent-tool-modal-save-status')?.textContent || '', /保存|更新/,
     'the tool dialog must expose autosave feedback');
+[...host.querySelectorAll('.agent-tool-modal-page')]
+    .find((button) => button.textContent.trim() === '技能').click();
+await waitFor(() => host.querySelector('.agent-skill-row'), 1_000);
+assert.match(host.querySelector('.agent-skill-row')?.textContent || '', /Document Review/,
+    'the Skills page must list Codex-discovered skills for the current workspace');
+host.querySelector('.agent-skill-row')?.click();
+await waitFor(() => host.querySelector('.agent-skill-preview'), 1_000);
+assert.match(host.querySelector('.agent-skill-preview')?.textContent || '', /Document Review/,
+    'selecting a Skill must show the bounded Main-owned SKILL.md preview');
+host.querySelector('.agent-skill-row .agent-tool-switch')?.click();
+await waitFor(() => savedWorkbenchSettings.some((payload) => payload.sessionId === selectedToolSettingsSessionId
+    && payload.skillPolicy?.preset === 'custom'), 3_000);
 [...host.querySelectorAll('.agent-tool-modal-page')]
     .find((button) => button.textContent.trim() === '实际 Schema').click();
 await waitFor(() => host.querySelector('.agent-tool-schema-card'), 1_000);

@@ -1,5 +1,6 @@
 import { createWorkspacePathRef } from './agent-workspace-model.js';
 import { button, iconButton, node } from './agent-workbench-dom.js';
+import { getWorkspacePreviewModes, renderWorkspacePreviewContent } from './agent-workspace-preview-registry.js';
 
 function createAgentWorkspaceView({ document = globalThis.document, actions = {} }) {
     const element = node('section', 'agent-workspace-browser', undefined, document);
@@ -60,25 +61,49 @@ function createAgentWorkspaceView({ document = globalThis.document, actions = {}
             node('span', 'agent-workspace-preview-path', preview.relativePath, document),
         );
         const headerActions = pathActions(ref);
+        let saveControl = null;
+        const modes = getWorkspacePreviewModes(preview);
+        if (modes.length > 1) {
+            const modeControl = node('div', 'agent-workspace-preview-modes', undefined, document);
+            modeControl.setAttribute('role', 'group');
+            modeControl.setAttribute('aria-label', '文件显示模式');
+            for (const [mode, label] of [['preview', '预览'], ['source', '源码'], ['edit', '编辑']]) {
+                if (!modes.includes(mode)) continue;
+                const modeButton = button(label, 'agent-workspace-preview-mode', document);
+                modeButton.classList.toggle('is-active', browser.previewMode === mode);
+                modeButton.setAttribute('aria-pressed', String(browser.previewMode === mode));
+                modeButton.addEventListener('click', () => actions.setPreviewMode?.(mode));
+                modeControl.append(modeButton);
+            }
+            headerActions.prepend(modeControl);
+        }
+        if (browser.previewMode === 'edit') {
+            saveControl = iconButton('save', browser.editSaving ? '正在保存' : '保存文件', 'agent-workspace-path-action', document);
+            saveControl.disabled = browser.editSaving || !browser.editDirty;
+            saveControl.addEventListener('click', () => actions.run?.(() => actions.saveText?.(ref)));
+            headerActions.prepend(saveControl);
+        }
+        if (browser.editError) {
+            const reload = iconButton('refresh', '放弃草稿并重新加载', 'agent-workspace-path-action', document);
+            reload.addEventListener('click', () => {
+                const confirmed = !browser.editDirty || document.defaultView?.confirm?.('放弃未保存的修改并重新加载文件？');
+                if (confirmed) actions.run?.(() => actions.openPreview?.(ref));
+            });
+            headerActions.prepend(reload);
+        }
         const pin = iconButton('keep', '固定到顶部标签栏', 'agent-workspace-path-action', document);
         pin.addEventListener('click', () => actions.run?.(() => actions.openFileTab?.(ref)));
         headerActions.prepend(pin);
         header.append(identity, headerActions);
         host.append(header);
-        if (preview.kind === 'text') {
-            host.append(node('pre', 'agent-workspace-preview-text', preview.content || '', document));
-            if (preview.truncated) {
-                host.append(node('div', 'agent-workspace-preview-note', `已截断 · ${preview.byteLen} bytes`, document));
-            }
-        } else if (preview.kind === 'image' && preview.dataUrl) {
-            const image = document.createElement('img');
-            image.className = 'agent-workspace-preview-image';
-            image.src = preview.dataUrl;
-            image.alt = preview.displayName;
-            host.append(image);
-        } else {
-            actions.onBinaryPreview?.();
-            host.append(node('div', 'agent-workspace-preview-note', `${preview.kind} · ${preview.mimeType || '未知类型'} · ${preview.byteLen} bytes`, document));
+        if (browser.editError) host.append(node('div', 'agent-workspace-error', browser.editError, document));
+        host.append(renderWorkspacePreviewContent({ preview, browser, actions: {
+            ...actions,
+            saveText: () => actions.saveText?.(ref),
+            syncDirty: (dirty) => { if (saveControl) saveControl.disabled = browser.editSaving || !dirty; },
+        }, document }));
+        if (preview.truncated) {
+            host.append(node('div', 'agent-workspace-preview-note', `已截断 · ${preview.byteLen} bytes`, document));
         }
         return host;
     }

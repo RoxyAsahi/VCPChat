@@ -80,10 +80,10 @@ function createAgentWorkbenchComposerView({ refs, document = globalThis.document
         sendButton.title = model.sendTitle || '发送消息';
         sendButton.setAttribute('aria-label', model.sendLabel || model.sendTitle || '发送消息');
         const sendIcon = sendButton.querySelector('.vcp-ui-icon');
-        if (sendIcon) sendIcon.textContent = 'arrow_upward';
+        if (sendIcon) sendIcon.textContent = model.sendIcon || 'arrow_upward';
         input.placeholder = model.placeholder || '输入消息…（Shift + Enter 换行）';
         inputCard.classList.toggle('is-busy', Boolean(model.busy));
-        sendButton.classList.remove('interrupt-mode');
+        sendButton.classList.toggle('interrupt-mode', Boolean(model.interruptMode));
         sendButton.classList.toggle('is-ready', Boolean(model.ready));
         runningModes.hidden = !model.showActiveModes;
         steerModeButton.classList.toggle('is-active', model.inputMode === 'steer');

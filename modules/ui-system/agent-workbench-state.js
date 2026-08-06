@@ -45,6 +45,8 @@ function createWorkspaceViewState() {
         inflight: new Map(), inflightRequestIds: new Map(), previewRequestId: '', searchRequestId: '',
         error: '', preview: null, previewLoading: false, search: '', searchResults: [],
         searchLoading: false, selectedPath: '', splitPercent: 46,
+        previewMode: 'preview', editDraft: '', editBaseRevision: '', editDirty: false,
+        editSaving: false, editError: '', sessionStates: new Map(), pendingExpanded: [],
     };
 }
 

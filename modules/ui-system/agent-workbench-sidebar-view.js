@@ -10,6 +10,14 @@ function normalized(value) {
     return String(value || '').trim().toLocaleLowerCase();
 }
 
+function activateOnKeyboard(element, action) {
+    element.addEventListener('keydown', (event) => {
+        if (!['Enter', ' '].includes(event.key)) return;
+        event.preventDefault();
+        action(event);
+    });
+}
+
 export function createAgentWorkbenchSidebarView({
     element,
     accountView,
@@ -85,20 +93,22 @@ export function createAgentWorkbenchSidebarView({
         const activity = session.activity || 'idle';
         const row = node('li', `topic-item agent-chat-session-row${active ? ' active active-topic-glowing' : ''}${['starting', 'running'].includes(activity) ? ' is-running' : ''}${activity === 'awaiting-approval' ? ' is-awaiting-approval' : ''}`);
         row.tabIndex = 0;
-        row.dataset.itemId = session.agentId || model.selectedAgent || 'Nova';
+        row.setAttribute('role', 'button');
+        row.dataset.itemId = session.agentId;
         row.dataset.itemType = 'agent-runtime';
         row.dataset.sessionId = session.sessionId;
         row.dataset.topicInUse = 'false';
         row.dataset.runtimeActivity = activity;
         row.dataset.topicSearch = `${session.title} ${session.model}`.toLocaleLowerCase();
-        const avatar = actions.createSessionAvatar(session.sessionId, session.agentId || model.selectedAgent,
-            `${model.selectedAgent || 'Nova'} - ${session.title}`, activity);
+        const avatar = actions.createSessionAvatar(session.sessionId, session.agentId,
+            `${session.agentId} - ${session.title}`, activity);
         const title = node('span', 'topic-title-display', session.title);
         const count = node('span', 'message-count', active
             ? String(model.selectedMessageCount)
             : activity === 'awaiting-approval' ? '!' : '');
         row.append(avatar, title, count);
         row.addEventListener('click', () => actions.hydrateSession(session));
+        activateOnKeyboard(row, () => actions.hydrateSession(session));
         if (!model.topicManaging && session.sessionId) {
             actions.appendSessionActions(row, {
                 id: session.sessionId,
@@ -117,12 +127,13 @@ export function createAgentWorkbenchSidebarView({
         const active = topic.id === model.selectedSessionId;
         const row = node('li', `topic-item agent-chat-session-row agent-chat-persisted-topic${selected ? ' selected' : ''}${active ? ' active active-topic-glowing' : ''}`);
         row.tabIndex = 0;
-        row.dataset.itemId = topic.agentId || model.selectedAgent || 'Nova';
+        row.setAttribute('role', 'button');
+        row.dataset.itemId = topic.agentId;
         row.dataset.itemType = 'agent-topic';
         row.dataset.sessionId = topic.id;
         row.dataset.topicSearch = `${topic.title || topic.id} ${topic.model || ''}`.toLocaleLowerCase();
-        const avatar = actions.createSessionAvatar(topic.id, topic.agentId || model.selectedAgent,
-            `${topic.agentId || 'Nova'} - ${topic.title || topic.id}`);
+        const avatar = actions.createSessionAvatar(topic.id, topic.agentId,
+            `${topic.agentId} - ${topic.title || topic.id}`);
         const title = node('span', 'topic-title-display', topic.title || topic.id);
         const status = topic.searchHit ? node('span', 'message-count', '匹配') : null;
         if (topic.searchHit?.snippet) row.title = topic.searchHit.snippet;
@@ -134,6 +145,10 @@ export function createAgentWorkbenchSidebarView({
         row.setAttribute('aria-selected', String(selected));
         row.addEventListener('click', (event) => {
             if (event.target.closest('.agent-chat-session-menu')) return;
+            if (model.topicManaging) actions.toggleTopicSelection(topic.id);
+            else actions.previewSession(topic);
+        });
+        activateOnKeyboard(row, (event) => {
             if (model.topicManaging) actions.toggleTopicSelection(topic.id);
             else actions.previewSession(topic);
         });
@@ -242,7 +257,7 @@ export function createAgentWorkbenchSidebarView({
             ? model.topicSearchResults.map((hit) => ({
                 id: hit.sessionId,
                 title: hit.title || hit.sessionId,
-                agentId: hit.agentId || model.selectedAgent,
+                agentId: hit.agentId,
                 inUse: hit.inUse === true,
                 readOnly: hit.readOnly === true,
                 model: hit.model || '',
@@ -335,6 +350,7 @@ export function createAgentWorkbenchSidebarView({
             const agentId = agent.id || agent.name;
             const row = node('li', `agent-chat-agent-row${normalized(agentId) === normalized(model.selectedAgent) ? ' active' : ''}${agent.configurationRequired ? ' configuration-required' : ''}`);
             row.tabIndex = 0;
+            row.setAttribute('role', 'button');
             row.dataset.agentSearch = `${agent.name || ''} ${agentId || ''} ${agent.historicalLabel || ''}`.toLocaleLowerCase();
             const avatar = document.createElement('img');
             avatar.className = 'avatar';
@@ -355,6 +371,7 @@ export function createAgentWorkbenchSidebarView({
                 row.append(warning);
             }
             row.addEventListener('click', () => actions.selectAgent(agentId));
+            activateOnKeyboard(row, () => actions.selectAgent(agentId));
             list.append(row);
         }
         if (!model.agentCatalog.length) list.append(node('li', 'agent-chat-empty-list', '正在读取 Agent 目录…'));

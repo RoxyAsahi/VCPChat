@@ -16,7 +16,7 @@ function createBuildEmptyState(document) {
     const content = node('div', 'next-ui-empty-state-content agent-chat-build-empty-content', undefined, document);
     const brand = node('div', 'next-ui-empty-brand', undefined, document);
     brand.setAttribute('role', 'img');
-    brand.setAttribute('aria-label', 'VCPBuild');
+    brand.setAttribute('aria-label', 'VCPBUILD');
     const svg = svgNode(document, 'svg', {
         class: 'next-ui-empty-brand-svg', viewBox: '0 0 900 190', 'aria-hidden': 'true',
     });
@@ -107,7 +107,7 @@ export function createAgentWorkbenchTimelineView({ refs, rows, callbacks, action
                 const terminal = ['failed', 'interrupted', 'empty'].includes(pending.phase);
                 const labels = {
                     starting: '正在启动 Agent…',
-                    thinking: '思考中',
+                    thinking: '回复中…',
                     failed: pending.detail || '任务执行失败。',
                     interrupted: pending.detail || '任务已停止。',
                     empty: pending.detail || '任务已结束，但没有返回可显示内容。',

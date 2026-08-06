@@ -90,6 +90,7 @@ const approvalResponses = [];
 const interactionResponses = [];
 const openedExternalLinks = [];
 const workspaceActions = [];
+const workspaceSaves = [];
 const savedWorkbenchSettings = [];
 const sessionConfigRevisions = new Map([['topic-archived', 1]]);
 const sessionConfigSnapshots = new Map([['topic-archived', {
@@ -185,6 +186,17 @@ window.chatAPI = {
         return { success: true, avatarUrl: `file:///${agentId}-updated.png` };
     },
     agentRuntimeListToolCatalog: async () => { toolCatalogRequests += 1; return toolCatalog; },
+    agentRuntimeListSkills: async () => ({
+        cwdLabel: 'workspace', errors: [], skills: [{
+            id: 'skill-document-review', name: 'document-review', displayName: 'Document Review',
+            description: 'Review documents', shortDescription: 'Review a document', scope: 'user',
+            sourceLabel: '用户技能', enabledByCodex: true, enabled: true, dependencies: null,
+        }],
+    }),
+    agentRuntimeReadSkill: async ({ skillId }) => ({
+        id: skillId, name: 'document-review', displayName: 'Document Review',
+        description: 'Review documents', sourceLabel: '用户技能', content: '# Document Review', truncated: false,
+    }),
     agentRuntimeReadSessionDiagnostics: async ({ sessionId }) => ({
         schemaVersion: 1,
         sessionId,
@@ -242,13 +254,27 @@ window.chatAPI = {
     }),
     agentWorkspaceReadPreview: async ({ sessionId, workspaceRevision, relativePath }) => ({
         sessionId, workspaceRevision, relativePath, displayName: path.basename(relativePath),
-        kind: 'text', content: '# preview', byteLen: 9, lineCount: 1, truncated: false,
+        kind: relativePath.endsWith('.md') ? 'markdown' : 'text', content: '# preview',
+        contentRevision: 'content-r1', editable: true, byteLen: 9, lineCount: 1, truncated: false,
     }),
     agentWorkspaceSearchFiles: async ({ sessionId, workspaceRevision, query }) => ({
         sessionId, workspaceRevision: workspaceRevision || 'workspace-revision-test', query,
         entries: [{ name: 'README.md', kind: 'file', relativePath: 'README.md' }], truncated: false,
     }),
     agentWorkspaceStatPath: async ({ sessionId, workspaceRevision, relativePath }) => ({ sessionId, workspaceRevision, relativePath, kind: 'file' }),
+    agentWorkspaceSaveText: async (payload) => {
+        workspaceSaves.push(payload);
+        return {
+            sessionId: payload.sessionId, workspaceRevision: payload.workspaceRevision,
+            relativePath: payload.relativePath, displayName: path.basename(payload.relativePath),
+            kind: payload.relativePath.endsWith('.md') ? 'markdown' : 'text', content: payload.content,
+            contentRevision: 'content-r2', editable: true, byteLen: payload.content.length,
+            lineCount: payload.content.split(/\r?\n/).length, truncated: false,
+        };
+    },
+    agentWorkspaceWatch: async ({ sessionId }) => ({ watchId: 'watch-test', sessionId, workspaceRevision: 'workspace-revision-test' }),
+    agentWorkspaceUnwatch: async ({ watchId }) => ({ stopped: true, watchId }),
+    onAgentWorkspaceChanged: () => () => {},
     agentWorkspacePerformPathAction: async (payload) => { workspaceActions.push(payload); return { ok: true, ...payload }; },
     agentRuntimeStart: async () => { runtimeStatus = 'ready'; runtimeTransitions.push('start'); return { state: 'ready' }; },
     agentRuntimeStop: async () => { runtimeStatus = 'stopped'; runtimeTransitions.push('stop'); return { state: 'stopped' }; },
@@ -575,4 +601,4 @@ function setSelectedAttachments(value) { selectedAttachments = value; }
 function setInteractionQueue(value) { interactionQueue = value; }
 function setRuntimeStatus(value) { runtimeStatus = value; }
 
-export { assert, fs, path, pathToFileURL, readCssWithImports, waitFor, root, workbenchProjectionPatch, dom, resizeObservers, TestResizeObserver, revokedAvatarUrl, unsubscribeCalls, eventCallback, runtimeStatus, activeRuntimeSession, presenceCalls, startedTurns, importedAttachment, importedVideoAttachment, selectedAttachments, followUpTurns, steeringTurns, cancelledTurns, interactionQueue, replacedInteractionQueues, resolvedPendingInputs, createdSessions, createdTopics, renamedTopics, compactedSessions, approvalResponses, interactionResponses, openedExternalLinks, workspaceActions, savedWorkbenchSettings, sessionConfigRevisions, sessionConfigSnapshots, savedAvatars, savedAgentProfiles, runtimeTransitions, runtimeEnsures, exportedSessions, mainCreateProxyCalls, sharedCreateActionCalls, releaseAgentCatalog, buildAgentProfiles, agentCatalogGate, topicCatalog, secondaryTopicCatalog, archivedTopicCatalog, topicListRequests, topicSearchRequests, toolCatalogRequests, canonicalSessionProjection, runtimeEventNumber, emitDaemonEvent, fixtureProjectionRevisionBySession, emitProjectionBlock, setSelectedAttachments, setInteractionQueue, setRuntimeStatus, modelUpdateCallback, modelUnsubscribeCalls, refreshModelCalls };
+export { assert, fs, path, pathToFileURL, readCssWithImports, waitFor, root, workbenchProjectionPatch, dom, resizeObservers, TestResizeObserver, revokedAvatarUrl, unsubscribeCalls, eventCallback, runtimeStatus, activeRuntimeSession, presenceCalls, startedTurns, importedAttachment, importedVideoAttachment, selectedAttachments, followUpTurns, steeringTurns, cancelledTurns, interactionQueue, replacedInteractionQueues, resolvedPendingInputs, createdSessions, createdTopics, renamedTopics, compactedSessions, approvalResponses, interactionResponses, openedExternalLinks, workspaceActions, workspaceSaves, savedWorkbenchSettings, sessionConfigRevisions, sessionConfigSnapshots, savedAvatars, savedAgentProfiles, runtimeTransitions, runtimeEnsures, exportedSessions, mainCreateProxyCalls, sharedCreateActionCalls, releaseAgentCatalog, buildAgentProfiles, agentCatalogGate, topicCatalog, secondaryTopicCatalog, archivedTopicCatalog, topicListRequests, topicSearchRequests, toolCatalogRequests, canonicalSessionProjection, runtimeEventNumber, emitDaemonEvent, fixtureProjectionRevisionBySession, emitProjectionBlock, setSelectedAttachments, setInteractionQueue, setRuntimeStatus, modelUpdateCallback, modelUnsubscribeCalls, refreshModelCalls };

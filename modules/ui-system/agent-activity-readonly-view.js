@@ -59,10 +59,18 @@ function appendUsageDetails(wrap, { usage, messages, current, prompt, instructio
         item.append(node('span', 'agent-chat-usage-label', label, document), node('span', 'agent-chat-usage-value', hasUsage && value != null ? format(value) : '—', document));
         stats.append(item);
     }
+    if (hasUsage && usage.sessionTotalTokens != null) {
+        const item = node('li', '', undefined, document);
+        item.append(node('span', 'agent-chat-usage-label', '会话累计', document),
+            node('span', 'agent-chat-usage-value', format(usage.sessionTotalTokens), document));
+        stats.append(item);
+    }
     wrap.append(stats);
-    const sourceLabel = usage.source === 'real' ? '模型实际返回' : usage.source === 'estimated' ? '估算（ToolBox 未返回真实 usage）' : '未知（未报告 usage）';
+    const sourceLabel = usage.provenance === 'codex-thread' ? 'Codex Thread 权威报告'
+        : usage.source === 'real' ? '模型实际返回'
+            : usage.source === 'estimated' ? '估算（ToolBox 未返回真实 usage）' : '未知（未报告 usage）';
     const identityLabel = [usage.model, usage.provider].filter(Boolean).join(' · ');
-    wrap.append(node('p', 'agent-chat-usage-note', `${sourceLabel}${identityLabel ? `；${identityLabel}` : ''}。此处是最近一次可靠报告，不伪装为 Session 累计费用。`, document));
+    wrap.append(node('p', 'agent-chat-usage-note', `${sourceLabel}${identityLabel ? `；${identityLabel}` : ''}。上下文水位使用最近一轮真实上下文锚点，会话累计单独展示。`, document));
     if (usage.inputTokens && messages.length) wrap.append(buildUsageBreakdown({ usage, messages, current, prompt, document }));
     if (instructionMode === 'codex-managed' || prompt) wrap.append(buildUsagePrompt({ instructionMode, prompt, snapshot, document }));
     if (current.plan?.text) wrap.append(buildPlan(current));
@@ -196,11 +204,11 @@ function createAgentActivityReadonlyView({ document = globalThis.document, actio
         const instructionMode = snapshot.instructionMode === 'codex-managed' ? 'codex-managed' : 'vchat-identity';
         const prompt = instructionMode === 'vchat-identity' ? snapshot.baseInstructions || '' : '';
         const timestamps = messages.map((message) => Number(message.createdAt || message.timestamp)).filter(Number.isFinite);
-        const total = hasUsage ? (usage.totalTokens ?? usage.usedTokens) : null;
+        const total = hasUsage ? (usage.contextTokens ?? usage.usedTokens ?? usage.totalTokens) : null;
         const summary = node('div', 'agent-chat-usage-summary', undefined, document);
         const totalChip = node('div', 'agent-chat-usage-metric', undefined, document);
         totalChip.append(
-            node('span', 'agent-chat-usage-label', 'Tokens', document),
+            node('span', 'agent-chat-usage-label', '当前上下文', document),
             node('span', 'agent-chat-usage-value', total != null ? format(total) : placeholder, document),
         );
         if (usage.contextWindow && usage.percentage != null) {

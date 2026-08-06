@@ -27,7 +27,7 @@ function createAgentSessionManagementFeature({
             openLive: (topic) => controller.hydrateTopic(topic.id, null, null, topic.agentId),
             async open(topic) {
                 await controller.previewTopic(topic.id, topic.agentId, topic);
-                rememberTopic({ sessionId: topic.id });
+                rememberTopic({ sessionId: topic.id, agentId: topic.agentId });
             },
             async rename(topic) {
                 const title = await host.feedback.edit({

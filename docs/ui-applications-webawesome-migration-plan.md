@@ -42,7 +42,7 @@
 
 - 主聊天界面、主聊天消息渲染器、主侧栏与主输入区。
 - Agent Workbench 与 Codex/Rust Agent Runtime 页面。
-- 音乐、主题、终端、桌面、VCPBuild。
+- 音乐、主题、终端、桌面、VCPBUILD。
 - 经典 UI 的视觉重构；经典 UI 只保留必要兼容和回归测试。
 - ToolBox、DistributedServer、插件协议、存储格式或业务 API 的功能性重写。
 - 将所有页面强行改成 React/Vue，或为本轮引入新的前端构建链。

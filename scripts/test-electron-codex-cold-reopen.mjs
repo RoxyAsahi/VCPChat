@@ -118,8 +118,8 @@ async function openAgentWorkbench(page) {
     await page.waitForFunction(() => Boolean(window.nextUiApps?.get?.('agent-workbench')), { timeout: timeoutMs });
     if (await page.$('#nextUiInternalAppHost .agent-workbench-root')) return;
     await page.click('#nextUiAddTabBtn');
-    await page.waitForSelector('.next-ui-internal-app-item[title="VCPBuild"]', { visible: true, timeout: timeoutMs });
-    await page.evaluate(() => document.querySelector('.next-ui-internal-app-item[title="VCPBuild"]')?.click());
+    await page.waitForSelector('.next-ui-internal-app-item[title="VCPBUILD"]', { visible: true, timeout: timeoutMs });
+    await page.evaluate(() => document.querySelector('.next-ui-internal-app-item[title="VCPBUILD"]')?.click());
     await page.waitForSelector('#nextUiInternalAppHost .agent-workbench-root', { visible: true, timeout: timeoutMs });
 }
 

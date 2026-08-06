@@ -67,6 +67,26 @@ export function createAgentProfileFlowView({ element, document, actions }) {
         workspaceInput.placeholder = '留空使用 VCPChat 当前工作目录';
         workspaceInput.setAttribute('aria-label', 'Build Agent 默认工作目录');
         workspaceInput.addEventListener('input', () => updateDraft({ workspaceRoot: workspaceInput.value }));
+        const workspaceControl = node('div', 'agent-chat-workspace-control');
+        const workspaceSelect = button('', 'agent-chat-workspace-select');
+        workspaceSelect.type = 'button';
+        workspaceSelect.title = '选择文件夹';
+        workspaceSelect.setAttribute('aria-label', '选择 Build Agent 默认工作目录');
+        workspaceSelect.append(node('span', 'vcp-ui-icon', 'folder_open'));
+        workspaceSelect.addEventListener('click', async () => {
+            workspaceSelect.disabled = true;
+            try {
+                const result = await actions.selectWorkspace?.(workspaceInput.value.trim());
+                if (result?.cancelled || !result?.workspaceRoot) return;
+                workspaceInput.value = result.workspaceRoot;
+                updateDraft({ workspaceRoot: result.workspaceRoot });
+            } catch (error) {
+                actions.reportError?.(error);
+            } finally {
+                workspaceSelect.disabled = false;
+            }
+        });
+        workspaceControl.append(workspaceInput, workspaceSelect);
         const permissionSelect = document.createElement('select');
         permissionSelect.className = 'agent-chat-topic-flow-input';
         permissionSelect.setAttribute('aria-label', 'Build Agent 默认审批模式');
@@ -95,7 +115,7 @@ export function createAgentProfileFlowView({ element, document, actions }) {
             field('提示词', promptInput),
             field('默认模型（可留空）', modelInput),
             modelList,
-            field('默认工作目录（可留空）', workspaceInput),
+            field('默认工作目录（可留空）', workspaceControl),
             field('默认本地工具审批', permissionSelect),
             controls,
         );

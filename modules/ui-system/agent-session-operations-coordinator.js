@@ -1,7 +1,7 @@
 function createAgentSessionOperationsCoordinator({
     state, store, controller, selectedAgentProfile, profileNeedsConfiguration,
     refreshControlPlane, queueRender, renderSidebar, notify, rememberTopic,
-    clearRememberedTopic, nextSessionTitle, activeSession,
+    forgetRememberedSession, clearRememberedTopic, nextSessionTitle, activeSession,
 }) {
     let disposed = false;
 
@@ -34,11 +34,11 @@ function createAgentSessionOperationsCoordinator({
             ...(Object.prototype.hasOwnProperty.call(overrides, 'model') ? { model: overrides.model } : {}),
             ...(Object.prototype.hasOwnProperty.call(overrides, 'systemPrompt') ? { systemPrompt: overrides.systemPrompt } : {}),
             ...(Object.prototype.hasOwnProperty.call(overrides, 'permissionMode') ? { permissionMode: overrides.permissionMode } : {}),
-            agent: overrides.agent ?? (state.selectedAgent || 'Nova'),
+            agent: overrides.agent ?? state.selectedAgent,
             title: overrides.title || nextSessionTitle(),
         });
         if (disposed || state.disposed) return created;
-        rememberTopic(created);
+        rememberTopic({ sessionId: created.sessionId, agentId: created.agentId });
         state.tab = 'sessions';
         await refreshControlPlane();
         return created;
@@ -107,14 +107,15 @@ function createAgentSessionOperationsCoordinator({
     function rememberTopicTitle(topic, title) {
         const sessionId = topic?.sessionId || topic?.id;
         if (!sessionId) return;
-        if (state.rememberedTopic?.sessionId === sessionId) state.rememberedTopic = { ...state.rememberedTopic, title };
-        rememberTopic({ sessionId, title, agentId: topic.agentId || state.selectedAgent || 'Nova' });
+        rememberTopic({ sessionId, agentId: topic.agentId });
     }
 
     function forgetTopic(sessionId) {
-        if (state.rememberedTopic?.sessionId !== sessionId) return;
-        state.rememberedTopic = null;
-        clearRememberedTopic();
+        if (state.rememberedTopic?.sessionId === sessionId) {
+            state.rememberedTopic = null;
+            clearRememberedTopic();
+        }
+        forgetRememberedSession({ sessionId });
     }
 
     return Object.freeze({

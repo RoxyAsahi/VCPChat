@@ -7,11 +7,13 @@ export function createAgentWorkbenchSidebarCoordinator({
     sameAgent, agentCacheKey, selectedAgentProfile, profileNeedsConfiguration,
     sessionActivity, createSessionAvatar, appendSessionActions, closeSessionContextMenu,
     openNewSession, openNewAgentFlow, refreshControlPlane, refreshRecoveryOperations,
-    refreshTopicsForAgent, selectAgent, rememberTopic, forgetTopic, syncModel, host,
+    refreshTopicsForAgent, selectAgent, rememberTopic, rememberedSessionForAgent,
+    forgetRememberedSession, forgetTopic, syncModel, host,
     renderSettings, queueRender, uxMark,
 }) {
     let view = null;
     let disposed = false;
+    let agentSelectionRequest = 0;
 
     function entries() {
         const current = store.getState();
@@ -25,7 +27,8 @@ export function createAgentWorkbenchSidebarCoordinator({
         const liveSessionIds = new Set(liveSessions.map((session) => session.sessionId).filter(Boolean));
         return {
             liveSessions,
-            persistedTopics: state.topics.filter((topic) => !liveSessionIds.has(topic.id)),
+            persistedTopics: state.topics.filter((topic) => topic.agentId
+                && sameAgent(topic.agentId, state.selectedAgent) && !liveSessionIds.has(topic.id)),
             selectedSessionId: selectedSessionId(current),
         };
     }
@@ -47,7 +50,8 @@ export function createAgentWorkbenchSidebarCoordinator({
             topicSelectedIds: new Set(state.topicSelectedIds),
             showArchivedTopics: state.showArchivedTopics,
             topicSearch: state.topicSearch,
-            topicSearchResults: state.topicSearchResults,
+            topicSearchResults: state.topicSearchResults.filter((topic) => topic.agentId
+                && sameAgent(topic.agentId, state.selectedAgent)),
             topicSearchLoading: state.topicSearchLoading,
             topicSearchError: state.topicSearchError,
             topicSearchOpen: state.topicSearchOpen,
@@ -64,6 +68,7 @@ export function createAgentWorkbenchSidebarCoordinator({
     }
 
     function resetSessionTools() {
+        lifecycle.clear('topic-search');
         state.topicManaging = false;
         state.topicSelectedIds.clear();
         state.topicSearchOpen = false;
@@ -135,12 +140,15 @@ export function createAgentWorkbenchSidebarCoordinator({
                 },
                 createSessionAvatar,
                 appendSessionActions,
-                hydrateSession: (session) => run(() => controller.hydrateTopic(
-                    session.sessionId, session, null, session.agentId,
-                )),
+                hydrateSession: (session) => run(async () => {
+                    if (!session.agentId) return;
+                    await controller.hydrateTopic(session.sessionId, session, null, session.agentId);
+                    if (!disposed) rememberTopic({ sessionId: session.sessionId, agentId: session.agentId });
+                }),
                 previewSession: (topic) => run(async () => {
+                    if (!topic.agentId) return;
                     await controller.previewTopic(topic.id, topic.agentId, topic);
-                    if (!disposed) rememberTopic({ sessionId: topic.id });
+                    if (!disposed) rememberTopic({ sessionId: topic.id, agentId: topic.agentId });
                 }),
                 toggleTopicSelection(sessionId) {
                     if (state.topicSelectedIds.has(sessionId)) state.topicSelectedIds.delete(sessionId);
@@ -182,6 +190,7 @@ export function createAgentWorkbenchSidebarCoordinator({
                 setAgentSearch(value) { state.agentSearch = value; },
                 selectAgent(agentId) {
                     run(async () => {
+                        const request = ++agentSelectionRequest;
                         state.uxTimings.set(`agent-click:${agentCacheKey(agentId)}`, uxMark('agent-click', agentId));
                         const current = store.getState();
                         const sessionAgent = current.selectedTopic?.agentId;
@@ -193,6 +202,25 @@ export function createAgentWorkbenchSidebarCoordinator({
                         resetSessionTools();
                         queueRender({ shell: true, header: true, composer: true });
                         await refreshControlPlane();
+                        if (disposed || state.disposed || request !== agentSelectionRequest
+                            || !sameAgent(agentId, state.selectedAgent)) return;
+                        const rememberedSessionId = rememberedSessionForAgent(agentId);
+                        if (!rememberedSessionId) return;
+                        const topic = state.topics.find((item) => item.id === rememberedSessionId
+                            && !item.archivedAt && item.agentId && sameAgent(item.agentId, agentId));
+                        const runtime = store.getState().activeRuntimes instanceof Map
+                            ? store.getState().activeRuntimes.get(rememberedSessionId) : null;
+                        const candidate = topic || (runtime?.agentId && sameAgent(runtime.agentId, agentId)
+                            ? { ...runtime, id: runtime.sessionId } : null);
+                        if (!candidate) {
+                            forgetRememberedSession({ agentId, sessionId: rememberedSessionId });
+                            return;
+                        }
+                        if (runtime) {
+                            await controller.hydrateTopic(rememberedSessionId, runtime, null, runtime.agentId);
+                        } else {
+                            await controller.previewTopic(rememberedSessionId, candidate.agentId, candidate);
+                        }
                     });
                 },
                 renderSettings,
@@ -210,6 +238,7 @@ export function createAgentWorkbenchSidebarCoordinator({
         render,
         dispose() {
             disposed = true;
+            agentSelectionRequest += 1;
             view?.dispose();
             view = null;
         },

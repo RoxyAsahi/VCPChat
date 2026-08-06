@@ -560,6 +560,235 @@
         line-height: 1.45;
     }
 
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-settings {
+        display: grid;
+        gap: 10px;
+        min-height: 390px;
+        max-height: min(620px, calc(100vh - 230px));
+        overflow: hidden;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-search {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        flex: 1;
+        height: 32px;
+        gap: 7px;
+        padding: 0 9px;
+        border-radius: 7px;
+        color: var(--vcp-ui-text-3);
+        background: var(--vcp-ui-surface-2);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-search > .vcp-ui-icon {
+        flex: 0 0 16px;
+        width: 16px;
+        height: 16px;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-search input {
+        min-width: 0;
+        flex: 1;
+        border: 0;
+        outline: 0;
+        color: var(--vcp-ui-text-0);
+        background: transparent;
+        font: inherit;
+        font-size: var(--vcp-ui-font-helper);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-search input::placeholder {
+        color: var(--vcp-ui-text-3);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-body {
+        display: grid;
+        grid-template-columns: minmax(250px, .85fr) minmax(0, 1.15fr);
+        min-height: 0;
+        overflow: hidden;
+        border: 1px solid var(--vcp-ui-border-subtle);
+        border-radius: 7px;
+        background: var(--vcp-ui-bg-1);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-list {
+        min-width: 0;
+        overflow: auto;
+        border-right: 1px solid var(--vcp-ui-border-subtle);
+        scrollbar-gutter: stable;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-row {
+        display: grid;
+        grid-template-columns: 26px minmax(0, 1fr) 32px;
+        align-items: center;
+        width: 100%;
+        min-height: 58px;
+        gap: 9px;
+        padding: 7px 9px;
+        border: 0;
+        border-bottom: 1px solid var(--vcp-ui-border-subtle);
+        color: inherit;
+        background: transparent;
+        font-family: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-row:hover,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-row.is-selected {
+        background: var(--vcp-ui-surface-2);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-row-icon {
+        width: 26px;
+        height: 26px;
+        padding: 5px;
+        border-radius: 6px;
+        color: var(--vcp-ui-accent);
+        background: color-mix(in srgb, var(--vcp-ui-accent) 12%, transparent);
+        box-sizing: border-box;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-row-labels,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-detail-head > div {
+        display: grid;
+        min-width: 0;
+        gap: 3px;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-row-title {
+        display: flex;
+        align-items: baseline;
+        min-width: 0;
+        gap: 6px;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-row-title strong {
+        overflow: hidden;
+        color: var(--vcp-ui-text-0);
+        font-size: var(--vcp-ui-font-helper);
+        font-weight: 600;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-row-title code,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-detail-head code {
+        overflow: hidden;
+        color: var(--vcp-ui-text-3);
+        font-size: var(--vcp-ui-font-caption);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-row-labels > span {
+        display: -webkit-box;
+        overflow: hidden;
+        color: var(--vcp-ui-text-3);
+        font-size: var(--vcp-ui-font-caption);
+        line-height: 1.35;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-tool-switch:disabled {
+        opacity: .42;
+        cursor: default;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-detail {
+        display: grid;
+        grid-template-rows: auto auto minmax(0, 1fr) auto;
+        min-width: 0;
+        min-height: 0;
+        gap: 10px;
+        padding: 12px;
+        overflow: hidden;
+        background: var(--vcp-ui-bg-1);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-detail-head {
+        display: flex;
+        align-items: start;
+        min-width: 0;
+        gap: 10px;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-detail-head > div {
+        flex: 1;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-detail-head strong {
+        color: var(--vcp-ui-text-0);
+        font-size: var(--vcp-ui-font-helper);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-scope {
+        flex: 0 0 auto;
+        padding: 2px 6px;
+        border-radius: 5px;
+        color: var(--vcp-ui-text-2);
+        background: var(--vcp-ui-surface-2);
+        font-size: var(--vcp-ui-font-caption);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-detail-description,
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-truncated {
+        margin: 0;
+        color: var(--vcp-ui-text-3);
+        font-size: var(--vcp-ui-font-caption);
+        line-height: 1.45;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-preview {
+        min-height: 0;
+        margin: 0;
+        padding: 10px;
+        overflow: auto;
+        border-radius: 6px;
+        color: var(--vcp-ui-text-1);
+        background: var(--vcp-ui-surface-2);
+        font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+        font-size: var(--vcp-ui-font-caption);
+        line-height: 1.5;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-empty {
+        display: flex;
+        align-items: center;
+        min-height: 96px;
+        gap: 12px;
+        padding: 16px;
+        color: var(--vcp-ui-text-3);
+        background: var(--vcp-ui-surface-2);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-empty > div {
+        display: grid;
+        gap: 3px;
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-empty strong {
+        color: var(--vcp-ui-text-0);
+        font-size: var(--vcp-ui-font-helper);
+    }
+
+    html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-empty span {
+        color: var(--vcp-ui-text-3);
+        font-size: var(--vcp-ui-font-caption);
+        line-height: 1.45;
+    }
+
     @media (max-width: 680px) {
         html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root > wa-dialog.agent-tool-settings-dialog {
             --width: calc(100vw - 24px);
@@ -567,6 +796,21 @@
 
         html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-tool-modal-save-status {
             display: none;
+        }
+
+        html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-body {
+            grid-template-columns: 1fr;
+            overflow: auto;
+        }
+
+        html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-list {
+            max-height: 230px;
+            border-right: 0;
+            border-bottom: 1px solid var(--vcp-ui-border-subtle);
+        }
+
+        html[data-ui-mode="next"] .vcp-ui-scope.agent-chat-root .agent-skill-detail {
+            min-height: 260px;
         }
     }
 }

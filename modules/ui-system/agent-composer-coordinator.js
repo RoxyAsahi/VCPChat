@@ -16,6 +16,42 @@ function composerReadiness(current, composerState, pending, activeTurnId = null)
     return { viewState, previewReady, archived, activeTurnId, hasActiveTurn, starting, ready, canSend, pending };
 }
 
+function composerActionModel({ pauseReady, hasActiveTurn, activeInputMode }) {
+    if (pauseReady) {
+        return {
+            sendTitle: '暂停当前任务', sendLabel: '暂停当前任务',
+            sendIcon: 'pause', interruptMode: true,
+        };
+    }
+    if (!hasActiveTurn) {
+        return { sendTitle: '发送消息', sendLabel: '发送消息', sendIcon: 'arrow_upward', interruptMode: false };
+    }
+    return {
+        sendTitle: activeInputMode === 'steer' ? '立即调整当前任务' : '排队到当前任务完成后',
+        sendLabel: activeInputMode === 'steer' ? '立即调整当前任务' : '排队后续指令',
+        sendIcon: 'arrow_upward', interruptMode: false,
+    };
+}
+
+function interruptibleTurnId(activeTurnId, pending) {
+    if (activeTurnId) return activeTurnId;
+    if (pending?.phase !== 'thinking') return null;
+    return String(pending.turnId || '').trim() || null;
+}
+
+function composerPlaceholder({ archived, starting, pending, viewState, previewReady, selectedSessionId,
+    hasActiveTurn, hasActiveDraft, activeInputMode }) {
+    if (archived) return '该会话已归档；恢复后才能继续发送。';
+    if (starting) return pending?.phase === 'thinking' ? '正在思考…' : '正在启动 Agent…';
+    if (['reconnecting', 'error'].includes(viewState)) return '正在重新连接 Codex App Server…';
+    if (previewReady) return '输入消息…（发送时启动此会话）';
+    if (!selectedSessionId) return '请先创建 Agent 会话…';
+    if (viewState === 'starting') return 'Agent Runtime 正在准备…';
+    if (!hasActiveTurn) return '输入消息…（Shift + Enter 换行）';
+    if (!hasActiveDraft) return '输入新的指令…';
+    return activeInputMode === 'steer' ? '输入要立即调整的指令…' : '输入任务完成后继续执行的指令…';
+}
+
 function createAgentComposerCoordinator({
     state, store, controller, composerView, runStatusView, refs, run, notify,
     selectedSessionKey, selectedComposerState, selectedTurnStart, selectedActiveTurnId,
@@ -47,7 +83,8 @@ function createAgentComposerCoordinator({
 
     function syncRunStatus(current = store.getState()) {
         const pending = selectedTurnStart(current);
-        const turnId = selectedActiveTurnId(current) || pending?.turnId || null;
+        const activeTurnId = selectedActiveTurnId(current);
+        const turnId = activeTurnId || pending?.turnId || null;
         if (!turnId && !pending) {
             runStatusView.update({ visible: false });
             return;
@@ -65,7 +102,7 @@ function createAgentComposerCoordinator({
                 : pending?.phase === 'starting' && !selectedActiveTurnId(current) ? '正在启动 Agent' : '正在运行',
             detail: runningTool ? `正在执行 ${projectVcpToolPresentation(runningTool).label}` : 'Agent 正在处理当前任务',
             startedAt,
-            canStop: Boolean(selectedActiveTurnId(current)),
+            canStop: Boolean(interruptibleTurnId(activeTurnId, pending)),
         });
     }
 
@@ -78,11 +115,17 @@ function createAgentComposerCoordinator({
         const { viewState, previewReady, archived, ready, activeTurnId, hasActiveTurn, pending, starting, canSend } = readiness;
         const commandBusy = activeTurnCommands.has(sessionId);
         const hasActiveDraft = Boolean(hasActiveTurn && composerState.draft.trim());
+        const hasDraft = Boolean(composerState.draft.trim());
+        const stoppableTurnId = interruptibleTurnId(activeTurnId, pending);
+        const pauseReady = Boolean(stoppableTurnId && !hasDraft);
+        const actionModel = composerActionModel({
+            pauseReady, hasActiveTurn, activeInputMode: composerState.activeInputMode,
+        });
         composerView.update({
             draft: composerState.draft,
             inputDisabled: !ready || starting || commandBusy,
-            sendDisabled: !ready || starting || commandBusy || !canSend,
-            attachDisabled: !ready || hasActiveTurn || composerState.attachments.length >= 8,
+            sendDisabled: !ready || commandBusy || (!pauseReady && (starting || !canSend)),
+            attachDisabled: !ready || starting || hasActiveTurn || composerState.attachments.length >= 8,
             attachments: composerState.attachments,
             removeAttachment: (index) => {
                 const next = composerState.attachments.slice();
@@ -90,21 +133,13 @@ function createAgentComposerCoordinator({
                 state.composerStateBySession.setAttachments(sessionId, next);
                 render();
             },
-            sendTitle: hasActiveTurn
-                ? (composerState.activeInputMode === 'steer' ? '立即调整当前任务' : '排队到当前任务完成后') : '发送消息',
-            sendLabel: hasActiveTurn
-                ? (composerState.activeInputMode === 'steer' ? '立即调整当前任务' : '排队后续指令') : '发送消息',
-            placeholder: archived ? '该会话已归档；恢复后才能继续发送。'
-                : starting ? (pending?.phase === 'thinking' ? '正在思考…' : '正在启动 Agent…')
-                    : ['reconnecting', 'error'].includes(viewState) ? '正在重新连接 Codex App Server…'
-                        : previewReady ? '输入消息…（发送时启动此会话）'
-                            : !current.selectedSessionId ? '请先创建 Agent 会话…'
-                                : viewState === 'starting' ? 'Agent Runtime 正在准备…'
-                    : hasActiveTurn ? (!hasActiveDraft ? '输入新的指令…'
-                        : composerState.activeInputMode === 'steer'
-                            ? '输入要立即调整的指令…' : '输入任务完成后继续执行的指令…')
-                                         : '输入消息…（Shift + Enter 换行）',
-            busy: hasActiveTurn,
+            ...actionModel,
+            placeholder: composerPlaceholder({
+                archived, starting, pending, viewState, previewReady,
+                selectedSessionId: current.selectedSessionId, hasActiveTurn, hasActiveDraft,
+                activeInputMode: composerState.activeInputMode,
+            }),
+            busy: Boolean(stoppableTurnId),
             showActiveModes: hasActiveDraft,
             ready: canSend,
             inputMode: composerState.activeInputMode,
@@ -170,16 +205,37 @@ function createAgentComposerCoordinator({
         return true;
     }
 
+    async function cancelActiveTurn(sessionId, turnId) {
+        const existing = activeTurnCommands.get(sessionId);
+        if (existing) return existing.promise;
+        const command = controller.cancelTurn(turnId);
+        activeTurnCommands.set(sessionId, { turnId, prompt: '', mode: 'cancel', promise: command });
+        render();
+        try {
+            await command;
+        } finally {
+            if (activeTurnCommands.get(sessionId)?.promise === command) activeTurnCommands.delete(sessionId);
+            if (!disposed) render();
+        }
+        return true;
+    }
+
+    async function handleExistingTurn(current, sessionId, composerState, prompt) {
+        const activeTurnId = selectedActiveTurnId(current);
+        const pending = selectedTurnStart(current);
+        const stoppableTurnId = interruptibleTurnId(activeTurnId, pending);
+        if (!stoppableTurnId) return false;
+        if (!prompt) await cancelActiveTurn(sessionId, stoppableTurnId);
+        else if (activeTurnId) await sendActiveTurn(prompt, composerState, sessionId);
+        return true;
+    }
+
     async function send() {
         const current = store.getState();
         const sessionId = selectedSessionKey(current);
         const composerState = state.composerStateBySession.get(sessionId);
         const prompt = composerState.draft.trim();
-        const activeTurnId = selectedActiveTurnId(current);
-        if (activeTurnId) {
-            await sendActiveTurn(prompt, composerState, sessionId);
-            return;
-        }
+        if (await handleExistingTurn(current, sessionId, composerState, prompt)) return;
         if (!prompt && !composerState.attachments.length) return;
         const pending = {
             sessionId, prompt, attachments: composerState.attachments.map((item) => ({ ...item })),

@@ -23,6 +23,24 @@ function createWorkspaceTreeModel() {
             expanded.clear();
             loading.clear();
         },
+        invalidate() {
+            children.clear();
+            loading.clear();
+        },
+        removeBranch(relativePath) {
+            const key = normalizeWorkspacePath(relativePath);
+            const prefix = key ? `${key}/` : '';
+            for (const childKey of [...children.keys()]) {
+                if (childKey === key || (prefix && childKey.startsWith(prefix))) children.delete(childKey);
+            }
+            for (const expandedKey of [...expanded]) {
+                if (expandedKey === key || (prefix && expandedKey.startsWith(prefix))) expanded.delete(expandedKey);
+            }
+            for (const loadingKey of [...loading]) {
+                if (loadingKey === key || (prefix && loadingKey.startsWith(prefix))) loading.delete(loadingKey);
+            }
+        },
+        expandedPaths: () => [...expanded],
         scope: () => scope,
         setLoading(relativePath, value) {
             const key = normalizeWorkspacePath(relativePath);

@@ -1,5 +1,16 @@
 import { selectedSessionId } from './agent-selected-session.js';
 
+function deriveReplyTurnStart({ stored, runtime, sessionId, startedAt = null }) {
+    if (stored) return stored;
+    const turnId = String(runtime?.activeTurnId || '').trim();
+    if (!sessionId || !turnId) return null;
+    const timestamp = Number(startedAt) || Date.now();
+    return {
+        sessionId, turnId, phase: 'thinking', seenRunning: true,
+        startedAt: timestamp, createdAt: timestamp, derived: true,
+    };
+}
+
 export function createAgentSessionViewContext({ state, store, document, sameAgent }) {
     function activeSession() {
         const current = store.getState();
@@ -18,7 +29,14 @@ export function createAgentSessionViewContext({ state, store, document, sameAgen
 
     function selectedTurnStart(current = store.getState()) {
         const sessionId = selectedSessionKey(current);
-        return sessionId ? state.turnStarts.get(sessionId) || null : null;
+        const runtime = sessionId && current.activeRuntimes instanceof Map
+            ? current.activeRuntimes.get(sessionId) : null;
+        return deriveReplyTurnStart({
+            stored: sessionId ? state.turnStarts.get(sessionId) || null : null,
+            runtime,
+            sessionId,
+            startedAt: runtime?.activeTurnId ? state.turnStartedAt.get(runtime.activeTurnId) : null,
+        });
     }
 
     function selectedActiveTurnId(current = store.getState()) {
@@ -89,3 +107,5 @@ export function createAgentSessionViewContext({ state, store, document, sameAgen
         selectedActiveTurnId, syncPermissionMode, syncModel, sessionActivity, createSessionAvatar,
     };
 }
+
+export { deriveReplyTurnStart };
