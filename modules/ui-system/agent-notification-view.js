@@ -5,8 +5,65 @@ export function createAgentNotificationView({ document, blockPresentation, actio
     let search = '';
     let sourceFilter = 'all';
     let kindFilter = 'all';
+    let sharedNodes = null;
+    let sharedAnchor = null;
+    let sharedActive = false;
+    let sharedRequested = false;
+    let sharedVisibilityObserver = null;
+
+    const sharedAppView = () => element.closest('.next-ui-internal-app-view');
+
+    function restoreSharedSurface() {
+        if (!sharedNodes || !sharedAnchor?.isConnected) return;
+        sharedAnchor.after(...sharedNodes);
+        sharedAnchor.remove();
+        sharedNodes = null;
+        sharedAnchor = null;
+        sharedActive = false;
+        element.removeAttribute('data-shared-notification-surface');
+        element.classList.remove('notifications-sidebar', 'active');
+        element.replaceChildren();
+    }
+
+    function mountSharedSurface() {
+        const sidebar = document.getElementById('notificationsSidebar');
+        if (!sidebar || !sidebar.isConnected || sharedActive) return Boolean(sharedActive);
+        const header = sidebar.querySelector('.notifications-header');
+        const status = sidebar.querySelector('#vcpLogConnectionStatus');
+        const list = sidebar.querySelector('#notificationsList');
+        if (!header || !status || !list) return false;
+        sharedAnchor = document.createComment('vcp-shared-notification-surface');
+        header.before(sharedAnchor);
+        sharedNodes = [header, status, list];
+        element.classList.add('notifications-sidebar', 'active');
+        element.dataset.sharedNotificationSurface = 'active';
+        element.replaceChildren(...sharedNodes);
+        sharedActive = true;
+        queueMicrotask(observeSharedAppView);
+        return true;
+    }
+
+    function syncSharedSurface() {
+        const shouldMount = sharedRequested && !sharedAppView()?.hidden;
+        if (shouldMount) mountSharedSurface();
+        else restoreSharedSurface();
+    }
+
+    function setSharedActive(active) {
+        sharedRequested = Boolean(active);
+        syncSharedSurface();
+    }
+
+    function observeSharedAppView() {
+        if (sharedVisibilityObserver || typeof MutationObserver === 'undefined') return;
+        const appView = sharedAppView();
+        if (!appView) return;
+        sharedVisibilityObserver = new MutationObserver(syncSharedSurface);
+        sharedVisibilityObserver.observe(appView, { attributes: true, attributeFilter: ['hidden'] });
+    }
 
     function update(current) {
+        if (sharedRequested && mountSharedSurface()) return element;
         const ws = current.toolboxWs || [];
         const markers = current.markerObservations || [];
         const existingCards = new Map([...element.querySelectorAll('[data-activity-key]')]
@@ -87,6 +144,12 @@ export function createAgentNotificationView({ document, blockPresentation, actio
     return {
         element,
         update,
-        dispose() { element.replaceChildren(); },
+        setActive: setSharedActive,
+        dispose() {
+            sharedRequested = false;
+            sharedVisibilityObserver?.disconnect();
+            restoreSharedSurface();
+            element.replaceChildren();
+        },
     };
 }

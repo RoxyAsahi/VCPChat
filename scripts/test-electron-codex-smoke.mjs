@@ -712,6 +712,33 @@ try {
         && notificationLayout.toolbarOutsideScroller
         && notificationLayout.bottomGap <= 2,
     `VCP notifications must keep full side-panel width and content height, then scroll: ${JSON.stringify(notificationLayout)}`);
+    const sharedNotificationSurface = await page.evaluate(async () => {
+        const host = document.querySelector('#nextUiInternalAppHost');
+        host?.querySelector('.agent-chat-activity-tab[data-tab="notifications"]')?.click();
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const view = host?.querySelector('.agent-chat-notification-view[data-shared-notification-surface="active"]');
+        const mainSidebar = document.querySelector('#notificationsSidebar');
+        const list = view?.querySelector('#notificationsList');
+        const tabRow = host?.querySelector('.agent-chat-dock-tab-row');
+        if (!view || !mainSidebar || !list || !tabRow) return null;
+        const tabStyle = getComputedStyle(tabRow);
+        return {
+            shared: list.parentElement === view,
+            mainSidebarEmpty: !mainSidebar.querySelector('#notificationsList'),
+            tabHeight: tabRow.getBoundingClientRect().height,
+            tabFlexShrink: tabStyle.flexShrink,
+            tabMinHeight: tabStyle.minHeight,
+        };
+    });
+    assert.ok(sharedNotificationSurface
+        && sharedNotificationSurface.shared
+        && sharedNotificationSurface.mainSidebarEmpty
+        && sharedNotificationSurface.tabHeight >= 45
+        && sharedNotificationSurface.tabFlexShrink === '0',
+    `Build notifications must reuse the main notification surface and preserve the fixed Dock header: ${JSON.stringify(sharedNotificationSurface)}`);
+    await page.evaluate(() => document.querySelector('#nextUiInternalAppHost .agent-chat-activity-tab[data-tab="context"]')?.click());
+    assert.equal(await page.evaluate(() => Boolean(document.querySelector('#notificationsSidebar #notificationsList'))), true,
+        'leaving Build notifications must restore the main notification list to the global sidebar');
     const toolGroupLayout = await page.evaluate(() => {
         const feed = document.querySelector('#nextUiInternalAppHost .agent-chat-messages');
         if (!feed) return null;

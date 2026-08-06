@@ -243,6 +243,7 @@ function createAgentActivityCoordinator({
         content.replaceChildren();
         const definition = tabs.find((tab) => tab.id === state.activityTab) || tabs[0];
         const kind = definition?.kind || 'context';
+        notificationView.setActive?.(kind === 'notifications');
         renderActivityContent({ kind, content, current, definition, state, selectedSessionId,
             approvals: { local: localApprovals, backend: backendApprovals, passive: passiveInteractions },
             activityReadonlyView, approvalView, notificationView, workspaceView, syncWorkspace,

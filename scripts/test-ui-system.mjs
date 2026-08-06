@@ -721,4 +721,50 @@ assert.equal(waTooltip.element.getAttribute('for'), waTipTrigger.element.id);
 assert.equal(waHost.querySelectorAll('[class^="vcp-ui-"]').length, 0, 'WA-backed controls must be removed on destroy');
 waHost.remove();
 
+const { createAgentNotificationView } = await import(
+    `${pathToFileURL(`${process.cwd()}/modules/ui-system/agent-notification-view.js`).href}?shared-surface-test=1`
+);
+const sharedNotificationSidebar = document.createElement('aside');
+sharedNotificationSidebar.id = 'notificationsSidebar';
+sharedNotificationSidebar.className = 'notifications-sidebar active';
+const sharedNotificationHeader = document.createElement('header');
+sharedNotificationHeader.className = 'notifications-header';
+const sharedNotificationStatus = document.createElement('div');
+sharedNotificationStatus.id = 'vcpLogConnectionStatus';
+const sharedNotificationList = document.createElement('ul');
+sharedNotificationList.id = 'notificationsList';
+sharedNotificationList.className = 'notifications-list';
+sharedNotificationSidebar.append(sharedNotificationHeader, sharedNotificationStatus, sharedNotificationList);
+document.body.append(sharedNotificationSidebar);
+const sharedNotificationAppView = document.createElement('section');
+sharedNotificationAppView.className = 'next-ui-internal-app-view';
+document.body.append(sharedNotificationAppView);
+const sharedNotificationView = createAgentNotificationView({
+    document,
+    blockPresentation: null,
+    actions: { refresh() {} },
+});
+sharedNotificationView.setActive(true);
+sharedNotificationView.update({});
+sharedNotificationAppView.append(sharedNotificationView.element);
+await new Promise(resolve => setTimeout(resolve, 0));
+assert.equal(sharedNotificationView.element.querySelector('#notificationsList'), sharedNotificationList,
+    'Build notifications must mount the exact main notification list node');
+assert.equal(sharedNotificationSidebar.querySelector('#notificationsList'), null,
+    'the main notification sidebar must not keep a duplicate list while Build owns the shared surface');
+sharedNotificationAppView.hidden = true;
+await new Promise(resolve => setTimeout(resolve, 0));
+assert.equal(sharedNotificationSidebar.querySelector('#notificationsList'), sharedNotificationList,
+    'hiding Build must restore the notification list to the main sidebar');
+sharedNotificationAppView.hidden = false;
+await new Promise(resolve => setTimeout(resolve, 0));
+assert.equal(sharedNotificationView.element.querySelector('#notificationsList'), sharedNotificationList,
+    'showing Build again must remount the shared notification list');
+sharedNotificationView.setActive(false);
+assert.equal(sharedNotificationSidebar.querySelector('#notificationsList'), sharedNotificationList,
+    'leaving the notification Dock tab must restore the main notification list');
+sharedNotificationView.dispose();
+sharedNotificationAppView.remove();
+sharedNotificationSidebar.remove();
+
 console.log(`UI system contract tests passed (${expected.length} public component names).`);
