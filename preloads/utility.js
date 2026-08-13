@@ -3,8 +3,10 @@ const { contextBridge, ipcRenderer } = require('electron');
 function installEmbeddedSurfaceContract() {
     const query = new URLSearchParams(globalThis.location?.search || '');
     if (query.get('vcpEmbedded') !== '1') return;
-    document.documentElement.dataset.vcpEmbeddedApp = 'true';
     const mount = () => {
+        const root = document.documentElement;
+        if (!root) return;
+        root.dataset.vcpEmbeddedApp = 'true';
         document.body?.setAttribute('data-vcp-embedded-app', 'true');
         if (document.getElementById('vcpEmbeddedSurfaceStyle')) return;
         const style = document.createElement('style');
@@ -18,8 +20,13 @@ function installEmbeddedSurfaceContract() {
         `;
         (document.head || document.documentElement).append(style);
     };
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, { once: true });
-    else mount();
+    // Sandboxed Electron preloads may run before the parser creates <html>.
+    // Never let optional embedded-surface styling abort the IPC bridge below.
+    if (document.readyState === 'loading' || !document.documentElement) {
+        document.addEventListener('DOMContentLoaded', mount, { once: true });
+    } else {
+        mount();
+    }
 }
 
 installEmbeddedSurfaceContract();
