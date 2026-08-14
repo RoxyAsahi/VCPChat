@@ -961,6 +961,7 @@
         if (initialized) return;
         initialized = true;
         window.addEventListener('ui-mode-changed', event => {
+            if (event.detail?.transaction === true) return;
             void syncMode(event.detail?.mode, { preview: event.detail?.preview === true });
         });
         void syncMode(document.documentElement.dataset.uiMode);

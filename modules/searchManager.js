@@ -36,7 +36,7 @@ const searchManager = {
 
         this.setupGlobalShortcuts();
         window.addEventListener('ui-mode-changed', () => {
-            if (this.elements.modal?.style.display !== 'none') {
+            if (this.elements.modal && this.elements.modal.style.display !== 'none') {
                 this.closeModal();
             }
         });
@@ -182,7 +182,7 @@ const searchManager = {
     },
 
     closeModal() {
-        this.elements.modal.style.display = 'none';
+        if (this.elements.modal) this.elements.modal.style.display = 'none';
         this.clearScopedStyles();
 
         // 清空搜索内容和状态，确保下次打开时是干净的

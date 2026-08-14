@@ -27,7 +27,8 @@
                 detail: {
                     mode: normalizedMode,
                     previousMode,
-                    preview: options.preview === true
+                    preview: options.preview === true,
+                    transaction: options.transaction === true
                 }
             }));
         }
@@ -44,7 +45,7 @@
         const generation = ++transitionGeneration;
         await window.topTabManager?.prepareForMode?.(normalizedMode, options);
         if (generation !== transitionGeneration) return getCurrentMode();
-        const appliedMode = apply(normalizedMode, options);
+        const appliedMode = apply(normalizedMode, { ...options, transaction: true });
         await window.topTabManager?.syncMode?.(appliedMode, options);
         return appliedMode;
     }

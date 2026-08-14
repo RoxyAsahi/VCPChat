@@ -227,6 +227,8 @@ let loomManager = null;
 let scriptoriumAgentControl = null;
 let networkNotesTreeCache = null; // In-memory cache for the network notes
 let cachedModels = []; // Cache for models fetched from VCP server
+let modelFetchGeneration = 0;
+let cachedModelConfigKey = null;
 const NOTES_MODULE_DIR = path.join(APP_DATA_ROOT_IN_PROJECT, 'Notemodules');
 const isRagObserverOnlyMode = process.argv.includes('--rag-observer-only');
 const isAutoOpenDesktop = process.argv.includes('--desktop-only');
@@ -803,14 +805,17 @@ if (!gotTheLock) {
         // Function to fetch and cache models from the VCP server
         async function fetchAndCacheModels() {
             console.log('[Main] fetchAndCacheModels called');
+            const generation = ++modelFetchGeneration;
             try {
                 const settings = await appSettingsManager.readSettings();
                 const vcpServerUrl = settings.vcpServerUrl;
                 const vcpApiKey = settings.vcpApiKey; // Get the API key
+                const configKey = `${vcpServerUrl || ''}\u0000${vcpApiKey || ''}`;
+                if (generation === modelFetchGeneration) cachedModelConfigKey = configKey;
 
                 if (!vcpServerUrl) {
                     console.warn('[Main] VCP Server URL is not configured. Cannot fetch models.');
-                    cachedModels = []; // Clear cache if URL is not set
+                    if (generation === modelFetchGeneration) cachedModels = [];
                     return;
                 }
                 // Correctly construct the base URL by removing known API paths.
@@ -828,13 +833,27 @@ if (!gotTheLock) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 const data = await response.json();
+                if (generation !== modelFetchGeneration) return;
                 cachedModels = data.data || []; // Assuming the response has a 'data' field containing the models array
                 console.log('[Main] Models fetched and cached successfully:', cachedModels.map(m => m.id));
             } catch (error) {
+                if (generation !== modelFetchGeneration) return;
                 console.error('[Main] Failed to fetch and cache models:', error);
                 cachedModels = []; // Clear cache on error
             }
         }
+
+        const notifyModelsUpdated = () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('models-updated', cachedModels);
+            }
+        };
+        appSettingsManager.on('settings-updated', settings => {
+            if (!settings || typeof settings.vcpServerUrl !== 'string') return;
+            const configKey = `${settings.vcpServerUrl || ''}\u0000${settings.vcpApiKey || ''}`;
+            if (configKey === cachedModelConfigKey) return;
+            void fetchAndCacheModels().then(notifyModelsUpdated);
+        });
 
         // Create the native window first, but load the renderer only after IPC registration.
         createWindow({ deferLoad: true });
@@ -955,7 +974,7 @@ if (!gotTheLock) {
         fetchAndCacheModels().then(() => {
             if (mainWindow && !mainWindow.isDestroyed()) {
                 console.log('[Main] Background model fetch complete. Notifying renderer.');
-                mainWindow.webContents.send('models-updated', cachedModels);
+                notifyModelsUpdated();
             }
         }).catch(error => {
             console.error('[Main] Background model fetch failed:', error);
