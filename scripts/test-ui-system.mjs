@@ -1000,7 +1000,7 @@ console.log(`lucide aliases validated (${Object.keys(lucideAliases).length} alia
 
 // --- Web Awesome-backed kernel (stub custom elements) ---
 // Registers fake wa-* elements that satisfy the API surface VCPUI factories
-// rely on, then verifies the WA branches and the native-control compat bridges.
+// rely on, then verifies the WA branches and controller-owned form semantics.
 function defineWaStubs() {
     const { HTMLElement, customElements } = window;
     const define = (tag, Class) => { if (!customElements.get(tag)) customElements.define(tag, Class); };
@@ -1027,6 +1027,13 @@ function defineWaStubs() {
         get readonly() { return this.hasAttribute('readonly'); }
         set readonly(value) { this.toggleAttribute('readonly', Boolean(value)); }
         setCustomValidity() {}
+        select() { this.selectionStart = 0; this.selectionEnd = String(this.value).length; }
+        setSelectionRange(start, end, direction = 'none') {
+            this.selectionStart = start;
+            this.selectionEnd = end;
+            this.selectionDirection = direction;
+        }
+        setRangeText(replacement) { this.value = replacement; }
     }
     class WaInput extends WaValue {}
     class WaTextarea extends WaValue {}
@@ -1116,22 +1123,57 @@ assert.equal(waInput.control.disabled, true);
 waInput.setDisabled(false);
 waInput.update({ placeholder: 'Updated name' });
 assert.equal(waInput.getValue(), 'contract-value', 'unrelated WA Input updates preserve setValue state');
-const waInputNative = waInput.element.querySelector('input');
-assert.ok(waInputNative instanceof dom.window.HTMLInputElement, 'WA Input must expose a queryable input');
-assert.equal(waInputNative.value, 'contract-value');
-waInputNative.value = 'updated';
-assert.equal(waInput.element.value, 'updated', 'shim value write must forward to the WA control');
-let waInputRelays = 0;
-waInputNative.addEventListener('input', () => { waInputRelays += 1; });
+assert.equal(waInput.element.querySelector('input'), null, 'WA Input must not fabricate a detached native shim');
+waInput.element.value = 'updated';
 waInput.element.dispatchEvent(new Event('input', { bubbles: true }));
-assert.equal(waInputRelays, 1, 'WA input event must relay to the native shim');
+assert.equal(waInput.getValue(), 'updated', 'WA Input events must update the controller-owned value');
+waInput.element.value = 'autofilled';
+waInput.element.dispatchEvent(new Event('change', { bubbles: true }));
+waInput.update({ placeholder: 'After autofill' });
+assert.equal(waInput.getValue(), 'autofilled', 'change-only autofill must survive unrelated updates');
+assert.equal(typeof waInput.checkValidity, 'function');
+assert.equal(typeof waInput.setCustomValidity, 'function');
+waInput.setCustomValidity('invalid');
+waInput.update({
+    name: 'agent-name', autocomplete: 'off', inputmode: 'text', minlength: 2,
+    maxlength: 64, pattern: '.+', autofocus: true, spellcheck: false, required: true,
+});
+assert.equal(waInput.element.getAttribute('name'), 'agent-name');
+assert.equal(waInput.element.getAttribute('autocomplete'), 'off');
+assert.equal(waInput.element.getAttribute('inputmode'), 'text');
+assert.equal(waInput.element.getAttribute('minlength'), '2');
+assert.equal(waInput.element.getAttribute('maxlength'), '64');
+assert.equal(waInput.element.getAttribute('pattern'), '.+');
+assert.equal(waInput.element.hasAttribute('autofocus'), true);
+assert.equal(waInput.element.getAttribute('spellcheck'), 'false');
+waInput.setSelectionRange(1, 3, 'forward');
+assert.equal(waInput.element.selectionStart, 1);
+assert.equal(waInput.element.selectionEnd, 3);
+assert.equal(waInput.element.selectionDirection, 'forward');
+
+waInput.element.id = 'existing-wa-input';
+waInput.element.setAttribute('aria-describedby', 'existing-help');
+const waField = VCPUI.create('Field', { label: '名称', error: '请输入名称', control: waInput });
+const waFieldLabel = waField.element.querySelector('label');
+assert.equal(waFieldLabel.htmlFor, 'existing-wa-input', 'WA Field label must preserve a supplied host id');
+assert.equal(waInput.element.required, true, 'WA Field required state must reach the host control');
+assert.equal(waField.element.querySelector('.vcp-ui-required').hidden, false,
+    'Field must preserve and reflect a control-owned required state');
+assert.equal(waInput.element.getAttribute('aria-invalid'), 'true');
+assert.ok(waInput.element.getAttribute('aria-describedby')?.includes(
+    waField.element.querySelector('.vcp-ui-field-message').id
+), 'WA Field helper/error text must describe the host control');
+waField.destroy();
+assert.equal(waInput.element.required, true, 'destroying Field must preserve the control-owned required state');
+assert.equal(waInput.element.getAttribute('aria-describedby'), 'existing-help', 'destroying Field must restore a supplied description link');
 
 const waTextarea = VCPUI.create('Textarea', { value: 'body', rows: 6 });
 assert.equal(waTextarea.element.tagName.toLowerCase(), 'wa-textarea');
 assert.equal(waTextarea.element.rows, 6);
-const waTextareaNative = waTextarea.element.querySelector('textarea');
-assert.ok(waTextareaNative instanceof dom.window.HTMLTextAreaElement);
-assert.equal(waTextareaNative.value, 'body');
+assert.equal(waTextarea.element.querySelector('textarea'), null, 'WA Textarea must not fabricate a detached native shim');
+assert.equal(waTextarea.getValue(), 'body');
+waTextarea.setValue('updated body');
+assert.equal(waTextarea.getValue(), 'updated body');
 
 const waSelect = VCPUI.create('Select', { options: ['A', 'B'], value: 'B' });
 assert.equal(waSelect.element.tagName.toLowerCase(), 'wa-select');

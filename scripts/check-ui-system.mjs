@@ -109,6 +109,9 @@ for (const file of filesIn(moduleDir, '.js')) {
 
 const runtimeFile = path.join(moduleDir, 'vcp-ui.js');
 const runtime = fs.readFileSync(runtimeFile, 'utf8');
+if (/bridgeTextControl|vcp-ui-native-bridge/.test(runtime)) {
+    report(runtimeFile, 'Input/Textarea must expose the controller API; detached text-control shims are forbidden');
+}
 const mainRuntimeSource = fs.readFileSync(path.join(moduleDir, 'vcp-main-ui-runtime.js'), 'utf8');
 if (mainRuntimeSource.includes('#globalSettingsModal:not([hidden])')) {
     report(path.join(moduleDir, 'vcp-main-ui-runtime.js'), 'must use the modal active state, not DOM connectivity, as the global-settings target');

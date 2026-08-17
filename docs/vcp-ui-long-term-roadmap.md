@@ -64,7 +64,7 @@
 | 1 固化 Select Provider | 已完成 | Provider、WA proxy、原子回滚和测试已形成独立提交 |
 | 2 清除 Select property bridge | 已完成（2026-08-17） | 原业务 Select 不再被 patch descriptor；复用设置 Surface 的异步提交代次有真实 Electron 逆序证据 |
 | 3 跨平台 Select 决策 | 未开始 | 用双平台证据决定默认 Provider |
-| 4 Input / Textarea Provider | 未开始 | 删除文本控件 shim 与查询伪装 |
+| 4 Input / Textarea Provider | 进行中（2026-08-17） | shim/查询伪装已删除；macOS Electron 已覆盖 Shadow DOM、IME、selection、password、FormData/reset、validity、focus；待 Windows 真机 |
 | 5 Toggle / Range / Form | 未开始 | 单一状态 owner 与可逆增强 |
 | 6 Feedback / Overlay | 未开始 | owner 隔离与 Overlay/View 对账 |
 | 7 VCP-owned Patterns | 未开始 | `vcp-ui.js` 退化为薄 facade |
@@ -154,7 +154,11 @@ Stage 2 证据：`npm run test:electron-settings-race` 连续通过（A=1、B=3�
 
 ## 9. 阶段 4：Input 与 Textarea
 
-建立 provider-neutral controller，删除 detached shim 与 Shadow DOM 查询伪装。重点保护 IME composition、selection、autofill、password、readonly、required、validity、label 和焦点。失败挂载必须恢复原节点；Windows 中文输入和 macOS 输入法都要有真实 Electron 证据。
+建立 provider-neutral controller，删除 detached shim 与 Shadow DOM 查询伪装。当前 `Input`/`Textarea` 的 Web Awesome 分支只暴露 `control/getValue/setValue/focus/checkValidity/reportValidity/setCustomValidity`，生产 `InputDialog` 已改用这些 API，不再 monkey-patch `querySelector()`。契约测试明确断言不会创建可见或 detached 的 native shim。
+
+重点保护 IME composition、selection、autofill、password、readonly、required、validity、label 和焦点。`test-vcp-ui-text-controls.mjs` 已在 macOS arm64/Electron 41.10.4 验证真实 WA Shadow DOM、composition 事件顺序、selection、密码属性、FormData/reset、change-only autofill 状态、Field label/description、validity、焦点和销毁；生命周期压力仍保持 listener/Scope/资源不增长。阶段退出仍需 Windows 中文输入/缩放证据及人工输入法确认。
+
+设计参考：VS Code 的 [`InputBox`](https://github.com/microsoft/vscode/blob/main/src/vs/base/browser/ui/inputbox/inputBox.ts) 将真实输入节点作为唯一 owner，显式提供 value、focus、select、selection 和 dispose；Lit 的 [`ReactiveController`](https://github.com/lit/lit/blob/main/packages/reactive-element/src/reactive-controller.ts) 只通过 hostConnected/hostDisconnected 管理副作用。VCPUI 采用同一边界，但保留上游原生 DOM 与 Web Awesome host 的可替换 Provider，不把 Shadow DOM 查询暴露给业务。
 
 ## 10. 阶段 5：Toggle、Range 与表单组合
 

@@ -99,8 +99,9 @@ function attachControlApi(controller, control) {
         enumerable: true,
         get: () => control,
     });
-    controller.getValue = () => control?.value;
+    controller.getValue = () => control?.value == null ? '' : control.value;
     controller.setValue = (value, options = {}) => {
+        if (controller.destroyed) return controller;
         const normalized = value == null ? '' : String(value);
         controller.update({ value: normalized });
         if (control) control.value = normalized;
@@ -108,8 +109,46 @@ function attachControlApi(controller, control) {
         return controller;
     };
     controller.setDisabled = disabled => {
+        if (controller.destroyed) return controller;
         controller.update({ disabled: Boolean(disabled) });
         if (control) control.disabled = Boolean(disabled);
+        return controller;
+    };
+    return controller;
+}
+
+function attachTextControlApi(controller, control) {
+    attachControlApi(controller, control);
+    controller.focus = options => {
+        if (controller.destroyed) return controller;
+        control?.focus?.(options);
+        return controller;
+    };
+    controller.blur = () => {
+        if (controller.destroyed) return controller;
+        control?.blur?.();
+        return controller;
+    };
+    controller.select = () => {
+        if (controller.destroyed) return controller;
+        control?.select?.();
+        return controller;
+    };
+    controller.setSelectionRange = (...args) => {
+        if (controller.destroyed) return controller;
+        control?.setSelectionRange?.(...args);
+        return controller;
+    };
+    controller.setRangeText = (...args) => {
+        if (controller.destroyed) return controller;
+        control?.setRangeText?.(...args);
+        return controller;
+    };
+    controller.checkValidity = () => control?.checkValidity?.() ?? true;
+    controller.reportValidity = () => control?.reportValidity?.() ?? controller.checkValidity();
+    controller.setCustomValidity = message => {
+        if (controller.destroyed) return controller;
+        control?.setCustomValidity?.(String(message || ''));
         return controller;
     };
     return controller;
@@ -202,7 +241,8 @@ function nativeControlEnhancer(element, kind, options = {}) {
         if (originalAriaLabel === null) element.removeAttribute('aria-label');
         else element.setAttribute('aria-label', originalAriaLabel);
     }, { removeOnDestroy: false });
-    attachControlApi(controller, element);
+    if (kind === 'input' || kind === 'textarea') attachTextControlApi(controller, element);
+    else attachControlApi(controller, element);
     controller.kernel = 'native';
     controller.kind = kind;
     return controller;
@@ -583,87 +623,58 @@ function waSize(wa, value, sizes = ['sm', 'md', 'lg'], map = { sm: 'small', md: 
 
 function waFocus(controller, wa) {
     const baseFocus = controller.focus.bind(controller);
-    controller.focus = () => {
-        if (typeof wa.focus === 'function') wa.focus();
-        else baseFocus();
+    controller.focus = options => {
+        if (controller.destroyed) return controller;
+        if (typeof wa.focus === 'function') wa.focus(options);
+        else baseFocus(options);
         return controller;
     };
     return controller;
 }
 
+// Keep the provider contract at the host/controller boundary. Web Awesome's
+// form-associated controls expose these same input semantics on the host, so
+// no consumer needs to inspect a shadow-root input (or a compatibility shim).
+function applyTextControlAttributes(control, current, kind) {
+    const sharedAttributes = [
+        'name', 'autocomplete', 'autocapitalize', 'enterkeyhint',
+        'inputmode', 'title', 'minlength', 'maxlength', 'dirname', 'form',
+    ];
+    const inputAttributes = ['pattern', 'min', 'max', 'step'];
+    [...sharedAttributes, ...(kind === 'input' ? inputAttributes : [])].forEach(attribute => {
+        if (current[attribute] === undefined) return;
+        const value = current[attribute];
+        if (value === null) {
+            control.removeAttribute(attribute);
+            return;
+        }
+        control.setAttribute(attribute, String(value));
+    });
+    if (current.spellcheck !== undefined) {
+        if (current.spellcheck === null) control.removeAttribute('spellcheck');
+        else control.setAttribute('spellcheck', String(Boolean(current.spellcheck)));
+    }
+    if (current.autocorrect !== undefined) {
+        if (current.autocorrect === null) control.removeAttribute('autocorrect');
+        else control.setAttribute('autocorrect', current.autocorrect === false ? 'off' : String(current.autocorrect));
+    }
+    if (current.autofocus !== undefined) control.toggleAttribute('autofocus', Boolean(current.autofocus));
+    if (control.localName === 'wa-input') {
+        if (current.clearable !== undefined) {
+            control.withClear = Boolean(current.clearable);
+            control.toggleAttribute('with-clear', Boolean(current.clearable));
+        }
+        if (current.passwordToggle !== undefined) {
+            control.passwordToggle = Boolean(current.passwordToggle);
+            control.toggleAttribute('password-toggle', Boolean(current.passwordToggle));
+        }
+    }
+    if (kind === 'input' && current.type !== undefined) control.type = current.type || 'text';
+}
+
 function nextFrame(callback) {
     if (typeof requestAnimationFrame === 'function') return requestAnimationFrame(callback);
     return setTimeout(callback, 16);
-}
-
-// Legacy callers of Input/Textarea reach the control through
-// `element.querySelector('input'|'textarea')` and then read/write `.value`.
-// A Web Awesome control keeps its native input inside a shadow root, so those
-// paths would silently return null and crash. This compatibility bridge keeps
-// them working until those two factories can expose only the controller API:
-//   - `querySelector`/`querySelectorAll` first search the light DOM, then the
-//     WA shadow root (the real internal control once connected), then fall back
-//     to a detached native shim.
-//   - the shim is a real `<input>`/`<textarea>` element, so `.value`,
-//     `.addEventListener(...)` and `.disabled` / `.required` / `.readOnly`
-//     never throw even before the WA element is
-//     connected; `.value`/`.disabled`/`.required`/`.readOnly` forward to the
-//     WA control, and WA `input`/`change` events are relayed onto the shim.
-function bridgeTextControl(wa, kind) {
-    const tag = kind === 'textarea' ? 'textarea' : 'input';
-    const shim = document.createElement(tag);
-    if (kind === 'input') shim.type = 'text';
-    if (kind === 'textarea') shim.rows = 4;
-    shim.className = 'vcp-ui-native-bridge';
-    shim.setAttribute('tabindex', '-1');
-    shim.setAttribute('aria-hidden', 'true');
-
-    Object.defineProperty(shim, 'value', {
-        configurable: true,
-        get() {
-            const value = wa.value;
-            return value == null ? '' : String(value);
-        },
-        set(next) {
-            wa.value = next == null ? '' : String(next);
-        }
-    });
-    ['disabled', 'required'].forEach(property => {
-        Object.defineProperty(shim, property, {
-            configurable: true,
-            get: () => Boolean(wa[property]),
-            set: next => { wa[property] = Boolean(next); }
-        });
-    });
-    Object.defineProperty(shim, 'readOnly', {
-        configurable: true,
-        get: () => Boolean(wa.readonly),
-        set: next => { wa.readonly = Boolean(next); }
-    });
-    ['input', 'change'].forEach(type => {
-        wa.addEventListener(type, () => {
-            shim.dispatchEvent(new Event(type, { bubbles: true }));
-        });
-    });
-
-    const matchesControl = selector => new RegExp(`(^|[\\s,>+~])${tag}([\\s,>+~]|$)`, 'i').test(selector);
-    const originalQuery = wa.querySelector.bind(wa);
-    const originalQueryAll = wa.querySelectorAll.bind(wa);
-    wa.querySelector = selector => {
-        const hit = originalQuery(selector);
-        if (hit) return hit;
-        const shadow = wa.shadowRoot?.querySelector(selector);
-        if (shadow) return shadow;
-        return matchesControl(selector) ? shim : null;
-    };
-    wa.querySelectorAll = selector => {
-        const hits = originalQueryAll(selector);
-        if (hits.length) return hits;
-        const shadow = wa.shadowRoot?.querySelectorAll(selector);
-        if (shadow?.length) return shadow;
-        return matchesControl(selector) ? [shim] : hits;
-    };
-    return shim;
 }
 
 // Checkbox/Switch keep their native toggle inside the WA shadow root. The WA
@@ -792,6 +803,7 @@ function textControlFactory(kind, options = {}) {
             } else {
                 wa.type = current.type || 'text';
             }
+            applyTextControlAttributes(wa, current, kind);
             wa.value = String(current.value ?? '');
             wa.replaceChildren();
             if (current.leadingIcon) {
@@ -812,9 +824,14 @@ function textControlFactory(kind, options = {}) {
                 wa.setCustomValidity(current.invalid ? (current.invalidMessage || ' ') : '');
             }
         });
-        controller._listen(wa, 'input', () => { state.value = wa.value; });
-        bridgeTextControl(wa, kind);
-        attachControlApi(controller, wa);
+        const syncValue = () => { if (!controller.destroyed) state.value = wa.value; };
+        controller._listen(wa, 'input', syncValue);
+        controller._listen(wa, 'change', syncValue);
+        controller._listen(document, 'reset', event => {
+            if (event.target !== wa.form && !event.target?.contains?.(wa)) return;
+            queueMicrotask(syncValue);
+        }, true);
+        attachTextControlApi(controller, wa);
         return waFocus(controller, wa);
     }
     const wrapper = document.createElement('span');
@@ -835,13 +852,20 @@ function textControlFactory(kind, options = {}) {
             control.rows = current.rows || 4;
             wrapper.dataset.resize = current.resize || 'vertical';
         }
+        applyTextControlAttributes(control, current, kind);
         if (control.value !== String(current.value ?? '')) control.value = String(current.value ?? '');
         wrapper.querySelectorAll('.vcp-ui-control-icon').forEach(node => node.remove());
         if (current.leadingIcon) wrapper.prepend(icon(current.leadingIcon, 'vcp-ui-control-icon is-leading'));
         if (current.trailingIcon) wrapper.append(icon(current.trailingIcon, 'vcp-ui-control-icon is-trailing'));
     });
-    attachControlApi(controller, control);
-    controller._listen(control, 'input', () => { state.value = control.value; });
+    attachTextControlApi(controller, control);
+    const syncValue = () => { if (!controller.destroyed) state.value = control.value; };
+    controller._listen(control, 'input', syncValue);
+    controller._listen(control, 'change', syncValue);
+    controller._listen(document, 'reset', event => {
+        if (event.target !== control.form && !event.target?.contains?.(control)) return;
+        queueMicrotask(syncValue);
+    }, true);
     return controller;
 }
 
@@ -1046,24 +1070,58 @@ function fieldFactory(options = {}) {
     controlHost.className = 'vcp-ui-field-control';
     const message = document.createElement('div');
     message.className = 'vcp-ui-field-message';
+    message.id = `vcp-ui-field-message-${crypto.randomUUID()}`;
     element.append(header, controlHost, message);
-    const state = { label: 'Field', helper: '', error: '', required: false, ...options };
+    const state = { label: 'Field', helper: '', error: '', required: undefined, ...options };
+    const originalDescribedBy = new Map();
+    const originalRequired = new Map();
+    const originalInvalid = new Map();
+    const generatedIds = new Map();
     return makeController(element, state, current => {
         label.textContent = current.label;
-        required.hidden = !current.required;
+        const currentControl = current.control?.control || current.control?.element || current.control;
+        required.hidden = !(current.required ?? currentControl?.required ?? false);
         element.dataset.state = current.error ? 'error' : 'default';
         message.textContent = current.error || current.helper || '';
         if (current.control) {
-            const control = current.control.element || current.control;
-            if (controlHost.firstChild !== control) controlHost.replaceChildren(control);
-            const native = control.matches?.('input, textarea, select') ? control : control.querySelector?.('input, textarea, select');
-            if (native) {
-                if (!native.id) native.id = `vcp-ui-field-${crypto.randomUUID()}`;
-                label.htmlFor = native.id;
-                native.required = Boolean(current.required);
-                native.setAttribute('aria-invalid', String(Boolean(current.error)));
+            const control = current.control.control || current.control.element || current.control;
+            const host = current.control.element || current.control;
+            if (controlHost.firstChild !== host) controlHost.replaceChildren(host);
+            const labelable = control?.matches?.('input, textarea, select, wa-input, wa-textarea, wa-select');
+            if (labelable) {
+                if (!control.id) {
+                    control.id = `vcp-ui-field-${crypto.randomUUID()}`;
+                    generatedIds.set(control, control.id);
+                }
+                label.htmlFor = control.id;
+                if (!originalRequired.has(control)) originalRequired.set(control, Boolean(control.required));
+                if (!originalInvalid.has(control)) originalInvalid.set(control, control.getAttribute('aria-invalid'));
+                if (current.required !== undefined) control.required = Boolean(current.required);
+                control.setAttribute('aria-invalid', String(Boolean(current.error)));
+                if (!originalDescribedBy.has(control)) {
+                    originalDescribedBy.set(control, control.getAttribute('aria-describedby'));
+                }
+                const original = originalDescribedBy.get(control);
+                if (current.error || current.helper) {
+                    const ids = new Set(`${original || ''} ${message.id}`.trim().split(/\s+/).filter(Boolean));
+                    control.setAttribute('aria-describedby', [...ids].join(' '));
+                } else if (original === null) control.removeAttribute('aria-describedby');
+                else control.setAttribute('aria-describedby', original);
             }
         }
+    }, () => {
+        originalDescribedBy.forEach((value, control) => {
+            if (value === null) control.removeAttribute('aria-describedby');
+            else control.setAttribute('aria-describedby', value);
+        });
+        originalRequired.forEach((value, control) => { control.required = value; });
+        originalInvalid.forEach((value, control) => {
+            if (value === null) control.removeAttribute('aria-invalid');
+            else control.setAttribute('aria-invalid', value);
+        });
+        generatedIds.forEach((id, control) => {
+            if (control.id === id) control.removeAttribute('id');
+        });
     });
 }
 
@@ -1765,12 +1823,12 @@ function inputDialogFactory(options = {}) {
     const cancel = buttonFactory({ label: options.cancelLabel || '取消', variant: 'ghost' });
     const submit = buttonFactory({ label: options.confirmLabel || '确认', variant: 'primary', type: 'submit' });
     modal = modalFactory({ ...options, content: form, actions: [cancel, submit] });
-    const native = control.element.querySelector('input, textarea');
     const validate = () => {
-        const value = native.value.trim();
+        const value = String(control.getValue?.() ?? '').trim();
         const message = options.required && !value ? '此项不能为空' : options.validate?.(value);
         error.textContent = message || '';
-        native.setAttribute('aria-invalid', String(Boolean(message)));
+        control.control?.setAttribute('aria-invalid', String(Boolean(message)));
+        control.setCustomValidity?.(message || '');
         return message ? null : value;
     };
     cancel.element.addEventListener('click', () => modal.close(null));

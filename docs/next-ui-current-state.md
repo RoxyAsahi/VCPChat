@@ -142,6 +142,8 @@ Select Provider Stage 2 已完成（`0923efd4` + `test:electron-settings-race`�
 
 2026-08-17 开始的 Provider 收敛不改变“VCPUI 是 adapter、Web Awesome 是私有内核”的既有边界，而是把它变成可执行合同。Select 已新增独立纯决策模块与 WA sibling proxy 模块，区分 existing/owned 与 native/customizable-native/WA proxy/WA owned，并禁止已挂载 controller 因 WA 迟到而原地升级。VCPUI-owned WA Select 已不再创建 detached native Select shim，也不再 monkey-patch WA `querySelector()` 来伪造 native Select。
 
+Input/Textarea 的第一步收敛已完成：VCPUI-owned Web Awesome 文本控件不再创建 detached native shim 或覆盖控件的 `querySelector/querySelectorAll`；`InputDialog` 改用 controller 的 value、selection、validity 和 focus 合同。新增真实 macOS Electron 测试覆盖 WA Shadow DOM、composition 顺序、selection、password 属性、FormData/reset、change-only autofill、Field label/required/description、validity、焦点与销毁；Windows 真机与人工输入法证据仍未完成。
+
 当前仍保留的 Select 技术债是 legacy proxy 对原业务 Select 的 `value/selectedIndex/add/remove/focus` property bridge；它用于兼容不派发事件的旧写入点，应在生产调用盘点和跨平台 Electron 证据完成后逐个删除。Customizable Native 目前只有能力检测和显式 Provider，不是默认路径。
 
 Select Provider 第一阶段已在独立提交 `d999d945` 固化；后续 property bridge 清理和默认 Provider 决策不得回写或混入该提交。
