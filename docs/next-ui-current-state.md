@@ -112,7 +112,7 @@ P3 公共合同收口已于 2026-08-17 关闭：13 个 Stable 组件均具备生
 
 P4 自动门禁已关闭；同步后 Windows 复验和人工 soak 仍待补齐。动态壁纸、插件运行时和业务子页面迁移继续排除在本轮之外。
 
-Select Provider Stage 2 正在收尾：原业务 Select 不再安装 `value/selectedIndex/add/remove/focus` descriptor 或 method bridge；全局设置复用 DOM 的 assistant/Rust 异步 hydration 现携带 open-generation 与精确 root 提交权，待集成乱序回归和 Electron 复验后再标记阶段完成。
+Select Provider Stage 2 已完成（`0923efd4` + `test:electron-settings-race`）：原业务 Select 不再安装 `value/selectedIndex/add/remove/focus` descriptor 或 method bridge；全局设置复用 DOM 的 assistant/Rust 异步 hydration 携带 open-generation 与精确 root 提交权。真实 Electron 逆序完成测试通过，且测试 fault injector 只存在于独立 E2E 入口，不改变生产 IPC。
 
 ## 7. 文档权威关系
 

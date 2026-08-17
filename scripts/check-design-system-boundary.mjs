@@ -176,6 +176,8 @@ const allowedSourceDifferences = new Set([
     'scripts/test-electron-lifecycle-stress.mjs',
     'scripts/test-electron-main-chat-sequences.mjs',
     'scripts/test-settings-wa-electron.mjs',
+    'scripts/test-settings-surface-race-electron.mjs',
+    'scripts/support/electron-settings-race-main.cjs',
     'tests/frontend-plugins.test.js',
     'tests/lifecycle-scope.test.js',
     'tests/lifecycle-inspector.test.js',

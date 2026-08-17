@@ -62,7 +62,7 @@
 |---|---|---|
 | 0 保护现场与事实基线 | 已完成 | 分支、远程、工作区、文档与测试证据对齐 |
 | 1 固化 Select Provider | 已完成 | Provider、WA proxy、原子回滚和测试已形成独立提交 |
-| 2 清除 Select property bridge | 进行中 | 原业务 Select 不再被 patch descriptor，并为复用设置 Surface 建立异步提交代次 |
+| 2 清除 Select property bridge | 已完成（2026-08-17） | 原业务 Select 不再被 patch descriptor；复用设置 Surface 的异步提交代次有真实 Electron 逆序证据 |
 | 3 跨平台 Select 决策 | 未开始 | 用双平台证据决定默认 Provider |
 | 4 Input / Textarea Provider | 未开始 | 删除文本控件 shim 与查询伪装 |
 | 5 Toggle / Range / Form | 未开始 | 单一状态 owner 与可逆增强 |
@@ -127,6 +127,8 @@
 - 表单提交、reset、事件顺序、label 和焦点行为不变。
 - 反复 mount/destroy 不增加 detached options、listener 或 Observer。
 - open → close → reopen → 乱序完成的 deferred 测试通过；关闭或替换 root 后不产生刷新事件、不写入新 Surface。
+
+Stage 2 证据：`npm run test:electron-settings-race` 连续通过（A=1、B=3）。测试专用 Electron 入口只在 E2E 环境包装 `ipcMain.handle`，生产 main/preload/IPC 文件保持不变；它断言同一 modal root、B 的 WA/native 值、B terminal events、无 synthetic change、迟到 A 不增加 presentation refresh，且每代每个读通道只发起一次请求。
 
 ## 8. 阶段 3：跨平台 Select 决策
 
