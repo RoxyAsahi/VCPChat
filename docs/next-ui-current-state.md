@@ -2,7 +2,7 @@
 
 > 状态：当前权威事实文档<br>
 > 核对日期：2026-08-17<br>
-> 当前 HEAD：`0923efd4`（Select Provider Stage 2）<br>
+> 当前 HEAD：`cbca0600`（Select Stage 2 修复与 Stage 3 决策门）<br>
 > 核对范围：`codex/design-system-upstream-no-workflow-20260817` 已提交文件树相对 `upstream/main`<br>
 > 后续施工顺序：[`next-ui-development-roadmap.md`](./next-ui-development-roadmap.md)
 
