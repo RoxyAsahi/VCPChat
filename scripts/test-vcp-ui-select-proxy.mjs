@@ -150,6 +150,7 @@ try {
         await new Promise(resolve => setTimeout(resolve, 100));
     }
     browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${debugPort}` });
+    const electronProduct = await browser.version();
     let page;
     while (Date.now() < deadline) {
         page = (await browser.pages()).find(candidate => candidate.url().includes('/select-test.html'));
@@ -179,6 +180,10 @@ try {
         customizableProvider: window.customizableController.provider,
         customizableAppearance: getComputedStyle(window.customizableController.element).appearance,
         capability: window.VCPUI.selectProviders.detectCustomizableNative(),
+        platform: navigator.platform,
+        userAgent: navigator.userAgent,
+        devicePixelRatio: window.devicePixelRatio,
+        viewport: { width: window.innerWidth, height: window.innerHeight },
         sourceOwnProperties: ['value', 'selectedIndex', 'add', 'remove', 'focus']
             .filter(property => Object.hasOwn(window.selectController.nativeElement, property)),
     }));
@@ -221,6 +226,24 @@ try {
         remainingLargeProxy: 0,
         customizableClassRestored: true,
     });
+    console.log(JSON.stringify({
+        selectProviderEvidence: {
+            platform: process.platform,
+            arch: process.arch,
+            electronProduct,
+            browserUserAgent: state.userAgent,
+            navigatorPlatform: state.platform,
+            devicePixelRatio: state.devicePixelRatio,
+            viewport: state.viewport,
+            customizableNative: state.capability,
+            providers: {
+                existing: state.provider,
+                large: state.largeProvider,
+                explicitNative: state.pinnedProvider,
+                explicitCustomizableNative: state.customizableProvider,
+            },
+        },
+    }, null, 2));
     console.log(`VCPUI Select providers passed in Electron (customizable native: ${state.capability.supported}).`);
 } finally {
     browser?.disconnect();

@@ -138,6 +138,7 @@ Stage 2 证据：`npm run test:electron-settings-race` 连续通过（A=1、B=3�
 - 当前 policy 没有平台分支：`auto` 在 Web Awesome ready 时为 existing Select 使用 sibling proxy，owned Select 使用 WA-owned；未 ready 时稳定回退 Native。Customizable Native 只接受显式请求，并要求 `appearance: base-select` 与 `::picker(select)` 同时被支持。
 - 因此不能仅凭 `CSS.supports`、macOS 截图、UA spoof 或 Chromium 版本开放 Customizable Native 的 `auto` 默认。Windows 任一键盘、视觉、缩放或可访问性关键项未通过时，继续保持显式实验 Provider。
 - 最小矩阵必须覆盖两平台的 provider/reason、亮暗主题、焦点/禁用/校验态、Tab/箭头/Home/End/typeahead/Enter/Escape、250 项滚动、最小窗口/DPI、动态 options/value、form reset、20 次 open-close-destroy 和 WA import failure→Native；同时采集 listener、Scope、Shadow DOM、detached options 与启动成本。
+- `npm run test:vcp-ui-select-proxy` 现在会输出可复用的 Electron 事实记录（Electron/Chrome、OS/架构、UA、DPR、viewport、两项 `CSS.supports` 结果和实际 Provider）。当前已采集 macOS arm64 / Electron 41.10.4 / Chrome 146；Windows 记录仍必须在真实 Windows Electron 上补齐。
 
 ### 工作
 
