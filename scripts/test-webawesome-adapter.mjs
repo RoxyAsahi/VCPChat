@@ -14,6 +14,8 @@ globalThis.HTMLElement = dom.window.HTMLElement;
 globalThis.MutationObserver = dom.window.MutationObserver;
 
 const adapter = (await import('../modules/ui-system/webawesome-adapter.js')).default;
+const { WEB_AWESOME_COMPONENTS, WEB_AWESOME_SURFACE_MANIFESTS } =
+    await import('../modules/ui-system/webawesome-runtime-manifest.js');
 const adapterWin = dom.window;
 
 function scopeRoot() {
@@ -27,6 +29,16 @@ let failures = 0;
 function check(name, fn) {
     try {
         fn();
+        console.log(`ok - ${name}`);
+    } catch (error) {
+        failures += 1;
+        console.error(`FAIL - ${name}\n    ${error.message}`);
+    }
+}
+
+async function checkAsync(name, fn) {
+    try {
+        await fn();
         console.log(`ok - ${name}`);
     } catch (error) {
         failures += 1;
@@ -66,7 +78,7 @@ check('on attaches and detaches a listener', () => {
     assert.equal(count, 1);
 });
 
-check('awaitUpdate resolves without updateComplete', async () => {
+await checkAsync('awaitUpdate resolves without updateComplete', async () => {
     const el = adapterWin.document.createElement('div');
     assert.equal(await adapter.awaitUpdate(el), el);
 });
@@ -113,7 +125,7 @@ check('applyTokens is a no-op outside next mode', () => {
     adapterWin.document.documentElement.dataset.uiMode = 'next';
 });
 
-check('loadComponents refuses to run outside next mode', async () => {
+await checkAsync('loadComponents refuses to run outside next mode', async () => {
     adapterWin.document.documentElement.dataset.uiMode = 'classic';
     await assert.rejects(adapter.loadComponents(['button']), /next/);
     adapterWin.document.documentElement.dataset.uiMode = 'next';
@@ -132,6 +144,21 @@ check('exposes isLoaded alongside isDefined', () => {
     }
     assert.equal(adapter.isLoaded('never-loaded-tag'), false, 'never-loaded tag must report false');
     assert.equal(adapter.isDefined('nonexistent-tag'), false, 'undefined tag must report false');
+});
+
+check('surface manifests are frozen subsets of the offline runtime closure', () => {
+    assert.ok(Object.isFrozen(WEB_AWESOME_SURFACE_MANIFESTS));
+    for (const [surface, tags] of Object.entries(WEB_AWESOME_SURFACE_MANIFESTS)) {
+        assert.ok(Object.isFrozen(tags), `${surface} manifest must be immutable`);
+        assert.ok(tags.length > 0, `${surface} manifest must not be empty`);
+        assert.equal(new Set(tags).size, tags.length, `${surface} manifest must not duplicate tags`);
+        for (const tag of tags) assert.equal(WEB_AWESOME_COMPONENTS.includes(tag), true,
+            `${surface} requests a tag absent from the offline closure: ${tag}`);
+    }
+    assert.deepEqual([...WEB_AWESOME_SURFACE_MANIFESTS.settings], ['select', 'option']);
+    assert.ok(WEB_AWESOME_SURFACE_MANIFESTS.creation.includes('dialog'));
+    assert.ok(WEB_AWESOME_SURFACE_MANIFESTS.comparison.includes('tooltip'));
+    assert.deepEqual(adapter.surfaceManifests, WEB_AWESOME_SURFACE_MANIFESTS);
 });
 
 check('translateEvent re-dispatches a wa event as a VCP event', () => {
@@ -157,7 +184,7 @@ check('mountScope applies tokens and theme together and releases both', () => {
     assert.equal(adapterWin.document.querySelector('link[data-webawesome-runtime-theme]'), null, 'theme released with the scope');
 });
 
-check('awaitUpdate resolves through an updateComplete promise', async () => {
+await checkAsync('awaitUpdate resolves through an updateComplete promise', async () => {
     const element = adapterWin.document.createElement('div');
     let release;
     element.updateComplete = new Promise(resolve => { release = () => resolve(element); });
@@ -173,16 +200,6 @@ check('awaitUpdate resolves through an updateComplete promise', async () => {
 // Deterministic fallback contract: custom-element definitions cannot be
 // rolled back, so the adapter state — rather than registry contents — is the
 // authority that keeps VCPUI on native DOM after any kernel failure.
-async function checkAsync(name, fn) {
-    try {
-        await fn();
-        console.log(`ok - ${name}`);
-    } catch (error) {
-        failures += 1;
-        console.error(`FAIL - ${name}\n    ${error.message}`);
-    }
-}
-
 await checkAsync('mounted scope follows runtime light and dark theme changes', async () => {
     const root = scopeRoot();
     const release = adapter.applyTokens(root);
@@ -205,24 +222,26 @@ await checkAsync('loadComponents failure is deterministic and observable', async
     const onFailed = event => events.push(['failed', event.detail?.tags]);
     adapterWin.addEventListener('vcp-webawesome-loaded', onLoaded);
     adapterWin.addEventListener('vcp-webawesome-failed', onFailed);
-    try {
-        const first = adapter.loadComponents(['button']);
-        const second = adapter.loadComponents(['select']);
-        assert.equal(adapter.getRuntimeState().state, 'loading');
-        await Promise.all([first, second]);
-    } catch {
-        // Expected: the vendored browser ESM cannot be imported in Node/jsdom.
-    }
+    const first = adapter.loadComponents(['button']);
+    const second = adapter.loadComponents(['select']);
+    assert.equal(adapter.getRuntimeState().state, 'loading');
+    const outcome = await Promise.allSettled([first, second]);
     adapterWin.removeEventListener('vcp-webawesome-loaded', onLoaded);
     adapterWin.removeEventListener('vcp-webawesome-failed', onFailed);
-    assert.equal(events.length, 1, 'exactly one load outcome event must fire');
+    assert.equal(events.length, 1, `exactly one load outcome event must fire: ${JSON.stringify(adapter.getRuntimeState())}`);
     if (events[0][0] === 'failed') {
+        assert.equal(outcome.every(result => result.status === 'rejected'), true,
+            'every waiter must observe the same terminal runtime failure');
         assert.deepEqual(events[0][1], adapter.getRuntimeState().components);
         assert.equal(adapter.getRuntimeState().state, 'failed');
         assert.equal(adapter.isLoaded('button'), false, 'failed preload must not mark tags as loaded');
         assert.equal(adapter.isDefined('button'), false, 'failed kernel must force native fallback');
         await assert.rejects(adapter.loadComponents(['button']));
         assert.equal(events.length, 1, 'terminal failure must not dispatch duplicate outcomes');
+    } else {
+        assert.equal(outcome.every(result => result.status === 'fulfilled'), true,
+            'a successful transaction must fulfill every coalesced waiter');
+        assert.equal(adapter.getRuntimeState().state, 'ready');
     }
 });
 

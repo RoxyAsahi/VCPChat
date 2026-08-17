@@ -50,6 +50,7 @@
 | 主聊天操作序列 | 已完成可用基线 | 固定 seed、动作覆盖、故障注入、trace 重放 |
 | 生命周期诊断 | 已完成 | renderer/main 只读 snapshot，Scope、listener、task、session 指标 |
 | Web Awesome 离线闭包 | 已完成 | 固定版本、101 文件 closure、vendor 与 pack check |
+| Web Awesome Surface 加载 | 进行中（2026-08-17） | `settings`/`creation`/`comparison` manifest、并发去重、adapter-only comparison、失败终态测试已通过；Windows 与增量失败 Electron 证据待补 |
 | 前端插件兼容边界 | 已完成 | Loader 恢复上游合同；Next 生命周期不接管插件运行时 |
 | 上游消息组件视觉语义 | 已保护 | Next 不重绘结构化消息内部组件，边界门禁存在 |
 

@@ -148,15 +148,20 @@ manifestNames.filter(name => !registrations.includes(name)).forEach(name => repo
 
 const webAwesomeComparisonFile = path.join(moduleDir, 'webawesome-comparison.js');
 const webAwesomeComparison = fs.readFileSync(webAwesomeComparisonFile, 'utf8');
-if (!webAwesomeComparison.includes('vendor/webawesome-runtime/dist-cdn/components/')) {
-    report(webAwesomeComparisonFile, 'must load the self-contained vendored dist-cdn build in the no-bundler renderer');
+if (!webAwesomeComparison.includes("from './webawesome-adapter.js'")) {
+    report(webAwesomeComparisonFile, 'must load components and own theme scope through the Web Awesome adapter');
 }
-if (webAwesomeComparison.includes('@awesome.me/webawesome')) {
-    report(webAwesomeComparisonFile, 'must not reference the node_modules copy; use the generated vendor/webawesome-runtime build');
-}
-if (webAwesomeComparison.includes('@awesome.me/webawesome/dist/components/')) {
-    report(webAwesomeComparisonFile, 'standard dist build contains bare Lit imports and breaks app registration');
-}
+filesIn(moduleDir, '.js').forEach(file => {
+    if (file === path.join(moduleDir, 'webawesome-adapter.js')) return;
+    const source = fs.readFileSync(file, 'utf8');
+    if (/vendor\/webawesome-runtime\/dist-cdn\/(?:components|translations|styles)/.test(source)
+        || /import\([^)]*webawesome-runtime/.test(source)) {
+        report(file, 'must not bypass webawesome-adapter for runtime imports or theme ownership');
+    }
+    if (source.includes('@awesome.me/webawesome')) {
+        report(file, 'must not reference the node_modules Web Awesome runtime directly');
+    }
+});
 const vendorWebAwesomePackage = path.join(root, 'vendor', 'webawesome-runtime', 'package.json');
 const vendoredVersion = JSON.parse(fs.readFileSync(vendorWebAwesomePackage, 'utf8')).version;
 if (vendoredVersion !== '3.11.0') {

@@ -1,3 +1,6 @@
+import webAwesome from './webawesome-adapter.js';
+import { WEB_AWESOME_SURFACE_MANIFESTS } from './webawesome-runtime-manifest.js';
+
 // Web Awesome's standard ESM build contains bare Lit imports. VCPChat's
 // no-bundler renderer uses the package's equivalent self-contained build.
 // The dist-cdn runtime closure is generated into vendor/webawesome-runtime so the installer
@@ -8,26 +11,6 @@
 // when the showcase actually mounts the comparison section, and only in
 // html[data-ui-mode="next"]. Classic mode and normal app boot never fetch a
 // byte of the Web Awesome runtime.
-const VENDOR_WEB_AWESOME_BASE = new URL(
-    '../../vendor/webawesome-runtime/dist-cdn/components/',
-    import.meta.url
-).href;
-
-const THEME_URL = new URL(
-    '../../vendor/webawesome-runtime/dist-cdn/styles/themes/default.css',
-    import.meta.url
-).href;
-
-const WEB_AWESOME_COMPONENTS = ['button', 'dialog', 'input', 'option', 'select', 'tooltip'];
-
-async function loadWebAwesomeComponents() {
-    await Promise.all(
-        WEB_AWESOME_COMPONENTS.map(tag =>
-            import(`${VENDOR_WEB_AWESOME_BASE}${tag}/${tag}.js`)
-        )
-    );
-}
-
 function createElement(tagName, attributes = {}, text = '') {
     const element = document.createElement(tagName);
     Object.entries(attributes).forEach(([name, value]) => {
@@ -37,24 +20,6 @@ function createElement(tagName, attributes = {}, text = '') {
     });
     if (text) element.textContent = text;
     return element;
-}
-
-function loadTheme() {
-    let link = document.querySelector('link[data-webawesome-showcase-theme]');
-    if (!link) {
-        link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = THEME_URL;
-        link.dataset.webawesomeShowcaseTheme = 'true';
-        document.head.append(link);
-    }
-    const owners = Number(link.dataset.ownerCount || 0) + 1;
-    link.dataset.ownerCount = String(owners);
-    return () => {
-        const remaining = Number(link.dataset.ownerCount || 1) - 1;
-        if (remaining <= 0) link.remove();
-        else link.dataset.ownerCount = String(remaining);
-    };
 }
 
 function sample(title, description) {
@@ -102,16 +67,6 @@ export function mountWebAwesomeComparison(host, { create, on }) {
         createElement('p', {}, '左侧是现有 VCPUI，右侧使用 Web Awesome 的交互与无障碍能力，并通过 VCP token 与 Shadow Parts 重新着色。')
     );
     root.append(intro);
-
-    const syncTheme = () => {
-        const isLight = document.body.classList.contains('light-theme');
-        root.classList.toggle('wa-light', isLight);
-        root.classList.toggle('wa-dark', !isLight);
-    };
-    syncTheme();
-    const themeObserver = new MutationObserver(syncTheme);
-    themeObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
-    disposers.push(() => themeObserver.disconnect());
 
     const grid = createElement('div', { class: 'vcp-ui-wa-grid' });
     const vcpColumn = column('现有 VCPUI', 'Native DOM + VCP runtime');
@@ -173,7 +128,7 @@ export function mountWebAwesomeComparison(host, { create, on }) {
 
     host.append(root);
 
-    const disposeTheme = loadTheme();
+    const disposeTheme = webAwesome.mountScope(root);
     disposers.push(disposeTheme);
 
     let disposed = false;
@@ -184,7 +139,7 @@ export function mountWebAwesomeComparison(host, { create, on }) {
         root.remove();
     };
 
-    loadWebAwesomeComponents()
+    webAwesome.loadComponents(WEB_AWESOME_SURFACE_MANIFESTS.comparison)
         .then(() => {
             if (disposed) return;
 

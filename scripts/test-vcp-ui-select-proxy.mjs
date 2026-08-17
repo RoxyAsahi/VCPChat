@@ -184,6 +184,7 @@ try {
         userAgent: navigator.userAgent,
         devicePixelRatio: window.devicePixelRatio,
         viewport: { width: window.innerWidth, height: window.innerHeight },
+        runtimeState: window.VCPWebAwesome.getRuntimeState(),
         sourceOwnProperties: ['value', 'selectedIndex', 'add', 'remove', 'focus']
             .filter(property => Object.hasOwn(window.selectController.nativeElement, property)),
     }));
@@ -201,6 +202,9 @@ try {
     assert.equal(typeof state.capability.baseSelect, 'boolean');
     assert.equal(typeof state.capability.picker, 'boolean');
     assert.deepEqual(state.sourceOwnProperties, [], 'proxy must not patch business Select properties');
+    assert.equal(state.runtimeState.state, 'ready');
+    assert.deepEqual(state.runtimeState.loaded, ['select', 'option'],
+        'Select surface must not execute unrelated Web Awesome components');
     if (state.capability.supported) {
         assert.equal(state.customizableProvider, 'customizable-native');
         assert.equal(state.customizableAppearance, 'base-select');

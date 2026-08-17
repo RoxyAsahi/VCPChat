@@ -887,6 +887,9 @@ try {
     assert.deepEqual(narrowDock.tooltipLabels, narrowDock.accessibleNames, `narrow notification dock hints do not match their accessible names: ${JSON.stringify(narrowDock)}`);
     assert.equal(narrowDock.iconsVisible, true, `narrow notification dock icons are clipped: ${JSON.stringify(narrowDock)}`);
     assert.equal(narrowDock.buttonOverflow, false, `narrow notification dock buttons overflow: ${JSON.stringify(narrowDock)}`);
+    // Seed Chromium's keyboard modality before focusing the exact tray item;
+    // programmatic focus alone is intentionally not :focus-visible.
+    await page.keyboard.press('Tab');
     await page.$eval('#appTrayPinnedApps > .capsule-button', button => button.focus());
     await new Promise(resolve => setTimeout(resolve, 220));
     const dockTooltip = await page.$eval('#appTrayPinnedApps > .capsule-button', button => ({
@@ -1026,7 +1029,7 @@ try {
     assert.equal(feedbackIsolation.loadingLabel, 'P1 main owner loading', `main loading state was replaced: ${JSON.stringify(feedbackIsolation)}`);
     assert.equal(feedbackIsolation.showcaseScopePresent, false, `showcase scope leaked: ${JSON.stringify(feedbackIsolation)}`);
     await page.evaluate(async () => {
-        document.querySelector('.vcp-ui-modal footer .vcp-ui-button')?.click();
+        document.querySelector('.vcp-ui-modal footer .vcp-ui-button, wa-dialog.vcp-ui-wa-dialog .vcp-ui-modal-actions .vcp-ui-button')?.click();
         await window.__p1MainDialog;
         window.__p1MainToast?.destroy();
         window.VCPUI.feedback.setLoading(false);
@@ -1039,10 +1042,11 @@ try {
 
     // Production WA Modal dismissal must release the creation surface, while
     // the durable create commit point blocks Escape/header/backdrop dismissal.
-    // Exercise the real cold path: creation itself owns kernel readiness and
-    // must not depend on a prior settings visit to select Web Awesome.
+    // The showcase now correctly loads through the document adapter. Creation
+    // therefore exercises an incremental Surface manifest on the same ready
+    // document instead of relying on registrations hidden from adapter state.
     const preCreationKernel = await page.evaluate(() => window.VCPWebAwesome?.getRuntimeState?.().state || 'missing');
-    assert.equal(preCreationKernel, 'idle', `creation test was not a cold WA start: ${preCreationKernel}`);
+    assert.equal(preCreationKernel, 'ready', `showcase runtime state was not shared with creation: ${preCreationKernel}`);
     const createEntryState = await page.evaluate(async () => {
         window.__nextDeltaOriginalCommands = window.MainChatCommands;
         window.MainChatCommands = {

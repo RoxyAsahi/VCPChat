@@ -95,7 +95,7 @@ assert.match(vcpUiSource, /_listen\(wa, 'wa-after-hide',[\s\S]*?finalize\(null\)
 const creationSource = read('modules/ui-system/next-shell/creation-controller.js');
 assert.doesNotMatch(creationSource, /getSnapshot|whenSettled|pendingOperations|listeners|\brevision\b|\boperationId\b/,
     'creation must not expose test-only settlement state');
-assert.match(creationSource, /await webAwesome\.loadComponents\(\)[\s\S]*?REQUIRED_WEB_AWESOME_COMPONENTS\.filter\(tag => !webAwesome\.isDefined\(tag\)\)/,
+assert.match(creationSource, /loadComponents\(requiredComponents\)[\s\S]*?requiredComponents\.filter\(tag => !webAwesome\.isDefined\(tag\)\)/,
     'creation must await its own Web Awesome dependency before choosing a Surface kernel');
 assert.doesNotMatch(creationSource, /SurfaceController \?|buildControls\(\(name, options\) => ui\.create/,
     'creation must not retain a direct no-Surface construction path');

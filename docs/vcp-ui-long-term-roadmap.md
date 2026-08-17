@@ -68,7 +68,7 @@
 | 5 Toggle / Range / Form | 未开始 | 单一状态 owner 与可逆增强 |
 | 6 Feedback / Overlay | 未开始 | owner 隔离与 Overlay/View 对账 |
 | 7 VCP-owned Patterns | 未开始 | `vcp-ui.js` 退化为薄 facade |
-| 8 Web Awesome Runtime | 未开始 | 真实按需、Surface 原子、稳定 fallback |
+| 8 Web Awesome Runtime | 进行中（2026-08-17） | Surface manifest、并发批处理和 adapter-only 加载已落地；待完成跨平台/pack/失败矩阵 |
 | 9 性能与视觉稳定 | 未开始 | 可重放的跨平台性能和几何证据 |
 | 10 操作序列与故障注入 | 未开始 | 必需 edge、trace 与资源不变量 |
 | 11 双平台长时间稳定 | 未开始 | 双平台完整矩阵与 soak |
@@ -170,7 +170,9 @@ Stage 2 证据：`npm run test:electron-settings-race` 连续通过（A=1、B=3�
 
 ## 13. 阶段 8：Web Awesome Runtime
 
-修正 `loadComponents(tags)` 名义按需、实际加载全部 `CORE_COMPONENTS` 的不一致。以 Surface manifest 建立最小原子批次，保持 document 级 `idle → loading → ready | failed`，失败后稳定 Native fallback。复核离线 closure、locale、theme、许可证和 pack 资源；不 fork WA，不暴露 `<wa-*>`、`--wa-*` 或 Shadow DOM 给业务。
+修正 `loadComponents(tags)` 名义按需、实际加载全部 `CORE_COMPONENTS` 的不一致。当前已建立冻结的 `settings`、`creation`、`comparison` Surface manifest；并发请求在一个 microtask 内合并，只导入尚未加载的 tag，加载状态在创建事务时同步进入 `loading`，所有 waiter 共享同一终态。`webawesome-comparison.js` 已改为只经 adapter 加载和持有主题，不再直接 import vendor 或建立第二套主题 observer。
+
+文档级终态仍为 `idle → loading → ready | failed`；由于 Custom Elements 不能反注册，失败后不会尝试恢复或升级已挂载控件，后续 Surface 必须走稳定 Native fallback。这里的“按 Surface”只减少执行和注册，不裁剪离线 vendor closure；closure、locale、theme、许可证和 pack 仍须独立核验。VS Code 的 activation/disposable、Lit 的 `updateComplete` 与本地 harness 的 capability/fail-closed 经验作为设计参考，不能替代真实 Electron 证据。
 
 ## 14. 阶段 9：性能与视觉稳定
 

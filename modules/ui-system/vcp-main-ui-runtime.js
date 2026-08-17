@@ -21,7 +21,9 @@ async function activateKernel() {
     const currentGeneration = ++generation;
     const activationScope = nextScope;
     try {
-        await window.VCPWebAwesome?.loadComponents?.();
+        await window.VCPWebAwesome?.loadComponents?.(
+            window.VCPWebAwesome?.surfaceManifests?.settings || ['select', 'option']
+        );
         if (currentGeneration !== generation
             || (activationScope && !activationScope.active)) return;
         const mountedRelease = window.VCPWebAwesome?.mountScope?.(document.body) || null;

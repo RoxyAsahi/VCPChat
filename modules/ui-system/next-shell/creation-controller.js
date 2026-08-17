@@ -88,8 +88,9 @@
             // A genuine load failure is an application-integrity error in the
             // packaged desktop app. Do not disguise it as a second UI.
             try {
-                await webAwesome.loadComponents();
-                const missing = REQUIRED_WEB_AWESOME_COMPONENTS.filter(tag => !webAwesome.isDefined(tag));
+                const requiredComponents = webAwesome.surfaceManifests?.creation || REQUIRED_WEB_AWESOME_COMPONENTS;
+                await webAwesome.loadComponents(requiredComponents);
+                const missing = requiredComponents.filter(tag => !webAwesome.isDefined(tag));
                 if (missing.length) throw new Error(`Web Awesome components were not defined: ${missing.join(', ')}`);
             } catch (kernelError) {
                 console.error('[NextUI] Web Awesome creation kernel unavailable:', kernelError);

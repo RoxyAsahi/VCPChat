@@ -20,3 +20,13 @@ export const WEB_AWESOME_COMPONENTS = Object.freeze([
     'dialog',
     'tooltip',
 ]);
+
+// Runtime loading is surface-scoped even though the packaged vendor closure
+// remains the complete, reproducible set above.  Keep these dependency sets
+// in one place so a surface cannot silently drift into an accidental full
+// preload or omit a sibling component (for example select + option).
+export const WEB_AWESOME_SURFACE_MANIFESTS = Object.freeze({
+    settings: Object.freeze(['select', 'option']),
+    creation: Object.freeze(['dialog', 'button', 'input', 'select', 'option']),
+    comparison: Object.freeze(['button', 'dialog', 'input', 'option', 'select', 'tooltip']),
+});

@@ -16,7 +16,7 @@
 // All Web Awesome component registrations happen lazily on first use, gated by
 // html[data-ui-mode="next"].
 
-import { WEB_AWESOME_COMPONENTS, WEB_AWESOME_LOCALE } from './webawesome-runtime-manifest.js';
+import { WEB_AWESOME_COMPONENTS, WEB_AWESOME_LOCALE, WEB_AWESOME_SURFACE_MANIFESTS } from './webawesome-runtime-manifest.js';
 
 const VENDOR_COMPONENT_BASE = new URL(
     '../../vendor/webawesome-runtime/dist-cdn/components/',
@@ -39,10 +39,12 @@ const ZH_CN_TRANSLATION_URL = new URL(
 // WA/native surface.
 const CORE_COMPONENTS = WEB_AWESOME_COMPONENTS;
 const loaded = new Map();
+const pending = new Set();
 const ownedThemeNodes = new Set();
 let runtimeState = 'idle';
 let runtimePromise = null;
 let runtimeError = null;
+let translationPromise = null;
 
 function isNextUi() {
     return document.documentElement.dataset.uiMode === 'next';
@@ -57,34 +59,60 @@ async function loadComponents(tags) {
     if (unsupported.length) {
         throw new Error(`WebAwesomeAdapter: components are not in the runtime manifest: ${unsupported.join(', ')}`);
     }
-    if (runtimeState === 'ready') return CORE_COMPONENTS;
+    if (runtimeState === 'ready' && requested.every(tag => loaded.has(tag))) return requested;
     if (runtimeState === 'failed') throw runtimeError;
-    if (runtimePromise) return runtimePromise;
-
-    runtimeState = 'loading';
-    runtimePromise = Promise.all(
-        [import(ZH_CN_TRANSLATION_URL), ...CORE_COMPONENTS.map(tag => import(`${VENDOR_COMPONENT_BASE}${tag}/${tag}.js`))]
-    ).then(modules => {
-        modules.slice(1).forEach((module, index) => loaded.set(CORE_COMPONENTS[index], module));
-        runtimeState = 'ready';
-        window.dispatchEvent(new CustomEvent('vcp-webawesome-loaded', {
-            detail: { tags: [...CORE_COMPONENTS], state: runtimeState },
-        }));
-        return CORE_COMPONENTS;
-    }).catch(error => {
-        loaded.clear();
-        runtimeState = 'failed';
-        runtimeError = error instanceof Error ? error : new Error(String(error));
-        window.dispatchEvent(new CustomEvent('vcp-webawesome-failed', {
-            detail: {
-                tags: [...CORE_COMPONENTS],
-                state: runtimeState,
-                error: String(runtimeError.message || runtimeError),
-            },
-        }));
-        throw runtimeError;
-    });
-    return runtimePromise;
+    requested.filter(tag => !loaded.has(tag)).forEach(tag => pending.add(tag));
+    while (requested.some(tag => !loaded.has(tag))) {
+        if (!runtimePromise) {
+            // Defer the batch boundary by one microtask so concurrent Surface
+            // requests coalesce into one import transaction.  The state
+            // transition itself is synchronous: callers must immediately see
+            // that this document has an active runtime transaction, rather
+            // than observing a misleading `idle` gap until the microtask runs.
+            runtimeState = 'loading';
+            runtimePromise = Promise.resolve().then(async () => {
+                const batch = [...pending];
+                pending.clear();
+                try {
+                    translationPromise ||= import(ZH_CN_TRANSLATION_URL);
+                    const modules = await Promise.all([
+                        translationPromise,
+                        ...batch.map(tag => import(`${VENDOR_COMPONENT_BASE}${tag}/${tag}.js`)),
+                    ]);
+                    modules.slice(1).forEach((module, index) => loaded.set(batch[index], module));
+                    runtimeState = 'ready';
+                    window.dispatchEvent(new CustomEvent('vcp-webawesome-loaded', {
+                        detail: {
+                            tags: [...CORE_COMPONENTS],
+                            requestedTags: batch,
+                            loadedTags: [...loaded.keys()],
+                            state: runtimeState,
+                        },
+                    }));
+                } catch (error) {
+                    loaded.clear();
+                    pending.clear();
+                    runtimeState = 'failed';
+                    runtimeError = error instanceof Error ? error : new Error(String(error));
+                    window.dispatchEvent(new CustomEvent('vcp-webawesome-failed', {
+                        detail: {
+                            tags: [...CORE_COMPONENTS],
+                            requestedTags: batch,
+                            state: runtimeState,
+                            error: String(runtimeError.message || runtimeError),
+                        },
+                    }));
+                    throw runtimeError;
+                }
+            }).finally(() => {
+                runtimePromise = null;
+            });
+        }
+        await runtimePromise;
+        if (runtimeState === 'failed') throw runtimeError;
+        requested.filter(tag => !loaded.has(tag)).forEach(tag => pending.add(tag));
+    }
+    return requested;
 }
 
 function setAttributes(element, attrs = {}) {
@@ -136,6 +164,7 @@ function getRuntimeState() {
     return Object.freeze({
         state: runtimeState,
         components: [...CORE_COMPONENTS],
+        loaded: [...loaded.keys()],
         locale: WEB_AWESOME_LOCALE,
         error: runtimeError ? String(runtimeError.message || runtimeError) : null,
     });
@@ -241,7 +270,8 @@ window.VCPWebAwesome = Object.freeze({
     applyTokens,
     registerTheme,
     destroy,
-    isNextUi
+    isNextUi,
+    surfaceManifests: WEB_AWESOME_SURFACE_MANIFESTS
 });
 
 window.dispatchEvent(new CustomEvent('vcp-webawesome-adapter-ready'));
@@ -259,5 +289,6 @@ export default {
     applyTokens,
     registerTheme,
     destroy,
-    isNextUi
+    isNextUi,
+    surfaceManifests: WEB_AWESOME_SURFACE_MANIFESTS
 };
