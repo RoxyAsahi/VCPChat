@@ -94,7 +94,7 @@ unmounted → decision frozen → mounting → mounted → disposing → dispose
 
 ## 7. 当前技术债与迁移顺序
 
-`vcp-ui.js` 已从约 2,380 行降到约 2,200 行，Select policy 与 WA sibling proxy 分别进入 `select-provider.js` 和 `select-webawesome-proxy.js`；facade 只负责做 Provider 决策并注入共享 controller 能力。主文件仍混合其他 factory、feedback、pattern 和兼容层，后续继续按组件域拆分。当前 Select proxy 保留了对原节点 `value/selectedIndex/add/remove/focus` 的临时 property bridge，以兼容“直接赋值但不发事件”的旧调用；这比修改 `querySelector()` 更窄，但仍是待消除债务。
+`vcp-ui.js` 已从约 2,380 行降到约 2,200 行，Select policy 与 WA sibling proxy 分别进入 `select-provider.js` 和 `select-webawesome-proxy.js`；facade 只负责做 Provider 决策并注入共享 controller 能力。主文件仍混合其他 factory、feedback、pattern 和兼容层，后续继续按组件域拆分。当前 Select proxy 已移除原节点 `value/selectedIndex/add/remove/focus` property bridge；业务写入通过显式 Surface refresh 或标准 DOM 事件完成。Stage 2 的真实 deferred Electron 证据仍待补齐。
 
 执行顺序：
 

@@ -9,7 +9,9 @@ let nextScope = null;
 
 function hasActiveTarget() {
     const sidebarSettings = document.querySelector('#tabContentSettings[aria-hidden="false"]');
-    const globalSettings = document.querySelector('#globalSettingsModal:not([hidden])');
+    // The modal template remains connected after close; `.active` is the
+    // canonical visibility signal emitted by ui-helpers.
+    const globalSettings = document.querySelector('#globalSettingsModal.active');
     return Boolean(sidebarSettings?.isConnected || globalSettings?.isConnected);
 }
 
