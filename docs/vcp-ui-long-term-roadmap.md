@@ -130,6 +130,13 @@
 
 ## 8. 阶段 3：跨平台 Select 决策
 
+### 当前调研事实（2026-08-17）
+
+- 本地 Electron 包为 `41.10.4`；真实应用的 `process.versions.chrome`、Windows 构建和显示缩放尚未采集，历史文档中的 Chromium 数字不作为本阶段证据。
+- 当前 policy 没有平台分支：`auto` 在 Web Awesome ready 时为 existing Select 使用 sibling proxy，owned Select 使用 WA-owned；未 ready 时稳定回退 Native。Customizable Native 只接受显式请求，并要求 `appearance: base-select` 与 `::picker(select)` 同时被支持。
+- 因此不能仅凭 `CSS.supports`、macOS 截图、UA spoof 或 Chromium 版本开放 Customizable Native 的 `auto` 默认。Windows 任一键盘、视觉、缩放或可访问性关键项未通过时，继续保持显式实验 Provider。
+- 最小矩阵必须覆盖两平台的 provider/reason、亮暗主题、焦点/禁用/校验态、Tab/箭头/Home/End/typeahead/Enter/Escape、250 项滚动、最小窗口/DPI、动态 options/value、form reset、20 次 open-close-destroy 和 WA import failure→Native；同时采集 listener、Scope、Shadow DOM、detached options 与启动成本。
+
 ### 工作
 
 - macOS、Windows 比较 Native、Customizable Native、WA。
