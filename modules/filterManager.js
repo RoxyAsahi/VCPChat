@@ -3,10 +3,30 @@ window.filterManager = (() => {
     let _electronAPI;
     let _uiHelper;
     let _globalSettingsRef;
+    const stateChannel = window.VCPStateChannels?.create('notification-filter', Object.freeze({
+        ready: false, enabled: false, ruleCount: 0
+    })) || null;
 
     // --- Helper Functions to access refs ---
     const getGlobalSettings = () => _globalSettingsRef.get();
     const setGlobalSettings = (newSettings) => _globalSettingsRef.set(newSettings);
+
+    function publishFilterState(source = 'filter-manager') {
+        const settings = _globalSettingsRef ? getGlobalSettings() : {};
+        const state = Object.freeze({
+            ready: Boolean(_globalSettingsRef),
+            enabled: settings?.filterEnabled === true,
+            ruleCount: Array.isArray(settings?.filterRules) ? settings.filterRules.filter(rule => rule.enabled).length : 0,
+        });
+        stateChannel?.publish(state, {
+            source,
+            equals: (left, right) => left?.ready === right.ready
+                && left?.enabled === right.enabled
+                && left?.ruleCount === right.ruleCount,
+        });
+        window.dispatchEvent(new CustomEvent('notification-filter-changed', { detail: state }));
+        return state;
+    }
 
     /**
      * 过滤规则数据结构
@@ -102,11 +122,8 @@ window.filterManager = (() => {
         const settings = getGlobalSettings();
         const previousValue = settings.filterEnabled === true;
         const isActive = typeof forceEnabled === 'boolean' ? forceEnabled : !previousValue;
-        const doNotDisturbBtn = document.getElementById('doNotDisturbBtn');
-
         settings.filterEnabled = isActive;
         setGlobalSettings(settings);
-        doNotDisturbBtn?.classList.toggle('active', isActive);
         localStorage.setItem('filterEnabled', isActive.toString());
 
         try {
@@ -114,19 +131,14 @@ window.filterManager = (() => {
             if (!result?.success) throw new Error(result?.error || '未知错误');
             updateFilterStatusDisplay();
             _uiHelper.showToastNotification(`过滤模式已${isActive ? '开启' : '关闭'}`, 'info');
-            window.dispatchEvent(new CustomEvent('notification-filter-changed', {
-                detail: { enabled: isActive }
-            }));
+            publishFilterState('toggle-committed');
             return { success: true, enabled: isActive };
         } catch (error) {
             settings.filterEnabled = previousValue;
             setGlobalSettings(settings);
-            doNotDisturbBtn?.classList.toggle('active', previousValue);
             localStorage.setItem('filterEnabled', previousValue.toString());
             _uiHelper.showToastNotification(`设置过滤模式失败: ${error.message}`, 'error');
-            window.dispatchEvent(new CustomEvent('notification-filter-changed', {
-                detail: { enabled: previousValue }
-            }));
+            publishFilterState('toggle-rollback');
             return { success: false, enabled: previousValue, error: error.message };
         }
     }
@@ -534,6 +546,8 @@ window.filterManager = (() => {
 
         if (!result.success) {
             _uiHelper.showToastNotification(`保存过滤设置失败: ${result.error}`, 'error');
+        } else {
+            publishFilterState('rules-saved');
         }
     }
 
@@ -625,22 +639,7 @@ window.filterManager = (() => {
         _globalSettingsRef = dependencies.refs.globalSettingsRef;
 
         normalizeToolAutoApprovalRules(getGlobalSettings());
-
-        const doNotDisturbBtn = document.getElementById('doNotDisturbBtn');
-
-        if (doNotDisturbBtn) {
-            // 左键点击：切换过滤总开关
-            doNotDisturbBtn.addEventListener('click', async (e) => {
-                e.preventDefault();
-                await toggleFilterMode();
-            });
-
-            // 右键点击：打开过滤规则设置页面
-            doNotDisturbBtn.addEventListener('contextmenu', (e) => {
-                e.preventDefault();
-                openFilterRulesModal();
-            });
-        }
+        publishFilterState('initialized');
 
         // 🟢 监听模态框就绪事件，动态绑定延迟加载的元素
         document.addEventListener('modal-ready', (e) => {
@@ -725,7 +724,7 @@ window.filterManager = (() => {
             }
         });
 
-        // 移除了 globalFilterCheckbox 的事件监听器，因为现在通过左键点击 doNotDisturbBtn 来切换总开关
+        // The canonical notification menu owns the filter toggle entry.
     }
 
     // --- Public API ---
@@ -734,6 +733,8 @@ window.filterManager = (() => {
         openFilterRulesModal,
         toggleFilterMode,
         isFilterEnabled,
+        getState: () => stateChannel?.get() || publishFilterState('query'),
+        subscribe: (listener, options) => stateChannel?.subscribe(listener, options) || (() => false),
         checkMessageFilter,
         checkToolAutoApproval
     };

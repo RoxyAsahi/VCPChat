@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob: file:; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: file: http: https:; media-src 'self' data: blob: file: http: https:; font-src 'self' data: blob: file: http: https:; connect-src 'self' blob: data:;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob: file:; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: file: http: https:; media-src 'self' data: blob: file: http: https:; font-src 'self' data: blob: file: http: https:; connect-src 'self' blob: data: https:;">
     <title>VCP Scriptorium · 共笔文坊</title>
     <link rel="stylesheet" href="../styles/themes.css">
     <link rel="stylesheet" href="scriptorium.css">
 </head>
-<body>
+<body class="home-state">
     <header class="scriptorium-titlebar">
         <div class="brand-lockup">
             <div class="brand-sigil" aria-hidden="true">S</div>
@@ -34,6 +34,11 @@
             </button>
             <button id="lineage-toggle-btn" class="icon-button titlebar-tool active" title="显示或收起文脉" aria-label="切换文脉" aria-pressed="true">
                 <svg viewBox="0 0 24 24"><path d="M6 3v12"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+            </button>
+            <button id="settings-btn" class="icon-button titlebar-tool"
+                type="button" title="Scriptorium 设置" aria-label="打开设置"
+                aria-haspopup="dialog" aria-expanded="false">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg>
             </button>
             <span class="titlebar-divider"></span>
             <button id="minimize-btn" class="window-button" title="最小化" aria-label="最小化">
@@ -216,24 +221,16 @@
             <button id="insert-block-btn" class="deck-button compact" type="button" title="在当前块后插入">
                 <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/><path d="M4 3h16M4 21h16"/></svg>
             </button>
-            <button class="deck-button compact" data-command="image" title="插入媒体" aria-label="插入媒体">
+            <button id="insert-media-btn" class="deck-button compact"
+                type="button" title="插入图片或媒体（可添加描述）"
+                aria-label="插入图片或媒体，可添加内容描述">
                 <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m4 18 5-5 4 4 3-3 4 4"/></svg>
             </button>
-            <label class="control-shell shape-kind-shell" title="选择 SVG 图形">
-                <span class="sr-only">图形类型</span>
-                <select id="shape-kind-select" aria-label="图形类型">
-                    <option value="rectangle">矩形</option>
-                    <option value="rounded">圆角矩形</option>
-                    <option value="ellipse">椭圆</option>
-                    <option value="triangle">三角形</option>
-                    <option value="star">星形</option>
-                    <option value="arrow">箭头</option>
-                    <option value="line">直线</option>
-                </select>
-            </label>
-            <button id="insert-shape-btn" class="deck-button compact" type="button"
-                title="插入所选 SVG 图形" aria-label="插入图形">
-                <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="12" cy="12" r="4"/></svg>
+            <button id="svg-asset-picker-btn" class="deck-button compact"
+                type="button" title="打开 SVG 图形资产库"
+                aria-label="插入 SVG 图形资产" aria-haspopup="dialog"
+                aria-expanded="false">
+                <svg viewBox="0 0 24 24"><circle cx="7" cy="8" r="3"/><rect x="12" y="5" width="7" height="7" rx="1"/><path d="m5 19 4-7 4 7zM14 16h6M17 13v6"/></svg>
             </button>
             <button id="insert-table-btn" class="deck-button compact" title="插入 3 × 3 表格">
                 <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 10h18M3 15h18M9 4v16M15 4v16"/></svg>
@@ -268,7 +265,32 @@
     </div>
 
     <main class="scriptorium-stage">
-        <aside id="outline-panel" class="outline-panel" aria-label="文档篇章导航">
+        <aside id="outline-panel" class="outline-panel" aria-label="文档导航">
+            <section id="document-library" class="document-library"
+                aria-label="文档系统">
+                <header class="library-header">
+                    <div>
+                        <span class="outline-kicker">DOCUMENT SYSTEM</span>
+                        <h2>文档</h2>
+                    </div>
+                    <button id="library-refresh-btn" class="library-refresh"
+                        type="button" title="刷新文档目录"
+                        aria-label="刷新文档目录">
+                        <svg viewBox="0 0 24 24"><path d="M20 6v5h-5"/><path d="M4 18v-5h5"/><path d="M6.1 9a7 7 0 0 1 11.6-2.6L20 9M4 15l2.3 2.6A7 7 0 0 0 17.9 15"/></svg>
+                    </button>
+                </header>
+                <p class="library-intro">集中访问笔记、文档与演示。展开目录，选择文件即可载入。</p>
+                <div id="document-library-tree" class="document-library-tree"
+                    role="tree" aria-label="笔记、文档和演示目录">
+                    <div class="library-loading" role="status">
+                        正在整理文档目录…
+                    </div>
+                </div>
+                <footer class="library-formats">
+                    VDOCX · DOCX · VPPTX · PPTX · MD · TXT · HTML
+                </footer>
+            </section>
+
             <div class="outline-header">
                 <div>
                     <span class="outline-kicker">DOCUMENT MAP</span>
@@ -457,6 +479,121 @@
                 title="关闭（Esc）" aria-label="关闭查找">×</button>
         </div>
     </section>
+
+    <section id="svg-asset-picker" class="svg-asset-picker" role="dialog"
+        aria-label="SVG 图形资产选择器" hidden>
+        <header class="svg-asset-picker-header">
+            <div>
+                <strong>图形资产</strong>
+                <small id="svg-asset-picker-count">0 个资产</small>
+            </div>
+            <button id="svg-asset-manage-btn" type="button">管理</button>
+        </header>
+        <div class="svg-asset-picker-tools">
+            <input id="svg-asset-picker-search" type="search"
+                placeholder="搜索图形" autocomplete="off">
+            <select id="svg-asset-picker-category" aria-label="图形分类">
+                <option value="">全部分类</option>
+            </select>
+        </div>
+        <div id="svg-asset-picker-grid" class="svg-asset-grid"
+            role="listbox" aria-label="可插入 SVG 资产"></div>
+        <button id="svg-asset-import-card" class="svg-asset-import-card"
+            type="button">
+            <span>＋</span>
+            <strong>批量导入 SVG</strong>
+        </button>
+        <input id="svg-asset-import-input" type="file"
+            accept=".svg,image/svg+xml" multiple hidden>
+    </section>
+
+    <div id="svg-asset-manager-dialog"
+        class="dialog-backdrop svg-asset-manager-backdrop"
+        role="dialog" aria-modal="true"
+        aria-labelledby="svg-asset-manager-title" hidden>
+        <section class="svg-asset-manager-dialog">
+            <header class="svg-asset-manager-header">
+                <div>
+                    <span class="dialog-kicker">SVG VISUAL ASSET LIBRARY</span>
+                    <h2 id="svg-asset-manager-title">图形资产管理</h2>
+                    <p>管理导入与 Agent 创建的静态或动画 SVG 资产；内置资产只读。</p>
+                </div>
+                <button id="svg-asset-manager-close-btn" type="button"
+                    aria-label="关闭">×</button>
+            </header>
+            <div class="svg-asset-manager-toolbar">
+                <input id="svg-asset-manager-search" type="search"
+                    placeholder="搜索名称、分类或标签" autocomplete="off">
+                <select id="svg-asset-manager-kind">
+                    <option value="">静态与动画</option>
+                    <option value="static">静态 SVG</option>
+                    <option value="animated">动画 SVG</option>
+                </select>
+                <button id="svg-asset-manager-import-btn"
+                    type="button">批量导入</button>
+                <button id="svg-asset-manager-export-btn"
+                    type="button">导出资产包</button>
+            </div>
+            <div class="svg-asset-manager-body">
+                <div id="svg-asset-manager-list"
+                    class="svg-asset-manager-list"></div>
+                <form id="svg-asset-editor-form" class="svg-asset-editor">
+                    <div class="svg-asset-editor-meta">
+                        <span id="svg-asset-editor-origin">选择一个资产</span>
+                        <h3 id="svg-asset-editor-heading">资产预览</h3>
+                    </div>
+                    <iframe id="svg-asset-preview-frame"
+                        class="svg-asset-preview-frame" sandbox=""
+                        title="SVG 资产隔离预览"></iframe>
+                    <div class="svg-asset-editor-fields">
+                        <label>
+                            <span>资产名称</span>
+                            <input id="svg-asset-name-input" maxlength="120">
+                        </label>
+                        <label>
+                            <span>分类</span>
+                            <input id="svg-asset-category-input" maxlength="80">
+                        </label>
+                        <label class="svg-asset-editor-wide">
+                            <span>内容描述</span>
+                            <textarea id="svg-asset-description-input"
+                                maxlength="1200"></textarea>
+                        </label>
+                        <label class="svg-asset-editor-wide">
+                            <span>标签（逗号分隔）</span>
+                            <input id="svg-asset-tags-input">
+                        </label>
+                        <label>
+                            <span>默认宽度</span>
+                            <input id="svg-asset-width-input" type="number"
+                                min="24" max="4096">
+                        </label>
+                        <label>
+                            <span>默认高度</span>
+                            <input id="svg-asset-height-input" type="number"
+                                min="24" max="4096">
+                        </label>
+                        <label class="svg-asset-editor-wide">
+                            <span>SVG 源码</span>
+                            <textarea id="svg-asset-source-input"
+                                class="object-code-input"
+                                spellcheck="false"></textarea>
+                        </label>
+                    </div>
+                    <div id="svg-asset-editor-diagnostics"
+                        class="object-source-diagnostics">
+                        等待选择资产
+                    </div>
+                    <footer class="svg-asset-editor-actions">
+                        <button id="svg-asset-delete-btn" type="button"
+                            class="dialog-danger" disabled>删除资产包</button>
+                        <button id="svg-asset-save-btn" type="submit"
+                            class="dialog-confirm" disabled>保存资产</button>
+                    </footer>
+                </form>
+            </div>
+        </section>
+    </div>
 
     <div id="style-library-dialog" class="style-library-backdrop" role="dialog" aria-modal="true" aria-labelledby="style-library-title" hidden>
         <section class="style-library-dialog">
@@ -814,6 +951,41 @@
         </section>
     </div>
 
+    <div id="settings-dialog" class="dialog-backdrop" role="dialog"
+        aria-modal="true" aria-labelledby="settings-dialog-title" hidden>
+        <section class="settings-dialog">
+            <header class="settings-dialog-header">
+                <div>
+                    <span class="dialog-kicker">SCRIPTORIUM PREFERENCES</span>
+                    <h2 id="settings-dialog-title">设置</h2>
+                    <p>这些偏好只保存在本机，不会写入文档工程。</p>
+                </div>
+                <button id="settings-close-btn" type="button"
+                    aria-label="关闭设置">×</button>
+            </header>
+            <div class="settings-dialog-body">
+                <section class="settings-group">
+                    <span class="settings-group-kicker">网络与字体</span>
+                    <label class="settings-toggle-row">
+                        <span class="settings-toggle-copy">
+                            <strong>信任网络字体</strong>
+                            <small>直接加载文档中的 HTTPS 字体 URL，不下载、不建立本地字体索引，HTML 导出也保留网络 URL。</small>
+                        </span>
+                        <input id="trust-network-fonts-toggle"
+                            type="checkbox" role="switch">
+                    </label>
+                    <div id="network-font-trust-status"
+                        class="settings-status" role="status">
+                        受控模式：下载字体并收纳到本地工程
+                    </div>
+                    <p class="settings-risk-note">
+                        开启后渲染与离线可用性依赖字体服务器，服务器也可能获知网络请求信息。仅对可信文档与可信字体提供方启用。
+                    </p>
+                </section>
+            </div>
+        </section>
+    </div>
+
     <div id="security-review-dialog" class="dialog-backdrop" role="dialog"
         aria-modal="true" aria-labelledby="security-review-dialog-title" hidden>
         <section class="security-review-dialog">
@@ -931,8 +1103,11 @@
     <script src="scriptorium-async.js"></script>
     <script src="scriptorium-export-resources.js"></script>
     <script src="scriptorium-objects.js"></script>
+    <script src="vdoc-svg-asset-library.js"></script>
+    <script src="scriptorium-svg-assets.js"></script>
     <script src="scriptorium-rendered-text.js"></script>
 
+    <script src="scriptorium-settings.js"></script>
     <script src="scriptorium-document-store.js"></script>
     <script src="scriptorium-dom-selection.js"></script>
     <script src="scriptorium-edit-history.js"></script>
@@ -959,7 +1134,9 @@
     <script src="scriptorium-lineage-ui.js"></script>
 
     <script src="scriptorium-runtime.js"></script>
+    <script src="scriptorium-network-fonts.js"></script>
     <script src="scriptorium-source-editor.js"></script>
+    <script src="scriptorium-library.js"></script>
     <script src="scriptorium-session.js"></script>
     <script src="scriptorium-flow-adapter.js"></script>
     <script src="scriptorium-deck-adapter.js"></script>

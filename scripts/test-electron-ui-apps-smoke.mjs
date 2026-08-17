@@ -5,8 +5,8 @@
 //   - the UI 组件库 internal app lazy-registers wa-* elements,
 //   - global settings modal (next): enhanced controls, save bar dirty state,
 //     injected search, focus/Escape keyboard flow; classic teardown,
-//   - Notes and Translator mount their active Next presentations,
-//   - other catalog applications open through the generic host but stay on
+//   - every child business application opens through the generic host but
+//     stays on
 //     their byte-identical upstream Classic pages,
 //   - switching the whole application to Classic leaves every business page
 //     on its original DOM with no VCPUI/Web Awesome surface mounted.
@@ -66,8 +66,8 @@ async function capture(page, name) {
 }
 
 // ── Embedded page manifest ────────────────────────────────────────────────
-// `nextEnabled` is intentionally limited to Notes and Translator. Every other
-// entry exercises host integration only; its page source is upstream Classic.
+// Every entry exercises host integration only; its page source and
+// presentation remain upstream Classic.
 const EMBEDDED_APPS = [
     {
         id: 'open-note-mini-window', action: 'open-note-mini-window', name: '便签', key: 'notemini.html',
@@ -76,7 +76,6 @@ const EMBEDDED_APPS = [
     },
     {
         id: 'open-translator-window', action: 'open-translator-window', name: '翻译', key: 'translator.html',
-        nextEnabled: true,
         shellTitle: '翻译助手', integrated: true, minWa: { 'wa-tooltip': 1, 'wa-select': 2 }, minHeaderRects: 0, minNativeEnhanced: 2,
         legacySelector: '.translator-container', bodyFocus: '.vcp-ui-page-shell-content textarea',
     },
@@ -97,7 +96,6 @@ const EMBEDDED_APPS = [
     },
     {
         id: 'open-notes-window', action: 'open-notes-window', name: '笔记', key: 'notes.html',
-        nextEnabled: true,
         shellTitle: '我的笔记', integrated: true, minWa: { 'wa-tooltip': 1 }, minHeaderRects: 0, minNativeEnhanced: 1,
         legacySelector: '.container', bodyFocus: '.vcp-ui-page-shell-content input',
     },
@@ -219,8 +217,15 @@ const LONG_TEXT_SCRIPT = () => {
 
 async function waitForChildPage(browser, key, deadline, label) {
     while (Date.now() < deadline) {
-        const found = (await browser.pages()).find(candidate => candidate.url().includes(key) && !candidate.isClosed());
-        if (found) return found;
+        // Do not enumerate browser.pages() while WebContentsView targets are
+        // being created/destroyed: Puppeteer eagerly initializes every target
+        // and can race Network.enable against a target that is already
+        // closing. Select the matching target first, then attach only to it.
+        const target = browser.targets().find(candidate => candidate.url().includes(key));
+        if (target) {
+            const found = await target.page();
+            if (found && !found.isClosed()) return found;
+        }
         await sleep(150);
     }
     throw new Error(`${label} page (${key}) did not appear`);
@@ -228,11 +233,21 @@ async function waitForChildPage(browser, key, deadline, label) {
 
 async function ensureChildPageClosed(browser, key, deadline, label) {
     while (Date.now() < deadline) {
-        const leftover = (await browser.pages()).find(candidate => candidate.url().includes(key) && !candidate.isClosed());
+        const leftover = browser.targets().find(candidate => candidate.url().includes(key));
         if (!leftover) return;
         await sleep(120);
     }
     throw new Error(`${label} page (${key}) never closed before reopen`);
+}
+
+async function pressEscapeAndAllowTargetClose(page) {
+    try {
+        await page.keyboard.press('Escape');
+    } catch (error) {
+        // Closing an embedded WebContents can destroy its CDP target before
+        // Input.dispatchKeyEvent receives an acknowledgement.
+        if (!/TargetCloseError|Target closed/i.test(`${error?.name || ''} ${error?.message || ''}`)) throw error;
+    }
 }
 
 // Known-benign console noise: the legacy pages load some Font Awesome SVG via
@@ -262,7 +277,7 @@ async function auditNextPage(page, app, captureName, { expectEmbedded = true } =
     assert.equal(state.waRuntime?.locale, 'zh-CN', `${app.name} WA locale is not zh-CN: ${JSON.stringify(state)}`);
     assert.equal(state.waScope, 'true', `${app.name} WA token scope is not mounted: ${JSON.stringify(state)}`);
     assert.equal(state.waThemeOwners, 1, `${app.name} WA theme ownership leaked or duplicated: ${JSON.stringify(state)}`);
-    assert.equal(state.hasSelectObserver, true, `${app.name} Select observer was not mounted: ${JSON.stringify(state)}`);
+    assert.equal(state.hasSelectObserver, false, `${app.name} mounted a document-wide Select observer: ${JSON.stringify(state)}`);
     if (expectEmbedded && app.integrated) {
         assert.equal(state.integratedShell, true, `${app.name} must use the shared integrated shell: ${JSON.stringify(state)}`);
         assert.equal(state.shellHeaderDisplay, 'none', `${app.name} embedded duplicate header must be hidden: ${JSON.stringify(state)}`);
@@ -343,18 +358,42 @@ async function auditNextPage(page, app, captureName, { expectEmbedded = true } =
 async function auditUpstreamClassicPage(page, app, captureName) {
     await page.waitForFunction((selector) => document.querySelector(selector), { timeout: timeoutMs }, app.legacySelector || app.legacy);
     await sleep(300);
-    const state = await page.evaluate((legacySelector) => ({
-        uiMode: document.documentElement.dataset.uiMode || 'classic',
-        hasShell: Boolean(document.querySelector('.vcp-ui-page-shell')),
-        waCount: document.querySelectorAll('wa-button, wa-input, wa-select, wa-card, wa-tooltip').length,
-        bodyScope: document.body.classList.contains('vcp-ui-scope'),
-        legacyPresent: Boolean(document.querySelector(legacySelector)),
-    }), app.legacySelector || app.legacy);
+    const state = await page.evaluate(async ({ legacySelector, action }) => {
+        const utilityApi = window.utilityAPI;
+        let pluginListProbe = null;
+        if (action === 'open-plugin-manager-window' && typeof utilityApi?.pluginManagerListPlugins === 'function') {
+            pluginListProbe = await utilityApi.pluginManagerListPlugins();
+        }
+        return {
+            uiMode: document.documentElement.dataset.uiMode || 'classic',
+            hasShell: Boolean(document.querySelector('.vcp-ui-page-shell')),
+            waCount: document.querySelectorAll('wa-button, wa-input, wa-select, wa-card, wa-tooltip').length,
+            bodyScope: document.body.classList.contains('vcp-ui-scope'),
+            legacyPresent: Boolean(document.querySelector(legacySelector)),
+            embeddedFlag: document.documentElement.dataset.vcpEmbeddedApp || '',
+            hasUtilityApi: Boolean(utilityApi),
+            hasLoadSettings: typeof utilityApi?.loadSettings === 'function',
+            hasPluginManagerApi: typeof utilityApi?.pluginManagerListPlugins === 'function',
+            pluginListProbe,
+        };
+    }, { legacySelector: app.legacySelector || app.legacy, action: app.action });
     assert.equal(state.uiMode, 'classic', `${app.name} upstream Classic surface must resolve to classic: ${JSON.stringify(state)}`);
     assert.equal(state.hasShell, false, `${app.name} upstream Classic surface must not mount AppPageShell: ${JSON.stringify(state)}`);
     assert.equal(state.waCount, 0, `${app.name} upstream Classic surface must not register WA: ${JSON.stringify(state)}`);
     assert.equal(state.bodyScope, false, `${app.name} upstream Classic surface must not enter next scope: ${JSON.stringify(state)}`);
     assert.ok(state.legacyPresent, `${app.name} upstream Classic DOM missing: ${JSON.stringify(state)}`);
+    assert.equal(state.embeddedFlag, 'true', `${app.name} embedded preload contract missing: ${JSON.stringify(state)}`);
+    assert.equal(state.hasUtilityApi, true, `${app.name} utility preload did not expose its role API: ${JSON.stringify(state)}`);
+    assert.equal(state.hasLoadSettings, true, `${app.name} shared utility IPC is unavailable: ${JSON.stringify(state)}`);
+    if (app.action === 'open-plugin-manager-window') {
+        assert.equal(state.hasPluginManagerApi, true, `插件管理 IPC 未注入: ${JSON.stringify(state)}`);
+        assert.equal(state.pluginListProbe?.success, true, `插件目录读取失败: ${JSON.stringify(state)}`);
+        assert.ok(Array.isArray(state.pluginListProbe?.plugins), `插件目录返回值无效: ${JSON.stringify(state)}`);
+        await page.waitForFunction(
+            () => !document.getElementById('plugin-groups')?.textContent?.includes('IPC 尚未注入'),
+            { timeout: timeoutMs }
+        );
+    }
     await capture(page, captureName);
 }
 
@@ -362,11 +401,32 @@ const appData = await fs.mkdtemp(path.join(os.tmpdir(), 'vcpchat-ui-apps-electro
 const nextSettings = {
     uiMode: 'next',
     enableDistributedServer: false,
-    vcpServerUrl: 'http://127.0.0.1:1',
-    vcpApiKey: 'smoke-test-key',
+    // First-run coverage: the canonical shell, settings and embedded IPC must
+    // be usable before the user configures a VCP server.
+    vcpServerUrl: '',
+    vcpApiKey: '',
 };
-const classicSettings = { ...nextSettings, uiMode: 'classic' };
+// Translator's unchanged upstream Classic page uses a blocking alert when its
+// server fields are empty. Keep the main-window first-run phase blank, then
+// use inert non-empty values for child-host coverage so the upstream alert
+// cannot freeze CDP before Puppeteer has attached to that WebContentsView.
+const embeddedNextSettings = {
+    ...nextSettings,
+    vcpServerUrl: 'http://127.0.0.1:1/v1/chat/completions',
+    vcpApiKey: 'electron-smoke-placeholder',
+};
+const classicSettings = { ...embeddedNextSettings, uiMode: 'classic' };
 await fs.writeFile(path.join(appData, 'settings.json'), JSON.stringify(nextSettings), 'utf8');
+const smokeAgentDir = path.join(appData, 'Agents', 'SmokeAgent');
+await fs.mkdir(smokeAgentDir, { recursive: true });
+await fs.writeFile(path.join(smokeAgentDir, 'config.json'), JSON.stringify({
+    name: 'Smoke Agent',
+    model: 'smoke-model',
+    promptMode: 'original',
+    originalSystemPrompt: 'Smoke prompt',
+    systemPrompt: 'Smoke prompt',
+    stripRegexes: [],
+}), 'utf8');
 
 // Keep the project-root mirror for older packaged/runtime paths while the
 // primary hermetic authority remains VCPCHAT_APP_DATA_DIR.
@@ -456,6 +516,13 @@ try {
     assert.equal(brandAssets.fontLoaded, true, `VCPChat Orbitron wordmark font failed to load: ${JSON.stringify(brandAssets)}`);
     assert.match(brandAssets.computedFamily, /VCP Orbitron/, `VCPChat wordmark resolved to the wrong family: ${JSON.stringify(brandAssets)}`);
     assert.ok(brandAssets.novaWidth > 0 && brandAssets.novaHeight > 0, `Nova launch asset failed to decode: ${JSON.stringify(brandAssets)}`);
+    // Renderer readiness does not imply that the asynchronous frontend-plugin
+    // IPC scan has completed. Audit the plugin after its own readiness
+    // contract instead of racing it under a busy CI/Electron host.
+    await page.waitForFunction(
+        () => Boolean(window.VCPFrontendPlugins?.get?.('vchat-dynamic-wallpaper')),
+        { timeout: timeoutMs }
+    );
     const nextWallpaperIntegration = await page.evaluate(() => ({
         titlePanelPresent: Boolean(document.querySelector('.chat-header #vchat-dynamic-wallpaper-panel')),
         titleGroupPresent: Boolean(document.querySelector('.chat-header #vchat-wallpaper-title-group')),
@@ -584,18 +651,14 @@ try {
             && presentationButton?.getAttribute('aria-expanded') === 'false'
             && document.activeElement === presentationButton;
 
-        const bodyWasDark = document.body.classList.contains('dark-theme');
-        const bodyWasLight = document.body.classList.contains('light-theme');
-        document.body.classList.remove('light-theme');
-        document.body.classList.add('dark-theme');
+        const originalTheme = document.body.classList.contains('dark-theme') ? 'dark' : 'light';
+        window.uiManager.applyTheme('dark');
         await tick();
         const darkThemeActionLabel = document.getElementById('nextUiThemeBtn')?.getAttribute('aria-label');
-        document.body.classList.remove('dark-theme');
-        document.body.classList.add('light-theme');
+        window.uiManager.applyTheme('light');
         await tick();
         const lightThemeActionLabel = document.getElementById('nextUiThemeBtn')?.getAttribute('aria-label');
-        document.body.classList.toggle('dark-theme', bodyWasDark);
-        document.body.classList.toggle('light-theme', bodyWasLight);
+        window.uiManager.applyTheme(originalTheme);
         await tick();
 
         document.getElementById('nextUiThemeBtn')?.click();
@@ -607,6 +670,8 @@ try {
         const memo = document.getElementById('nextUiNotificationMemo');
         const filter = document.getElementById('nextUiNotificationFilterToggle');
         const clear = document.getElementById('nextUiNotificationClear');
+        menu.hidden = true;
+        menuButton.setAttribute('aria-expanded', 'false');
         const openMenu = async () => {
             if (menu.hidden) menuButton.click();
             await tick();
@@ -704,6 +769,35 @@ try {
         protectedPreserved: true,
         removed: 1,
     }, `notification clear must preserve tool approvals: ${JSON.stringify(parityControls)}`);
+    const narrowDock = await page.evaluate(async () => {
+        const sidebar = document.getElementById('notificationsSidebar');
+        const previousWidth = sidebar.style.width;
+        sidebar.classList.add('active');
+        sidebar.style.width = '240px';
+        await new Promise(resolve => setTimeout(resolve, 420));
+        const buttons = [...document.querySelectorAll('#appTrayPinnedApps > .capsule-button')];
+        const state = {
+            labelsHidden: buttons.every(button => getComputedStyle(button.querySelector('.notes-button-label')).display === 'none'),
+            iconsVisible: buttons.every(button => {
+                const icon = button.querySelector('svg');
+                const rect = icon?.getBoundingClientRect();
+                return rect?.width >= 17 && rect?.height >= 17;
+            }),
+            buttonOverflow: buttons.some(button => button.scrollWidth > button.clientWidth + 1),
+            geometry: buttons.map(button => ({
+                clientWidth: button.clientWidth,
+                scrollWidth: button.scrollWidth,
+                width: getComputedStyle(button).width,
+                padding: getComputedStyle(button).padding,
+                gap: getComputedStyle(button).gap,
+            })),
+        };
+        sidebar.style.width = previousWidth;
+        return state;
+    });
+    assert.equal(narrowDock.labelsHidden, true, `narrow notification dock labels are visible: ${JSON.stringify(narrowDock)}`);
+    assert.equal(narrowDock.iconsVisible, true, `narrow notification dock icons are clipped: ${JSON.stringify(narrowDock)}`);
+    assert.equal(narrowDock.buttonOverflow, false, `narrow notification dock buttons overflow: ${JSON.stringify(narrowDock)}`);
     await page.waitForFunction(() => Boolean(window.askNovaController), { timeout: timeoutMs });
     const askNovaEntryState = await page.evaluate(() => ({
         buttons: document.querySelectorAll('button[data-ask-nova-target]').length,
@@ -748,6 +842,14 @@ try {
     await capture(page, 'main-ask-nova.png');
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('.ask-nova-modal-host'), { timeout: timeoutMs });
+    await page.click('button[data-ask-nova-target="backend"]');
+    await page.waitForFunction(() => {
+        const hosts = document.querySelectorAll('.ask-nova-modal-host');
+        return hosts.length === 1
+            && document.querySelector('.ask-nova-target-tab.active')?.dataset.target === 'backend';
+    }, { timeout: timeoutMs });
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.ask-nova-modal-host'), { timeout: timeoutMs });
     summary.push({ surface: '主界面 shell', mode: 'next', pass: true, lucide: bootLucide.lucideIcons, note: 'boot: WA 零请求/零注册，Orbitron/Nova/lucide 已载入，上游消息组件语义保留，应用托盘与 Ask Nova 可用' });
 
     // 2. Open the UI 组件库 internal app; WA must register lazily.
@@ -777,6 +879,96 @@ try {
     await capture(page, 'main-showcase.png');
     summary.push({ surface: 'UI 组件库', mode: 'next', pass: true, lucide: 0, note: 'lazy-registers WA + 拉取 vendored bundle' });
 
+    // Production WA Modal dismissal must release the creation surface, while
+    // the durable create commit point blocks Escape/header/backdrop dismissal.
+    // Activate the main-window kernel through its real settings lifecycle;
+    // the component showcase deliberately owns an isolated comparison loader
+    // and therefore does not make VCPUI switch kernels by side effect.
+    await page.evaluate(() => window.uiHelperFunctions.openModal('globalSettingsModal'));
+    await page.waitForFunction(
+        () => window.VCPWebAwesome?.getRuntimeState?.().state === 'ready',
+        { timeout: timeoutMs }
+    );
+    await page.evaluate(() => window.uiHelperFunctions.closeModal('globalSettingsModal'));
+    const createEntryState = await page.evaluate(async () => {
+        window.__nextDeltaOriginalCommands = window.MainChatCommands;
+        window.MainChatCommands = {
+            ...window.MainChatCommands,
+            createAgent: () => new Promise(resolve => { window.__nextDeltaResolveCreate = resolve; }),
+        };
+        const button = document.getElementById('nextUiCreateItemBtn');
+        button?.click();
+        await new Promise(resolve => setTimeout(resolve, 250));
+        return {
+            buttonPresent: Boolean(button),
+            controllerMounted: window.VCPNextShellController?.isMounted?.() === true,
+            hostPresent: Boolean(document.querySelector('.next-ui-create-dialog-host')),
+            dialogTag: document.querySelector('.next-ui-create-dialog-host')?.firstElementChild?.localName || '',
+            diagnostics: window.VCPNextShellController?.getDiagnostics?.() || null,
+        };
+    });
+    assert.equal(createEntryState.hostPresent, true,
+        `creation entry did not mount a host: ${JSON.stringify(createEntryState)}`);
+    assert.equal(createEntryState.dialogTag, 'wa-dialog',
+        `creation entry did not select the Web Awesome dialog kernel: ${JSON.stringify(createEntryState)}`);
+    await page.waitForFunction(() => Boolean(document.querySelector('.next-ui-create-dialog-host wa-dialog')), { timeout: timeoutMs });
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.next-ui-create-dialog-host'), { timeout: timeoutMs });
+
+    await page.evaluate(() => document.getElementById('nextUiCreateItemBtn')?.click());
+    await page.waitForFunction(() => Boolean(document.querySelector('.next-ui-create-dialog-host wa-dialog')), { timeout: timeoutMs });
+    const lockedCreateDismissal = await page.evaluate(async () => {
+        const host = document.querySelector('.next-ui-create-dialog-host');
+        const form = host?.querySelector('.next-ui-create-dialog-form');
+        const name = form?.querySelector('wa-input, input');
+        if (name) {
+            name.value = 'Delta Contract Agent';
+            name.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+        }
+        form?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const dialog = host?.querySelector('wa-dialog');
+        const hide = new CustomEvent('wa-hide', { bubbles: true, cancelable: true });
+        dialog?.dispatchEvent(hide);
+        return {
+            blocked: hide.defaultPrevented,
+            connected: Boolean(host?.isConnected),
+        };
+    });
+    assert.deepEqual(lockedCreateDismissal, { blocked: true, connected: true },
+        `durable creation did not lock WA dismissal: ${JSON.stringify(lockedCreateDismissal)}`);
+    await page.evaluate(() => window.__nextDeltaResolveCreate?.({ success: false, error: 'controlled creation failure' }));
+    await page.waitForFunction(() => {
+        const host = document.querySelector('.next-ui-create-dialog-host');
+        return host?.textContent?.includes('controlled creation failure');
+    }, { timeout: timeoutMs });
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.next-ui-create-dialog-host'), { timeout: timeoutMs });
+    await page.evaluate(() => {
+        window.MainChatCommands = {
+            ...window.MainChatCommands,
+            createAgent: async () => ({ success: true, navigationSuccess: true }),
+        };
+        document.getElementById('nextUiCreateItemBtn')?.click();
+    });
+    await page.waitForFunction(() => Boolean(document.querySelector('.next-ui-create-dialog-host wa-dialog')), { timeout: timeoutMs });
+    await page.evaluate(() => {
+        const host = document.querySelector('.next-ui-create-dialog-host');
+        const input = host?.querySelector('wa-input, input');
+        if (input) {
+            input.value = 'Successful Delta Agent';
+            input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+        }
+        host?.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    await page.waitForFunction(() => !document.querySelector('.next-ui-create-dialog-host'), { timeout: timeoutMs });
+    await page.evaluate(() => {
+        window.MainChatCommands = window.__nextDeltaOriginalCommands;
+        delete window.__nextDeltaOriginalCommands;
+        delete window.__nextDeltaResolveCreate;
+    });
+    summary.push({ surface: '创建助手 Modal', mode: 'next', pass: true, lucide: 0, note: 'WA Escape 释放资源，提交中禁止用户关闭，成功提交可完成关闭' });
+
     // 3. Global settings modal is enhanced in next mode + keyboard flow.
     await page.waitForFunction(() => document.documentElement.dataset.uiMode === 'next', { timeout: timeoutMs });
     await page.evaluate(() => window.uiHelperFunctions.openModal('globalSettingsModal'));
@@ -802,15 +994,15 @@ try {
     const settingsSelectState = await page.evaluate(() => {
         const modal = document.getElementById('globalSettingsModal');
         return {
-            native: modal?.querySelectorAll('select.vcp-ui-select-source').length || 0,
+            native: modal?.querySelectorAll('select.vcp-ui-native-select').length || 0,
             proxies: modal?.querySelectorAll('wa-select.vcp-ui-select-proxy').length || 0,
-            visibleNative: [...(modal?.querySelectorAll('select.vcp-ui-select-source') || [])]
+            visibleNative: [...(modal?.querySelectorAll('select.vcp-ui-native-select') || [])]
                 .filter(select => !select.hidden && getComputedStyle(select).display !== 'none').length,
         };
     });
-    assert.ok(settingsSelectState.native > 0, `global settings Select sources missing: ${JSON.stringify(settingsSelectState)}`);
-    assert.equal(settingsSelectState.proxies, settingsSelectState.native, `global settings Select proxies mismatch: ${JSON.stringify(settingsSelectState)}`);
-    assert.equal(settingsSelectState.visibleNative, 0, `global settings native Select is still visible: ${JSON.stringify(settingsSelectState)}`);
+    assert.ok(settingsSelectState.native > 0, `global settings native Select controls missing: ${JSON.stringify(settingsSelectState)}`);
+    assert.equal(settingsSelectState.proxies, 0, `legacy settings unexpectedly created WA Select proxies: ${JSON.stringify(settingsSelectState)}`);
+    assert.ok(settingsSelectState.visibleNative > 0, `global settings native Select controls are not usable: ${JSON.stringify(settingsSelectState)}`);
     await capture(page, 'main-settings-next.png');
     // Focus lands on the first field inside the open modal.
     const settingsFocus = await page.evaluate(() => {
@@ -824,8 +1016,39 @@ try {
     await page.evaluate(() => window.uiHelperFunctions.closeModal('globalSettingsModal'));
     summary.push({ surface: '全局设置', mode: 'next', pass: true, lucide: 0, note: '增强输入/保存栏 dirty 态/搜索注入/焦点' });
 
+    // Agent settings are a renderer-owned surface and must not create child
+    // WebContents or accumulate VCPUI adapters when repeatedly revisited.
+    await page.evaluate(() => window.topTabManager.setView('home'));
+    await page.waitForSelector('#agentList [data-item-id="SmokeAgent"]', { timeout: timeoutMs });
+    await page.click('#agentList [data-item-id="SmokeAgent"]');
+    await page.evaluate(() => window.uiManager.switchToTab('settings'));
+    await page.waitForFunction(() => document.getElementById('editingAgentId')?.value === 'SmokeAgent', { timeout: timeoutMs });
+    const settingsProcessBaseline = (await browser.pages()).length;
+    const settingsDomBaseline = await page.evaluate(() => ({
+        enhanced: window.VCPUISettingsBridge?.enhancedCount || 0,
+        promptNodes: document.querySelectorAll('#systemPromptContainer *').length,
+    }));
+    for (let cycle = 0; cycle < 20; cycle += 1) {
+        await page.evaluate(() => {
+            window.uiManager.switchToTab('agents');
+            window.uiManager.switchToTab('settings');
+            return window.settingsManager.displaySettingsForItem();
+        });
+    }
+    await sleep(250);
+    const settingsDomAfter = await page.evaluate(() => ({
+        enhanced: window.VCPUISettingsBridge?.enhancedCount || 0,
+        promptNodes: document.querySelectorAll('#systemPromptContainer *').length,
+    }));
+    assert.equal((await browser.pages()).length, settingsProcessBaseline, 'agent settings visits leaked renderer/WebContents processes');
+    assert.equal(settingsDomAfter.enhanced, settingsDomBaseline.enhanced, `agent settings adapters accumulated: ${JSON.stringify({ settingsDomBaseline, settingsDomAfter })}`);
+    assert.ok(settingsDomAfter.promptNodes <= settingsDomBaseline.promptNodes + 4, `agent prompt DOM accumulated: ${JSON.stringify({ settingsDomBaseline, settingsDomAfter })}`);
+    summary.push({ surface: 'Agent 设置生命周期', mode: 'next', pass: true, lucide: 0, note: '20 次往返不增加 WebContents、VCPUI adapter 或提示词 DOM' });
+
     // 4. Active child presentations plus upstream-Classic host integration.
+    await fs.writeFile(path.join(appData, 'settings.json'), JSON.stringify(embeddedNextSettings), 'utf8');
     for (const app of EMBEDDED_APPS) {
+        console.log(`[electron-ui-apps] opening ${app.name}`);
         const label = `next:${app.name}`;
         await page.evaluate((appDefinition) => window.topTabManager.openEmbeddedApp(appDefinition), {
             id: app.id, action: app.action, name: app.name,
@@ -842,6 +1065,31 @@ try {
         summary.push(app.nextEnabled
             ? { surface: app.name, mode: 'next', pass: true, lucide: 0, note: `shell + ${Object.entries(app.minWa || {}).map(([t, n]) => `${n}+<${t}>`).join(', ')}，native增强>=${app.minNativeEnhanced || 0}，无溢出/重叠/报错` }
             : { surface: app.name, mode: 'upstream-classic', pass: true, lucide: 0, note: '通用宿主打开上游经典页面，未携带实验性 Next 实现' });
+        if (app.action === 'open-note-mini-window') {
+            // The upstream sticky-note page maps Escape to closeWindow(). In
+            // an embedded WebContentsView that must dispose only its tab,
+            // never the owning VCPChat BrowserWindow. Repeat the path to catch
+            // delayed renderer destruction/process accumulation.
+            await pressEscapeAndAllowTargetClose(childPage);
+            await ensureChildPageClosed(browser, app.key, Date.now() + timeoutMs, app.name);
+            await page.waitForFunction(
+                viewId => !document.querySelector(`[data-view-id="${viewId}"]`),
+                { timeout: timeoutMs },
+                `app:${app.id}`
+            );
+            assert.equal(page.isClosed(), false, 'embedded Escape cascaded into the main window');
+            for (let cycle = 0; cycle < 4; cycle += 1) {
+                console.log(`[electron-ui-apps] reopening ${app.name} cycle ${cycle + 1}`);
+                await page.evaluate((appDefinition) => window.topTabManager.openEmbeddedApp(appDefinition), {
+                    id: app.id, action: app.action, name: app.name,
+                });
+                const reopened = await waitForChildPage(browser, app.key, Date.now() + timeoutMs, `${app.name} cycle ${cycle + 1}`);
+                await pressEscapeAndAllowTargetClose(reopened);
+                await ensureChildPageClosed(browser, app.key, Date.now() + timeoutMs, `${app.name} cycle ${cycle + 1}`);
+                assert.equal(page.isClosed(), false, `embedded Escape closed main window in cycle ${cycle + 1}`);
+            }
+            continue;
+        }
         await page.evaluate((appDefinition) => window.topTabManager.closeView(`app:${appDefinition.id}`), { id: app.id });
         await ensureChildPageClosed(browser, app.key, Date.now() + timeoutMs, app.name);
     }
@@ -880,7 +1128,7 @@ try {
     await fs.writeFile(path.join(appData, 'settings.json'), JSON.stringify(nextSettings), 'utf8');
     await writeProjectUiMode('next');
 
-    // 6. Main renderer: switch to classic tears the next-UI surfaces down.
+    // 6. Main renderer: a legacy Classic request stays on the canonical layout.
     await page.evaluate(() => window.uiModeManager.apply('classic', { cache: true }));
     await page.waitForFunction(() => {
         const input = document.getElementById('globalSettingsForm')?.querySelector('input[id]');
@@ -889,7 +1137,7 @@ try {
     const classicMainStyle = await page.evaluate(() => ({
         fontSize: getComputedStyle(document.body).fontSize,
         materialOpticsPresent: Boolean(document.getElementById('vcpMaterialOptics')),
-        classicTitlebarVisible: getComputedStyle(document.querySelector('.title-bar')).display !== 'none',
+        classicTitlebarPresent: Boolean(document.querySelector('.title-bar')),
         nextTopbarHidden: getComputedStyle(document.getElementById('nextUiTopbar')).display === 'none',
         nextSettingsShellPresent: Boolean(document.querySelector('#globalSettingsModal .vcp-ui-settings-shell')),
         webAwesomeElementCount: document.querySelectorAll('wa-button, wa-input, wa-textarea, wa-select, wa-switch, wa-checkbox').length,
@@ -916,20 +1164,20 @@ try {
             .map(node => node.textContent.trim())
             .filter(Boolean),
     }));
-    assert.equal(classicMainStyle.fontSize, '15px', `Classic body typography was changed by Next Appearance: ${JSON.stringify(classicMainStyle)}`);
-    assert.equal(classicMainStyle.materialOpticsPresent, false, `Classic retained Next material runtime DOM: ${JSON.stringify(classicMainStyle)}`);
-    assert.equal(classicMainStyle.classicTitlebarVisible, true, `Classic title bar is not visible: ${JSON.stringify(classicMainStyle)}`);
-    assert.equal(classicMainStyle.nextTopbarHidden, true, `Next top bar leaked into Classic: ${JSON.stringify(classicMainStyle)}`);
-    assert.equal(classicMainStyle.nextSettingsShellPresent, false, `Next SettingsShell leaked into Classic: ${JSON.stringify(classicMainStyle)}`);
-    assert.equal(classicMainStyle.webAwesomeElementCount, 0, `Web Awesome controls leaked into Classic main DOM: ${JSON.stringify(classicMainStyle)}`);
+    assert.equal(classicMainStyle.fontSize, '16px', `legacy mode request changed canonical typography: ${JSON.stringify(classicMainStyle)}`);
+    assert.equal(classicMainStyle.materialOpticsPresent, true, `legacy mode request tore down canonical material state: ${JSON.stringify(classicMainStyle)}`);
+    assert.equal(classicMainStyle.classicTitlebarPresent, false, `retired title bar remains in the DOM: ${JSON.stringify(classicMainStyle)}`);
+    assert.equal(classicMainStyle.nextTopbarHidden, false, `canonical top bar disappeared: ${JSON.stringify(classicMainStyle)}`);
+    assert.equal(classicMainStyle.nextSettingsShellPresent, true, `canonical SettingsShell disappeared: ${JSON.stringify(classicMainStyle)}`);
+    assert.ok(classicMainStyle.webAwesomeElementCount > 0, `canonical controls disappeared: ${JSON.stringify(classicMainStyle)}`);
     classicMainStyle.composerButtons.forEach(button => {
-        assert.equal(button.hasSvg, true, `Classic composer button lost its SVG icon: ${JSON.stringify(button)}`);
-        assert.deepEqual(button.leakedText, [], `Classic composer button exposed icon text: ${JSON.stringify(button)}`);
-        assert.notEqual(button.width, 'auto', `Classic composer button has unstable width: ${JSON.stringify(button)}`);
-        assert.notEqual(button.height, 'auto', `Classic composer button has unstable height: ${JSON.stringify(button)}`);
+        assert.equal(button.hasSvg, true, `shared composer button lost its SVG icon: ${JSON.stringify(button)}`);
+        assert.deepEqual(button.leakedText, [], `shared composer button exposed icon text: ${JSON.stringify(button)}`);
+        assert.notEqual(button.width, 'auto', `shared composer button has unstable width: ${JSON.stringify(button)}`);
+        assert.notEqual(button.height, 'auto', `shared composer button has unstable height: ${JSON.stringify(button)}`);
     });
     classicMainStyle.classicNotificationControls.forEach(control => {
-        assert.equal(control.present, true, `Classic notification shortcut is missing: ${JSON.stringify(control)}`);
+        assert.equal(control.present, false, `retired notification proxy remains hidden in the DOM: ${JSON.stringify(control)}`);
     });
     assert.equal(classicMainStyle.wallpaperControlPresent, true, `Classic video wallpaper control is missing: ${JSON.stringify(classicMainStyle)}`);
     assert.equal(classicMainStyle.wallpaperControlHasSvg, true, `Classic video wallpaper control lost its SVG icon: ${JSON.stringify(classicMainStyle)}`);
@@ -939,25 +1187,22 @@ try {
     await page.waitForFunction(() => document.getElementById('globalSettingsModal')?.classList.contains('active'), { timeout: timeoutMs });
     const classicSettingsNavigation = await page.evaluate(async () => {
         const modal = document.getElementById('globalSettingsModal');
-        const navItems = [...modal.querySelectorAll('.settings-nav-item')];
-        const target = navItems.find(item => item.dataset.section === 'server-connection');
+        const navItems = [...modal.querySelectorAll('.vcp-ui-list-item')];
+        const target = navItems[1];
         target?.click();
         await new Promise(resolve => setTimeout(resolve, 220));
         return {
             navCount: navItems.length,
-            activeNav: modal.querySelector('.settings-nav-item.active')?.dataset.section || '',
             activeSection: modal.querySelector('.settings-section.active')?.id || '',
             nextShell: Boolean(modal.querySelector('.vcp-ui-settings-shell')),
         };
     });
     assert.equal(classicSettingsNavigation.navCount, 8, `Classic settings category count changed: ${JSON.stringify(classicSettingsNavigation)}`);
-    assert.equal(classicSettingsNavigation.activeNav, 'server-connection', `Classic settings navigation click failed: ${JSON.stringify(classicSettingsNavigation)}`);
     assert.equal(classicSettingsNavigation.activeSection, 'section-server-connection', `Classic settings content did not follow navigation: ${JSON.stringify(classicSettingsNavigation)}`);
-    assert.equal(classicSettingsNavigation.nextShell, false, `Next SettingsShell mounted during Classic settings navigation: ${JSON.stringify(classicSettingsNavigation)}`);
+    assert.equal(classicSettingsNavigation.nextShell, true, `canonical SettingsShell was not retained: ${JSON.stringify(classicSettingsNavigation)}`);
     const classicAppearanceSettings = await page.evaluate(async () => {
         const modal = document.getElementById('globalSettingsModal');
-        const appearanceNav = [...modal.querySelectorAll('.settings-nav-item')]
-            .find(item => item.dataset.section === 'appearance-settings');
+        const appearanceNav = [...modal.querySelectorAll('.vcp-ui-list-item')][2];
         appearanceNav?.click();
         await new Promise(resolve => setTimeout(resolve, 220));
         const workbench = modal.querySelector('.appearance-workbench-card');
@@ -976,14 +1221,14 @@ try {
     assert.equal(classicAppearanceSettings.activeSection, 'section-appearance-settings', `Classic appearance section did not open: ${JSON.stringify(classicAppearanceSettings)}`);
     assert.equal(classicAppearanceSettings.workbenchDisplay, 'grid', `Classic appearance workbench fell back to unstyled flow: ${JSON.stringify(classicAppearanceSettings)}`);
     assert.notEqual(classicAppearanceSettings.workbenchColumns, 'none', `Classic appearance workbench columns are missing: ${JSON.stringify(classicAppearanceSettings)}`);
-    assert.equal(classicAppearanceSettings.layoutBorder, 'solid', `Classic layout selector retained native fieldset styling: ${JSON.stringify(classicAppearanceSettings)}`);
-    assert.notEqual(classicAppearanceSettings.layoutRadius, '0px', `Classic layout options retained native radio rows: ${JSON.stringify(classicAppearanceSettings)}`);
+    assert.equal(classicAppearanceSettings.layoutBorder, '', `retired layout selector remains visible: ${JSON.stringify(classicAppearanceSettings)}`);
+    assert.equal(classicAppearanceSettings.layoutRadius, '', `retired layout option remains visible: ${JSON.stringify(classicAppearanceSettings)}`);
     assert.equal(classicAppearanceSettings.homeVisualDisplay, 'flex', `Classic home visual controls are not aligned: ${JSON.stringify(classicAppearanceSettings)}`);
     await capture(page, 'main-settings-classic.png');
     await page.evaluate(() => window.uiHelperFunctions.closeModal('globalSettingsModal'));
-    summary.push({ surface: '主窗口与全局设置', mode: 'classic', pass: true, lucide: 0, note: '上游标题栏、输入按钮、通知、壁纸与设置导航保持可用' });
+    summary.push({ surface: '主窗口与全局设置', mode: 'canonical', pass: true, lucide: 0, note: '旧 Classic 配置无法拆卸唯一布局，共享输入、通知、壁纸与设置保持可用' });
 
-    console.log('Electron UI apps smoke passed (boot WA gate, showcase, global settings, 2 active child Next surfaces, upstream-Classic host integration, classic regression).');
+    console.log('Electron UI apps smoke passed (canonical main layout plus upstream-Classic child host integration).');
 } catch (error) {
     console.error(`Electron UI apps smoke failed:\n${error?.stack || error}`);
     for (const [label, errors] of [...pageErrors, ...consoleErrors]) {

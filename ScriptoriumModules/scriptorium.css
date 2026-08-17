@@ -184,7 +184,6 @@ svg {
     justify-content: center;
     gap: 8px;
     min-width: 0;
-    -webkit-app-region: no-drag;
 }
 
 .state-dot {
@@ -238,7 +237,6 @@ svg {
     justify-content: flex-end;
     height: 100%;
     gap: 2px;
-    -webkit-app-region: no-drag;
 }
 
 .titlebar-divider {
@@ -1003,6 +1001,343 @@ body.lineage-collapsed .writing-chamber::after {
     transition: opacity 0.28s ease, transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.document-library {
+    display: none;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    overflow: hidden;
+}
+
+body.home-state .document-library {
+    display: grid;
+}
+
+body.home-state .outline-panel > :not(.document-library) {
+    display: none !important;
+}
+
+.library-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 22px 16px 8px 18px;
+}
+
+.library-header h2 {
+    margin: 4px 0 0;
+    font: 500 26px var(--scriptorium-serif);
+}
+
+.library-refresh {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    place-items: center;
+    border: 1px solid var(--scriptorium-hairline);
+    border-radius: 50%;
+    color: var(--secondary-text);
+    background: color-mix(in srgb, var(--input-bg) 58%, transparent);
+    cursor: pointer;
+    transition: color .16s ease, border-color .16s ease,
+        background .16s ease, transform .2s ease;
+}
+
+.library-refresh:hover,
+.library-refresh:focus-visible {
+    border-color: var(--scriptorium-accent-mid);
+    outline: 0;
+    color: var(--highlight-text);
+    background: var(--scriptorium-accent-soft);
+    transform: rotate(18deg);
+}
+
+.library-refresh:disabled {
+    opacity: .45;
+    cursor: wait;
+}
+
+.library-refresh:disabled svg {
+    animation: libraryRefreshSpin .8s linear infinite;
+}
+
+@keyframes libraryRefreshSpin {
+    to { transform: rotate(360deg); }
+}
+
+.library-intro {
+    margin: 0;
+    padding: 0 18px 14px;
+    border-bottom: 1px solid var(--scriptorium-hairline);
+    color: var(--secondary-text);
+    font: 9px/1.65 var(--scriptorium-ui);
+}
+
+.document-library-tree {
+    min-height: 0;
+    padding: 10px 8px 24px;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.library-loading,
+.library-error {
+    margin: 8px;
+    padding: 14px 12px;
+    border: 1px dashed var(--scriptorium-hairline);
+    border-radius: 4px 12px 4px 12px;
+    color: var(--secondary-text);
+    font-size: 9px;
+    line-height: 1.6;
+}
+
+.library-error {
+    border-color: color-mix(
+        in srgb,
+        var(--danger-color) 44%,
+        var(--scriptorium-hairline)
+    );
+    color: var(--danger-color);
+}
+
+.library-root {
+    margin-bottom: 7px;
+    overflow: hidden;
+    border: 1px solid var(--scriptorium-hairline);
+    border-radius: 4px 13px 4px 13px;
+    background: color-mix(in srgb, var(--input-bg) 44%, transparent);
+}
+
+.library-root[open] {
+    border-color: color-mix(
+        in srgb,
+        var(--highlight-text) 24%,
+        var(--scriptorium-hairline)
+    );
+    background: color-mix(
+        in srgb,
+        var(--input-bg) 60%,
+        var(--scriptorium-accent-soft)
+    );
+}
+
+.library-root-summary,
+.library-directory-summary {
+    list-style: none;
+    cursor: pointer;
+}
+
+.library-root-summary::-webkit-details-marker,
+.library-directory-summary::-webkit-details-marker {
+    display: none;
+}
+
+.library-root-summary {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    min-height: 51px;
+    padding: 7px 10px;
+}
+
+.library-root-summary:hover,
+.library-root-summary:focus-visible {
+    outline: 0;
+    background: var(--scriptorium-accent-soft);
+}
+
+.library-root-icon {
+    display: grid;
+    width: 28px;
+    height: 30px;
+    place-items: center;
+    border: 1px solid var(--scriptorium-accent-mid);
+    border-radius: 3px 9px 3px 9px;
+    color: var(--highlight-text);
+    background: var(--scriptorium-accent-soft);
+    font: 750 9px/1 var(--scriptorium-serif);
+}
+
+.library-root-copy {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+}
+
+.library-root-copy strong {
+    overflow: hidden;
+    color: var(--primary-text);
+    font: 650 12px/1.3 var(--scriptorium-serif);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.library-root-copy small {
+    overflow: hidden;
+    color: var(--secondary-text);
+    font-size: 7px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.library-chevron {
+    width: 14px;
+    height: 14px;
+    color: var(--secondary-text);
+    transition: transform .16s ease;
+}
+
+details[open] > summary > .library-chevron {
+    transform: rotate(90deg);
+}
+
+.library-children {
+    position: relative;
+    padding: 2px 5px 8px 11px;
+}
+
+.library-root > .library-children {
+    border-top: 1px solid var(--scriptorium-hairline);
+}
+
+.library-directory {
+    position: relative;
+}
+
+.library-directory .library-children {
+    margin-left: 10px;
+    padding: 0 0 1px 7px;
+    border-left: 1px solid var(--scriptorium-hairline);
+}
+
+.library-directory-summary,
+.library-file {
+    position: relative;
+    display: grid;
+    grid-template-columns: 14px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 5px;
+    width: 100%;
+    min-height: 29px;
+    padding: 3px 5px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--secondary-text);
+    background: transparent;
+    text-align: left;
+}
+
+.library-directory-summary:hover,
+.library-directory-summary:focus-visible,
+.library-file:hover,
+.library-file:focus-visible {
+    border-color: var(--scriptorium-hairline);
+    outline: 0;
+    color: var(--primary-text);
+    background: var(--scriptorium-accent-soft);
+}
+
+.library-directory-summary .library-chevron {
+    width: 11px;
+    height: 11px;
+}
+
+.library-node-name {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 9px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.library-directory-summary .library-node-name {
+    font-weight: 650;
+}
+
+.library-directory-count {
+    color: var(--placeholder-text);
+    font-size: 7px;
+    font-variant-numeric: tabular-nums;
+}
+
+.library-file {
+    grid-template-columns: 28px minmax(0, 1fr);
+    min-height: 35px;
+    padding-right: 7px;
+    cursor: pointer;
+}
+
+.library-file-badge {
+    display: grid;
+    width: 27px;
+    height: 23px;
+    place-items: center;
+    border: 1px solid var(--scriptorium-hairline);
+    border-radius: 3px 7px 3px 7px;
+    color: var(--secondary-text);
+    background: color-mix(in srgb, var(--input-bg) 70%, transparent);
+    font: 800 6px/1 var(--scriptorium-ui);
+    letter-spacing: -.02em;
+}
+
+.library-file[data-extension="vdocx"] .library-file-badge,
+.library-file[data-extension="docx"] .library-file-badge {
+    border-color: color-mix(in srgb, #5a8fd8 55%, var(--scriptorium-hairline));
+    color: #79aaf0;
+}
+
+.library-file[data-extension="vpptx"] .library-file-badge,
+.library-file[data-extension="pptx"] .library-file-badge {
+    border-color: color-mix(in srgb, #d77b55 58%, var(--scriptorium-hairline));
+    color: #e99a72;
+}
+
+.library-file[data-extension="md"] .library-file-badge,
+.library-file[data-extension="txt"] .library-file-badge,
+.library-file[data-extension="html"] .library-file-badge {
+    border-color: var(--scriptorium-accent-mid);
+    color: var(--highlight-text);
+}
+
+.library-file-copy {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+}
+
+.library-file-copy strong {
+    overflow: hidden;
+    color: inherit;
+    font: 550 9px/1.25 var(--scriptorium-ui);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.library-file-copy small {
+    color: var(--placeholder-text);
+    font-size: 7px;
+}
+
+.library-root-empty {
+    padding: 11px 8px 9px;
+    color: var(--secondary-text);
+    font-size: 8px;
+    line-height: 1.55;
+}
+
+.library-formats {
+    padding: 9px 12px;
+    border-top: 1px solid var(--scriptorium-hairline);
+    color: var(--placeholder-text);
+    font-size: 6px;
+    font-weight: 750;
+    letter-spacing: .08em;
+    text-align: center;
+}
+
 body.outline-collapsed .outline-panel {
     opacity: 0;
     transform: translateX(-100%);
@@ -1763,7 +2098,9 @@ body.lineage-collapsed .lineage-panel {
     position: fixed;
     right: 20px;
     bottom: 50px;
-    z-index: 500;
+    /* 通知属于应用级反馈，必须覆盖高级样式库、对象检查器、
+       文脉详情及二次确认等所有模态层。 */
+    z-index: 2200;
     display: flex;
     flex-direction: column;
     align-items: flex-end;
@@ -2601,7 +2938,7 @@ body.focus-mode .chamber-aura {
 
 .style-library-backdrop {
     position: fixed;
-    z-index: 180;
+    z-index: 1820;
     inset: 0;
     display: grid;
     padding: 48px;
@@ -4895,4 +5232,626 @@ body.light-theme .object-inspector-fields .object-code-input {
     border-color: rgba(75, 66, 51, .2);
     color: #28332e;
     background: #f7f3e9;
+}
+
+/* ── SVG visual asset picker and manager ─────────────────── */
+.svg-asset-picker {
+    position: fixed;
+    z-index: 1750;
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    max-height: min(620px, calc(100vh - 150px));
+    overflow: hidden;
+    border: 1px solid var(--scriptorium-hairline);
+    border-radius: 5px 18px 5px 18px;
+    color: var(--primary-text);
+    background:
+        radial-gradient(circle at 85% 5%, var(--scriptorium-accent-soft), transparent 34%),
+        var(--scriptorium-glass-solid);
+    box-shadow: 0 24px 72px rgba(0, 0, 0, .46);
+    backdrop-filter: blur(24px) saturate(145%);
+    -webkit-backdrop-filter: blur(24px) saturate(145%);
+    animation: svgAssetPickerReveal .16s cubic-bezier(.22, 1, .36, 1);
+}
+
+@keyframes svgAssetPickerReveal {
+    from {
+        opacity: 0;
+        transform: translateY(-6px) scale(.985);
+    }
+}
+
+.svg-asset-picker-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 13px 14px 9px;
+    border-bottom: 1px solid var(--scriptorium-hairline);
+}
+
+.svg-asset-picker-header > div {
+    display: grid;
+    gap: 2px;
+}
+
+.svg-asset-picker-header strong {
+    font: 650 15px var(--scriptorium-serif);
+}
+
+.svg-asset-picker-header small {
+    color: var(--secondary-text);
+    font-size: 8px;
+}
+
+.svg-asset-picker-header button,
+.svg-asset-picker-tools input,
+.svg-asset-picker-tools select {
+    height: 30px;
+    border: 1px solid var(--scriptorium-hairline);
+    border-radius: 7px;
+    color: var(--primary-text);
+    background: color-mix(in srgb, var(--input-bg) 78%, transparent);
+    font-size: 9px;
+}
+
+.svg-asset-picker-header button {
+    padding: 0 10px;
+    color: var(--highlight-text);
+    cursor: pointer;
+}
+
+.svg-asset-picker-tools {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 120px;
+    gap: 7px;
+    padding: 9px 11px;
+}
+
+.svg-asset-picker-tools input,
+.svg-asset-picker-tools select {
+    min-width: 0;
+    padding: 0 9px;
+    outline: 0;
+}
+
+.svg-asset-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    align-content: start;
+    gap: 7px;
+    min-height: 0;
+    padding: 4px 11px 11px;
+    overflow-y: auto;
+}
+
+.svg-asset-card,
+.svg-asset-manager-card {
+    position: relative;
+    display: grid;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0;
+    border: 1px solid var(--scriptorium-hairline);
+    border-radius: 4px 11px 4px 11px;
+    color: var(--primary-text);
+    background: color-mix(in srgb, var(--input-bg) 58%, transparent);
+    text-align: left;
+    cursor: pointer;
+    transition:
+        border-color .15s ease,
+        background .15s ease,
+        transform .15s ease;
+}
+
+.svg-asset-card:hover,
+.svg-asset-card:focus-visible,
+.svg-asset-card.active,
+.svg-asset-manager-card:hover,
+.svg-asset-manager-card:focus-visible,
+.svg-asset-manager-card.active {
+    border-color: var(--scriptorium-accent-mid);
+    outline: 0;
+    background: var(--scriptorium-accent-soft);
+    transform: translateY(-2px);
+}
+
+.svg-asset-card-preview {
+    display: block;
+    width: 100%;
+    height: 74px;
+    border: 0;
+    pointer-events: none;
+    background:
+        linear-gradient(45deg, rgba(128, 128, 128, .07) 25%, transparent 25%),
+        linear-gradient(-45deg, rgba(128, 128, 128, .07) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, rgba(128, 128, 128, .07) 75%),
+        linear-gradient(-45deg, transparent 75%, rgba(128, 128, 128, .07) 75%);
+    background-position: 0 0, 0 6px, 6px -6px, -6px 0;
+    background-size: 12px 12px;
+}
+
+.svg-asset-card-copy {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+    padding: 7px 8px 8px;
+}
+
+.svg-asset-card-copy strong,
+.svg-asset-card-copy small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.svg-asset-card-copy strong {
+    font: 650 9px var(--scriptorium-ui);
+}
+
+.svg-asset-card-copy small {
+    color: var(--secondary-text);
+    font-size: 7px;
+}
+
+.svg-asset-motion-badge {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    display: grid;
+    width: 20px;
+    height: 20px;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--success-color) 50%, transparent);
+    border-radius: 50%;
+    color: var(--success-color);
+    background: color-mix(in srgb, var(--secondary-bg) 88%, transparent);
+    font: 750 7px var(--scriptorium-ui);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .16);
+}
+
+.svg-asset-import-card {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    min-height: 46px;
+    margin: 0 11px 11px;
+    border: 1px dashed var(--scriptorium-accent-mid);
+    border-radius: 4px 11px 4px 11px;
+    color: var(--highlight-text);
+    background: var(--scriptorium-accent-soft);
+    cursor: pointer;
+}
+
+.svg-asset-import-card span {
+    font-size: 20px;
+    line-height: 1;
+}
+
+.svg-asset-import-card strong {
+    font-size: 9px;
+}
+
+.svg-asset-manager-backdrop {
+    z-index: 1850;
+}
+
+.svg-asset-manager-dialog {
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    width: min(1180px, calc(100vw - 46px));
+    height: min(800px, calc(100vh - 46px));
+    overflow: hidden;
+    border: 1px solid var(--scriptorium-hairline);
+    border-radius: 5px 24px 5px 24px;
+    color: var(--primary-text);
+    background:
+        radial-gradient(circle at 86% 6%, var(--scriptorium-accent-soft), transparent 30%),
+        var(--scriptorium-glass-solid);
+    box-shadow: 0 34px 100px rgba(0, 0, 0, .52);
+}
+
+.svg-asset-manager-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 21px 25px 16px;
+    border-bottom: 1px solid var(--scriptorium-hairline);
+}
+
+.svg-asset-manager-header h2 {
+    margin: 5px 0 3px;
+    font: 500 27px var(--scriptorium-serif);
+}
+
+.svg-asset-manager-header p {
+    margin: 0;
+    color: var(--secondary-text);
+    font-size: 10px;
+}
+
+.svg-asset-manager-header > button {
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--scriptorium-hairline);
+    border-radius: 50%;
+    color: var(--secondary-text);
+    background: transparent;
+    font-size: 22px;
+    cursor: pointer;
+}
+
+.svg-asset-manager-toolbar {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) 140px auto auto;
+    gap: 8px;
+    padding: 11px 16px;
+    border-bottom: 1px solid var(--scriptorium-hairline);
+}
+
+.svg-asset-manager-toolbar input,
+.svg-asset-manager-toolbar select,
+.svg-asset-manager-toolbar button {
+    min-width: 0;
+    height: 34px;
+    padding: 0 10px;
+    border: 1px solid var(--scriptorium-hairline);
+    border-radius: 7px;
+    color: var(--primary-text);
+    background: color-mix(in srgb, var(--input-bg) 78%, transparent);
+    font-size: 9px;
+}
+
+.svg-asset-manager-toolbar button {
+    color: var(--highlight-text);
+    cursor: pointer;
+}
+
+.svg-asset-manager-body {
+    display: grid;
+    grid-template-columns: minmax(280px, .72fr) minmax(520px, 1.28fr);
+    min-width: 0;
+    min-height: 0;
+}
+
+.svg-asset-manager-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+    gap: 8px;
+    min-height: 0;
+    padding: 13px;
+    overflow-y: auto;
+    border-right: 1px solid var(--scriptorium-hairline);
+}
+
+.svg-asset-manager-card .svg-asset-card-preview {
+    height: 92px;
+}
+
+.svg-asset-editor {
+    display: grid;
+    grid-template-rows: auto minmax(180px, .8fr) auto auto auto;
+    min-width: 0;
+    min-height: 0;
+    padding: 15px 18px 17px;
+    overflow-y: auto;
+}
+
+.svg-asset-editor-meta {
+    padding: 0 2px 10px;
+}
+
+.svg-asset-editor-meta span {
+    color: var(--highlight-text);
+    font-size: 8px;
+    font-weight: 750;
+    letter-spacing: .08em;
+}
+
+.svg-asset-editor-meta h3 {
+    margin: 4px 0 0;
+    font: 600 20px var(--scriptorium-serif);
+}
+
+.svg-asset-preview-frame {
+    width: 100%;
+    min-height: 190px;
+    border: 1px solid rgba(75, 62, 44, .2);
+    border-radius: 4px 14px 4px 14px;
+    background:
+        linear-gradient(45deg, #eee9de 25%, transparent 25%),
+        linear-gradient(-45deg, #eee9de 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #eee9de 75%),
+        linear-gradient(-45deg, transparent 75%, #eee9de 75%),
+        #fffdf8;
+    background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+    background-size: 16px 16px;
+}
+
+.svg-asset-editor-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 9px;
+    padding-top: 13px;
+}
+
+.svg-asset-editor-fields label {
+    display: grid;
+    gap: 5px;
+    color: var(--secondary-text);
+    font-size: 8px;
+}
+
+.svg-asset-editor-fields input,
+.svg-asset-editor-fields textarea {
+    width: 100%;
+    min-width: 0;
+    border: 1px solid var(--scriptorium-hairline);
+    border-radius: 7px;
+    outline: 0;
+    color: var(--primary-text);
+    background: var(--input-bg);
+    font-size: 9px;
+}
+
+.svg-asset-editor-fields input {
+    height: 34px;
+    padding: 0 9px;
+}
+
+.svg-asset-editor-fields textarea {
+    min-height: 58px;
+    padding: 8px 9px;
+    resize: vertical;
+}
+
+.svg-asset-editor-fields .object-code-input {
+    min-height: 150px;
+    color: #d9e0dc;
+    background: #111614;
+    font: 9px/1.55 Consolas, monospace;
+}
+
+.svg-asset-editor-wide {
+    grid-column: 1 / -1;
+}
+
+.svg-asset-editor-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 8px;
+}
+
+.svg-asset-editor-actions button {
+    height: 36px;
+    padding: 0 14px;
+    border: 1px solid var(--scriptorium-hairline);
+    border-radius: 7px;
+    color: var(--primary-text);
+    background: transparent;
+    cursor: pointer;
+}
+
+.svg-asset-editor-actions .dialog-danger {
+    margin-right: auto;
+    color: var(--danger-color);
+    border-color: color-mix(in srgb, var(--danger-color) 48%, var(--scriptorium-hairline));
+}
+
+.svg-asset-editor-actions .dialog-confirm {
+    color: var(--text-on-accent);
+    border-color: var(--button-bg);
+    background: var(--button-bg);
+}
+
+.svg-asset-editor-actions button:disabled,
+.svg-asset-editor-fields :disabled {
+    opacity: .4;
+    cursor: default;
+}
+
+@media (max-width: 900px) {
+    .svg-asset-manager-dialog {
+        width: calc(100vw - 20px);
+        height: calc(100vh - 20px);
+    }
+
+    .svg-asset-manager-body {
+        grid-template-columns: 1fr;
+        overflow-y: auto;
+    }
+
+    .svg-asset-manager-list {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        max-height: 250px;
+        border-right: 0;
+        border-bottom: 1px solid var(--scriptorium-hairline);
+    }
+
+    .svg-asset-manager-toolbar {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 560px) {
+    .svg-asset-grid,
+    .svg-asset-manager-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .svg-asset-editor-fields {
+        grid-template-columns: 1fr;
+    }
+
+    .svg-asset-editor-wide {
+        grid-column: 1;
+    }
+}
+
+/* ── Scriptorium local preferences ───────────────────────── */
+.settings-dialog {
+    width: min(620px, calc(100vw - 40px));
+    overflow: hidden;
+    border: 1px solid var(--scriptorium-hairline);
+    border-radius: 5px 24px 5px 24px;
+    color: var(--primary-text);
+    background:
+        radial-gradient(circle at 86% 7%, var(--scriptorium-accent-soft), transparent 32%),
+        var(--scriptorium-glass-solid);
+    box-shadow: var(--scriptorium-shadow);
+}
+
+.settings-dialog-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 24px 26px 18px;
+    border-bottom: 1px solid var(--scriptorium-hairline);
+}
+
+.settings-dialog-header h2 {
+    margin: 5px 0 3px;
+    font: 500 28px var(--scriptorium-serif);
+}
+
+.settings-dialog-header p {
+    margin: 0;
+    color: var(--secondary-text);
+    font-size: 10px;
+}
+
+.settings-dialog-header > button {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    flex: 0 0 auto;
+    padding: 0;
+    place-items: center;
+    border: 1px solid var(--scriptorium-hairline);
+    border-radius: 50%;
+    color: var(--secondary-text);
+    background: transparent;
+    font-size: 23px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.settings-dialog-header > button:hover,
+.settings-dialog-header > button:focus-visible {
+    border-color: var(--scriptorium-accent-mid);
+    outline: 0;
+    color: var(--highlight-text);
+    background: var(--scriptorium-accent-soft);
+}
+
+.settings-dialog-body {
+    padding: 20px 24px 26px;
+}
+
+.settings-group {
+    display: grid;
+    gap: 12px;
+}
+
+.settings-group-kicker {
+    color: var(--highlight-text);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+}
+
+.settings-toggle-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 18px;
+    padding: 16px;
+    border: 1px solid var(--scriptorium-hairline);
+    border-radius: 4px 14px 4px 14px;
+    background: color-mix(in srgb, var(--input-bg) 58%, transparent);
+    cursor: pointer;
+}
+
+.settings-toggle-copy {
+    display: grid;
+    gap: 5px;
+}
+
+.settings-toggle-copy strong {
+    color: var(--primary-text);
+    font: 650 14px var(--scriptorium-serif);
+}
+
+.settings-toggle-copy small {
+    color: var(--secondary-text);
+    font-size: 9px;
+    line-height: 1.65;
+}
+
+.settings-toggle-row input {
+    width: 38px;
+    height: 20px;
+    margin: 0;
+    accent-color: var(--highlight-text);
+    cursor: pointer;
+}
+
+.settings-toggle-row:has(input:checked) {
+    border-color: color-mix(
+        in srgb,
+        var(--danger-color) 48%,
+        var(--scriptorium-hairline)
+    );
+    background: color-mix(in srgb, var(--danger-color) 7%, transparent);
+}
+
+.settings-status {
+    padding: 9px 11px;
+    border: 1px solid color-mix(
+        in srgb,
+        var(--success-color) 42%,
+        var(--scriptorium-hairline)
+    );
+    border-radius: 7px;
+    color: var(--success-color);
+    background: color-mix(in srgb, var(--success-color) 7%, transparent);
+    font-size: 9px;
+    line-height: 1.5;
+}
+
+.settings-status.trusted {
+    border-color: color-mix(
+        in srgb,
+        var(--danger-color) 48%,
+        var(--scriptorium-hairline)
+    );
+    color: var(--danger-color);
+    background: color-mix(in srgb, var(--danger-color) 7%, transparent);
+}
+
+.settings-risk-note {
+    margin: 0;
+    color: var(--secondary-text);
+    font-size: 9px;
+    line-height: 1.7;
+}
+
+@media (max-width: 620px) {
+    .settings-dialog {
+        width: calc(100vw - 20px);
+    }
+
+    .settings-dialog-header,
+    .settings-dialog-body {
+        padding-right: 18px;
+        padding-left: 18px;
+    }
+
+    .settings-toggle-row {
+        align-items: start;
+    }
 }

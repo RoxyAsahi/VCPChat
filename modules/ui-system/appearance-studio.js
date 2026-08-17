@@ -1,7 +1,11 @@
 (() => {
     'use strict';
 
+    const LifecycleScope = window.VCPLifecycle?.LifecycleScope;
+    const moduleScope = LifecycleScope ? new LifecycleScope('next:appearance-studio-controller') : null;
+
     const DEFAULT_HOME_TAGLINE = '语义级打穿 AI、UI/UX、APP 与人类想象力的边界';
+    const CANONICAL_UI_MODE = 'next';
 
     const MATERIAL_FIELDS = Object.freeze([
         'surfaceOpacity',
@@ -66,7 +70,7 @@
         'cardRadius'
     ]);
     const THEME_MODES = new Set(['light', 'dark', 'system']);
-    const UI_MODES = new Set(['classic', 'next']);
+    const UI_MODES = new Set(['next']);
     const PRESETS = Object.freeze({
         balanced: Object.freeze({
             name: '平衡默认',
@@ -137,7 +141,6 @@
     });
 
     const DEFAULT_STATE = Object.freeze({
-        uiMode: 'classic',
         themeMode: 'system',
         themeFileName: null,
         presentation: 'bubble',
@@ -188,8 +191,7 @@
             small: '小圆角', medium: '中圆角', round: '大圆角', custom: '自定义'
         }),
         presentation: Object.freeze({ bubble: '气泡', panel: '面板', immersive: '沉浸' }),
-        themeMode: Object.freeze({ light: '浅色', dark: '深色', system: '跟随系统' }),
-        uiMode: Object.freeze({ classic: '经典布局', next: 'Next 布局' })
+        themeMode: Object.freeze({ light: '浅色', dark: '深色', system: '跟随系统' })
     });
     const DETAIL_RADIUS_FIELDS = Object.freeze([
         'shellRadius',
@@ -217,10 +219,15 @@
     let themesLoading = false;
     let themesLoadError = null;
     let themesLoadSequence = 0;
+    let surfaceScope = null;
+    let openScope = null;
+    let destroyed = false;
+    let destroyPromise = null;
+    let closePromise = null;
+    let queuedOpenOptions = null;
 
     const clone = value => JSON.parse(JSON.stringify(value));
     const api = () => window.chatAPI || window.electronAPI;
-    const currentUiMode = () => document.documentElement.dataset.uiMode || 'classic';
     function normalizeHomeTaglineText(value, fallback = DEFAULT_HOME_TAGLINE) {
         const normalized = typeof value === 'string' ? value.trim().slice(0, 120) : '';
         return normalized || fallback;
@@ -297,13 +304,11 @@
 
     function readState() {
         const settings = window.globalSettings || {};
-        const uiMode = UI_MODES.has(settings.uiMode) ? settings.uiMode : currentUiMode();
         const themeMode = THEME_MODES.has(settings.currentThemeMode)
             ? settings.currentThemeMode
             : readEffectiveTheme();
         return {
-            uiMode,
-            profile: window.VCPAppearance?.normalize(settings.appearanceProfile, uiMode)
+            profile: window.VCPAppearance?.normalize(settings.appearanceProfile, CANONICAL_UI_MODE)
                 || clone(PRESETS.balanced.profile),
             presentation: window.normalizeChatPresentationMode?.(settings.chatPresentationMode) || 'bubble',
             messageWidth: settings.enableWideChatLayout === true ? 'wide' : 'normal',
@@ -319,13 +324,11 @@
         const source = state && typeof state === 'object' ? state : {};
         const base = fallback && typeof fallback === 'object' ? fallback : DEFAULT_STATE;
         const themeMode = THEME_MODES.has(source.themeMode) ? source.themeMode : base.themeMode;
-        const uiMode = UI_MODES.has(source.uiMode) ? source.uiMode : base.uiMode;
         const themeFileName = typeof source.themeFileName === 'string'
             ? source.themeFileName
             : (typeof base.themeFileName === 'string' ? base.themeFileName : null);
         return {
-            uiMode,
-            profile: window.VCPAppearance?.normalize(source.profile || base.profile, uiMode)
+            profile: window.VCPAppearance?.normalize(source.profile || base.profile, CANONICAL_UI_MODE)
                 || clone(base.profile),
             presentation: window.normalizeChatPresentationMode?.(source.presentation || base.presentation)
                 || base.presentation,
@@ -354,10 +357,7 @@
                 [field, document.getElementById(id)?.value || base.profile[field]]
             )))
         };
-        const selectedUiMode = document.querySelector('input[name="appearanceUiMode"]:checked')?.value;
-        const modeControl = document.getElementById('enableNextUi');
         return normalizeState({
-            uiMode: selectedUiMode || (modeControl ? (modeControl.checked ? 'next' : 'classic') : base.uiMode),
             profile,
             presentation: document.querySelector('input[name="chatPresentationMode"]:checked')?.value
                 || base.presentation,
@@ -402,7 +402,6 @@
         if (title) title.textContent = presetId ? PRESETS[presetId].name : '自定义外观';
         if (description) {
             description.textContent = [
-                SUMMARY_LABELS.uiMode[state.uiMode],
                 SUMMARY_LABELS.themeMode[state.themeMode],
                 SUMMARY_LABELS.typography[state.profile.typography],
                 SUMMARY_LABELS.contentWidth[state.profile.contentWidth],
@@ -418,7 +417,6 @@
             preview.dataset.radius = state.profile.radius;
             preview.dataset.presentation = state.presentation;
             preview.dataset.theme = effectiveThemeForMode(state.themeMode);
-            preview.dataset.uiMode = state.uiMode;
         }
     }
 
@@ -472,11 +470,10 @@
         const trigger = document.getElementById('openAppearanceStudioFromSettings');
         if (!card || !form || !trigger) return;
         if (!card.dataset.appearanceSummaryBound) {
-            form.addEventListener('change', event => {
-                if (event.target.matches('input[name="appearanceUiMode"]')) {
-                    const compatibilityControl = document.getElementById('enableNextUi');
-                    if (compatibilityControl) compatibilityControl.checked = event.target.value === 'next';
-                }
+            const bindSummary = (target, type, handler) => moduleScope
+                ? moduleScope.listen(target, type, handler, undefined, `appearance-settings-summary:${type}`)
+                : target.addEventListener(type, handler);
+            bindSummary(form, 'change', event => {
                 if (event.target.matches('input[name="appearanceSidebarRadiusChoice"]')) {
                     const compatibilityControl = document.getElementById('appearanceSidebarRadius');
                     if (compatibilityControl) compatibilityControl.value = event.target.value;
@@ -485,7 +482,7 @@
                     syncSettingsSummary();
                 }
             });
-            form.addEventListener('input', event => {
+            bindSummary(form, 'input', event => {
                 if (event.target.id === 'appearanceCustomRadius') {
                     const output = document.getElementById('appearanceCustomRadiusValue');
                     if (output) output.value = `${event.target.value}px`;
@@ -494,10 +491,13 @@
                 if (!['appearanceSidebarRowHeight', 'appearanceSidebarAvatarSize'].includes(event.target.id)) return;
                 syncSettingsGeometryControls(event.target.id);
             });
-            trigger.addEventListener('click', () => {
+            bindSummary(trigger, 'click', () => {
                 open({ trigger, initialState: readSettingsFormState() });
             });
             card.dataset.appearanceSummaryBound = 'true';
+            moduleScope?.own(() => {
+                delete card.dataset.appearanceSummaryBound;
+            }, 'appearance-settings-summary-marker', 'dom-state');
         }
         syncSettingsGeometryControls();
         syncSettingsSummary();
@@ -505,6 +505,8 @@
 
     function createSurface() {
         if (surface?.root?.isConnected) return surface;
+
+        surfaceScope = moduleScope?.child('next:appearance-studio-surface') || null;
 
         const root = document.createElement('div');
         root.id = 'vcpAppearanceStudio';
@@ -573,20 +575,6 @@
                         <div class="vcp-appearance-studio-section-heading">
                             <div><h3 id="vcpAppearanceLayoutTitle">页面布局</h3><p>选择主页结构与聊天内容的占用方式</p></div>
                             <button type="button" class="vcp-appearance-studio-reset" data-reset-section="layout" aria-label="重置页面布局" title="重置本节"><span class="vcp-ui-icon">refresh</span></button>
-                        </div>
-                        <div class="vcp-appearance-subsection vcp-appearance-shell-subsection">
-                            <h4>主页布局</h4>
-                            <div class="vcp-appearance-option-grid vcp-appearance-shell-grid" role="group" aria-label="主页布局">
-                                <button type="button" class="vcp-appearance-option vcp-appearance-shell-option" data-appearance-key="uiMode" data-appearance-value="classic">
-                                    <span class="vcp-appearance-shell-preview classic" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-                                    <span class="vcp-appearance-shell-copy"><strong>经典布局</strong><small>原版标题栏与三栏结构</small></span>
-                                </button>
-                                <button type="button" class="vcp-appearance-option vcp-appearance-shell-option" data-appearance-key="uiMode" data-appearance-value="next">
-                                    <span class="vcp-appearance-shell-preview next" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-                                    <span class="vcp-appearance-shell-copy"><strong>Next 布局</strong><small>标签顶栏与圆角内容区</small></span>
-                                </button>
-                            </div>
-                            <p class="vcp-appearance-shell-note"><span class="vcp-ui-icon" aria-hidden="true">info</span>只切换主页外壳；主题、壁纸与聊天内容保持不变。</p>
                         </div>
                         <div class="vcp-appearance-mini-options" role="group" aria-label="阅读区、消息宽度和主页视觉文字">
                             <div class="vcp-appearance-mini-item"><h4>阅读区布局</h4><div class="vcp-appearance-segmented"><button type="button" data-appearance-key="contentWidth" data-appearance-value="full">全宽画布</button><button type="button" data-appearance-key="contentWidth" data-appearance-value="centered">居中阅读</button></div><p class="vcp-appearance-mini-helper">控制整个聊天阅读区</p></div>
@@ -729,8 +717,11 @@
         });
 
         document.body.append(root);
+        surfaceScope?.own(() => root.remove(), 'appearance-root', 'dom');
         root.querySelectorAll('input[type="range"]').forEach(control => {
-            if (!window.VCPUI?.getController?.(control)) window.VCPUI?.enhance?.('Range', control);
+            if (window.VCPUI?.getController?.(control)) return;
+            const controller = window.VCPUI?.enhance?.('Range', control);
+            if (controller && surfaceScope) surfaceScope.own(() => controller.destroy(), 'appearance-range', 'ui-registration');
         });
         const themePreviewStyle = document.createElement('style');
         themePreviewStyle.dataset.appearanceThemeSwatches = 'true';
@@ -741,11 +732,14 @@
         const closePrompt = root.querySelector('[data-unsaved-confirm]');
         const closePromptDialog = root.querySelector('.vcp-appearance-unsaved-dialog');
 
-        root.addEventListener('click', handleClick);
-        root.addEventListener('change', handleChange);
-        root.addEventListener('input', handleInput);
-        root.addEventListener('keydown', handleKeydown);
-        root.addEventListener('pointerdown', event => {
+        const listenSurface = (type, handler) => surfaceScope
+            ? surfaceScope.listen(root, type, handler, undefined, `appearance:${type}`)
+            : root.addEventListener(type, handler);
+        listenSurface('click', handleClick);
+        listenSurface('change', handleChange);
+        listenSurface('input', handleInput);
+        listenSurface('keydown', handleKeydown);
+        listenSurface('pointerdown', event => {
             if (event.target === root && closePrompt.hidden) void requestClose();
         });
         surface = {
@@ -871,7 +865,15 @@
         themesLoadError = null;
         renderThemePalette();
         try {
-            const themes = await api()?.getThemes?.();
+            const tasks = window.VCPTasks;
+            const ownerScope = openScope;
+            const themeTask = api()?.getThemes && tasks?.createTask?.({
+                id: tasks.createTaskId?.('appearance-themes') || `appearance-themes:${Date.now()}`,
+                start: () => api().getThemes(),
+            });
+            const themes = themeTask && ownerScope
+                ? await themeTask.own(ownerScope, 'appearance-theme-list')
+                : await api()?.getThemes?.();
             if (sequence !== themesLoadSequence || !surface || surface.root.hidden) return;
             installedThemes = Array.isArray(themes)
                 ? themes.slice().sort((left, right) => Number(right.isActive) - Number(left.isActive)
@@ -974,7 +976,6 @@
         if (section === 'theme') {
             draft.themeMode = defaults.themeMode;
         } else if (section === 'layout') {
-            draft.uiMode = defaults.uiMode;
             draft.profile.contentWidth = defaults.profile.contentWidth;
             draft.messageWidth = defaults.messageWidth;
             draft.homeVisual = defaults.homeVisual;
@@ -1000,18 +1001,9 @@
     async function preview(options = {}) {
         if (!draft) return;
         const generation = ++previewGeneration;
-        const preserveNextSession = snapshot?.uiMode === 'next';
-        if (window.uiModeManager?.applyAsync) {
-            await window.uiModeManager.applyAsync(draft.uiMode, {
-                cache: false,
-                preview: preserveNextSession
-            });
-        } else {
-            window.uiModeManager?.apply(draft.uiMode, { cache: false });
-        }
         if (generation !== previewGeneration || !draft) return;
         window.VCPAppearance?.apply(draft.profile, {
-            uiMode: draft.uiMode,
+            uiMode: CANONICAL_UI_MODE,
             cache: false,
             source: 'appearance-studio-preview'
         });
@@ -1039,17 +1031,8 @@
         previewGeneration += 1;
         if ((window.VCPAppearance?.getRevision?.() || 0) !== snapshotRevision) return;
         removeThemePreview();
-        const preserveNextSession = snapshot.uiMode === 'next';
-        if (window.uiModeManager?.applyAsync) {
-            await window.uiModeManager.applyAsync(snapshot.uiMode, {
-                cache: false,
-                preview: preserveNextSession
-            });
-        } else {
-            window.uiModeManager?.apply(snapshot.uiMode, { cache: false });
-        }
         window.VCPAppearance?.apply(snapshot.profile, {
-            uiMode: snapshot.uiMode,
+            uiMode: CANONICAL_UI_MODE,
             cache: false,
             source: 'appearance-studio-rollback'
         });
@@ -1065,14 +1048,8 @@
         });
     }
 
-    function syncLegacySettingsControls() {
+    function syncSettingsControls() {
         if (!draft) return;
-        const enableNextUi = document.getElementById('enableNextUi');
-        if (enableNextUi) enableNextUi.checked = draft.uiMode === 'next';
-        const visibleMode = document.getElementById(
-            draft.uiMode === 'next' ? 'appearanceUiModeNext' : 'appearanceUiModeClassic'
-        );
-        if (visibleMode) visibleMode.checked = true;
         const homeVisual = document.getElementById('showHomeVisualBrand');
         if (homeVisual) homeVisual.checked = draft.homeVisual !== 'hidden';
         const homeTagline = document.getElementById('showHomeVisualTagline');
@@ -1109,7 +1086,6 @@
         previewGeneration += 1;
         const nextState = clone(draft);
         const persistedSnapshot = snapshot ? {
-            uiMode: snapshot.uiMode,
             appearanceProfile: snapshot.profile,
             chatPresentationMode: snapshot.presentation,
             enableWideChatLayout: snapshot.messageWidth === 'wide',
@@ -1121,7 +1097,6 @@
         let settingsPersisted = false;
         try {
             const result = await api()?.saveSettings?.({
-                uiMode: nextState.uiMode,
                 appearanceProfile: nextState.profile,
                 chatPresentationMode: nextState.presentation,
                 enableWideChatLayout: nextState.messageWidth === 'wide',
@@ -1134,7 +1109,6 @@
             settingsPersisted = true;
 
             Object.assign(window.globalSettings || {}, {
-                uiMode: nextState.uiMode,
                 appearanceProfile: nextState.profile,
                 chatPresentationMode: nextState.presentation,
                 enableWideChatLayout: nextState.messageWidth === 'wide',
@@ -1143,19 +1117,17 @@
                 homeVisualTagline: nextState.homeTaglineText,
                 currentThemeMode: nextState.themeMode
             });
-            if (window.uiModeManager?.applyAsync) {
-                await window.uiModeManager.applyAsync(nextState.uiMode, { cache: true });
-            } else {
-                window.uiModeManager?.apply(nextState.uiMode, { cache: true });
-            }
-            window.VCPAppearance?.commit(nextState.profile, {
-                uiMode: nextState.uiMode,
-                source: 'appearance-studio-save'
-            });
             await window.applyChatPresentationMode?.(nextState.presentation, {
                 persist: false,
                 preserveScroll: true,
                 notify: false,
+                source: 'appearance-studio-save'
+            });
+            // Commit the appearance revision only after all fallible local
+            // projections have succeeded. Otherwise rollback mistakes our
+            // own partial commit for a newer external settings revision.
+            window.VCPAppearance?.commit(nextState.profile, {
+                uiMode: CANONICAL_UI_MODE,
                 source: 'appearance-studio-save'
             });
             if (nextState.themeMode === 'system') {
@@ -1168,7 +1140,7 @@
             if (nextState.themeFileName && nextState.themeFileName !== snapshot.themeFileName) {
                 api()?.applyTheme?.(nextState.themeFileName);
             }
-            syncLegacySettingsControls();
+            syncSettingsControls();
             snapshot = clone(nextState);
             snapshotRevision = window.VCPAppearance?.getRevision?.() || snapshotRevision;
             syncAccountMenuValue(nextState);
@@ -1229,28 +1201,81 @@
         surface.dialog.inert = true;
         surface.root.classList.add('is-confirming-close');
         closePromptPromise = new Promise(resolve => { resolveClosePrompt = resolve; });
-        requestAnimationFrame(() => surface.closePromptDialog.focus());
+        if (openScope) openScope.animationFrame(() => surface.closePromptDialog.focus(), 'focus-close-prompt');
+        else requestAnimationFrame(() => surface.closePromptDialog.focus());
         return closePromptPromise;
     }
 
-    async function close({ rollback = true } = {}) {
-        if (!surface || surface.root.hidden || (saving && rollback)) return;
-        if (surface.closePrompt && !surface.closePrompt.hidden) settleClosePrompt(false);
-        surface.root.hidden = true;
-        surface.root.classList.remove('active');
-        document.body.classList.remove('vcp-appearance-studio-open');
-        if (rollback) await restoreSnapshot();
-        const nextFocus = sourceTrigger?.isConnected ? sourceTrigger : null;
-        sourceTrigger = null;
-        snapshot = null;
-        snapshotRevision = 0;
-        draft = null;
-        themesLoadSequence += 1;
-        document.documentElement.classList.remove('vcp-appearance-studio-host');
-        nextFocus?.focus?.();
+    let activeOverlayOwner = null;
+
+    function acquireStudioOverlay() {
+        if (activeOverlayOwner) return;
+        const owner = Symbol('appearance-studio-overlay');
+        activeOverlayOwner = owner;
+        if (!openScope && moduleScope) openScope = moduleScope.child('next:appearance-studio-open');
+        openScope?.own(() => {
+            if (activeOverlayOwner !== owner) return;
+            activeOverlayOwner = null;
+            window.topTabManager?.releaseOverlay?.(owner);
+        }, 'appearance-overlay-lease', 'overlay');
+        Promise.resolve(window.topTabManager?.acquireOverlay?.(owner)).catch(error => {
+            if (activeOverlayOwner === owner) activeOverlayOwner = null;
+            console.warn('[AppearanceStudio] Failed to hide embedded app:', error);
+        });
+    }
+
+    async function releaseStudioOverlay() {
+        if (openScope) {
+            const scope = openScope;
+            openScope = null;
+            try {
+                await scope.dispose('appearance-closed');
+            } catch (error) {
+                console.error('[AppearanceStudio] Failed to dispose open resources:', error);
+            }
+        } else if (activeOverlayOwner) {
+            const owner = activeOverlayOwner;
+            activeOverlayOwner = null;
+            window.topTabManager?.releaseOverlay?.(owner);
+        }
+    }
+
+    function close({ rollback = true } = {}) {
+        if (closePromise) return closePromise;
+        if (!surface || surface.root.hidden || (saving && rollback)) return Promise.resolve();
+        closePromise = (async () => {
+            if (surface.closePrompt && !surface.closePrompt.hidden) settleClosePrompt(false);
+            surface.root.hidden = true;
+            surface.root.classList.remove('active');
+            document.body.classList.remove('vcp-appearance-studio-open');
+            const nextFocus = sourceTrigger?.isConnected ? sourceTrigger : null;
+            try {
+                if (rollback) await restoreSnapshot();
+            } finally {
+                sourceTrigger = null;
+                snapshot = null;
+                snapshotRevision = 0;
+                draft = null;
+                themesLoadSequence += 1;
+                document.documentElement.classList.remove('vcp-appearance-studio-host');
+                await releaseStudioOverlay();
+                nextFocus?.focus?.();
+            }
+        })().finally(() => {
+            closePromise = null;
+            const pendingOptions = queuedOpenOptions;
+            queuedOpenOptions = null;
+            if (pendingOptions && !destroyed) queueMicrotask(() => open(pendingOptions));
+        });
+        return closePromise;
     }
 
     function open(options = {}) {
+        if (destroyed) return false;
+        if (closePromise) {
+            queuedOpenOptions = options;
+            return true;
+        }
         document.documentElement.classList.add('vcp-appearance-studio-host');
         const currentSurface = createSurface();
         if (!currentSurface.root.hidden) {
@@ -1258,6 +1283,8 @@
             return true;
         }
         sourceTrigger = options.trigger || document.activeElement;
+        if (!openScope && moduleScope) openScope = moduleScope.child('next:appearance-studio-open');
+        acquireStudioOverlay();
         snapshot = readState();
         snapshotRevision = window.VCPAppearance?.getRevision?.() || 0;
         draft = normalizeState(options.initialState, snapshot);
@@ -1266,10 +1293,12 @@
         if (statesEqual(snapshot, draft)) syncControls();
         else void preview();
         void loadThemes();
-        requestAnimationFrame(() => {
+        const reveal = () => {
             currentSurface.root.classList.add('active');
             currentSurface.dialog.focus();
-        });
+        };
+        if (openScope) openScope.animationFrame(reveal, 'appearance-reveal');
+        else requestAnimationFrame(reveal);
         return true;
     }
 
@@ -1324,8 +1353,7 @@
         }
         if (target.matches('[data-reset-all]')) {
             const themeFileName = draft.themeFileName;
-            const uiMode = draft.uiMode;
-            draft = { ...clone(DEFAULT_STATE), uiMode, themeFileName };
+            draft = { ...clone(DEFAULT_STATE), themeFileName };
             await preview();
             return;
         }
@@ -1333,7 +1361,6 @@
         if (presetId && PRESETS[presetId]) {
             const preset = PRESETS[presetId];
             draft = {
-                uiMode: draft.uiMode,
                 profile: clone(preset.profile),
                 presentation: preset.presentation,
                 messageWidth: draft.messageWidth,
@@ -1427,6 +1454,7 @@
     function handleKeydown(event) {
         if (event.key === 'Escape') {
             event.preventDefault();
+            event.stopPropagation();
             if (surface?.closePrompt && !surface.closePrompt.hidden) settleClosePrompt(false);
             else void requestClose();
             return;
@@ -1448,7 +1476,10 @@
         }
     }
 
-    window.addEventListener('global-settings-updated', () => {
+    const listenModule = (target, type, handler, options) => moduleScope
+        ? moduleScope.listen(target, type, handler, options, `appearance-controller:${type}`)
+        : target.addEventListener(type, handler, options);
+    listenModule(window, 'global-settings-updated', () => {
         if (!draft) {
             const state = readState();
             applyHomeVisual(state.homeVisual);
@@ -1457,18 +1488,17 @@
         if (!surface || surface.root.hidden) syncAccountMenuValue();
         syncSettingsSummary();
     });
-    window.addEventListener('ui-mode-changed', () => {
-        if (!surface || surface.root.hidden) syncSettingsSummary();
-    });
-    document.addEventListener('DOMContentLoaded', () => {
+    listenModule(document, 'DOMContentLoaded', () => {
         const state = readState();
         applyHomeVisual(state.homeVisual);
         applyHomeTagline(state.homeTagline, state.homeTaglineText);
         syncAccountMenuValue();
         bindSettingsSummary();
-    });
-    document.addEventListener('modal-ready', event => {
-        if (event.detail?.modalId === 'globalSettingsModal') requestAnimationFrame(bindSettingsSummary);
+    }, { once: true });
+    listenModule(document, 'modal-ready', event => {
+        if (event.detail?.modalId !== 'globalSettingsModal') return;
+        if (moduleScope) moduleScope.animationFrame(bindSettingsSummary, 'bind-settings-summary');
+        else requestAnimationFrame(bindSettingsSummary);
     });
 
     window.VCPAppearanceStudio = Object.freeze({
@@ -1480,6 +1510,15 @@
         readState,
         syncAccountMenuValue,
         syncSettingsSummary,
-        setThemeMode
+        setThemeMode,
+        destroy() {
+            if (destroyPromise) return destroyPromise;
+            destroyed = true;
+            destroyPromise = (async () => {
+                await close({ rollback: true });
+                await moduleScope?.dispose('appearance-controller-destroyed');
+            })();
+            return destroyPromise;
+        }
     });
 })();

@@ -2,65 +2,28 @@
     const STORAGE_KEY = 'vcpchat.uiMode';
     const CLASSIC_MODE = 'classic';
     const NEXT_MODE = 'next';
-    let transitionGeneration = 0;
+    const settled = Object.freeze({ phase: 'settled', mode: NEXT_MODE, generation: 0 });
 
-    function normalize(mode) {
-        return mode === NEXT_MODE ? NEXT_MODE : CLASSIC_MODE;
+    // Read-only compatibility facade for integrations that still query the
+    // historical API. Persisted uiMode belongs to the settings schema only;
+    // it is not a live main-window state source.
+    function normalize() { return NEXT_MODE; }
+    function apply(_requestedMode, options = {}) {
+        document.documentElement.dataset.uiMode = NEXT_MODE;
+        if (options.cache === true) localStorage.setItem(STORAGE_KEY, NEXT_MODE);
+        return NEXT_MODE;
     }
+    async function applyAsync(requestedMode, options = {}) { return apply(requestedMode, options); }
 
-    function apply(mode, options = {}) {
-        const normalizedMode = normalize(mode);
-        const previousMode = document.documentElement.dataset.uiMode;
-
-        document.documentElement.dataset.uiMode = normalizedMode;
-
-        // `settings.json` is the persistent authority.  localStorage is only
-        // a boot-time hint to avoid a blank classic shell before the renderer
-        // receives settings through IPC, so callers must opt in after a
-        // successful settings read/write.
-        if (options.cache === true) {
-            localStorage.setItem(STORAGE_KEY, normalizedMode);
-        }
-
-        if (previousMode && previousMode !== normalizedMode) {
-            window.dispatchEvent(new CustomEvent('ui-mode-changed', {
-                detail: {
-                    mode: normalizedMode,
-                    previousMode,
-                    preview: options.preview === true,
-                    transaction: options.transaction === true
-                }
-            }));
-        }
-
-        return normalizedMode;
-    }
-
-    function getCurrentMode() {
-        return normalize(document.documentElement.dataset.uiMode);
-    }
-
-    async function applyAsync(mode, options = {}) {
-        const normalizedMode = normalize(mode);
-        const generation = ++transitionGeneration;
-        await window.topTabManager?.prepareForMode?.(normalizedMode, options);
-        if (generation !== transitionGeneration) return getCurrentMode();
-        const appliedMode = apply(normalizedMode, { ...options, transaction: true });
-        await window.topTabManager?.syncMode?.(appliedMode, options);
-        return appliedMode;
-    }
-
-    // The cache never writes back by itself. `loadAndApplyGlobalSettings()`
-    // will reconcile it with the authoritative settings file.
-    const cachedMode = localStorage.getItem(STORAGE_KEY) ?? CLASSIC_MODE;
-    apply(cachedMode, { cache: false });
-
+    apply(localStorage.getItem(STORAGE_KEY), { cache: false });
+    const stateChannel = window.VCPStateChannels?.create('ui-mode', Object.freeze({ mode: NEXT_MODE, transition: settled })) || null;
     window.uiModeManager = Object.freeze({
-        CLASSIC_MODE,
-        NEXT_MODE,
-        apply,
-        applyAsync,
-        getCurrentMode,
-        normalize
+        CLASSIC_MODE, NEXT_MODE, apply, applyAsync,
+        whenSettled: () => Promise.resolve(NEXT_MODE),
+        getTransitionState: () => settled,
+        getCurrentMode: () => NEXT_MODE,
+        normalize,
+        getState: () => stateChannel?.get() || Object.freeze({ mode: NEXT_MODE, transition: settled }),
+        subscribe: (listener, options) => stateChannel?.subscribe(listener, options) || (() => false),
     });
 })();

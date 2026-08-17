@@ -70,10 +70,11 @@
         const containerModule = context.containerModule;
         const programmableContent = context.programmableContent;
         const styleLibrary = context.styleLibrary;
+        const svgAssetLibrary = context.svgAssetLibrary;
         if (!documentPort || !lineagePort || !core || !diff
-            || !styleLibrary) {
+            || !styleLibrary || !svgAssetLibrary) {
             throw new TypeError(
-                'Agent controller requires DocumentPort, LineagePort, VDocCore, PR diff and VDocStyleLibrary.'
+                'Agent controller requires DocumentPort, LineagePort, VDocCore, PR diff, VDocStyleLibrary and VDocSvgAssetLibrary.'
             );
         }
 
@@ -275,81 +276,15 @@
             });
         }
 
-        function markdownHeadingIndex(sourceValue) {
-            const source = String(sourceValue || '');
-            const lines = source.split(/\r\n?|\n/);
-            const offsets = [];
-            let offset = 0;
-            lines.forEach((line) => {
-                offsets.push(offset);
-                offset += line.length + 1;
-            });
-
-            const headings = [];
-            let fence = null;
-            lines.forEach((line, lineIndex) => {
-                const fenceMatch = line.match(/^ {0,3}(`{3,}|~{3,})/);
-                if (fenceMatch) {
-                    if (!fence) fence = fenceMatch[1][0];
-                    else if (fence === fenceMatch[1][0]) fence = null;
-                    return;
-                }
-                if (fence) return;
-
-                const atx = line.match(/^ {0,3}(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$/);
-                const setext = lineIndex + 1 < lines.length
-                    ? lines[lineIndex + 1].match(/^ {0,3}(=+|-+)[ \t]*$/)
-                    : null;
-                const text = atx
-                    ? atx[2].trim()
-                    : setext && line.trim()
-                        ? line.trim()
-                        : '';
-                if (!text) return;
-                const level = atx ? atx[1].length : (setext[1][0] === '=' ? 1 : 2);
-                const start = offsets[lineIndex];
-                headings.push({
-                    id: `heading-${start}-${simpleHash(text)}`,
-                    index: headings.length,
-                    kind: 'heading',
-                    level,
-                    text,
-                    start,
-                    startLine: lineIndex + 1,
-                    headingEndLine: lineIndex + (atx ? 1 : 2),
-                });
-            });
-            headings.forEach((heading, index) => {
-                const next = headings.slice(index + 1)
-                    .find((candidate) => candidate.level <= heading.level);
-                heading.end = next ? next.start : source.length;
-                heading.endLine = next
-                    ? Math.max(heading.startLine, next.startLine - 1)
-                    : lines.length;
-            });
-            return headings;
-        }
-
-        function simpleHash(value) {
-            const source = String(value || '');
-            let hash = 0x811c9dc5;
-            for (let index = 0; index < source.length; index += 1) {
-                hash ^= source.charCodeAt(index);
-                hash = Math.imul(hash, 0x01000193);
-            }
-            return (hash >>> 0).toString(16).padStart(8, '0');
-        }
-
         function outline() {
             const current = adapter();
             if (current.kind === 'flow') {
-                const headings = markdownHeadingIndex(current.currentSource());
+                const headings = current.compile().headings || [];
                 return response({
                     sourceKind: 'markdown-hybrid',
-                    items: headings.map(({ start, end, ...heading }) => ({
-                        ...heading,
-                        sourceRange: { start, end },
-                    })),
+                    count: headings.length,
+                    totalCharacters: current.currentSource().length,
+                    items: headings,
                 });
             }
             return response({ items: current.outline() });
@@ -361,15 +296,17 @@
                 throw new Error('GetSection 仅适用于 VDOCX。');
             }
             const source = current.currentSource();
-            const headings = markdownHeadingIndex(source);
+            const headings = current.compile().headings || [];
             const requestedId = String(options.id || '');
             const requestedIndex = Number(options.index);
             const heading = requestedId
                 ? headings.find((item) => item.id === requestedId)
                 : headings[Number.isInteger(requestedIndex) ? requestedIndex : -1];
             if (!heading) throw new Error('指定章节不存在。请先调用 GetOutline 获取章节 ID 或索引。');
-            const sectionSource = source.slice(heading.start, heading.end)
-                .replace(/\s+$/, '');
+            const sectionSource = source.slice(
+                heading.sourceRange.start,
+                heading.sourceRange.end
+            ).replace(/\s+$/, '');
             const compiled = context.hybridCompiler?.compile?.(sectionSource, {
                 sanitizeHtml: core.sanitizeHtml,
             });
@@ -380,13 +317,12 @@
                     index: heading.index,
                     text: heading.text,
                     level: heading.level,
+                    characterCount: heading.characterCount,
+                    contentCharacterCount: heading.contentCharacterCount,
                 },
                 startLine: heading.startLine,
                 endLine: heading.endLine,
-                sourceRange: {
-                    start: heading.start,
-                    end: heading.end,
-                },
+                sourceRange: heading.sourceRange,
                 source: sectionSource,
                 renderedText: compiled
                     ? textFromHtml(compiled.html)
@@ -594,7 +530,7 @@
             };
         }
 
-        function upsertStylePack(options = {}) {
+        async function upsertStylePack(options = {}) {
             const author = normalizeAuthor(options.maid || options.author);
             if (!author) {
                 throw new Error('Agent 管理样式包必须提供 maid 署名。');
@@ -612,7 +548,7 @@
             const result = styleLibrary.registerPack(pack, {
                 conflict: 'replace',
             });
-            context.onStyleLibraryChange?.({
+            await context.onStyleLibraryChange?.({
                 operation: existed ? 'replace' : 'create',
                 pack: result,
             });
@@ -624,7 +560,7 @@
             };
         }
 
-        function deleteStylePack(options = {}) {
+        async function deleteStylePack(options = {}) {
             const author = normalizeAuthor(options.maid || options.author);
             if (!author) {
                 throw new Error('Agent 管理样式包必须提供 maid 署名。');
@@ -636,7 +572,7 @@
             const existing = styleLibrary.getPack(packId);
             if (!existing) throw new Error(`未找到高级样式包：${packId}`);
             styleLibrary.unregisterPack(packId);
-            context.onStyleLibraryChange?.({
+            await context.onStyleLibraryChange?.({
                 operation: 'delete',
                 pack: existing,
             });
@@ -645,6 +581,139 @@
                 operation: 'delete',
                 packId,
                 deletedStyleCount: existing.styles.length,
+                maid: author,
+            };
+        }
+
+        function listSvgAssetPacks(options = {}) {
+            const query = String(options.query || '').trim().toLowerCase();
+            const editableOnly = options.editableOnly === true;
+            const packs = svgAssetLibrary.listPacks()
+                .filter((pack) => !editableOnly || pack.editable)
+                .filter((pack) => !query || [
+                    pack.manifest.id,
+                    pack.manifest.name,
+                    pack.manifest.description,
+                    pack.manifest.author,
+                    ...pack.assets.flatMap((asset) => [
+                        asset.id,
+                        asset.name,
+                        asset.description,
+                        asset.category,
+                        ...(asset.tags || []),
+                    ]),
+                ].some((value) =>
+                    String(value || '').toLowerCase().includes(query)
+                ));
+            return {
+                success: true,
+                format: svgAssetLibrary.PACK_FORMAT,
+                version: svgAssetLibrary.PACK_VERSION,
+                builtinPackId: svgAssetLibrary.BUILTIN_PACK_ID,
+                count: packs.length,
+                packs,
+            };
+        }
+
+        function listSvgAssets(options = {}) {
+            const assets = svgAssetLibrary.list({
+                query: options.query,
+                packId: options.packId,
+                category: options.category,
+                kind: options.kind,
+            }).map((asset) => {
+                const { source, ...metadata } = asset;
+                return metadata;
+            });
+            return {
+                success: true,
+                count: assets.length,
+                assets,
+            };
+        }
+
+        function getSvgAsset(options = {}) {
+            const assetId = String(
+                options.assetId || options.id || ''
+            ).trim();
+            if (!assetId) throw new Error('GetSvgAsset 缺少 assetId。');
+            const asset = svgAssetLibrary.get(assetId);
+            if (!asset) throw new Error(`未找到 SVG 资产：${assetId}`);
+            const pack = svgAssetLibrary.getPack(asset.packId);
+            return {
+                success: true,
+                builtin: pack?.builtin === true,
+                editable: pack?.editable === true,
+                asset,
+                source: asset.source,
+            };
+        }
+
+        function getSvgAssetPack(options = {}) {
+            const packId = String(
+                options.packId || options.id || ''
+            ).trim();
+            if (!packId) {
+                throw new Error('GetSvgAssetPack 缺少 packId。');
+            }
+            const pack = svgAssetLibrary.getPack(packId);
+            if (!pack) throw new Error(`未找到 SVG 资产包：${packId}`);
+            return {
+                success: true,
+                pack,
+                source: svgAssetLibrary.serializePack(packId),
+            };
+        }
+
+        async function upsertSvgAssetPack(options = {}) {
+            const author = normalizeAuthor(options.maid || options.author);
+            if (!author) {
+                throw new Error('Agent 管理 SVG 资产包必须提供 maid 署名。');
+            }
+            const supplied = options.pack ?? options.source;
+            let pack = supplied;
+            if (typeof supplied === 'string') {
+                pack = svgAssetLibrary.parsePack(supplied);
+            }
+            if (!pack || typeof pack !== 'object' || Array.isArray(pack)) {
+                throw new Error(
+                    'UpsertSvgAssetPack 缺少 pack JSON 对象或源码。'
+                );
+            }
+            const packId = String(pack.manifest?.id || '').trim();
+            const existed = Boolean(svgAssetLibrary.getPack(packId));
+            const result = svgAssetLibrary.registerPack(pack, {
+                conflict: 'replace',
+            });
+            await context.persistSvgAssets?.();
+            return {
+                success: true,
+                operation: existed ? 'replace' : 'create',
+                maid: author,
+                pack: result,
+            };
+        }
+
+        async function deleteSvgAssetPack(options = {}) {
+            const author = normalizeAuthor(options.maid || options.author);
+            if (!author) {
+                throw new Error('Agent 管理 SVG 资产包必须提供 maid 署名。');
+            }
+            const packId = String(
+                options.packId || options.id || ''
+            ).trim();
+            if (!packId) {
+                throw new Error('DeleteSvgAssetPack 缺少 packId。');
+            }
+            const existing = svgAssetLibrary.getPack(packId);
+            if (!existing) throw new Error(`未找到 SVG 资产包：${packId}`);
+            svgAssetLibrary.unregisterPack(packId);
+            await context.persistSvgAssets?.();
+            return {
+                success: true,
+                operation: 'delete',
+                packId,
+                deletedAssetCount: existing.assets.length,
                 maid: author,
             };
         }
@@ -1435,6 +1504,12 @@
             getStylePack,
             upsertStylePack,
             deleteStylePack,
+            listSvgAssetPacks,
+            listSvgAssets,
+            getSvgAsset,
+            getSvgAssetPack,
+            upsertSvgAssetPack,
+            deleteSvgAssetPack,
             submitSourcePr,
             buildProjectArtifact,
         });
@@ -1478,7 +1553,7 @@
         }
 
         return Object.freeze({
-            version: 4,
+            version: 5,
             common,
             docx,
             pptx,

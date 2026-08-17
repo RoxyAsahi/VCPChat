@@ -8,9 +8,6 @@ const dom = new JSDOM(`<!doctype html><html data-ui-mode="next"><body class="dar
     <button id="nextUiAccountMenuTrigger">账户</button>
     <div id="nextUiAccountMenu" hidden></div>
     <form id="globalSettingsForm">
-        <input type="checkbox" id="enableNextUi" checked>
-        <input type="radio" id="appearanceUiModeClassic" name="appearanceUiMode" value="classic">
-        <input type="radio" id="appearanceUiModeNext" name="appearanceUiMode" value="next" checked>
         <input type="checkbox" id="showHomeVisualBrand" checked>
         <input type="checkbox" id="showHomeVisualTagline" checked>
         <input type="text" id="homeVisualTagline" value="语义级打穿 AI、UI/UX、APP 与人类想象力的边界">
@@ -64,7 +61,6 @@ window.requestAnimationFrame = globalThis.requestAnimationFrame;
 window.matchMedia = globalThis.matchMedia;
 await import(`${pathToFileURL(`${process.cwd()}/modules/ui-system/vcp-ui.js`).href}?appearance-studio-test=1`);
 window.globalSettings = {
-    uiMode: 'next',
     currentThemeMode: 'dark',
     appearanceProfile: {
         density: 'comfortable', radius: 'medium', typography: 'humanist',
@@ -114,21 +110,6 @@ window.uiManager = {
         window.document.body.classList.toggle('light-theme', theme === 'light');
     }
 };
-window.uiModeManager = {
-    applied: [],
-    apply(mode, options = {}) {
-        const normalized = mode === 'next' ? 'next' : 'classic';
-        const previousMode = document.documentElement.dataset.uiMode;
-        document.documentElement.dataset.uiMode = normalized;
-        this.applied.push({ mode: normalized, cache: options.cache === true });
-        if (previousMode !== normalized) {
-            window.dispatchEvent(new CustomEvent('ui-mode-changed', {
-                detail: { mode: normalized, previousMode }
-            }));
-        }
-        return normalized;
-    }
-};
 window.uiHelperFunctions = { showToastNotification() {}, openModal() {} };
 window.normalizeChatPresentationMode = mode => ['bubble', 'panel', 'immersive'].includes(mode) ? mode : 'bubble';
 window.applyChatPresentationMode = async mode => {
@@ -140,6 +121,7 @@ window.applyChatPresentationMode = async mode => {
     return { success: true, mode: normalized };
 };
 
+window.eval(fs.readFileSync('modules/ui-system/lifecycle-scope.js', 'utf8'));
 window.eval(fs.readFileSync('modules/ui-system/appearance-engine.js', 'utf8'));
 window.eval(fs.readFileSync('modules/ui-system/appearance-studio.js', 'utf8'));
 document.dispatchEvent(new CustomEvent('modal-ready', { detail: { modalId: 'globalSettingsModal' } }));
@@ -241,14 +223,7 @@ assert.doesNotMatch(drawer.textContent, /内容宽度/);
 drawer.querySelector('[data-appearance-key="messageWidth"][data-appearance-value="wide"]').click();
 await new Promise(resolve => setImmediate(resolve));
 assert.equal(document.body.classList.contains('chat-wide-layout'), true);
-assert.equal(drawer.querySelectorAll('[data-appearance-key="uiMode"]').length, 2);
-drawer.querySelector('[data-appearance-key="uiMode"][data-appearance-value="classic"]').click();
-await new Promise(resolve => setImmediate(resolve));
-assert.equal(document.documentElement.dataset.uiMode, 'classic');
-assert.equal(studio.isOpen(), true, 'the drawer must remain open while previewing classic layout');
-assert.equal(document.documentElement.classList.contains('vcp-appearance-studio-host'), true);
-drawer.querySelector('[data-appearance-key="uiMode"][data-appearance-value="next"]').click();
-await new Promise(resolve => setImmediate(resolve));
+assert.equal(drawer.querySelectorAll('[data-appearance-key="uiMode"]').length, 0);
 assert.equal(document.documentElement.dataset.uiMode, 'next');
 assert.equal(drawer.querySelectorAll('[data-theme-file-name]').length, 2);
 assert.equal(drawer.querySelector('[data-theme-file-name="themes默认.css"]').classList.contains('active'), true);
@@ -346,7 +321,6 @@ studio.setThemeMode('dark', { persist: false, source: 'preset-theme-independence
 drawer.querySelector('[data-appearance-preset="reading"]').click();
 await new Promise(resolve => setImmediate(resolve));
 assert.equal(document.body.classList.contains('dark-theme'), true, 'reading preset must not force light mode');
-drawer.querySelector('[data-appearance-key="uiMode"][data-appearance-value="classic"]').click();
 drawer.querySelector('[data-appearance-key="messageWidth"][data-appearance-value="wide"]').click();
 drawer.querySelector('[data-appearance-key="homeVisual"][data-appearance-value="hidden"]').click();
 studioTaglineInput.value = '为想象力打开新的边界';
@@ -355,7 +329,7 @@ drawer.querySelector('[data-appearance-key="homeTagline"][data-appearance-value=
 await new Promise(resolve => setImmediate(resolve));
 drawer.querySelector('[data-reset-section="layout"]').click();
 await new Promise(resolve => setImmediate(resolve));
-assert.equal(document.documentElement.dataset.uiMode, 'classic', 'layout reset must use the first-run Classic default');
+assert.equal(document.documentElement.dataset.uiMode, 'next', 'layout reset must preserve the canonical presentation');
 assert.equal(document.documentElement.dataset.vcpContentWidth, 'full');
 assert.equal(document.body.classList.contains('chat-wide-layout'), false);
 assert.equal(document.documentElement.dataset.vcpHomeVisual, 'shown');
@@ -366,8 +340,6 @@ assert.equal(document.documentElement.dataset.vcpRadius, 'medium');
 drawer.querySelector('[data-reset-all]').click();
 assert.equal(document.documentElement.dataset.vcpTypography, 'humanist');
 assert.equal(document.body.classList.contains('chat-presentation-bubble'), true);
-drawer.querySelector('[data-appearance-key="uiMode"][data-appearance-value="next"]').click();
-await new Promise(resolve => setImmediate(resolve));
 drawer.querySelector('[data-appearance-preset="reading"]').click();
 await new Promise(resolve => setImmediate(resolve));
 drawer.querySelector('[data-appearance-key="messageWidth"][data-appearance-value="wide"]').click();
@@ -384,7 +356,8 @@ drawer.querySelector('[data-theme-file-name="themes森林.css"]').click();
 drawer.querySelector('[data-studio-save]').click();
 await new Promise(resolve => setImmediate(resolve));
 assert.equal(window.chatAPI.saved.length, 1);
-assert.equal(window.chatAPI.saved[0].uiMode, 'next');
+assert.equal(Object.hasOwn(window.chatAPI.saved[0], 'uiMode'), false,
+    'Appearance Studio must not write the retired main-window presentation field');
 assert.equal(window.chatAPI.saved[0].appearanceProfile.typography, 'serif');
 assert.equal(window.chatAPI.saved[0].chatPresentationMode, 'immersive');
 assert.equal(window.chatAPI.saved[0].enableWideChatLayout, true);
@@ -427,14 +400,10 @@ assert.equal(window.globalSettings.currentThemeMode, 'dark');
 assert.equal(document.body.classList.contains('dark-theme'), true);
 assert.equal(window.chatAPI.themes.at(-1), 'dark');
 
-window.globalSettings.uiMode = 'classic';
-document.getElementById('enableNextUi').checked = false;
-window.uiModeManager.apply('classic');
 assert.equal(studio.open({ trigger: document.getElementById('openAppearanceStudioFromSettings') }), true);
-assert.equal(studio.isOpen(), true, 'classic layout must be able to reopen the same appearance drawer');
-assert.equal(drawer.querySelector('[data-appearance-key="uiMode"][data-appearance-value="classic"]').classList.contains('active'), true);
+assert.equal(studio.isOpen(), true, 'canonical layout must reopen the same appearance drawer');
 await studio.close({ rollback: true });
-assert.equal(document.documentElement.dataset.uiMode, 'classic');
+assert.equal(document.documentElement.dataset.uiMode, 'next');
 assert.equal(document.documentElement.classList.contains('vcp-appearance-studio-host'), false);
 
 studio.open();
@@ -467,12 +436,8 @@ assert.equal(studio.isOpen(), false, 'save and close persists changes before clo
 assert.equal(window.globalSettings.appearanceProfile.density, 'compact');
 assert.equal(window.chatAPI.saved.length, 2);
 
-const originalApplyAsync = window.uiModeManager.applyAsync
-    ? window.uiModeManager.applyAsync.bind(window.uiModeManager)
-    : async (mode, options = {}) => window.uiModeManager.apply(mode, options);
 const savedBeforeFailedApply = window.chatAPI.saved.length;
 const persistedBeforeFailedApply = {
-    uiMode: window.globalSettings.uiMode,
     appearanceProfile: structuredClone(window.globalSettings.appearanceProfile),
     chatPresentationMode: window.globalSettings.chatPresentationMode,
     enableWideChatLayout: window.globalSettings.enableWideChatLayout,
@@ -481,17 +446,19 @@ const persistedBeforeFailedApply = {
     homeVisualTagline: window.globalSettings.homeVisualTagline,
     currentThemeMode: window.globalSettings.currentThemeMode
 };
-let failCommittedModeApply = true;
-window.uiModeManager.applyAsync = async (mode, options = {}) => {
-    if (options.cache === true && failCommittedModeApply) {
-        failCommittedModeApply = false;
-        throw new Error('simulated committed mode failure');
+const originalApplyPresentation = window.applyChatPresentationMode;
+let failCommittedPresentationApply = false;
+window.applyChatPresentationMode = async (...args) => {
+    if (failCommittedPresentationApply) {
+        failCommittedPresentationApply = false;
+        throw new Error('simulated committed presentation failure');
     }
-    return originalApplyAsync(mode, options);
+    return originalApplyPresentation(...args);
 };
 studio.open();
 drawer.querySelector('[data-appearance-key="density"][data-appearance-value="comfortable"]').click();
 await new Promise(resolve => setImmediate(resolve));
+failCommittedPresentationApply = true;
 drawer.querySelector('[data-studio-save]').click();
 await new Promise(resolve => setImmediate(resolve));
 await new Promise(resolve => setImmediate(resolve));
@@ -503,30 +470,49 @@ assert.equal(document.documentElement.dataset.vcpDensity, 'compact',
     'failed local apply must restore the in-memory appearance snapshot');
 assert.equal(studio.isOpen(), true, 'failed save keeps the studio open for correction');
 await studio.close({ rollback: true });
-delete window.uiModeManager.applyAsync;
+window.applyChatPresentationMode = originalApplyPresentation;
 
-let releasePendingPreview;
-let asyncModeCall = 0;
-window.uiModeManager.applyAsync = async mode => {
-    asyncModeCall += 1;
-    if (asyncModeCall === 1) {
-        await new Promise(resolve => { releasePendingPreview = resolve; });
-        return document.documentElement.dataset.uiMode;
-    }
-    return window.uiModeManager.apply(mode, { cache: false });
+const originalTopTabManager = window.topTabManager;
+let rejectFirstOverlay;
+const overlayOwners = [];
+const releasedOverlayOwners = [];
+window.topTabManager = {
+    acquireOverlay: owner => {
+        overlayOwners.push(owner);
+        if (overlayOwners.length === 1) {
+            return new Promise((_, reject) => { rejectFirstOverlay = reject; });
+        }
+        return Promise.resolve(owner);
+    },
+    releaseOverlay: owner => { releasedOverlayOwners.push(owner); },
 };
 studio.open();
-drawer.querySelector('[data-appearance-key="density"][data-appearance-value="relaxed"]').click();
-await Promise.resolve();
-const closingDuringPreview = studio.close({ rollback: true });
-await closingDuringPreview;
-releasePendingPreview();
 await new Promise(resolve => setImmediate(resolve));
+await studio.close({ rollback: true });
+studio.open();
+await new Promise(resolve => setImmediate(resolve));
+rejectFirstOverlay(new Error('simulated stale overlay acquisition failure'));
+await new Promise(resolve => setImmediate(resolve));
+assert.equal(studio.isOpen(), true, 'a stale overlay failure must not invalidate a newer open');
+await studio.close({ rollback: true });
+await new Promise(resolve => setImmediate(resolve));
+assert.equal(overlayOwners.length, 2);
+assert.notStrictEqual(overlayOwners[0], overlayOwners[1], 'each Appearance open needs an isolated overlay identity');
+assert.deepEqual(releasedOverlayOwners, overlayOwners, 'both old and current overlay leases must be released exactly once');
 assert.equal(
-    document.documentElement.dataset.vcpDensity,
-    'compact',
-    'a pending preview must not overwrite the snapshot after the drawer closes'
+    window.VCPLifecycle.diagnostics.find('next:appearance-studio-open').length,
+    0,
+    'failed overlay acquisition must not retain the per-open Appearance Studio scope'
 );
+window.topTabManager = originalTopTabManager;
+
+studio.open();
+const closeBeforeReopen = studio.close({ rollback: true });
+assert.equal(studio.open(), true, 'an open requested during teardown should be queued');
+await closeBeforeReopen;
+await new Promise(resolve => setImmediate(resolve));
+assert.equal(studio.isOpen(), true, 'queued open should mount only after prior teardown completes');
+await studio.close({ rollback: true });
 
 const source = fs.readFileSync('main.html', 'utf8');
 assert.match(source, /nextUiAccountAppearanceStudioBtn/);
@@ -540,4 +526,5 @@ assert.doesNotMatch(
     /vchatDynamicWallpaperMenuButton|data-studio-action="wallpaper"/,
     'Next Appearance Studio must not depend on a plugin-specific wallpaper adapter'
 );
+await studio.destroy();
 console.log('appearance studio checks passed.');

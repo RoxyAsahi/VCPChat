@@ -15,6 +15,7 @@
         hybridCompiler,
         styleLibrary,
         pagination,
+        settings: window.ScriptoriumSettings,
         documentStore: window.ScriptoriumDocumentStore,
         flowAdapter: window.ScriptoriumFlowAdapter,
         deckAdapter: window.ScriptoriumDeckAdapter,
@@ -23,6 +24,8 @@
         deckEditor: window.ScriptoriumDeckEditor,
         formatting: window.ScriptoriumFormatting,
         primitives: window.ScriptoriumRenderPrimitives,
+        svgAssetLibrary: window.VDocSvgAssetLibrary,
+        svgAssets: window.ScriptoriumSvgAssets,
         renderedText: window.ScriptoriumRenderedText,
         flowRenderer: window.ScriptoriumFlowRenderer,
         deckRenderer: window.ScriptoriumDeckRenderer,
@@ -40,7 +43,9 @@
         prDiff: window.ScriptoriumPrDiff,
         agentPort: window.ScriptoriumAgentPort,
         runtime: window.ScriptoriumRuntime,
+        networkFonts: window.ScriptoriumNetworkFonts,
         sourceEditor: window.ScriptoriumSourceEditor,
+        library: window.ScriptoriumLibrary,
         session: window.ScriptoriumSession,
         shell: window.ScriptoriumShell,
     };
@@ -60,10 +65,24 @@
         readPath: (path) => nativeApi.readPath(path),
         readExternalResource: (payload) =>
             nativeApi.readExternalResource(payload),
+        resolveFontStylesheet: (payload) =>
+            nativeApi.resolveFontStylesheet(payload),
+        resolveFontUrl: (payload) =>
+            nativeApi.resolveFontUrl(payload),
         save: (payload) => nativeApi.save(payload),
         exportRichDocument: (payload) =>
             nativeApi.exportRichDocument(payload),
+        listDocumentLibrary: () =>
+            nativeApi.listDocumentLibrary(),
         listRecent: () => nativeApi.listRecent(),
+        loadStylePacks: () =>
+            nativeApi.loadStylePacks?.() || [],
+        saveStylePacks: (packs) =>
+            nativeApi.saveStylePacks?.(packs),
+        loadSvgAssetPacks: () =>
+            nativeApi.loadSvgAssetPacks?.() || [],
+        saveSvgAssetPacks: (packs) =>
+            nativeApi.saveSvgAssetPacks?.(packs),
         listSystemFonts: (force) => nativeApi.listSystemFonts(force),
         loadAgentsList: () => nativeApi.loadAgentsList?.() || [],
         loadUserAvatar: () => nativeApi.loadUserAvatar?.() || null,
@@ -86,10 +105,14 @@
             nativeApi.respondAgentRequest?.(payload),
     });
 
+    const settingsPort =
+        window.ScriptoriumSettings.createSettingsStore();
+
     const documentPort =
         window.ScriptoriumDocumentStore.createDocumentStore({
             core,
             containerModule,
+            settingsPort,
         });
 
     let activeAdapter = null;
@@ -98,6 +121,7 @@
     let sourcePort = null;
     let exportPort = null;
     let sessionPort = null;
+    let libraryPort = null;
     let mediaPort = null;
     let findPort = null;
     let navigationPort = null;
@@ -107,6 +131,8 @@
     let prDiffPort = null;
     let agentPort = null;
     let objectPort = null;
+    let svgAssetPort = null;
+    let networkFontPort = null;
     let shell = null;
     let pathRequestDisposer = null;
     let agentRequestDisposer = null;
@@ -139,9 +165,54 @@
 
     const editorFacade = Object.freeze({
         flush: (...args) => activeEditor?.flush?.(...args) ?? true,
+        captureViewState: (...args) =>
+            activeEditor?.captureViewState?.(...args) || null,
+        restoreViewState: (...args) =>
+            activeEditor?.restoreViewState?.(...args) ?? false,
         disposeSurface: (...args) =>
             activeEditor?.disposeSurface?.(...args),
     });
+
+    function historyBranchKey() {
+        const mode = shell?.surfacePort?.mode?.() || 'edit';
+        if (activeAdapter?.kind !== 'deck') {
+            return `${mode}|flow|document`;
+        }
+        if (mode === 'source-css') return `${mode}|deck|global-css`;
+        const slideId = activeAdapter.activeSlide?.()?.id
+            || `index-${activeAdapter.activeSlideIndex?.() ?? 0}`;
+        return `${mode}|deck|slide:${encodeURIComponent(slideId)}`;
+    }
+
+    function restoreHistorySnapshot(serialized, branchKey) {
+        const captured = core.parse(serialized);
+        if (activeAdapter?.kind !== 'deck') return captured;
+
+        const current = documentPort.document();
+        if (!current) return captured;
+        const merged = core.parse(core.serialize(current));
+        if (branchKey === 'source-css|deck|global-css') {
+            merged.source.deckCss = String(captured.source?.deckCss || '');
+            return merged;
+        }
+
+        const encodedSlideId = String(branchKey || '')
+            .match(/\|deck\|slide:(.*)$/)?.[1];
+        const slideId = encodedSlideId
+            ? decodeURIComponent(encodedSlideId)
+            : '';
+        const capturedSlide = (captured.source?.slides || []).find(
+            (slide) => slide.id === slideId
+        );
+        const currentIndex = (merged.source?.slides || []).findIndex(
+            (slide) => slide.id === slideId
+        );
+        if (capturedSlide && currentIndex >= 0) {
+            merged.source.slides[currentIndex] =
+                JSON.parse(JSON.stringify(capturedSlide));
+        }
+        return merged;
+    }
 
     const historyPort = window.ScriptoriumEditHistory.createEditHistory({
         documentPort,
@@ -149,6 +220,9 @@
         editorPort: editorFacade,
         adapterResolver,
         renderPort: renderFacade,
+        branchKeyResolver: historyBranchKey,
+        restoreSnapshot: restoreHistorySnapshot,
+        onChange: () => formattingPort?.syncHistoryControls?.(),
     });
 
     const lineagePort =
@@ -161,6 +235,9 @@
         window.ScriptoriumRenderedText.createRenderedTextController({
             historyPort,
             notificationPort: notificationFacade,
+            // 延迟读取，避免在 visibilityPort 声明前触发词法作用域暂存死区；
+            // 编辑事件发生时该端口已经完成初始化。
+            getVisibilityPort: () => visibilityPort,
         });
 
     const runtimePort =
@@ -170,6 +247,22 @@
 
     const visibilityObservers = new Map();
     const visibilityPort = Object.freeze({
+        pause(surface) {
+            if (!surface) return false;
+            window.ScriptoriumVisibility.pause(surface);
+            return true;
+        },
+        resume(surface) {
+            if (!surface) return false;
+            window.ScriptoriumVisibility.resume(surface);
+            return true;
+        },
+        isPaused(surface) {
+            return Boolean(
+                surface
+                && window.ScriptoriumVisibility.isPaused(surface)
+            );
+        },
         observe(root, host, options = {}) {
             const previous = visibilityObservers.get(root);
             previous?.disconnect?.();
@@ -198,6 +291,7 @@
             core,
             styleLibrary,
             hybridCompiler,
+            settingsPort,
             resourceResolver: () => documentPort.resourceResolver(),
         });
 
@@ -216,6 +310,9 @@
             core,
             onActiveSlideChange: () => {
                 renderFacade.invalidate('active-slide-changed');
+                historyPort.activate(undefined, {
+                    reason: 'active-slide-changed',
+                });
                 if (initialized) {
                     renderFacade.renderEdit({ force: true });
                     navigationPort?.render?.();
@@ -399,6 +496,7 @@
         createDeck: (...args) => sessionPort?.createDeck(...args),
         showHome: (...args) => sessionPort?.showHome(...args),
         open: (...args) => sessionPort?.open(...args),
+        openPath: (...args) => sessionPort?.openPath(...args),
         import: (...args) => sessionPort?.import(...args),
         save: (...args) => sessionPort?.save(...args),
         close: (...args) => sessionPort?.close(...args),
@@ -418,6 +516,24 @@
     const styleFacade = Object.freeze({
         close: (...args) => stylePort?.close(...args),
     });
+    const metricsPort = Object.freeze({
+        text() {
+            const documentModel = documentPort.document();
+            if (!documentModel) return '';
+            const html = documentModel.manifest?.scene?.kind
+                === core.PROJECT_KINDS.SLIDE_DECK
+                ? (documentModel.source?.slides || [])
+                    .map((slide) => core.splitSlideSource(slide.source).html)
+                    .join('\n')
+                : hybridCompiler.compile(
+                    String(documentModel.source?.content || ''),
+                    { sanitizeHtml: core.sanitizeHtml }
+                ).html;
+            const template = document.createElement('template');
+            template.innerHTML = html;
+            return template.content.textContent || '';
+        },
+    });
 
     shell = window.ScriptoriumShell.createShell({
         core,
@@ -436,6 +552,8 @@
         findPort: findFacade,
         mediaPort: mediaFacade,
         stylePort: styleFacade,
+        metricsPort,
+        settingsPort,
         editorResolver,
         bindElements,
         onInitialize,
@@ -444,14 +562,24 @@
     function bindElements(elements, notificationPort, surfacePort) {
         renderPort =
             window.ScriptoriumRenderCoordinator.createRenderCoordinator({
-                documentPort,
-                primitives,
-                runtimePort,
-                editHost: elements['page-stream'],
+            documentPort,
+            primitives,
+            runtimePort,
+            editorPort: flowEditor,
+            editHost: elements['page-stream'],
                 readHost: elements['read-page-stream'],
                 editScrollHost: elements['render-host'],
                 readScrollHost: elements['read-host'],
                 onRendered: () => navigationPort?.render?.(),
+            });
+
+        networkFontPort =
+            window.ScriptoriumNetworkFonts.createNetworkFontController({
+                documentPort,
+                containerModule,
+                persistencePort,
+                notificationPort,
+                settingsPort,
             });
 
         sourcePort =
@@ -463,6 +591,7 @@
                 notificationPort,
                 historyPort,
                 renderPort: renderFacade,
+                networkFontPort,
                 getAdapter: adapterResolver,
             });
         sourcePort.initialize();
@@ -531,6 +660,7 @@
             window.ScriptoriumStyleUi.createStyleUiController({
                 elements,
                 styleLibrary,
+                persistencePort,
                 notificationPort,
                 getEditorPort: editorResolver,
                 onStyleUsed(style) {
@@ -553,6 +683,14 @@
                 },
             });
 
+        libraryPort =
+            window.ScriptoriumLibrary.createLibraryController({
+                elements,
+                persistencePort,
+                openPath: (filePath) =>
+                    sessionFacade.openPath(filePath),
+            });
+
         sessionPort =
             window.ScriptoriumSession.createSessionController({
                 documentPort,
@@ -564,10 +702,12 @@
                 renderPort: renderFacade,
                 surfacePort,
                 sourcePort,
+                networkFontPort,
                 historyPort,
                 lineagePort,
                 navigationPort,
                 lineageUiPort,
+                libraryPort,
                 editorResolver,
                 getAdapter: adapterResolver,
                 resolveAdapter,
@@ -618,6 +758,7 @@
                 containerModule,
                 hybridCompiler,
                 styleLibrary,
+                svgAssetLibrary: window.VDocSvgAssetLibrary,
                 programmableContent: window.ScriptoriumProgrammableContent,
                 prDiff: window.ScriptoriumPrDiff,
                 historyPort,
@@ -626,10 +767,15 @@
                 getAdapter: adapterResolver,
                 persist: (reason) =>
                     sessionPort.persistCheckpoint(reason),
-                onStyleLibraryChange: () => {
+                onStyleLibraryChange: async () => {
+                    await stylePort.persist();
                     renderFacade.invalidate('style-library-changed');
                     renderFacade.renderCurrent({ force: true });
                 },
+                persistSvgAssets: () =>
+                    persistencePort.saveSvgAssetPacks(
+                        window.VDocSvgAssetLibrary.exportUserPacks()
+                    ),
             });
         window.ScriptoriumAgent = agentPort;
 
@@ -650,14 +796,30 @@
                 commitMutation: mutateObject,
             });
 
+        svgAssetPort =
+            window.ScriptoriumSvgAssets.createSvgAssetController({
+                elements,
+                library: window.VDocSvgAssetLibrary,
+                objects: window.ScriptoriumObjects,
+                persistencePort,
+                notificationPort,
+                canInsert: () =>
+                    documentPort.status().ready
+                    && shell.surfacePort.mode() === 'edit',
+                freeCanvas: () => activeAdapter?.kind === 'deck',
+                insertObject,
+            });
+
         [
             sessionPort,
+            libraryPort,
             mediaPort,
             findPort,
             navigationPort,
             formattingPort,
             stylePort,
             lineageUiPort,
+            svgAssetPort,
         ].forEach(shell.register);
     }
 
@@ -735,6 +897,9 @@
         await Promise.all([
             loadFonts(),
             sessionPort.renderRecent(),
+            libraryPort.refresh(),
+            stylePort.initialize(),
+            svgAssetPort.initialize(),
         ]);
         initialized = true;
     }
@@ -748,6 +913,7 @@
         agentCheckpointDisposer?.();
         visibilityPort.dispose();
         objectPort?.dispose?.();
+        networkFontPort?.dispose?.();
         renderedTextPort.dispose();
         shell.dispose();
         runtimePort.dispose();
@@ -760,6 +926,7 @@
         historyPort.dispose();
         lineagePort.dispose();
         documentPort.dispose();
+        settingsPort.dispose();
         disposed = true;
     }
 

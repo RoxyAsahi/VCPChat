@@ -16,9 +16,23 @@ const scriptoriumAPI = Object.freeze({
     readPath: (filePath) => ipcRenderer.invoke('docx:read-path', filePath),
     readExternalResource: (payload) =>
         ipcRenderer.invoke('docx:read-external-resource', payload),
+    resolveFontStylesheet: (payload) =>
+        ipcRenderer.invoke('scriptorium:resolve-font-stylesheet', payload),
+    resolveFontUrl: (payload) =>
+        ipcRenderer.invoke('scriptorium:resolve-font-url', payload),
     save: (payload) => ipcRenderer.invoke('docx:save', payload),
     exportRichDocument: (payload) => ipcRenderer.invoke('scriptorium:export-rich-document', payload),
+    listDocumentLibrary: () =>
+        ipcRenderer.invoke('scriptorium:document-library'),
     listRecent: () => ipcRenderer.invoke('docx:recent-list'),
+    loadStylePacks: () =>
+        ipcRenderer.invoke('scriptorium:style-packs-load'),
+    saveStylePacks: (packs) =>
+        ipcRenderer.invoke('scriptorium:style-packs-save', packs),
+    loadSvgAssetPacks: () =>
+        ipcRenderer.invoke('scriptorium:svg-assets-load'),
+    saveSvgAssetPacks: (packs) =>
+        ipcRenderer.invoke('scriptorium:svg-assets-save', packs),
     listSystemFonts: (forceRefresh = false) => ipcRenderer.invoke('docx:fonts-list', forceRefresh),
 
     // 文脉署名头像只读取现有用户与 Agent 资料，不向文档工程写入本机路径。

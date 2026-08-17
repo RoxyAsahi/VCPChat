@@ -10,6 +10,7 @@
     function createStyleUiController(context = {}) {
         const elements = context.elements || {};
         const styleLibrary = context.styleLibrary;
+        const persistencePort = context.persistencePort || {};
         const notificationPort = context.notificationPort || {};
         if (!styleLibrary) {
             throw new TypeError('Style UI requires VDocStyleLibrary.');
@@ -20,6 +21,37 @@
         let abortController = null;
         let libraryDisposer = null;
         let disposed = false;
+        let initialized = false;
+        let initializationPromise = null;
+
+        function persist() {
+            return persistencePort.saveStylePacks?.(
+                styleLibrary.exportUserPacks()
+            );
+        }
+
+        function initialize() {
+            if (initialized) return Promise.resolve(true);
+            if (initializationPromise) return initializationPromise;
+            initializationPromise = (async () => {
+                try {
+                    const packs =
+                        await persistencePort.loadStylePacks?.() || [];
+                    styleLibrary.replaceUserPacks(packs);
+                } catch (error) {
+                    notificationPort.show?.(
+                        `高级样式库载入失败：${error.message}`,
+                        'error',
+                        5000
+                    );
+                }
+                initialized = true;
+                populateCategories();
+                renderList();
+                return true;
+            })();
+            return initializationPromise;
+        }
 
         function currentEditor() {
             return editorPort || context.getEditorPort?.() || null;
@@ -194,6 +226,13 @@ ${product.css}
                 notificationPort.show?.('请先选择一段文字。', 'info');
                 return false;
             }
+
+            // “高级样式”按钮位于文字右键菜单内部，点击它不会触发菜单的
+            // 外部 pointerdown 自动关闭逻辑。模态窗口打开前显式收起菜单，
+            // 避免浮层继续拦截交互或遮挡样式库。
+            if (elements['text-context-menu']) {
+                elements['text-context-menu'].hidden = true;
+            }
             elements['style-library-dialog'].hidden = false;
             populateCategories();
             renderList();
@@ -243,6 +282,7 @@ ${product.css}
                 const result = styleLibrary.registerPack(pack, {
                     conflict: 'replace',
                 });
+                await persist();
                 populateCategories();
                 renderList();
                 notificationPort.show?.(
@@ -348,6 +388,7 @@ ${product.css}
                     renderList();
                 }
             });
+            initialize();
             return api;
         }
 
@@ -361,6 +402,8 @@ ${product.css}
         }
 
         const api = Object.freeze({
+            initialize,
+            persist,
             setEditorPort,
             open,
             close,

@@ -4,6 +4,7 @@
     const COMPILER_VERSION = 'vdoc-hybrid-compiler/3';
     const ISLAND_ATTRIBUTE = 'data-vdoc-island';
     const TOKEN_PREFIX = 'VDOC_PROTECTED_BLOCK_';
+    const PARAGRAPH_BREAK_PLACEHOLDER = '↵';
 
     function lineEndingOf(source) {
         const text = String(source || '');
@@ -280,9 +281,17 @@
             return true;
         };
 
+        // 独占一行的 ↵ 是 Scriptorium 显式回车占位符。它在编辑 DOM 中
+        // 保留真实源码字符和光标映射，但由专用样式压缩为透明零宽节点。
+        const paragraphBreakPattern = /^[ \t]*(↵)[ \t]*$/gm;
+        let match;
+        while ((match = paragraphBreakPattern.exec(source))) {
+            const start = match.index + match[0].indexOf(match[1]);
+            add(start, start + match[1].length, 'paragraph-break');
+        }
+
         // 块级前缀保持源码字符本身，只附加编辑态着色信息。
         const linePattern = /^(?: {0,3})(#{1,6}(?=\s)|>\s?|(?:[-+*]|\d+\.)\s+(?:\[[ xX]\]\s*)?)/gm;
-        let match;
         while ((match = linePattern.exec(source))) {
             const delimiter = match[1];
             const start = match.index + match[0].indexOf(delimiter);
@@ -452,6 +461,15 @@
         return output;
     }
 
+    function protectParagraphBreakPlaceholders(source) {
+        return String(source || '').replace(
+            /^([ \t]*)↵[ \t]*$/gm,
+            '$1<span class="vdoc-paragraph-break-placeholder" '
+                + 'data-vdoc-paragraph-break-placeholder="true" '
+                + 'aria-label="空白行">↵</span>'
+        );
+    }
+
     function markedApi() {
         const candidate = global.marked;
         if (typeof candidate === 'function') return candidate;
@@ -591,8 +609,22 @@
             let cursor = 0;
             const add = (from, to, token = null) => {
                 if (to <= from) return;
-                const raw = segment.slice(from, to);
-                if (!raw.trim()) return;
+                let regionEnd = to;
+                let raw = segment.slice(from, regionEnd);
+
+                // Marked 会把块后的空白分隔（通常 \n\n）纳入 token.raw。
+                // 分隔空行不是前一个块的可编辑内容；若保留在 region 内，
+                // 段尾 Enter 或 HTML 边界插入会改变下次编译的区域范围，
+                // 造成活动会话、光标及后续 shell key 全部失配。
+                //
+                // 这里只剥离两个及以上的普通尾换行。由编辑器创建的空白行
+                // 含有显式 ↵，不会进入该分支，也不会再被归一化吞掉。
+                const separator = raw.match(/(?:\r?\n){2,}$/)?.[0] || '';
+                if (separator) {
+                    regionEnd -= separator.length;
+                    raw = segment.slice(from, regionEnd);
+                }
+                if (regionEnd <= from || !raw.trim()) return;
                 const type = tokenEditType(token, raw);
                 regions.push({
                     type,
@@ -600,7 +632,7 @@
                         ? htmlEditFlowKind(raw)
                         : 'text-flow',
                     start: start + from,
-                    end: start + to,
+                    end: start + regionEnd,
                     source: raw,
                     markdownTokenType: token?.type || null,
                 });
@@ -707,7 +739,13 @@
 
         const registry = [];
         const mathRegions = scanMathRegions(raw);
-        const protectedSource = protectStructuralRegions(raw, mathRegions, registry);
+        const structuralSource = protectStructuralRegions(
+            raw,
+            mathRegions,
+            registry
+        );
+        const protectedSource =
+            protectParagraphBreakPlaceholders(structuralSource);
         try {
             return restoreProtectedHtml(parse(protectedSource, {
                 gfm: true,
@@ -727,6 +765,137 @@
             ));
             return `<pre class="vdoc-source-fallback">${escapeHtml(raw)}</pre>`;
         }
+    }
+
+    function decodeHeadingText(value) {
+        return String(value || '')
+            .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '')
+            .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, '')
+            .replace(/<[^>]+>/g, '')
+            .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+            .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+            .replace(/[`*_~]/g, '')
+            .replace(/&nbsp;|&#160;/gi, ' ')
+            .replace(/&|&#38;/gi, '&')
+            .replace(/<|&#60;/gi, '<')
+            .replace(/>|&#62;/gi, '>')
+            .replace(/"|&#34;/gi, '"')
+            .replace(/'|'/gi, "'")
+            .replace(/&#(\d+);/g, (_match, code) =>
+                String.fromCodePoint(Number(code))
+            )
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    function buildHeadingIndex(source, editRegions, lexer) {
+        const headings = [];
+        const add = (level, text, start, headingEnd, editRegionOrdinal) => {
+            const normalizedText = decodeHeadingText(text);
+            if (!normalizedText || level < 1 || level > 6) return;
+            headings.push({
+                id: `heading-${start}-${simpleHash(normalizedText)}`,
+                index: headings.length,
+                kind: 'heading',
+                level,
+                text: normalizedText,
+                start,
+                headingEnd,
+                editRegionOrdinal,
+            });
+        };
+
+        editRegions.forEach((region) => {
+            const regionStart = region.sourceRange.start;
+            const raw = source.slice(regionStart, region.sourceRange.end);
+
+            if (region.markdownTokenType === 'heading' && lexer) {
+                try {
+                    const token = lexer(raw, {
+                        gfm: true,
+                        breaks: false,
+                        async: false,
+                    })?.find((candidate) => candidate?.type === 'heading');
+                    if (token) {
+                        const tokenStart = Math.max(0, raw.indexOf(token.raw));
+                        add(
+                            Number(token.depth),
+                            token.text,
+                            regionStart + tokenStart,
+                            regionStart + tokenStart + token.raw.length,
+                            region.ordinal
+                        );
+                    }
+                } catch {}
+            }
+
+            if (!['html', 'island'].includes(region.type)) return;
+            const excluded = [
+                ...scanFences(raw),
+                ...scanStyleBlocks(raw),
+            ];
+            const scriptPattern = /<script\b[^>]*>[\s\S]*?<\/script\s*>/gi;
+            let scriptMatch;
+            while ((scriptMatch = scriptPattern.exec(raw))) {
+                excluded.push({
+                    start: scriptMatch.index,
+                    end: scriptMatch.index + scriptMatch[0].length,
+                });
+            }
+
+            const headingPattern =
+                /<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1\s*>/gi;
+            let match;
+            while ((match = headingPattern.exec(raw))) {
+                const start = match.index;
+                const end = start + match[0].length;
+                if (overlapsRegion(start, end, excluded)) continue;
+                add(
+                    Number(match[1]),
+                    match[2],
+                    regionStart + start,
+                    regionStart + end,
+                    region.ordinal
+                );
+            }
+        });
+
+        headings.sort((left, right) => left.start - right.start);
+        headings.forEach((heading, index) => {
+            heading.index = index;
+            const next = headings.slice(index + 1).find((candidate) =>
+                candidate.level <= heading.level
+            );
+            heading.end = next ? next.start : source.length;
+            const startPosition = lineAndColumnAt(source, heading.start);
+            const headingEndPosition = lineAndColumnAt(
+                source,
+                heading.headingEnd
+            );
+            const endPosition = lineAndColumnAt(source, heading.end);
+            heading.startLine = startPosition.line;
+            heading.headingEndLine = headingEndPosition.line;
+            heading.endLine = endPosition.column === 1 && heading.end > 0
+                ? Math.max(heading.startLine, endPosition.line - 1)
+                : endPosition.line;
+            heading.characterCount = heading.end - heading.start;
+            heading.contentCharacterCount = Math.max(
+                0,
+                heading.end - heading.headingEnd
+            );
+            heading.headingRange = {
+                start: heading.start,
+                end: heading.headingEnd,
+            };
+            heading.sourceRange = {
+                start: heading.start,
+                end: heading.end,
+            };
+            delete heading.start;
+            delete heading.headingEnd;
+            delete heading.end;
+        });
+        return headings;
     }
 
     function buildPreviewHtml(source, editRegions, parse, diagnostics) {
@@ -807,11 +976,13 @@
         ].sort((left, right) => left.start - right.start);
 
         const registry = [];
-        const protectedSource = protectStructuralRegions(
+        const structuralSource = protectStructuralRegions(
             source,
             protectedRegions,
             registry
         );
+        const protectedSource =
+            protectParagraphBreakPlaceholders(structuralSource);
 
         const parse = markedApi();
         const lexer = markedLexerApi();
@@ -857,6 +1028,7 @@
             lexer,
             diagnostics
         );
+        const headings = buildHeadingIndex(source, editRegions, lexer);
         let previewHtml = buildPreviewHtml(
             source,
             editRegions,
@@ -876,6 +1048,7 @@
             previewHtml,
             blocks,
             editRegions,
+            headings,
             islands: islands.map((island) => ({
                 id: island.id,
                 sourceRange: { start: island.start, end: island.end },
@@ -900,6 +1073,7 @@
     global.VDocHybridCompiler = Object.freeze({
         COMPILER_VERSION,
         ISLAND_ATTRIBUTE,
+        PARAGRAPH_BREAK_PLACEHOLDER,
         compile,
         lineEndingOf,
         markdownLiveMarkerRanges,

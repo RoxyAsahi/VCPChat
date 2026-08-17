@@ -7,40 +7,15 @@ const uiManager = (() => {
     // --- Private Variables ---
     let globalSettingsRef = { get: () => ({}) }; // Reference to global settings
     let electronAPI = null;
+    const themeChannel = window.VCPStateChannels?.create('theme', Object.freeze({ ready: false, effective: 'light' })) || null;
 
     // DOM Elements (will be initialized in init)
     let leftSidebar, rightNotificationsSidebar, resizerLeft, resizerRight;
-    let minimizeBtn, maximizeBtn, restoreBtn, closeBtn, settingsBtn;
-    let themeToggleBtn;
     let digitalClockElement, dateDisplayElement, notificationTitleElement;
     let sidebarTabButtons, sidebarTabContents;
 
 
     // --- Private Functions ---
-
-    /**
-     * Sets up the custom title bar controls (minimize, maximize, close).
-     */
-    function setupTitleBarControls() {
-        if (minimizeBtn) minimizeBtn.addEventListener('click', () => electronAPI.minimizeWindow());
-        if (maximizeBtn) maximizeBtn.addEventListener('click', () => electronAPI.maximizeWindow());
-        if (restoreBtn) restoreBtn.addEventListener('click', () => electronAPI.unmaximizeWindow());
-        if (closeBtn) closeBtn.addEventListener('click', () => electronAPI.closeWindow());
-        // if (settingsBtn) settingsBtn.addEventListener('click', () => electronAPI.openDevTools()); // This is now handled by the theme module
-
-        if (electronAPI && typeof electronAPI.onWindowMaximized === 'function') {
-            electronAPI.onWindowMaximized(() => {
-                if (maximizeBtn) maximizeBtn.style.display = 'none';
-                if (restoreBtn) restoreBtn.style.display = 'flex';
-            });
-        }
-        if (electronAPI && typeof electronAPI.onWindowUnmaximized === 'function') {
-            electronAPI.onWindowUnmaximized(() => {
-                if (maximizeBtn) maximizeBtn.style.display = 'flex';
-                if (restoreBtn) restoreBtn.style.display = 'none';
-            });
-        }
-    }
 
     /**
      * Initializes the resizable sidebars.
@@ -107,15 +82,8 @@ const uiManager = (() => {
         // Apply class to body for CSS styling
         document.body.classList.remove('light-theme', 'dark-theme');
         document.body.classList.add(`${theme}-theme`);
+        themeChannel?.publish(Object.freeze({ ready: true, effective: theme }), { source: 'ui-manager' });
 
-        // Update the toggle button icon
-        if (themeToggleBtn) {
-            const themeIcon = themeToggleBtn.querySelector('i');
-            if (themeIcon) {
-                // Assuming sun for light theme, moon for dark theme
-                themeIcon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
-            }
-        }
         console.log(`[UIManager] Theme applied: ${theme}`);
     }
 
@@ -494,12 +462,6 @@ const uiManager = (() => {
             rightNotificationsSidebar = options.elements.rightNotificationsSidebar;
             resizerLeft = options.elements.resizerLeft;
             resizerRight = options.elements.resizerRight;
-            minimizeBtn = options.elements.minimizeBtn;
-            maximizeBtn = options.elements.maximizeBtn;
-            restoreBtn = options.elements.restoreBtn;
-            closeBtn = options.elements.closeBtn;
-            settingsBtn = options.elements.settingsBtn;
-            themeToggleBtn = options.elements.themeToggleBtn;
             digitalClockElement = options.elements.digitalClockElement;
             dateDisplayElement = options.elements.dateDisplayElement;
             notificationTitleElement = options.elements.notificationTitleElement;
@@ -507,29 +469,17 @@ const uiManager = (() => {
             sidebarTabContents = options.elements.sidebarTabContents;
 
             // Initialize all features
-            setupTitleBarControls();
             initializeResizers();
             await initializeTheme(); // Replaces loadAndApplyThemePreference
             initializeDigitalClock();
             setupSidebarTabs();
             setupCompactSidebarNavigation();
 
-            // Setup theme toggle button listener
-            if (themeToggleBtn) {
-                themeToggleBtn.addEventListener('click', () => {
-                    // Determine the new theme based on the current one
-                    const isCurrentlyDark = document.body.classList.contains('dark-theme');
-                    const newTheme = isCurrentlyDark ? 'light' : 'dark';
-
-                    // Just tell the main process to set the theme.
-                    // The UI update will happen automatically when we receive the 'theme-updated' event.
-                    electronAPI.setTheme(newTheme);
-                });
-            }
-
             console.log('uiManager initialized.');
         },
         applyTheme: applyTheme, // Expose applyTheme if needed externally
+        getThemeState: () => themeChannel?.get() || Object.freeze({ ready: true, effective: document.body.classList.contains('dark-theme') ? 'dark' : 'light' }),
+        subscribeTheme: (listener, options) => themeChannel?.subscribe(listener, options) || (() => false),
         switchToTab: switchToTab // Expose switchToTab for external use
     };
 })();

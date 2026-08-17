@@ -35,11 +35,6 @@ const searchManager = {
         this.currentTopicIdRef = dependencies.refs.currentTopicIdRef;
 
         this.setupGlobalShortcuts();
-        window.addEventListener('ui-mode-changed', () => {
-            if (this.elements.modal && this.elements.modal.style.display !== 'none') {
-                this.closeModal();
-            }
-        });
 
         // 🟢 监听模态框就绪事件
         document.addEventListener('modal-ready', (e) => {
@@ -112,9 +107,9 @@ const searchManager = {
         
         if (this.elements.modal) {
             this.elements.modal.style.display = 'flex';
-            this.elements.input.focus();
+            this.elements.input?.focus();
         }
-        this.elements.input.select();
+        this.elements.input?.select();
         if (this.elements.resultsContainer && !this.elements.resultsContainer.childElementCount) {
             this.elements.resultsContainer.innerHTML = '<p class="search-status-message search-status-message--empty">输入关键词，查找任意助手或群组中的聊天记录。</p>';
         }
@@ -182,6 +177,8 @@ const searchManager = {
     },
 
     closeModal() {
+        // Mode changes can arrive before the lazily-created search modal has
+        // emitted modal-ready. Closing an absent surface is a valid no-op.
         if (this.elements.modal) this.elements.modal.style.display = 'none';
         this.clearScopedStyles();
 

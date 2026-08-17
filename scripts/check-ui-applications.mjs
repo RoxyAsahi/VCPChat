@@ -31,10 +31,7 @@ const surfaceDirs = [
     'VchatManager',
 ];
 const singleFiles = ['main.html'];
-const SELECT_RUNTIME_ENTRYPOINTS = [
-    'Translatormodules/translator.html',
-    'Notemodules/notes.html',
-];
+const SELECT_RUNTIME_ENTRYPOINTS = [];
 
 const CDN_HOSTS = [
     /unpkg\.com/i,
@@ -146,8 +143,11 @@ if (!mainSource.includes('modules/ui-system/vcp-main-ui-runtime.js')) {
     failures.push('main.html: global settings Select migration requires vcp-main-ui-runtime.js');
 }
 const runtimeSource = fs.readFileSync(path.join(root, 'modules/ui-system/vcp-ui-runtime-bootstrap.js'), 'utf8');
-if (!runtimeSource.includes('VCPUI.observeControls')) {
-    failures.push('vcp-ui-runtime-bootstrap.js: dynamic Select observer is missing');
+if (runtimeSource.includes('VCPUI.observeControls')) {
+    failures.push('vcp-ui-runtime-bootstrap.js: document-wide dynamic control observers are forbidden');
+}
+if (!runtimeSource.includes('UiModeController.createSurfaceController') || !runtimeSource.includes('mountScope')) {
+    failures.push('vcp-ui-runtime-bootstrap.js: explicit mode surface lifecycle is missing');
 }
 const vcpUiSource = fs.readFileSync(path.join(root, 'modules/ui-system/vcp-ui.js'), 'utf8');
 if (!vcpUiSource.includes("ENHANCERS.set('select', selectEnhancer)")) {

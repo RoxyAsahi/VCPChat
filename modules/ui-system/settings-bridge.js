@@ -2,15 +2,15 @@
 //
 // The sidebar settings forms (agent/group) and the global settings modal keep
 // their original business DOM, form ids, defaults and IPC; this module only
-// layers the VCPUI presentation on top when the mode resolves to next.
+// layers the VCPUI presentation on top of the canonical main-window shell.
 //
 // Global settings (R5.1): in Next, the modal is rebuilt into a
 // SettingsShell-style layout — left rail with a VCPUI-enhanced search field and
 // a VCPUI List category navigation, the original form as the content area, and
-// the existing footer as the fixed save bar. Classic keeps the upstream modal
-// DOM and controls untouched.
+// the existing footer as the fixed save bar.
 
 const controllers = new Set();
+const controllerReleases = new Map();
 const injectedNodes = new Set();
 // Per-modal shell state: { layout, nav, listHost, originalNavHtml, meta,
 // active, query, list } keyed by the modal root so teardown can restore the
@@ -21,32 +21,47 @@ const shellRoots = new Set();
 // Replaced inline SVGs inside the global form, keyed by container, so teardown
 // restores the original Lucide-style paths (classic must not lose them).
 const iconReplacements = new Set();
-let observer = null;
 let refreshQueued = false;
+const LifecycleScope = window.VCPLifecycle?.LifecycleScope;
+const bridgeScope = LifecycleScope ? new LifecycleScope('next:settings-bridge-controller') : null;
+const settingsHost = document.getElementById('tabContentSettings');
+let presentationScope = null;
+let destroyed = false;
+let destroyPromise = null;
+
+function ensurePresentationScope() {
+    if (destroyed) return null;
+    if (!presentationScope) {
+        presentationScope = bridgeScope?.child('next:settings-presentation') || null;
+    }
+    return presentationScope;
+}
 
 function isNextUi() {
-    return document.documentElement.dataset.uiMode === 'next'
-        && settingsHost?.dataset.settingsPresentation !== 'classic';
+    return settingsHost?.dataset.settingsPresentation !== 'classic';
 }
 
 function isGlobalSettingsNextUi() {
-    return document.documentElement.dataset.uiMode === 'next'
-        && Boolean(document.getElementById('globalSettingsModal'));
+    return Boolean(document.getElementById('globalSettingsModal'));
 }
 
 function syncGlobalSettingsHost() {
     const modal = document.getElementById('globalSettingsModal');
-    const isNext = document.documentElement.dataset.uiMode === 'next';
-    const active = isNext && Boolean(modal?.classList.contains('active'));
+    const active = Boolean(modal?.classList.contains('active'));
     document.documentElement.classList.toggle('vcp-global-settings-host', active);
-    modal?.classList.toggle('vcp-global-settings-next', isNext);
+    modal?.classList.add('vcp-global-settings-next');
     return modal;
 }
 
 function enhance(name, element, options = {}) {
     if (!element || window.VCPUI.getController(element)) return;
     try {
-        controllers.add(window.VCPUI.enhance(name, element, options));
+        const controller = window.VCPUI.enhance(name, element, options);
+        controllers.add(controller);
+        const scope = ensurePresentationScope();
+        if (scope) {
+            controllerReleases.set(controller, scope.own(() => controller.destroy(), `settings:${name}`, 'ui-registration'));
+        }
     } catch (error) {
         console.warn(`[VCPUI SettingsBridge] Could not enhance ${name}:`, error);
     }
@@ -60,7 +75,7 @@ function enhanceForm(form) {
         enhance('Input', input);
     });
     form.querySelectorAll('textarea').forEach(textarea => enhance('Textarea', textarea));
-    form.querySelectorAll('select').forEach(select => enhance('Select', select));
+    form.querySelectorAll('select').forEach(select => enhance('Select', select, { kernel: 'native' }));
     form.querySelectorAll('input[type="range"]').forEach(range => enhance('Range', range));
     form.querySelectorAll('label.switch').forEach(control => enhance('Switch', control));
     form.querySelectorAll('.agent-name-wrapper, .group-name-wrapper, .group-settings-field-shell, .style-control-item, .params-content > div:not(.form-group-inline)').forEach(field => {
@@ -92,7 +107,7 @@ function enhanceGlobalSettings(root, form) {
         enhance('Input', input);
     });
     form.querySelectorAll('textarea').forEach(textarea => enhance('Textarea', textarea));
-    form.querySelectorAll('select').forEach(select => enhance('Select', select));
+    form.querySelectorAll('select').forEach(select => enhance('Select', select, { kernel: 'native' }));
     form.querySelectorAll('input[type="range"]').forEach(range => enhance('Range', range));
     form.querySelectorAll('label.switch').forEach(control => enhance('Switch', control));
     form.querySelectorAll('.agent-name-wrapper').forEach(field => {
@@ -118,7 +133,12 @@ function normalizeFormIcons(root) {
         icon.setAttribute('aria-hidden', 'true');
         icon.textContent = lucideName;
         svg.replaceWith(icon);
-        replaced.push({ container, original: svg, icon });
+        // lucide-adapter replaces this temporary span with an SVG. Retaining
+        // the span in the restoration record keeps an already-detached node
+        // alive for the whole Next surface lifetime and, across repeated mode
+        // round-trips, makes Chromium report a linear detached-node chain.
+        // Restoration only needs the container and upstream SVG.
+        replaced.push({ container, original: svg });
     };
     replaceIcon(root.querySelector('#resetUserAvatarColorsBtn'), 'refresh');
     replaceIcon(root.querySelector('.avatar-upload-overlay'), 'camera');
@@ -175,6 +195,7 @@ function mountSettingsShell(root) {
         active: initial,
         query: '',
         list: null,
+        listRelease: null,
     };
     shellState.set(root, state);
     shellRoots.add(root);
@@ -199,6 +220,7 @@ function mountSettingsShell(root) {
         if (state.list) state.list.update({ items });
         else {
             state.list = window.VCPUI.create('List', { items });
+            state.listRelease = ensurePresentationScope()?.own(() => state.list?.destroy(), 'settings-navigation-list', 'ui-registration') || null;
             state.listHost.replaceChildren(state.list.element);
         }
     };
@@ -238,7 +260,9 @@ function mountSettingsShell(root) {
     enhance('Input', searchInput);
     nav.prepend(search);
     injectedNodes.add(search);
-    searchInput.addEventListener('input', () => onQuery(searchInput.value));
+    const onInput = () => onQuery(searchInput.value);
+    if (ensurePresentationScope()) presentationScope.listen(searchInput, 'input', onInput, undefined, 'settings-search-input');
+    else searchInput.addEventListener('input', onInput);
 
     renderList();
 }
@@ -265,7 +289,7 @@ function mountLegacySearch(root) {
     content.prepend(search);
     injectedNodes.add(search);
 
-    input.addEventListener('input', () => {
+    const handleInput = () => {
         const query = input.value.trim().toLowerCase();
         navItems.forEach(item => {
             const section = root.querySelector(`#section-${item.dataset.section}`);
@@ -278,19 +302,26 @@ function mountLegacySearch(root) {
             const firstVisible = navItems.find(item => !item.hidden);
             if (firstVisible) firstVisible.click();
         }
-    });
+    };
+    if (ensurePresentationScope()) presentationScope.listen(input, 'input', handleInput, undefined, 'legacy-settings-search-input');
+    else input.addEventListener('input', handleInput);
 }
 
 function cleanupDisconnectedControllers() {
     [...controllers].forEach(controller => {
         if (controller.element.isConnected) return;
-        controller.destroy();
+        const release = controllerReleases.get(controller);
+        if (release) void release();
+        else controller.destroy();
+        controllerReleases.delete(controller);
         controllers.delete(controller);
     });
 }
 
 function refresh() {
     refreshQueued = false;
+    if (destroyed) return;
+    ensurePresentationScope();
     cleanupDisconnectedControllers();
     const globalSettingsModal = syncGlobalSettingsHost();
     if (isNextUi()) {
@@ -303,21 +334,42 @@ function refresh() {
 }
 
 function scheduleRefresh() {
-    if (refreshQueued) return;
+    if (destroyed || refreshQueued) return;
     refreshQueued = true;
     queueMicrotask(refresh);
 }
 
 function teardown() {
-    [...controllers].reverse().forEach(controller => controller.destroy());
+    const scope = presentationScope;
+    presentationScope = null;
+    // Retract enhanced controller identity synchronously before a rapid
+    // Classic -> Next round-trip can schedule the next refresh.  The Scope
+    // disposal below still owns error isolation and all non-controller
+    // resources, but must not leave stale VCPUI proxies visible to the next
+    // presentation generation.
+    [...controllers].reverse().forEach(controller => {
+        const release = controllerReleases.get(controller);
+        if (release) {
+            void release().catch(error => {
+                console.error('[VCPUI SettingsBridge] Failed to release controller:', error);
+            });
+        } else controller.destroy();
+    });
+    if (scope) {
+        void scope.dispose('settings-presentation-teardown').catch(error => {
+            console.error('[VCPUI SettingsBridge] Failed to dispose presentation:', error);
+        });
+    }
     controllers.clear();
+    controllerReleases.clear();
     injectedNodes.forEach(node => node.remove());
     injectedNodes.clear();
     [...shellRoots].forEach(root => {
         const state = shellState.get(root);
         if (!state) return;
         state.layout.classList.remove('vcp-ui-settings-shell');
-        state.list?.destroy();
+        if (state.listRelease) void state.listRelease();
+        else state.list?.destroy();
         const activeSection = state.active || root.querySelector('.settings-section.active')?.id?.replace(/^section-/, '');
         state.originalNavNodes
             .filter(node => node.nodeType === 1 && node.matches('.settings-nav-item'))
@@ -334,31 +386,34 @@ function teardown() {
     document.documentElement.classList.remove('vcp-global-settings-host');
 }
 
-function syncMode() {
-    teardown();
-    scheduleRefresh();
-}
-
-observer = new window.MutationObserver(scheduleRefresh);
-const settingsHost = document.getElementById('tabContentSettings');
-if (settingsHost) observer.observe(settingsHost, { childList: true, subtree: true });
-const modalContainer = document.getElementById('modal-container');
-if (modalContainer) observer.observe(modalContainer, { childList: true, subtree: true });
-window.addEventListener('ui-mode-changed', syncMode);
 const handleModalVisibility = event => {
     if (event.detail?.modalId === 'globalSettingsModal') scheduleRefresh();
 };
-document.addEventListener('modal-visibility-changed', handleModalVisibility);
-syncMode();
+const handleSurfaceUpdated = () => scheduleRefresh();
+if (bridgeScope) bridgeScope.listen(document, 'modal-visibility-changed', handleModalVisibility, undefined, 'settings-modal-visibility');
+else document.addEventListener('modal-visibility-changed', handleModalVisibility);
+if (bridgeScope) {
+    bridgeScope.listen(document, 'modal-ready', handleModalVisibility, undefined, 'settings-modal-ready');
+    bridgeScope.listen(document, 'vcp-settings-surface-updated', handleSurfaceUpdated, undefined, 'settings-surface-updated');
+} else {
+    document.addEventListener('modal-ready', handleModalVisibility);
+    document.addEventListener('vcp-settings-surface-updated', handleSurfaceUpdated);
+}
+scheduleRefresh();
 
 window.VCPUISettingsBridge = Object.freeze({
     refresh: scheduleRefresh,
     destroy() {
-        observer?.disconnect();
-        observer = null;
-        window.removeEventListener('ui-mode-changed', syncMode);
-        document.removeEventListener('modal-visibility-changed', handleModalVisibility);
+        if (destroyPromise) return destroyPromise;
+        destroyed = true;
+        if (!bridgeScope) {
+            document.removeEventListener('modal-visibility-changed', handleModalVisibility);
+            document.removeEventListener('modal-ready', handleModalVisibility);
+            document.removeEventListener('vcp-settings-surface-updated', handleSurfaceUpdated);
+        }
         teardown();
+        destroyPromise = bridgeScope?.dispose('settings-bridge-destroyed') || Promise.resolve();
+        return destroyPromise;
     },
     get enhancedCount() {
         return controllers.size;

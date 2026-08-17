@@ -46,12 +46,39 @@
                 });
                 const activeAdapter = context.resolveAdapter(normalized);
                 context.activateAdapter(activeAdapter);
+
+                // 导入的 Markdown/HTML 可能把网络字体声明放在混合源码的
+                // <style> 中。必须在首次 Surface 渲染前完成受控下载、工程
+                // 资源注册和 URL 改写，否则首屏只能使用回退字体。
+                if (metadata.imported && context.networkFontPort) {
+                    try {
+                        await context.networkFontPort.processDocument(
+                            activeAdapter,
+                            {
+                                dirty: false,
+                                notify: true,
+                            }
+                        );
+                    } catch (error) {
+                        console.warn(
+                            '[ScriptoriumSession] Imported network fonts could not be localized:',
+                            error
+                        );
+                        notificationPort.show?.(
+                            `网络字体本地化失败，将使用回退字体：${error.message}`,
+                            'info',
+                            5000
+                        );
+                    }
+                }
+
                 context.historyPort.reset({ capture: false });
                 context.renderPort.invalidate('document-opened');
 
                 // 工作区必须先进入可布局状态，再建立依赖宿主尺寸、ShadowRoot
                 // 和可见区域的编辑 Surface。禁止在 hidden 祖先中预渲染后仅凭
                 // 模式切换返回值推断画布已经可用。
+                document.body.classList.remove('home-state');
                 if (elements['welcome-state']) {
                     elements['welcome-state'].hidden = true;
                 }
@@ -326,6 +353,9 @@
             return runAfterUnsavedDecision(
                 '回到首页前，可以保存当前修改，或舍弃这些修改。',
                 async () => {
+                    context.surfacePort?.setFocusMode?.(false, {
+                        focusDock: false,
+                    });
                     context.editorResolver?.()?.flush?.();
                     context.historyPort.finalize();
                     context.navigationPort?.clear?.();
@@ -347,7 +377,12 @@
                     if (elements['welcome-state']) {
                         elements['welcome-state'].hidden = false;
                     }
-                    await renderRecent();
+                    document.body.classList.add('home-state');
+                    context.surfacePort?.refreshControls?.();
+                    await Promise.all([
+                        renderRecent(),
+                        context.libraryPort?.refresh?.(),
+                    ]);
                     return true;
                 }
             );
