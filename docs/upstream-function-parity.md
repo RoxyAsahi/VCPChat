@@ -37,7 +37,7 @@
 ## PR 门禁
 
 - `npm run guard:classic-parity`：静态检查 Classic 共享控件、八个设置分类、输入区 SVG 和 Next CSS 作用域。
-- `npm run test:electron-ui-apps`：以 `uiMode: classic` 启动主窗口，验证 Classic 标题栏、输入按钮、通知快捷按钮、全局设置导航和 Next runtime 隔离；再验证允许的 Notes/Translator Classic 页面。
+- `npm run test:electron-ui-apps`：Classic 设置 fixture 只验证允许的 Notes/Translator 等子页面；主聊天窗口已收敛为 canonical Next，不应把该 fixture 描述成主窗口 Classic presentation 覆盖。
 - 深色和浅色模式分别检查所有可见入口。
 - 在完整、头像窄栏、左栏隐藏和通知栏展开状态下重复检查。
 - 对标记了左右键或长按的控件执行真实鼠标操作。

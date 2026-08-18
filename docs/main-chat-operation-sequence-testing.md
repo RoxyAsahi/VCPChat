@@ -127,6 +127,7 @@ snapshot API 必须只读，不包含 API Key、消息正文、文件路径或�
 - 打开/关闭设置，修改、保存、放弃或制造保存失败。
 - 搜索助手/话题、切换主题和聊天显示模式。
 - 打开、切换和关闭一个内嵌应用；Escape 只关闭当前层。
+- 组合 Overlay 链：通知菜单 → 创建 Surface → Ask Nova → 全局设置 → 内嵌应用上的设置；每次 Escape 只能关闭当前最上层，链尾核对 owner、lease、View 和活动 DOM。
 
 ### C. 故障与恢复动作（默认权重 10%）
 
@@ -225,7 +226,7 @@ fixture 只在 `VCPCHAT_E2E_TEST=1` 的临时 AppData 中使用，不向生产 p
 - `scripts/test-electron-main-chat-sequences.mjs` 使用隔离 AppData、真实 Electron/Puppeteer、两名助手、多话题以及本地 OpenAI-compatible JSON/SSE 服务运行主聊天序列。
 - 当前固定动作覆盖助手与话题快速切换、设置/通知往返、流式期间切话题、主动取消、HTTP 失败和连接中断；失败输出完整 seed 与具体动作参数。
 - seed `1..5` 各运行 32 步通过，共覆盖 40 次受控 VCP 请求（含每轮 warm-up）；默认 seed 24 步进入 `test:electron-stability`。
-- Electron driver 可通过 `VCPCHAT_SEQUENCE_UI_MODE=classic` 对同一共享业务序列运行 Classic；Classic 与 Next 的固定 24 步回归均已通过。
+- 这份文档早期曾记录 Classic/Next 双 presentation 的序列结果；主窗口现已收敛为单一 `main-chat` Surface，旧双布局结果仅作历史记录。
 - 纯模型及选择竞态回归进入 `test:ui-system`，不会依赖 Electron 或真实网络。
 
 操作序列已发现并修复四个可复现缺陷：
@@ -242,7 +243,7 @@ fixture 只在 `VCPCHAT_E2E_TEST=1` 的临时 AppData 中使用，不向生产 p
 7. 旧助手的新建话题请求迟到后会抢占当前助手；旧助手的删除回调也会改写当前助手。创建使用 item/topic generation，删除回调显式携带源身份并拒绝迟到提交。
 8. 新话题创建时若话题页签隐藏，权威 topic ID 已改变但列表仍高亮旧行。创建完成现在始终刷新列表投影。
 
-第二阶段验证证据：Next 下 5 个 phase2 seed 各 36 步通过；包含并发流、失败、断连、取消和切换，共 97 次受控请求。创建/删除固定 seed 的 40 步序列在 Next 与 Classic 均通过，各包含 20 次受控请求。
+第二阶段验证证据：Next 下 5 个 phase2 seed 各 36 步通过；包含并发流、失败、断连、取消和切换，共 97 次受控请求。创建/删除固定 seed 的 40 步序列曾在收敛前的 Next 与 Classic 双 presentation 上通过，旧 Classic 结果仅保留作历史记录。
 
 第三阶段阻塞项收敛：
 
@@ -251,7 +252,7 @@ fixture 只在 `VCPCHAT_E2E_TEST=1` 的临时 AppData 中使用，不向生产 p
 11. history watcher 从 Renderer 的“返回后丢弃”升级为主进程 lease：新选择在异步工作前 claim，主进程串行 start/stop，拒绝旧 lease，并在 renderer destroyed 时撤销 owner。Chokidar 的 `close()` 现在被真正等待。
 12. 同一助手并发创建话题拥有独立 creation generation；只有最后一次操作能选择其结果。双流测试键也全部由版本化 PRNG 生成，相同 seed/trace 不再混入 `Date.now()` 或 `Math.random()`。
 
-阻塞项固定验证：聊天选择/发送和 watcher lease 单元回归共 11 条；Next 与 Classic 各自 36 步 Electron 序列通过，且历史文件不含 `isThinking` 或 `isPendingStream` 临时记录。
+阻塞项固定验证：聊天选择/发送和 watcher lease 单元回归共 11 条；Next 36 步 Electron 序列通过，且历史文件不含 `isThinking` 或 `isPendingStream` 临时记录。Classic 结果属于收敛前历史。
 
 第四阶段已完成的 S2 能力：
 
@@ -267,12 +268,13 @@ fixture 只在 `VCPCHAT_E2E_TEST=1` 的临时 AppData 中使用，不向生产 p
 14. renderer reload/crash 后，旧 SSE 会继续向复用的 WebContents 新 document 发送 chunk/end，形成不可见 prebuffer 与 deferred finalization。主进程流任务现在绑定 sender document，在 navigation 或 `render-process-gone` 时 Abort，并在终态解除 sender 引用。
 15. 上次选择采用 fire-and-forget 整份 settings 写入，且重复选择当前助手/话题直接 return，导致可见话题与重载恢复话题不一致。last-open 提交现在有序且被选择事务等待；幂等选择也会重新确认持久状态。
 
-快速回归：
+快速回归（当前 canonical 主窗口）：
 
 ```bash
 npm run test:electron-main-chat-sequences
-VCPCHAT_SEQUENCE_UI_MODE=classic npm run test:electron-main-chat-sequences
 ```
+
+序列 harness 不再接受布局模式参数；它只验证单一 `main-chat` Surface。独立业务子页面由 Electron UI Apps gate 验证。
 
 发布前资源斜率：
 
@@ -283,7 +285,7 @@ VCPCHAT_SEQUENCE_STEPS=30 \
 npm run test:electron-main-chat-sequences
 ```
 
-2026-08-16 验收：`m9-final-normalized` 在 Next 下完成 20×30，共 600 个动作、216 次受控 VCP 请求；heap/listener/DOM 斜率、Scope、WebContents/page、renderer/Electron process、embedded task 与 chat stream task 均通过。Classic 的 reload/crash 固定 40 步种子也通过。
+2026-08-16 验收：`m9-final-normalized` 在 Next 下完成 20×30，共 600 个动作、216 次受控 VCP 请求；heap/listener/DOM 斜率、Scope、WebContents/page、renderer/Electron process、embedded task 与 chat stream task 均通过。Classic 的 reload/crash 固定 40 步结果属于收敛前历史，当前 harness 不再运行主窗口 Classic。
 
 ## 2026-08-17：动作覆盖与领域静止契约
 
@@ -298,4 +300,94 @@ npm run test:electron-main-chat-sequences
 
 所有等待都支持 `AbortSignal` 和超时，并在 resolve/reject/abort 后解除订阅。它们不等待动画、通知 timer、插件、VCPLog 或动态壁纸。测试只在对应 domain 有明确完成语义时替换 sleep；GC、CDP 连接、浏览器布局和受控网络故障的物理等待继续保留。
 
-尚未宣称整个 M9 完成：群组、附件、重生成、输入草稿以及更多通知/侧栏动作仍需逐步进入模型。当前 S2 已覆盖本轮约定的 reload/crash、关键非聊天 IPC 逆序、失败工件和资源斜率基础设施；插件运行时与动态壁纸继续明确排除。
+尚未宣称整个 M9 完成：群组基础发送与 reload/crash 已进入模型，但附件、重生成、输入草稿以及更多通知/侧栏动作仍需逐步覆盖。当前 S2 已覆盖本轮约定的 reload/crash、关键非聊天 IPC 逆序、失败工件和资源斜率基础设施；插件运行时与动态壁纸继续明确排除。
+
+## 2026-08-18：流式归属与故障注入自包含
+
+`send-stream-switch` 现在使用受控 `sequence-hold-*` 请求和唯一 nonce：先让源话题
+进入未完成状态，再切换到目标话题，随后逆序释放响应。终态同时检查源/目标磁盘
+history 与当前消息 DOM，要求完整响应只出现在源话题，目标话题不能出现 nonce。
+`reload/crash-during-stream` 则只要求恢复后 user nonce 持久化、无 pending/thinking
+残留，且 renderer 销毁后的迟到 assistant 片段不得污染新 history；当前 renderer-owned
+流式协议不承诺跨 reload/crash 自动补写完整 assistant 回复。
+
+每个 embedded overlay 故障 action 现在自己创建并清理 hide-failure gate；默认序列不
+启用该故障时走正常 Escape 关闭，只有设置 `VCPCHAT_E2E_FAIL_EMBEDDED_HIDE_ONCE=1`
+才等待 test-only rejection 文件，避免随机 action 顺序造成测试假死。固定 seed 三次
+（72 actions）和 hide-rejection 单次序列均通过。
+
+同一轮新增真实 Group fixture：`AgentGroups/SequenceGroupA/config.json` 使用现有
+`SequenceAgentA` 与 `SequenceAgentB` 作为 sequential 成员，群组 topics/history 写入隔离 AppData，选择路径实际
+经过上游 Group renderer 与 `sendGroupChatMessage` IPC。新增 `send-group-stream-switch`
+使用群聊请求中的完整 messages 查找 hold nonce，并要求响应只写入源 group topic，
+history 同时具备 `groupId/topicId/isGroupMessage` 语义；目标 topic 与当前 DOM 不得出现
+该 nonce。fixture 为每个 nonce 维护递增 request ordinal（`:2` 等），因此两个成员
+响应必须分别 release 和持久化，不会因共享业务 nonce 互相覆盖。
+`group-smoke` 固定 seed 3×30（90 actions、32 次受控 VCP 请求）通过；默认 agent seed 也
+保持通过。
+
+新增 `send-cross-identity-stream`：在 Agent 与 Group 之间交叉切换持有中的流式请求，
+验证源 identity/topic history 收到完整响应，而目标 identity 的 history 和当前 DOM
+均不出现源 nonce。该路径覆盖 Group renderer 与 Agent renderer 两条不同的消息归属
+分支；`VCPCHAT_SEQUENCE_SEED=cross-identity VCPCHAT_SEQUENCE_STEPS=40` 已通过。
+
+另有 `VCPCHAT_SEQUENCE_GROUP_RELOAD_ONCE=1` 与
+`VCPCHAT_SEQUENCE_GROUP_CRASH_ONCE=1` 两个显式故障入口：在双成员群聊第一位成员
+hold 期间重载或撞毁 renderer，恢复后依次释放两个成员请求。真实主进程继续持有
+group IPC，最终 history 必须出现两条且仅两条带 nonce 的 group assistant 响应，恢复
+后的 DOM 也只能出现两条 assistant 响应；user nonce 必须唯一，history 不得保留
+pending/thinking。crash 路径会优先接受新 Page target；Electron 复用 BrowserWindow/Page
+包装器时则显式 reload，并用变化后的 `performance.timeOrigin` 证明新 renderer document，
+避免把仍残留在 `browser.pages()` 的旧执行上下文误判为恢复成功。reload 路径 24 actions、
+15 次受控请求，crash 路径 24 actions、8 次受控请求均通过。该证据不代表群组附件、
+重生成或删除最后消息已经覆盖。
+
+可重复命令：`npm run test:electron-main-chat-group-sequences`（默认
+`group-smoke`、3×30；可通过 `VCPCHAT_SEQUENCE_RUNS`、`VCPCHAT_SEQUENCE_STEPS` 覆盖），
+固定故障仍使用 `VCPCHAT_SEQUENCE_GROUP_RELOAD_ONCE=1` 或
+`VCPCHAT_SEQUENCE_GROUP_CRASH_ONCE=1`。这些路径暂未列入 20-run required edge，避免在
+没有 Windows/CI 资源预算时把平台专用 fixture 静默当成完整覆盖。
+
+Group 取消故障曾在独立注入中验证出上游缺陷：本地 abort 后共享发送按钮可能保持
+`interrupt`，因此暂不将其包装成 Next 设计系统回归测试；修复应进入上游 Group manager
+变更，而不是通过 Next facade 旁路收尾。
+
+Group 503 failure preflight 已通过；disconnect preflight 目前为红色诊断：服务端关闭
+连接后 stream 已清理，但随后切换 Agent 时 topic list 为空，导致选择状态无法完成。
+这属于上游 Topic/Group 同步问题，保留为上游修复项，不纳入本分支绿色门禁。
+
+## 2026-08-17：Overlay generation 集成回归
+
+`scripts/test-next-ui-tab-lifecycle.mjs` 现在额外重放一条跨 owner 序列：旧 modal 激活 → native hide 失败 → modal 关闭 → 同 ID 新 generation 激活 → 迟到 failure 完成 → 新 modal 关闭。每一步检查 `OverlayCoordinator.snapshot()` 的 `modalIds/active`，并确认失败事件不会移除新 modal。该 fixture 只使用受控 IPC 和无正文 DOM，不改变插件 Loader、动态壁纸或上游 Classic 子页面。
+
+同一 fixture 还验证 feedback 的两条所有权路径：scoped owner 必须在 native session 的异步 close 完成后释放；没有 owner 时 global fallback 可以继续显示 toast，但不能在 Next teardown 中释放共享 singleton。这防止“先清空引用、后启动异步 close”造成的静默泄漏或跨 Surface 误清理。
+
+内嵌会话的故障注入还覆盖同 action replacement：延迟旧 V1 的 `loadURL`，关闭标签并启动 V2，先释放 V1 再释放 V2。主进程 `EmbeddedAppSessionManager.close(action, expectedView)` 以 WebContentsView identity 校验关闭权，旧 completion 不能删除或关闭 V2。该序列是 Next 新增宿主边界；底层 WebContentsView 创建/销毁仍由主进程负责。
+
+嵌入会话单元还覆盖旧 view 的失败分支：V1 释放后触发 `render-process-gone` / `did-fail-load`，通知数量必须保持不变；同一测试随后触发 authoritative V2 的两类失败并校验 payload/state 正常发布，并确认子帧和 `ERR_ABORTED` 不产生错误通知；独立 abort controller 使 `loadURL` reject 后只清理自己的 session。当前仍缺少真实 Electron `loadURL` reject 与 destroyed event 的跨进程序列，保留为下一批故障矩阵入口。
+
+通知三点菜单已由 `NotificationMenuController` 持有，单元序列覆盖打开、Forum/Memo、过滤左键/右键、清空、Escape、外部点击、失败命令、filter subscription dispose 和重新挂载；主聊天 Electron smoke 继续验证通知菜单与主壳、Classic child host 同时存在时的边界。
+
+当前工作树以 seed `next-overlay-regression` 运行 5×32：160 actions、16 action kinds、94 action pairs、48 transitions、4 faults、54 次受控 VCP 请求全部通过；其中新增 embedded WebContentsView + Overlay + renderer reload 交叉动作。该动作通过独立的 E2E Electron entrypoint 在真实 `embedded-vchat-app:activate(null)` IPC 响应上设置 gate，等待 hide 已开始后 reload，恢复 renderer 后释放旧响应，并验证唯一 session、active action、overlay lease、IPC/chat task 和 host ready 状态；reload 后显式重新预热设置/通知 Surface 再进行资源不变量比较。随后 lifecycle stress 运行 2 次预热 + 10 次测量，858 listeners、8 scopes、174 resources、5 个 Electron process 恒定，detached root/icon/option 始终为 0。这是本轮改动后的回归证据，不替代 Windows 真机与 30–60 分钟 soak。
+
+## 2026-08-18：Provider 与 Overlay 组合复核
+
+本轮对抗审查又收敛了四个边界：WA/Next 的 Escape dispatcher 在消费事件后使用
+`stopImmediatePropagation`，避免同一 Escape 被 legacy/WA listener 级联关闭第二个
+surface；Overlay generation 替换先取得新 hide lease，再释放旧 lease，消除
+release→reconcile 的可见空窗，并在关闭竞态中同时撤销 replacement 的旧 lease。
+OverlayCoordinator 只接管 `globalSettingsModal` 或显式标记为 Next 的 modal，不再从
+整个 document 劫持 Classic/第三方 modal。SettingsActionBar 的保存/删除终态必须带
+匹配 operationId，删除按钮也有重复提交锁和超时清理，迟到或无 ID 终态不会污染新操作。
+
+修复后验证：`test-ui-system.mjs`、Overlay/Escape/Settings 单测通过；主聊天状态机
+20×30（600 actions、165 次受控 VCP 请求、17 action kinds、187 pairs、55
+transitions、4 faults）通过全部 16 个 required edges。首次门禁暴露的
+`embedded-overlay-reload` 非法动作来自“先生成随机尾部、再拼接 required prefix”
+的测试模型错位，现改为先应用 prefix transition 再生成 tail，避免测试自身制造
+不可执行 trace。
+
+- WA-owned Select 的真实 Electron 路径新增到 `test-vcp-ui-select-proxy`：Web Component 内部派发的 untrusted `input`/`change` 各到达消费者一次，controller value 在后续无关更新中保持，程序化 `setValue` 不合成事件。Native fallback 的 `required` 属性也有对照契约。
+- 主聊天序列新增 `overlay-surface-chain`：通知菜单 → 创建 Surface → Ask Nova → 全局设置 → 内嵌 Notes 上的全局设置，每个 Escape 只关闭当前最上层，链尾核对活动 DOM、Overlay lease、embedded session、native active action 和主 renderer 存活。
+- 该序列首次暴露 Next 的真实遗漏：全局设置是上游模板 modal，没有注册 Next Escape owner；现在由 `EscapeDispatcher` 直接拥有其关闭命令，Classic 不加载该 owner。
+- Next teardown 改为先等待 native embedded hide/close，再通过 lifecycle tree 释放 scoped feedback，避免 WebContentsView 的迟到绘制与 renderer feedback 清理交错。

@@ -4,15 +4,15 @@
 
 本表描述 **VCPUI 每个组件**在主窗口按需加载和原生回落时的实际行为内核：
 
-- **next（WA 已加载）**：`html[data-ui-mode="next"]` 且主窗口 runtime 已按需定义对应 `wa-*` —— 组件由 Web Awesome 提供行为/无障碍内核。
-- **next（WA 预载失败）**：`loadComponents` 拒绝（`vcp-webawesome-failed` 已派发），全部 `wa-*` 保持未注册 —— 与经典模式相同的原生 DOM 回落。
-- **classic / 无预载上下文**：主渲染器或经典模式，从不获取 WA bundle —— 原生 DOM 回落。
+- **main-chat（WA 已加载）**：Surface policy 确认主聊天，且 runtime 已按需定义对应 `wa-*`，组件由 Web Awesome 提供行为/无障碍内核。
+- **main-chat（WA 加载失败）**：`loadComponents` 拒绝并进入确定失败终态，全部 `wa-*` 保持不可用，Surface 按其产品合同显示 native fallback 或不可用反馈。
+- **上游独立页面**：不加载 WA bundle，继续使用页面自身的原生 DOM。
 
 判定开关只有一处：`vcp-ui.js` 的 `waControl(tag)` —— 每次调用时检查 `VCPWebAwesome.isDefined(tag)`，**不存在“随机回落”**。
 
 ## 组件矩阵
 
-| 组件 | next + WA 预载 | WA 内核元素 | classic / 预载失败回落 | 兼容桥（旧调用方路径） |
+| 组件 | main-chat + WA | WA 内核元素 | native / 加载失败路径 | 兼容桥（旧调用方路径） |
 | --- | --- | --- | --- | --- |
 | Button | ✅ | `wa-button`（variant/appearance/size/loading/disabled） | 原生 `<button>`（data-variant/aria-busy） | — |
 | IconButton | ✅ | `wa-button`（appearance=plain/outlined/filled，aria-label/aria-pressed/title） | 原生 `<button>` | — |
@@ -23,12 +23,12 @@
 | Tabs | ✅ | `wa-tab-group` + `wa-tab` + `wa-tab-panel`（`active` 属性、`wa-tab-show` → `change`） | `<div role="tablist">` + 按钮（方向键/Home/End 轮转） | — |
 | Dialog / Modal | ✅ | `wa-dialog`（label/open/light-dismiss、`wa-after-hide` → destroy + 焦点恢复） | `<div.vcp-ui-modal-overlay>` + `<section role="dialog">`（Escape/Tab 环回/背板关闭） | — |
 | Tooltip | ✅ | `wa-tooltip`（`for`/placement/content） | `<span.vcp-ui-tooltip>` + 气泡（aria-describedby） | — |
-| Checkbox | ✅ | `wa-checkbox`（checked/indeterminate/disabled/required/value、`change` 事件） | `<label.vcp-ui-checkbox>` + 原生 `<input type="checkbox">` | `element.checked`、`querySelector('input')`（`bridgeCheckedControl`） |
-| Switch | ✅ | `wa-switch`（checked/disabled/required/value、`change` 事件、role=switch） | `<button role="switch">`（aria-checked、click 切换） | `element.checked`、`querySelector('input')` |
+| Checkbox | ✅（showcase/candidate） | `wa-checkbox`（host checked/indeterminate/disabled/required/value、`change` 事件） | `<label.vcp-ui-checkbox>` + 原生 `<input type="checkbox">` | 两个 provider 都通过 `getChecked/setChecked` 与 host/control 属性；不穿透 Shadow DOM |
+| Switch | ✅（showcase/candidate） | `wa-switch`（host checked/disabled/required/value、`change` 事件、role=switch） | `<button role="switch">`（aria-checked、click 切换） | `getChecked/setChecked` 与 host 属性；不穿透 Shadow DOM |
 
 ## 未进入 WA 内核的组件（始终原生 DOM）
 
-`Range`、`Field`、`SettingsSection`、`SettingsActionBar`、`Badge`、`Alert`、`Toolbar`、`List`、`TableFrame`、`EmptyState`、`Divider`、`Skeleton`、`SegmentedControl`、`Pagination`、`ScrollArea`、`Toast`、`ConfirmDialog`、`InputDialog`、`AppPageShell`、`WindowControls`、`AsyncBoundary`。其中 `ConfirmDialog` / `InputDialog` 内部由 `Modal` + `Button` 组合，因此 **在 next+WA 下其弹层与按钮内核真实来自 Web Awesome**。
+`Range`、`Field`、`SettingsSection`、`SettingsActionBar`、`Badge`、`Alert`、`Toolbar`、`List`、`TableFrame`、`EmptyState`、`Divider`、`Skeleton`、`SegmentedControl`、`Pagination`、`ScrollArea`、`Toast`、`ConfirmDialog`、`InputDialog`、`AppPageShell`、`WindowControls`、`AsyncBoundary`。其中 `ConfirmDialog` / `InputDialog` 内部由 `Modal` + `Button` 组合，因此在 WA 可用时其弹层与按钮使用 Web Awesome 内核。
 
 ## 加载时序与降级路径
 
@@ -52,4 +52,4 @@
 
 - `wa-input`/`wa-textarea` 的 invalid 视觉态通过 `aria-invalid` + `setCustomValidity` 传递；深色/紧凑主题下 WA 控件细粒度间距需真实 Electron 截图复核。
 - Input/Textarea 的真实 macOS Electron/WA Shadow DOM、composition、selection、autofill/change、password、form reset 与 validity 已有专门证据；Windows 中文输入、DPI/缩放与人工输入法确认仍待完成。stub 套件只证明 facade 合同，不代表跨平台行为。
-- Checkbox/Switch 仍有 Shadow DOM 查询兼容桥，将在 Stage 5 单独收敛；它不再作为 Input/Textarea 的实现先例。
+- Checkbox 的 WA factory 与 Switch 的 WA-owned factory 当前只有组件展示页和契约测试消费者；生产设置仍增强上游原生 `label.switch`/checkbox（Switch 的 native enhancer 是 stable 生产路径）。WA provider 未进入生产 Surface manifest，不应把 showcase 通过视为生产迁移完成。native 与 WA fallback 共享 checked controller API，避免 presentation 分支产生不同业务语义。

@@ -63,7 +63,7 @@ P3.5 之后的 Input/Textarea、表单组件、Feedback、Patterns、WA Runtime�
 
 - 任何开发者只读当前状态文档和本路线，就能区分已完成、部分完成、未开始和非目标。
 - 全仓库不存在两份都自称“当前权威”、却描述不同主窗口拓扑的文档。
-- `uiMode` 的兼容读取与业务子页面 Classic policy 被明确区分。
+- 主窗口 Surface 能力与上游独立子页面边界被明确区分。
 
 ## 5. P1：所有权缺陷修复
 
@@ -105,7 +105,7 @@ await feedback.dispose();
 
 ## 6. P2：无消费者架构减法
 
-> 状态：已完成（2026-08-17）。休眠子页面 runtime、无 sender 的 mode preload API、静态 `uiModeManager` 以及 Settings/Creation/item list 的测试专用 settlement 公共面均已删除。页面 gate 保持 `0 active rebuilt / 12 upstream classic`；测试改为等待业务 Promise、保存结果事件和 DOM 终态，`AppTabHost.whenSettled()` 因存在真实 Electron 消费者而保留。
+> 状态：已完成并在 2026-08-18 收尾。休眠子页面 runtime、mode preload API、静态 `uiModeManager`、无消费者页面 policy 以及 Settings/Creation/item list 的测试专用 settlement 公共面均已删除。页面 gate 直接验证 12 个上游子页面未加载设计系统 runtime；`AppTabHost.whenSettled()` 因存在真实 Electron 消费者而保留。
 
 ### 6.1 删除休眠的子页面 Next runtime
 
@@ -128,7 +128,7 @@ await feedback.dispose();
 | Settings settlement 全局 facade | 已删除；测试等待真实保存 Promise/结果事件 |
 | Creation settlement | 已删除；创建行为等待本次 command promise，不公开全局 idle |
 | Identity/item list revision channel | 已删除；保留 `loadItems()` Promise 与旧结果防覆盖 token |
-| `uiModeManager` state channel | 已删除；主窗口在 HTML 静态声明 canonical `next` |
+| `uiModeManager` state channel | 已删除；主窗口在 HTML 静态声明 `main-chat` Surface |
 
 禁止新增全局 `whenIdle()`。后台 watcher、动画、插件和网络服务不能被混成一个无法定义的“全应用空闲”。
 

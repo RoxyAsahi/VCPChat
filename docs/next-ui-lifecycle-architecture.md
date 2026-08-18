@@ -69,15 +69,14 @@ renderer page
 
 前端插件 Loader、注册协议、脚本/样式加载顺序和实例销毁语义保持上游实现，本轮生命周期收敛不接管它们。若未来需要插件卸载或热重载，应作为独立插件运行时变更设计、迁移和验证，不能借 Next Shell 重构间接改变现有插件。
 
-## 规范主窗口与兼容模式读取
+## 规范主窗口 Surface
 
-主窗口现在只有一个规范 presentation，由 `main.html` 静态声明 `data-ui-mode="next"`。旧配置中的
-`classic` / `next` 值只在 settings schema 中兼容归一化；不存在运行时 mode manager、状态通道、拆卸换壳或第二套 listener。
-Appearance Studio、全局设置和启动加载不再把 `uiMode` 当作可预览、可提交的运行时状态。
+主窗口只有一个规范 presentation，由 `main.html` 静态声明
+`data-vcp-ui-surface="main-chat"`。不存在运行时 mode manager、状态通道、拆卸换壳或第二套 listener。
+Appearance Studio、全局设置和启动加载不再读取、预览或提交 `uiMode`。
 
-内嵌业务页面拥有独立产品策略。当前 allowlist 中的页面显式以 `uiMode=classic` 打开，主窗口设置
-不会向现有 WebContentsView 广播 presentation 变化。若以后迁移某个业务页面，必须在页面策略中
-单独启用并完成其 mount/unmount 门禁，不能重新引入“主窗口模式自动传染所有子页面”的第二权威。
+内嵌业务页面继续加载其上游文件，不接收主窗口 Surface 或 `uiMode` URL 参数。若以后迁移某个
+业务页面，必须独立引入最小 runtime、真实消费者和 teardown 门禁，不能让主窗口状态自动传染子页面。
 
 ## 开发规则
 
@@ -91,12 +90,15 @@ Appearance Studio、全局设置和启动加载不再把 `uiMode` 当作可预�
 - 内部应用注销时，Launchpad 必须刷新，已打开的 tab 与 Surface 必须同步关闭。
 - `destroy()`/`dispose()` 必须幂等。
 - Classic 代码不因 Next 生命周期化而改写；共享增强器必须能恢复原 DOM 身份和状态。
+- 可访问的动态导航不得用渲染序号作为提交身份。交互项应保留原生控件语义，使用稳定的
+  `id/value` 关联业务目标；重绘后若原项仍存在，应显式恢复焦点和 current/selected 状态。
+  `role=listitem` 只适用于真正的静态列表项，不能覆盖 button 的原生 role。
 
 ## 验收门禁
 
 单元与契约测试覆盖逆序异步释放、重复 dispose、部分清理失败、child collapse、迟到 generation、已完成 timer/task 自动撤销，以及 Next App 注册回收。
 
-Electron 压力测试在真实 renderer 中反复执行 Ask Nova、设置、Agent 设置、内嵌应用、拖出窗口、Overlay、renderer reload/crash 与 Classic/Next 往返，同时检查：
+Electron 压力测试在真实 renderer 中反复执行 Ask Nova、设置、Agent 设置、内嵌应用、拖出窗口、Overlay、renderer reload/crash，并检查规范 Next host 在重复操作中的稳定性，同时检查：
 
 - Heap、listener、page、process 与 renderer process 无持续增长。
 - Ask Nova host、动态标签、内嵌 view 和临时 Overlay 在每轮结束时不存在于活动 DOM。
@@ -113,6 +115,7 @@ Electron 压力测试在真实 renderer 中反复执行 Ask Nova、设置、Agen
 `npm run guard:next-delta` 只约束本分支相对上游新增的责任，不把上游既有问题冒充为 Next 缺陷：
 
 - 规范 Shell、设置、通知、创建入口和共享业务 host 只能存在一个 owner。
+- 创建助手/群组弹窗的焦点所有者必须来自触发事件的 `currentTarget`；不得在异步 Web Awesome 加载完成后重新读取 `document.activeElement`。该 opener 同时传给 Modal 与 SurfaceController，关闭时由同一 owner 恢复，避免异步加载或 Surface 销毁把焦点落到 `body`。
 - 已退役的 Classic 主窗口 ID、隐藏控件 `.click()` 代理和运行时 `uiMode` 写入不得回归。
 - Web Awesome Modal 必须满足一次性 finalize；原生关闭、Escape、light-dismiss 与程序关闭共享同一合同，持久创建提交期间禁止用户关闭。
 - 子页面 presentation 权威与主窗口设置隔离。
@@ -128,14 +131,14 @@ Electron 压力测试在真实 renderer 中反复执行 Ask Nova、设置、Agen
 
 ## 生命周期检查器与性能诊断
 
-- `window.VCPLifecycleInspector.snapshot()` 返回 renderer Scope、TaskHandle、Contribution、State Channel、Shell/Overlay、最近模式事务和有界性能样本。
+- `window.VCPLifecycleInspector.snapshot()` 返回 renderer Surface、Scope、TaskHandle、Contribution、State Channel、Shell/Overlay 和有界性能样本。
 - `snapshotMain()` 通过受限 preload 查询主进程 embedded session 与 sender-owned task；返回值不包含聊天内容、凭据或文件数据。
-- `VCPPerformance` 最多保留 100 条标量记录，并给 Next mount、模式切换、设置打开、原生 View 创建和激活附加诊断预算。
+- `VCPPerformance` 最多保留 100 条标量记录，并给 Surface mount、设置打开、原生 View 创建和激活附加诊断预算。
 - Inspector 是只读观察面，不提供 dispose、cancel、register 或 session mutation 能力。
 
 ## 2026-08-15 对抗审查
 
-本轮审查只归因于 Next 生命周期改造引入或覆盖的控制流，不把上游已有服务、音频、模型连接、插件运行时和业务页面问题计入。审查方法包括逐文件差异复核、逆序/并发 dispose、延迟原生 IPC、逆序完成的并发模态窗、失败 disposer，以及 Classic/Next 快速往返。
+本轮审查只归因于主聊天 Surface 生命周期改造引入或覆盖的控制流，不把上游已有服务、音频、模型连接、插件运行时和业务页面问题计入。审查方法包括逐文件差异复核、逆序/并发 dispose、延迟原生 IPC、逆序完成的并发模态窗、失败 disposer，以及规范主聊天 host 的重复挂载/关闭/恢复。子页面边界由独立的上游页面门禁验证，不在主聊天压力脚本中伪造布局往返。
 
 确认并修复的边界：
 
@@ -147,6 +150,9 @@ Electron 压力测试在真实 renderer 中反复执行 Ask Nova、设置、Agen
 - VCPUI controller 的内部 listener 与 cleanup 采用失败隔离；任一清理失败不再阻止 controller identity、DOM 和其余 listener 的撤销。
 - `LifecycleScope.dispose()` 会加入已经开始的手动 release，避免 Scope 先于异步清理报告 disposed；对应失败仍汇总为 `AggregateError`。
 - Appearance Studio 每次打开使用唯一 Overlay owner；关闭会等待 per-open Scope 完整销毁，关闭期间的新 open 会串行排队，旧 acquire 的迟到失败不能污染新一次打开。
+- Next Shell 的 feedback fallback 具有明确的所有权边界：有 `LifecycleScope` 时使用 `feedback.owner(scope)`，并在内嵌 View 完成 hide/close 后释放 scoped handle；owner 不可用时允许 global feedback 负责展示，但 teardown 永远不会调用 global singleton 的 `dispose()`。引用必须保持到异步关闭流程结束，不能在 `unmount()` 进入 pending 状态时提前清空。
+- 可复用的全局设置 modal 将保存 operation 与 `settings-surface-session` generation 绑定。旧代保存即使已经写入持久化边界，也没有权利向当前代 DOM/state 提交或关闭当前 modal；关闭后没有 replacement 时仍允许更新全局业务设置，但不重复执行 modal close hooks。
+- 内嵌 WebContentsView 的 load、abort、render-process-gone 和 did-fail-load 回调都以具体 view 作为提交权；同 action 的 replacement 存在时，旧代只能结算自身，不能关闭 replacement 或发布错误通知。该 identity guard 与主进程 close 的 expectedView 校验共同形成 session owner 边界。
 - State Channel 的 immediate subscriber 若抛错，会事务性撤销注册；renderer 销毁后主进程任务表立即解除 sender 强引用。
 - Creation Surface 在同一 mount 事务内创建并持有控件；中途失败会原子清理并停止打开，不再继续使用半销毁控件。
 
@@ -159,6 +165,41 @@ Electron 压力测试在真实 renderer 中反复执行 Ask Nova、设置、Agen
 - 前端插件生命周期仍由上游 Loader 和插件自身负责；本轮不承诺插件卸载或热重载能力。
 - `topTabManager.js` 已退化为兼容 facade；标签、覆盖层、启动台和创建流程由独立 Next controller 承担。
 - 自动化证明覆盖路径资源归零，不等价于模型服务、GPU、系统休眠恢复和任意第三方插件组合绝对无缺陷；发布前仍需要长时间 soak 与人工操作序列。
+
+## 2026-08-18 复核增量
+
+- EscapeDispatcher 消费 Escape 后同时阻止同一 document 上后注册的 legacy/WA
+  listener，保证一次按键只结算一个最高优先级 owner。
+- Overlay generation replacement 采用新 lease 先取得、旧 lease 后释放的顺序；关闭
+  竞态会撤销 replacement 与其保留的旧 lease，避免短暂 native 覆盖或遗留 owner。
+- OverlayCoordinator 只响应全局设置或显式 Next modal，Classic/第三方 modal 不再被
+  Next mount 的全局扫描接管。
+- SettingsActionBar 删除与保存终态均要求 operationId 与当前活动操作匹配；重复删除、
+  无 ID 迟到事件和超时后的旧终态都失去提交权。
+- Embedded session 在 authoritative `render-process-gone` 后立即按具体 view identity
+  撤销 session；后续 `did-fail-load` 只属于已失权 view，不会重复通知或关闭同 action
+  的 replacement。真实 Electron test-only fault injection 已覆盖 loadURL reject 与
+  renderer crash 两条路径。
+
+## 2026-08-18 对抗式代理与守卫复核
+
+本轮确认以下问题曾真实存在于当前设计分支：
+
+- Web Awesome Select 原先只监听事件和 MutationObserver，无法观察业务代码直接写入
+  `select.value`、`selectedIndex` 或 `option.selected`；现在以可撤销的实例级属性桥接同步到
+  代理，销毁后恢复原生描述符。
+- 多选和 `size > 1` 的 Select 不适合被单值 Web Awesome 代理压缩；现在保留原生 provider，
+  防止表单语义丢失。
+- Overlay 新代替换取得 lease 失败时，旧代 lease 可能遗留；失败路径现在同时释放 replacement
+  与 previous owner，并有逆序回归测试。
+- Settings Action Bar 曾检查已废弃的 `globalSettingsActive*` dataset 键；保存超时现在清理实际
+  `vcpSettingsActiveOperation`，重复提交按当前 operationId 拒绝。
+- 全局头像保存/颜色提取在异步 IPC 返回后重新校验 settings surface generation，不再把旧窗口
+  结果写入新窗口；Agent 助手列表和 TTS 水合也在提交 DOM 前复核 populate token。
+
+守卫现在拒绝缺失或 `HEAD` 基线；Web Awesome 离线 runtime 的文件集合、相对导入和 SHA-256
+manifest 已接入 `check:ui-system`；facade 检查覆盖 renderer、main、preload 及别名/括号访问。
+这不把上游 Classic 业务缺陷归因于本分支，也不接管插件 Loader 或动态壁纸生命周期。
 
 ## 非目标
 

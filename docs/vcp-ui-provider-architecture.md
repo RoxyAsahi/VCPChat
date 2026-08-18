@@ -78,6 +78,19 @@ Web Awesome 3.11.0 内部使用 Lit 和 Shadow DOM。这不等于 VCPChat 采用
 | Card、List、Toolbar、SettingsSection | VCP-owned DOM pattern | 不需要第三方行为内核 |
 | Dialog、Popover、Menu | 分别比较 platform API 与 WA | 必须按焦点、关闭和 overlay 所有权决策 |
 
+## 6. Web Awesome facade 的生产边界
+
+生产模块当前只依赖 `loadComponents`、`create`、`isDefined`、`isLoaded`、
+`getRuntimeState`、`mountScope` 和 `surfaceManifests`。`on`、`translateEvent`、
+`awaitUpdate`、`applyTokens`、`registerTheme`、`destroy` 目前只有 adapter 内部或契约
+测试消费者，不应被业务页面继续使用。
+
+其中 `destroy()` 风险最高：它只能移除共享主题节点，无法替所有活动 `mountScope`
+观察器恢复 scope 属性；暴露它会制造“看似销毁、实际仍有 owner”的半清理状态。后续
+收敛已完成第一步：`window.VCPWebAwesome` 现在只暴露上述七项产品能力；这些 helper
+仍作为模块 default export 保留给 adapter 契约测试，业务页面无法再调用。`mountScope()`
+返回的 release 函数是唯一产品销毁路径。后续可在测试完全迁移后再删除模块级兼容导出。
+
 ## 6. 生命周期
 
 每个 Provider controller 必须由所属 `LifecycleScope` 或 `SurfaceController` 持有。完整状态为：
@@ -89,12 +102,12 @@ unmounted → decision frozen → mounting → mounted → disposing → dispose
 
 - mounting 失败原子回滚；不暴露半初始化 controller。
 - dispose 幂等，并等待已经开始的异步释放。
-- 请求、listener、MutationObserver、弹层、WA proxy 和临时 property descriptor 都由同一 controller 释放。
+- 请求、listener、MutationObserver、弹层和 WA proxy 都由同一 controller 释放；业务 Select 不再安装临时 property descriptor。
 - 迟到的 runtime、option 或异步结果必须检查 generation/owner 后才能提交。可复用的 global-settings modal 还必须核对精确 root 与 `.active`，不能只依赖 `isConnected`。
 
 ## 7. 当前技术债与迁移顺序
 
-`vcp-ui.js` 已从约 2,380 行降到约 2,200 行，Select policy 与 WA sibling proxy 分别进入 `select-provider.js` 和 `select-webawesome-proxy.js`；facade 只负责做 Provider 决策并注入共享 controller 能力。主文件仍混合其他 factory、feedback、pattern 和兼容层，后续继续按组件域拆分。当前 Select proxy 已移除原节点 `value/selectedIndex/add/remove/focus` property bridge；业务写入通过显式 Surface refresh 或标准 DOM 事件完成。Stage 2 的真实 deferred Electron 证据仍待补齐。
+`vcp-ui.js` 已从约 2,380 行降到约 2,200 行，Select policy 与 WA sibling proxy 分别进入 `select-provider.js` 和 `select-webawesome-proxy.js`；facade 只负责做 Provider 决策并注入共享 controller 能力。主文件仍混合其他 factory、feedback、pattern 和兼容层，后续继续按组件域拆分。当前 Select proxy 已移除原节点 `value/selectedIndex/add/remove/focus` property bridge；业务写入通过显式 Surface refresh 或标准 DOM 事件完成。Stage 2 的 deferred Electron 逆序证据已通过。
 
 执行顺序：
 
