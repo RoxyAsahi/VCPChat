@@ -26,11 +26,18 @@ for (const item of COMPONENT_MANIFEST) {
     if (item.status === 'stable') assert.ok(record, `${item.name} is stable without a production consumer`);
     if (!record) continue;
     assert.equal(item.status, 'stable', `${item.name} has reviewed production evidence but is not stable`);
+    const normalizeEvidence = (value, label) => {
+        assert.ok(Array.isArray(value), `${item.name}.${label} must be an evidence pair or list of pairs`);
+        if (value.length === 2 && value.every(part => typeof part === 'string')) return [value];
+        assert.ok(value.length > 0 && value.every(pair => Array.isArray(pair) && pair.length === 2
+            && pair.every(part => typeof part === 'string')), `${item.name}.${label} must contain [file, token] pairs`);
+        return value;
+    };
     for (const field of ['source', 'electron']) {
-        assert.ok(Array.isArray(record[field]) && record[field].length === 2, `${item.name}.${field} must contain [file, token]`);
-        const [file, token] = record[field];
-        assert.ok(fs.existsSync(path.join(root, file)), `${item.name}.${field} file is missing: ${file}`);
-        assert.ok(read(file).includes(token), `${item.name}.${field} evidence disappeared from ${file}: ${token}`);
+        normalizeEvidence(record[field], field).forEach(([file, token]) => {
+            assert.ok(fs.existsSync(path.join(root, file)), `${item.name}.${field} file is missing: ${file}`);
+            assert.ok(read(file).includes(token), `${item.name}.${field} evidence disappeared from ${file}: ${token}`);
+        });
     }
 }
 

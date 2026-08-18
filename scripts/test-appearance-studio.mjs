@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { JSDOM } from 'jsdom';
 
-const dom = new JSDOM(`<!doctype html><html data-ui-mode="next"><body class="dark-theme">
+const dom = new JSDOM(`<!doctype html><html data-vcp-ui-surface="main-chat"><body class="dark-theme">
     <button id="nextUiAccountAppearanceStudioBtn">外观与布局</button>
     <button id="nextUiAccountMenuTrigger">账户</button>
     <div id="nextUiAccountMenu" hidden></div>
@@ -59,6 +59,7 @@ Object.assign(globalThis, {
 });
 window.requestAnimationFrame = globalThis.requestAnimationFrame;
 window.matchMedia = globalThis.matchMedia;
+window.VCPSurfacePolicy = { isMainChat: () => true };
 await import(`${pathToFileURL(`${process.cwd()}/modules/ui-system/vcp-ui.js`).href}?appearance-studio-test=1`);
 window.globalSettings = {
     currentThemeMode: 'dark',
@@ -224,7 +225,7 @@ drawer.querySelector('[data-appearance-key="messageWidth"][data-appearance-value
 await new Promise(resolve => setImmediate(resolve));
 assert.equal(document.body.classList.contains('chat-wide-layout'), true);
 assert.equal(drawer.querySelectorAll('[data-appearance-key="uiMode"]').length, 0);
-assert.equal(document.documentElement.dataset.uiMode, 'next');
+assert.equal(document.documentElement.dataset.vcpUiSurface, 'main-chat');
 assert.equal(drawer.querySelectorAll('[data-theme-file-name]').length, 2);
 assert.equal(drawer.querySelector('[data-theme-file-name="themes默认.css"]').classList.contains('active'), true);
 assert.equal(drawer.querySelectorAll('.vcp-appearance-theme-mode button').length, 3);
@@ -329,7 +330,7 @@ drawer.querySelector('[data-appearance-key="homeTagline"][data-appearance-value=
 await new Promise(resolve => setImmediate(resolve));
 drawer.querySelector('[data-reset-section="layout"]').click();
 await new Promise(resolve => setImmediate(resolve));
-assert.equal(document.documentElement.dataset.uiMode, 'next', 'layout reset must preserve the canonical presentation');
+assert.equal(document.documentElement.dataset.vcpUiSurface, 'main-chat', 'layout reset must preserve the canonical Surface');
 assert.equal(document.documentElement.dataset.vcpContentWidth, 'full');
 assert.equal(document.body.classList.contains('chat-wide-layout'), false);
 assert.equal(document.documentElement.dataset.vcpHomeVisual, 'shown');
@@ -388,10 +389,7 @@ window.globalSettings.appearanceProfile = {
     ...window.globalSettings.appearanceProfile,
     density: 'relaxed',
 };
-window.VCPAppearance.commit(window.globalSettings.appearanceProfile, {
-    uiMode: 'next',
-    source: 'concurrent-settings-save',
-});
+window.VCPAppearance.commit(window.globalSettings.appearanceProfile, { source: 'concurrent-settings-save' });
 await studio.close({ rollback: true });
 assert.equal(document.documentElement.dataset.vcpDensity, 'relaxed', 'a stale studio snapshot must not roll back a newer committed revision');
 
@@ -403,7 +401,7 @@ assert.equal(window.chatAPI.themes.at(-1), 'dark');
 assert.equal(studio.open({ trigger: document.getElementById('openAppearanceStudioFromSettings') }), true);
 assert.equal(studio.isOpen(), true, 'canonical layout must reopen the same appearance drawer');
 await studio.close({ rollback: true });
-assert.equal(document.documentElement.dataset.uiMode, 'next');
+assert.equal(document.documentElement.dataset.vcpUiSurface, 'main-chat');
 assert.equal(document.documentElement.classList.contains('vcp-appearance-studio-host'), false);
 
 studio.open();

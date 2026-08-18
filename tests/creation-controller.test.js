@@ -40,6 +40,7 @@ function createUi(window) {
 function installSurfaceRuntime(window, overrides = {}) {
     window.VCPLifecycle = { LifecycleScope };
     window.VCPUISurface = { SurfaceController };
+    window.VCPSurfacePolicy = { isMainChat: () => true };
     window.VCPWebAwesome = {
         getRuntimeState: () => ({ state: 'ready' }),
         loadComponents: async () => {},
@@ -60,7 +61,7 @@ test('model options normalize supported payloads and remove duplicates', () => {
 });
 
 test('creation controller refuses unavailable commands and disposes idempotently', async () => {
-    const dom = new JSDOM('<!doctype html><html data-ui-mode="next"><body></body></html>');
+    const dom = new JSDOM('<!doctype html><html data-vcp-ui-surface="main-chat"><body></body></html>');
     let unavailable = 0;
     const controller = new CreationController({
         window: dom.window,
@@ -79,7 +80,7 @@ test('creation controller refuses unavailable commands and disposes idempotently
 });
 
 test('creation surface failure destroys partial controls and does not continue with a broken modal', async () => {
-    const dom = new JSDOM('<!doctype html><html data-ui-mode="next"><body></body></html>');
+    const dom = new JSDOM('<!doctype html><html data-vcp-ui-surface="main-chat"><body></body></html>');
     installSurfaceRuntime(dom.window);
     let creates = 0;
     let destroys = 0;
@@ -112,9 +113,10 @@ test('creation surface failure destroys partial controls and does not continue w
 });
 
 test('creation waits for its own Web Awesome kernel and coalesces repeated opens', async () => {
-    const dom = new JSDOM('<!doctype html><html data-ui-mode="next"><body></body></html>', { pretendToBeVisual: true });
+    const dom = new JSDOM('<!doctype html><html data-vcp-ui-surface="main-chat"><body></body></html>', { pretendToBeVisual: true });
     dom.window.VCPLifecycle = { LifecycleScope };
     dom.window.VCPUISurface = { SurfaceController };
+    dom.window.VCPSurfacePolicy = { isMainChat: () => true };
     const ui = createUi(dom.window);
     let resolveKernel;
     let runtimeState = 'loading';
@@ -160,7 +162,7 @@ test('creation waits for its own Web Awesome kernel and coalesces repeated opens
 });
 
 test('disposing while the creation kernel loads prevents a late surface mount', async () => {
-    const dom = new JSDOM('<!doctype html><html data-ui-mode="next"><body></body></html>');
+    const dom = new JSDOM('<!doctype html><html data-vcp-ui-surface="main-chat"><body></body></html>');
     let resolveKernel;
     installSurfaceRuntime(dom.window, {
         getRuntimeState: () => ({ state: 'loading' }),
@@ -185,7 +187,7 @@ test('disposing while the creation kernel loads prevents a late surface mount', 
 });
 
 test('a terminal Web Awesome load failure exposes an error without mounting a second UI', async () => {
-    const dom = new JSDOM('<!doctype html><html data-ui-mode="next"><body></body></html>');
+    const dom = new JSDOM('<!doctype html><html data-vcp-ui-surface="main-chat"><body></body></html>');
     const ui = createUi(dom.window);
     const unavailable = [];
     installSurfaceRuntime(dom.window, {
@@ -208,7 +210,7 @@ test('a terminal Web Awesome load failure exposes an error without mounting a se
 });
 
 test('creation submission waits for the command promise and restores controls after failure', async () => {
-    const dom = new JSDOM('<!doctype html><html data-ui-mode="next"><body></body></html>', { pretendToBeVisual: true });
+    const dom = new JSDOM('<!doctype html><html data-vcp-ui-surface="main-chat"><body></body></html>', { pretendToBeVisual: true });
     const ui = createUi(dom.window);
     installSurfaceRuntime(dom.window);
     let resolveCreation;

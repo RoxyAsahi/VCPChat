@@ -23,7 +23,8 @@ for (const retiredFile of [
 ]) {
     assert.equal(exists(retiredFile), false, `${retiredFile} must not return without a production consumer`);
 }
-assert.equal(document.documentElement.dataset.uiMode, 'next', 'main.html must declare the canonical presentation');
+assert.equal(document.documentElement.dataset.vcpUiSurface, 'main-chat',
+    'main.html must declare the canonical main-chat Surface');
 assert.doesNotMatch(read('preloads/shared/catalog.js'), /onUiModeUpdated|ui-mode-updated/,
     'preload must not expose a presentation subscription without a sender and consumer');
 
@@ -79,8 +80,8 @@ assert.doesNotMatch(appearanceStudioSource, /appearanceUiMode|enableNextUi|ui-mo
     'Appearance Studio must only edit appearance, not a retired presentation switch');
 
 const embeddedSource = read('modules/services/embeddedAppSessionManager.js');
-assert.match(embeddedSource, /const uiMode = 'classic'/,
-    'unmigrated child applications must keep an explicit upstream presentation policy');
+assert.doesNotMatch(embeddedSource, /\buiMode\b|searchParams\.set\(['"]uiMode/,
+    'child applications must remain upstream pages without a retired main-window mode query');
 assert.doesNotMatch(embeddedSource, /settings-updated|ui-mode-updated|subscribeSettings/,
     'main settings must not override the presentation policy of live child applications');
 
@@ -107,6 +108,8 @@ assert.match(creationSource, /modal\.update\(\{ dismissible: false, closeOnBackd
     'durable Agent/group creation must lock user dismissal at its commit boundary');
 assert.match(creationSource, /modal\.update\(\{ dismissible: true, closeOnBackdrop: true \}\)/,
     'failed creation must restore user dismissal controls');
+assert.doesNotMatch(read('modules/ui-system/next-shell/next-shell-controller.js'), /feedback\.cancelAll\(\)/,
+    'Next teardown must dispose its own feedback owner instead of cancelling other surfaces');
 
 const surfaceSource = read('modules/ui-system/surface-controller.js');
 assert.match(surfaceSource, /kernel === 'web-awesome'[\s\S]*?mountScope\?\.\(host\)[\s\S]*?this\.own\(releaseKernelScope/,

@@ -4,38 +4,7 @@ import { JSDOM } from 'jsdom';
 
 const appearanceEngineSource = fs.readFileSync('modules/ui-system/appearance-engine.js', 'utf8');
 
-const raceDom = new JSDOM('<!doctype html><html data-ui-mode="next"><head></head><body></body></html>', {
-    url: 'https://vcpchat.local/',
-    runScripts: 'outside-only'
-});
-const raceBody = raceDom.window.document.body;
-raceBody.remove();
-raceDom.window.eval(appearanceEngineSource);
-raceDom.window.document.documentElement.dataset.uiMode = 'classic';
-raceDom.window.document.documentElement.append(raceBody);
-raceDom.window.document.dispatchEvent(new raceDom.window.Event('DOMContentLoaded'));
-assert.equal(
-    raceDom.window.document.getElementById('vcpMaterialOptics'),
-    null,
-    'a deferred Next optics mount must not leak into Classic after a pre-DOM mode switch'
-);
-raceDom.window.close();
-
-const bootDom = new JSDOM(`<!doctype html><html data-ui-mode="classic"><head>
-    <script>${appearanceEngineSource.replace(/<\/script/gi, '<\\/script')}</script>
-    </head><body><main id="classicLayout"></main></body></html>`, {
-    url: 'https://vcpchat.local/',
-    runScripts: 'dangerously'
-});
-if (bootDom.window.document.readyState === 'loading') {
-    await new Promise(resolve => bootDom.window.document.addEventListener('DOMContentLoaded', resolve, { once: true }));
-}
-const bootOptics = bootDom.window.document.getElementById('vcpMaterialOptics');
-assert.equal(bootOptics, null, 'Classic must not mount the Next material optics runtime');
-assert.equal(bootDom.window.document.documentElement.querySelector(':scope > svg'), null, 'classic layout has no pre-body SVG line box');
-bootDom.window.close();
-
-const dom = new JSDOM('<!doctype html><html data-ui-mode="next"><body><div class="vcp-ui-scope"></div></body></html>', {
+const dom = new JSDOM('<!doctype html><html data-vcp-ui-surface="main-chat"><body><div class="vcp-ui-scope"></div></body></html>', {
     url: 'https://vcpchat.local/',
     runScripts: 'outside-only'
 });
@@ -51,17 +20,17 @@ const appearance = dom.window.VCPAppearance;
 assert.ok(appearance);
 assert.ok(document.getElementById('vcpMaterialOptics'), 'Next mounts the material optics runtime');
 assert.equal(appearance.getRevision(), 0);
-assert.equal(appearance.normalize({ radius: 'round' }, 'next').radius, 'round');
-assert.equal(appearance.normalize({ radius: 'invalid' }, 'next').radius, 'medium');
+assert.equal(appearance.normalize({ radius: 'round' }).radius, 'round');
+assert.equal(appearance.normalize({ radius: 'invalid' }).radius, 'small');
 
-appearance.commit({ density: 'relaxed' }, { uiMode: 'next', source: 'test-commit' });
+appearance.commit({ density: 'relaxed' }, { source: 'test-commit' });
 assert.equal(appearance.getRevision(), 1, 'persisted commits advance the appearance revision');
-assert.equal(appearance.readCache('next').density, 'relaxed');
+assert.equal(appearance.readCache().density, 'relaxed');
 
 const resolved = appearance.apply({
     density: 'compact', radius: 'square', typography: 'serif',
     fontScale: 'large', contentWidth: 'centered', surface: 'solid'
-}, { uiMode: 'next', cache: true, source: 'test' });
+}, { cache: true, source: 'test' });
 assert.equal(JSON.stringify(resolved), JSON.stringify({
     density: 'compact', radius: 'square', typography: 'serif',
     fontScale: 'large', contentWidth: 'centered', surface: 'solid',
@@ -78,7 +47,7 @@ assert.match(document.getElementById('vcpAppearanceLayoutVariables').textContent
 assert.match(document.getElementById('vcpAppearanceLayoutVariables').textContent, /--vcp-appearance-sidebar-avatar-size:32px/);
 assert.match(document.getElementById('vcpAppearanceLayoutVariables').textContent, /--vcp-appearance-custom-radius:10px/);
 assert.equal(document.querySelector('.vcp-ui-scope').dataset.density, 'compact');
-assert.equal(appearance.readCache('next').contentWidth, 'centered');
+assert.equal(appearance.readCache().contentWidth, 'centered');
 assert.equal(document.getElementById('vcpAppearanceMaterialVariables').textContent.includes('--vcp-material-blur:24px'), true);
 
 const material = appearance.apply({
@@ -92,7 +61,7 @@ const material = appearance.apply({
     surfaceBorder: 68,
     surfaceShadow: 22,
     surfaceSheen: 81
-}, { uiMode: 'next', cache: false, source: 'test-material' });
+}, { cache: false, source: 'test-material' });
 assert.equal(material.surface, 'custom');
 assert.equal(material.surfaceOpacity, 20);
 assert.equal(material.surfaceBlur, 40);
@@ -100,11 +69,11 @@ assert.equal(material.surfaceSaturation, 146);
 assert.equal(document.documentElement.dataset.vcpSurface, 'custom');
 assert.equal(document.documentElement.dataset.vcpSurfaceEffect, 'liquid');
 assert.match(document.getElementById('vcpAppearanceMaterialVariables').textContent, /--vcp-material-sheen:81%/);
-assert.equal(appearance.normalize({ surfaceEffect: 'unknown' }, 'next').surfaceEffect, 'vibrancy');
-assert.equal(appearance.normalize({ sidebarRowHeight: 80 }, 'next').sidebarRowHeight, 64);
-assert.equal(appearance.normalize({ sidebarRowHeight: 20 }, 'next').sidebarRowHeight, 38);
-assert.equal(appearance.normalize({ sidebarRowHeight: 38, sidebarAvatarSize: 50 }, 'next').sidebarAvatarSize, 34);
-assert.equal(appearance.normalize({ radius: 'custom', customRadius: 40 }, 'next').customRadius, 32);
+assert.equal(appearance.normalize({ surfaceEffect: 'unknown' }).surfaceEffect, 'vibrancy');
+assert.equal(appearance.normalize({ sidebarRowHeight: 80 }).sidebarRowHeight, 64);
+assert.equal(appearance.normalize({ sidebarRowHeight: 20 }).sidebarRowHeight, 38);
+assert.equal(appearance.normalize({ sidebarRowHeight: 38, sidebarAvatarSize: 50 }).sidebarAvatarSize, 34);
+assert.equal(appearance.normalize({ radius: 'custom', customRadius: 40 }).customRadius, 32);
 
 const detailed = appearance.apply({
     ...resolved,
@@ -112,7 +81,7 @@ const detailed = appearance.apply({
     composerRadius: 'round',
     sidebarRadius: 'square',
     cardRadius: 'small'
-}, { uiMode: 'next', cache: false, source: 'test-details' });
+}, { cache: false, source: 'test-details' });
 assert.equal(detailed.shellRadius, 'follow');
 assert.equal(document.documentElement.dataset.vcpSidebarRadius, 'square');
 assert.equal(document.documentElement.dataset.vcpCardRadius, 'small');

@@ -70,7 +70,6 @@ async function fileExists(file) {
 const appData = await fs.mkdtemp(path.join(os.tmpdir(), 'vcpchat-settings-race-'));
 const gateDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vcpchat-settings-race-gate-'));
 await fs.writeFile(path.join(appData, 'settings.json'), JSON.stringify({
-    uiMode: 'next',
     vcpServerUrl: 'http://127.0.0.1:1',
     vcpApiKey: 'race-test-key',
     assistantAgent: 'generation-b',

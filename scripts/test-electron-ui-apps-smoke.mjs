@@ -4,12 +4,12 @@
 //   - boot: Web Awesome is NOT registered nor fetched at app boot,
 //   - the UI 组件库 internal app lazy-registers wa-* elements,
 //   - global settings modal (next): enhanced controls, save bar dirty state,
-//     injected search, focus/Escape keyboard flow; classic teardown,
+//     injected search, focus/Escape keyboard flow; canonical Next survives reload,
 //   - every child business application opens through the generic host but
 //     stays on
 //     their byte-identical upstream Classic pages,
-//   - switching the whole application to Classic leaves every business page
-//     on its original DOM with no VCPUI/Web Awesome surface mounted.
+//   - upstream Classic child-host fixtures retain their original DOM with no
+//     VCPUI/Web Awesome surface mounted; the main window itself is canonical Next.
 //
 // Usage: node scripts/test-electron-ui-apps-smoke.mjs
 // Screenshots are written under <repo>/screenshots/.
@@ -134,7 +134,7 @@ const NEXT_AUDIT_SCRIPT = () => {
     const focusable = [...document.querySelectorAll('.vcp-ui-page-shell-content :is(input, textarea, select, wa-input, wa-select), .vcp-ui-page-shell-header :is(button, wa-button)')]
         .filter(el => !el.disabled && el.getClientRects().length && getComputedStyle(el).display !== 'none');
     return {
-        uiMode: document.documentElement.dataset.uiMode,
+        surface: document.documentElement.dataset.vcpUiSurface || null,
         controllerMode: window.VCPUiModeController?.getCurrentMode?.() || null,
         hasShell: Boolean(document.querySelector('.vcp-ui-page-shell')),
         bodyScope: document.body.classList.contains('vcp-ui-scope'),
@@ -268,8 +268,6 @@ async function auditNextPage(page, app, captureName, { expectEmbedded = true } =
     await page.waitForFunction(() => document.querySelector('.vcp-ui-page-shell'), { timeout: timeoutMs });
     await sleep(500); // let WA tooltips/layout settle
     const state = await page.evaluate(NEXT_AUDIT_SCRIPT);
-    assert.equal(state.uiMode, 'next', `${app.name} must be next mode: ${JSON.stringify(state)}`);
-    assert.equal(state.controllerMode, 'next', `${app.name} controller must agree on next mode`);
     assert.ok(state.hasShell, `${app.name} AppPageShell missing`);
     assert.equal(state.shellEmbedded, expectEmbedded ? 'true' : 'false', `${app.name} embedded flag wrong: ${JSON.stringify(state)}`);
     assert.equal(state.bodyScope, true, `${app.name} body not vcp-ui-scope`);
@@ -365,7 +363,8 @@ async function auditUpstreamClassicPage(page, app, captureName) {
             pluginListProbe = await utilityApi.pluginManagerListPlugins();
         }
         return {
-            uiMode: document.documentElement.dataset.uiMode || 'classic',
+            mainChatSurface: document.documentElement.dataset.vcpUiSurface === 'main-chat',
+            hasRetiredModeQuery: new URL(location.href).searchParams.has('uiMode'),
             hasShell: Boolean(document.querySelector('.vcp-ui-page-shell')),
             waCount: document.querySelectorAll('wa-button, wa-input, wa-select, wa-card, wa-tooltip').length,
             bodyScope: document.body.classList.contains('vcp-ui-scope'),
@@ -377,7 +376,8 @@ async function auditUpstreamClassicPage(page, app, captureName) {
             pluginListProbe,
         };
     }, { legacySelector: app.legacySelector || app.legacy, action: app.action });
-    assert.equal(state.uiMode, 'classic', `${app.name} upstream Classic surface must resolve to classic: ${JSON.stringify(state)}`);
+    assert.equal(state.mainChatSurface, false, `${app.name} upstream child page must not claim the main-chat Surface: ${JSON.stringify(state)}`);
+    assert.equal(state.hasRetiredModeQuery, false, `${app.name} upstream child page must not receive a retired uiMode query: ${JSON.stringify(state)}`);
     assert.equal(state.hasShell, false, `${app.name} upstream Classic surface must not mount AppPageShell: ${JSON.stringify(state)}`);
     assert.equal(state.waCount, 0, `${app.name} upstream Classic surface must not register WA: ${JSON.stringify(state)}`);
     assert.equal(state.bodyScope, false, `${app.name} upstream Classic surface must not enter next scope: ${JSON.stringify(state)}`);
@@ -399,7 +399,6 @@ async function auditUpstreamClassicPage(page, app, captureName) {
 
 const appData = await fs.mkdtemp(path.join(os.tmpdir(), 'vcpchat-ui-apps-electron-'));
 const nextSettings = {
-    uiMode: 'next',
     enableDistributedServer: false,
     // First-run coverage: the canonical shell, settings and embedded IPC must
     // be usable before the user configures a VCP server.
@@ -415,7 +414,6 @@ const embeddedNextSettings = {
     vcpServerUrl: 'http://127.0.0.1:1/v1/chat/completions',
     vcpApiKey: 'electron-smoke-placeholder',
 };
-const classicSettings = { ...embeddedNextSettings, uiMode: 'classic' };
 await fs.writeFile(path.join(appData, 'settings.json'), JSON.stringify(nextSettings), 'utf8');
 const smokeAgentDir = path.join(appData, 'Agents', 'SmokeAgent');
 await fs.mkdir(smokeAgentDir, { recursive: true });
@@ -427,19 +425,6 @@ await fs.writeFile(path.join(smokeAgentDir, 'config.json'), JSON.stringify({
     systemPrompt: 'Smoke prompt',
     stripRegexes: [],
 }), 'utf8');
-
-// Keep the project-root mirror for older packaged/runtime paths while the
-// primary hermetic authority remains VCPCHAT_APP_DATA_DIR.
-const projectAppDataDir = path.join(root, 'AppData');
-await fs.mkdir(projectAppDataDir, { recursive: true });
-const projectSettingsFile = path.join(projectAppDataDir, 'settings.json');
-async function writeProjectUiMode(uiMode) {
-    let settings = {};
-    try { settings = JSON.parse(await fs.readFile(projectSettingsFile, 'utf8')); } catch { /* first write */ }
-    settings.uiMode = uiMode;
-    await fs.writeFile(projectSettingsFile, JSON.stringify(settings), 'utf8');
-}
-await writeProjectUiMode('next');
 
 const port = await freePort();
 const stderr = { value: '' };
@@ -534,7 +519,6 @@ try {
     assert.equal(nextWallpaperIntegration.nextMenuPresent, false, `Next-only wallpaper account entry must not be injected: ${JSON.stringify(nextWallpaperIntegration)}`);
     assert.equal(nextWallpaperIntegration.studioActionPresent, false, `Appearance Studio must not expose a plugin-specific wallpaper action: ${JSON.stringify(nextWallpaperIntegration)}`);
     const messageSemantics = await page.evaluate(() => {
-        const originalMode = document.documentElement.dataset.uiMode || 'next';
         const host = document.createElement('div');
         host.className = 'vcp-ui-scope chat-messages-container';
         host.style.position = 'fixed';
@@ -582,20 +566,12 @@ try {
             copy: read('.vcp-code-copy-button', ['borderRadius', 'backgroundColor']),
         });
 
-        document.documentElement.dataset.uiMode = 'classic';
-        const classic = snapshot();
-        document.documentElement.dataset.uiMode = 'next';
-        const next = snapshot();
-        document.documentElement.dataset.uiMode = originalMode;
+        const upstream = snapshot();
         host.remove();
-        return { classic, next };
+        return upstream;
     });
-    assert.deepEqual(
-        messageSemantics.next,
-        messageSemantics.classic,
-        `Next must preserve the complete Classic message presentation: ${JSON.stringify(messageSemantics)}`
-    );
-    assert.notEqual(messageSemantics.next.before.borderLeftColor, messageSemantics.next.after.borderLeftColor, 'Diary before/after emphasis colors must remain distinct');
+    assert.notEqual(messageSemantics.before.borderLeftColor, messageSemantics.after.borderLeftColor,
+        'Diary before/after emphasis colors must remain distinct');
     const bootLucide = await page.evaluate(() => ({
         lucideIcons: document.querySelectorAll('[data-lucide]').length,
         lucideGlobal: Boolean(window.lucide),
@@ -847,6 +823,73 @@ try {
         protectedPreserved: true,
         removed: 1,
     }, `notification clear must preserve tool approvals: ${JSON.stringify(parityControls)}`);
+
+    // Platform-independent composition guard. This cannot replace Windows
+    // native-DPI/DWM evidence, but it catches the blank-frame, zero-geometry,
+    // focus-loss and stale-theme regressions that previously hid behind a
+    // single DPR=1 dark -> light smoke step.
+    const themeDprMatrix = [];
+    const themeSequence = ['dark', 'light', 'dark', 'light', 'dark', 'light'];
+    const pageErrorsBeforeTheme = pageErrors.get('main')?.length || 0;
+    for (const deviceScaleFactor of [1, 1.25, 2]) {
+        await page.setViewport({ width: 1200, height: 800, deviceScaleFactor });
+        for (const theme of themeSequence) {
+            const sample = await page.evaluate(async (nextTheme) => {
+                const trigger = document.getElementById('nextUiThemeBtn');
+                trigger?.focus();
+                window.uiManager.applyTheme(nextTheme);
+                await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+                const selectors = ['.container', '#nextUiMainPanel', '.main-content', '#nextUiTopbar'];
+                const geometry = Object.fromEntries(selectors.map(selector => {
+                    const element = document.querySelector(selector);
+                    const rect = element?.getBoundingClientRect();
+                    const style = element ? getComputedStyle(element) : null;
+                    return [selector, {
+                        present: Boolean(element),
+                        width: rect?.width || 0,
+                        height: rect?.height || 0,
+                        display: style?.display || '',
+                        visibility: style?.visibility || '',
+                        opacity: style?.opacity || '',
+                    }];
+                }));
+                return {
+                    theme: nextTheme,
+                    bodyHasTheme: document.body.classList.contains(`${nextTheme}-theme`),
+                    bodyTextLength: document.body.innerText.trim().length,
+                    focusedId: document.activeElement?.id || '',
+                    geometry,
+                };
+            }, theme);
+            themeDprMatrix.push({ deviceScaleFactor, ...sample });
+        }
+    }
+    await page.setViewport({ width: 1200, height: 800, deviceScaleFactor: 1 });
+    for (const sample of themeDprMatrix) {
+        assert.equal(sample.bodyHasTheme, true, `theme class did not settle: ${JSON.stringify(sample)}`);
+        assert.ok(sample.bodyTextLength > 100, `renderer appears blank after theme transition: ${JSON.stringify(sample)}`);
+        assert.equal(sample.focusedId, 'nextUiThemeBtn', `theme transition lost trigger focus: ${JSON.stringify(sample)}`);
+        for (const [selector, geometry] of Object.entries(sample.geometry)) {
+            assert.equal(geometry.present, true, `${selector} disappeared after theme transition: ${JSON.stringify(sample)}`);
+            assert.ok(geometry.width > 0 && geometry.height > 0, `${selector} collapsed after theme transition: ${JSON.stringify(sample)}`);
+            assert.notEqual(geometry.display, 'none', `${selector} became display:none after theme transition: ${JSON.stringify(sample)}`);
+            assert.notEqual(geometry.visibility, 'hidden', `${selector} became hidden after theme transition: ${JSON.stringify(sample)}`);
+            assert.notEqual(geometry.opacity, '0', `${selector} became transparent after theme transition: ${JSON.stringify(sample)}`);
+        }
+    }
+    const pageErrorsAfterTheme = pageErrors.get('main')?.length || 0;
+    assert.equal(
+        pageErrorsAfterTheme,
+        pageErrorsBeforeTheme,
+        `theme transitions introduced a renderer pageerror: ${JSON.stringify({ before: pageErrorsBeforeTheme, after: pageErrorsAfterTheme, themeDprMatrix })}`
+    );
+    summary.push({
+        surface: '主界面主题合成',
+        mode: 'next',
+        pass: true,
+        lucide: 0,
+        note: 'DPR 1/1.25/2 × 6 次明暗切换：主壳几何、正文、焦点与主题状态稳定',
+    });
     const narrowDock = await page.evaluate(async () => {
         const sidebar = document.getElementById('notificationsSidebar');
         const previousWidth = sidebar.style.width;
@@ -947,6 +990,8 @@ try {
     await capture(page, 'main-ask-nova.png');
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('.ask-nova-modal-host'), { timeout: timeoutMs });
+    assert.equal(await page.evaluate(() => document.activeElement?.dataset?.askNovaTarget || ''), 'frontend',
+        'Ask Nova Escape must restore focus to the originating launchpad button');
     await page.click('button[data-ask-nova-target="backend"]');
     await page.waitForFunction(() => {
         const hosts = document.querySelectorAll('.ask-nova-modal-host');
@@ -955,6 +1000,8 @@ try {
     }, { timeout: timeoutMs });
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('.ask-nova-modal-host'), { timeout: timeoutMs });
+    assert.equal(await page.evaluate(() => document.activeElement?.dataset?.askNovaTarget || ''), 'backend',
+        'Ask Nova replacement session must restore focus to its own originating button');
     summary.push({ surface: '主界面 shell', mode: 'next', pass: true, lucide: bootLucide.lucideIcons, note: 'boot: WA 零请求/零注册，Orbitron/Nova/lucide 已载入，上游消息组件语义保留，应用托盘与 Ask Nova 可用' });
 
     // 2. Open the UI 组件库 internal app; WA must register lazily.
@@ -1047,17 +1094,21 @@ try {
     // document instead of relying on registrations hidden from adapter state.
     const preCreationKernel = await page.evaluate(() => window.VCPWebAwesome?.getRuntimeState?.().state || 'missing');
     assert.equal(preCreationKernel, 'ready', `showcase runtime state was not shared with creation: ${preCreationKernel}`);
-    const createEntryState = await page.evaluate(async () => {
+    await page.evaluate(() => window.topTabManager.setView('home'));
+    await page.waitForFunction(() => document.getElementById('nextUiHomeTab')?.classList.contains('active'), { timeout: timeoutMs });
+    await page.$eval('#nextUiCreateItemBtn', button => button.focus());
+    await page.evaluate(() => {
         window.__nextDeltaOriginalCommands = window.MainChatCommands;
         window.MainChatCommands = {
             ...window.MainChatCommands,
             createAgent: () => new Promise(resolve => { window.__nextDeltaResolveCreate = resolve; }),
         };
-        const button = document.getElementById('nextUiCreateItemBtn');
-        button?.click();
-        await new Promise(resolve => setTimeout(resolve, 250));
+    });
+    await page.click('#nextUiCreateItemBtn');
+    await page.waitForFunction(() => Boolean(document.querySelector('.next-ui-create-dialog-host wa-dialog')), { timeout: timeoutMs });
+    const createEntryState = await page.evaluate(() => {
         return {
-            buttonPresent: Boolean(button),
+            buttonPresent: Boolean(document.getElementById('nextUiCreateItemBtn')),
             controllerMounted: window.VCPNextShellController?.isMounted?.() === true,
             hostPresent: Boolean(document.querySelector('.next-ui-create-dialog-host')),
             dialogTag: document.querySelector('.next-ui-create-dialog-host')?.firstElementChild?.localName || '',
@@ -1224,13 +1275,22 @@ try {
     }, { timeout: timeoutMs });
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('.next-ui-create-dialog-host'), { timeout: timeoutMs });
+    const creationEscapeFocus = await page.evaluate(() => ({
+        active: document.activeElement?.id || '',
+        triggerConnected: Boolean(document.getElementById('nextUiCreateItemBtn')?.isConnected),
+        triggerDisplay: document.getElementById('nextUiCreateItemBtn') ? getComputedStyle(document.getElementById('nextUiCreateItemBtn')).display : '',
+        triggerTabIndex: document.getElementById('nextUiCreateItemBtn')?.tabIndex ?? null,
+    }));
+    assert.equal(creationEscapeFocus.active, 'nextUiCreateItemBtn',
+        `creation Escape must restore focus to the originating create button: ${JSON.stringify(creationEscapeFocus)}`);
+    await page.$eval('#nextUiCreateItemBtn', button => button.focus());
     await page.evaluate(() => {
         window.MainChatCommands = {
             ...window.MainChatCommands,
             createAgent: async () => ({ success: true, navigationSuccess: true }),
         };
-        document.getElementById('nextUiCreateItemBtn')?.click();
     });
+    await page.click('#nextUiCreateItemBtn');
     await page.waitForFunction(() => Boolean(document.querySelector('.next-ui-create-dialog-host wa-dialog')), { timeout: timeoutMs });
     await page.evaluate(() => {
         const host = document.querySelector('.next-ui-create-dialog-host');
@@ -1242,6 +1302,8 @@ try {
         host?.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     });
     await page.waitForFunction(() => !document.querySelector('.next-ui-create-dialog-host'), { timeout: timeoutMs });
+    assert.equal(await page.evaluate(() => document.activeElement?.id || ''), 'nextUiCreateItemBtn',
+        'successful creation must restore focus to the originating create button');
     await page.evaluate(() => {
         window.MainChatCommands = window.__nextDeltaOriginalCommands;
         delete window.__nextDeltaOriginalCommands;
@@ -1258,8 +1320,8 @@ try {
             isDefined: () => false,
             isLoaded: () => false,
         });
-        document.getElementById('nextUiCreateItemBtn')?.click();
     });
+    await page.click('#nextUiCreateItemBtn');
     await page.waitForFunction(() => [...document.querySelectorAll('.vcp-ui-toast')]
         .some(item => item.textContent.includes('创建界面组件加载失败')), { timeout: timeoutMs });
     assert.equal(await page.evaluate(() => Boolean(document.querySelector('.next-ui-create-dialog-host'))), false,
@@ -1271,7 +1333,7 @@ try {
     summary.push({ surface: '创建助手 Modal', mode: 'next', pass: true, lucide: 0, note: 'WA 单一实现覆盖冷启动/主题/故障提示，提交和关闭生命周期可控' });
 
     // 3. Global settings modal is enhanced in next mode + keyboard flow.
-    await page.waitForFunction(() => document.documentElement.dataset.uiMode === 'next', { timeout: timeoutMs });
+    await page.waitForFunction(() => document.documentElement.dataset.vcpUiSurface === 'main-chat', { timeout: timeoutMs });
     await page.evaluate(() => window.uiHelperFunctions.openModal('globalSettingsModal'));
     await page.waitForFunction(() => document.getElementById('globalSettingsForm'), { timeout: timeoutMs });
     await page.waitForFunction(() => {
@@ -1399,42 +1461,10 @@ try {
         await ensureChildPageClosed(browser, app.key, Date.now() + timeoutMs, app.name);
     }
 
-    // 5. Classic mode: embedded pages must keep the legacy DOM and never mount
-    //    the next surface. Flip the project AppData settings the same way a
-    //    user switching mode does, then walk a representative subset.
-    await fs.writeFile(path.join(appData, 'settings.json'), JSON.stringify(classicSettings), 'utf8');
-    await writeProjectUiMode('classic');
-    for (const app of EMBEDDED_APPS) {
-        const label = `classic:${app.name}`;
-        await page.evaluate((appDefinition) => window.topTabManager.openEmbeddedApp(appDefinition), {
-            id: app.id, action: app.action, name: app.name,
-        });
-        const childPage = await waitForChildPage(browser, app.key, Date.now() + timeoutMs, app.name);
-        instrument(childPage, label);
-        await childPage.waitForFunction((selector) => document.querySelector(selector), { timeout: timeoutMs }, app.legacySelector);
-        await sleep(300);
-        const classicState = await childPage.evaluate((legacySelector) => ({
-            uiMode: document.documentElement.dataset.uiMode || 'classic',
-            hasShell: Boolean(document.querySelector('.vcp-ui-page-shell')),
-            waCount: document.querySelectorAll('wa-button, wa-input, wa-select, wa-card, wa-tooltip').length,
-            bodyScope: document.body.classList.contains('vcp-ui-scope'),
-            legacyPresent: Boolean(document.querySelector(legacySelector)),
-        }), app.legacySelector);
-        assert.equal(classicState.uiMode, 'classic', `${app.name} classic mode wrong: ${JSON.stringify(classicState)}`);
-        assert.equal(classicState.hasShell, false, `${app.name} must not mount AppPageShell in classic: ${JSON.stringify(classicState)}`);
-        assert.equal(classicState.waCount, 0, `${app.name} must not register WA in classic: ${JSON.stringify(classicState)}`);
-        assert.equal(classicState.bodyScope, false, `${app.name} body must not be vcp-ui-scope in classic: ${JSON.stringify(classicState)}`);
-        assert.ok(classicState.legacyPresent, `${app.name} legacy DOM missing in classic: ${JSON.stringify(classicState)}`);
-        await capture(childPage, `classic-${app.name}.png`);
-        summary.push({ surface: app.name, mode: 'classic', pass: true, lucide: 0, note: '旧 DOM 保留，next 表面未挂载，无 WA' });
-        await page.evaluate((appDefinition) => window.topTabManager.closeView(`app:${appDefinition.id}`), { id: app.id });
-        await ensureChildPageClosed(browser, app.key, Date.now() + timeoutMs, app.name);
-    }
     await fs.writeFile(path.join(appData, 'settings.json'), JSON.stringify(nextSettings), 'utf8');
-    await writeProjectUiMode('next');
 
-    // 6. Main renderer: a legacy Classic request stays on the canonical layout.
-    assert.equal(await page.evaluate(() => document.documentElement.dataset.uiMode), 'next');
+    // 5. Main renderer remains on the canonical main-chat Surface.
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.vcpUiSurface), 'main-chat');
     await page.waitForFunction(() => {
         const input = document.getElementById('globalSettingsForm')?.querySelector('input[id]');
         return !input || !input.className.includes('vcp-ui-native-input');

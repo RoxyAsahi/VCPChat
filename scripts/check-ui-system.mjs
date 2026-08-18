@@ -109,8 +109,8 @@ for (const file of filesIn(moduleDir, '.js')) {
 
 const runtimeFile = path.join(moduleDir, 'vcp-ui.js');
 const runtime = fs.readFileSync(runtimeFile, 'utf8');
-if (/bridgeTextControl|vcp-ui-native-bridge/.test(runtime)) {
-    report(runtimeFile, 'Input/Textarea must expose the controller API; detached text-control shims are forbidden');
+if (/bridgeTextControl|vcp-ui-native-bridge|bridgeCheckedControl/.test(runtime)) {
+    report(runtimeFile, 'form controls must expose controller APIs; detached shims and Shadow DOM query bridges are forbidden');
 }
 const mainRuntimeSource = fs.readFileSync(path.join(moduleDir, 'vcp-main-ui-runtime.js'), 'utf8');
 if (mainRuntimeSource.includes('#globalSettingsModal:not([hidden])')) {

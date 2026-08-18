@@ -6,8 +6,8 @@ const { JSDOM } = require('jsdom');
 
 const root = path.resolve(__dirname, '..');
 
-test('legacy mode events cannot tear down canonical topic management state', async () => {
-    const dom = new JSDOM(`<!doctype html><html data-ui-mode="next"><body>
+test('unrelated settings events cannot tear down canonical topic management state', async () => {
+    const dom = new JSDOM(`<!doctype html><html data-vcp-ui-surface="main-chat"><body>
         <section id="tabContentTopics" class="is-managing">
             <div class="topics-header-container" data-next-ui-tools-bound="true"></div>
             <div class="next-ui-topic-manage-panel" aria-hidden="false"></div>
@@ -42,10 +42,7 @@ test('legacy mode events cannot tear down canonical topic management state', asy
         mainRendererFunctions: {}
     });
 
-    window.document.documentElement.dataset.uiMode = 'classic';
-    window.dispatchEvent(new window.CustomEvent('ui-mode-changed', {
-        detail: { mode: 'classic', previousMode: 'next' }
-    }));
+    window.dispatchEvent(new window.CustomEvent('global-settings-updated', { detail: { settings: {} } }));
     await new Promise(resolve => setTimeout(resolve, 0));
 
     const container = window.document.getElementById('tabContentTopics');

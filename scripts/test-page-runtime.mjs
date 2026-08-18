@@ -1,11 +1,9 @@
 // Structural boundary for standalone/embedded business pages.
-// No child page currently has a production Next-UI consumer. Keep the central
-// policy and prove that every known child page remains on its upstream UI.
+// No child page currently has a design-system runtime. Prove that every known
+// child page remains on its upstream UI without retaining an unused mode API.
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { ACTIVE_NEXT_UI_SURFACES } from '../modules/ui-system/ui-surface-policy.js';
-
 const root = process.cwd();
 
 const upstreamClassicPages = [
@@ -24,8 +22,6 @@ const upstreamClassicPages = [
 ];
 const failures = [];
 
-const activePolicyPages = new Set(ACTIVE_NEXT_UI_SURFACES);
-if (activePolicyPages.size) failures.push(`child Next-UI allowlist must remain empty (found: ${[...activePolicyPages].join(', ')})`);
 for (const page of upstreamClassicPages) {
     const htmlPath = path.join(root, page.html);
     const jsPath = path.join(root, page.js);
@@ -35,7 +31,6 @@ for (const page of upstreamClassicPages) {
     }
     const html = fs.readFileSync(htmlPath, 'utf8');
     const js = fs.readFileSync(jsPath, 'utf8');
-    if (activePolicyPages.has(page.html)) failures.push(`${page.html}: upstream classic page must not be active`);
     if (/vcp-ui-runtime-bootstrap|styles\/ui-system\/runtime\.css|<\s*wa-[\w-]+/i.test(html))
         failures.push(`${page.html}: upstream Classic page must not load a child Next-UI runtime or Web Awesome element`);
     if (/AppPageShell|VCPPageRebuild|VCPWebAwesome|vcp-ui-runtime-ready/.test(js))
@@ -48,4 +43,4 @@ if (failures.length) {
     process.exit(1);
 }
 
-console.log(`Page runtime gate passed (0 active rebuilt, ${upstreamClassicPages.length} upstream classic).`);
+console.log(`Page runtime gate passed (${upstreamClassicPages.length} upstream child pages unchanged).`);

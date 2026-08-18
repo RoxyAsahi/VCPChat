@@ -1,9 +1,17 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import path from 'node:path';
 import { JSDOM } from 'jsdom';
 
 const read = file => fs.readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
 const document = new JSDOM(read('main.html')).window.document;
+
+function sourceFiles(directory) {
+    return fs.readdirSync(new URL(`../${directory}/`, import.meta.url), { withFileTypes: true }).flatMap(entry => {
+        const relative = path.posix.join(directory, entry.name);
+        return entry.isDirectory() ? sourceFiles(relative) : entry.name.endsWith('.js') ? [relative] : [];
+    });
+}
 
 for (const id of ['chatMessages', 'messageInput', 'sendMessageBtn', 'attachFileBtn', 'quickNewTopicBtn', 'emoticonTriggerBtn', 'notificationsList', 'globalSettingsModalTemplate', 'agentSettingsForm']) {
     assert.equal(document.querySelectorAll(`#${id}`).length, 1, `shared DOM identity #${id} must exist exactly once`);
@@ -39,4 +47,17 @@ for (const file of [
 }
 assert.doesNotMatch(read('modules/topTabManager.js'), /prepareForMode|syncMode/,
     'the canonical tab-host facade must not expose retired mode-transition methods');
+
+const legacyAliasFiles = new Set(['main.html', 'modules/ui-system/surface-policy.js']);
+for (const file of ['main.html', 'renderer.js', ...sourceFiles('modules'), ...sourceFiles('preloads')]) {
+    if (legacyAliasFiles.has(file)) continue;
+    assert.doesNotMatch(read(file), /\buiMode\b|data-ui-mode|ui-mode-(?:changed|transition-state)/,
+        `${file} must use an explicit Surface/page capability instead of the retired uiMode state`);
+}
+assert.equal(document.documentElement.dataset.vcpUiSurface, 'main-chat',
+    'the canonical main window must use the explicit main-chat Surface marker');
+assert.equal(document.documentElement.dataset.uiMode, 'next',
+    'the legacy data-ui-mode alias remains for one compatibility release only');
+assert.match(read('modules/ui-system/surface-policy.js'), /one-release compatibility alias/,
+    'the legacy alias must remain isolated and visibly deprecated');
 console.log('Classic retirement boundary gate passed.');

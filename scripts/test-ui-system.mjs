@@ -44,10 +44,9 @@ assert.doesNotMatch(
     'Next UI must not disable the assistant emotion animation card'
 );
 
-const dom = new JSDOM('<!doctype html><html data-ui-mode="next"><body><main class="vcp-ui-scope" data-density="comfortable"></main></body></html>', {
+const dom = new JSDOM('<!doctype html><html data-vcp-ui-surface="main-chat"><body><main class="vcp-ui-scope" data-density="comfortable"></main></body></html>', {
     url: 'https://vcpchat.local/'
 });
-
 Object.assign(globalThis, {
     window: dom.window,
     document: dom.window.document,
@@ -67,6 +66,9 @@ Object.assign(globalThis, {
         disconnect() {}
     }
 });
+window.VCPSurfacePolicy = {
+    isMainChat: () => document.documentElement.dataset.vcpUiSurface === 'main-chat',
+};
 
 if (!globalThis.crypto) globalThis.crypto = webcrypto;
 if (typeof globalThis.requestAnimationFrame !== 'function') {
@@ -123,7 +125,11 @@ const askNovaApi = {
     sendOpenExternalLink: url => askNovaCalls.push({ external: url })
 };
 const askNovaController = createAskNovaController({ document, api: askNovaApi, VCPUI, marked: { parse: value => `<p>${value}</p>` } });
-const askNovaModal = await askNovaController.open('backend');
+const askNovaTrigger = document.createElement('button');
+askNovaTrigger.id = 'askNovaContractTrigger';
+document.body.append(askNovaTrigger);
+askNovaTrigger.focus();
+const askNovaModal = await askNovaController.open('backend', askNovaTrigger);
 assert.equal(askNovaModal.getState().targetId, 'backend');
 assert.ok(askNovaModal.element.querySelector('.ask-nova-dialog'), 'Ask Nova modal must mount through VCPUI');
 const askNovaTextarea = askNovaModal.element.querySelector('.ask-nova-composer textarea');
@@ -142,8 +148,10 @@ assert.match(askNovaCalls.at(-1).external, /VCPChat/);
 askNovaModal.close();
 await new Promise(resolve => setTimeout(resolve, 0));
 assert.equal(askNovaController.activeModal, null, 'Ask Nova close must clean up modal state');
+assert.equal(document.activeElement, askNovaTrigger, 'Ask Nova close must restore the explicit opener after async overlay setup');
 assert.equal(lifecycleApi.diagnostics.find('next:ask-nova-modal:backend').length, 0, 'Ask Nova close must dispose its modal scope');
 await askNovaController.destroy();
+askNovaTrigger.remove();
 
 let pendingAskNovaResolve;
 const pendingAskNovaCalls = [];
@@ -315,6 +323,28 @@ assert.equal(legacyRange.className, '');
 assert.equal(legacyRange.style.getPropertyValue('--vcp-ui-range-progress'), '');
 legacyRange.remove();
 
+const ownedRange = document.createElement('input');
+ownedRange.type = 'range';
+ownedRange.min = '1';
+ownedRange.max = '9';
+ownedRange.value = '3';
+scope.append(ownedRange);
+const ownedRangeController = VCPUI.enhance('Range', ownedRange, {
+    min: 2, max: 8, step: 2, value: 4, disabled: true,
+});
+assert.equal(ownedRange.min, '1', 'existing Range enhancement does not override business min');
+assert.equal(ownedRange.value, '3', 'existing Range enhancement does not override business value');
+// A business update after enhancement is canonical and must survive teardown.
+ownedRange.min = '0';
+ownedRange.value = '6';
+ownedRange.dispatchEvent(new Event('input', { bubbles: true }));
+ownedRangeController.destroy();
+assert.equal(ownedRange.min, '0', 'Range teardown must not restore over a newer business min');
+assert.equal(ownedRange.value, '6', 'Range teardown must not restore over a newer business value');
+assert.equal(ownedRange.max, '9', 'Range teardown leaves business attributes intact');
+assert.equal(ownedRange.disabled, false, 'Range teardown leaves business disabled state intact');
+ownedRange.remove();
+
 const legacyInput = document.createElement('input');
 legacyInput.type = 'text';
 scope.append(legacyInput);
@@ -389,7 +419,10 @@ legacySelect.value = 'two';
 enhancedSelect.refresh();
 await new Promise(resolve => setTimeout(resolve, 0));
 assert.equal(enhancedSelect.element.value, 'two', 'explicit presentation refresh syncs a native value write to WA');
-['value', 'selectedIndex', 'add', 'remove', 'focus'].forEach(property => {
+['value', 'selectedIndex'].forEach(property => {
+    assert.equal(Object.hasOwn(legacySelect, property), true, `Select proxy must bridge programmatic source ${property}`);
+});
+['add', 'remove', 'focus'].forEach(property => {
     assert.equal(Object.hasOwn(legacySelect, property), false, `Select proxy must not patch source ${property}`);
 });
 legacySelect.add(new Option('Three', 'three'));
@@ -403,6 +436,8 @@ assert.equal(VCPUI.getController(legacySelect), enhancedSelect, 'repeat enhancem
 enhancedSelect.destroy();
 assert.ok(legacySelect.isConnected, 'destroy restores the native select');
 assert.ok(!legacySelect.classList.contains('vcp-ui-select-source'));
+assert.equal(Object.hasOwn(legacySelect, 'value'), false, 'destroy restores the native value descriptor');
+assert.equal(Object.hasOwn(legacySelect, 'selectedIndex'), false, 'destroy restores the native selectedIndex descriptor');
 legacySelect.remove();
 
 const retainedNativeSelect = document.createElement('select');
@@ -433,13 +468,13 @@ assert.equal(dynamicSelectRoot.querySelectorAll('wa-select.vcp-ui-select-proxy')
 assert.equal(dynamicSelect.hidden, false, 'observer teardown restores native Select visibility');
 dynamicSelectRoot.remove();
 
-document.documentElement.dataset.uiMode = 'classic';
+delete document.documentElement.dataset.vcpUiSurface;
 const lateUpgradeSelect = document.createElement('select');
 lateUpgradeSelect.add(new Option('Late', 'late'));
 scope.append(lateUpgradeSelect);
 const nativeSelectController = VCPUI.enhance('Select', lateUpgradeSelect);
 assert.equal(nativeSelectController.kernel, 'native');
-document.documentElement.dataset.uiMode = 'next';
+document.documentElement.dataset.vcpUiSurface = 'main-chat';
 const upgradedSelectController = VCPUI.enhance('Select', lateUpgradeSelect);
 await new Promise(resolve => setTimeout(resolve, 0));
 assert.equal(upgradedSelectController.kernel, 'native', 'mounted Select keeps its original provider after WA becomes available');
@@ -460,6 +495,19 @@ assert.equal(legacySection.dataset.state, 'expanded');
 enhancedSection.destroy();
 assert.ok(legacySection.isConnected);
 legacySection.remove();
+
+const remountedSection = document.createElement('section');
+remountedSection.className = 'agent-settings-section collapsed';
+remountedSection.innerHTML = '<div class="agent-settings-section-header"><button class="agent-settings-toggle-btn"></button></div><div class="agent-settings-section-content"></div>';
+scope.append(remountedSection);
+const firstSectionController = VCPUI.enhance('SettingsSection', remountedSection);
+firstSectionController.destroy();
+const secondSectionController = VCPUI.enhance('SettingsSection', remountedSection);
+remountedSection.classList.remove('collapsed');
+await new Promise(resolve => setTimeout(resolve, 0));
+assert.equal(remountedSection.dataset.state, 'expanded', 'a destroyed section observer cannot overwrite a remounted section');
+secondSectionController.destroy();
+remountedSection.remove();
 
 const settingsHost = document.createElement('div');
 settingsHost.id = 'tabContentSettings';
@@ -489,11 +537,20 @@ document.getElementById('bridgeInput').dispatchEvent(new Event('input', { bubble
 assert.equal(bridgedActionBar.dataset.state, 'dirty');
 document.getElementById('agentSettingsForm').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
 assert.equal(bridgedActionBar.dataset.state, 'saving');
-document.getElementById('agentSettingsForm').dispatchEvent(new CustomEvent('vcp-settings-save-result', { detail: { success: true } }));
-assert.equal(bridgedActionBar.dataset.state, 'clean');
+const firstSaveOperation = document.getElementById('agentSettingsForm').dataset.vcpSettingsActiveOperation;
+document.getElementById('agentSettingsForm').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+const secondSaveOperation = document.getElementById('agentSettingsForm').dataset.vcpSettingsActiveOperation;
+assert.equal(firstSaveOperation, secondSaveOperation, 'an in-flight save must keep one operation identity');
+document.getElementById('agentSettingsForm').dispatchEvent(new CustomEvent('vcp-settings-save-result', { detail: { success: true, operationId: firstSaveOperation } }));
+assert.equal(bridgedActionBar.dataset.state, 'clean', 'the first terminal result settles the single in-flight save');
 bridgedActionBar.querySelector('.danger-button').click();
 assert.equal(bridgedActionBar.dataset.state, 'deleting');
-document.getElementById('agentSettingsForm').dispatchEvent(new CustomEvent('vcp-settings-delete-result', { detail: { success: false, cancelled: true } }));
+const deleteOperation = document.getElementById('agentSettingsForm').dataset.vcpSettingsActiveDeleteOperation;
+document.getElementById('agentSettingsForm').dispatchEvent(new CustomEvent('vcp-settings-delete-result', { detail: { success: true } }));
+assert.equal(bridgedActionBar.dataset.state, 'deleting', 'an uncorrelated delete result must not settle the active operation');
+bridgedActionBar.querySelector('.danger-button').click();
+assert.equal(document.getElementById('agentSettingsForm').dataset.vcpSettingsActiveDeleteOperation, deleteOperation, 'a duplicate delete must retain one operation identity');
+document.getElementById('agentSettingsForm').dispatchEvent(new CustomEvent('vcp-settings-delete-result', { detail: { success: false, cancelled: true, operationId: deleteOperation } }));
 assert.equal(bridgedActionBar.dataset.state, 'clean');
 
 const dynamicGroupForm = document.createElement('form');
@@ -549,7 +606,11 @@ assert.equal(globalModal.querySelector('wa-select.vcp-ui-select-proxy').value, '
     'an independently settled settings producer refreshes the same presentation');
 assert.equal(globalBusinessSelectChanges, 0,
     'presentation refresh must not manufacture a business change event');
-['value', 'selectedIndex', 'add', 'remove', 'focus'].forEach(property => {
+['value', 'selectedIndex'].forEach(property => {
+    assert.equal(Object.hasOwn(globalBusinessSelect, property), true,
+        `settings Select bridges programmatic ${property} writes`);
+});
+['add', 'remove', 'focus'].forEach(property => {
     assert.equal(Object.hasOwn(globalBusinessSelect, property), false,
         `settings Select keeps its native ${property} descriptor`);
 });
@@ -561,21 +622,20 @@ document.getElementById('globalUserName').dispatchEvent(new Event('input', { bub
 assert.equal(globalFooter.dataset.state, 'dirty', 'global save bar tracks dirty state');
 document.getElementById('globalSettingsForm').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
 assert.equal(globalFooter.dataset.state, 'saving', 'global save bar tracks saving state');
-document.documentElement.dataset.uiMode = 'classic';
-window.dispatchEvent(new CustomEvent('ui-mode-changed', { detail: { mode: 'classic', previousMode: 'next' } }));
+window.dispatchEvent(new CustomEvent('global-settings-updated', { detail: { settings: {} } }));
 await new Promise(resolve => setTimeout(resolve, 0));
 assert.ok(document.getElementById('globalUserName').classList.contains('vcp-ui-native-input'),
-    'legacy mode events must not tear down canonical settings controls');
+    'settings updates must not tear down canonical settings controls');
 assert.ok(globalModal.classList.contains('vcp-global-settings-next'),
-    'legacy mode events must not remove the canonical modal marker');
+    'settings updates must not remove the canonical modal marker');
 assert.ok(globalModal.querySelector('.vcp-ui-settings-search'),
-    'legacy mode events must not remove the SettingsShell search');
+    'settings updates must not remove the SettingsShell search');
 await window.VCPUISettingsBridge.destroy();
 modalContainer.remove();
 
 assert.ok(!document.getElementById('bridgeInput').classList.contains('vcp-ui-native-input'));
 settingsHost.remove();
-document.documentElement.dataset.uiMode = 'next';
+document.documentElement.dataset.vcpUiSurface = 'main-chat';
 
 const classicPresentationSettingsHost = document.createElement('div');
 classicPresentationSettingsHost.id = 'tabContentSettings';
@@ -637,6 +697,7 @@ const mainChatCommandsSource = fs.readFileSync(new URL('../modules/mainChatComma
 const windowStateServiceSource = fs.readFileSync(new URL('../modules/services/windowStateService.js', import.meta.url), 'utf8');
 const nextShellControllerSource = fs.readFileSync(new URL('../modules/ui-system/next-shell/next-shell-controller.js', import.meta.url), 'utf8');
 const eventListenersSource = fs.readFileSync(new URL('../modules/event-listeners.js', import.meta.url), 'utf8');
+const notificationMenuControllerSource = fs.readFileSync(new URL('../modules/ui-system/next-shell/notification-menu-controller.js', import.meta.url), 'utf8');
 const rendererSource = fs.readFileSync(new URL('../renderer.js', import.meta.url), 'utf8');
 const topTabManagerSource = fs.readFileSync(new URL('../modules/topTabManager.js', import.meta.url), 'utf8');
 const appTabHostSource = fs.readFileSync(new URL('../modules/ui-system/next-shell/app-tab-host.js', import.meta.url), 'utf8');
@@ -698,15 +759,15 @@ assert.match(accountMenuControllerSource, /topbarThemeButton[\s\S]*setAttribute\
     'the Next topbar theme shortcut must synchronize its action label');
 assert.doesNotMatch(topTabManagerSource, /nextUiAccountThemeLabel[\s\S]*setAttribute\('aria-label'/,
     'topTabManager must delegate account and theme presentation state');
-assert.match(eventListenersSource, /const runMenuAction = async[\s\S]*catch \(error\)[\s\S]*finally \{[\s\S]*closeNotificationMenu/,
+assert.match(notificationMenuControllerSource, /async runAction\(action[\s\S]*catch \(error\)[\s\S]*finally \{[\s\S]*this\.close\(\{ restoreFocus \}\)/,
     'notification menu actions must close and restore focus even after rejection');
 assert.match(mainHtml, /id="nextUiNotificationForum"[\s\S]*id="nextUiNotificationMemo"[\s\S]*id="nextUiNotificationFilterToggle"[\s\S]*id="nextUiNotificationClear"/,
     'the Next notification menu must contain separate Forum and Memo entries plus filter and clear commands');
 assert.doesNotMatch(eventListenersSource, /(?:doNotDisturbBtn|clearNotificationsBtn)\.click\(\)/,
     'Next notification actions must not proxy hidden Classic controls');
-assert.match(eventListenersSource, /nextUiNotificationMemo\.addEventListener\('click'[\s\S]*openMemo/,
+assert.match(notificationMenuControllerSource, /elements\.memo, 'click'[\s\S]*openMemo/,
     'the dedicated Memo menu item must open Memo');
-assert.match(eventListenersSource, /nextUiNotificationFilterToggle\.addEventListener\('contextmenu'[\s\S]*openNotificationFilterSettings/,
+assert.match(notificationMenuControllerSource, /elements\.filter, 'contextmenu'[\s\S]*openNotificationFilterSettings/,
     'filter menu secondary action must open filter settings');
 assert.doesNotMatch(nextUiCss,
     /html[^{]*#vchatAppTray[^{]*\{[^}]*display:\s*none/s,
@@ -827,6 +888,9 @@ behaviorCheckboxInput.checked = true;
 behaviorCheckboxInput.dispatchEvent(new Event('change', { bubbles: true }));
 assert.equal(behaviorCheckbox.element.dataset.state, 'checked');
 assert.equal(behaviorCheckboxChanges, 1);
+assert.equal(behaviorCheckbox.getChecked(), true);
+behaviorCheckbox.setChecked(false);
+assert.equal(behaviorCheckbox.getChecked(), false);
 behaviorCheckbox.destroy();
 
 // Switch: click toggles aria-checked and fires change; role is switch.
@@ -839,6 +903,9 @@ assert.equal(behaviorSwitch.element.getAttribute('aria-checked'), 'true');
 assert.equal(behaviorSwitchChanges, 1);
 behaviorSwitch.update({ checked: false });
 assert.equal(behaviorSwitch.element.getAttribute('aria-checked'), 'false');
+assert.equal(behaviorSwitch.getChecked(), false);
+behaviorSwitch.setChecked(true);
+assert.equal(behaviorSwitch.getChecked(), true);
 behaviorSwitch.destroy();
 
 // Tabs: roving tabindex + arrow-key navigation + change event.
@@ -858,7 +925,70 @@ behaviorTabsCurrent[1].focus();
 behaviorTabsCurrent[1].dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
 behaviorTabsCurrent = behaviorTabButtons();
 assert.equal(behaviorTabsCurrent[0].getAttribute('aria-selected'), 'true');
+behaviorTabs.update({ items: [{ label: 'B', value: 'b' }, { label: 'C', value: 'c', disabled: true }] });
+behaviorTabsCurrent = behaviorTabButtons();
+assert.equal(behaviorTabsCurrent[0].getAttribute('aria-selected'), 'true',
+    'Tabs must fall back to the first enabled item when the selected item is removed');
+behaviorTabs.update({ items: [{ label: 'Disabled', value: 'disabled', disabled: true }] });
+assert.equal(behaviorTabs.element.querySelector('[aria-selected="true"]'), null,
+    'Tabs must not retain a selection when every item is disabled');
 behaviorTabs.destroy();
+
+const behaviorSegmented = VCPUI.create('SegmentedControl', {
+    items: [{ label: 'A', value: 'a', icon: 'check' }, { label: 'B', value: 'b' }], value: 'b'
+});
+scope.append(behaviorSegmented.element);
+let behaviorSegmentedChanges = 0;
+behaviorSegmented.element.addEventListener('change', () => { behaviorSegmentedChanges += 1; });
+const oldSegmentedButton = behaviorSegmented.element.querySelector('[role="radio"]');
+oldSegmentedButton.focus();
+oldSegmentedButton.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+assert.equal(behaviorSegmentedChanges, 1, 'SegmentedControl arrow navigation must emit one change');
+assert.equal(behaviorSegmented.element.querySelector('[aria-checked="true"]')?.dataset.value, 'b');
+behaviorSegmented.update({ items: [{ label: 'A', value: 'a' }] });
+assert.equal(behaviorSegmented.element.querySelector('[aria-checked="true"]')?.dataset.value, 'a',
+    'SegmentedControl must normalize a removed selected value');
+behaviorSegmented.update({ items: [{ label: 'Disabled', value: 'disabled', disabled: true }] });
+assert.equal(behaviorSegmented.element.querySelector('[aria-checked="true"]'), null,
+    'SegmentedControl must not retain a selection when every item is disabled');
+behaviorSegmented.update({ items: [{ label: 'Disabled', value: 'disabled', disabled: true }, { label: 'Enabled', value: 'enabled' }] });
+const segmentedButtons = [...behaviorSegmented.element.querySelectorAll('[role="radio"]')];
+assert.equal(segmentedButtons[0].disabled, true);
+assert.equal(segmentedButtons[1].tabIndex, 0, 'SegmentedControl must give focus roving tabindex to the normalized value');
+const detachedSegmentedButton = segmentedButtons[1];
+behaviorSegmented.update({ items: [{ label: 'Replacement', value: 'replacement' }] });
+detachedSegmentedButton.click();
+assert.equal(behaviorSegmented.element.querySelector('[aria-checked="true"]')?.dataset.value, 'replacement',
+    'detached SegmentedControl buttons must not retain old callbacks');
+behaviorSegmented.destroy();
+
+// List: semantic rows, delegated interaction and safe item replacement.
+let behaviorListClicks = 0;
+const behaviorList = VCPUI.create('List', {
+    items: [
+        { label: 'Active', description: 'Primary', icon: 'check', trailing: '⌘1', onClick: () => { behaviorListClicks += 1; } },
+        { label: 'Static', interactive: false, disabled: true },
+    ],
+});
+const behaviorListRows = () => [...behaviorList.element.querySelectorAll('.vcp-ui-list-item')];
+assert.equal(behaviorList.element.getAttribute('role'), 'list');
+assert.equal(behaviorListRows()[0].tagName, 'BUTTON');
+assert.equal(behaviorListRows()[0].getAttribute('role'), null,
+    'interactive List rows must retain native button semantics');
+assert.equal(behaviorListRows()[0].querySelector('strong')?.textContent, 'Active');
+assert.equal(behaviorListRows()[0].querySelector('.vcp-ui-list-trailing')?.textContent, '⌘1');
+assert.equal(behaviorListRows()[1].tagName, 'DIV');
+assert.equal(behaviorListRows()[1].getAttribute('role'), 'listitem');
+behaviorListRows()[0].click();
+assert.equal(behaviorListClicks, 1);
+const oldListRow = behaviorListRows()[0];
+behaviorList.update({ items: [{ label: 'Replacement', onClick: () => { behaviorListClicks += 10; } }] });
+assert.equal(behaviorListRows()[0].querySelector('strong')?.textContent, 'Replacement');
+oldListRow.click();
+assert.equal(behaviorListClicks, 1, 'detached List rows must not retain active item callbacks');
+behaviorListRows()[0].click();
+assert.equal(behaviorListClicks, 11);
+behaviorList.destroy();
 
 // Card (interactive): aria-pressed tracks the selected variant.
 const behaviorCard = VCPUI.create('Card', { title: 'T', description: 'D', interactive: true, variant: 'selected' });
@@ -890,6 +1020,12 @@ const behaviorModal = VCPUI.create('Modal', {
 });
 scope.append(behaviorModal.element);
 assert.equal(behaviorModal.element.querySelector('.vcp-ui-modal').getAttribute('role'), 'dialog');
+behaviorModal.update({ dismissible: false });
+assert.equal(behaviorModal.element.querySelectorAll('.vcp-ui-modal header button').length, 1, 'modal updates do not accumulate render-owned close controls');
+behaviorFocusTarget.focus();
+behaviorModal.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+assert.equal(document.activeElement, behaviorModal.element.querySelector('.vcp-ui-modal'), 'modal traps Tab to a dialog fallback when no controls are focusable');
+behaviorModal.update({ dismissible: true });
 behaviorModal.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 assert.ok(!behaviorModal.element.isConnected, 'Escape must close the modal');
 behaviorModal.close(null);
@@ -961,6 +1097,17 @@ timerFeedbackScope.timeout(() => {
 }, 5, 'showcase-loading-demo');
 await timerFeedbackScope.dispose('showcase-closed-before-timer');
 await timerFeedbackScope.dispose('duplicate-dispose');
+
+const tokenFeedbackScope = new lifecycleApi.LifecycleScope('test:loading-token');
+const tokenFeedback = VCPUI.feedback.owner(tokenFeedbackScope);
+const loadingA = tokenFeedback.beginLoading('A');
+const loadingB = tokenFeedback.beginLoading('B');
+assert.equal(document.querySelector('.vcp-ui-loading-label')?.textContent, 'B');
+tokenFeedback.endLoading(loadingA);
+assert.equal(document.querySelector('.vcp-ui-loading-label')?.textContent, 'B', 'non-LIFO loading completion keeps the other token');
+tokenFeedback.endLoading(loadingB);
+assert.equal(document.querySelector('.vcp-ui-loading-layer')?.hidden, true);
+await tokenFeedbackScope.dispose('loading-token-done');
 await new Promise(resolve => setTimeout(resolve, 15));
 assert.equal(lateShowcaseMutation, 0, 'a disposed showcase timer cannot mutate feedback state');
 assert.equal(document.querySelector('.vcp-ui-loading-layer')?.hidden, true);
@@ -1167,6 +1314,28 @@ waField.destroy();
 assert.equal(waInput.element.required, true, 'destroying Field must preserve the control-owned required state');
 assert.equal(waInput.element.getAttribute('aria-describedby'), 'existing-help', 'destroying Field must restore a supplied description link');
 
+// Field enhancement must survive a business renderer replacing its control;
+// the old control must not retain listeners or receive teardown writes.
+const dynamicField = document.createElement('div');
+dynamicField.className = 'vcp-ui-field';
+dynamicField.innerHTML = '<label>动态字段</label><input required aria-invalid="false">';
+document.body.append(dynamicField);
+const dynamicFieldController = VCPUI.enhance('Field', dynamicField);
+const oldDynamicControl = dynamicField.querySelector('input');
+const replacementControl = document.createElement('input');
+replacementControl.required = true;
+dynamicField.replaceChildren(dynamicField.querySelector('label'), replacementControl);
+await new Promise(resolve => setTimeout(resolve, 0));
+assert.equal(dynamicField.querySelector('label').htmlFor, replacementControl.id,
+    'Field must rebind its label when the business control is replaced');
+replacementControl.setCustomValidity('invalid');
+replacementControl.dispatchEvent(new Event('invalid', { bubbles: false, cancelable: true }));
+assert.equal(dynamicField.dataset.state, 'error', 'replacement control must own Field validity state');
+dynamicFieldController.destroy();
+assert.equal(oldDynamicControl.getAttribute('aria-invalid'), 'false',
+    'destroying a rebound Field must not mutate the detached old control');
+assert.equal(replacementControl.required, true, 'destroying a rebound Field must preserve replacement control state');
+
 const waTextarea = VCPUI.create('Textarea', { value: 'body', rows: 6 });
 assert.equal(waTextarea.element.tagName.toLowerCase(), 'wa-textarea');
 assert.equal(waTextarea.element.rows, 6);
@@ -1175,9 +1344,21 @@ assert.equal(waTextarea.getValue(), 'body');
 waTextarea.setValue('updated body');
 assert.equal(waTextarea.getValue(), 'updated body');
 
-const waSelect = VCPUI.create('Select', { options: ['A', 'B'], value: 'B' });
+const nativeRequiredSelect = VCPUI.create('Select', {
+    provider: 'native', required: true, options: ['A', 'B'], value: 'A'
+});
+assert.equal(nativeRequiredSelect.element.tagName.toLowerCase(), 'select');
+assert.equal(nativeRequiredSelect.element.required, true,
+    'native Select fallback must preserve the WA-owned required contract');
+nativeRequiredSelect.update({ required: false });
+assert.equal(nativeRequiredSelect.element.required, false,
+    'native Select fallback must update required without replacing its provider');
+nativeRequiredSelect.destroy();
+
+const waSelect = VCPUI.create('Select', { options: ['A', 'B'], value: 'B', required: true });
 assert.equal(waSelect.element.tagName.toLowerCase(), 'wa-select');
 assert.equal(waSelect.control, waSelect.element, 'WA Select exposes the same business control contract');
+assert.equal(waSelect.element.required, true, 'WA-owned Select must expose the same required contract');
 waSelect.setValue('A');
 assert.equal(waSelect.getValue(), 'A');
 waSelect.setDisabled(true);
@@ -1189,19 +1370,49 @@ assert.equal(waSelect.element.querySelectorAll('wa-option').length, 2);
 assert.equal(waSelect.element.value, 'A');
 assert.equal(waSelect.provider, 'webawesome-owned');
 assert.equal(waSelect.element.querySelector('select'), null, 'VCPUI-owned Select does not fabricate a detached native shim');
+let waSelectInputs = 0;
+let waSelectChanges = 0;
+waSelect.element.addEventListener('input', () => { waSelectInputs += 1; });
+waSelect.element.addEventListener('change', () => { waSelectChanges += 1; });
+waSelect.element.value = 'B';
+const waSelectUserInput = new Event('input', { bubbles: true, composed: true });
+assert.equal(waSelectUserInput.isTrusted, false, 'the WA input fixture must exercise the untrusted Web Component path');
+waSelect.element.dispatchEvent(waSelectUserInput);
+const waSelectUserChange = new Event('change', { bubbles: true, composed: true });
+assert.equal(waSelectUserChange.isTrusted, false, 'the WA event fixture must exercise the untrusted Web Component path');
+waSelect.element.dispatchEvent(waSelectUserChange);
+assert.equal(waSelectInputs, 1, 'one WA user input must reach consumers exactly once');
+assert.equal(waSelectChanges, 1, 'one WA user change must reach consumers exactly once');
+assert.equal(waSelect.getValue(), 'B', 'WA user change must update the controller value');
+waSelect.update({ size: 'md' });
+assert.equal(waSelect.getValue(), 'B', 'an unrelated update must not restore the value from before the WA change');
+waSelect.setValue('A');
+assert.equal(waSelectInputs, 1, 'programmatic value updates must not synthesize an input event');
+assert.equal(waSelectChanges, 1, 'programmatic value updates must not synthesize a change event');
 
 const waCheckbox = VCPUI.create('Checkbox', { label: '同意', checked: true });
 assert.equal(waCheckbox.element.tagName.toLowerCase(), 'wa-checkbox');
 assert.equal(waCheckbox.element.checked, true);
+assert.equal(waCheckbox.element.querySelector('input'), null, 'WA Checkbox must not expose a shadow query shim');
+assert.equal(waCheckbox.getChecked(), true);
+waCheckbox.setChecked(false);
+assert.equal(waCheckbox.getChecked(), false);
+waCheckbox.element.checked = true;
+waCheckbox.update({ label: '外部修改后' });
+assert.equal(waCheckbox.element.checked, true, 'unrelated Checkbox updates must preserve host-owned checked state');
 waCheckbox.element.click();
 assert.equal(waCheckbox.element.checked, false, 'wa-checkbox click must toggle checked');
 
 const waSwitch = VCPUI.create('Switch', { label: '开关' });
 assert.equal(waSwitch.element.tagName.toLowerCase(), 'wa-switch');
+assert.equal(waSwitch.element.querySelector('input'), null, 'WA Switch must not expose a shadow query shim');
+waSwitch.element.checked = true;
+waSwitch.update({ label: '外部修改后' });
+assert.equal(waSwitch.element.checked, true, 'unrelated Switch updates must preserve host-owned checked state');
 let waSwitchChanges = 0;
 waSwitch.element.addEventListener('change', () => { waSwitchChanges += 1; });
 waSwitch.element.click();
-assert.equal(waSwitch.element.checked, true, 'wa-switch click must toggle checked');
+assert.equal(waSwitch.element.checked, false, 'wa-switch click must toggle checked');
 assert.equal(waSwitchChanges, 1, 'wa-switch change must reach consumers');
 
 const waCard = VCPUI.create('Card', { title: 'Card', description: 'desc', interactive: true });
@@ -1221,8 +1432,16 @@ const nestedTabs = document.createElement('wa-tab-group');
 waTabs.element.append(nestedTabs);
 nestedTabs.dispatchEvent(new CustomEvent('wa-tab-show', { detail: { name: 'nested' }, bubbles: true }));
 assert.equal(waTabChanges, 1, 'nested tab lifecycle events must not mutate an ancestor Tabs controller');
+waTabs.update({ items: [{ label: 'A', value: 'a' }] });
+assert.equal(waTabs.element.active, 'a', 'WA Tabs must normalize a removed active value');
+waTabs.update({ items: [{ label: 'Disabled', value: 'disabled', disabled: true }] });
+assert.equal(waTabs.element.active, '', 'WA Tabs must clear active value when every item is disabled');
 
 let waModalCloseCount = 0;
+const waModalFocusOrigin = document.createElement('button');
+waModalFocusOrigin.type = 'button';
+waHost.append(waModalFocusOrigin);
+waModalFocusOrigin.focus();
 const waModal = VCPUI.create('Modal', {
     title: 'Modal',
     content: document.createTextNode('Body'),
@@ -1240,6 +1459,8 @@ assert.equal(waModalCloseCount, 0, 'nested WA lifecycle events must not close th
 assert.equal(waModal.element.isConnected, true, 'nested WA teardown must not destroy the Modal Surface');
 waModal.close(null);
 assert.equal(waModal.element.open, false);
+assert.equal(document.activeElement, waModalFocusOrigin, 'WA modal close restores focus without waiting for provider animation');
+assert.equal(waModal.element.isConnected, false, 'WA modal close tears down even when wa-after-hide never arrives');
 waModal.element.dispatchEvent(new CustomEvent('wa-hide', { bubbles: true, cancelable: true }));
 waModal.element.dispatchEvent(new CustomEvent('wa-after-hide', { bubbles: true }));
 assert.equal(waModalCloseCount, 1, 'programmatic and Web Awesome hide events must share one close finalizer');
@@ -1283,6 +1504,7 @@ assert.ok(waTipTrigger.element.id, 'tooltip trigger must get an id');
 assert.equal(waTooltip.element.getAttribute('for'), waTipTrigger.element.id);
 
 [waButton, waIconButton, waInput, waTextarea, waSelect, waCheckbox, waSwitch, waCard, waTabs, waModal, dismissedWaModal, lockedWaModal, waTooltip, waTipTrigger].forEach(controller => controller.destroy());
+waModalFocusOrigin.remove();
 assert.equal(waHost.querySelectorAll('[class^="vcp-ui-"]').length, 0, 'WA-backed controls must be removed on destroy');
 waHost.remove();
 

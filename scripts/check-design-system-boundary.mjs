@@ -13,6 +13,13 @@ const sourceRef = process.env.VCP_DESIGN_SOURCE_REF || 'b5931a69d0815a1dfd60c079
 const upstreamRef = process.env.VCP_UPSTREAM_REF || sourceRef;
 const failures = [];
 
+const assertPinnedRef = (label, ref) => {
+    if (!ref || ref === 'HEAD' || ref.startsWith('HEAD~') || ref.startsWith('HEAD^')) {
+        throw new Error(`${label} must be an explicit reviewed commit, not ${ref || '(empty)'}`);
+    }
+    git(['rev-parse', '--verify', `${ref}^{commit}`]);
+};
+
 const forbiddenPaths = [
     /^\.cargo\/config\.toml$/,
     /^\.github\/workflows\/codex_agent_windows\.yml$/,
@@ -37,6 +44,7 @@ const allowedSourceDifferences = new Set([
     '.gitattributes',
     '.gitignore',
     'README.md',
+    'docs/README.md',
     'RAGmodules/RAG_Observer.html',
     'docs/next-ui-webawesome-roadmap.md',
     'docs/next-ui-lifecycle-architecture.md',
@@ -105,11 +113,18 @@ const allowedSourceDifferences = new Set([
     'modules/ui-system/state-channel.js',
     'modules/ui-system/settlement.js',
     'modules/ui-system/surface-controller.js',
+    'modules/ui-system/surface-policy.js',
+    'modules/ui-system/ui-surface-policy.js',
     'modules/ui-system/next-shell/overlay-coordinator.js',
+    'modules/ui-system/next-shell/escape-dispatcher.js',
+    'modules/ui-system/patterns/list-factory.js',
+    'modules/ui-system/patterns/pure-factories.js',
+    'modules/ui-system/patterns/segmented-control-factory.js',
     'modules/ui-system/next-shell/embedded-app-controller.js',
     'modules/ui-system/next-shell/app-tab-host.js',
     'modules/ui-system/next-shell/assistant-search-controller.js',
     'modules/ui-system/next-shell/account-menu-controller.js',
+    'modules/ui-system/next-shell/notification-menu-controller.js',
     'modules/ui-system/next-shell/launchpad-controller.js',
     'modules/ui-system/next-shell/creation-controller.js',
     'modules/ui-system/next-shell/next-shell-controller.js',
@@ -118,7 +133,6 @@ const allowedSourceDifferences = new Set([
     'modules/ui-system/appearance-studio.js',
     'modules/ui-system/ask-nova-modal.js',
     'modules/ui-system/lucide-adapter.js',
-    'modules/ui-system/ui-surface-policy.js',
     'modules/ui-system/vcp-ui.js',
     'modules/ui-system/settings-bridge.js',
     'modules/ui-system/settings-surface-session.js',
@@ -159,6 +173,7 @@ const allowedSourceDifferences = new Set([
     'scripts/check-ui-applications.mjs',
     'scripts/check-ui-system.mjs',
     'scripts/check-vcpui-consumers.mjs',
+    'scripts/check-webawesome-facade-boundary.mjs',
     'scripts/vcpui-production-consumers.json',
     'scripts/test-ui-system.mjs',
     'scripts/test-appearance-engine.mjs',
@@ -172,11 +187,14 @@ const allowedSourceDifferences = new Set([
     'scripts/test-ui-mode-manager.mjs',
     'scripts/test-webawesome-adapter.mjs',
     'scripts/test-vcp-ui-select-proxy.mjs',
+    'scripts/test-vcp-ui-text-controls.mjs',
     'scripts/test-electron-ui-apps-smoke.mjs',
     'scripts/test-electron-lifecycle-stress.mjs',
     'scripts/test-electron-main-chat-sequences.mjs',
+    'scripts/test-electron-main-chat-group-sequences.mjs',
     'scripts/test-settings-wa-electron.mjs',
     'scripts/test-settings-surface-race-electron.mjs',
+    'scripts/support/electron-embedded-overlay-main.cjs',
     'scripts/support/electron-settings-race-main.cjs',
     'tests/frontend-plugins.test.js',
     'tests/lifecycle-scope.test.js',
@@ -190,14 +208,17 @@ const allowedSourceDifferences = new Set([
     'tests/state-authority.test.js',
     'tests/window-state-service.test.js',
     'tests/surface-controller.test.js',
+    'tests/surface-policy.test.js',
     'tests/app-tab-host.test.js',
     'tests/assistant-search-controller.test.js',
     'tests/account-menu-controller.test.js',
+    'tests/notification-menu-controller.test.js',
     'tests/launchpad-controller.test.js',
     'tests/creation-controller.test.js',
     'tests/global-settings-save.test.mjs',
     'tests/embedded-app-controller.test.js',
     'tests/overlay-coordinator.test.js',
+    'tests/escape-dispatcher.test.js',
     'tests/next-ui-registries.test.mjs',
     'tests/topic-list-mode-lifecycle.test.js',
     'tests/chat-manager-selection-race.test.js',
@@ -263,7 +284,8 @@ function git(args) {
     return execFileSync('git', ['-c', 'core.quotepath=false', ...args], { cwd: root, encoding: 'utf8' }).trim();
 }
 
-const trackedFiles = git(['ls-files']).split('\n').filter(Boolean);
+const trackedFiles = git(['ls-files']).split('\n').filter(Boolean)
+    .filter(file => fs.existsSync(path.join(root, file)));
 for (const file of trackedFiles) {
     if (forbiddenPaths.some(pattern => pattern.test(file))) failures.push(`${file}: forbidden Build/Codex path remains`);
 }
@@ -317,6 +339,9 @@ if (/executeJavaScript|insertCSS/.test(embeddedHostSource)) {
 const retainedEventListenersSource = fs.readFileSync(path.join(root, 'modules/event-listeners.js'), 'utf8');
 if (/\bgetAgentSidebar\b/.test(retainedEventListenersSource)) {
     failures.push('event-listeners.js: removed Agent sidebar accessor leaked into the retained main-chat sidebar controls');
+}
+if (!/e\.defaultPrevented\s*\|\|\s*e\.isComposing\s*\|\|\s*e\.keyCode\s*===\s*229/.test(retainedEventListenersSource)) {
+    failures.push('event-listeners.js: Enter send handler must yield to IME composition and higher-priority input surfaces');
 }
 
 const nextCommandConsumers = [
@@ -387,8 +412,8 @@ for (const [name, command] of Object.entries(packageJson.scripts || {})) {
 }
 
 try {
-    git(['rev-parse', '--verify', sourceRef]);
-    git(['rev-parse', '--verify', upstreamRef]);
+    assertPinnedRef('VCP_DESIGN_SOURCE_REF', sourceRef);
+    assertPinnedRef('VCP_UPSTREAM_REF', upstreamRef);
     const filesDifferentFromUpstream = new Set(
         git(['diff', '--ignore-space-at-eol', '--name-only', upstreamRef, '--'])
             .split('\n')
@@ -405,8 +430,8 @@ try {
             || restoredToUpstream) continue;
         failures.push(`${file}: differs from ${sourceRef} outside the subtraction allowlist`);
     }
-} catch {
-    console.warn(`[DesignBoundary] Source ref ${sourceRef} is unavailable; skipped byte-parity audit.`);
+} catch (error) {
+    failures.push(`[DesignBoundary] baseline ref unavailable: ${error.message}`);
 }
 
 try {
@@ -417,8 +442,8 @@ try {
     for (const file of classicDifferences) {
         failures.push(`${file}: excluded Next surface must remain byte-identical to ${upstreamRef}`);
     }
-} catch {
-    console.warn(`[DesignBoundary] Upstream ref ${upstreamRef} is unavailable; skipped Classic parity audit.`);
+} catch (error) {
+    failures.push(`[DesignBoundary] upstream ref unavailable: ${error.message}`);
 }
 
 if (failures.length) {

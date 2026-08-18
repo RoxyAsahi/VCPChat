@@ -5,8 +5,11 @@ const { LifecycleScope } = require('../modules/ui-system/lifecycle-scope.js');
 const { SurfaceController } = require('../modules/ui-system/surface-controller.js');
 
 function fixture(runtimeState = 'ready') {
-    const dom = new JSDOM('<!doctype html><html data-ui-mode="next"><body><button id="origin">open</button><div id="host"></div></body></html>');
+    const dom = new JSDOM('<!doctype html><html data-vcp-ui-surface="main-chat"><body><button id="origin">open</button><div id="host"></div></body></html>');
     dom.window.VCPLifecycle = { LifecycleScope };
+    dom.window.VCPSurfacePolicy = {
+        isMainChat: documentObject => documentObject.documentElement.dataset.vcpUiSurface === 'main-chat',
+    };
     dom.window.__kernelScope = { mounted: 0, released: 0 };
     dom.window.VCPWebAwesome = {
         getRuntimeState: () => ({ state: runtimeState }),

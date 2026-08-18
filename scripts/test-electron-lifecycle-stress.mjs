@@ -111,7 +111,7 @@ async function assertMainSurface(page, browser, label) {
         };
         return {
             ready: document.documentElement.dataset.vcpRendererReady,
-            mode: document.documentElement.dataset.uiMode,
+            surface: document.documentElement.dataset.vcpUiSurface,
             mounted: window.topTabManager?.isMounted?.() === true,
             container: visible('.container'),
             panel: visible('#nextUiMainPanel'),
@@ -128,7 +128,7 @@ async function assertMainSurface(page, browser, label) {
         };
     });
     assert.equal(state.ready, 'true', `${label}: renderer readiness marker disappeared: ${JSON.stringify(state)}`);
-    assert.equal(state.mode, 'next', `${label}: UI mode changed unexpectedly: ${JSON.stringify(state)}`);
+    assert.equal(state.surface, 'main-chat', `${label}: main UI surface marker changed unexpectedly: ${JSON.stringify(state)}`);
     assert.equal(state.mounted, true, `${label}: Next tab host was unmounted: ${JSON.stringify(state)}`);
     assert.equal(state.container, true, `${label}: application container disappeared: ${JSON.stringify(state)}`);
     assert.equal(state.panel, true, `${label}: main panel disappeared: ${JSON.stringify(state)}`);
@@ -139,43 +139,6 @@ async function assertMainSurface(page, browser, label) {
     assert.equal(state.internalViews, 0, `${label}: closed Next app views remained connected: ${JSON.stringify(state)}`);
     assert.equal(state.globalSettingsActive, false, `${label}: settings modal remained active: ${JSON.stringify(state)}`);
     assert.deepEqual(state.transientLifecycleScopes, [], `${label}: transient Next lifecycle owners survived close: ${JSON.stringify(state)}`);
-    assert.ok(state.bodyText > 20, `${label}: renderer became visually empty: ${JSON.stringify(state)}`);
-}
-
-async function assertClassicSurface(page, browser, label) {
-    assert.equal(page.isClosed(), false, `${label}: main renderer was closed`);
-    const mainPages = (await browser.pages()).filter(candidate => !candidate.isClosed() && candidate.url().includes('main.html'));
-    assert.equal(mainPages.length, 1, `${label}: expected exactly one main renderer, found ${mainPages.length}`);
-    const state = await page.evaluate(() => {
-        const visible = selector => {
-            const element = document.querySelector(selector);
-            if (!element?.isConnected) return false;
-            const rect = element.getBoundingClientRect();
-            const style = getComputedStyle(element);
-            return rect.width > 40 && rect.height > 30 && style.display !== 'none' && style.visibility !== 'hidden';
-        };
-        return {
-            mode: document.documentElement.dataset.uiMode,
-            mounted: window.topTabManager?.isMounted?.() === true,
-            container: visible('.container'),
-            chat: visible('.main-content'),
-            classicHeader: visible('.chat-header'),
-            nextTopbar: visible('#nextUiTopbar'),
-            dynamicTabs: document.querySelectorAll('#nextUiDynamicTabs > .next-ui-tab').length,
-            dynamicLifecycleScopes: (window.VCPLifecycle?.diagnostics?.snapshot?.() || [])
-                .filter(scope => /next:(?:tab-host|main-ui-runtime|settings-presentation|ask-nova-modal|appearance-studio-open|create-item-modal|internal-app|embedded-app)(?=$|:)/.test(scope.label))
-                .map(scope => scope.label),
-            bodyText: document.body?.innerText?.length || 0,
-        };
-    });
-    assert.equal(state.mode, 'classic', `${label}: Classic mode did not apply: ${JSON.stringify(state)}`);
-    assert.equal(state.mounted, false, `${label}: Next tab host remained mounted: ${JSON.stringify(state)}`);
-    assert.equal(state.container, true, `${label}: application container disappeared: ${JSON.stringify(state)}`);
-    assert.equal(state.chat, true, `${label}: Classic chat surface disappeared: ${JSON.stringify(state)}`);
-    assert.equal(state.classicHeader, true, `${label}: Classic chat header disappeared: ${JSON.stringify(state)}`);
-    assert.equal(state.nextTopbar, false, `${label}: Next top bar remained visible: ${JSON.stringify(state)}`);
-    assert.equal(state.dynamicTabs, 0, `${label}: Next tabs survived teardown: ${JSON.stringify(state)}`);
-    assert.deepEqual(state.dynamicLifecycleScopes, [], `${label}: dynamic Next lifecycle owners survived Classic teardown: ${JSON.stringify(state)}`);
     assert.ok(state.bodyText > 20, `${label}: renderer became visually empty: ${JSON.stringify(state)}`);
 }
 
@@ -742,7 +705,7 @@ async function cycleRendererCrash(page, browser, app, label) {
     return recoveredPage;
 }
 
-async function assertCanonicalModeCompatibility(page, browser, label) {
+async function assertCanonicalHostStable(page, browser, label) {
     const before = await page.evaluate(() => {
         window.__vcpCanonicalHost = document.getElementById('nextUiInternalAppHost');
         return {
@@ -750,7 +713,7 @@ async function assertCanonicalModeCompatibility(page, browser, label) {
             tabs: document.querySelectorAll('#nextUiDynamicTabs > .next-ui-tab').length,
         };
     });
-    await page.waitForFunction(() => document.documentElement.dataset.uiMode === 'next'
+    await page.waitForFunction(() => document.documentElement.dataset.vcpUiSurface === 'main-chat'
         && window.topTabManager?.isMounted?.() === true, { timeout: timeoutMs });
     const after = await page.evaluate(() => {
         const result = {
@@ -768,7 +731,6 @@ async function assertCanonicalModeCompatibility(page, browser, label) {
 
 const appData = await fs.mkdtemp(path.join(os.tmpdir(), 'vcpchat-lifecycle-stress-'));
 await fs.writeFile(path.join(appData, 'settings.json'), JSON.stringify({
-    uiMode: 'next',
     enableDistributedServer: false,
     vcpServerUrl: 'http://127.0.0.1:1',
     vcpApiKey: 'lifecycle-stress-key',
@@ -846,8 +808,8 @@ try {
         await collectDetachedDiagnostic(cdp, `${label}: embedded overlay`, page);
         if (cycle % 4 === 0) await cycleDetachedApp(page, browser, noteApp, label);
         await collectDetachedDiagnostic(cdp, `${label}: detached app`, page);
-        await assertCanonicalModeCompatibility(page, browser, label);
-        await collectDetachedDiagnostic(cdp, `${label}: mode round-trip`, page);
+        await assertCanonicalHostStable(page, browser, label);
+        await collectDetachedDiagnostic(cdp, `${label}: canonical host stability`, page);
         await assertMainSurface(page, browser, label);
     };
 

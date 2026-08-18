@@ -32,6 +32,7 @@ const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, mil
 const screenshotsDir = path.join(root, 'screenshots');
 const darkShot = path.join(screenshotsDir, 'settings-wa-dark-700x500.png');
 const lightShot = path.join(screenshotsDir, 'settings-wa-light-700x500.png');
+const windowResizeDiagnostics = [];
 
 async function freePort() {
     const server = net.createServer();
@@ -56,7 +57,6 @@ function requestJson(url) {
 
 const appData = await fs.mkdtemp(path.join(os.tmpdir(), 'vcpchat-settings-wa-electron-'));
 await fs.writeFile(path.join(appData, 'settings.json'), JSON.stringify({
-    uiMode: 'next',
     enableDistributedServer: false,
     vcpServerUrl: 'http://127.0.0.1:1',
     vcpApiKey: 'smoke-test-key',
@@ -76,18 +76,34 @@ const child = spawn(electron, ['.', '--allow-multiple-instances', `--remote-debu
 child.stderr.on('data', (chunk) => { stderr.value = `${stderr.value}${chunk}`.slice(-12_000); });
 
 async function resizeWindow(page, browser, width, height) {
-    // Resize the OS window so a 700×500 screenshot covers the whole modal.
-    // Browser.* CDP commands require the browser-level target session.
+    // Prefer resizing the OS window when Electron exposes the Browser CDP
+    // domain. Some Electron versions do not expose Browser.getWindowForTarget;
+    // in that case the page viewport remains the authoritative, deterministic
+    // screenshot surface. Record the capability explicitly instead of
+    // silently treating a skipped resize as a successful OS-window resize.
+    let osWindowResized = false;
+    let resizeFailure = '';
     try {
         const browserTarget = browser.targets().find((target) => target.type() === 'browser');
-        const session = await browserTarget.createCDPSession();
-        const { windowId } = await session.send('Browser.getWindowForTarget', { targetId: page.target()._targetId });
-        await session.send('Browser.setWindowBounds', { windowId, bounds: { width, height } });
-        await session.detach();
+        if (browserTarget) {
+            const session = await browserTarget.createCDPSession();
+            const { windowId } = await session.send('Browser.getWindowForTarget', { targetId: page.target()._targetId });
+            await session.send('Browser.setWindowBounds', { windowId, bounds: { width, height } });
+            await session.detach();
+            osWindowResized = true;
+        }
     } catch (error) {
-        console.warn(`[test-settings-wa-electron] window resize skipped: ${error?.message}`);
+        resizeFailure = error?.message || String(error);
     }
     await page.setViewport({ width, height, deviceScaleFactor: 1 });
+    windowResizeDiagnostics.push({
+        width,
+        height,
+        osWindowResized,
+        viewportApplied: true,
+        ...(resizeFailure ? { reason: resizeFailure } : {}),
+    });
+    return { osWindowResized };
 }
 
 async function setTheme(page, theme) {
@@ -124,9 +140,12 @@ try {
     });
 
     await page.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout: timeoutMs });
-    await page.waitForFunction(() => document.documentElement.dataset.uiMode === 'next', { timeout: timeoutMs });
+    await page.waitForFunction(() => document.documentElement.dataset.vcpUiSurface === 'main-chat', { timeout: timeoutMs });
 
     // ---- 1. SettingsShell layout ----
+    await page.focus('#nextUiAccountSettingsBtn');
+    assert.equal(await page.evaluate(() => document.activeElement?.id || ''), 'nextUiAccountSettingsBtn',
+        'settings trigger could not receive focus before opening');
     await page.evaluate(() => window.uiHelperFunctions.openModal('globalSettingsModal'));
     await page.waitForFunction(() => document.getElementById('globalSettingsForm'), { timeout: timeoutMs });
     await page.waitForFunction(() => document.querySelector('#globalSettingsModal .vcp-ui-settings-shell'), { timeout: timeoutMs });
@@ -138,6 +157,10 @@ try {
         return {
             shell: Boolean(modal.querySelector('.vcp-ui-settings-shell')),
             navCount: navItems.length,
+            navRole: modal.querySelector('.vcp-ui-list')?.getAttribute('role'),
+            navLabel: modal.querySelector('.vcp-ui-list')?.getAttribute('aria-label'),
+            interactiveRole: navItems[0]?.getAttribute('role'),
+            currentCount: [...navItems].filter(item => item.getAttribute('aria-current') === 'page').length,
             searchInNav: Boolean(modal.querySelector('.global-settings-nav .vcp-ui-settings-search')),
             searchEnhanced: search?.classList.contains('vcp-ui-native-input') || false,
             footerEnhanced: footer?.classList.contains('vcp-ui-settings-action-bar') || false,
@@ -148,6 +171,10 @@ try {
     });
     assert.ok(shellState.shell, 'SettingsShell class applied');
     assert.equal(shellState.navCount, 8, '8 categories in VCPUI List nav');
+    assert.equal(shellState.navRole, 'navigation', 'settings categories expose navigation semantics');
+    assert.equal(shellState.navLabel, '全局设置分类', 'settings navigation has an accessible label');
+    assert.equal(shellState.interactiveRole, null, 'settings buttons retain native button semantics');
+    assert.equal(shellState.currentCount, 1, 'exactly one settings category is current');
     assert.ok(shellState.searchInNav, 'search field pinned in the left rail');
     assert.ok(shellState.searchEnhanced, 'search input is VCPUI-enhanced');
     assert.ok(shellState.footerEnhanced, 'save bar is SettingsActionBar-enhanced');
@@ -160,6 +187,19 @@ try {
         return Boolean(btn?.querySelector('[data-vcp-icon]') || btn?.querySelector('span.vcp-ui-icon'));
     }, { timeout: timeoutMs });
     console.log('  [PASS] 1. SettingsShell layout (nav list, search, save bar, sections, icons)');
+    await page.evaluate(() => window.uiHelperFunctions.closeModal('globalSettingsModal'));
+    await page.waitForFunction(() => !document.getElementById('globalSettingsModal')?.classList.contains('active'), { timeout: timeoutMs });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const settingsFocusAfterClose = await page.evaluate(() => ({
+        active: document.activeElement?.id || '',
+        trigger: Boolean(document.getElementById('nextUiSettingsBtn')),
+        opener: document.getElementById('globalSettingsModal')?.__vcpNextOpenerId || '',
+    }));
+    assert.equal(settingsFocusAfterClose.active, 'nextUiAccountSettingsBtn',
+        `global settings close must restore focus to the originating settings button: ${JSON.stringify(settingsFocusAfterClose)}`);
+    await page.focus('#nextUiAccountSettingsBtn');
+    await page.evaluate(() => window.uiHelperFunctions.openModal('globalSettingsModal'));
+    await page.waitForFunction(() => document.querySelector('#globalSettingsModal .vcp-ui-settings-shell'), { timeout: timeoutMs });
 
     // ---- 2. Category switching keeps unsaved values ----
     await page.evaluate(() => {
@@ -167,12 +207,23 @@ try {
         input.value = '未保存测试';
         input.dispatchEvent(new Event('input', { bubbles: true }));
     });
-    await page.evaluate(() => document.querySelectorAll('#globalSettingsModal .vcp-ui-list-item')[1].click());
+    await page.evaluate(() => {
+        const item = document.querySelectorAll('#globalSettingsModal .vcp-ui-list-item')[1];
+        item.click();
+    });
     await new Promise(resolve => setTimeout(resolve, 80));
     const switchState = await page.evaluate(() => ({
         active: document.querySelector('#globalSettingsModal .settings-section.active')?.id,
+        focused: document.activeElement?.dataset.itemKey,
+        current: document.querySelector('#globalSettingsModal .vcp-ui-list-item[aria-current="page"]')?.dataset.itemKey,
     }));
     assert.equal(switchState.active, 'section-server-connection', 'nav switched to server connection');
+    assert.equal(switchState.focused, 'server-connection', 'category activation restores focus to the selected item');
+    assert.equal(switchState.current, 'server-connection', 'category activation updates aria-current');
+    await page.evaluate(() => document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true })));
+    await new Promise(resolve => setTimeout(resolve, 20));
+    assert.equal(await page.evaluate(() => document.activeElement?.dataset.itemKey), 'user-identity',
+        'settings navigation supports keyboard traversal');
     await page.evaluate(() => document.querySelectorAll('#globalSettingsModal .vcp-ui-list-item')[0].click());
     await new Promise(resolve => setTimeout(resolve, 80));
     const backState = await page.evaluate(() => ({
@@ -273,7 +324,7 @@ try {
     // Reopen after a full reload: the form must be re-populated from settings.json.
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout: timeoutMs });
-    await page.waitForFunction(() => document.documentElement.dataset.uiMode === 'next', { timeout: timeoutMs });
+    await page.waitForFunction(() => document.documentElement.dataset.vcpUiSurface === 'main-chat', { timeout: timeoutMs });
     await page.evaluate(() => window.uiHelperFunctions.openModal('globalSettingsModal'));
     await page.waitForFunction(() => document.getElementById('globalSettingsForm'), { timeout: timeoutMs });
     await new Promise(resolve => setTimeout(resolve, 250));
@@ -287,13 +338,23 @@ try {
     assert.equal(restored.active, 'section-user-identity', 'reopened modal starts on the first category');
     console.log('  [PASS] 7. reopen after reload restores persisted values from settings.json');
 
-    // ---- 8. Classic teardown keeps next-mode surfaces clean ----
-    assert.equal(await page.evaluate(() => document.documentElement.dataset.uiMode), 'next');
-    await page.waitForFunction(() => {
+    // ---- 8. Canonical main-chat Surface survives reload ----
+    const canonicalSurface = await page.evaluate(() => {
         const modal = document.getElementById('globalSettingsModal');
-        return !modal?.querySelector('.vcp-ui-settings-shell') && !modal?.querySelector('.vcp-ui-settings-search');
-    }, { timeout: timeoutMs });
-    console.log('  [PASS] 8. switching to classic tears the SettingsShell down');
+        return {
+            surface: document.documentElement.dataset.vcpUiSurface,
+            shell: Boolean(modal?.querySelector('.vcp-ui-settings-shell')),
+            search: Boolean(modal?.querySelector('.vcp-ui-settings-search')),
+        };
+    });
+    assert.equal(canonicalSurface.surface, 'main-chat', `main window lost its canonical Surface: ${JSON.stringify(canonicalSurface)}`);
+    assert.equal(canonicalSurface.shell, true, `SettingsShell disappeared after reload: ${JSON.stringify(canonicalSurface)}`);
+    assert.equal(canonicalSurface.search, true, `Settings search disappeared after reload: ${JSON.stringify(canonicalSurface)}`);
+    console.log('  [PASS] 8. canonical main-chat SettingsShell remains mounted after reload');
+
+    if (windowResizeDiagnostics.some((entry) => !entry.osWindowResized)) {
+        console.warn(`[test-settings-wa-electron] OS window resize unavailable; viewport-only evidence: ${JSON.stringify(windowResizeDiagnostics)}`);
+    }
 
     console.log('\nSettings WA Electron gate passed (shell layout, nav/search, real save + reload restore, screenshots).');
 } catch (error) {
@@ -303,8 +364,15 @@ try {
     }
     process.exitCode = 1;
 } finally {
-    child.kill();
     browser?.disconnect();
-    await new Promise(resolve => setTimeout(resolve, 300));
-    child.kill('SIGKILL');
+    if (child.exitCode === null) child.kill();
+    await Promise.race([
+        new Promise(resolve => child.once('exit', resolve)),
+        sleep(2_000),
+    ]);
+    if (child.exitCode === null) child.kill('SIGKILL');
+    await Promise.race([
+        new Promise(resolve => child.once('exit', resolve)),
+        sleep(2_000),
+    ]);
 }

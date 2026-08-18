@@ -11,7 +11,7 @@ function deferred() {
 }
 
 function createFixture() {
-    const dom = new JSDOM(`<!doctype html><html data-ui-mode="next"><body>
+    const dom = new JSDOM(`<!doctype html><html data-vcp-ui-surface="main-chat"><body>
         <main class="main-content"><div class="chat-messages-container"><div id="chatMessages"></div></div>
             <div id="nextUiEmptyState" aria-hidden="true"></div>
         </main>
