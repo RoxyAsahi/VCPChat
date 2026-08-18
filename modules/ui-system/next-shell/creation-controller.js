@@ -54,19 +54,26 @@
 
         close() { this.activeModal?.close(null); }
 
-        async open() {
+        async open(opener = null) {
             if (this.opening) return;
             this.opening = true;
             try {
-                return await this.openInternal();
+                return await this.openInternal(opener);
             } finally {
                 this.opening = false;
             }
         }
 
-        async openInternal() {
+        async openInternal(opener = null) {
             if (!this.mounted) return;
             if (this.activeModal?.element?.isConnected) return void this.activeModal.focus();
+            // Capture the opener before any asynchronous Web Awesome load or
+            // native overlay shielding can move focus into another surface.
+            // The Modal provider uses this explicit owner for deterministic
+            // Escape/backdrop/failed-submit restoration.
+            const openerFocus = opener?.nodeType === 1
+                ? opener
+                : this.document.activeElement;
             const ui = this.getUi();
             const api = this.getApi();
             const commands = this.commands();
@@ -148,6 +155,11 @@
             await surface.mount(host, context => {
                 buildControls((name, options) => context.create(name, options));
             }, {
+                // Creation captures its opener before the asynchronous WA
+                // load. Keep that same owner through Surface disposal; using
+                // document.activeElement here can capture <body> after the
+                // async boundary and overwrite the correct modal restoration.
+                focusOrigin: openerFocus,
                 renderFallback: target => {
                     target.textContent = '创建界面暂时无法加载。';
                 },
@@ -188,10 +200,21 @@
                 if (cleaned) return;
                 cleaned = true;
                 if (this.activeModal === modal) this.activeModal = null;
+                // The launchpad/sidebar can be re-rendered while the modal is
+                // closing, so the original element reference may be detached.
+                // Resolve the stable trigger identity again before releasing
+                // the surface's DOM and focus ownership.
+                if (openerFocus?.isConnected) openerFocus.focus();
+                else if (openerFocus?.id) this.document.getElementById(openerFocus.id)?.focus?.();
                 void disposeDialog('create-modal-closed').catch(reason => console.error('[NextUI] Failed to dispose create dialog:', reason));
             };
             try {
-                modal = ui.create('Modal', { title: '创建助手或群组', size: 'sm', content: form, actions: [cancelButton, createButton], onClose: cleanup });
+                modal = ui.create('Modal', {
+                    title: '创建助手或群组', size: 'sm', content: form,
+                    actions: [cancelButton, createButton], onClose: cleanup,
+                    previousFocus: openerFocus,
+                    previousFocusId: openerFocus?.id || '',
+                });
             } catch (modalError) {
                 await disposeDialog('create-modal-failed');
                 throw modalError;

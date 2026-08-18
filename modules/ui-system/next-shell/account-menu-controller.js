@@ -22,12 +22,14 @@
             this.syncAppearance = options.syncAppearance || (() => {});
             this.setIcon = options.setIcon || null;
             this.subscribeTheme = options.subscribeTheme || null;
+            this.escapeDispatcher = options.escapeDispatcher || null;
             this.scope = null;
             this.abortController = null;
             this.observer = null;
             this.elements = null;
             this.mounted = false;
             this.themeSubscriptionDisposer = null;
+            this.escapeDisposer = null;
         }
 
         mount(scope = null) {
@@ -73,12 +75,24 @@
             listen(this.document, 'pointerdown', event => {
                 if (!elements.menu.hidden && !elements.dock.contains(event.target)) this.setOpen(false);
             });
-            listen(this.document, 'keydown', event => {
-                if (event.key !== 'Escape' || elements.menu.hidden) return;
-                event.preventDefault();
-                this.setOpen(false);
-                elements.trigger.focus();
-            });
+            if (this.escapeDispatcher) {
+                this.escapeDisposer = this.escapeDispatcher.register({
+                    priority: 40,
+                    isActive: () => !elements.menu.hidden,
+                    close: () => {
+                        this.setOpen(false);
+                        elements.trigger.focus();
+                        return true;
+                    },
+                });
+            } else {
+                listen(this.document, 'keydown', event => {
+                    if (event.key !== 'Escape' || elements.menu.hidden) return;
+                    event.preventDefault();
+                    this.setOpen(false);
+                    elements.trigger.focus();
+                });
+            }
             listen(this.document, 'next-ui-overlay-changed', event => {
                 if (event.detail?.active === true) this.setOpen(false);
             });
@@ -137,9 +151,11 @@
             this.abortController?.abort();
             this.observer?.disconnect();
             this.themeSubscriptionDisposer?.();
+            this.escapeDisposer?.();
             this.abortController = null;
             this.observer = null;
             this.themeSubscriptionDisposer = null;
+            this.escapeDisposer = null;
             this.elements = null;
             this.scope = null;
         }

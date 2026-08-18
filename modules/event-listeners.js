@@ -442,6 +442,11 @@ export function setupEventListeners(deps) {
         }
     });
     messageInput.addEventListener('keydown', (e) => {
+        // IME composition and higher-priority input surfaces (for example the
+        // note suggestion popup) own Enter while active.  This listener is
+        // shared by Classic and Next, so it must never turn a handled or
+        // composing key into a chat send.
+        if (e.defaultPrevented || e.isComposing || e.keyCode === 229) return;
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             chatManager.handleSendMessage();
@@ -518,10 +523,11 @@ export function setupEventListeners(deps) {
         const form = modal.querySelector('#globalSettingsForm');
         if (form && !form.dataset.globalSettingsSaveBound) {
             form.addEventListener('submit', (ev) => {
+                const operationId = ev.vcpSettingsOperationId || null;
                 Promise.resolve(handleSaveGlobalSettings(ev, deps)).catch((error) => {
                     console.error('[GlobalSettings] Unexpected save failure:', error);
                     form.dispatchEvent(new CustomEvent('vcp-settings-save-result', {
-                        detail: { success: false, error: error?.message || String(error) }
+                        detail: { success: false, error: error?.message || String(error), operationId: operationId || undefined }
                     }));
                     uiHelperFunctions.showToastNotification(`保存全局设置失败: ${error?.message || error}`, 'error');
                 });
@@ -1146,139 +1152,6 @@ export function setupEventListeners(deps) {
         } catch (error) {
             console.error('创建话题时出错:', error);
             uiHelperFunctions.showToastNotification(`创建话题时出错: ${error.message}`, 'error');
-        }
-    }
-
-    const nextUiNotificationMenuBtn = document.getElementById('nextUiNotificationMenuBtn');
-    const nextUiNotificationMenu = document.getElementById('nextUiNotificationMenu');
-    const nextUiNotificationForum = document.getElementById('nextUiNotificationForum');
-    const nextUiNotificationMemo = document.getElementById('nextUiNotificationMemo');
-    const nextUiNotificationFilterToggle = document.getElementById('nextUiNotificationFilterToggle');
-    const nextUiNotificationFilterState = document.getElementById('nextUiNotificationFilterState');
-    const nextUiNotificationClear = document.getElementById('nextUiNotificationClear');
-    if (
-        nextUiNotificationMenuBtn
-        && nextUiNotificationMenu
-        && nextUiNotificationForum
-        && nextUiNotificationMemo
-        && nextUiNotificationFilterToggle
-        && nextUiNotificationFilterState
-        && nextUiNotificationClear
-    ) {
-        const syncNotificationFilterState = (state = null) => {
-            const isActive = typeof state?.enabled === 'boolean' ? state.enabled : window.filterManager?.isFilterEnabled?.() === true;
-            nextUiNotificationFilterToggle.setAttribute('aria-checked', String(isActive));
-            nextUiNotificationFilterState.textContent = isActive ? '开启' : '关闭';
-        };
-
-        const closeNotificationMenu = ({ restoreFocus = false } = {}) => {
-            if (nextUiNotificationMenu.hidden) return;
-            nextUiNotificationMenu.hidden = true;
-            nextUiNotificationMenuBtn.setAttribute('aria-expanded', 'false');
-            if (restoreFocus) nextUiNotificationMenuBtn.focus();
-        };
-
-        const openNotificationMenu = () => {
-            syncNotificationFilterState();
-            nextUiNotificationMenu.hidden = false;
-            nextUiNotificationMenuBtn.setAttribute('aria-expanded', 'true');
-            nextUiNotificationForum.focus();
-        };
-
-        nextUiNotificationMenuBtn.addEventListener('click', () => {
-            if (nextUiNotificationMenu.hidden) {
-                openNotificationMenu();
-            } else {
-                closeNotificationMenu();
-            }
-        });
-
-        const runMenuAction = async (action, { restoreFocus = true } = {}) => {
-            try {
-                return await action?.();
-            } catch (error) {
-                console.warn('[Notifications] Menu action failed:', error);
-                uiHelperFunctions.showToastNotification(`通知操作失败：${error.message}`, 'error');
-                return { success: false, error: error.message };
-            } finally {
-                syncNotificationFilterState();
-                closeNotificationMenu({ restoreFocus });
-            }
-        };
-
-        nextUiNotificationForum.addEventListener('click', () => {
-            void runMenuAction(() => window.MainChatCommands?.openForum?.());
-        });
-        nextUiNotificationMemo.addEventListener('click', () => {
-            void runMenuAction(() => window.MainChatCommands?.openMemo?.());
-        });
-
-        nextUiNotificationFilterToggle.addEventListener('click', () => {
-            void runMenuAction(() => window.MainChatCommands?.toggleNotificationFilter?.());
-        });
-        nextUiNotificationFilterToggle.addEventListener('contextmenu', event => {
-            event.preventDefault();
-            void runMenuAction(() => window.MainChatCommands?.openNotificationFilterSettings?.(), {
-                restoreFocus: false
-            });
-        });
-
-        nextUiNotificationClear.addEventListener('click', () => {
-            void runMenuAction(() => window.MainChatCommands?.clearNotifications?.());
-        });
-
-        document.addEventListener('pointerdown', (event) => {
-            if (
-                !nextUiNotificationMenu.hidden
-                && !nextUiNotificationMenu.contains(event.target)
-                && !nextUiNotificationMenuBtn.contains(event.target)
-            ) {
-                closeNotificationMenu();
-            }
-        });
-
-        document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape' && !nextUiNotificationMenu.hidden) {
-                event.preventDefault();
-                closeNotificationMenu({ restoreFocus: true });
-            }
-        });
-
-        document.addEventListener('next-ui-overlay-changed', (event) => {
-            if (event.detail?.active === true) closeNotificationMenu();
-        });
-
-        nextUiNotificationMenu.addEventListener('keydown', (event) => {
-            if ((event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10'))
-                && document.activeElement === nextUiNotificationFilterToggle) {
-                event.preventDefault();
-                document.activeElement.dispatchEvent(new MouseEvent('contextmenu', {
-                    bubbles: true,
-                    cancelable: true,
-                    button: 2
-                }));
-                return;
-            }
-            if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
-
-            const menuItems = [...nextUiNotificationMenu.querySelectorAll('[role^="menuitem"]')];
-            const currentIndex = menuItems.indexOf(document.activeElement);
-            let nextIndex = currentIndex;
-
-            if (event.key === 'Home') nextIndex = 0;
-            if (event.key === 'End') nextIndex = menuItems.length - 1;
-            if (event.key === 'ArrowDown') nextIndex = (currentIndex + 1) % menuItems.length;
-            if (event.key === 'ArrowUp') nextIndex = (currentIndex - 1 + menuItems.length) % menuItems.length;
-
-            event.preventDefault();
-            menuItems[nextIndex]?.focus();
-        });
-
-        if (window.filterManager?.subscribe) {
-            window.filterManager.subscribe(syncNotificationFilterState);
-        } else {
-            window.addEventListener('notification-filter-changed', event => syncNotificationFilterState(event.detail));
-            syncNotificationFilterState();
         }
     }
 

@@ -34,35 +34,20 @@
     let revision = 0;
     let currentProfile = null;
     let stateChannel = null;
-    const PRESETS = Object.freeze({
-        classic: Object.freeze({
-            density: 'comfortable', radius: 'small', typography: 'system',
-            fontScale: 'normal', contentWidth: 'full', surface: 'translucent',
-            sidebarRowHeight: 46,
-            sidebarAvatarSize: 32,
-            customRadius: 10,
-            surfaceEffect: 'vibrancy',
-            ...MATERIAL_DEFAULTS,
-            shellRadius: 'tuned', composerRadius: 'tuned', sidebarRadius: 'tuned', cardRadius: 'tuned'
-        }),
-        next: Object.freeze({
-            density: 'comfortable', radius: 'medium', typography: 'humanist',
-            fontScale: 'normal', contentWidth: 'full', surface: 'translucent',
-            sidebarRowHeight: 46,
-            sidebarAvatarSize: 32,
-            customRadius: 10,
-            surfaceEffect: 'vibrancy',
-            ...MATERIAL_DEFAULTS,
-            shellRadius: 'tuned', composerRadius: 'tuned', sidebarRadius: 'tuned', cardRadius: 'tuned'
-        })
+    const DEFAULT_PROFILE = Object.freeze({
+        density: 'comfortable', radius: 'small', typography: 'system',
+        fontScale: 'normal', contentWidth: 'full', surface: 'translucent',
+        sidebarRowHeight: 46,
+        sidebarAvatarSize: 32,
+        customRadius: 10,
+        surfaceEffect: 'vibrancy',
+        ...MATERIAL_DEFAULTS,
+        shellRadius: 'tuned', composerRadius: 'tuned', sidebarRadius: 'tuned', cardRadius: 'tuned'
     });
+    const PRESETS = Object.freeze({ canonical: DEFAULT_PROFILE });
 
-    function normalizeUiMode(mode) {
-        return mode === 'next' ? 'next' : 'classic';
-    }
-
-    function normalize(profile, uiMode = 'classic') {
-        const preset = PRESETS[normalizeUiMode(uiMode)];
+    function normalize(profile) {
+        const preset = DEFAULT_PROFILE;
         const source = profile && typeof profile === 'object' ? profile : {};
         const options = Object.fromEntries(Object.entries(OPTION_SETS).map(([key, allowed]) => {
             const value = source[key];
@@ -145,7 +130,6 @@
 
     function mountMaterialOptics() {
         materialOpticsMountPending = false;
-        if (normalizeUiMode(document.documentElement.dataset.uiMode) !== 'next') return;
         if (!document.body || document.getElementById('vcpMaterialOptics')) return;
         const namespace = 'http://www.w3.org/2000/svg';
         const optics = document.createElementNS(namespace, 'svg');
@@ -180,18 +164,8 @@
         document.addEventListener('DOMContentLoaded', mountMaterialOptics, { once: true });
     }
 
-    function syncMaterialOptics(uiMode) {
-        if (normalizeUiMode(uiMode) === 'next') {
-            ensureMaterialOptics();
-            return;
-        }
-        materialOpticsMountPending = false;
-        document.getElementById('vcpMaterialOptics')?.remove();
-    }
-
     function apply(profile, options = {}) {
-        const uiMode = options.uiMode || document.documentElement.dataset.uiMode || 'classic';
-        const resolved = normalize(profile, uiMode);
+        const resolved = normalize(profile);
         const root = document.documentElement;
         root.dataset.vcpDensity = resolved.density;
         root.dataset.vcpRadius = resolved.radius;
@@ -200,7 +174,7 @@
         root.dataset.vcpContentWidth = resolved.contentWidth;
         root.dataset.vcpSurface = resolved.surface;
         root.dataset.vcpSurfaceEffect = resolved.surfaceEffect;
-        syncMaterialOptics(uiMode);
+        ensureMaterialOptics();
         applyMaterialVariables(resolved);
         applyLayoutVariables(resolved);
         root.dataset.vcpShellRadius = resolved.shellRadius;
@@ -233,20 +207,16 @@
         return revision;
     }
 
-    function readCache(uiMode = 'classic') {
+    function readCache() {
         try {
-            return normalize(JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'), uiMode);
+            return normalize(JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'));
         } catch {
-            return normalize(null, uiMode);
+            return normalize(null);
         }
     }
 
-    const bootMode = document.documentElement.dataset.uiMode || 'classic';
-    apply(readCache(bootMode), { uiMode: bootMode, source: 'boot-cache' });
+    apply(readCache(), { source: 'boot-cache' });
     stateChannel = window.VCPStateChannels?.create('appearance', Object.freeze({ profile: currentProfile, revision })) || null;
-    window.addEventListener('ui-mode-changed', event => {
-        syncMaterialOptics(event.detail?.mode || document.documentElement.dataset.uiMode);
-    });
     window.VCPAppearance = Object.freeze({
         PRESETS, MATERIAL_RANGES, LAYOUT_RANGES, normalize, apply, commit, getRevision, readCache,
         getCurrent: () => currentProfile,

@@ -26,7 +26,8 @@
 
         chooseKernel() {
             const runtime = this.window.VCPWebAwesome?.getRuntimeState?.();
-            return this.document.documentElement.dataset.uiMode === 'next' && runtime?.state === 'ready'
+            const mainSurface = this.window.VCPSurfacePolicy?.isMainChat?.(this.document) === true;
+            return mainSurface && runtime?.state === 'ready'
                 ? 'web-awesome'
                 : 'native';
         }

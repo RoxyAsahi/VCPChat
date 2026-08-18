@@ -8,7 +8,10 @@
     let mountGeneration = 0;
     let mountAbortController = null;
     let mountScope = null;
+    let feedbackHandle = null;
+    let feedbackHandleScoped = false;
     let accountMenuController = null;
+    let notificationMenuController = null;
     let sidebarResizeObserver = null;
     let creationController = null;
     let embeddedAppController = null;
@@ -16,7 +19,11 @@
     let pendingTabRestore = null;
     let teardownPromise = null;
     let overlayCoordinator = null;
+    let escapeDispatcher = null;
+    let settingsEscapeDisposer = null;
     let releaseWindowState = null;
+    let globalSettingsOpenerId = '';
+    let globalSettingsFocusGeneration = 0;
     let tabOperationId = 0;
     let tabOperationRevision = 0;
     const pendingTabOperations = new Map();
@@ -220,7 +227,7 @@
         const context = Object.freeze({
             close: () => closeView(viewId),
             activate: () => setView(viewId),
-            feedback: window.VCPUI?.feedback,
+            feedback: feedbackHandle || window.VCPUI?.feedback,
             scope: viewScope
         });
         let disposer = null;
@@ -378,7 +385,7 @@
             closeView(viewId, { skipEmbeddedClose: true });
         } catch (error) {
             view.tab.classList.remove('is-detaching');
-            window.VCPUI?.feedback?.toast?.(error.message || '标签拖出失败', { variant: 'error' });
+            (feedbackHandle || window.VCPUI?.feedback)?.toast?.(error.message || '标签拖出失败', { variant: 'error' });
         }
     }
 
@@ -499,7 +506,6 @@
         if (preservedSession) restoringTabs = true;
         [...appTabHost.views.keys()].forEach(viewId => closeView(viewId, { skipEmbeddedClose: true }));
         closeLaunchpad();
-        window.VCPUI?.feedback.cancelAll();
         document.getElementById('nextUiInternalAppHost')?.remove();
         setView('home');
         if (preservedSession) {
@@ -520,7 +526,9 @@
 
     function closeCreateDialog() { creationController?.close(); }
 
-    function openCreateDialog() { return creationController?.open(); }
+    function openCreateDialog(event) {
+        return creationController?.open(event?.currentTarget || null);
+    }
 
     function setupEmbeddedAppState() {
         embeddedAppController?.mount(mountScope, payload => {
@@ -560,17 +568,21 @@
         if (teardownPromise) return teardownPromise.then(() => mount());
         const finishMountTiming = window.VCPPerformance?.begin?.('next.mount');
         const OverlayCoordinator = window.VCPNextShell?.OverlayCoordinator;
+        const EscapeDispatcher = window.VCPNextShell?.EscapeDispatcher;
         const EmbeddedAppController = window.VCPNextShell?.EmbeddedAppController;
         const AppTabHost = window.VCPNextShell?.AppTabHost;
         const AssistantSearchController = window.VCPNextShell?.AssistantSearchController;
         const AccountMenuController = window.VCPNextShell?.AccountMenuController;
+        const NotificationMenuController = window.VCPNextShell?.NotificationMenuController;
         const LaunchpadController = window.VCPNextShell?.LaunchpadController;
         const CreationController = window.VCPNextShell?.CreationController;
         if (!OverlayCoordinator) throw new Error('OverlayCoordinator is unavailable.');
+        if (!EscapeDispatcher) throw new Error('EscapeDispatcher is unavailable.');
         if (!EmbeddedAppController) throw new Error('EmbeddedAppController is unavailable.');
         if (!AppTabHost) throw new Error('AppTabHost is unavailable.');
         if (!AssistantSearchController) throw new Error('AssistantSearchController is unavailable.');
         if (!AccountMenuController) throw new Error('AccountMenuController is unavailable.');
+        if (!NotificationMenuController) throw new Error('NotificationMenuController is unavailable.');
         if (!LaunchpadController) throw new Error('LaunchpadController is unavailable.');
         if (!CreationController) throw new Error('CreationController is unavailable.');
         mounted = true;
@@ -578,6 +590,81 @@
         const LifecycleScope = window.VCPLifecycle?.LifecycleScope;
         mountScope = LifecycleScope ? new LifecycleScope('next:tab-host') : null;
         mountAbortController = mountScope ? null : new AbortController();
+        escapeDispatcher = new EscapeDispatcher({ document });
+        escapeDispatcher.mount(mountScope);
+        settingsEscapeDisposer = escapeDispatcher.register({
+            priority: 20,
+            isActive: () => {
+                const modal = document.getElementById('globalSettingsModal');
+                if (modal?.classList.contains('active') !== true) return false;
+                // Transient surfaces layered above the settings modal own
+                // Escape themselves (VCPUI modal overlay, wa-dialog, legacy
+                // confirm dialog). Closing the modal underneath them would
+                // orphan the dialog and strand its pending promise.
+                if (document.querySelector('.vcp-ui-modal-overlay, wa-dialog[open], .confirm-dialog-overlay.visible')) {
+                    return false;
+                }
+                return true;
+            },
+            close: () => {
+                if (typeof window.uiHelperFunctions?.closeModal !== 'function') return false;
+                window.uiHelperFunctions.closeModal('globalSettingsModal');
+                return true;
+            },
+        });
+        if (mountScope) mountScope.own(settingsEscapeDisposer, 'next:settings-escape-owner', 'controller');
+        listen(document, 'modal-visibility-changed', event => {
+            if (event.detail?.modalId !== 'globalSettingsModal') return;
+            const modal = document.getElementById('globalSettingsModal');
+            if (event.detail.active === true) {
+                globalSettingsFocusGeneration += 1;
+                globalSettingsOpenerId = document.activeElement?.id || '';
+                return;
+            }
+            const generation = globalSettingsFocusGeneration;
+            queueMicrotask(() => {
+                if (generation !== globalSettingsFocusGeneration || modal?.classList.contains('active')) return;
+                if (globalSettingsOpenerId) document.getElementById(globalSettingsOpenerId)?.focus?.();
+                globalSettingsOpenerId = '';
+            });
+        });
+        listen(document, 'next-ui-overlay-activation-failed', event => {
+            if (!mounted) return;
+            const detail = event.detail || {};
+            const currentRoot = detail.modalId ? document.getElementById(detail.modalId) : null;
+            if (detail.root && currentRoot && detail.root !== currentRoot) return;
+            const modal = detail.root?.isConnected && detail.root?.classList?.contains('active')
+                ? detail.root
+                : (detail.root ? null : currentRoot);
+            if (!modal?.classList.contains('active')) return;
+            // A native WebContentsView that could not be hidden would paint
+            // above this renderer modal. Use the canonical close API so its
+            // focus restoration and other close hooks still run; the fallback
+            // keeps the failure path safe in minimal test/fixture documents.
+            if (detail.modalId && typeof window.uiHelperFunctions?.closeModal === 'function') {
+                window.uiHelperFunctions.closeModal(detail.modalId);
+            } else {
+                modal.classList.remove('active');
+                document.dispatchEvent(new CustomEvent('modal-visibility-changed', {
+                    detail: {
+                        modalId: detail.modalId,
+                        root: modal,
+                        generation: detail.generation,
+                        active: false,
+                        reason: 'overlay-activation-failed',
+                    },
+                }));
+            }
+            window.uiHelperFunctions?.showToastNotification?.(
+                '当前应用层无法暂时隐藏，请稍后重试。', 'warning'
+            );
+        });
+        const scopedFeedback = mountScope ? window.VCPUI?.feedback?.owner?.(mountScope) : null;
+        feedbackHandleScoped = Boolean(scopedFeedback);
+        // A missing LifecycleScope/feedback owner must never turn the global
+        // feedback singleton into a teardown target. It may still be used as
+        // a presentation fallback, but only a scoped owner is disposable here.
+        feedbackHandle = scopedFeedback || window.VCPUI?.feedback || null;
         releaseWindowState = window.MainChatCommands?.subscribeWindowState?.(syncWindowControl) || null;
         if (mountScope && releaseWindowState) mountScope.own(releaseWindowState, 'next:window-state', 'subscription');
         appTabHost = new AppTabHost({
@@ -593,6 +680,7 @@
         assistantSearchController = new AssistantSearchController({
             document,
             filter: value => window.uiHelperFunctions?.filterAgentList?.(value),
+            escapeDispatcher,
         });
         assistantSearchController.mount(mountScope);
         accountMenuController = new AccountMenuController({
@@ -607,8 +695,18 @@
             syncAppearance: () => window.VCPAppearanceStudio?.syncAccountMenuValue?.(),
             setIcon: (element, icon) => window.VCPIcons?.set?.(element, icon),
             subscribeTheme: (listener, options) => window.uiManager?.subscribeTheme?.(listener, options),
+            escapeDispatcher,
         });
         accountMenuController.mount(mountScope);
+        notificationMenuController = new NotificationMenuController({
+            window,
+            document,
+            commands: () => window.MainChatCommands,
+            filterManager: window.filterManager,
+            showToast: (message, variant) => window.uiHelperFunctions?.showToastNotification?.(message, variant),
+            escapeDispatcher,
+        });
+        notificationMenuController.mount(mountScope);
         launchpadController = new LaunchpadController({
             document,
             getExternalApps: () => window.trayManager?.getApps?.() || [],
@@ -636,9 +734,8 @@
             getDensity,
             acquireOverlay: owner => creationOverlayCoordinator.acquire(owner),
             releaseOverlay: owner => creationOverlayCoordinator.release(owner),
-            showUnavailable: message => window.uiHelperFunctions?.showToastNotification?.(
-                message || '创建功能尚未准备好，请稍后重试。',
-                'error'
+            showUnavailable: message => (feedbackHandle || window.VCPUI?.feedback)?.toast?.(
+                message || '创建功能尚未准备好，请稍后重试。', { variant: 'error' }
             ),
         });
         creationController.mount(mountScope);
@@ -686,8 +783,10 @@
             appTabHost?.dispose();
             assistantSearchController?.dispose();
             accountMenuController?.dispose();
+            notificationMenuController?.dispose();
             launchpadController?.dispose();
             creationController?.dispose();
+            escapeDispatcher?.dispose();
         }
         pendingTabRestore = null;
         restoringTabs = false;
@@ -697,16 +796,31 @@
         coordinatorToDispose?.dispose();
         const scopeToDispose = mountScope;
         mountScope = null;
-        const pending = Promise.allSettled([
-            closeAllInternalApps({ preserveSession: true }),
-            scopeToDispose?.dispose('leave-next') || Promise.resolve(),
-        ]).then(results => {
-            results.forEach(result => {
-                if (result.status === 'rejected') {
-                    console.error('[NextUI] Teardown resource failed; mode transition will continue:', result.reason);
-                }
-            });
-        });
+        escapeDispatcher = null;
+        settingsEscapeDisposer = null;
+        notificationMenuController = null;
+        const pending = (async () => {
+            // Native WebContentsViews live above renderer feedback. Quiesce
+            // and close those views before disposing the scoped feedback
+            // owner through the lifecycle tree, so a late native paint cannot
+            // race a half-torn-down modal/toast surface.
+            try {
+                await closeAllInternalApps({ preserveSession: true });
+            } catch (error) {
+                console.error('[NextUI] Teardown resource failed; mode transition will continue:', error);
+            }
+            try {
+                await scopeToDispose?.dispose('leave-next');
+            } catch (error) {
+                console.error('[NextUI] Teardown resource failed; mode transition will continue:', error);
+            }
+            // Keep the feedback reference alive until both closeAllInternalApps
+            // and the lifecycle tree have completed. Clearing it before then
+            // would make the scoped owner unreachable and silently skip its
+            // disposal. The global fallback is never a teardown target.
+            feedbackHandle = null;
+            feedbackHandleScoped = false;
+        })();
         const wrapped = pending.finally(() => {
             if (teardownPromise === wrapped) teardownPromise = null;
         });

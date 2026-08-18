@@ -5,7 +5,6 @@
     const moduleScope = LifecycleScope ? new LifecycleScope('next:appearance-studio-controller') : null;
 
     const DEFAULT_HOME_TAGLINE = '语义级打穿 AI、UI/UX、APP 与人类想象力的边界';
-    const CANONICAL_UI_MODE = 'next';
 
     const MATERIAL_FIELDS = Object.freeze([
         'surfaceOpacity',
@@ -308,7 +307,7 @@
             ? settings.currentThemeMode
             : readEffectiveTheme();
         return {
-            profile: window.VCPAppearance?.normalize(settings.appearanceProfile, CANONICAL_UI_MODE)
+            profile: window.VCPAppearance?.normalize(settings.appearanceProfile)
                 || clone(PRESETS.balanced.profile),
             presentation: window.normalizeChatPresentationMode?.(settings.chatPresentationMode) || 'bubble',
             messageWidth: settings.enableWideChatLayout === true ? 'wide' : 'normal',
@@ -328,7 +327,7 @@
             ? source.themeFileName
             : (typeof base.themeFileName === 'string' ? base.themeFileName : null);
         return {
-            profile: window.VCPAppearance?.normalize(source.profile || base.profile, CANONICAL_UI_MODE)
+            profile: window.VCPAppearance?.normalize(source.profile || base.profile)
                 || clone(base.profile),
             presentation: window.normalizeChatPresentationMode?.(source.presentation || base.presentation)
                 || base.presentation,
@@ -1003,7 +1002,6 @@
         const generation = ++previewGeneration;
         if (generation !== previewGeneration || !draft) return;
         window.VCPAppearance?.apply(draft.profile, {
-            uiMode: CANONICAL_UI_MODE,
             cache: false,
             source: 'appearance-studio-preview'
         });
@@ -1032,7 +1030,6 @@
         if ((window.VCPAppearance?.getRevision?.() || 0) !== snapshotRevision) return;
         removeThemePreview();
         window.VCPAppearance?.apply(snapshot.profile, {
-            uiMode: CANONICAL_UI_MODE,
             cache: false,
             source: 'appearance-studio-rollback'
         });
@@ -1127,7 +1124,6 @@
             // projections have succeeded. Otherwise rollback mistakes our
             // own partial commit for a newer external settings revision.
             window.VCPAppearance?.commit(nextState.profile, {
-                uiMode: CANONICAL_UI_MODE,
                 source: 'appearance-studio-save'
             });
             if (nextState.themeMode === 'system') {

@@ -1578,7 +1578,7 @@ async function loadAndApplyGlobalSettings() {
         window.globalSettings = globalSettings;
         globalSettings.appearanceProfile = window.VCPAppearance?.commit(
             globalSettings.appearanceProfile,
-            { uiMode: 'next', source: 'settings-load' }
+            { source: 'settings-load' }
         ) || globalSettings.appearanceProfile;
         window.dispatchEvent(new CustomEvent('global-settings-updated', {
             detail: { settings: globalSettings, source: 'settings-load' }
@@ -2231,7 +2231,7 @@ async function syncGlobalSettingsToUI(session = captureSettingsSurfaceSession())
     safeCheck('showHomeVisualBrand', globalSettings.showHomeVisualBrand !== false);
     safeCheck('showHomeVisualTagline', globalSettings.showHomeVisualTagline !== false);
     safeSet('homeVisualTagline', globalSettings.homeVisualTagline || '语义级打穿 AI、UI/UX、APP 与人类想象力的边界');
-    const appearance = window.VCPAppearance?.normalize(globalSettings.appearanceProfile, 'next');
+    const appearance = window.VCPAppearance?.normalize(globalSettings.appearanceProfile);
     safeSet('appearanceDensity', appearance?.density || 'comfortable');
     safeSet('appearanceRadius', appearance?.radius || 'small');
     safeSet('appearanceTypography', appearance?.typography || 'system');

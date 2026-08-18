@@ -17,6 +17,8 @@
             this.abortController = null;
             this.elements = null;
             this.mounted = false;
+            this.escapeDispatcher = options.escapeDispatcher || null;
+            this.escapeDisposer = null;
         }
 
         mount(scope = null) {
@@ -38,12 +40,23 @@
                 : target.addEventListener(type, handler, { signal: this.abortController.signal });
             listen(trigger, 'click', () => this.setOpen(true, false));
             listen(close, 'click', () => this.setOpen(false));
-            listen(input, 'keydown', event => {
-                if (event.key !== 'Escape') return;
-                event.preventDefault();
-                event.stopPropagation();
-                this.setOpen(false);
-            });
+            if (this.escapeDispatcher) {
+                this.escapeDisposer = this.escapeDispatcher.register({
+                    priority: 30,
+                    isActive: () => header.classList.contains('is-searching'),
+                    close: () => {
+                        this.setOpen(false);
+                        return true;
+                    },
+                });
+            } else {
+                listen(input, 'keydown', event => {
+                    if (event.key !== 'Escape') return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.setOpen(false);
+                });
+            }
             this.document.querySelectorAll('.sidebar-tab-button').forEach(button => {
                 listen(button, 'click', () => {
                     if (button.dataset.tab !== 'agents') this.setOpen(false);
@@ -73,7 +86,9 @@
             const { header, trigger, input } = this.elements;
             this.mounted = false;
             this.abortController?.abort();
+            this.escapeDisposer?.();
             this.abortController = null;
+            this.escapeDisposer = null;
             header.classList.remove('is-searching');
             trigger.setAttribute('aria-expanded', 'false');
             input.value = '';
