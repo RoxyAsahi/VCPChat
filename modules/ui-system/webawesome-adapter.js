@@ -9,12 +9,12 @@
 //   1. `loadComponents(tags)` dynamically imports the vendored self-contained
 //      generated dist-cdn closure (vendor/webawesome-runtime) — never at module-eval time.
 //   2. `mount(scopeRoot)` applies the VCP token set to the scope and starts a
-//      ref-counted theme stylesheet. Classic mode and non-scoped roots no-op.
+//      ref-counted theme stylesheet. Non-main-chat documents and non-scoped roots no-op.
 //   3. `create(tag, attrs, children)` builds an element and awaits `updateComplete`
 //      through `awaitUpdate()` where the caller needs post-render layout.
 //
-// All Web Awesome component registrations happen lazily on first use, gated by
-// html[data-ui-mode="next"].
+// All Web Awesome component registrations happen lazily on first use and are
+// gated by the canonical main-chat Surface policy.
 
 import { WEB_AWESOME_COMPONENTS, WEB_AWESOME_LOCALE, WEB_AWESOME_SURFACE_MANIFESTS } from './webawesome-runtime-manifest.js';
 
@@ -46,13 +46,23 @@ let runtimePromise = null;
 let runtimeError = null;
 let translationPromise = null;
 
-function isNextUi() {
-    return document.documentElement.dataset.uiMode === 'next';
+// Internal deterministic seam for contract tests. It is intentionally not
+// part of the public VCPWebAwesome facade; production has no hook installed
+// and always uses native dynamic import. This lets tests model a partial
+// component batch where one module registers before a sibling import fails.
+function importRuntimeModule(url, tag) {
+    const hook = globalThis.__VCPUI_TEST_IMPORT__;
+    if (typeof hook === 'function') return hook(url, tag);
+    return import(url);
+}
+
+function isMainChatSurface() {
+    return window.VCPSurfacePolicy?.isMainChat?.() === true;
 }
 
 async function loadComponents(tags) {
-    if (!isNextUi()) {
-        throw new Error('WebAwesomeAdapter: components require html[data-ui-mode="next"]');
+    if (!isMainChatSurface()) {
+        throw new Error('WebAwesomeAdapter: components require the canonical main-chat surface');
     }
     const requested = [...new Set((tags || CORE_COMPONENTS).map(tag => String(tag).toLowerCase()))];
     const unsupported = requested.filter(tag => !CORE_COMPONENTS.includes(tag));
@@ -74,10 +84,10 @@ async function loadComponents(tags) {
                 const batch = [...pending];
                 pending.clear();
                 try {
-                    translationPromise ||= import(ZH_CN_TRANSLATION_URL);
+                    translationPromise ||= importRuntimeModule(ZH_CN_TRANSLATION_URL, '__locale__');
                     const modules = await Promise.all([
                         translationPromise,
-                        ...batch.map(tag => import(`${VENDOR_COMPONENT_BASE}${tag}/${tag}.js`)),
+                        ...batch.map(tag => importRuntimeModule(`${VENDOR_COMPONENT_BASE}${tag}/${tag}.js`, tag)),
                     ]);
                     modules.slice(1).forEach((module, index) => loaded.set(batch[index], module));
                     runtimeState = 'ready';
@@ -205,7 +215,7 @@ async function awaitUpdate(element) {
 // specific scope root. Only runs in next UI mode; the actual mapping lives in
 // styles/ui-system/webawesome-adapter.css (kept as the single visual authority).
 function applyTokens(scopeRoot) {
-    if (!isNextUi() || !scopeRoot) return () => {};
+    if (!isMainChatSurface() || !scopeRoot) return () => {};
     const hadLightClass = scopeRoot.classList.contains('wa-light');
     const hadDarkClass = scopeRoot.classList.contains('wa-dark');
     const syncTheme = () => {
@@ -257,20 +267,17 @@ function destroy() {
     ownedThemeNodes.clear();
 }
 
+// Product-facing facade: only capabilities with a real production consumer
+// or a stable runtime-diagnostics role are exposed globally. Adapter helpers
+// stay module-private/default-exported for implementation contract tests;
+// surfaces must own teardown through the release returned by mountScope().
 window.VCPWebAwesome = Object.freeze({
     loadComponents,
     create,
-    on,
     isDefined,
     isLoaded,
     getRuntimeState,
-    translateEvent,
     mountScope,
-    awaitUpdate,
-    applyTokens,
-    registerTheme,
-    destroy,
-    isNextUi,
     surfaceManifests: WEB_AWESOME_SURFACE_MANIFESTS
 });
 
@@ -289,6 +296,6 @@ export default {
     applyTokens,
     registerTheme,
     destroy,
-    isNextUi,
+    isMainChatSurface,
     surfaceManifests: WEB_AWESOME_SURFACE_MANIFESTS
 };

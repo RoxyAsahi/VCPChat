@@ -456,7 +456,7 @@ function mountShowcase(container, context = {}) {
     }
     updateThemeStatus();
     const observer = new MutationObserver(updateThemeStatus);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style', 'data-ui-mode'] });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style'] });
     observer.observe(document.body, { attributes: true, attributeFilter: ['class', 'style'] });
 
     on(search, 'input', () => {

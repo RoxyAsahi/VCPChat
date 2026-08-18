@@ -137,3 +137,30 @@ test('a source setter failure cannot leave proxy synchronization locked', async 
     assert.equal(wa.value, 'b', 'syncing lock is released after a failed source write');
     controller.destroy();
 });
+
+test('programmatic native Select writes refresh the visible proxy', async () => {
+    const dom = new JSDOM('<!doctype html><div><select><option value="a">A</option><option value="b">B</option></select></div>');
+    const { document } = dom.window;
+    const source = document.querySelector('select');
+    const wa = document.createElement('wa-select');
+    wa.value = 'a';
+    const controller = mountWebAwesomeSelectProxy({
+        element: source, wa, providerDecision: Object.freeze({ provider: 'webawesome-proxy' }),
+        makeController: createController, attachControlApi() {}, waSize() {}, waFocus: c => c,
+        rememberController() {}, forgetController() {},
+    });
+    await Promise.resolve();
+    source.value = 'b';
+    await Promise.resolve();
+    assert.equal(wa.value, 'b');
+    source.options[0].selected = true;
+    await Promise.resolve();
+    assert.equal(wa.value, 'a');
+    controller.destroy();
+});
+
+test('multiple Selects remain native rather than collapsing to one proxy value', () => {
+    const dom = new JSDOM('<!doctype html><select multiple><option value="a">A</option><option value="b">B</option></select>');
+    const source = dom.window.document.querySelector('select');
+    assert.equal(source.multiple, true);
+});

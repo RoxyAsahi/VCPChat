@@ -49,7 +49,7 @@ const mime = new Map([
 ]);
 
 const html = `<!doctype html>
-<html data-ui-mode="next">
+<html data-vcp-ui-surface="main-chat">
 <head><meta charset="utf-8"><link rel="stylesheet" href="/styles/ui-system/components.css"><style>body{padding:40px}wa-select{width:320px}</style></head>
 <body class="vcp-ui-scope">
 <script type="module">
@@ -91,6 +91,16 @@ const customizable = document.createElement('select');
 customizable.add(new Option('Customizable Native', 'customizable'));
 document.body.append(customizable);
 window.customizableController = VCPUI.enhance('Select', customizable, { provider: 'customizable-native' });
+window.ownedController = VCPUI.create('Select', {
+    options: [{ value: 'first', label: '第一项' }, { value: 'second', label: '第二项' }],
+    value: 'first',
+});
+window.ownedController.element.setAttribute('aria-label', 'Owned Select');
+window.ownedInputs = 0;
+window.ownedChanges = 0;
+window.ownedController.element.addEventListener('input', () => { window.ownedInputs += 1; });
+window.ownedController.element.addEventListener('change', () => { window.ownedChanges += 1; });
+document.body.append(window.ownedController.element);
 await customElements.whenDefined('wa-select');
 await Promise.all([...document.querySelectorAll('wa-select')].map(element => element.updateComplete));
 window.selectTestReady = true;
@@ -164,6 +174,10 @@ try {
     await page.waitForFunction(() => document.querySelector('wa-select')?.open === true);
     await page.click('wa-option[value="always-approve"]');
     await page.waitForFunction(() => document.querySelector('wa-select')?.open === false);
+    await page.click('wa-select[aria-label="Owned Select"]');
+    await page.waitForFunction(() => document.querySelector('wa-select[aria-label="Owned Select"]')?.open === true);
+    await page.click('wa-select[aria-label="Owned Select"] wa-option[value="second"]');
+    await page.waitForFunction(() => document.querySelector('wa-select[aria-label="Owned Select"]')?.open === false);
     await new Promise(resolve => setTimeout(resolve, 100));
 
     const state = await page.evaluate(() => ({
@@ -185,6 +199,9 @@ try {
         devicePixelRatio: window.devicePixelRatio,
         viewport: { width: window.innerWidth, height: window.innerHeight },
         runtimeState: window.VCPWebAwesome.getRuntimeState(),
+        ownedValue: window.ownedController.getValue(),
+        ownedInputs: window.ownedInputs,
+        ownedChanges: window.ownedChanges,
         sourceOwnProperties: ['value', 'selectedIndex', 'add', 'remove', 'focus']
             .filter(property => Object.hasOwn(window.selectController.nativeElement, property)),
     }));
@@ -192,6 +209,17 @@ try {
     assert.equal(state.proxyValue, 'always-approve');
     assert.equal(state.nativeInputs, 1);
     assert.equal(state.nativeChanges, 1);
+    assert.equal(state.ownedValue, 'second');
+    assert.equal(state.ownedInputs, 1, 'owned WA Select must emit one input event for a user choice');
+    assert.equal(state.ownedChanges, 1, 'owned WA Select must emit one change event for a user choice');
+    await page.evaluate(() => window.ownedController.update({ size: 'sm' }));
+    const ownedAfterUpdate = await page.evaluate(() => ({
+        value: window.ownedController.getValue(),
+        inputs: window.ownedInputs,
+        changes: window.ownedChanges,
+    }));
+    assert.deepEqual(ownedAfterUpdate, { value: 'second', inputs: 1, changes: 1 },
+        'owned WA Select updates must preserve the user value without synthesizing events');
     assert.equal(state.provider, 'webawesome-proxy');
     assert.equal(state.largeProvider, 'webawesome-proxy');
     assert.equal(state.largeOptions, 250);
@@ -230,7 +258,7 @@ try {
         remainingLargeProxy: 0,
         customizableClassRestored: true,
     });
-    console.log(JSON.stringify({
+    const evidence = {
         selectProviderEvidence: {
             platform: process.platform,
             arch: process.arch,
@@ -247,7 +275,16 @@ try {
                 explicitCustomizableNative: state.customizableProvider,
             },
         },
-    }, null, 2));
+    };
+    console.log(JSON.stringify(evidence, null, 2));
+    if (process.env.VCPCHAT_SELECT_EVIDENCE_OUT) {
+        await fs.mkdir(path.dirname(path.resolve(process.env.VCPCHAT_SELECT_EVIDENCE_OUT)), { recursive: true });
+        await fs.writeFile(
+            path.resolve(process.env.VCPCHAT_SELECT_EVIDENCE_OUT),
+            `${JSON.stringify(evidence, null, 2)}\n`,
+            'utf8',
+        );
+    }
     console.log(`VCPUI Select providers passed in Electron (customizable native: ${state.capability.supported}).`);
 } finally {
     browser?.disconnect();

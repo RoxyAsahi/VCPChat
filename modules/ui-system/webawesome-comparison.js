@@ -8,9 +8,8 @@ import { WEB_AWESOME_SURFACE_MANIFESTS } from './webawesome-runtime-manifest.js'
 //
 // The components are NOT imported at module-eval time. Registering them is a
 // side effect (customElements.define + Lit engine init), so it only happens
-// when the showcase actually mounts the comparison section, and only in
-// html[data-ui-mode="next"]. Classic mode and normal app boot never fetch a
-// byte of the Web Awesome runtime.
+// when the showcase actually mounts the comparison section on the canonical
+// main-chat Surface. Other application pages never fetch this runtime.
 function createElement(tagName, attributes = {}, text = '') {
     const element = document.createElement(tagName);
     Object.entries(attributes).forEach(([name, value]) => {
@@ -50,8 +49,8 @@ function createWebAwesomeButton(label, attributes = {}) {
 }
 
 export function mountWebAwesomeComparison(host, { create, on }) {
-    if (document.documentElement.dataset.uiMode !== 'next') {
-        host.append(createElement('p', { class: 'vcp-ui-wa-error' }, 'Web Awesome 对照仅在 新版 UI 模式下可用。'));
+    if (!window.VCPSurfacePolicy?.isMainChat?.()) {
+        host.append(createElement('p', { class: 'vcp-ui-wa-error' }, 'Web Awesome 对照仅在主聊天设计系统中可用。'));
         return () => host.replaceChildren();
     }
 

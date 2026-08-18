@@ -39,7 +39,7 @@ function ensurePresentationScope() {
     return presentationScope;
 }
 
-function isNextUi() {
+function usesEnhancedSettingsPresentation() {
     return settingsHost?.dataset.settingsPresentation !== 'classic';
 }
 
@@ -224,14 +224,21 @@ function mountSettingsShell(root) {
 
     const renderList = () => {
         const items = visibleItems().map(item => ({
+            id: item.value,
             icon: item.icon,
             label: item.label,
             selected: item.value === state.active,
+            current: item.value === state.active ? 'page' : false,
             onClick: () => activateSection(item.value),
         }));
         if (state.list) state.list.update({ items });
         else {
-            state.list = window.VCPUI.create('List', { items });
+            state.list = window.VCPUI.create('List', {
+                items,
+                role: 'navigation',
+                ariaLabel: '全局设置分类',
+                keyboardNavigation: true,
+            });
             state.listRelease = ensurePresentationScope()?.own(() => state.list?.destroy(), 'settings-navigation-list', 'ui-registration') || null;
             state.listHost.replaceChildren(state.list.element);
         }
@@ -245,7 +252,14 @@ function mountSettingsShell(root) {
         const target = document.getElementById(`section-${value}`);
         if (target) target.classList.add('active');
         state.active = value;
+        // Only restore focus when it lived inside the nav list before the
+        // re-render. Search-driven activations must not steal focus from the
+        // search input on every keystroke.
+        const focusWasInList = !!state.list?.element.contains(document.activeElement);
         renderList();
+        if (focusWasInList) {
+            queueMicrotask(() => state.list?.element.querySelector(`[data-item-key="${CSS.escape(value)}"]`)?.focus());
+        }
     };
 
     const onQuery = (query) => {
@@ -336,7 +350,7 @@ function refresh() {
     ensurePresentationScope();
     cleanupDisconnectedControllers();
     const globalSettingsModal = syncGlobalSettingsHost();
-    if (isNextUi()) {
+    if (usesEnhancedSettingsPresentation()) {
         document.querySelectorAll('#agentSettingsForm, #groupSettingsForm').forEach(enhanceForm);
     }
     if (isGlobalSettingsNextUi()) {
@@ -361,11 +375,18 @@ function teardown() {
     // presentation generation.
     [...controllers].reverse().forEach(controller => {
         const release = controllerReleases.get(controller);
+        // Retract the VCPUI controller synchronously before awaiting the
+        // lifecycle scope's async disposer. This closes the remount window in
+        // which enhance() could still see the old controller and skip the new
+        // generation.
+        try { controller.destroy(); } catch (error) {
+            console.error('[VCPUI SettingsBridge] Failed to synchronously destroy controller:', error);
+        }
         if (release) {
             void release().catch(error => {
                 console.error('[VCPUI SettingsBridge] Failed to release controller:', error);
             });
-        } else controller.destroy();
+        }
     });
     if (scope) {
         void scope.dispose('settings-presentation-teardown').catch(error => {
@@ -380,8 +401,10 @@ function teardown() {
         const state = shellState.get(root);
         if (!state) return;
         state.layout.classList.remove('vcp-ui-settings-shell');
+        try { state.list?.destroy(); } catch (error) {
+            console.error('[VCPUI SettingsBridge] Failed to synchronously destroy navigation list:', error);
+        }
         if (state.listRelease) void state.listRelease();
-        else state.list?.destroy();
         const activeSection = state.active || root.querySelector('.settings-section.active')?.id?.replace(/^section-/, '');
         state.originalNavNodes
             .filter(node => node.nodeType === 1 && node.matches('.settings-nav-item'))

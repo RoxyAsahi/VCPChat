@@ -1,7 +1,7 @@
 import { JSDOM } from 'jsdom';
 import assert from 'node:assert/strict';
 
-const dom = new JSDOM('<!doctype html><html data-ui-mode="next"><body></body></html>', {
+const dom = new JSDOM('<!doctype html><html data-vcp-ui-surface="main-chat"><body></body></html>', {
     url: 'https://vcp.local/',
     runScripts: 'outside-only'
 });
@@ -12,6 +12,9 @@ globalThis.CustomEvent = dom.window.CustomEvent;
 globalThis.Event = dom.window.Event;
 globalThis.HTMLElement = dom.window.HTMLElement;
 globalThis.MutationObserver = dom.window.MutationObserver;
+dom.window.VCPSurfacePolicy = {
+    isMainChat: () => dom.window.document.documentElement.dataset.vcpUiSurface === 'main-chat',
+};
 
 const adapter = (await import('../modules/ui-system/webawesome-adapter.js')).default;
 const { WEB_AWESOME_COMPONENTS, WEB_AWESOME_SURFACE_MANIFESTS } =
@@ -47,10 +50,14 @@ async function checkAsync(name, fn) {
 }
 
 check('exposes the VCP-shaped API', () => {
-    for (const key of ['loadComponents', 'create', 'on', 'awaitUpdate', 'applyTokens', 'registerTheme', 'destroy', 'isNextUi', 'getRuntimeState']) {
+    for (const key of ['loadComponents', 'create', 'on', 'awaitUpdate', 'applyTokens', 'registerTheme', 'destroy', 'isMainChatSurface', 'getRuntimeState']) {
         assert.equal(typeof adapter[key], 'function', `missing ${key}`);
     }
     assert.equal(typeof adapterWin.VCPWebAwesome, 'object');
+    assert.deepEqual(
+        Object.keys(adapterWin.VCPWebAwesome).sort(),
+        ['create', 'getRuntimeState', 'isDefined', 'isLoaded', 'loadComponents', 'mountScope', 'surfaceManifests'].sort(),
+    );
 });
 
 check('create builds a wa-* element and translates attributes', () => {
@@ -83,7 +90,7 @@ await checkAsync('awaitUpdate resolves without updateComplete', async () => {
     assert.equal(await adapter.awaitUpdate(el), el);
 });
 
-check('applyTokens marks an adapter scope in next mode and unmarks on release', () => {
+check('applyTokens marks an adapter scope on the main-chat Surface and unmarks on release', () => {
     const root = scopeRoot();
     const release = adapter.applyTokens(root);
     assert.equal(root.dataset.waScope, 'true');
@@ -109,26 +116,26 @@ check('registerTheme is ref-counted', () => {
     assert.equal(link, null, 'link removed at zero owners');
 });
 
-check('isNextUi reflects the current ui mode', () => {
-    assert.equal(adapter.isNextUi(), true);
-    adapterWin.document.documentElement.dataset.uiMode = 'classic';
-    assert.equal(adapter.isNextUi(), false);
-    adapterWin.document.documentElement.dataset.uiMode = 'next';
+check('isMainChatSurface reflects the canonical Surface capability', () => {
+    assert.equal(adapter.isMainChatSurface(), true);
+    delete adapterWin.document.documentElement.dataset.vcpUiSurface;
+    assert.equal(adapter.isMainChatSurface(), false);
+    adapterWin.document.documentElement.dataset.vcpUiSurface = 'main-chat';
 });
 
-check('applyTokens is a no-op outside next mode', () => {
-    adapterWin.document.documentElement.dataset.uiMode = 'classic';
+check('applyTokens is a no-op outside the main-chat Surface', () => {
+    delete adapterWin.document.documentElement.dataset.vcpUiSurface;
     const root = scopeRoot();
     const release = adapter.applyTokens(root);
     assert.equal(root.hasAttribute('data-wa-scope'), false);
     release();
-    adapterWin.document.documentElement.dataset.uiMode = 'next';
+    adapterWin.document.documentElement.dataset.vcpUiSurface = 'main-chat';
 });
 
-await checkAsync('loadComponents refuses to run outside next mode', async () => {
-    adapterWin.document.documentElement.dataset.uiMode = 'classic';
-    await assert.rejects(adapter.loadComponents(['button']), /next/);
-    adapterWin.document.documentElement.dataset.uiMode = 'next';
+await checkAsync('loadComponents refuses to run outside the main-chat Surface', async () => {
+    delete adapterWin.document.documentElement.dataset.vcpUiSurface;
+    await assert.rejects(adapter.loadComponents(['button']), /main-chat/);
+    adapterWin.document.documentElement.dataset.vcpUiSurface = 'main-chat';
 });
 
 check('destroy clears theme ref-count nodes', () => {
@@ -174,7 +181,7 @@ check('translateEvent re-dispatches a wa event as a VCP event', () => {
 });
 
 check('mountScope applies tokens and theme together and releases both', () => {
-    adapterWin.document.documentElement.dataset.uiMode = 'next';
+    adapterWin.document.documentElement.dataset.vcpUiSurface = 'main-chat';
     const root = scopeRoot();
     const release = adapter.mountScope(root);
     assert.equal(root.dataset.waScope, 'true');
@@ -216,37 +223,45 @@ await checkAsync('mounted scope follows runtime light and dark theme changes', a
 });
 
 await checkAsync('loadComponents failure is deterministic and observable', async () => {
-    adapterWin.document.documentElement.dataset.uiMode = 'next';
+    adapterWin.document.documentElement.dataset.vcpUiSurface = 'main-chat';
     const events = [];
+    const imports = [];
+    globalThis.__VCPUI_TEST_IMPORT__ = async (url, tag) => {
+        imports.push(tag);
+        if (tag === 'select') throw new Error('controlled partial Web Awesome import failure');
+        return import(url);
+    };
     const onLoaded = event => events.push(['loaded', event.detail?.tags]);
     const onFailed = event => events.push(['failed', event.detail?.tags]);
     adapterWin.addEventListener('vcp-webawesome-loaded', onLoaded);
     adapterWin.addEventListener('vcp-webawesome-failed', onFailed);
-    const first = adapter.loadComponents(['button']);
-    const second = adapter.loadComponents(['select']);
-    assert.equal(adapter.getRuntimeState().state, 'loading');
-    const outcome = await Promise.allSettled([first, second]);
-    adapterWin.removeEventListener('vcp-webawesome-loaded', onLoaded);
-    adapterWin.removeEventListener('vcp-webawesome-failed', onFailed);
-    assert.equal(events.length, 1, `exactly one load outcome event must fire: ${JSON.stringify(adapter.getRuntimeState())}`);
-    if (events[0][0] === 'failed') {
+    try {
+        const first = adapter.loadComponents(['button']);
+        const second = adapter.loadComponents(['select']);
+        assert.equal(adapter.getRuntimeState().state, 'loading');
+        const outcome = await Promise.allSettled([first, second]);
+        assert.equal(events.length, 1, `exactly one load outcome event must fire: ${JSON.stringify(adapter.getRuntimeState())}`);
+        assert.equal(events[0][0], 'failed');
         assert.equal(outcome.every(result => result.status === 'rejected'), true,
             'every waiter must observe the same terminal runtime failure');
         assert.deepEqual(events[0][1], adapter.getRuntimeState().components);
         assert.equal(adapter.getRuntimeState().state, 'failed');
         assert.equal(adapter.isLoaded('button'), false, 'failed preload must not mark tags as loaded');
         assert.equal(adapter.isDefined('button'), false, 'failed kernel must force native fallback');
+        assert.ok(imports.includes('button') && imports.includes('select'), 'the failed batch must attempt both component imports');
+        const importCount = imports.length;
         await assert.rejects(adapter.loadComponents(['button']));
         assert.equal(events.length, 1, 'terminal failure must not dispatch duplicate outcomes');
-    } else {
-        assert.equal(outcome.every(result => result.status === 'fulfilled'), true,
-            'a successful transaction must fulfill every coalesced waiter');
-        assert.equal(adapter.getRuntimeState().state, 'ready');
+        assert.equal(imports.length, importCount, 'terminal failure must not retry dynamic imports');
+    } finally {
+        adapterWin.removeEventListener('vcp-webawesome-loaded', onLoaded);
+        adapterWin.removeEventListener('vcp-webawesome-failed', onFailed);
+        delete globalThis.__VCPUI_TEST_IMPORT__;
     }
 });
 
 await checkAsync('failed runtime ignores irreversible custom element registrations', async () => {
-    adapterWin.document.documentElement.dataset.uiMode = 'next';
+    adapterWin.document.documentElement.dataset.vcpUiSurface = 'main-chat';
     class FakeWaButton extends adapterWin.HTMLElement {}
     if (!adapterWin.customElements.get('wa-button')) {
         adapterWin.customElements.define('wa-button', FakeWaButton);

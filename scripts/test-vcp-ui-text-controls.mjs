@@ -22,7 +22,8 @@ async function freePort() {
 }
 
 const mime = new Map([['.html', 'text/html; charset=utf-8'], ['.js', 'text/javascript; charset=utf-8'], ['.css', 'text/css; charset=utf-8']]);
-const html = `<!doctype html><html data-ui-mode="next"><head><meta charset="utf-8"></head><body class="vcp-ui-scope">
+const html = `<!doctype html><html data-vcp-ui-surface="main-chat"><head><meta charset="utf-8"></head><body class="vcp-ui-scope">
+<script src="/modules/ui-system/surface-policy.js"></script>
 <script type="module">
 import '/modules/ui-system/webawesome-adapter.js';
 await window.VCPWebAwesome.loadComponents(['input', 'textarea']);

@@ -31,15 +31,22 @@ export function mountWebAwesomeSelectProxy({
     const originallyHidden = element.hidden;
     const state = { size: element.dataset.size || 'md', ...options };
     let syncing = false;
+    let resetting = false;
     let observer;
     let renderedOptionsSignature = null;
     let controller;
     let active = true;
+    const propertyRestorers = [];
+    const bridgedProperties = new WeakMap();
+    let parentObserver;
 
     const restoreSource = () => {
         active = false;
         observer?.disconnect();
         observer = null;
+        parentObserver?.disconnect();
+        parentObserver = null;
+        propertyRestorers.splice(0).reverse().forEach(restore => { try { restore(); } catch {} });
         forgetController(element);
         if (!originallyNativeSelect) element.classList.remove('vcp-ui-native-select');
         if (!originallySelectSource) element.classList.remove('vcp-ui-select-source');
@@ -137,8 +144,14 @@ export function mountWebAwesomeSelectProxy({
     };
 
     const syncProxyToNative = event => {
-        if (!active || syncing) return;
+        // Always swallow the raw wa events; business listeners must only ever
+        // see notifications flowing through the native authority node.
         event?.stopPropagation?.();
+        // During a form reset wa's formResetCallback resets wa.value to its
+        // own defaultValue ('') and dispatches input/change. Syncing that
+        // back would overwrite the native node's correctly-reset value with
+        // garbage; the reset handler re-asserts native authority instead.
+        if (!active || syncing || resetting) return;
         syncing = true;
         let changed = false;
         try {
@@ -148,13 +161,43 @@ export function mountWebAwesomeSelectProxy({
         } finally {
             syncing = false;
         }
+        if (typeof wa.setCustomValidity === 'function' && changed) wa.setCustomValidity('');
         if (event?.type === 'input' && changed) {
             element.dispatchEvent(new EventCtor('input', { bubbles: true }));
-        } else if (event?.type === 'change') {
-            if (changed) element.dispatchEvent(new EventCtor('input', { bubbles: true }));
+        } else if (event?.type === 'change' && changed) {
+            element.dispatchEvent(new EventCtor('input', { bubbles: true }));
             element.dispatchEvent(new EventCtor('change', { bubbles: true }));
         }
     };
+
+    // Property writes do not produce DOM mutation records. Preserve the
+    // native Select as the authority while forwarding programmatic writes to
+    // the visible proxy (the common `select.value = ...` application path).
+    const bridgeProperty = (target, property, callback) => {
+        if (bridgedProperties.get(target)?.has(property)) return;
+        const own = Object.getOwnPropertyDescriptor(target, property);
+        if (own && !own.configurable) return;
+        const prototype = Object.getPrototypeOf(target);
+        const descriptor = own || Object.getOwnPropertyDescriptor(prototype, property);
+        if (!descriptor?.get || !descriptor?.set) return;
+        Object.defineProperty(target, property, {
+            configurable: true,
+            enumerable: descriptor.enumerable ?? false,
+            get: descriptor.get.bind(target),
+            set(value) {
+                descriptor.set.call(target, value);
+                callback();
+            },
+        });
+        propertyRestorers.push(() => {
+            if (own) Object.defineProperty(target, property, own);
+            else delete target[property];
+        });
+        const properties = bridgedProperties.get(target) || new Set();
+        properties.add(property);
+        bridgedProperties.set(target, properties);
+    };
+    const bridgeOptionSelection = option => bridgeProperty(option, 'selected', () => queueMicrotask(syncNativeToProxy));
 
     controller = makeController(wa, state, current => {
         if (current.value !== undefined && element.value !== String(current.value)) element.value = String(current.value);
@@ -175,18 +218,57 @@ export function mountWebAwesomeSelectProxy({
         return controller;
     };
     rememberController(element, controller);
+    if (element.multiple || element.size > 1) {
+        controller.destroy();
+        throw new Error('Web Awesome Select proxy does not support multiple or listbox Selects.');
+    }
+    bridgeProperty(element, 'value', () => queueMicrotask(syncNativeToProxy));
+    bridgeProperty(element, 'selectedIndex', () => queueMicrotask(syncNativeToProxy));
+    [...element.options].forEach(bridgeOptionSelection);
     controller._listen(wa, 'input', syncProxyToNative);
     controller._listen(wa, 'change', syncProxyToNative);
     controller._listen(wa, 'wa-show', syncNativeToProxy);
     controller._listen(element, 'input', syncNativeToProxy);
     controller._listen(element, 'change', syncNativeToProxy);
+    // `invalid` does not bubble, but fires on the element itself. The hidden
+    // native node is unfocusable, so Chromium would silently cancel the form
+    // submission with no visible feedback; reflect the failure onto the
+    // visible proxy instead.
+    controller._listen(element, 'invalid', () => {
+        if (!active) return;
+        if (typeof wa.setCustomValidity === 'function') {
+            wa.setCustomValidity(element.validationMessage || ' ');
+        }
+        if (typeof wa.reportValidity === 'function') wa.reportValidity();
+        else wa.focus?.();
+    });
+    // Form reset: suppress the proxy->native sync that wa's formResetCallback
+    // would trigger, then re-assert the native authority's reset value onto
+    // the proxy once the reset algorithm has completed.
+    controller._listen(document, 'reset', event => {
+        if (!active || resetting || element.form !== event.target) return;
+        resetting = true;
+        queueMicrotask(() => {
+            resetting = false;
+            if (active) syncNativeToProxy();
+        });
+    });
     [...(element.labels || [])].forEach(label => controller._listen(label, 'click', event => {
         event.preventDefault();
         wa.focus?.();
     }));
     if (typeof Observer !== 'undefined') {
-        observer = new Observer(() => queueMicrotask(syncNativeToProxy));
+        observer = new Observer(() => {
+            [...element.options].forEach(bridgeOptionSelection);
+            queueMicrotask(syncNativeToProxy);
+        });
         observer.observe(element, { attributes: true, childList: true, subtree: true, characterData: true });
+        if (element.parentNode) {
+            parentObserver = new Observer(() => {
+                if (!element.isConnected) controller?.destroy?.();
+            });
+            parentObserver.observe(element.parentNode, { childList: true });
+        }
     }
     queueMicrotask(syncNativeToProxy);
     return waFocus(controller, wa);
