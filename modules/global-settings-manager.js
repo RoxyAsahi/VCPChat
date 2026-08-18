@@ -1,22 +1,26 @@
+import { captureSettingsSurfaceSession, isCurrentSettingsSurfaceSession } from './ui-system/settings-surface-session.js';
+
 /**
  * This module handles the logic for saving global settings.
  */
 export function handleSaveGlobalSettings(e, deps) {
     e.preventDefault();
+    const operationId = e.vcpSettingsOperationId || null;
     const settingsForm = e.currentTarget || document.getElementById('globalSettingsForm');
     if (settingsForm?.dataset.globalSettingsSaving === 'true') return;
     if (settingsForm) settingsForm.dataset.globalSettingsSaving = 'true';
+    const surfaceSession = captureSettingsSurfaceSession();
 
-    return saveGlobalSettings(deps, settingsForm).finally(() => {
+    return saveGlobalSettings(deps, settingsForm, operationId, surfaceSession).finally(() => {
         if (settingsForm) delete settingsForm.dataset.globalSettingsSaving;
     });
 }
 
-async function saveGlobalSettings(deps, settingsForm) {
+async function saveGlobalSettings(deps, settingsForm, operationId = null, surfaceSession = null) {
     const chatAPI = window.chatAPI || window.electronAPI;
     const reportSaveResult = (success, error = '') => {
         settingsForm?.dispatchEvent(new CustomEvent('vcp-settings-save-result', {
-            detail: { success, error: error || undefined }
+            detail: { success, error: error || undefined, operationId: operationId || undefined }
         }));
     };
 
@@ -28,6 +32,7 @@ async function saveGlobalSettings(deps, settingsForm) {
         settingsManager
     } = deps;
     const currentSettings = refs.globalSettings.get();
+    const sessionIsCurrent = () => !surfaceSession || isCurrentSettingsSurfaceSession(surfaceSession);
 
     const clampBubbleWidthPercent = (rawValue, fallback) => {
         const parsed = Number.parseInt(rawValue, 10);
@@ -105,7 +110,7 @@ async function saveGlobalSettings(deps, settingsForm) {
                 || document.getElementById('appearanceSidebarRadius')?.value
                 || currentSettings.appearanceProfile?.sidebarRadius,
             cardRadius: currentSettings.appearanceProfile?.cardRadius
-        }, 'next') || currentSettings.appearanceProfile,
+        }) || currentSettings.appearanceProfile,
         chatFontPreset: document.getElementById('chatFontPreset')?.value || currentSettings.chatFontPreset || 'system',
         chatFontCustom: document.getElementById('chatFontCustom')?.value.trim() || '',
         chatCodeFontPreset: document.getElementById('chatCodeFontPreset')?.value || currentSettings.chatCodeFontPreset || 'consolas',
@@ -198,6 +203,9 @@ async function saveGlobalSettings(deps, settingsForm) {
                 buffer: arrayBuffer
             });
             if (avatarSaveResult.success) {
+                // Saving the file may outlive the settings surface. Never
+                // apply a late result to a newly opened session's DOM/state.
+                if (!sessionIsCurrent()) return reportSaveResult(false, 'stale-settings-session');
                 refs.globalSettings.get().userAvatarUrl = avatarSaveResult.avatarUrl;
                 const userAvatarPreview = document.getElementById('userAvatarPreview');
                 userAvatarPreview.src = avatarSaveResult.avatarUrl;
@@ -215,10 +223,10 @@ async function saveGlobalSettings(deps, settingsForm) {
                 if (avatarSaveResult.needsColorExtraction && chatAPI?.saveAvatarColor) {
                     if (window.getDominantAvatarColor) {
                         window.getDominantAvatarColor(avatarSaveResult.avatarUrl).then(avgColor => {
-                            if (avgColor) {
+                            if (avgColor && sessionIsCurrent()) {
                                 chatAPI.saveAvatarColor({ type: 'user', id: 'user_global', color: avgColor })
                                     .then((saveColorResult) => {
-                                        if (saveColorResult && saveColorResult.success) {
+                                        if (saveColorResult && saveColorResult.success && sessionIsCurrent()) {
                                             refs.globalSettings.get().userAvatarCalculatedColor = avgColor;
                                             if (window.messageRenderer) window.messageRenderer.setUserAvatarColor(avgColor);
                                         } else {
@@ -272,11 +280,27 @@ async function saveGlobalSettings(deps, settingsForm) {
             }
         }
 
+        // A reusable modal may have been closed and opened again while the
+        // persistence IPC was pending. The old operation can remain durable,
+        // but it no longer owns the active presentation. Do not merge its
+        // snapshot into the new form, publish a stale settings event, or
+        // close the replacement modal.
+        const activeModal = document.getElementById('globalSettingsModal');
+        const replacedSurface = Boolean(
+            surfaceSession?.root
+            && activeModal?.classList.contains('active')
+            && !isCurrentSettingsSurfaceSession(surfaceSession)
+        );
+        if (replacedSurface) {
+            reportSaveResult(true);
+            return;
+        }
+
         Object.assign(refs.globalSettings.get(), newSettings);
         try {
             newSettings.appearanceProfile = window.VCPAppearance?.commit(
                 newSettings.appearanceProfile,
-                { uiMode: 'next', source: 'settings-save' }
+                { source: 'settings-save' }
             ) || newSettings.appearanceProfile;
             window.dispatchEvent(new CustomEvent('global-settings-updated', {
                 detail: { settings: refs.globalSettings.get(), source: 'settings-save' }
@@ -300,7 +324,9 @@ async function saveGlobalSettings(deps, settingsForm) {
         }
         reportSaveResult(true);
         uiHelperFunctions.showToastNotification('全局设置已保存！部分设置（如通知URL/Key）可能需要重新连接生效。');
-        uiHelperFunctions.closeModal('globalSettingsModal');
+        if (!surfaceSession?.root || isCurrentSettingsSurfaceSession(surfaceSession)) {
+            uiHelperFunctions.closeModal('globalSettingsModal');
+        }
         if (refs.globalSettings.get().vcpLogUrl && refs.globalSettings.get().vcpLogKey) {
              chatAPI.connectVCPLog(refs.globalSettings.get().vcpLogUrl, refs.globalSettings.get().vcpLogKey);
         } else {

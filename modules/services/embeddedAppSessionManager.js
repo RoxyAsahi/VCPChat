@@ -21,12 +21,8 @@ function toFileUrl(appRoot, relativePath, query = {}) {
 }
 
 async function resolveDescriptor(appAction, appRoot) {
-    // Embedded business pages stay on their upstream Classic presentation in
-    // this PR. The parent may use the Next shell, but it must not implicitly
-    // opt child documents into an unshipped presentation.
-    const uiMode = 'classic';
     const entry = embeddedAppAllowlist.get(appAction);
-    return entry ? { url: toFileUrl(appRoot, entry.page, { uiMode }) } : null;
+    return entry ? { url: toFileUrl(appRoot, entry.page) } : null;
 }
 
 function normalizeBounds(bounds, parentBounds) {
@@ -160,10 +156,19 @@ function createEmbeddedAppSessionManager({ mainWindow, launchStandalone, powerMo
             return { action: 'deny' };
         });
         view.webContents.on('render-process-gone', (_event, details) => {
+            if (sessions.get(appAction)?.view !== view) return;
             notify(appAction, 'error', { error: `应用进程已退出：${details.reason}` });
+            // A crashed renderer may not emit a usable `destroyed` sequence
+            // before the parent reconciles. Retire this exact session now so
+            // list()/restore cannot keep a dead WebContentsView alive. The
+            // expectedView guard prevents a stale crash from closing a
+            // replacement session for the same action.
+            void close(appAction, view).catch(error => {
+                console.warn(`[EmbeddedApps] Failed to retire crashed ${appAction} view:`, error.message);
+            });
         });
         view.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
-            if (isMainFrame !== false && errorCode !== -3) {
+            if (sessions.get(appAction)?.view === view && isMainFrame !== false && errorCode !== -3) {
                 notify(appAction, 'error', { error: errorDescription, url: validatedURL });
             }
         });
@@ -175,20 +180,20 @@ function createEmbeddedAppSessionManager({ mainWindow, launchStandalone, powerMo
 
         const abortLoad = () => {
             try { view.webContents.stop(); } catch (_error) { /* already destroyed */ }
-            void close(appAction);
+            void close(appAction, view);
         };
         signal?.addEventListener('abort', abortLoad, { once: true });
 
         try {
             await view.webContents.loadURL(descriptor.url);
             if (signal?.aborted || sessions.get(appAction)?.view !== view) {
-                await close(appAction);
+                await close(appAction, view);
                 return cancelledResult();
             }
             notify(appAction, 'ready');
             return { success: true, embeddable: true, action: appAction };
         } catch (error) {
-            await close(appAction);
+            await close(appAction, view);
             if (signal?.aborted) return cancelledResult();
             return { success: false, embeddable: true, error: error.message };
         } finally {
@@ -224,13 +229,21 @@ function createEmbeddedAppSessionManager({ mainWindow, launchStandalone, powerMo
         return { success: true };
     }
 
-    function close(appAction) {
+    function close(appAction, expectedView = null) {
         try { appAction = normalizeEmbeddedAction(appAction); }
         catch (error) { return Promise.resolve({ success: false, error: error.message }); }
         const pendingClose = closingSessions.get(appAction);
         if (pendingClose) return pendingClose;
         const session = sessions.get(appAction);
         if (!session) return Promise.resolve({ success: true });
+        // A load/abort callback may arrive after its session was replaced by
+        // a newer WebContentsView for the same action.  Closing by action
+        // alone would then tear down the replacement.  Only the caller that
+        // still owns this exact view may close it; stale completions become a
+        // harmless no-op.
+        if (expectedView && session.view !== expectedView) {
+            return Promise.resolve({ success: true, stale: true });
+        }
         sessions.delete(appAction);
         if (activeAction === appAction) activeAction = null;
         try { mainWindow.contentView.removeChildView(session.view); } catch (_error) { /* already detached */ }

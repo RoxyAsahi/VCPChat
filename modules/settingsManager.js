@@ -88,15 +88,15 @@ const settingsManager = (() => {
         rangeInput.style.setProperty('--vcp-ui-range-progress', `${Math.max(0, Math.min(100, progress))}%`);
     }
 
-    function reportSettingsSaveResult(form, success, error = '') {
+    function reportSettingsSaveResult(form, success, error = '', operationId = null) {
         form?.dispatchEvent(new CustomEvent('vcp-settings-save-result', {
-            detail: { success: Boolean(success), error }
+            detail: { success: Boolean(success), error, operationId: operationId || undefined }
         }));
     }
 
-    function reportSettingsDeleteResult(form, success, { cancelled = false, error = '' } = {}) {
+    function reportSettingsDeleteResult(form, success, { cancelled = false, error = '', operationId = null } = {}) {
         form?.dispatchEvent(new CustomEvent('vcp-settings-delete-result', {
-            detail: { success: Boolean(success), cancelled: Boolean(cancelled), error }
+            detail: { success: Boolean(success), cancelled: Boolean(cancelled), error, operationId: operationId || undefined }
         }));
     }
 
@@ -269,6 +269,10 @@ const settingsManager = (() => {
 
         // Populate bilingual TTS settings
         await populateTtsModels(agentConfig.ttsVoicePrimary, agentConfig.ttsVoiceSecondary);
+        if (populateToken !== agentSettingsPopulateToken) {
+            console.debug(`[SettingsManager] Aborting stale TTS settings render for agent ${agentId}.`);
+            return { stale: true };
+        }
 
         agentTtsRegexPrimaryInput.value = agentConfig.ttsRegexPrimary || '';
         agentTtsRegexSecondaryInput.value = agentConfig.ttsRegexSecondary || '';
@@ -314,17 +318,18 @@ const settingsManager = (() => {
      */
     async function saveCurrentAgentSettings(event) {
         event.preventDefault();
+        const operationId = event.vcpSettingsOperationId || null;
         const agentId = editingAgentIdInput.value;
         if (!agentId) {
             console.error("[SettingsManager] Cannot save agent settings: agentId is missing.");
             uiHelper.showToastNotification("保存失败：未指定 Agent ID", 'error');
-            reportSettingsSaveResult(agentSettingsForm, false, 'missing-agent-id');
+            reportSettingsSaveResult(agentSettingsForm, false, 'missing-agent-id', operationId);
             return;
         }
         if (promptManager?.getAgentId?.() && promptManager.getAgentId() !== agentId) {
             console.warn(`[SettingsManager] Blocked save for ${agentId}: PromptManager is bound to ${promptManager.getAgentId()}.`);
             uiHelper.showToastNotification('Agent 正在切换，请稍后再保存。', 'warning');
-            reportSettingsSaveResult(agentSettingsForm, false, 'agent-switching');
+            reportSettingsSaveResult(agentSettingsForm, false, 'agent-switching', operationId);
             return;
         }
 
@@ -334,14 +339,14 @@ const settingsManager = (() => {
             await promptManager.saveCurrentModeData();
             if (editingAgentIdInput.value !== agentId || promptManager.getAgentId?.() !== agentId) {
                 console.debug(`[SettingsManager] Aborting stale save after prompt persistence for ${agentId}.`);
-                reportSettingsSaveResult(agentSettingsForm, false, 'stale-agent');
+                reportSettingsSaveResult(agentSettingsForm, false, 'stale-agent', operationId);
                 return;
             }
 
             const currentPrompt = await promptManager.getCurrentSystemPrompt();
             if (editingAgentIdInput.value !== agentId || promptManager.getAgentId?.() !== agentId) {
                 console.debug(`[SettingsManager] Aborting stale save after prompt read for ${agentId}.`);
-                reportSettingsSaveResult(agentSettingsForm, false, 'stale-agent');
+                reportSettingsSaveResult(agentSettingsForm, false, 'stale-agent', operationId);
                 return;
             }
             systemPromptData.systemPrompt = currentPrompt; // Keep for compatibility
@@ -375,7 +380,7 @@ const settingsManager = (() => {
 
         if (!newConfig.name) {
             uiHelper.showToastNotification("Agent名称不能为空！", 'error');
-            reportSettingsSaveResult(agentSettingsForm, false, 'missing-name');
+            reportSettingsSaveResult(agentSettingsForm, false, 'missing-name', operationId);
             return;
         }
 
@@ -391,7 +396,7 @@ const settingsManager = (() => {
 
                 if (avatarResult.error) {
                     uiHelper.showToastNotification(`保存Agent头像失败: ${avatarResult.error}`, 'error');
-                    reportSettingsSaveResult(agentSettingsForm, false, avatarResult.error);
+                    reportSettingsSaveResult(agentSettingsForm, false, avatarResult.error, operationId);
                     // 如果头像保存失败，视情况决定是否继续保存其他配置。这里选择报错并中断。
                     return;
                 } else {
@@ -420,7 +425,7 @@ const settingsManager = (() => {
             } catch (readError) {
                 console.error("读取Agent头像文件失败:", readError);
                 uiHelper.showToastNotification(`读取Agent头像文件失败: ${readError.message}`, 'error');
-                reportSettingsSaveResult(agentSettingsForm, false, readError.message);
+                reportSettingsSaveResult(agentSettingsForm, false, readError.message, operationId);
                 return; // 中断保存
             }
         }
@@ -431,7 +436,7 @@ const settingsManager = (() => {
         } catch (error) {
             console.error('[SettingsManager] Failed to save agent settings:', error);
             uiHelper.showToastNotification(`保存Agent设置时出错: ${error.message}`, 'error');
-            reportSettingsSaveResult(agentSettingsForm, false, error.message);
+            reportSettingsSaveResult(agentSettingsForm, false, error.message, operationId);
             return;
         }
         const saveButton = agentSettingsForm.querySelector('button[type="submit"]');
@@ -478,9 +483,9 @@ const settingsManager = (() => {
                 console.error('[SettingsManager] Agent settings saved, but UI projection failed:', projectionError);
                 uiHelper.showToastNotification(`Agent设置已保存，但界面刷新失败: ${projectionError.message || projectionError}`, 'warning');
             }
-            reportSettingsSaveResult(agentSettingsForm, true);
+            reportSettingsSaveResult(agentSettingsForm, true, '', operationId);
         } else {
-            reportSettingsSaveResult(agentSettingsForm, false, result.error || 'save-failed');
+            reportSettingsSaveResult(agentSettingsForm, false, result.error || 'save-failed', operationId);
             if (saveButton) uiHelper.showSaveFeedback(saveButton, false, '保存失败', '保存 Agent 设置');
             uiHelper.showToastNotification(`保存Agent设置失败: ${result.error}`, 'error');
         }
@@ -489,11 +494,12 @@ const settingsManager = (() => {
     /**
      * Handles the deletion of the currently selected item (agent or group).
      */
-    async function handleDeleteCurrentItem() {
+    async function handleDeleteCurrentItem(event) {
+        const operationId = event?.vcpSettingsOperationId || null;
         const currentSelectedItem = refs.currentSelectedItemRef.get();
         if (!currentSelectedItem.id) {
             uiHelper.showToastNotification("没有选中的项目可删除。", 'info');
-            reportSettingsDeleteResult(agentSettingsForm, false, { error: 'missing-selection' });
+            reportSettingsDeleteResult(agentSettingsForm, false, { error: 'missing-selection', operationId });
             return;
         }
 
@@ -502,7 +508,7 @@ const settingsManager = (() => {
 
         const confirmed = await uiHelper.showConfirmDialog(`您确定要删除 ${itemTypeDisplay} "${itemName}" 吗？其所有聊天记录和设置都将被删除，此操作不可撤销！`, '删除确认', '删除', '取消', true);
         if (!confirmed) {
-            reportSettingsDeleteResult(agentSettingsForm, false, { cancelled: true });
+            reportSettingsDeleteResult(agentSettingsForm, false, { cancelled: true, operationId });
             return;
         }
 
@@ -515,7 +521,7 @@ const settingsManager = (() => {
             }
 
             if (result && result.success) {
-                reportSettingsDeleteResult(agentSettingsForm, true);
+                reportSettingsDeleteResult(agentSettingsForm, true, { operationId });
                 // Reset state in renderer via refs
                 refs.currentSelectedItemRef.set({ id: null, type: null, name: null, avatarUrl: null, config: null });
                 refs.currentTopicIdRef.set(null);
@@ -526,12 +532,12 @@ const settingsManager = (() => {
                     mainRendererFunctions.onItemDeleted();
                 }
             } else {
-                reportSettingsDeleteResult(agentSettingsForm, false, { error: result?.error || 'unknown-error' });
+                reportSettingsDeleteResult(agentSettingsForm, false, { error: result?.error || 'unknown-error', operationId });
                 uiHelper.showToastNotification(`删除${itemTypeDisplay}失败: ${result?.error || '未知错误'}`, 'error');
             }
         } catch (error) {
             console.error('[SettingsManager] Failed to delete item:', error);
-            reportSettingsDeleteResult(agentSettingsForm, false, { error: error.message });
+            reportSettingsDeleteResult(agentSettingsForm, false, { error: error.message, operationId });
             uiHelper.showToastNotification(`删除${itemTypeDisplay}时出错: ${error.message}`, 'error');
         }
     }
@@ -546,7 +552,15 @@ const settingsManager = (() => {
             return;
         }
 
-        const agents = await electronAPI.getAgents();
+        let agents;
+        try {
+            agents = await electronAPI.getAgents();
+        } catch (error) {
+            if (!canCommit()) return;
+            console.error('[SettingsManager] Failed to load agents for assistant select:', error);
+            assistantAgentSelect.replaceChildren(new Option('加载Agent失败', ''));
+            return { error: true };
+        }
         if (!canCommit()) return;
         if (agents && !agents.error) {
             assistantAgentSelect.innerHTML = '<option value="">请选择一个Agent</option>'; // Clear and add placeholder

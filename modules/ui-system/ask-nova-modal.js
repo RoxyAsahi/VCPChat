@@ -144,10 +144,15 @@ export function createAskNovaController(options = {}) {
     let openGeneration = 0;
     const controllerScope = LifecycleScope ? new LifecycleScope('next:ask-nova-controller') : null;
 
-    async function open(targetId = 'frontend') {
+    async function open(targetId = 'frontend', opener = null) {
         if (destroyed) return null;
         const requestGeneration = ++openGeneration;
         const initialTarget = TARGETS[targetId] || TARGETS.frontend;
+        // Capture the trigger identity before the asynchronous native-view
+        // overlay acquisition. Reading activeElement after that await can
+        // resolve to body or to a replacement surface, making Escape restore
+        // focus to the wrong owner.
+        const openerFocus = opener?.nodeType === 1 ? opener : documentRef.activeElement;
         if (activeModal) {
             activeModal.switchTarget(initialTarget.id);
             activeModal.focusComposer();
@@ -291,6 +296,8 @@ export function createAskNovaController(options = {}) {
                 actions: [],
                 native: true,
                 closeOnBackdrop: true,
+                previousFocus: openerFocus,
+                previousFocusId: openerFocus?.id || '',
                 onClose: cleanup
             });
         } catch (error) {
@@ -518,7 +525,7 @@ export function createAskNovaController(options = {}) {
             const handler = async event => {
                 event.preventDefault();
                 try {
-                    await open(trigger.dataset.askNovaTarget);
+                    await open(trigger.dataset.askNovaTarget, trigger);
                 } catch (error) {
                     window.VCPUI?.feedback?.toast?.(error?.message || 'Ask Nova 打开失败', { variant: 'error' });
                 }
