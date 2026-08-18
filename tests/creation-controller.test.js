@@ -186,7 +186,7 @@ test('disposing while the creation kernel loads prevents a late surface mount', 
     dom.window.close();
 });
 
-test('a terminal Web Awesome load failure exposes an error without mounting a second UI', async () => {
+test('a terminal Web Awesome load failure mounts the same creation tree with the native kernel', async () => {
     const dom = new JSDOM('<!doctype html><html data-vcp-ui-surface="main-chat"><body></body></html>');
     const ui = createUi(dom.window);
     const unavailable = [];
@@ -203,9 +203,37 @@ test('a terminal Web Awesome load failure exposes an error without mounting a se
     });
     controller.mount();
     await controller.open();
+    assert.ok(dom.window.document.querySelector('.next-ui-create-dialog-host'));
+    assert.ok(ui.controls.length > 0, 'kernel failure must preserve the core creation flow');
+    assert.deepEqual(unavailable, []);
+    assert.equal(ui.controls.some(control => control.options.native === true), true,
+        'the modal must use the same native kernel as the rest of the Surface');
+    controller.close();
+    await new Promise(resolve => setImmediate(resolve));
     assert.equal(dom.window.document.querySelector('.next-ui-create-dialog-host'), null);
-    assert.equal(ui.controls.length, 0, 'kernel failure must not construct native substitutes');
-    assert.deepEqual(unavailable, ['创建界面组件加载失败，请按 Ctrl+R 重新加载应用。']);
+    dom.window.close();
+});
+
+test('a partially defined Web Awesome batch falls back atomically to native controls', async () => {
+    const dom = new JSDOM('<!doctype html><html data-vcp-ui-surface="main-chat"><body></body></html>');
+    const ui = createUi(dom.window);
+    installSurfaceRuntime(dom.window, {
+        getRuntimeState: () => ({ state: 'ready' }),
+        isDefined: tag => tag === 'button',
+    });
+    const controller = new CreationController({
+        window: dom.window,
+        document: dom.window.document,
+        getUi: () => ui,
+        commands: () => ({ createAgent() {}, createGroup() {} }),
+    });
+    controller.mount();
+    await controller.open();
+    assert.ok(dom.window.document.querySelector('.next-ui-create-dialog-host'));
+    assert.equal(ui.controls.every(control => control.options.kernel === 'native' || control.options.native === true), true,
+        'a partial WA registration must not produce a mixed-kernel Surface');
+    controller.close();
+    await new Promise(resolve => setImmediate(resolve));
     dom.window.close();
 });
 

@@ -83,7 +83,7 @@ window.chatAPI = {
         return { success: true };
     },
     setTheme(theme) { this.themes.push(theme); },
-    setThemeMode() {},
+    setThemeMode(payload) { this.themes.push(typeof payload === 'string' ? payload : payload?.mode); },
     async getThemes() {
         return [
             {
@@ -470,11 +470,11 @@ assert.equal(studio.isOpen(), true, 'failed save keeps the studio open for corre
 await studio.close({ rollback: true });
 window.applyChatPresentationMode = originalApplyPresentation;
 
-const originalTopTabManager = window.topTabManager;
+const originalMainChatSurface = window.mainChatSurface;
 let rejectFirstOverlay;
 const overlayOwners = [];
 const releasedOverlayOwners = [];
-window.topTabManager = {
+window.mainChatSurface = {
     acquireOverlay: owner => {
         overlayOwners.push(owner);
         if (overlayOwners.length === 1) {
@@ -502,7 +502,7 @@ assert.equal(
     0,
     'failed overlay acquisition must not retain the per-open Appearance Studio scope'
 );
-window.topTabManager = originalTopTabManager;
+window.mainChatSurface = originalMainChatSurface;
 
 studio.open();
 const closeBeforeReopen = studio.close({ rollback: true });

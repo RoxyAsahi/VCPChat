@@ -20,10 +20,15 @@ const handleOpenThemesWindow = () => {
 };
 
 const handleSetThemeMode = async (event, themeMode) => {
+    const payload = themeMode && typeof themeMode === 'object'
+        ? themeMode
+        : { mode: themeMode, persist: true };
+    themeMode = payload.mode;
+    const persist = payload.persist !== false;
     if (['light', 'dark', 'system'].includes(themeMode)) {
         console.log(`[ThemeHandlers] Setting theme source to: ${themeMode}`);
         nativeTheme.themeSource = themeMode;
-        if (settingsManager) {
+        if (persist && settingsManager) {
             try {
                 await settingsManager.updateSettings(settings => ({
                     ...settings,

@@ -5,9 +5,20 @@ const fs = require('node:fs');
 const Module = require('node:module');
 const {
     MAX_DETACH_COORDINATE,
+    classifyEmbeddedNavigation,
     normalizeEmbeddedAction,
     normalizeDetachPoint,
 } = require('../modules/services/embeddedAppSessionManager.js');
+
+test('embedded navigation stays on its declared local page', () => {
+    const allowed = 'file:///Applications/VCP/Notemodules/notes.html?vcpEmbedded=1';
+    assert.equal(classifyEmbeddedNavigation(allowed, `${allowed}#editor`), 'internal');
+    assert.equal(classifyEmbeddedNavigation(allowed, 'https://example.com/docs'), 'external');
+    assert.equal(classifyEmbeddedNavigation(allowed, 'http://127.0.0.1:3000/'), 'external');
+    assert.equal(classifyEmbeddedNavigation(allowed, 'file:///Applications/VCP/main.html'), 'blocked');
+    assert.equal(classifyEmbeddedNavigation(allowed, 'javascript:alert(1)'), 'blocked');
+    assert.equal(classifyEmbeddedNavigation(allowed, 'not a url'), 'blocked');
+});
 
 test('embedded actions are restricted to the local application allowlist', () => {
     assert.equal(normalizeEmbeddedAction('open-notes-window'), 'open-notes-window');
@@ -33,6 +44,7 @@ test('embedded sessions keep upstream child pages independent from main settings
 
 test('embedded session manager enforces a bounded native view pool', async () => {
     const originalLoad = Module._load;
+    const openedExternal = [];
     class FakeWebContents extends EventEmitter {
         constructor() { super(); this.destroyed = false; this.currentLoad = null; this.sent = []; }
         isDestroyed() { return this.destroyed; }
@@ -54,7 +66,7 @@ test('embedded session manager enforces a bounded native view pool', async () =>
         if (request === 'electron') return {
             WebContentsView: FakeView,
             app: { getAppPath: () => process.cwd() },
-            shell: { openExternal: async () => {} },
+            shell: { openExternal: async url => { openedExternal.push(url); } },
             screen: { getDisplayNearestPoint: () => ({ workArea: { x: 0, y: 0, width: 1200, height: 900 } }) },
         };
         return originalLoad.call(this, request, parent, isMain);
@@ -84,6 +96,11 @@ test('embedded session manager enforces a bounded native view pool', async () =>
         for (const action of actions.slice(0, MAX_EMBEDDED_SESSIONS)) {
             assert.equal((await manager.create(action)).success, true);
         }
+        let prevented = false;
+        const firstContents = FakeView.instances[0].webContents;
+        firstContents.emit('will-navigate', { preventDefault: () => { prevented = true; } }, 'https://example.com/outside');
+        assert.equal(prevented, true, 'external navigation must never stay inside an embedded view');
+        assert.deepEqual(openedExternal, ['https://example.com/outside']);
         const overflow = await manager.create(actions[MAX_EMBEDDED_SESSIONS]);
         assert.equal(overflow.success, false);
         assert.match(overflow.error, /最多同时打开/);

@@ -13,6 +13,9 @@
             this.label = options.label || 'next:surface';
             this.ownerScope = options.ownerScope || null;
             this.getUi = options.getUi || (() => this.window.VCPUI);
+            this.requestedKernel = options.kernel === 'native' || options.kernel === 'web-awesome'
+                ? options.kernel
+                : 'auto';
             this.state = 'idle';
             this.kernel = null;
             this.scope = null;
@@ -27,6 +30,7 @@
         chooseKernel() {
             const runtime = this.window.VCPWebAwesome?.getRuntimeState?.();
             const mainSurface = this.window.VCPSurfacePolicy?.isMainChat?.(this.document) === true;
+            if (this.requestedKernel === 'native') return 'native';
             return mainSurface && runtime?.state === 'ready'
                 ? 'web-awesome'
                 : 'native';
@@ -60,7 +64,7 @@
                 own: (value, label, type) => this.own(value, label, type),
                 create: (name, componentOptions = {}) => {
                     if (this.state !== 'mounting') throw new Error(`Surface "${this.label}" only creates controls during mount.`);
-                    const control = this.getUi()?.create(name, componentOptions);
+                    const control = this.getUi()?.create(name, { ...componentOptions, kernel: this.kernel });
                     if (!control) throw new Error(`VCPUI could not create ${name}.`);
                     this.own(control, `control:${name}`, 'ui-registration');
                     return control;

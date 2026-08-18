@@ -78,31 +78,28 @@
             const api = this.getApi();
             const commands = this.commands();
             const generation = this.generation;
-            const webAwesome = this.window.VCPWebAwesome;
             const SurfaceController = this.window.VCPUISurface?.SurfaceController;
             if (!ui || !commands?.createAgent || !commands?.createGroup
-                || typeof webAwesome?.loadComponents !== 'function'
-                || typeof webAwesome?.isDefined !== 'function'
                 || typeof SurfaceController !== 'function') {
                 this.showUnavailable('创建界面运行时不完整，请按 Ctrl+R 重新加载应用。');
                 return;
             }
 
-            // This production Surface is a Web Awesome consumer in its own
-            // right. Do not let an unrelated settings visit decide whether it
-            // receives the WA or native kernel: wait for the shared component
-            // load to reach a terminal state before SurfaceController chooses.
-            // A genuine load failure is an application-integrity error in the
-            // packaged desktop app. Do not disguise it as a second UI.
-            try {
-                const requiredComponents = webAwesome.surfaceManifests?.creation || REQUIRED_WEB_AWESOME_COMPONENTS;
-                await webAwesome.loadComponents(requiredComponents);
-                const missing = requiredComponents.filter(tag => !webAwesome.isDefined(tag));
-                if (missing.length) throw new Error(`Web Awesome components were not defined: ${missing.join(', ')}`);
-            } catch (kernelError) {
-                console.error('[NextUI] Web Awesome creation kernel unavailable:', kernelError);
-                this.showUnavailable('创建界面组件加载失败，请按 Ctrl+R 重新加载应用。');
-                return;
+            // Resolve one kernel for the complete Surface. A failed or partial
+            // Web Awesome load uses the same VCPUI component tree with the
+            // native kernel; no second business form is ever mounted.
+            const webAwesome = this.window.VCPWebAwesome;
+            let creationKernel = 'native';
+            if (typeof webAwesome?.loadComponents === 'function' && typeof webAwesome?.isDefined === 'function') {
+                try {
+                    const requiredComponents = webAwesome.surfaceManifests?.creation || REQUIRED_WEB_AWESOME_COMPONENTS;
+                    await webAwesome.loadComponents(requiredComponents);
+                    const missing = requiredComponents.filter(tag => !webAwesome.isDefined(tag));
+                    if (missing.length) throw new Error(`Web Awesome components were not defined: ${missing.join(', ')}`);
+                    creationKernel = 'web-awesome';
+                } catch (kernelError) {
+                    console.warn('[VCPUI] Web Awesome creation kernel unavailable; using native kernel:', kernelError);
+                }
             }
             if (!this.mounted || generation !== this.generation) return;
 
@@ -151,6 +148,7 @@
                 label: 'next:create-item-modal',
                 ownerScope: this.scope,
                 getUi: this.getUi,
+                kernel: creationKernel,
             });
             await surface.mount(host, context => {
                 buildControls((name, options) => context.create(name, options));
@@ -167,11 +165,6 @@
             if (surface.fallback) {
                 await surface.dispose('create-surface-fallback');
                 this.showUnavailable();
-                return;
-            }
-            if (surface.kernel !== 'web-awesome') {
-                await surface.dispose('create-kernel-unavailable');
-                this.showUnavailable('创建界面组件尚未就绪，请按 Ctrl+R 重新加载应用。');
                 return;
             }
             const dialogScope = surface.scope;
@@ -214,6 +207,7 @@
                     actions: [cancelButton, createButton], onClose: cleanup,
                     previousFocus: openerFocus,
                     previousFocusId: openerFocus?.id || '',
+                    native: surface.kernel === 'native',
                 });
             } catch (modalError) {
                 await disposeDialog('create-modal-failed');

@@ -136,10 +136,10 @@ window.eval(fs.readFileSync(path.join(root, 'modules/ui-system/next-shell/notifi
 window.eval(fs.readFileSync(path.join(root, 'modules/ui-system/next-shell/launchpad-controller.js'), 'utf8'));
 window.eval(fs.readFileSync(path.join(root, 'modules/ui-system/next-shell/creation-controller.js'), 'utf8'));
 window.eval(fs.readFileSync(path.join(root, 'modules/ui-system/next-shell/next-shell-controller.js'), 'utf8'));
-window.eval(fs.readFileSync(path.join(root, 'modules/topTabManager.js'), 'utf8'));
-window.topTabManager.init();
+window.eval(fs.readFileSync(path.join(root, 'modules/mainChatSurface.js'), 'utf8'));
+window.mainChatSurface.init();
 await new Promise(resolve => setTimeout(resolve, 10));
-assert.equal(window.topTabManager.isMounted(), true, 'the canonical shell must mount the tab host');
+assert.equal(window.mainChatSurface.isMounted(), true, 'the canonical shell must mount the tab host');
 assert.equal(window.VCPLifecycle.diagnostics.find('next:tab-host').length, 1, 'the canonical shell must have exactly one tab-host owner');
 assert.equal(window.VCPLifecycle.diagnostics.find('next:app-grid').length, 1, 'the canonical shell must own one app-grid render lifetime');
 window.dispatchEvent(new window.CustomEvent('next-ui-apps-changed', { detail: { action: 'registered', id: 'fixture' } }));
@@ -163,20 +163,20 @@ await new Promise(resolve => setTimeout(resolve, 0));
 assert.ok(activates > activationsBeforeKeyboard, 'Enter must activate a focused dynamic tab');
 
 const overlayOwner = Symbol('test-overlay');
-await window.topTabManager.acquireOverlay(overlayOwner);
+await window.mainChatSurface.acquireOverlay(overlayOwner);
 assert.equal(lifecycleEvents.at(-1), 'activate:none', 'DOM overlays must hide native WebContentsViews before mounting');
-window.topTabManager.setView('app:translator');
+window.mainChatSurface.setView('app:translator');
 await new Promise(resolve => setTimeout(resolve, 0));
 assert.equal(lifecycleEvents.at(-1), 'activate:none', 'view changes must not reactivate native content while an overlay lease is held');
-window.topTabManager.releaseOverlay(overlayOwner);
+window.mainChatSurface.releaseOverlay(overlayOwner);
 await new Promise(resolve => setTimeout(resolve, 0));
 assert.equal(lifecycleEvents.at(-1), 'activate:open-translator-window', 'releasing the final overlay lease must restore the active embedded view');
 
 deferNextOverlayHide = true;
 const delayedOverlayOwner = Symbol('delayed-overlay');
-const delayedAcquire = window.topTabManager.acquireOverlay(delayedOverlayOwner);
+const delayedAcquire = window.mainChatSurface.acquireOverlay(delayedOverlayOwner);
 await new Promise(resolve => setTimeout(resolve, 0));
-window.topTabManager.releaseOverlay(delayedOverlayOwner);
+window.mainChatSurface.releaseOverlay(delayedOverlayOwner);
 resolveDeferredOverlayHide?.();
 await delayedAcquire;
 await new Promise(resolve => setTimeout(resolve, 0));
@@ -238,9 +238,9 @@ assert.equal(window.VCPNextShellController.getDiagnostics().overlay.active, fals
     'closing the replacement modal must release its generation lease');
 reopenedOverlayModal.remove();
 
-const lifecycleUnmount = window.topTabManager.unmount();
+const lifecycleUnmount = window.mainChatSurface.unmount();
 await new Promise(resolve => setTimeout(resolve, 0));
-assert.equal(window.topTabManager.isMounted(), false, 'explicit lifecycle teardown must unmount the tab host');
+assert.equal(window.mainChatSurface.isMounted(), false, 'explicit lifecycle teardown must unmount the tab host');
 assert.equal(window.VCPLifecycle.diagnostics.find('next:tab-host').length, 1,
     'the tab-host owner must remain quiescing while native embedded teardown is pending');
 assert.equal(window.VCPLifecycle.diagnostics.find('next:app-grid').length, 1,
@@ -251,7 +251,7 @@ assert.ok(
     'teardown must hide the native view before closing its session',
 );
 
-const lifecycleRemount = window.topTabManager.mount();
+const lifecycleRemount = window.mainChatSurface.mount();
 await new Promise(resolve => setTimeout(resolve, 10));
 assert.equal(creates, 1, 'remount must wait for the previous native teardown');
 resolveDeferredClose?.();
@@ -272,7 +272,7 @@ assert.ok(
 // while tearing down the Next shell.
 allowFeedbackOwner = false;
 
-window.topTabManager.openInternalApp(removableInternalApp.id);
+window.mainChatSurface.openInternalApp(removableInternalApp.id);
 assert.ok(window.document.querySelector('[data-view-id="app:removable-fixture"]'), 'registered internal app must open in the tab host');
 availableInternalApps.delete(removableInternalApp.id);
 window.dispatchEvent(new window.CustomEvent('next-ui-apps-changed', {
@@ -282,11 +282,11 @@ await new Promise(resolve => setTimeout(resolve, 0));
 assert.equal(window.document.querySelector('[data-view-id="app:removable-fixture"]'), null,
     'unregistering an open internal app must close its view and surface');
 assert.equal(removableDisposed, 1, 'unregistering an open app must dispose its mounted surface exactly once');
-window.topTabManager.openInternalApp(failingInternalApp.id);
+window.mainChatSurface.openInternalApp(failingInternalApp.id);
 const originalConsoleError = window.console.error;
 const expectedTeardownErrors = [];
 window.console.error = (...args) => expectedTeardownErrors.push(args);
-const finalUnmount = window.topTabManager.unmount();
+const finalUnmount = window.mainChatSurface.unmount();
 await new Promise(resolve => setTimeout(resolve, 0));
 resolveDeferredClose?.();
 await assert.doesNotReject(finalUnmount, 'one failing app disposer must not block canonical lifecycle teardown');

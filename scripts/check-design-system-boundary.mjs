@@ -94,7 +94,7 @@ const allowedSourceDifferences = new Set([
     'modules/services/senderTaskRegistry.js',
     'modules/services/windowStateService.js',
     'modules/shared/embeddedAppAllowlist.js',
-    'modules/topTabManager.js',
+    'modules/mainChatSurface.js',
     'modules/topicListManager.js',
     'modules/trayManager.js',
     'modules/ui-helpers.js',
@@ -268,6 +268,11 @@ const allowedSourceDifferences = new Set([
 ]);
 const allowedSourceDifferencePatterns = [
     /^vendor\/webawesome(?:-runtime)?\//,
+    /^ScriptoriumModules\//,
+    /^VCPDistributedServer\/Plugin\/PowerShellExecutor\/PowerShellExecutor\.js$/,
+    /^modules\/renderer\/toolRequestScanner\.js$/,
+    /^tests\/(?:scriptorium-markdown-linebreak-electron|tool-request-scanner)\.test\.js$/,
+    /^scripts\/test-main-chat-surface-session\.mjs$/,
     /^(?:Agenttaskmodules|Forummodules|Logmodules|Memomodules|PluginManagerModules|VCPHumanToolBox|VchatManager)\//,
     /^Notemodules\/notemini\.(?:html|js|css)$/,
 ];
@@ -315,7 +320,7 @@ const requiredRetainedFiles = [
     'assets/nova_button.png',
     'assets/nova_button_light.png',
     'styles/ui-next.css',
-    'modules/topTabManager.js',
+    'modules/mainChatSurface.js',
     'modules/ui-system/lifecycle-scope.js',
     'modules/services/deepWikiService.js',
     'modules/services/embeddedAppSessionManager.js',
@@ -345,7 +350,7 @@ if (!/e\.defaultPrevented\s*\|\|\s*e\.isComposing\s*\|\|\s*e\.keyCode\s*===\s*22
 }
 
 const nextCommandConsumers = [
-    'modules/topTabManager.js',
+    'modules/mainChatSurface.js',
     'modules/ui-system/appearance-studio.js',
 ];
 for (const file of nextCommandConsumers) {

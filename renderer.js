@@ -330,10 +330,10 @@ import { setupEventListeners } from './modules/event-listeners.js';
         console.error('[RENDERER_INIT] trayManager module not found!');
     }
 
-    if (window.topTabManager) {
-        window.topTabManager.init();
+    if (window.mainChatSurface) {
+        window.mainChatSurface.init();
     } else {
-        console.error('[RENDERER_INIT] topTabManager module not found!');
+        console.error('[RENDERER_INIT] mainChatSurface module not found!');
     }
 
     // 确保在GroupRenderer初始化之前，其容器已准备好

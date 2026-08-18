@@ -21,7 +21,7 @@
 以下内容不再作为“待建设路线”重复施工：
 
 - 主窗口已收敛为一个规范 presentation。
-- Next Shell 已拆为 8 个窄控制器，`topTabManager` 仅保留兼容转发。
+- 主聊天只有一个 canonical Surface；`mainChatSurface` 是其明确的入口桥接，不再承担旧布局兼容。
 - 动态 Surface 已具备 `LifecycleScope`、可撤销注册、迟到结果隔离和只读诊断。
 - Ask Nova、Overlay、WebContentsView session、renderer reload/crash 已有确定性回归。
 - 主聊天操作序列、故障注入和资源压力门禁已经可用。

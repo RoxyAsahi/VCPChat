@@ -1,7 +1,7 @@
-/* Backward-compatible facade. Next implementation lives in NextShellController. */
+/* Canonical main-chat surface bridge. Presentation lives in NextShellController. */
 (() => {
     const controller = () => window.VCPNextShellController;
-    window.topTabManager = Object.freeze({
+    window.mainChatSurface = Object.freeze({
         init: (...args) => controller()?.init(...args),
         mount: (...args) => controller()?.mount(...args),
         unmount: (...args) => controller()?.unmount(...args),

@@ -27,6 +27,12 @@ Classic 主窗口 DOM 或 Classic/Next remount。
     └── 上游共享消息、输入、列表和插件业务 DOM
 ```
 
+本轮收敛的发布阻塞项已经落到代码与门禁：内嵌 WebContentsView 只允许声明的本地页面继续导航，
+外部 URL 转交系统浏览器；创建 Surface 在 Web Awesome 完整加载失败或部分注册时，整块切换到
+同一 VCPUI 控件树的 native kernel；主题预览、持久化和主进程确认广播各只有一个权威事务；
+`superdoc` 无生产消费者，已从生产依赖移除。`mainChatSurface` 是唯一标签宿主入口，旧
+`topTabManager` 文件和运行时名称不再存在。
+
 内嵌 Notes、Translator、Memo、Forum 等仍是上游独立页面。它们不使用主窗口 Surface，
 也不接收 `uiMode` URL 参数；这是页面边界，不是第二套主窗口布局。
 
@@ -36,12 +42,11 @@ Classic 主窗口 DOM 或 Classic/Next remount。
 - Appearance Engine、Studio、全局设置和操作序列不再接收 `uiMode` 参数或事件。
 - 内嵌页面 URL 不再追加 `?uiMode=classic`。
 - 内部能力判断统一经过 `window.VCPSurfacePolicy.isMainChat()`。
-- `main.html` 暂时保留 `data-ui-mode="next"`，仅作为第三方插件的一轮兼容别名。
-- 只有 `surface-policy.js` 可以读取该别名；边界门禁禁止其他生产模块继续消费它。
-- 兼容别名应在下一次明确的插件兼容窗口结束后删除，不得扩展新消费者。
+- `main.html` 已删除 `data-ui-mode`，主窗口只使用 `data-vcp-ui-surface="main-chat"`。
+- 边界门禁禁止主聊天和子页面重新引入该历史标识。
 
-`next-ui-*` ID、class、目录和文件名属于命名债，不是运行时模式状态。本轮不做大规模机械
-重命名，避免在生命周期收敛期间制造无意义的 DOM、CSS 和插件兼容风险。
+`next-ui-*` ID、class 和 CSS 前缀仍属于视觉资源命名，不是运行时模式状态；运行时入口已统一为
+`mainChatSurface`，避免业务代码继续依赖旧的 `topTabManager` 名称。
 
 ## 3. 已完成能力
 
@@ -91,7 +96,7 @@ Windows 真机 DPI/IME、长时间 soak 和第三方插件组合仍属于发布�
 
 达到以下条件才可称为“适合创建或更新 PR”：
 
-1. 生产搜索中，`uiMode` 只剩 `main.html` 与 `surface-policy.js` 的兼容别名。
+1. 生产主聊天中不再存在 `uiMode` 运行时分支；历史设置字段只用于数据兼容读取。
 2. 主聊天、设置、内嵌应用和生命周期门禁全部通过。
 3. 相对目标上游分支无未解决冲突。
 4. `styles/themes.css` 等用户独立修改未被误纳入。
@@ -104,8 +109,8 @@ Windows 真机 DPI/IME、长时间 soak 和第三方插件组合仍属于发布�
 
 1. 完成 Surface marker、Appearance 和 Electron 测试迁移。
 2. 移除无消费者的 mode 测试与一次性迁移脚本。
-3. 保留一轮 `data-ui-mode` 插件兼容别名并记录删除条件。
-4. 稳定期后单独评估 `next-ui-*` 命名整理，不与行为改动混合。
+3. 已删除主窗口 `data-ui-mode` 兼容别名，并由 retirement guard 防止回归。
+4. 已将运行时标签宿主入口从 `topTabManager` 收敛为 `mainChatSurface`。
 5. 任何子页面设计迁移必须独立立项并提供真实消费者、回滚与生命周期证据。
 
 ## 8. 更新规则

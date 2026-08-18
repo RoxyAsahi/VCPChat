@@ -112,7 +112,7 @@ async function assertMainSurface(page, browser, label) {
         return {
             ready: document.documentElement.dataset.vcpRendererReady,
             surface: document.documentElement.dataset.vcpUiSurface,
-            mounted: window.topTabManager?.isMounted?.() === true,
+            mounted: window.mainChatSurface?.isMounted?.() === true,
             container: visible('.container'),
             panel: visible('#nextUiMainPanel'),
             chat: visible('.main-content'),
@@ -368,7 +368,7 @@ async function cycleAskNova(page, target, label) {
         }));
     });
     await page.waitForFunction(() => !document.querySelector('.ask-nova-modal-host'), { timeout: timeoutMs });
-    await page.evaluate(() => window.topTabManager.setView('home'));
+    await page.evaluate(() => window.mainChatSurface.setView('home'));
     assert.equal(page.isClosed(), false, `${label}: Ask Nova Escape closed the main renderer`);
 }
 
@@ -389,7 +389,7 @@ async function cycleSettings(page, label) {
 
 async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
     await page.evaluate(async () => {
-        window.topTabManager.setView('home');
+        window.mainChatSurface.setView('home');
         window.uiManager.switchToTab('agents');
         document.querySelector('#agentList [data-item-id="StressAgent"]')?.click();
         window.uiManager.switchToTab('settings');
@@ -439,7 +439,7 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
 }
 
 async function cycleEmbeddedEscape(page, browser, app, label) {
-    await page.evaluate(appDefinition => window.topTabManager.openEmbeddedApp(appDefinition), app);
+    await page.evaluate(appDefinition => window.mainChatSurface.openEmbeddedApp(appDefinition), app);
     const childPage = await waitForPage(browser, candidate => candidate.url().includes(app.key), `${label}: ${app.name}`);
     await childPage.waitForFunction(() => document.readyState === 'complete', { timeout: timeoutMs });
     await rememberRendererNode(page, `embedded-tab:${app.id}`, `[data-view-id="app:${app.id}"]`);
@@ -451,7 +451,7 @@ async function cycleEmbeddedEscape(page, browser, app, label) {
 }
 
 async function cycleAskNovaOverEmbedded(page, browser, app, target, label) {
-    await page.evaluate(appDefinition => window.topTabManager.openEmbeddedApp(appDefinition), app);
+    await page.evaluate(appDefinition => window.mainChatSurface.openEmbeddedApp(appDefinition), app);
     const childPage = await waitForPage(browser, candidate => candidate.url().includes(app.key), `${label}: embedded ${app.name}`);
     await childPage.waitForFunction(() => document.readyState === 'complete', { timeout: timeoutMs });
     await page.evaluate(async targetId => {
@@ -468,9 +468,9 @@ async function cycleAskNovaOverEmbedded(page, browser, app, target, label) {
     assert.equal(childPage.isClosed(), false, `${label}: closing Ask Nova destroyed the covered embedded app`);
     await rememberRendererNode(page, `covered-tab:${app.id}`, `[data-view-id="app:${app.id}"]`);
     await rememberRendererNode(page, `covered-view:${app.id}`, `[data-app-id="${app.id}"]`);
-    await page.evaluate(viewId => window.topTabManager.closeView(viewId), `app:${app.id}`);
+    await page.evaluate(viewId => window.mainChatSurface.closeView(viewId), `app:${app.id}`);
     await waitForPageGone(browser, candidate => candidate.url().includes(app.key), `${label}: embedded ${app.name}`);
-    await page.evaluate(() => window.topTabManager.setView('home'));
+    await page.evaluate(() => window.mainChatSurface.setView('home'));
 }
 
 async function waitForEmbeddedActivation(page, expectedAction, label) {
@@ -492,7 +492,7 @@ async function cycleOverlayOwnership(page, browser, app, label) {
         try { return new URL(candidate.url()).searchParams.get('vcpEmbedded') === '1'; } catch { return false; }
     };
 
-    await page.evaluate(appDefinition => window.topTabManager.openEmbeddedApp(appDefinition), catalogApp);
+    await page.evaluate(appDefinition => window.mainChatSurface.openEmbeddedApp(appDefinition), catalogApp);
     await waitForPage(browser, isEmbedded, `${label}: overlay fixture ${app.name}`);
     await waitForEmbeddedActivation(page, app.action, `${label}: initial embedded app`);
 
@@ -512,7 +512,7 @@ async function cycleOverlayOwnership(page, browser, app, label) {
 
     await page.evaluate(() => document.getElementById('nextUiNotificationMenuBtn').click());
     await page.waitForFunction(() => !document.getElementById('nextUiNotificationMenu')?.hidden, { timeout: timeoutMs });
-    await page.evaluate(() => window.topTabManager.openAccountMenu());
+    await page.evaluate(() => window.mainChatSurface.openAccountMenu());
     await page.waitForFunction(() => !document.getElementById('nextUiAccountMenu')?.hidden, { timeout: timeoutMs });
     await page.evaluate(() => window.VCPAppearanceStudio.open());
     await page.waitForFunction(() => window.VCPAppearanceStudio.isOpen(), { timeout: timeoutMs });
@@ -544,9 +544,9 @@ async function cycleOverlayOwnership(page, browser, app, label) {
     await page.waitForFunction(() => !window.VCPAppearanceStudio.isOpen(), { timeout: timeoutMs });
     await waitForEmbeddedActivation(page, app.action, `${label}: Appearance Studio close`);
 
-    await page.evaluate(viewId => window.topTabManager.closeView(viewId), `app:${catalogApp.id}`);
+    await page.evaluate(viewId => window.mainChatSurface.closeView(viewId), `app:${catalogApp.id}`);
     await waitForPageGone(browser, isEmbedded, `${label}: overlay fixture ${app.name}`);
-    await page.evaluate(() => window.topTabManager.setView('home'));
+    await page.evaluate(() => window.mainChatSurface.setView('home'));
 }
 
 async function cycleDetachedApp(page, browser, app, label) {
@@ -556,7 +556,7 @@ async function cycleDetachedApp(page, browser, app, label) {
     };
     const isStandalone = candidate => candidate.url().includes(app.key) && !isEmbedded(candidate);
 
-    await page.evaluate(appDefinition => window.topTabManager.openEmbeddedApp(appDefinition), app);
+    await page.evaluate(appDefinition => window.mainChatSurface.openEmbeddedApp(appDefinition), app);
     const embeddedPage = await waitForPage(browser, isEmbedded, `${label}: embedded ${app.name}`);
     await embeddedPage.waitForFunction(() => document.readyState === 'complete', { timeout: timeoutMs });
     await rememberRendererNode(page, `detached-tab:${app.id}`, `[data-view-id="app:${app.id}"]`);
@@ -587,11 +587,11 @@ async function cycleDetachedApp(page, browser, app, label) {
     await waitForPageGone(browser, isStandalone, `${label}: detached ${app.name}`);
     assert.equal(page.isClosed(), false, `${label}: detached app Escape closed the main renderer`);
 
-    await page.evaluate(appDefinition => window.topTabManager.openEmbeddedApp(appDefinition), app);
+    await page.evaluate(appDefinition => window.mainChatSurface.openEmbeddedApp(appDefinition), app);
     await waitForPage(browser, isEmbedded, `${label}: reopened ${app.name}`);
-    await page.evaluate(viewId => window.topTabManager.closeView(viewId), `app:${app.id}`);
+    await page.evaluate(viewId => window.mainChatSurface.closeView(viewId), `app:${app.id}`);
     await waitForPageGone(browser, isEmbedded, `${label}: reopened ${app.name}`);
-    await page.evaluate(() => window.topTabManager.setView('home'));
+    await page.evaluate(() => window.mainChatSurface.setView('home'));
 }
 
 async function cycleRendererReload(page, browser, app, label) {
@@ -603,7 +603,7 @@ async function cycleRendererReload(page, browser, app, label) {
         if (!candidate.url().includes(app.key)) return false;
         try { return new URL(candidate.url()).searchParams.get('vcpEmbedded') === '1'; } catch { return false; }
     };
-    await page.evaluate(appDefinition => window.topTabManager.openEmbeddedApp(appDefinition), catalogApp);
+    await page.evaluate(appDefinition => window.mainChatSurface.openEmbeddedApp(appDefinition), catalogApp);
     const childPage = await waitForPage(browser, isEmbedded, `${label}: reload fixture ${app.name}`);
     await childPage.waitForFunction(() => document.readyState === 'complete', { timeout: timeoutMs });
     const storedBeforeReload = await page.evaluate(() => sessionStorage.getItem('vcpchat.nextUi.openTabs.v1'));
@@ -611,7 +611,7 @@ async function cycleRendererReload(page, browser, app, label) {
 
     await page.reload({ waitUntil: 'domcontentloaded', timeout: timeoutMs });
     await page.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout: timeoutMs });
-    await page.waitForFunction(() => window.topTabManager?.isMounted?.() && window.askNovaController, { timeout: timeoutMs });
+    await page.waitForFunction(() => window.mainChatSurface?.isMounted?.() && window.askNovaController, { timeout: timeoutMs });
     // The renderer readiness marker precedes asynchronous reconciliation with
     // Main's native WebContentsView registry. Give that one bounded turn, then
     // inspect the final DOM atomically rather than observing an intermediate
@@ -660,9 +660,9 @@ async function cycleRendererReload(page, browser, app, label) {
     assert.equal(restoredSurface.hostVisible, true, `${label}: renderer reload left the embedded host hidden: ${JSON.stringify(restoredSurface)}`);
     assert.equal(restoredSurface.topbarVisible, true, `${label}: renderer reload hid the Next top bar: ${JSON.stringify(restoredSurface)}`);
 
-    await page.evaluate(viewId => window.topTabManager.closeView(viewId), `app:${catalogApp.id}`);
+    await page.evaluate(viewId => window.mainChatSurface.closeView(viewId), `app:${catalogApp.id}`);
     await waitForPageGone(browser, isEmbedded, `${label}: reload fixture ${app.name}`);
-    await page.evaluate(() => window.topTabManager.setView('home'));
+    await page.evaluate(() => window.mainChatSurface.setView('home'));
     await assertMainSurface(page, browser, `${label}: renderer reload cleanup`);
 }
 
@@ -675,7 +675,7 @@ async function cycleRendererCrash(page, browser, app, label) {
         if (!candidate.url().includes(app.key)) return false;
         try { return new URL(candidate.url()).searchParams.get('vcpEmbedded') === '1'; } catch { return false; }
     };
-    await page.evaluate(appDefinition => window.topTabManager.openEmbeddedApp(appDefinition), catalogApp);
+    await page.evaluate(appDefinition => window.mainChatSurface.openEmbeddedApp(appDefinition), catalogApp);
     await waitForPage(browser, isEmbedded, `${label}: crash fixture ${app.name}`);
     await waitForEmbeddedActivation(page, app.action, `${label}: crash fixture activation`);
 
@@ -689,7 +689,7 @@ async function cycleRendererCrash(page, browser, app, label) {
 
     const recoveredPage = await waitForPage(browser, candidate => candidate.url().includes('main.html'), `${label}: recovered main renderer`);
     await recoveredPage.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout: timeoutMs });
-    await recoveredPage.waitForFunction(() => window.topTabManager?.isMounted?.() && window.askNovaController, { timeout: timeoutMs });
+    await recoveredPage.waitForFunction(() => window.mainChatSurface?.isMounted?.() && window.askNovaController, { timeout: timeoutMs });
     await recoveredPage.waitForFunction(expectedId => (
         document.querySelector(`[data-view-id="app:${expectedId}"]`)
         && document.getElementById('nextUiInternalAppHost')?.dataset.activeAppId === expectedId
@@ -698,9 +698,9 @@ async function cycleRendererCrash(page, browser, app, label) {
     const embeddedPages = (await browser.pages()).filter(candidate => !candidate.isClosed() && isEmbedded(candidate));
     assert.equal(embeddedPages.length, 1, `${label}: crash recovery duplicated embedded WebContents (${embeddedPages.length})`);
 
-    await recoveredPage.evaluate(viewId => window.topTabManager.closeView(viewId), `app:${catalogApp.id}`);
+    await recoveredPage.evaluate(viewId => window.mainChatSurface.closeView(viewId), `app:${catalogApp.id}`);
     await waitForPageGone(browser, isEmbedded, `${label}: crash fixture ${app.name}`);
-    await recoveredPage.evaluate(() => window.topTabManager.setView('home'));
+    await recoveredPage.evaluate(() => window.mainChatSurface.setView('home'));
     await assertMainSurface(recoveredPage, browser, `${label}: crash recovery cleanup`);
     return recoveredPage;
 }
@@ -714,7 +714,7 @@ async function assertCanonicalHostStable(page, browser, label) {
         };
     });
     await page.waitForFunction(() => document.documentElement.dataset.vcpUiSurface === 'main-chat'
-        && window.topTabManager?.isMounted?.() === true, { timeout: timeoutMs });
+        && window.mainChatSurface?.isMounted?.() === true, { timeout: timeoutMs });
     const after = await page.evaluate(() => {
         const result = {
             sameHost: window.__vcpCanonicalHost === document.getElementById('nextUiInternalAppHost'),
@@ -791,7 +791,7 @@ try {
     };
     trackRendererPage(page);
     await page.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout: timeoutMs });
-    await page.waitForFunction(() => window.topTabManager?.isMounted?.() && window.askNovaController, { timeout: timeoutMs });
+    await page.waitForFunction(() => window.mainChatSurface?.isMounted?.() && window.askNovaController, { timeout: timeoutMs });
     const runCycle = async (cycle, phase) => {
         const label = `${phase} cycle ${cycle + 1}`;
         await page.evaluate(() => {

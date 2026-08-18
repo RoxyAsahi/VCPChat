@@ -163,7 +163,7 @@ Electron 压力测试在真实 renderer 中反复执行 Ask Nova、设置、Agen
 - Appearance Engine、Lucide adapter 等页面级静态 singleton 仍以 renderer page 为自然生命周期；本轮不为追求形式统一而改写 Classic 可见的稳定代码。
 - 原生 IPC 调用本身没有统一 AbortSignal 协议；当前通过 generation、owner active 和最终状态对账保证 UI 正确，但无法取消已经进入主进程的底层工作。
 - 前端插件生命周期仍由上游 Loader 和插件自身负责；本轮不承诺插件卸载或热重载能力。
-- `topTabManager.js` 已退化为兼容 facade；标签、覆盖层、启动台和创建流程由独立 Next controller 承担。
+- `mainChatSurface.js` 是 canonical 主聊天入口；标签、覆盖层、启动台和创建流程由独立窄控制器承担。
 - 自动化证明覆盖路径资源归零，不等价于模型服务、GPU、系统休眠恢复和任意第三方插件组合绝对无缺陷；发布前仍需要长时间 soak 与人工操作序列。
 
 ## 2026-08-18 复核增量

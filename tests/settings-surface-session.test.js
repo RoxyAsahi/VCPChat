@@ -43,4 +43,3 @@ test('global settings sessions invalidate late work across close and reopen', as
         globalThis.document = previous.document;
     }
 });
-

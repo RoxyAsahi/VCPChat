@@ -838,7 +838,7 @@ function nextFrame(callback) {
 }
 
 function buttonFactory(options = {}) {
-    const wa = waControl('button', {});
+    const wa = options.kernel === 'native' ? null : waControl('button', {});
     if (wa) {
         wa.className = 'vcp-ui-button vcp-ui-wa-button';
         const state = { label: 'Button', variant: 'primary', size: 'md', ...options };
@@ -885,7 +885,7 @@ function buttonFactory(options = {}) {
 }
 
 function iconButtonFactory(options = {}) {
-    const wa = waControl('button', {});
+    const wa = options.kernel === 'native' ? null : waControl('button', {});
     if (wa) {
         wa.className = 'vcp-ui-icon-button vcp-ui-wa-icon-button';
         const state = { icon: 'more_horiz', label: '', variant: 'ghost', size: 'md', ...options };
@@ -922,7 +922,9 @@ function iconButtonFactory(options = {}) {
 }
 
 function textControlFactory(kind, options = {}) {
-    const wa = kind === 'input' ? waControl('input', {}) : waControl('textarea', {});
+    const wa = options.kernel === 'native'
+        ? null
+        : kind === 'input' ? waControl('input', {}) : waControl('textarea', {});
     if (wa) {
         wa.className = kind === 'input'
             ? 'vcp-ui-input vcp-ui-wa-input'
@@ -1098,7 +1100,7 @@ function selectFactory(options = {}) {
 }
 
 function checkboxFactory(options = {}) {
-    const wa = waControl('checkbox', {});
+    const wa = options.kernel === 'native' ? null : waControl('checkbox', {});
     if (wa) {
         wa.className = 'vcp-ui-checkbox vcp-ui-wa-checkbox';
         const state = { label: 'Checkbox', checked: false, indeterminate: false, ...options };
@@ -1162,7 +1164,7 @@ function checkboxFactory(options = {}) {
 }
 
 function switchFactory(options = {}) {
-    const wa = waControl('switch', {});
+    const wa = options.kernel === 'native' ? null : waControl('switch', {});
     if (wa) {
         wa.className = 'vcp-ui-switch vcp-ui-wa-switch';
         const state = { label: 'Switch', checked: false, size: 'md', ...options };
@@ -1340,7 +1342,7 @@ function alertFactory(options = {}) {
 const cardFactory = createCardFactory({ makeController, normalize, appendContent, waControl });
 
 function tabsFactory(options = {}) {
-    const wa = waControl('tab-group', {});
+    const wa = options.kernel === 'native' ? null : waControl('tab-group', {});
     if (wa) {
         const state = { items: [], value: '', ...options };
         const controller = makeController(wa, state, current => {

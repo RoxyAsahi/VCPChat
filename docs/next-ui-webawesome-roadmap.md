@@ -6,20 +6,19 @@
 
 本文记录建设期采用的并行 presentation 策略。该迁移阶段已经结束，当前主窗口只有一套规范 presentation；保护上游业务 DOM、事件、IPC 和聊天数据流的边界继续有效。
 
-Web Awesome 只作为新版界面的基础交互与无障碍内核。业务代码通过 `VCPUI` 使用它，不直接创建 `<wa-*>`、读取 `--wa-*` 或依赖第三方事件。Classic 不因 Next UI 的存在而加载、挂载或增强 Web Awesome 控件。
+Web Awesome 只作为 canonical UI 的基础交互与无障碍内核。业务代码通过 `VCPUI` 使用它，不直接创建 `<wa-*>`、读取 `--wa-*` 或依赖第三方事件；内嵌上游子页面不因主窗口采用 VCPUI 而自动加载 Web Awesome。
 
 ```text
 上游领域逻辑与稳定业务接口
-        ├── Classic presentation（上游基线）
-        └── Next presentation（独立生命周期）
+        └── Canonical main-chat Surface
                     └── VCPUI（项目 API）
                               └── Web Awesome（可替换内核）
 ```
 
 ## 不变量
 
-1. Classic DOM 是兼容基线，不为迁就 Web Awesome 改写结构或事件语义。
-2. Next UI 必须挂在明确的 Next root 或 Next surface 内，并能完整 mount/unmount。
+1. 上游共享聊天 DOM、事件和结构化消息视觉语义保持不变。
+2. canonical UI 必须挂在明确的 main-chat Surface 内，并能完整 mount/unmount。
 3. Next presentation 通过稳定 command、store、IPC 或状态订阅调用业务，不通过 `.click()` 驱动隐藏的 Classic 控件。
 4. Web Awesome 只能由 `modules/ui-system/webawesome-adapter.js` 加载；业务模块和通用业务样式不得出现 WA 标签或 Token。
 5. 同一次 surface mount 只能选择一个控件内核：Web Awesome 全部就绪后使用 WA；加载失败或挂载已过期时整次使用 native fallback，不允许加载时半途升级。

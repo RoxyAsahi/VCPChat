@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
 
-const source = await fs.readFile(new URL('../modules/topTabManager.js', import.meta.url), 'utf8');
+const source = await fs.readFile(new URL('../modules/mainChatSurface.js', import.meta.url), 'utf8');
 
 function createWindow(savedSession = null) {
     const dom = new JSDOM(`<!doctype html><html><body>
@@ -26,15 +26,15 @@ function createWindow(savedSession = null) {
 }
 
 const first = createWindow();
-first.window.topTabManager.init();
-first.window.topTabManager.openInternalApp('alpha');
-first.window.topTabManager.openInternalApp('beta');
+first.window.mainChatSurface.init();
+first.window.mainChatSurface.openInternalApp('alpha');
+first.window.mainChatSurface.openInternalApp('beta');
 const savedSession = first.window.sessionStorage.getItem('vcpchat.nextUi.openTabs.v1');
 assert.ok(savedSession, 'open tabs must be recorded in page session storage');
 first.dom.window.close();
 
 const second = createWindow(savedSession);
-second.window.topTabManager.init();
+second.window.mainChatSurface.init();
 await new Promise(resolve => setTimeout(resolve, 0));
 assert.deepEqual(
     [...second.window.document.querySelectorAll('#nextUiDynamicTabs > .next-ui-tab')].map(tab => tab.dataset.viewId),

@@ -79,12 +79,18 @@ const uiManager = (() => {
             theme = 'light';
         }
 
+        const className = `${theme}-theme`;
+        if (document.body.classList.contains(className)
+            && !document.body.classList.contains(theme === 'light' ? 'dark-theme' : 'light-theme')) {
+            return theme;
+        }
         // Apply class to body for CSS styling
         document.body.classList.remove('light-theme', 'dark-theme');
-        document.body.classList.add(`${theme}-theme`);
+        document.body.classList.add(className);
         themeChannel?.publish(Object.freeze({ ready: true, effective: theme }), { source: 'ui-manager' });
 
         console.log(`[UIManager] Theme applied: ${theme}`);
+        return theme;
     }
 
     /**
@@ -104,12 +110,12 @@ const uiManager = (() => {
         // Apply the initial theme based on the settings loaded in the renderer process.
         // This ensures the UI matches the settings file immediately on load.
         const settings = globalSettingsRef.get();
-        if (settings && settings.currentThemeMode && electronAPI.setTheme) {
+        if (settings && settings.currentThemeMode && electronAPI.setThemeMode) {
             console.log(`[UIManager] Applying initial theme from settings: ${settings.currentThemeMode}`);
             // We tell the main process to set the theme. The onThemeUpdated listener
             // above will then catch the broadcast and call applyTheme(), ensuring a single
             // consistent flow for all theme changes.
-            electronAPI.setTheme(settings.currentThemeMode);
+            electronAPI.setThemeMode({ mode: settings.currentThemeMode, persist: false });
         } else {
             // Fallback if the setting is not present for some reason.
             console.warn('[UIManager] currentThemeMode not found in settings, falling back to requesting from main process.');

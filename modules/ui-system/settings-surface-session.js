@@ -40,4 +40,3 @@ export function isCurrentSettingsSurfaceSession(session) {
 export function currentSettingsSurfaceGeneration() {
     return active ? generation : 0;
 }
-

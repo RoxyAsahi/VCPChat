@@ -1,12 +1,12 @@
 # Classic 退场与单一布局收敛记录
 
-> 状态：历史决策与已完成施工记录，不再作为当前路线。当前事实见 [`next-ui-current-state.md`](./next-ui-current-state.md)，后续顺序见 [`next-ui-development-roadmap.md`](./next-ui-development-roadmap.md)。主窗口只有一个规范 presentation；旧 `uiMode` 值仅作为读取兼容缝保留，不再触发运行时换壳。
+> 状态：历史决策与已完成施工记录，不再作为当前路线。当前事实见 [`next-ui-current-state.md`](./next-ui-current-state.md)，后续顺序见 [`next-ui-development-roadmap.md`](./next-ui-development-roadmap.md)。主窗口只有一个规范 presentation；旧 `uiMode` 值不再参与主窗口运行时。
 >
 > 上位路线：[`next-ui-development-roadmap.md`](./next-ui-development-roadmap.md)。业务竞态 oracle：[`main-chat-operation-sequence-testing.md`](./main-chat-operation-sequence-testing.md)。功能对等基线：[`upstream-function-parity.md`](./upstream-function-parity.md)。
 
 ## 1. 决策摘要
 
-VCPChat 主窗口的 Classic presentation 已完成退场。施工核对证实，Classic 与 Next 从来不是两套完整主窗口：消息、输入、侧栏、通知和设置的大部分 DOM 与业务调用本来就是共享的。本轮只收口少量真实分叉、让 Next 新 Surface 稳定常驻，并删除 `uiMode` 门控与失效样式，没有重写共享聊天业务。
+VCPChat 主窗口已收敛为单一 canonical Surface。施工核对证实，历史 Classic 与 Next 从来不是两套完整主窗口：消息、输入、侧栏、通知和设置的大部分 DOM 与业务调用本来就是共享的。本轮收口真实分叉、让 canonical Surface 稳定常驻，并删除 `uiMode` 门控与失效样式，没有重写共享聊天业务。
 
 最终目标是：
 
@@ -253,7 +253,7 @@ M4/M6 不阻塞 M10 启动；某个真实变更单元进入 R 阶段时，只补
 | R5 | 已完成 | Classic 主窗口 DOM/代理/条件 CSS 已机械删除或提升，机械脚本可审计 |
 | R6 | 本地完成，CI 持续验证 | macOS ARM64 smoke、操作序列、资源斜率、离线闭包与 unpacked package 已通过；Windows/macOS workflow 负责跨平台发布证据 |
 
-这里的“Classic 退场”只指主窗口 presentation。内嵌 Notes、Translator 及其他上游子页面按 `ui-surface-policy` 保留独立页面策略，不由主窗口 `uiMode` 兼容缝控制。
+这里的“Classic 退场”只指主窗口历史 presentation 命名。内嵌 Notes、Translator 及其他上游子页面按 `ui-surface-policy` 保留独立页面策略，不由主窗口状态控制。
 
 ### R0：实际拓扑与模式分支清单
 

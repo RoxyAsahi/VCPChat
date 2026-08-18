@@ -39,6 +39,22 @@ function cancelledResult() {
     return { success: false, embeddable: true, cancelled: true, error: '操作已取消。' };
 }
 
+function classifyEmbeddedNavigation(allowedUrl, targetUrl) {
+    let allowed;
+    let target;
+    try {
+        allowed = new URL(allowedUrl);
+        target = new URL(targetUrl);
+    } catch (_error) {
+        return 'blocked';
+    }
+    if (target.protocol === 'http:' || target.protocol === 'https:') return 'external';
+    if (target.protocol !== 'file:' || allowed.protocol !== 'file:') return 'blocked';
+    return target.host === allowed.host && target.pathname === allowed.pathname
+        ? 'internal'
+        : 'blocked';
+}
+
 function normalizeEmbeddedAction(appAction, { optional = false } = {}) {
     if (optional && (appAction === null || appAction === undefined || appAction === '')) return null;
     if (typeof appAction !== 'string' || !embeddedAppAllowlist.get(appAction)) {
@@ -154,6 +170,16 @@ function createEmbeddedAppSessionManager({ mainWindow, launchStandalone, powerMo
         view.webContents.setWindowOpenHandler(({ url }) => {
             if (/^https?:/i.test(url)) shell.openExternal(url).catch(() => {});
             return { action: 'deny' };
+        });
+        view.webContents.on('will-navigate', (event, targetUrl) => {
+            const disposition = classifyEmbeddedNavigation(descriptor.url, targetUrl);
+            if (disposition === 'internal') return;
+            event.preventDefault();
+            if (disposition === 'external') {
+                shell.openExternal(targetUrl).catch(error => {
+                    console.warn(`[EmbeddedApps] Failed to open external URL for ${appAction}:`, error.message);
+                });
+            }
         });
         view.webContents.on('render-process-gone', (_event, details) => {
             if (sessions.get(appAction)?.view !== view) return;
@@ -345,6 +371,7 @@ module.exports = {
     EMBEDDED_APP_ACTIONS: new Set(embeddedAppAllowlist.entries.map(entry => entry.action)),
     MAX_EMBEDDED_SESSIONS,
     MAX_DETACH_COORDINATE,
+    classifyEmbeddedNavigation,
     normalizeEmbeddedAction,
     normalizeDetachPoint,
     createEmbeddedAppSessionManager,

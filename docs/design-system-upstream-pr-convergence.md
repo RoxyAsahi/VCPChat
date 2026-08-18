@@ -7,7 +7,7 @@
 > 减法源快照：`a1f76dffea8105999e465da45d8e52558cd80c47`
 > 原则：只修复本设计分支新增或显著放大的问题，不借设计 PR 重构上游 Classic。
 
-默认策略：首次启动、缺失 `uiMode` 或设置读取失败时进入 Classic。Next 是用户主动选择并保存的可选布局；已经保存为 Next 的用户保持原偏好。
+当前策略：主窗口始终加载 canonical Surface；`uiMode` 不再选择主窗口 presentation。历史 `uiMode` 设置只作为数据兼容字段读取，不触发换壳。
 
 ## 责任边界
 
@@ -26,7 +26,7 @@
 
 1. Translator 嵌入 URL 携带 `vcpApiKey` 的敏感信息泄漏。
 2. 嵌入应用服务自行猜测 `settings.json` 路径，导致 packaged 路径与主进程权威路径不一致。
-3. `topTabManager` 在 Classic 中仍初始化、恢复标签、注册全局监听并可能创建原生 `WebContentsView`。
+3. 历史 `topTabManager` facade 曾在主窗口之外暴露标签宿主能力，现已统一为 `mainChatSurface`。
 4. Next 通过 `.click()` 驱动隐藏 Classic 控件，而不是调用共享 command。
 5. Appearance Studio、全局设置、DOM dataset 和启动缓存缺少 revision/事务协调，旧预览可能覆盖新提交。
 6. 设计分支新增了第二份内嵌应用 allowlist 和 descriptor switch，扩大了上游应用清单的多真源问题。
@@ -52,8 +52,7 @@ Memo、Forum、Log、Plugin Manager、Task、Human ToolBox、VchatManager、RAG 
 
 ```text
 上游业务与 IPC
-    ├── Classic presentation（保持上游基线）
-    └── Next lifecycle（仅 Next 时 mount）
+    └── Canonical main-chat Surface
             ├── MainChatCommands
             ├── AppearanceCoordinator
             ├── AppTabHost + EmbeddedAppAllowlist
@@ -63,10 +62,8 @@ Memo、Forum、Log、Plugin Manager、Task、Human ToolBox、VchatManager、RAG 
 
 ### 生命周期
 
-- 静态 Next DOM 可以随 `main.html` 交付，但 Classic 下不得运行 Next 控制器。
-- `topTabManager.mount()` 只在进入 Next 后执行；`unmount()` 必须先隐藏原生 view，再等待关闭全部嵌入 session，随后完成 Observer、监听和过期异步任务清理。
-- 权威设置加载、保存和 Appearance Studio 使用 `uiModeManager.applyAsync()`；切回 Classic 必须等待原生 view teardown，快速连续切换由 generation 收敛到最后一次请求。
-- 通用标签宿主固定以 `uiMode=classic` 打开业务子页面；主界面选择 Next 不改变子页面 presentation。
+- canonical DOM 随 `main.html` 交付，`mainChatSurface` 负责显式初始化和销毁标签宿主。
+- 通用标签宿主不向业务子页面追加主窗口 `uiMode` 参数；子页面继续使用各自的上游页面策略。
 - 所有异步打开、恢复和 WA 加载都携带 generation；过期结果不得修改 DOM 或原生 view。
 
 ### 状态

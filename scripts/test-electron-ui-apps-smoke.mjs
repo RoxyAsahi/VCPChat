@@ -30,7 +30,7 @@ const electron = process.platform === 'darwin'
     : path.join(root, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron');
 // Generous wait for embedded page boot: the main renderer can block on a
 // model-fetch when the configured vcpServerUrl is unreachable (a normal dev
-// or smoke environment), which delays topTabManager readiness and therefore
+// or smoke environment), which delays mainChatSurface readiness and therefore
 // the embedded-page open flow. 45s was flaky under concurrent Electron
 // instances on the same machine.
 const timeoutMs = 90_000;
@@ -953,7 +953,7 @@ try {
     }));
     assert.equal(askNovaEntryState.buttons, 3, `Ask Nova must expose three modal buttons: ${JSON.stringify(askNovaEntryState)}`);
     assert.equal(askNovaEntryState.externalAnchors, 0, `Ask Nova entries must not navigate directly: ${JSON.stringify(askNovaEntryState)}`);
-    await page.evaluate(() => window.topTabManager.openLaunchpad());
+    await page.evaluate(() => window.mainChatSurface.openLaunchpad());
     await page.waitForFunction(() => {
         const button = document.querySelector('button[data-ask-nova-target="frontend"]');
         const rect = button?.getBoundingClientRect();
@@ -1006,12 +1006,12 @@ try {
 
     // 2. Open the UI 组件库 internal app; WA must register lazily.
     await page.click('#nextUiAddTabBtn');
-    await page.waitForFunction(() => window.topTabManager, { timeout: timeoutMs });
+    await page.waitForFunction(() => window.mainChatSurface, { timeout: timeoutMs });
     const showcaseHandle = await page.evaluateHandle(() =>
         [...document.querySelectorAll('.next-ui-internal-app-item')].find(item => item.getAttribute('title') === 'UI 组件库')
     );
     if (await showcaseHandle.evaluate(el => !el)) {
-        await page.evaluate(() => window.topTabManager.openInternalApp('ui-component-library'));
+        await page.evaluate(() => window.mainChatSurface.openInternalApp('ui-component-library'));
     } else {
         await showcaseHandle.asElement().click();
     }
@@ -1048,7 +1048,7 @@ try {
         const clickedDialog = clickByText('删除项目');
         const clickedLoading = clickByText('模拟加载 1.2 秒');
         await new Promise(resolve => setTimeout(resolve, 0));
-        await window.topTabManager.closeView('app:ui-component-library');
+        await window.mainChatSurface.closeView('app:ui-component-library');
         await new Promise(resolve => setTimeout(resolve, 0));
         return {
             clickedToast,
@@ -1082,7 +1082,7 @@ try {
         window.VCPUI.feedback.setLoading(false);
         delete window.__p1MainDialog;
         delete window.__p1MainToast;
-        window.topTabManager.openInternalApp('ui-component-library');
+        window.mainChatSurface.openInternalApp('ui-component-library');
     });
     await page.waitForFunction(() => document.querySelector('.vcp-ui-showcase-root'), { timeout: timeoutMs });
     summary.push({ surface: 'UI 组件库', mode: 'next', pass: true, lucide: 0, note: 'lazy-registers WA；feedback owner 关闭后不影响主 Surface' });
@@ -1094,7 +1094,7 @@ try {
     // document instead of relying on registrations hidden from adapter state.
     const preCreationKernel = await page.evaluate(() => window.VCPWebAwesome?.getRuntimeState?.().state || 'missing');
     assert.equal(preCreationKernel, 'ready', `showcase runtime state was not shared with creation: ${preCreationKernel}`);
-    await page.evaluate(() => window.topTabManager.setView('home'));
+    await page.evaluate(() => window.mainChatSurface.setView('home'));
     await page.waitForFunction(() => document.getElementById('nextUiHomeTab')?.classList.contains('active'), { timeout: timeoutMs });
     await page.$eval('#nextUiCreateItemBtn', button => button.focus());
     await page.evaluate(() => {
@@ -1309,8 +1309,8 @@ try {
         delete window.__nextDeltaOriginalCommands;
         delete window.__nextDeltaResolveCreate;
     });
-    // A terminal component-load failure is an application-integrity error.
-    // It must report the failure without mounting a visually divergent UI.
+    // A terminal component-load failure must keep the creation workflow alive
+    // through the same VCPUI tree with its native kernel.
     await page.evaluate(() => {
         window.__nextDeltaOriginalWebAwesome = window.VCPWebAwesome;
         window.VCPWebAwesome = Object.freeze({
@@ -1322,10 +1322,13 @@ try {
         });
     });
     await page.click('#nextUiCreateItemBtn');
-    await page.waitForFunction(() => [...document.querySelectorAll('.vcp-ui-toast')]
-        .some(item => item.textContent.includes('创建界面组件加载失败')), { timeout: timeoutMs });
-    assert.equal(await page.evaluate(() => Boolean(document.querySelector('.next-ui-create-dialog-host'))), false,
-        'failed WA creation mounted a native substitute');
+    await page.waitForFunction(() => Boolean(document.querySelector('.next-ui-create-dialog-host')), { timeout: timeoutMs });
+    assert.equal(await page.evaluate(() => Boolean(document.querySelector('.next-ui-create-dialog-host'))), true,
+        'failed WA creation must preserve the native creation workflow');
+    assert.equal(await page.evaluate(() => Boolean(document.querySelector('.next-ui-create-dialog-host wa-dialog'))), false,
+        'failed WA creation must not mix a partial Web Awesome dialog into native controls');
+    await page.evaluate(() => document.querySelector('.next-ui-create-dialog-host button[aria-label="关闭对话框"]')?.click());
+    await page.waitForFunction(() => !document.querySelector('.next-ui-create-dialog-host'), { timeout: timeoutMs });
     await page.evaluate(() => {
         window.VCPWebAwesome = window.__nextDeltaOriginalWebAwesome;
         delete window.__nextDeltaOriginalWebAwesome;
@@ -1385,7 +1388,7 @@ try {
 
     // Agent settings are a renderer-owned surface and must not create child
     // WebContents or accumulate VCPUI adapters when repeatedly revisited.
-    await page.evaluate(() => window.topTabManager.setView('home'));
+    await page.evaluate(() => window.mainChatSurface.setView('home'));
     await page.waitForSelector('#agentList [data-item-id="SmokeAgent"]', { timeout: timeoutMs });
     await page.click('#agentList [data-item-id="SmokeAgent"]');
     await page.evaluate(() => window.uiManager.switchToTab('settings'));
@@ -1417,7 +1420,7 @@ try {
     for (const app of EMBEDDED_APPS) {
         console.log(`[electron-ui-apps] opening ${app.name}`);
         const label = `next:${app.name}`;
-        await page.evaluate((appDefinition) => window.topTabManager.openEmbeddedApp(appDefinition), {
+        await page.evaluate((appDefinition) => window.mainChatSurface.openEmbeddedApp(appDefinition), {
             id: app.id, action: app.action, name: app.name,
         });
         const childPage = await waitForChildPage(browser, app.key, Date.now() + timeoutMs, app.name);
@@ -1447,7 +1450,7 @@ try {
             assert.equal(page.isClosed(), false, 'embedded Escape cascaded into the main window');
             for (let cycle = 0; cycle < 4; cycle += 1) {
                 console.log(`[electron-ui-apps] reopening ${app.name} cycle ${cycle + 1}`);
-                await page.evaluate((appDefinition) => window.topTabManager.openEmbeddedApp(appDefinition), {
+                await page.evaluate((appDefinition) => window.mainChatSurface.openEmbeddedApp(appDefinition), {
                     id: app.id, action: app.action, name: app.name,
                 });
                 const reopened = await waitForChildPage(browser, app.key, Date.now() + timeoutMs, `${app.name} cycle ${cycle + 1}`);
@@ -1457,7 +1460,7 @@ try {
             }
             continue;
         }
-        await page.evaluate((appDefinition) => window.topTabManager.closeView(`app:${appDefinition.id}`), { id: app.id });
+        await page.evaluate((appDefinition) => window.mainChatSurface.closeView(`app:${appDefinition.id}`), { id: app.id });
         await ensureChildPageClosed(browser, app.key, Date.now() + timeoutMs, app.name);
     }
 

@@ -351,10 +351,10 @@ const trayManager = (function () {
             closed = true;
             document.removeEventListener('keydown', handleKeydown, true);
             modal.remove();
-            window.topTabManager?.releaseOverlay?.(overlayOwner);
+            window.mainChatSurface?.releaseOverlay?.(overlayOwner);
             focusReturnTarget?.focus();
         };
-        Promise.resolve(window.topTabManager?.acquireOverlay?.(overlayOwner)).catch(error => {
+        Promise.resolve(window.mainChatSurface?.acquireOverlay?.(overlayOwner)).catch(error => {
             console.warn('[TrayManager] Failed to hide embedded app for tray settings:', error);
         });
         container.appendChild(modal);

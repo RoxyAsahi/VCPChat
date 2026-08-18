@@ -45,7 +45,7 @@ for (const file of [
         `${file} must not retain a main-window Classic/Next runtime branch`,
     );
 }
-assert.doesNotMatch(read('modules/topTabManager.js'), /prepareForMode|syncMode/,
+assert.doesNotMatch(read('modules/mainChatSurface.js'), /prepareForMode|syncMode/,
     'the canonical tab-host facade must not expose retired mode-transition methods');
 
 const legacyAliasFiles = new Set(['main.html', 'modules/ui-system/surface-policy.js']);
@@ -56,8 +56,8 @@ for (const file of ['main.html', 'renderer.js', ...sourceFiles('modules'), ...so
 }
 assert.equal(document.documentElement.dataset.vcpUiSurface, 'main-chat',
     'the canonical main window must use the explicit main-chat Surface marker');
-assert.equal(document.documentElement.dataset.uiMode, 'next',
-    'the legacy data-ui-mode alias remains for one compatibility release only');
-assert.match(read('modules/ui-system/surface-policy.js'), /one-release compatibility alias/,
-    'the legacy alias must remain isolated and visibly deprecated');
+assert.equal(document.documentElement.dataset.uiMode, undefined,
+    'the retired data-ui-mode alias must not be emitted by the canonical main window');
+assert.doesNotMatch(read('modules/ui-system/surface-policy.js'), /data-ui-mode|compatibility alias/,
+    'surface policy must use only the canonical main-chat capability');
 console.log('Classic retirement boundary gate passed.');

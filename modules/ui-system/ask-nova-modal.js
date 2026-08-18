@@ -165,7 +165,7 @@ export function createAskNovaController(options = {}) {
         const overlayOwner = Symbol('ask-nova-overlay');
         const modalScope = controllerScope?.child(`next:ask-nova-modal:${initialTarget.id}`) || null;
         try {
-            await window.topTabManager?.acquireOverlay?.(overlayOwner);
+            await window.mainChatSurface?.acquireOverlay?.(overlayOwner);
         } catch (error) {
             if (modalScope) await modalScope.dispose('overlay-acquire-failed');
             throw error;
@@ -174,23 +174,23 @@ export function createAskNovaController(options = {}) {
         // destroyed while the native view was being hidden.  Do not attach a
         // lease to a dead owner: return it immediately instead.
         if (modalScope && !modalScope.active) {
-            window.topTabManager?.releaseOverlay?.(overlayOwner);
+            window.mainChatSurface?.releaseOverlay?.(overlayOwner);
             return null;
         }
-        modalScope?.own(() => window.topTabManager?.releaseOverlay?.(overlayOwner), 'overlay-lease', 'overlay');
+        modalScope?.own(() => window.mainChatSurface?.releaseOverlay?.(overlayOwner), 'overlay-lease', 'overlay');
         if (requestGeneration !== openGeneration) {
             if (modalScope) await modalScope.dispose('superseded-open');
-            else window.topTabManager?.releaseOverlay?.(overlayOwner);
+            else window.mainChatSurface?.releaseOverlay?.(overlayOwner);
             return activeModal;
         }
         if (destroyed) {
             if (modalScope) await modalScope.dispose('open-cancelled');
-            else window.topTabManager?.releaseOverlay?.(overlayOwner);
+            else window.mainChatSurface?.releaseOverlay?.(overlayOwner);
             return null;
         }
         if (activeModal) {
             if (modalScope) await modalScope.dispose('duplicate-open');
-            else window.topTabManager?.releaseOverlay?.(overlayOwner);
+            else window.mainChatSurface?.releaseOverlay?.(overlayOwner);
             activeModal.switchTarget(initialTarget.id);
             activeModal.focusComposer();
             return activeModal;
@@ -283,7 +283,7 @@ export function createAskNovaController(options = {}) {
                     console.error('[AskNova] Failed to dispose modal resources:', error);
                 });
             } else {
-                window.topTabManager?.releaseOverlay?.(overlayOwner);
+                window.mainChatSurface?.releaseOverlay?.(overlayOwner);
                 queueMicrotask(() => scopeHost.remove());
             }
             activeModal = null;
@@ -302,7 +302,7 @@ export function createAskNovaController(options = {}) {
             });
         } catch (error) {
             if (modalScope) await modalScope.dispose('modal-create-failed');
-            else window.topTabManager?.releaseOverlay?.(overlayOwner);
+            else window.mainChatSurface?.releaseOverlay?.(overlayOwner);
             throw error;
         }
         modal.element.classList.add('ask-nova-modal-host');

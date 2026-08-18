@@ -196,10 +196,10 @@ assert.equal(
 
 // Concurrent opens may settle in either native IPC order, but the most recent
 // user request must select the final target and only one modal may survive.
-const previousConcurrentTopTabManager = window.topTabManager;
+const previousConcurrentMainChatSurface = window.mainChatSurface;
 const concurrentOverlayResolvers = [];
 const concurrentOverlayReleases = [];
-window.topTabManager = {
+window.mainChatSurface = {
     acquireOverlay: () => new Promise(resolve => concurrentOverlayResolvers.push(resolve)),
     releaseOverlay: owner => concurrentOverlayReleases.push(owner)
 };
@@ -224,15 +224,15 @@ latestConcurrentModal.close();
 await new Promise(resolve => setTimeout(resolve, 0));
 await concurrentAskNovaController.destroy();
 assert.equal(concurrentOverlayReleases.length, 2, 'both concurrent overlay leases must be returned');
-window.topTabManager = previousConcurrentTopTabManager;
+window.mainChatSurface = previousConcurrentMainChatSurface;
 
 // Destroying the controller while the native WebContentsView hide request is
 // pending must return the just-acquired overlay lease instead of attaching it
 // to an already disposed modal Scope.
-const previousTopTabManager = window.topTabManager;
+const previousMainChatSurface = window.mainChatSurface;
 let resolveOverlayAcquire;
 const overlayReleases = [];
-window.topTabManager = {
+window.mainChatSurface = {
     acquireOverlay: () => new Promise(resolve => { resolveOverlayAcquire = resolve; }),
     releaseOverlay: owner => overlayReleases.push(owner)
 };
@@ -248,7 +248,7 @@ await interruptedAskNovaController.destroy();
 resolveOverlayAcquire();
 assert.equal(await interruptedOpen, null, 'destroyed Ask Nova must not mount after overlay acquisition settles');
 assert.equal(overlayReleases.length, 1, 'destroyed Ask Nova must return its late overlay lease exactly once');
-window.topTabManager = previousTopTabManager;
+window.mainChatSurface = previousMainChatSurface;
 
 const expected = ['button', 'iconbutton', 'input', 'textarea', 'select', 'range', 'checkbox', 'switch', 'field', 'settingssection', 'settingsactionbar', 'badge', 'alert', 'card', 'tabs', 'toolbar', 'list', 'listitem', 'tableframe', 'emptystate', 'divider', 'tooltip', 'skeleton', 'segmentedcontrol', 'pagination', 'scrollarea', 'modal', 'toast', 'confirmdialog', 'inputdialog', 'apppageshell', 'windowcontrols', 'asyncboundary'];
 expected.forEach(name => assert.ok(VCPUI.components.includes(name), `missing public component ${name}`));
@@ -699,7 +699,7 @@ const nextShellControllerSource = fs.readFileSync(new URL('../modules/ui-system/
 const eventListenersSource = fs.readFileSync(new URL('../modules/event-listeners.js', import.meta.url), 'utf8');
 const notificationMenuControllerSource = fs.readFileSync(new URL('../modules/ui-system/next-shell/notification-menu-controller.js', import.meta.url), 'utf8');
 const rendererSource = fs.readFileSync(new URL('../renderer.js', import.meta.url), 'utf8');
-const topTabManagerSource = fs.readFileSync(new URL('../modules/topTabManager.js', import.meta.url), 'utf8');
+const mainChatSurfaceSource = fs.readFileSync(new URL('../modules/mainChatSurface.js', import.meta.url), 'utf8');
 const appTabHostSource = fs.readFileSync(new URL('../modules/ui-system/next-shell/app-tab-host.js', import.meta.url), 'utf8');
 const accountMenuControllerSource = fs.readFileSync(new URL('../modules/ui-system/next-shell/account-menu-controller.js', import.meta.url), 'utf8');
 const agentHandlersSource = fs.readFileSync(new URL('../modules/ipc/agentHandlers.js', import.meta.url), 'utf8');
@@ -724,8 +724,8 @@ assert.match(mainHtml, /id="nextUiDynamicTabs"[^>]*role="tablist"/,
     'the dynamic application strip must expose tablist semantics');
 assert.match(appTabHostSource, /createElement\('div'\)[\s\S]*setAttribute\('role', 'tab'\)[\s\S]*createElement\('button'\)[\s\S]*next-ui-tab-close/,
     'dynamic tabs must avoid nested buttons and use a real close button');
-assert.doesNotMatch(topTabManagerSource, /createElement\('div'\)[\s\S]*next-ui-tab-close/,
-    'topTabManager must delegate tab presentation to AppTabHost');
+assert.doesNotMatch(mainChatSurfaceSource, /createElement\('div'\)[\s\S]*next-ui-tab-close/,
+    'mainChatSurface must delegate tab presentation to AppTabHost');
 const saveSettingsHandler = settingsHandlersSource.match(/ipcMain\.handle\('save-settings',[\s\S]*?\n\s*}\);/)?.[0] || '';
 assert.match(saveSettingsHandler, /'flowlockContinueDelay' in settingsToSave/,
     'partial settings patches may validate flowlock delay only when supplied');
@@ -757,8 +757,8 @@ assert.match(rendererSource, /usesExplicitState[\s\S]*setOpen\(false\)[\s\S]*tri
     'the presentation popup must close explicitly and restore trigger focus');
 assert.match(accountMenuControllerSource, /topbarThemeButton[\s\S]*setAttribute\('aria-label', label\)/,
     'the Next topbar theme shortcut must synchronize its action label');
-assert.doesNotMatch(topTabManagerSource, /nextUiAccountThemeLabel[\s\S]*setAttribute\('aria-label'/,
-    'topTabManager must delegate account and theme presentation state');
+assert.doesNotMatch(mainChatSurfaceSource, /nextUiAccountThemeLabel[\s\S]*setAttribute\('aria-label'/,
+    'mainChatSurface must delegate account and theme presentation state');
 assert.match(notificationMenuControllerSource, /async runAction\(action[\s\S]*catch \(error\)[\s\S]*finally \{[\s\S]*this\.close\(\{ restoreFocus \}\)/,
     'notification menu actions must close and restore focus even after rejection');
 assert.match(mainHtml, /id="nextUiNotificationForum"[\s\S]*id="nextUiNotificationMemo"[\s\S]*id="nextUiNotificationFilterToggle"[\s\S]*id="nextUiNotificationClear"/,

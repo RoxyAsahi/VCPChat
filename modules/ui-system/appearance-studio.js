@@ -69,7 +69,6 @@
         'cardRadius'
     ]);
     const THEME_MODES = new Set(['light', 'dark', 'system']);
-    const UI_MODES = new Set(['next']);
     const PRESETS = Object.freeze({
         balanced: Object.freeze({
             name: '平衡默认',
@@ -284,14 +283,13 @@
     function setThemeMode(mode, options = {}) {
         const normalizedMode = THEME_MODES.has(mode) ? mode : null;
         if (!normalizedMode) return false;
-        const { persist = true, source = 'appearance-theme-control' } = options;
+        const { persist = true, apply = true, source = 'appearance-theme-control' } = options;
         const effectiveTheme = effectiveThemeForMode(normalizedMode);
         window.globalSettings = window.globalSettings || {};
         window.globalSettings.currentThemeMode = normalizedMode;
-        window.uiManager?.applyTheme?.(effectiveTheme);
+        if (apply) window.uiManager?.applyTheme?.(effectiveTheme);
         if (persist) {
-            if (normalizedMode === 'system') api()?.setThemeMode?.('system');
-            else api()?.setTheme?.(normalizedMode);
+            api()?.setThemeMode?.({ mode: normalizedMode, persist: true });
         }
         syncAccountMenuValue();
         syncSettingsSummary();
@@ -1126,13 +1124,10 @@
             window.VCPAppearance?.commit(nextState.profile, {
                 source: 'appearance-studio-save'
             });
-            if (nextState.themeMode === 'system') {
-                api()?.setThemeMode?.('system');
-                window.uiManager?.applyTheme?.(effectiveThemeForMode('system'));
-            } else {
-                api()?.setTheme?.(nextState.themeMode);
-                window.uiManager?.applyTheme?.(nextState.themeMode);
-            }
+            // Preview already applied the effective theme locally. Persist the
+            // nativeTheme source once without reapplying or issuing a second
+            // settings write; the main process broadcasts the confirmation.
+            api()?.setThemeMode?.({ mode: nextState.themeMode, persist: false });
             if (nextState.themeFileName && nextState.themeFileName !== snapshot.themeFileName) {
                 api()?.applyTheme?.(nextState.themeFileName);
             }
@@ -1212,9 +1207,9 @@
         openScope?.own(() => {
             if (activeOverlayOwner !== owner) return;
             activeOverlayOwner = null;
-            window.topTabManager?.releaseOverlay?.(owner);
+            window.mainChatSurface?.releaseOverlay?.(owner);
         }, 'appearance-overlay-lease', 'overlay');
-        Promise.resolve(window.topTabManager?.acquireOverlay?.(owner)).catch(error => {
+        Promise.resolve(window.mainChatSurface?.acquireOverlay?.(owner)).catch(error => {
             if (activeOverlayOwner === owner) activeOverlayOwner = null;
             console.warn('[AppearanceStudio] Failed to hide embedded app:', error);
         });
@@ -1232,7 +1227,7 @@
         } else if (activeOverlayOwner) {
             const owner = activeOverlayOwner;
             activeOverlayOwner = null;
-            window.topTabManager?.releaseOverlay?.(owner);
+            window.mainChatSurface?.releaseOverlay?.(owner);
         }
     }
 

@@ -39,7 +39,7 @@
     }
 
     function createItem() {
-        return window.topTabManager?.openCreateDialog?.();
+        return window.mainChatSurface?.openCreateDialog?.();
     }
 
     function notify(message, type = 'error') {

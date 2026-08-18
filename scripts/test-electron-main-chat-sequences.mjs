@@ -1244,7 +1244,7 @@ try {
 
             const app = await page.evaluate(() => window.trayManager?.getApps?.().find(candidate => candidate.id === 'vchat-app-notes'));
             assert.ok(app?.id && app?.action, 'overlay surface chain requires the embeddable notes app');
-            await page.evaluate(appDefinition => window.topTabManager.openEmbeddedApp(appDefinition), app);
+            await page.evaluate(appDefinition => window.mainChatSurface.openEmbeddedApp(appDefinition), app);
             await page.waitForFunction(
                 id => Boolean(document.querySelector(`.next-ui-embedded-app-view[data-app-id="${id}"][data-state="ready"]`)),
                 { timeout },
@@ -1263,8 +1263,8 @@ try {
             await page.waitForFunction(() => document.getElementById('globalSettingsModal')?.classList.contains('active'), { timeout });
             await page.keyboard.press('Escape');
             await page.waitForFunction(() => !document.getElementById('globalSettingsModal')?.classList.contains('active'), { timeout });
-            await page.evaluate(appId => window.topTabManager.closeView(`app:${appId}`), app.id);
-            await page.evaluate(() => window.topTabManager.whenSettled({ timeoutMs: 8_000 }));
+            await page.evaluate(appId => window.mainChatSurface.closeView(`app:${appId}`), app.id);
+            await page.evaluate(() => window.mainChatSurface.whenSettled({ timeoutMs: 8_000 }));
             const state = await page.evaluate(async () => ({
                 main: await window.VCPLifecycleInspector?.snapshotMain?.(),
                 overlay: window.VCPNextShellController?.getDiagnostics?.().overlay || null,
@@ -1285,10 +1285,10 @@ try {
             const result = await page.evaluate(async () => {
                 const app = window.trayManager?.getApps?.().find(candidate => candidate.id === 'vchat-app-notes');
                 if (!app) return { error: 'notes app missing' };
-                const opening = window.topTabManager.openEmbeddedApp(app);
-                window.topTabManager.closeView(`app:${app.id}`);
+                const opening = window.mainChatSurface.openEmbeddedApp(app);
+                window.mainChatSurface.closeView(`app:${app.id}`);
                 await opening;
-                await window.topTabManager.whenSettled({ timeoutMs: 8_000 });
+                await window.mainChatSurface.whenSettled({ timeoutMs: 8_000 });
                 return {
                     viewPresent: Boolean(document.querySelector(`[data-view-id="app:${app.id}"]`)),
                     internalPresent: Boolean(document.querySelector(`[data-app-id="${app.id}"]`)),
@@ -1307,8 +1307,8 @@ try {
             ));
             assert.ok(app?.id && app?.action, 'load failure requires an embeddable notes app');
             const result = await page.evaluate(async appDefinition => {
-                await window.topTabManager.openEmbeddedApp(appDefinition);
-                await window.topTabManager.whenSettled({ timeoutMs: 8_000 });
+                await window.mainChatSurface.openEmbeddedApp(appDefinition);
+                await window.mainChatSurface.whenSettled({ timeoutMs: 8_000 });
                 const host = document.querySelector(`.next-ui-embedded-app-view[data-app-id="${appDefinition.id}"]`);
                 return {
                     state: host?.dataset.state || null,
@@ -1321,8 +1321,8 @@ try {
             assert.match(result.errorText, /controlled loadURL rejection|应用加载失败/);
             assert.deepEqual(result.main?.embeddedSessions || [], [], 'failed load retained an embedded session');
             assert.equal(result.main?.activeEmbeddedAction || null, null, 'failed load retained active native view');
-            await page.evaluate(appId => window.topTabManager.closeView(`app:${appId}`), app.id);
-            await page.evaluate(() => window.topTabManager.whenSettled({ timeoutMs: 8_000 }));
+            await page.evaluate(appId => window.mainChatSurface.closeView(`app:${appId}`), app.id);
+            await page.evaluate(() => window.mainChatSurface.whenSettled({ timeoutMs: 8_000 }));
             const cleaned = await page.evaluate(() => window.VCPLifecycleInspector?.snapshotMain?.());
             assert.deepEqual(cleaned?.embeddedSessions || [], [], 'failed load close retained a session');
         },
@@ -1332,8 +1332,8 @@ try {
             ));
             assert.ok(app?.id && app?.action, 'renderer crash requires an embeddable notes app');
             await page.evaluate(async appDefinition => {
-                await window.topTabManager.openEmbeddedApp(appDefinition);
-                await window.topTabManager.whenSettled({ timeoutMs: 8_000 });
+                await window.mainChatSurface.openEmbeddedApp(appDefinition);
+                await window.mainChatSurface.whenSettled({ timeoutMs: 8_000 });
             }, app);
             // The authoritative crash handler may publish `error` and then
             // immediately publish `closed`, which removes the host. Allow
@@ -1347,8 +1347,8 @@ try {
             assert.ok(!crashed.errorText || /应用进程已退出|应用运行异常/.test(crashed.errorText));
             assert.deepEqual(crashed.main?.embeddedSessions || [], [], 'renderer crash retained an embedded session');
             assert.equal(crashed.main?.activeEmbeddedAction || null, null, 'renderer crash retained active native view');
-            await page.evaluate(appId => window.topTabManager.closeView(`app:${appId}`), app.id);
-            await page.evaluate(() => window.topTabManager.whenSettled({ timeoutMs: 8_000 }));
+            await page.evaluate(appId => window.mainChatSurface.closeView(`app:${appId}`), app.id);
+            await page.evaluate(() => window.mainChatSurface.whenSettled({ timeoutMs: 8_000 }));
         },
         async embeddedHideFailure() {
             const app = await page.evaluate(() => (
@@ -1356,8 +1356,8 @@ try {
             ));
             assert.ok(app?.id && app?.action, 'hide failure requires an embeddable notes app');
             await page.evaluate(async appDefinition => {
-                await window.topTabManager.openEmbeddedApp(appDefinition);
-                await window.topTabManager.whenSettled({ timeoutMs: 8_000 });
+                await window.mainChatSurface.openEmbeddedApp(appDefinition);
+                await window.mainChatSurface.whenSettled({ timeoutMs: 8_000 });
             }, app);
             await fs.writeFile(embeddedHideFailureArm, '1', 'utf8');
             await page.evaluate(() => window.uiHelperFunctions.openModal('globalSettingsModal'));
@@ -1382,8 +1382,8 @@ try {
                 `hide rejection failed to restore the embedded view: ${JSON.stringify(state)}`);
             assert.equal(state.main?.embeddedSessions?.filter(session => session.action === app.action).length, 1,
                 `hide rejection unexpectedly discarded the embedded session: ${JSON.stringify(state)}`);
-            await page.evaluate(appId => window.topTabManager.closeView(`app:${appId}`), app.id);
-            await page.evaluate(() => window.topTabManager.whenSettled({ timeoutMs: 8_000 }));
+            await page.evaluate(appId => window.mainChatSurface.closeView(`app:${appId}`), app.id);
+            await page.evaluate(() => window.mainChatSurface.whenSettled({ timeoutMs: 8_000 }));
             const cleaned = await page.evaluate(() => window.VCPLifecycleInspector?.snapshotMain?.());
             assert.deepEqual(cleaned?.embeddedSessions || [], [], 'hide rejection cleanup retained a session');
         },
@@ -1393,13 +1393,13 @@ try {
                 || window.trayManager?.getApps?.().find(candidate => candidate.action === 'open-notes-window')
             ));
             assert.ok(app?.id && app?.action, 'overlay reload requires an embeddable notes app');
-            await page.evaluate(appDefinition => window.topTabManager.openEmbeddedApp(appDefinition), app);
+            await page.evaluate(appDefinition => window.mainChatSurface.openEmbeddedApp(appDefinition), app);
             await page.waitForFunction(
                 id => Boolean(document.querySelector(`.next-ui-embedded-app-view[data-app-id="${id}"][data-state="ready"]`)),
                 { timeout },
                 app.id,
             );
-            await page.evaluate(() => window.topTabManager.whenSettled({ timeoutMs: 8_000 }));
+            await page.evaluate(() => window.mainChatSurface.whenSettled({ timeoutMs: 8_000 }));
 
             // Arm a test-only main-process gate for the real hide IPC. The
             // production entrypoint is unchanged; the wrapper entrypoint
@@ -1458,8 +1458,8 @@ try {
             assert.equal(afterRelease.activeEmbeddedAction || null, app.action,
                 'a stale hide response must not deactivate the replacement active tab');
 
-            await page.evaluate(appId => window.topTabManager.closeView(`app:${appId}`), app.id);
-            await page.evaluate(() => window.topTabManager.whenSettled({ timeoutMs: 8_000 }));
+            await page.evaluate(appId => window.mainChatSurface.closeView(`app:${appId}`), app.id);
+            await page.evaluate(() => window.mainChatSurface.whenSettled({ timeoutMs: 8_000 }));
             await page.waitForFunction(async () => {
                 const snapshot = await window.VCPLifecycleInspector.snapshotMain();
                 return (snapshot.embeddedSessions || []).length === 0 && !snapshot.activeEmbeddedAction;
