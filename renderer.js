@@ -1,4 +1,5 @@
 import { captureSettingsSurfaceSession, isCurrentSettingsSurfaceSession } from './modules/ui-system/settings-surface-session.js';
+import { StartupThemeGate, loadSettingsWithTimeout } from './modules/ui-system/startup-theme-gate.js';
 
 // --- Globals ---
 let globalSettings = {
@@ -75,6 +76,12 @@ let currentChatHistory = [];
 window.__vcpRendererReady = false;
 window.__vcpPendingTopicSelection = null;
 const chatAPI = window.chatAPI || window.electronAPI;
+const STARTUP_SETTINGS_TIMEOUT_MS = 15_000;
+const startupThemeGate = new StartupThemeGate({
+    document,
+    applyTheme: applyInitialThemeClass,
+    statusElement: document.getElementById('startupInitializationStatus'),
+});
 
 // 暴露到window对象以便其他模块访问
 window.currentSelectedItem = currentSelectedItem;
@@ -979,7 +986,10 @@ import { setupEventListeners } from './modules/event-listeners.js';
         } catch (error) {
             // Do not leave the startup gate closed if settings IPC fails.
             console.error('[RENDERER_INIT] Failed to load global settings:', error);
-            applyInitialThemeClass('system');
+            startupThemeGate.release({
+                mode: 'system',
+                message: `设置加载失败，已使用系统主题：${error?.message || '未知错误'}`,
+            });
         }
         await window.itemListManager.loadItems(); // Load both agents and groups
         await window.chatManager.restoreLastOpenState(globalSettings);
@@ -1173,7 +1183,13 @@ import { setupEventListeners } from './modules/event-listeners.js';
     } catch (error) {
         window.__vcpRendererReady = false;
         console.error('Error during DOMContentLoaded initialization:', error);
-        chatMessagesDiv.innerHTML = `<div class="message-item system">初始化失败: ${error.message}</div>`;
+        startupThemeGate.release({
+            mode: 'system',
+            message: `初始化失败，已使用系统主题：${error?.message || '未知错误'}`,
+        });
+        if (chatMessagesDiv) {
+            chatMessagesDiv.innerHTML = `<div class="message-item system">初始化失败: ${error?.message || '未知错误'}</div>`;
+        }
     }
 
     // --- Agent Settings Reload Listener ---
@@ -1578,14 +1594,24 @@ function setupTtsListeners() {
 
 
 async function loadAndApplyGlobalSettings() {
-    const settings = await chatAPI.loadSettings();
+    let settings;
+    try {
+        settings = await loadSettingsWithTimeout(
+            chatAPI?.loadSettings,
+            STARTUP_SETTINGS_TIMEOUT_MS,
+            '加载设置超时'
+        );
+    } catch (error) {
+        startupThemeGate.release({ mode: 'system', message: error?.message || '设置加载失败' });
+        throw error;
+    }
     if (settings && !settings.error) {
         globalSettings = { ...globalSettings, ...settings };
         window.globalSettings = globalSettings;
 
         // Theme variables must be selected before any item/chat restoration can paint.
         // The uiManager listener is initialized later and receives the same effective value.
-        applyInitialThemeClass(globalSettings.currentThemeMode);
+        startupThemeGate.release({ mode: globalSettings.currentThemeMode });
 
         globalSettings.appearanceProfile = window.VCPAppearance?.commit(
             globalSettings.appearanceProfile,
@@ -1669,7 +1695,7 @@ async function loadAndApplyGlobalSettings() {
         }
     } else {
         console.warn('加载全局设置失败或无设置:', settings?.error);
-        applyInitialThemeClass('system');
+        startupThemeGate.release({ mode: 'system', message: settings?.error || '设置加载失败，已使用系统主题' });
         if (window.notificationRenderer) window.notificationRenderer.updateVCPLogStatus({ status: 'error', message: 'VCPLog未配置' }, vcpLogConnectionStatusDiv);
     }
 }

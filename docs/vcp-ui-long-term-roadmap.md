@@ -66,11 +66,11 @@
 | 3 跨平台 Select 决策 | 未开始 | 用双平台证据决定默认 Provider |
 | 4 Input / Textarea Provider | 进行中（2026-08-17） | shim/查询伪装已删除；macOS Electron 已覆盖 Shadow DOM、IME、selection、password、FormData/reset、validity、focus；待 Windows 真机 |
 | 5 Toggle / Range / Form | 进行中（2026-08-17） | Checkbox/Switch 已移除 Shadow DOM 查询桥并统一 host API；SettingsSection/Field/ActionBar 已加入 WeakMap owner、同步撤销和保存/删除 operation identity；Range 只回滚视觉层并拒绝覆盖已有业务属性；Field 已通过 host 委托监听与 owner 管理的 MutationObserver 支持动态 control replacement。仍待 Windows 证据 |
-| 6 Feedback / Overlay | 进行中（2026-08-18） | Feedback owner 增加精确 loading token；Dialog factory 失败可结算；WA Modal close 不依赖 after-hide；Overlay replacement 先取得新 lease 后释放旧 lease，Classic/第三方 modal 隔离，Escape dispatcher 阻止级联关闭；真实跨进程 load reject、renderer crash、迟到 hide response/reload、hide handler rejection、Ask Nova 来源焦点恢复、Creation 来源焦点恢复和全局设置来源焦点恢复已有证据，仍待更强 Creation/Ask Nova 与嵌入 View 组合证据 |
+| 6 Feedback / Overlay | 核心完成；组合证据待补（2026-08-19） | Feedback owner、Dialog settlement、Overlay generation、Escape dispatcher 和跨进程恢复已落地；仅保留更强 Creation/Ask Nova/嵌入 View 组合证据 |
 | 7 VCP-owned Patterns | 首批拆分进行中（2026-08-18） | List 有全局设置导航真实消费者，已移入 `patterns/list-factory.js` 并由 facade 注入共享 controller/icon；SegmentedControl 现已移入 `patterns/segmented-control-factory.js`，由 facade 注入 normalize/value 规范化/icon/emit，Creation 消费者保持不变；Tabs 当前仅 showcase/契约测试。Divider/Skeleton/Card/Toolbar 已移入纯展示 factory 模块，facade/registry 兼容入口保持不变 |
 | 8 Web Awesome Runtime | 进行中（2026-08-18） | Surface manifest、并发批处理、adapter-only 加载和部分组件导入失败后的唯一 `failed`/Native fallback 语义已落地并有契约证据；生产 facade 已收缩为 `loadComponents/create/isDefined/isLoaded/getRuntimeState/mountScope/surfaceManifests`，模块级兼容 helper 尚待测试迁移后删除；Windows cold start、真实 ASAR 增量失败与跨平台视觉仍待补 |
 | 9 性能与视觉稳定 | 进行中（2026-08-17） | macOS Electron 已加入 DPR 1/1.25/2 × 连续主题切换、主壳几何/正文/焦点断言；Windows 原生 DPI/DWM 仍待实机 |
-| 10 操作序列与故障注入 | 进行中（2026-08-18） | 状态机已覆盖 20×30、required edges 16/16，并包含通知→创建→Ask Nova→全局设置→嵌入应用 Escape 链、同 action WebContentsView replacement、旧 view 失败/abort、设置 modal 跨代逆序和真实主进程 hide gate；test-only Electron 另外验证 `loadURL` reject、renderer crash session 清理、replacement 隔离，以及双成员 Group stream-switch/reload/crash 的 history/DOM/瞬态状态归属。Group crash 以新 renderer document epoch 为恢复证据。trace 最小化、附件/重生成/删除末消息及更广 fault matrix 仍待完成 |
+| 10 操作序列与故障注入 | 基线完成；扩展矩阵待补（2026-08-19） | 状态机已覆盖 20×30、required edges 16/16，并包含通知→创建→Ask Nova→全局设置→嵌入应用 Escape 链、同 action WebContentsView replacement、旧 view 失败/abort、设置 modal 跨代逆序和真实主进程 hide gate；test-only Electron 另外验证 `loadURL` reject、renderer crash session 清理、replacement 隔离，以及双成员 Group stream-switch/reload/crash 的 history/DOM/瞬态状态归属。剩余是 trace 最小化、附件/重生成/删除末消息和更广 fault matrix，不是重新建立状态机 |
 | 11 双平台长时间稳定 | 未完成 | macOS 短循环通过；Windows 完整矩阵及 30–60 分钟人工 soak 尚缺 |
 | 12 提交与上游交付 | 未开始 | 干净、可审阅、可回滚的最终 diff |
 
