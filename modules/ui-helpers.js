@@ -8,6 +8,9 @@
     let croppedGroupAvatarFile = null;
 
     const uiHelperFunctions = {};
+    const textareaResizeStates = new WeakMap();
+    const REGEX_CACHE_MAX_ENTRIES = 512;
+    const regexCompileCache = new Map();
     const filePreviewIconMarkup = `
 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
     <path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path>
@@ -170,16 +173,11 @@
         return { kind: 'file', iconMarkup: filePreviewIconMarkup };
     };
 
-    /**
-     * 从字符串中解析正则表达式（支持 /pattern/flags 格式）
-     * @param {string} input - 正则表达式字符串，如 "/test/gi" 或普通字符串 "test"
-     * @returns {RegExp|null} - 返回RegExp对象，如果解析失败则返回null
-     */
-    uiHelperFunctions.regexFromString = function(input) {
+    function parseRegexParts(input) {
         if (!input || typeof input !== 'string') {
             return null;
         }
-        
+
         // 终极修复：废除使用正则表达式解析正则表达式的脆弱方法。
         // 改为使用明确的、手动字符串分割，这能从根本上避免转义地狱。
         if (input.length < 2 || !input.startsWith('/') || input.lastIndexOf('/') === 0) {
@@ -187,41 +185,94 @@
             return null;
         }
 
-        try {
-            const lastSlashIndex = input.lastIndexOf('/');
-            const pattern = input.substring(1, lastSlashIndex);
-            const flags = input.substring(lastSlashIndex + 1);
-            
-            // 这是最稳定、最可靠的创建方式
-            return new RegExp(pattern, flags);
-            
-        } catch (e) {
-            console.error(`[regexFromString] 解析正则表达式 "${input}" 失败:`, e);
+        const lastSlashIndex = input.lastIndexOf('/');
+        return {
+            pattern: input.substring(1, lastSlashIndex),
+            flags: input.substring(lastSlashIndex + 1)
+        };
+    }
+
+    function touchRegexCacheEntry(cacheKey, entry) {
+        regexCompileCache.delete(cacheKey);
+        regexCompileCache.set(cacheKey, entry);
+        return entry;
+    }
+
+    function trimRegexCompileCache() {
+        while (regexCompileCache.size > REGEX_CACHE_MAX_ENTRIES) {
+            const oldestKey = regexCompileCache.keys().next().value;
+            if (oldestKey === undefined) break;
+            regexCompileCache.delete(oldestKey);
+        }
+    }
+
+    /**
+     * 从字符串中解析正则表达式（支持 /pattern/flags 格式）
+     * @param {string} input - 正则表达式字符串，如 "/test/gi" 或普通字符串 "test"
+     * @returns {RegExp|null} - 返回RegExp对象，如果解析失败则返回null
+     */
+    uiHelperFunctions.regexFromString = function(input) {
+        const compiled = uiHelperFunctions.getCompiledRegex(input);
+        return compiled ? compiled.regex : null;
+    };
+
+    /**
+     * 带缓存地编译正则表达式，避免历史载入/上下文组装时重复 new RegExp。
+     * @param {string} input - 正则表达式字符串，如 "/test/gi"
+     * @returns {{regex: RegExp, error: null}|{regex: null, error: Error}|null}
+     */
+    uiHelperFunctions.getCompiledRegex = function(input) {
+        const parts = parseRegexParts(input);
+        if (!parts) {
             return null;
         }
+
+        const cacheKey = `${parts.pattern}/${parts.flags}`;
+        const cached = regexCompileCache.get(cacheKey);
+        if (cached) {
+            return touchRegexCacheEntry(cacheKey, cached);
+        }
+
+        let entry;
+        try {
+            entry = {
+                regex: new RegExp(parts.pattern, parts.flags),
+                error: null
+            };
+        } catch (e) {
+            console.error(`[regexFromString] 解析正则表达式 "${input}" 失败:`, e);
+            entry = {
+                regex: null,
+                error: e
+            };
+        }
+
+        regexCompileCache.set(cacheKey, entry);
+        trimRegexCompileCache();
+        return entry;
+    };
+
+    uiHelperFunctions.clearRegexCompileCache = function() {
+        regexCompileCache.clear();
     };
 
     /**
      * Scrolls the chat messages div to the bottom.
      */
     uiHelperFunctions.scrollToBottom = function() {
-        const chatMessagesDiv = document.getElementById('chatMessages');
         const parentContainer = document.querySelector('.chat-messages-container');
-        if (!chatMessagesDiv || !parentContainer) return;
+        if (!parentContainer) return;
 
-        // 🟢 核心修复：使用真正的滚动容器（parentContainer）进行判断
-        // 之前的逻辑错误地使用了 chatMessagesDiv，而它通常没有滚动条，导致判断永远为 true
-        const scrollThreshold = 50; // 像素容差
-        const isScrolledToBottom = parentContainer.scrollHeight - parentContainer.clientHeight <= parentContainer.scrollTop + scrollThreshold;
+        const scrollThreshold = 50;
+        const isNearBottom = () => (
+            parentContainer.scrollHeight - parentContainer.clientHeight
+            <= parentContainer.scrollTop + scrollThreshold
+        );
 
-        // 只有当用户已经位于底部时，才执行自动滚动。
-        if (isScrolledToBottom) {
-            // 使用 requestAnimationFrame 来确保滚动操作在下一次浏览器重绘前执行。
+        if (isNearBottom()) {
             requestAnimationFrame(() => {
-                if (document.body.contains(parentContainer)) {
+                if (parentContainer.isConnected && isNearBottom()) {
                     parentContainer.scrollTop = parentContainer.scrollHeight;
-                    // 同时同步内部 div 的位置（如果它也有滚动条的话）
-                    chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
                 }
             });
         }
@@ -229,12 +280,40 @@
 
     /**
      * Automatically resizes a textarea to fit its content.
+     * Repeated calls in the same frame are coalesced to avoid write-read-write layout thrashing.
      * @param {HTMLTextAreaElement} textarea The textarea element.
      */
     uiHelperFunctions.autoResizeTextarea = function(textarea) {
         if (!textarea) return;
-        textarea.style.height = 'auto';
-        textarea.style.height = textarea.scrollHeight + 'px';
+
+        let state = textareaResizeStates.get(textarea);
+        if (!state) {
+            state = { frameId: 0, lastHeight: null };
+            textareaResizeStates.set(textarea, state);
+        }
+        if (state.frameId) return;
+
+        state.frameId = requestAnimationFrame(() => {
+            state.frameId = 0;
+            if (!textarea.isConnected) return;
+
+            textarea.style.height = 'auto';
+            const computed = getComputedStyle(textarea);
+            const maxHeight = parseFloat(computed.maxHeight);
+            const minHeight = parseFloat(computed.minHeight) || 0;
+            const measuredHeight = textarea.scrollHeight;
+            const nextHeight = Math.max(
+                minHeight,
+                Number.isFinite(maxHeight) ? Math.min(measuredHeight, maxHeight) : measuredHeight
+            );
+
+            if (state.lastHeight !== nextHeight) {
+                textarea.style.height = `${nextHeight}px`;
+                state.lastHeight = nextHeight;
+            } else {
+                textarea.style.height = `${state.lastHeight}px`;
+            }
+        });
     };
 
     /**
@@ -264,6 +343,9 @@
 
         if (modalElement) {
             modalElement.classList.add('active');
+            document.dispatchEvent(new CustomEvent('modal-visibility-changed', {
+                detail: { modalId, active: true }
+            }));
             // 确保新打开的模态框获得焦点
             modalElement.focus();
         } else {
@@ -277,7 +359,12 @@
      */
     uiHelperFunctions.closeModal = function(modalId) {
         const modalElement = document.getElementById(modalId);
-        if (modalElement) modalElement.classList.remove('active');
+        if (modalElement) {
+            modalElement.classList.remove('active');
+            document.dispatchEvent(new CustomEvent('modal-visibility-changed', {
+                detail: { modalId, active: false }
+            }));
+        }
     };
 
     /**
@@ -286,6 +373,11 @@
      * @param {number} [duration=3000] The duration in milliseconds.
      */
     uiHelperFunctions.showToastNotification = function(message, type = 'info', duration = 3000) {
+        if (window.VCPUI?.feedback?.toast) {
+            const variant = type === 'error' ? 'error' : ['info', 'success', 'warning'].includes(type) ? type : 'info';
+            return window.VCPUI.feedback.toast(String(message), { variant, duration });
+        }
+
         const container = document.getElementById('floating-toast-notifications-container');
         if (!container) {
             console.warn("Toast notification container not found.");
@@ -700,38 +792,6 @@
                 console.error("[UI Helper] Could not find tabContentSettings to append group settings DOM placeholder.");
             }
         }
-         // Ensure createNewGroupBtn has its text updated
-         const createNewAgentBtn = document.getElementById('createNewAgentBtn');
-         const createNewGroupBtn = document.getElementById('createNewGroupBtn');
-         if (createNewAgentBtn) {
-             createNewAgentBtn.innerHTML = `
-                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                     <path d="M2 21a8 8 0 0 1 13.292-6"></path>
-                     <circle cx="10" cy="8" r="5"></circle>
-                     <path d="M19 16v6"></path>
-                     <path d="M22 19h-6"></path>
-                 </svg>
-                 <span class="sidebar-button-label">
-                     <span class="sidebar-button-prefix">&#21019;&#24314;</span>
-                     <span class="sidebar-button-keyword">Agent</span>
-                 </span>
-             `;
-         }
-         if (createNewGroupBtn) {
-             createNewGroupBtn.innerHTML = `
-                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                     <path d="M18 21a8 8 0 0 0-16 0"></path>
-                     <circle cx="10" cy="8" r="5"></circle>
-                     <path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"></path>
-                 </svg>
-                 <span class="sidebar-button-label">
-                     <span class="sidebar-button-prefix">&#21019;&#24314;</span>
-                     <span class="sidebar-button-keyword">Group</span>
-                 </span>
-             `;
-             console.log('[UI Helper prepareGroupSettingsDOM] createNewGroupBtn icon content applied');
-             createNewGroupBtn.style.display = 'inline-flex'; // Make it visible
-         }
     };
 
     uiHelperFunctions.addNetworkPathInput = function(path = '') {

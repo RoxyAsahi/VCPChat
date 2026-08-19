@@ -39,6 +39,15 @@
             }
         });
 
+        contextMenuElement.querySelector('[data-action="code-edit"]')?.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const targetId = contextMenuTargetWidgetId;
+            hideContextMenu();
+            if (targetId) {
+                await openWidgetCodeEditor(targetId);
+            }
+        });
+
         contextMenuElement.querySelector('[data-action="close"]')?.addEventListener('click', (e) => {
             e.stopPropagation();
             const targetId = contextMenuTargetWidgetId;
@@ -253,15 +262,14 @@
         const presetId = state.lastLoadedPresetId;
         if (!presetId) return;
 
-        if (!desktopApi?.desktopSaveLayout || !desktopApi?.desktopLoadLayout) return;
+        if (!desktopApi?.desktopLoadLayout || !desktopApi?.desktopPatchLayout) return;
 
         try {
-            // 加载现有数据
+            // 加载现有预设列表
             const result = await desktopApi.desktopLoadLayout();
             if (!result?.success || !result.data) return;
 
-            const layoutData = result.data;
-            const presets = layoutData.presets || [];
+            const presets = result.data.presets || [];
             const target = presets.find(p => p.id === presetId);
             if (!target) {
                 if (window.VCPDesktop.status) {
@@ -299,9 +307,8 @@
             };
             target.updatedAt = Date.now();
 
-            // 保存
-            layoutData.presets = presets;
-            await desktopApi.desktopSaveLayout(layoutData);
+            // 使用增量更新 API 只写 presets 字段，避免竞态覆盖其他字段
+            await desktopApi.desktopPatchLayout({ presets });
 
             if (window.VCPDesktop.status) {
                 window.VCPDesktop.status.update('connected', `预设已更新: ${target.name}`);
@@ -312,6 +319,54 @@
             console.error('[ContextMenu] Overwrite preset error:', err);
             if (window.VCPDesktop.status) {
                 window.VCPDesktop.status.update('waiting', '保存预设失败');
+                window.VCPDesktop.status.show();
+                setTimeout(() => window.VCPDesktop.status.hide(), 3000);
+            }
+        }
+    }
+
+    async function openWidgetCodeEditor(widgetId) {
+        const widgetData = state.widgets.get(widgetId);
+        if (!widgetData?.savedId) {
+            if (window.VCPDesktop.status) {
+                window.VCPDesktop.status.update('waiting', '请先收藏该挂件，再编辑源码');
+                window.VCPDesktop.status.show();
+                setTimeout(() => window.VCPDesktop.status.hide(), 3000);
+            }
+            return;
+        }
+
+        if (!desktopApi?.desktopOpenWidgetInCanvas) {
+            console.warn('[ContextMenu] desktopOpenWidgetInCanvas API not available');
+            if (window.VCPDesktop.status) {
+                window.VCPDesktop.status.update('waiting', '代码编辑 API 不可用，请重启应用');
+                window.VCPDesktop.status.show();
+                setTimeout(() => window.VCPDesktop.status.hide(), 3000);
+            }
+            return;
+        }
+
+        try {
+            const result = await desktopApi.desktopOpenWidgetInCanvas({
+                savedId: widgetData.savedId,
+                fileName: 'widget.html',
+            });
+
+            if (result?.success) {
+                if (window.VCPDesktop.status) {
+                    window.VCPDesktop.status.update('connected', `正在编辑源码: ${widgetData.savedName || widgetData.savedId}`);
+                    window.VCPDesktop.status.show();
+                    setTimeout(() => window.VCPDesktop.status.hide(), 3000);
+                }
+            } else if (window.VCPDesktop.status) {
+                window.VCPDesktop.status.update('waiting', result?.error || '打开代码编辑失败');
+                window.VCPDesktop.status.show();
+                setTimeout(() => window.VCPDesktop.status.hide(), 3000);
+            }
+        } catch (err) {
+            console.error('[ContextMenu] Open widget code editor error:', err);
+            if (window.VCPDesktop.status) {
+                window.VCPDesktop.status.update('waiting', '打开代码编辑失败');
                 window.VCPDesktop.status.show();
                 setTimeout(() => window.VCPDesktop.status.hide(), 3000);
             }
@@ -359,6 +414,11 @@
         const refreshBtn = contextMenuElement.querySelector('[data-action="refresh"]');
         if (refreshBtn) {
             refreshBtn.style.display = widgetData?.savedId ? '' : 'none';
+        }
+
+        const codeEditBtn = contextMenuElement.querySelector('[data-action="code-edit"]');
+        if (codeEditBtn) {
+            codeEditBtn.style.display = widgetData?.savedId ? '' : 'none';
         }
 
         // 定位，确保不超出视口

@@ -12,6 +12,7 @@ const searchManager = {
     uiHelper: null,
     chatManager: null,
     currentSelectedItemRef: null,
+    currentTopicIdRef: null,
 
     elements: {},
     state: {
@@ -31,9 +32,10 @@ const searchManager = {
         this.uiHelper = dependencies.uiHelper;
         this.chatManager = dependencies.modules.chatManager;
         this.currentSelectedItemRef = dependencies.refs.currentSelectedItemRef;
+        this.currentTopicIdRef = dependencies.refs.currentTopicIdRef;
 
         this.setupGlobalShortcuts();
-        
+
         // 🟢 监听模态框就绪事件
         document.addEventListener('modal-ready', (e) => {
             if (e.detail.modalId === 'globalSearchModal') {
@@ -105,9 +107,12 @@ const searchManager = {
         
         if (this.elements.modal) {
             this.elements.modal.style.display = 'flex';
-            this.elements.input.focus();
+            this.elements.input?.focus();
         }
-        this.elements.input.select();
+        this.elements.input?.select();
+        if (this.elements.resultsContainer && !this.elements.resultsContainer.childElementCount) {
+            this.elements.resultsContainer.innerHTML = '<p class="search-status-message search-status-message--empty">输入关键词，查找任意助手或群组中的聊天记录。</p>';
+        }
         await this.populateAgentSelect();
     },
 
@@ -118,9 +123,25 @@ const searchManager = {
                 this.electronAPI.getAgentGroups()
             ]);
 
-            // 保留“所有”选项
+            // 保留当前选中值
             const currentValue = this.elements.agentSelect.value;
-            this.elements.agentSelect.innerHTML = '<option value="all">所有助手和群组</option>';
+            this.elements.agentSelect.innerHTML = '';
+
+            // 置顶"当前会话"选项
+            const currentItem = this.currentSelectedItemRef?.get();
+            const currentTopicId = this.currentTopicIdRef?.get();
+            if (currentItem && currentItem.id && currentTopicId) {
+                const currentSessionOption = document.createElement('option');
+                currentSessionOption.value = 'current-session';
+                currentSessionOption.textContent = `当前会话 (${currentItem.name || currentItem.id})`;
+                this.elements.agentSelect.appendChild(currentSessionOption);
+            }
+
+            // "所有助手和群组"选项
+            const allOption = document.createElement('option');
+            allOption.value = 'all';
+            allOption.textContent = '所有助手和群组';
+            this.elements.agentSelect.appendChild(allOption);
 
             if (agents && !agents.error) {
                 const agentGroup = document.createElement('optgroup');
@@ -156,7 +177,9 @@ const searchManager = {
     },
 
     closeModal() {
-        this.elements.modal.style.display = 'none';
+        // Mode changes can arrive before the lazily-created search modal has
+        // emitted modal-ready. Closing an absent surface is a valid no-op.
+        if (this.elements.modal) this.elements.modal.style.display = 'none';
         this.clearScopedStyles();
 
         // 清空搜索内容和状态，确保下次打开时是干净的
@@ -206,7 +229,7 @@ const searchManager = {
             return;
         }
         if (!query || query.length < 2) {
-            this.elements.resultsContainer.innerHTML = '<p style="text-align: center; padding: 20px;">请输入至少2个字符进行搜索。</p>';
+            this.elements.resultsContainer.innerHTML = '<p class="search-status-message">请输入至少 2 个字符进行搜索。</p>';
             this.state.searchResults = [];
             this.renderSearchResults();
             return;
@@ -215,7 +238,7 @@ const searchManager = {
         this.state.isFetching = true;
         this.state.currentQuery = query;
         this.clearScopedStyles();
-        this.elements.resultsContainer.innerHTML = '<p style="text-align: center; padding: 20px;">正在努力搜索中...</p>';
+        this.elements.resultsContainer.innerHTML = '<p class="search-status-message">正在搜索聊天记录…</p>';
         this.elements.paginationContainer.innerHTML = '';
 
         try {
@@ -235,35 +258,60 @@ const searchManager = {
             let allFoundMessages = [];
             const topicsToFetch = [];
 
-            const selectedFilter = this.elements.agentSelect.value; // "all", "agent:id", or "group:id"
-            const [filterType, filterId] = selectedFilter.split(':');
+            const selectedFilter = this.elements.agentSelect.value; // "all", "current-session", "agent:id", or "group:id"
 
-            const processItem = (item, type) => {
-                // 如果指定了过滤，且当前项目不匹配，则跳过
-                if (selectedFilter !== 'all') {
-                    if (type !== filterType || item.id !== filterId) {
-                        return;
-                    }
-                }
+            // 处理"当前会话"筛选
+            if (selectedFilter === 'current-session') {
+                const currentItem = this.currentSelectedItemRef?.get();
+                const currentTopicId = this.currentTopicIdRef?.get();
+                if (currentItem && currentItem.id && currentTopicId) {
+                    // 从当前 item 的 config 中找到当前 topic 的名称
+                    const itemConfig = currentItem.config || currentItem;
+                    const topics = itemConfig.topics || [];
+                    const currentTopic = topics.find(t => t.id === currentTopicId);
+                    const topicName = currentTopic ? currentTopic.name : '当前话题';
 
-                if (item.topics && item.topics.length > 0) {
-                    item.topics.forEach(topic => {
-                        topicsToFetch.push({
-                            context: {
-                                itemId: item.id,
-                                itemName: item.name,
-                                itemType: type,
-                                itemAvatar: item.avatarUrl,
-                                topicId: topic.id,
-                                topicName: topic.name
-                            }
-                        });
+                    topicsToFetch.push({
+                        context: {
+                            itemId: currentItem.id,
+                            itemName: currentItem.name,
+                            itemType: currentItem.type,
+                            itemAvatar: currentItem.avatarUrl,
+                            topicId: currentTopicId,
+                            topicName: topicName
+                        }
                     });
                 }
-            };
+            } else {
+                const [filterType, filterId] = selectedFilter.split(':');
 
-            agents.forEach(agent => processItem(agent, 'agent'));
-            groups.forEach(group => processItem(group, 'group'));
+                const processItem = (item, type) => {
+                    // 如果指定了过滤，且当前项目不匹配，则跳过
+                    if (selectedFilter !== 'all') {
+                        if (type !== filterType || item.id !== filterId) {
+                            return;
+                        }
+                    }
+
+                    if (item.topics && item.topics.length > 0) {
+                        item.topics.forEach(topic => {
+                            topicsToFetch.push({
+                                context: {
+                                    itemId: item.id,
+                                    itemName: item.name,
+                                    itemType: type,
+                                    itemAvatar: item.avatarUrl,
+                                    topicId: topic.id,
+                                    topicName: topic.name
+                                }
+                            });
+                        });
+                    }
+                };
+
+                agents.forEach(agent => processItem(agent, 'agent'));
+                groups.forEach(group => processItem(group, 'group'));
+            }
 
             const historyReadPromises = topicsToFetch.map(info => {
                 const { itemType, itemId, topicId } = info.context;
@@ -327,7 +375,7 @@ const searchManager = {
 
         } catch (error) {
             console.error('[SearchManager] Error during search:', error);
-            this.elements.resultsContainer.innerHTML = `<p style="text-align: center; padding: 20px; color: var(--danger-text);">搜索时发生错误: ${error.message}</p>`;
+            this.elements.resultsContainer.innerHTML = `<p class="search-status-message search-status-message--error">搜索时发生错误：${this.escapeHtml(error.message)}</p>`;
         } finally {
             this.state.isFetching = false;
         }
@@ -338,7 +386,7 @@ const searchManager = {
         this.elements.paginationContainer.innerHTML = '';
 
         if (this.state.searchResults.length === 0) {
-            this.elements.resultsContainer.innerHTML = '<p style="text-align: center; padding: 20px;">未找到匹配的结果。</p>';
+            this.elements.resultsContainer.innerHTML = '<p class="search-status-message search-status-message--empty">未找到匹配的结果。</p>';
             return;
         }
 

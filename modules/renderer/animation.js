@@ -11,7 +11,7 @@ const CDN_TO_LOCAL_MAP = {
 };
 
 import * as visibilityOptimizer from './visibilityOptimizer.js';
-import { createPausableRAF, registerCanvasAnimation } from './visibilityOptimizer.js';
+import { createPausableRAF, createPausableTimerAPI, registerCanvasAnimation } from './visibilityOptimizer.js';
 
 // 🔥 全局跟踪已加载的脚本，防止跨消息重复加载
 if (!window._vcp_loaded_scripts) {
@@ -27,8 +27,8 @@ function replaceCdnUrls(scriptContent) {
     
     const threeJsPatterns = [
         /https?:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/three\.js\/[^'"`);\s]*/gi,
-        /https?:\/\/cdn\.jsdelivr\.net\/npm\/three[@\/][^'"`);\s]*/gi,
-        /https?:\/\/unpkg\.com\/three[@\/][^'"`);\s]*/gi,
+        /https?:\/\/cdn\.jsdelivr\.net\/npm\/three(?:@[^\/'"`);\s]+)?\/[^'"`);\s]*/gi,
+        /https?:\/\/unpkg\.com\/three(?:@[^\/'"`);\s]+)?\/[^'"`);\s]*/gi,
     ];
     
     threeJsPatterns.forEach(pattern => {
@@ -37,8 +37,8 @@ function replaceCdnUrls(scriptContent) {
     
     const animeJsPatterns = [
         /https?:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/animejs\/[^'"`);\s]*/gi,
-        /https?:\/\/cdn\.jsdelivr\.net\/npm\/animejs[@\/][^'"`);\s]*/gi,
-        /https?:\/\/unpkg\.com\/animejs[@\/][^'"`);\s]*/gi,
+        /https?:\/\/cdn\.jsdelivr\.net\/npm\/animejs(?:@[^\/'"`);\s]+)?\/[^'"`);\s]*/gi,
+        /https?:\/\/unpkg\.com\/animejs(?:@[^\/'"`);\s]+)?\/[^'"`);\s]*/gi,
     ];
     
     animeJsPatterns.forEach(pattern => {
@@ -46,8 +46,8 @@ function replaceCdnUrls(scriptContent) {
     });
     
     const genericCdnPatterns = [
-        { pattern: /https?:\/\/[^'"`);\s]*three[^'"`);\s]*\.js/gi, replacement: 'vendor/three.min.js' },
-        { pattern: /https?:\/\/[^'"`);\s]*anime[^'"`);\s]*\.js/gi, replacement: 'vendor/anime.min.js' },
+        { pattern: /https?:\/\/[^'"`);\s]*(?:three\.js|three)[^'"`);\s]*\/[^'"`);\s]*\.js(?:\?[^'"`);\s]*)?/gi, replacement: 'vendor/three.min.js' },
+        { pattern: /https?:\/\/[^'"`);\s]*(?:animejs|anime)[^'"`);\s]*\/[^'"`);\s]*\.js(?:\?[^'"`);\s]*)?/gi, replacement: 'vendor/anime.min.js' },
     ];
     
     genericCdnPatterns.forEach(({ pattern, replacement }) => {
@@ -174,7 +174,20 @@ function processScripts(containerElement) {
     const allScripts = Array.from(containerElement.querySelectorAll('script'));
     const threeScripts = allScripts.filter(s => s.src && s.src.includes('three'));
     const otherExternalScripts = allScripts.filter(s => s.src && !s.src.includes('three'));
-    const inlineScripts = allScripts.filter(s => !s.src && s.textContent.trim());
+    const inlineScripts = allScripts
+        .filter(s => !s.src && s.textContent.trim())
+        .map(s => ({
+            textContent: s.textContent,
+            previousElementSibling: s.previousElementSibling,
+            parentElement: s.parentElement,
+            parentNode: s.parentNode,
+            id: s.id || '',
+            className: s.className || '',
+            type: s.type || '',
+            dataset: { ...s.dataset },
+            getAttribute: (name) => s.getAttribute(name),
+            hasAttribute: (name) => s.hasAttribute(name),
+        }));
 
     // Clean up all script tags from the message body
     allScripts.forEach(s => { if (s.parentNode) s.parentNode.removeChild(s); });
@@ -220,29 +233,160 @@ function processScripts(containerElement) {
                         }
                     });
 
-                    // 2. 创建可暂停的 rAF 包装器
+                    // 2. 创建可暂停的 rAF 与 timer 包装器
                     const pausableRAF = messageItem
                         ? createPausableRAF(messageItem)
                         : window.requestAnimationFrame;
+                    const pausableTimerAPI = messageItem
+                        ? createPausableTimerAPI(messageItem)
+                        : {
+                            setTimeout: window.setTimeout.bind(window),
+                            clearTimeout: window.clearTimeout.bind(window),
+                            setInterval: window.setInterval.bind(window),
+                            clearInterval: window.clearInterval.bind(window)
+                        };
 
                     // 3. 影子注入：通过 IIFE 重新定义局部作用域内的 API
-                    // 我们将 pausableRAF 挂载到一个临时全局变量上，以便注入脚本读取
+                    // 我们将 pausableRAF / pausableTimerAPI 挂载到临时全局变量上，以便注入脚本读取
                     const tempRafId = `_vcp_raf_${Math.random().toString(36).slice(2, 11)}`;
                     window[tempRafId] = pausableRAF;
+                    const tempTimerId = `_vcp_timer_${Math.random().toString(36).slice(2, 11)}`;
+                    window[tempTimerId] = pausableTimerAPI;
+
+                    const tempDocId = `_vcp_doc_${Math.random().toString(36).slice(2, 11)}`;
+                    const virtualCurrentScript = {
+                        tagName: 'SCRIPT',
+                        nodeName: 'SCRIPT',
+                        nodeType: Node.ELEMENT_NODE,
+                        id: script.id,
+                        className: script.className,
+                        type: script.type,
+                        dataset: script.dataset,
+                        previousElementSibling: script.previousElementSibling,
+                        parentElement: script.parentElement,
+                        parentNode: script.parentNode,
+                        ownerDocument: document,
+                        getAttribute: script.getAttribute,
+                        hasAttribute: script.hasAttribute,
+                    };
+                    const shadowDocument = new Proxy(document, {
+                        get(target, prop) {
+                            if (prop === 'currentScript') {
+                                return virtualCurrentScript;
+                            }
+
+                            // 消息内脚本默认只能命中当前消息中的节点，避免多个消息包含
+                            // 相同 id / data-vdoc-island 时 document.querySelector 总是选中
+                            // 页面里的第一个副本。当前消息没有匹配项时才回退到真实 document，
+                            // 以兼容脚本查询 body、head 或应用级全局节点。
+                            if (prop === 'querySelector') {
+                                return function(selector) {
+                                    try {
+                                        if (containerElement.matches?.(selector)) {
+                                            return containerElement;
+                                        }
+
+                                        const localMatch = containerElement.querySelector(selector);
+                                        if (localMatch) {
+                                            return localMatch;
+                                        }
+                                    } catch (error) {
+                                        // 让原生 document 重新处理并抛出非法选择器异常。
+                                    }
+
+                                    return target.querySelector(selector);
+                                };
+                            }
+
+                            if (prop === 'querySelectorAll') {
+                                return function(selector) {
+                                    try {
+                                        const localMatches = Array.from(containerElement.querySelectorAll(selector));
+                                        if (containerElement.matches?.(selector)) {
+                                            localMatches.unshift(containerElement);
+                                        }
+
+                                        if (localMatches.length > 0) {
+                                            localMatches.item = (index) => localMatches[index] || null;
+                                            return localMatches;
+                                        }
+                                    } catch (error) {
+                                        // 让原生 document 重新处理并抛出非法选择器异常。
+                                    }
+
+                                    return target.querySelectorAll(selector);
+                                };
+                            }
+
+                            if (prop === 'getElementById') {
+                                return function(id) {
+                                    const escapedId = window.CSS?.escape
+                                        ? window.CSS.escape(String(id))
+                                        : String(id).replace(/(["\\])/g, '\\$1');
+                                    const localMatch = containerElement.querySelector(`#${escapedId}`);
+                                    return localMatch || target.getElementById(id);
+                                };
+                            }
+
+                            if (prop === 'getElementsByTagName') {
+                                return function(tagName) {
+                                    const normalizedTagName = String(tagName).toLowerCase();
+
+                                    // script 查询保留原有兼容行为，库代码可能依赖 currentScript
+                                    // 或通过最后一个 script 标签寻找自身。
+                                    if (normalizedTagName === 'script') {
+                                        const elements = Array.from(target.getElementsByTagName(tagName));
+                                        const scripts = [...elements, virtualCurrentScript];
+                                        scripts.item = (index) => scripts[index] || null;
+                                        return scripts;
+                                    }
+
+                                    const localElements = Array.from(containerElement.getElementsByTagName(tagName));
+                                    if (localElements.length > 0) {
+                                        localElements.item = (index) => localElements[index] || null;
+                                        return localElements;
+                                    }
+
+                                    return target.getElementsByTagName(tagName);
+                                };
+                            }
+
+                            const value = target[prop];
+                            return typeof value === 'function' ? value.bind(target) : value;
+                        },
+                        set(target, prop, value) {
+                            target[prop] = value;
+                            return true;
+                        }
+                    });
+                    window[tempDocId] = shadowDocument;
                     
-                    // [优化] 拦截脚本中的 requestAnimationFrame，强制指向 pausableRAF
-                    let scriptContent = script.textContent;
+                    // [优化] 拦截脚本中的 requestAnimationFrame / timer，强制指向可暂停 API
+                    let scriptContent = replaceCdnUrls(script.textContent);
                     
-                    // 简单的正则替换，处理常见的调用方式
+                    // 简单的正则替换，处理常见的 window.* 调用方式
                     // 注意：这只是辅助手段，核心拦截靠 IIFE 作用域覆盖
-                    scriptContent = scriptContent.replace(/window\.requestAnimationFrame/g, `window['${tempRafId}']`);
+                    scriptContent = scriptContent
+                        .replace(/window\.requestAnimationFrame/g, `window['${tempRafId}']`)
+                        .replace(/window\.webkitRequestAnimationFrame/g, `window['${tempRafId}']`)
+                        .replace(/window\.mozRequestAnimationFrame/g, `window['${tempRafId}']`)
+                        .replace(/window\.setTimeout/g, `window['${tempTimerId}'].setTimeout`)
+                        .replace(/window\.clearTimeout/g, `window['${tempTimerId}'].clearTimeout`)
+                        .replace(/window\.setInterval/g, `window['${tempTimerId}'].setInterval`)
+                        .replace(/window\.clearInterval/g, `window['${tempTimerId}'].clearInterval`);
                     
                     const wrappedScript = `
 (function() {
+    const document = window['${tempDocId}'];
     const requestAnimationFrame = window['${tempRafId}'];
     // 同时也覆盖 webkitRequestAnimationFrame 等变体以防万一
     const webkitRequestAnimationFrame = requestAnimationFrame;
     const mozRequestAnimationFrame = requestAnimationFrame;
+    const __vcpTimerAPI = window['${tempTimerId}'];
+    const setTimeout = __vcpTimerAPI.setTimeout;
+    const clearTimeout = __vcpTimerAPI.clearTimeout;
+    const setInterval = __vcpTimerAPI.setInterval;
+    const clearInterval = __vcpTimerAPI.clearInterval;
     
     const container = document.querySelector('.message-item[data-message-id="${messageItem?.dataset.messageId}"] .md-content');
     try {
@@ -256,8 +400,12 @@ function processScripts(containerElement) {
                     newScript.textContent = wrappedScript;
                     document.head.appendChild(newScript).parentNode.removeChild(newScript);
                     
-                    // 稍微延迟清理，确保脚本解析完成
-                    setTimeout(() => { delete window[tempRafId]; }, 0);
+                    // 稍微延迟清理，确保脚本解析完成；已创建的回调闭包会继续持有可暂停 API
+                    setTimeout(() => {
+                        delete window[tempRafId];
+                        delete window[tempTimerId];
+                        delete window[tempDocId];
+                    }, 0);
 
                 } catch (e) {
                     console.error('[Animation] Error executing inline script:', e);

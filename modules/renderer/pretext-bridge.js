@@ -1,24 +1,18 @@
 /**
  * pretext-bridge.js
- * VChat × Pretext 集成适配层（浏览器全局模块版本）
- * 
- * 依赖：window.Pretext（由 pretext.bundle.js 提供）
+ * VChat × Pretext 集成适配层（ESM 版本）
+ *
+ * 依赖：./pretext.esm.js（由 @chenglou/pretext 通过 esbuild 生成）
  * 暴露：window.pretextBridge
  */
 
-(function() {
-    'use strict';
+import { prepare, layout } from './pretext.esm.js';
 
-    // ─── Pretext 引用 ───
-
-    const Pretext = window.Pretext;
-    if (!Pretext || !Pretext.prepare || !Pretext.layout) {
-        console.warn('[pretext-bridge] window.Pretext not found. Bridge disabled.');
-        window.pretextBridge = { isReady: () => false };
-        return;
-    }
-
-    console.log('[pretext-bridge] Pretext detected. Bridge initializing...');
+if (typeof prepare !== 'function' || typeof layout !== 'function') {
+    console.warn('[pretext-bridge] Pretext ESM exports not found. Bridge disabled.');
+    window.pretextBridge = { isReady: () => false };
+} else {
+    console.log('[pretext-bridge] Pretext ESM detected. Bridge initializing...');
 
     // ─── 缓存层 ───
 
@@ -30,6 +24,10 @@
 
     /** @type {Map<string, string>} messageId → 上次 prepare 的原始文本 */
     const textSnapshot = new Map();
+
+    let currentPresentationMode = 'bubble';
+    const PRESENTATION_MODES = new Set(['bubble', 'panel', 'immersive']);
+    const IMMERSIVE_MAX_WIDTH = 880;
 
     // ─── 字体常量（VChat 实际使用的字体） ───
 
@@ -45,13 +43,13 @@
     };
 
     const LINE_HEIGHTS = {
-        body: 1.6 * 15,     // 24px
-        code: 1.5 * 14,     // 21px
+        body: 1.6 * 15,      // 24px
+        code: 1.5 * 14,      // 21px
         system: 1.5 * 14,    // 21px
         viewer: 1.6 * 15,    // 24px
         widget: 1.5 * 14,    // 21px
         memo: 1.5 * 14,      // 21px
-        rag: 1.6 * 14,      // 22.4px
+        rag: 1.6 * 14,       // 22.4px
         note: 1.6 * 15       // 24px
     };
 
@@ -77,10 +75,12 @@
 
         const fullWidthTypes = ['viewer', 'widget', 'memo', 'rag', 'note'];
         if (fullWidthTypes.includes(type)) {
-            // 这些模式通常占满或按比例占满可用宽度
             maxWidth = containerWidth;
+        } else if (currentPresentationMode === 'panel') {
+            maxWidth = containerWidth;
+        } else if (currentPresentationMode === 'immersive') {
+            maxWidth = Math.min(containerWidth, IMMERSIVE_MAX_WIDTH);
         } else {
-            // 聊天气泡模式（body/code/system）占 80% 宽度
             maxWidth = Math.floor(containerWidth * 0.8);
         }
 
@@ -105,30 +105,30 @@
         }
 
         // prepare + layout
-        var prepared = Pretext.prepare(text, font, { whiteSpace: whiteSpace });
+        const prepared = prepare(text, font, { whiteSpace: whiteSpace });
         preparedCache.set(messageId, prepared);
         textSnapshot.set(messageId, text);
 
-        var result = Pretext.layout(prepared, maxWidth, lineHeight);
+        const result = layout(prepared, maxWidth, lineHeight);
         heightCache.set(messageId, { height: result.height, maxWidth: maxWidth, lineHeight: lineHeight });
 
         return result.height;
     }
 
     function getCachedHeight(messageId) {
-        var cached = heightCache.get(messageId);
+        const cached = heightCache.get(messageId);
         return cached ? cached.height : null;
     }
 
     function recalculateAll(newContainerWidth) {
-        var updates = new Map();
+        const updates = new Map();
 
         preparedCache.forEach(function(prepared, messageId) {
-            var prev = heightCache.get(messageId);
-            var lineHeight = prev ? prev.lineHeight : LINE_HEIGHTS.body;
+            const prev = heightCache.get(messageId);
+            const lineHeight = prev ? prev.lineHeight : LINE_HEIGHTS.body;
 
             // 根据 lineHeight 逆推 messageType (简单启发式)
-            var messageType = 'body';
+            let messageType = 'body';
             if (lineHeight === LINE_HEIGHTS.code) messageType = 'code';
             else if (lineHeight === LINE_HEIGHTS.system) messageType = 'system';
             else if (lineHeight === LINE_HEIGHTS.viewer) messageType = 'viewer';
@@ -137,8 +137,8 @@
             else if (lineHeight === LINE_HEIGHTS.rag) messageType = 'rag';
             else if (lineHeight === LINE_HEIGHTS.note) messageType = 'note';
 
-            var maxWidth = getContentWidth(newContainerWidth, messageType);
-            var result = Pretext.layout(prepared, maxWidth, lineHeight);
+            const maxWidth = getContentWidth(newContainerWidth, messageType);
+            const result = layout(prepared, maxWidth, lineHeight);
 
             heightCache.set(messageId, { height: result.height, maxWidth: maxWidth, lineHeight: lineHeight });
             updates.set(messageId, result.height);
@@ -157,6 +157,17 @@
         preparedCache.clear();
         heightCache.clear();
         textSnapshot.clear();
+    }
+
+    function clearHeightCache() {
+        heightCache.clear();
+    }
+
+    function setPresentationMode(mode) {
+        const normalizedMode = PRESENTATION_MODES.has(mode) ? mode : 'bubble';
+        if (normalizedMode === currentPresentationMode) return;
+        currentPresentationMode = normalizedMode;
+        clearHeightCache();
     }
 
     function setChatFonts(bodyFontFamily, codeFontFamily) {
@@ -181,6 +192,9 @@
         recalculateAll: recalculateAll,
         evict: evict,
         clearAll: clearAll,
+        clearHeightCache: clearHeightCache,
+        setPresentationMode: setPresentationMode,
+        getPresentationMode: function() { return currentPresentationMode; },
         setChatFonts: setChatFonts,
         isReady: function() { return true; },
         getContentWidth: getContentWidth,
@@ -189,5 +203,4 @@
     };
 
     console.log('[pretext-bridge] Bridge ready. API available at window.pretextBridge');
-
-})();
+}

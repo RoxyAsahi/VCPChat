@@ -154,6 +154,7 @@ function fixEmoticonUrl(originalSrc) {
         return originalSrc;
     }
 
+
     let bestMatch = null;
     let highestScore = -1;
 

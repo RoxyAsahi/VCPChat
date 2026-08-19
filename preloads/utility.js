@@ -1,5 +1,34 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+const isEmbeddedSurface = new URLSearchParams(globalThis.location?.search || '').get('vcpEmbedded') === '1';
+
+function installEmbeddedSurfaceContract() {
+    if (!isEmbeddedSurface) return;
+    const mount = () => {
+        // A preload runs before the page document is guaranteed to have an
+        // <html> element. Touching documentElement before DOMContentLoaded
+        // aborts the entire preload and prevents contextBridge APIs from being
+        // exposed to embedded WebContentsViews.
+        document.documentElement?.setAttribute('data-vcp-embedded-app', 'true');
+        document.body?.setAttribute('data-vcp-embedded-app', 'true');
+        if (document.getElementById('vcpEmbeddedSurfaceStyle')) return;
+        const style = document.createElement('style');
+        style.id = 'vcpEmbeddedSurfaceStyle';
+        style.textContent = `
+            html[data-vcp-embedded-app="true"] :is(
+                #minimize-btn, #maximize-btn, #close-btn,
+                #minimize-theme-btn, #maximize-theme-btn, #close-theme-btn,
+                #minimize-translator-btn, #maximize-translator-btn, #close-translator-btn
+            ) { display: none; }
+        `;
+        (document.head || document.documentElement).append(style);
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, { once: true });
+    else mount();
+}
+
+installEmbeddedSurfaceContract();
+
 function command(value) {
     return { kind: 'command', value };
 }
@@ -102,6 +131,8 @@ function createCatalog(ops) {
     return {
         // Shared shell/config/theme helpers
         loadSettings: query(() => ops.invoke('load-settings')),
+        loadTranslatorSettings: query(() => ops.invoke('load-translator-settings')),
+        saveTranslatorSettings: query((settings) => ops.invoke('save-translator-settings', settings)),
         saveSettings: query((settings) => ops.invoke('save-settings', settings)),
         saveUserAvatar: query((avatarData) => ops.invoke('save-user-avatar', avatarData)),
         saveAvatarColor: query((data) => ops.invoke('save-avatar-color', data)),
@@ -122,7 +153,13 @@ function createCatalog(ops) {
         minimizeWindow: command(() => ops.send('minimize-window')),
         maximizeWindow: command(() => ops.send('maximize-window')),
         unmaximizeWindow: command(() => ops.send('unmaximize-window')),
-        closeWindow: command(() => ops.send('close-window')),
+        // A WebContentsView is owned by the main chat window. Sending the
+        // generic close-window channel from that child may resolve to the
+        // owner BrowserWindow and close the whole application. Embedded
+        // pages therefore request disposal of their own session instead.
+        closeWindow: command(() => ops.send(
+            isEmbeddedSurface ? 'embedded-vchat-app:request-close' : 'close-window'
+        )),
         hideWindow: command(() => ops.send('hide-window')),
         openDevTools: command(() => ops.send('open-dev-tools')),
         sendToggleNotificationsSidebar: command(() => ops.send('toggle-notifications-sidebar')),
@@ -135,6 +172,10 @@ function createCatalog(ops) {
         closeApp: command(() => ops.send('close-app')),
         showImageContextMenu: command((imageUrl) => ops.send('show-image-context-menu', imageUrl)),
         openImageViewer: command((data) => ops.send('open-image-viewer', data)),
+        // 大体积图片 payload 通过主进程内存缓存中转，避免把 dataURL 塞进 BrowserWindow URL query。
+        registerImageViewerPayload: query((payload) => ops.invoke('image-viewer:register-payload', payload)),
+        consumeImageViewerPayload: query((token) => ops.invoke('image-viewer:consume-payload', token)),
+        copyGifToClipboard: query((gifBytes) => ops.invoke('image-viewer:copy-gif', gifBytes)),
         openImageInNewWindow: command((imageUrl, imageTitle) => ops.send('open-image-in-new-window', imageUrl, imageTitle)),
         openTextInNewWindow: query((textContent, windowTitle, theme) => ops.invoke('display-text-content-in-viewer', textContent, windowTitle, theme)),
         sendOpenExternalLink: command((url) => ops.send('open-external-link', url)),
@@ -147,6 +188,7 @@ function createCatalog(ops) {
 
         // Shared window launching
         openNotesWindow: query((theme) => ops.invoke('open-notes-window', theme)),
+        openNoteMiniWindow: query(() => ops.invoke('open-note-mini-window')),
         openNotesWithContent: query((data) => ops.invoke('open-notes-with-content', data)),
         openTranslatorWindow: query((theme) => ops.invoke('open-translator-window', theme)),
         openRAGObserverWindow: query(() => ops.invoke('open-rag-observer-window')),
@@ -154,6 +196,7 @@ function createCatalog(ops) {
         openVoiceChatWindow: command((data) => ops.send('open-voice-chat-window', data)),
         openForumWindow: command(() => ops.send('open-forum-window')),
         openMemoWindow: command(() => ops.send('open-memo-window')),
+        openLogWindow: command(() => ops.send('open-log-window')),
         openMusicWindow: command(() => ops.send('open-music-window')),
         openDiceWindow: query(() => ops.invoke('open-dice-window')),
         openCanvasWindow: query(() => ops.invoke('open-canvas-window')),
@@ -264,6 +307,7 @@ function createCatalog(ops) {
         // Utility APIs
         readNotesTree: query(() => ops.invoke('read-notes-tree')),
         writeTxtNote: query((noteData) => ops.invoke('write-txt-note', noteData)),
+        saveMiniNote: query((noteData) => ops.invoke('save-mini-note', noteData)),
         deleteItem: query((itemPath) => ops.invoke('delete-item', itemPath)),
         createNoteFolder: query((data) => ops.invoke('create-note-folder', data)),
         renameItem: query((data) => ops.invoke('rename-item', data)),
@@ -273,6 +317,7 @@ function createCatalog(ops) {
         copyNoteContent: query((filePath) => ops.invoke('copy-note-content', filePath)),
         scanNetworkNotes: command(() => ops.send('scan-network-notes')),
         onNetworkNotesScanned: subscription(ops.subscribe('network-notes-scanned', (_event, networkTree) => networkTree)),
+        onLocalNotesChanged: subscription(ops.subscribe('local-notes-changed', () => undefined)),
         getCachedNetworkNotes: query(() => ops.invoke('get-cached-network-notes')),
         searchNotes: query((queryText) => ops.invoke('search-notes', queryText)),
         onSharedNoteData: subscription(ops.subscribe('shared-note-data', (_event, data) => data)),
@@ -419,11 +464,20 @@ function createCatalog(ops) {
         desktopMetricsGetCapabilities: query(() => ops.invoke('desktop-metrics-get-capabilities')),
         desktopMetricsGetDetailedProcesses: query(() => ops.invoke('desktop-metrics-get-detailed-processes')),
         desktopOpenSystemTool: query((cmd) => ops.invoke('desktop-open-system-tool', cmd)),
+        desktopOpenWidgetInCanvas: query((data) => ops.invoke('desktop-open-widget-in-canvas', data)),
+        onDesktopWidgetSourceSaved: subscription(ops.subscribe('desktop-widget-source-saved', (_event, data) => data)),
+        pluginManagerListPlugins: query(() => ops.invoke('plugin-manager-list-plugins')),
+        pluginManagerSaveManifest: query((data) => ops.invoke('plugin-manager-save-manifest', data)),
+        pluginManagerSaveConfigEnv: query((data) => ops.invoke('plugin-manager-save-config-env', data)),
+        pluginManagerSetPluginEnabled: query((data) => ops.invoke('plugin-manager-set-plugin-enabled', data)),
+        pluginManagerOpenPluginFolder: query((data) => ops.invoke('plugin-manager-open-plugin-folder', data)),
     };
 }
 
 const ALLOWED_KEYS = [
     "loadSettings",
+    "loadTranslatorSettings",
+    "saveTranslatorSettings",
     "saveSettings",
     "saveUserAvatar",
     "saveAvatarColor",
@@ -442,6 +496,9 @@ const ALLOWED_KEYS = [
     "onWindowUnmaximized",
     "showImageContextMenu",
     "openImageViewer",
+    "registerImageViewerPayload",
+    "consumeImageViewerPayload",
+    "copyGifToClipboard",
     "openImageInNewWindow",
     "openTextInNewWindow",
     "sendOpenExternalLink",
@@ -452,6 +509,7 @@ const ALLOWED_KEYS = [
     "getPlatform",
     "getWallpaperThumbnail",
     "openNotesWindow",
+    "openNoteMiniWindow",
     "openNotesWithContent",
     "openTranslatorWindow",
     "openRAGObserverWindow",
@@ -459,6 +517,7 @@ const ALLOWED_KEYS = [
     "openVoiceChatWindow",
     "openForumWindow",
     "openMemoWindow",
+    "openLogWindow",
     "openMusicWindow",
     "openCanvasWindow",
     "openDesktopWindow",
@@ -476,6 +535,7 @@ const ALLOWED_KEYS = [
     "executePythonCode",
     "readNotesTree",
     "writeTxtNote",
+    "saveMiniNote",
     "deleteItem",
     "createNoteFolder",
     "renameItem",
@@ -485,6 +545,7 @@ const ALLOWED_KEYS = [
     "copyNoteContent",
     "scanNetworkNotes",
     "onNetworkNotesScanned",
+    "onLocalNotesChanged",
     "getCachedNetworkNotes",
     "searchNotes",
     "onSharedNoteData",
@@ -585,9 +646,16 @@ const ALLOWED_KEYS = [
     "getWebdavFileUrl",
     "loadWebdavTrack",
     "addWebdavServer",
+    "desktopOpenWidgetInCanvas",
+    "onDesktopWidgetSourceSaved",
     "toggleSelectionListener",
     "getSelectionListenerStatus",
-    "getEmoticonLibrary"
+    "getEmoticonLibrary",
+    "pluginManagerListPlugins",
+    "pluginManagerSaveManifest",
+    "pluginManagerSaveConfigEnv",
+    "pluginManagerSetPluginEnabled",
+    "pluginManagerOpenPluginFolder"
 ];
 
 const ops = createOps();

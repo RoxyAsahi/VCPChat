@@ -17,6 +17,7 @@ let searchAbortController = null; // 搜索请求控制器
 let isBatchMode = false;
 let selectedMemos = new Set(); // Set of "folder:::name" strings
 let hiddenFolders = new Set(); // Set of hidden folder names
+let collapsedCategories = new Set(); // Set of collapsed category IDs
 let folderOrder = []; // Array of folder names for UI sorting
 let draggedFolder = null; // Currently dragged folder name
 let memoStartupBlocked = false;
@@ -30,6 +31,7 @@ const contextMenuEl = document.getElementById('context-menu');
 
 // 编辑器相关
 const editorOverlay = document.getElementById('editor-overlay');
+const editorContainer = document.querySelector('.editor-container');
 const editorTitleInput = document.getElementById('editor-title');
 const editorTextarea = document.getElementById('editor-textarea');
 const editorPreview = document.getElementById('editor-preview');
@@ -39,6 +41,8 @@ const editorStatus = document.getElementById('editor-status');
 const createModal = document.getElementById('create-modal');
 const newMemoDateInput = document.getElementById('new-memo-date');
 const newMemoMaidInput = document.getElementById('new-memo-maid');
+const newMemoFilenameInput = document.getElementById('new-memo-filename');
+const newMemoTagsInput = document.getElementById('new-memo-tags');
 const newMemoContentInput = document.getElementById('new-memo-content');
 
 function blockStartup(message) {
@@ -131,6 +135,9 @@ async function initApp() {
             if (memoConfig.hiddenFolders) {
                 hiddenFolders = new Set(memoConfig.hiddenFolders);
             }
+            if (memoConfig.collapsedCategories) {
+                collapsedCategories = new Set(memoConfig.collapsedCategories);
+            }
             if (memoConfig.folderOrder) {
                 folderOrder = memoConfig.folderOrder;
             }
@@ -187,10 +194,10 @@ function setupEventListeners() {
         // 切换图标和标题
         if (searchScope === 'global') {
             searchScopeBtn.title = '当前范围：全局搜索';
-            searchScopeBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-primary)" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>`;
+            searchScopeBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>`;
         } else if (searchScope === 'semantic') {
             searchScopeBtn.title = '当前范围：语义级全局检索';
-            searchScopeBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .52 8.125A5.002 5.002 0 0 0 14 18a5 5 0 0 0 5-5A3 3 0 0 0 12 5Z"/><path d="M12 18v-2a2 2 0 0 0-2-2H8"/><path d="M16 8a2 2 0 0 0-2 2v2"/></svg>`;
+            searchScopeBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .52 8.125A5.002 5.002 0 0 0 14 18a5 5 0 0 0 5-5A3 3 0 0 0 12 5Z"/><path d="M12 18v-2a2 2 0 0 0-2-2H8"/><path d="M16 8a2 2 0 0 0-2 2v2"/></svg>`;
         } else {
             searchScopeBtn.title = '当前范围：文件夹内';
             searchScopeBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>`;
@@ -280,12 +287,9 @@ function setupEventListeners() {
 
     // 联想弹窗事件
     const kInput = document.getElementById('input-assoc-k');
-    const boostInput = document.getElementById('input-assoc-boost');
     const kValueLabel = document.getElementById('label-k-value');
-    const boostValueLabel = document.getElementById('label-boost-value');
 
     if (kInput) kInput.oninput = () => kValueLabel.textContent = kInput.value;
-    if (boostInput) boostInput.oninput = () => boostValueLabel.textContent = boostInput.value;
 
     document.getElementById('close-assoc-config-btn').onclick = () => {
         document.getElementById('assoc-config-modal').style.display = 'none';
@@ -362,6 +366,11 @@ function setupEventListeners() {
     // 编辑器控制
     document.getElementById('close-editor-btn').onclick = () => {
         editorOverlay.classList.remove('active');
+    };
+
+    document.getElementById('toggle-preview-btn').onclick = () => {
+        const isCollapsed = editorContainer.classList.toggle('preview-collapsed');
+        updateEditorPreviewToggle(isCollapsed);
     };
 
     editorTextarea.oninput = () => {
@@ -553,85 +562,126 @@ function renderFolders(folders) {
     // 更新 folderOrder 以包含新发现的文件夹
     folderOrder = visibleFolders;
 
-    visibleFolders.forEach(folder => {
-        // 侧边栏列表
-        const item = document.createElement('div');
-        item.className = `folder-item ${folder === currentFolder ? 'active' : ''}`;
-        item.setAttribute('draggable', 'true');
-        item.innerHTML = `
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-            <span>${escapeHtml(folder)}</span>
+    // 分类逻辑
+    const clusters = visibleFolders.filter(f => f.endsWith('簇'));
+    const diaries = visibleFolders.filter(f => !f.endsWith('簇'));
+
+    const categories = [
+        { id: 'diary', name: '日记 / 知识库', folders: diaries },
+        { id: 'cluster', name: '思维簇', folders: clusters }
+    ];
+
+    categories.forEach(cat => {
+        if (cat.folders.length === 0) return;
+
+        const catEl = document.createElement('div');
+        catEl.className = `folder-category ${collapsedCategories.has(cat.id) ? 'collapsed' : ''}`;
+        catEl.id = `cat-${cat.id}`;
+
+        const header = document.createElement('div');
+        header.className = 'category-header';
+        header.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            <span>${cat.name}</span>
         `;
-        item.onclick = () => selectFolder(folder);
+        header.onclick = () => toggleCategory(cat.id);
 
-        // 拖拽事件
-        item.ondragstart = (e) => {
-            draggedFolder = folder;
-            item.classList.add('dragging');
-            e.dataTransfer.effectAllowed = 'move';
-        };
+        const content = document.createElement('div');
+        content.className = 'category-content';
 
-        item.ondragover = (e) => {
-            e.preventDefault();
-            if (draggedFolder !== folder) {
-                item.classList.add('drag-over');
-            }
-            return false;
-        };
+        cat.folders.forEach(folder => {
+            const item = document.createElement('div');
+            item.className = `folder-item ${folder === currentFolder ? 'active' : ''}`;
+            item.setAttribute('draggable', 'true');
+            item.innerHTML = `
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                <span>${escapeHtml(folder)}</span>
+            `;
+            item.onclick = () => selectFolder(folder);
 
-        item.ondragleave = () => {
-            item.classList.remove('drag-over');
-        };
+            // 拖拽事件
+            item.ondragstart = (e) => {
+                draggedFolder = folder;
+                item.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            };
 
-        item.ondrop = async (e) => {
-            e.preventDefault();
-            item.classList.remove('drag-over');
-            if (draggedFolder && draggedFolder !== folder) {
-                // 重新排序
-                const fromIndex = folderOrder.indexOf(draggedFolder);
-                const toIndex = folderOrder.indexOf(folder);
-
-                folderOrder.splice(fromIndex, 1);
-                folderOrder.splice(toIndex, 0, draggedFolder);
-
-                renderFolders(folders); // 重新渲染
-                await saveMemoConfig(); // 持久化
-            }
-            return false;
-        };
-
-        item.ondragend = () => {
-            item.classList.remove('dragging');
-            draggedFolder = null;
-        };
-
-        // 文件夹右键菜单
-        item.oncontextmenu = (e) => {
-            showContextMenu(e, [
-                {
-                    label: '删除文件夹',
-                    className: 'danger',
-                    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
-                    onClick: () => handleDeleteFolder(folder)
-                },
-                {
-                    label: '隐藏文件夹',
-                    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>',
-                    onClick: () => handleHideFolder(folder)
+            item.ondragover = (e) => {
+                e.preventDefault();
+                if (draggedFolder !== folder) {
+                    item.classList.add('drag-over');
                 }
-            ]);
-        };
+                return false;
+            };
 
-        folderListEl.appendChild(item);
+            item.ondragleave = () => {
+                item.classList.remove('drag-over');
+            };
 
-        // 批量移动下拉框
-        if (folder !== currentFolder) {
-            const opt = document.createElement('option');
-            opt.value = folder;
-            opt.textContent = folder;
-            moveSelect.appendChild(opt);
-        }
+            item.ondrop = async (e) => {
+                e.preventDefault();
+                item.classList.remove('drag-over');
+                if (draggedFolder && draggedFolder !== folder) {
+                    const fromIndex = folderOrder.indexOf(draggedFolder);
+                    const toIndex = folderOrder.indexOf(folder);
+                    folderOrder.splice(fromIndex, 1);
+                    folderOrder.splice(toIndex, 0, draggedFolder);
+                    renderFolders(folders);
+                    await saveMemoConfig();
+                }
+                return false;
+            };
+
+            item.ondragend = () => {
+                item.classList.remove('dragging');
+                draggedFolder = null;
+            };
+
+            // 文件夹右键菜单
+            item.oncontextmenu = (e) => {
+                showContextMenu(e, [
+                    {
+                        label: '删除文件夹',
+                        className: 'danger',
+                        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
+                        onClick: () => handleDeleteFolder(folder)
+                    },
+                    {
+                        label: '隐藏文件夹',
+                        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>',
+                        onClick: () => handleHideFolder(folder)
+                    }
+                ]);
+            };
+
+            content.appendChild(item);
+
+            // 批量移动下拉框
+            if (folder !== currentFolder) {
+                const opt = document.createElement('option');
+                opt.value = folder;
+                opt.textContent = folder;
+                moveSelect.appendChild(opt);
+            }
+        });
+
+        catEl.appendChild(header);
+        catEl.appendChild(content);
+        folderListEl.appendChild(catEl);
     });
+}
+
+async function toggleCategory(catId) {
+    const catEl = document.getElementById(`cat-${catId}`);
+    if (!catEl) return;
+
+    const isCollapsed = catEl.classList.toggle('collapsed');
+    if (isCollapsed) {
+        collapsedCategories.add(catId);
+    } else {
+        collapsedCategories.delete(catId);
+    }
+    await saveMemoConfig();
 }
 
 async function selectFolder(folderName) {
@@ -685,9 +735,20 @@ function renderMemos(memos) {
         card.dataset.memoId = memoId;
         card.dataset.pretextWidth = String(Math.max(estimatedCardWidth, 240));
 
+        const titleParts = parseStructuredMemoName(memo.name);
+        const titleHtml = titleParts
+            ? `
+                <h3 class="memo-title structured" title="${escapeHtml(memo.name)}">
+                    <span class="memo-format-tag">${escapeHtml(titleParts.format)}</span>
+                    <span class="memo-readable-title">${escapeHtml(titleParts.title)}</span>
+                    <span class="memo-readable-time">${escapeHtml(titleParts.readableTime)}</span>
+                </h3>
+            `
+            : `<h3 title="${escapeHtml(memo.name)}">${escapeHtml(memo.name)}</h3>`;
+
         card.innerHTML = `
             <div>
-                <h3>${escapeHtml(memo.name)}</h3>
+                ${titleHtml}
                 <p class="preview">${escapeHtml(previewText)}</p>
             </div>
             <div class="meta">
@@ -834,6 +895,15 @@ async function openMemo(memo) {
     }
 }
 
+function updateEditorPreviewToggle(isCollapsed = editorContainer.classList.contains('preview-collapsed')) {
+    const togglePreviewBtn = document.getElementById('toggle-preview-btn');
+    if (!togglePreviewBtn) return;
+
+    togglePreviewBtn.title = isCollapsed ? '展开渲染区' : '收纳渲染区';
+    togglePreviewBtn.setAttribute('aria-label', togglePreviewBtn.title);
+    togglePreviewBtn.setAttribute('aria-expanded', String(!isCollapsed));
+}
+
 function renderPreview(content) {
     if (window.marked) {
         editorPreview.innerHTML = marked.parse(content);
@@ -949,6 +1019,9 @@ async function handleDeleteMemo() {
 async function handleCreateMemo() {
     const date = newMemoDateInput.value;
     const maid = newMemoMaidInput.value.trim();
+    const folder = document.getElementById('new-memo-folder')?.value.trim() || '';
+    const fileName = newMemoFilenameInput.value.trim();
+    const tags = newMemoTagsInput.value.trim();
     const content = newMemoContentInput.value.trim();
 
     if (!date || !maid || !content) {
@@ -964,14 +1037,25 @@ async function handleCreateMemo() {
         const settings = await api.loadSettings();
         if (!settings?.vcpApiKey) throw new Error('API Key 未配置');
 
-        // 构造 TOOL_REQUEST
-        const toolRequest = `<<<[TOOL_REQUEST]>>>
-maid:「始」${maid}「末」,
+        // 构造 TOOL_REQUEST（可选字段仅在有值时加入）
+        let toolFields = `maid:「始」${maid}「末」,
 tool_name:「始」DailyNote「末」,
 command:「始」create「末」,
-Date:「始」${date}「末」,
-Content:「始」${content}「末」
-<<<[END_TOOL_REQUEST]>>>`;
+Date:「始」${date}「末」,`;
+
+        if (folder) {
+            toolFields += `\nfolder:「始」${folder}「末」,`;
+        }
+        if (fileName) {
+            toolFields += `\nfileName:「始」${fileName}「末」,`;
+        }
+        if (tags) {
+            toolFields += `\nTag:「始」${tags}「末」,`;
+        }
+
+        toolFields += `\nContent:「始」${content}「末」`;
+
+        const toolRequest = `<<<[TOOL_REQUEST]>>>\n${toolFields}\n<<<[END_TOOL_REQUEST]>>>`;
 
         const res = await fetch(`${serverBaseUrl}v1/human/tool`, {
             method: 'POST',
@@ -987,6 +1071,8 @@ Content:「始」${content}「末」
         // 成功后处理
         createModal.style.display = 'none';
         newMemoContentInput.value = '';
+        newMemoFilenameInput.value = '';
+        newMemoTagsInput.value = '';
 
         // 延迟刷新，给后端一点处理时间
         setTimeout(async () => {
@@ -1092,19 +1178,7 @@ search_all_knowledge_bases:「始」true「末」
         // 竞态检查：解析完成后再次确认
         if (myAbortController !== searchAbortController) return;
 
-        let output = '';
-        if (data.original_plugin_output) {
-            output = data.original_plugin_output;
-        } else if (data.status === 'success' && data.content) {
-            try {
-                const content = JSON.parse(data.content);
-                output = content.original_plugin_output || data.content;
-            } catch (e) {
-                output = data.content;
-            }
-        } else if (typeof data === 'string') {
-            output = data;
-        }
+        const output = extractLightMemoOutput(data);
 
         if (output) {
             processSemanticSearchResults(output, query);
@@ -1120,64 +1194,161 @@ search_all_knowledge_bases:「始」true「末」
     }
 }
 
-function processSemanticSearchResults(output, query) {
-    // 解析 LightMemo 输出并转换为 memo 列表格式
-    const results = [];
-    const sections = output.split('--- (来源:');
-    
-    sections.forEach(section => {
-        if (!section.trim()) return;
-        
-        const pathMatch = section.match(/\[路径: file:\/\/\/(.*?)\]/);
-        if (pathMatch) {
-            const fullPath = pathMatch[1];
-            const parts = fullPath.split('/');
-            const fileName = parts.pop();
-            const folderName = parts.join('/');
-            
-            // 提取预览内容：跳过元信息行（来源标题、路径、TagMemo、Tag），取实际日记内容
-            const lines = section.split('\n');
-            let contentLines = [];
-            let skippedFirstLine = false;
-            
-            for (let i = 0; i < lines.length; i++) {
-                const line = lines[i].trim();
-                if (!line) continue;
-                // split('--- (来源:') 后第一个非空行一定是来源信息（如 "公共的日常, 相关性: 86.6%(混合))"）
-                if (!skippedFirstLine) {
-                    skippedFirstLine = true;
-                    continue;
-                }
-                // 跳过路径行
-                if (line.startsWith('[路径:')) continue;
-                // 跳过 TagMemo 增强行
-                if (line.startsWith('[TagMemo')) continue;
-                // 跳过 Tag 行（兼容半角/全角冒号）
-                if (/^Tag[：:]/.test(line)) continue;
-                // 跳过分隔线
-                if (line.startsWith('---')) continue;
-                
-                // 剩下的就是实际日记内容
-                contentLines.push(line);
-                // 收集足够的预览内容就停止
-                if (contentLines.join(' ').length >= 100) break;
-            }
-            
-            const preview = contentLines.join(' ').substring(0, 150);
+function extractLightMemoOutput(payload) {
+    if (!payload) return '';
+    if (typeof payload === 'string') return payload;
 
-            results.push({
-                name: fileName,
-                folderName: folderName,
-                preview: preview || '语义匹配片段...',
-                lastModified: new Date().getTime(), // 语义搜索不一定返回准确时间，暂用当前
-                path: fullPath
+    if (typeof payload.original_plugin_output !== 'undefined') {
+        return normalizeLightMemoContent(payload.original_plugin_output);
+    }
+
+    if (payload.result) {
+        const resultOutput = extractLightMemoOutput(payload.result);
+        if (resultOutput) return resultOutput;
+    }
+
+    if (typeof payload.content !== 'undefined') {
+        return normalizeLightMemoContent(payload.content);
+    }
+
+    if (typeof payload.text === 'string') {
+        return payload.text;
+    }
+
+    return '';
+}
+
+function normalizeLightMemoContent(content) {
+    if (content == null) return '';
+    if (typeof content === 'string') {
+        try {
+            const parsedContent = JSON.parse(content);
+            const nestedOutput = extractLightMemoOutput(parsedContent);
+            return nestedOutput || content;
+        } catch (e) {
+            return content;
+        }
+    }
+
+    if (Array.isArray(content)) {
+        return content
+            .map(item => {
+                if (typeof item === 'string') return item;
+                if (item && typeof item.text === 'string') return item.text;
+                return extractLightMemoOutput(item);
+            })
+            .filter(Boolean)
+            .join('\n');
+    }
+
+    if (typeof content === 'object') {
+        return extractLightMemoOutput(content);
+    }
+
+    return String(content);
+}
+
+function processSemanticSearchResults(output, query) {
+    // LightMemo 的 sourceFile 可能是绝对路径、相对路径或 file URL。
+    // 日记 API 只接受 <folder>/<file>，因此优先采用“来源”作为文件夹，
+    // 仅在来源缺失时使用路径的直接父目录兜底。
+    const resultByMemo = new Map();
+    const normalizedOutput = String(output || '').replace(/\r\n?/g, '\n');
+    const sections = normalizedOutput.split(/(?=^---\s*\(来源\s*[:：])/gm);
+
+    sections.forEach(section => {
+        const sourceMatch = section.match(
+            /^---\s*\(来源\s*[:：]\s*(.+?)(?:[,，]\s*相关(?:性)?\s*[:：]|\)\s*$)/m
+        );
+        const pathMatch = section.match(/^\s*\[路径\s*[:：]\s*(.+?)\]\s*$/m);
+        if (!pathMatch) return;
+
+        const pathInfo = parseSemanticMemoPath(pathMatch[1]);
+        if (!pathInfo.fileName) return;
+
+        const sourceFolder = sourceMatch ? sourceMatch[1].trim() : '';
+        const folderName = sourceFolder || pathInfo.parentFolder;
+        if (
+            !folderName ||
+            folderName === 'MusicDiary' ||
+            hiddenFolders.has(folderName)
+        ) {
+            return;
+        }
+
+        const contentLines = [];
+        for (const rawLine of section.split('\n')) {
+            const line = rawLine.trim();
+            if (!line) continue;
+
+            // 过滤 LightMemo 标题及其可选引擎元数据，避免元信息进入卡片预览。
+            if (/^---\s*\(来源\s*[:：]/.test(line)) continue;
+            if (/^\[路径\s*[:：]/.test(line)) continue;
+            if (/^\[(?:TagMemo|RiverMemo)\b/i.test(line)) continue;
+            if (/^Tag\s*[：:]/i.test(line)) continue;
+            if (/^\[---/.test(line) || /^---+$/.test(line)) continue;
+
+            contentLines.push(line);
+            if (contentLines.join(' ').length >= 150) break;
+        }
+
+        const memoKey = `${folderName}:::${pathInfo.fileName}`;
+        const preview = contentLines.join(' ').substring(0, 150);
+        const existing = resultByMemo.get(memoKey);
+
+        // LightMemo 可能从同一文件召回多个 chunk。卡片按文件去重，并保留更长的片段。
+        if (!existing || preview.length > existing.preview.length) {
+            resultByMemo.set(memoKey, {
+                name: pathInfo.fileName,
+                folderName,
+                preview: preview || existing?.preview || '语义匹配片段...',
+                lastModified: Date.now(),
+                path: pathInfo.normalizedPath
             });
         }
     });
 
+    const results = Array.from(resultByMemo.values());
     allMemos = results;
     currentFolderNameEl.textContent = `语义级全局检索: ${query}`;
+
+    if (results.length === 0) {
+        memoGridEl.innerHTML = '<div style="padding: 20px; color: var(--text-secondary);">语义搜索返回了内容，但未识别到可打开的日记路径</div>';
+        return;
+    }
+
     renderMemos(results);
+}
+
+function parseSemanticMemoPath(rawPath) {
+    let normalizedPath = String(rawPath || '').trim();
+
+    // URL 构造器不能稳定处理所有 Windows 相对路径，这里只剥离 LightMemo 添加的协议。
+    normalizedPath = normalizedPath
+        .replace(/^file:(?:\/\/\/|\/\/)?/i, '')
+        .replace(/[?#].*$/, '');
+
+    try {
+        normalizedPath = decodeURIComponent(normalizedPath);
+    } catch (error) {
+        console.warn('[Memo] Semantic result contains an invalid encoded path:', rawPath);
+    }
+
+    normalizedPath = normalizedPath
+        .replace(/\\/g, '/')
+        .replace(/\/+/g, '/')
+        .replace(/^\/(?=[A-Za-z]:\/)/, '')
+        .replace(/\/$/, '');
+
+    const parts = normalizedPath.split('/').filter(Boolean);
+    const fileName = parts.pop() || '';
+    const parentFolder = parts.pop() || '';
+
+    return {
+        normalizedPath,
+        fileName,
+        parentFolder
+    };
 }
 
 async function handleBatchDelete() {
@@ -1258,6 +1429,7 @@ async function saveMemoConfig() {
     try {
         await api.saveMemoConfig({
             hiddenFolders: Array.from(hiddenFolders),
+            collapsedCategories: Array.from(collapsedCategories),
             folderOrder: folderOrder
         });
     } catch (error) {
@@ -1380,6 +1552,53 @@ function customAlert(message, title = '提示') {
 }
 
 // ========== 工具函数 ==========
+function parseStructuredMemoName(fileName) {
+    if (typeof fileName !== 'string') return null;
+
+    const extMatch = fileName.match(/\.([^.]+)$/);
+    const formatFromExt = extMatch?.[1] || '';
+    const withoutExt = fileName.replace(/\.[^.]+$/, '');
+
+    // 支持：2026-06-01-06_21_33-六一晨间的温柔拥抱.txt
+    // 也兼容：2026-06-01-06_21_33-标题-md.txt 这类带额外格式尾缀的旧命名
+    const match = withoutExt.match(/^(\d{4})[-_](\d{2})[-_](\d{2})[-_](\d{2})[-_](\d{2})[-_](\d{2})[-_]+(.+)$/);
+    if (!match) return null;
+
+    const [, year, month, day, hour, minute, second, rawRest] = match;
+    const date = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second));
+    if (
+        Number.isNaN(date.getTime()) ||
+        date.getFullYear() !== Number(year) ||
+        date.getMonth() !== Number(month) - 1 ||
+        date.getDate() !== Number(day) ||
+        date.getHours() !== Number(hour) ||
+        date.getMinutes() !== Number(minute) ||
+        date.getSeconds() !== Number(second)
+    ) {
+        return null;
+    }
+
+    let rawTitle = rawRest;
+    let format = formatFromExt;
+
+    const titleTailMatch = rawRest.match(/^(.+)[-_]([A-Za-z0-9]{2,8})$/);
+    if (titleTailMatch && !formatFromExt) {
+        rawTitle = titleTailMatch[1];
+        format = titleTailMatch[2];
+    }
+
+    if (!format) return null;
+
+    const title = rawTitle.replace(/[-_]+/g, ' ').trim();
+    if (!title) return null;
+
+    return {
+        format: format.toUpperCase(),
+        title,
+        readableTime: `${year}-${month}-${day} ${hour}:${minute}`
+    };
+}
+
 function escapeHtml(str) {
     if (typeof str !== 'string') return str;
     return str

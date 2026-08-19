@@ -27,12 +27,18 @@ body {
 /* --- Sidebar --- */
 .sidebar {
     width: var(--sidebar-width);
-    background: rgba(0, 0, 0, 0.2);
-    backdrop-filter: blur(10px);
+    background-color: var(--panel-bg-dark);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     border-right: 1px solid var(--glass-border);
     display: flex;
     flex-direction: column;
     transition: all 0.3s ease;
+    text-shadow: var(--panel-text-shadow);
+}
+
+body.light-theme .sidebar {
+    background-color: var(--panel-bg-light);
 }
 
 .sidebar-header {
@@ -55,7 +61,7 @@ body {
 .folder-search-input {
     width: 100%;
     padding: 8px 12px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--input-bg);
     border: 1px solid var(--glass-border);
     border-radius: 8px;
     color: var(--text-primary);
@@ -66,9 +72,9 @@ body {
 }
 
 .folder-search-input:focus {
-    border-color: var(--accent-color);
-    background: rgba(255, 255, 255, 0.08);
-    box-shadow: 0 0 8px rgba(var(--accent-color-rgb, 74, 144, 226), 0.2);
+    border-color: var(--highlight-text);
+    background: color-mix(in srgb, var(--input-bg) 82%, var(--accent-bg) 18%);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--highlight-text) 20%, transparent);
 }
 
 .folder-search-input::placeholder {
@@ -82,15 +88,66 @@ body {
     padding: 10px;
 }
 
+.folder-category {
+    margin-bottom: 15px;
+}
+
+.category-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.2s;
+}
+
+.category-header:hover {
+    color: var(--accent-color);
+}
+
+.category-header svg {
+    width: 12px;
+    height: 12px;
+    transition: transform 0.3s ease;
+    opacity: 0.6;
+}
+
+.folder-category.collapsed .category-header svg {
+    transform: rotate(-90deg);
+}
+
+.category-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out;
+}
+
+.folder-category.collapsed .category-content {
+    max-height: 0 !important;
+}
+
 .folder-item {
-    padding: 12px 15px;
-    border-radius: 10px;
-    margin-bottom: 5px;
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    min-height: 46px;
+    padding: 10px 15px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    margin-bottom: 6px;
     cursor: pointer;
     display: flex;
     align-items: center;
     gap: 10px;
-    transition: all 0.2s ease;
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
     color: var(--text-secondary);
 }
 
@@ -106,14 +163,52 @@ body {
 }
 
 .folder-item:hover {
-    background: rgba(255, 255, 255, 0.05);
+    border-color: color-mix(in srgb, var(--border-color) 54%, transparent);
+    background: color-mix(in srgb, var(--accent-bg) 58%, transparent);
     color: var(--text-primary);
+    box-shadow:
+        inset 1px -1px 1px -1px rgba(255, 255, 255, 0.22),
+        inset -1px 1px 1px -1px rgba(255, 255, 255, 0.16);
 }
 
 .folder-item.active {
-    background: var(--accent-color);
-    color: var(--secondary-text);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--user-bubble-bg) 82%, rgba(255, 255, 255, 0.4)),
+        color-mix(in srgb, var(--user-bubble-bg) 70%, rgba(255, 255, 255, 0.22))
+    );
+    border-color: color-mix(in srgb, var(--highlight-text) 18%, var(--border-color));
+    color: var(--text-primary);
+    font-weight: 500;
+    box-shadow:
+        inset 2px -2px 1px -1px rgba(255, 255, 255, 0.72),
+        inset -2px 2px 1px -1px rgba(255, 255, 255, 0.62),
+        inset 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.folder-item.active svg {
+    color: var(--highlight-text);
+}
+
+body:not(.light-theme) .folder-item:hover {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.045));
+    box-shadow:
+        inset 1px -1px 1px -1px rgba(255, 255, 255, 0.14),
+        inset -1px 1px 1px -1px rgba(255, 255, 255, 0.1);
+}
+
+body:not(.light-theme) .folder-item.active {
+    background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--user-bubble-bg) 52%, rgba(255, 255, 255, 0.06)),
+        color-mix(in srgb, var(--user-bubble-bg) 40%, rgba(255, 255, 255, 0.03))
+    );
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow:
+        inset 1px -1px 1px -1px rgba(255, 255, 255, 0.16),
+        inset -1px 1px 1px -1px rgba(255, 255, 255, 0.12),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
 .folder-item svg {
@@ -178,6 +273,47 @@ body {
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+}
+
+.memo-card h3.structured {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    line-height: 1.35;
+    -webkit-line-clamp: unset;
+    -webkit-box-orient: unset;
+}
+
+.memo-format-tag {
+    flex: 0 0 auto;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: rgba(var(--accent-color-rgb, 74, 144, 226), 0.16);
+    border: 1px solid rgba(var(--accent-color-rgb, 74, 144, 226), 0.32);
+    color: var(--accent-color);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    line-height: 1.35;
+}
+
+.memo-readable-title {
+    flex: 1 1 140px;
+    min-width: 0;
+    color: var(--accent-color);
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.memo-readable-time {
+    flex: 0 0 auto;
+    color: var(--text-secondary);
+    opacity: 0.75;
+    font-size: 0.72rem;
+    font-weight: 500;
 }
 
 .memo-card .preview {
@@ -268,6 +404,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 16px;
 }
 
 .editor-title-input {
@@ -278,12 +415,55 @@ body {
     font-weight: bold;
     flex: 1;
     outline: none;
+    min-width: 0;
+}
+
+.editor-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.editor-toggle-preview-btn {
+    position: relative;
+}
+
+.editor-toggle-preview-btn .toggle-preview-icon {
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.editor-toggle-preview-btn .expand-icon {
+    display: none;
+}
+
+.editor-container.preview-collapsed .editor-toggle-preview-btn .collapse-icon {
+    display: none;
+}
+
+.editor-container.preview-collapsed .editor-toggle-preview-btn .expand-icon {
+    display: block;
 }
 
 .editor-body {
     flex: 1;
     display: flex;
     overflow: hidden;
+}
+
+.editor-container.preview-collapsed .editor-textarea {
+    border-right: none;
+}
+
+.editor-container.preview-collapsed .editor-preview {
+    flex: 0 0 0;
+    width: 0;
+    min-width: 0;
+    padding-left: 0;
+    padding-right: 0;
+    border-left: 0;
+    opacity: 0;
+    pointer-events: none;
 }
 
 .editor-textarea {
@@ -306,6 +486,7 @@ body {
     overflow-y: auto;
     color: var(--text-primary);
     line-height: 1.7;
+    transition: flex-basis 0.25s ease, width 0.25s ease, padding 0.25s ease, opacity 0.18s ease;
 }
 
 .editor-footer {
@@ -354,7 +535,7 @@ body {
 
 .glass-btn.primary {
     background: var(--accent-color);
-    color: var(--secondary-text);
+    color: var(--text-on-accent);
     border: none;
 }
 
@@ -388,10 +569,16 @@ body {
 }
 
 .scope-toggle-btn.active {
-    background: var(--accent-color);
-    color: var(--text-on-accent);
-    border-color: transparent;
-    box-shadow: 0 0 8px rgba(var(--accent-color-rgb, 74, 144, 226), 0.4);
+    background: var(--accent-bg);
+    color: var(--highlight-text);
+    border-color: var(--border-color);
+    box-shadow: 0 0 8px rgba(var(--accent-color-rgb, 74, 144, 226), 0.2);
+}
+
+body.light-theme .scope-toggle-btn.active {
+    background: var(--accent-bg);
+    color: var(--highlight-text);
+    border-color: var(--border-color);
 }
 
 .scope-toggle-btn svg {
@@ -535,7 +722,7 @@ body {
 
 .batch-item-remove:hover {
     background: var(--danger-color);
-    color: white;
+    color: var(--text-on-accent);
 }
 
 /* --- Association Feature Styles --- */
@@ -556,7 +743,7 @@ body {
 
 .association-btn:hover {
     background: var(--accent-color);
-    color: white;
+    color: var(--text-on-accent);
     box-shadow: 0 0 10px var(--accent-color);
 }
 
@@ -619,7 +806,7 @@ body {
 .folder-tag.active {
     background: var(--accent-color);
     border-color: var(--accent-color);
-    color: white;
+    color: var(--text-on-accent);
     box-shadow: 0 4px 10px rgba(var(--accent-color-rgb), 0.3);
 }
 

@@ -9,6 +9,19 @@ window.topicListManager = (() => {
     let uiHelper;
     let mainRendererFunctions;
     let wasSelectionListenerActive = false; // To store the state of the selection listener before dragging
+    let topicListRenderGeneration = 0;
+    let topicListScrollCleanup = null;
+    let topicCountObserver = null;
+    let isManageMode = false;
+    let selectedTopicIds = new Set();
+    let displayedTopics = [];
+    let availableTopics = [];
+    let currentItemConfig = null;
+    let managedItemKey = '';
+
+    const TOPIC_INITIAL_RENDER_COUNT = 40;
+    const TOPIC_PROGRESSIVE_BATCH_SIZE = 30;
+    const TOPIC_LOAD_MORE_THRESHOLD_PX = 320;
 
     /**
      * Initializes the TopicListManager module.
@@ -33,33 +46,69 @@ window.topicListManager = (() => {
 
         // 设置鼠标快捷键
         setupMouseShortcuts();
+        setupNextUiTopicTools();
 
         console.log('[TopicListManager] Initialized successfully.');
     }
 
-    /**
-     * Part C: 智能计数逻辑辅助函数（前端复制）
-     * 判断是否应该激活计数
-     * @param {Array} history - 消息历史
-     * @returns {boolean}
-     */
-    function shouldActivateCount(history) {
-        if (!history || history.length === 0) return false;
+    function hasUserParticipation(history) {
+        return Array.isArray(history) && history.some(message =>
+            message &&
+            message.role === 'user' &&
+            message.isThinking !== true
+        );
+    }
 
-        // 过滤掉系统消息
-        const nonSystemMessages = history.filter(msg => msg.role !== 'system');
+    function hasValidPersistentUnreadMarker(topic, history) {
+        if (topic?.unread !== true) return false;
+        if (topic.unreadSource === 'manual') return true;
 
-        // 必须有且只有一条消息，且该消息是 AI 回复
-        return nonSystemMessages.length === 1 && nonSystemMessages[0].role === 'assistant';
+        // Agent/TopicSponsor 产生的旧未读标记在用户参与后即失效。
+        return !hasUserParticipation(history);
+    }
+
+    async function clearStalePersistentUnreadMarker(topic, itemId, history) {
+        if (
+            topic?.unread !== true ||
+            topic.unreadSource === 'manual' ||
+            !hasUserParticipation(history)
+        ) {
+            return;
+        }
+
+        topic.unread = false;
+        delete topic.unreadSource;
+
+        try {
+            const result = await electronAPI.setTopicUnread(itemId, topic.id, false);
+            if (!result?.success) {
+                console.warn(`[TopicListManager] 清理话题 ${topic.id} 的残留未读标记失败:`, result?.error);
+            }
+        } catch (error) {
+            console.warn(`[TopicListManager] 清理话题 ${topic.id} 的残留未读标记失败:`, error);
+        }
     }
 
     /**
-     * Part C: 计算未读消息数量
+     * 统计完全由 Agent 主动发起、尚无用户参与的话题消息数。
+     * 系统消息和思考占位不参与判断；历史中只要出现过用户消息就返回 0。
      * @param {Array} history - 消息历史
      * @returns {number}
      */
     function countUnreadMessages(history) {
-        return shouldActivateCount(history) ? 1 : 0;
+        if (!Array.isArray(history) || history.length === 0) return 0;
+
+        const effectiveMessages = history.filter(message =>
+            message &&
+            message.role !== 'system' &&
+            message.isThinking !== true
+        );
+
+        if (effectiveMessages.some(message => message.role === 'user')) {
+            return 0;
+        }
+
+        return effectiveMessages.filter(message => message.role === 'assistant').length;
     }
 
     function normalizeTopicTitle(topicTitle) {
@@ -78,24 +127,390 @@ window.topicListManager = (() => {
     }
 
     /**
+     * 解析话题搜索约定词。
+     * 仅当完整输入为“未读话题”或“unread topic”时启用未读置顶。
+     * @param {string} rawValue - 搜索框原始值
+     * @returns {{ rawTerm: string, queryTerm: string, prioritizeUnread: boolean }}
+     */
+    function parseTopicSearchQuery(rawValue) {
+        const rawTerm = String(rawValue || '').trim().toLowerCase();
+        const prioritizeUnread = rawTerm === '未读话题' || rawTerm === 'unread topic';
+
+        return {
+            rawTerm,
+            queryTerm: prioritizeUnread ? '' : rawTerm,
+            prioritizeUnread
+        };
+    }
+
+    /**
+     * 读取各话题历史，并将未读话题稳定地移到顶部。
+     * 未读组与已读组内部均保留用户自定义顺序。
+     */
+    async function prioritizeUnreadTopics(topics, currentSelectedItem) {
+        const topicsWithUnreadState = await Promise.all(topics.map(async topic => {
+            let history = [];
+            try {
+                history = currentSelectedItem.type === 'group'
+                    ? await electronAPI.getGroupChatHistory(currentSelectedItem.id, topic.id)
+                    : await electronAPI.getChatHistory(currentSelectedItem.id, topic.id);
+            } catch (error) {
+                console.warn(`[TopicListManager] 读取话题 ${topic.id} 的未读状态失败:`, error);
+            }
+
+            const calculatedUnreadCount = Array.isArray(history)
+                ? countUnreadMessages(history)
+                : 0;
+            const hasPersistentUnread = hasValidPersistentUnreadMarker(topic, history);
+
+            await clearStalePersistentUnreadMarker(topic, currentSelectedItem.id, history);
+
+            return {
+                topic,
+                isUnread: calculatedUnreadCount > 0 || hasPersistentUnread,
+                calculatedUnreadCount
+            };
+        }));
+
+        const unreadTopics = [];
+        const readTopics = [];
+        topicsWithUnreadState.forEach(({ topic, isUnread, calculatedUnreadCount }) => {
+            topic.__calculatedUnreadCount = calculatedUnreadCount;
+            (isUnread ? unreadTopics : readTopics).push(topic);
+        });
+
+        return unreadTopics.concat(readTopics);
+    }
+
+    function ensureTopicUnreadIndicator(li, unreadCount = -1) {
+        if (!li) return;
+
+        let indicator = li.querySelector('.topic-unread-indicator');
+        if (!indicator) {
+            indicator = document.createElement('span');
+            indicator.className = 'topic-unread-indicator';
+            const messageCountSpan = li.querySelector('.message-count');
+            li.insertBefore(indicator, messageCountSpan || null);
+        }
+
+        indicator.textContent = unreadCount > 0 ? `未读 ${unreadCount}` : '未读';
+        indicator.title = unreadCount > 0 ? `${unreadCount} 条未读消息` : '未读话题';
+        li.classList.add('has-unread-topic');
+    }
+
+    function removeTopicUnreadIndicator(li) {
+        if (!li) return;
+        li.querySelector('.topic-unread-indicator')?.remove();
+        li.classList.remove('has-unread-topic');
+    }
+
+    /**
      * Part C: 计算单个话题的未读消息数
      * @param {Object} topic - 话题对象
      * @param {Array} history - 话题历史消息
      * @returns {number} - 未读消息数，-1 表示仅显示小点
      */
     function calculateTopicUnreadCount(topic, history) {
-        // 优先检查自动计数条件（AI回复了但用户没回）
-        if (shouldActivateCount(history)) {
-            const count = countUnreadMessages(history);
-            if (count > 0) return count;
-        }
+        const count = countUnreadMessages(history);
+        if (count > 0) return count;
 
-        // 如果不满足自动计数条件，但被手动标记为未读，则显示小点
-        if (topic.unread === true) {
+        // 没有自动计数时，仅保留仍有效的持久化未读标记。
+        if (hasValidPersistentUnreadMarker(topic, history)) {
             return -1; // 仅显示小点，不显示数字
         }
 
         return 0; // 不显示
+    }
+
+    function cleanupProgressiveTopicRendering() {
+        topicListRenderGeneration++;
+        if (typeof topicListScrollCleanup === 'function') {
+            topicListScrollCleanup();
+            topicListScrollCleanup = null;
+        }
+        if (topicCountObserver) {
+            topicCountObserver.disconnect();
+            topicCountObserver = null;
+        }
+        const topicListUl = document.getElementById('topicList');
+        if (topicListUl?.sortableInstance) {
+            topicListUl.sortableInstance.destroy();
+            topicListUl.sortableInstance = null;
+        }
+    }
+
+    function getTopicScrollContainer(topicListUl) {
+        return topicListUl?.closest('.sidebar-list-scroll') || topicListContainer;
+    }
+
+    function ensureTopicCountObserver() {
+        if (topicCountObserver) return topicCountObserver;
+
+        topicCountObserver = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+                if (!entry.isIntersecting) return;
+
+                const li = entry.target;
+                topicCountObserver.unobserve(li);
+                loadTopicMessageCount(li);
+            });
+        }, {
+            root: getTopicScrollContainer(document.getElementById('topicList')),
+            rootMargin: '240px 0px',
+            threshold: 0.01
+        });
+
+        return topicCountObserver;
+    }
+
+    function loadTopicMessageCount(li) {
+        if (!li?.isConnected || li.dataset.countLoaded === 'true' || li.dataset.countLoading === 'true') return;
+
+        const itemId = li.dataset.itemId;
+        const itemType = li.dataset.itemType;
+        const topicId = li.dataset.topicId;
+        const topic = li.__topicData;
+        const messageCountSpan = li.querySelector('.message-count');
+
+        if (!itemId || !itemType || !topicId || !topic || !messageCountSpan) return;
+
+        li.dataset.countLoading = 'true';
+
+        let historyPromise;
+        if (itemType === 'agent') {
+            historyPromise = electronAPI.getChatHistory(itemId, topicId);
+        } else if (itemType === 'group') {
+            historyPromise = electronAPI.getGroupChatHistory(itemId, topicId);
+        }
+
+        if (!historyPromise) {
+            messageCountSpan.textContent = 'N/A';
+            li.dataset.countLoaded = 'true';
+            li.dataset.countLoading = 'false';
+            return;
+        }
+
+        historyPromise.then(async historyResult => {
+            if (!li.isConnected) return;
+
+            messageCountSpan.classList.remove('has-unread', 'unread-marker-only');
+
+            if (historyResult && !historyResult.error && Array.isArray(historyResult)) {
+                await clearStalePersistentUnreadMarker(topic, itemId, historyResult);
+                const unreadCount = calculateTopicUnreadCount(topic, historyResult);
+                if (unreadCount > 0) {
+                    messageCountSpan.textContent = `${historyResult.length}`;
+                    messageCountSpan.classList.add('has-unread');
+                    ensureTopicUnreadIndicator(li, unreadCount);
+                } else if (unreadCount === -1) {
+                    messageCountSpan.textContent = `${historyResult.length}`;
+                    messageCountSpan.classList.add('unread-marker-only');
+                    ensureTopicUnreadIndicator(li);
+                } else {
+                    messageCountSpan.textContent = `${historyResult.length}`;
+                    removeTopicUnreadIndicator(li);
+                }
+            } else {
+                messageCountSpan.textContent = 'N/A';
+            }
+            li.dataset.countLoaded = 'true';
+        }).catch(() => {
+            if (li.isConnected) {
+                messageCountSpan.textContent = 'ERR';
+            }
+        }).finally(() => {
+            if (li.isConnected) {
+                li.dataset.countLoading = 'false';
+            }
+        });
+    }
+
+    function createTopicListItem(topic, currentSelectedItem, currentTopicId, itemConfigFull) {
+        const li = document.createElement('li');
+        li.classList.add('topic-item');
+        li.dataset.itemId = currentSelectedItem.id;
+        li.dataset.itemType = currentSelectedItem.type;
+        li.dataset.topicId = topic.id;
+        li.__topicData = topic;
+
+        const isCurrentActiveTopic = topic.id === currentTopicId;
+        const isPersistentlyUnread = topic.unread === true || topic.__calculatedUnreadCount > 0;
+        li.classList.toggle('active', isCurrentActiveTopic);
+        li.classList.toggle('active-topic-glowing', isCurrentActiveTopic);
+        li.classList.toggle('has-unread-topic', isPersistentlyUnread);
+
+        const avatarImg = document.createElement('img');
+        avatarImg.classList.add('avatar');
+        avatarImg.loading = 'lazy';
+        avatarImg.decoding = 'async';
+        avatarImg.src = currentSelectedItem.avatarUrl ? currentSelectedItem.avatarUrl : (currentSelectedItem.type === 'group' ? 'assets/default_group_avatar.png' : 'assets/default_avatar.png');
+
+        const displayTopicTitle = normalizeTopicTitle(topic.name || `话题 ${topic.id}`);
+        avatarImg.alt = `${currentSelectedItem.name} - ${displayTopicTitle}`;
+        avatarImg.onerror = () => { avatarImg.src = (currentSelectedItem.type === 'group' ? 'assets/default_group_avatar.png' : 'assets/default_avatar.png'); };
+
+        const topicTitleDisplay = document.createElement('span');
+        topicTitleDisplay.classList.add('topic-title-display');
+        topicTitleDisplay.textContent = displayTopicTitle;
+
+        const messageCountSpan = document.createElement('span');
+        messageCountSpan.classList.add('message-count');
+        messageCountSpan.textContent = '...';
+
+        const selectionIcon = document.createElement('span');
+        selectionIcon.classList.add('next-ui-topic-select-icon', 'vcp-ui-icon');
+        selectionIcon.setAttribute('aria-hidden', 'true');
+        selectionIcon.textContent = selectedTopicIds.has(topic.id) ? 'check_box' : 'check_box_outline_blank';
+        li.appendChild(selectionIcon);
+        li.appendChild(avatarImg);
+
+        if (topic.locked === false) {
+            const unlockedIndicator = document.createElement('span');
+            unlockedIndicator.classList.add('unlocked-indicator');
+            unlockedIndicator.textContent = 'unlocked';
+            unlockedIndicator.title = 'AI可以查看和回复此话题';
+            li.appendChild(unlockedIndicator);
+        }
+
+        li.appendChild(topicTitleDisplay);
+        if (isPersistentlyUnread) {
+            ensureTopicUnreadIndicator(li, topic.__calculatedUnreadCount);
+        }
+        li.appendChild(messageCountSpan);
+
+        const observer = ensureTopicCountObserver();
+        observer.observe(li);
+
+        li.addEventListener('click', async () => {
+            if (isManageMode) {
+                toggleTopicSelection(topic.id);
+                return;
+            }
+
+            if (currentTopicIdRef.get() === topic.id) {
+                return;
+            }
+
+            if (window.__vcpRendererReady === false) {
+                window.__vcpPendingTopicSelection = {
+                    itemId: currentSelectedItem.id,
+                    itemType: currentSelectedItem.type,
+                    topicId: topic.id,
+                };
+                if (uiHelper && uiHelper.showToastNotification) {
+                    uiHelper.showToastNotification('正在初始化界面，稍后自动打开该话题', 'info');
+                }
+                return;
+            }
+
+            try {
+                await Promise.resolve(mainRendererFunctions.selectTopic(topic.id));
+            } catch (error) {
+                console.error('[TopicListManager] Failed to select topic:', error);
+                if (uiHelper && uiHelper.showToastNotification) {
+                    uiHelper.showToastNotification(`打开话题失败: ${error.message}`, 'error');
+                }
+            }
+        });
+
+        li.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            if (isManageMode) return;
+            showTopicContextMenu(e, li, itemConfigFull, topic, currentSelectedItem.type);
+        });
+
+        return li;
+    }
+
+    function renderTopicListProgressively(topicListUl, topicsToProcess, currentSelectedItem, currentTopicId, itemConfigFull, searchTerm) {
+        const renderGeneration = topicListRenderGeneration;
+        const scrollContainer = getTopicScrollContainer(topicListUl);
+        const totalCount = topicsToProcess.length;
+        const initialCount = searchTerm
+            ? Math.min(Math.max(TOPIC_INITIAL_RENDER_COUNT, TOPIC_PROGRESSIVE_BATCH_SIZE), totalCount)
+            : Math.min(TOPIC_INITIAL_RENDER_COUNT, totalCount);
+
+        let currentIndex = 0;
+        let isRendering = false;
+        let allRendered = false;
+
+        const statusLi = document.createElement('li');
+        statusLi.className = 'topic-list-progressive-status';
+        statusLi.textContent = '';
+        statusLi.style.justifyContent = 'center';
+        statusLi.style.opacity = '0.75';
+
+        const finalizeIfDone = () => {
+            if (!allRendered || renderGeneration !== topicListRenderGeneration) return;
+
+            statusLi.remove();
+            if (typeof topicListScrollCleanup === 'function') {
+                topicListScrollCleanup();
+                topicListScrollCleanup = null;
+            }
+
+            if (currentSelectedItem.id && topicsToProcess.length > 0 && typeof Sortable !== 'undefined' && !searchTerm) {
+                initializeTopicSortable(currentSelectedItem.id, currentSelectedItem.type);
+            }
+        };
+
+        const renderNextBatch = (batchSize = TOPIC_PROGRESSIVE_BATCH_SIZE) => {
+            if (isRendering || allRendered || renderGeneration !== topicListRenderGeneration) return;
+            isRendering = true;
+
+            requestAnimationFrame(() => {
+                if (renderGeneration !== topicListRenderGeneration) {
+                    isRendering = false;
+                    return;
+                }
+
+                const fragment = document.createDocumentFragment();
+                const end = Math.min(currentIndex + batchSize, totalCount);
+
+                for (; currentIndex < end; currentIndex++) {
+                    fragment.appendChild(createTopicListItem(
+                        topicsToProcess[currentIndex],
+                        currentSelectedItem,
+                        currentTopicId,
+                        itemConfigFull
+                    ));
+                }
+
+                if (statusLi.parentNode === topicListUl) {
+                    topicListUl.insertBefore(fragment, statusLi);
+                } else {
+                    topicListUl.appendChild(fragment);
+                }
+
+                allRendered = currentIndex >= totalCount;
+                isRendering = false;
+
+                if (!allRendered) {
+                    statusLi.textContent = `继续向下滚动加载更多话题（${currentIndex}/${totalCount}）`;
+                    if (!statusLi.parentNode) topicListUl.appendChild(statusLi);
+                    if (scrollContainer.scrollHeight <= scrollContainer.clientHeight + TOPIC_LOAD_MORE_THRESHOLD_PX) {
+                        renderNextBatch();
+                    }
+                } else {
+                    finalizeIfDone();
+                }
+            });
+        };
+
+        const onScroll = () => {
+            if (allRendered || isRendering || renderGeneration !== topicListRenderGeneration) return;
+
+            const distanceToBottom = scrollContainer.scrollHeight - scrollContainer.scrollTop - scrollContainer.clientHeight;
+            if (distanceToBottom <= TOPIC_LOAD_MORE_THRESHOLD_PX) {
+                renderNextBatch();
+            }
+        };
+
+        scrollContainer.addEventListener('scroll', onScroll, { passive: true });
+        topicListScrollCleanup = () => scrollContainer.removeEventListener('scroll', onScroll);
+
+        topicListUl.innerHTML = '';
+        renderNextBatch(initialCount);
     }
 
     async function loadTopicList() {
@@ -104,6 +519,8 @@ window.topicListManager = (() => {
             return;
         }
 
+        cleanupProgressiveTopicRendering();
+
         let topicListUl = topicListContainer.querySelector('.topic-list');
         if (topicListUl) {
             topicListUl.innerHTML = '';
@@ -111,7 +528,7 @@ window.topicListManager = (() => {
             const topicsHeader = topicListContainer.querySelector('.topics-header') || document.createElement('div');
             if (!topicsHeader.classList.contains('topics-header')) {
                 topicsHeader.className = 'topics-header';
-                topicsHeader.innerHTML = `<h2>话题列表</h2><div class="topic-search-container"><input type="text" id="topicSearchInput" placeholder="搜索话题..." class="topic-search-input"></div>`;
+                topicsHeader.innerHTML = `<h2>话题列表</h2><div class="topic-search-container"><input type="text" id="topicSearchInput" placeholder="搜索话题；输入“未读话题”置顶" title="输入“未读话题”或“unread topic”将未读话题置顶" aria-label="搜索话题；输入未读话题将未读话题置顶" class="topic-search-input"></div>`;
                 topicListContainer.prepend(topicsHeader);
                 const newTopicSearchInput = topicsHeader.querySelector('#topicSearchInput');
                 if (newTopicSearchInput) setupTopicSearchListener(newTopicSearchInput);
@@ -125,13 +542,27 @@ window.topicListManager = (() => {
 
         const currentSelectedItem = currentSelectedItemRef.get();
         if (!currentSelectedItem.id) {
+            availableTopics = [];
+            displayedTopics = [];
+            currentItemConfig = null;
+            managedItemKey = '';
+            selectedTopicIds.clear();
+            syncManageUi();
             topicListUl.innerHTML = '<li><p>请先在“助手与群组”列表选择一个项目以查看其相关话题。</p></li>';
             return;
         }
 
+        const nextItemKey = `${currentSelectedItem.type}:${currentSelectedItem.id}`;
+        if (managedItemKey && managedItemKey !== nextItemKey) {
+            selectedTopicIds.clear();
+        }
+        managedItemKey = nextItemKey;
+
         const itemNameForLoading = currentSelectedItem.name || '当前项目';
         const searchInput = document.getElementById('topicSearchInput');
-        const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+        const searchQuery = parseTopicSearchQuery(searchInput ? searchInput.value : '');
+        const searchTerm = searchQuery.rawTerm;
+        const contentQueryTerm = searchQuery.queryTerm;
 
         let itemConfigFull;
 
@@ -152,6 +583,11 @@ window.topicListManager = (() => {
         }
 
         if (!itemConfigFull || itemConfigFull.error) {
+            availableTopics = [];
+            displayedTopics = [];
+            currentItemConfig = null;
+            selectedTopicIds.clear();
+            syncManageUi();
             topicListUl.innerHTML = `<li><p>无法加载 ${itemNameForLoading} 的配置信息: ${itemConfigFull?.error || '未知错误'}</p></li>`;
         } else {
             let topicsToProcess = itemConfigFull.topics || [];
@@ -160,25 +596,30 @@ window.topicListManager = (() => {
                 topicsToProcess.push(defaultAgentTopic);
             }
 
+            availableTopics = [...topicsToProcess];
+            currentItemConfig = itemConfigFull;
+            const availableTopicIds = new Set(availableTopics.map(topic => topic.id));
+            selectedTopicIds = new Set([...selectedTopicIds].filter(topicId => availableTopicIds.has(topicId)));
+
             // topicsToProcess.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
-            if (searchTerm) {
+            if (contentQueryTerm) {
                 let frontendFilteredTopics = topicsToProcess.filter(topic => {
                     const normalizedTopicTitle = normalizeTopicTitle(topic.name || '');
-                    const nameMatch = normalizedTopicTitle.toLowerCase().includes(searchTerm);
+                    const nameMatch = normalizedTopicTitle.toLowerCase().includes(contentQueryTerm);
                     let dateMatch = false;
                     if (topic.createdAt) {
                         const date = new Date(topic.createdAt);
                         const fullDateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
                         const shortDateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-                        dateMatch = fullDateStr.toLowerCase().includes(searchTerm) || shortDateStr.toLowerCase().includes(searchTerm);
+                        dateMatch = fullDateStr.toLowerCase().includes(contentQueryTerm) || shortDateStr.toLowerCase().includes(contentQueryTerm);
                     }
                     return nameMatch || dateMatch;
                 });
 
                 let contentMatchedTopicIds = [];
                 try {
-                    const contentSearchResult = await electronAPI.searchTopicsByContent(currentSelectedItem.id, currentSelectedItem.type, searchTerm);
+                    const contentSearchResult = await electronAPI.searchTopicsByContent(currentSelectedItem.id, currentSelectedItem.type, contentQueryTerm);
                     if (contentSearchResult && contentSearchResult.success && Array.isArray(contentSearchResult.matchedTopicIds)) {
                         contentMatchedTopicIds = contentSearchResult.matchedTopicIds;
                     } else if (contentSearchResult && !contentSearchResult.success) {
@@ -194,143 +635,18 @@ window.topicListManager = (() => {
                 topicsToProcess = topicsToProcess.filter(topic => finalFilteredTopicIds.has(topic.id));
             }
 
+            if (searchQuery.prioritizeUnread) {
+                topicsToProcess = await prioritizeUnreadTopics(topicsToProcess, currentSelectedItem);
+            }
+
+            displayedTopics = [...topicsToProcess];
+            syncManageUi();
+
             if (topicsToProcess.length === 0) {
                 topicListUl.innerHTML = `<li><p>${itemNameForLoading} 还没有任何话题${searchTerm ? '匹配当前搜索' : ''}。您可以点击上方的“新建${currentSelectedItem.type === 'group' ? '群聊话题' : '聊天话题'}”按钮创建一个。</p></li>`;
             } else {
-                topicListUl.innerHTML = '';
                 const currentTopicId = currentTopicIdRef.get();
-
-                // --- 优化：分批渲染话题列表 ---
-                const BATCH_SIZE = 20;
-                let currentIndex = 0;
-
-                const renderBatch = () => {
-                    const fragment = document.createDocumentFragment();
-                    const end = Math.min(currentIndex + BATCH_SIZE, topicsToProcess.length);
-
-                    for (; currentIndex < end; currentIndex++) {
-                        const topic = topicsToProcess[currentIndex];
-                        const li = document.createElement('li');
-                        li.classList.add('topic-item');
-                        li.dataset.itemId = currentSelectedItem.id;
-                        li.dataset.itemType = currentSelectedItem.type;
-                        li.dataset.topicId = topic.id;
-                        const isCurrentActiveTopic = topic.id === currentTopicId;
-                        li.classList.toggle('active', isCurrentActiveTopic);
-                        li.classList.toggle('active-topic-glowing', isCurrentActiveTopic);
-
-                        const avatarImg = document.createElement('img');
-                        avatarImg.classList.add('avatar');
-                        // 优化：延迟加载头像，仅在需要时添加时间戳
-                        avatarImg.src = currentSelectedItem.avatarUrl ? currentSelectedItem.avatarUrl : (currentSelectedItem.type === 'group' ? 'assets/default_group_avatar.png' : 'assets/default_avatar.png');
-                        const displayTopicTitle = normalizeTopicTitle(topic.name || `话题 ${topic.id}`);
-                        avatarImg.alt = `${currentSelectedItem.name} - ${displayTopicTitle}`;
-                        avatarImg.onerror = () => { avatarImg.src = (currentSelectedItem.type === 'group' ? 'assets/default_group_avatar.png' : 'assets/default_avatar.png'); };
-
-                        const topicTitleDisplay = document.createElement('span');
-                        topicTitleDisplay.classList.add('topic-title-display');
-                        topicTitleDisplay.textContent = displayTopicTitle;
-
-                        const messageCountSpan = document.createElement('span');
-                        messageCountSpan.classList.add('message-count');
-                        messageCountSpan.textContent = '...';
-
-                        li.appendChild(avatarImg);
-
-                        if (topic.locked === false) {
-                            const unlockedIndicator = document.createElement('span');
-                            unlockedIndicator.classList.add('unlocked-indicator');
-                            unlockedIndicator.textContent = 'unlocked';
-                            unlockedIndicator.title = 'AI可以查看和回复此话题';
-                            li.appendChild(unlockedIndicator);
-                        }
-
-                        li.appendChild(topicTitleDisplay);
-                        li.appendChild(messageCountSpan);
-
-                        // 优化：延迟加载计数逻辑，避免瞬间爆发大量 IPC 请求
-                        setTimeout(() => {
-                            if (!li.isConnected) return; // 如果节点已从 DOM 移除，则跳过
-
-                            let historyPromise;
-                            if (currentSelectedItem.type === 'agent') {
-                                historyPromise = electronAPI.getChatHistory(currentSelectedItem.id, topic.id);
-                            } else if (currentSelectedItem.type === 'group') {
-                                historyPromise = electronAPI.getGroupChatHistory(currentSelectedItem.id, topic.id);
-                            }
-
-                            if (historyPromise) {
-                                historyPromise.then(historyResult => {
-                                    if (historyResult && !historyResult.error && Array.isArray(historyResult)) {
-                                        const unreadCount = calculateTopicUnreadCount(topic, historyResult);
-                                        if (unreadCount > 0) {
-                                            messageCountSpan.textContent = `${unreadCount}`;
-                                            messageCountSpan.classList.add('has-unread');
-                                        } else if (unreadCount === -1) {
-                                            messageCountSpan.textContent = `${historyResult.length}`;
-                                            messageCountSpan.classList.add('unread-marker-only');
-                                        } else {
-                                            messageCountSpan.textContent = `${historyResult.length}`;
-                                        }
-                                    } else {
-                                        messageCountSpan.textContent = 'N/A';
-                                    }
-                                }).catch(() => messageCountSpan.textContent = 'ERR');
-                            }
-                        }, 100 + (currentIndex * 10)); // 阶梯式延迟请求
-
-                        li.addEventListener('click', async () => {
-                            if (currentTopicIdRef.get() === topic.id) {
-                                return;
-                            }
-
-                            if (window.__vcpRendererReady === false) {
-                                window.__vcpPendingTopicSelection = {
-                                    itemId: currentSelectedItem.id,
-                                    itemType: currentSelectedItem.type,
-                                    topicId: topic.id,
-                                };
-                                if (uiHelper && uiHelper.showToastNotification) {
-                                    uiHelper.showToastNotification('正在初始化界面，稍后自动打开该话题', 'info');
-                                }
-                                return;
-                            }
-
-                            try {
-                                await Promise.resolve(mainRendererFunctions.selectTopic(topic.id));
-                            } catch (error) {
-                                console.error('[TopicListManager] Failed to select topic:', error);
-                                if (uiHelper && uiHelper.showToastNotification) {
-                                    uiHelper.showToastNotification(`打开话题失败: ${error.message}`, 'error');
-                                }
-                            }
-                        });
-
-                        li.addEventListener('contextmenu', (e) => {
-                            e.preventDefault();
-                            showTopicContextMenu(e, li, itemConfigFull, topic, currentSelectedItem.type);
-                        });
-                        fragment.appendChild(li);
-                    }
-
-                    topicListUl.appendChild(fragment);
-
-                    if (currentIndex < topicsToProcess.length) {
-                        // 使用 requestAnimationFrame 确保在下一帧继续渲染，保持 UI 响应
-                        requestAnimationFrame(renderBatch);
-                    } else {
-                        // 渲染完成后初始化排序
-                        if (currentSelectedItem.id && topicsToProcess.length > 0 && typeof Sortable !== 'undefined') {
-                            initializeTopicSortable(currentSelectedItem.id, currentSelectedItem.type);
-                        }
-                    }
-                };
-
-                // 开始第一批渲染
-                renderBatch();
-            }
-            if (currentSelectedItem.id && topicsToProcess && topicsToProcess.length > 0 && typeof Sortable !== 'undefined') {
-                initializeTopicSortable(currentSelectedItem.id, currentSelectedItem.type);
+                renderTopicListProgressively(topicListUl, topicsToProcess, currentSelectedItem, currentTopicId, itemConfigFull, searchTerm);
             }
         }
     }
@@ -343,6 +659,9 @@ window.topicListManager = (() => {
     }
 
     function setupTopicSearchListener(inputElement) {
+        if (inputElement.dataset.topicSearchBound === 'true') return;
+        inputElement.dataset.topicSearchBound = 'true';
+
         inputElement.addEventListener('input', filterTopicList);
         inputElement.addEventListener('keydown', (event) => {
             if (event.key === 'Enter') {
@@ -354,6 +673,181 @@ window.topicListManager = (() => {
 
     function filterTopicList() {
         loadTopicList();
+    }
+
+    function setupNextUiTopicTools() {
+        const topicsHeader = document.querySelector('#tabContentTopics .topics-header-container');
+        const createButton = document.getElementById('nextUiCreateTopicBtn');
+        const manageButton = document.getElementById('nextUiManageTopicsBtn');
+        const searchButton = document.getElementById('nextUiTopicSearchTrigger');
+        const searchCloseButton = document.getElementById('nextUiTopicSearchClose');
+        const searchInput = document.getElementById('topicSearchInput');
+        const selectAllButton = document.getElementById('nextUiSelectAllTopicsBtn');
+        const deleteButton = document.getElementById('nextUiDeleteTopicsBtn');
+        const exitButton = document.getElementById('nextUiExitTopicManageBtn');
+
+        if (!topicsHeader || !createButton || !manageButton || !searchButton || !searchCloseButton || !searchInput) return;
+        if (topicsHeader.dataset.nextUiToolsBound === 'true') return;
+        topicsHeader.dataset.nextUiToolsBound = 'true';
+
+        const setSearchMode = (active, clear = !active) => {
+            topicsHeader.classList.toggle('is-searching', active);
+            searchButton.setAttribute('aria-expanded', String(active));
+            if (clear) {
+                searchInput.value = '';
+                loadTopicList();
+            }
+            if (active) requestAnimationFrame(() => searchInput.focus());
+            else if (document.activeElement === searchInput) searchButton.focus();
+        };
+
+        createButton.addEventListener('click', () => {
+            document.getElementById('currentAgentSettingsBtn')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        });
+        createButton.addEventListener('contextmenu', (event) => {
+            event.preventDefault();
+            document.getElementById('currentAgentSettingsBtn')?.dispatchEvent(new MouseEvent('contextmenu', {
+                bubbles: true,
+                clientX: event.clientX,
+                clientY: event.clientY
+            }));
+        });
+        manageButton.addEventListener('click', () => setManageMode(!isManageMode));
+        searchButton.addEventListener('click', () => setSearchMode(true, false));
+        searchCloseButton.addEventListener('click', () => setSearchMode(false, true));
+        searchInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                setSearchMode(false, true);
+            }
+        });
+        selectAllButton?.addEventListener('click', toggleSelectAllDisplayedTopics);
+        deleteButton?.addEventListener('click', deleteSelectedTopics);
+        exitButton?.addEventListener('click', () => setManageMode(false));
+
+        syncManageUi();
+    }
+
+    function setManageMode(active) {
+        isManageMode = active;
+        if (!active) selectedTopicIds.clear();
+
+        const topicListUl = document.getElementById('topicList');
+        if (active && topicListUl?.sortableInstance) {
+            topicListUl.sortableInstance.destroy();
+            topicListUl.sortableInstance = null;
+        } else if (!active) {
+            loadTopicList();
+        }
+
+        syncManageUi();
+    }
+
+    function toggleTopicSelection(topicId) {
+        if (selectedTopicIds.has(topicId)) selectedTopicIds.delete(topicId);
+        else selectedTopicIds.add(topicId);
+        syncManageUi();
+    }
+
+    function toggleSelectAllDisplayedTopics() {
+        const displayedIds = displayedTopics.map(topic => topic.id);
+        const allDisplayedSelected = displayedIds.length > 0 && displayedIds.every(topicId => selectedTopicIds.has(topicId));
+
+        if (allDisplayedSelected) displayedIds.forEach(topicId => selectedTopicIds.delete(topicId));
+        else displayedIds.forEach(topicId => selectedTopicIds.add(topicId));
+        syncManageUi();
+    }
+
+    function syncManageUi() {
+        const container = document.getElementById('tabContentTopics');
+        const manageButton = document.getElementById('nextUiManageTopicsBtn');
+        const managePanel = container?.querySelector('.next-ui-topic-manage-panel');
+        const count = document.getElementById('nextUiTopicSelectionCount');
+        const selectAllButton = document.getElementById('nextUiSelectAllTopicsBtn');
+        const deleteButton = document.getElementById('nextUiDeleteTopicsBtn');
+        const allDisplayedSelected = displayedTopics.length > 0
+            && displayedTopics.every(topic => selectedTopicIds.has(topic.id));
+
+        container?.classList.toggle('is-managing', isManageMode);
+        manageButton?.classList.toggle('active', isManageMode);
+        manageButton?.setAttribute('aria-pressed', String(isManageMode));
+        managePanel?.setAttribute('aria-hidden', String(!isManageMode));
+        if (count) count.textContent = `已选择 ${selectedTopicIds.size} 项`;
+        if (deleteButton) deleteButton.disabled = selectedTopicIds.size === 0;
+        const selectAllIcon = selectAllButton?.querySelector('.vcp-ui-icon');
+        if (selectAllIcon) selectAllIcon.textContent = allDisplayedSelected ? 'check_box' : 'check_box_outline_blank';
+        if (selectAllButton) selectAllButton.title = allDisplayedSelected ? '取消全选' : '全选话题';
+
+        document.querySelectorAll('#topicList .topic-item').forEach(item => {
+            const selected = selectedTopicIds.has(item.dataset.topicId);
+            item.classList.toggle('selected', selected);
+            item.setAttribute('aria-selected', String(selected));
+            const icon = item.querySelector('.next-ui-topic-select-icon');
+            if (icon) icon.textContent = selected ? 'check_box' : 'check_box_outline_blank';
+        });
+    }
+
+    async function deleteSelectedTopics() {
+        if (!isManageMode || selectedTopicIds.size === 0 || !currentItemConfig) return;
+
+        const currentSelectedItem = currentSelectedItemRef.get();
+        const topicsToDelete = availableTopics.filter(topic => selectedTopicIds.has(topic.id));
+        if (topicsToDelete.length === 0) return;
+        if (topicsToDelete.length >= availableTopics.length) {
+            uiHelper.showToastNotification('至少需要保留一个话题。', 'warning');
+            return;
+        }
+
+        const flowlockedTopic = currentSelectedItem.type === 'agent'
+            ? topicsToDelete.find(topic => window.flowlockManager?.isTopicLocked?.(currentSelectedItem.id, topic.id))
+            : null;
+        if (flowlockedTopic) {
+            uiHelper.showToastNotification(`话题“${flowlockedTopic.name}”正在心流锁中运行，请先停止对应心流锁。`, 'warning');
+            return;
+        }
+
+        const confirmed = await uiHelper.showConfirmDialog(
+            `确定要永久删除选中的 ${topicsToDelete.length} 个话题吗？此操作不可撤销。`,
+            '批量删除话题',
+            '删除',
+            '取消',
+            true
+        );
+        if (!confirmed) return;
+
+        let deletedCount = 0;
+        let remainingTopics = availableTopics;
+        let firstError = '';
+        const activeTopicId = currentTopicIdRef.get();
+        let activeTopicDeleted = false;
+
+        for (const topic of topicsToDelete) {
+            try {
+                const result = currentSelectedItem.type === 'agent'
+                    ? await electronAPI.deleteTopic(currentSelectedItem.id, topic.id)
+                    : await electronAPI.deleteGroupTopic(currentSelectedItem.id, topic.id);
+                if (result?.success) {
+                    deletedCount++;
+                    if (topic.id === activeTopicId) activeTopicDeleted = true;
+                    remainingTopics = result.remainingTopics || remainingTopics.filter(item => item.id !== topic.id);
+                } else if (!firstError) {
+                    firstError = result?.error || '未知错误';
+                }
+            } catch (error) {
+                if (!firstError) firstError = error.message;
+            }
+        }
+
+        if (activeTopicDeleted) {
+            mainRendererFunctions.handleTopicDeletion(remainingTopics, {
+                id: currentSelectedItem.id,
+                type: currentSelectedItem.type
+            });
+        }
+
+        setManageMode(false);
+        if (deletedCount > 0) uiHelper.showToastNotification(`已删除 ${deletedCount} 个话题。`, 'success');
+        if (firstError) uiHelper.showToastNotification(`部分话题删除失败：${firstError}`, 'error');
     }
 
     function initializeTopicSortable(itemId, itemType) {
@@ -500,6 +994,34 @@ window.topicListManager = (() => {
         };
         menu.appendChild(editTitleOption);
 
+        const copyTopicIdOption = document.createElement('div');
+        copyTopicIdOption.classList.add('context-menu-item');
+        copyTopicIdOption.innerHTML = `<i class="fas fa-copy"></i> 复制话题ID`;
+        copyTopicIdOption.onclick = async () => {
+            closeTopicContextMenu();
+            const topicId = String(topic.id ?? '');
+            try {
+                if (navigator.clipboard?.writeText) {
+                    await navigator.clipboard.writeText(topicId);
+                } else {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = topicId;
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    document.body.appendChild(textarea);
+                    textarea.focus();
+                    textarea.select();
+                    document.execCommand('copy');
+                    textarea.remove();
+                }
+                uiHelper.showToastNotification('已复制话题ID', 'success');
+            } catch (error) {
+                console.error('[TopicListManager] Failed to copy topic ID:', error);
+                uiHelper.showToastNotification(`复制话题ID失败: ${error.message}`, 'error');
+            }
+        };
+        menu.appendChild(copyTopicIdOption);
+
         // Part C: 锁定/解锁话题选项
         const toggleLockOption = document.createElement('div');
         toggleLockOption.classList.add('context-menu-item');
@@ -537,6 +1059,11 @@ window.topicListManager = (() => {
                 const result = await electronAPI.setTopicUnread(itemFullConfig.id, topic.id, !isUnread);
                 if (result.success) {
                     topic.unread = result.unread;
+                    if (result.unreadSource) {
+                        topic.unreadSource = result.unreadSource;
+                    } else {
+                        delete topic.unreadSource;
+                    }
                     uiHelper.showToastNotification(
                         topic.unread ? '已标记为未读' : '已标记为已读',
                         'success'
@@ -560,6 +1087,13 @@ window.topicListManager = (() => {
         deleteTopicPermanentlyOption.innerHTML = `<i class="fas fa-trash-alt"></i> 删除此话题`;
         deleteTopicPermanentlyOption.onclick = async () => {
             closeTopicContextMenu();
+
+            // 活动 Flowlock Session 仍依赖该话题的历史目录，运行期间禁止删除。
+            if (itemType === 'agent' && window.flowlockManager?.isTopicLocked?.(itemFullConfig.id, topic.id)) {
+                uiHelper.showToastNotification('该话题正在心流锁中运行，请先停止对应 Agent 的心流锁。', 'warning');
+                return;
+            }
+
             // 使用自定义确认对话框替代原生 confirm()，避免 Electron 焦点问题
             const confirmed = await uiHelper.showConfirmDialog(
                 `确定要永久删除话题 "${topic.name}" 吗？此操作不可撤销。`,
@@ -578,7 +1112,10 @@ window.topicListManager = (() => {
 
                 if (result && result.success) {
                     if (currentTopicIdRef.get() === topic.id) {
-                        mainRendererFunctions.handleTopicDeletion(result.remainingTopics);
+                        mainRendererFunctions.handleTopicDeletion(result.remainingTopics, {
+                            id: itemFullConfig.id,
+                            type: itemType
+                        });
                     }
                     loadTopicList();
                 } else {
@@ -596,6 +1133,15 @@ window.topicListManager = (() => {
             handleExportTopic(itemFullConfig.id, itemType, topic.id, topic.name);
         };
         menu.appendChild(exportTopicOption);
+
+        const exportFullTopicOption = document.createElement('div');
+        exportFullTopicOption.classList.add('context-menu-item');
+        exportFullTopicOption.innerHTML = `<i class="fas fa-file-code"></i> 导出此话题(完整)`;
+        exportFullTopicOption.onclick = () => {
+            closeTopicContextMenu();
+            handleExportFullTopic(itemFullConfig, itemType, topic.id, topic.name);
+        };
+        menu.appendChild(exportFullTopicOption);
 
         // 智能定位逻辑：先隐藏菜单以测量尺寸
         menu.style.visibility = 'hidden';
@@ -692,9 +1238,9 @@ window.topicListManager = (() => {
                     const contentClone = contentElement.cloneNode(true);
                     contentClone.querySelectorAll('.vcp-thought-chain-bubble').forEach(el => el.remove());
                     let content = contentClone.innerText || contentClone.textContent || "";
-                    // 兜底：清理可能残留的明文形式思维链
-                    content = content.replace(/\[--- VCP元思考链(?::\s*"[^"]*")?\s*---\][\s\S]*?\[--- 元思考链结束 ---\]/gs, '');
-                    content = content.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
+                    // 兜底：仅清理起止标签分别独占一行的明文思维链。
+                    content = content.replace(/^[ \t]*\[--- VCP元思考链(?::\s*"[^"]*")?\s*---\][ \t]*\r?\n[\s\S]*?^[ \t]*\[--- 元思考链结束 ---\][ \t]*(?:\r?\n|$)/gm, '');
+                    content = content.replace(/^[ \t]*<think(?:ing)?>[ \t]*\r?\n[\s\S]*?^[ \t]*<\/think(?:ing)?>[ \t]*(?:\r?\n|$)/gim, '');
                     content = content.trim();
 
                     if (sender && content) {
@@ -731,6 +1277,107 @@ window.topicListManager = (() => {
         }
     }
 
+    function getRawMessageContent(message) {
+        if (typeof message?.content === 'string') return message.content;
+        if (typeof message?.content?.text === 'string') return message.content.text;
+        if (Array.isArray(message?.content)) {
+            return message.content
+                .filter(part => part && part.type === 'text' && typeof part.text === 'string')
+                .map(part => part.text)
+                .join('\n');
+        }
+        if (message?.content === null || message?.content === undefined) return '';
+        try {
+            return JSON.stringify(message.content, null, 2);
+        } catch {
+            return String(message.content);
+        }
+    }
+
+    function resolveFullExportAgentInfo(message, itemFullConfig, itemType) {
+        if (message.role === 'user') {
+            return {
+                name: message.name || '用户',
+                model: 'N/A'
+            };
+        }
+
+        if (itemType === 'group') {
+            const agentId = message.agentId || message.agentID;
+            const member = (itemFullConfig.agents || []).find(agent =>
+                agent.id === agentId || agent.agentId === agentId
+            );
+            const usesUnifiedModel = itemFullConfig.useUnifiedModel === true;
+            return {
+                name: message.name || member?.name || agentId || 'Assistant',
+                model: message.model || message.modelName ||
+                    (usesUnifiedModel ? itemFullConfig.unifiedModel : member?.model) ||
+                    '未知模型'
+            };
+        }
+
+        return {
+            name: message.name || itemFullConfig.name || itemFullConfig.id || 'Assistant',
+            model: message.model || message.modelName || itemFullConfig.model || '未知模型'
+        };
+    }
+
+    async function handleExportFullTopic(itemFullConfig, itemType, topicId, topicName) {
+        console.log(`[TopicListManager] Exporting full raw topic: ${topicName} (ID: ${topicId})`);
+
+        try {
+            const history = itemType === 'group'
+                ? await electronAPI.getGroupChatHistory(itemFullConfig.id, topicId)
+                : await electronAPI.getChatHistory(itemFullConfig.id, topicId);
+
+            if (!Array.isArray(history)) {
+                throw new Error(history?.error || '无法读取话题历史');
+            }
+
+            const messages = history.filter(message =>
+                message &&
+                message.role !== 'system' &&
+                message.isThinking !== true
+            );
+
+            if (messages.length === 0) {
+                uiHelper.showToastNotification('此话题没有可导出的对话内容。', 'info');
+                return;
+            }
+
+            let exportContent = `# 话题: ${topicName}\n\n`;
+            exportContent += `> 导出模式: 完整（保留原始消息内容）\n\n`;
+
+            messages.forEach((message, index) => {
+                const { name, model } = resolveFullExportAgentInfo(message, itemFullConfig, itemType);
+                const rawContent = getRawMessageContent(message);
+
+                exportContent += `===== 消息 ${index + 1} =====\n`;
+                exportContent += `Role: ${message.role || 'unknown'}\n`;
+                exportContent += `Agent: ${name}\n`;
+                exportContent += `Model: ${model}\n`;
+                if (message.timestamp) {
+                    exportContent += `Timestamp: ${new Date(message.timestamp).toISOString()}\n`;
+                }
+                exportContent += `\n${rawContent}\n\n`;
+            });
+
+            const result = await electronAPI.exportTopicAsMarkdown({
+                topicName: `${topicName}-完整`,
+                markdownContent: exportContent
+            });
+
+            if (result.success) {
+                uiHelper.showToastNotification(`话题 "${topicName}" 已完整导出到: ${result.path}`);
+            } else if (result.error !== '用户取消了导出操作。') {
+                uiHelper.showToastNotification(`完整导出话题失败: ${result.error}`, 'error');
+            }
+        } catch (error) {
+            console.error('[TopicListManager] 完整导出话题时发生错误:', error);
+            uiHelper.showToastNotification(`完整导出话题失败: ${error.message}`, 'error');
+        }
+    }
+
     /**
      * 设置鼠标快捷键事件监听器
      */
@@ -745,6 +1392,8 @@ window.topicListManager = (() => {
 
         // 双击左键：进入设置页面
         topicsContainer.addEventListener('click', (e) => {
+            if (isManageMode) return;
+            if (e.target.closest('button, input, .topics-header-container, .next-ui-topic-manage-panel')) return;
             if (e.button === 0) { // 左键
                 const currentTime = Date.now();
                 const timeDiff = currentTime - lastLeftClickTime;

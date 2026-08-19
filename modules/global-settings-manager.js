@@ -1,9 +1,24 @@
 /**
  * This module handles the logic for saving global settings.
  */
-export async function handleSaveGlobalSettings(e, deps) {
-    const chatAPI = window.chatAPI || window.electronAPI;
+export function handleSaveGlobalSettings(e, deps) {
     e.preventDefault();
+    const settingsForm = e.currentTarget || document.getElementById('globalSettingsForm');
+    if (settingsForm?.dataset.globalSettingsSaving === 'true') return;
+    if (settingsForm) settingsForm.dataset.globalSettingsSaving = 'true';
+
+    return saveGlobalSettings(deps, settingsForm).finally(() => {
+        if (settingsForm) delete settingsForm.dataset.globalSettingsSaving;
+    });
+}
+
+async function saveGlobalSettings(deps, settingsForm) {
+    const chatAPI = window.chatAPI || window.electronAPI;
+    const reportSaveResult = (success, error = '') => {
+        settingsForm?.dispatchEvent(new CustomEvent('vcp-settings-save-result', {
+            detail: { success, error: error || undefined }
+        }));
+    };
 
     const {
         refs,
@@ -49,14 +64,47 @@ export async function handleSaveGlobalSettings(e, deps) {
         enableRegenerateConfirmation: document.getElementById('enableRegenerateConfirmation').checked,
         vcpServerUrl: settingsManager.completeVcpUrl(document.getElementById('vcpServerUrl').value.trim()),
         vcpApiKey: document.getElementById('vcpApiKey').value,
+        fileKey: document.getElementById('fileKey')?.value || '',
         vcpLogUrl: document.getElementById('vcpLogUrl').value.trim(),
         vcpLogKey: document.getElementById('vcpLogKey').value.trim(),
         topicSummaryModel: document.getElementById('topicSummaryModel').value.trim(),
         networkNotesPaths: networkNotesPaths,
         sidebarWidth: refs.globalSettings.get().sidebarWidth,
         notificationsSidebarWidth: refs.globalSettings.get().notificationsSidebarWidth,
-        enableAgentBubbleTheme: document.getElementById('enableAgentBubbleTheme').checked,
         enableSmoothStreaming: document.getElementById('enableSmoothStreaming').checked,
+        showHomeVisualBrand: document.getElementById('showHomeVisualBrand')?.checked !== false,
+        showHomeVisualTagline: document.getElementById('showHomeVisualTagline')?.checked !== false,
+        homeVisualTagline: document.getElementById('homeVisualTagline')?.value.trim().slice(0, 120)
+            || '语义级打穿 AI、UI/UX、APP 与人类想象力的边界',
+        appearanceProfile: window.VCPAppearance?.normalize({
+            density: document.getElementById('appearanceDensity')?.value,
+            radius: document.getElementById('appearanceRadius')?.value,
+            typography: document.getElementById('appearanceTypography')?.value,
+            fontScale: document.getElementById('appearanceFontScale')?.value,
+            contentWidth: document.getElementById('appearanceContentWidth')?.value,
+            sidebarRowHeight: Number(document.getElementById('appearanceSidebarRowHeight')?.value)
+                || currentSettings.appearanceProfile?.sidebarRowHeight
+                || 46,
+            sidebarAvatarSize: Number(document.getElementById('appearanceSidebarAvatarSize')?.value)
+                || currentSettings.appearanceProfile?.sidebarAvatarSize
+                || 32,
+            customRadius: Number(document.getElementById('appearanceCustomRadius')?.value ?? 10),
+            surface: document.getElementById('appearanceSurface')?.value,
+            surfaceEffect: currentSettings.appearanceProfile?.surfaceEffect,
+            surfaceOpacity: currentSettings.appearanceProfile?.surfaceOpacity,
+            surfaceBlur: currentSettings.appearanceProfile?.surfaceBlur,
+            surfaceSaturation: currentSettings.appearanceProfile?.surfaceSaturation,
+            surfaceBrightness: currentSettings.appearanceProfile?.surfaceBrightness,
+            surfaceBorder: currentSettings.appearanceProfile?.surfaceBorder,
+            surfaceShadow: currentSettings.appearanceProfile?.surfaceShadow,
+            surfaceSheen: currentSettings.appearanceProfile?.surfaceSheen,
+            shellRadius: currentSettings.appearanceProfile?.shellRadius,
+            composerRadius: currentSettings.appearanceProfile?.composerRadius,
+            sidebarRadius: document.querySelector('input[name="appearanceSidebarRadiusChoice"]:checked')?.value
+                || document.getElementById('appearanceSidebarRadius')?.value
+                || currentSettings.appearanceProfile?.sidebarRadius,
+            cardRadius: currentSettings.appearanceProfile?.cardRadius
+        }, 'next') || currentSettings.appearanceProfile,
         chatFontPreset: document.getElementById('chatFontPreset')?.value || currentSettings.chatFontPreset || 'system',
         chatFontCustom: document.getElementById('chatFontCustom')?.value.trim() || '',
         chatCodeFontPreset: document.getElementById('chatCodeFontPreset')?.value || currentSettings.chatCodeFontPreset || 'consolas',
@@ -66,6 +114,10 @@ export async function handleSaveGlobalSettings(e, deps) {
         chatToolFontPreset: document.getElementById('chatToolFontPreset')?.value || currentSettings.chatToolFontPreset || 'system',
         chatToolFontCustom: document.getElementById('chatToolFontCustom')?.value.trim() || '',
         enableWideChatLayout: document.getElementById('chatLayoutModeWide')?.checked || false,
+        chatPresentationMode: window.normalizeChatPresentationMode?.(
+            document.querySelector('input[name="chatPresentationMode"]:checked')?.value
+                || currentSettings.chatPresentationMode
+        ) || 'bubble',
         enableUserChatBubbleUi: document.getElementById('enableUserChatBubbleUi')?.checked !== false,
         showUserMetaInChatBubbleUi: document.getElementById('showUserMetaInChatBubbleUi')?.checked !== false,
         chatBubbleMaxWidthDefault: clampBubbleWidthPercent(currentSettings.chatBubbleMaxWidthDefault, 82),
@@ -83,13 +135,13 @@ export async function handleSaveGlobalSettings(e, deps) {
         voiceMode,
         speechRecognizerBrowserPath,
         speechRecognizerPagePath,
-        voiceNetworkSettings: {
-            sovitsUrl: document.getElementById('voiceNetworkSovitsUrl')?.value.trim() || '',
-            sovitsKey: document.getElementById('voiceNetworkSovitsKey')?.value || ''
-        },
         voiceLocalSettings: {
-            providerUrl: document.getElementById('voiceLocalProviderUrl')?.value.trim() || '',
-            providerKey: document.getElementById('voiceLocalProviderKey')?.value || ''
+            sovitsUrl: document.getElementById('voiceLocalSovitsUrl')?.value.trim() || '',
+            sovitsKey: document.getElementById('voiceLocalSovitsKey')?.value || ''
+        },
+        voiceNetworkSettings: {
+            providerUrl: document.getElementById('voiceNetworkProviderUrl')?.value.trim() || '',
+            providerKey: document.getElementById('voiceNetworkProviderKey')?.value || ''
         },
         enableDistributedServer: document.getElementById('enableDistributedServer').checked,
         agentMusicControl: document.getElementById('agentMusicControl').checked,
@@ -207,7 +259,7 @@ export async function handleSaveGlobalSettings(e, deps) {
     }
 
     const result = await chatAPI.saveSettings(newSettings);
-    if (result.success) {
+    if (result?.success) {
         if (chatAPI?.saveRustAssistantConfig) {
             const rustSaveResult = await chatAPI.saveRustAssistantConfig(rustConfigPatch);
             if (!rustSaveResult?.success) {
@@ -220,9 +272,32 @@ export async function handleSaveGlobalSettings(e, deps) {
         }
 
         Object.assign(refs.globalSettings.get(), newSettings);
-        if (typeof window.applyChatBubbleLayoutSettings === 'function') {
-            window.applyChatBubbleLayoutSettings(refs.globalSettings.get());
+        try {
+            newSettings.appearanceProfile = window.VCPAppearance?.commit(
+                newSettings.appearanceProfile,
+                { uiMode: 'next', source: 'settings-save' }
+            ) || newSettings.appearanceProfile;
+            window.dispatchEvent(new CustomEvent('global-settings-updated', {
+                detail: { settings: refs.globalSettings.get(), source: 'settings-save' }
+            }));
+            if (typeof window.applyChatBubbleLayoutSettings === 'function') {
+                window.applyChatBubbleLayoutSettings(refs.globalSettings.get());
+            }
+            if (typeof window.applyChatPresentationMode === 'function') {
+                await window.applyChatPresentationMode(newSettings.chatPresentationMode, {
+                    persist: false,
+                    preserveScroll: true,
+                    source: 'global-settings'
+                });
+            }
+        } catch (presentationError) {
+            // Settings have already been written. Keep the dialog state
+            // truthful and surface this as a post-save presentation warning,
+            // rather than incorrectly reporting an unsaved form.
+            console.error('[GlobalSettings] Saved, but applying presentation settings failed:', presentationError);
+            uiHelperFunctions.showToastNotification(`设置已保存，但界面应用失败：${presentationError?.message || presentationError}`, 'warning');
         }
+        reportSaveResult(true);
         uiHelperFunctions.showToastNotification('全局设置已保存！部分设置（如通知URL/Key）可能需要重新连接生效。');
         uiHelperFunctions.closeModal('globalSettingsModal');
         if (refs.globalSettings.get().vcpLogUrl && refs.globalSettings.get().vcpLogKey) {
@@ -232,6 +307,8 @@ export async function handleSaveGlobalSettings(e, deps) {
              if (window.notificationRenderer) window.notificationRenderer.updateVCPLogStatus({ status: 'error', message: 'VCPLog未配置' }, document.getElementById('vcpLogConnectionStatus'));
         }
    } else {
-       uiHelperFunctions.showToastNotification(`保存全局设置失败: ${result.error}`, 'error');
+       const error = result?.error || '保存接口未返回成功结果';
+       reportSaveResult(false, error);
+       uiHelperFunctions.showToastNotification(`保存全局设置失败: ${error}`, 'error');
     }
 }
