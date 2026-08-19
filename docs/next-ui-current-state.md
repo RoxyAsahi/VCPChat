@@ -1,7 +1,7 @@
 # 主聊天 UI 当前架构与交付基线
 
 > 状态：当前事实的唯一权威文档
-> 核对日期：2026-08-18
+> 核对日期：2026-08-19
 > 分支：`codex/design-system-upstream-no-workflow-20260817`
 > 文档入口：[`README.md`](./README.md)
 
@@ -62,6 +62,7 @@ Classic 主窗口 DOM 或 Classic/Next remount。
 | 插件兼容边界 | 已保护 | Loader 不由 UI 生命周期接管 |
 | 上游消息组件语义 | 已保护 | Next-owned CSS 不重绘结构化消息内部组件 |
 | 上游子页面边界 | 已保护 | 12 个页面保持原页面、无 WA runtime、无 mode query |
+| 启动主题门 | 已修复 | 有界 settings timeout、统一 fallback、非阻塞错误 host、启动门故障测试 |
 
 ## 4. 架构边界
 
@@ -76,7 +77,7 @@ Classic 主窗口 DOM 或 Classic/Next remount。
 
 ## 5. 当前验证状态
 
-本轮 `uiMode` 收敛后的当前验证：
+本轮 canonical Surface 与启动主题门修复后的当前验证：
 
 ```bash
 npm run check:ui-system
@@ -85,9 +86,12 @@ npm run test:electron-main-chat-group-sequences
 git diff --check
 ```
 
-上述命令已在 2026-08-18 当前工作树通过；`npm run test:electron-stability` 也通过，包含
-设置竞态、主聊天序列和 3 次预热 + 20 次生命周期压力循环。当前工作树仍包含其他并行线程的
-未提交改动，因此提交前必须再次核对文件归属和 `styles/themes.css` 排除状态。
+上述命令已在 2026-08-19 当前工作树通过；`npm run test:electron-stability` 也通过，包含
+设置竞态、主聊天序列和 3 次预热 + 20 次生命周期压力循环。提交前仍必须再次核对文件归属，
+并确认 `styles/themes.css` 等用户独立修改未进入提交。
+
+启动主题门的 reject、timeout、缺少 preload API、幂等释放和正常启动状态已有独立单元测试；
+Electron smoke 另外确认正常启动后门已释放且错误 host 保持隐藏。
 
 Windows 真机 DPI/IME、长时间 soak 和第三方插件组合仍属于发布证据，不可由 macOS 单元测试
 替代。它们不阻止架构代码进入审查，但必须在发布判断中显式标注。
@@ -107,11 +111,9 @@ Windows 真机 DPI/IME、长时间 soak 和第三方插件组合仍属于发布�
 
 ## 7. 后续顺序
 
-1. 完成 Surface marker、Appearance 和 Electron 测试迁移。
-2. 移除无消费者的 mode 测试与一次性迁移脚本。
-3. 已删除主窗口 `data-ui-mode` 兼容别名，并由 retirement guard 防止回归。
-4. 已将运行时标签宿主入口从 `topTabManager` 收敛为 `mainChatSurface`。
-5. 任何子页面设计迁移必须独立立项并提供真实消费者、回滚与生命周期证据。
+1. 补齐 Windows DPI/IME、ASAR 增量失败和 30–60 分钟人工 soak 证据。
+2. 持续运行现有生命周期、Web Awesome 和操作序列回归，不重复重构已完成的核心。
+3. 任何子页面设计迁移必须独立立项并提供真实消费者、回滚与生命周期证据。
 
 ## 8. 更新规则
 
