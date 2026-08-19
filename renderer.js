@@ -1680,8 +1680,15 @@ function applyInitialThemeClass(mode) {
         effectiveTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
     effectiveTheme = effectiveTheme || 'light';
-    document.body.classList.remove('light-theme', 'dark-theme');
-    document.body.classList.add(`${effectiveTheme}-theme`);
+    // Use the manager when available so the authoritative theme channel and
+    // the DOM class are committed together. A direct class fallback is only
+    // needed before the manager script has been installed.
+    if (window.uiManager?.applyTheme) {
+        window.uiManager.applyTheme(effectiveTheme);
+    } else {
+        document.body.classList.remove('light-theme', 'dark-theme');
+        document.body.classList.add(`${effectiveTheme}-theme`);
+    }
     document.body.removeAttribute('data-theme-pending');
 }
 

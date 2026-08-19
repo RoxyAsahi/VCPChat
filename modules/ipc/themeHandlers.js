@@ -230,19 +230,33 @@ function broadcastThemeUpdate(theme) {
     console.log(`[ThemeHandlers] Theme updated to: ${theme}. Notifying windows.`);
     const targets = new Set();
     const addContents = contents => {
-        if (contents && !contents.isDestroyed?.() && !contents.isCrashed?.()) targets.add(contents);
+        if (!contents) return;
+        try {
+            if (!contents.isDestroyed?.() && !contents.isCrashed?.()) targets.add(contents);
+        } catch (error) {
+            console.warn('[ThemeHandlers] Ignoring unavailable theme target:', error.message);
+        }
     };
     const addWindow = win => {
-        if (win && !win.isDestroyed?.()) addContents(win.webContents);
+        if (!win) return;
+        try {
+            if (!win.isDestroyed?.()) addContents(win.webContents);
+        } catch (error) {
+            console.warn('[ThemeHandlers] Ignoring unavailable theme window:', error.message);
+        }
     };
 
     addWindow(mainWindow);
-    openChildWindows.forEach(addWindow);
+    (openChildWindows || []).forEach(addWindow);
 
     // Embedded applications are WebContentsViews owned by the main window,
     // not BrowserWindows, so they are absent from openChildWindows.
     // Forward the same authoritative theme event to every live child view.
-    mainWindow?.contentView?.children?.forEach(view => addContents(view?.webContents));
+    try {
+        mainWindow?.contentView?.children?.forEach(view => addContents(view?.webContents));
+    } catch (error) {
+        console.warn('[ThemeHandlers] Failed to enumerate embedded theme targets:', error.message);
+    }
 
     targets.forEach(contents => {
         try {
