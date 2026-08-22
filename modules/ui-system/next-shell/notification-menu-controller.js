@@ -32,11 +32,10 @@
             const elements = {
                 trigger: byId('nextUiNotificationMenuBtn'),
                 menu: byId('nextUiNotificationMenu'),
-                log: byId('nextUiNotificationLog'),
-                observer: byId('nextUiNotificationObserver'),
+                forum: byId('nextUiNotificationForum'),
+                memo: byId('nextUiNotificationMemo'),
                 filter: byId('nextUiNotificationFilterToggle'),
                 filterState: byId('nextUiNotificationFilterState'),
-                settings: byId('nextUiNotificationSettings'),
                 clear: byId('nextUiNotificationClear'),
             };
             if (Object.values(elements).some(element => !element)) return false;
@@ -57,13 +56,13 @@
                 if (elements.menu.hidden) this.open();
                 else this.close({ restoreFocus: true });
             });
-            listen(elements.log, 'click', () => void this.runAction(() => this.commands()?.openLog?.()));
-            listen(elements.observer, 'click', () => void this.runAction(() => this.commands()?.openRagObserver?.()));
+            listen(elements.forum, 'click', () => void this.runAction(() => this.commands()?.openForum?.()));
+            listen(elements.memo, 'click', () => void this.runAction(() => this.commands()?.openMemo?.()));
             listen(elements.filter, 'click', () => void this.runAction(() => this.commands()?.toggleNotificationFilter?.()));
-            listen(elements.settings, 'click', () => void this.runAction(
-                () => this.commands()?.openNotificationFilterSettings?.(),
-                { restoreFocus: false }
-            ));
+            listen(elements.filter, 'contextmenu', event => {
+                event.preventDefault();
+                void this.runAction(() => this.commands()?.openNotificationFilterSettings?.(), { restoreFocus: false });
+            });
             listen(elements.clear, 'click', () => void this.runAction(() => this.commands()?.clearNotifications?.()));
             listen(this.document, 'pointerdown', event => {
                 if (!elements.menu.hidden
@@ -123,7 +122,7 @@
             this.syncFilterState();
             this.elements.menu.hidden = false;
             this.elements.trigger.setAttribute('aria-expanded', 'true');
-            this.elements.log.focus();
+            this.elements.forum.focus();
         }
 
         close({ restoreFocus = false } = {}) {
@@ -149,6 +148,14 @@
 
         handleKeydown(event) {
             if (!this.mounted) return;
+            if ((event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10'))
+                && this.document.activeElement === this.elements.filter) {
+                event.preventDefault();
+                this.elements.filter.dispatchEvent(new this.window.MouseEvent('contextmenu', {
+                    bubbles: true, cancelable: true, button: 2,
+                }));
+                return;
+            }
             if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
             const menuItems = [...this.elements.menu.querySelectorAll('[role^="menuitem"]')];
             const currentIndex = menuItems.indexOf(this.document.activeElement);

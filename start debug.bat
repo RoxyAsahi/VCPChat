@@ -3,40 +3,34 @@ setlocal EnableExtensions
 chcp 65001 >nul
 cd /d "%~dp0"
 
-title VCP Chat - npm start
+title VCP Chat Debug Console
 
-rem 使用 UTF-8 语言环境，减少 Node.js、Electron 及其子进程的中文日志乱码。
-set "LANG=zh_CN.UTF-8"
-set "LC_ALL=zh_CN.UTF-8"
-set "PYTHONIOENCODING=utf-8"
-set "PYTHONUTF8=1"
+set "ELECTRON_ENABLE_LOGGING=1"
+set "ELECTRON_ENABLE_STACK_DUMPING=1"
 
 echo ============================================================
-echo VCP Chat 原生 npm start
-echo 项目目录: %CD%
-echo 启动时间: %DATE% %TIME%
+echo VCP Chat Debug Launcher
+echo Working directory: %CD%
+echo Started at: %DATE% %TIME%
 echo ============================================================
 echo.
 
-where npm.cmd >nul 2>nul
-if errorlevel 1 (
-    echo [错误] 未找到 npm.cmd，请确认 Node.js 已安装并加入 PATH。
-    echo.
-    pause
-    exit /b 1
+if exist "NativeSplash.exe" (
+    start "" "NativeSplash.exe"
 )
 
-rem 不启动 Native Splash，不使用托管启动器，直接执行 package.json 的 start。
-call npm.cmd start
+call npm start
 set "VCP_EXIT_CODE=%ERRORLEVEL%"
 
 echo.
 echo ============================================================
-echo VCP Chat 已退出
-echo 退出码: %VCP_EXIT_CODE%
-echo 结束时间: %DATE% %TIME%
-echo ============================================================
+echo Electron process exited.
+echo Exit code: %VCP_EXIT_CODE%
+echo Finished at: %DATE% %TIME%
 echo.
-pause
+echo 请保留并复制上方最后一段错误输出。
+echo 按任意键关闭此调试终端。
+echo ============================================================
+pause >nul
 
 exit /b %VCP_EXIT_CODE%

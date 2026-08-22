@@ -12,7 +12,6 @@ const {
   upsertMessageIndex,
   upsertAttachmentIndex,
   upsertMessageAttachment,
-  upsertHistorySourceState,
 } = require("../core/db");
 const { computeMessageFingerprint, computeAggregatedHash } = require("../core/hash");
 const { sanitizeId, writeIntentLock } = require("./entity");
@@ -551,25 +550,16 @@ async function uploadMessagesBatchRaw(req, appDataPath, res) {
 }
 
 /**
- * 将 history.json 摄入到消息索引。
- *
- * reconcile 调用方可传入已读取的 history 与 stat，避免同一文件先校验、
- * 后摄取时发生第二次完整读取。普通 watcher/push 调用仍保持向后兼容。
+ * 将 history.json 摄入到消息索引
  */
-async function ingestHistoryToDb(
-  filePath,
-  topicId,
-  source = "watcher",
-  { history: suppliedHistory, sourceStats: suppliedStats } = {},
-) {
-  if (topicId === "default") return { messageCount: 0, warningCount: 0 };
+async function ingestHistoryToDb(filePath, topicId, source = "watcher") {
+  if (topicId === "default") return;
   const db = getDb();
   const logger = getLogger();
   if (!db) throw new Error("Database not initialized");
 
   try {
-    const history = suppliedHistory ?? (await readHistoryStrict(filePath)).history;
-    const sourceStats = suppliedStats ?? await fs.stat(filePath);
+    const { history } = await readHistoryStrict(filePath);
     const canonical = canonicalizeHistory(history, topicId);
     if (canonical.topicIdRewrites > 0) {
       logger.logInfo(
@@ -651,12 +641,6 @@ async function ingestHistoryToDb(
       }
     });
     applyIndex();
-    upsertHistorySourceState(
-      topicId,
-      filePath,
-      sourceStats.size,
-      sourceStats.mtimeMs,
-    );
     clearHistoryTopicUnhealthy(topicId);
 
     if (source !== "reconcile") {
@@ -668,9 +652,7 @@ async function ingestHistoryToDb(
         `msgs=${validMessages.length} attachments=${attachmentCount}`,
       );
     }
-    // 启动 reconcile 由外层合并输出摘要，避免数十个话题分别触发
-    // console、日志文件和 WebSocket 三路写入。
-    if (canonical.warningCount > 0 && source !== "reconcile") {
+    if (canonical.warningCount > 0) {
       logger.logOperation(
         "messages",
         "legacy_attachment_warning",
@@ -679,17 +661,9 @@ async function ingestHistoryToDb(
         `count=${canonical.warningCount}`,
       );
     }
-    return {
-      messageCount: validMessages.length,
-      warningCount: canonical.warningCount,
-    };
   } catch (e) {
     markHistoryTopicUnhealthy(topicId, e);
-    // 启动 reconcile 由外层统一按 history 话题记录错误，避免同一故障
-    // 同时产生 ingest 与 history 两条控制台/文件/WS 日志。
-    if (source !== "reconcile") {
-      logger.logOperation("messages", "ingest", topicId, "error", e.message);
-    }
+    logger.logOperation("messages", "ingest", topicId, "error", e.message);
     throw e;
   }
 }

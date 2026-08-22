@@ -20,20 +20,6 @@ export function createMainChatAttachmentOwner({ renderPreview = null } = {}) {
         },
     });
 
-    const syncPreview = () => {
-        if (disposed) return false;
-        renderPreview?.(files, removeAt);
-        return true;
-    };
-
-    function removeAt(index) {
-        assertActive();
-        if (!Number.isInteger(index) || index < 0 || index >= files.length) return false;
-        files = Object.freeze(files.filter((_, fileIndex) => fileIndex !== index));
-        syncPreview();
-        return true;
-    }
-
     return Object.freeze({
         ref,
         get: ref.get,
@@ -42,8 +28,11 @@ export function createMainChatAttachmentOwner({ renderPreview = null } = {}) {
             files = Object.freeze([]);
             return files;
         },
-        removeAt,
-        syncPreview,
+        syncPreview() {
+            if (disposed) return false;
+            renderPreview?.(files);
+            return true;
+        },
         dispose() {
             if (disposed) return;
             disposed = true;

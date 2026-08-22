@@ -26,9 +26,7 @@ export function createWindowStreamRuntime({
         }, {
             getSurfaceGeneration: () => 0,
             start: message => streamProjection.startStreamingMessage(message),
-            append: (messageId, chunk, context, operationId) => (
-                streamProjection.appendStreamChunk(messageId, chunk, context, operationId)
-            ),
+            append: (messageId, chunk, context) => streamProjection.appendStreamChunk(messageId, chunk, context),
             projectTerminal: (messageId, finishReason, context, payload) => streamProjection.projectStreamTerminal(messageId, finishReason, context, payload),
             persistTerminal: projected => historyPersistence.commit(projected),
             dispatchTerminal,

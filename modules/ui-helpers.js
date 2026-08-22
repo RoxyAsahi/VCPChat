@@ -645,9 +645,8 @@
      * Updates the attachment preview area with current attached files.
      * @param {Array} attachedFiles Array of attached file objects.
      * @param {HTMLElement} attachmentPreviewArea The preview area element.
-     * @param {function(number): boolean} [removeAttachmentAt] Owner command for immutable attachment state.
      */
-    uiHelperFunctions.updateAttachmentPreview = function(attachedFiles, attachmentPreviewArea, removeAttachmentAt = null) {
+    uiHelperFunctions.updateAttachmentPreview = function(attachedFiles, attachmentPreviewArea) {
         if (!attachmentPreviewArea) {
             console.error('[UI Helper] updateAttachmentPreview: attachmentPreviewArea is null or undefined!');
             return;
@@ -696,17 +695,10 @@
             prevDiv.appendChild(nameSpan);
     
             const removeBtn = document.createElement('button');
-            removeBtn.type = 'button';
             removeBtn.className = 'file-preview-remove-btn';
             removeBtn.innerHTML = '×';
             removeBtn.title = '移除此附件';
-            removeBtn.onclick = (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                if (typeof removeAttachmentAt === 'function') {
-                    removeAttachmentAt(index);
-                    return;
-                }
+            removeBtn.onclick = () => {
                 attachedFiles.splice(index, 1);
                 uiHelperFunctions.updateAttachmentPreview(attachedFiles, attachmentPreviewArea);
             };

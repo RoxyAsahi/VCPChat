@@ -20,10 +20,7 @@ class SyncLogger {
   constructor() {
     this.currentSession = null;
     this.currentPhase = "system"; // 默认相位
-    const writableRoot = process.env.VCPCHAT_APP_DATA_DIR || path.join(__dirname, "..");
-    this.logDir = process.env.VCPCHAT_APP_DATA_DIR
-      ? path.join(writableRoot, "PluginLogs", "VCPMobileSync", "sync")
-      : path.join(writableRoot, "logs", "sync");
+    this.logDir = path.join(__dirname, "..", "logs", "sync");
     if (!fs.existsSync(this.logDir)) {
       fs.mkdirSync(this.logDir, { recursive: true });
     }
