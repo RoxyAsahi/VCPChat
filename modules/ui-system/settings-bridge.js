@@ -691,20 +691,20 @@ function restoreFormIcons(root) {
 // shell chrome (nav/header/options) is reconstructed here.
 function mountSettingsShell(root) {
     if (root.querySelector('.vcp-harness-settings-panel')) return;
-    const panel = root.querySelector('.vcp-settings-bootstrap-panel');
-    const layout = root.querySelector('.vcp-settings-bootstrap-layout');
-    const nav = root.querySelector('.vcp-settings-bootstrap-nav');
-    const listHost = nav?.querySelector('.vcp-settings-bootstrap-list');
-    const content = root.querySelector('.vcp-settings-bootstrap-content');
+    const panel = root.querySelector('.vcp-settings-source-panel');
+    const layout = root.querySelector('.vcp-settings-source-layout');
+    const nav = root.querySelector('.vcp-settings-source-nav');
+    const listHost = nav?.querySelector('.vcp-settings-source-list');
+    const content = root.querySelector('.vcp-settings-source-content');
     const form = root.querySelector('#globalSettingsForm');
-    const title = root.querySelector('.vcp-settings-bootstrap-title');
+    const title = root.querySelector('.vcp-settings-source-title');
     const close = root.querySelector('.close-button');
     const footer = root.querySelector('.global-settings-footer');
     if (!panel || !layout || !nav || !listHost || !content || !form || !title || !close) {
         return;
     }
 
-    const meta = [...listHost.querySelectorAll('.vcp-settings-bootstrap-item')].map(item => ({
+    const meta = [...listHost.querySelectorAll('.vcp-settings-source-item')].map(item => ({
         value: item.dataset.section,
         label: (item.querySelector('span')?.textContent || '').trim() || item.textContent.trim(),
         icon: GLOBAL_CATEGORY_ICONS[item.dataset.section] || 'circle',
@@ -743,10 +743,10 @@ function mountSettingsShell(root) {
     content.classList.add('vcp-harness-settings-content');
     // Legacy presentation selectors must not participate in the live tree.
     // The classes are restored only when the bridge is torn down.
-    nav.classList.remove('vcp-settings-bootstrap-nav');
-    content.classList.remove('vcp-settings-bootstrap-content');
-    panel.classList.remove('vcp-settings-bootstrap-panel');
-    title.classList.remove('vcp-settings-bootstrap-title');
+    nav.classList.remove('vcp-settings-source-nav');
+    content.classList.remove('vcp-settings-source-content');
+    panel.classList.remove('vcp-settings-source-panel');
+    title.classList.remove('vcp-settings-source-title');
 
     // Harness owns the settings title in the nav rail, not as a second
     // content heading. Move the canonical node and restore its exact parent

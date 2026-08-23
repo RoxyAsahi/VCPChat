@@ -20,7 +20,7 @@
 
 ### 当前审查结论（2026-08-23）
 
-Terra 风格对抗审查确认：旧实现清理门禁此前遗漏了 legacy row 包裹、tablist 语义、外层旧 stylesheet、Input/Select 字体契约、Appearance 固定三列和 portal 生命周期差异。本轮已完成物理 row 替换、移除 tab/tabpanel 语义、删除旧 global modal stylesheet、live bootstrap marker 清理，并把这些差异加入本计划的强制验收项。
+Terra 风格对抗审查确认：旧实现清理门禁此前遗漏了 legacy row 包裹、tablist 语义、外层旧 stylesheet、Input/Select 字体契约、Appearance 固定三列和 portal 生命周期差异。本轮已完成物理 row 替换、移除 tab/tabpanel 语义、删除旧 global modal stylesheet、live source scaffold marker 清理，并把这些差异加入本计划的强制验收项。
 
 ### Phase A：源码差异冻结
 
@@ -54,7 +54,7 @@ Terra 风格对抗审查确认：旧实现清理门禁此前遗漏了 legacy row
 - 删除 Classic/Next 选择逻辑对全局设置 Surface 的影响；保留历史 settings schema 兼容归一化，不保留 presentation branch。
 - dead-code gate 必须覆盖 CSS、HTML class、bridge symbol、stylesheet import 和运行时 listener owner。
 
-当前进度：旧 `settings-global-modal.css` 已删除，`styles/settings.css` import 与 design-boundary 引用已移除；bootstrap nav/content class 在 live mount 时也会移除，DOM snapshot 已记录；teardown 不再恢复旧 DOM。
+当前进度：旧 `settings-global-modal.css` 已删除，`styles/settings.css` import 与 design-boundary 引用已移除；source nav/content class 在 live mount 时也会移除，DOM snapshot 已记录；teardown 不再恢复旧 DOM。
 
 ### Phase E：证据与验收
 

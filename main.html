@@ -986,15 +986,15 @@
     <div id="modal-container"></div>
     <template id="globalSettingsModalTemplate">
         <div class="modal vcp-ui-scope" id="globalSettingsModal">
-            <div class="modal-content vcp-settings-bootstrap-panel">
+            <div class="modal-content vcp-settings-source-panel">
                 <button class="close-button" type="button" aria-label="关闭全局设置">×</button>
-                <h2 class="vcp-settings-bootstrap-title">全局设置</h2>
+                <h2 class="vcp-settings-source-title">全局设置</h2>
 
-                <div class="vcp-settings-bootstrap-layout">
+                <div class="vcp-settings-source-layout">
                     <!-- 左侧导航菜单 -->
-                    <nav class="vcp-settings-bootstrap-nav">
-                        <ul class="vcp-settings-bootstrap-list">
-                            <li class="vcp-settings-bootstrap-item active" data-section="user-identity">
+                    <nav class="vcp-settings-source-nav">
+                        <ul class="vcp-settings-source-list">
+                            <li class="vcp-settings-source-item active" data-section="user-identity">
                                 <svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2">
                                     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
@@ -1002,7 +1002,7 @@
                                 </svg>
                                 <span>用户身份</span>
                             </li>
-                            <li class="vcp-settings-bootstrap-item" data-section="server-connection">
+                            <li class="vcp-settings-source-item" data-section="server-connection">
                                 <svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2">
                                     <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
@@ -1012,7 +1012,7 @@
                                 </svg>
                                 <span>服务器连接</span>
                             </li>
-                            <li class="vcp-settings-bootstrap-item" data-section="appearance-settings">
+                            <li class="vcp-settings-source-item" data-section="appearance-settings">
                                 <svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2">
                                     <circle cx="13.5" cy="6.5" r="2.5"></circle>
@@ -1023,7 +1023,7 @@
                                 </svg>
                                 <span>界面与外观</span>
                             </li>
-                            <li class="vcp-settings-bootstrap-item" data-section="render-settings">
+                            <li class="vcp-settings-source-item" data-section="render-settings">
                                 <svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2">
                                     <circle cx="12" cy="12" r="3"></circle>
@@ -1033,7 +1033,7 @@
                                 </svg>
                                 <span>消息渲染</span>
                             </li>
-                            <li class="vcp-settings-bootstrap-item" data-section="selection-assistant">
+                            <li class="vcp-settings-source-item" data-section="selection-assistant">
                                 <svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2">
                                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -1041,7 +1041,7 @@
                                 </svg>
                                 <span>划词助手</span>
                             </li>
-                            <li class="vcp-settings-bootstrap-item" data-section="voice-settings">
+                            <li class="vcp-settings-source-item" data-section="voice-settings">
                                 <svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2">
                                     <path d="M12 19v3"></path>
@@ -1050,7 +1050,7 @@
                                 </svg>
                                 <span>语音设置</span>
                             </li>
-                            <li class="vcp-settings-bootstrap-item" data-section="advanced-features">
+                            <li class="vcp-settings-source-item" data-section="advanced-features">
                                 <svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2">
                                     <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
@@ -1059,7 +1059,7 @@
                                 </svg>
                                 <span>高级功能</span>
                             </li>
-                            <li class="vcp-settings-bootstrap-item" data-section="quick-actions">
+                            <li class="vcp-settings-source-item" data-section="quick-actions">
                                 <svg class="settings-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2">
                                     <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
@@ -1070,7 +1070,7 @@
                     </nav>
 
                     <!-- 右侧内容区域 -->
-                    <div class="vcp-settings-bootstrap-content">
+                    <div class="vcp-settings-source-content">
                         <form id="globalSettingsForm">
                             <!-- 用户身份 -->
                             <div class="settings-section active" id="section-user-identity">

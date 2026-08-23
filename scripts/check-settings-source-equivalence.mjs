@@ -42,8 +42,8 @@ for (const forbidden of [
 assert.doesNotMatch(bridge, /vcp-harness-legacy-anchor/, 'canonical rows must not retain legacy anchor presentation');
 assert.doesNotMatch(css, /vcp-harness-legacy-anchor/, 'legacy anchor CSS must be deleted');
 assert.doesNotMatch(bridge, /vcp-settings-navigation-restored|originalLegacyClasses|originalPanelNodes/, 'retired legacy SettingsRoot restoration path must be deleted');
-assert.match(bridge, /nav\.classList\.remove\('vcp-settings-bootstrap-nav'\)/, 'bootstrap nav marker must leave live tree');
-assert.match(bridge, /content\.classList\.remove\('vcp-settings-bootstrap-content'\)/, 'bootstrap content marker must leave live tree');
+assert.match(bridge, /nav\.classList\.remove\('vcp-settings-source-nav'\)/, 'source nav marker must leave live tree');
+assert.match(bridge, /content\.classList\.remove\('vcp-settings-source-content'\)/, 'source content marker must leave live tree');
 
 // Geometry values are copied from the Harness source, not inferred from VCP
 // tokens.  Verify both the reference and the VCP canonical selectors.
@@ -96,8 +96,8 @@ assert.doesNotMatch(settingsEntry, /settings-global-modal\.css/, 'legacy global 
 assert.equal(fs.existsSync(path.join(root, 'styles/setting/settings-global-modal.css')), false, 'legacy global modal stylesheet must be deleted');
 
 const template = html.match(/<template id="globalSettingsModalTemplate">[\s\S]*?<\/template>/)?.[0] || '';
-assert.match(template, /vcp-settings-bootstrap-panel/, 'settings bootstrap panel marker must be explicit');
-assert.match(template, /vcp-settings-bootstrap-title/, 'settings bootstrap title marker must be explicit');
+assert.match(template, /vcp-settings-source-panel/, 'settings source panel marker must be explicit');
+assert.match(template, /vcp-settings-source-title/, 'settings source title marker must be explicit');
 const legacyRows = (template.match(/class="[^"]*(?:settings-form-group|form-group-inline|settings-subsection)[^"]*"/g) || []).length;
 const inlineStyles = (template.match(/\sstyle\s*=/g) || []).length;
 const legacyCssSelectors = (css.match(/\.(?:settings-form-group|form-group-inline|settings-subsection|global-settings-layout|settings-nav-item|global-settings-nav|global-settings-content|global-settings-title|settings-nav-list|vcp-ui-list(?:-item|-copy)?|vcp-ui-settings-shell)\b/g) || []).length;
