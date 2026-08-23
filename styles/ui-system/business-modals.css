@@ -25,40 +25,6 @@
         width: min(100%, var(--vcp-ui-modal-wide-width));
     }
 
-    /* 保存栏：固定于内容区底部，配合 SettingsActionBar 的脏/保存/错误状态。 */
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .global-settings-footer {
-        margin: 0;
-        padding: var(--vcp-ui-space-3) var(--vcp-ui-space-4);
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        gap: var(--vcp-ui-space-2);
-        border-top: 1px solid var(--vcp-ui-border);
-        background: var(--vcp-ui-bg-1);
-        flex: 0 0 auto;
-    }
-
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .global-settings-footer button[type="submit"] {
-        min-height: var(--vcp-ui-control-md);
-        padding: 0 var(--vcp-ui-space-4);
-        border: 0;
-        border-radius: var(--vcp-ui-radius-sm);
-        color: var(--vcp-ui-on-accent);
-        background: var(--vcp-ui-accent);
-        font: inherit;
-        cursor: pointer;
-        transition: background var(--vcp-ui-transition-fast);
-    }
-
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .global-settings-footer button[type="submit"]:hover {
-        background: var(--vcp-ui-accent-hover);
-    }
-
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .global-settings-footer[data-state="saving"] button[type="submit"], :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .global-settings-footer[data-state="error"] button[type="submit"] {
-        cursor: progress;
-        opacity: 0.78;
-    }
-
     :is(html, html.vcp-global-settings-host) .vcp-ui-scope#avatarCropperModal .avatar-cropper-modal-content {
         width: min(100%, var(--vcp-ui-modal-width));
     }

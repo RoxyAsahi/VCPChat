@@ -18,7 +18,7 @@ assert.match(bridge, /harnessSelectOwnerMounted/);
 assert.doesNotMatch(bridge, /function isNextUi\s*\(/);
 assert.doesNotMatch(bridge, /vcp-global-settings-next/);
 assert.match(css, /vcp-harness-general-item/);
-assert.match(css, /\.data-vcp-settings-section\s*\{[\s\S]*?background:\s*transparent/);
+assert.match(css, /\.vcp-harness-editor-section\s*\{[\s\S]*?background:\s*transparent/);
 assert.doesNotMatch(css, /#globalSettingsModal\.vcp-global-settings-next/);
 assert.match(html, /id="tabContentSettings"[^>]*data-settings-presentation="unified"/);
 assert.match(css, /vcp-harness-settings-panel/);

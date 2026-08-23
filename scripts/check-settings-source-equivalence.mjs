@@ -42,6 +42,7 @@ for (const forbidden of [
 }
 assert.doesNotMatch(bridge, /vcp-harness-legacy-anchor/, 'canonical rows must not retain legacy anchor presentation');
 assert.doesNotMatch(bridge, /vcp-settings-source-item/, 'source nav items must not be a runtime owner');
+assert.doesNotMatch(bridge, /global-settings-footer|data-vcp-settings-section/, 'retired settings group/footer owners must be absent');
 assert.doesNotMatch(css, /vcp-harness-legacy-anchor/, 'legacy anchor CSS must be deleted');
 assert.doesNotMatch(bridge, /vcp-settings-navigation-restored|originalLegacyClasses|originalPanelNodes/, 'retired legacy SettingsRoot restoration path must be deleted');
 assert.match(bridge, /nav\.classList\.remove\('vcp-settings-source-nav'\)/, 'source nav marker must leave live tree');

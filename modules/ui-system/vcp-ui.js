@@ -599,7 +599,7 @@ function fieldEnhancer(element, options = {}) {
 }
 
 function settingsActionBarEnhancer(element, options = {}, { removeOnDestroy = false } = {}) {
-    if (!element?.matches?.('.form-actions, .vcp-ui-settings-action-bar, .global-settings-footer')) {
+    if (!element?.matches?.('.form-actions, .vcp-ui-settings-action-bar')) {
         throw new TypeError('VCPUI SettingsActionBar enhancement received an incompatible element.');
     }
     const form = options.form || element.closest('form');

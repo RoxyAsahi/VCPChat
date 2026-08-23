@@ -169,8 +169,6 @@ function enhanceGlobalSettings(root, form) {
     form.querySelectorAll('.agent-name-wrapper').forEach(field => {
         if (field.querySelector('input:not([type="hidden"]), select, textarea')) enhance('Field', field);
     });
-    const footer = root.querySelector('.global-settings-footer');
-    if (footer) enhance('SettingsActionBar', footer, { form });
     mountSettingsShell(root);
     mountSettingsAutosave(root, form);
     normalizeFormIcons(root);
@@ -225,7 +223,7 @@ function mountHarnessDisclosures(form) {
 }
 
 function removeLegacySubsectionHeadings(form) {
-    form.querySelectorAll('.data-vcp-settings-section-heading').forEach(heading => {
+    form.querySelectorAll('.vcp-harness-editor-section-heading').forEach(heading => {
         const section = heading.closest('.settings-section');
         // The section h3 is the single canonical heading.  Subsection cards
         // must not introduce a second title/description stack.
@@ -293,10 +291,9 @@ function composeCanonicalRowSlots(row) {
 
 function mountSettingsAutosave(root, form) {
     if (form.dataset.vcpAutosaveMounted === 'true') return;
-    const footer = root.querySelector('.global-settings-footer');
     const statusHost = root.querySelector('.vcp-harness-settings-actions');
     if (!statusHost) return;
-    const state = { form, footer, timer: null, saving: false, pending: false, cleanups: [] };
+    const state = { form, timer: null, saving: false, pending: false, cleanups: [] };
     const status = document.createElement('button');
     status.type = 'button';
     status.className = 'vcp-settings-autosave-status';
@@ -307,7 +304,6 @@ function mountSettingsAutosave(root, form) {
     const setStatus = (value, mode = '') => {
         status.textContent = value;
         status.dataset.state = mode;
-        if (footer) footer.dataset.state = mode || footer.dataset.state || '';
     };
     const submit = () => {
         state.timer = null;
@@ -698,7 +694,6 @@ function mountSettingsShell(root) {
     const form = root.querySelector('#globalSettingsForm');
     const title = root.querySelector('.vcp-settings-source-title');
     const close = root.querySelector('.close-button');
-    const footer = root.querySelector('.global-settings-footer');
     if (!panel || !layout || !nav || !content || !form || !title || !close) {
         return;
     }
@@ -725,7 +720,6 @@ function mountSettingsShell(root) {
         content,
         form,
         close,
-        footer,
         listHost: null,
         originalNavHost: listHost || null,
         title,
@@ -774,7 +768,6 @@ function mountSettingsShell(root) {
     state.header = header;
     state.options = options;
     options.append(...[...content.childNodes]);
-    if (footer) actions.append(footer);
     actions.append(close);
     header.append(actions);
     content.replaceChildren(header, options);
@@ -842,7 +835,7 @@ function mountSettingsShell(root) {
     const activateSection = (value) => {
         if (value === state.active) return;
         root.querySelectorAll('.settings-section').forEach(section => {
-            section.classList.remove('active', 'switching-out', 'switching-in');
+            section.classList.remove('active');
         });
         const target = document.getElementById(`section-${value}`);
         if (target) target.classList.add('active');

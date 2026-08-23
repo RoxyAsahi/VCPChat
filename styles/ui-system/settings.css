@@ -677,7 +677,7 @@
     }
 
     /* ---- subsections (cards) ---- */
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .data-vcp-settings-section {
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .vcp-harness-editor-section {
         margin: 0;
         padding: 0;
         border: 0;
@@ -686,24 +686,24 @@
         box-shadow: none;
     }
 
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .data-vcp-settings-section:last-child {
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .vcp-harness-editor-section:last-child {
         margin-bottom: 0;
     }
 
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .data-vcp-settings-section-title {
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .vcp-harness-editor-section-title {
         color: var(--vcp-ui-text-0);
         font-size: var(--vcp-ui-font-body);
         font-weight: 600;
     }
 
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .data-vcp-settings-section-description {
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .vcp-harness-editor-section-description {
         margin: 0;
         color: var(--vcp-ui-text-3);
         font-size: var(--vcp-ui-font-caption);
         line-height: var(--vcp-ui-line-body);
     }
 
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .data-vcp-settings-section-new {
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .vcp-harness-editor-section[data-editor-density="prominent"] {
         box-shadow: none;
     }
 
@@ -850,7 +850,7 @@
         box-shadow: none;
     }
 
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal :is(.agent-identity-container, .data-vcp-settings-section, .chat-presentation-mode-option, .scenario-preview-card) {
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal :is(.agent-identity-container, .vcp-harness-editor-section, .chat-presentation-mode-option, .scenario-preview-card) {
         border: 0;
         background: var(--vcp-ui-fill-0);
         box-shadow: none;
@@ -1781,7 +1781,7 @@
 }
 
 /* No subsection/card surface survives on the unified SettingsRoot. */
-:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .data-vcp-settings-section {
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-editor-section {
     margin: 0;
     padding: 0;
     border: 0;
