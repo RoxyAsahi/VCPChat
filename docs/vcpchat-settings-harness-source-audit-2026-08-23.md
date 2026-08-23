@@ -22,7 +22,7 @@
 
 - [main.html](/Users/asahi/Documents/Codex/VCPChat-newarchitecture/main.html:987) 的统一 Surface 已移除旧 `global-settings-layout` 与 legacy row/subsection class；原 inline style 已迁移为受控 `data-vcp-style` 规则。
 - [settings-bridge.js](/Users/asahi/Documents/Codex/VCPChat-newarchitecture/modules/ui-system/settings-bridge.js:155) 的 `mountCanonicalSettingsRows` 已改为同 tag canonical row 物理替换旧 row，业务 child controls 原节点移动保留；后续继续拆分 title/helper/control slot。
-- [settings-bridge.js](/Users/asahi/Documents/Codex/VCPChat-newarchitecture/modules/ui-system/settings-bridge.js:257) 的 Select 仍为 native source + VCP 自写 trigger/menu projection，不是 Harness `Menu` 的同一 primitive。必须继续验证 portal identity、动态 option hydrate、detached projection 和 exact-one-visible projection。
+- [settings-bridge.js](/Users/asahi/Documents/Codex/VCPChat-newarchitecture/modules/ui-system/settings-bridge.js:300) 的 Select 保留 native source，但 projection 已采用 Harness `Menu` 的 `menu → viewport → itemWrap → menuitem → itemLabel/check` 语义与结构；portal identity、动态 option hydrate、detached projection 和 exact-one-visible projection 均由 bridge owner 管理。
 - [settings.css](/Users/asahi/Documents/Codex/VCPChat-newarchitecture/styles/ui-system/settings.css:809) 仍有 Web Awesome Select proxy 规则；统一 Surface 不应再让 `wa-select.vcp-ui-select-proxy` 参与全局设置视觉。
 - `settings.css` 的 source-equivalence gate 当前报告 legacy rows=0、inlineStyles=0、cssSelectors=0；统一 Surface 不再由旧 wrapper 提供布局 ownership。
 - `styles/settings.css` 已移除旧 `settings-global-modal.css` 的加载入口；该旧文件不再进入统一设置 Surface 的 cascade。
@@ -31,6 +31,7 @@
 - Electron gate 同时输出 `screenshots/settings-dom-tree.json`；当前 live tree 的 panel/nav/content/header/options 只保留 `vcp-harness-*` primitive，bootstrap nav/content marker 已从 live DOM 移除。
 - bridge teardown 已改为只释放 controllers、observers、timers、portal 和 autosave owner，不再恢复旧 settings layout、旧 class 或旧 navigation DOM。
 - bridge 不再为全局设置建立 tab/tabpanel 语义或 Classic/Next presentation branch；历史 schema 兼容不参与 Surface ownership。
+- 文本输入现在由 `.vcp-harness-input-wrap` 物理承载，wrapper 对齐 Harness `Input.module.css` 的 `32px/r8/focus-within` 契约，native input/textarea 节点及其 `id/name` 保持不变。
 
 ## 本轮 bounded 施工
 

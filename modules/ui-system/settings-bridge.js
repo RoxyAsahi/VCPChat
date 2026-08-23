@@ -150,6 +150,7 @@ const GLOBAL_CATEGORY_ICONS = Object.freeze({
 function enhanceGlobalSettings(root, form) {
     mountCanonicalSettingsRows(form);
     removeLegacySubsectionHeadings(form);
+    mountHarnessInputWrappers(form);
     form.querySelectorAll('input:is(:not([type]), [type="text"], [type="url"], [type="password"], [type="number"], [type="email"], [type="search"], [type="tel"])').forEach(input => {
         enhance('Input', input);
     });
@@ -173,6 +174,18 @@ function enhanceGlobalSettings(root, form) {
     mountSettingsShell(root);
     mountSettingsAutosave(root, form);
     normalizeFormIcons(root);
+}
+
+function mountHarnessInputWrappers(form) {
+    const selector = 'input:is(:not([type]), [type="text"], [type="url"], [type="password"], [type="number"], [type="email"], [type="search"], [type="tel"]), textarea';
+    form.querySelectorAll(selector).forEach(control => {
+        if (control.closest('.vcp-harness-input-wrap')) return;
+        const wrap = document.createElement('span');
+        wrap.className = 'vcp-harness-input-wrap';
+        wrap.dataset.settingPrimitive = 'input-wrap';
+        control.parentNode.insertBefore(wrap, control);
+        wrap.append(control);
+    });
 }
 
 function mountHarnessDisclosures(form) {
@@ -401,7 +414,9 @@ function mountHarnessSelects(form) {
         button.append(label, arrow);
         const popover = document.createElement('div');
         popover.className = 'vcp-harness-menu-list vcp-harness-select-popover vcp-harness-menu-portal';
-        popover.setAttribute('role', 'listbox');
+        // Harness Menu is a menu primitive; the native select remains the
+        // serialization source while this portal owns menu semantics.
+        popover.setAttribute('role', 'menu');
         popover.id = `${controlId}-listbox`;
         popover.hidden = true;
         const state = { select, wrap, button, label, popover, open: false, portal: false, cleanups: [], rebuildOptions: null };
@@ -416,9 +431,8 @@ function mountHarnessSelects(form) {
             const selected = select.options[select.selectedIndex];
             label.textContent = selected?.textContent?.trim() || '';
             button.setAttribute('aria-label', select.getAttribute('aria-label') || selected?.textContent?.trim() || '选择');
-            [...popover.querySelectorAll('[role="option"]')].forEach(option => {
+            [...popover.querySelectorAll('[role="menuitem"]')].forEach(option => {
                 const active = option.dataset.value === select.value;
-                option.setAttribute('aria-selected', String(active));
                 option.classList.toggle('is-selected', active);
             });
         };
@@ -475,11 +489,11 @@ function mountHarnessSelects(form) {
             const item = document.createElement('button');
             item.type = 'button'; item.className = 'vcp-harness-menu-item vcp-harness-select-option'; item.dataset.value = option.value;
             item.id = `${controlId}-option-${optionIndex}`;
-            item.setAttribute('role', 'option');
+            item.setAttribute('role', 'menuitem');
             item.disabled = option.disabled;
             if (option.disabled) item.setAttribute('aria-disabled', 'true');
             const text = document.createElement('span'); text.className = 'vcp-harness-menu-item-label'; text.textContent = option.textContent.trim();
-            const check = document.createElement('span'); check.className = 'vcp-harness-menu-check vcp-harness-select-check'; check.textContent = '✓'; check.setAttribute('aria-hidden', 'true');
+            const check = document.createElement('span'); check.className = 'vcp-harness-menu-check vcp-harness-select-check vcp-ui-icon'; check.textContent = 'check'; check.setAttribute('aria-hidden', 'true');
             item.append(text, check); itemWrap.append(item); viewport.append(itemWrap);
             const onClick = () => { select.value = option.value; select.dispatchEvent(new Event('change', { bubbles: true })); sync(); close(); button.focus(); };
             item.addEventListener('click', onClick); optionCleanups.push(() => item.removeEventListener('click', onClick));

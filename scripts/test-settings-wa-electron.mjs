@@ -172,6 +172,7 @@ try {
                     pick('.vcp-harness-settings-header'),
                     pick('.vcp-harness-settings-options'),
                     pick('.vcp-harness-general-item'),
+                    pick('.vcp-harness-input-wrap'),
                     pick('.vcp-harness-select-trigger'),
                     pick('.vcp-harness-choice-option'),
                 ].filter(Boolean);
@@ -227,6 +228,7 @@ try {
         return [probe('.vcp-harness-select-trigger'), probe('.vcp-harness-menu-item'), probe('.vcp-harness-choice-option')].filter(Boolean);
     });
     assert.ok(visibleGeometry.some(item => item.selector === '.vcp-harness-select-trigger' && item.height === '36px' && item.borderRadius === '18px' && item.fontSize === '14px' && item.lineHeight === '22px'), 'visible select geometry matches Harness trigger contract');
+    assert.ok(shellState.computedGeometry.some(item => item.selector === '.vcp-harness-input-wrap' && item.borderRadius === '8px'), 'Input wrapper geometry matches Harness contract');
     console.log(`  [INFO] visible control geometry ${JSON.stringify(visibleGeometry)}`);
     await page.evaluate(() => document.querySelector('.vcp-harness-settings-nav-cell[data-section="user-identity"]')?.click());
     await page.waitForFunction(() => document.querySelector('#globalSettingsModal #section-user-identity.active'), { timeout: timeoutMs });
@@ -256,8 +258,8 @@ try {
         const wrap = document.getElementById('chatFontPreset').closest('.vcp-harness-select-wrap');
         const popover = document.querySelector('.vcp-harness-menu-portal:not([hidden])');
         return {
-            options: popover?.querySelectorAll('[role="option"]').length || 0,
-            checked: popover?.querySelectorAll('[role="option"][aria-selected="true"]').length || 0,
+            options: popover?.querySelectorAll('[role="menuitem"]').length || 0,
+            checked: popover?.querySelectorAll('[role="menuitem"].is-selected').length || 0,
             background: getComputedStyle(wrap.querySelector('.vcp-harness-select-trigger')).backgroundColor,
             border: getComputedStyle(wrap.querySelector('.vcp-harness-select-trigger')).borderTopColor,
             height: getComputedStyle(wrap.querySelector('.vcp-harness-select-trigger')).height,
@@ -272,12 +274,12 @@ try {
     const menuWidth = await page.$eval('.vcp-harness-menu-portal:not([hidden])', menu => ({ min: getComputedStyle(menu).minWidth, max: getComputedStyle(menu).maxWidth }));
     assert.equal(menuWidth.min, '218px', 'Harness menu surface uses min-width 218px');
     assert.equal(menuWidth.max, '360px', 'Harness menu surface uses max-width 360px');
-    assert.equal(await page.$eval('.vcp-harness-menu-portal:not([hidden]) [role="option"]', option => getComputedStyle(option).minHeight), '40px', 'Harness menu item uses min-height 40px');
+    assert.equal(await page.$eval('.vcp-harness-menu-portal:not([hidden]) [role="menuitem"]', option => getComputedStyle(option).minHeight), '40px', 'Harness menu item uses min-height 40px');
     await page.waitForFunction(() => {
         const menu = document.querySelector('.vcp-harness-menu-portal:not([hidden])');
         return menu && getComputedStyle(menu).visibility === 'visible';
     }, { timeout: timeoutMs });
-    const focusedMenuItem = await page.$eval('.vcp-harness-menu-portal:not([hidden]) [role="option"]:not(:disabled)', option => {
+    const focusedMenuItem = await page.$eval('.vcp-harness-menu-portal:not([hidden]) [role="menuitem"]:not(:disabled)', option => {
         option.focus();
         return document.activeElement === option;
     });
@@ -286,7 +288,7 @@ try {
     await page.waitForFunction(() => !document.querySelector('.vcp-harness-menu-portal:not([hidden])'), { timeout: timeoutMs });
     await page.evaluate(() => document.querySelector('#chatFontPreset')?.closest('.vcp-harness-select-wrap')?.querySelector('.vcp-harness-select-trigger')?.click());
     await page.waitForFunction(() => document.querySelector('.vcp-harness-menu-portal:not([hidden])'), { timeout: timeoutMs });
-    await page.evaluate(() => document.querySelectorAll('.vcp-harness-menu-portal:not([hidden]) [role="option"]')[1]?.click());
+    await page.evaluate(() => document.querySelectorAll('.vcp-harness-menu-portal:not([hidden]) [role="menuitem"]')[1]?.click());
     assert.equal(await page.$eval('#chatFontPreset', select => select.value), await page.$eval('#chatFontPreset', select => select.options[1].value), 'select choice writes through to native source');
     await page.evaluate(() => {
         const select = document.getElementById('assistantAgent');

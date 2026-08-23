@@ -1305,7 +1305,7 @@
     line-height: 22px;
 }
 
-:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-general-row > :is(input, select, textarea, .vcp-harness-select-wrap, .vcp-harness-choice-wrap, .model-input-container, .switch) {
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-general-row > :is(input, select, textarea, .vcp-harness-input-wrap, .vcp-harness-select-wrap, .vcp-harness-choice-wrap, .model-input-container, .switch) {
     min-width: 0;
     justify-self: stretch;
 }
@@ -1316,6 +1316,39 @@
     min-height: 32px;
     height: 32px;
     border-radius: 8px;
+    font-size: 14px;
+    line-height: 22px;
+}
+
+/* Input.module.css contract: the wrapper owns the 1px focus/border surface;
+   the native business input remains the only value-bearing node. */
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-input-wrap {
+    display: flex;
+    min-width: 0;
+    width: 100%;
+    height: 32px;
+    min-height: 32px;
+    box-sizing: border-box;
+    align-items: center;
+    border: 1px solid var(--vcp-ui-control-border, var(--vcp-ui-border));
+    border-radius: 8px;
+    background: var(--vcp-ui-control-bg, var(--vcp-ui-bg-1));
+}
+
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-input-wrap:focus-within {
+    border-color: var(--vcp-ui-control-focus, var(--vcp-ui-accent));
+}
+
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-input-wrap > :is(input, textarea) {
+    width: 100%;
+    min-width: 0;
+    height: 30px;
+    min-height: 30px;
+    box-sizing: border-box;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    box-shadow: none;
     font-size: 14px;
     line-height: 22px;
 }
