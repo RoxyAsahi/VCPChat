@@ -9,7 +9,9 @@
 @import url('./setting/settings-invite.css');
 @import url('./setting/settings-model-select.css');
 @import url('./setting/settings-regex.css');
-@import url('./setting/settings-global-modal.css');
+/* Global settings is owned exclusively by styles/ui-system/settings.css.  The
+   former settings-global-modal stylesheet is no longer loaded on this unified
+   surface, preventing legacy geometry from re-entering the cascade. */
 @import url('./setting/settings-agent-params.css');
 @import url('./setting/settings-agent-card-shell.css');
 @import url('./setting/settings-agent-identity.css');

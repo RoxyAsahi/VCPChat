@@ -1,29 +1,35 @@
-// settings-bridge — Next UI enhancement bridge for the settings surfaces.
+// settings-bridge — unified VCPUI enhancement bridge for settings surfaces.
 //
 // The sidebar settings forms (agent/group) and the global settings modal keep
 // their original business DOM, form ids, defaults and IPC; this module only
 // layers the VCPUI presentation on top of the canonical main-window shell.
 //
-// Global settings (R5.1): in Next, the modal is rebuilt into a
-// SettingsShell-style layout — left rail with a VCPUI-enhanced search field and
-// a VCPUI List category navigation, the original form as the content area, and
-// the existing footer as the fixed save bar.
+// Global settings: the modal is rebuilt into one Harness SettingsRoot-style
+// layout — native nav cells in the left rail, a header/options content column,
+// the original form as the business source, and autosave status in the header.
 
 const controllers = new Set();
 const controllerReleases = new Map();
-const injectedNodes = new Set();
-// Per-modal shell state: { layout, nav, listHost, originalNavHtml, meta,
-// active, query, list } keyed by the modal root so teardown can restore the
-// exact original navigation markup. WeakMap cannot be iterated, so built
-// roots are tracked separately.
+// Per-modal shell state is keyed by modal root so teardown can restore the
+// exact original business nodes/classes after the canonical tree is removed.
+// WeakMap cannot be iterated, so built roots are tracked separately.
 const shellState = new WeakMap();
 const shellRoots = new Set();
+// Long enumerations use a scoped Harness-style presentation layer while the
+// native select remains the sole form/business node.
+const customSelectStates = new Set();
+const customChoiceStates = new Set();
+const autosaveStates = new Set();
+const disclosureStates = new Set();
+const selectObserverStates = new Map();
+let harnessSelectOwnerMounted = false;
+let harnessSelectOpenCount = 0;
 // Replaced inline SVGs inside the global form, keyed by container, so teardown
-// restores the original Lucide-style paths (classic must not lose them).
+// restores the original upstream paths during teardown.
 const iconReplacements = new Set();
 let refreshQueued = false;
 const LifecycleScope = window.VCPLifecycle?.LifecycleScope;
-const bridgeScope = LifecycleScope ? new LifecycleScope('next:settings-bridge-controller') : null;
+const bridgeScope = LifecycleScope ? new LifecycleScope('settings-bridge-controller') : null;
 const settingsHost = document.getElementById('tabContentSettings');
 let presentationScope = null;
 let destroyed = false;
@@ -32,16 +38,49 @@ let destroyPromise = null;
 function ensurePresentationScope() {
     if (destroyed) return null;
     if (!presentationScope) {
-        presentationScope = bridgeScope?.child('next:settings-presentation') || null;
+        presentationScope = bridgeScope?.child('settings-presentation') || null;
     }
     return presentationScope;
 }
 
-function isNextUi() {
-    return settingsHost?.dataset.settingsPresentation !== 'classic';
+function mountHarnessSelectOwner() {
+    if (harnessSelectOwnerMounted) return;
+    const onPointerDown = event => customSelectStates.forEach(state => {
+        if (state.open && !state.wrap.contains(event.target) && !state.popover.contains(event.target)) state.close?.();
+    });
+    const onEscape = event => {
+        if (event.key !== 'Escape') return;
+        customSelectStates.forEach(state => { if (state.open) { event.preventDefault(); state.close?.(); } });
+    };
+    const onReposition = () => customSelectStates.forEach(state => { if (state.open) state.position?.(); });
+    document.addEventListener('pointerdown', onPointerDown, true);
+    window.addEventListener('keydown', onEscape, true);
+    window.addEventListener('resize', onReposition);
+    document.addEventListener('scroll', onReposition, true);
+    window.__vcpHarnessSelectOwnerCleanup = () => {
+        document.removeEventListener('pointerdown', onPointerDown, true);
+        window.removeEventListener('keydown', onEscape, true);
+        window.removeEventListener('resize', onReposition);
+        document.removeEventListener('scroll', onReposition, true);
+        harnessSelectOwnerMounted = false;
+        delete window.__vcpHarnessSelectOwnerCleanup;
+    };
+    harnessSelectOwnerMounted = true;
 }
 
-function isGlobalSettingsNextUi() {
+function releaseHarnessSelectOwner() {
+    if (harnessSelectOpenCount === 0) window.__vcpHarnessSelectOwnerCleanup?.();
+}
+
+function shouldEnhanceSidebarSettings() {
+    // Global settings has one presentation contract.  The data attribute is
+    // retained only as bootstrap metadata; it never selects a second layout.
+    return Boolean(settingsHost);
+}
+
+function hasGlobalSettingsSurface() {
+    // Global settings has one canonical surface.  Keep this helper as a
+    // compatibility seam for callers, but never branch its presentation mode.
     return Boolean(document.getElementById('globalSettingsModal'));
 }
 
@@ -49,7 +88,9 @@ function syncGlobalSettingsHost() {
     const modal = document.getElementById('globalSettingsModal');
     const active = Boolean(modal?.classList.contains('active'));
     document.documentElement.classList.toggle('vcp-global-settings-host', active);
-    modal?.classList.add('vcp-global-settings-next');
+    // Keep the historical marker as a non-branching compatibility alias for
+    // automation/tests; all styling is owned by the unified surface marker.
+    modal?.classList.add('vcp-global-settings-surface');
     return modal;
 }
 
@@ -78,6 +119,10 @@ function enhanceForm(form) {
     form.querySelectorAll('select').forEach(select => enhance('Select', select, { kernel: 'native' }));
     form.querySelectorAll('input[type="range"]').forEach(range => enhance('Range', range));
     form.querySelectorAll('label.switch').forEach(control => enhance('Switch', control));
+    form.querySelectorAll('.agent-style-collapsible-container').forEach(disclosure => {
+        disclosure.dataset.settingPrimitive = 'disclosure';
+        disclosure.querySelector('.style-collapse-header')?.classList.add('vcp-harness-disclosure-row');
+    });
     form.querySelectorAll('.agent-name-wrapper, .group-name-wrapper, .group-settings-field-shell, .style-control-item, .params-content > div:not(.form-group-inline)').forEach(field => {
         if (field.querySelector('input:not([type="hidden"]), select, textarea')) enhance('Field', field);
     });
@@ -88,7 +133,7 @@ function enhanceForm(form) {
 
 // Lucide icon names for the global settings categories. Icons are always
 // rendered through VCPUI (`.vcp-ui-icon` -> lucide-adapter); no inline SVG,
-// emoji or text arrows on this surface in next mode.
+// emoji or text arrows on this surface.
 const GLOBAL_CATEGORY_ICONS = Object.freeze({
     'user-identity': 'user',
     'server-connection': 'server',
@@ -100,34 +145,507 @@ const GLOBAL_CATEGORY_ICONS = Object.freeze({
     'quick-actions': 'zap',
 });
 
-// Global settings modal: control enhancement, VCP save bar on the footer and a
-// SettingsShell-style layout (search + category List in the left rail).
+// Global settings modal: control enhancement, autosave status, and the
+// source-equivalent SettingsRoot shell.
 function enhanceGlobalSettings(root, form) {
+    mountCanonicalSettingsRows(form);
+    removeLegacySubsectionHeadings(form);
+    mountHarnessInputWrappers(form);
     form.querySelectorAll('input:is(:not([type]), [type="text"], [type="url"], [type="password"], [type="number"], [type="email"], [type="search"], [type="tel"])').forEach(input => {
         enhance('Input', input);
     });
     form.querySelectorAll('textarea').forEach(textarea => enhance('Textarea', textarea));
-    // The canonical global settings modal is a real Next surface; its Select
-    // controls use the Web Awesome kernel like the other VCPUI controls. Do
-    // not lock them into VCPUI's native fallback while the lazy runtime is
-    // still loading; vcp-main-ui-runtime refreshes this bridge once ready.
-    if (window.VCPWebAwesome?.isLoaded?.('select')) {
-        form.querySelectorAll('select').forEach(select => enhance('Select', select));
-    }
+    // Short enumerations remain native/segmented controls. Long enumerations
+    // get a Harness-style popover, but the native select is retained as the
+    // one authoritative business node.
+    mountHarnessSelects(form);
     form.querySelectorAll('input[type="range"]').forEach(range => enhance('Range', range));
     form.querySelectorAll('label.switch').forEach(control => enhance('Switch', control));
+    form.querySelectorAll('.agent-style-collapsible-container').forEach(disclosure => {
+        disclosure.dataset.settingPrimitive = 'disclosure';
+        disclosure.querySelector('.style-collapse-header')?.classList.add('vcp-harness-disclosure-row');
+    });
+    mountHarnessDisclosures(form);
     form.querySelectorAll('.agent-name-wrapper').forEach(field => {
         if (field.querySelector('input:not([type="hidden"]), select, textarea')) enhance('Field', field);
     });
-    const footer = root.querySelector('.global-settings-footer');
-    if (footer) enhance('SettingsActionBar', footer, { form });
     mountSettingsShell(root);
+    mountSettingsAutosave(root, form);
     normalizeFormIcons(root);
 }
 
+function mountHarnessInputWrappers(form) {
+    const selector = 'input:is(:not([type]), [type="text"], [type="url"], [type="password"], [type="number"], [type="email"], [type="search"], [type="tel"]), textarea';
+    form.querySelectorAll(selector).forEach(control => {
+        if (control.closest('.vcp-harness-input-wrap')) return;
+        const wrap = document.createElement('span');
+        wrap.className = 'vcp-harness-input-wrap';
+        wrap.dataset.settingPrimitive = 'input-wrap';
+        control.parentNode.insertBefore(wrap, control);
+        wrap.append(control);
+    });
+}
+
+function mountHarnessDisclosures(form) {
+    form.querySelectorAll('.agent-style-collapsible-container').forEach(container => {
+        if (disclosureStates.has(container)) return;
+        const header = container.querySelector('.style-collapse-header');
+        const content = container.querySelector('.agent-style-controls');
+        if (!header || !content) return;
+        if (!content.id) content.id = `${container.id || 'settings-disclosure'}-content`;
+        header.classList.add('vcp-harness-disclosure-row');
+        header.setAttribute('role', 'button');
+        header.tabIndex = header.tabIndex >= 0 ? header.tabIndex : 0;
+        header.setAttribute('aria-controls', content.id);
+        const sync = () => header.setAttribute('aria-expanded', String(!container.classList.contains('collapsed')));
+        const toggle = event => {
+            if (event.type === 'keydown' && !['Enter', ' '].includes(event.key)) return;
+            event.preventDefault();
+            container.classList.toggle('collapsed');
+            sync();
+        };
+        header.addEventListener('click', toggle);
+        header.addEventListener('keydown', toggle);
+        const observer = window.MutationObserver ? new window.MutationObserver(sync) : null;
+        observer?.observe(container, { attributes: true, attributeFilter: ['class'] });
+        sync();
+        disclosureStates.add({ container, header, observer, cleanup: () => {
+            observer?.disconnect();
+            header.removeEventListener('click', toggle);
+            header.removeEventListener('keydown', toggle);
+            header.removeAttribute('aria-controls');
+            header.removeAttribute('aria-expanded');
+            header.removeAttribute('role');
+            header.removeAttribute('tabindex');
+            disclosureStates.delete([...disclosureStates].find(state => state.container === container));
+        }});
+    });
+}
+
+function removeLegacySubsectionHeadings(form) {
+    form.querySelectorAll('.vcp-harness-editor-section-heading').forEach(heading => {
+        const section = heading.closest('.settings-section');
+        // The section h3 is the single canonical heading.  Subsection cards
+        // must not introduce a second title/description stack.
+        if (section?.querySelector(':scope > .settings-section-title')) heading.remove();
+    });
+}
+
+/**
+ * Establish one presentation owner for every persisted settings row. The
+ * source row is replaced by a same-tag canonical row, so no legacy wrapper
+ * remains in the live presentation tree. Business controls and their ids,
+ * names, labels and child listeners are moved intact into the replacement.
+ * This is intentionally idempotent because fields can be injected asynchronously.
+ */
+function mountCanonicalSettingsRows(form) {
+    if (!form) return;
+    const candidates = form.querySelectorAll(
+        ':scope [data-vcp-settings-row], :scope [data-vcp-settings-control-row], :scope .vcp-settings-row, :scope .vcp-settings-control-row, :scope .settings-form-group, :scope .form-group-inline, :scope > .form-group, :scope .form-group'
+    );
+    candidates.forEach(row => {
+        if (!(row instanceof HTMLElement) || row.closest('.vcp-harness-general-item')) return;
+        if (!row.querySelector('input, select, textarea, button, [role="switch"]')) return;
+        const keyNode = row.querySelector('[name], [id]');
+        const key = keyNode?.getAttribute('name') || keyNode?.id || '';
+        const item = document.createElement(row.tagName.toLowerCase());
+        const preservedClasses = [...row.classList].filter(className => ![
+            'settings-form-group', 'form-group-inline', 'vcp-settings-row', 'vcp-settings-control-row',
+            'form-group'
+        ].includes(className));
+        item.className = ['vcp-harness-general-item', 'vcp-harness-general-row', ...preservedClasses].join(' ');
+        for (const attribute of row.attributes) {
+            if (attribute.name === 'class' || attribute.name === 'style') continue;
+            item.setAttribute(attribute.name, attribute.value);
+        }
+        item.dataset.settingPrimitive = 'general-item';
+        const appearanceOwner = row.closest('.appearance-settings-section, .appearance-sidebar-geometry-section, .appearance-home-tagline-setting');
+        if (appearanceOwner) {
+            item.dataset.settingPrimitive = 'appearance-row';
+            item.classList.add('vcp-harness-appearance-row');
+        }
+        if (key) item.dataset.settingKey = key;
+        item.dataset.canonicalRow = 'true';
+        row.replaceWith(item);
+        item.append(...[...row.childNodes]);
+        row.remove();
+        composeCanonicalRowSlots(item);
+    });
+    form.dataset.vcpCanonicalRowsMounted = 'true';
+}
+
+function composeCanonicalRowSlots(row) {
+    if (!row || row.matches('label, fieldset') || row.querySelector(':scope > .vcp-harness-row-copy')) return;
+    const children = [...row.children];
+    const controls = children.filter(node => node.matches('input, select, textarea, button, .switch, .model-input-container, .vcp-harness-select-wrap, .vcp-harness-choice-wrap'));
+    const titles = children.filter(node => node.matches('label, span, strong, h4, h5'));
+    const helpers = children.filter(node => node.matches('small, p'));
+    if (!controls.length || !titles.length) return;
+    const copy = document.createElement('div');
+    copy.className = 'vcp-harness-row-copy';
+    copy.dataset.settingPrimitive = 'row-copy';
+    [...titles, ...helpers].forEach(node => copy.append(node));
+    const remaining = children.filter(node => !copy.contains(node) && !controls.includes(node));
+    row.replaceChildren(copy, ...remaining, ...controls);
+}
+
+function mountSettingsAutosave(root, form) {
+    if (form.dataset.vcpAutosaveMounted === 'true') return;
+    const statusHost = root.querySelector('.vcp-harness-settings-actions');
+    if (!statusHost) return;
+    const state = { form, timer: null, saving: false, pending: false, cleanups: [] };
+    const status = document.createElement('button');
+    status.type = 'button';
+    status.className = 'vcp-settings-autosave-status';
+    status.setAttribute('role', 'status');
+    status.setAttribute('aria-live', 'polite');
+    status.textContent = '自动保存';
+    statusHost.append(status);
+    const setStatus = (value, mode = '') => {
+        status.textContent = value;
+        status.dataset.state = mode;
+    };
+    const submit = () => {
+        state.timer = null;
+        if (!state.pending || state.saving) return;
+        state.pending = false;
+        state.saving = true;
+        setStatus('保存中…', 'saving');
+        form.requestSubmit();
+    };
+    const schedule = () => {
+        if (state.saving) { state.pending = true; return; }
+        state.pending = true;
+        setStatus('未保存', 'dirty');
+        if (state.timer) clearTimeout(state.timer);
+        state.timer = setTimeout(submit, 400);
+    };
+    const onInput = event => { if (event.target?.matches?.('input, select, textarea')) schedule(); };
+    const onResult = event => {
+        state.saving = false;
+        if (event.detail?.success) {
+            setStatus('已保存', 'saved');
+            if (state.pending) schedule();
+        } else setStatus('保存失败 · 重试', 'error');
+    };
+    const onStatusClick = () => { if (status.dataset.state === 'error') schedule(); };
+    form.addEventListener('input', onInput);
+    form.addEventListener('change', onInput);
+    form.addEventListener('vcp-settings-save-result', onResult);
+    status.addEventListener('click', onStatusClick);
+    state.cleanups.push(() => {
+        if (state.timer) clearTimeout(state.timer);
+        form.removeEventListener('input', onInput);
+        form.removeEventListener('change', onInput);
+        form.removeEventListener('vcp-settings-save-result', onResult);
+        status.removeEventListener('click', onStatusClick);
+        status.remove();
+        delete form.dataset.vcpAutosaveMounted;
+    });
+    form.dataset.vcpAutosaveMounted = 'true';
+    autosaveStates.add(state);
+}
+
+function flushSettingsAutosave() {
+    autosaveStates.forEach(state => {
+        if (!state.pending) return;
+        if (state.timer) clearTimeout(state.timer);
+        state.timer = null;
+        if (!state.saving) {
+            state.saving = true;
+            state.pending = false;
+            state.form.requestSubmit();
+        }
+    });
+}
+
+function teardownSettingsAutosave() {
+    [...autosaveStates].forEach(state => {
+        state.cleanups.forEach(cleanup => cleanup());
+        autosaveStates.delete(state);
+    });
+}
+
+function teardownHarnessDisclosures() {
+    [...disclosureStates].forEach(state => state.cleanup());
+}
+
+function mountHarnessSelects(form) {
+    const previousObserver = selectObserverStates.get(form);
+    previousObserver?.disconnect();
+    // A refresh can arrive after an async options update.  Reclassify the
+    // existing projection before the per-select guard sees its wrapper;
+    // otherwise a Choice that became a long Select (or vice versa) would be
+    // treated as already mounted forever.
+    const requiresReclassification = [...form.querySelectorAll('select')].some(select => {
+        const isChoice = Boolean(select.closest('.vcp-harness-choice-wrap'));
+        const isSelect = Boolean(select.closest('.vcp-harness-select-wrap'));
+        const shouldChoice = !select.multiple && !select.disabled && select.options.length > 1 && select.options.length <= 4;
+        return (isChoice && !shouldChoice) || (isSelect && shouldChoice);
+    });
+    if (requiresReclassification) teardownHarnessSelects();
+    let ordinal = 0;
+    form.querySelectorAll('select').forEach(select => {
+        ordinal += 1;
+        if (select.multiple || select.disabled || select.closest('.vcp-harness-select-wrap, .vcp-harness-choice-wrap')) return;
+        if (select.options.length > 1 && select.options.length <= 4) { mountHarnessChoice(select); return; }
+        if (select.options.length <= 1) return;
+        const controlId = select.id || `vcp-select-${ordinal}`;
+        const originalTabIndex = select.getAttribute('tabindex');
+        const originalAriaHidden = select.getAttribute('aria-hidden');
+        const wrap = document.createElement('div');
+        wrap.className = 'vcp-harness-select-wrap';
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'vcp-harness-select-trigger';
+        button.setAttribute('aria-haspopup', 'listbox');
+        button.id = `${controlId}-trigger`;
+        const label = document.createElement('span');
+        label.className = 'vcp-harness-select-label';
+        const arrow = document.createElement('span');
+        arrow.className = 'vcp-harness-select-arrow';
+        arrow.setAttribute('aria-hidden', 'true');
+        arrow.textContent = '';
+        button.append(label, arrow);
+        const popover = document.createElement('div');
+        popover.className = 'vcp-harness-menu-list vcp-harness-select-popover vcp-harness-menu-portal';
+        // Harness Menu is a menu primitive; the native select remains the
+        // serialization source while this portal owns menu semantics.
+        popover.setAttribute('role', 'menu');
+        popover.id = `${controlId}-listbox`;
+        popover.hidden = true;
+        const state = { select, wrap, button, label, popover, open: false, portal: false, cleanups: [], rebuildOptions: null };
+        button.setAttribute('aria-controls', popover.id);
+        const fieldLabel = select.id ? [...document.querySelectorAll('label[for]')].find(label => label.htmlFor === select.id) : null;
+        const originalLabelId = fieldLabel?.id || null;
+        if (fieldLabel) {
+            if (!fieldLabel.id) fieldLabel.id = `${controlId}-label`;
+            button.setAttribute('aria-labelledby', fieldLabel.id);
+        }
+        const sync = () => {
+            const selected = select.options[select.selectedIndex];
+            label.textContent = selected?.textContent?.trim() || '';
+            button.setAttribute('aria-label', select.getAttribute('aria-label') || selected?.textContent?.trim() || '选择');
+            [...popover.querySelectorAll('[role="menuitem"]')].forEach(option => {
+                const active = option.dataset.value === select.value;
+                option.classList.toggle('is-selected', active);
+            });
+        };
+        const position = () => {
+            if (!state.open) return;
+            const rect = button.getBoundingClientRect();
+            popover.style.position = 'fixed'; popover.style.left = `${rect.left}px`; popover.style.top = `${rect.bottom + 6}px`; popover.style.width = `${rect.width}px`;
+        };
+        const close = () => {
+            const wasOpen = state.open;
+            state.open = false;
+            popover.hidden = true;
+            button.setAttribute('aria-expanded', 'false');
+            wrap.classList.remove('is-open');
+            if (state.portal) { wrap.append(popover); state.portal = false; }
+            popover.style.position = ''; popover.style.left = ''; popover.style.top = ''; popover.style.width = ''; popover.style.visibility = '';
+            if (wasOpen) { harnessSelectOpenCount = Math.max(0, harnessSelectOpenCount - 1); releaseHarnessSelectOwner(); }
+        };
+        const open = () => {
+            if (select.disabled) return;
+            state.open = true;
+            harnessSelectOpenCount += 1;
+            mountHarnessSelectOwner();
+            if (!state.portal) { document.body.append(popover); state.portal = true; }
+            popover.hidden = false;
+            popover.style.visibility = 'hidden';
+            button.setAttribute('aria-expanded', 'true');
+            wrap.classList.add('is-open');
+            position();
+            requestAnimationFrame(() => {
+                if (!state.open) return;
+                position();
+                popover.style.visibility = 'visible';
+            });
+        };
+        select.parentNode.insertBefore(wrap, select);
+        wrap.append(select, button, popover);
+        select.classList.add('vcp-harness-select-native');
+        select.tabIndex = -1;
+        select.setAttribute('aria-hidden', 'true');
+        button.setAttribute('aria-expanded', 'false');
+        const viewport = document.createElement('div');
+        viewport.className = 'vcp-harness-menu-viewport';
+        popover.append(viewport);
+        const rebuildOptions = () => {
+            // Rebuild the projection atomically from the native select.  The
+            // native node remains the sole business source; projection
+            // buttons are disposable presentation artifacts.
+            viewport.replaceChildren();
+            const optionCleanups = [];
+            [...select.options].forEach((option, optionIndex) => {
+            const itemWrap = document.createElement('div');
+            itemWrap.className = 'vcp-harness-menu-item-wrap';
+            const item = document.createElement('button');
+            item.type = 'button'; item.className = 'vcp-harness-menu-item vcp-harness-select-option'; item.dataset.value = option.value;
+            item.id = `${controlId}-option-${optionIndex}`;
+            item.setAttribute('role', 'menuitem');
+            item.disabled = option.disabled;
+            if (option.disabled) item.setAttribute('aria-disabled', 'true');
+            const text = document.createElement('span'); text.className = 'vcp-harness-menu-item-label'; text.textContent = option.textContent.trim();
+            const check = document.createElement('span'); check.className = 'vcp-harness-menu-check vcp-harness-select-check vcp-ui-icon'; check.textContent = 'check'; check.setAttribute('aria-hidden', 'true');
+            item.append(text, check); itemWrap.append(item); viewport.append(itemWrap);
+            const onClick = () => { select.value = option.value; select.dispatchEvent(new Event('change', { bubbles: true })); sync(); close(); button.focus(); };
+            item.addEventListener('click', onClick); optionCleanups.push(() => item.removeEventListener('click', onClick));
+            });
+            state.cleanups = state.cleanups.filter(cleanup => !cleanup.__vcpOptionCleanup);
+            optionCleanups.forEach(cleanup => { cleanup.__vcpOptionCleanup = true; state.cleanups.push(cleanup); });
+            sync();
+        };
+        state.rebuildOptions = rebuildOptions;
+        rebuildOptions();
+        button.setAttribute('aria-activedescendant', `${controlId}-option-${Math.max(0, select.selectedIndex)}`);
+        const onButton = () => state.open ? close() : open();
+        const onKey = event => {
+            if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onButton(); return; }
+            if (event.key === 'Escape' && state.open) { event.preventDefault(); close(); return; }
+            if (!state.open || !['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+            event.preventDefault(); const delta = event.key === 'ArrowDown' ? 1 : -1;
+            let next = select.selectedIndex;
+            do { next = (next + delta + select.options.length) % select.options.length; } while (select.options[next]?.disabled && next !== select.selectedIndex);
+            select.selectedIndex = next; select.dispatchEvent(new Event('change', { bubbles: true })); button.setAttribute('aria-activedescendant', `${controlId}-option-${next}`); sync();
+        };
+        const onChange = sync;
+        state.close = close;
+        state.position = position;
+        button.addEventListener('click', onButton); button.addEventListener('keydown', onKey); select.addEventListener('change', onChange); window.addEventListener('global-settings-updated', onChange);
+        state.cleanups.push(() => { close(); button.removeEventListener('click', onButton); button.removeEventListener('keydown', onKey); select.removeEventListener('change', onChange); window.removeEventListener('global-settings-updated', onChange); if (originalAriaHidden === null) select.removeAttribute('aria-hidden'); else select.setAttribute('aria-hidden', originalAriaHidden); if (originalTabIndex === null) select.removeAttribute('tabindex'); else select.setAttribute('tabindex', originalTabIndex); if (fieldLabel && originalLabelId === null) fieldLabel.removeAttribute('id'); });
+        sync(); customSelectStates.add(state);
+    });
+    if (window.MutationObserver && !selectObserverStates.has(form)) {
+        const observer = new window.MutationObserver(mutations => {
+            const relevant = mutations.some(record => {
+                if (record.type === 'attributes') return record.target.matches?.('select, option');
+                if (record.type !== 'childList') return false;
+                if (record.target.matches?.('select')) return true;
+                return [...record.addedNodes, ...record.removedNodes].some(node =>
+                    node.nodeType === window.Node.ELEMENT_NODE &&
+                    (node.matches?.('select, option') || node.querySelector?.('select, option'))
+                );
+            });
+            if (!relevant) return;
+            if (form.dataset.vcpSelectRebuilding === 'true') return;
+            clearTimeout(form.__vcpSelectRebuildTimer);
+            form.__vcpSelectRebuildTimer = setTimeout(() => {
+                form.dataset.vcpSelectRebuilding = 'true';
+                // Same classification: refresh only the affected projection.
+                // If option count crosses the compact-choice threshold, do a
+                // full transaction so no stale instance or portal survives.
+                const changedSelects = [...form.querySelectorAll('select')];
+                const requiresReclassification = changedSelects.some(select => {
+                    const isChoice = Boolean(select.closest('.vcp-harness-choice-wrap'));
+                    const shouldChoice = !select.multiple && !select.disabled && select.options.length > 1 && select.options.length <= 4;
+                    return isChoice !== shouldChoice;
+                });
+                if (requiresReclassification) {
+                    teardownHarnessSelects();
+                    mountHarnessSelects(form);
+                } else {
+                    customSelectStates.forEach(state => {
+                        if (state.select.form === form) state.rebuildOptions?.();
+                    });
+                    customChoiceStates.forEach(state => {
+                        if (state.select.form === form) state.rebuildOptions?.();
+                    });
+                }
+                form.dataset.vcpSelectRebuilding = 'false';
+            }, 0);
+        });
+        observer.observe(form, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'value', 'selected'] });
+        selectObserverStates.set(form, observer);
+    }
+}
+
+function mountHarnessChoice(select) {
+    const wrap = document.createElement('div'); wrap.className = 'vcp-harness-choice-wrap';
+    const track = document.createElement('div'); track.className = 'vcp-harness-choice-track'; track.setAttribute('role', 'radiogroup');
+    const originalTabIndex = select.getAttribute('tabindex');
+    const originalAriaHidden = select.getAttribute('aria-hidden');
+    const state = { select, wrap, track, cleanups: [], rebuildOptions: null };
+    const fieldLabel = select.id ? [...document.querySelectorAll('label[for]')].find(label => label.htmlFor === select.id) : null;
+    const originalLabelId = fieldLabel?.id || null;
+    if (fieldLabel) {
+        if (!fieldLabel.id) fieldLabel.id = `${select.id}-label`;
+        track.setAttribute('aria-labelledby', fieldLabel.id);
+    }
+    const sync = () => [...track.children].forEach(item => {
+        const active = item.dataset.value === select.value;
+        item.classList.toggle('is-selected', active); item.setAttribute('aria-checked', String(active));
+        item.tabIndex = active ? 0 : -1;
+    });
+    select.parentNode.insertBefore(wrap, select); wrap.append(select, track); select.classList.add('vcp-harness-choice-native'); select.tabIndex = -1; select.setAttribute('aria-hidden', 'true');
+    const rebuildOptions = () => {
+        const focusedValue = track.querySelector(':focus')?.dataset.value;
+        track.replaceChildren();
+        const optionCleanups = [];
+        [...select.options].forEach(option => {
+        const item = document.createElement('button'); item.type = 'button'; item.className = 'vcp-harness-choice-option'; item.dataset.value = option.value;
+        item.setAttribute('role', 'radio'); item.textContent = option.textContent.trim();
+        item.disabled = option.disabled; if (option.disabled) item.setAttribute('aria-disabled', 'true');
+        const onClick = () => { select.value = option.value; select.dispatchEvent(new Event('change', { bubbles: true })); sync(); item.focus(); };
+        item.addEventListener('click', onClick); optionCleanups.push(() => item.removeEventListener('click', onClick)); track.append(item);
+        });
+        state.cleanups = state.cleanups.filter(cleanup => !cleanup.__vcpOptionCleanup);
+        optionCleanups.forEach(cleanup => { cleanup.__vcpOptionCleanup = true; state.cleanups.push(cleanup); });
+        sync();
+        if (focusedValue) [...track.children].find(item => item.dataset.value === focusedValue)?.focus();
+    };
+    state.rebuildOptions = rebuildOptions;
+    rebuildOptions();
+    const onKey = event => {
+        if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const available = [...select.options].map((option, index) => ({ option, index })).filter(({ option }) => !option.disabled);
+        if (!available.length) return;
+        const current = Math.max(0, available.findIndex(({ index }) => index === select.selectedIndex));
+        let next = current;
+        if (event.key === 'Home') next = 0;
+        else if (event.key === 'End') next = available.length - 1;
+        else {
+            const delta = ['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : -1;
+            next = (current + delta + available.length) % available.length;
+        }
+        next = available[next].index;
+        select.selectedIndex = next; select.dispatchEvent(new Event('change', { bubbles: true })); sync();
+        [...track.children].find(item => item.dataset.value === select.value)?.focus();
+    };
+    const onChange = sync; select.addEventListener('change', onChange); window.addEventListener('global-settings-updated', onChange); track.addEventListener('keydown', onKey);
+    state.cleanups.push(() => { select.removeEventListener('change', onChange); window.removeEventListener('global-settings-updated', onChange); track.removeEventListener('keydown', onKey); if (originalAriaHidden === null) select.removeAttribute('aria-hidden'); else select.setAttribute('aria-hidden', originalAriaHidden); if (originalTabIndex === null) select.removeAttribute('tabindex'); else select.setAttribute('tabindex', originalTabIndex); if (fieldLabel && originalLabelId === null) fieldLabel.removeAttribute('id'); });
+    sync(); customChoiceStates.add(state);
+}
+
+function teardownHarnessSelects() {
+    selectObserverStates.forEach((observer, form) => {
+        observer.disconnect();
+        clearTimeout(form.__vcpSelectRebuildTimer);
+        delete form.__vcpSelectRebuildTimer;
+    });
+    selectObserverStates.clear();
+    window.__vcpHarnessSelectOwnerCleanup?.();
+    harnessSelectOpenCount = 0;
+    [...customSelectStates].forEach(state => {
+        state.cleanups.forEach(cleanup => cleanup());
+        state.select.classList.remove('vcp-harness-select-native');
+        if (state.wrap.parentNode) state.wrap.parentNode.insertBefore(state.select, state.wrap);
+        state.wrap.remove();
+        customSelectStates.delete(state);
+    });
+    [...customChoiceStates].forEach(state => {
+        state.cleanups.forEach(cleanup => cleanup());
+        state.select.classList.remove('vcp-harness-choice-native');
+        if (state.wrap.parentNode) state.wrap.parentNode.insertBefore(state.select, state.wrap);
+        state.wrap.remove(); customChoiceStates.delete(state);
+    });
+}
+
 // Replaces the handful of hand-inlined Lucide paths inside the global form
-// with VCPUI icon nodes (rendered by lucide-adapter in next mode). Originals
-// are kept so classic mode and teardown can restore them exactly.
+// with VCPUI icon nodes (rendered by lucide-adapter). Originals are kept for
+// deterministic teardown and business-DOM restoration.
 function normalizeFormIcons(root) {
     if (root.dataset.vcpSettingsIconsNormalized) return;
     const replaced = [];
@@ -141,8 +659,8 @@ function normalizeFormIcons(root) {
         svg.replaceWith(icon);
         // lucide-adapter replaces this temporary span with an SVG. Retaining
         // the span in the restoration record keeps an already-detached node
-        // alive for the whole Next surface lifetime and, across repeated mode
-        // round-trips, makes Chromium report a linear detached-node chain.
+        // alive for the whole surface lifetime and, across repeated round-trips,
+        // makes Chromium report a linear detached-node chain.
         // Restoration only needs the container and upstream SVG.
         replaced.push({ container, original: svg });
     };
@@ -163,118 +681,161 @@ function restoreFormIcons(root) {
     delete root.dataset.vcpSettingsIconsNormalized;
 }
 
-// SettingsShell build: replaces the legacy <ul> category nav with a VCPUI List
-// and pins a VCPUI-enhanced search above it. The original form sections are the
-// content area; switching categories only toggles the `active` class so
-// unsaved values in hidden sections stay in the DOM.
+// SettingsShell build: assemble a live Harness SettingsRoot primitive tree.
+// The original form sections remain the business source of truth; only the
+// shell chrome (nav/header/options) is reconstructed here.
 function mountSettingsShell(root) {
-    if (root.querySelector('.vcp-ui-settings-shell')) return;
-    const layout = root.querySelector('.global-settings-layout');
-    const nav = root.querySelector('.global-settings-nav');
-    const listHost = nav?.querySelector('.settings-nav-list');
-    if (!layout || !nav || !listHost) {
-        mountLegacySearch(root);
+    if (root.querySelector('.vcp-harness-settings-panel')) return;
+    const panel = root.querySelector('.vcp-settings-source-panel');
+    const layout = root.querySelector('.vcp-settings-source-layout');
+    const nav = root.querySelector('.vcp-settings-source-nav');
+    const listHost = nav?.querySelector('.vcp-settings-source-list');
+    const content = root.querySelector('.vcp-settings-source-content');
+    const form = root.querySelector('#globalSettingsForm');
+    const title = root.querySelector('.vcp-settings-source-title');
+    const close = root.querySelector('.close-button');
+    if (!panel || !layout || !nav || !content || !form || !title || !close) {
         return;
     }
 
-    const meta = [...listHost.querySelectorAll('.settings-nav-item')].map(item => ({
-        value: item.dataset.section,
-        label: (item.querySelector('span')?.textContent || '').trim() || item.textContent.trim(),
-        icon: GLOBAL_CATEGORY_ICONS[item.dataset.section] || 'circle',
-        selected: item.classList.contains('active'),
-    }));
+    let meta = [];
+    try {
+        const sourceMeta = JSON.parse(nav.dataset.settingsSections || '[]');
+        meta = sourceMeta.map(item => ({ ...item, icon: GLOBAL_CATEGORY_ICONS[item.value] || 'circle', selected: item.value === 'user-identity' }));
+    } catch (error) {
+        console.error('[VCPUI SettingsBridge] Invalid settings section metadata', error);
+        return;
+    }
+    if (!meta.length) return;
     const initial = meta.find(item => item.selected)?.value || meta[0]?.value;
     if (!initial || !document.getElementById(`section-${initial}`)) {
-        mountLegacySearch(root);
         return;
     }
 
+
     const state = {
+        panel,
         layout,
         nav,
-        listHost,
-        // Keep the original Classic nodes alive instead of rebuilding them
-        // from HTML on teardown. Their event listeners are owned by the
-        // Classic settings controller and must survive a Next preview.
-        originalNavNodes: [...listHost.childNodes],
+        content,
+        form,
+        close,
+        listHost: null,
+        originalNavHost: listHost || null,
+        title,
+        header: null,
+        options: null,
+        navList: null,
+        cleanups: [],
         meta,
         active: initial,
         query: '',
-        list: null,
-        listRelease: null,
     };
     shellState.set(root, state);
     shellRoots.add(root);
-    layout.classList.add('vcp-ui-settings-shell');
+    root.classList.add('vcp-harness-settings-root', 'vcp-global-settings-surface');
+    panel.classList.add('vcp-harness-settings-panel');
+    nav.classList.add('vcp-harness-settings-nav');
+    content.classList.add('vcp-harness-settings-content');
+    // Legacy presentation selectors must not participate in the live tree.
+    // The classes are restored only when the bridge is torn down.
+    nav.classList.remove('vcp-settings-source-nav');
+    content.classList.remove('vcp-settings-source-content');
+    panel.classList.remove('vcp-settings-source-panel');
+    title.classList.remove('vcp-settings-source-title');
 
-    const sectionText = (value) => document.getElementById(`section-${value}`)?.textContent.toLowerCase() || '';
-    const visibleItems = () => {
-        const q = state.query.trim().toLowerCase();
-        if (!q) return state.meta;
-        return state.meta.filter(item =>
-            item.label.toLowerCase().includes(q) || sectionText(item.value).includes(q)
-        );
-    };
+    // Harness owns the settings title in the nav rail, not as a second
+    // content heading. Move the canonical node and restore its exact parent
+    // and sibling on teardown.
+    nav.prepend(title);
+    title.classList.add('vcp-harness-settings-nav-title');
+    title.id ||= 'vcpSettingsNavTitle';
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
+    panel.setAttribute('aria-labelledby', title.id);
+    nav.setAttribute('aria-label', '全局设置');
 
+    // Compose the Harness header/options primitives around the existing form;
+    // the form remains the business owner, while the new nodes own chrome.
+    const header = document.createElement('header');
+    header.className = 'vcp-harness-settings-header';
+    header.setAttribute('data-setting-primitive', 'header');
+    const actions = document.createElement('div');
+    actions.className = 'vcp-harness-settings-actions';
+    const options = document.createElement('div');
+    options.className = 'vcp-harness-settings-options';
+    options.setAttribute('data-setting-primitive', 'options');
+    state.header = header;
+    state.options = options;
+    options.append(...[...content.childNodes]);
+    actions.append(close);
+    header.append(actions);
+    content.replaceChildren(header, options);
+    const canonicalNav = document.createElement('div');
+    canonicalNav.className = 'vcp-harness-settings-nav-list';
+    canonicalNav.setAttribute('aria-label', '全局设置分类');
+    state.navList = canonicalNav;
+    state.listHost = canonicalNav;
+    listHost?.replaceWith(canonicalNav);
+    nav.replaceChildren(title, canonicalNav);
+    // The legacy grid wrapper no longer owns live layout.  Keep it detached so
+    // business nodes can be restored atomically by teardown.
+    panel.replaceChildren(nav, content);
+
+    const rows = state.meta.map(item => {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'vcp-harness-settings-nav-cell';
+        row.dataset.section = item.value;
+        row.dataset.vcpCanonicalNav = 'true';
+        row.id = `vcpSettingsTab-${item.value}`;
+        const icon = document.createElement('span');
+        icon.className = 'vcp-harness-settings-nav-icon vcp-ui-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = item.icon;
+        const copy = document.createElement('span');
+        copy.className = 'vcp-harness-settings-nav-copy';
+        const label = document.createElement('strong');
+        label.textContent = item.label;
+        copy.append(label);
+        row.append(icon, copy);
+        row.addEventListener('click', () => activateSection(item.value));
+        row.addEventListener('keydown', event => {
+            if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+            event.preventDefault();
+            const current = rows.indexOf(row);
+            const next = event.key === 'Home' ? 0 : event.key === 'End' ? rows.length - 1 : (current + (event.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length;
+            rows[next]?.focus();
+            if (rows[next]) activateSection(rows[next].dataset.section);
+        });
+        state.listHost.append(row);
+        return row;
+    });
     const renderList = () => {
-        const items = visibleItems().map(item => ({
-            value: item.value,
-            icon: item.icon,
-            label: item.label,
-            selected: item.value === state.active,
-            onClick: () => activateSection(item.value),
-        }));
-        if (state.list) state.list.update({ items });
-        else {
-            state.list = window.VCPUI.create('List', { items });
-            state.listRelease = ensurePresentationScope()?.own(() => state.list?.destroy(), 'settings-navigation-list', 'ui-registration') || null;
-            state.listHost.replaceChildren(state.list.element);
-            state.list.element.setAttribute('role', 'tablist');
-            state.list.element.setAttribute('aria-label', '全局设置分类');
-            state.list.element.setAttribute('aria-orientation', 'vertical');
-            const onKeyDown = event => {
-                if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
-                const rows = [...state.list.element.querySelectorAll('.vcp-ui-list-item[role="tab"]')];
-                const current = rows.indexOf(document.activeElement);
-                if (current < 0) return;
-                event.preventDefault();
-                const next = event.key === 'Home' ? 0
-                    : event.key === 'End' ? rows.length - 1
-                        : (current + (event.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length;
-                const row = rows[next];
-                if (!row) return;
-                activateSection(row.dataset.section);
-                [...state.list.element.querySelectorAll('.vcp-ui-list-item[role="tab"]')]
-                    .find(candidate => candidate.dataset.section === row.dataset.section)?.focus();
-            };
-            if (ensurePresentationScope()) presentationScope.listen(state.list.element, 'keydown', onKeyDown, undefined, 'settings-navigation-keyboard');
-            else state.list.element.addEventListener('keydown', onKeyDown);
-        }
-        const rows = [...state.list.element.querySelectorAll('.vcp-ui-list-item')];
+        state.listHost.setAttribute('aria-label', '全局设置分类');
         rows.forEach(row => {
-            const value = row.dataset.section || row.dataset.value;
+            const value = row.dataset.section;
             const item = state.meta.find(candidate => candidate.value === value);
             if (!item) return;
-            row.dataset.section = item.value;
-            row.setAttribute('role', 'tab');
-            row.id = `vcpSettingsTab-${item.value}`;
-            row.setAttribute('aria-selected', String(item.value === state.active));
-            row.tabIndex = item.value === state.active ? 0 : -1;
-            row.setAttribute('aria-controls', `section-${item.value}`);
+            const selected = item.value === state.active;
+            row.classList.toggle('is-active', selected);
+            row.classList.toggle('active', selected);
+            row.dataset.state = selected ? 'selected' : 'idle';
+            row.tabIndex = selected ? 0 : -1;
         });
         state.meta.forEach(item => {
             const section = root.querySelector(`#section-${item.value}`);
             if (!section) return;
-            section.setAttribute('role', 'tabpanel');
-            section.setAttribute('aria-labelledby', `vcpSettingsTab-${item.value}`);
-            section.setAttribute('aria-hidden', String(item.value !== state.active));
+            section.removeAttribute('role');
+            section.removeAttribute('aria-labelledby');
+            section.removeAttribute('aria-hidden');
         });
     };
 
     const activateSection = (value) => {
         if (value === state.active) return;
         root.querySelectorAll('.settings-section').forEach(section => {
-            section.classList.remove('active', 'switching-out', 'switching-in');
+            section.classList.remove('active');
         });
         const target = document.getElementById(`section-${value}`);
         if (target) target.classList.add('active');
@@ -282,75 +843,7 @@ function mountSettingsShell(root) {
         renderList();
     };
 
-    const onQuery = (query) => {
-        state.query = query;
-        renderList();
-        if (query.trim()) {
-            const first = visibleItems().find(item => item.value !== state.active) || visibleItems()[0];
-            if (first) activateSection(first.value);
-        }
-    };
-
-    // VCPUI-enhanced search field, pinned to the top of the left rail.
-    const search = document.createElement('div');
-    search.className = 'vcp-ui-settings-search';
-    const searchIcon = document.createElement('span');
-    searchIcon.className = 'vcp-ui-icon';
-    searchIcon.setAttribute('aria-hidden', 'true');
-    searchIcon.textContent = 'search';
-    const searchInput = document.createElement('input');
-    searchInput.type = 'search';
-    searchInput.placeholder = '搜索设置项';
-    searchInput.setAttribute('aria-label', '搜索设置项');
-    search.append(searchIcon, searchInput);
-    enhance('Input', searchInput);
-    nav.prepend(search);
-    injectedNodes.add(search);
-    const onInput = () => onQuery(searchInput.value);
-    if (ensurePresentationScope()) presentationScope.listen(searchInput, 'input', onInput, undefined, 'settings-search-input');
-    else searchInput.addEventListener('input', onInput);
-
     renderList();
-}
-
-// Legacy fallback used only when the modal has no category nav (kept for the
-// contract fixture and defensive coverage): injects the search into the content
-// column and filters `.settings-nav-item` nodes by hiding them.
-function mountLegacySearch(root) {
-    const content = root.querySelector('.global-settings-content');
-    const navItems = [...root.querySelectorAll('.settings-nav-item')];
-    if (!content || content.querySelector('.vcp-ui-settings-search')) return;
-
-    const search = document.createElement('div');
-    search.className = 'vcp-ui-settings-search';
-    const icon = document.createElement('span');
-    icon.className = 'vcp-ui-icon';
-    icon.setAttribute('aria-hidden', 'true');
-    icon.textContent = 'search';
-    const input = document.createElement('input');
-    input.type = 'search';
-    input.placeholder = '搜索设置项';
-    input.setAttribute('aria-label', '搜索设置项');
-    search.append(icon, input);
-    content.prepend(search);
-    injectedNodes.add(search);
-
-    const handleInput = () => {
-        const query = input.value.trim().toLowerCase();
-        navItems.forEach(item => {
-            const section = root.querySelector(`#section-${item.dataset.section}`);
-            const hit = !query
-                || (section && section.textContent.toLowerCase().includes(query))
-                || item.textContent.toLowerCase().includes(query);
-            item.hidden = !hit;
-        });
-        if (query) {
-            const firstVisible = navItems.find(item => !item.hidden);
-            if (firstVisible) firstVisible.click();
-        }
-    };
-    if (ensurePresentationScope()) presentationScope.listen(input, 'input', handleInput, undefined, 'legacy-settings-search-input');
-    else input.addEventListener('input', handleInput);
 }
 
 function cleanupDisconnectedControllers() {
@@ -370,10 +863,10 @@ function refresh() {
     ensurePresentationScope();
     cleanupDisconnectedControllers();
     const globalSettingsModal = syncGlobalSettingsHost();
-    if (isNextUi()) {
+    if (shouldEnhanceSidebarSettings()) {
         document.querySelectorAll('#agentSettingsForm, #groupSettingsForm').forEach(enhanceForm);
     }
-    if (isGlobalSettingsNextUi()) {
+    if (hasGlobalSettingsSurface()) {
         const form = globalSettingsModal?.querySelector('#globalSettingsForm');
         if (globalSettingsModal && form) enhanceGlobalSettings(globalSettingsModal, form);
     }
@@ -389,7 +882,7 @@ function teardown() {
     const scope = presentationScope;
     presentationScope = null;
     // Retract enhanced controller identity synchronously before a rapid
-    // Classic -> Next round-trip can schedule the next refresh.  The Scope
+    // A rapid surface round-trip can schedule another refresh.  The Scope
     // disposal below still owns error isolation and all non-controller
     // resources, but must not leave stale VCPUI proxies visible to the next
     // presentation generation.
@@ -408,38 +901,29 @@ function teardown() {
     }
     controllers.clear();
     controllerReleases.clear();
-    injectedNodes.forEach(node => node.remove());
-    injectedNodes.clear();
+    teardownSettingsAutosave();
+    teardownHarnessDisclosures();
+    teardownHarnessSelects();
     [...shellRoots].forEach(root => {
         const state = shellState.get(root);
         if (!state) return;
-        state.layout.classList.remove('vcp-ui-settings-shell');
-        if (state.listRelease) void state.listRelease();
-        else state.list?.destroy();
-        const activeSection = state.active || root.querySelector('.settings-section.active')?.id?.replace(/^section-/, '');
-        state.originalNavNodes
-            .filter(node => node.nodeType === 1 && node.matches('.settings-nav-item'))
-            .forEach(node => node.classList.toggle('active', node.dataset.section === activeSection));
-        state.meta.forEach(item => {
-            const section = root.querySelector(`#section-${item.value}`);
-            section?.removeAttribute('role');
-            section?.removeAttribute('aria-labelledby');
-            section?.removeAttribute('aria-hidden');
-        });
-        state.listHost.replaceChildren(...state.originalNavNodes);
+        state.cleanups?.forEach(cleanup => cleanup());
+        state.cleanups = [];
+        // The unified Surface is canonical for the renderer lifetime. Teardown
+        // releases listeners/controllers but does not resurrect retired DOM.
         shellState.delete(root);
-        document.dispatchEvent(new CustomEvent('vcp-settings-navigation-restored', {
-            detail: { root }
-        }));
     });
     shellRoots.clear();
     document.querySelectorAll('#globalSettingsModal[data-vcp-settings-icons-normalized]').forEach(restoreFormIcons);
-    document.getElementById('globalSettingsModal')?.classList.remove('vcp-global-settings-next');
+    document.getElementById('globalSettingsModal')?.classList.remove('vcp-global-settings-surface');
     document.documentElement.classList.remove('vcp-global-settings-host');
 }
 
 const handleModalVisibility = event => {
-    if (event.detail?.modalId === 'globalSettingsModal') scheduleRefresh();
+    if (event.detail?.modalId === 'globalSettingsModal') {
+        if (event.detail?.active === false) flushSettingsAutosave();
+        scheduleRefresh();
+    }
 };
 const handleSurfaceUpdated = () => scheduleRefresh();
 if (bridgeScope) bridgeScope.listen(document, 'modal-visibility-changed', handleModalVisibility, undefined, 'settings-modal-visibility');

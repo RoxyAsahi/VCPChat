@@ -121,8 +121,8 @@
         display: grid;
         gap: var(--vcp-ui-space-2);
     }
-    :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope .vcp-appearance-preset-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope .vcp-appearance-density-grid, :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope .vcp-appearance-font-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope .vcp-appearance-preset-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+    :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope .vcp-appearance-density-grid, :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope .vcp-appearance-font-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
     :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope .vcp-appearance-radius-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope .vcp-appearance-tile, :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope .vcp-appearance-option, :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope .vcp-appearance-mode-grid button {
         min-width: 0;
@@ -1238,7 +1238,7 @@
         border: 0;
         background: transparent;
     }
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope .appearance-home-tagline-setting .settings-form-group { margin: 0; }
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope .appearance-home-tagline-setting .vcp-settings-row { margin: 0; }
 
     :is(html, html.vcp-appearance-studio-host, html.vcp-global-settings-host) .vcp-ui-scope .vcp-appearance-tagline-editor {
         margin-top: var(--vcp-ui-space-4);

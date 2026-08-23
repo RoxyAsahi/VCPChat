@@ -2,8 +2,7 @@
 // global settings modal in Next UI (R5.1 SettingsShell).
 //
 // Verifies against the real app:
-//   - the modal is rebuilt into the SettingsShell layout (VCPUI List category
-//     nav + VCPUI search + fixed save bar) only in next mode,
+//   - the modal is rebuilt into one unified Harness SettingsRoot layout,
 //   - switching categories keeps unsaved values in the DOM,
 //   - the search locates and activates the matching category,
 //   - a real save persists through IPC to settings.json, the modal closes, and
@@ -129,37 +128,175 @@ try {
     // ---- 1. SettingsShell layout ----
     await page.evaluate(() => window.uiHelperFunctions.openModal('globalSettingsModal'));
     await page.waitForFunction(() => document.getElementById('globalSettingsForm'), { timeout: timeoutMs });
-    await page.waitForFunction(() => document.querySelector('#globalSettingsModal .vcp-ui-settings-shell'), { timeout: timeoutMs });
+    await page.waitForFunction(() => document.querySelector('#globalSettingsModal .vcp-harness-settings-panel'), { timeout: timeoutMs });
     const shellState = await page.evaluate(() => {
         const modal = document.getElementById('globalSettingsModal');
-        const navItems = modal.querySelectorAll('.vcp-ui-list-item');
-        const search = modal.querySelector('.vcp-ui-settings-search input[type="search"]');
-        const footer = modal.querySelector('.global-settings-footer');
+        const navItems = modal.querySelectorAll('.vcp-harness-settings-nav-cell');
+        const autosaveStatus = modal.querySelector('.vcp-settings-autosave-status');
         return {
-            shell: Boolean(modal.querySelector('.vcp-ui-settings-shell')),
+            shell: Boolean(modal.querySelector('.vcp-harness-settings-panel')),
             navCount: navItems.length,
-            searchInNav: Boolean(modal.querySelector('.global-settings-nav .vcp-ui-settings-search')),
-            searchEnhanced: search?.classList.contains('vcp-ui-native-input') || false,
-            footerEnhanced: footer?.classList.contains('vcp-ui-settings-action-bar') || false,
+            autosaveMounted: Boolean(autosaveStatus),
             sectionIds: [...modal.querySelectorAll('.settings-section')].map(section => section.id),
             activeSection: modal.querySelector('.settings-section.active')?.id,
             iconReplaced: Boolean(modal.querySelector('#resetUserAvatarColorsBtn [data-lucide]')),
+            canonicalRows: modal.querySelectorAll('.vcp-harness-general-item[data-canonical-row="true"]').length,
+            legacySubsectionHeadings: modal.querySelectorAll('.settings-subsection-heading, .settings-subsection-title, .settings-subsection-description').length,
+            legacyBusinessRows: [...modal.querySelectorAll('#globalSettingsForm .settings-form-group, #globalSettingsForm .form-group-inline')]
+                .filter(row => !row.closest('.vcp-harness-general-item')).length,
+            unwrappedBusinessRows: [...modal.querySelectorAll('#globalSettingsForm .vcp-settings-row, #globalSettingsForm .vcp-settings-control-row, #globalSettingsForm > .form-group')]
+                .filter(row => row.querySelector('input, select, textarea, button') && !row.closest('.vcp-harness-general-item')).length,
+            navGeometry: (() => { const nav = modal.querySelector('.vcp-harness-settings-nav'); const list = modal.querySelector('.vcp-harness-settings-nav-list'); return { nav: nav?.getBoundingClientRect().toJSON(), list: list?.getBoundingClientRect().toJSON(), navScrollHeight: nav?.scrollHeight, navClientHeight: nav?.clientHeight }; })(),
+            computedGeometry: (() => {
+                const pick = (selector) => {
+                    const node = [...modal.querySelectorAll(selector)].find(candidate => candidate.getBoundingClientRect().width > 0) || modal.querySelector(selector);
+                    if (!node) return null;
+                    const style = getComputedStyle(node);
+                    return {
+                        selector,
+                        rect: node.getBoundingClientRect().toJSON(),
+                        fontSize: style.fontSize,
+                        lineHeight: style.lineHeight,
+                        padding: style.padding,
+                        gap: style.gap,
+                        borderWidth: style.borderWidth,
+                        borderColor: style.borderColor,
+                        backgroundColor: style.backgroundColor,
+                        borderRadius: style.borderRadius,
+                    };
+                };
+                return [
+                    pick('.vcp-harness-settings-panel'),
+                    pick('.vcp-harness-settings-nav'),
+                    pick('.vcp-harness-settings-nav-cell'),
+                    pick('.vcp-harness-settings-header'),
+                    pick('.vcp-harness-settings-options'),
+                    pick('.vcp-harness-general-item'),
+                    pick('.vcp-harness-input-wrap'),
+                    pick('.vcp-harness-select-trigger'),
+                    pick('.vcp-harness-choice-option'),
+                ].filter(Boolean);
+            })(),
         };
     });
     assert.ok(shellState.shell, 'SettingsShell class applied');
-    assert.equal(shellState.navCount, 8, '8 categories in VCPUI List nav');
-    assert.ok(shellState.searchInNav, 'search field pinned in the left rail');
-    assert.ok(shellState.searchEnhanced, 'search input is VCPUI-enhanced');
-    assert.ok(shellState.footerEnhanced, 'save bar is SettingsActionBar-enhanced');
+    assert.equal(shellState.navCount, 8, '8 canonical Harness nav cells');
+    assert.ok(shellState.autosaveMounted, 'autosave status is mounted in the Harness header');
     assert.equal(shellState.sectionIds.length, 8, '8 setting sections present');
     assert.equal(shellState.activeSection, 'section-user-identity', 'starts on user identity');
+    assert.ok(shellState.canonicalRows >= 20, `canonical settings rows mounted (${shellState.canonicalRows})`);
+    assert.equal(shellState.legacySubsectionHeadings, 0, 'legacy subsection headings removed from the unified surface');
+    assert.equal(shellState.legacyBusinessRows, 0, 'legacy business row classes removed from the unified surface');
+    assert.equal(shellState.unwrappedBusinessRows, 0, 'every business row is owned by a canonical wrapper');
+    console.log(`  [INFO] nav geometry ${JSON.stringify(shellState.navGeometry)}`);
+    console.log(`  [INFO] computed geometry ${JSON.stringify(shellState.computedGeometry)}`);
+    await fs.writeFile(path.join(screenshotsDir, 'settings-computed-geometry.json'), `${JSON.stringify({ viewport: await page.evaluate(() => ({ width: innerWidth, height: innerHeight })), ...shellState }, null, 2)}\n`, 'utf8');
+    await fs.writeFile(path.join(screenshotsDir, 'settings-dom-tree.json'), `${JSON.stringify(await page.evaluate(() => {
+        const root = document.querySelector('#globalSettingsModal');
+        const summarize = (node, depth = 0) => {
+            if (!(node instanceof Element) || depth > 4) return null;
+            return {
+                tag: node.tagName.toLowerCase(),
+                id: node.id || undefined,
+                classes: [...node.classList].filter(name => name.startsWith('vcp-harness-') || name.startsWith('vcp-settings-') || name === 'settings-section'),
+                primitive: node.dataset.settingPrimitive || undefined,
+                children: [...node.children].map(child => summarize(child, depth + 1)).filter(Boolean),
+            };
+        };
+        return summarize(root);
+    }), null, 2)}\n`, 'utf8');
     // Icons inside the form are normalized to VCPUI Lucide icons (the lucide
     // adapter renders the marker span into an svg shortly after insertion).
     await page.waitForFunction(() => {
         const btn = document.getElementById('resetUserAvatarColorsBtn');
         return Boolean(btn?.querySelector('[data-vcp-icon]') || btn?.querySelector('span.vcp-ui-icon'));
     }, { timeout: timeoutMs });
-    console.log('  [PASS] 1. SettingsShell layout (nav list, search, save bar, sections, icons)');
+    console.log('  [PASS] 1. SettingsRoot layout (nav cells, header, options, sections, icons)');
+
+    // Activate the appearance section so the geometry probe samples real
+    // controls rather than hidden descendants from another section.
+    await page.evaluate(() => document.querySelector('.vcp-harness-settings-nav-cell[data-section="appearance-settings"]')?.click());
+    await page.waitForFunction(() => document.querySelector('#globalSettingsModal #section-appearance-settings.active'), { timeout: timeoutMs });
+    const visibleGeometry = await page.evaluate(() => {
+        const modal = document.getElementById('globalSettingsModal');
+        const probe = (selector) => {
+            const node = [...modal.querySelectorAll(selector)].find(candidate => candidate.getBoundingClientRect().width > 0);
+            if (!node) return null;
+            const style = getComputedStyle(node);
+            return { selector, rect: node.getBoundingClientRect().toJSON(), height: style.height, minHeight: style.minHeight, padding: style.padding, borderRadius: style.borderRadius, fontSize: style.fontSize, lineHeight: style.lineHeight };
+        };
+        return [probe('.vcp-harness-select-trigger'), probe('.vcp-harness-menu-item'), probe('.vcp-harness-choice-option')].filter(Boolean);
+    });
+    assert.ok(visibleGeometry.some(item => item.selector === '.vcp-harness-select-trigger' && item.height === '36px' && item.borderRadius === '18px' && item.fontSize === '14px' && item.lineHeight === '22px'), 'visible select geometry matches Harness trigger contract');
+    assert.ok(shellState.computedGeometry.some(item => item.selector === '.vcp-harness-input-wrap' && item.borderRadius === '8px'), 'Input wrapper geometry matches Harness contract');
+    console.log(`  [INFO] visible control geometry ${JSON.stringify(visibleGeometry)}`);
+    await page.evaluate(() => document.querySelector('.vcp-harness-settings-nav-cell[data-section="user-identity"]')?.click());
+    await page.waitForFunction(() => document.querySelector('#globalSettingsModal #section-user-identity.active'), { timeout: timeoutMs });
+
+    // ---- 1b. Harness select and compact choice primitives ----
+    const controlState = await page.evaluate(() => ({
+        longSelects: [...document.querySelectorAll('#globalSettingsModal .vcp-harness-select-wrap select')].map(select => select.id),
+        choiceRows: document.querySelectorAll('#globalSettingsModal .vcp-harness-choice-wrap').length,
+        nativeSources: document.querySelectorAll('#globalSettingsModal select.vcp-harness-select-native').length,
+        visibleSelectProjections: [...document.querySelectorAll('#globalSettingsModal select.vcp-harness-select-native')].filter(select => {
+            const trigger = select.closest('.vcp-harness-select-wrap')?.querySelector('.vcp-harness-select-trigger');
+            return trigger && getComputedStyle(trigger).display !== 'none';
+        }).length,
+    }));
+    assert.ok(controlState.longSelects.includes('chatFontPreset'), `font preset uses Harness select: ${controlState.longSelects.join(',')}`);
+    assert.ok(controlState.choiceRows >= 1, 'short enumerations use compact choice rows');
+    assert.equal(controlState.nativeSources, controlState.longSelects.length, 'native select remains the sole source for long controls');
+    assert.equal(controlState.visibleSelectProjections, controlState.longSelects.length, 'each long select has exactly one visible Harness trigger');
+    await page.evaluate(() => {
+        const select = document.getElementById('chatFontPreset');
+        const trigger = select.closest('.vcp-harness-select-wrap')?.querySelector('.vcp-harness-select-trigger');
+        trigger?.click();
+    });
+    await page.waitForFunction(() => document.querySelector('#chatFontPreset')?.closest('.vcp-harness-select-wrap')?.querySelector('.vcp-harness-select-trigger[aria-expanded="true"]')
+        && document.querySelector('.vcp-harness-menu-portal:not([hidden])'), { timeout: timeoutMs });
+    const popoverState = await page.evaluate(() => {
+        const wrap = document.getElementById('chatFontPreset').closest('.vcp-harness-select-wrap');
+        const popover = document.querySelector('.vcp-harness-menu-portal:not([hidden])');
+        return {
+            options: popover?.querySelectorAll('[role="menuitem"]').length || 0,
+            checked: popover?.querySelectorAll('[role="menuitem"].is-selected').length || 0,
+            background: getComputedStyle(wrap.querySelector('.vcp-harness-select-trigger')).backgroundColor,
+            border: getComputedStyle(wrap.querySelector('.vcp-harness-select-trigger')).borderTopColor,
+            height: getComputedStyle(wrap.querySelector('.vcp-harness-select-trigger')).height,
+            radius: getComputedStyle(wrap.querySelector('.vcp-harness-select-trigger')).borderTopLeftRadius,
+        };
+    });
+    assert.ok(popoverState.options >= 5, 'long select renders a real option popover');
+    assert.equal(popoverState.checked, 1, 'popover exposes one checked option');
+    assert.equal(popoverState.height, '36px', 'Harness trigger uses 36px capsule height');
+    assert.equal(popoverState.radius, '18px', 'Harness trigger uses 18px capsule radius');
+    assert.equal(await page.$eval('.vcp-harness-menu-portal:not([hidden])', menu => getComputedStyle(menu).borderRadius), '12px', 'Harness menu surface uses r12');
+    const menuWidth = await page.$eval('.vcp-harness-menu-portal:not([hidden])', menu => ({ min: getComputedStyle(menu).minWidth, max: getComputedStyle(menu).maxWidth }));
+    assert.equal(menuWidth.min, '218px', 'Harness menu surface uses min-width 218px');
+    assert.equal(menuWidth.max, '360px', 'Harness menu surface uses max-width 360px');
+    assert.equal(await page.$eval('.vcp-harness-menu-portal:not([hidden]) [role="menuitem"]', option => getComputedStyle(option).minHeight), '40px', 'Harness menu item uses min-height 40px');
+    await page.waitForFunction(() => {
+        const menu = document.querySelector('.vcp-harness-menu-portal:not([hidden])');
+        return menu && getComputedStyle(menu).visibility === 'visible';
+    }, { timeout: timeoutMs });
+    const focusedMenuItem = await page.$eval('.vcp-harness-menu-portal:not([hidden]) [role="menuitem"]:not(:disabled)', option => {
+        option.focus();
+        return document.activeElement === option;
+    });
+    assert.equal(focusedMenuItem, true, 'menu item receives keyboard focus');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.vcp-harness-menu-portal:not([hidden])'), { timeout: timeoutMs });
+    await page.evaluate(() => document.querySelector('#chatFontPreset')?.closest('.vcp-harness-select-wrap')?.querySelector('.vcp-harness-select-trigger')?.click());
+    await page.waitForFunction(() => document.querySelector('.vcp-harness-menu-portal:not([hidden])'), { timeout: timeoutMs });
+    await page.evaluate(() => document.querySelectorAll('.vcp-harness-menu-portal:not([hidden]) [role="menuitem"]')[1]?.click());
+    assert.equal(await page.$eval('#chatFontPreset', select => select.value), await page.$eval('#chatFontPreset', select => select.options[1].value), 'select choice writes through to native source');
+    await page.evaluate(() => {
+        const select = document.getElementById('assistantAgent');
+        select.replaceChildren(new Option('助手 A', 'agent-a'), new Option('助手 B', 'agent-b'));
+    });
+    await page.waitForFunction(() => Boolean(document.querySelector('#assistantAgent')?.closest('.vcp-harness-choice-wrap, .vcp-harness-select-wrap')), { timeout: timeoutMs });
+    assert.ok(await page.$eval('#assistantAgent', select => Boolean(select.closest('.vcp-harness-choice-wrap') || select.closest('.vcp-harness-select-wrap'))), 'dynamic assistant options receive a Harness primitive');
+    console.log(`  [PASS] 1b. Harness select popover + compact choices (background ${popoverState.background}, border ${popoverState.border})`);
 
     // ---- 2. Category switching keeps unsaved values ----
     await page.evaluate(() => {
@@ -167,13 +304,13 @@ try {
         input.value = '未保存测试';
         input.dispatchEvent(new Event('input', { bubbles: true }));
     });
-    await page.evaluate(() => document.querySelectorAll('#globalSettingsModal .vcp-ui-list-item')[1].click());
+    await page.evaluate(() => document.querySelectorAll('#globalSettingsModal .vcp-harness-settings-nav-cell')[1].click());
     await new Promise(resolve => setTimeout(resolve, 80));
     const switchState = await page.evaluate(() => ({
         active: document.querySelector('#globalSettingsModal .settings-section.active')?.id,
     }));
     assert.equal(switchState.active, 'section-server-connection', 'nav switched to server connection');
-    await page.evaluate(() => document.querySelectorAll('#globalSettingsModal .vcp-ui-list-item')[0].click());
+    await page.evaluate(() => document.querySelectorAll('#globalSettingsModal .vcp-harness-settings-nav-cell')[0].click());
     await new Promise(resolve => setTimeout(resolve, 80));
     const backState = await page.evaluate(() => ({
         active: document.querySelector('#globalSettingsModal .settings-section.active')?.id,
@@ -183,41 +320,21 @@ try {
     assert.equal(backState.userName, '未保存测试', 'unsaved value survived the category round-trip');
     console.log('  [PASS] 2. category switching keeps unsaved values');
 
-    // ---- 3. Search locates the matching category ----
-    await page.evaluate(() => {
-        const search = document.querySelector('#globalSettingsModal .vcp-ui-settings-search input');
-        search.value = '语音';
-        search.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    await new Promise(resolve => setTimeout(resolve, 80));
-    const searchState = await page.evaluate(() => ({
-        active: document.querySelector('#globalSettingsModal .settings-section.active')?.id,
-        navCount: document.querySelectorAll('#globalSettingsModal .vcp-ui-list-item').length,
-        labels: [...document.querySelectorAll('#globalSettingsModal .vcp-ui-list-copy strong')].map(node => node.textContent),
-    }));
-    assert.equal(searchState.active, 'section-voice-settings', 'search activated the voice category');
-    assert.ok(searchState.navCount <= 2, `search narrowed the nav: ${searchState.navCount}`);
-    assert.ok(searchState.labels.some(label => label.includes('语音')), `matching label visible: ${searchState.labels.join(',')}`);
-    await page.evaluate(() => {
-        const search = document.querySelector('#globalSettingsModal .vcp-ui-settings-search input');
-        search.value = '';
-        search.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    await new Promise(resolve => setTimeout(resolve, 80));
-    assert.equal(await page.evaluate(() => document.querySelectorAll('#globalSettingsModal .vcp-ui-list-item').length), 8, 'clearing search restores the full nav');
-    console.log('  [PASS] 3. search locates and activates the matching category');
+    // ---- 3. Canonical nav exposes every section without an extra search layer ----
+    assert.equal(await page.evaluate(() => document.querySelectorAll('#globalSettingsModal .vcp-harness-settings-nav-cell').length), 8, 'canonical nav remains stable');
+    console.log('  [PASS] 3. canonical nav has no duplicate search layer');
 
     // ---- 4. Dark screenshot (700×500) ----
     // The app boots in light theme by default; switch explicitly to dark first.
     await resizeWindow(page, browser, 700, 500);
     await setTheme(page, 'dark');
     await page.evaluate(() => window.uiHelperFunctions.openModal('globalSettingsModal'));
-    await page.waitForFunction(() => document.querySelector('#globalSettingsModal .vcp-ui-settings-shell'), { timeout: timeoutMs });
+    await page.waitForFunction(() => document.querySelector('#globalSettingsModal .vcp-harness-settings-panel'), { timeout: timeoutMs });
     await new Promise(resolve => setTimeout(resolve, 250));
     await page.screenshot({ path: darkShot, clip: { x: 0, y: 0, width: 700, height: 500 } });
     const darkStat = await fs.stat(darkShot);
     assert.ok(darkStat.size > 20_000, `dark screenshot written (${darkStat.size} bytes)`);
-    const darkModalBg = await page.evaluate(() => getComputedStyle(document.querySelector('#globalSettingsModal .global-settings-modal-content')).backgroundColor);
+    const darkModalBg = await page.evaluate(() => getComputedStyle(document.querySelector('#globalSettingsModal .vcp-harness-settings-panel')).backgroundColor);
     console.log('  [PASS] 4. dark screenshot -> screenshots/settings-wa-dark-700x500.png');
 
     // ---- 5. Light screenshot (700×500) ----
@@ -226,7 +343,7 @@ try {
     await page.screenshot({ path: lightShot, clip: { x: 0, y: 0, width: 700, height: 500 } });
     const lightStat = await fs.stat(lightShot);
     assert.ok(lightStat.size > 20_000, `light screenshot written (${lightStat.size} bytes)`);
-    const lightModalBg = await page.evaluate(() => getComputedStyle(document.querySelector('#globalSettingsModal .global-settings-modal-content')).backgroundColor);
+    const lightModalBg = await page.evaluate(() => getComputedStyle(document.querySelector('#globalSettingsModal .vcp-harness-settings-panel')).backgroundColor);
     assert.notEqual(darkModalBg, lightModalBg, `dark and light modal backgrounds differ (${darkModalBg} vs ${lightModalBg})`);
     const darkHash = createHash('sha256').update(await fs.readFile(darkShot)).digest('hex');
     const lightHash = createHash('sha256').update(await fs.readFile(lightShot)).digest('hex');
@@ -244,7 +361,7 @@ try {
         textarea.value = value;
         textarea.dispatchEvent(new Event('input', { bubbles: true }));
     }, uniquePrompt);
-    const footerStateBefore = await page.evaluate(() => document.querySelector('.global-settings-footer')?.dataset.state);
+    const footerStateBefore = await page.evaluate(() => document.querySelector('.vcp-settings-autosave-status')?.dataset.state);
     assert.equal(footerStateBefore, 'dirty', 'save bar reports dirty before saving');
     await page.evaluate(() => {
         window.__settingsSaveProjection = null;
@@ -256,13 +373,13 @@ try {
             };
         }, { once: true });
     });
-    await page.evaluate(() => document.querySelector('.global-settings-footer button[type="submit"]').click());
+    await page.waitForFunction(() => document.querySelector('.vcp-settings-autosave-status')?.dataset.state === 'saving' || document.querySelector('.vcp-settings-autosave-status')?.dataset.state === 'saved', { timeout: timeoutMs });
     // Poll for the modal to close; collect diagnostics so a hang is debuggable.
     let saveDiagnostics = null;
     for (let attempt = 0; attempt < 120; attempt += 1) {
         const state = await page.evaluate(() => ({
             active: document.getElementById('globalSettingsModal')?.classList.contains('active') || false,
-            footerState: document.querySelector('.global-settings-footer')?.dataset.state || '',
+            footerState: document.querySelector('.vcp-settings-autosave-status')?.dataset.state || '',
             prompt: window.__settingsSaveProjection?.continueWritingPrompt || '',
         }));
         if (!state.active) break;
@@ -271,7 +388,7 @@ try {
     }
     const afterSave = await page.evaluate(() => ({
         active: document.getElementById('globalSettingsModal')?.classList.contains('active') || false,
-        footerState: document.querySelector('.global-settings-footer')?.dataset.state || '',
+        footerState: document.querySelector('.vcp-settings-autosave-status')?.dataset.state || '',
         toast: [...document.querySelectorAll('.vcp-ui-toast, .floating-toast-notification')].map(node => node.textContent).slice(0, 3),
     }));
     assert.equal(afterSave.active, false, `modal closed after save; last poll ${JSON.stringify(saveDiagnostics)}, after ${JSON.stringify(afterSave)}`);
@@ -301,11 +418,11 @@ try {
     assert.equal(await page.evaluate(() => document.documentElement.dataset.uiMode), 'next');
     await page.waitForFunction(() => {
         const modal = document.getElementById('globalSettingsModal');
-        return Boolean(modal?.querySelector('.vcp-ui-settings-shell') && modal?.querySelector('.vcp-ui-settings-search'));
+        return Boolean(modal?.querySelector('.vcp-harness-settings-root .vcp-harness-settings-header') && modal?.querySelector('.vcp-harness-settings-options'));
     }, { timeout: timeoutMs });
-    console.log('  [PASS] 8. canonical Next SettingsShell survives reload');
+    console.log('  [PASS] 8. canonical unified SettingsShell survives reload');
 
-    console.log('\nSettings WA Electron gate passed (shell layout, nav/search, real save + reload restore, screenshots).');
+    console.log('\nSettings Harness structure gate passed (Root, nav/header/options, controls, real save + reload restore, screenshots).');
 } catch (error) {
     console.error(`Settings WA Electron gate failed:\n${error?.stack || error}`);
     if (rendererErrors.length) {

@@ -151,6 +151,10 @@ D0–D6 已接入生产并具备各自的源码、静态门禁和自动化证据
 - 任何阶段只有全部退出条件满足后才能标为完成，不能用“按需完成”替代状态。
 - 新发现的问题先归因于上游或 Next delta，再决定是否进入本路线。
 - 路线变化必须保留删除项和非目标，防止后续会话重新扩张范围。
+
+### 全局设置 Surface（2026-08-23）
+
+全局设置当前只有一套 Harness-style SettingsRoot presentation。Select/Choice 的 native 节点保留为业务与持久化 source；其 projection 由 settings bridge 单一 owner 管理，动态 options 会原子重建并在 Choice/Select 阈值变化时清理旧 wrapper、portal 和 listeners。该事实以 `docs/vcpchat-settings-harness-source-audit-2026-08-23.md` 与 settings Electron gate 为准。Notes、翻译、日志等嵌入页面仍不在本路线。
 历史证据保留其原始日期和计数；当前 D5/D6 结论与 D7 阻断项只读取最终审计。完整 Windows 配置矩阵和人工 soak 仍待完成。
 
 人工 soak 入口现为 `npm run test:manual-soak`，运行产物写入 `artifacts/manual-soak/` 并固定标记为 `manual_observation_required`；它只提供真实 Electron 采样和人工检查清单，不会替代人工交互或把单台 Windows 观察升级为发布证据。

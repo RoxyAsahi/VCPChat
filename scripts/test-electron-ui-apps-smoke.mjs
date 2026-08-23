@@ -1397,27 +1397,24 @@ try {
     await page.waitForFunction(() => document.documentElement.dataset.uiMode === 'next', { timeout: timeoutMs });
     await page.evaluate(() => window.uiHelperFunctions.openModal('globalSettingsModal'));
     await page.waitForFunction(() => document.getElementById('globalSettingsForm'), { timeout: timeoutMs });
-    await page.waitForFunction(() => {
-        const footer = document.getElementById('globalSettingsModal')?.querySelector('.global-settings-footer');
-        return footer?.classList.contains('vcp-ui-settings-action-bar');
-    }, { timeout: timeoutMs });
+    await page.waitForFunction(() => Boolean(document.getElementById('globalSettingsModal')?.querySelector('.vcp-settings-autosave-status')), { timeout: timeoutMs });
     await page.waitForFunction(
-        () => document.querySelectorAll('#globalSettingsModal wa-select.vcp-ui-select-proxy').length > 0,
+        () => document.querySelectorAll('#globalSettingsModal .vcp-harness-select-trigger, #globalSettingsModal .vcp-harness-choice-wrap').length > 0,
         { timeout: timeoutMs }
     );
     const settingsState = await page.evaluate(() => {
         const form = document.getElementById('globalSettingsForm');
-        const footer = form.closest('#globalSettingsModal')?.querySelector('.global-settings-footer');
+        const status = form.closest('#globalSettingsModal')?.querySelector('.vcp-settings-autosave-status');
         const userName = document.getElementById('userName');
-        const state = { inputClass: userName?.className || '', footerClass: footer?.className || '', hasSearch: Boolean(document.querySelector('.vcp-ui-settings-search')) };
+        const state = { inputClass: userName?.className || '', statusClass: status?.className || '', hasSearch: Boolean(document.querySelector('.vcp-ui-settings-search')) };
         userName?.dispatchEvent(new Event('input', { bubbles: true }));
         return new Promise(resolve => {
-            setTimeout(() => resolve({ ...state, footerState: footer?.dataset.state || '' }), 50);
+            setTimeout(() => resolve({ ...state, statusState: status?.dataset.state || '' }), 50);
         });
     });
     assert.ok(settingsState.inputClass.includes('vcp-ui-native-input'), `global settings input not enhanced: ${settingsState.inputClass}`);
-    assert.ok(settingsState.footerClass.includes('vcp-ui-settings-action-bar'), `save bar not enhanced: ${settingsState.footerClass}`);
-    assert.ok(settingsState.hasSearch, 'settings search not injected');
+    assert.ok(settingsState.statusClass.includes('vcp-settings-autosave-status'), `autosave status not mounted: ${settingsState.statusClass}`);
+    assert.equal(settingsState.hasSearch, false, 'retired settings search is absent');
     assert.equal(settingsState.footerState, 'dirty', `save bar should be dirty after input: ${settingsState.footerState}`);
     const settingsSelectState = await page.evaluate(() => {
         const modal = document.getElementById('globalSettingsModal');
