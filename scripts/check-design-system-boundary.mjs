@@ -254,7 +254,6 @@ const allowedSourceDifferences = new Set([
     'styles/themes.css',
     'styles/chat.css',
     'styles/appearance.css',
-    'styles/setting/settings-global-modal.css',
     'styles/themes/themes纸墨与机芯.css',
     'styles/ui-next.css',
     'styles/ui-system/shell.css',
@@ -361,7 +360,7 @@ for (const file of trackedFiles) {
 const runtimeFiles = trackedFiles.filter(file => (
     /^(?:main\.html|main\.js|renderer\.js|package\.json)$/.test(file)
     || /^(?:modules|preloads|styles)\//.test(file)
-) && /\.(?:html|js|mjs|cjs|css|json)$/.test(file));
+) && /\.(?:html|js|mjs|cjs|css|json)$/.test(file) && fs.existsSync(path.join(root, file)));
 const forbiddenRuntimeTerms = /VCPBuild|Agent Workbench|modules\/codex-runtime|agent-runtime:|agent-session:|agent-workspace:|agent-chat-root|agent-chat-notification-view|shared-notification-surface/i;
 for (const file of runtimeFiles) {
     const source = fs.readFileSync(path.join(root, file), 'utf8');

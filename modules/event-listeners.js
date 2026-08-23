@@ -584,7 +584,10 @@ export function setupEventListeners(deps) {
 
     // 全局设置双栏导航切换
     function setupGlobalSettingsNavigation() {
-        const navItems = document.querySelectorAll('.settings-nav-item');
+        // The unified Harness SettingsRoot owns canonical nav buttons.  Keep
+        // this upstream binder scoped to unmounted compatibility anchors so it
+        // cannot double-handle clicks or reintroduce the legacy animation.
+        const navItems = document.querySelectorAll('.settings-nav-item:not([data-vcp-canonical-nav="true"])');
         const sections = document.querySelectorAll('.settings-section');
         let isAnimating = false;
 
@@ -651,7 +654,6 @@ export function setupEventListeners(deps) {
             });
         });
     }
-    document.addEventListener('vcp-settings-navigation-restored', setupGlobalSettingsNavigation);
 
     function setupUserAvatarListener(input) {
         input.addEventListener('change', (event) => {
@@ -896,17 +898,6 @@ export function setupEventListeners(deps) {
         } catch (error) {
             console.error('[EventListeners] Error loading rust config:', error);
         }
-    }
-
-    // 用户样式设置折叠功能
-    const userStyleCollapseHeader = document.getElementById('userStyleCollapseHeader');
-    if (userStyleCollapseHeader) {
-        userStyleCollapseHeader.addEventListener('click', () => {
-            const container = userStyleCollapseHeader.closest('.agent-style-collapsible-container');
-            if (container) {
-                container.classList.toggle('collapsed');
-            }
-        });
     }
 
     // 用户颜色选择器同步

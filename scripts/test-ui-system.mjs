@@ -510,25 +510,32 @@ const globalModal = document.createElement('div');
 globalModal.className = 'modal vcp-ui-scope';
 globalModal.id = 'globalSettingsModal';
 globalModal.innerHTML = `
-    <div class="global-settings-modal-content">
-        <div class="global-settings-content">
+    <div class="vcp-settings-bootstrap-panel">
+        <button class="close-button" type="button" aria-label="关闭">×</button>
+        <h2 class="vcp-settings-bootstrap-title">全局设置</h2>
+        <div class="vcp-settings-bootstrap-layout">
+        <nav class="vcp-settings-bootstrap-nav"><ul class="vcp-settings-bootstrap-list"><li class="vcp-settings-bootstrap-item active" data-section="user-identity"><span>用户身份</span></li></ul></nav>
+        <div class="vcp-settings-bootstrap-content">
             <form id="globalSettingsForm">
+                <div class="settings-section active" id="section-user-identity">
                 <input id="globalUserName" type="text">
                 <select id="globalSelect"><option>A</option><option>B</option></select>
+                </div>
             </form>
         </div>
         <div class="global-settings-footer"><button type="submit" form="globalSettingsForm">保存全局设置</button></div>
+        </div>
     </div>`;
 modalContainer.append(globalModal);
 scope.append(modalContainer);
 window.VCPUISettingsBridge.refresh();
 await new Promise(resolve => setTimeout(resolve, 0));
 assert.ok(document.getElementById('globalUserName').classList.contains('vcp-ui-native-input'), 'global input enhanced');
-assert.ok(document.getElementById('globalSelect').classList.contains('vcp-ui-native-select'), 'global select enhanced');
-assert.ok(globalModal.querySelector('wa-select.vcp-ui-select-proxy'), 'global select uses the loaded Web Awesome kernel');
+assert.ok(document.getElementById('globalSelect').classList.contains('vcp-harness-choice-native'), 'global select keeps the native business node');
+assert.ok(globalModal.querySelector('.vcp-harness-choice-wrap'), 'short global select uses the Harness choice primitive');
 const globalFooter = globalModal.querySelector('.global-settings-footer');
 assert.ok(globalFooter.classList.contains('vcp-ui-settings-action-bar'), 'global save bar enhanced');
-assert.ok(globalModal.querySelector('.vcp-ui-settings-search'), 'settings search injected');
+assert.ok(globalModal.querySelector('.vcp-harness-settings-panel .vcp-harness-settings-header'), 'canonical SettingsRoot header mounted');
 document.getElementById('globalUserName').value = 'Changed';
 document.getElementById('globalUserName').dispatchEvent(new Event('input', { bubbles: true }));
 assert.equal(globalFooter.dataset.state, 'dirty', 'global save bar tracks dirty state');
@@ -539,10 +546,10 @@ window.dispatchEvent(new CustomEvent('ui-mode-changed', { detail: { mode: 'class
 await new Promise(resolve => setTimeout(resolve, 0));
 assert.ok(document.getElementById('globalUserName').classList.contains('vcp-ui-native-input'),
     'legacy mode events must not tear down canonical settings controls');
-assert.ok(globalModal.classList.contains('vcp-global-settings-next'),
+assert.ok(globalModal.classList.contains('vcp-global-settings-surface'),
     'legacy mode events must not remove the canonical modal marker');
-assert.ok(globalModal.querySelector('.vcp-ui-settings-search'),
-    'legacy mode events must not remove the SettingsShell search');
+assert.ok(globalModal.querySelector('.vcp-harness-settings-panel .vcp-harness-settings-options'),
+    'legacy mode events must not remove canonical SettingsRoot options');
 await window.VCPUISettingsBridge.destroy();
 modalContainer.remove();
 
