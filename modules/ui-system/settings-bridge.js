@@ -745,6 +745,8 @@ function mountSettingsShell(root) {
     // The classes are restored only when the bridge is torn down.
     nav.classList.remove('vcp-settings-bootstrap-nav');
     content.classList.remove('vcp-settings-bootstrap-content');
+    panel.classList.remove('vcp-settings-bootstrap-panel');
+    title.classList.remove('vcp-settings-bootstrap-title');
 
     // Harness owns the settings title in the nav rail, not as a second
     // content heading. Move the canonical node and restore its exact parent
