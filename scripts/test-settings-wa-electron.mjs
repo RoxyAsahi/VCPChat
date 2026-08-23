@@ -245,6 +245,15 @@ try {
     }));
     assert.ok(controlState.longSelects.includes('chatFontPreset'), `font preset uses Harness select: ${controlState.longSelects.join(',')}`);
     assert.ok(controlState.choiceRows >= 1, 'short enumerations use compact choice rows');
+    const disclosureState = await page.evaluate(() => {
+        const header = document.querySelector('#globalSettingsModal .vcp-harness-disclosure-row');
+        return header ? { role: header.getAttribute('role'), controls: header.getAttribute('aria-controls'), expanded: header.getAttribute('aria-expanded') } : null;
+    });
+    if (disclosureState) {
+        assert.equal(disclosureState.role, 'button', 'DisclosureRow exposes button role');
+        assert.ok(disclosureState.controls, 'DisclosureRow exposes aria-controls');
+        assert.ok(['true', 'false'].includes(disclosureState.expanded), 'DisclosureRow exposes aria-expanded');
+    }
     assert.equal(controlState.nativeSources, controlState.longSelects.length, 'native select remains the sole source for long controls');
     assert.equal(controlState.visibleSelectProjections, controlState.longSelects.length, 'each long select has exactly one visible Harness trigger');
     await page.evaluate(() => {
@@ -284,12 +293,20 @@ try {
         return document.activeElement === option;
     });
     assert.equal(focusedMenuItem, true, 'menu item receives keyboard focus');
+    await page.keyboard.press('ArrowDown');
+    const activeAfterArrow = await page.evaluate(() => document.activeElement?.getAttribute('role'));
+    assert.equal(activeAfterArrow, 'menuitem', 'menu ArrowDown keeps focus inside the Menu primitive');
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('.vcp-harness-menu-portal:not([hidden])'), { timeout: timeoutMs });
     await page.evaluate(() => document.querySelector('#chatFontPreset')?.closest('.vcp-harness-select-wrap')?.querySelector('.vcp-harness-select-trigger')?.click());
     await page.waitForFunction(() => document.querySelector('.vcp-harness-menu-portal:not([hidden])'), { timeout: timeoutMs });
     await page.evaluate(() => document.querySelectorAll('.vcp-harness-menu-portal:not([hidden]) [role="menuitem"]')[1]?.click());
     assert.equal(await page.$eval('#chatFontPreset', select => select.value), await page.$eval('#chatFontPreset', select => select.options[1].value), 'select choice writes through to native source');
+    await page.evaluate(() => document.querySelector('#chatFontPreset')?.closest('.vcp-harness-select-wrap')?.querySelector('.vcp-harness-select-trigger')?.click());
+    await page.waitForFunction(() => Boolean(document.querySelector('.vcp-harness-menu-portal:not([hidden])')), { timeout: timeoutMs });
+    await page.mouse.click(4, 4);
+    await page.waitForFunction(() => !document.querySelector('.vcp-harness-menu-portal:not([hidden])'), { timeout: timeoutMs });
+    assert.equal(await page.$eval('#chatFontPreset', select => select.closest('.vcp-harness-select-wrap')?.querySelector('.vcp-harness-select-trigger')?.getAttribute('aria-expanded')), 'false', 'outside click closes the owned portal');
     await page.evaluate(() => {
         const select = document.getElementById('assistantAgent');
         select.replaceChildren(new Option('助手 A', 'agent-a'), new Option('助手 B', 'agent-b'));

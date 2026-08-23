@@ -108,3 +108,5 @@ Electron 设置交互（含 IPC 保存/重载、浅色/深色截图）及 UI Sys
 5. 全局表单中的 DisclosureRow 由 settings bridge 绑定唯一 click/keyboard owner，并同步 `role=button`、`aria-controls`、`aria-expanded`；旧 event-listeners 重复 toggle 已移除。
 
 新增证据：`scripts/test-settings-wa.mjs` 动态 options/reclassification/keyboard 断言通过；Electron gate 重新通过 8/8。当前仍明确的证据限制只有 Electron CDP 不支持 `Browser.getWindowForTarget`，因此 OS window resize 记录为 skipped，不伪称已覆盖。
+
+本轮又补充了真实 Electron 操作矩阵：Menu ArrowDown 焦点保持、Escape、外部点击关闭、selected write-through、Disclosure ARIA、重开/reload 后 portal 清理；所有序列通过。
