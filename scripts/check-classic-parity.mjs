@@ -44,9 +44,11 @@ classicSettingsTemplates.forEach(template => {
 });
 assert.equal(settingsTemplate.content.querySelectorAll('.appearance-layout-option').length, 0,
     'retired main-layout controls must not remain in settings');
-const navItems = [...settingsTemplate.content.querySelectorAll('.vcp-settings-bootstrap-item')];
-assert.equal(navItems.length, 8, 'global settings bootstrap metadata must retain all eight categories');
-navItems.forEach(item => assert.ok(item.dataset.section, 'settings category must retain its section target'));
+const settingsNav = settingsTemplate.content.querySelector('[data-settings-sections]');
+assert.ok(settingsNav, 'global settings category metadata must be present');
+const navItems = JSON.parse(settingsNav.dataset.settingsSections || '[]');
+assert.equal(navItems.length, 8, 'global settings metadata must retain all eight categories');
+navItems.forEach(item => assert.ok(item.value && item.label, 'settings category metadata must retain value and label'));
 
 for (const file of [
     path.join(root, 'styles', 'ui-next.css'),

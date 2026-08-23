@@ -294,7 +294,8 @@ function composeCanonicalRowSlots(row) {
 function mountSettingsAutosave(root, form) {
     if (form.dataset.vcpAutosaveMounted === 'true') return;
     const footer = root.querySelector('.global-settings-footer');
-    if (!footer) return;
+    const statusHost = root.querySelector('.vcp-harness-settings-actions');
+    if (!statusHost) return;
     const state = { form, footer, timer: null, saving: false, pending: false, cleanups: [] };
     const status = document.createElement('button');
     status.type = 'button';
@@ -302,13 +303,11 @@ function mountSettingsAutosave(root, form) {
     status.setAttribute('role', 'status');
     status.setAttribute('aria-live', 'polite');
     status.textContent = '自动保存';
-    const statusHost = root.querySelector('.vcp-harness-settings-actions') || footer;
     statusHost.append(status);
-    footer.classList.add('vcp-harness-settings-footer-compat');
     const setStatus = (value, mode = '') => {
         status.textContent = value;
         status.dataset.state = mode;
-        footer.dataset.state = mode || footer.dataset.state || '';
+        if (footer) footer.dataset.state = mode || footer.dataset.state || '';
     };
     const submit = () => {
         state.timer = null;
@@ -700,16 +699,19 @@ function mountSettingsShell(root) {
     const title = root.querySelector('.vcp-settings-source-title');
     const close = root.querySelector('.close-button');
     const footer = root.querySelector('.global-settings-footer');
-    if (!panel || !layout || !nav || !listHost || !content || !form || !title || !close) {
+    if (!panel || !layout || !nav || !content || !form || !title || !close) {
         return;
     }
 
-    const meta = [...listHost.querySelectorAll('.vcp-settings-source-item')].map(item => ({
-        value: item.dataset.section,
-        label: (item.querySelector('span')?.textContent || '').trim() || item.textContent.trim(),
-        icon: GLOBAL_CATEGORY_ICONS[item.dataset.section] || 'circle',
-        selected: item.classList.contains('active'),
-    }));
+    let meta = [];
+    try {
+        const sourceMeta = JSON.parse(nav.dataset.settingsSections || '[]');
+        meta = sourceMeta.map(item => ({ ...item, icon: GLOBAL_CATEGORY_ICONS[item.value] || 'circle', selected: item.value === 'user-identity' }));
+    } catch (error) {
+        console.error('[VCPUI SettingsBridge] Invalid settings section metadata', error);
+        return;
+    }
+    if (!meta.length) return;
     const initial = meta.find(item => item.selected)?.value || meta[0]?.value;
     if (!initial || !document.getElementById(`section-${initial}`)) {
         return;
@@ -725,7 +727,7 @@ function mountSettingsShell(root) {
         close,
         footer,
         listHost: null,
-        originalNavHost: listHost,
+        originalNavHost: listHost || null,
         title,
         header: null,
         options: null,
@@ -781,7 +783,7 @@ function mountSettingsShell(root) {
     canonicalNav.setAttribute('aria-label', '全局设置分类');
     state.navList = canonicalNav;
     state.listHost = canonicalNav;
-    listHost.replaceWith(canonicalNav);
+    listHost?.replaceWith(canonicalNav);
     nav.replaceChildren(title, canonicalNav);
     // The legacy grid wrapper no longer owns live layout.  Keep it detached so
     // business nodes can be restored atomically by teardown.

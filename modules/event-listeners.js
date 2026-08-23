@@ -558,7 +558,6 @@ export function setupEventListeners(deps) {
         if (!modal.dataset.globalSettingsControlsBound) {
             setupColorSyncListeners();
             setupRustAssistantConfigListeners();
-            setupGlobalSettingsNavigation();
             modal.dataset.globalSettingsControlsBound = 'true';
         }
     }
@@ -581,79 +580,6 @@ export function setupEventListeners(deps) {
     document.addEventListener('modal-ready', (e) => {
         if (e.detail?.modalId === 'globalSettingsModal') bindGlobalSettingsModal();
     });
-
-    // 全局设置双栏导航切换
-    function setupGlobalSettingsNavigation() {
-        // The unified Harness SettingsRoot owns canonical nav buttons.  Keep
-        // this upstream binder scoped to unmounted compatibility anchors so it
-        // cannot double-handle clicks or reintroduce the legacy animation.
-        const navItems = document.querySelectorAll('.settings-nav-item:not([data-vcp-canonical-nav="true"])');
-        const sections = document.querySelectorAll('.settings-section');
-        let isAnimating = false;
-
-        navItems.forEach(item => {
-            if (item.dataset.globalSettingsNavBound) return;
-            item.dataset.globalSettingsNavBound = 'true';
-            item.addEventListener('click', () => {
-                // 防止动画过程中重复点击
-                if (isAnimating) return;
-
-                const targetSection = item.dataset.section;
-                const currentActive = document.querySelector('.settings-section.active');
-
-                // 如果点击的是当前已激活的项，不执行任何操作
-                if (currentActive && currentActive.id === `section-${targetSection}`) {
-                    return;
-                }
-
-                isAnimating = true;
-
-                // 更新导航项激活状态
-                navItems.forEach(nav => nav.classList.remove('active'));
-                item.classList.add('active');
-
-                // 获取目标面板
-                const targetPanel = document.getElementById(`section-${targetSection}`);
-                if (!targetPanel) {
-                    isAnimating = false;
-                    return;
-                }
-
-                // 如果有当前激活的面板，先执行退出动画
-                if (currentActive) {
-                    currentActive.classList.add('switching-out');
-                    currentActive.classList.remove('active');
-
-                    // 等待退出动画完成后显示新面板
-                    setOwnedTimeout(() => {
-                        currentActive.style.display = 'none';
-                        currentActive.classList.remove('switching-out');
-
-                        // 显示新面板
-                        targetPanel.style.display = 'block';
-                        targetPanel.classList.add('switching-in');
-
-                        // 强制重排以触发动画
-                        void targetPanel.offsetWidth;
-
-                        targetPanel.classList.remove('switching-in');
-                        targetPanel.classList.add('active');
-                        isAnimating = false;
-                    }, 150);
-                } else {
-                    // 没有当前面板，直接显示新面板
-                    targetPanel.style.display = 'block';
-                    targetPanel.classList.add('switching-in');
-
-                    void targetPanel.offsetWidth;
-
-                    targetPanel.classList.remove('switching-in');
-                    targetPanel.classList.add('active');
-                    isAnimating = false;
-                }
-            });
-        });
-    }
 
     function setupUserAvatarListener(input) {
         input.addEventListener('change', (event) => {

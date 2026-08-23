@@ -132,11 +132,11 @@ try {
     const shellState = await page.evaluate(() => {
         const modal = document.getElementById('globalSettingsModal');
         const navItems = modal.querySelectorAll('.vcp-harness-settings-nav-cell');
-        const footer = modal.querySelector('.global-settings-footer');
+        const autosaveStatus = modal.querySelector('.vcp-settings-autosave-status');
         return {
             shell: Boolean(modal.querySelector('.vcp-harness-settings-panel')),
             navCount: navItems.length,
-            footerEnhanced: footer?.classList.contains('vcp-ui-settings-action-bar') || false,
+            autosaveMounted: Boolean(autosaveStatus),
             sectionIds: [...modal.querySelectorAll('.settings-section')].map(section => section.id),
             activeSection: modal.querySelector('.settings-section.active')?.id,
             iconReplaced: Boolean(modal.querySelector('#resetUserAvatarColorsBtn [data-lucide]')),
@@ -181,7 +181,7 @@ try {
     });
     assert.ok(shellState.shell, 'SettingsShell class applied');
     assert.equal(shellState.navCount, 8, '8 canonical Harness nav cells');
-    assert.ok(shellState.footerEnhanced, 'save bar is SettingsActionBar-enhanced');
+    assert.ok(shellState.autosaveMounted, 'autosave status is mounted in the Harness header');
     assert.equal(shellState.sectionIds.length, 8, '8 setting sections present');
     assert.equal(shellState.activeSection, 'section-user-identity', 'starts on user identity');
     assert.ok(shellState.canonicalRows >= 20, `canonical settings rows mounted (${shellState.canonicalRows})`);
@@ -361,7 +361,7 @@ try {
         textarea.value = value;
         textarea.dispatchEvent(new Event('input', { bubbles: true }));
     }, uniquePrompt);
-    const footerStateBefore = await page.evaluate(() => document.querySelector('.global-settings-footer')?.dataset.state);
+    const footerStateBefore = await page.evaluate(() => document.querySelector('.vcp-settings-autosave-status')?.dataset.state);
     assert.equal(footerStateBefore, 'dirty', 'save bar reports dirty before saving');
     await page.evaluate(() => {
         window.__settingsSaveProjection = null;
@@ -373,13 +373,13 @@ try {
             };
         }, { once: true });
     });
-    await page.waitForFunction(() => document.querySelector('.global-settings-footer')?.dataset.state === 'saving' || document.querySelector('.global-settings-footer')?.dataset.state === 'saved', { timeout: timeoutMs });
+    await page.waitForFunction(() => document.querySelector('.vcp-settings-autosave-status')?.dataset.state === 'saving' || document.querySelector('.vcp-settings-autosave-status')?.dataset.state === 'saved', { timeout: timeoutMs });
     // Poll for the modal to close; collect diagnostics so a hang is debuggable.
     let saveDiagnostics = null;
     for (let attempt = 0; attempt < 120; attempt += 1) {
         const state = await page.evaluate(() => ({
             active: document.getElementById('globalSettingsModal')?.classList.contains('active') || false,
-            footerState: document.querySelector('.global-settings-footer')?.dataset.state || '',
+            footerState: document.querySelector('.vcp-settings-autosave-status')?.dataset.state || '',
             prompt: window.__settingsSaveProjection?.continueWritingPrompt || '',
         }));
         if (!state.active) break;
@@ -388,7 +388,7 @@ try {
     }
     const afterSave = await page.evaluate(() => ({
         active: document.getElementById('globalSettingsModal')?.classList.contains('active') || false,
-        footerState: document.querySelector('.global-settings-footer')?.dataset.state || '',
+        footerState: document.querySelector('.vcp-settings-autosave-status')?.dataset.state || '',
         toast: [...document.querySelectorAll('.vcp-ui-toast, .floating-toast-notification')].map(node => node.textContent).slice(0, 3),
     }));
     assert.equal(afterSave.active, false, `modal closed after save; last poll ${JSON.stringify(saveDiagnostics)}, after ${JSON.stringify(afterSave)}`);

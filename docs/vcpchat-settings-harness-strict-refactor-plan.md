@@ -54,7 +54,7 @@ Terra 风格对抗审查确认：旧实现清理门禁此前遗漏了 legacy row
 - 删除 Classic/Next 选择逻辑对全局设置 Surface 的影响；保留历史 settings schema 兼容归一化，不保留 presentation branch。
 - dead-code gate 必须覆盖 CSS、HTML class、bridge symbol、stylesheet import 和运行时 listener owner。
 
-当前进度：旧 `settings-global-modal.css` 已删除，`styles/settings.css` import 与 design-boundary 引用已移除；source nav/content class 在 live mount 时也会移除，DOM snapshot 已记录；teardown 不再恢复旧 DOM。
+当前进度：旧 `settings-global-modal.css` 已删除，`styles/settings.css` import 与 design-boundary 引用已移除；旧导航 `<li>/<svg>` 已移入 inert source template，mount 时整个 scaffold 被替换，DOM snapshot 已记录；teardown 不再恢复旧 DOM。
 
 ### Phase E：证据与验收
 
@@ -84,6 +84,7 @@ Terra 风格对抗审查确认：旧实现清理门禁此前遗漏了 legacy row
 - Choice 补齐 roving tabindex、ArrowLeft/Right、ArrowUp/Down、Home、End，并跳过 disabled option。
 - 全局 DisclosureRow 收敛为 bridge 唯一 toggle/keyboard owner，补齐 `aria-controls` / `aria-expanded`，删除 event-listeners 中的重复 toggle。
 - 文本输入补齐真实 `.vcp-harness-input-wrap`，wrapper 持有 Harness Input 的 border/radius/focus geometry，业务 input/textarea 原节点不复制。
+- 自动保存已移除模板底部 submit/footer presentation；状态节点直接由 autosave owner 挂入 header actions。
 - Appearance preset/density/font grids 改为 Harness 风格的 `auto-fit/minmax(180px, 1fr)`，不再固定三列。
 - 测试新增动态 options、重分类、stale wrapper 清理和 Choice roving 键盘断言。
 

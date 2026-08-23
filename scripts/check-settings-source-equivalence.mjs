@@ -9,6 +9,7 @@ const bridge = read('modules/ui-system/settings-bridge.js');
 const css = read('styles/ui-system/settings.css');
 const html = read('main.html');
 const settingsEntry = read('styles/settings.css');
+const eventListeners = read('modules/event-listeners.js');
 
 // These assertions are deliberately source-level.  A screenshot can prove a
 // visual outcome but cannot prove that an old List/search owner is absent.
@@ -40,6 +41,7 @@ for (const forbidden of [
     assert.doesNotMatch(bridge, new RegExp(forbidden.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `retired bridge owner remains: ${forbidden}`);
 }
 assert.doesNotMatch(bridge, /vcp-harness-legacy-anchor/, 'canonical rows must not retain legacy anchor presentation');
+assert.doesNotMatch(bridge, /vcp-settings-source-item/, 'source nav items must not be a runtime owner');
 assert.doesNotMatch(css, /vcp-harness-legacy-anchor/, 'legacy anchor CSS must be deleted');
 assert.doesNotMatch(bridge, /vcp-settings-navigation-restored|originalLegacyClasses|originalPanelNodes/, 'retired legacy SettingsRoot restoration path must be deleted');
 assert.match(bridge, /nav\.classList\.remove\('vcp-settings-source-nav'\)/, 'source nav marker must leave live tree');
@@ -94,10 +96,12 @@ assert.doesNotMatch(bridge, /item\.append\(row\)/, 'canonical row must not wrap 
 assert.match(css, /vcp-harness-disclosure-row[\s\S]*?border-top:\s*1px\s+solid/);
 assert.doesNotMatch(settingsEntry, /settings-global-modal\.css/, 'legacy global modal stylesheet must not be loaded');
 assert.equal(fs.existsSync(path.join(root, 'styles/setting/settings-global-modal.css')), false, 'legacy global modal stylesheet must be deleted');
+assert.doesNotMatch(eventListeners, /setupGlobalSettingsNavigation|settings-nav-item|switching-out|switching-in/, 'retired settings navigation owner must be absent');
 
 const template = html.match(/<template id="globalSettingsModalTemplate">[\s\S]*?<\/template>/)?.[0] || '';
 assert.match(template, /vcp-settings-source-panel/, 'settings source panel marker must be explicit');
 assert.match(template, /vcp-settings-source-title/, 'settings source title marker must be explicit');
+assert.doesNotMatch(template, /global-settings-footer|保存全局设置/, 'legacy save footer must be absent; autosave owns persistence feedback');
 const legacyRows = (template.match(/class="[^"]*(?:settings-form-group|form-group-inline|settings-subsection)[^"]*"/g) || []).length;
 const inlineStyles = (template.match(/\sstyle\s*=/g) || []).length;
 const legacyCssSelectors = (css.match(/\.(?:settings-form-group|form-group-inline|settings-subsection|global-settings-layout|settings-nav-item|global-settings-nav|global-settings-content|global-settings-title|settings-nav-list|vcp-ui-list(?:-item|-copy)?|vcp-ui-settings-shell)\b/g) || []).length;

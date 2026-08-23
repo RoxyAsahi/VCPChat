@@ -28,10 +28,10 @@
 - `styles/settings.css` 已移除旧 `settings-global-modal.css` 的加载入口；该旧文件不再进入统一设置 Surface 的 cascade。
 - `settings.css` 中旧 `global-settings-nav/content/title`、`settings-nav-list`、`vcp-ui-list*` 与 `vcp-ui-settings-shell` dead selector 已删除；source gate 现已覆盖这些名称。
 - Electron gate 现在输出 `screenshots/settings-computed-geometry.json`，覆盖 panel/nav/nav-cell/header/options/general-row/select/menu-item/choice 的 computed geometry，并对可见 Select trigger、Menu r12、Menu item 40px 做断言。
-- Electron gate 同时输出 `screenshots/settings-dom-tree.json`；当前 live tree 的 panel/nav/content/header/options 只保留 `vcp-harness-*` primitive，source scaffold marker（`vcp-settings-source-*`）在 mount 时全部移除。
-- bridge teardown 已改为只释放 controllers、observers、timers、portal 和 autosave owner，不再恢复旧 settings layout、旧 class 或旧 navigation DOM。
+- Electron gate 同时输出 `screenshots/settings-dom-tree.json`；当前 live tree 的 panel/nav/content/header/options 只保留 `vcp-harness-*` primitive。旧导航条目已移入 inert `<template>` source metadata scaffold，mount 时整个 scaffold 被替换，live DOM 不含 source item、旧 SVG 或旧列表 owner。
+- bridge teardown 已改为只释放 controllers、observers、timers、portal 和 autosave owner，不再恢复旧 settings layout、旧 class 或旧 navigation DOM；模板保存栏已删除，autosave status 直接挂在 Harness header actions。
 - bridge 不再为全局设置建立 tab/tabpanel 语义或 Classic/Next presentation branch；历史 schema 兼容不参与 Surface ownership。
-- 文本输入现在由 `.vcp-harness-input-wrap` 物理承载，wrapper 对齐 Harness `Input.module.css` 的 `32px/r8/focus-within` 契约，native input/textarea 节点及其 `id/name` 保持不变。
+- 文本输入现在由 `.vcp-harness-input-wrap` 物理承载，wrapper 对齐 Harness `Input.module.css` 的 `32px/r8/focus-within` 契约，native input/textarea 节点及其 `id/name` 保持不变；动态 network path 行也直接创建 canonical wrapper，不再写 inline flex/width 样式。
 
 ## 本轮 bounded 施工
 

@@ -510,12 +510,12 @@ const globalModal = document.createElement('div');
 globalModal.className = 'modal vcp-ui-scope';
 globalModal.id = 'globalSettingsModal';
 globalModal.innerHTML = `
-    <div class="vcp-settings-bootstrap-panel">
+    <div class="vcp-settings-source-panel">
         <button class="close-button" type="button" aria-label="关闭">×</button>
-        <h2 class="vcp-settings-bootstrap-title">全局设置</h2>
-        <div class="vcp-settings-bootstrap-layout">
-        <nav class="vcp-settings-bootstrap-nav"><ul class="vcp-settings-bootstrap-list"><li class="vcp-settings-bootstrap-item active" data-section="user-identity"><span>用户身份</span></li></ul></nav>
-        <div class="vcp-settings-bootstrap-content">
+        <h2 class="vcp-settings-source-title">全局设置</h2>
+        <div class="vcp-settings-source-layout">
+        <nav class="vcp-settings-source-nav" data-settings-sections='[{"value":"user-identity","label":"用户身份"}]'></nav>
+        <div class="vcp-settings-source-content">
             <form id="globalSettingsForm">
                 <div class="settings-section active" id="section-user-identity">
                 <input id="globalUserName" type="text">
@@ -523,7 +523,6 @@ globalModal.innerHTML = `
                 </div>
             </form>
         </div>
-        <div class="global-settings-footer"><button type="submit" form="globalSettingsForm">保存全局设置</button></div>
         </div>
     </div>`;
 modalContainer.append(globalModal);
@@ -533,14 +532,15 @@ await new Promise(resolve => setTimeout(resolve, 0));
 assert.ok(document.getElementById('globalUserName').classList.contains('vcp-ui-native-input'), 'global input enhanced');
 assert.ok(document.getElementById('globalSelect').classList.contains('vcp-harness-choice-native'), 'global select keeps the native business node');
 assert.ok(globalModal.querySelector('.vcp-harness-choice-wrap'), 'short global select uses the Harness choice primitive');
-const globalFooter = globalModal.querySelector('.global-settings-footer');
-assert.ok(globalFooter.classList.contains('vcp-ui-settings-action-bar'), 'global save bar enhanced');
+const globalStatus = globalModal.querySelector('.vcp-settings-autosave-status');
+assert.ok(globalStatus, 'global autosave status mounted in header');
 assert.ok(globalModal.querySelector('.vcp-harness-settings-panel .vcp-harness-settings-header'), 'canonical SettingsRoot header mounted');
 document.getElementById('globalUserName').value = 'Changed';
 document.getElementById('globalUserName').dispatchEvent(new Event('input', { bubbles: true }));
-assert.equal(globalFooter.dataset.state, 'dirty', 'global save bar tracks dirty state');
+assert.equal(globalStatus.dataset.state, 'dirty', 'global autosave status tracks dirty state');
 document.getElementById('globalSettingsForm').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-assert.equal(globalFooter.dataset.state, 'saving', 'global save bar tracks saving state');
+await new Promise(resolve => setTimeout(resolve, 450));
+assert.equal(globalStatus.dataset.state, 'saving', 'global autosave status tracks saving state');
 document.documentElement.dataset.uiMode = 'classic';
 window.dispatchEvent(new CustomEvent('ui-mode-changed', { detail: { mode: 'classic', previousMode: 'next' } }));
 await new Promise(resolve => setTimeout(resolve, 0));

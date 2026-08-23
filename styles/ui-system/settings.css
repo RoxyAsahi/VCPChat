@@ -830,38 +830,6 @@
         border-radius: var(--vcp-ui-radius-md);
     }
 
-    /* ---- fixed save bar ---- */
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .global-settings-footer {
-        grid-column: 2;
-        grid-row: 2;
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        gap: var(--vcp-ui-space-2);
-        padding: var(--vcp-ui-space-2) var(--vcp-ui-space-3);
-        border: 0;
-        border-radius: var(--vcp-ui-radius-md);
-        background: var(--vcp-ui-bg-0);
-    }
-
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .global-settings-footer button[type="submit"] {
-        min-height: var(--vcp-ui-control-md);
-        padding: 0 var(--vcp-ui-space-4);
-        border: 0;
-        border-radius: var(--vcp-ui-radius-sm);
-        color: var(--vcp-ui-on-accent);
-        background: var(--vcp-ui-accent);
-        font-family: var(--vcp-ui-font-family);
-        font-size: var(--vcp-ui-font-helper);
-        font-weight: 600;
-        cursor: pointer;
-    }
-
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal .global-settings-footer button[type="submit"]:hover {
-        border-color: var(--vcp-ui-accent-hover);
-        background: var(--vcp-ui-accent-hover);
-    }
-
     :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .settings-section-title {
         display: flex;
         align-items: center;
@@ -895,27 +863,6 @@
     :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal :is(.settings-dependent-panel, .settings-nested-panel) {
         border: 0;
         background: var(--vcp-ui-fill-1);
-    }
-
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal.vcp-global-settings-surface .global-settings-footer {
-        border: 0;
-        border-radius: 0;
-        background: var(--vcp-ui-bg-0);
-    }
-
-    /* Next settings are write-through. Keep the upstream submit node for
-       Classic/automation compatibility, but remove it from the visual Next
-       surface and expose one quiet status affordance instead. */
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .global-settings-footer button[type="submit"] {
-        display: none;
-    }
-
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .global-settings-footer {
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        min-height: 34px;
-        padding: 8px 18px;
     }
 
     :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-settings-autosave-status {
@@ -1569,10 +1516,6 @@
     gap: 8px;
     min-width: 0;
     margin-left: auto;
-}
-
-:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal.vcp-global-settings-surface .vcp-harness-settings-actions .global-settings-footer {
-    display: contents;
 }
 
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal.vcp-global-settings-surface .vcp-harness-settings-close {

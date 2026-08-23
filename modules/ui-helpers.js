@@ -376,12 +376,17 @@
      * @param {number} [duration=3000] The duration in milliseconds.
      */
     uiHelperFunctions.showToastNotification = function(message, type = 'info', duration = 3000) {
+        const normalizedMessage = String(message);
+        const toastRoot = document.getElementById('floating-toast-notifications-container');
+        const alreadyVisible = [...document.querySelectorAll('.floating-toast-notification, .vcp-ui-toast')]
+            .some(node => node.textContent?.trim() === normalizedMessage);
+        if (alreadyVisible) return;
         if (window.VCPUI?.feedback?.toast) {
             const variant = type === 'error' ? 'error' : ['info', 'success', 'warning'].includes(type) ? type : 'info';
-            return window.VCPUI.feedback.toast(String(message), { variant, duration });
+            return window.VCPUI.feedback.toast(normalizedMessage, { variant, duration });
         }
 
-        const container = document.getElementById('floating-toast-notifications-container');
+        const container = toastRoot;
         if (!container) {
             console.warn("Toast notification container not found.");
             alert(message); // Fallback
@@ -800,25 +805,28 @@
     uiHelperFunctions.addNetworkPathInput = function(path = '') {
         const container = document.getElementById('networkNotesPathsContainer');
         const inputGroup = document.createElement('div');
-        inputGroup.className = 'network-path-input-group';
+        inputGroup.className = 'network-path-input-group vcp-settings-row';
+        inputGroup.dataset.vcpSettingsRow = 'true';
     
         const input = document.createElement('input');
         input.type = 'text';
         input.name = 'networkNotesPath';
         input.placeholder = '例如 \\\\NAS\\Shared\\Notes';
         input.value = path;
-        input.style.flexGrow = '1';
+        const inputWrap = document.createElement('span');
+        inputWrap.className = 'vcp-harness-input-wrap';
+        inputWrap.dataset.settingPrimitive = 'input-wrap';
     
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
         removeBtn.textContent = '删除';
         removeBtn.className = 'sidebar-button small-button danger-button'; // Re-use existing styles
-        removeBtn.style.width = 'auto';
         removeBtn.onclick = () => {
             inputGroup.remove();
         };
     
-        inputGroup.appendChild(input);
+        inputWrap.appendChild(input);
+        inputGroup.appendChild(inputWrap);
         inputGroup.appendChild(removeBtn);
         container.appendChild(inputGroup);
     };
