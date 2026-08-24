@@ -44,12 +44,15 @@ test('typed ThemePresenter projects snapshots and releases through LifecycleScop
     mountThemePresenter(root, { theme }, { scope, services: { theme } });
     assert.equal(root.dataset.themeEffective, 'light');
     assert.equal(root.dataset.themeRevision, '0');
+    assert.equal(dom.window.document.documentElement.style.getPropertyValue('--vcp-ui-theme-bg-primary'), 'oklch(0.98 0.008 230)');
     theme.publish('dark');
     assert.equal(root.dataset.themeEffective, 'dark');
     assert.equal(root.dataset.themeRevision, '1');
+    assert.equal(dom.window.document.documentElement.style.getPropertyValue('--vcp-ui-theme-bg-primary'), 'oklch(0.04 0.012 230)');
     assert.equal(theme.listenerCount, 1);
     await scope.dispose('test-teardown');
     assert.equal(theme.listenerCount, 0);
+    assert.equal(dom.window.document.documentElement.style.getPropertyValue('--vcp-ui-theme-bg-primary'), '');
     theme.publish('light');
     assert.equal(root.dataset.themeEffective, 'dark', 'disposed consumer must ignore late theme updates');
     dom.window.close();

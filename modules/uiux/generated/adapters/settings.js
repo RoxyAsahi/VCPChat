@@ -23,7 +23,16 @@ export function createSettingsUiService(input) {
         revision += 1;
         source = nextSource;
         const nextSnapshot = snapshot();
-        listeners.forEach(listener => listener(state, nextSnapshot));
+        [...listeners].forEach(listener => {
+            try {
+                listener(state, nextSnapshot);
+            }
+            catch (error) {
+                // One presentation consumer must not prevent the remaining
+                // consumers from receiving the committed snapshot.
+                console.error('[SettingsUiService] subscriber failed:', error);
+            }
+        });
         return nextSnapshot;
     };
     const externalRelease = input.subscribe?.(next => publish(next, 'settings-external')) || null;
@@ -35,8 +44,15 @@ export function createSettingsUiService(input) {
                 if (disposed)
                     return () => { };
                 listeners.add(listener);
-                if (options.immediate !== false)
-                    listener(state, snapshot());
+                if (options.immediate !== false) {
+                    try {
+                        listener(state, snapshot());
+                    }
+                    catch (error) {
+                        listeners.delete(listener);
+                        throw error;
+                    }
+                }
                 let active = true;
                 return () => {
                     if (!active)

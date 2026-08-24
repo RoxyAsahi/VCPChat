@@ -380,6 +380,20 @@ try {
     const uniquePrompt = `请继续-电子-重试-${Date.now()}`;
     await page.evaluate(() => window.uiHelperFunctions.openModal('globalSettingsModal'));
     await new Promise(resolve => setTimeout(resolve, 150));
+    await page.evaluate(() => {
+        window.dispatchEvent(new CustomEvent('global-settings-updated', {
+            detail: { settings: {
+                userName: 'typed-external-user',
+                continueWritingPrompt: 'typed-external-prompt',
+                vcpServerUrl: 'http://typed-external:6005',
+                chatFontPreset: 'serif',
+            }, source: 'external-test' }
+        }));
+    });
+    await page.waitForFunction(() => document.getElementById('userName')?.value === 'typed-external-user');
+    assert.equal(await page.$eval('#continueWritingPrompt', node => node.value), 'typed-external-prompt', 'clean form consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#vcpServerUrl', node => node.value), 'http://typed-external:6005', 'clean text control consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#chatFontPreset', node => node.value), 'serif', 'clean select control consumes typed Settings snapshot');
     // Force the real IPC persistence path to fail once by removing write
     // access from the isolated test profile, then restore it for retry.
     await fs.chmod(path.join(appData, 'settings.json'), 0o444);
@@ -389,6 +403,12 @@ try {
         textarea.value = value;
         textarea.dispatchEvent(new Event('input', { bubbles: true }));
     }, uniquePrompt);
+    await page.evaluate(() => {
+        window.dispatchEvent(new CustomEvent('global-settings-updated', {
+            detail: { settings: { userName: 'late-external-user', continueWritingPrompt: 'late-external-prompt' }, source: 'external-during-dirty' }
+        }));
+    });
+    assert.equal(await page.$eval('#continueWritingPrompt', node => node.value), uniquePrompt, 'dirty form rejects external snapshot overwrite');
     const footerStateBefore = await page.evaluate(() => document.querySelector('.vcp-settings-autosave-status')?.dataset.state);
     assert.equal(footerStateBefore, 'dirty', 'save bar reports dirty before saving');
     await page.evaluate(() => {

@@ -289,7 +289,11 @@ async function saveGlobalSettings(deps, settingsForm) {
     // settles. The underlying IPC call may still finish later, but its late
     // result cannot continue this operation because the bounded await has
     // already rejected and the form lock is released by the outer finally.
-    const result = await awaitWithTimeout(chatAPI.saveSettings(newSettings), deps.saveTimeoutMs);
+    const typedSettingsService = window.VCPUISettingsBridge?.getTypedService?.();
+    const saveOperation = typedSettingsService?.save?.execute
+        ? typedSettingsService.save.execute(newSettings)
+        : chatAPI.saveSettings(newSettings);
+    const result = await awaitWithTimeout(saveOperation, deps.saveTimeoutMs);
     if (result?.success) {
         if (chatAPI?.saveRustAssistantConfig) {
             const rustSaveResult = await chatAPI.saveRustAssistantConfig(rustConfigPatch);
