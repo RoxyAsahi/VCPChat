@@ -37,6 +37,8 @@ export function createSettingsUiService(input: SettingsUiAdapterInput): Settings
     let state = freezeState(input.get());
     let revision = 0;
     let source = 'initial';
+    let disposed = false;
+    let saveGeneration = 0;
     const listeners = new Set<(value: SettingsState, snapshot: UiSnapshot<SettingsState>) => void>();
     const snapshot = (): UiSnapshot<SettingsState> => Object.freeze({
         value: state,
@@ -44,6 +46,7 @@ export function createSettingsUiService(input: SettingsUiAdapterInput): Settings
         source,
     });
     const publish = (next: SettingsState, nextSource: string) => {
+        if (disposed) return snapshot();
         state = freezeState(next);
         revision += 1;
         source = nextSource;
@@ -57,6 +60,7 @@ export function createSettingsUiService(input: SettingsUiAdapterInput): Settings
             get: () => state,
             getSnapshot: snapshot,
             subscribe(listener, options = {}) {
+                if (disposed) return () => {};
                 listeners.add(listener);
                 if (options.immediate !== false) listener(state, snapshot());
                 let active = true;
@@ -69,8 +73,13 @@ export function createSettingsUiService(input: SettingsUiAdapterInput): Settings
         },
         save: {
             async execute(patch) {
+                if (disposed) return Object.freeze({ success: false, error: '设置服务已销毁' });
+                const generation = ++saveGeneration;
                 const result = await input.save(Object.freeze({ ...patch }));
                 if (!result?.success) return Object.freeze({ success: false, error: result?.error || '设置保存失败' });
+                // A newer save owns publication rights. The older IPC result
+                // may still settle, but must not roll the UI snapshot back.
+                if (disposed || generation !== saveGeneration) return Object.freeze({ success: true });
                 publish({ ...state, ...patch }, 'settings-save');
                 return Object.freeze({ success: true });
             },
@@ -79,7 +88,13 @@ export function createSettingsUiService(input: SettingsUiAdapterInput): Settings
     // The adapter is itself a UI-owned resource when external settings updates
     // exist; callers should register this disposer with their UiScope.
     Object.defineProperty(service, 'dispose', {
-        value: () => externalRelease?.(),
+        value: () => {
+            if (disposed) return;
+            disposed = true;
+            saveGeneration += 1;
+            listeners.clear();
+            return externalRelease?.();
+        },
         enumerable: false,
     });
     return Object.freeze(service);

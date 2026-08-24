@@ -38,3 +38,34 @@ test('typed SettingsUiService publishes only committed patches and releases exte
     await service.dispose?.();
     assert.equal(external.size, 0);
 });
+
+test('typed SettingsUiService rejects stale save publication and silences late results after dispose', async () => {
+    let state = { density: 'comfortable' };
+    const pending = [];
+    const external = new Set();
+    const service = createSettingsUiService({
+        get: () => state,
+        save: patch => new Promise(resolve => pending.push({ patch, resolve })),
+        subscribe: listener => {
+            external.add(listener);
+            return () => external.delete(listener);
+        },
+    });
+    const snapshots = [];
+    service.state.subscribe((_value, snapshot) => snapshots.push(snapshot));
+
+    const first = service.save.execute({ density: 'compact' });
+    const second = service.save.execute({ density: 'spacious' });
+    assert.equal(pending.length, 2);
+    pending[1].resolve({ success: true });
+    await second;
+    pending[0].resolve({ success: true });
+    await first;
+    assert.equal(service.state.get().density, 'spacious');
+    assert.deepEqual(snapshots.map(snapshot => snapshot.revision), [0, 1]);
+
+    await service.dispose?.();
+    external.forEach(listener => listener({ density: 'late-external' }));
+    assert.equal(service.state.get().density, 'spacious');
+    assert.deepEqual(snapshots.map(snapshot => snapshot.revision), [0, 1]);
+});

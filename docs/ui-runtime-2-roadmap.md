@@ -198,6 +198,8 @@ evidence: npm run check:uiux; npm run test:uiux; node scripts/test-ui-system.mjs
 
 退出证据：保存成功/失败/取消/迟到结果；输入保留；重新打开读取 durable 值；native/WA/fallback 视觉与键盘合同一致。
 
+当前 SettingsRoot typed consumer slice（2026-08-24）：`SettingsUiService` 已接入生产 SettingsRoot；保存请求按顺序串行化，较早的迟到结果失去 snapshot 发布权；服务 dispose 会撤销外部设置监听、清空 subscriber，并静默迟到 IPC/external 结果。focused contract 覆盖失败保存不发布、重叠保存 generation、dispose 后迟到结果隔离；Settings Electron journey 覆盖真实保存、重载恢复、结构与截图门禁。旧 source form 仍作为业务/持久化节点保留，待下一切片补齐失败重试和 teardown ledger 后再评估删除 presentation 路径。
+
 ### R2-03：Theme Runtime 与语义 Token 真源
 
 目标：主题状态只有一个 snapshot owner，组件不再通过 `body.classList` 猜测主题。
