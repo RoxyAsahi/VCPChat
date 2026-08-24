@@ -283,7 +283,7 @@ const owned = slots.mount('chat.composer.leading', host, snapshot, { scope });
 
 1. 先把 R2-03 从 snapshot projection 推进到真正 semantic token presenter，并记录/逐步删除 legacy theme reads。
 2. 再让 SettingsRoot 的真实控件通过 `SettingsUiService.state` 与 `save.execute` 工作；在行为等价证据后删除旧 presentation bridge 路径。
-3. R2-08 仅保持 typed-contract-scaffold：补 source/artifact consistency gate、artifact smoke、ESM 配置和最小 service provider/consumer 装配前，不声明 public runtime ready。
+3. R2-08 仅保持 typed-contract-scaffold：`npm run check:uiux:artifacts` 现以临时干净目录重建并逐字节校验 12 个 generated JS/d.ts 文件，`npm run test:uiux:artifacts` 会实际加载 generated SettingsUiService 并执行 save/subscribe/dispose contract；仍缺 ESM package 配置、artifact-only Electron smoke、真实 service provider/consumer 装配，故不声明 public runtime ready。
 4. 保持 R2-00/R2-01 的能力由真实 consumer 驱动，不开放任意 selector/HTML 注入，也不创建第二套生命周期或 durable UI Store；Plugin Loader 与 chat plugin protocol 保持冻结。
 
 补充门禁记录：本批补回 `nextUiNotificationForum` / `nextUiNotificationMemo`，并让 NextShell controller 成为唯一 owner；旧 `event-listeners.js` 中对应的重复 document-level binding 仍保持注释隔离。Plugin Loader 与 chat plugin manifest 的越界改动已回退，UI Runtime 只消费既有插件能力；完整 UI Apps smoke 仍受 `VCPDistributedServer/Plugin/VChatDynamicWallpaper/plugin-manifest.json.block` 外部 readiness blocker 影响，本轮不擅自启用用户禁用插件。
