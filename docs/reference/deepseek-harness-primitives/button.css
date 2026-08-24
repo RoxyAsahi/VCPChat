@@ -1,0 +1,21 @@
+/* Clipped from Harness: packages/client/ui-primitives/src/Button.module.css */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: none;
+  border-radius: 18px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--dsw-alias-label-primary);
+  background: transparent;
+  padding: 0 14px;
+}
+
+.md { height: 36px; }
+.sm { height: 28px; font-size: 12px; line-height: 18px; padding: 0 10px; border-radius: 14px; }
+.primary { background: var(--dsw-alias-button-primary-fill); }
+.ghost:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
+.ghost:active:not(:disabled) { background: var(--dsw-alias-interactive-bg-active); }
