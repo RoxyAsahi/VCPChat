@@ -317,3 +317,5 @@ R2-02 partial-root 修复（2026-08-24）：typed projection 只有在 `#globalS
 R2-02 async-readiness 修复（2026-08-24）：`syncGlobalSettingsToUI()` 在 Forum IPC 与 assistant options 两个 `await` 边界重新读取 typed consumer readiness，避免 consumer 中途挂载后 legacy owner 继续用过期状态覆盖 typed projection。owner 单测、Electron Settings gate 与 UIUX type check 通过。
 
 R2-02 root-identity 修复（2026-08-24）：readiness refresh 不再捕获旧 SettingsRoot 引用；每次跨 await 检查都重新解析当前 modal root，避免 reload/reopen generation 使用已替换 DOM 的 marker。owner 单测、10-cycle Electron Settings journey 与 UIUX type check 通过。
+
+UI System gate audit（2026-08-24）：`npm run check:ui-system` 当前在 `guard:design-subtraction` 阶段失败；大量既有 UIUX/Settings 文件相对旧 baseline `b5931a69...` 未登记，且另有 `styles/themes.css` composer focus contract 报告。该失败不能归因于本批 Settings readiness 修复，也不能通过扩大 allowlist 或重写 baseline 伪造绿色；发布门禁缺口保持独立记录。
