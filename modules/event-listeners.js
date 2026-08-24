@@ -519,9 +519,9 @@ export function setupEventListeners(deps) {
             form.addEventListener('submit', (ev) => {
                 Promise.resolve(handleSaveGlobalSettings(ev, deps)).catch((error) => {
                     console.error('[GlobalSettings] Unexpected save failure:', error);
-                    form.dispatchEvent(new CustomEvent('vcp-settings-save-result', {
-                        detail: { success: false, error: error?.message || String(error) }
-                    }));
+                    // `handleSaveGlobalSettings` owns the terminal failure
+                    // event contract. This catch only reports the error to
+                    // the user; dispatching here would duplicate retry state.
                     uiHelperFunctions.showToastNotification(`保存全局设置失败: ${error?.message || error}`, 'error');
                 });
             });
