@@ -1,5 +1,11 @@
 import assert from 'node:assert/strict';
 import { createSettingsUiService } from '../modules/uiux/generated/adapters/settings.js';
+import { createUiScope } from '../modules/uiux/generated/runtime/scope.js';
+import { createUiServiceRegistry } from '../modules/uiux/generated/runtime/service-registry.js';
+import { createRustAssistantUiService } from '../modules/uiux/generated/adapters/rust-assistant.js';
+
+const lifecycleModule = await import('../modules/ui-system/lifecycle-scope.js');
+const { LifecycleScope } = lifecycleModule.default || lifecycleModule;
 
 let state = { userName: 'artifact-user', density: 'comfortable' };
 const external = new Set();
@@ -26,4 +32,29 @@ await service.dispose();
 release();
 assert.equal(external.size, 0);
 assert.deepEqual(revisions, [0, 1, 2]);
-console.log('UIUX generated artifact smoke passed (SettingsUiService runtime contract).');
+
+const owner = createUiScope(new LifecycleScope('artifact-registry'));
+const registry = createUiServiceRegistry(owner);
+let serviceDisposed = false;
+const installed = registry.install({
+    id: 'artifact-service',
+    provide: () => ({ dispose: () => { serviceDisposed = true; } }),
+});
+assert.equal(registry.get('artifact-service'), installed);
+await registry.release('artifact-service');
+assert.equal(registry.get('artifact-service'), undefined);
+assert.equal(serviceDisposed, true);
+await registry.dispose();
+await owner.dispose('artifact-smoke-complete');
+
+let rustState = { debugMode: false };
+const rustService = createRustAssistantUiService({
+    get: () => rustState,
+    save: async patch => { rustState = { ...rustState, ...patch }; return { success: true }; },
+});
+await rustService.refresh.execute();
+assert.equal(rustService.state.get().debugMode, false);
+await rustService.save.execute({ debugMode: true });
+assert.equal(rustService.state.get().debugMode, true);
+await rustService.dispose();
+console.log('UIUX generated artifact smoke passed (Settings + Rust Assistant + scoped registry contracts).');

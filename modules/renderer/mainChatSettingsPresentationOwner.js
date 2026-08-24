@@ -560,6 +560,14 @@ export function createMainChatSettingsPresentationOwner({
             const el = document.getElementById(id);
             if (el) el.checked = !!checked;
         };
+        // The SettingsRoot typed consumer owns the migrated projection fields
+        // once its scoped service is assembled. Keep this legacy startup
+        // owner responsible for the remaining business controls, but do not
+        // overwrite clean snapshots or dirty drafts that the typed consumer
+        // deliberately protects.
+        const typedSettingsProjectionActive = Boolean(
+            windowRef?.VCPUISettingsBridge?.getTypedService?.()
+        );
         const syncRustDebugPanelVisibility = () => {
             const rustDebugModeEl = document.getElementById('rustDebugMode');
             const rustDebugPanelEl = document.getElementById('rustDebugPanel');
@@ -579,7 +587,9 @@ export function createMainChatSettingsPresentationOwner({
             }
         };
 
-        safeSet('userName', globalSettings.userName || '用户');
+        if (!typedSettingsProjectionActive) {
+            safeSet('userName', globalSettings.userName || '用户');
+        }
 
         const borderColor = globalSettings.userAvatarBorderColor || '#3d5a80';
         safeSet('userAvatarBorderColor', borderColor);
@@ -591,23 +601,31 @@ export function createMainChatSettingsPresentationOwner({
 
         safeCheck('userUseThemeColorsInChat', globalSettings.userUseThemeColorsInChat);
 
-        const completedUrl = getSettingsManager().completeVcpUrl(globalSettings.vcpServerUrl || '');
-        safeSet('vcpServerUrl', completedUrl);
-        safeSet('vcpApiKey', globalSettings.vcpApiKey || '');
-        safeSet('fileKey', globalSettings.fileKey || '');
-        safeSet('vcpLogUrl', globalSettings.vcpLogUrl || '');
-        safeSet('vcpLogKey', globalSettings.vcpLogKey || '');
-        safeSet('topicSummaryModel', globalSettings.topicSummaryModel || '');
-        safeSet('continueWritingPrompt', globalSettings.continueWritingPrompt || '请继续');
-        safeSet('flowlockContinueDelay', globalSettings.flowlockContinueDelay ?? 5);
-        safeCheck('voiceModeLocal', (globalSettings.voiceMode || 'local') !== 'network');
-        safeCheck('voiceModeNetwork', (globalSettings.voiceMode || 'local') === 'network');
-        safeSet('speechRecognizerBrowserPath', globalSettings.speechRecognizerBrowserPath || '');
-        safeSet('speechRecognizerPagePath', globalSettings.speechRecognizerPagePath || 'Voicechatmodules/recognizer.html');
-        safeSet('voiceLocalSovitsUrl', globalSettings.voiceLocalSettings?.sovitsUrl || '');
-        safeSet('voiceLocalSovitsKey', globalSettings.voiceLocalSettings?.sovitsKey || '');
-        safeSet('voiceNetworkProviderUrl', globalSettings.voiceNetworkSettings?.providerUrl || '');
-        safeSet('voiceNetworkProviderKey', globalSettings.voiceNetworkSettings?.providerKey || '');
+        if (!typedSettingsProjectionActive) {
+            const completedUrl = getSettingsManager().completeVcpUrl(globalSettings.vcpServerUrl || '');
+            safeSet('vcpServerUrl', completedUrl);
+        }
+        if (!typedSettingsProjectionActive) {
+            safeSet('vcpApiKey', globalSettings.vcpApiKey || '');
+            safeSet('fileKey', globalSettings.fileKey || '');
+            safeSet('vcpLogUrl', globalSettings.vcpLogUrl || '');
+            safeSet('vcpLogKey', globalSettings.vcpLogKey || '');
+        }
+        if (!typedSettingsProjectionActive) {
+            safeSet('topicSummaryModel', globalSettings.topicSummaryModel || '');
+            safeSet('continueWritingPrompt', globalSettings.continueWritingPrompt || '请继续');
+        }
+        if (!typedSettingsProjectionActive) safeSet('flowlockContinueDelay', globalSettings.flowlockContinueDelay ?? 5);
+        if (!typedSettingsProjectionActive) {
+            safeCheck('voiceModeLocal', (globalSettings.voiceMode || 'local') !== 'network');
+            safeCheck('voiceModeNetwork', (globalSettings.voiceMode || 'local') === 'network');
+            safeSet('speechRecognizerBrowserPath', globalSettings.speechRecognizerBrowserPath || '');
+            safeSet('speechRecognizerPagePath', globalSettings.speechRecognizerPagePath || 'Voicechatmodules/recognizer.html');
+            safeSet('voiceLocalSovitsUrl', globalSettings.voiceLocalSettings?.sovitsUrl || '');
+            safeSet('voiceLocalSovitsKey', globalSettings.voiceLocalSettings?.sovitsKey || '');
+            safeSet('voiceNetworkProviderUrl', globalSettings.voiceNetworkSettings?.providerUrl || '');
+            safeSet('voiceNetworkProviderKey', globalSettings.voiceNetworkSettings?.providerKey || '');
+        }
 
         // Network Notes Paths
         const networkNotesPathsContainer = document.getElementById('networkNotesPathsContainer');
@@ -621,55 +639,59 @@ export function createMainChatSettingsPresentationOwner({
             }
         }
 
-        safeCheck('enableSmoothStreaming', globalSettings.enableSmoothStreaming === true);
-        safeCheck('showHomeVisualBrand', globalSettings.showHomeVisualBrand !== false);
-        safeCheck('showHomeVisualTagline', globalSettings.showHomeVisualTagline !== false);
-        safeSet('homeVisualTagline', globalSettings.homeVisualTagline || '语义级打穿 AI、UI/UX、APP 与人类想象力的边界');
-        const appearance = getAppearance()?.normalize(globalSettings.appearanceProfile, 'next');
-        safeSet('appearanceDensity', appearance?.density || 'comfortable');
-        safeSet('appearanceRadius', appearance?.radius || 'small');
-        safeSet('appearanceTypography', appearance?.typography || 'system');
-        safeSet('appearanceFontScale', appearance?.fontScale || 'normal');
-        safeSet('appearanceContentWidth', appearance?.contentWidth || 'full');
-        safeSet('appearanceSidebarRowHeight', appearance?.sidebarRowHeight ?? 46);
-        safeSet('appearanceSidebarRowHeightValue', `${appearance?.sidebarRowHeight ?? 46}px`);
-        safeSet('appearanceSidebarAvatarSize', appearance?.sidebarAvatarSize ?? 32);
-        safeSet('appearanceSidebarAvatarSizeValue', `${appearance?.sidebarAvatarSize ?? 32}px`);
-        safeSet('appearanceSidebarRadius', appearance?.sidebarRadius || 'tuned');
-        safeCheck(`appearanceSidebarRadiusChoice-${appearance?.sidebarRadius || 'tuned'}`, true);
-        safeSet('appearanceCustomRadius', appearance?.customRadius ?? 10);
-        safeSet('appearanceCustomRadiusValue', `${appearance?.customRadius ?? 10}px`);
-        document.getElementById('appearanceSidebarAvatarSize')?.dispatchEvent(new Event('input', { bubbles: true }));
-        safeSet('appearanceSurface', appearance?.surface || 'translucent');
-        safeSet('chatFontPreset', globalSettings.chatFontPreset || 'system');
-        safeSet('chatFontCustom', globalSettings.chatFontCustom || '');
-        safeSet('chatCodeFontPreset', globalSettings.chatCodeFontPreset || 'consolas');
-        safeSet('chatCodeFontCustom', globalSettings.chatCodeFontCustom || '');
-        safeSet('chatDiaryFontPreset', globalSettings.chatDiaryFontPreset || 'serif');
-        safeSet('chatDiaryFontCustom', globalSettings.chatDiaryFontCustom || '');
-        safeSet('chatToolFontPreset', globalSettings.chatToolFontPreset || 'system');
-        safeSet('chatToolFontCustom', globalSettings.chatToolFontCustom || '');
+        if (!typedSettingsProjectionActive) {
+            safeCheck('enableSmoothStreaming', globalSettings.enableSmoothStreaming === true);
+            safeCheck('showHomeVisualBrand', globalSettings.showHomeVisualBrand !== false);
+            safeCheck('showHomeVisualTagline', globalSettings.showHomeVisualTagline !== false);
+            safeSet('homeVisualTagline', globalSettings.homeVisualTagline || '语义级打穿 AI、UI/UX、APP 与人类想象力的边界');
+            const appearance = getAppearance()?.normalize(globalSettings.appearanceProfile, 'next');
+            safeSet('appearanceDensity', appearance?.density || 'comfortable');
+            safeSet('appearanceRadius', appearance?.radius || 'small');
+            safeSet('appearanceTypography', appearance?.typography || 'system');
+            safeSet('appearanceFontScale', appearance?.fontScale || 'normal');
+            safeSet('appearanceContentWidth', appearance?.contentWidth || 'full');
+            safeSet('appearanceSidebarRowHeight', appearance?.sidebarRowHeight ?? 46);
+            safeSet('appearanceSidebarRowHeightValue', `${appearance?.sidebarRowHeight ?? 46}px`);
+            safeSet('appearanceSidebarAvatarSize', appearance?.sidebarAvatarSize ?? 32);
+            safeSet('appearanceSidebarAvatarSizeValue', `${appearance?.sidebarAvatarSize ?? 32}px`);
+            safeSet('appearanceSidebarRadius', appearance?.sidebarRadius || 'tuned');
+            safeCheck(`appearanceSidebarRadiusChoice-${appearance?.sidebarRadius || 'tuned'}`, true);
+            safeSet('appearanceCustomRadius', appearance?.customRadius ?? 10);
+            safeSet('appearanceCustomRadiusValue', `${appearance?.customRadius ?? 10}px`);
+            document.getElementById('appearanceSidebarAvatarSize')?.dispatchEvent(new Event('input', { bubbles: true }));
+            safeSet('appearanceSurface', appearance?.surface || 'translucent');
+            safeSet('chatFontPreset', globalSettings.chatFontPreset || 'system');
+            safeSet('chatFontCustom', globalSettings.chatFontCustom || '');
+            safeSet('chatCodeFontPreset', globalSettings.chatCodeFontPreset || 'consolas');
+            safeSet('chatCodeFontCustom', globalSettings.chatCodeFontCustom || '');
+            safeSet('chatDiaryFontPreset', globalSettings.chatDiaryFontPreset || 'serif');
+            safeSet('chatDiaryFontCustom', globalSettings.chatDiaryFontCustom || '');
+            safeSet('chatToolFontPreset', globalSettings.chatToolFontPreset || 'system');
+            safeSet('chatToolFontCustom', globalSettings.chatToolFontCustom || '');
+        }
         const presentationMode = normalizeChatPresentationMode(globalSettings.chatPresentationMode);
-        safeCheck(`chatPresentationMode${presentationMode[0].toUpperCase()}${presentationMode.slice(1)}`, true);
-        safeCheck('chatLayoutModeWide', globalSettings.enableWideChatLayout === true);
-        safeCheck('chatLayoutModeNormal', globalSettings.enableWideChatLayout !== true);
-        safeCheck('enableUserChatBubbleUi', globalSettings.enableUserChatBubbleUi !== false);
-        safeCheck('showUserMetaInChatBubbleUi', globalSettings.showUserMetaInChatBubbleUi !== false);
-        safeSet('chatBubbleMaxWidthWideDefault', clampChatBubbleWidthPercent(globalSettings.chatBubbleMaxWidthWideDefault, 92));
-        safeSet('chatBubbleMaxWidthWideNotifications', clampChatBubbleWidthPercent(globalSettings.chatBubbleMaxWidthWideNotifications, 96));
-        safeSet(
-            'chatBubbleMaxWidthWideNarrow',
-            clampChatBubbleWidthPercent(
-                globalSettings.chatBubbleMaxWidthWideNarrow,
-                clampChatBubbleWidthPercent(globalSettings.chatBubbleMaxWidthWideDefault, 92)
-            )
-        );
-        safeSet('minChunkBufferSize', globalSettings.minChunkBufferSize ?? 16);
-        safeSet('smoothStreamIntervalMs', globalSettings.smoothStreamIntervalMs ?? 100);
-        syncChatFontControls();
-        syncWideChatLayoutControls();
-        syncUserChatBubbleControls();
-        syncChatPresentationModeControls(presentationMode);
+        if (!typedSettingsProjectionActive) {
+            safeCheck(`chatPresentationMode${presentationMode[0].toUpperCase()}${presentationMode.slice(1)}`, true);
+            safeCheck('chatLayoutModeWide', globalSettings.enableWideChatLayout === true);
+            safeCheck('chatLayoutModeNormal', globalSettings.enableWideChatLayout !== true);
+            safeCheck('enableUserChatBubbleUi', globalSettings.enableUserChatBubbleUi !== false);
+            safeCheck('showUserMetaInChatBubbleUi', globalSettings.showUserMetaInChatBubbleUi !== false);
+            safeSet('chatBubbleMaxWidthWideDefault', clampChatBubbleWidthPercent(globalSettings.chatBubbleMaxWidthWideDefault, 92));
+            safeSet('chatBubbleMaxWidthWideNotifications', clampChatBubbleWidthPercent(globalSettings.chatBubbleMaxWidthWideNotifications, 96));
+            safeSet(
+                'chatBubbleMaxWidthWideNarrow',
+                clampChatBubbleWidthPercent(
+                    globalSettings.chatBubbleMaxWidthWideNarrow,
+                    clampChatBubbleWidthPercent(globalSettings.chatBubbleMaxWidthWideDefault, 92)
+                )
+            );
+            safeSet('minChunkBufferSize', globalSettings.minChunkBufferSize ?? 16);
+            safeSet('smoothStreamIntervalMs', globalSettings.smoothStreamIntervalMs ?? 100);
+        }
+        if (!typedSettingsProjectionActive) syncChatFontControls();
+        if (!typedSettingsProjectionActive) syncWideChatLayoutControls();
+        if (!typedSettingsProjectionActive) syncUserChatBubbleControls();
+        if (!typedSettingsProjectionActive) syncChatPresentationModeControls(presentationMode);
 
         const chatFontPresetSelect = document.getElementById('chatFontPreset');
         const chatFontCustomInput = document.getElementById('chatFontCustom');
@@ -773,27 +795,31 @@ export function createMainChatSettingsPresentationOwner({
         if (assistantAgentSelect) {
             await getSettingsManager().populateAssistantAgentSelect();
             if (!isCurrent(token)) return false;
-            assistantAgentSelect.value = globalSettings.assistantAgent || '';
+            if (!typedSettingsProjectionActive) assistantAgentSelect.value = globalSettings.assistantAgent || '';
         }
 
-        safeCheck('enableDistributedServer', globalSettings.enableDistributedServer === true);
-        safeCheck('agentMusicControl', globalSettings.agentMusicControl === true);
-        safeCheck('enableVcpToolInjection', globalSettings.enableVcpToolInjection === true);
-        safeCheck('enableThoughtChainInjection', globalSettings.enableThoughtChainInjection === true);
-        safeCheck('enableContextSanitizer', globalSettings.enableContextSanitizer === true);
-        safeSet('contextSanitizerDepth', globalSettings.contextSanitizerDepth ?? 2);
+        if (!typedSettingsProjectionActive) {
+            safeCheck('enableDistributedServer', globalSettings.enableDistributedServer === true);
+            safeCheck('agentMusicControl', globalSettings.agentMusicControl === true);
+            safeCheck('enableVcpToolInjection', globalSettings.enableVcpToolInjection === true);
+            safeCheck('enableThoughtChainInjection', globalSettings.enableThoughtChainInjection === true);
+            safeCheck('enableContextSanitizer', globalSettings.enableContextSanitizer === true);
+            safeSet('contextSanitizerDepth', globalSettings.contextSanitizerDepth ?? 2);
 
-        const contextSanitizerDepthContainer = document.getElementById('contextSanitizerDepthContainer');
-        if (contextSanitizerDepthContainer) {
-            contextSanitizerDepthContainer.style.display = globalSettings.enableContextSanitizer === true ? 'block' : 'none';
+            const contextSanitizerDepthContainer = document.getElementById('contextSanitizerDepthContainer');
+            if (contextSanitizerDepthContainer) {
+                contextSanitizerDepthContainer.style.display = globalSettings.enableContextSanitizer === true ? 'block' : 'none';
+            }
+
+            safeCheck('enableAiMessageButtons', globalSettings.enableAiMessageButtons !== false);
         }
-
-        safeCheck('enableAiMessageButtons', globalSettings.enableAiMessageButtons !== false);
-        safeCheck('enableMiddleClickQuickAction', globalSettings.enableMiddleClickQuickAction === true);
-        safeSet('middleClickQuickAction', globalSettings.middleClickQuickAction || '');
-        safeCheck('enableMiddleClickAdvanced', globalSettings.enableMiddleClickAdvanced === true);
-        safeSet('middleClickAdvancedDelay', Math.max(1000, globalSettings.middleClickAdvancedDelay ?? 1000));
-        safeCheck('enableRegenerateConfirmation', globalSettings.enableRegenerateConfirmation !== false);
+        if (!typedSettingsProjectionActive) {
+            safeCheck('enableMiddleClickQuickAction', globalSettings.enableMiddleClickQuickAction === true);
+            safeSet('middleClickQuickAction', globalSettings.middleClickQuickAction || '');
+            safeCheck('enableMiddleClickAdvanced', globalSettings.enableMiddleClickAdvanced === true);
+            safeSet('middleClickAdvancedDelay', Math.max(1000, globalSettings.middleClickAdvancedDelay ?? 1000));
+            safeCheck('enableRegenerateConfirmation', globalSettings.enableRegenerateConfirmation !== false);
+        }
 
         if (chatAPI?.getRustAssistantConfig) {
             try {
@@ -870,12 +896,14 @@ export function createMainChatSettingsPresentationOwner({
         }
 
         // Visibility toggles
-        const middleClickContainer = document.getElementById('middleClickQuickActionContainer');
-        if (middleClickContainer) middleClickContainer.style.display = globalSettings.enableMiddleClickQuickAction ? 'block' : 'none';
-        const middleClickAdvancedContainer = document.getElementById('middleClickAdvancedContainer');
-        if (middleClickAdvancedContainer) middleClickAdvancedContainer.style.display = globalSettings.enableMiddleClickQuickAction ? 'block' : 'none';
-        const middleClickAdvancedSettings = document.getElementById('middleClickAdvancedSettings');
-        if (middleClickAdvancedSettings) middleClickAdvancedSettings.style.display = globalSettings.enableMiddleClickAdvanced ? 'block' : 'none';
+        if (!typedSettingsProjectionActive) {
+            const middleClickContainer = document.getElementById('middleClickQuickActionContainer');
+            if (middleClickContainer) middleClickContainer.style.display = globalSettings.enableMiddleClickQuickAction ? 'block' : 'none';
+            const middleClickAdvancedContainer = document.getElementById('middleClickAdvancedContainer');
+            if (middleClickAdvancedContainer) middleClickAdvancedContainer.style.display = globalSettings.enableMiddleClickQuickAction ? 'block' : 'none';
+            const middleClickAdvancedSettings = document.getElementById('middleClickAdvancedSettings');
+            if (middleClickAdvancedSettings) middleClickAdvancedSettings.style.display = globalSettings.enableMiddleClickAdvanced ? 'block' : 'none';
+        }
         return true;
     }
 

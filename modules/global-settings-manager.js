@@ -296,7 +296,10 @@ async function saveGlobalSettings(deps, settingsForm) {
     const result = await awaitWithTimeout(saveOperation, deps.saveTimeoutMs);
     if (result?.success) {
         if (chatAPI?.saveRustAssistantConfig) {
-            const rustSaveResult = await chatAPI.saveRustAssistantConfig(rustConfigPatch);
+            const rustService = window.VCPUISettingsBridge?.getRustAssistantService?.();
+            const rustSaveResult = rustService?.save?.execute
+                ? await rustService.save.execute(rustConfigPatch)
+                : await chatAPI.saveRustAssistantConfig(rustConfigPatch);
             if (!rustSaveResult?.success) {
                 uiHelperFunctions.showToastNotification(`Rust助手配置保存失败: ${rustSaveResult?.error || '未知错误'}`, 'warning');
             } else if (rustSaveResult.reconcile?.modeChanged) {

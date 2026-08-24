@@ -384,16 +384,113 @@ try {
         window.dispatchEvent(new CustomEvent('global-settings-updated', {
             detail: { settings: {
                 userName: 'typed-external-user',
+                assistantAgent: 'agent-b',
                 continueWritingPrompt: 'typed-external-prompt',
                 vcpServerUrl: 'http://typed-external:6005',
+                vcpApiKey: 'typed-api-key',
+                fileKey: 'typed-file-key',
+                vcpLogUrl: 'ws://typed-log:6006',
+                vcpLogKey: 'typed-log-key',
+                voiceMode: 'network',
+                speechRecognizerBrowserPath: '/typed/chrome',
+                speechRecognizerPagePath: '/typed/recognizer.html',
+                voiceLocalSettings: { sovitsUrl: 'http://typed-local:9880', sovitsKey: 'typed-local-key' },
+                voiceNetworkSettings: { providerUrl: 'https://typed-voice.example/api', providerKey: 'typed-network-key' },
+                enableDistributedServer: true,
+                agentMusicControl: true,
+                enableVcpToolInjection: true,
+                enableThoughtChainInjection: true,
+                enableContextSanitizer: true,
+                contextSanitizerDepth: 7,
+                enableAiMessageButtons: false,
+                flowlockContinueDelay: 12,
+                enableMiddleClickQuickAction: true,
+                middleClickQuickAction: 'edit',
+                enableMiddleClickAdvanced: true,
+                middleClickAdvancedDelay: 1800,
+                enableRegenerateConfirmation: false,
+                chatPresentationMode: 'panel',
+                enableWideChatLayout: true,
+                enableUserChatBubbleUi: true,
+                showUserMetaInChatBubbleUi: false,
+                chatBubbleMaxWidthWideDefault: 88,
+                chatBubbleMaxWidthWideNotifications: 94,
+                chatBubbleMaxWidthWideNarrow: 90,
+                minChunkBufferSize: 24,
+                smoothStreamIntervalMs: 140,
                 chatFontPreset: 'serif',
+                appearanceProfile: {
+                    density: 'compact',
+                    radius: 'round',
+                    typography: 'humanist',
+                    fontScale: 'large',
+                    contentWidth: 'centered',
+                    surface: 'custom',
+                    sidebarRowHeight: 52,
+                    sidebarAvatarSize: 36,
+                    sidebarRadius: 'round',
+                    customRadius: 14,
+                },
+                enableSmoothStreaming: false,
             }, source: 'external-test' }
         }));
     });
     await page.waitForFunction(() => document.getElementById('userName')?.value === 'typed-external-user');
+    assert.equal(await page.$eval('#assistantAgent', node => node.value), 'agent-b', 'dynamic assistant select consumes typed Settings snapshot');
     assert.equal(await page.$eval('#continueWritingPrompt', node => node.value), 'typed-external-prompt', 'clean form consumes typed Settings snapshot');
     assert.equal(await page.$eval('#vcpServerUrl', node => node.value), 'http://typed-external:6005', 'clean text control consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#vcpApiKey', node => node.value), 'typed-api-key', 'clean API key control consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#fileKey', node => node.value), 'typed-file-key', 'clean file key control consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#vcpLogUrl', node => node.value), 'ws://typed-log:6006', 'clean VCPLog URL consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#vcpLogKey', node => node.value), 'typed-log-key', 'clean VCPLog key consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#voiceModeNetwork', node => node.checked), true, 'clean voice mode consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#voiceModeLocal', node => node.checked), false, 'clean local voice mode consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#speechRecognizerBrowserPath', node => node.value), '/typed/chrome', 'clean STT browser path consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#speechRecognizerPagePath', node => node.value), '/typed/recognizer.html', 'clean STT page path consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#voiceLocalSovitsUrl', node => node.value), 'http://typed-local:9880', 'clean local voice URL consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#voiceLocalSovitsKey', node => node.value), 'typed-local-key', 'clean local voice key consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#voiceNetworkProviderUrl', node => node.value), 'https://typed-voice.example/api', 'clean network voice URL consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#voiceNetworkProviderKey', node => node.value), 'typed-network-key', 'clean network voice key consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#enableDistributedServer', node => node.checked), true, 'clean distributed server checkbox consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#agentMusicControl', node => node.checked), true, 'clean music control checkbox consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#enableVcpToolInjection', node => node.checked), true, 'clean tool injection checkbox consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#enableThoughtChainInjection', node => node.checked), true, 'clean thought-chain checkbox consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#enableContextSanitizer', node => node.checked), true, 'clean context sanitizer checkbox consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#contextSanitizerDepth', node => node.value), '7', 'clean sanitizer depth consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#contextSanitizerDepthContainer', node => getComputedStyle(node).display), 'block', 'sanitizer depth visibility follows typed snapshot');
+    assert.equal(await page.$eval('#enableAiMessageButtons', node => node.checked), false, 'clean AI buttons checkbox consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#flowlockContinueDelay', node => node.value), '12', 'clean flowlock delay consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#enableMiddleClickQuickAction', node => node.checked), true, 'clean middle-click checkbox consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#middleClickQuickAction', node => node.value), 'edit', 'clean middle-click action consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#middleClickQuickActionContainer', node => getComputedStyle(node).display), 'block', 'middle-click action visibility follows typed snapshot');
+    assert.equal(await page.$eval('#enableMiddleClickAdvanced', node => node.checked), true, 'clean advanced middle-click checkbox consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#middleClickAdvancedDelay', node => node.value), '1800', 'clean advanced middle-click delay consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#middleClickAdvancedSettings', node => getComputedStyle(node).display), 'block', 'advanced middle-click visibility follows typed snapshot');
+    assert.equal(await page.$eval('#enableRegenerateConfirmation', node => node.checked), false, 'clean regenerate confirmation consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#chatPresentationModePanel', node => node.checked), true, 'clean presentation mode consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#chatLayoutModeWide', node => node.checked), true, 'clean wide layout consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#enableUserChatBubbleUi', node => node.checked), true, 'clean user bubble toggle consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#showUserMetaInChatBubbleUi', node => node.checked), false, 'clean user metadata toggle consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#chatBubbleMaxWidthWideDefault', node => node.value), '88', 'clean wide bubble width consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#chatBubbleMaxWidthWideNotifications', node => node.value), '94', 'clean wide notification width consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#chatBubbleMaxWidthWideNarrow', node => node.value), '90', 'clean wide narrow width consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#minChunkBufferSize', node => node.value), '24', 'clean chunk buffer consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#smoothStreamIntervalMs', node => node.value), '140', 'clean stream interval consumes typed Settings snapshot');
     assert.equal(await page.$eval('#chatFontPreset', node => node.value), 'serif', 'clean select control consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceDensity', node => node.value), 'compact', 'clean appearance density consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceRadius', node => node.value), 'round', 'clean appearance radius consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceTypography', node => node.value), 'humanist', 'clean appearance typography consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceFontScale', node => node.value), 'large', 'clean appearance scale consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceContentWidth', node => node.value), 'centered', 'clean appearance width consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceSurface', node => node.value), 'custom', 'clean appearance surface consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceSidebarRowHeight', node => node.value), '52', 'clean sidebar row height consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceSidebarAvatarSize', node => node.value), '36', 'clean sidebar avatar size consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceSidebarRowHeightValue', node => node.value), '52px', 'clean row-height output consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceSidebarAvatarSizeValue', node => node.value), '36px', 'clean avatar-size output consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceCustomRadius', node => node.value), '14', 'clean custom radius consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceCustomRadiusValue', node => node.value), '14px', 'clean custom-radius output consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceSidebarRadiusChoice-round', node => node.checked), true, 'clean radius choice consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#enableSmoothStreaming', node => node.checked), false, 'clean checkbox consumes typed Settings snapshot');
     // Force the real IPC persistence path to fail once by removing write
     // access from the isolated test profile, then restore it for retry.
     await fs.chmod(path.join(appData, 'settings.json'), 0o444);

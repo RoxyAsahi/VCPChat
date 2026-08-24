@@ -1,12 +1,21 @@
 import { mountThemePresenter } from './providers/theme.js';
 import { createSettingsUiService } from './adapters/settings.js';
 import { createUiScope } from './runtime/scope.js';
+import { createUiServiceRegistry } from './runtime/service-registry.js';
+import { settingsUiDefinition } from './adapters/settings.js';
+import { createRustAssistantUiService, rustAssistantUiDefinition } from './adapters/rust-assistant.js';
 const api = {
     mountThemePresenterFromScope(root, theme, legacyScope) {
         const scope = createUiScope(legacyScope);
         return mountThemePresenter(root, { theme }, { scope, services: { theme } });
     },
     createSettingsUiService,
+    createUiServiceRegistryFromScope(legacyScope) {
+        return createUiServiceRegistry(createUiScope(legacyScope));
+    },
+    settingsUiDefinition,
+    createRustAssistantUiService,
+    rustAssistantUiDefinition,
 };
 Object.defineProperty(globalThis, 'VCPUIUX', {
     value: Object.freeze(api),

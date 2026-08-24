@@ -35,6 +35,8 @@ let presentationScope = null;
 let destroyed = false;
 let destroyPromise = null;
 let typedSettingsService = null;
+let typedSettingsRegistry = null;
+let typedRustAssistantService = null;
 let typedSettingsState = Object.freeze({});
 let typedSettingsExternalRelease = null;
 let typedSettingsSaveChain = Promise.resolve();
@@ -74,16 +76,27 @@ function ensureTypedSettingsService() {
         },
     });
     void window.chatAPI?.loadSettings?.().then(settings => publishExternal(settings)).catch(() => {});
+    if (window.VCPUIUX?.createUiServiceRegistryFromScope && bridgeScope && window.VCPUIUX?.settingsUiDefinition) {
+        typedSettingsRegistry = window.VCPUIUX.createUiServiceRegistryFromScope(bridgeScope);
+        const definition = window.VCPUIUX.settingsUiDefinition;
+        typedSettingsRegistry.install(definition, context => definition.provide({
+            ...context,
+            services: { ...context.services, settings: typedSettingsService },
+        }));
+    } else {
+        // Compatibility fallback while the typed browser entry is unavailable.
+        bridgeScope?.own(() => typedSettingsService?.dispose?.(), 'typed-settings-service', 'ui-service');
+    }
     bridgeScope?.own(() => {
         typedSettingsDisposed = true;
-        typedSettingsService?.dispose?.();
         typedSettingsExternalRelease?.();
-    }, 'typed-settings-service', 'ui-service');
+    }, 'typed-settings-events', 'ui-service');
     return typedSettingsService;
 }
 
 function mountTypedSettingsConsumer(root) {
-    const service = ensureTypedSettingsService();
+    const fallbackService = ensureTypedSettingsService();
+    const service = typedSettingsRegistry?.get('settings-ui') || fallbackService;
     if (!service || !root) return;
     const form = root.querySelector('#globalSettingsForm');
     const apply = (_value, snapshot) => {
@@ -97,21 +110,160 @@ function mountTypedSettingsConsumer(root) {
             ['userName', 'userName'],
             ['continueWritingPrompt', 'continueWritingPrompt'],
             ['vcpServerUrl', 'vcpServerUrl'],
+            ['vcpApiKey', 'vcpApiKey'],
+            ['fileKey', 'fileKey'],
+            ['vcpLogUrl', 'vcpLogUrl'],
+            ['vcpLogKey', 'vcpLogKey'],
             ['topicSummaryModel', 'topicSummaryModel'],
+            ['assistantAgent', 'assistantAgent'],
+            ['voiceModeLocal', 'voiceMode', 'checked-value', 'local'],
+            ['voiceModeNetwork', 'voiceMode', 'checked-value', 'network'],
+            ['speechRecognizerBrowserPath', 'speechRecognizerBrowserPath'],
+            ['speechRecognizerPagePath', 'speechRecognizerPagePath'],
+            ['voiceLocalSovitsUrl', 'voiceLocalSettings.sovitsUrl'],
+            ['voiceLocalSovitsKey', 'voiceLocalSettings.sovitsKey'],
+            ['voiceNetworkProviderUrl', 'voiceNetworkSettings.providerUrl'],
+            ['voiceNetworkProviderKey', 'voiceNetworkSettings.providerKey'],
+            ['enableDistributedServer', 'enableDistributedServer', 'checked'],
+            ['agentMusicControl', 'agentMusicControl', 'checked'],
+            ['enableVcpToolInjection', 'enableVcpToolInjection', 'checked'],
+            ['enableThoughtChainInjection', 'enableThoughtChainInjection', 'checked'],
+            ['enableContextSanitizer', 'enableContextSanitizer', 'checked'],
+            ['contextSanitizerDepth', 'contextSanitizerDepth'],
+            ['enableAiMessageButtons', 'enableAiMessageButtons', 'checked'],
+            ['flowlockContinueDelay', 'flowlockContinueDelay'],
+            ['enableMiddleClickQuickAction', 'enableMiddleClickQuickAction', 'checked'],
+            ['middleClickQuickAction', 'middleClickQuickAction'],
+            ['enableMiddleClickAdvanced', 'enableMiddleClickAdvanced', 'checked'],
+            ['middleClickAdvancedDelay', 'middleClickAdvancedDelay'],
+            ['enableRegenerateConfirmation', 'enableRegenerateConfirmation', 'checked'],
+            ['chatPresentationModeBubble', 'chatPresentationMode', 'checked-value', 'bubble'],
+            ['chatPresentationModePanel', 'chatPresentationMode', 'checked-value', 'panel'],
+            ['chatPresentationModeImmersive', 'chatPresentationMode', 'checked-value', 'immersive'],
+            ['chatLayoutModeWide', 'enableWideChatLayout', 'checked'],
+            ['chatLayoutModeNormal', 'enableWideChatLayout', 'checked-inverse'],
+            ['enableUserChatBubbleUi', 'enableUserChatBubbleUi', 'checked'],
+            ['showUserMetaInChatBubbleUi', 'showUserMetaInChatBubbleUi', 'checked'],
+            ['chatBubbleMaxWidthWideDefault', 'chatBubbleMaxWidthWideDefault'],
+            ['chatBubbleMaxWidthWideNotifications', 'chatBubbleMaxWidthWideNotifications'],
+            ['chatBubbleMaxWidthWideNarrow', 'chatBubbleMaxWidthWideNarrow'],
+            ['minChunkBufferSize', 'minChunkBufferSize'],
+            ['smoothStreamIntervalMs', 'smoothStreamIntervalMs'],
+            ['showHomeVisualBrand', 'showHomeVisualBrand', 'checked'],
             ['homeVisualTagline', 'homeVisualTagline'],
             ['appearanceDensity', 'appearanceProfile.density'],
+            ['appearanceRadius', 'appearanceProfile.radius'],
+            ['appearanceTypography', 'appearanceProfile.typography'],
+            ['appearanceFontScale', 'appearanceProfile.fontScale'],
+            ['appearanceContentWidth', 'appearanceProfile.contentWidth'],
+            ['appearanceSurface', 'appearanceProfile.surface'],
+            ['appearanceSidebarRowHeight', 'appearanceProfile.sidebarRowHeight'],
+            ['appearanceSidebarRowHeightValue', 'appearanceProfile.sidebarRowHeight', 'px-output'],
+            ['appearanceSidebarAvatarSize', 'appearanceProfile.sidebarAvatarSize'],
+            ['appearanceSidebarAvatarSizeValue', 'appearanceProfile.sidebarAvatarSize', 'px-output'],
+            ['appearanceSidebarRadius', 'appearanceProfile.sidebarRadius'],
+            ['appearanceSidebarRadiusChoice-tuned', 'appearanceProfile.sidebarRadius', 'checked-value', 'tuned'],
+            ['appearanceSidebarRadiusChoice-follow', 'appearanceProfile.sidebarRadius', 'checked-value', 'follow'],
+            ['appearanceSidebarRadiusChoice-square', 'appearanceProfile.sidebarRadius', 'checked-value', 'square'],
+            ['appearanceSidebarRadiusChoice-small', 'appearanceProfile.sidebarRadius', 'checked-value', 'small'],
+            ['appearanceSidebarRadiusChoice-medium', 'appearanceProfile.sidebarRadius', 'checked-value', 'medium'],
+            ['appearanceSidebarRadiusChoice-round', 'appearanceProfile.sidebarRadius', 'checked-value', 'round'],
+            ['appearanceSidebarRadiusChoice-custom', 'appearanceProfile.sidebarRadius', 'checked-value', 'custom'],
+            ['appearanceCustomRadius', 'appearanceProfile.customRadius'],
+            ['appearanceCustomRadiusValue', 'appearanceProfile.customRadius', 'px-output'],
             ['chatFontPreset', 'chatFontPreset'],
+            ['chatFontCustom', 'chatFontCustom'],
             ['chatCodeFontPreset', 'chatCodeFontPreset'],
+            ['chatCodeFontCustom', 'chatCodeFontCustom'],
+            ['chatDiaryFontPreset', 'chatDiaryFontPreset'],
+            ['chatDiaryFontCustom', 'chatDiaryFontCustom'],
+            ['chatToolFontPreset', 'chatToolFontPreset'],
+            ['chatToolFontCustom', 'chatToolFontCustom'],
+            ['enableUserChatBubbleUi', 'enableUserChatBubbleUi', 'checked'],
+            ['enableSmoothStreaming', 'enableSmoothStreaming', 'checked'],
         ];
-        projection.forEach(([id, path]) => {
+        projection.forEach(([id, path, mode, expected]) => {
             const control = form.querySelector(`#${id}`);
             if (!control) return;
             const value = path.split('.').reduce((current, key) => current?.[key], settings);
-            if (value !== undefined && value !== null) control.value = String(value);
+            if (value === undefined || value === null) return;
+            if (mode === 'checked-value') control.checked = String(value) === expected;
+            else if (mode === 'checked-inverse') control.checked = value !== true;
+            else if (mode === 'checked' || control.type === 'checkbox') control.checked = Boolean(value);
+            else if (mode === 'px-output') {
+                control.value = `${value}px`;
+                control.textContent = `${value}px`;
+            }
+            else control.value = String(value);
         });
+        const sanitizerContainer = form.querySelector('#contextSanitizerDepthContainer');
+        const sanitizerEnabled = settings.enableContextSanitizer === true;
+        if (sanitizerContainer) sanitizerContainer.style.display = sanitizerEnabled ? 'block' : 'none';
+        const middleClickEnabled = settings.enableMiddleClickQuickAction === true;
+        const quickActionContainer = form.querySelector('#middleClickQuickActionContainer');
+        const advancedContainer = form.querySelector('#middleClickAdvancedContainer');
+        const advancedSettings = form.querySelector('#middleClickAdvancedSettings');
+        if (quickActionContainer) quickActionContainer.style.display = middleClickEnabled ? 'block' : 'none';
+        if (advancedContainer) advancedContainer.style.display = middleClickEnabled ? 'block' : 'none';
+        if (advancedSettings) advancedSettings.style.display = settings.enableMiddleClickAdvanced === true ? 'block' : 'none';
+        const mode = settings.chatPresentationMode || 'bubble';
+        const bubbleWidthSettings = form.querySelector('#chatBubbleWidthSettings');
+        if (bubbleWidthSettings) bubbleWidthSettings.hidden = mode !== 'bubble';
+        const bubbleMetaSettings = form.querySelector('#userChatBubbleMetaSettings');
+        if (bubbleMetaSettings) bubbleMetaSettings.style.display = settings.enableUserChatBubbleUi === true ? 'flex' : 'none';
     };
     const release = service.state.subscribe(apply);
     ensurePresentationScope()?.own(release, 'typed-settings-consumer', 'ui-presentation');
+    const assistantSelect = form?.querySelector('#assistantAgent');
+    if (assistantSelect && window.MutationObserver) {
+        const observer = new MutationObserver(() => {
+            const snapshot = service.state.getSnapshot();
+            apply(snapshot.value, snapshot);
+        });
+        observer.observe(assistantSelect, { childList: true });
+        ensurePresentationScope()?.own(() => observer.disconnect(), 'typed-assistant-options-consumer', 'ui-presentation');
+    }
+    const rustService = ensureRustAssistantUiService();
+    if (rustService) {
+        const applyRust = (_value, snapshot) => {
+            if (form.dataset.vcpSettingsDirty === 'true' || form.dataset.globalSettingsSaving === 'true') return;
+            const rust = snapshot.value || {};
+            const check = (id, value) => { const control = form.querySelector(`#${id}`); if (control) control.checked = Boolean(value); };
+            const set = (id, value) => { const control = form.querySelector(`#${id}`); if (control && value !== undefined && value !== null) control.value = String(value); };
+            check('rustUseAssistant', rust.useRustAssistant === true);
+            check('rustDebugMode', rust.debugMode === true);
+            const thresholds = rust.runtimeThresholds || {};
+            const custom = Object.entries({ minEventIntervalMs: 80, minDistance: 0, screenshotSuspendMs: 3000, clipboardConflictSuspendMs: 1000, clipboardCheckIntervalMs: 500 })
+                .some(([key, fallback]) => Number(thresholds[key] ?? fallback) !== fallback);
+            check('rustEnableCustomThresholds', custom);
+            set('rustMinEventIntervalMs', thresholds.minEventIntervalMs);
+            set('rustMinDistance', thresholds.minDistance);
+            set('rustScreenshotSuspendMs', thresholds.screenshotSuspendMs);
+            set('rustClipboardConflictSuspendMs', thresholds.clipboardConflictSuspendMs);
+            set('rustClipboardCheckIntervalMs', thresholds.clipboardCheckIntervalMs);
+            const panel = form.querySelector('#rustCustomThresholdsPanel');
+            if (panel) panel.style.display = custom ? 'block' : 'none';
+        };
+        const release = rustService.state.subscribe(applyRust);
+        ensurePresentationScope()?.own(release, 'typed-rust-assistant-consumer', 'ui-presentation');
+        void rustService.refresh.execute();
+    }
+}
+
+function ensureRustAssistantUiService() {
+    if (typedRustAssistantService || !typedSettingsRegistry || !window.VCPUIUX?.createRustAssistantUiService) return typedRustAssistantService;
+    const chatAPI = window.chatAPI;
+    if (!chatAPI?.getRustAssistantConfig || !chatAPI?.saveRustAssistantConfig) return null;
+    const adapter = window.VCPUIUX.createRustAssistantUiService({
+        get: () => chatAPI.getRustAssistantConfig(),
+        save: patch => chatAPI.saveRustAssistantConfig(patch),
+    });
+    const definition = window.VCPUIUX.rustAssistantUiDefinition;
+    typedRustAssistantService = typedSettingsRegistry.install(definition, context => definition.provide({
+        ...context,
+        services: { ...context.services, rustAssistantAdapter: adapter },
+    }));
+    return typedRustAssistantService;
 }
 
 function ensurePresentationScope() {
@@ -1101,13 +1253,17 @@ window.VCPUISettingsBridge = Object.freeze({
     getTypedService() {
         return ensureTypedSettingsService();
     },
+    getRustAssistantService() {
+        ensureTypedSettingsService();
+        return ensureRustAssistantUiService();
+    },
     destroy() {
         if (destroyPromise) return destroyPromise;
         destroyed = true;
         typedSettingsDisposed = true;
-        typedSettingsService?.dispose?.();
-        typedSettingsExternalRelease?.();
         if (!bridgeScope) {
+            typedSettingsService?.dispose?.();
+            typedSettingsExternalRelease?.();
             document.removeEventListener('modal-visibility-changed', handleModalVisibility);
             document.removeEventListener('modal-ready', handleModalVisibility);
             document.removeEventListener('vcp-settings-surface-updated', handleSurfaceUpdated);
