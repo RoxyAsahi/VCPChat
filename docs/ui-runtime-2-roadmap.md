@@ -198,7 +198,7 @@ evidence: npm run check:uiux; npm run test:uiux; node scripts/test-ui-system.mjs
 
 退出证据：保存成功/失败/取消/迟到结果；输入保留；重新打开读取 durable 值；native/WA/fallback 视觉与键盘合同一致。
 
-当前 SettingsRoot typed consumer slice（2026-08-24）：`SettingsUiService` 已接入生产 SettingsRoot；保存请求按顺序串行化，较早的迟到结果失去 snapshot 发布权；服务 dispose 会撤销外部设置监听、清空 subscriber，并静默迟到 IPC/external 结果。全局保存控制器现在把异常/有界 IPC 超时统一发布为 `vcp-settings-save-result(success=false)`，因此 autosave consumer 能进入可重试 error 终态并释放保存锁；外层 event-listener 只负责 toast，不再重复发布失败事件。focused contract 覆盖失败保存不发布、重叠保存 generation、dispose 后迟到结果隔离、timeout failure event 和 timeout 后迟到成功不复活 UI；Settings Electron journey 已覆盖真实持久化失败、输入保留、点击重试成功、重载恢复、结构/截图，以及显式 Settings bridge/presentation scope teardown。旧 source form 仍作为业务/持久化节点保留，待下一切片补齐更广泛的失败矩阵后再评估删除 presentation 路径。
+当前 SettingsRoot typed consumer slice（2026-08-24）：`SettingsUiService` 已接入生产 SettingsRoot；保存请求按顺序串行化，较早的迟到结果失去 snapshot 发布权；服务 dispose 会撤销外部设置监听、清空 subscriber，并静默迟到 IPC/external 结果。全局保存控制器现在把异常/有界 IPC 超时统一发布为 `vcp-settings-save-result(success=false)`，因此 autosave consumer 能进入可重试 error 终态并释放保存锁；外层 event-listener 只负责 toast，不再重复发布失败事件。Settings service subscriber 现在具备 immediate 失败回滚与单个 consumer 异常隔离，避免一个坏 consumer 中断其他 snapshot 发布。focused contract 覆盖失败保存不发布、重叠保存 generation、dispose 后迟到结果隔离、timeout failure event、timeout 后迟到成功不复活 UI、immediate subscriber rollback 和 publish isolation；Settings Electron journey 已覆盖真实持久化失败、输入保留、点击重试成功、重载恢复、结构/截图，以及显式 Settings bridge/presentation scope teardown。旧 source form 仍作为业务/持久化节点保留，待下一切片补齐更广泛的失败矩阵后再评估删除 presentation 路径。
 
 ### R2-03：Theme Runtime 与语义 Token 真源
 

@@ -69,3 +69,29 @@ test('typed SettingsUiService rejects stale save publication and silences late r
     assert.equal(service.state.get().density, 'spacious');
     assert.deepEqual(snapshots.map(snapshot => snapshot.revision), [0, 1]);
 });
+
+test('typed SettingsUiService rolls back failed immediate subscriptions and isolates publish failures', () => {
+    let state = { density: 'comfortable' };
+    const external = new Set();
+    const service = createSettingsUiService({
+        get: () => state,
+        save: patch => {
+            state = { ...state, ...patch };
+            return { success: true };
+        },
+        subscribe: listener => {
+            external.add(listener);
+            return () => external.delete(listener);
+        },
+    });
+    let failedCalls = 0;
+    assert.throws(() => service.state.subscribe(() => {
+        failedCalls += 1;
+        throw new Error('immediate consumer failed');
+    }));
+    let healthyCalls = 0;
+    service.state.subscribe(() => { healthyCalls += 1; }, { immediate: false });
+    external.forEach(listener => listener({ density: 'compact' }));
+    assert.equal(failedCalls, 1, 'failed immediate subscriber is retracted');
+    assert.equal(healthyCalls, 1, 'healthy subscriber still receives external snapshot');
+});
