@@ -416,7 +416,7 @@ function mountHarnessSelects(form) {
         popover.setAttribute('role', 'menu');
         popover.id = `${controlId}-menu`;
         popover.hidden = true;
-        const state = { select, wrap, button, label, popover, open: false, portal: false, cleanups: [], rebuildOptions: null };
+        const state = { select, wrap, button, label, popover, open: false, portal: false, activeIndex: 0, cleanups: [], rebuildOptions: null };
         button.setAttribute('aria-controls', popover.id);
         const fieldLabel = select.id ? [...document.querySelectorAll('label[for]')].find(label => label.htmlFor === select.id) : null;
         const originalLabelId = fieldLabel?.id || null;
@@ -428,10 +428,13 @@ function mountHarnessSelects(form) {
             const selected = select.options[select.selectedIndex];
             label.textContent = selected?.textContent?.trim() || '';
             button.setAttribute('aria-label', select.getAttribute('aria-label') || selected?.textContent?.trim() || '选择');
-            [...popover.querySelectorAll('[role="menuitem"]')].forEach(option => {
+            state.activeIndex = Math.max(0, select.selectedIndex);
+            [...popover.querySelectorAll('[role="menuitem"]')].forEach((option, index) => {
                 const active = option.dataset.value === select.value;
                 option.classList.toggle('is-selected', active);
+                option.tabIndex = index === state.activeIndex ? 0 : -1;
             });
+            button.setAttribute('aria-activedescendant', `${controlId}-option-${state.activeIndex}`);
         };
         const position = () => {
             if (!state.open) return;
@@ -463,6 +466,7 @@ function mountHarnessSelects(form) {
                 if (!state.open) return;
                 position();
                 popover.style.visibility = 'visible';
+                viewport.querySelector(`[role="menuitem"][data-index="${state.activeIndex}"]`)?.focus();
             });
         };
         select.parentNode.insertBefore(wrap, select);
@@ -486,13 +490,21 @@ function mountHarnessSelects(form) {
             const item = document.createElement('button');
             item.type = 'button'; item.className = 'vcp-harness-menu-item vcp-harness-select-option'; item.dataset.value = option.value;
             item.id = `${controlId}-option-${optionIndex}`;
+            item.dataset.index = String(optionIndex);
             item.setAttribute('role', 'menuitem');
             item.disabled = option.disabled;
             if (option.disabled) item.setAttribute('aria-disabled', 'true');
             const text = document.createElement('span'); text.className = 'vcp-harness-menu-item-label'; text.textContent = option.textContent.trim();
             const check = document.createElement('span'); check.className = 'vcp-harness-menu-check vcp-harness-select-check vcp-ui-icon'; check.textContent = 'check'; check.setAttribute('aria-hidden', 'true');
             item.append(text, check); itemWrap.append(item); viewport.append(itemWrap);
-            const onClick = () => { select.value = option.value; select.dispatchEvent(new Event('change', { bubbles: true })); sync(); close(); button.focus(); };
+            const onClick = () => {
+                if (option.disabled) return;
+                select.value = option.value;
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+                sync();
+                close();
+                button.focus();
+            };
             item.addEventListener('click', onClick); optionCleanups.push(() => item.removeEventListener('click', onClick));
             });
             state.cleanups = state.cleanups.filter(cleanup => !cleanup.__vcpOptionCleanup);
@@ -501,22 +513,35 @@ function mountHarnessSelects(form) {
         };
         state.rebuildOptions = rebuildOptions;
         rebuildOptions();
-        button.setAttribute('aria-activedescendant', `${controlId}-option-${Math.max(0, select.selectedIndex)}`);
         const onButton = () => state.open ? close() : open();
         const onKey = event => {
             if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onButton(); return; }
             if (event.key === 'Escape' && state.open) { event.preventDefault(); close(); return; }
-            if (!state.open || !['ArrowDown', 'ArrowUp'].includes(event.key)) return;
-            event.preventDefault(); const delta = event.key === 'ArrowDown' ? 1 : -1;
-            let next = select.selectedIndex;
-            do { next = (next + delta + select.options.length) % select.options.length; } while (select.options[next]?.disabled && next !== select.selectedIndex);
-            select.selectedIndex = next; select.dispatchEvent(new Event('change', { bubbles: true })); button.setAttribute('aria-activedescendant', `${controlId}-option-${next}`); sync();
+        };
+        const onMenuKey = event => {
+            if (!state.open) return;
+            const items = [...viewport.querySelectorAll('[role="menuitem"]')].filter(item => !item.disabled);
+            if (!items.length) return;
+            const current = Math.max(0, items.findIndex(item => Number(item.dataset.index) === state.activeIndex));
+            let next = current;
+            if (event.key === 'ArrowDown') next = (current + 1) % items.length;
+            else if (event.key === 'ArrowUp') next = (current - 1 + items.length) % items.length;
+            else if (event.key === 'Home') next = 0;
+            else if (event.key === 'End') next = items.length - 1;
+            else if (event.key === 'Escape') { event.preventDefault(); close(); button.focus(); return; }
+            else if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault(); items[current]?.click(); return;
+            } else return;
+            event.preventDefault();
+            state.activeIndex = Number(items[next].dataset.index);
+            items[next].focus();
+            button.setAttribute('aria-activedescendant', items[next].id);
         };
         const onChange = sync;
         state.close = close;
         state.position = position;
-        button.addEventListener('click', onButton); button.addEventListener('keydown', onKey); select.addEventListener('change', onChange); window.addEventListener('global-settings-updated', onChange);
-        state.cleanups.push(() => { close(); button.removeEventListener('click', onButton); button.removeEventListener('keydown', onKey); select.removeEventListener('change', onChange); window.removeEventListener('global-settings-updated', onChange); if (originalAriaHidden === null) select.removeAttribute('aria-hidden'); else select.setAttribute('aria-hidden', originalAriaHidden); if (originalTabIndex === null) select.removeAttribute('tabindex'); else select.setAttribute('tabindex', originalTabIndex); if (fieldLabel && originalLabelId === null) fieldLabel.removeAttribute('id'); });
+        button.addEventListener('click', onButton); button.addEventListener('keydown', onKey); popover.addEventListener('keydown', onMenuKey); select.addEventListener('change', onChange); window.addEventListener('global-settings-updated', onChange);
+        state.cleanups.push(() => { close(); button.removeEventListener('click', onButton); button.removeEventListener('keydown', onKey); popover.removeEventListener('keydown', onMenuKey); select.removeEventListener('change', onChange); window.removeEventListener('global-settings-updated', onChange); if (originalAriaHidden === null) select.removeAttribute('aria-hidden'); else select.setAttribute('aria-hidden', originalAriaHidden); if (originalTabIndex === null) select.removeAttribute('tabindex'); else select.setAttribute('tabindex', originalTabIndex); if (fieldLabel && originalLabelId === null) fieldLabel.removeAttribute('id'); });
         sync(); customSelectStates.add(state);
     });
     if (window.MutationObserver && !selectObserverStates.has(form)) {
