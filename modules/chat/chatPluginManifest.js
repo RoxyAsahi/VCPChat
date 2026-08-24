@@ -12,7 +12,7 @@ export function validateChatPluginManifest(manifest) {
     return Object.freeze({ id: manifest.id, apiVersion: 1, capabilities: Object.freeze([...capabilities]), slots: Object.freeze([...(manifest.slots || [])]) });
 }
 
-export function createChatPluginLoader({ state, slots, theme, skins = new Map(), owner = null }) {
+export function createChatPluginLoader({ state, slots, theme, skins = new Map() }) {
     const installed = new Map();
     let disposed = false;
     return {
@@ -41,11 +41,7 @@ export function createChatPluginLoader({ state, slots, theme, skins = new Map(),
                     subscribeState,
                     registerSlot: (slot, id, mount) => {
                         if (!manifest.slots.includes(slot)) throw new Error(`slot not declared by plugin: ${slot}`);
-                        const disposeSlot = slots?.register(slot, `${manifest.id}:${id}`, mount, {
-                            owner,
-                            scope: 'surface',
-                            kind: 'list',
-                        });
+                        const disposeSlot = slots?.register(slot, `${manifest.id}:${id}`, mount);
                         if (typeof disposeSlot === 'function') owned.push(disposeSlot);
                         return disposeSlot;
                     },

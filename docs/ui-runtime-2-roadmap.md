@@ -5,7 +5,7 @@
 > 适用目录：`/Users/asahi/Documents/Codex/VCPChat-newarchitecture`  
 > 对照对象：本机 `deepseek-harness` 的 Client UI / Slot / Theme / lifecycle 机制
 > 上位规范：[vcpchat-harness-uiux-architecture.md](/Users/asahi/Documents/Codex/VCPChat-newarchitecture/docs/vcpchat-harness-uiux-architecture.md)；本文件只负责执行顺序、consumer、证据与删除账本
-> 最近核验：2026-08-24；R2-00 Composer slice 已达到 complete；R2-01 Overlay/notification slice 已闭合；R2-03 ThemeSnapshot adapter 已接入；R2-08 typed foundation 已完成；R2-02 SettingsUiService 已由 SettingsRoot 生产 consumer 接入；当前 active slice：R2-02 failure/retry + teardown evidence
+> 最近核验：2026-08-24；R2-00 Composer slice 已达到 complete；R2-01 Overlay/notification slice 已闭合；R2-03 为 snapshot-projection-active；R2-08 为 typed-contract-scaffold（runtime delegates to legacy LifecycleScope）；R2-02 为 typed-settings-observer-active；当前 active slice：scope correction → semantic tokens + real Settings consumer
 > 最近证据：`node --test tests/chat-surface.test.mjs tests/chat-surface-slots.test.mjs tests/main-chat-surface-adapter.test.mjs tests/chat-plugin-manifest.test.mjs`（19/19）；`npm run test:electron-main-chat-sequences`（next-main-chat-default，24 actions，25 VCP requests，required 1/1）
 > R2-01 证据：`node --test tests/overlay-coordinator.test.js tests/escape-dispatcher.test.js tests/notification-menu-controller.test.js`（9/9）；`node scripts/test-ui-system.mjs`；`node scripts/test-settings-wa-electron.mjs`（Settings Harness structure gate passed）。R2-03 证据：`node --test tests/state-authority.test.js tests/account-menu-controller.test.js tests/ui-manager-lifecycle.test.mjs`（7/7）；`node scripts/test-appearance-studio.mjs`（appearance studio checks passed）。R2-08 证据：`npm run check:uiux`；`npm run test:uiux`（ThemePresenter + SettingsUiService contracts 2/2）；`npm run test:electron-uiux-theme`（light→dark snapshot、reload remount、subscriber ledger 2→2）；主聊天 sequence 仍作为 broader evidence，但 auxiliary concurrent fixture 可能独立 flake。
 
@@ -27,10 +27,10 @@
 | 上位规范 | 本路线执行批次 | 当前状态 |
 | --- | --- | --- |
 | U0 事实与架构冻结 | R2-00 前置登记、工作树和证据账本 | complete |
-| U1 TypeScript UI foundation | R2-08 `modules/uiux/` typed kernel | complete（foundation；持续被真实 Surface 消费） |
+| U1 TypeScript UI foundation | R2-08 `modules/uiux/` typed kernel | typed-contract-scaffold（compile + focused tests；public API not ready） |
 | U2 Overlay / Focus / Primitive kernel | R2-01 | notification/lease slice complete，journey 持续补证据 |
-| U3 Theme service | R2-03 | active：ThemeSnapshot consumer |
-| U4 Settings Surface | R2-02 | active：SettingsUiService + SettingsRoot consumer |
+| U3 Theme service | R2-03 | snapshot-projection-active（semantic token presenter missing） |
+| U4 Settings Surface | R2-02 | typed-settings-observer-active（controls still owned by legacy bridge） |
 | U5 Shell 与 Chat Surface | R2-00、R2-04 | Chat Composer slice complete，Shell 持续迁移 |
 | U6 App Surface | R2-05 | planned |
 | U7 旧 UI 清理与发布证据 | R2-07 | planned |
@@ -150,13 +150,13 @@ DOM、Web Components、原生 Electron View
 ```yaml
 batch: R2-02
 mode: target
-focus: settings-surface-typed-adapter
+focus: scope-correction-and-real-consumer-boundaries
 status: active
 production_consumer: global SettingsRoot + Appearance Studio
 consumer_kind: internal production consumer; typed adapter migration slice
 first_slice: existing settings capability boundary + modules/uiux/adapters/settings.ts
-completed_slice: SettingsRoot failure/retry, late-result, subscriber teardown, and typed contract hardening
-next_slice: Creation Surface independent Electron journey and typed page-mode boundary review
+completed_slice: SettingsRoot failure/retry, late-result, subscriber teardown, and typed observer contract hardening
+next_slice: semantic token presenter, then SettingsRoot controls consuming SettingsUiService commands
 blocked_by: UI Apps smoke 的 dynamic-wallpaper disabled-manifest readiness（不阻塞 Settings Surface contract）
 excluded: chat-message-internals, plugin-loader, child-page-migration
 last_verified: 2026-08-24
@@ -198,7 +198,7 @@ evidence: npm run check:uiux; npm run test:uiux; node --test tests/creation-cont
 
 退出证据：保存成功/失败/取消/迟到结果；输入保留；重新打开读取 durable 值；native/WA/fallback 视觉与键盘合同一致。
 
-当前 SettingsRoot typed consumer slice（2026-08-24）：`SettingsUiService` 已接入生产 SettingsRoot；保存请求按顺序串行化，较早的迟到结果失去 snapshot 发布权；服务 dispose 会撤销外部设置监听、清空 subscriber，并静默迟到 IPC/external 结果。全局保存控制器现在把异常/有界 IPC 超时统一发布为 `vcp-settings-save-result(success=false)`，因此 autosave consumer 能进入可重试 error 终态并释放保存锁；外层 event-listener 只负责 toast，不再重复发布失败事件。Settings service subscriber 现在具备 immediate 失败回滚与单个 consumer 异常隔离，避免一个坏 consumer 中断其他 snapshot 发布。focused contract 覆盖失败保存不发布、重叠保存 generation、dispose 后迟到结果隔离、timeout failure event、timeout 后迟到成功不复活 UI、immediate subscriber rollback 和 publish isolation；Settings Electron journey 已覆盖真实持久化失败、输入保留、点击重试成功、重载恢复、结构/截图，以及显式 Settings bridge/presentation scope teardown。旧 source form 仍作为业务/持久化节点保留，待下一切片补齐更广泛的失败矩阵后再评估删除 presentation 路径。
+当前 SettingsRoot 状态（2026-08-24）：`SettingsUiService` 是 typed observer/projection consumer，并非真实控件 command owner；SettingsRoot 的字段、Select/Choice、autosave 仍主要由 legacy `settings-bridge.js` 与 global settings manager 控制。adapter 已具备保存串行化、迟到 generation、dispose、subscriber rollback/isolation 和失败事件合同，Electron journey 已覆盖真实持久化失败、输入保留、点击重试成功、重载恢复、结构/截图及 bridge/presentation teardown。下一步必须让真实控件通过 `SettingsUiService.state` 读取、通过 `save.execute` 提交，并在完成行为等价证据后才删除旧 bridge presentation 路径。
 
 Creation 现状核验（2026-08-24）：`tests/creation-controller.test.js` 8/8 通过，覆盖命令缺失、Surface 部分失败回滚、Web Awesome 失败后的 native fallback、重复 open、kernel 加载期间 dispose、创建失败恢复和迟到完成隔离。完整 `test-electron-ui-apps-smoke.mjs` 当前不能作为 Creation 的 broad evidence，因为它在进入 Creation journey 前被用户禁用的 `VChatDynamicWallpaper/plugin-manifest.json.block` 阻断（`loaded=true, results=[], dynamicWallpaper=false`）；本路线不擅自启用该插件，下一切片将使用独立 Creation Electron journey 补齐真实 Surface 证据。
 
@@ -207,6 +207,8 @@ Creation 现状核验（2026-08-24）：`tests/creation-controller.test.js` 8/8 
 目标：主题状态只有一个 snapshot owner，组件不再通过 `body.classList` 猜测主题。
 
 退出证据：source → generated artifact → runtime presenter 一致；light/dark/system、壁纸、DPI 和 fallback 矩阵通过。
+
+当前状态：`ThemeSnapshot` 仅达到 snapshot-projection-active；现有 presenter 主要写入 `data-theme-*` 诊断属性，尚未驱动 semantic CSS custom properties、surface material 或 control states，且 legacy `body.classList` 读取仍存在。不得将该阶段描述为单一主题真源已完成。
 
 ### R2-04：Conversation Surface Slots
 
@@ -279,9 +281,9 @@ const owned = slots.mount('chat.composer.leading', host, snapshot, { scope });
 
 ## 8. 当前下一步
 
-1. 完成 R2-02 的失败重试、迟到保存结果 generation guard、关闭/重载后的 subscriber teardown ledger；继续以 SettingsRoot 真实 consumer 为边界。
-2. 在 SettingsRoot 的旧 presentation contract 被完整替代并有删除证据后，删除一条重复旧 presentation 路径；在此之前保留 source form 作为业务/持久化 source，不把 wrapper 当完成。
-3. 保持 R2-00/R2-01/R2-03/R2-08 的能力由真实 consumer 驱动，不开放任意 selector/HTML 注入，也不创建第二套生命周期或 durable UI Store。
-4. UI Apps smoke 的外部 readiness blocker 仍为 `loaded=true, results=[], dynamicWallpaper=false`，根因是 `VChatDynamicWallpaper/plugin-manifest.json.block`；不擅自启用用户禁用插件。
+1. 先把 R2-03 从 snapshot projection 推进到真正 semantic token presenter，并记录/逐步删除 legacy theme reads。
+2. 再让 SettingsRoot 的真实控件通过 `SettingsUiService.state` 与 `save.execute` 工作；在行为等价证据后删除旧 presentation bridge 路径。
+3. R2-08 仅保持 typed-contract-scaffold：补 source/artifact consistency gate、artifact smoke、ESM 配置和最小 service provider/consumer 装配前，不声明 public runtime ready。
+4. 保持 R2-00/R2-01 的能力由真实 consumer 驱动，不开放任意 selector/HTML 注入，也不创建第二套生命周期或 durable UI Store；Plugin Loader 与 chat plugin protocol 保持冻结。
 
-补充门禁记录：本批补回 `nextUiNotificationForum` / `nextUiNotificationMemo`，并让 NextShell controller 成为唯一 owner；旧 `event-listeners.js` 中对应的重复 document-level binding 仍保持注释隔离。frontend-plugin-loader 现在提供 `loaded/results/ready` 终态合同；Electron smoke 已从无输出挂起变为明确失败：`loaded=true, results=[], dynamicWallpaper=false`。根因是 `VCPDistributedServer/Plugin/VChatDynamicWallpaper/plugin-manifest.json.block`，本轮不擅自启用用户禁用插件。
+补充门禁记录：本批补回 `nextUiNotificationForum` / `nextUiNotificationMemo`，并让 NextShell controller 成为唯一 owner；旧 `event-listeners.js` 中对应的重复 document-level binding 仍保持注释隔离。Plugin Loader 与 chat plugin manifest 的越界改动已回退，UI Runtime 只消费既有插件能力；完整 UI Apps smoke 仍受 `VCPDistributedServer/Plugin/VChatDynamicWallpaper/plugin-manifest.json.block` 外部 readiness blocker 影响，本轮不擅自启用用户禁用插件。
