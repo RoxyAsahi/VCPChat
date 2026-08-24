@@ -37,6 +37,8 @@ let destroyPromise = null;
 let typedSettingsService = null;
 let typedSettingsRegistry = null;
 let typedRustAssistantService = null;
+let typedForumConfigService = null;
+let typedAssistantRuntimeService = null;
 let typedSettingsState = Object.freeze({});
 let typedSettingsExternalRelease = null;
 let typedSettingsSaveChain = Promise.resolve();
@@ -108,6 +110,11 @@ function mountTypedSettingsConsumer(root) {
         const settings = snapshot.value || {};
         const projection = [
             ['userName', 'userName'],
+            ['userAvatarBorderColor', 'userAvatarBorderColor'],
+            ['userAvatarBorderColorText', 'userAvatarBorderColor'],
+            ['userNameTextColor', 'userNameTextColor'],
+            ['userNameTextColorText', 'userNameTextColor'],
+            ['userUseThemeColorsInChat', 'userUseThemeColorsInChat', 'checked'],
             ['continueWritingPrompt', 'continueWritingPrompt'],
             ['vcpServerUrl', 'vcpServerUrl'],
             ['vcpApiKey', 'vcpApiKey'],
@@ -211,6 +218,20 @@ function mountTypedSettingsConsumer(root) {
         if (bubbleWidthSettings) bubbleWidthSettings.hidden = mode !== 'bubble';
         const bubbleMetaSettings = form.querySelector('#userChatBubbleMetaSettings');
         if (bubbleMetaSettings) bubbleMetaSettings.style.display = settings.enableUserChatBubbleUi === true ? 'flex' : 'none';
+        const paths = Array.isArray(settings.networkNotesPaths)
+            ? settings.networkNotesPaths.map(path => String(path || '')).filter(Boolean)
+            : [];
+        const pathsContainer = form.querySelector('#networkNotesPathsContainer');
+        if (pathsContainer) {
+            const current = [...pathsContainer.querySelectorAll('input[name="networkNotesPath"]')].map(input => input.value);
+            if (current.join('\u0000') !== paths.join('\u0000')) {
+                pathsContainer.replaceChildren();
+                const addPath = window.uiHelperFunctions?.addNetworkPathInput;
+                if (typeof addPath === 'function') {
+                    (paths.length ? paths : ['']).forEach(path => addPath(path));
+                }
+            }
+        }
     };
     const release = service.state.subscribe(apply);
     ensurePresentationScope()?.own(release, 'typed-settings-consumer', 'ui-presentation');
@@ -263,6 +284,45 @@ function mountTypedSettingsConsumer(root) {
         ensurePresentationScope()?.own(release, 'typed-rust-assistant-consumer', 'ui-presentation');
         void rustService.refresh.execute();
     }
+    const forumService = ensureForumConfigUiService();
+    if (forumService) {
+        const applyForum = (_value, snapshot) => {
+            if (form.dataset.vcpSettingsDirty === 'true' || form.dataset.globalSettingsSaving === 'true') return;
+            const forum = snapshot.value || {};
+            const username = form.querySelector('#adminUsername');
+            const password = form.querySelector('#adminPassword');
+            if (username && forum.username !== undefined) username.value = String(forum.username || '');
+            if (password && forum.password !== undefined) password.value = String(forum.password || '');
+        };
+        const release = forumService.state.subscribe(applyForum);
+        ensurePresentationScope()?.own(release, 'typed-forum-config-consumer', 'ui-presentation');
+        void forumService.refresh.execute();
+    }
+    const runtimeService = ensureAssistantRuntimeUiService();
+    if (runtimeService) {
+        const applyRuntime = (_value, snapshot) => {
+            const runtime = snapshot.value || {};
+            const modeText = runtime.mode === 'rust' ? 'Rust' : (runtime.mode === 'disabled' ? 'Disabled' : runtime.mode || 'Unknown');
+            const desiredText = runtime.desiredMode === 'rust' ? 'Rust' : (runtime.desiredMode === 'disabled' ? 'Disabled' : runtime.desiredMode || 'Unknown');
+            const setText = (id, value) => { const node = form.querySelector(`#${id}`); if (node) node.textContent = String(value ?? '无'); };
+            setText('assistantRuntimeMode', modeText);
+            setText('assistantRuntimeDesiredMode', desiredText);
+            setText('assistantRuntimeActive', runtime.active === true ? '运行中' : '未运行');
+            setText('assistantRuntimeDebugReason', runtime.debugReason || '无');
+            setText('assistantRuntimeForwardedCount', runtime.integrationTrace?.forwardedCount ?? 0);
+            setText('assistantRuntimeSidecarActive', runtime.sidecarActive === true ? '运行中' : '未运行');
+            setText('assistantRuntimeProcessAlive', runtime.adapterProcessAlive === true ? '运行中' : '未运行');
+            setText('assistantRuntimeProcessPid', runtime.adapterProcessPid || '无');
+            setText('assistantRuntimeAutoFallbackCount', runtime.runtimeFallbackTrace?.autoFallbackCount ?? 0);
+            setText('assistantRuntimeAutoFallbackReason', runtime.runtimeFallbackTrace?.lastAutoFallbackReason || '无');
+            setText('assistantRuntimeReceivedCount', runtime.integrationTrace?.receivedSelectionCount ?? 0);
+            setText('assistantRuntimeShowAttemptCount', runtime.integrationTrace?.showAttemptCount ?? 0);
+            setText('assistantRuntimeShowError', runtime.integrationTrace?.lastShowError || '无');
+        };
+        const release = runtimeService.state.subscribe(applyRuntime);
+        ensurePresentationScope()?.own(release, 'typed-assistant-runtime-consumer', 'ui-presentation');
+        void runtimeService.refresh.execute();
+    }
 }
 
 function ensureRustAssistantUiService() {
@@ -279,6 +339,35 @@ function ensureRustAssistantUiService() {
         services: { ...context.services, rustAssistantAdapter: adapter },
     }));
     return typedRustAssistantService;
+}
+
+function ensureForumConfigUiService() {
+    if (typedForumConfigService || !typedSettingsRegistry || !window.VCPUIUX?.createForumConfigUiService) return typedForumConfigService;
+    const chatAPI = window.chatAPI;
+    if (!chatAPI?.loadForumConfig || !chatAPI?.saveForumConfig) return null;
+    const adapter = window.VCPUIUX.createForumConfigUiService({
+        get: () => chatAPI.loadForumConfig(),
+        save: patch => chatAPI.saveForumConfig(patch),
+    });
+    const definition = window.VCPUIUX.forumConfigUiDefinition;
+    typedForumConfigService = typedSettingsRegistry.install(definition, context => definition.provide({
+        ...context,
+        services: { ...context.services, forumConfigAdapter: adapter },
+    }));
+    return typedForumConfigService;
+}
+
+function ensureAssistantRuntimeUiService() {
+    if (typedAssistantRuntimeService || !typedSettingsRegistry || !window.VCPUIUX?.createAssistantRuntimeUiService) return typedAssistantRuntimeService;
+    const chatAPI = window.chatAPI;
+    if (!chatAPI?.getAssistantRuntimeStatus) return null;
+    const adapter = window.VCPUIUX.createAssistantRuntimeUiService({ get: () => chatAPI.getAssistantRuntimeStatus() });
+    const definition = window.VCPUIUX.assistantRuntimeUiDefinition;
+    typedAssistantRuntimeService = typedSettingsRegistry.install(definition, context => definition.provide({
+        ...context,
+        services: { ...context.services, assistantRuntimeAdapter: adapter },
+    }));
+    return typedAssistantRuntimeService;
 }
 
 function ensurePresentationScope() {
@@ -1271,6 +1360,14 @@ window.VCPUISettingsBridge = Object.freeze({
     getRustAssistantService() {
         ensureTypedSettingsService();
         return ensureRustAssistantUiService();
+    },
+    getForumConfigService() {
+        ensureTypedSettingsService();
+        return ensureForumConfigUiService();
+    },
+    getAssistantRuntimeService() {
+        ensureTypedSettingsService();
+        return ensureAssistantRuntimeUiService();
     },
     destroy() {
         if (destroyPromise) return destroyPromise;

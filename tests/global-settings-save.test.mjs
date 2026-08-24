@@ -85,6 +85,10 @@ test('global settings saves the server URL once with canonical presentation', as
         let typedPayload;
         let typedRustCalls = 0;
         let typedRustPayload;
+        let rustShouldFail = false;
+        let typedForumCalls = 0;
+        let typedForumPayload;
+        let forumShouldFail = false;
         dom.window.VCPUISettingsBridge = {
             getTypedService: () => ({
                 save: {
@@ -100,7 +104,16 @@ test('global settings saves the server URL once with canonical presentation', as
                     execute: async payload => {
                         typedRustCalls += 1;
                         typedRustPayload = payload;
-                        return { success: true };
+                        return rustShouldFail ? { success: false, error: 'rust-denied' } : { success: true };
+                    },
+                },
+            }),
+            getForumConfigService: () => ({
+                save: {
+                    execute: async payload => {
+                        typedForumCalls += 1;
+                        typedForumPayload = payload;
+                        return forumShouldFail ? { success: false, error: 'forum-denied' } : { success: true };
                     },
                 },
             }),
@@ -108,13 +121,30 @@ test('global settings saves the server URL once with canonical presentation', as
         dom.window.chatAPI.saveSettings = () => {
             throw new Error('legacy save path should not run when typed service is available');
         };
+        dom.window.document.getElementById('adminUsername').value = 'forum-admin';
+        dom.window.document.getElementById('adminPassword').value = 'forum-password';
         await handleSaveGlobalSettings(event, deps);
         assert.equal(typedCalls, 1, 'global Settings form delegates persistence to typed service command');
         assert.equal(typedPayload.vcpServerUrl, 'http://localhost:6005');
         assert.equal(saveCalls, 1, 'typed service command avoids a second legacy IPC save');
         assert.equal(typedRustCalls, 1, 'Rust settings save delegates to the typed Rust service command');
         assert.equal(typedRustPayload?.debugMode, false);
+        assert.equal(typedForumCalls, 1, 'forum settings save delegates to the typed Forum service command');
+        assert.equal(typedForumPayload?.username, 'forum-admin');
 
+        rustShouldFail = true;
+        await handleSaveGlobalSettings(event, deps);
+        assert.equal(saveResults.at(-1)?.success, false, 'Rust command failure publishes a retryable terminal state');
+        assert.match(saveResults.at(-1)?.error || '', /rust-denied/, 'Rust command error reaches the SettingsRoot retry UI');
+
+        rustShouldFail = false;
+        forumShouldFail = true;
+        await handleSaveGlobalSettings(event, deps);
+        assert.equal(saveResults.at(-1)?.success, false, 'Forum command failure publishes a retryable terminal state');
+        assert.match(saveResults.at(-1)?.error || '', /forum-denied/, 'Forum command error reaches the SettingsRoot retry UI');
+
+        dom.window.document.getElementById('adminUsername').value = '';
+        dom.window.document.getElementById('adminPassword').value = '';
         delete dom.window.VCPUISettingsBridge;
         let resolveLate;
         dom.window.chatAPI.saveSettings = () => new Promise(resolve => { resolveLate = resolve; });
@@ -125,12 +155,12 @@ test('global settings saves the server URL once with canonical presentation', as
             'a permanently pending save must become a recoverable terminal state'
         );
         assert.equal(form.dataset.globalSettingsSaving, undefined, 'timeout must release the submit lock');
-        assert.equal(saveResults.length, 3, 'each save attempt publishes exactly one terminal event');
+        assert.equal(saveResults.length, 5, 'each save attempt publishes exactly one terminal event');
         assert.equal(saveResults.at(-1)?.success, false, 'timeout publishes a failure terminal state to autosave');
         assert.match(saveResults.at(-1)?.error || '', /保存设置超时/, 'timeout error is available to retry UI');
         resolveLate({ success: true });
         await new Promise(resolve => setImmediate(resolve));
-        assert.equal(saveResults.length, 3, 'late IPC success cannot resurrect a timed-out UI save');
+        assert.equal(saveResults.length, 5, 'late IPC success cannot resurrect a timed-out UI save');
     } finally {
         for (const [name, value] of Object.entries(previousGlobals)) {
             if (value === undefined) delete globalThis[name];

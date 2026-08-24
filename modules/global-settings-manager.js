@@ -276,9 +276,15 @@ async function saveGlobalSettings(deps, settingsForm) {
                 replyUsername: newSettings.userName || '用户',
                 rememberCredentials: true
             };
-            const forumResult = await chatAPI.saveForumConfig(forumConfig);
+            const forumService = window.VCPUISettingsBridge?.getForumConfigService?.();
+            const forumResult = forumService?.save?.execute
+                ? await forumService.save.execute(forumConfig)
+                : await chatAPI.saveForumConfig(forumConfig);
             if (!forumResult?.success) {
-                console.warn('[GlobalSettings] Failed to save forum config:', forumResult?.error);
+                const error = forumResult?.error || '未知错误';
+                reportSaveResult(false, `论坛配置保存失败: ${error}`);
+                uiHelperFunctions.showToastNotification(`论坛配置保存失败: ${error}`, 'error');
+                return;
             }
         } catch (forumErr) {
             console.warn('[GlobalSettings] Error saving forum config:', forumErr);
@@ -301,7 +307,14 @@ async function saveGlobalSettings(deps, settingsForm) {
                 ? await rustService.save.execute(rustConfigPatch)
                 : await chatAPI.saveRustAssistantConfig(rustConfigPatch);
             if (!rustSaveResult?.success) {
-                uiHelperFunctions.showToastNotification(`Rust助手配置保存失败: ${rustSaveResult?.error || '未知错误'}`, 'warning');
+                const error = rustSaveResult?.error || '未知错误';
+                reportSaveResult(false, `Rust助手配置保存失败: ${error}`);
+                uiHelperFunctions.showToastNotification(`Rust助手配置保存失败: ${error}`, 'error');
+                // Global settings are already durable, but the Rust capability
+                // is a separate command boundary. Keep SettingsRoot open so
+                // autosave can expose retry instead of closing on a partial
+                // success.
+                return;
             } else if (rustSaveResult.reconcile?.modeChanged) {
                 const modeLabel = rustSaveResult.reconcile.mode === 'rust' ? 'Rust' : 'Disabled';
                 const restartText = rustSaveResult.reconcile.restarted ? '并已热重启监听器' : '将在下次启用监听器时生效';

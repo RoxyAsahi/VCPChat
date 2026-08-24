@@ -591,15 +591,17 @@ export function createMainChatSettingsPresentationOwner({
             safeSet('userName', globalSettings.userName || '用户');
         }
 
-        const borderColor = globalSettings.userAvatarBorderColor || '#3d5a80';
-        safeSet('userAvatarBorderColor', borderColor);
-        safeSet('userAvatarBorderColorText', borderColor);
+        if (!typedSettingsProjectionActive) {
+            const borderColor = globalSettings.userAvatarBorderColor || '#3d5a80';
+            safeSet('userAvatarBorderColor', borderColor);
+            safeSet('userAvatarBorderColorText', borderColor);
 
-        const nameColor = globalSettings.userNameTextColor || '#ffffff';
-        safeSet('userNameTextColor', nameColor);
-        safeSet('userNameTextColorText', nameColor);
+            const nameColor = globalSettings.userNameTextColor || '#ffffff';
+            safeSet('userNameTextColor', nameColor);
+            safeSet('userNameTextColorText', nameColor);
 
-        safeCheck('userUseThemeColorsInChat', globalSettings.userUseThemeColorsInChat);
+            safeCheck('userUseThemeColorsInChat', globalSettings.userUseThemeColorsInChat);
+        }
 
         if (!typedSettingsProjectionActive) {
             const completedUrl = getSettingsManager().completeVcpUrl(globalSettings.vcpServerUrl || '');
@@ -628,14 +630,16 @@ export function createMainChatSettingsPresentationOwner({
         }
 
         // Network Notes Paths
-        const networkNotesPathsContainer = document.getElementById('networkNotesPathsContainer');
-        if (networkNotesPathsContainer) {
-            networkNotesPathsContainer.innerHTML = '';
-            const paths = Array.isArray(globalSettings.networkNotesPaths) ? globalSettings.networkNotesPaths : (globalSettings.networkNotesPath ? [globalSettings.networkNotesPath] : []);
-            if (paths.length === 0) {
-                uiHelperFunctions.addNetworkPathInput('');
-            } else {
-                paths.forEach(path => uiHelperFunctions.addNetworkPathInput(path));
+        if (!typedSettingsProjectionActive) {
+            const networkNotesPathsContainer = document.getElementById('networkNotesPathsContainer');
+            if (networkNotesPathsContainer) {
+                networkNotesPathsContainer.innerHTML = '';
+                const paths = Array.isArray(globalSettings.networkNotesPaths) ? globalSettings.networkNotesPaths : (globalSettings.networkNotesPath ? [globalSettings.networkNotesPath] : []);
+                if (paths.length === 0) {
+                    uiHelperFunctions.addNetworkPathInput('');
+                } else {
+                    paths.forEach(path => uiHelperFunctions.addNetworkPathInput(path));
+                }
             }
         }
 
@@ -779,15 +783,17 @@ export function createMainChatSettingsPresentationOwner({
         }
 
         // 加载论坛配置并填充管理员账号/密码
-        try {
-            const forumConfig = await chatAPI.loadForumConfig();
-            if (!isCurrent(token)) return false;
-            if (forumConfig && !forumConfig.error) {
-                safeSet('adminUsername', forumConfig.username || '');
-                safeSet('adminPassword', forumConfig.password || '');
+        if (!windowRef?.VCPUISettingsBridge?.getForumConfigService?.()) {
+            try {
+                const forumConfig = await chatAPI.loadForumConfig();
+                if (!isCurrent(token)) return false;
+                if (forumConfig && !forumConfig.error) {
+                    safeSet('adminUsername', forumConfig.username || '');
+                    safeSet('adminPassword', forumConfig.password || '');
+                }
+            } catch (err) {
+                console.warn('[Renderer] Failed to load forum config for global settings:', err);
             }
-        } catch (err) {
-            console.warn('[Renderer] Failed to load forum config for global settings:', err);
         }
 
         // Assistant Select
@@ -853,7 +859,7 @@ export function createMainChatSettingsPresentationOwner({
             }
         }
 
-        if (chatAPI?.getAssistantRuntimeStatus && document.getElementById('rustDebugMode')?.checked) {
+        if (!windowRef?.VCPUISettingsBridge?.getAssistantRuntimeService?.() && chatAPI?.getAssistantRuntimeStatus && document.getElementById('rustDebugMode')?.checked) {
             try {
                 const runtime = await chatAPI.getAssistantRuntimeStatus();
                 if (!isCurrent(token)) return false;
