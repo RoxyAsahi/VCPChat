@@ -157,6 +157,7 @@ function mountTypedSettingsConsumer(root) {
             ['minChunkBufferSize', 'minChunkBufferSize'],
             ['smoothStreamIntervalMs', 'smoothStreamIntervalMs'],
             ['showHomeVisualBrand', 'showHomeVisualBrand', 'checked'],
+            ['showHomeVisualTagline', 'showHomeVisualTagline', 'checked'],
             ['homeVisualTagline', 'homeVisualTagline'],
             ['appearanceDensity', 'appearanceProfile.density'],
             ['appearanceRadius', 'appearanceProfile.radius'],
