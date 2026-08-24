@@ -795,7 +795,7 @@ export function createMainChatSettingsPresentationOwner({
         if (assistantAgentSelect) {
             await getSettingsManager().populateAssistantAgentSelect();
             if (!isCurrent(token)) return false;
-            assistantAgentSelect.value = globalSettings.assistantAgent || '';
+            if (!typedSettingsProjectionActive) assistantAgentSelect.value = globalSettings.assistantAgent || '';
         }
 
         if (!typedSettingsProjectionActive) {

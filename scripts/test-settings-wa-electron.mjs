@@ -384,6 +384,7 @@ try {
         window.dispatchEvent(new CustomEvent('global-settings-updated', {
             detail: { settings: {
                 userName: 'typed-external-user',
+                assistantAgent: 'agent-b',
                 continueWritingPrompt: 'typed-external-prompt',
                 vcpServerUrl: 'http://typed-external:6005',
                 vcpApiKey: 'typed-api-key',
@@ -435,6 +436,7 @@ try {
         }));
     });
     await page.waitForFunction(() => document.getElementById('userName')?.value === 'typed-external-user');
+    assert.equal(await page.$eval('#assistantAgent', node => node.value), 'agent-b', 'dynamic assistant select consumes typed Settings snapshot');
     assert.equal(await page.$eval('#continueWritingPrompt', node => node.value), 'typed-external-prompt', 'clean form consumes typed Settings snapshot');
     assert.equal(await page.$eval('#vcpServerUrl', node => node.value), 'http://typed-external:6005', 'clean text control consumes typed Settings snapshot');
     assert.equal(await page.$eval('#vcpApiKey', node => node.value), 'typed-api-key', 'clean API key control consumes typed Settings snapshot');

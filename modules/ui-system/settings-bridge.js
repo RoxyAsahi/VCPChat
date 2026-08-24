@@ -114,6 +114,7 @@ function mountTypedSettingsConsumer(root) {
             ['vcpLogUrl', 'vcpLogUrl'],
             ['vcpLogKey', 'vcpLogKey'],
             ['topicSummaryModel', 'topicSummaryModel'],
+            ['assistantAgent', 'assistantAgent'],
             ['voiceModeLocal', 'voiceMode', 'checked-value', 'local'],
             ['voiceModeNetwork', 'voiceMode', 'checked-value', 'network'],
             ['speechRecognizerBrowserPath', 'speechRecognizerBrowserPath'],
@@ -212,6 +213,15 @@ function mountTypedSettingsConsumer(root) {
     };
     const release = service.state.subscribe(apply);
     ensurePresentationScope()?.own(release, 'typed-settings-consumer', 'ui-presentation');
+    const assistantSelect = form?.querySelector('#assistantAgent');
+    if (assistantSelect && window.MutationObserver) {
+        const observer = new MutationObserver(() => {
+            const snapshot = service.state.getSnapshot();
+            apply(snapshot.value, snapshot);
+        });
+        observer.observe(assistantSelect, { childList: true });
+        ensurePresentationScope()?.own(() => observer.disconnect(), 'typed-assistant-options-consumer', 'ui-presentation');
+    }
 }
 
 function ensurePresentationScope() {
