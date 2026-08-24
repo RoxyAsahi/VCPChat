@@ -15,6 +15,7 @@
     "guard:next-delta": "node scripts/check-next-delta-contract.mjs",
     "guard:chat-kernel-consumers": "node scripts/check-chat-kernel-consumers.mjs",
     "build:chat-event-graph": "node scripts/build-chat-event-graph.mjs",
+    "test:chat-event-graph-determinism": "node scripts/test-chat-event-graph-determinism.mjs",
     "check:chat-contracts": "node scripts/check-chat-contracts.mjs",
     "test:chat-contract-invariants": "node scripts/run-chat-contract-invariants.mjs && node scripts/test-chat-contract-invalid.mjs",
     "check:artifact-plane": "node scripts/check-artifact-plane.mjs",

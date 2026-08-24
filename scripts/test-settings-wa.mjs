@@ -199,14 +199,31 @@ const clickNav = (index) => {
 };
 const activeSectionId = () => document.querySelector('#globalSettingsModal .settings-section.active')?.id;
 
+const assertNavigationConsistency = (expected) => {
+    const activeSections = [...document.querySelectorAll('#globalSettingsModal .settings-section.active')];
+    const selectedNav = document.querySelector('#globalSettingsModal .vcp-harness-settings-nav-cell[data-state="selected"]');
+    assert.equal(activeSections.length, 1, `exactly one settings section is active for ${expected}`);
+    assert.equal(activeSections[0].id, `section-${expected}`, `right panel follows ${expected}`);
+    assert.equal(selectedNav?.dataset.section, expected, `left nav follows ${expected}`);
+};
+
 // 切换分类不丢未保存值
 clickNav(0); // user-identity
+assertNavigationConsistency('user-identity');
 setField('userName', '未保存测试');
 clickNav(1); // server-connection
 assert.equal(activeSectionId(), 'section-server-connection', 'nav switches to server-connection');
+assertNavigationConsistency('server-connection');
 clickNav(0);
+assertNavigationConsistency('user-identity');
 assert.equal(document.getElementById('userName').value, '未保存测试', 'unsaved value survives category switch');
 clickNav(1);
+assertNavigationConsistency('server-connection');
+
+for (const value of ['appearance-settings', 'render-settings', 'selection-assistant', 'voice-settings', 'advanced-features', 'quick-actions']) {
+    document.querySelector(`#globalSettingsModal .vcp-harness-settings-nav-cell[data-section="${value}"]`).click();
+    assertNavigationConsistency(value);
+}
 
 assert.equal(document.querySelectorAll('#globalSettingsModal .vcp-harness-settings-nav-cell').length, 8, 'unified nav remains stable after switching');
 

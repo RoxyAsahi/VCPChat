@@ -22,6 +22,7 @@ function walk(relative) {
     }
 }
 for (const sourceRoot of sourceRoots) walk(sourceRoot);
+files.sort();
 
 const eventPatterns = [
     { kind: 'custom-event-dispatch', regex: /dispatchEvent\(new (?:CustomEvent|CustomEventConstructor)\(['"]([^'"]+)['"]/g },
@@ -74,13 +75,19 @@ const graph = {
     filesScanned: files.sort(),
     events: [...nodes.values()].map(node => ({
         ...node,
-        producers: [...new Map(node.producers.map(item => [`${item.file}:${item.line}:${item.kind}`, item])).values()],
+        producers: [...new Map(node.producers.map(item => [`${item.file}:${item.line}:${item.kind}`, item])).values()]
+            .sort((a, b) => `${a.file}:${a.line}:${a.kind}`.localeCompare(`${b.file}:${b.line}:${b.kind}`)),
         consumers: [...new Map(node.consumers.map(item => [`${item.file}:${item.line}:${item.kind}`, item])).values()]
+            .sort((a, b) => `${a.file}:${a.line}:${a.kind}`.localeCompare(`${b.file}:${b.line}:${b.kind}`)),
+        evidence: [...node.evidence]
+            .sort((a, b) => `${a.file}:${a.line}:${a.kind}:${a.match}`.localeCompare(`${b.file}:${b.line}:${b.kind}:${b.match}`))
     })).sort((a, b) => a.name.localeCompare(b.name)),
     registeredDynamic: [...new Map(registeredDynamic.map(item => [`${item.file}:${item.line}`, item])).values()],
     undiscovered: [...new Map(undiscovered.map(item => [`${item.file}:${item.line}`, item])).values()]
 };
-const output = path.join(root, 'docs/contracts/generated/chat-event-graph.json');
+const output = process.env.VCPCHAT_GRAPH_OUTPUT
+    ? path.resolve(process.env.VCPCHAT_GRAPH_OUTPUT)
+    : path.join(root, 'docs/contracts/generated/chat-event-graph.json');
 const serialized = `${JSON.stringify(graph, null, 2)}\n`;
 if (process.argv.includes('--check')) {
     if (!fs.existsSync(output) || fs.readFileSync(output, 'utf8') !== serialized) {

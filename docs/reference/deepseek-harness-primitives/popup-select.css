@@ -1,0 +1,30 @@
+/* Clipped from Harness: packages/client/ui-commands/src/client/PopupSelectView.module.css */
+.card {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  z-index: 100;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  min-width: min(220px, 100%);
+  max-height: 320px;
+  overflow: hidden;
+  border: 1px solid var(--dsw-alias-border-inverted);
+  border-radius: 12px;
+  background: var(--dsw-specific-menu);
+  box-shadow: var(--dsw-shadow-lv3);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary);
+}
+
+.rowActive { background: var(--dsw-alias-interactive-bg-hover); }

@@ -826,6 +826,11 @@ function mountSettingsShell(root) {
         state.meta.forEach(item => {
             const section = root.querySelector(`#section-${item.value}`);
             if (!section) return;
+            // The active section is derived from the same state as the nav.
+            // Re-assert it on every render so stale classes from a reused
+            // modal or a bootstrap refresh cannot leave the two columns out
+            // of sync.
+            section.classList.toggle('active', item.value === state.active);
             section.removeAttribute('role');
             section.removeAttribute('aria-labelledby');
             section.removeAttribute('aria-hidden');
@@ -833,12 +838,7 @@ function mountSettingsShell(root) {
     };
 
     const activateSection = (value) => {
-        if (value === state.active) return;
-        root.querySelectorAll('.settings-section').forEach(section => {
-            section.classList.remove('active');
-        });
-        const target = document.getElementById(`section-${value}`);
-        if (target) target.classList.add('active');
+        if (!state.meta.some(item => item.value === value)) return;
         state.active = value;
         renderList();
     };

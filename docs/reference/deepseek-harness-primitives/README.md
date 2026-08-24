@@ -1,0 +1,28 @@
+# DeepSeek Harness primitive reference
+
+This directory is a deliberately trimmed, read-only reference snapshot of the
+local DeepSeek Harness source. It is kept beside VCPChat's own implementation
+so visual changes can be reviewed against source geometry instead of screenshots.
+
+Source checkout: `/Users/asahi/Documents/Codex/deepseek-harness`
+
+The excerpts preserve the relevant DOM/CSS contract and source path. They do
+not add a runtime dependency and must not be imported by the Electron app.
+
+| VCP primitive | Harness source | Reference |
+| --- | --- | --- |
+| settings shell | `packages/client/ui-settings-general/src/client/SettingsRoot.module.css` | `settings-shell.css` |
+| text/input/select field | `packages/client/ui-settings-models/src/client/ModelsSection.module.css` | `field-select.css` |
+| menu/dropdown | `packages/client/ui-primitives/src/Menu.module.css` | `menu.css` |
+| popup select | `packages/client/ui-commands/src/client/PopupSelectView.module.css` | `popup-select.css` |
+| buttons | `packages/client/ui-primitives/src/Button.module.css` | `button.css` |
+| disclosure | `packages/client/ui-primitives/src/DisclosureRow.module.css` | `disclosure.css` |
+
+## Comparison rules
+
+- Keep the source geometry (height, padding, radius, gap, typography and
+  hover/focus behavior) unchanged when porting a primitive.
+- Only map `--dsw-*` color/elevation aliases to VCP theme variables.
+- Preserve one native business node (`input`, `select`, `textarea` or radio)
+  and treat any wrapper as presentation.
+- A VCP deviation requires a written reason in the audit document and a test.
