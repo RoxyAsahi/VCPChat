@@ -352,7 +352,7 @@ await fs.writeFile(path.join(appData, 'settings.json'), JSON.stringify({
 }), 'utf8');
 const debugPort = await freePort();
 const stderr = { value: '' };
-const child = spawn(electron, ['.', '--allow-multiple-instances', `--remote-debugging-port=${debugPort}`], {
+const child = spawn(electron, ['.', '--allow-multiple-instances', `--user-data-dir=${path.join(appData, 'ElectronProfile')}`, `--remote-debugging-port=${debugPort}`], {
     cwd: root,
     env: { ...process.env, VCPCHAT_APP_DATA_DIR: appData, VCPCHAT_E2E_TEST: '1' },
     stdio: ['ignore', 'ignore', 'pipe'],
@@ -391,6 +391,7 @@ try {
     };
     trackPage(page);
     await page.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout });
+    if (process.env.VCPCHAT_SEQUENCE_DEBUG === '1') console.log('renderer ready');
     const providerBoundary = await page.evaluate(async () => {
         const [{ chatManager }, { createMessageRenderer }, { createStreamProjection }] = await Promise.all([
             import('./modules/chatManager.js'),
@@ -441,6 +442,7 @@ try {
         hasHistoryRef: false,
     }, 'VCPMainChatState must remain a frozen, non-replaceable read-only plugin facade');
     await page.waitForFunction(ids => ids.every(id => document.querySelector(`#agentList > [data-item-id="${id}"][data-item-type="agent"]`)), { timeout }, identities);
+    if (process.env.VCPCHAT_SEQUENCE_DEBUG === '1') console.log('identity list ready');
 
     const click = async selector => page.evaluate(value => document.querySelector(value)?.click(), selector);
     const waitForRecoveredMainPage = async () => {
@@ -1303,6 +1305,9 @@ try {
                         assert.deepEqual(snapshot.activeItems, [model.identity.id], `run ${runIndex + 1}, step ${index}: active item DOM diverged`);
                         assert.deepEqual(snapshot.activeTopics, [model.topicId], `run ${runIndex + 1}, step ${index}: active topic DOM diverged`);
                     }
+                },
+                onStep: async ({ entry, index }) => {
+                    if (process.env.VCPCHAT_SEQUENCE_DEBUG === '1') console.log(`sequence step ${index + 1}: ${entry.id}`);
                 },
             });
         } catch (error) {
