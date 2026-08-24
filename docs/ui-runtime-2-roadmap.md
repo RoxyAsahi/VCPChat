@@ -306,4 +306,4 @@ R2-02 retry-chain 增量（2026-08-24）：timeout cancellation 现在同时切�
 
 Stress evidence refresh（2026-08-24）：`VCPCHAT_STRESS_CYCLES=5 VCPCHAT_STRESS_WARMUP=1 npm run test:electron-lifecycle-stress` 仍在 checkpoint 处失败，listeners 从 baseline 579 增至 609（+30），但 lifecycle scopes/resources、connected elements、detached roots/icons/options 均稳定。该混合场景包含多个非 Settings Surface，不能据此归因或宣布 Settings failure/retry + teardown complete。
 
-Settings-only stress evidence（2026-08-24）：`VCPCHAT_SETTINGS_REOPEN_CYCLES=10 node scripts/test-settings-wa-electron.mjs` 通过；10 次 close/reopen 均保持单一 `settings-presentation` 与 `ui-services` scope、稳定 network path 行数和四个 typed services，随后显式 teardown 撤销全部 Settings owner。该证据支持 Settings Surface 自身稳定，但不替代混合全局 lifecycle stress。
+Settings-only stress evidence（2026-08-24）：`VCPCHAT_SETTINGS_REOPEN_CYCLES=20 node scripts/test-settings-wa-electron.mjs` 通过；20 次 close/reopen 均保持单一 `settings-presentation` 与 `ui-services` scope、稳定 network path 行数和四个 typed services，随后显式 teardown 撤销全部 Settings owner。该证据支持 Settings Surface 自身稳定，但不替代混合全局 lifecycle stress。
