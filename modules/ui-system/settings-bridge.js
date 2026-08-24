@@ -35,6 +35,7 @@ let presentationScope = null;
 let destroyed = false;
 let destroyPromise = null;
 let typedSettingsService = null;
+let typedSettingsRegistry = null;
 let typedSettingsState = Object.freeze({});
 let typedSettingsExternalRelease = null;
 let typedSettingsSaveChain = Promise.resolve();
@@ -74,16 +75,27 @@ function ensureTypedSettingsService() {
         },
     });
     void window.chatAPI?.loadSettings?.().then(settings => publishExternal(settings)).catch(() => {});
+    if (window.VCPUIUX?.createUiServiceRegistryFromScope && bridgeScope && window.VCPUIUX?.settingsUiDefinition) {
+        typedSettingsRegistry = window.VCPUIUX.createUiServiceRegistryFromScope(bridgeScope);
+        const definition = window.VCPUIUX.settingsUiDefinition;
+        typedSettingsRegistry.install(definition, context => definition.provide({
+            ...context,
+            services: { ...context.services, settings: typedSettingsService },
+        }));
+    } else {
+        // Compatibility fallback while the typed browser entry is unavailable.
+        bridgeScope?.own(() => typedSettingsService?.dispose?.(), 'typed-settings-service', 'ui-service');
+    }
     bridgeScope?.own(() => {
         typedSettingsDisposed = true;
-        typedSettingsService?.dispose?.();
         typedSettingsExternalRelease?.();
-    }, 'typed-settings-service', 'ui-service');
+    }, 'typed-settings-events', 'ui-service');
     return typedSettingsService;
 }
 
 function mountTypedSettingsConsumer(root) {
-    const service = ensureTypedSettingsService();
+    const fallbackService = ensureTypedSettingsService();
+    const service = typedSettingsRegistry?.get('settings-ui') || fallbackService;
     if (!service || !root) return;
     const form = root.querySelector('#globalSettingsForm');
     const apply = (_value, snapshot) => {
@@ -1105,9 +1117,9 @@ window.VCPUISettingsBridge = Object.freeze({
         if (destroyPromise) return destroyPromise;
         destroyed = true;
         typedSettingsDisposed = true;
-        typedSettingsService?.dispose?.();
-        typedSettingsExternalRelease?.();
         if (!bridgeScope) {
+            typedSettingsService?.dispose?.();
+            typedSettingsExternalRelease?.();
             document.removeEventListener('modal-visibility-changed', handleModalVisibility);
             document.removeEventListener('modal-ready', handleModalVisibility);
             document.removeEventListener('vcp-settings-surface-updated', handleSurfaceUpdated);

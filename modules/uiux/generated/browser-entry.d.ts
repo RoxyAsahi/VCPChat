@@ -15,5 +15,7 @@ interface LegacyScopeLike {
 declare const api: {
     mountThemePresenterFromScope(root: HTMLElement, theme: ThemeUiService["theme"], legacyScope: LegacyScopeLike): UiDisposer;
     createSettingsUiService: typeof createSettingsUiService;
+    createUiServiceRegistryFromScope(legacyScope: LegacyScopeLike): import("./runtime/service-registry.js").UiServiceRegistry;
+    settingsUiDefinition: import("./contracts.js").UiServiceDefinition<import("./index.js").SettingsUiService>;
 };
 export { api as uiuxBrowserApi };

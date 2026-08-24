@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
 import { createSettingsUiService } from '../modules/uiux/generated/adapters/settings.js';
+import { createUiScope } from '../modules/uiux/generated/runtime/scope.js';
+import { createUiServiceRegistry } from '../modules/uiux/generated/runtime/service-registry.js';
+
+const lifecycleModule = await import('../modules/ui-system/lifecycle-scope.js');
+const { LifecycleScope } = lifecycleModule.default || lifecycleModule;
 
 let state = { userName: 'artifact-user', density: 'comfortable' };
 const external = new Set();
@@ -26,4 +31,18 @@ await service.dispose();
 release();
 assert.equal(external.size, 0);
 assert.deepEqual(revisions, [0, 1, 2]);
-console.log('UIUX generated artifact smoke passed (SettingsUiService runtime contract).');
+
+const owner = createUiScope(new LifecycleScope('artifact-registry'));
+const registry = createUiServiceRegistry(owner);
+let serviceDisposed = false;
+const installed = registry.install({
+    id: 'artifact-service',
+    provide: () => ({ dispose: () => { serviceDisposed = true; } }),
+});
+assert.equal(registry.get('artifact-service'), installed);
+await registry.release('artifact-service');
+assert.equal(registry.get('artifact-service'), undefined);
+assert.equal(serviceDisposed, true);
+await registry.dispose();
+await owner.dispose('artifact-smoke-complete');
+console.log('UIUX generated artifact smoke passed (SettingsUiService + scoped registry contracts).');
