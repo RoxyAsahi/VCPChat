@@ -574,10 +574,16 @@ export function createMainChatSettingsPresentationOwner({
         // partial mount failure); in that window the legacy owner must still
         // populate the canonical business controls.
         const settingsRoot = document.getElementById('globalSettingsModal');
-        const typedSettingsProjectionActive = Boolean(
+        let typedSettingsProjectionActive = Boolean(
             windowRef?.VCPUISettingsBridge?.getTypedService?.()
             && settingsRoot?.dataset?.vcpSettingsRevision !== undefined
         );
+        const refreshTypedSettingsProjectionState = () => {
+            typedSettingsProjectionActive = Boolean(
+                windowRef?.VCPUISettingsBridge?.getTypedService?.()
+                && settingsRoot?.dataset?.vcpSettingsRevision !== undefined
+            );
+        };
         const syncRustDebugPanelVisibility = () => {
             const rustDebugModeEl = document.getElementById('rustDebugMode');
             const rustDebugPanelEl = document.getElementById('rustDebugPanel');
@@ -808,6 +814,7 @@ export function createMainChatSettingsPresentationOwner({
                 console.warn('[Renderer] Failed to load forum config for global settings:', err);
             }
         }
+        refreshTypedSettingsProjectionState();
 
         // Assistant Select
         const assistantAgentSelect = document.getElementById('assistantAgent');
@@ -816,6 +823,7 @@ export function createMainChatSettingsPresentationOwner({
             if (!isCurrent(token)) return false;
             if (!typedSettingsProjectionActive) assistantAgentSelect.value = globalSettings.assistantAgent || '';
         }
+        refreshTypedSettingsProjectionState();
 
         if (!typedSettingsProjectionActive) {
             safeCheck('enableDistributedServer', globalSettings.enableDistributedServer === true);
