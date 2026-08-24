@@ -565,7 +565,7 @@ export function createMainChatSettingsPresentationOwner({
             if (el) el.checked = !!checked;
         };
         // The SettingsRoot typed consumer owns the migrated projection fields
-        // once its scoped service is assembled. Keep this legacy startup
+        // once its real subscription is mounted. Keep this legacy startup
         // owner responsible for the remaining business controls, but do not
         // overwrite clean snapshots or dirty drafts that the typed consumer
         // deliberately protects.
