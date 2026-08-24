@@ -808,6 +808,8 @@ try {
         streamingMessages: document.querySelectorAll('.message-item.streaming').length,
         streams: window.VCPLifecycleInspector?.snapshot?.().streams || null,
         lifecycle: window.VCPLifecycle?.diagnostics?.summary?.() || null,
+        typedThemeProjection: document.querySelector('.next-ui-account-dock')?.dataset.themeEffective || null,
+        typedThemeReady: document.querySelector('.next-ui-account-dock')?.dataset.themeReady || null,
     }));
     const collectResourceCheckpoint = async label => {
         const rendererSession = await page.createCDPSession();
@@ -1301,6 +1303,8 @@ try {
                     assert.equal(snapshot.mode, requestedUiMode, `run ${runIndex + 1}, step ${index}: mode changed`);
                     assert.equal(snapshot.settingsActive, false, `run ${runIndex + 1}, step ${index}: modal retained`);
                     assert.equal(snapshot.mainConnected, true, `run ${runIndex + 1}, step ${index}: main chat surface disappeared`);
+                    assert.ok(['light', 'dark'].includes(snapshot.typedThemeProjection), `run ${runIndex + 1}, step ${index}: typed theme projection missing`);
+                    assert.equal(snapshot.typedThemeReady, 'true', `run ${runIndex + 1}, step ${index}: typed theme projection is not ready`);
                     assert.equal(snapshot.streamingMessages, 0, `run ${runIndex + 1}, step ${index}: stream owner survived settle`);
                     assert.equal(settledStreams?.activeInitializations || 0, 0, `run ${runIndex + 1}, step ${index}: active stream initialization survived settle`);
                     assert.equal(settledStreams?.prebuffered || 0, 0, `run ${runIndex + 1}, step ${index}: stream prebuffer survived settle`);

@@ -29,6 +29,7 @@
     "check:uiux": "tsc --project tsconfig.uiux.json --pretty false",
     "build:uiux": "tsc --project tsconfig.uiux.build.json --pretty false",
     "test:uiux": "node --experimental-strip-types --test tests/uiux-theme-presenter.test.mjs",
+    "test:electron-uiux-theme": "node scripts/test-electron-uiux-theme.mjs",
     "guard:design-subtraction": "node scripts/check-design-system-boundary.mjs",
     "guard:classic-parity": "node scripts/check-classic-parity.mjs",
     "guard:classic-retirement": "node scripts/check-classic-retirement-boundary.mjs",
