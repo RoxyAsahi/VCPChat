@@ -36,6 +36,7 @@ let destroyed = false;
 let destroyPromise = null;
 let typedSettingsService = null;
 let typedSettingsRegistry = null;
+let typedRustAssistantService = null;
 let typedSettingsState = Object.freeze({});
 let typedSettingsExternalRelease = null;
 let typedSettingsSaveChain = Promise.resolve();
@@ -222,6 +223,47 @@ function mountTypedSettingsConsumer(root) {
         observer.observe(assistantSelect, { childList: true });
         ensurePresentationScope()?.own(() => observer.disconnect(), 'typed-assistant-options-consumer', 'ui-presentation');
     }
+    const rustService = ensureRustAssistantUiService();
+    if (rustService) {
+        const applyRust = (_value, snapshot) => {
+            if (form.dataset.vcpSettingsDirty === 'true' || form.dataset.globalSettingsSaving === 'true') return;
+            const rust = snapshot.value || {};
+            const check = (id, value) => { const control = form.querySelector(`#${id}`); if (control) control.checked = Boolean(value); };
+            const set = (id, value) => { const control = form.querySelector(`#${id}`); if (control && value !== undefined && value !== null) control.value = String(value); };
+            check('rustUseAssistant', rust.useRustAssistant === true);
+            check('rustDebugMode', rust.debugMode === true);
+            const thresholds = rust.runtimeThresholds || {};
+            const custom = Object.entries({ minEventIntervalMs: 80, minDistance: 0, screenshotSuspendMs: 3000, clipboardConflictSuspendMs: 1000, clipboardCheckIntervalMs: 500 })
+                .some(([key, fallback]) => Number(thresholds[key] ?? fallback) !== fallback);
+            check('rustEnableCustomThresholds', custom);
+            set('rustMinEventIntervalMs', thresholds.minEventIntervalMs);
+            set('rustMinDistance', thresholds.minDistance);
+            set('rustScreenshotSuspendMs', thresholds.screenshotSuspendMs);
+            set('rustClipboardConflictSuspendMs', thresholds.clipboardConflictSuspendMs);
+            set('rustClipboardCheckIntervalMs', thresholds.clipboardCheckIntervalMs);
+            const panel = form.querySelector('#rustCustomThresholdsPanel');
+            if (panel) panel.style.display = custom ? 'block' : 'none';
+        };
+        const release = rustService.state.subscribe(applyRust);
+        ensurePresentationScope()?.own(release, 'typed-rust-assistant-consumer', 'ui-presentation');
+        void rustService.refresh.execute();
+    }
+}
+
+function ensureRustAssistantUiService() {
+    if (typedRustAssistantService || !typedSettingsRegistry || !window.VCPUIUX?.createRustAssistantUiService) return typedRustAssistantService;
+    const chatAPI = window.chatAPI;
+    if (!chatAPI?.getRustAssistantConfig || !chatAPI?.saveRustAssistantConfig) return null;
+    const adapter = window.VCPUIUX.createRustAssistantUiService({
+        get: () => chatAPI.getRustAssistantConfig(),
+        save: patch => chatAPI.saveRustAssistantConfig(patch),
+    });
+    const definition = window.VCPUIUX.rustAssistantUiDefinition;
+    typedRustAssistantService = typedSettingsRegistry.install(definition, context => definition.provide({
+        ...context,
+        services: { ...context.services, rustAssistantAdapter: adapter },
+    }));
+    return typedRustAssistantService;
 }
 
 function ensurePresentationScope() {
@@ -1210,6 +1252,10 @@ window.VCPUISettingsBridge = Object.freeze({
     refresh: scheduleRefresh,
     getTypedService() {
         return ensureTypedSettingsService();
+    },
+    getRustAssistantService() {
+        ensureTypedSettingsService();
+        return ensureRustAssistantUiService();
     },
     destroy() {
         if (destroyPromise) return destroyPromise;

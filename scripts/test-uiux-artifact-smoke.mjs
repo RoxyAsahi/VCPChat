@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createSettingsUiService } from '../modules/uiux/generated/adapters/settings.js';
 import { createUiScope } from '../modules/uiux/generated/runtime/scope.js';
 import { createUiServiceRegistry } from '../modules/uiux/generated/runtime/service-registry.js';
+import { createRustAssistantUiService } from '../modules/uiux/generated/adapters/rust-assistant.js';
 
 const lifecycleModule = await import('../modules/ui-system/lifecycle-scope.js');
 const { LifecycleScope } = lifecycleModule.default || lifecycleModule;
@@ -45,4 +46,15 @@ assert.equal(registry.get('artifact-service'), undefined);
 assert.equal(serviceDisposed, true);
 await registry.dispose();
 await owner.dispose('artifact-smoke-complete');
-console.log('UIUX generated artifact smoke passed (SettingsUiService + scoped registry contracts).');
+
+let rustState = { debugMode: false };
+const rustService = createRustAssistantUiService({
+    get: () => rustState,
+    save: async patch => { rustState = { ...rustState, ...patch }; return { success: true }; },
+});
+await rustService.refresh.execute();
+assert.equal(rustService.state.get().debugMode, false);
+await rustService.save.execute({ debugMode: true });
+assert.equal(rustService.state.get().debugMode, true);
+await rustService.dispose();
+console.log('UIUX generated artifact smoke passed (Settings + Rust Assistant + scoped registry contracts).');

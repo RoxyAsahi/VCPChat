@@ -1,4 +1,5 @@
 import { createSettingsUiService } from './adapters/settings.js';
+import { createRustAssistantUiService } from './adapters/rust-assistant.js';
 import type { ThemeUiService } from './providers/theme.js';
 import type { UiDisposer } from './contracts.js';
 interface LegacyScopeLike {
@@ -17,5 +18,7 @@ declare const api: {
     createSettingsUiService: typeof createSettingsUiService;
     createUiServiceRegistryFromScope(legacyScope: LegacyScopeLike): import("./runtime/service-registry.js").UiServiceRegistry;
     settingsUiDefinition: import("./contracts.js").UiServiceDefinition<import("./index.js").SettingsUiService>;
+    createRustAssistantUiService: typeof createRustAssistantUiService;
+    rustAssistantUiDefinition: import("./contracts.js").UiServiceDefinition<import("./adapters/rust-assistant.js").RustAssistantUiService>;
 };
 export { api as uiuxBrowserApi };
