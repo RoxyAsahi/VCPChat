@@ -1,3 +1,4 @@
+import { createSettingsUiService } from './adapters/settings.js';
 import type { ThemeUiService } from './providers/theme.js';
 import type { UiDisposer } from './contracts.js';
 interface LegacyScopeLike {
@@ -13,5 +14,6 @@ interface LegacyScopeLike {
 }
 declare const api: {
     mountThemePresenterFromScope(root: HTMLElement, theme: ThemeUiService["theme"], legacyScope: LegacyScopeLike): UiDisposer;
+    createSettingsUiService: typeof createSettingsUiService;
 };
 export { api as uiuxBrowserApi };

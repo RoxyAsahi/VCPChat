@@ -146,6 +146,8 @@ try {
                 .filter(row => !row.closest('.vcp-harness-general-item')).length,
             unwrappedBusinessRows: [...modal.querySelectorAll('#globalSettingsForm .vcp-settings-row, #globalSettingsForm .vcp-settings-control-row, #globalSettingsForm > .form-group')]
                 .filter(row => row.querySelector('input, select, textarea, button') && !row.closest('.vcp-harness-general-item')).length,
+            typedSettingsRevision: modal.dataset.vcpSettingsRevision || null,
+            typedSettingsSource: modal.dataset.vcpSettingsSource || null,
             navGeometry: (() => { const nav = modal.querySelector('.vcp-harness-settings-nav'); const list = modal.querySelector('.vcp-harness-settings-nav-list'); return { nav: nav?.getBoundingClientRect().toJSON(), list: list?.getBoundingClientRect().toJSON(), navScrollHeight: nav?.scrollHeight, navClientHeight: nav?.clientHeight }; })(),
             computedGeometry: (() => {
                 const pick = (selector) => {
@@ -188,6 +190,8 @@ try {
     assert.equal(shellState.legacySubsectionHeadings, 0, 'legacy subsection headings removed from the unified surface');
     assert.equal(shellState.legacyBusinessRows, 0, 'legacy business row classes removed from the unified surface');
     assert.equal(shellState.unwrappedBusinessRows, 0, 'every business row is owned by a canonical wrapper');
+    assert.ok(Number.isInteger(Number(shellState.typedSettingsRevision)), `typed settings snapshot missing: ${JSON.stringify(shellState)}`);
+    assert.ok(shellState.typedSettingsSource, `typed settings source missing: ${JSON.stringify(shellState)}`);
     console.log(`  [INFO] nav geometry ${JSON.stringify(shellState.navGeometry)}`);
     console.log(`  [INFO] computed geometry ${JSON.stringify(shellState.computedGeometry)}`);
     await fs.writeFile(path.join(screenshotsDir, 'settings-computed-geometry.json'), `${JSON.stringify({ viewport: await page.evaluate(() => ({ width: innerWidth, height: innerHeight })), ...shellState }, null, 2)}\n`, 'utf8');

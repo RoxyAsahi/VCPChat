@@ -8,6 +8,7 @@ export interface SettingsSaveResult {
 export interface SettingsUiService {
     readonly state: UiReadable<SettingsState>;
     readonly save: UiCommand<SettingsPatch, SettingsSaveResult>;
+    readonly dispose?: UiDisposer;
 }
 export interface SettingsUiAdapterInput {
     readonly get: () => SettingsState;
