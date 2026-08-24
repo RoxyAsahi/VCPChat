@@ -4,6 +4,7 @@ import { createUiScope } from '../modules/uiux/generated/runtime/scope.js';
 import { createUiServiceRegistry } from '../modules/uiux/generated/runtime/service-registry.js';
 import { createRustAssistantUiService } from '../modules/uiux/generated/adapters/rust-assistant.js';
 import { createForumConfigUiService } from '../modules/uiux/generated/adapters/forum-config.js';
+import { createAssistantRuntimeUiService } from '../modules/uiux/generated/adapters/assistant-runtime.js';
 
 const lifecycleModule = await import('../modules/ui-system/lifecycle-scope.js');
 const { LifecycleScope } = lifecycleModule.default || lifecycleModule;
@@ -69,4 +70,9 @@ assert.equal(forumService.state.get().username, 'artifact-admin');
 await forumService.save.execute({ username: 'artifact-next' });
 assert.equal(forumService.state.get().username, 'artifact-next');
 await forumService.dispose();
-console.log('UIUX generated artifact smoke passed (Settings + Rust + Forum adapters + scoped registry contracts).');
+
+const runtimeService = createAssistantRuntimeUiService({ get: async () => ({ mode: 'rust', active: true }) });
+await runtimeService.refresh.execute();
+assert.equal(runtimeService.state.get().mode, 'rust');
+await runtimeService.dispose();
+console.log('UIUX generated artifact smoke passed (Settings + Rust + Forum + Runtime adapters + scoped registry contracts).');

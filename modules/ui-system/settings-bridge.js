@@ -38,6 +38,7 @@ let typedSettingsService = null;
 let typedSettingsRegistry = null;
 let typedRustAssistantService = null;
 let typedForumConfigService = null;
+let typedAssistantRuntimeService = null;
 let typedSettingsState = Object.freeze({});
 let typedSettingsExternalRelease = null;
 let typedSettingsSaveChain = Promise.resolve();
@@ -297,6 +298,31 @@ function mountTypedSettingsConsumer(root) {
         ensurePresentationScope()?.own(release, 'typed-forum-config-consumer', 'ui-presentation');
         void forumService.refresh.execute();
     }
+    const runtimeService = ensureAssistantRuntimeUiService();
+    if (runtimeService) {
+        const applyRuntime = (_value, snapshot) => {
+            const runtime = snapshot.value || {};
+            const modeText = runtime.mode === 'rust' ? 'Rust' : (runtime.mode === 'disabled' ? 'Disabled' : runtime.mode || 'Unknown');
+            const desiredText = runtime.desiredMode === 'rust' ? 'Rust' : (runtime.desiredMode === 'disabled' ? 'Disabled' : runtime.desiredMode || 'Unknown');
+            const setText = (id, value) => { const node = form.querySelector(`#${id}`); if (node) node.textContent = String(value ?? '无'); };
+            setText('assistantRuntimeMode', modeText);
+            setText('assistantRuntimeDesiredMode', desiredText);
+            setText('assistantRuntimeActive', runtime.active === true ? '运行中' : '未运行');
+            setText('assistantRuntimeDebugReason', runtime.debugReason || '无');
+            setText('assistantRuntimeForwardedCount', runtime.integrationTrace?.forwardedCount ?? 0);
+            setText('assistantRuntimeSidecarActive', runtime.sidecarActive === true ? '运行中' : '未运行');
+            setText('assistantRuntimeProcessAlive', runtime.adapterProcessAlive === true ? '运行中' : '未运行');
+            setText('assistantRuntimeProcessPid', runtime.adapterProcessPid || '无');
+            setText('assistantRuntimeAutoFallbackCount', runtime.runtimeFallbackTrace?.autoFallbackCount ?? 0);
+            setText('assistantRuntimeAutoFallbackReason', runtime.runtimeFallbackTrace?.lastAutoFallbackReason || '无');
+            setText('assistantRuntimeReceivedCount', runtime.integrationTrace?.receivedSelectionCount ?? 0);
+            setText('assistantRuntimeShowAttemptCount', runtime.integrationTrace?.showAttemptCount ?? 0);
+            setText('assistantRuntimeShowError', runtime.integrationTrace?.lastShowError || '无');
+        };
+        const release = runtimeService.state.subscribe(applyRuntime);
+        ensurePresentationScope()?.own(release, 'typed-assistant-runtime-consumer', 'ui-presentation');
+        void runtimeService.refresh.execute();
+    }
 }
 
 function ensureRustAssistantUiService() {
@@ -329,6 +355,19 @@ function ensureForumConfigUiService() {
         services: { ...context.services, forumConfigAdapter: adapter },
     }));
     return typedForumConfigService;
+}
+
+function ensureAssistantRuntimeUiService() {
+    if (typedAssistantRuntimeService || !typedSettingsRegistry || !window.VCPUIUX?.createAssistantRuntimeUiService) return typedAssistantRuntimeService;
+    const chatAPI = window.chatAPI;
+    if (!chatAPI?.getAssistantRuntimeStatus) return null;
+    const adapter = window.VCPUIUX.createAssistantRuntimeUiService({ get: () => chatAPI.getAssistantRuntimeStatus() });
+    const definition = window.VCPUIUX.assistantRuntimeUiDefinition;
+    typedAssistantRuntimeService = typedSettingsRegistry.install(definition, context => definition.provide({
+        ...context,
+        services: { ...context.services, assistantRuntimeAdapter: adapter },
+    }));
+    return typedAssistantRuntimeService;
 }
 
 function ensurePresentationScope() {
@@ -1325,6 +1364,10 @@ window.VCPUISettingsBridge = Object.freeze({
     getForumConfigService() {
         ensureTypedSettingsService();
         return ensureForumConfigUiService();
+    },
+    getAssistantRuntimeService() {
+        ensureTypedSettingsService();
+        return ensureAssistantRuntimeUiService();
     },
     destroy() {
         if (destroyPromise) return destroyPromise;

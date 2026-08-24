@@ -5,6 +5,7 @@ import { createUiServiceRegistry } from './runtime/service-registry.js';
 import { settingsUiDefinition } from './adapters/settings.js';
 import { createRustAssistantUiService, rustAssistantUiDefinition } from './adapters/rust-assistant.js';
 import { createForumConfigUiService, forumConfigUiDefinition } from './adapters/forum-config.js';
+import { createAssistantRuntimeUiService, assistantRuntimeUiDefinition } from './adapters/assistant-runtime.js';
 import type { ThemeUiService } from './providers/theme.js';
 import type { UiDisposer } from './contracts.js';
 
@@ -38,6 +39,8 @@ const api = {
     rustAssistantUiDefinition,
     createForumConfigUiService,
     forumConfigUiDefinition,
+    createAssistantRuntimeUiService,
+    assistantRuntimeUiDefinition,
 };
 
 Object.defineProperty(globalThis, 'VCPUIUX', {

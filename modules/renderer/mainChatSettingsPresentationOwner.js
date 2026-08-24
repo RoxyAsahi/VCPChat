@@ -859,7 +859,7 @@ export function createMainChatSettingsPresentationOwner({
             }
         }
 
-        if (chatAPI?.getAssistantRuntimeStatus && document.getElementById('rustDebugMode')?.checked) {
+        if (!windowRef?.VCPUISettingsBridge?.getAssistantRuntimeService?.() && chatAPI?.getAssistantRuntimeStatus && document.getElementById('rustDebugMode')?.checked) {
             try {
                 const runtime = await chatAPI.getAssistantRuntimeStatus();
                 if (!isCurrent(token)) return false;

@@ -520,6 +520,19 @@ try {
     });
     assert.equal(forumConsumerState.available, true, 'Forum config UI service is assembled in the production bridge');
     assert.equal(forumConsumerState.controlUsername, forumConsumerState.username, 'Forum admin control consumes the typed forum snapshot');
+    const runtimeConsumerState = await page.evaluate(() => {
+        const service = window.VCPUISettingsBridge?.getAssistantRuntimeService?.();
+        return {
+            available: Boolean(service?.state?.get),
+            mode: service?.state?.get()?.mode,
+            renderedMode: document.getElementById('assistantRuntimeMode')?.textContent,
+        };
+    });
+    assert.equal(runtimeConsumerState.available, true, 'Assistant runtime UI service is assembled in the production bridge');
+    if (runtimeConsumerState.mode) {
+        const expected = runtimeConsumerState.mode === 'rust' ? 'Rust' : (runtimeConsumerState.mode === 'disabled' ? 'Disabled' : runtimeConsumerState.mode);
+        assert.equal(runtimeConsumerState.renderedMode, expected, 'runtime diagnostics consume the typed runtime snapshot');
+    }
     // Force the real IPC persistence path to fail once by removing write
     // access from the isolated test profile, then restore it for retry.
     await fs.chmod(path.join(appData, 'settings.json'), 0o444);
