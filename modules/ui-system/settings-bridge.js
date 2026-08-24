@@ -85,9 +85,18 @@ function ensureTypedSettingsService() {
 function mountTypedSettingsConsumer(root) {
     const service = ensureTypedSettingsService();
     if (!service || !root) return;
+    const form = root.querySelector('#globalSettingsForm');
     const apply = (_value, snapshot) => {
         root.dataset.vcpSettingsRevision = String(snapshot.revision);
         root.dataset.vcpSettingsSource = snapshot.source;
+        // The typed service owns durable projection reads for migrated fields.
+        // Never overwrite a user's dirty draft or an in-flight submission.
+        if (!form || form.dataset.vcpSettingsDirty === 'true' || form.dataset.globalSettingsSaving === 'true') return;
+        const settings = snapshot.value || {};
+        const userName = form.querySelector('#userName');
+        const prompt = form.querySelector('#continueWritingPrompt');
+        if (userName && settings.userName !== undefined) userName.value = settings.userName;
+        if (prompt && settings.continueWritingPrompt !== undefined) prompt.value = settings.continueWritingPrompt;
     };
     const release = service.state.subscribe(apply);
     ensurePresentationScope()?.own(release, 'typed-settings-consumer', 'ui-presentation');
@@ -374,6 +383,7 @@ function mountSettingsAutosave(root, form) {
     const schedule = () => {
         if (state.saving) { state.pending = true; return; }
         state.pending = true;
+        form.dataset.vcpSettingsDirty = 'true';
         setStatus('未保存', 'dirty');
         if (state.timer) clearTimeout(state.timer);
         state.timer = setTimeout(submit, 400);
@@ -382,6 +392,7 @@ function mountSettingsAutosave(root, form) {
     const onResult = event => {
         state.saving = false;
         if (event.detail?.success) {
+            delete form.dataset.vcpSettingsDirty;
             setStatus('已保存', 'saved');
             if (state.pending) schedule();
         } else setStatus('保存失败 · 重试', 'error');
