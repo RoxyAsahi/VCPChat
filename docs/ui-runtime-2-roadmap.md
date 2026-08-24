@@ -329,3 +329,5 @@ Settings source-boundary refresh（2026-08-24）：`check-settings-source-equiva
 R2-02 network-path consumer 增量（2026-08-24）：`networkNotesPaths` 的 typed projection 现在由 Settings bridge 自己创建/删除 Harness row；Add 按钮优先走 `VCPUISettingsBridge.addNetworkPathInput()`，legacy `uiHelperFunctions.addNetworkPathInput()` 仅保留 capability 不可用时的 fallback。Electron gate 新增 Add/Remove 行证据，60-cycle Settings-only stress 也通过；source-equivalence、unified-surface 与 UIUX type check 通过；字段名和持久化格式未改变。
 
 账本校准（2026-08-24）：本节早期 R2-02 段落中的“3 次/10-cycle repeated reopen”属于历史记录；当前权威 Settings-only 证据为 60 cycles，详见上方 stress evidence 与 network-path consumer 增量。状态仍为 `typed-production-consumer-active`，不标 complete。
+
+R2-02 late-command 修复（2026-08-24）：`VCPUISettingsBridge.addNetworkPathInput()` 在 bridge dispose 后拒绝 late command；Electron teardown gate 已验证 disposed Settings owner 不会被 late network-path row command 复活。
