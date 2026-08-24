@@ -5,7 +5,7 @@
 > 适用目录：`/Users/asahi/Documents/Codex/VCPChat-newarchitecture`  
 > 对照对象：本机 `deepseek-harness` 的 Client UI / Slot / Theme / lifecycle 机制
 > 上位规范：[vcpchat-harness-uiux-architecture.md](/Users/asahi/Documents/Codex/VCPChat-newarchitecture/docs/vcpchat-harness-uiux-architecture.md)；本文件只负责执行顺序、consumer、证据与删除账本
-> 最近核验：2026-08-24；R2-00 Composer slice 已达到 complete；R2-01 Overlay/notification slice 已闭合；R2-03 ThemeSnapshot adapter 已接入；R2-08 typed ThemePresenter 已接入 Next Account Dock；当前 active slice：R2-08 artifact teardown hardening  
+> 最近核验：2026-08-24；R2-00 Composer slice 已达到 complete；R2-01 Overlay/notification slice 已闭合；R2-03 ThemeSnapshot adapter 已接入；R2-08 typed ThemePresenter 已达到 foundation complete；当前 active slice：R2-02 Settings Surface typed adapter  
 > 最近证据：`node --test tests/chat-surface.test.mjs tests/chat-surface-slots.test.mjs tests/main-chat-surface-adapter.test.mjs tests/chat-plugin-manifest.test.mjs`（19/19）；`npm run test:electron-main-chat-sequences`（next-main-chat-default，24 actions，25 VCP requests，required 1/1）
 > R2-01 证据：`node --test tests/overlay-coordinator.test.js tests/escape-dispatcher.test.js tests/notification-menu-controller.test.js`（9/9）；`node scripts/test-ui-system.mjs`；`node scripts/test-settings-wa-electron.mjs`（Settings Harness structure gate passed）。R2-03 证据：`node --test tests/state-authority.test.js tests/account-menu-controller.test.js tests/ui-manager-lifecycle.test.mjs`（7/7）；`node scripts/test-appearance-studio.mjs`（appearance studio checks passed）。R2-08 证据：`npm run check:uiux`；`npm run test:uiux`（typed ThemePresenter contract 1/1）；`npm run test:electron-uiux-theme`（light→dark snapshot、reload remount、subscriber ledger 2→2）；主聊天 sequence 仍作为 broader evidence，但 auxiliary concurrent fixture 可能独立 flake。
 
@@ -148,18 +148,18 @@ DOM、Web Components、原生 Electron View
 ### 2.3 当前工作批次
 
 ```yaml
-batch: R2-08
+batch: R2-02
 mode: target
-focus: typescript-ui-foundation
+focus: settings-surface-typed-adapter
 status: in_progress
-production_consumer: NextShell Account Dock typed ThemePresenter
-consumer_kind: internal production consumer; stable API still gated
-first_slice: modules/uiux/contracts.ts + modules/uiux/runtime/scope.ts + providers/theme.ts
-next_slice: semantic token projection coverage and explicit remount resource ledger
-blocked_by: UI Apps smoke 的 dynamic-wallpaper disabled-manifest readiness（不阻塞 ThemeSnapshot contract）
+production_consumer: global SettingsRoot + Appearance Studio
+consumer_kind: internal production consumer; typed adapter migration slice
+first_slice: existing settings capability boundary + modules/uiux/contracts.ts
+next_slice: typed SettingsUiDefinition read/command/subscribe adapter
+blocked_by: UI Apps smoke 的 dynamic-wallpaper disabled-manifest readiness（不阻塞 Settings Surface contract）
 excluded: chat-message-internals, plugin-loader, child-page-migration
 last_verified: 2026-08-24
-evidence: npm run check:uiux; npm run test:uiux; node --test tests/state-authority.test.js tests/account-menu-controller.test.js tests/ui-manager-lifecycle.test.mjs
+evidence: npm run check:uiux; npm run test:uiux; npm run test:electron-uiux-theme; node --test tests/state-authority.test.js tests/account-menu-controller.test.js tests/ui-manager-lifecycle.test.mjs
 ```
 
 ## 3. 分阶段路线
