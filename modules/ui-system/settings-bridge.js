@@ -93,10 +93,22 @@ function mountTypedSettingsConsumer(root) {
         // Never overwrite a user's dirty draft or an in-flight submission.
         if (!form || form.dataset.vcpSettingsDirty === 'true' || form.dataset.globalSettingsSaving === 'true') return;
         const settings = snapshot.value || {};
-        const userName = form.querySelector('#userName');
-        const prompt = form.querySelector('#continueWritingPrompt');
-        if (userName && settings.userName !== undefined) userName.value = settings.userName;
-        if (prompt && settings.continueWritingPrompt !== undefined) prompt.value = settings.continueWritingPrompt;
+        const projection = [
+            ['userName', 'userName'],
+            ['continueWritingPrompt', 'continueWritingPrompt'],
+            ['vcpServerUrl', 'vcpServerUrl'],
+            ['topicSummaryModel', 'topicSummaryModel'],
+            ['homeVisualTagline', 'homeVisualTagline'],
+            ['appearanceDensity', 'appearanceProfile.density'],
+            ['chatFontPreset', 'chatFontPreset'],
+            ['chatCodeFontPreset', 'chatCodeFontPreset'],
+        ];
+        projection.forEach(([id, path]) => {
+            const control = form.querySelector(`#${id}`);
+            if (!control) return;
+            const value = path.split('.').reduce((current, key) => current?.[key], settings);
+            if (value !== undefined && value !== null) control.value = String(value);
+        });
     };
     const release = service.state.subscribe(apply);
     ensurePresentationScope()?.own(release, 'typed-settings-consumer', 'ui-presentation');

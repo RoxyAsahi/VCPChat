@@ -382,11 +382,18 @@ try {
     await new Promise(resolve => setTimeout(resolve, 150));
     await page.evaluate(() => {
         window.dispatchEvent(new CustomEvent('global-settings-updated', {
-            detail: { settings: { userName: 'typed-external-user', continueWritingPrompt: 'typed-external-prompt' }, source: 'external-test' }
+            detail: { settings: {
+                userName: 'typed-external-user',
+                continueWritingPrompt: 'typed-external-prompt',
+                vcpServerUrl: 'http://typed-external:6005',
+                chatFontPreset: 'serif',
+            }, source: 'external-test' }
         }));
     });
     await page.waitForFunction(() => document.getElementById('userName')?.value === 'typed-external-user');
     assert.equal(await page.$eval('#continueWritingPrompt', node => node.value), 'typed-external-prompt', 'clean form consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#vcpServerUrl', node => node.value), 'http://typed-external:6005', 'clean text control consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#chatFontPreset', node => node.value), 'serif', 'clean select control consumes typed Settings snapshot');
     // Force the real IPC persistence path to fail once by removing write
     // access from the isolated test profile, then restore it for retry.
     await fs.chmod(path.join(appData, 'settings.json'), 0o444);
