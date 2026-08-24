@@ -560,6 +560,14 @@ export function createMainChatSettingsPresentationOwner({
             const el = document.getElementById(id);
             if (el) el.checked = !!checked;
         };
+        // The SettingsRoot typed consumer owns the migrated projection fields
+        // once its scoped service is assembled. Keep this legacy startup
+        // owner responsible for the remaining business controls, but do not
+        // overwrite clean snapshots or dirty drafts that the typed consumer
+        // deliberately protects.
+        const typedSettingsProjectionActive = Boolean(
+            windowRef?.VCPUISettingsBridge?.getTypedService?.()
+        );
         const syncRustDebugPanelVisibility = () => {
             const rustDebugModeEl = document.getElementById('rustDebugMode');
             const rustDebugPanelEl = document.getElementById('rustDebugPanel');
@@ -621,34 +629,36 @@ export function createMainChatSettingsPresentationOwner({
             }
         }
 
-        safeCheck('enableSmoothStreaming', globalSettings.enableSmoothStreaming === true);
-        safeCheck('showHomeVisualBrand', globalSettings.showHomeVisualBrand !== false);
-        safeCheck('showHomeVisualTagline', globalSettings.showHomeVisualTagline !== false);
-        safeSet('homeVisualTagline', globalSettings.homeVisualTagline || '语义级打穿 AI、UI/UX、APP 与人类想象力的边界');
-        const appearance = getAppearance()?.normalize(globalSettings.appearanceProfile, 'next');
-        safeSet('appearanceDensity', appearance?.density || 'comfortable');
-        safeSet('appearanceRadius', appearance?.radius || 'small');
-        safeSet('appearanceTypography', appearance?.typography || 'system');
-        safeSet('appearanceFontScale', appearance?.fontScale || 'normal');
-        safeSet('appearanceContentWidth', appearance?.contentWidth || 'full');
-        safeSet('appearanceSidebarRowHeight', appearance?.sidebarRowHeight ?? 46);
-        safeSet('appearanceSidebarRowHeightValue', `${appearance?.sidebarRowHeight ?? 46}px`);
-        safeSet('appearanceSidebarAvatarSize', appearance?.sidebarAvatarSize ?? 32);
-        safeSet('appearanceSidebarAvatarSizeValue', `${appearance?.sidebarAvatarSize ?? 32}px`);
-        safeSet('appearanceSidebarRadius', appearance?.sidebarRadius || 'tuned');
-        safeCheck(`appearanceSidebarRadiusChoice-${appearance?.sidebarRadius || 'tuned'}`, true);
-        safeSet('appearanceCustomRadius', appearance?.customRadius ?? 10);
-        safeSet('appearanceCustomRadiusValue', `${appearance?.customRadius ?? 10}px`);
-        document.getElementById('appearanceSidebarAvatarSize')?.dispatchEvent(new Event('input', { bubbles: true }));
-        safeSet('appearanceSurface', appearance?.surface || 'translucent');
-        safeSet('chatFontPreset', globalSettings.chatFontPreset || 'system');
-        safeSet('chatFontCustom', globalSettings.chatFontCustom || '');
-        safeSet('chatCodeFontPreset', globalSettings.chatCodeFontPreset || 'consolas');
-        safeSet('chatCodeFontCustom', globalSettings.chatCodeFontCustom || '');
-        safeSet('chatDiaryFontPreset', globalSettings.chatDiaryFontPreset || 'serif');
-        safeSet('chatDiaryFontCustom', globalSettings.chatDiaryFontCustom || '');
-        safeSet('chatToolFontPreset', globalSettings.chatToolFontPreset || 'system');
-        safeSet('chatToolFontCustom', globalSettings.chatToolFontCustom || '');
+        if (!typedSettingsProjectionActive) {
+            safeCheck('enableSmoothStreaming', globalSettings.enableSmoothStreaming === true);
+            safeCheck('showHomeVisualBrand', globalSettings.showHomeVisualBrand !== false);
+            safeCheck('showHomeVisualTagline', globalSettings.showHomeVisualTagline !== false);
+            safeSet('homeVisualTagline', globalSettings.homeVisualTagline || '语义级打穿 AI、UI/UX、APP 与人类想象力的边界');
+            const appearance = getAppearance()?.normalize(globalSettings.appearanceProfile, 'next');
+            safeSet('appearanceDensity', appearance?.density || 'comfortable');
+            safeSet('appearanceRadius', appearance?.radius || 'small');
+            safeSet('appearanceTypography', appearance?.typography || 'system');
+            safeSet('appearanceFontScale', appearance?.fontScale || 'normal');
+            safeSet('appearanceContentWidth', appearance?.contentWidth || 'full');
+            safeSet('appearanceSidebarRowHeight', appearance?.sidebarRowHeight ?? 46);
+            safeSet('appearanceSidebarRowHeightValue', `${appearance?.sidebarRowHeight ?? 46}px`);
+            safeSet('appearanceSidebarAvatarSize', appearance?.sidebarAvatarSize ?? 32);
+            safeSet('appearanceSidebarAvatarSizeValue', `${appearance?.sidebarAvatarSize ?? 32}px`);
+            safeSet('appearanceSidebarRadius', appearance?.sidebarRadius || 'tuned');
+            safeCheck(`appearanceSidebarRadiusChoice-${appearance?.sidebarRadius || 'tuned'}`, true);
+            safeSet('appearanceCustomRadius', appearance?.customRadius ?? 10);
+            safeSet('appearanceCustomRadiusValue', `${appearance?.customRadius ?? 10}px`);
+            document.getElementById('appearanceSidebarAvatarSize')?.dispatchEvent(new Event('input', { bubbles: true }));
+            safeSet('appearanceSurface', appearance?.surface || 'translucent');
+            safeSet('chatFontPreset', globalSettings.chatFontPreset || 'system');
+            safeSet('chatFontCustom', globalSettings.chatFontCustom || '');
+            safeSet('chatCodeFontPreset', globalSettings.chatCodeFontPreset || 'consolas');
+            safeSet('chatCodeFontCustom', globalSettings.chatCodeFontCustom || '');
+            safeSet('chatDiaryFontPreset', globalSettings.chatDiaryFontPreset || 'serif');
+            safeSet('chatDiaryFontCustom', globalSettings.chatDiaryFontCustom || '');
+            safeSet('chatToolFontPreset', globalSettings.chatToolFontPreset || 'system');
+            safeSet('chatToolFontCustom', globalSettings.chatToolFontCustom || '');
+        }
         const presentationMode = normalizeChatPresentationMode(globalSettings.chatPresentationMode);
         safeCheck(`chatPresentationMode${presentationMode[0].toUpperCase()}${presentationMode.slice(1)}`, true);
         safeCheck('chatLayoutModeWide', globalSettings.enableWideChatLayout === true);
@@ -666,9 +676,9 @@ export function createMainChatSettingsPresentationOwner({
         );
         safeSet('minChunkBufferSize', globalSettings.minChunkBufferSize ?? 16);
         safeSet('smoothStreamIntervalMs', globalSettings.smoothStreamIntervalMs ?? 100);
-        syncChatFontControls();
+        if (!typedSettingsProjectionActive) syncChatFontControls();
         syncWideChatLayoutControls();
-        syncUserChatBubbleControls();
+        if (!typedSettingsProjectionActive) syncUserChatBubbleControls();
         syncChatPresentationModeControls(presentationMode);
 
         const chatFontPresetSelect = document.getElementById('chatFontPreset');
