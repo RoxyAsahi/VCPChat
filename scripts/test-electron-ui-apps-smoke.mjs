@@ -447,7 +447,7 @@ const rendererErrors = [];
 const pageErrors = new Map();
 const consoleErrors = new Map();
 const webAwesomeRuntimeRequests = [];
-const child = spawn(electron, ['.', '--allow-multiple-instances', `--remote-debugging-port=${port}`], {
+const child = spawn(electron, ['.', '--allow-multiple-instances', `--user-data-dir=${path.join(appData, 'ElectronProfile')}`, `--remote-debugging-port=${port}`], {
     cwd: root,
     env: { ...process.env, VCPCHAT_APP_DATA_DIR: appData, VCPCHAT_E2E_TEST: '1' },
     stdio: ['ignore', 'ignore', 'pipe'],
