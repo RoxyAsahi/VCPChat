@@ -405,6 +405,8 @@ try {
             chatProvider: typeof chatManager.sendMessage === 'function',
             rendererProvider: typeof createMessageRenderer === 'function',
             streamProvider: typeof createStreamProjection === 'function',
+            typedUiuxProvider: typeof window.VCPUIUX?.mountThemePresenterFromScope === 'function',
+            typedThemeProjectionPresent: /^(light|dark)$/.test(document.querySelector('.next-ui-account-dock')?.dataset.themeEffective || ''),
         };
     });
     assert.deepEqual(providerBoundary, {
@@ -412,6 +414,8 @@ try {
         chatProvider: true,
         rendererProvider: true,
         streamProvider: true,
+        typedUiuxProvider: true,
+        typedThemeProjectionPresent: true,
     }, 'main renderer must use explicit providers without compatibility globals');
     const stateFacadeBoundary = await page.evaluate(() => {
         const descriptor = Object.getOwnPropertyDescriptor(window, 'VCPMainChatState');
@@ -503,7 +507,9 @@ try {
         await page.waitForFunction(() => !document.getElementById('globalSettingsModal')?.classList.contains('active'), { timeout });
     };
     const warmRendererLifecycleBaseline = async () => {
+        if (process.env.VCPCHAT_SEQUENCE_DEBUG === '1') console.log('warm: settings open');
         await openCloseSettings();
+        if (process.env.VCPCHAT_SEQUENCE_DEBUG === '1') console.log('warm: settings closed');
         await click('#toggleNotificationsBtn');
         await sleep(20);
         await click('#toggleNotificationsBtn');

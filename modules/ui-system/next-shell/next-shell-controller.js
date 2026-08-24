@@ -21,6 +21,7 @@
     let overlayCoordinator = null;
     let chatCapabilities = null;
     let releaseWindowState = null;
+    let typedThemeConsumerMounted = false;
     let tabOperationId = 0;
     let tabOperationRevision = 0;
     const pendingTabOperations = new Map();
@@ -777,6 +778,28 @@
             escapeDispatcher,
         });
         accountMenuController.mount(mountScope);
+        const mountTypedThemeConsumer = () => {
+            if (typedThemeConsumerMounted || !mountScope || !window.VCPUIUX?.mountThemePresenterFromScope) return;
+            const root = document.querySelector('.next-ui-account-dock');
+            const theme = window.uiManager?.getThemeSnapshot
+                ? {
+                    get: () => window.uiManager.getThemeState(),
+                    getSnapshot: () => window.uiManager.getThemeSnapshot(),
+                    subscribe: (listener, options) => window.uiManager.subscribeTheme(listener, options),
+                }
+                : null;
+            if (!root || !theme) return;
+            try {
+                window.VCPUIUX.mountThemePresenterFromScope(root, theme, mountScope);
+                typedThemeConsumerMounted = true;
+            } catch (error) {
+                console.warn('[NextUI] Typed theme presenter unavailable; legacy account presenter remains active:', error);
+            }
+        };
+        mountTypedThemeConsumer();
+        if (!typedThemeConsumerMounted && mountScope) {
+            mountScope.listen(window, 'vcp-uiux-ready', mountTypedThemeConsumer, undefined, 'typed-theme-presenter-ready');
+        }
         notificationMenuController = new NotificationMenuController({
             window,
             document,
@@ -852,6 +875,7 @@
     function unmount() {
         if (!mounted) return teardownPromise || Promise.resolve();
         mounted = false;
+        typedThemeConsumerMounted = false;
         mountGeneration += 1;
         if (!mountScope) mountAbortController?.abort();
         if (!mountScope) {
