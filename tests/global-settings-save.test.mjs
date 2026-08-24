@@ -83,12 +83,23 @@ test('global settings saves the server URL once with canonical presentation', as
 
         let typedCalls = 0;
         let typedPayload;
+        let typedRustCalls = 0;
+        let typedRustPayload;
         dom.window.VCPUISettingsBridge = {
             getTypedService: () => ({
                 save: {
                     execute: async payload => {
                         typedCalls += 1;
                         typedPayload = payload;
+                        return { success: true };
+                    },
+                },
+            }),
+            getRustAssistantService: () => ({
+                save: {
+                    execute: async payload => {
+                        typedRustCalls += 1;
+                        typedRustPayload = payload;
                         return { success: true };
                     },
                 },
@@ -101,6 +112,8 @@ test('global settings saves the server URL once with canonical presentation', as
         assert.equal(typedCalls, 1, 'global Settings form delegates persistence to typed service command');
         assert.equal(typedPayload.vcpServerUrl, 'http://localhost:6005');
         assert.equal(saveCalls, 1, 'typed service command avoids a second legacy IPC save');
+        assert.equal(typedRustCalls, 1, 'Rust settings save delegates to the typed Rust service command');
+        assert.equal(typedRustPayload?.debugMode, false);
 
         delete dom.window.VCPUISettingsBridge;
         let resolveLate;
