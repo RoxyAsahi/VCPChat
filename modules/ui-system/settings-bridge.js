@@ -108,6 +108,11 @@ function mountTypedSettingsConsumer(root) {
         const settings = snapshot.value || {};
         const projection = [
             ['userName', 'userName'],
+            ['userAvatarBorderColor', 'userAvatarBorderColor'],
+            ['userAvatarBorderColorText', 'userAvatarBorderColor'],
+            ['userNameTextColor', 'userNameTextColor'],
+            ['userNameTextColorText', 'userNameTextColor'],
+            ['userUseThemeColorsInChat', 'userUseThemeColorsInChat', 'checked'],
             ['continueWritingPrompt', 'continueWritingPrompt'],
             ['vcpServerUrl', 'vcpServerUrl'],
             ['vcpApiKey', 'vcpApiKey'],

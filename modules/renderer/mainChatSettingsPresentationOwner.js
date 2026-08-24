@@ -591,15 +591,17 @@ export function createMainChatSettingsPresentationOwner({
             safeSet('userName', globalSettings.userName || '用户');
         }
 
-        const borderColor = globalSettings.userAvatarBorderColor || '#3d5a80';
-        safeSet('userAvatarBorderColor', borderColor);
-        safeSet('userAvatarBorderColorText', borderColor);
+        if (!typedSettingsProjectionActive) {
+            const borderColor = globalSettings.userAvatarBorderColor || '#3d5a80';
+            safeSet('userAvatarBorderColor', borderColor);
+            safeSet('userAvatarBorderColorText', borderColor);
 
-        const nameColor = globalSettings.userNameTextColor || '#ffffff';
-        safeSet('userNameTextColor', nameColor);
-        safeSet('userNameTextColorText', nameColor);
+            const nameColor = globalSettings.userNameTextColor || '#ffffff';
+            safeSet('userNameTextColor', nameColor);
+            safeSet('userNameTextColorText', nameColor);
 
-        safeCheck('userUseThemeColorsInChat', globalSettings.userUseThemeColorsInChat);
+            safeCheck('userUseThemeColorsInChat', globalSettings.userUseThemeColorsInChat);
+        }
 
         if (!typedSettingsProjectionActive) {
             const completedUrl = getSettingsManager().completeVcpUrl(globalSettings.vcpServerUrl || '');
