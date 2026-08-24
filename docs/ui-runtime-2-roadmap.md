@@ -311,3 +311,5 @@ Settings-only stress evidence（2026-08-24）：`VCPCHAT_SETTINGS_REOPEN_CYCLES=
 R2-02 readiness-boundary 修复（2026-08-24）：legacy Settings owner 不再把“typed service 已装配”误当成“SettingsRoot consumer 已挂载”；现在以真实 `vcpSettingsRevision` projection marker 判定 typed takeover。service 预装配/partial mount 时保留 legacy 初始化，Forum/Rust/runtime fallback 同步遵守该边界。owner 单测、UIUX type check 与 20-cycle Electron Settings journey 通过。
 
 R2-02 marker teardown 修复（2026-08-24）：typed consumer disposer 现在同步撤销 `vcpSettingsRevision` / `vcpSettingsSource` readiness markers，避免复用 root 在 service 不可用时把旧 marker 误认成活跃 consumer；Electron teardown gate 已断言 marker 为 null。
+
+R2-02 partial-root 修复（2026-08-24）：typed projection 只有在 `#globalSettingsForm` 存在时才写入 readiness marker；malformed/partial SettingsRoot 不会被 legacy owner 误判为已接管。Settings Electron gate 与 UIUX type check 通过。

@@ -111,11 +111,12 @@ function mountTypedSettingsConsumer(root) {
     if (!service || !root) return;
     const form = root.querySelector('#globalSettingsForm');
     const apply = (_value, snapshot) => {
+        if (!form) return;
         root.dataset.vcpSettingsRevision = String(snapshot.revision);
         root.dataset.vcpSettingsSource = snapshot.source;
         // The typed service owns durable projection reads for migrated fields.
         // Never overwrite a user's dirty draft or an in-flight submission.
-        if (!form || form.dataset.vcpSettingsDirty === 'true' || form.dataset.globalSettingsSaving === 'true') return;
+        if (form.dataset.vcpSettingsDirty === 'true' || form.dataset.globalSettingsSaving === 'true') return;
         const settings = snapshot.value || {};
         const projection = [
             ['userName', 'userName'],
