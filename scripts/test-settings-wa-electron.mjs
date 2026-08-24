@@ -217,6 +217,26 @@ try {
     }, { timeout: timeoutMs });
     console.log('  [PASS] 1. SettingsRoot layout (nav cells, header, options, sections, icons)');
 
+    // Typed Settings consumer owns the avatar preview projection while the
+    // upload/save capability remains in the legacy business command owner.
+    const avatarProbe = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+    await page.evaluate((avatarUrl) => {
+        window.dispatchEvent(new CustomEvent('global-settings-updated', {
+            detail: { settings: { userAvatarUrl: avatarUrl }, source: 'settings-avatar-probe' },
+        }));
+    }, avatarProbe);
+    await page.waitForFunction((avatarUrl) => {
+        const preview = document.getElementById('userAvatarPreview');
+        return preview?.src === avatarUrl && preview.style.display === 'block';
+    }, { timeout: timeoutMs }, avatarProbe);
+    await page.evaluate(() => {
+        window.dispatchEvent(new CustomEvent('global-settings-updated', {
+            detail: { settings: { userAvatarUrl: '' }, source: 'settings-avatar-probe-clear' },
+        }));
+    });
+    await page.waitForFunction(() => document.getElementById('userAvatarPreview')?.style.display === 'none', { timeout: timeoutMs });
+    console.log('  [PASS] 1c. typed avatar preview projection and clear');
+
     // Activate the appearance section so the geometry probe samples real
     // controls rather than hidden descendants from another section.
     await page.evaluate(() => document.querySelector('.vcp-harness-settings-nav-cell[data-section="appearance-settings"]')?.click());
