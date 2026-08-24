@@ -326,4 +326,4 @@ Artifact runtime refresh（2026-08-24）：`build:uiux`、`check:uiux:artifacts`
 
 Settings source-boundary refresh（2026-08-24）：`check-settings-source-equivalence.mjs` 与 `check-settings-unified-surface.mjs` 均通过；shell source equivalence、retired bridge owners、Harness geometry 和 legacy rows/inline styles/selectors 均保持绿色。该证据仍不等同于 legacy Settings bridge 全部退役。
 
-R2-02 network-path consumer 增量（2026-08-24）：`networkNotesPaths` 的 typed projection 现在由 Settings bridge 自己创建/删除 Harness row；Add 按钮优先走 `VCPUISettingsBridge.addNetworkPathInput()`，legacy `uiHelperFunctions.addNetworkPathInput()` 仅保留 capability 不可用时的 fallback。Electron gate 新增 Add/Remove 行证据，source-equivalence、unified-surface 与 UIUX type check 通过；字段名和持久化格式未改变。
+R2-02 network-path consumer 增量（2026-08-24）：`networkNotesPaths` 的 typed projection 现在由 Settings bridge 自己创建/删除 Harness row；Add 按钮优先走 `VCPUISettingsBridge.addNetworkPathInput()`，legacy `uiHelperFunctions.addNetworkPathInput()` 仅保留 capability 不可用时的 fallback。Electron gate 新增 Add/Remove 行证据，60-cycle Settings-only stress 也通过；source-equivalence、unified-surface 与 UIUX type check 通过；字段名和持久化格式未改变。
