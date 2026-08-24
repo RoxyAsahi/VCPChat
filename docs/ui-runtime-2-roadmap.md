@@ -323,3 +323,5 @@ UI System gate audit（2026-08-24）：`npm run check:ui-system` 当前在 `guar
 可归因子门禁复核（2026-08-24）：`check-ui-async-state-matrix`（5 surfaces × 6 states）、`check-ui-task-journeys`（7 journeys）与 `check-theme-provenance` 均通过；因此当前 Settings readiness 变更的异步状态/任务旅程/主题来源子证据保持绿色，总门禁失败仍限于 baseline/design-subtraction 账本缺口。
 
 Artifact runtime refresh（2026-08-24）：`build:uiux`、`check:uiux:artifacts`、`test:uiux:artifacts` 与 `test:electron-uiux:artifacts` 均通过；generated 20 文件一致，Electron generated theme journey 的 light → dark → reload light 与 subscriber teardown 合同通过。
+
+Settings source-boundary refresh（2026-08-24）：`check-settings-source-equivalence.mjs` 与 `check-settings-unified-surface.mjs` 均通过；shell source equivalence、retired bridge owners、Harness geometry 和 legacy rows/inline styles/selectors 均保持绿色。该证据仍不等同于 legacy Settings bridge 全部退役。
