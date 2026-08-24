@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const root = process.cwd();
-const harnessRoot = process.env.DEEPSEEK_HARNESS_ROOT || '/Users/asahi/Documents/Codex/deepseek-harness';
+const harnessRoot = process.env.DEEPSEEK_HARNESS_ROOT || 'C:/VCP/vchat-develop/deepseek-harness';
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const bridge = read('modules/ui-system/settings-bridge.js');
 const css = read('styles/ui-system/settings.css');
