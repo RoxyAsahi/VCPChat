@@ -605,10 +605,12 @@ export function createMainChatSettingsPresentationOwner({
             const completedUrl = getSettingsManager().completeVcpUrl(globalSettings.vcpServerUrl || '');
             safeSet('vcpServerUrl', completedUrl);
         }
-        safeSet('vcpApiKey', globalSettings.vcpApiKey || '');
-        safeSet('fileKey', globalSettings.fileKey || '');
-        safeSet('vcpLogUrl', globalSettings.vcpLogUrl || '');
-        safeSet('vcpLogKey', globalSettings.vcpLogKey || '');
+        if (!typedSettingsProjectionActive) {
+            safeSet('vcpApiKey', globalSettings.vcpApiKey || '');
+            safeSet('fileKey', globalSettings.fileKey || '');
+            safeSet('vcpLogUrl', globalSettings.vcpLogUrl || '');
+            safeSet('vcpLogKey', globalSettings.vcpLogKey || '');
+        }
         if (!typedSettingsProjectionActive) {
             safeSet('topicSummaryModel', globalSettings.topicSummaryModel || '');
             safeSet('continueWritingPrompt', globalSettings.continueWritingPrompt || '请继续');

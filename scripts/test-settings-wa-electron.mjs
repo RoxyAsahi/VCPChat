@@ -386,6 +386,10 @@ try {
                 userName: 'typed-external-user',
                 continueWritingPrompt: 'typed-external-prompt',
                 vcpServerUrl: 'http://typed-external:6005',
+                vcpApiKey: 'typed-api-key',
+                fileKey: 'typed-file-key',
+                vcpLogUrl: 'ws://typed-log:6006',
+                vcpLogKey: 'typed-log-key',
                 chatFontPreset: 'serif',
                 appearanceProfile: {
                     density: 'compact',
@@ -406,6 +410,10 @@ try {
     await page.waitForFunction(() => document.getElementById('userName')?.value === 'typed-external-user');
     assert.equal(await page.$eval('#continueWritingPrompt', node => node.value), 'typed-external-prompt', 'clean form consumes typed Settings snapshot');
     assert.equal(await page.$eval('#vcpServerUrl', node => node.value), 'http://typed-external:6005', 'clean text control consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#vcpApiKey', node => node.value), 'typed-api-key', 'clean API key control consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#fileKey', node => node.value), 'typed-file-key', 'clean file key control consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#vcpLogUrl', node => node.value), 'ws://typed-log:6006', 'clean VCPLog URL consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#vcpLogKey', node => node.value), 'typed-log-key', 'clean VCPLog key consumes typed Settings snapshot');
     assert.equal(await page.$eval('#chatFontPreset', node => node.value), 'serif', 'clean select control consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceDensity', node => node.value), 'compact', 'clean appearance density consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceRadius', node => node.value), 'round', 'clean appearance radius consumes typed Settings snapshot');
