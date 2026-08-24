@@ -258,10 +258,16 @@ async function saveGlobalSettings(deps, settingsForm) {
                 setCroppedFile('user', null);
                 document.getElementById('userAvatarInput').value = '';
             } else {
-                uiHelperFunctions.showToastNotification(`保存用户头像失败: ${avatarSaveResult.error}`, 'error');
+                const error = avatarSaveResult.error || '未知错误';
+                reportSaveResult(false, `保存用户头像失败: ${error}`);
+                uiHelperFunctions.showToastNotification(`保存用户头像失败: ${error}`, 'error');
+                return;
             }
         } catch (readError) {
-            uiHelperFunctions.showToastNotification(`读取用户头像文件失败: ${readError.message}`, 'error');
+            const error = readError?.message || String(readError);
+            reportSaveResult(false, `读取用户头像文件失败: ${error}`);
+            uiHelperFunctions.showToastNotification(`读取用户头像文件失败: ${error}`, 'error');
+            return;
         }
     }
 

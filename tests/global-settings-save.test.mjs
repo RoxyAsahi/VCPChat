@@ -27,6 +27,7 @@ test('global settings saves the server URL once with canonical presentation', as
 
     let resolveSave;
     let saveCalls = 0;
+    let croppedFile = null;
     let savedPayload;
     let normalizeMode;
     const savePromise = new Promise(resolve => { resolveSave = resolve; });
@@ -52,7 +53,7 @@ test('global settings saves the server URL once with canonical presentation', as
     let currentSettings = {};
     const deps = {
         refs: { globalSettings: { get: () => currentSettings, set: value => { currentSettings = value; } } },
-        getCroppedFile: () => null,
+        getCroppedFile: () => croppedFile,
         setCroppedFile() {},
         uiHelperFunctions: { showToastNotification() {}, closeModal() {} },
         settingsManager: { completeVcpUrl: url => url },
@@ -134,6 +135,15 @@ test('global settings saves the server URL once with canonical presentation', as
         assert.equal(typedForumCalls, 1, 'forum settings save delegates to the typed Forum service command');
         assert.equal(typedForumPayload?.username, 'forum-admin');
 
+        croppedFile = { name: 'avatar.png', type: 'image/png', arrayBuffer: async () => new ArrayBuffer(0) };
+        dom.window.chatAPI.saveUserAvatar = async () => ({ success: false, error: 'avatar-denied' });
+        await handleSaveGlobalSettings(event, deps);
+        assert.equal(saveResults.at(-1)?.success, false, 'avatar command failure publishes a retryable terminal state');
+        assert.match(saveResults.at(-1)?.error || '', /avatar-denied/, 'avatar command error reaches the SettingsRoot retry UI');
+        assert.equal(typedCalls, 1, 'avatar failure stops the transaction before global settings persistence');
+        croppedFile = null;
+        delete dom.window.chatAPI.saveUserAvatar;
+
         rustShouldFail = true;
         await handleSaveGlobalSettings(event, deps);
         assert.equal(saveResults.at(-1)?.success, false, 'Rust command failure publishes a retryable terminal state');
@@ -164,12 +174,12 @@ test('global settings saves the server URL once with canonical presentation', as
             'a permanently pending save must become a recoverable terminal state'
         );
         assert.equal(form.dataset.globalSettingsSaving, undefined, 'timeout must release the submit lock');
-        assert.equal(saveResults.length, 6, 'each save attempt publishes exactly one terminal event');
+        assert.equal(saveResults.length, 7, 'each save attempt publishes exactly one terminal event');
         assert.equal(saveResults.at(-1)?.success, false, 'timeout publishes a failure terminal state to autosave');
         assert.match(saveResults.at(-1)?.error || '', /保存设置超时/, 'timeout error is available to retry UI');
         resolveLate({ success: true });
         await new Promise(resolve => setImmediate(resolve));
-        assert.equal(saveResults.length, 6, 'late IPC success cannot resurrect a timed-out UI save');
+        assert.equal(saveResults.length, 7, 'late IPC success cannot resurrect a timed-out UI save');
     } finally {
         for (const [name, value] of Object.entries(previousGlobals)) {
             if (value === undefined) delete globalThis[name];
