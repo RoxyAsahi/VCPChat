@@ -137,3 +137,40 @@ test('settings presentation owner waits for pending startup settings and suppres
     listenerOwner.dispose();
     dom.window.close();
 });
+
+test('settings presentation owner binds modal-ready once across repeated startup applies', async () => {
+    const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'https://vcpchat.test/' });
+    const settingsOwner = createMainChatSettingsOwner({ initial: {} });
+    const listenerOwner = createDomListenerOwner();
+    let modalReadyAdds = 0;
+    const countingListenerOwner = {
+        add(target, type, handler, options) {
+            if (type === 'modal-ready') modalReadyAdds += 1;
+            return listenerOwner.add(target, type, handler, options);
+        },
+    };
+    let loadCount = 0;
+    const owner = createMainChatSettingsPresentationOwner({
+        documentRef: dom.window.document,
+        settingsOwner,
+        listenerOwner: countingListenerOwner,
+        chatAPI: {},
+    });
+    owner.configureThemeOwner({
+        normalizePresentation: mode => mode || 'bubble',
+        applyPresentation: async mode => ({ success: true, mode }),
+        applyInitialTheme() {},
+    });
+    owner.configureStartup({
+        loadSettings: async () => { loadCount += 1; return {}; },
+        startupThemeGate: { release() {} },
+    });
+
+    await owner.loadAndApply();
+    await owner.loadAndApply();
+    assert.equal(loadCount, 2);
+    assert.equal(modalReadyAdds, 1);
+    await owner.dispose();
+    listenerOwner.dispose();
+    dom.window.close();
+});
