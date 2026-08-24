@@ -119,9 +119,19 @@ function mountTypedSettingsConsumer(root) {
             ['appearanceContentWidth', 'appearanceProfile.contentWidth'],
             ['appearanceSurface', 'appearanceProfile.surface'],
             ['appearanceSidebarRowHeight', 'appearanceProfile.sidebarRowHeight'],
+            ['appearanceSidebarRowHeightValue', 'appearanceProfile.sidebarRowHeight', 'px-output'],
             ['appearanceSidebarAvatarSize', 'appearanceProfile.sidebarAvatarSize'],
+            ['appearanceSidebarAvatarSizeValue', 'appearanceProfile.sidebarAvatarSize', 'px-output'],
             ['appearanceSidebarRadius', 'appearanceProfile.sidebarRadius'],
+            ['appearanceSidebarRadiusChoice-tuned', 'appearanceProfile.sidebarRadius', 'checked-value', 'tuned'],
+            ['appearanceSidebarRadiusChoice-follow', 'appearanceProfile.sidebarRadius', 'checked-value', 'follow'],
+            ['appearanceSidebarRadiusChoice-square', 'appearanceProfile.sidebarRadius', 'checked-value', 'square'],
+            ['appearanceSidebarRadiusChoice-small', 'appearanceProfile.sidebarRadius', 'checked-value', 'small'],
+            ['appearanceSidebarRadiusChoice-medium', 'appearanceProfile.sidebarRadius', 'checked-value', 'medium'],
+            ['appearanceSidebarRadiusChoice-round', 'appearanceProfile.sidebarRadius', 'checked-value', 'round'],
+            ['appearanceSidebarRadiusChoice-custom', 'appearanceProfile.sidebarRadius', 'checked-value', 'custom'],
             ['appearanceCustomRadius', 'appearanceProfile.customRadius'],
+            ['appearanceCustomRadiusValue', 'appearanceProfile.customRadius', 'px-output'],
             ['chatFontPreset', 'chatFontPreset'],
             ['chatFontCustom', 'chatFontCustom'],
             ['chatCodeFontPreset', 'chatCodeFontPreset'],
@@ -133,12 +143,17 @@ function mountTypedSettingsConsumer(root) {
             ['enableUserChatBubbleUi', 'enableUserChatBubbleUi', 'checked'],
             ['enableSmoothStreaming', 'enableSmoothStreaming', 'checked'],
         ];
-        projection.forEach(([id, path, mode]) => {
+        projection.forEach(([id, path, mode, expected]) => {
             const control = form.querySelector(`#${id}`);
             if (!control) return;
             const value = path.split('.').reduce((current, key) => current?.[key], settings);
             if (value === undefined || value === null) return;
-            if (mode === 'checked' || control.type === 'checkbox') control.checked = Boolean(value);
+            if (mode === 'checked-value') control.checked = String(value) === expected;
+            else if (mode === 'checked' || control.type === 'checkbox') control.checked = Boolean(value);
+            else if (mode === 'px-output') {
+                control.value = `${value}px`;
+                control.textContent = `${value}px`;
+            }
             else control.value = String(value);
         });
     };

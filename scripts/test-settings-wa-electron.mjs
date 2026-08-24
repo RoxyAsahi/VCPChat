@@ -415,6 +415,11 @@ try {
     assert.equal(await page.$eval('#appearanceSurface', node => node.value), 'custom', 'clean appearance surface consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceSidebarRowHeight', node => node.value), '52', 'clean sidebar row height consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceSidebarAvatarSize', node => node.value), '36', 'clean sidebar avatar size consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceSidebarRowHeightValue', node => node.value), '52px', 'clean row-height output consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceSidebarAvatarSizeValue', node => node.value), '36px', 'clean avatar-size output consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceCustomRadius', node => node.value), '14', 'clean custom radius consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceCustomRadiusValue', node => node.value), '14px', 'clean custom-radius output consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceSidebarRadiusChoice-round', node => node.checked), true, 'clean radius choice consumes typed Settings snapshot');
     assert.equal(await page.$eval('#enableSmoothStreaming', node => node.checked), false, 'clean checkbox consumes typed Settings snapshot');
     // Force the real IPC persistence path to fail once by removing write
     // access from the isolated test profile, then restore it for retry.
