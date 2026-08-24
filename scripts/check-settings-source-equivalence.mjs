@@ -84,11 +84,16 @@ assert.match(css, /\.vcp-harness-menu-portal\.vcp-harness-menu-list[\s\S]*?borde
 assert.match(css, /\.vcp-harness-menu-portal \.vcp-harness-menu-item[\s\S]*?min-height:\s*40px/);
 assert.match(bridge, /dataset\.settingPrimitive\s*=\s*'disclosure'/);
 assert.match(bridge, /vcp-harness-row-copy/);
+assert.match(bridge, /vcp-harness-active-section/);
+assert.match(bridge, /vcp-harness-section-bank/);
+assert.match(bridge, /vcp-harness-settings-close-icon/);
+assert.match(bridge, /vcp-harness-settings-close-label/);
 assert.match(bridge, /dataset\.settingPrimitive\s*=\s*'appearance-row'/);
 assert.match(bridge, /dataset\.settingPrimitive\s*=\s*'disclosure'/);
 assert.match(css, /vcp-harness-appearance-row[\s\S]*?gap:\s*8px[\s\S]*?padding:\s*16px\s+0/);
 assert.match(bridge, /popover\.setAttribute\('role', 'menu'\)/, 'Select projection must use Harness Menu semantics');
 assert.match(bridge, /item\.setAttribute\('role', 'menuitem'\)/, 'Select projection entries must be Menu items');
+assert.match(bridge, /button\.setAttribute\('aria-haspopup', 'menu'\)/, 'Select trigger must own a Harness Menu');
 assert.match(bridge, /vcp-ui-icon[^;]*check|textContent\s*=\s*'check'/, 'selection marker must use the shared icon adapter');
 assert.match(bridge, /rebuildOptions/, 'projection must expose an atomic option rebuild owner');
 assert.match(bridge, /aria-controls/, 'Menu trigger/disclosure must expose controlled content');
