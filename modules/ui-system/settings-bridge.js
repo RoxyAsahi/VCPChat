@@ -45,6 +45,31 @@ let typedSettingsSaveChain = Promise.resolve();
 let typedSettingsSaveGeneration = 0;
 let typedSettingsDisposed = false;
 
+function addTypedNetworkPathInput(root, path = '') {
+    const container = root?.querySelector?.('#networkNotesPathsContainer');
+    if (!container) return false;
+    const inputGroup = document.createElement('div');
+    inputGroup.className = 'network-path-input-group vcp-settings-row';
+    inputGroup.dataset.vcpSettingsRow = 'true';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.name = 'networkNotesPath';
+    input.placeholder = '例如 \\NAS\\Shared\\Notes';
+    input.value = path;
+    const inputWrap = document.createElement('span');
+    inputWrap.className = 'vcp-harness-input-wrap';
+    inputWrap.dataset.settingPrimitive = 'input-wrap';
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.textContent = '删除';
+    removeBtn.className = 'sidebar-button small-button danger-button';
+    removeBtn.addEventListener('click', () => inputGroup.remove(), { once: true });
+    inputWrap.appendChild(input);
+    inputGroup.append(inputWrap, removeBtn);
+    container.appendChild(inputGroup);
+    return true;
+}
+
 function ensureTypedSettingsService() {
     if (typedSettingsService || !window.VCPUIUX?.createSettingsUiService) return typedSettingsService;
     const externalListeners = new Set();
@@ -252,7 +277,8 @@ function mountTypedSettingsConsumer(root) {
             const current = [...pathsContainer.querySelectorAll('input[name="networkNotesPath"]')].map(input => input.value);
             if (current.join('\u0000') !== paths.join('\u0000')) {
                 pathsContainer.replaceChildren();
-                const addPath = window.uiHelperFunctions?.addNetworkPathInput;
+                const addPath = path => addTypedNetworkPathInput(root, path)
+                    || window.uiHelperFunctions?.addNetworkPathInput?.(path);
                 if (typeof addPath === 'function') {
                     (paths.length ? paths : ['']).forEach(path => addPath(path));
                 }
@@ -1393,6 +1419,12 @@ scheduleRefresh();
 
 window.VCPUISettingsBridge = Object.freeze({
     refresh: scheduleRefresh,
+    addNetworkPathInput(path = '') {
+        const root = document.getElementById('globalSettingsModal');
+        return addTypedNetworkPathInput(root, path)
+            || window.uiHelperFunctions?.addNetworkPathInput?.(path)
+            || false;
+    },
     getTypedService() {
         return ensureTypedSettingsService();
     },
