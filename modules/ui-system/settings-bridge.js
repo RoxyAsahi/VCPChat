@@ -398,9 +398,7 @@ function mountHarnessSelects(form) {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'vcp-harness-select-trigger';
-        // The presentation projection owns a Harness Menu primitive; the
-        // native select remains the sole business/serialization source.
-        button.setAttribute('aria-haspopup', 'menu');
+        button.setAttribute('aria-haspopup', 'listbox');
         button.id = `${controlId}-trigger`;
         const label = document.createElement('span');
         label.className = 'vcp-harness-select-label';
@@ -414,9 +412,9 @@ function mountHarnessSelects(form) {
         // Harness Menu is a menu primitive; the native select remains the
         // serialization source while this portal owns menu semantics.
         popover.setAttribute('role', 'menu');
-        popover.id = `${controlId}-menu`;
+        popover.id = `${controlId}-listbox`;
         popover.hidden = true;
-        const state = { select, wrap, button, label, popover, open: false, portal: false, activeIndex: 0, cleanups: [], rebuildOptions: null };
+        const state = { select, wrap, button, label, popover, open: false, portal: false, cleanups: [], rebuildOptions: null };
         button.setAttribute('aria-controls', popover.id);
         const fieldLabel = select.id ? [...document.querySelectorAll('label[for]')].find(label => label.htmlFor === select.id) : null;
         const originalLabelId = fieldLabel?.id || null;
@@ -428,13 +426,10 @@ function mountHarnessSelects(form) {
             const selected = select.options[select.selectedIndex];
             label.textContent = selected?.textContent?.trim() || '';
             button.setAttribute('aria-label', select.getAttribute('aria-label') || selected?.textContent?.trim() || '选择');
-            state.activeIndex = Math.max(0, select.selectedIndex);
-            [...popover.querySelectorAll('[role="menuitem"]')].forEach((option, index) => {
+            [...popover.querySelectorAll('[role="menuitem"]')].forEach(option => {
                 const active = option.dataset.value === select.value;
                 option.classList.toggle('is-selected', active);
-                option.tabIndex = index === state.activeIndex ? 0 : -1;
             });
-            button.setAttribute('aria-activedescendant', `${controlId}-option-${state.activeIndex}`);
         };
         const position = () => {
             if (!state.open) return;
@@ -466,7 +461,6 @@ function mountHarnessSelects(form) {
                 if (!state.open) return;
                 position();
                 popover.style.visibility = 'visible';
-                viewport.querySelector(`[role="menuitem"][data-index="${state.activeIndex}"]`)?.focus();
             });
         };
         select.parentNode.insertBefore(wrap, select);
@@ -490,21 +484,13 @@ function mountHarnessSelects(form) {
             const item = document.createElement('button');
             item.type = 'button'; item.className = 'vcp-harness-menu-item vcp-harness-select-option'; item.dataset.value = option.value;
             item.id = `${controlId}-option-${optionIndex}`;
-            item.dataset.index = String(optionIndex);
             item.setAttribute('role', 'menuitem');
             item.disabled = option.disabled;
             if (option.disabled) item.setAttribute('aria-disabled', 'true');
             const text = document.createElement('span'); text.className = 'vcp-harness-menu-item-label'; text.textContent = option.textContent.trim();
             const check = document.createElement('span'); check.className = 'vcp-harness-menu-check vcp-harness-select-check vcp-ui-icon'; check.textContent = 'check'; check.setAttribute('aria-hidden', 'true');
             item.append(text, check); itemWrap.append(item); viewport.append(itemWrap);
-            const onClick = () => {
-                if (option.disabled) return;
-                select.value = option.value;
-                select.dispatchEvent(new Event('change', { bubbles: true }));
-                sync();
-                close();
-                button.focus();
-            };
+            const onClick = () => { select.value = option.value; select.dispatchEvent(new Event('change', { bubbles: true })); sync(); close(); button.focus(); };
             item.addEventListener('click', onClick); optionCleanups.push(() => item.removeEventListener('click', onClick));
             });
             state.cleanups = state.cleanups.filter(cleanup => !cleanup.__vcpOptionCleanup);
@@ -513,35 +499,22 @@ function mountHarnessSelects(form) {
         };
         state.rebuildOptions = rebuildOptions;
         rebuildOptions();
+        button.setAttribute('aria-activedescendant', `${controlId}-option-${Math.max(0, select.selectedIndex)}`);
         const onButton = () => state.open ? close() : open();
         const onKey = event => {
             if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onButton(); return; }
             if (event.key === 'Escape' && state.open) { event.preventDefault(); close(); return; }
-        };
-        const onMenuKey = event => {
-            if (!state.open) return;
-            const items = [...viewport.querySelectorAll('[role="menuitem"]')].filter(item => !item.disabled);
-            if (!items.length) return;
-            const current = Math.max(0, items.findIndex(item => Number(item.dataset.index) === state.activeIndex));
-            let next = current;
-            if (event.key === 'ArrowDown') next = (current + 1) % items.length;
-            else if (event.key === 'ArrowUp') next = (current - 1 + items.length) % items.length;
-            else if (event.key === 'Home') next = 0;
-            else if (event.key === 'End') next = items.length - 1;
-            else if (event.key === 'Escape') { event.preventDefault(); close(); button.focus(); return; }
-            else if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault(); items[current]?.click(); return;
-            } else return;
-            event.preventDefault();
-            state.activeIndex = Number(items[next].dataset.index);
-            items[next].focus();
-            button.setAttribute('aria-activedescendant', items[next].id);
+            if (!state.open || !['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+            event.preventDefault(); const delta = event.key === 'ArrowDown' ? 1 : -1;
+            let next = select.selectedIndex;
+            do { next = (next + delta + select.options.length) % select.options.length; } while (select.options[next]?.disabled && next !== select.selectedIndex);
+            select.selectedIndex = next; select.dispatchEvent(new Event('change', { bubbles: true })); button.setAttribute('aria-activedescendant', `${controlId}-option-${next}`); sync();
         };
         const onChange = sync;
         state.close = close;
         state.position = position;
-        button.addEventListener('click', onButton); button.addEventListener('keydown', onKey); popover.addEventListener('keydown', onMenuKey); select.addEventListener('change', onChange); window.addEventListener('global-settings-updated', onChange);
-        state.cleanups.push(() => { close(); button.removeEventListener('click', onButton); button.removeEventListener('keydown', onKey); popover.removeEventListener('keydown', onMenuKey); select.removeEventListener('change', onChange); window.removeEventListener('global-settings-updated', onChange); if (originalAriaHidden === null) select.removeAttribute('aria-hidden'); else select.setAttribute('aria-hidden', originalAriaHidden); if (originalTabIndex === null) select.removeAttribute('tabindex'); else select.setAttribute('tabindex', originalTabIndex); if (fieldLabel && originalLabelId === null) fieldLabel.removeAttribute('id'); });
+        button.addEventListener('click', onButton); button.addEventListener('keydown', onKey); select.addEventListener('change', onChange); window.addEventListener('global-settings-updated', onChange);
+        state.cleanups.push(() => { close(); button.removeEventListener('click', onButton); button.removeEventListener('keydown', onKey); select.removeEventListener('change', onChange); window.removeEventListener('global-settings-updated', onChange); if (originalAriaHidden === null) select.removeAttribute('aria-hidden'); else select.setAttribute('aria-hidden', originalAriaHidden); if (originalTabIndex === null) select.removeAttribute('tabindex'); else select.setAttribute('tabindex', originalTabIndex); if (fieldLabel && originalLabelId === null) fieldLabel.removeAttribute('id'); });
         sync(); customSelectStates.add(state);
     });
     if (window.MutationObserver && !selectObserverStates.has(form)) {
@@ -752,9 +725,6 @@ function mountSettingsShell(root) {
         title,
         header: null,
         options: null,
-        sectionHost: null,
-        sectionBank: null,
-        sections: new Map(),
         navList: null,
         cleanups: [],
         meta,
@@ -798,50 +768,9 @@ function mountSettingsShell(root) {
     state.header = header;
     state.options = options;
     options.append(...[...content.childNodes]);
-    // Harness owns an icon-only 28px close primitive with an accessible text
-    // seat. Replace the legacy text glyph once, while preserving the same
-    // business button and close listener.
-    if (!close.dataset.vcpHarnessClose) {
-        const icon = document.createElement('span');
-        icon.className = 'vcp-ui-icon vcp-harness-settings-close-icon';
-        icon.setAttribute('aria-hidden', 'true');
-        icon.textContent = 'x';
-        const hiddenLabel = document.createElement('span');
-        hiddenLabel.className = 'vcp-harness-settings-close-label';
-        hiddenLabel.textContent = close.getAttribute('aria-label') || '关闭';
-        close.replaceChildren(icon, hiddenLabel);
-        close.classList.add('vcp-harness-settings-close');
-        close.dataset.vcpHarnessClose = 'true';
-    }
     actions.append(close);
     header.append(actions);
     content.replaceChildren(header, options);
-
-    // Harness renders only the selected section into Options. Keep the
-    // remaining business fields connected to the same form in a hidden bank
-    // so legacy id/name queries, form serialization and IPC handlers remain
-    // authoritative without leaving inactive settings in the visible tree.
-    const sectionHost = document.createElement('div');
-    sectionHost.className = 'vcp-harness-active-section';
-    sectionHost.dataset.settingPrimitive = 'section';
-    const sectionBank = document.createElement('div');
-    sectionBank.className = 'vcp-harness-section-bank';
-    sectionBank.hidden = true;
-    sectionBank.setAttribute('aria-hidden', 'true');
-    state.sectionHost = sectionHost;
-    state.sectionBank = sectionBank;
-    [...form.children].filter(child => child.matches('.settings-section')).forEach(section => {
-        const value = section.id.replace(/^section-/, '');
-        state.sections.set(value, section);
-        section.classList.remove('active');
-        sectionBank.append(section);
-    });
-    form.prepend(sectionHost, sectionBank);
-    const initialSection = state.sections.get(initial);
-    if (initialSection) {
-        sectionHost.append(initialSection);
-        initialSection.classList.add('active');
-    }
     const canonicalNav = document.createElement('div');
     canonicalNav.className = 'vcp-harness-settings-nav-list';
     canonicalNav.setAttribute('aria-label', '全局设置分类');
@@ -895,7 +824,7 @@ function mountSettingsShell(root) {
             row.tabIndex = selected ? 0 : -1;
         });
         state.meta.forEach(item => {
-            const section = state.sections.get(item.value) || root.querySelector(`#section-${item.value}`);
+            const section = root.querySelector(`#section-${item.value}`);
             if (!section) return;
             // The active section is derived from the same state as the nav.
             // Re-assert it on every render so stale classes from a reused
@@ -911,12 +840,6 @@ function mountSettingsShell(root) {
     const activateSection = (value) => {
         if (!state.meta.some(item => item.value === value)) return;
         state.active = value;
-        const next = state.sections.get(value);
-        if (next && state.sectionHost && next.parentNode !== state.sectionHost) {
-            const current = state.sectionHost.querySelector('.settings-section');
-            if (current) state.sectionBank.append(current);
-            state.sectionHost.append(next);
-        }
         renderList();
     };
 

@@ -1550,45 +1550,6 @@
     min-width: 0;
 }
 
-:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal.vcp-global-settings-surface .vcp-harness-active-section {
-    display: block;
-    min-width: 0;
-}
-
-:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal.vcp-global-settings-surface .vcp-harness-section-bank[hidden] {
-    display: none;
-}
-
-:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal.vcp-global-settings-surface .vcp-harness-settings-close {
-    position: static;
-    display: inline-flex;
-    flex: 0 0 28px;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    margin: 0;
-    padding: 0;
-    border: 0;
-    border-radius: 28px;
-    outline: 0;
-    color: var(--vcp-ui-text-0);
-    background: transparent;
-}
-
-:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal.vcp-global-settings-surface .vcp-harness-settings-close:hover {
-    background: var(--vcp-ui-fill-1);
-}
-
-:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal.vcp-global-settings-surface .vcp-harness-settings-close-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-}
-
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal.vcp-global-settings-surface .settings-section > .settings-section-title[hidden] {
     display: none;
 }
