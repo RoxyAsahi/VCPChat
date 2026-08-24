@@ -377,9 +377,13 @@ try {
     // ---- 6. Real save through IPC, then reopen (reload) restores from disk ----
     await resizeWindow(page, browser, 1200, 800);
     await setTheme(page, 'dark');
-    const uniquePrompt = `请继续-电子-${Date.now()}`;
+    const uniquePrompt = `请继续-电子-重试-${Date.now()}`;
     await page.evaluate(() => window.uiHelperFunctions.openModal('globalSettingsModal'));
     await new Promise(resolve => setTimeout(resolve, 150));
+    // Force the real IPC persistence path to fail once by removing write
+    // access from the isolated test profile, then restore it for retry.
+    await fs.chmod(path.join(appData, 'settings.json'), 0o444);
+    await fs.chmod(appData, 0o500);
     await page.evaluate((value) => {
         const textarea = document.getElementById('continueWritingPrompt');
         textarea.value = value;
@@ -397,6 +401,18 @@ try {
             };
         }, { once: true });
     });
+    await page.waitForFunction(() => document.querySelector('.vcp-settings-autosave-status')?.dataset.state === 'error', { timeout: timeoutMs });
+    const failedRetryState = await page.evaluate(() => ({
+        active: document.getElementById('globalSettingsModal')?.classList.contains('active') || false,
+        footerState: document.querySelector('.vcp-settings-autosave-status')?.dataset.state || '',
+        prompt: document.getElementById('continueWritingPrompt')?.value || '',
+    }));
+    assert.equal(failedRetryState.active, true, `failed save keeps SettingsRoot open (${JSON.stringify(failedRetryState)})`);
+    assert.equal(failedRetryState.footerState, 'error', 'failed save exposes retry state');
+    assert.equal(failedRetryState.prompt, uniquePrompt, 'failed save preserves input');
+    await fs.chmod(appData, 0o700);
+    await fs.chmod(path.join(appData, 'settings.json'), 0o600);
+    await page.click('.vcp-settings-autosave-status');
     await page.waitForFunction(() => document.querySelector('.vcp-settings-autosave-status')?.dataset.state === 'saving' || document.querySelector('.vcp-settings-autosave-status')?.dataset.state === 'saved', { timeout: timeoutMs });
     // Poll for the modal to close; collect diagnostics so a hang is debuggable.
     let saveDiagnostics = null;
@@ -419,7 +435,7 @@ try {
     const savedProjection = await page.evaluate(() => window.__settingsSaveProjection);
     assert.equal(savedProjection?.continueWritingPrompt, uniquePrompt, 'settings authority publishes the persisted value after save');
     const savedUserName = savedProjection?.userName;
-    console.log('  [PASS] 6. real save via IPC persists (modal closed, authority projection updated)');
+    console.log('  [PASS] 6. failed save keeps input, retry succeeds, and IPC persists (modal closed, authority projection updated)');
 
     // Reopen after a full reload: the form must be re-populated from settings.json.
     await page.reload({ waitUntil: 'domcontentloaded' });
@@ -446,7 +462,19 @@ try {
     }, { timeout: timeoutMs });
     console.log('  [PASS] 8. canonical unified SettingsShell survives reload');
 
-    console.log('\nSettings Harness structure gate passed (Root, nav/header/options, controls, real save + reload restore, screenshots).');
+    // ---- 9. Explicit renderer teardown retracts the Settings owner ledger ----
+    const teardownLedger = await page.evaluate(async () => {
+        await window.VCPUISettingsBridge?.destroy?.();
+        return {
+            scopes: window.VCPLifecycle?.diagnostics?.snapshot?.() || [],
+            typedRevision: document.getElementById('globalSettingsModal')?.dataset.vcpSettingsRevision || null,
+        };
+    });
+    assert.equal(teardownLedger.scopes.some(scope => String(scope.label).includes('settings-bridge')), false, `settings bridge scope disposed: ${JSON.stringify(teardownLedger.scopes)}`);
+    assert.equal(teardownLedger.scopes.some(scope => String(scope.label).includes('settings-presentation')), false, `settings presentation scope disposed: ${JSON.stringify(teardownLedger.scopes)}`);
+    console.log('  [PASS] 9. explicit Settings owner teardown retracts bridge/presentation scopes');
+
+    console.log('\nSettings Harness structure gate passed (Root, nav/header/options, controls, failure retry, reload restore, teardown, screenshots).');
 } catch (error) {
     console.error(`Settings WA Electron gate failed:\n${error?.stack || error}`);
     if (rendererErrors.length) {
