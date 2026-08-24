@@ -31,9 +31,12 @@ test('typed SettingsUiService publishes only committed patches and releases exte
     assert.deepEqual(saved, { success: true });
     assert.equal(service.state.get().density, 'compact');
     assert.deepEqual(revisions, [0, 1]);
-    external.forEach(listener => listener({ currentThemeMode: 'dark', density: 'compact' }));
+    external.forEach(listener => listener({ currentThemeMode: 'dark' }));
     assert.equal(service.state.get().currentThemeMode, 'dark');
+    assert.equal(service.state.get().density, 'compact', 'partial external patch preserves unrelated settings');
     assert.deepEqual(revisions, [0, 1, 2]);
+    external.forEach(listener => listener({ currentThemeMode: 'dark' }));
+    assert.deepEqual(revisions, [0, 1, 2], 'identical external snapshot is deduplicated');
     release();
     await service.dispose?.();
     assert.equal(external.size, 0);

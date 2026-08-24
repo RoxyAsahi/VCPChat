@@ -30,6 +30,11 @@ function freezeState(value: SettingsState): SettingsState {
     return Object.freeze({ ...(value || {}) });
 }
 
+function sameState(left: SettingsState, right: SettingsState): boolean {
+    const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+    return [...keys].every(key => left[key] === right[key]);
+}
+
 export function createSettingsUiService(input: SettingsUiAdapterInput): SettingsUiService {
     if (!input || typeof input.get !== 'function' || typeof input.save !== 'function') {
         throw new TypeError('SettingsUiAdapter requires get() and save().');
@@ -47,7 +52,9 @@ export function createSettingsUiService(input: SettingsUiAdapterInput): Settings
     });
     const publish = (next: SettingsState, nextSource: string) => {
         if (disposed) return snapshot();
-        state = freezeState(next);
+        const nextState = freezeState(next);
+        if (sameState(state, nextState)) return snapshot();
+        state = nextState;
         revision += 1;
         source = nextSource;
         const nextSnapshot = snapshot();
@@ -62,7 +69,10 @@ export function createSettingsUiService(input: SettingsUiAdapterInput): Settings
         });
         return nextSnapshot;
     };
-    const externalRelease = input.subscribe?.(next => publish(next, 'settings-external')) || null;
+    // External notifications are allowed to be partial patches (for example,
+    // a presentation owner may publish only the field it changed). Merge them
+    // into the authoritative snapshot instead of erasing unrelated settings.
+    const externalRelease = input.subscribe?.(next => publish({ ...state, ...(next || {}) }, 'settings-external')) || null;
     const service: SettingsUiService = {
         state: {
             get: () => state,
