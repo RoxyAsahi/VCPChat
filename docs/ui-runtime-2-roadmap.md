@@ -7,7 +7,7 @@
 > 上位规范：[vcpchat-harness-uiux-architecture.md](/Users/asahi/Documents/Codex/VCPChat-newarchitecture/docs/vcpchat-harness-uiux-architecture.md)；本文件只负责执行顺序、consumer、证据与删除账本
 > 最近核验：2026-08-24；R2-00 Composer slice 已达到 complete；R2-01 Overlay/notification slice 已闭合；R2-03 ThemeSnapshot adapter 已接入；R2-08 typed ThemePresenter 已接入 Next Account Dock；当前 active slice：R2-08 artifact teardown hardening  
 > 最近证据：`node --test tests/chat-surface.test.mjs tests/chat-surface-slots.test.mjs tests/main-chat-surface-adapter.test.mjs tests/chat-plugin-manifest.test.mjs`（19/19）；`npm run test:electron-main-chat-sequences`（next-main-chat-default，24 actions，25 VCP requests，required 1/1）
-> R2-01 证据：`node --test tests/overlay-coordinator.test.js tests/escape-dispatcher.test.js tests/notification-menu-controller.test.js`（9/9）；`node scripts/test-ui-system.mjs`；`node scripts/test-settings-wa-electron.mjs`（Settings Harness structure gate passed）。R2-03 证据：`node --test tests/state-authority.test.js tests/account-menu-controller.test.js tests/ui-manager-lifecycle.test.mjs`（7/7）；`node scripts/test-appearance-studio.mjs`（appearance studio checks passed）。R2-08 证据：`npm run check:uiux`；`npm run test:uiux`（typed ThemePresenter contract 1/1）；`VCPCHAT_SEQUENCE_DEBUG=1 VCPCHAT_SEQUENCE_SEED=next-main-chat-default npm run test:electron-main-chat-sequences`（typed provider/projection boundary + 24 actions passed）。
+> R2-01 证据：`node --test tests/overlay-coordinator.test.js tests/escape-dispatcher.test.js tests/notification-menu-controller.test.js`（9/9）；`node scripts/test-ui-system.mjs`；`node scripts/test-settings-wa-electron.mjs`（Settings Harness structure gate passed）。R2-03 证据：`node --test tests/state-authority.test.js tests/account-menu-controller.test.js tests/ui-manager-lifecycle.test.mjs`（7/7）；`node scripts/test-appearance-studio.mjs`（appearance studio checks passed）。R2-08 证据：`npm run check:uiux`；`npm run test:uiux`（typed ThemePresenter contract 1/1）；`npm run test:electron-uiux-theme`（initial/reload projection + subscriber teardown boundary passed）；主聊天 sequence 仍作为 broader evidence，但 auxiliary concurrent fixture 可能独立 flake。
 
 ## 0. 这份文档的职责
 
@@ -155,7 +155,7 @@ status: in_progress
 production_consumer: NextShell Account Dock typed ThemePresenter
 consumer_kind: internal production consumer; stable API still gated
 first_slice: modules/uiux/contracts.ts + modules/uiux/runtime/scope.ts + providers/theme.ts
-next_slice: artifact teardown/reload diagnostics and semantic token projection coverage
+next_slice: semantic token projection coverage and explicit remount resource ledger
 blocked_by: UI Apps smoke 的 dynamic-wallpaper disabled-manifest readiness（不阻塞 ThemeSnapshot contract）
 excluded: chat-message-internals, plugin-loader, child-page-migration
 last_verified: 2026-08-24
