@@ -75,14 +75,17 @@ test('typed SettingsUiService rejects stale save publication and silences late r
 
 test('typed SettingsUiService invalidates a timed-out save without disposing the service', async () => {
     let resolveSave;
+    let cancelled = false;
     const service = createSettingsUiService({
         get: () => ({ density: 'comfortable' }),
         save: () => new Promise(resolve => { resolveSave = resolve; }),
+        cancelPendingSaves: () => { cancelled = true; },
     });
     const revisions = [];
     service.state.subscribe((_value, snapshot) => revisions.push(snapshot.revision));
     const pending = service.save.execute({ density: 'compact' });
     service.cancelPendingSaves?.();
+    assert.equal(cancelled, true, 'service cancellation reaches the adapter owner');
     resolveSave({ success: true });
     assert.deepEqual(await pending, { success: true });
     assert.equal(service.state.get().density, 'comfortable');

@@ -15,6 +15,7 @@ export interface SettingsUiService {
 export interface SettingsUiAdapterInput {
     readonly get: () => SettingsState;
     readonly save: (patch: SettingsPatch) => Promise<SettingsSaveResult> | SettingsSaveResult;
+    readonly cancelPendingSaves?: () => void;
     readonly subscribe?: (listener: (state: SettingsState) => void) => UiDisposer;
 }
 export declare function createSettingsUiService(input: SettingsUiAdapterInput): SettingsUiService;
