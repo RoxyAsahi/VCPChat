@@ -59,3 +59,31 @@ test('parent scope teardown invalidates the registry view', async () => {
     assert.equal(registry.get('owned'), undefined);
     assert.throws(() => registry.install({ id: 'late', provide: () => ({}) }), /disposed/);
 });
+
+test('service release waits for async disposer quiescence', async () => {
+    const scope = await makeScope('registry-async-release');
+    const registry = createUiServiceRegistry(scope);
+    let resolveDispose;
+    let disposed = false;
+    registry.install({
+        id: 'async-service',
+        provide: () => ({
+            dispose: () => new Promise(resolve => {
+                resolveDispose = () => { disposed = true; resolve(); };
+            }),
+        }),
+    });
+    const releasing = registry.release('async-service');
+    let settled = false;
+    releasing.finally(() => { settled = true; }).catch(() => {});
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(settled, false);
+    assert.equal(disposed, false);
+    resolveDispose();
+    await releasing;
+    assert.equal(settled, true);
+    assert.equal(disposed, true);
+    assert.equal(registry.get('async-service'), undefined);
+    await registry.dispose();
+    await scope.dispose('test-end');
+});
