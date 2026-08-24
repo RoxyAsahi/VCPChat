@@ -83,7 +83,15 @@ try {
     assert.ok(['light', 'dark'].includes(initial.projection), `typed theme projection missing: ${JSON.stringify(initial)}`);
     assert.equal(initial.ready, 'true');
     assert.ok(Number.isInteger(Number(initial.revision)), `typed theme revision missing: ${JSON.stringify(initial)}`);
-    assert.ok(Number(initial.subscribers) >= 1, `theme channel has no consumer: ${JSON.stringify(initial)}`);
+    assert.equal(initial.subscribers, 2, `unexpected theme subscriber ledger: ${JSON.stringify(initial)}`);
+
+    await page.evaluate(() => window.uiManager.applyTheme('dark'));
+    await page.waitForFunction(() => document.querySelector('.next-ui-account-dock')?.dataset.themeEffective === 'dark', { timeout: 8_000 });
+    const dark = await readBoundary();
+    assert.equal(dark.projection, 'dark');
+    assert.equal(dark.ready, 'true');
+    assert.ok(Number(dark.revision) > Number(initial.revision), `theme revision did not advance: ${JSON.stringify({ initial, dark })}`);
+    assert.equal(dark.subscribers, initial.subscribers, 'theme update changed subscriber ownership');
 
     await page.reload({ waitUntil: 'domcontentloaded', timeout: 12_000 });
     await page.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout });
@@ -91,8 +99,8 @@ try {
     const recovered = await readBoundary();
     assert.equal(recovered.provider, true);
     assert.equal(recovered.ready, 'true');
-    assert.ok(Number(recovered.subscribers) >= 1, `theme consumer did not remount after reload: ${JSON.stringify(recovered)}`);
-    console.log(`UIUX Theme Electron journey passed: initial=${initial.projection}/${initial.revision}, reload=${recovered.projection}/${recovered.revision}, subscribers=${recovered.subscribers}`);
+    assert.equal(recovered.subscribers, initial.subscribers, `theme consumer ledger changed after reload: ${JSON.stringify({ initial, recovered })}`);
+    console.log(`UIUX Theme Electron journey passed: initial=${initial.projection}/${initial.revision}, dark=${dark.projection}/${dark.revision}, reload=${recovered.projection}/${recovered.revision}, subscribers=${recovered.subscribers}`);
 } finally {
     browser?.disconnect();
     if (child.exitCode === null) child.kill('SIGKILL');
