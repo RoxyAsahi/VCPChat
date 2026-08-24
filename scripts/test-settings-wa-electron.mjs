@@ -691,6 +691,7 @@ try {
     assert.equal(teardownLedger.scopes.some(scope => String(scope.label).includes('settings-bridge')), false, `settings bridge scope disposed: ${JSON.stringify(teardownLedger.scopes)}`);
     assert.equal(teardownLedger.scopes.some(scope => String(scope.label).includes('settings-presentation')), false, `settings presentation scope disposed: ${JSON.stringify(teardownLedger.scopes)}`);
     assert.equal(teardownLedger.scopes.some(scope => String(scope.label).includes('ui-services')), false, `typed service scope disposed: ${JSON.stringify(teardownLedger.scopes)}`);
+    assert.equal(teardownLedger.typedRevision, null, 'typed Settings readiness marker retracts with the consumer');
     assert.equal(teardownLedger.rustResult?.success, false, 'disposed Rust service rejects late command');
     assert.equal(teardownLedger.forumResult?.success, false, 'disposed Forum service rejects late command');
     assert.equal(teardownLedger.runtimeResult?.success, false, 'disposed runtime service rejects late refresh');

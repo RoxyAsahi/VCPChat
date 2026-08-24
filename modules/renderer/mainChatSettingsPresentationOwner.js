@@ -565,13 +565,24 @@ export function createMainChatSettingsPresentationOwner({
             if (el) el.checked = !!checked;
         };
         // The SettingsRoot typed consumer owns the migrated projection fields
-        // once its scoped service is assembled. Keep this legacy startup
+        // once its real subscription is mounted. Keep this legacy startup
         // owner responsible for the remaining business controls, but do not
         // overwrite clean snapshots or dirty drafts that the typed consumer
         // deliberately protects.
-        const typedSettingsProjectionActive = Boolean(
+        // Service assembly alone is not consumer readiness.  The bridge may
+        // expose a typed service before SettingsRoot has mounted (or after a
+        // partial mount failure); in that window the legacy owner must still
+        // populate the canonical business controls.
+        let typedSettingsProjectionActive = Boolean(
             windowRef?.VCPUISettingsBridge?.getTypedService?.()
+            && document.getElementById('globalSettingsModal')?.dataset?.vcpSettingsRevision !== undefined
         );
+        const refreshTypedSettingsProjectionState = () => {
+            typedSettingsProjectionActive = Boolean(
+                windowRef?.VCPUISettingsBridge?.getTypedService?.()
+                && document.getElementById('globalSettingsModal')?.dataset?.vcpSettingsRevision !== undefined
+            );
+        };
         const syncRustDebugPanelVisibility = () => {
             const rustDebugModeEl = document.getElementById('rustDebugMode');
             const rustDebugPanelEl = document.getElementById('rustDebugPanel');
@@ -790,7 +801,7 @@ export function createMainChatSettingsPresentationOwner({
         }
 
         // 加载论坛配置并填充管理员账号/密码
-        if (!windowRef?.VCPUISettingsBridge?.getForumConfigService?.()) {
+        if (!typedSettingsProjectionActive) {
             try {
                 const forumConfig = await chatAPI.loadForumConfig();
                 if (!isCurrent(token)) return false;
@@ -802,6 +813,7 @@ export function createMainChatSettingsPresentationOwner({
                 console.warn('[Renderer] Failed to load forum config for global settings:', err);
             }
         }
+        refreshTypedSettingsProjectionState();
 
         // Assistant Select
         const assistantAgentSelect = document.getElementById('assistantAgent');
@@ -810,6 +822,7 @@ export function createMainChatSettingsPresentationOwner({
             if (!isCurrent(token)) return false;
             if (!typedSettingsProjectionActive) assistantAgentSelect.value = globalSettings.assistantAgent || '';
         }
+        refreshTypedSettingsProjectionState();
 
         if (!typedSettingsProjectionActive) {
             safeCheck('enableDistributedServer', globalSettings.enableDistributedServer === true);
@@ -834,7 +847,9 @@ export function createMainChatSettingsPresentationOwner({
             safeCheck('enableRegenerateConfirmation', globalSettings.enableRegenerateConfirmation !== false);
         }
 
-        const typedRustAssistantService = windowRef?.VCPUISettingsBridge?.getRustAssistantService?.();
+        const typedRustAssistantService = typedSettingsProjectionActive
+            ? windowRef?.VCPUISettingsBridge?.getRustAssistantService?.()
+            : null;
         if (!typedRustAssistantService && chatAPI?.getRustAssistantConfig) {
             try {
                 const rustConfig = await chatAPI.getRustAssistantConfig();
@@ -866,7 +881,7 @@ export function createMainChatSettingsPresentationOwner({
             }
         }
 
-        if (!windowRef?.VCPUISettingsBridge?.getAssistantRuntimeService?.() && chatAPI?.getAssistantRuntimeStatus && document.getElementById('rustDebugMode')?.checked) {
+        if (!typedSettingsProjectionActive && chatAPI?.getAssistantRuntimeStatus && document.getElementById('rustDebugMode')?.checked) {
             try {
                 const runtime = await chatAPI.getAssistantRuntimeStatus();
                 if (!isCurrent(token)) return false;
