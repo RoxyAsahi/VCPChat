@@ -30,6 +30,11 @@ function freezeState(value: SettingsState): SettingsState {
     return Object.freeze({ ...(value || {}) });
 }
 
+function sameState(left: SettingsState, right: SettingsState): boolean {
+    const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+    return [...keys].every(key => left[key] === right[key]);
+}
+
 export function createSettingsUiService(input: SettingsUiAdapterInput): SettingsUiService {
     if (!input || typeof input.get !== 'function' || typeof input.save !== 'function') {
         throw new TypeError('SettingsUiAdapter requires get() and save().');
@@ -47,7 +52,9 @@ export function createSettingsUiService(input: SettingsUiAdapterInput): Settings
     });
     const publish = (next: SettingsState, nextSource: string) => {
         if (disposed) return snapshot();
-        state = freezeState(next);
+        const nextState = freezeState(next);
+        if (sameState(state, nextState)) return snapshot();
+        state = nextState;
         revision += 1;
         source = nextSource;
         const nextSnapshot = snapshot();
