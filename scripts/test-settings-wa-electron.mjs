@@ -491,6 +491,16 @@ try {
     assert.equal(await page.$eval('#appearanceCustomRadiusValue', node => node.value), '14px', 'clean custom-radius output consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceSidebarRadiusChoice-round', node => node.checked), true, 'clean radius choice consumes typed Settings snapshot');
     assert.equal(await page.$eval('#enableSmoothStreaming', node => node.checked), false, 'clean checkbox consumes typed Settings snapshot');
+    const rustConsumerState = await page.evaluate(() => {
+        const service = window.VCPUISettingsBridge?.getRustAssistantService?.();
+        return {
+            available: Boolean(service?.state?.get),
+            debugMode: service?.state?.get()?.debugMode,
+            controlDebugMode: document.getElementById('rustDebugMode')?.checked,
+        };
+    });
+    assert.equal(rustConsumerState.available, true, 'Rust Assistant UI service is assembled in the production bridge');
+    assert.equal(rustConsumerState.controlDebugMode, rustConsumerState.debugMode === true, 'Rust control consumes the typed Rust snapshot');
     // Force the real IPC persistence path to fail once by removing write
     // access from the isolated test profile, then restore it for retry.
     await fs.chmod(path.join(appData, 'settings.json'), 0o444);

@@ -39,3 +39,27 @@ test('Rust Assistant UI adapter silences late refresh after dispose', async () =
     assert.deepEqual(revisions, [0]);
     assert.deepEqual(service.state.get(), {});
 });
+
+test('Rust Assistant UI adapter keeps failed saves out of the snapshot and supports retry', async () => {
+    let fail = true;
+    let state = { debugMode: false };
+    const service = createRustAssistantUiService({
+        get: () => state,
+        save: async patch => {
+            if (fail) return { success: false, error: 'denied' };
+            state = { ...state, ...patch };
+            return { success: true };
+        },
+    });
+    const revisions = [];
+    service.state.subscribe((_value, snapshot) => revisions.push(snapshot.revision));
+    await service.refresh.execute();
+    assert.deepEqual(await service.save.execute({ debugMode: true }), { success: false, error: 'denied' });
+    assert.equal(service.state.get().debugMode, false);
+    assert.deepEqual(revisions, [0, 1]);
+    fail = false;
+    assert.deepEqual(await service.save.execute({ debugMode: true }), { success: true });
+    assert.equal(service.state.get().debugMode, true);
+    assert.deepEqual(revisions, [0, 1, 2]);
+    await service.dispose();
+});
