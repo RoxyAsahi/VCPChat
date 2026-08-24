@@ -621,6 +621,33 @@ try {
     }, { timeout: timeoutMs });
     console.log('  [PASS] 8. canonical unified SettingsShell survives reload');
 
+    // ---- 8b. Repeated close/reopen must not duplicate owners or rows ----
+    const reopenLedgers = [];
+    for (let cycle = 0; cycle < 3; cycle += 1) {
+        await page.evaluate(() => window.uiHelperFunctions.closeModal('globalSettingsModal'));
+        await page.waitForFunction(() => !document.getElementById('globalSettingsModal')?.classList.contains('active'), { timeout: timeoutMs });
+        await page.evaluate(() => window.uiHelperFunctions.openModal('globalSettingsModal'));
+        await page.waitForFunction(() => document.querySelector('#globalSettingsModal.vcp-harness-settings-root'), { timeout: timeoutMs });
+        await sleep(120);
+        reopenLedgers.push(await page.evaluate(() => ({
+            scopeLabels: window.VCPLifecycle?.diagnostics?.snapshot?.().map(scope => scope.label) || [],
+            pathCount: document.querySelectorAll('#networkNotesPathsContainer input[name="networkNotesPath"]').length,
+            typedServices: [
+                window.VCPUISettingsBridge?.getTypedService?.(),
+                window.VCPUISettingsBridge?.getRustAssistantService?.(),
+                window.VCPUISettingsBridge?.getForumConfigService?.(),
+                window.VCPUISettingsBridge?.getAssistantRuntimeService?.(),
+            ].filter(Boolean).length,
+        })));
+    }
+    reopenLedgers.forEach((ledger, index) => {
+        assert.equal(ledger.scopeLabels.filter(label => String(label).includes('settings-presentation')).length, 1, `reopen ${index + 1} has one presentation scope`);
+        assert.equal(ledger.scopeLabels.filter(label => String(label).includes('ui-services')).length, 1, `reopen ${index + 1} has one typed service scope`);
+        assert.equal(ledger.pathCount, 2, `reopen ${index + 1} keeps one row per network path`);
+        assert.equal(ledger.typedServices, 4, `reopen ${index + 1} retains all typed services`);
+    });
+    console.log('  [PASS] 8b. repeated reopen has stable owner/service/list ledgers');
+
     // ---- 9. Explicit renderer teardown retracts the Settings owner ledger ----
     const teardownLedger = await page.evaluate(async () => {
         const rust = window.VCPUISettingsBridge?.getRustAssistantService?.();
