@@ -287,7 +287,10 @@ async function saveGlobalSettings(deps, settingsForm) {
                 return;
             }
         } catch (forumErr) {
-            console.warn('[GlobalSettings] Error saving forum config:', forumErr);
+            const error = forumErr?.message || String(forumErr);
+            reportSaveResult(false, `论坛配置保存失败: ${error}`);
+            uiHelperFunctions.showToastNotification(`论坛配置保存失败: ${error}`, 'error');
+            return;
         }
     }
 
