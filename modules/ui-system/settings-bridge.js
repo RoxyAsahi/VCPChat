@@ -243,6 +243,21 @@ function mountTypedSettingsConsumer(root) {
             set('rustClipboardCheckIntervalMs', thresholds.clipboardCheckIntervalMs);
             const panel = form.querySelector('#rustCustomThresholdsPanel');
             if (panel) panel.style.display = custom ? 'block' : 'none';
+            set('rustWhitelistKeywords', Array.isArray(rust.whitelist) ? rust.whitelist.join('\n') : '');
+            set('rustBlacklistKeywords', Array.isArray(rust.blacklist) ? rust.blacklist.join('\n') : '');
+            set('rustScreenshotApps', Array.isArray(rust.screenshotApps) ? rust.screenshotApps.join('\n') : '');
+            const ruleMode = Array.isArray(rust.whitelist) && rust.whitelist.length
+                ? 'whitelist'
+                : (Array.isArray(rust.blacklist) && rust.blacklist.length ? 'blacklist' : 'none');
+            set('rustRuleMode', ruleMode);
+            const guard = form.querySelector('#rustGuardRulesContainer');
+            if (guard) guard.style.display = rust.useRustAssistant === true ? 'block' : 'none';
+            const whitelistPanel = form.querySelector('#rustWhitelistPanel');
+            const blacklistPanel = form.querySelector('#rustBlacklistPanel');
+            if (whitelistPanel) whitelistPanel.style.display = ruleMode === 'whitelist' ? 'block' : 'none';
+            if (blacklistPanel) blacklistPanel.style.display = ruleMode === 'blacklist' ? 'block' : 'none';
+            const debugPanel = form.querySelector('#rustDebugPanel');
+            if (debugPanel) debugPanel.style.display = rust.debugMode === true ? 'block' : 'none';
         };
         const release = rustService.state.subscribe(applyRust);
         ensurePresentationScope()?.own(release, 'typed-rust-assistant-consumer', 'ui-presentation');

@@ -821,7 +821,8 @@ export function createMainChatSettingsPresentationOwner({
             safeCheck('enableRegenerateConfirmation', globalSettings.enableRegenerateConfirmation !== false);
         }
 
-        if (chatAPI?.getRustAssistantConfig) {
+        const typedRustAssistantService = windowRef?.VCPUISettingsBridge?.getRustAssistantService?.();
+        if (!typedRustAssistantService && chatAPI?.getRustAssistantConfig) {
             try {
                 const rustConfig = await chatAPI.getRustAssistantConfig();
                 if (!isCurrent(token)) return false;
