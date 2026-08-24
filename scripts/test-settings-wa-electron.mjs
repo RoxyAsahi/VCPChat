@@ -28,6 +28,7 @@ const electron = process.platform === 'darwin'
     : path.join(root, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron');
 const timeoutMs = 90_000;
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+const reopenCycles = Math.max(1, Number.parseInt(process.env.VCPCHAT_SETTINGS_REOPEN_CYCLES || '3', 10) || 3);
 const screenshotsDir = path.join(root, 'screenshots');
 const darkShot = path.join(screenshotsDir, 'settings-wa-dark-700x500.png');
 const lightShot = path.join(screenshotsDir, 'settings-wa-light-700x500.png');
@@ -643,7 +644,7 @@ try {
 
     // ---- 8b. Repeated close/reopen must not duplicate owners or rows ----
     const reopenLedgers = [];
-    for (let cycle = 0; cycle < 3; cycle += 1) {
+    for (let cycle = 0; cycle < reopenCycles; cycle += 1) {
         await page.evaluate(() => window.uiHelperFunctions.closeModal('globalSettingsModal'));
         await page.waitForFunction(() => !document.getElementById('globalSettingsModal')?.classList.contains('active'), { timeout: timeoutMs });
         await page.evaluate(() => window.uiHelperFunctions.openModal('globalSettingsModal'));
@@ -666,7 +667,7 @@ try {
         assert.equal(ledger.pathCount, 2, `reopen ${index + 1} keeps one row per network path`);
         assert.equal(ledger.typedServices, 4, `reopen ${index + 1} retains all typed services`);
     });
-    console.log('  [PASS] 8b. repeated reopen has stable owner/service/list ledgers');
+    console.log(`  [PASS] 8b. repeated reopen (${reopenCycles} cycles) has stable owner/service/list ledgers`);
 
     // ---- 9. Explicit renderer teardown retracts the Settings owner ledger ----
     const teardownLedger = await page.evaluate(async () => {
