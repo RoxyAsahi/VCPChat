@@ -679,6 +679,7 @@ try {
         const forum = window.VCPUISettingsBridge?.getForumConfigService?.();
         const runtime = window.VCPUISettingsBridge?.getAssistantRuntimeService?.();
         await window.VCPUISettingsBridge?.destroy?.();
+        const latePathResult = window.VCPUISettingsBridge?.addNetworkPathInput?.('late') ?? false;
         const [rustResult, forumResult, runtimeResult] = await Promise.all([
             rust?.save?.execute?.({ debugMode: false }),
             forum?.save?.execute?.({ username: 'late' }),
@@ -687,6 +688,7 @@ try {
         return {
             scopes: window.VCPLifecycle?.diagnostics?.snapshot?.() || [],
             typedRevision: document.getElementById('globalSettingsModal')?.dataset.vcpSettingsRevision || null,
+            latePathResult,
             rustResult,
             forumResult,
             runtimeResult,
@@ -696,6 +698,7 @@ try {
     assert.equal(teardownLedger.scopes.some(scope => String(scope.label).includes('settings-presentation')), false, `settings presentation scope disposed: ${JSON.stringify(teardownLedger.scopes)}`);
     assert.equal(teardownLedger.scopes.some(scope => String(scope.label).includes('ui-services')), false, `typed service scope disposed: ${JSON.stringify(teardownLedger.scopes)}`);
     assert.equal(teardownLedger.typedRevision, null, 'typed Settings readiness marker retracts with the consumer');
+    assert.equal(teardownLedger.latePathResult, false, 'disposed Settings bridge rejects late network path commands');
     assert.equal(teardownLedger.rustResult?.success, false, 'disposed Rust service rejects late command');
     assert.equal(teardownLedger.forumResult?.success, false, 'disposed Forum service rejects late command');
     assert.equal(teardownLedger.runtimeResult?.success, false, 'disposed runtime service rejects late refresh');

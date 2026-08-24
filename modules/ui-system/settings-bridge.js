@@ -1420,6 +1420,7 @@ scheduleRefresh();
 window.VCPUISettingsBridge = Object.freeze({
     refresh: scheduleRefresh,
     addNetworkPathInput(path = '') {
+        if (destroyed) return false;
         const root = document.getElementById('globalSettingsModal');
         return addTypedNetworkPathInput(root, path)
             || window.uiHelperFunctions?.addNetworkPathInput?.(path)
