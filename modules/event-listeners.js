@@ -736,6 +736,12 @@ export function setupEventListeners(deps) {
                 return;
             }
 
+            // Rust Assistant UI projection is owned by the scoped typed
+            // adapter when the SettingsRoot is mounted. Keep this loader as
+            // the compatibility fallback for Classic/early bootstrap paths,
+            // but never let it overwrite the production typed consumer.
+            if (window.VCPUISettingsBridge?.getRustAssistantService?.()) return;
+
             const result = await chatAPI.getRustAssistantConfig?.() || {};
             if (result.error) {
                 console.warn('[EventListeners] Failed to load rust config:', result.error);
