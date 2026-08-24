@@ -73,6 +73,23 @@ test('typed SettingsUiService rejects stale save publication and silences late r
     assert.deepEqual(snapshots.map(snapshot => snapshot.revision), [0, 1]);
 });
 
+test('typed SettingsUiService invalidates a timed-out save without disposing the service', async () => {
+    let resolveSave;
+    const service = createSettingsUiService({
+        get: () => ({ density: 'comfortable' }),
+        save: () => new Promise(resolve => { resolveSave = resolve; }),
+    });
+    const revisions = [];
+    service.state.subscribe((_value, snapshot) => revisions.push(snapshot.revision));
+    const pending = service.save.execute({ density: 'compact' });
+    service.cancelPendingSaves?.();
+    resolveSave({ success: true });
+    assert.deepEqual(await pending, { success: true });
+    assert.equal(service.state.get().density, 'comfortable');
+    assert.deepEqual(revisions, [0], 'late completion cannot publish after timeout invalidation');
+    await service.dispose?.();
+});
+
 test('typed SettingsUiService rolls back failed immediate subscriptions and isolates publish failures', () => {
     let state = { density: 'comfortable' };
     const external = new Set();
