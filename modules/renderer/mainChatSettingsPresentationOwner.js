@@ -771,18 +771,21 @@ export function createMainChatSettingsPresentationOwner({
             radio.dataset.boundPresentationModeToggle = 'true';
         });
 
-        // User Avatar Preview
-        const userAvatarPreview = document.getElementById('userAvatarPreview');
-        const userAvatarWrapper = userAvatarPreview?.closest('.agent-avatar-wrapper');
-        if (userAvatarPreview) {
-            if (globalSettings.userAvatarUrl) {
-                userAvatarPreview.src = globalSettings.userAvatarUrl;
-                userAvatarPreview.style.display = 'block';
-                userAvatarWrapper?.classList.remove('no-avatar');
-            } else {
-                userAvatarPreview.src = '#';
-                userAvatarPreview.style.display = 'none';
-                userAvatarWrapper?.classList.add('no-avatar');
+        // User Avatar Preview remains a Classic compatibility projection until
+        // the typed Settings consumer is assembled for this renderer.
+        if (!typedSettingsProjectionActive) {
+            const userAvatarPreview = document.getElementById('userAvatarPreview');
+            const userAvatarWrapper = userAvatarPreview?.closest('.agent-avatar-wrapper');
+            if (userAvatarPreview) {
+                if (globalSettings.userAvatarUrl) {
+                    userAvatarPreview.src = globalSettings.userAvatarUrl;
+                    userAvatarPreview.style.display = 'block';
+                    userAvatarWrapper?.classList.remove('no-avatar');
+                } else {
+                    userAvatarPreview.src = '#';
+                    userAvatarPreview.style.display = 'none';
+                    userAvatarWrapper?.classList.add('no-avatar');
+                }
             }
         }
 

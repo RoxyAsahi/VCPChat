@@ -204,6 +204,22 @@ function mountTypedSettingsConsumer(root) {
             }
             else control.value = String(value);
         });
+        if (Object.prototype.hasOwnProperty.call(settings, 'userAvatarUrl')) {
+            const preview = form.querySelector('#userAvatarPreview');
+            const wrapper = preview?.closest('.agent-avatar-wrapper');
+            const avatarUrl = String(settings.userAvatarUrl || '');
+            if (preview) {
+                if (avatarUrl) {
+                    preview.src = avatarUrl;
+                    preview.style.display = 'block';
+                    wrapper?.classList.remove('no-avatar');
+                } else {
+                    preview.src = '#';
+                    preview.style.display = 'none';
+                    wrapper?.classList.add('no-avatar');
+                }
+            }
+        }
         const sanitizerContainer = form.querySelector('#contextSanitizerDepthContainer');
         const sanitizerEnabled = settings.enableContextSanitizer === true;
         if (sanitizerContainer) sanitizerContainer.style.display = sanitizerEnabled ? 'block' : 'none';
