@@ -26,6 +26,7 @@ export function createMainChatSettingsPresentationOwner({
     let disposed = false;
     let generation = 0;
     const tasks = new Set();
+    let globalSettingsReadyListenerBound = false;
     const isCurrent = token => !disposed && token === generation;
     const track = value => {
         const task = Promise.resolve(value);
@@ -105,9 +106,12 @@ export function createMainChatSettingsPresentationOwner({
             elements.toggleSidebarMode.classList.toggle('active', avatarOnly);
             elements.toggleSidebarMode.setAttribute('aria-pressed', String(avatarOnly));
         }
-        listenerOwner.add(document, 'modal-ready', event => {
-            if (event.detail?.modalId === 'globalSettingsModal' && !disposed) track(syncGlobalSettingsToUI());
-        });
+        if (!globalSettingsReadyListenerBound) {
+            listenerOwner.add(document, 'modal-ready', event => {
+                if (event.detail?.modalId === 'globalSettingsModal' && !disposed) track(syncGlobalSettingsToUI());
+            });
+            globalSettingsReadyListenerBound = true;
+        }
         messageRenderer?.setUserAvatar?.(globalSettings.userAvatarUrl);
         messageRenderer?.setUserAvatarColor?.(globalSettings.userAvatarCalculatedColor);
         return true;
