@@ -202,7 +202,7 @@ evidence: npm run check:uiux; npm run test:uiux; node --test tests/creation-cont
 
 R2-02 退出审计（2026-08-24）：已迁移字段对应的 `mainChatSettingsPresentationOwner` 写入均在 typed service 可用时 gated；剩余旧 DOM 写入不属于同一 global Settings snapshot：`adminUsername/adminPassword` 来自独立 forum-config IPC，`networkNotesPaths` 是动态列表业务编辑器，`assistantRuntime*` 是 Rust runtime diagnostics。它们必须分别建立 capability/Surface 合同后才能迁移，不能继续堆进 `SettingsUiService`。因此本阶段保持 `typed-command-active`，退出条件是为这三个边界补齐独立 owner、失败/teardown 证据，或明确将其列入后续 Surface，而不是宣称 SettingsRoot 全量完成。
 
-Forum-config 独立 Surface（2026-08-24）：`ForumConfigUiService` 已通过 bridge-owned `UiServiceRegistry` 装配，管理员账号/密码由 typed snapshot 消费，保存由 typed command 路由到既有 `loadForumConfig/saveForumConfig` capability；失败会保持 SettingsRoot 打开并发布 retryable save result。该 adapter 不复制论坛 durable state、不改 IPC 或配置格式；`networkNotesPaths` 与 `assistantRuntime*` 仍未迁移。
+Forum-config 独立 Surface（2026-08-24）：`ForumConfigUiService` 已通过 bridge-owned `UiServiceRegistry` 装配，管理员账号/密码由 typed snapshot 消费，保存由 typed command 路由到既有 `loadForumConfig/saveForumConfig` capability；失败会保持 SettingsRoot 打开并发布 retryable save result。该 adapter 不复制论坛 durable state、不改 IPC 或配置格式。`networkNotesPaths` 也已由 typed snapshot 在 clean form 上幂等重建动态输入行，dirty form 不会被外部 snapshot 覆盖；`assistantRuntime*` diagnostics 仍未迁移。
 
 Creation 现状核验（2026-08-24）：`tests/creation-controller.test.js` 8/8 通过，覆盖命令缺失、Surface 部分失败回滚、Web Awesome 失败后的 native fallback、重复 open、kernel 加载期间 dispose、创建失败恢复和迟到完成隔离。完整 `test-electron-ui-apps-smoke.mjs` 当前不能作为 Creation 的 broad evidence，因为它在进入 Creation journey 前被用户禁用的 `VChatDynamicWallpaper/plugin-manifest.json.block` 阻断（`loaded=true, results=[], dynamicWallpaper=false`）；本路线不擅自启用该插件，下一切片将使用独立 Creation Electron journey 补齐真实 Surface 证据。
 

@@ -217,6 +217,20 @@ function mountTypedSettingsConsumer(root) {
         if (bubbleWidthSettings) bubbleWidthSettings.hidden = mode !== 'bubble';
         const bubbleMetaSettings = form.querySelector('#userChatBubbleMetaSettings');
         if (bubbleMetaSettings) bubbleMetaSettings.style.display = settings.enableUserChatBubbleUi === true ? 'flex' : 'none';
+        const paths = Array.isArray(settings.networkNotesPaths)
+            ? settings.networkNotesPaths.map(path => String(path || '')).filter(Boolean)
+            : [];
+        const pathsContainer = form.querySelector('#networkNotesPathsContainer');
+        if (pathsContainer) {
+            const current = [...pathsContainer.querySelectorAll('input[name="networkNotesPath"]')].map(input => input.value);
+            if (current.join('\u0000') !== paths.join('\u0000')) {
+                pathsContainer.replaceChildren();
+                const addPath = window.uiHelperFunctions?.addNetworkPathInput;
+                if (typeof addPath === 'function') {
+                    (paths.length ? paths : ['']).forEach(path => addPath(path));
+                }
+            }
+        }
     };
     const release = service.state.subscribe(apply);
     ensurePresentationScope()?.own(release, 'typed-settings-consumer', 'ui-presentation');

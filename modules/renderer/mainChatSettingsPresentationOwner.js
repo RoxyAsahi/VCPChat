@@ -630,14 +630,16 @@ export function createMainChatSettingsPresentationOwner({
         }
 
         // Network Notes Paths
-        const networkNotesPathsContainer = document.getElementById('networkNotesPathsContainer');
-        if (networkNotesPathsContainer) {
-            networkNotesPathsContainer.innerHTML = '';
-            const paths = Array.isArray(globalSettings.networkNotesPaths) ? globalSettings.networkNotesPaths : (globalSettings.networkNotesPath ? [globalSettings.networkNotesPath] : []);
-            if (paths.length === 0) {
-                uiHelperFunctions.addNetworkPathInput('');
-            } else {
-                paths.forEach(path => uiHelperFunctions.addNetworkPathInput(path));
+        if (!typedSettingsProjectionActive) {
+            const networkNotesPathsContainer = document.getElementById('networkNotesPathsContainer');
+            if (networkNotesPathsContainer) {
+                networkNotesPathsContainer.innerHTML = '';
+                const paths = Array.isArray(globalSettings.networkNotesPaths) ? globalSettings.networkNotesPaths : (globalSettings.networkNotesPath ? [globalSettings.networkNotesPath] : []);
+                if (paths.length === 0) {
+                    uiHelperFunctions.addNetworkPathInput('');
+                } else {
+                    paths.forEach(path => uiHelperFunctions.addNetworkPathInput(path));
+                }
             }
         }
 
