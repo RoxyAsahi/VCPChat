@@ -1,4 +1,5 @@
 import { mountThemePresenter } from './providers/theme.js';
+import { createSettingsUiService } from './adapters/settings.js';
 import { createUiScope } from './runtime/scope.js';
 import type { ThemeUiService } from './providers/theme.js';
 import type { UiDisposer } from './contracts.js';
@@ -24,6 +25,7 @@ const api = {
         const scope = createUiScope(legacyScope);
         return mountThemePresenter(root, { theme }, { scope, services: { theme } });
     },
+    createSettingsUiService,
 };
 
 Object.defineProperty(globalThis, 'VCPUIUX', {

@@ -34,6 +34,64 @@ const settingsHost = document.getElementById('tabContentSettings');
 let presentationScope = null;
 let destroyed = false;
 let destroyPromise = null;
+let typedSettingsService = null;
+let typedSettingsState = Object.freeze({});
+let typedSettingsExternalRelease = null;
+let typedSettingsSaveChain = Promise.resolve();
+let typedSettingsDisposed = false;
+
+function ensureTypedSettingsService() {
+    if (typedSettingsService || !window.VCPUIUX?.createSettingsUiService) return typedSettingsService;
+    const externalListeners = new Set();
+    const publishExternal = settings => {
+        if (typedSettingsDisposed) return;
+        typedSettingsState = Object.freeze({ ...(settings || {}) });
+        externalListeners.forEach(listener => listener(typedSettingsState));
+    };
+    const onExternalSettings = event => publishExternal(event.detail?.settings);
+    window.addEventListener('global-settings-updated', onExternalSettings);
+    typedSettingsExternalRelease = () => {
+        window.removeEventListener('global-settings-updated', onExternalSettings);
+        externalListeners.clear();
+        typedSettingsExternalRelease = null;
+    };
+    typedSettingsService = window.VCPUIUX.createSettingsUiService({
+        get: () => typedSettingsState,
+        save: patch => {
+            const run = async () => {
+                const next = Object.freeze({ ...typedSettingsState, ...patch });
+                const result = await window.chatAPI?.saveSettings?.(next);
+                if (result?.success) publishExternal(next);
+                return result?.success ? { success: true } : { success: false, error: result?.error || '设置保存失败' };
+            };
+            const result = typedSettingsSaveChain.then(run, run);
+            typedSettingsSaveChain = result.catch(() => {});
+            return result;
+        },
+        subscribe: listener => {
+            externalListeners.add(listener);
+            return () => externalListeners.delete(listener);
+        },
+    });
+    void window.chatAPI?.loadSettings?.().then(settings => publishExternal(settings)).catch(() => {});
+    bridgeScope?.own(() => {
+        typedSettingsDisposed = true;
+        typedSettingsService?.dispose?.();
+        typedSettingsExternalRelease?.();
+    }, 'typed-settings-service', 'ui-service');
+    return typedSettingsService;
+}
+
+function mountTypedSettingsConsumer(root) {
+    const service = ensureTypedSettingsService();
+    if (!service || !root) return;
+    const apply = (_value, snapshot) => {
+        root.dataset.vcpSettingsRevision = String(snapshot.revision);
+        root.dataset.vcpSettingsSource = snapshot.source;
+    };
+    const release = service.state.subscribe(apply);
+    ensurePresentationScope()?.own(release, 'typed-settings-consumer', 'ui-presentation');
+}
 
 function ensurePresentationScope() {
     if (destroyed) return null;
@@ -713,6 +771,7 @@ function restoreFormIcons(root) {
 // shell chrome (nav/header/options) is reconstructed here.
 function mountSettingsShell(root) {
     if (root.querySelector('.vcp-harness-settings-panel')) return;
+    mountTypedSettingsConsumer(root);
     const panel = root.querySelector('.vcp-settings-source-panel');
     const layout = root.querySelector('.vcp-settings-source-layout');
     const nav = root.querySelector('.vcp-settings-source-nav');
@@ -1019,6 +1078,9 @@ window.VCPUISettingsBridge = Object.freeze({
     destroy() {
         if (destroyPromise) return destroyPromise;
         destroyed = true;
+        typedSettingsDisposed = true;
+        typedSettingsService?.dispose?.();
+        typedSettingsExternalRelease?.();
         if (!bridgeScope) {
             document.removeEventListener('modal-visibility-changed', handleModalVisibility);
             document.removeEventListener('modal-ready', handleModalVisibility);

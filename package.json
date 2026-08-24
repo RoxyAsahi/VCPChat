@@ -28,7 +28,7 @@
     "lint:ui-system": "stylelint \"styles/ui-system/**/*.css\" --config stylelint.ui-system.config.cjs",
     "check:uiux": "tsc --project tsconfig.uiux.json --pretty false",
     "build:uiux": "tsc --project tsconfig.uiux.build.json --pretty false",
-    "test:uiux": "node --experimental-strip-types --test tests/uiux-theme-presenter.test.mjs",
+    "test:uiux": "node --experimental-strip-types --test tests/uiux-theme-presenter.test.mjs tests/uiux-settings-adapter.test.mjs",
     "test:electron-uiux-theme": "node scripts/test-electron-uiux-theme.mjs",
     "guard:design-subtraction": "node scripts/check-design-system-boundary.mjs",
     "guard:classic-parity": "node scripts/check-classic-parity.mjs",
