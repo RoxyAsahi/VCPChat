@@ -269,6 +269,7 @@ try {
         return {
             options: popover?.querySelectorAll('[role="menuitem"]').length || 0,
             checked: popover?.querySelectorAll('[role="menuitem"].is-selected').length || 0,
+            triggerHasMenu: wrap.querySelector('.vcp-harness-select-trigger')?.getAttribute('aria-haspopup') === 'menu',
             background: getComputedStyle(wrap.querySelector('.vcp-harness-select-trigger')).backgroundColor,
             border: getComputedStyle(wrap.querySelector('.vcp-harness-select-trigger')).borderTopColor,
             height: getComputedStyle(wrap.querySelector('.vcp-harness-select-trigger')).height,
@@ -276,6 +277,7 @@ try {
         };
     });
     assert.ok(popoverState.options >= 5, 'long select renders a real option popover');
+    assert.equal(popoverState.triggerHasMenu, true, 'Harness select trigger owns a Menu primitive');
     assert.equal(popoverState.checked, 1, 'popover exposes one checked option');
     assert.equal(popoverState.height, '36px', 'Harness trigger uses 36px capsule height');
     assert.equal(popoverState.radius, '18px', 'Harness trigger uses 18px capsule radius');

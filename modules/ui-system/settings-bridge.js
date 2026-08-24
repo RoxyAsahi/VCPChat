@@ -398,7 +398,9 @@ function mountHarnessSelects(form) {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'vcp-harness-select-trigger';
-        button.setAttribute('aria-haspopup', 'listbox');
+        // The presentation projection owns a Harness Menu primitive; the
+        // native select remains the sole business/serialization source.
+        button.setAttribute('aria-haspopup', 'menu');
         button.id = `${controlId}-trigger`;
         const label = document.createElement('span');
         label.className = 'vcp-harness-select-label';
@@ -412,7 +414,7 @@ function mountHarnessSelects(form) {
         // Harness Menu is a menu primitive; the native select remains the
         // serialization source while this portal owns menu semantics.
         popover.setAttribute('role', 'menu');
-        popover.id = `${controlId}-listbox`;
+        popover.id = `${controlId}-menu`;
         popover.hidden = true;
         const state = { select, wrap, button, label, popover, open: false, portal: false, cleanups: [], rebuildOptions: null };
         button.setAttribute('aria-controls', popover.id);
