@@ -796,19 +796,21 @@ export function createMainChatSettingsPresentationOwner({
             assistantAgentSelect.value = globalSettings.assistantAgent || '';
         }
 
-        safeCheck('enableDistributedServer', globalSettings.enableDistributedServer === true);
-        safeCheck('agentMusicControl', globalSettings.agentMusicControl === true);
-        safeCheck('enableVcpToolInjection', globalSettings.enableVcpToolInjection === true);
-        safeCheck('enableThoughtChainInjection', globalSettings.enableThoughtChainInjection === true);
-        safeCheck('enableContextSanitizer', globalSettings.enableContextSanitizer === true);
-        safeSet('contextSanitizerDepth', globalSettings.contextSanitizerDepth ?? 2);
+        if (!typedSettingsProjectionActive) {
+            safeCheck('enableDistributedServer', globalSettings.enableDistributedServer === true);
+            safeCheck('agentMusicControl', globalSettings.agentMusicControl === true);
+            safeCheck('enableVcpToolInjection', globalSettings.enableVcpToolInjection === true);
+            safeCheck('enableThoughtChainInjection', globalSettings.enableThoughtChainInjection === true);
+            safeCheck('enableContextSanitizer', globalSettings.enableContextSanitizer === true);
+            safeSet('contextSanitizerDepth', globalSettings.contextSanitizerDepth ?? 2);
 
-        const contextSanitizerDepthContainer = document.getElementById('contextSanitizerDepthContainer');
-        if (contextSanitizerDepthContainer) {
-            contextSanitizerDepthContainer.style.display = globalSettings.enableContextSanitizer === true ? 'block' : 'none';
+            const contextSanitizerDepthContainer = document.getElementById('contextSanitizerDepthContainer');
+            if (contextSanitizerDepthContainer) {
+                contextSanitizerDepthContainer.style.display = globalSettings.enableContextSanitizer === true ? 'block' : 'none';
+            }
+
+            safeCheck('enableAiMessageButtons', globalSettings.enableAiMessageButtons !== false);
         }
-
-        safeCheck('enableAiMessageButtons', globalSettings.enableAiMessageButtons !== false);
         safeCheck('enableMiddleClickQuickAction', globalSettings.enableMiddleClickQuickAction === true);
         safeSet('middleClickQuickAction', globalSettings.middleClickQuickAction || '');
         safeCheck('enableMiddleClickAdvanced', globalSettings.enableMiddleClickAdvanced === true);

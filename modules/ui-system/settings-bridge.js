@@ -122,6 +122,13 @@ function mountTypedSettingsConsumer(root) {
             ['voiceLocalSovitsKey', 'voiceLocalSettings.sovitsKey'],
             ['voiceNetworkProviderUrl', 'voiceNetworkSettings.providerUrl'],
             ['voiceNetworkProviderKey', 'voiceNetworkSettings.providerKey'],
+            ['enableDistributedServer', 'enableDistributedServer', 'checked'],
+            ['agentMusicControl', 'agentMusicControl', 'checked'],
+            ['enableVcpToolInjection', 'enableVcpToolInjection', 'checked'],
+            ['enableThoughtChainInjection', 'enableThoughtChainInjection', 'checked'],
+            ['enableContextSanitizer', 'enableContextSanitizer', 'checked'],
+            ['contextSanitizerDepth', 'contextSanitizerDepth'],
+            ['enableAiMessageButtons', 'enableAiMessageButtons', 'checked'],
             ['showHomeVisualBrand', 'showHomeVisualBrand', 'checked'],
             ['homeVisualTagline', 'homeVisualTagline'],
             ['appearanceDensity', 'appearanceProfile.density'],
@@ -168,6 +175,9 @@ function mountTypedSettingsConsumer(root) {
             }
             else control.value = String(value);
         });
+        const sanitizerContainer = form.querySelector('#contextSanitizerDepthContainer');
+        const sanitizerEnabled = settings.enableContextSanitizer === true;
+        if (sanitizerContainer) sanitizerContainer.style.display = sanitizerEnabled ? 'block' : 'none';
     };
     const release = service.state.subscribe(apply);
     ensurePresentationScope()?.own(release, 'typed-settings-consumer', 'ui-presentation');

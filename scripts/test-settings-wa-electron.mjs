@@ -395,6 +395,13 @@ try {
                 speechRecognizerPagePath: '/typed/recognizer.html',
                 voiceLocalSettings: { sovitsUrl: 'http://typed-local:9880', sovitsKey: 'typed-local-key' },
                 voiceNetworkSettings: { providerUrl: 'https://typed-voice.example/api', providerKey: 'typed-network-key' },
+                enableDistributedServer: true,
+                agentMusicControl: true,
+                enableVcpToolInjection: true,
+                enableThoughtChainInjection: true,
+                enableContextSanitizer: true,
+                contextSanitizerDepth: 7,
+                enableAiMessageButtons: false,
                 chatFontPreset: 'serif',
                 appearanceProfile: {
                     density: 'compact',
@@ -427,6 +434,14 @@ try {
     assert.equal(await page.$eval('#voiceLocalSovitsKey', node => node.value), 'typed-local-key', 'clean local voice key consumes typed Settings snapshot');
     assert.equal(await page.$eval('#voiceNetworkProviderUrl', node => node.value), 'https://typed-voice.example/api', 'clean network voice URL consumes typed Settings snapshot');
     assert.equal(await page.$eval('#voiceNetworkProviderKey', node => node.value), 'typed-network-key', 'clean network voice key consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#enableDistributedServer', node => node.checked), true, 'clean distributed server checkbox consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#agentMusicControl', node => node.checked), true, 'clean music control checkbox consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#enableVcpToolInjection', node => node.checked), true, 'clean tool injection checkbox consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#enableThoughtChainInjection', node => node.checked), true, 'clean thought-chain checkbox consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#enableContextSanitizer', node => node.checked), true, 'clean context sanitizer checkbox consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#contextSanitizerDepth', node => node.value), '7', 'clean sanitizer depth consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#contextSanitizerDepthContainer', node => getComputedStyle(node).display), 'block', 'sanitizer depth visibility follows typed snapshot');
+    assert.equal(await page.$eval('#enableAiMessageButtons', node => node.checked), false, 'clean AI buttons checkbox consumes typed Settings snapshot');
     assert.equal(await page.$eval('#chatFontPreset', node => node.value), 'serif', 'clean select control consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceDensity', node => node.value), 'compact', 'clean appearance density consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceRadius', node => node.value), 'round', 'clean appearance radius consumes typed Settings snapshot');
