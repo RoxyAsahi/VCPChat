@@ -623,14 +623,29 @@ try {
 
     // ---- 9. Explicit renderer teardown retracts the Settings owner ledger ----
     const teardownLedger = await page.evaluate(async () => {
+        const rust = window.VCPUISettingsBridge?.getRustAssistantService?.();
+        const forum = window.VCPUISettingsBridge?.getForumConfigService?.();
+        const runtime = window.VCPUISettingsBridge?.getAssistantRuntimeService?.();
         await window.VCPUISettingsBridge?.destroy?.();
+        const [rustResult, forumResult, runtimeResult] = await Promise.all([
+            rust?.save?.execute?.({ debugMode: false }),
+            forum?.save?.execute?.({ username: 'late' }),
+            runtime?.refresh?.execute?.(),
+        ]);
         return {
             scopes: window.VCPLifecycle?.diagnostics?.snapshot?.() || [],
             typedRevision: document.getElementById('globalSettingsModal')?.dataset.vcpSettingsRevision || null,
+            rustResult,
+            forumResult,
+            runtimeResult,
         };
     });
     assert.equal(teardownLedger.scopes.some(scope => String(scope.label).includes('settings-bridge')), false, `settings bridge scope disposed: ${JSON.stringify(teardownLedger.scopes)}`);
     assert.equal(teardownLedger.scopes.some(scope => String(scope.label).includes('settings-presentation')), false, `settings presentation scope disposed: ${JSON.stringify(teardownLedger.scopes)}`);
+    assert.equal(teardownLedger.scopes.some(scope => String(scope.label).includes('ui-services')), false, `typed service scope disposed: ${JSON.stringify(teardownLedger.scopes)}`);
+    assert.equal(teardownLedger.rustResult?.success, false, 'disposed Rust service rejects late command');
+    assert.equal(teardownLedger.forumResult?.success, false, 'disposed Forum service rejects late command');
+    assert.equal(teardownLedger.runtimeResult?.success, false, 'disposed runtime service rejects late refresh');
     console.log('  [PASS] 9. explicit Settings owner teardown retracts bridge/presentation scopes');
 
     console.log('\nSettings Harness structure gate passed (Root, nav/header/options, controls, failure retry, reload restore, teardown, screenshots).');
