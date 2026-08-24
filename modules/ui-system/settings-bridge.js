@@ -845,6 +845,11 @@ function mountHarnessSelects(form) {
             };
             item.addEventListener('click', onClick); optionCleanups.push(() => item.removeEventListener('click', onClick));
             });
+            // Rebuilding the disposable projection must retract listeners from
+            // detached option buttons before dropping their cleanup handles.
+            // Filtering alone leaves the old buttons/listeners retained until
+            // the whole Select owner is torn down.
+            state.cleanups.filter(cleanup => cleanup.__vcpOptionCleanup).forEach(cleanup => cleanup());
             state.cleanups = state.cleanups.filter(cleanup => !cleanup.__vcpOptionCleanup);
             optionCleanups.forEach(cleanup => { cleanup.__vcpOptionCleanup = true; state.cleanups.push(cleanup); });
             sync();
@@ -955,6 +960,10 @@ function mountHarnessChoice(select) {
         const onClick = () => { select.value = option.value; select.dispatchEvent(new Event('change', { bubbles: true })); sync(); item.focus(); };
         item.addEventListener('click', onClick); optionCleanups.push(() => item.removeEventListener('click', onClick)); track.append(item);
         });
+        // Retract listeners from detached choice buttons before replacing the
+        // cleanup handles; filtering without invoking them leaks each option
+        // projection across SettingsRoot refreshes.
+        state.cleanups.filter(cleanup => cleanup.__vcpOptionCleanup).forEach(cleanup => cleanup());
         state.cleanups = state.cleanups.filter(cleanup => !cleanup.__vcpOptionCleanup);
         optionCleanups.forEach(cleanup => { cleanup.__vcpOptionCleanup = true; state.cleanups.push(cleanup); });
         sync();

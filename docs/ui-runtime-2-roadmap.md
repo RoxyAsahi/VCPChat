@@ -204,6 +204,8 @@ R2-02 退出审计（2026-08-24）：已迁移字段对应的 `mainChatSettingsP
 
 Forum-config 独立 Surface（2026-08-24）：`ForumConfigUiService` 已通过 bridge-owned `UiServiceRegistry` 装配，管理员账号/密码由 typed snapshot 消费，保存由 typed command 路由到既有 `loadForumConfig/saveForumConfig` capability；失败会保持 SettingsRoot 打开并发布 retryable save result。该 adapter 不复制论坛 durable state、不改 IPC 或配置格式。`networkNotesPaths` 也已由 typed snapshot 在 clean form 上幂等重建动态输入行，dirty form 不会被外部 snapshot 覆盖；`assistantRuntime*` 已由只读 `AssistantRuntimeUiService` 消费 runtime status snapshot，旧 diagnostics projection 在 typed service 可用时降为 fallback。
 
+Select projection cleanup（2026-08-24）：Harness Select/Choice 在重建选项 DOM 前会先执行旧 option listener cleanup，避免 detached option listener 随 SettingsRoot refresh/reopen 累积；`node scripts/test-settings-wa-electron.mjs`、`node scripts/test-settings-wa.mjs` 与 `npm run check:uiux` 通过。
+
 Creation 现状核验（2026-08-24）：`tests/creation-controller.test.js` 8/8 通过，覆盖命令缺失、Surface 部分失败回滚、Web Awesome 失败后的 native fallback、重复 open、kernel 加载期间 dispose、创建失败恢复和迟到完成隔离。完整 `test-electron-ui-apps-smoke.mjs` 当前不能作为 Creation 的 broad evidence，因为它在进入 Creation journey 前被用户禁用的 `VChatDynamicWallpaper/plugin-manifest.json.block` 阻断（`loaded=true, results=[], dynamicWallpaper=false`）；本路线不擅自启用该插件，下一切片将使用独立 Creation Electron journey 补齐真实 Surface 证据。
 
 ### R2-03：Theme Runtime 与语义 Token 真源
