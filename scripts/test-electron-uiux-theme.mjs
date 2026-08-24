@@ -67,6 +67,27 @@ try {
     const page = (await browser.pages()).find(candidate => candidate.url().includes('main.html'));
     assert.ok(page, `Theme probe main renderer missing: ${stderr}`);
     await page.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout });
+    const artifactBoundary = await page.evaluate(async () => {
+        const scripts = [...document.scripts].map(script => script.src || script.getAttribute('src') || '');
+        const generated = scripts.filter(src => src.includes('/modules/uiux/generated/'));
+        const sourcePlane = scripts.filter(src => /modules\/uiux\/(?!generated\/)/.test(src));
+        let state = { userName: 'electron-artifact' };
+        const service = window.VCPUIUX?.createSettingsUiService?.({
+            get: () => state,
+            save: async patch => { state = { ...state, ...patch }; return { success: true }; },
+            subscribe: () => () => {},
+        });
+        const save = await service?.save?.execute?.({ userName: 'electron-artifact-next' });
+        const value = service?.state?.get?.().userName;
+        await service?.dispose?.();
+        return { generated, sourcePlane, save, value };
+    });
+    assert.ok(artifactBoundary.generated.some(src => src.endsWith('/modules/uiux/generated/browser-entry.js')),
+        `Electron did not load generated UIUX browser artifact: ${JSON.stringify(artifactBoundary)}`);
+    assert.equal(artifactBoundary.sourcePlane.length, 0,
+        `Electron UIUX smoke loaded source-plane UIUX modules: ${JSON.stringify(artifactBoundary)}`);
+    assert.deepEqual(artifactBoundary.save, { success: true });
+    assert.equal(artifactBoundary.value, 'electron-artifact-next');
     const readBoundary = () => page.evaluate(() => {
         const dock = document.querySelector('.next-ui-account-dock');
         const theme = window.VCPStateChannels?.diagnostics?.().find(item => item.name === 'theme');
