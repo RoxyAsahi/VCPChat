@@ -61,6 +61,8 @@ test('global settings saves the server URL once with canonical presentation', as
         applyChatBubbleLayoutSettings() {},
     };
     const form = dom.window.document.getElementById('globalSettingsForm');
+    const saveResults = [];
+    form.addEventListener('vcp-settings-save-result', event => saveResults.push(event.detail));
     dom.window.document.getElementById('vcpServerUrl').value = 'http://localhost:6005';
 
     try {
@@ -87,6 +89,8 @@ test('global settings saves the server URL once with canonical presentation', as
             'a permanently pending save must become a recoverable terminal state'
         );
         assert.equal(form.dataset.globalSettingsSaving, undefined, 'timeout must release the submit lock');
+        assert.equal(saveResults.at(-1)?.success, false, 'timeout publishes a failure terminal state to autosave');
+        assert.match(saveResults.at(-1)?.error || '', /保存设置超时/, 'timeout error is available to retry UI');
     } finally {
         for (const [name, value] of Object.entries(previousGlobals)) {
             if (value === undefined) delete globalThis[name];

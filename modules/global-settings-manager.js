@@ -7,7 +7,15 @@ export function handleSaveGlobalSettings(e, deps) {
     if (settingsForm?.dataset.globalSettingsSaving === 'true') return;
     if (settingsForm) settingsForm.dataset.globalSettingsSaving = 'true';
 
-    return saveGlobalSettings(deps, settingsForm).finally(() => {
+    return saveGlobalSettings(deps, settingsForm).catch(error => {
+        // Exceptions (notably the bounded IPC timeout) are terminal outcomes
+        // for the autosave consumer too. Publish the same failure contract as
+        // an explicit `{ success: false }` result before releasing the lock.
+        settingsForm?.dispatchEvent(new CustomEvent('vcp-settings-save-result', {
+            detail: { success: false, error: error?.message || String(error) }
+        }));
+        throw error;
+    }).finally(() => {
         if (settingsForm) delete settingsForm.dataset.globalSettingsSaving;
     });
 }
