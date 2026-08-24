@@ -725,6 +725,9 @@ function mountSettingsShell(root) {
         title,
         header: null,
         options: null,
+        sectionHost: null,
+        sectionBank: null,
+        sections: new Map(),
         navList: null,
         cleanups: [],
         meta,
@@ -768,9 +771,50 @@ function mountSettingsShell(root) {
     state.header = header;
     state.options = options;
     options.append(...[...content.childNodes]);
+    // Harness owns an icon-only 28px close primitive with an accessible text
+    // seat. Replace the legacy text glyph once, while preserving the same
+    // business button and close listener.
+    if (!close.dataset.vcpHarnessClose) {
+        const icon = document.createElement('span');
+        icon.className = 'vcp-ui-icon vcp-harness-settings-close-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = 'x';
+        const hiddenLabel = document.createElement('span');
+        hiddenLabel.className = 'vcp-harness-settings-close-label';
+        hiddenLabel.textContent = close.getAttribute('aria-label') || '关闭';
+        close.replaceChildren(icon, hiddenLabel);
+        close.classList.add('vcp-harness-settings-close');
+        close.dataset.vcpHarnessClose = 'true';
+    }
     actions.append(close);
     header.append(actions);
     content.replaceChildren(header, options);
+
+    // Harness renders only the selected section into Options. Keep the
+    // remaining business fields connected to the same form in a hidden bank
+    // so legacy id/name queries, form serialization and IPC handlers remain
+    // authoritative without leaving inactive settings in the visible tree.
+    const sectionHost = document.createElement('div');
+    sectionHost.className = 'vcp-harness-active-section';
+    sectionHost.dataset.settingPrimitive = 'section';
+    const sectionBank = document.createElement('div');
+    sectionBank.className = 'vcp-harness-section-bank';
+    sectionBank.hidden = true;
+    sectionBank.setAttribute('aria-hidden', 'true');
+    state.sectionHost = sectionHost;
+    state.sectionBank = sectionBank;
+    [...form.children].filter(child => child.matches('.settings-section')).forEach(section => {
+        const value = section.id.replace(/^section-/, '');
+        state.sections.set(value, section);
+        section.classList.remove('active');
+        sectionBank.append(section);
+    });
+    form.prepend(sectionHost, sectionBank);
+    const initialSection = state.sections.get(initial);
+    if (initialSection) {
+        sectionHost.append(initialSection);
+        initialSection.classList.add('active');
+    }
     const canonicalNav = document.createElement('div');
     canonicalNav.className = 'vcp-harness-settings-nav-list';
     canonicalNav.setAttribute('aria-label', '全局设置分类');
@@ -824,7 +868,7 @@ function mountSettingsShell(root) {
             row.tabIndex = selected ? 0 : -1;
         });
         state.meta.forEach(item => {
-            const section = root.querySelector(`#section-${item.value}`);
+            const section = state.sections.get(item.value) || root.querySelector(`#section-${item.value}`);
             if (!section) return;
             // The active section is derived from the same state as the nav.
             // Re-assert it on every render so stale classes from a reused
@@ -840,6 +884,12 @@ function mountSettingsShell(root) {
     const activateSection = (value) => {
         if (!state.meta.some(item => item.value === value)) return;
         state.active = value;
+        const next = state.sections.get(value);
+        if (next && state.sectionHost && next.parentNode !== state.sectionHost) {
+            const current = state.sectionHost.querySelector('.settings-section');
+            if (current) state.sectionBank.append(current);
+            state.sectionHost.append(next);
+        }
         renderList();
     };
 
