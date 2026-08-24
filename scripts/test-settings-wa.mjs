@@ -182,6 +182,10 @@ assert.equal(document.querySelectorAll('#globalSettingsModal .vcp-harness-settin
 assert.equal(document.querySelector('#globalSettingsModal .vcp-harness-settings-nav-cell')?.getAttribute('role'), null, 'Harness nav cells do not use tab role');
 assert.equal(document.querySelector('#globalSettingsModal .settings-section')?.getAttribute('role'), null, 'settings sections do not use tabpanel role');
 assert.equal(document.querySelector('#globalSettingsModal .vcp-ui-settings-search'), null, 'legacy settings search is absent');
+assert.ok(document.querySelector('#globalSettingsModal .vcp-harness-active-section'), 'Harness active section projection exists');
+assert.ok(document.querySelector('#globalSettingsModal .vcp-harness-section-bank[hidden]'), 'inactive business sections stay in a hidden compatibility bank');
+assert.ok(document.querySelector('#globalSettingsModal .vcp-harness-settings-close-icon'), 'close button uses an icon primitive');
+assert.ok(document.querySelector('#globalSettingsModal .vcp-harness-settings-close-label'), 'close button retains an accessible text seat');
 const disclosureHeader = document.querySelector('#globalSettingsModal .vcp-harness-disclosure-row');
 if (disclosureHeader) {
     assert.equal(disclosureHeader.getAttribute('role'), 'button', 'DisclosureRow exposes button semantics');

@@ -269,6 +269,7 @@ try {
         return {
             options: popover?.querySelectorAll('[role="menuitem"]').length || 0,
             checked: popover?.querySelectorAll('[role="menuitem"].is-selected').length || 0,
+            triggerHasMenu: wrap.querySelector('.vcp-harness-select-trigger')?.getAttribute('aria-haspopup') === 'menu',
             background: getComputedStyle(wrap.querySelector('.vcp-harness-select-trigger')).backgroundColor,
             border: getComputedStyle(wrap.querySelector('.vcp-harness-select-trigger')).borderTopColor,
             height: getComputedStyle(wrap.querySelector('.vcp-harness-select-trigger')).height,
@@ -276,6 +277,7 @@ try {
         };
     });
     assert.ok(popoverState.options >= 5, 'long select renders a real option popover');
+    assert.equal(popoverState.triggerHasMenu, true, 'Harness select trigger owns a Menu primitive');
     assert.equal(popoverState.checked, 1, 'popover exposes one checked option');
     assert.equal(popoverState.height, '36px', 'Harness trigger uses 36px capsule height');
     assert.equal(popoverState.radius, '18px', 'Harness trigger uses 18px capsule radius');
@@ -294,8 +296,9 @@ try {
     });
     assert.equal(focusedMenuItem, true, 'menu item receives keyboard focus');
     await page.keyboard.press('ArrowDown');
-    const activeAfterArrow = await page.evaluate(() => document.activeElement?.getAttribute('role'));
-    assert.equal(activeAfterArrow, 'menuitem', 'menu ArrowDown keeps focus inside the Menu primitive');
+    const activeAfterArrow = await page.evaluate(() => ({ role: document.activeElement?.getAttribute('role'), selected: document.querySelector('#chatFontPreset')?.value, active: document.activeElement?.id }));
+    assert.equal(activeAfterArrow.role, 'menuitem', 'menu ArrowDown keeps focus inside the Menu primitive');
+    assert.equal(activeAfterArrow.selected, await page.$eval('#chatFontPreset', select => select.value), 'menu highlight does not write business value before Enter');
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('.vcp-harness-menu-portal:not([hidden])'), { timeout: timeoutMs });
     await page.evaluate(() => document.querySelector('#chatFontPreset')?.closest('.vcp-harness-select-wrap')?.querySelector('.vcp-harness-select-trigger')?.click());

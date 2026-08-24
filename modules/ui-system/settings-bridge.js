@@ -148,7 +148,6 @@ const GLOBAL_CATEGORY_ICONS = Object.freeze({
 // Global settings modal: control enhancement, autosave status, and the
 // source-equivalent SettingsRoot shell.
 function enhanceGlobalSettings(root, form) {
-    console.log('[settings-bridge] enhanceGlobalSettings called', { root: !!root, form: !!form });
     mountCanonicalSettingsRows(form);
     removeLegacySubsectionHeadings(form);
     mountHarnessInputWrappers(form);
@@ -399,7 +398,9 @@ function mountHarnessSelects(form) {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'vcp-harness-select-trigger';
-        button.setAttribute('aria-haspopup', 'listbox');
+        // The presentation projection owns a Harness Menu primitive; the
+        // native select remains the sole business/serialization source.
+        button.setAttribute('aria-haspopup', 'menu');
         button.id = `${controlId}-trigger`;
         const label = document.createElement('span');
         label.className = 'vcp-harness-select-label';
@@ -413,9 +414,9 @@ function mountHarnessSelects(form) {
         // Harness Menu is a menu primitive; the native select remains the
         // serialization source while this portal owns menu semantics.
         popover.setAttribute('role', 'menu');
-        popover.id = `${controlId}-listbox`;
+        popover.id = `${controlId}-menu`;
         popover.hidden = true;
-        const state = { select, wrap, button, label, popover, open: false, portal: false, cleanups: [], rebuildOptions: null };
+        const state = { select, wrap, button, label, popover, open: false, portal: false, activeIndex: 0, cleanups: [], rebuildOptions: null };
         button.setAttribute('aria-controls', popover.id);
         const fieldLabel = select.id ? [...document.querySelectorAll('label[for]')].find(label => label.htmlFor === select.id) : null;
         const originalLabelId = fieldLabel?.id || null;
@@ -427,10 +428,13 @@ function mountHarnessSelects(form) {
             const selected = select.options[select.selectedIndex];
             label.textContent = selected?.textContent?.trim() || '';
             button.setAttribute('aria-label', select.getAttribute('aria-label') || selected?.textContent?.trim() || '选择');
-            [...popover.querySelectorAll('[role="menuitem"]')].forEach(option => {
+            state.activeIndex = Math.max(0, select.selectedIndex);
+            [...popover.querySelectorAll('[role="menuitem"]')].forEach((option, index) => {
                 const active = option.dataset.value === select.value;
                 option.classList.toggle('is-selected', active);
+                option.tabIndex = index === state.activeIndex ? 0 : -1;
             });
+            button.setAttribute('aria-activedescendant', `${controlId}-option-${state.activeIndex}`);
         };
         const position = () => {
             if (!state.open) return;
@@ -462,6 +466,7 @@ function mountHarnessSelects(form) {
                 if (!state.open) return;
                 position();
                 popover.style.visibility = 'visible';
+                viewport.querySelector(`[role="menuitem"][data-index="${state.activeIndex}"]`)?.focus();
             });
         };
         select.parentNode.insertBefore(wrap, select);
@@ -485,13 +490,21 @@ function mountHarnessSelects(form) {
             const item = document.createElement('button');
             item.type = 'button'; item.className = 'vcp-harness-menu-item vcp-harness-select-option'; item.dataset.value = option.value;
             item.id = `${controlId}-option-${optionIndex}`;
+            item.dataset.index = String(optionIndex);
             item.setAttribute('role', 'menuitem');
             item.disabled = option.disabled;
             if (option.disabled) item.setAttribute('aria-disabled', 'true');
             const text = document.createElement('span'); text.className = 'vcp-harness-menu-item-label'; text.textContent = option.textContent.trim();
             const check = document.createElement('span'); check.className = 'vcp-harness-menu-check vcp-harness-select-check vcp-ui-icon'; check.textContent = 'check'; check.setAttribute('aria-hidden', 'true');
             item.append(text, check); itemWrap.append(item); viewport.append(itemWrap);
-            const onClick = () => { select.value = option.value; select.dispatchEvent(new Event('change', { bubbles: true })); sync(); close(); button.focus(); };
+            const onClick = () => {
+                if (option.disabled) return;
+                select.value = option.value;
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+                sync();
+                close();
+                button.focus();
+            };
             item.addEventListener('click', onClick); optionCleanups.push(() => item.removeEventListener('click', onClick));
             });
             state.cleanups = state.cleanups.filter(cleanup => !cleanup.__vcpOptionCleanup);
@@ -500,22 +513,35 @@ function mountHarnessSelects(form) {
         };
         state.rebuildOptions = rebuildOptions;
         rebuildOptions();
-        button.setAttribute('aria-activedescendant', `${controlId}-option-${Math.max(0, select.selectedIndex)}`);
         const onButton = () => state.open ? close() : open();
         const onKey = event => {
             if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onButton(); return; }
             if (event.key === 'Escape' && state.open) { event.preventDefault(); close(); return; }
-            if (!state.open || !['ArrowDown', 'ArrowUp'].includes(event.key)) return;
-            event.preventDefault(); const delta = event.key === 'ArrowDown' ? 1 : -1;
-            let next = select.selectedIndex;
-            do { next = (next + delta + select.options.length) % select.options.length; } while (select.options[next]?.disabled && next !== select.selectedIndex);
-            select.selectedIndex = next; select.dispatchEvent(new Event('change', { bubbles: true })); button.setAttribute('aria-activedescendant', `${controlId}-option-${next}`); sync();
+        };
+        const onMenuKey = event => {
+            if (!state.open) return;
+            const items = [...viewport.querySelectorAll('[role="menuitem"]')].filter(item => !item.disabled);
+            if (!items.length) return;
+            const current = Math.max(0, items.findIndex(item => Number(item.dataset.index) === state.activeIndex));
+            let next = current;
+            if (event.key === 'ArrowDown') next = (current + 1) % items.length;
+            else if (event.key === 'ArrowUp') next = (current - 1 + items.length) % items.length;
+            else if (event.key === 'Home') next = 0;
+            else if (event.key === 'End') next = items.length - 1;
+            else if (event.key === 'Escape') { event.preventDefault(); close(); button.focus(); return; }
+            else if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault(); items[current]?.click(); return;
+            } else return;
+            event.preventDefault();
+            state.activeIndex = Number(items[next].dataset.index);
+            items[next].focus();
+            button.setAttribute('aria-activedescendant', items[next].id);
         };
         const onChange = sync;
         state.close = close;
         state.position = position;
-        button.addEventListener('click', onButton); button.addEventListener('keydown', onKey); select.addEventListener('change', onChange); window.addEventListener('global-settings-updated', onChange);
-        state.cleanups.push(() => { close(); button.removeEventListener('click', onButton); button.removeEventListener('keydown', onKey); select.removeEventListener('change', onChange); window.removeEventListener('global-settings-updated', onChange); if (originalAriaHidden === null) select.removeAttribute('aria-hidden'); else select.setAttribute('aria-hidden', originalAriaHidden); if (originalTabIndex === null) select.removeAttribute('tabindex'); else select.setAttribute('tabindex', originalTabIndex); if (fieldLabel && originalLabelId === null) fieldLabel.removeAttribute('id'); });
+        button.addEventListener('click', onButton); button.addEventListener('keydown', onKey); popover.addEventListener('keydown', onMenuKey); select.addEventListener('change', onChange); window.addEventListener('global-settings-updated', onChange);
+        state.cleanups.push(() => { close(); button.removeEventListener('click', onButton); button.removeEventListener('keydown', onKey); popover.removeEventListener('keydown', onMenuKey); select.removeEventListener('change', onChange); window.removeEventListener('global-settings-updated', onChange); if (originalAriaHidden === null) select.removeAttribute('aria-hidden'); else select.setAttribute('aria-hidden', originalAriaHidden); if (originalTabIndex === null) select.removeAttribute('tabindex'); else select.setAttribute('tabindex', originalTabIndex); if (fieldLabel && originalLabelId === null) fieldLabel.removeAttribute('id'); });
         sync(); customSelectStates.add(state);
     });
     if (window.MutationObserver && !selectObserverStates.has(form)) {
@@ -686,11 +712,7 @@ function restoreFormIcons(root) {
 // The original form sections remain the business source of truth; only the
 // shell chrome (nav/header/options) is reconstructed here.
 function mountSettingsShell(root) {
-    console.log('[settings-bridge] mountSettingsShell called');
-    if (root.querySelector('.vcp-harness-settings-panel')) {
-        console.log('[settings-bridge] panel already mounted, skipping');
-        return;
-    }
+    if (root.querySelector('.vcp-harness-settings-panel')) return;
     const panel = root.querySelector('.vcp-settings-source-panel');
     const layout = root.querySelector('.vcp-settings-source-layout');
     const nav = root.querySelector('.vcp-settings-source-nav');
@@ -699,9 +721,7 @@ function mountSettingsShell(root) {
     const form = root.querySelector('#globalSettingsForm');
     const title = root.querySelector('.vcp-settings-source-title');
     const close = root.querySelector('.close-button');
-    console.log('[settings-bridge] elements found:', { panel: !!panel, layout: !!layout, nav: !!nav, listHost: !!listHost, content: !!content, form: !!form, title: !!title, close: !!close });
     if (!panel || !layout || !nav || !content || !form || !title || !close) {
-        console.error('[settings-bridge] required elements missing!');
         return;
     }
 
@@ -732,6 +752,9 @@ function mountSettingsShell(root) {
         title,
         header: null,
         options: null,
+        sectionHost: null,
+        sectionBank: null,
+        sections: new Map(),
         navList: null,
         cleanups: [],
         meta,
@@ -775,9 +798,50 @@ function mountSettingsShell(root) {
     state.header = header;
     state.options = options;
     options.append(...[...content.childNodes]);
+    // Harness owns an icon-only 28px close primitive with an accessible text
+    // seat. Replace the legacy text glyph once, while preserving the same
+    // business button and close listener.
+    if (!close.dataset.vcpHarnessClose) {
+        const icon = document.createElement('span');
+        icon.className = 'vcp-ui-icon vcp-harness-settings-close-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = 'x';
+        const hiddenLabel = document.createElement('span');
+        hiddenLabel.className = 'vcp-harness-settings-close-label';
+        hiddenLabel.textContent = close.getAttribute('aria-label') || '关闭';
+        close.replaceChildren(icon, hiddenLabel);
+        close.classList.add('vcp-harness-settings-close');
+        close.dataset.vcpHarnessClose = 'true';
+    }
     actions.append(close);
     header.append(actions);
     content.replaceChildren(header, options);
+
+    // Harness renders only the selected section into Options. Keep the
+    // remaining business fields connected to the same form in a hidden bank
+    // so legacy id/name queries, form serialization and IPC handlers remain
+    // authoritative without leaving inactive settings in the visible tree.
+    const sectionHost = document.createElement('div');
+    sectionHost.className = 'vcp-harness-active-section';
+    sectionHost.dataset.settingPrimitive = 'section';
+    const sectionBank = document.createElement('div');
+    sectionBank.className = 'vcp-harness-section-bank';
+    sectionBank.hidden = true;
+    sectionBank.setAttribute('aria-hidden', 'true');
+    state.sectionHost = sectionHost;
+    state.sectionBank = sectionBank;
+    [...form.children].filter(child => child.matches('.settings-section')).forEach(section => {
+        const value = section.id.replace(/^section-/, '');
+        state.sections.set(value, section);
+        section.classList.remove('active');
+        sectionBank.append(section);
+    });
+    form.prepend(sectionHost, sectionBank);
+    const initialSection = state.sections.get(initial);
+    if (initialSection) {
+        sectionHost.append(initialSection);
+        initialSection.classList.add('active');
+    }
     const canonicalNav = document.createElement('div');
     canonicalNav.className = 'vcp-harness-settings-nav-list';
     canonicalNav.setAttribute('aria-label', '全局设置分类');
@@ -806,11 +870,7 @@ function mountSettingsShell(root) {
         label.textContent = item.label;
         copy.append(label);
         row.append(icon, copy);
-        console.log('[settings-bridge] binding click event for:', item.value);
-        row.addEventListener('click', () => {
-            console.log('[settings-bridge] click event fired for:', item.value);
-            activateSection(item.value);
-        });
+        row.addEventListener('click', () => activateSection(item.value));
         row.addEventListener('keydown', event => {
             if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
             event.preventDefault();
@@ -823,28 +883,25 @@ function mountSettingsShell(root) {
         return row;
     });
     const renderList = () => {
-        console.log('[settings-bridge] renderList called, state.active:', state.active);
         state.listHost.setAttribute('aria-label', '全局设置分类');
         rows.forEach(row => {
             const value = row.dataset.section;
             const item = state.meta.find(candidate => candidate.value === value);
             if (!item) return;
             const selected = item.value === state.active;
-            console.log(`[settings-bridge] row ${value}: selected=${selected}`);
             row.classList.toggle('is-active', selected);
             row.classList.toggle('active', selected);
             row.dataset.state = selected ? 'selected' : 'idle';
             row.tabIndex = selected ? 0 : -1;
         });
         state.meta.forEach(item => {
-            const section = root.querySelector(`#section-${item.value}`);
-            if (!section) {
-                console.warn(`[settings-bridge] section not found: #section-${item.value}`);
-                return;
-            }
-            const isActive = item.value === state.active;
-            console.log(`[settings-bridge] section ${item.value}: isActive=${isActive}`);
-            section.classList.toggle('active', isActive);
+            const section = state.sections.get(item.value) || root.querySelector(`#section-${item.value}`);
+            if (!section) return;
+            // The active section is derived from the same state as the nav.
+            // Re-assert it on every render so stale classes from a reused
+            // modal or a bootstrap refresh cannot leave the two columns out
+            // of sync.
+            section.classList.toggle('active', item.value === state.active);
             section.removeAttribute('role');
             section.removeAttribute('aria-labelledby');
             section.removeAttribute('aria-hidden');
@@ -852,14 +909,14 @@ function mountSettingsShell(root) {
     };
 
     const activateSection = (value) => {
-        console.log('[settings-bridge] activateSection called with:', value);
-        console.log('[settings-bridge] state.meta:', state.meta);
-        if (!state.meta.some(item => item.value === value)) {
-            console.warn('[settings-bridge] value not found in meta!');
-            return;
-        }
+        if (!state.meta.some(item => item.value === value)) return;
         state.active = value;
-        console.log('[settings-bridge] state.active updated to:', state.active);
+        const next = state.sections.get(value);
+        if (next && state.sectionHost && next.parentNode !== state.sectionHost) {
+            const current = state.sectionHost.querySelector('.settings-section');
+            if (current) state.sectionBank.append(current);
+            state.sectionHost.append(next);
+        }
         renderList();
     };
 
@@ -878,23 +935,17 @@ function cleanupDisconnectedControllers() {
 }
 
 function refresh() {
-    console.log('[settings-bridge] refresh() called');
     refreshQueued = false;
     if (destroyed) return;
     ensurePresentationScope();
     cleanupDisconnectedControllers();
     const globalSettingsModal = syncGlobalSettingsHost();
-    console.log('[settings-bridge] refresh - globalSettingsModal:', !!globalSettingsModal);
     if (shouldEnhanceSidebarSettings()) {
         document.querySelectorAll('#agentSettingsForm, #groupSettingsForm').forEach(enhanceForm);
     }
     if (hasGlobalSettingsSurface()) {
-        console.log('[settings-bridge] hasGlobalSettingsSurface = true');
         const form = globalSettingsModal?.querySelector('#globalSettingsForm');
-        console.log('[settings-bridge] form found:', !!form);
         if (globalSettingsModal && form) enhanceGlobalSettings(globalSettingsModal, form);
-    } else {
-        console.log('[settings-bridge] hasGlobalSettingsSurface = false');
     }
 }
 
