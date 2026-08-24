@@ -17,6 +17,8 @@ export interface SettingsSaveResult {
 export interface SettingsUiService {
     readonly state: UiReadable<SettingsState>;
     readonly save: UiCommand<SettingsPatch, SettingsSaveResult>;
+    /** Invalidate an in-flight command whose UI owner reached a terminal timeout. */
+    readonly cancelPendingSaves?: () => void;
     readonly dispose?: UiDisposer;
 }
 
@@ -110,6 +112,10 @@ export function createSettingsUiService(input: SettingsUiAdapterInput): Settings
             },
         },
     };
+    Object.defineProperty(service, 'cancelPendingSaves', {
+        value: () => { saveGeneration += 1; },
+        enumerable: false,
+    });
     // The adapter is itself a UI-owned resource when external settings updates
     // exist; callers should register this disposer with their UiScope.
     Object.defineProperty(service, 'dispose', {

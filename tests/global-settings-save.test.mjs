@@ -27,6 +27,7 @@ test('global settings saves the server URL once with canonical presentation', as
 
     let resolveSave;
     let saveCalls = 0;
+    let croppedFile = null;
     let savedPayload;
     let normalizeMode;
     const savePromise = new Promise(resolve => { resolveSave = resolve; });
@@ -52,7 +53,7 @@ test('global settings saves the server URL once with canonical presentation', as
     let currentSettings = {};
     const deps = {
         refs: { globalSettings: { get: () => currentSettings, set: value => { currentSettings = value; } } },
-        getCroppedFile: () => null,
+        getCroppedFile: () => croppedFile,
         setCroppedFile() {},
         uiHelperFunctions: { showToastNotification() {}, closeModal() {} },
         settingsManager: { completeVcpUrl: url => url },
@@ -89,15 +90,20 @@ test('global settings saves the server URL once with canonical presentation', as
         let typedForumCalls = 0;
         let typedForumPayload;
         let forumShouldFail = false;
+        let forumShouldThrow = false;
+        let typedShouldHang = false;
+        let typedCancelled = false;
         dom.window.VCPUISettingsBridge = {
             getTypedService: () => ({
                 save: {
                     execute: async payload => {
                         typedCalls += 1;
                         typedPayload = payload;
+                        if (typedShouldHang) return new Promise(() => {});
                         return { success: true };
                     },
                 },
+                cancelPendingSaves: () => { typedCancelled = true; },
             }),
             getRustAssistantService: () => ({
                 save: {
@@ -113,6 +119,7 @@ test('global settings saves the server URL once with canonical presentation', as
                     execute: async payload => {
                         typedForumCalls += 1;
                         typedForumPayload = payload;
+                        if (forumShouldThrow) throw new Error('forum-ipc-down');
                         return forumShouldFail ? { success: false, error: 'forum-denied' } : { success: true };
                     },
                 },
@@ -132,6 +139,27 @@ test('global settings saves the server URL once with canonical presentation', as
         assert.equal(typedForumCalls, 1, 'forum settings save delegates to the typed Forum service command');
         assert.equal(typedForumPayload?.username, 'forum-admin');
 
+        typedShouldHang = true;
+        deps.saveTimeoutMs = 5;
+        await assert.rejects(
+            handleSaveGlobalSettings(event, deps),
+            /保存设置超时/,
+            'a typed save timeout must become a recoverable terminal state'
+        );
+        assert.equal(typedCancelled, true, 'typed timeout invalidates pending publication rights');
+        assert.equal(saveResults.at(-1)?.success, false, 'typed timeout publishes a retryable terminal state');
+        typedShouldHang = false;
+        delete deps.saveTimeoutMs;
+
+        croppedFile = { name: 'avatar.png', type: 'image/png', arrayBuffer: async () => new ArrayBuffer(0) };
+        dom.window.chatAPI.saveUserAvatar = async () => ({ success: false, error: 'avatar-denied' });
+        await handleSaveGlobalSettings(event, deps);
+        assert.equal(saveResults.at(-1)?.success, false, 'avatar command failure publishes a retryable terminal state');
+        assert.match(saveResults.at(-1)?.error || '', /avatar-denied/, 'avatar command error reaches the SettingsRoot retry UI');
+        assert.equal(typedCalls, 2, 'avatar failure stops the transaction before a second global settings persistence');
+        croppedFile = null;
+        delete dom.window.chatAPI.saveUserAvatar;
+
         rustShouldFail = true;
         await handleSaveGlobalSettings(event, deps);
         assert.equal(saveResults.at(-1)?.success, false, 'Rust command failure publishes a retryable terminal state');
@@ -143,6 +171,13 @@ test('global settings saves the server URL once with canonical presentation', as
         assert.equal(saveResults.at(-1)?.success, false, 'Forum command failure publishes a retryable terminal state');
         assert.match(saveResults.at(-1)?.error || '', /forum-denied/, 'Forum command error reaches the SettingsRoot retry UI');
 
+        forumShouldFail = false;
+        forumShouldThrow = true;
+        await handleSaveGlobalSettings(event, deps);
+        assert.equal(saveResults.at(-1)?.success, false, 'Forum command exceptions publish a retryable terminal state');
+        assert.match(saveResults.at(-1)?.error || '', /forum-ipc-down/, 'Forum command exception reaches the SettingsRoot retry UI');
+
+        forumShouldThrow = false;
         dom.window.document.getElementById('adminUsername').value = '';
         dom.window.document.getElementById('adminPassword').value = '';
         delete dom.window.VCPUISettingsBridge;
@@ -155,12 +190,12 @@ test('global settings saves the server URL once with canonical presentation', as
             'a permanently pending save must become a recoverable terminal state'
         );
         assert.equal(form.dataset.globalSettingsSaving, undefined, 'timeout must release the submit lock');
-        assert.equal(saveResults.length, 5, 'each save attempt publishes exactly one terminal event');
+        assert.equal(saveResults.length, 8, 'each save attempt publishes exactly one terminal event');
         assert.equal(saveResults.at(-1)?.success, false, 'timeout publishes a failure terminal state to autosave');
         assert.match(saveResults.at(-1)?.error || '', /保存设置超时/, 'timeout error is available to retry UI');
         resolveLate({ success: true });
         await new Promise(resolve => setImmediate(resolve));
-        assert.equal(saveResults.length, 5, 'late IPC success cannot resurrect a timed-out UI save');
+        assert.equal(saveResults.length, 8, 'late IPC success cannot resurrect a timed-out UI save');
     } finally {
         for (const [name, value] of Object.entries(previousGlobals)) {
             if (value === undefined) delete globalThis[name];

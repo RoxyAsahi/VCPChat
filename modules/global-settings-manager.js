@@ -258,10 +258,16 @@ async function saveGlobalSettings(deps, settingsForm) {
                 setCroppedFile('user', null);
                 document.getElementById('userAvatarInput').value = '';
             } else {
-                uiHelperFunctions.showToastNotification(`保存用户头像失败: ${avatarSaveResult.error}`, 'error');
+                const error = avatarSaveResult.error || '未知错误';
+                reportSaveResult(false, `保存用户头像失败: ${error}`);
+                uiHelperFunctions.showToastNotification(`保存用户头像失败: ${error}`, 'error');
+                return;
             }
         } catch (readError) {
-            uiHelperFunctions.showToastNotification(`读取用户头像文件失败: ${readError.message}`, 'error');
+            const error = readError?.message || String(readError);
+            reportSaveResult(false, `读取用户头像文件失败: ${error}`);
+            uiHelperFunctions.showToastNotification(`读取用户头像文件失败: ${error}`, 'error');
+            return;
         }
     }
 
@@ -287,7 +293,10 @@ async function saveGlobalSettings(deps, settingsForm) {
                 return;
             }
         } catch (forumErr) {
-            console.warn('[GlobalSettings] Error saving forum config:', forumErr);
+            const error = forumErr?.message || String(forumErr);
+            reportSaveResult(false, `论坛配置保存失败: ${error}`);
+            uiHelperFunctions.showToastNotification(`论坛配置保存失败: ${error}`, 'error');
+            return;
         }
     }
 
@@ -299,7 +308,16 @@ async function saveGlobalSettings(deps, settingsForm) {
     const saveOperation = typedSettingsService?.save?.execute
         ? typedSettingsService.save.execute(newSettings)
         : chatAPI.saveSettings(newSettings);
-    const result = await awaitWithTimeout(saveOperation, deps.saveTimeoutMs);
+    let result;
+    try {
+        result = await awaitWithTimeout(saveOperation, deps.saveTimeoutMs);
+    } catch (error) {
+        // A bounded UI timeout is a terminal owner transition. Invalidate the
+        // typed command generation so a late IPC result cannot republish the
+        // timed-out patch into SettingsRoot.
+        typedSettingsService?.cancelPendingSaves?.();
+        throw error;
+    }
     if (result?.success) {
         if (chatAPI?.saveRustAssistantConfig) {
             const rustService = window.VCPUISettingsBridge?.getRustAssistantService?.();

@@ -295,3 +295,7 @@ const owned = slots.mount('chat.composer.leading', host, snapshot, { scope });
 4. 保持 R2-00/R2-01 的能力由真实 consumer 驱动，不开放任意 selector/HTML 注入，也不创建第二套生命周期或 durable UI Store；Plugin Loader 与 chat plugin protocol 保持冻结。
 
 补充门禁记录：本批补回 `nextUiNotificationForum` / `nextUiNotificationMemo`，并让 NextShell controller 成为唯一 owner；旧 `event-listeners.js` 中对应的重复 document-level binding 仍保持注释隔离。Plugin Loader 与 chat plugin manifest 的越界改动已回退，UI Runtime 只消费既有插件能力；完整 UI Apps smoke 仍受 `VCPDistributedServer/Plugin/VChatDynamicWallpaper/plugin-manifest.json.block` 外部 readiness blocker 影响，本轮不擅自启用用户禁用插件。
+
+R2-02 failure contract 增量（2026-08-24）：Forum typed command 的显式失败与异常、头像文件保存的显式失败与读取异常，均发布 retryable `vcp-settings-save-result: success=false` 并终止当前提交事务；对应回归证据位于 `tests/global-settings-save.test.mjs`。该增量不改变头像、设置或 IPC 数据格式，也不影响 legacy bridge 的剩余迁移职责。
+
+R2-02 timeout/late-result 增量（2026-08-24）：typed Settings save 超时现在调用 `cancelPendingSaves()` 失效当前 generation，迟到 IPC 结果不能重新发布 Settings snapshot；generated artifact consistency、artifact smoke 与 Electron Settings journey 均通过。该能力仍属于迁移期 Settings service，不代表 legacy bridge 已退役。
