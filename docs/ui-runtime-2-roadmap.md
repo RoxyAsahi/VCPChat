@@ -299,3 +299,5 @@ const owned = slots.mount('chat.composer.leading', host, snapshot, { scope });
 R2-02 failure contract 增量（2026-08-24）：Forum typed command 的显式失败与异常、头像文件保存的显式失败与读取异常，均发布 retryable `vcp-settings-save-result: success=false` 并终止当前提交事务；对应回归证据位于 `tests/global-settings-save.test.mjs`。该增量不改变头像、设置或 IPC 数据格式，也不影响 legacy bridge 的剩余迁移职责。
 
 R2-02 timeout/late-result 增量（2026-08-24）：typed Settings save 超时现在调用 `cancelPendingSaves()` 失效当前 generation，迟到 IPC 结果不能重新发布 Settings snapshot；generated artifact consistency、artifact smoke 与 Electron Settings journey 均通过。该能力仍属于迁移期 Settings service，不代表 legacy bridge 已退役。
+
+R2-02 projection simplification（2026-08-24）：删除 Settings typed projection 表中重复的 `enableUserChatBubbleUi` 映射；行为保持不变，避免同一 consumer 对同一控件执行重复投影。Electron Settings journey 与 UIUX type check 通过。

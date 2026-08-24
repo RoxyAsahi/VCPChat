@@ -187,7 +187,6 @@ function mountTypedSettingsConsumer(root) {
             ['chatDiaryFontCustom', 'chatDiaryFontCustom'],
             ['chatToolFontPreset', 'chatToolFontPreset'],
             ['chatToolFontCustom', 'chatToolFontCustom'],
-            ['enableUserChatBubbleUi', 'enableUserChatBubbleUi', 'checked'],
             ['enableSmoothStreaming', 'enableSmoothStreaming', 'checked'],
         ];
         projection.forEach(([id, path, mode, expected]) => {
