@@ -37,6 +37,7 @@ let destroyPromise = null;
 let typedSettingsService = null;
 let typedSettingsRegistry = null;
 let typedRustAssistantService = null;
+let typedForumConfigService = null;
 let typedSettingsState = Object.freeze({});
 let typedSettingsExternalRelease = null;
 let typedSettingsSaveChain = Promise.resolve();
@@ -268,6 +269,20 @@ function mountTypedSettingsConsumer(root) {
         ensurePresentationScope()?.own(release, 'typed-rust-assistant-consumer', 'ui-presentation');
         void rustService.refresh.execute();
     }
+    const forumService = ensureForumConfigUiService();
+    if (forumService) {
+        const applyForum = (_value, snapshot) => {
+            if (form.dataset.vcpSettingsDirty === 'true' || form.dataset.globalSettingsSaving === 'true') return;
+            const forum = snapshot.value || {};
+            const username = form.querySelector('#adminUsername');
+            const password = form.querySelector('#adminPassword');
+            if (username && forum.username !== undefined) username.value = String(forum.username || '');
+            if (password && forum.password !== undefined) password.value = String(forum.password || '');
+        };
+        const release = forumService.state.subscribe(applyForum);
+        ensurePresentationScope()?.own(release, 'typed-forum-config-consumer', 'ui-presentation');
+        void forumService.refresh.execute();
+    }
 }
 
 function ensureRustAssistantUiService() {
@@ -284,6 +299,22 @@ function ensureRustAssistantUiService() {
         services: { ...context.services, rustAssistantAdapter: adapter },
     }));
     return typedRustAssistantService;
+}
+
+function ensureForumConfigUiService() {
+    if (typedForumConfigService || !typedSettingsRegistry || !window.VCPUIUX?.createForumConfigUiService) return typedForumConfigService;
+    const chatAPI = window.chatAPI;
+    if (!chatAPI?.loadForumConfig || !chatAPI?.saveForumConfig) return null;
+    const adapter = window.VCPUIUX.createForumConfigUiService({
+        get: () => chatAPI.loadForumConfig(),
+        save: patch => chatAPI.saveForumConfig(patch),
+    });
+    const definition = window.VCPUIUX.forumConfigUiDefinition;
+    typedForumConfigService = typedSettingsRegistry.install(definition, context => definition.provide({
+        ...context,
+        services: { ...context.services, forumConfigAdapter: adapter },
+    }));
+    return typedForumConfigService;
 }
 
 function ensurePresentationScope() {
@@ -1276,6 +1307,10 @@ window.VCPUISettingsBridge = Object.freeze({
     getRustAssistantService() {
         ensureTypedSettingsService();
         return ensureRustAssistantUiService();
+    },
+    getForumConfigService() {
+        ensureTypedSettingsService();
+        return ensureForumConfigUiService();
     },
     destroy() {
         if (destroyPromise) return destroyPromise;

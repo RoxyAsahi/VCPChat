@@ -276,9 +276,15 @@ async function saveGlobalSettings(deps, settingsForm) {
                 replyUsername: newSettings.userName || '用户',
                 rememberCredentials: true
             };
-            const forumResult = await chatAPI.saveForumConfig(forumConfig);
+            const forumService = window.VCPUISettingsBridge?.getForumConfigService?.();
+            const forumResult = forumService?.save?.execute
+                ? await forumService.save.execute(forumConfig)
+                : await chatAPI.saveForumConfig(forumConfig);
             if (!forumResult?.success) {
-                console.warn('[GlobalSettings] Failed to save forum config:', forumResult?.error);
+                const error = forumResult?.error || '未知错误';
+                reportSaveResult(false, `论坛配置保存失败: ${error}`);
+                uiHelperFunctions.showToastNotification(`论坛配置保存失败: ${error}`, 'error');
+                return;
             }
         } catch (forumErr) {
             console.warn('[GlobalSettings] Error saving forum config:', forumErr);

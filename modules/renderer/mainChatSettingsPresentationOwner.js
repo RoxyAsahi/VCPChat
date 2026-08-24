@@ -781,15 +781,17 @@ export function createMainChatSettingsPresentationOwner({
         }
 
         // 加载论坛配置并填充管理员账号/密码
-        try {
-            const forumConfig = await chatAPI.loadForumConfig();
-            if (!isCurrent(token)) return false;
-            if (forumConfig && !forumConfig.error) {
-                safeSet('adminUsername', forumConfig.username || '');
-                safeSet('adminPassword', forumConfig.password || '');
+        if (!windowRef?.VCPUISettingsBridge?.getForumConfigService?.()) {
+            try {
+                const forumConfig = await chatAPI.loadForumConfig();
+                if (!isCurrent(token)) return false;
+                if (forumConfig && !forumConfig.error) {
+                    safeSet('adminUsername', forumConfig.username || '');
+                    safeSet('adminPassword', forumConfig.password || '');
+                }
+            } catch (err) {
+                console.warn('[Renderer] Failed to load forum config for global settings:', err);
             }
-        } catch (err) {
-            console.warn('[Renderer] Failed to load forum config for global settings:', err);
         }
 
         // Assistant Select

@@ -4,6 +4,7 @@ import { createUiScope } from './runtime/scope.js';
 import { createUiServiceRegistry } from './runtime/service-registry.js';
 import { settingsUiDefinition } from './adapters/settings.js';
 import { createRustAssistantUiService, rustAssistantUiDefinition } from './adapters/rust-assistant.js';
+import { createForumConfigUiService, forumConfigUiDefinition } from './adapters/forum-config.js';
 const api = {
     mountThemePresenterFromScope(root, theme, legacyScope) {
         const scope = createUiScope(legacyScope);
@@ -16,6 +17,8 @@ const api = {
     settingsUiDefinition,
     createRustAssistantUiService,
     rustAssistantUiDefinition,
+    createForumConfigUiService,
+    forumConfigUiDefinition,
 };
 Object.defineProperty(globalThis, 'VCPUIUX', {
     value: Object.freeze(api),

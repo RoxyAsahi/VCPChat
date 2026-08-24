@@ -3,6 +3,7 @@ import { createSettingsUiService } from '../modules/uiux/generated/adapters/sett
 import { createUiScope } from '../modules/uiux/generated/runtime/scope.js';
 import { createUiServiceRegistry } from '../modules/uiux/generated/runtime/service-registry.js';
 import { createRustAssistantUiService } from '../modules/uiux/generated/adapters/rust-assistant.js';
+import { createForumConfigUiService } from '../modules/uiux/generated/adapters/forum-config.js';
 
 const lifecycleModule = await import('../modules/ui-system/lifecycle-scope.js');
 const { LifecycleScope } = lifecycleModule.default || lifecycleModule;
@@ -57,4 +58,15 @@ assert.equal(rustService.state.get().debugMode, false);
 await rustService.save.execute({ debugMode: true });
 assert.equal(rustService.state.get().debugMode, true);
 await rustService.dispose();
-console.log('UIUX generated artifact smoke passed (Settings + Rust Assistant + scoped registry contracts).');
+
+let forumState = { username: 'artifact-admin' };
+const forumService = createForumConfigUiService({
+    get: () => forumState,
+    save: async patch => { forumState = { ...forumState, ...patch }; return { success: true }; },
+});
+await forumService.refresh.execute();
+assert.equal(forumService.state.get().username, 'artifact-admin');
+await forumService.save.execute({ username: 'artifact-next' });
+assert.equal(forumService.state.get().username, 'artifact-next');
+await forumService.dispose();
+console.log('UIUX generated artifact smoke passed (Settings + Rust + Forum adapters + scoped registry contracts).');

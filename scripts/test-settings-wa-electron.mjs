@@ -508,6 +508,16 @@ try {
     });
     assert.equal(rustConsumerState.available, true, 'Rust Assistant UI service is assembled in the production bridge');
     assert.equal(rustConsumerState.controlDebugMode, rustConsumerState.debugMode === true, 'Rust control consumes the typed Rust snapshot');
+    const forumConsumerState = await page.evaluate(() => {
+        const service = window.VCPUISettingsBridge?.getForumConfigService?.();
+        return {
+            available: Boolean(service?.state?.get),
+            username: service?.state?.get()?.username ?? '',
+            controlUsername: document.getElementById('adminUsername')?.value ?? '',
+        };
+    });
+    assert.equal(forumConsumerState.available, true, 'Forum config UI service is assembled in the production bridge');
+    assert.equal(forumConsumerState.controlUsername, forumConsumerState.username, 'Forum admin control consumes the typed forum snapshot');
     // Force the real IPC persistence path to fail once by removing write
     // access from the isolated test profile, then restore it for retry.
     await fs.chmod(path.join(appData, 'settings.json'), 0o444);
