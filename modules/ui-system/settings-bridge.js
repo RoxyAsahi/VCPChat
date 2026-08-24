@@ -110,16 +110,36 @@ function mountTypedSettingsConsumer(root) {
             ['continueWritingPrompt', 'continueWritingPrompt'],
             ['vcpServerUrl', 'vcpServerUrl'],
             ['topicSummaryModel', 'topicSummaryModel'],
+            ['showHomeVisualBrand', 'showHomeVisualBrand', 'checked'],
             ['homeVisualTagline', 'homeVisualTagline'],
             ['appearanceDensity', 'appearanceProfile.density'],
+            ['appearanceRadius', 'appearanceProfile.radius'],
+            ['appearanceTypography', 'appearanceProfile.typography'],
+            ['appearanceFontScale', 'appearanceProfile.fontScale'],
+            ['appearanceContentWidth', 'appearanceProfile.contentWidth'],
+            ['appearanceSurface', 'appearanceProfile.surface'],
+            ['appearanceSidebarRowHeight', 'appearanceProfile.sidebarRowHeight'],
+            ['appearanceSidebarAvatarSize', 'appearanceProfile.sidebarAvatarSize'],
+            ['appearanceSidebarRadius', 'appearanceProfile.sidebarRadius'],
+            ['appearanceCustomRadius', 'appearanceProfile.customRadius'],
             ['chatFontPreset', 'chatFontPreset'],
+            ['chatFontCustom', 'chatFontCustom'],
             ['chatCodeFontPreset', 'chatCodeFontPreset'],
+            ['chatCodeFontCustom', 'chatCodeFontCustom'],
+            ['chatDiaryFontPreset', 'chatDiaryFontPreset'],
+            ['chatDiaryFontCustom', 'chatDiaryFontCustom'],
+            ['chatToolFontPreset', 'chatToolFontPreset'],
+            ['chatToolFontCustom', 'chatToolFontCustom'],
+            ['enableUserChatBubbleUi', 'enableUserChatBubbleUi', 'checked'],
+            ['enableSmoothStreaming', 'enableSmoothStreaming', 'checked'],
         ];
-        projection.forEach(([id, path]) => {
+        projection.forEach(([id, path, mode]) => {
             const control = form.querySelector(`#${id}`);
             if (!control) return;
             const value = path.split('.').reduce((current, key) => current?.[key], settings);
-            if (value !== undefined && value !== null) control.value = String(value);
+            if (value === undefined || value === null) return;
+            if (mode === 'checked' || control.type === 'checkbox') control.checked = Boolean(value);
+            else control.value = String(value);
         });
     };
     const release = service.state.subscribe(apply);

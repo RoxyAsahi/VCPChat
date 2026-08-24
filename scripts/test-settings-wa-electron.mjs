@@ -387,6 +387,19 @@ try {
                 continueWritingPrompt: 'typed-external-prompt',
                 vcpServerUrl: 'http://typed-external:6005',
                 chatFontPreset: 'serif',
+                appearanceProfile: {
+                    density: 'compact',
+                    radius: 'round',
+                    typography: 'humanist',
+                    fontScale: 'large',
+                    contentWidth: 'centered',
+                    surface: 'custom',
+                    sidebarRowHeight: 52,
+                    sidebarAvatarSize: 36,
+                    sidebarRadius: 'round',
+                    customRadius: 14,
+                },
+                enableSmoothStreaming: false,
             }, source: 'external-test' }
         }));
     });
@@ -394,6 +407,15 @@ try {
     assert.equal(await page.$eval('#continueWritingPrompt', node => node.value), 'typed-external-prompt', 'clean form consumes typed Settings snapshot');
     assert.equal(await page.$eval('#vcpServerUrl', node => node.value), 'http://typed-external:6005', 'clean text control consumes typed Settings snapshot');
     assert.equal(await page.$eval('#chatFontPreset', node => node.value), 'serif', 'clean select control consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceDensity', node => node.value), 'compact', 'clean appearance density consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceRadius', node => node.value), 'round', 'clean appearance radius consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceTypography', node => node.value), 'humanist', 'clean appearance typography consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceFontScale', node => node.value), 'large', 'clean appearance scale consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceContentWidth', node => node.value), 'centered', 'clean appearance width consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceSurface', node => node.value), 'custom', 'clean appearance surface consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceSidebarRowHeight', node => node.value), '52', 'clean sidebar row height consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceSidebarAvatarSize', node => node.value), '36', 'clean sidebar avatar size consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#enableSmoothStreaming', node => node.checked), false, 'clean checkbox consumes typed Settings snapshot');
     // Force the real IPC persistence path to fail once by removing write
     // access from the isolated test profile, then restore it for retry.
     await fs.chmod(path.join(appData, 'settings.json'), 0o444);
