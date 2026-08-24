@@ -301,7 +301,14 @@ async function saveGlobalSettings(deps, settingsForm) {
                 ? await rustService.save.execute(rustConfigPatch)
                 : await chatAPI.saveRustAssistantConfig(rustConfigPatch);
             if (!rustSaveResult?.success) {
-                uiHelperFunctions.showToastNotification(`Rust助手配置保存失败: ${rustSaveResult?.error || '未知错误'}`, 'warning');
+                const error = rustSaveResult?.error || '未知错误';
+                reportSaveResult(false, `Rust助手配置保存失败: ${error}`);
+                uiHelperFunctions.showToastNotification(`Rust助手配置保存失败: ${error}`, 'error');
+                // Global settings are already durable, but the Rust capability
+                // is a separate command boundary. Keep SettingsRoot open so
+                // autosave can expose retry instead of closing on a partial
+                // success.
+                return;
             } else if (rustSaveResult.reconcile?.modeChanged) {
                 const modeLabel = rustSaveResult.reconcile.mode === 'rust' ? 'Rust' : 'Disabled';
                 const restartText = rustSaveResult.reconcile.restarted ? '并已热重启监听器' : '将在下次启用监听器时生效';
