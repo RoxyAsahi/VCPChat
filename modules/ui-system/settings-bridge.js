@@ -42,6 +42,7 @@ let typedAssistantRuntimeService = null;
 let typedSettingsState = Object.freeze({});
 let typedSettingsExternalRelease = null;
 let typedSettingsSaveChain = Promise.resolve();
+let typedSettingsSaveGeneration = 0;
 let typedSettingsDisposed = false;
 
 function ensureTypedSettingsService() {
@@ -62,15 +63,23 @@ function ensureTypedSettingsService() {
     typedSettingsService = window.VCPUIUX.createSettingsUiService({
         get: () => typedSettingsState,
         save: patch => {
+            const generation = ++typedSettingsSaveGeneration;
             const run = async () => {
                 const next = Object.freeze({ ...typedSettingsState, ...patch });
                 const result = await window.chatAPI?.saveSettings?.(next);
-                if (result?.success) publishExternal(next);
+                if (result?.success && generation === typedSettingsSaveGeneration) publishExternal(next);
                 return result?.success ? { success: true } : { success: false, error: result?.error || '设置保存失败' };
             };
             const result = typedSettingsSaveChain.then(run, run);
             typedSettingsSaveChain = result.catch(() => {});
             return result;
+        },
+        cancelPendingSaves: () => {
+            typedSettingsSaveGeneration += 1;
+            // Do not let a timed-out IPC hold retry behind an unbounded chain.
+            // The old request may still settle in the main process, but it has
+            // lost publication rights and the next retry starts immediately.
+            typedSettingsSaveChain = Promise.resolve();
         },
         subscribe: listener => {
             externalListeners.add(listener);

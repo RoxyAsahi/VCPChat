@@ -25,6 +25,7 @@ export interface SettingsUiService {
 export interface SettingsUiAdapterInput {
     readonly get: () => SettingsState;
     readonly save: (patch: SettingsPatch) => Promise<SettingsSaveResult> | SettingsSaveResult;
+    readonly cancelPendingSaves?: () => void;
     readonly subscribe?: (listener: (state: SettingsState) => void) => UiDisposer;
 }
 
@@ -113,7 +114,10 @@ export function createSettingsUiService(input: SettingsUiAdapterInput): Settings
         },
     };
     Object.defineProperty(service, 'cancelPendingSaves', {
-        value: () => { saveGeneration += 1; },
+        value: () => {
+            saveGeneration += 1;
+            input.cancelPendingSaves?.();
+        },
         enumerable: false,
     });
     // The adapter is itself a UI-owned resource when external settings updates

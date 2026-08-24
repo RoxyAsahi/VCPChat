@@ -301,3 +301,7 @@ R2-02 failure contract 增量（2026-08-24）：Forum typed command 的显式失
 R2-02 timeout/late-result 增量（2026-08-24）：typed Settings save 超时现在调用 `cancelPendingSaves()` 失效当前 generation，迟到 IPC 结果不能重新发布 Settings snapshot；generated artifact consistency、artifact smoke 与 Electron Settings journey 均通过。该能力仍属于迁移期 Settings service，不代表 legacy bridge 已退役。
 
 R2-02 projection simplification（2026-08-24）：删除 Settings typed projection 表中重复的 `enableUserChatBubbleUi` 映射；行为保持不变，避免同一 consumer 对同一控件执行重复投影。Electron Settings journey 与 UIUX type check 通过。
+
+R2-02 retry-chain 增量（2026-08-24）：timeout cancellation 现在同时切断 bridge 内部未完成的串行 save chain，并撤销旧请求的 external snapshot publication rights；重试不会继续排在永久挂起的旧 IPC 后面。typed adapter、generated artifact 与 Electron Settings evidence 均通过。
+
+Stress evidence refresh（2026-08-24）：`VCPCHAT_STRESS_CYCLES=5 VCPCHAT_STRESS_WARMUP=1 npm run test:electron-lifecycle-stress` 仍在 checkpoint 处失败，listeners 从 baseline 579 增至 609（+30），但 lifecycle scopes/resources、connected elements、detached roots/icons/options 均稳定。该混合场景包含多个非 Settings Surface，不能据此归因或宣布 Settings failure/retry + teardown complete。
