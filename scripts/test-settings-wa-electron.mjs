@@ -390,6 +390,11 @@ try {
                 fileKey: 'typed-file-key',
                 vcpLogUrl: 'ws://typed-log:6006',
                 vcpLogKey: 'typed-log-key',
+                voiceMode: 'network',
+                speechRecognizerBrowserPath: '/typed/chrome',
+                speechRecognizerPagePath: '/typed/recognizer.html',
+                voiceLocalSettings: { sovitsUrl: 'http://typed-local:9880', sovitsKey: 'typed-local-key' },
+                voiceNetworkSettings: { providerUrl: 'https://typed-voice.example/api', providerKey: 'typed-network-key' },
                 chatFontPreset: 'serif',
                 appearanceProfile: {
                     density: 'compact',
@@ -414,6 +419,14 @@ try {
     assert.equal(await page.$eval('#fileKey', node => node.value), 'typed-file-key', 'clean file key control consumes typed Settings snapshot');
     assert.equal(await page.$eval('#vcpLogUrl', node => node.value), 'ws://typed-log:6006', 'clean VCPLog URL consumes typed Settings snapshot');
     assert.equal(await page.$eval('#vcpLogKey', node => node.value), 'typed-log-key', 'clean VCPLog key consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#voiceModeNetwork', node => node.checked), true, 'clean voice mode consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#voiceModeLocal', node => node.checked), false, 'clean local voice mode consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#speechRecognizerBrowserPath', node => node.value), '/typed/chrome', 'clean STT browser path consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#speechRecognizerPagePath', node => node.value), '/typed/recognizer.html', 'clean STT page path consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#voiceLocalSovitsUrl', node => node.value), 'http://typed-local:9880', 'clean local voice URL consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#voiceLocalSovitsKey', node => node.value), 'typed-local-key', 'clean local voice key consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#voiceNetworkProviderUrl', node => node.value), 'https://typed-voice.example/api', 'clean network voice URL consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#voiceNetworkProviderKey', node => node.value), 'typed-network-key', 'clean network voice key consumes typed Settings snapshot');
     assert.equal(await page.$eval('#chatFontPreset', node => node.value), 'serif', 'clean select control consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceDensity', node => node.value), 'compact', 'clean appearance density consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceRadius', node => node.value), 'round', 'clean appearance radius consumes typed Settings snapshot');

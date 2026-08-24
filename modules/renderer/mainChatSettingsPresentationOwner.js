@@ -616,14 +616,16 @@ export function createMainChatSettingsPresentationOwner({
             safeSet('continueWritingPrompt', globalSettings.continueWritingPrompt || '请继续');
         }
         safeSet('flowlockContinueDelay', globalSettings.flowlockContinueDelay ?? 5);
-        safeCheck('voiceModeLocal', (globalSettings.voiceMode || 'local') !== 'network');
-        safeCheck('voiceModeNetwork', (globalSettings.voiceMode || 'local') === 'network');
-        safeSet('speechRecognizerBrowserPath', globalSettings.speechRecognizerBrowserPath || '');
-        safeSet('speechRecognizerPagePath', globalSettings.speechRecognizerPagePath || 'Voicechatmodules/recognizer.html');
-        safeSet('voiceLocalSovitsUrl', globalSettings.voiceLocalSettings?.sovitsUrl || '');
-        safeSet('voiceLocalSovitsKey', globalSettings.voiceLocalSettings?.sovitsKey || '');
-        safeSet('voiceNetworkProviderUrl', globalSettings.voiceNetworkSettings?.providerUrl || '');
-        safeSet('voiceNetworkProviderKey', globalSettings.voiceNetworkSettings?.providerKey || '');
+        if (!typedSettingsProjectionActive) {
+            safeCheck('voiceModeLocal', (globalSettings.voiceMode || 'local') !== 'network');
+            safeCheck('voiceModeNetwork', (globalSettings.voiceMode || 'local') === 'network');
+            safeSet('speechRecognizerBrowserPath', globalSettings.speechRecognizerBrowserPath || '');
+            safeSet('speechRecognizerPagePath', globalSettings.speechRecognizerPagePath || 'Voicechatmodules/recognizer.html');
+            safeSet('voiceLocalSovitsUrl', globalSettings.voiceLocalSettings?.sovitsUrl || '');
+            safeSet('voiceLocalSovitsKey', globalSettings.voiceLocalSettings?.sovitsKey || '');
+            safeSet('voiceNetworkProviderUrl', globalSettings.voiceNetworkSettings?.providerUrl || '');
+            safeSet('voiceNetworkProviderKey', globalSettings.voiceNetworkSettings?.providerKey || '');
+        }
 
         // Network Notes Paths
         const networkNotesPathsContainer = document.getElementById('networkNotesPathsContainer');
