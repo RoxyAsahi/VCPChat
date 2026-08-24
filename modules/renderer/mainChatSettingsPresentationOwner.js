@@ -587,7 +587,9 @@ export function createMainChatSettingsPresentationOwner({
             }
         };
 
-        safeSet('userName', globalSettings.userName || '用户');
+        if (!typedSettingsProjectionActive) {
+            safeSet('userName', globalSettings.userName || '用户');
+        }
 
         const borderColor = globalSettings.userAvatarBorderColor || '#3d5a80';
         safeSet('userAvatarBorderColor', borderColor);
@@ -599,14 +601,18 @@ export function createMainChatSettingsPresentationOwner({
 
         safeCheck('userUseThemeColorsInChat', globalSettings.userUseThemeColorsInChat);
 
-        const completedUrl = getSettingsManager().completeVcpUrl(globalSettings.vcpServerUrl || '');
-        safeSet('vcpServerUrl', completedUrl);
+        if (!typedSettingsProjectionActive) {
+            const completedUrl = getSettingsManager().completeVcpUrl(globalSettings.vcpServerUrl || '');
+            safeSet('vcpServerUrl', completedUrl);
+        }
         safeSet('vcpApiKey', globalSettings.vcpApiKey || '');
         safeSet('fileKey', globalSettings.fileKey || '');
         safeSet('vcpLogUrl', globalSettings.vcpLogUrl || '');
         safeSet('vcpLogKey', globalSettings.vcpLogKey || '');
-        safeSet('topicSummaryModel', globalSettings.topicSummaryModel || '');
-        safeSet('continueWritingPrompt', globalSettings.continueWritingPrompt || '请继续');
+        if (!typedSettingsProjectionActive) {
+            safeSet('topicSummaryModel', globalSettings.topicSummaryModel || '');
+            safeSet('continueWritingPrompt', globalSettings.continueWritingPrompt || '请继续');
+        }
         safeSet('flowlockContinueDelay', globalSettings.flowlockContinueDelay ?? 5);
         safeCheck('voiceModeLocal', (globalSettings.voiceMode || 'local') !== 'network');
         safeCheck('voiceModeNetwork', (globalSettings.voiceMode || 'local') === 'network');
