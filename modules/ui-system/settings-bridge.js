@@ -148,6 +148,7 @@ const GLOBAL_CATEGORY_ICONS = Object.freeze({
 // Global settings modal: control enhancement, autosave status, and the
 // source-equivalent SettingsRoot shell.
 function enhanceGlobalSettings(root, form) {
+    console.log('[settings-bridge] enhanceGlobalSettings called', { root: !!root, form: !!form });
     mountCanonicalSettingsRows(form);
     removeLegacySubsectionHeadings(form);
     mountHarnessInputWrappers(form);
@@ -685,7 +686,11 @@ function restoreFormIcons(root) {
 // The original form sections remain the business source of truth; only the
 // shell chrome (nav/header/options) is reconstructed here.
 function mountSettingsShell(root) {
-    if (root.querySelector('.vcp-harness-settings-panel')) return;
+    console.log('[settings-bridge] mountSettingsShell called');
+    if (root.querySelector('.vcp-harness-settings-panel')) {
+        console.log('[settings-bridge] panel already mounted, skipping');
+        return;
+    }
     const panel = root.querySelector('.vcp-settings-source-panel');
     const layout = root.querySelector('.vcp-settings-source-layout');
     const nav = root.querySelector('.vcp-settings-source-nav');
@@ -694,7 +699,9 @@ function mountSettingsShell(root) {
     const form = root.querySelector('#globalSettingsForm');
     const title = root.querySelector('.vcp-settings-source-title');
     const close = root.querySelector('.close-button');
+    console.log('[settings-bridge] elements found:', { panel: !!panel, layout: !!layout, nav: !!nav, listHost: !!listHost, content: !!content, form: !!form, title: !!title, close: !!close });
     if (!panel || !layout || !nav || !content || !form || !title || !close) {
+        console.error('[settings-bridge] required elements missing!');
         return;
     }
 
@@ -799,7 +806,11 @@ function mountSettingsShell(root) {
         label.textContent = item.label;
         copy.append(label);
         row.append(icon, copy);
-        row.addEventListener('click', () => activateSection(item.value));
+        console.log('[settings-bridge] binding click event for:', item.value);
+        row.addEventListener('click', () => {
+            console.log('[settings-bridge] click event fired for:', item.value);
+            activateSection(item.value);
+        });
         row.addEventListener('keydown', event => {
             if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
             event.preventDefault();
@@ -812,12 +823,14 @@ function mountSettingsShell(root) {
         return row;
     });
     const renderList = () => {
+        console.log('[settings-bridge] renderList called, state.active:', state.active);
         state.listHost.setAttribute('aria-label', '全局设置分类');
         rows.forEach(row => {
             const value = row.dataset.section;
             const item = state.meta.find(candidate => candidate.value === value);
             if (!item) return;
             const selected = item.value === state.active;
+            console.log(`[settings-bridge] row ${value}: selected=${selected}`);
             row.classList.toggle('is-active', selected);
             row.classList.toggle('active', selected);
             row.dataset.state = selected ? 'selected' : 'idle';
@@ -825,12 +838,13 @@ function mountSettingsShell(root) {
         });
         state.meta.forEach(item => {
             const section = root.querySelector(`#section-${item.value}`);
-            if (!section) return;
-            // The active section is derived from the same state as the nav.
-            // Re-assert it on every render so stale classes from a reused
-            // modal or a bootstrap refresh cannot leave the two columns out
-            // of sync.
-            section.classList.toggle('active', item.value === state.active);
+            if (!section) {
+                console.warn(`[settings-bridge] section not found: #section-${item.value}`);
+                return;
+            }
+            const isActive = item.value === state.active;
+            console.log(`[settings-bridge] section ${item.value}: isActive=${isActive}`);
+            section.classList.toggle('active', isActive);
             section.removeAttribute('role');
             section.removeAttribute('aria-labelledby');
             section.removeAttribute('aria-hidden');
@@ -838,8 +852,14 @@ function mountSettingsShell(root) {
     };
 
     const activateSection = (value) => {
-        if (!state.meta.some(item => item.value === value)) return;
+        console.log('[settings-bridge] activateSection called with:', value);
+        console.log('[settings-bridge] state.meta:', state.meta);
+        if (!state.meta.some(item => item.value === value)) {
+            console.warn('[settings-bridge] value not found in meta!');
+            return;
+        }
         state.active = value;
+        console.log('[settings-bridge] state.active updated to:', state.active);
         renderList();
     };
 
@@ -858,17 +878,23 @@ function cleanupDisconnectedControllers() {
 }
 
 function refresh() {
+    console.log('[settings-bridge] refresh() called');
     refreshQueued = false;
     if (destroyed) return;
     ensurePresentationScope();
     cleanupDisconnectedControllers();
     const globalSettingsModal = syncGlobalSettingsHost();
+    console.log('[settings-bridge] refresh - globalSettingsModal:', !!globalSettingsModal);
     if (shouldEnhanceSidebarSettings()) {
         document.querySelectorAll('#agentSettingsForm, #groupSettingsForm').forEach(enhanceForm);
     }
     if (hasGlobalSettingsSurface()) {
+        console.log('[settings-bridge] hasGlobalSettingsSurface = true');
         const form = globalSettingsModal?.querySelector('#globalSettingsForm');
+        console.log('[settings-bridge] form found:', !!form);
         if (globalSettingsModal && form) enhanceGlobalSettings(globalSettingsModal, form);
+    } else {
+        console.log('[settings-bridge] hasGlobalSettingsSurface = false');
     }
 }
 
