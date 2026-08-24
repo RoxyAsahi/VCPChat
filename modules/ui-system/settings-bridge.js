@@ -129,6 +129,12 @@ function mountTypedSettingsConsumer(root) {
             ['enableContextSanitizer', 'enableContextSanitizer', 'checked'],
             ['contextSanitizerDepth', 'contextSanitizerDepth'],
             ['enableAiMessageButtons', 'enableAiMessageButtons', 'checked'],
+            ['flowlockContinueDelay', 'flowlockContinueDelay'],
+            ['enableMiddleClickQuickAction', 'enableMiddleClickQuickAction', 'checked'],
+            ['middleClickQuickAction', 'middleClickQuickAction'],
+            ['enableMiddleClickAdvanced', 'enableMiddleClickAdvanced', 'checked'],
+            ['middleClickAdvancedDelay', 'middleClickAdvancedDelay'],
+            ['enableRegenerateConfirmation', 'enableRegenerateConfirmation', 'checked'],
             ['showHomeVisualBrand', 'showHomeVisualBrand', 'checked'],
             ['homeVisualTagline', 'homeVisualTagline'],
             ['appearanceDensity', 'appearanceProfile.density'],
@@ -178,6 +184,13 @@ function mountTypedSettingsConsumer(root) {
         const sanitizerContainer = form.querySelector('#contextSanitizerDepthContainer');
         const sanitizerEnabled = settings.enableContextSanitizer === true;
         if (sanitizerContainer) sanitizerContainer.style.display = sanitizerEnabled ? 'block' : 'none';
+        const middleClickEnabled = settings.enableMiddleClickQuickAction === true;
+        const quickActionContainer = form.querySelector('#middleClickQuickActionContainer');
+        const advancedContainer = form.querySelector('#middleClickAdvancedContainer');
+        const advancedSettings = form.querySelector('#middleClickAdvancedSettings');
+        if (quickActionContainer) quickActionContainer.style.display = middleClickEnabled ? 'block' : 'none';
+        if (advancedContainer) advancedContainer.style.display = middleClickEnabled ? 'block' : 'none';
+        if (advancedSettings) advancedSettings.style.display = settings.enableMiddleClickAdvanced === true ? 'block' : 'none';
     };
     const release = service.state.subscribe(apply);
     ensurePresentationScope()?.own(release, 'typed-settings-consumer', 'ui-presentation');

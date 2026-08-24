@@ -615,7 +615,7 @@ export function createMainChatSettingsPresentationOwner({
             safeSet('topicSummaryModel', globalSettings.topicSummaryModel || '');
             safeSet('continueWritingPrompt', globalSettings.continueWritingPrompt || '请继续');
         }
-        safeSet('flowlockContinueDelay', globalSettings.flowlockContinueDelay ?? 5);
+        if (!typedSettingsProjectionActive) safeSet('flowlockContinueDelay', globalSettings.flowlockContinueDelay ?? 5);
         if (!typedSettingsProjectionActive) {
             safeCheck('voiceModeLocal', (globalSettings.voiceMode || 'local') !== 'network');
             safeCheck('voiceModeNetwork', (globalSettings.voiceMode || 'local') === 'network');
@@ -811,11 +811,13 @@ export function createMainChatSettingsPresentationOwner({
 
             safeCheck('enableAiMessageButtons', globalSettings.enableAiMessageButtons !== false);
         }
-        safeCheck('enableMiddleClickQuickAction', globalSettings.enableMiddleClickQuickAction === true);
-        safeSet('middleClickQuickAction', globalSettings.middleClickQuickAction || '');
-        safeCheck('enableMiddleClickAdvanced', globalSettings.enableMiddleClickAdvanced === true);
-        safeSet('middleClickAdvancedDelay', Math.max(1000, globalSettings.middleClickAdvancedDelay ?? 1000));
-        safeCheck('enableRegenerateConfirmation', globalSettings.enableRegenerateConfirmation !== false);
+        if (!typedSettingsProjectionActive) {
+            safeCheck('enableMiddleClickQuickAction', globalSettings.enableMiddleClickQuickAction === true);
+            safeSet('middleClickQuickAction', globalSettings.middleClickQuickAction || '');
+            safeCheck('enableMiddleClickAdvanced', globalSettings.enableMiddleClickAdvanced === true);
+            safeSet('middleClickAdvancedDelay', Math.max(1000, globalSettings.middleClickAdvancedDelay ?? 1000));
+            safeCheck('enableRegenerateConfirmation', globalSettings.enableRegenerateConfirmation !== false);
+        }
 
         if (chatAPI?.getRustAssistantConfig) {
             try {
@@ -892,12 +894,14 @@ export function createMainChatSettingsPresentationOwner({
         }
 
         // Visibility toggles
-        const middleClickContainer = document.getElementById('middleClickQuickActionContainer');
-        if (middleClickContainer) middleClickContainer.style.display = globalSettings.enableMiddleClickQuickAction ? 'block' : 'none';
-        const middleClickAdvancedContainer = document.getElementById('middleClickAdvancedContainer');
-        if (middleClickAdvancedContainer) middleClickAdvancedContainer.style.display = globalSettings.enableMiddleClickQuickAction ? 'block' : 'none';
-        const middleClickAdvancedSettings = document.getElementById('middleClickAdvancedSettings');
-        if (middleClickAdvancedSettings) middleClickAdvancedSettings.style.display = globalSettings.enableMiddleClickAdvanced ? 'block' : 'none';
+        if (!typedSettingsProjectionActive) {
+            const middleClickContainer = document.getElementById('middleClickQuickActionContainer');
+            if (middleClickContainer) middleClickContainer.style.display = globalSettings.enableMiddleClickQuickAction ? 'block' : 'none';
+            const middleClickAdvancedContainer = document.getElementById('middleClickAdvancedContainer');
+            if (middleClickAdvancedContainer) middleClickAdvancedContainer.style.display = globalSettings.enableMiddleClickQuickAction ? 'block' : 'none';
+            const middleClickAdvancedSettings = document.getElementById('middleClickAdvancedSettings');
+            if (middleClickAdvancedSettings) middleClickAdvancedSettings.style.display = globalSettings.enableMiddleClickAdvanced ? 'block' : 'none';
+        }
         return true;
     }
 

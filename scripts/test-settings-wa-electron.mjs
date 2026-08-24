@@ -402,6 +402,12 @@ try {
                 enableContextSanitizer: true,
                 contextSanitizerDepth: 7,
                 enableAiMessageButtons: false,
+                flowlockContinueDelay: 12,
+                enableMiddleClickQuickAction: true,
+                middleClickQuickAction: 'edit',
+                enableMiddleClickAdvanced: true,
+                middleClickAdvancedDelay: 1800,
+                enableRegenerateConfirmation: false,
                 chatFontPreset: 'serif',
                 appearanceProfile: {
                     density: 'compact',
@@ -442,6 +448,14 @@ try {
     assert.equal(await page.$eval('#contextSanitizerDepth', node => node.value), '7', 'clean sanitizer depth consumes typed Settings snapshot');
     assert.equal(await page.$eval('#contextSanitizerDepthContainer', node => getComputedStyle(node).display), 'block', 'sanitizer depth visibility follows typed snapshot');
     assert.equal(await page.$eval('#enableAiMessageButtons', node => node.checked), false, 'clean AI buttons checkbox consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#flowlockContinueDelay', node => node.value), '12', 'clean flowlock delay consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#enableMiddleClickQuickAction', node => node.checked), true, 'clean middle-click checkbox consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#middleClickQuickAction', node => node.value), 'edit', 'clean middle-click action consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#middleClickQuickActionContainer', node => getComputedStyle(node).display), 'block', 'middle-click action visibility follows typed snapshot');
+    assert.equal(await page.$eval('#enableMiddleClickAdvanced', node => node.checked), true, 'clean advanced middle-click checkbox consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#middleClickAdvancedDelay', node => node.value), '1800', 'clean advanced middle-click delay consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#middleClickAdvancedSettings', node => getComputedStyle(node).display), 'block', 'advanced middle-click visibility follows typed snapshot');
+    assert.equal(await page.$eval('#enableRegenerateConfirmation', node => node.checked), false, 'clean regenerate confirmation consumes typed Settings snapshot');
     assert.equal(await page.$eval('#chatFontPreset', node => node.value), 'serif', 'clean select control consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceDensity', node => node.value), 'compact', 'clean appearance density consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceRadius', node => node.value), 'round', 'clean appearance radius consumes typed Settings snapshot');
