@@ -569,8 +569,14 @@ export function createMainChatSettingsPresentationOwner({
         // owner responsible for the remaining business controls, but do not
         // overwrite clean snapshots or dirty drafts that the typed consumer
         // deliberately protects.
+        // Service assembly alone is not consumer readiness.  The bridge may
+        // expose a typed service before SettingsRoot has mounted (or after a
+        // partial mount failure); in that window the legacy owner must still
+        // populate the canonical business controls.
+        const settingsRoot = document.getElementById('globalSettingsModal');
         const typedSettingsProjectionActive = Boolean(
             windowRef?.VCPUISettingsBridge?.getTypedService?.()
+            && settingsRoot?.dataset?.vcpSettingsRevision !== undefined
         );
         const syncRustDebugPanelVisibility = () => {
             const rustDebugModeEl = document.getElementById('rustDebugMode');
@@ -790,7 +796,7 @@ export function createMainChatSettingsPresentationOwner({
         }
 
         // 加载论坛配置并填充管理员账号/密码
-        if (!windowRef?.VCPUISettingsBridge?.getForumConfigService?.()) {
+        if (!typedSettingsProjectionActive) {
             try {
                 const forumConfig = await chatAPI.loadForumConfig();
                 if (!isCurrent(token)) return false;
@@ -834,7 +840,9 @@ export function createMainChatSettingsPresentationOwner({
             safeCheck('enableRegenerateConfirmation', globalSettings.enableRegenerateConfirmation !== false);
         }
 
-        const typedRustAssistantService = windowRef?.VCPUISettingsBridge?.getRustAssistantService?.();
+        const typedRustAssistantService = typedSettingsProjectionActive
+            ? windowRef?.VCPUISettingsBridge?.getRustAssistantService?.()
+            : null;
         if (!typedRustAssistantService && chatAPI?.getRustAssistantConfig) {
             try {
                 const rustConfig = await chatAPI.getRustAssistantConfig();
@@ -866,7 +874,7 @@ export function createMainChatSettingsPresentationOwner({
             }
         }
 
-        if (!windowRef?.VCPUISettingsBridge?.getAssistantRuntimeService?.() && chatAPI?.getAssistantRuntimeStatus && document.getElementById('rustDebugMode')?.checked) {
+        if (!typedSettingsProjectionActive && chatAPI?.getAssistantRuntimeStatus && document.getElementById('rustDebugMode')?.checked) {
             try {
                 const runtime = await chatAPI.getAssistantRuntimeStatus();
                 if (!isCurrent(token)) return false;
