@@ -466,6 +466,10 @@ test('统一加载桥只加载现有插件管理器返回的已启用前端插�
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     assert.deepEqual(appendedScripts, ['VCPDistributedServer/Plugin/VChatDynamicWallpaper/plugin.js']);
+    assert.equal(window.VCPFrontendPlugins.loaded, true);
+    assert.equal(window.VCPFrontendPlugins.results[0].id, 'VChatDynamicWallpaper');
+    const ready = await window.VCPFrontendPlugins.ready;
+    assert.equal(ready.results[0].loaded, true);
     assert.equal(window.document.querySelectorAll('script[data-vcp-plugin]').length, 1);
     assert.equal(window.document.querySelectorAll('link[data-vcp-plugin]').length, 1);
     assert.equal(window.document.querySelector('[data-vcp-plugin="VChatAutoTTS"]'), null);

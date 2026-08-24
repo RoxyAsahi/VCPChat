@@ -529,12 +529,20 @@ try {
     assert.match(brandAssets.computedFamily, /VCP Orbitron/, `VCPChat wordmark resolved to the wrong family: ${JSON.stringify(brandAssets)}`);
     assert.ok(brandAssets.novaWidth > 0 && brandAssets.novaHeight > 0, `Nova launch asset failed to decode: ${JSON.stringify(brandAssets)}`);
     // Renderer readiness does not imply that the asynchronous frontend-plugin
-    // IPC scan has completed. Audit the plugin after its own readiness
-    // contract instead of racing it under a busy CI/Electron host.
+    // IPC scan has completed. Wait for the loader's terminal scan contract,
+    // then report a disabled/missing plugin immediately instead of leaving a
+    // long opaque registry wait behind a busy Electron host.
     await page.waitForFunction(
-        () => Boolean(window.VCPFrontendPlugins?.get?.('vchat-dynamic-wallpaper')),
+        () => window.VCPFrontendPlugins?.loaded === true,
         { timeout: timeoutMs }
     );
+    const frontendPluginState = await page.evaluate(() => ({
+        loaded: window.VCPFrontendPlugins?.loaded === true,
+        results: window.VCPFrontendPlugins?.results || [],
+        dynamicWallpaper: Boolean(window.VCPFrontendPlugins?.get?.('vchat-dynamic-wallpaper')),
+    }));
+    assert.equal(frontendPluginState.dynamicWallpaper, true,
+        `dynamic wallpaper frontend plugin was not registered after scan: ${JSON.stringify(frontendPluginState)}`);
     const nextWallpaperIntegration = await page.evaluate(() => ({
         titlePanelPresent: Boolean(document.querySelector('.chat-header #vchat-dynamic-wallpaper-panel')),
         titleGroupPresent: Boolean(document.querySelector('.chat-header #vchat-wallpaper-title-group')),

@@ -294,6 +294,9 @@
         </button>`).join('');
 
     function readEffectiveTheme() {
+        const snapshot = getUiManager()?.getThemeSnapshot?.();
+        const effective = snapshot?.value?.effective;
+        if (effective === 'light' || effective === 'dark') return effective;
         return document.body.classList.contains('light-theme') ? 'light' : 'dark';
     }
 

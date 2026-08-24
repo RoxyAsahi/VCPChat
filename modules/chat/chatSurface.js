@@ -28,9 +28,14 @@ export function createChatSurface({ root, renderer, repository, focusTarget = nu
             return { history, stale: false };
         },
         focus() { if (!disposed) (focusTarget || root).focus?.(); },
-        mountSlot(slot, slotRoot, snapshot = {}) {
+        mountSlot(slot, slotRoot, snapshot = {}, options = {}) {
             if (disposed || !slots) return;
-            mountedSlotDisposers.push(...slots.mount(slot, slotRoot, { mode, ...(presentationState?.getSnapshot?.() || {}), ...snapshot }));
+            mountedSlotDisposers.push(...slots.mount(
+                slot,
+                slotRoot,
+                { mode, ...(presentationState?.getSnapshot?.() || {}), ...snapshot },
+                options,
+            ));
         },
         sendMessage(request) {
             if (!operations) return Promise.reject(new Error('ChatSurface has no send capability'));
@@ -46,7 +51,8 @@ export function createChatSurface({ root, renderer, repository, focusTarget = nu
             // projection cannot race an already-destroyed Surface root.
             await operations?.dispose?.();
             await domRenderer.dispose();
-            mountedSlotDisposers.splice(0).reverse().forEach(disposeSlot => disposeSlot());
+            const disposers = mountedSlotDisposers.splice(0).reverse();
+            for (const disposeSlot of disposers) await disposeSlot();
             delete root.dataset.chatSurface;
             root.removeAttribute('aria-live');
         }

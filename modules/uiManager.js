@@ -556,6 +556,12 @@ const uiManager = (() => {
         },
         applyTheme: applyTheme, // Expose applyTheme if needed externally
         getThemeState: () => themeChannel?.get() || Object.freeze({ ready: true, effective: document.body.classList.contains('dark-theme') ? 'dark' : 'light' }),
+        getThemeSnapshot: () => themeChannel?.getSnapshot?.() || Object.freeze({
+            name: 'theme',
+            value: Object.freeze({ ready: true, effective: document.body.classList.contains('dark-theme') ? 'dark' : 'light' }),
+            revision: 0,
+            source: 'dom-fallback',
+        }),
         subscribeTheme: (listener, options) => themeChannel?.subscribe(listener, options) || (() => false),
         switchToTab: switchToTab // Expose switchToTab for external use
         ,dispose: async () => {

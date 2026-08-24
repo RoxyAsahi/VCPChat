@@ -4,8 +4,13 @@
     if (window.VCPFrontendPlugins?.loaderStarted) return;
 
     const registry = new Map();
+    let resolveReady;
+    const ready = new Promise(resolve => { resolveReady = resolve; });
     const api = {
         loaderStarted: true,
+        loaded: false,
+        results: [],
+        ready,
         registry,
         register(id, instance) {
             if (!id || registry.has(id)) return false;
@@ -61,6 +66,9 @@
         document.dispatchEvent(new CustomEvent('vcp-frontend-plugins-loaded', {
             detail: { results }
         }));
+        api.results = results.slice();
+        api.loaded = true;
+        resolveReady(Object.freeze({ results: Object.freeze(results.slice()) }));
     }
 
     if (document.readyState === 'loading') {

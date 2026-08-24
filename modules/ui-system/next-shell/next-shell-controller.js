@@ -772,6 +772,7 @@
             toggleTheme: () => window.MainChatCommands?.toggleTheme?.(),
             syncAppearance: () => window.VCPAppearanceStudio?.syncAccountMenuValue?.(),
             setIcon: (element, icon) => window.VCPIcons?.set?.(element, icon),
+            getThemeSnapshot: () => window.uiManager?.getThemeSnapshot?.() || null,
             subscribeTheme: (listener, options) => window.uiManager?.subscribeTheme?.(listener, options),
             escapeDispatcher,
         });
@@ -926,6 +927,7 @@
             manager: capabilities.manager,
             presentation: capabilities.presentation || null,
             settings: capabilities.settings || null,
+            slots: capabilities.slots || null,
         });
         return () => {
             if (chatCapabilities?.repository === capabilities.repository) chatCapabilities = null;

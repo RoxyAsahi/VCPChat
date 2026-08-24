@@ -1,4 +1,5 @@
 import { createChatOperations } from '../chat/chatOperation.js';
+import { createChatSurfaceSlots } from '../chat/chatSurfaceSlots.js';
 import { createMainChatSurfaceAdapter } from './mainChatSurfaceAdapter.js';
 
 /**
@@ -29,7 +30,28 @@ export function createMainChatComposition({
     settings,
     createInternalRenderer,
     disposeCapabilities,
+    composerSlotRoot = null,
+    slotOwner = null,
+    composerControls = null,
 }) {
+    const slots = createChatSurfaceSlots();
+    const registerRelocatedControl = (id, element, priority) => {
+        if (!element) return;
+        slots.register('chat.composer.leading', id, (host) => {
+            const parent = element.parentNode;
+            const next = element.nextSibling;
+            host.style.display = 'contents';
+            host.dataset.chatSlotContribution = id;
+            host.appendChild(element);
+            return () => {
+                if (!parent) return;
+                if (next && next.parentNode === parent) parent.insertBefore(element, next);
+                else parent.appendChild(element);
+            };
+        }, { owner: slotOwner, priority, scope: 'session-maybe' });
+    };
+    registerRelocatedControl('core-attachment', composerControls?.attachFileBtn, 0);
+    registerRelocatedControl('core-emoticon', composerControls?.emoticonTriggerBtn, 10);
     const adapter = createMainChatSurfaceAdapter({
         root,
         renderer: messageRenderer,
@@ -52,6 +74,9 @@ export function createMainChatComposition({
             dispatchTerminal,
             notifySendStateChanged,
         },
+        slots,
+        composerSlotRoot,
+        slotOwner,
         disposeRenderer: async () => {
             await messageRenderer.disposeRootResources(root);
             messageRenderer.disposeRendererResources();
@@ -70,6 +95,11 @@ export function createMainChatComposition({
         manager: chatManager,
         presentation: presentationState,
         settings,
+        slots: Object.freeze({
+            register: slots.register,
+            describe: slots.describe,
+            diagnostics: () => slots.diagnostics(),
+        }),
     }) || null;
 
     messageRenderer.setContextMenuDependencies({
@@ -82,6 +112,7 @@ export function createMainChatComposition({
         adapter,
         surface: adapter.surface,
         domRenderer: adapter.domRenderer,
+        slots,
         releaseCapabilities: release,
     });
 }

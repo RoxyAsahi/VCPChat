@@ -28,7 +28,7 @@ function mountStandaloneChat(container, context = {}) {
         return () => { delete host.dataset.presentationMode; delete host.dataset.skinAccent; };
     }, update: (host, state) => { host.dataset.presentationMode = state.mode; } });
     const themePlugin = createChatThemePlugin({ id: 'surface-default', tokens: { accent: 'var(--vcp-accent-color)', surface: 'var(--vcp-surface-color)' } });
-    const pluginLoader = createChatPluginLoader({ state: presentationState, slots });
+    const pluginLoader = createChatPluginLoader({ state: presentationState, slots, owner: scope });
     const skinHost = container.querySelector('.vcp-standalone-chat > header');
     const uninstallBadge = pluginLoader.install({
         id: 'readonly-badge', apiVersion: 1,
