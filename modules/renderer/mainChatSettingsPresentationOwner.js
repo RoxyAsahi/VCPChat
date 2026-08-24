@@ -573,15 +573,14 @@ export function createMainChatSettingsPresentationOwner({
         // expose a typed service before SettingsRoot has mounted (or after a
         // partial mount failure); in that window the legacy owner must still
         // populate the canonical business controls.
-        const settingsRoot = document.getElementById('globalSettingsModal');
         let typedSettingsProjectionActive = Boolean(
             windowRef?.VCPUISettingsBridge?.getTypedService?.()
-            && settingsRoot?.dataset?.vcpSettingsRevision !== undefined
+            && document.getElementById('globalSettingsModal')?.dataset?.vcpSettingsRevision !== undefined
         );
         const refreshTypedSettingsProjectionState = () => {
             typedSettingsProjectionActive = Boolean(
                 windowRef?.VCPUISettingsBridge?.getTypedService?.()
-                && settingsRoot?.dataset?.vcpSettingsRevision !== undefined
+                && document.getElementById('globalSettingsModal')?.dataset?.vcpSettingsRevision !== undefined
             );
         };
         const syncRustDebugPanelVisibility = () => {

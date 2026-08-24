@@ -315,3 +315,5 @@ R2-02 marker teardown 修复（2026-08-24）：typed consumer disposer 现在同
 R2-02 partial-root 修复（2026-08-24）：typed projection 只有在 `#globalSettingsForm` 存在时才写入 readiness marker；malformed/partial SettingsRoot 不会被 legacy owner 误判为已接管。Settings Electron gate 与 UIUX type check 通过。
 
 R2-02 async-readiness 修复（2026-08-24）：`syncGlobalSettingsToUI()` 在 Forum IPC 与 assistant options 两个 `await` 边界重新读取 typed consumer readiness，避免 consumer 中途挂载后 legacy owner 继续用过期状态覆盖 typed projection。owner 单测、Electron Settings gate 与 UIUX type check 通过。
+
+R2-02 root-identity 修复（2026-08-24）：readiness refresh 不再捕获旧 SettingsRoot 引用；每次跨 await 检查都重新解析当前 modal root，避免 reload/reopen generation 使用已替换 DOM 的 marker。owner 单测、10-cycle Electron Settings journey 与 UIUX type check 通过。
