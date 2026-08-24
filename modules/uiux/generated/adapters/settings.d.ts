@@ -8,6 +8,8 @@ export interface SettingsSaveResult {
 export interface SettingsUiService {
     readonly state: UiReadable<SettingsState>;
     readonly save: UiCommand<SettingsPatch, SettingsSaveResult>;
+    /** Invalidate an in-flight command whose UI owner reached a terminal timeout. */
+    readonly cancelPendingSaves?: () => void;
     readonly dispose?: UiDisposer;
 }
 export interface SettingsUiAdapterInput {

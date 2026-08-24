@@ -308,7 +308,16 @@ async function saveGlobalSettings(deps, settingsForm) {
     const saveOperation = typedSettingsService?.save?.execute
         ? typedSettingsService.save.execute(newSettings)
         : chatAPI.saveSettings(newSettings);
-    const result = await awaitWithTimeout(saveOperation, deps.saveTimeoutMs);
+    let result;
+    try {
+        result = await awaitWithTimeout(saveOperation, deps.saveTimeoutMs);
+    } catch (error) {
+        // A bounded UI timeout is a terminal owner transition. Invalidate the
+        // typed command generation so a late IPC result cannot republish the
+        // timed-out patch into SettingsRoot.
+        typedSettingsService?.cancelPendingSaves?.();
+        throw error;
+    }
     if (result?.success) {
         if (chatAPI?.saveRustAssistantConfig) {
             const rustService = window.VCPUISettingsBridge?.getRustAssistantService?.();

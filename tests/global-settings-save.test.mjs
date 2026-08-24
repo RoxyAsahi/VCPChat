@@ -91,15 +91,19 @@ test('global settings saves the server URL once with canonical presentation', as
         let typedForumPayload;
         let forumShouldFail = false;
         let forumShouldThrow = false;
+        let typedShouldHang = false;
+        let typedCancelled = false;
         dom.window.VCPUISettingsBridge = {
             getTypedService: () => ({
                 save: {
                     execute: async payload => {
                         typedCalls += 1;
                         typedPayload = payload;
+                        if (typedShouldHang) return new Promise(() => {});
                         return { success: true };
                     },
                 },
+                cancelPendingSaves: () => { typedCancelled = true; },
             }),
             getRustAssistantService: () => ({
                 save: {
@@ -135,12 +139,24 @@ test('global settings saves the server URL once with canonical presentation', as
         assert.equal(typedForumCalls, 1, 'forum settings save delegates to the typed Forum service command');
         assert.equal(typedForumPayload?.username, 'forum-admin');
 
+        typedShouldHang = true;
+        deps.saveTimeoutMs = 5;
+        await assert.rejects(
+            handleSaveGlobalSettings(event, deps),
+            /保存设置超时/,
+            'a typed save timeout must become a recoverable terminal state'
+        );
+        assert.equal(typedCancelled, true, 'typed timeout invalidates pending publication rights');
+        assert.equal(saveResults.at(-1)?.success, false, 'typed timeout publishes a retryable terminal state');
+        typedShouldHang = false;
+        delete deps.saveTimeoutMs;
+
         croppedFile = { name: 'avatar.png', type: 'image/png', arrayBuffer: async () => new ArrayBuffer(0) };
         dom.window.chatAPI.saveUserAvatar = async () => ({ success: false, error: 'avatar-denied' });
         await handleSaveGlobalSettings(event, deps);
         assert.equal(saveResults.at(-1)?.success, false, 'avatar command failure publishes a retryable terminal state');
         assert.match(saveResults.at(-1)?.error || '', /avatar-denied/, 'avatar command error reaches the SettingsRoot retry UI');
-        assert.equal(typedCalls, 1, 'avatar failure stops the transaction before global settings persistence');
+        assert.equal(typedCalls, 2, 'avatar failure stops the transaction before a second global settings persistence');
         croppedFile = null;
         delete dom.window.chatAPI.saveUserAvatar;
 
@@ -174,12 +190,12 @@ test('global settings saves the server URL once with canonical presentation', as
             'a permanently pending save must become a recoverable terminal state'
         );
         assert.equal(form.dataset.globalSettingsSaving, undefined, 'timeout must release the submit lock');
-        assert.equal(saveResults.length, 7, 'each save attempt publishes exactly one terminal event');
+        assert.equal(saveResults.length, 8, 'each save attempt publishes exactly one terminal event');
         assert.equal(saveResults.at(-1)?.success, false, 'timeout publishes a failure terminal state to autosave');
         assert.match(saveResults.at(-1)?.error || '', /保存设置超时/, 'timeout error is available to retry UI');
         resolveLate({ success: true });
         await new Promise(resolve => setImmediate(resolve));
-        assert.equal(saveResults.length, 7, 'late IPC success cannot resurrect a timed-out UI save');
+        assert.equal(saveResults.length, 8, 'late IPC success cannot resurrect a timed-out UI save');
     } finally {
         for (const [name, value] of Object.entries(previousGlobals)) {
             if (value === undefined) delete globalThis[name];

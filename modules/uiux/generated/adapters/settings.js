@@ -89,6 +89,10 @@ export function createSettingsUiService(input) {
             },
         },
     };
+    Object.defineProperty(service, 'cancelPendingSaves', {
+        value: () => { saveGeneration += 1; },
+        enumerable: false,
+    });
     // The adapter is itself a UI-owned resource when external settings updates
     // exist; callers should register this disposer with their UiScope.
     Object.defineProperty(service, 'dispose', {
