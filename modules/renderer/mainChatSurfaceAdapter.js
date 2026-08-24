@@ -94,6 +94,9 @@ export function createMainChatSurfaceAdapter({
     presentationState,
     renderDependencies,
     streamServices,
+    slots = null,
+    composerSlotRoot = null,
+    slotOwner = null,
     disposeRenderer,
     ownerWindow = root?.ownerDocument?.defaultView,
     onDispose = null,
@@ -108,8 +111,12 @@ export function createMainChatSurfaceAdapter({
         mode: 'interactive',
         operations,
         presentationState,
+        slots,
         disposeRenderer,
     });
+    if (slots && composerSlotRoot) {
+        surface.mountSlot('chat.composer.leading', composerSlotRoot, { canSend: true }, { scope: slotOwner });
+    }
     renderer.initializeMessageRenderer({ ...renderDependencies, chatDomRenderer: surface.renderer });
     const streamCapabilities = createStreamCapabilities(root, streamServices);
     const bridge = createVcpStreamBridge({

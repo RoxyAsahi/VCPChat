@@ -22,9 +22,14 @@ test('appearance and theme expose explicit authoritative subscriptions', async (
 
     window.eval(source('modules/uiManager.js'));
     const themes = [];
+    const initialThemeSnapshot = window.uiManager.getThemeSnapshot();
+    assert.equal(initialThemeSnapshot.name, 'theme');
+    assert.equal(initialThemeSnapshot.value.effective, 'light');
+    assert.equal(Object.isFrozen(initialThemeSnapshot), true);
     const unsubscribeTheme = window.uiManager.subscribeTheme(state => themes.push(state.effective));
     window.uiManager.applyTheme('dark');
     assert.deepEqual(themes, ['light', 'dark']);
+    assert.equal(window.uiManager.getThemeSnapshot().value.effective, 'dark');
     unsubscribeTheme();
     assert.deepEqual(
         Array.from(window.VCPStateChannels.diagnostics(), item => String(item.name)).sort(),

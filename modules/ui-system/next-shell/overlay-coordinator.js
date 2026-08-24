@@ -23,7 +23,7 @@
             this.hideEmbeddedView = options.hideEmbeddedView || (() => Promise.resolve());
             this.reconcileEmbeddedView = options.reconcileEmbeddedView || (() => {});
             this.warn = options.warn || ((...args) => console.warn(...args));
-            this.owners = new Set();
+            this.owners = new Map();
             this.modalOwners = new Map();
             this.scope = null;
             this.abortController = null;
@@ -55,10 +55,14 @@
             this.document.dispatchEvent(new CustomEventConstructor('next-ui-overlay-changed', { detail: { active } }));
         }
 
-        async acquire(owner = Symbol('next-ui-overlay')) {
+        async acquire(owner = Symbol('next-ui-overlay'), options = {}) {
             if (!this.mounted) throw new Error('OverlayCoordinator must be mounted before acquiring a lease.');
             const wasEmpty = this.owners.size === 0;
-            this.owners.add(owner);
+            const activeElement = this.document.activeElement;
+            const focus = options.restoreFocus === false || !activeElement || activeElement === this.document.body
+                ? null
+                : activeElement;
+            this.owners.set(owner, { focus, restoreFocus: options.restoreFocus !== false });
             if (wasEmpty) this.dispatchState(true);
             try {
                 await this.hideEmbeddedView();
@@ -76,9 +80,15 @@
         }
 
         release(owner) {
-            if (!this.owners.delete(owner)) return false;
-            if (this.owners.size === 0) this.dispatchState(false);
+            const record = this.owners.get(owner);
+            if (!record) return false;
+            this.owners.delete(owner);
+            const becameEmpty = this.owners.size === 0;
+            if (becameEmpty) this.dispatchState(false);
             this.reconcileEmbeddedView();
+            if (becameEmpty && record.restoreFocus && record.focus?.isConnected) {
+                record.focus.focus({ preventScroll: true });
+            }
             return true;
         }
 
@@ -93,7 +103,7 @@
                     root: event.detail?.root || this.document.getElementById(modalId) || null,
                     generation: event.detail?.generation ?? null,
                 });
-                void this.acquire(owner).catch(error => {
+                void this.acquire(owner, { restoreFocus: true }).catch(error => {
                     if (this.modalOwners.get(modalId)?.owner === owner) this.modalOwners.delete(modalId);
                     this.warn(`[NextUI] Failed to acquire overlay for modal ${modalId}:`, error);
                 });
@@ -118,7 +128,7 @@
             return Object.freeze({
                 mounted: this.mounted,
                 active: this.active,
-                owners: Object.freeze([...this.owners].map(owner => typeof owner === 'symbol' ? owner.description || 'symbol' : String(owner))),
+                owners: Object.freeze([...this.owners.keys()].map(owner => typeof owner === 'symbol' ? owner.description || 'symbol' : String(owner))),
                 modalIds: Object.freeze([...this.modalOwners.keys()]),
             });
         }
@@ -130,12 +140,14 @@
             this.abortController = null;
             this.scope = null;
             this.modalOwners.clear();
+            const focusRecord = [...this.owners.values()].find(record => record.restoreFocus && record.focus?.isConnected);
             if (this.owners.size > 0) this.dispatchState(false);
             this.owners.clear();
             // Disposal can happen while an overlay still owns the native
             // view. Reconcile immediately so teardown never leaves a hidden
             // WebContentsView after the coordinator has gone away.
             this.reconcileEmbeddedView();
+            focusRecord?.focus?.focus?.({ preventScroll: true });
         }
     }
 

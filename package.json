@@ -26,6 +26,9 @@
     "start:rag-observer": "electron . --rag-observer-only",
     "build": "node rust_chat_data_service/build-runtime.js",
     "lint:ui-system": "stylelint \"styles/ui-system/**/*.css\" --config stylelint.ui-system.config.cjs",
+    "check:uiux": "tsc --project tsconfig.uiux.json --pretty false",
+    "build:uiux": "tsc --project tsconfig.uiux.build.json --pretty false",
+    "test:uiux": "node --experimental-strip-types --test tests/uiux-theme-presenter.test.mjs",
     "guard:design-subtraction": "node scripts/check-design-system-boundary.mjs",
     "guard:classic-parity": "node scripts/check-classic-parity.mjs",
     "guard:classic-retirement": "node scripts/check-classic-retirement-boundary.mjs",
@@ -87,7 +90,8 @@
     "electron": "^41.7.1",
     "electron-builder": "^26.0.12",
     "node-addon-api": "^8.3.1",
-    "node-gyp": "^11.4.2"
+    "node-gyp": "^11.4.2",
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "@3d-dice/dice-box": "^1.1.4",

@@ -21,6 +21,7 @@
             this.toggleTheme = options.toggleTheme || (() => {});
             this.syncAppearance = options.syncAppearance || (() => {});
             this.setIcon = options.setIcon || null;
+            this.getThemeSnapshot = options.getThemeSnapshot || null;
             this.subscribeTheme = options.subscribeTheme || null;
             this.escapeDispatcher = options.escapeDispatcher || null;
             this.scope = null;
@@ -117,7 +118,10 @@
             const avatar = settings.userAvatarUrl || 'assets/default_user_avatar.png';
             if (e.avatar.getAttribute('src') !== avatar) e.avatar.src = avatar;
             this.syncAppearance();
-            const isDark = this.document.body.classList.contains('dark-theme');
+            const themeSnapshot = this.getThemeSnapshot?.();
+            const effectiveTheme = themeSnapshot?.value?.effective;
+            const isDark = effectiveTheme === 'dark'
+                || (effectiveTheme !== 'light' && this.document.body.classList.contains('dark-theme'));
             const label = isDark ? '切换为浅色模式' : '切换为深色模式';
             const icon = isDark ? 'dark_mode' : 'light_mode';
             if (e.themeIcon) this.setIcon ? this.setIcon(e.themeIcon, icon) : e.themeIcon.textContent = icon;

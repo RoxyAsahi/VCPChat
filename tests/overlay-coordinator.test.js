@@ -97,3 +97,35 @@ test('stale close from an older modal root cannot release a reopened modal lease
     assert.equal(coordinator.active, false);
     coordinator.dispose();
 });
+
+test('last overlay lease restores its captured focus without disturbing nested owners', async () => {
+    const dom = new JSDOM('<!doctype html><body><button id="trigger">Open</button><div id="dialog" tabindex="-1"></div></body>', { pretendToBeVisual: true });
+    const trigger = dom.window.document.getElementById('trigger');
+    const dialog = dom.window.document.getElementById('dialog');
+    const coordinator = new OverlayCoordinator({ document: dom.window.document });
+    coordinator.mount();
+    trigger.focus();
+    const first = Symbol('first');
+    await coordinator.acquire(first);
+    dialog.focus();
+    const second = Symbol('second');
+    await coordinator.acquire(second, { restoreFocus: false });
+    coordinator.release(second);
+    assert.equal(dom.window.document.activeElement, dialog, 'nested release must not restore the outer trigger');
+    coordinator.release(first);
+    assert.equal(dom.window.document.activeElement, trigger, 'last release must restore the captured trigger');
+    coordinator.dispose();
+    dom.window.close();
+});
+
+test('coordinator teardown restores the outer focus origin when a lease is still active', async () => {
+    const dom = new JSDOM('<!doctype html><body><button id="trigger">Open</button><div tabindex="-1"></div></body>', { pretendToBeVisual: true });
+    const trigger = dom.window.document.getElementById('trigger');
+    const coordinator = new OverlayCoordinator({ document: dom.window.document });
+    coordinator.mount();
+    trigger.focus();
+    await coordinator.acquire(Symbol('active'));
+    coordinator.dispose();
+    assert.equal(dom.window.document.activeElement, trigger);
+    dom.window.close();
+});

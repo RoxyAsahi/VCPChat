@@ -577,6 +577,9 @@ mainChatSettingsPresentationOwner.configureStartup({
             }),
             settings: mainChatSettingsOwner,
             createInternalRenderer: createOwnedInternalChatRenderer,
+            composerSlotRoot: chatInputCard?.querySelector?.('.chat-input-actions') || null,
+            slotOwner: mainChatDomListenerOwner,
+            composerControls: { attachFileBtn, emoticonTriggerBtn },
             disposeCapabilities: async () => {
                 await mainChatEventBridge?.dispose?.();
                 mainChatEventBridge = null;
