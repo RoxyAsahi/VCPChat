@@ -81,7 +81,8 @@ test('global settings saves the server URL once with canonical presentation', as
         await firstSave;
         assert.equal(form.dataset.globalSettingsSaving, undefined, 'the submit lock is released after completion');
 
-        dom.window.chatAPI.saveSettings = () => new Promise(() => {});
+        let resolveLate;
+        dom.window.chatAPI.saveSettings = () => new Promise(resolve => { resolveLate = resolve; });
         deps.saveTimeoutMs = 5;
         await assert.rejects(
             handleSaveGlobalSettings(event, deps),
@@ -89,8 +90,12 @@ test('global settings saves the server URL once with canonical presentation', as
             'a permanently pending save must become a recoverable terminal state'
         );
         assert.equal(form.dataset.globalSettingsSaving, undefined, 'timeout must release the submit lock');
+        assert.equal(saveResults.length, 2, 'success and timeout each publish exactly one terminal event');
         assert.equal(saveResults.at(-1)?.success, false, 'timeout publishes a failure terminal state to autosave');
         assert.match(saveResults.at(-1)?.error || '', /保存设置超时/, 'timeout error is available to retry UI');
+        resolveLate({ success: true });
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(saveResults.length, 2, 'late IPC success cannot resurrect a timed-out UI save');
     } finally {
         for (const [name, value] of Object.entries(previousGlobals)) {
             if (value === undefined) delete globalThis[name];
