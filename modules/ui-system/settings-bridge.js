@@ -259,7 +259,11 @@ function mountTypedSettingsConsumer(root) {
         }
     };
     const release = service.state.subscribe(apply);
-    ensurePresentationScope()?.own(release, 'typed-settings-consumer', 'ui-presentation');
+    ensurePresentationScope()?.own(() => {
+        release?.();
+        delete root.dataset.vcpSettingsRevision;
+        delete root.dataset.vcpSettingsSource;
+    }, 'typed-settings-consumer', 'ui-presentation');
     const assistantSelect = form?.querySelector('#assistantAgent');
     if (assistantSelect && window.MutationObserver) {
         const observer = new MutationObserver(() => {
