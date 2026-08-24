@@ -30,7 +30,7 @@
 | U1 TypeScript UI foundation | R2-08 `modules/uiux/` typed kernel | typed-contract-scaffold（compile + focused tests；public API not ready） |
 | U2 Overlay / Focus / Primitive kernel | R2-01 | notification/lease slice complete，journey 持续补证据 |
 | U3 Theme service | R2-03 | snapshot-projection-active（semantic token presenter missing） |
-| U4 Settings Surface | R2-02 | typed-settings-observer-active（controls still owned by legacy bridge） |
+| U4 Settings Surface | R2-02 | typed-settings-command-active（state projection/controls still partly legacy） |
 | U5 Shell 与 Chat Surface | R2-00、R2-04 | Chat Composer slice complete，Shell 持续迁移 |
 | U6 App Surface | R2-05 | planned |
 | U7 旧 UI 清理与发布证据 | R2-07 | planned |
@@ -198,7 +198,7 @@ evidence: npm run check:uiux; npm run test:uiux; node --test tests/creation-cont
 
 退出证据：保存成功/失败/取消/迟到结果；输入保留；重新打开读取 durable 值；native/WA/fallback 视觉与键盘合同一致。
 
-当前 SettingsRoot 状态（2026-08-24）：`SettingsUiService` 是 typed observer/projection consumer，并非真实控件 command owner；SettingsRoot 的字段、Select/Choice、autosave 仍主要由 legacy `settings-bridge.js` 与 global settings manager 控制。adapter 已具备保存串行化、迟到 generation、dispose、subscriber rollback/isolation 和失败事件合同，Electron journey 已覆盖真实持久化失败、输入保留、点击重试成功、重载恢复、结构/截图及 bridge/presentation teardown。下一步必须让真实控件通过 `SettingsUiService.state` 读取、通过 `save.execute` 提交，并在完成行为等价证据后才删除旧 bridge presentation 路径。
+当前 SettingsRoot 状态（2026-08-24）：全局 Settings form submit 已通过 `VCPUISettingsBridge.getTypedService().save.execute()` 进入 typed command owner；但字段/Select/Choice 的读取投影、dirty/autosave 编排仍主要由 legacy `settings-bridge.js` 与 global settings manager 控制，因此整体仍是 typed-command-active 而非完整 Settings consumer。adapter 已具备保存串行化、迟到 generation、dispose、subscriber rollback/isolation 和失败事件合同，Electron journey 已覆盖真实持久化失败、输入保留、点击重试成功、重载恢复、结构/截图及 bridge/presentation teardown。下一步必须让真实控件通过 `SettingsUiService.state` 读取并减少旧 bridge 的控制面，在完成行为等价证据后才删除旧 presentation 路径。
 
 Creation 现状核验（2026-08-24）：`tests/creation-controller.test.js` 8/8 通过，覆盖命令缺失、Surface 部分失败回滚、Web Awesome 失败后的 native fallback、重复 open、kernel 加载期间 dispose、创建失败恢复和迟到完成隔离。完整 `test-electron-ui-apps-smoke.mjs` 当前不能作为 Creation 的 broad evidence，因为它在进入 Creation journey 前被用户禁用的 `VChatDynamicWallpaper/plugin-manifest.json.block` 阻断（`loaded=true, results=[], dynamicWallpaper=false`）；本路线不擅自启用该插件，下一切片将使用独立 Creation Electron journey 补齐真实 Surface 证据。
 

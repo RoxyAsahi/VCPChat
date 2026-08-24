@@ -1075,6 +1075,9 @@ scheduleRefresh();
 
 window.VCPUISettingsBridge = Object.freeze({
     refresh: scheduleRefresh,
+    getTypedService() {
+        return ensureTypedSettingsService();
+    },
     destroy() {
         if (destroyPromise) return destroyPromise;
         destroyed = true;
