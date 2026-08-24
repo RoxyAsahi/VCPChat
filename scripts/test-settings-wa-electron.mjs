@@ -408,6 +408,15 @@ try {
                 enableMiddleClickAdvanced: true,
                 middleClickAdvancedDelay: 1800,
                 enableRegenerateConfirmation: false,
+                chatPresentationMode: 'panel',
+                enableWideChatLayout: true,
+                enableUserChatBubbleUi: true,
+                showUserMetaInChatBubbleUi: false,
+                chatBubbleMaxWidthWideDefault: 88,
+                chatBubbleMaxWidthWideNotifications: 94,
+                chatBubbleMaxWidthWideNarrow: 90,
+                minChunkBufferSize: 24,
+                smoothStreamIntervalMs: 140,
                 chatFontPreset: 'serif',
                 appearanceProfile: {
                     density: 'compact',
@@ -456,6 +465,15 @@ try {
     assert.equal(await page.$eval('#middleClickAdvancedDelay', node => node.value), '1800', 'clean advanced middle-click delay consumes typed Settings snapshot');
     assert.equal(await page.$eval('#middleClickAdvancedSettings', node => getComputedStyle(node).display), 'block', 'advanced middle-click visibility follows typed snapshot');
     assert.equal(await page.$eval('#enableRegenerateConfirmation', node => node.checked), false, 'clean regenerate confirmation consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#chatPresentationModePanel', node => node.checked), true, 'clean presentation mode consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#chatLayoutModeWide', node => node.checked), true, 'clean wide layout consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#enableUserChatBubbleUi', node => node.checked), true, 'clean user bubble toggle consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#showUserMetaInChatBubbleUi', node => node.checked), false, 'clean user metadata toggle consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#chatBubbleMaxWidthWideDefault', node => node.value), '88', 'clean wide bubble width consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#chatBubbleMaxWidthWideNotifications', node => node.value), '94', 'clean wide notification width consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#chatBubbleMaxWidthWideNarrow', node => node.value), '90', 'clean wide narrow width consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#minChunkBufferSize', node => node.value), '24', 'clean chunk buffer consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#smoothStreamIntervalMs', node => node.value), '140', 'clean stream interval consumes typed Settings snapshot');
     assert.equal(await page.$eval('#chatFontPreset', node => node.value), 'serif', 'clean select control consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceDensity', node => node.value), 'compact', 'clean appearance density consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceRadius', node => node.value), 'round', 'clean appearance radius consumes typed Settings snapshot');

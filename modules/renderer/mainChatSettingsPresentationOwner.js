@@ -670,26 +670,28 @@ export function createMainChatSettingsPresentationOwner({
             safeSet('chatToolFontCustom', globalSettings.chatToolFontCustom || '');
         }
         const presentationMode = normalizeChatPresentationMode(globalSettings.chatPresentationMode);
-        safeCheck(`chatPresentationMode${presentationMode[0].toUpperCase()}${presentationMode.slice(1)}`, true);
-        safeCheck('chatLayoutModeWide', globalSettings.enableWideChatLayout === true);
-        safeCheck('chatLayoutModeNormal', globalSettings.enableWideChatLayout !== true);
-        safeCheck('enableUserChatBubbleUi', globalSettings.enableUserChatBubbleUi !== false);
-        safeCheck('showUserMetaInChatBubbleUi', globalSettings.showUserMetaInChatBubbleUi !== false);
-        safeSet('chatBubbleMaxWidthWideDefault', clampChatBubbleWidthPercent(globalSettings.chatBubbleMaxWidthWideDefault, 92));
-        safeSet('chatBubbleMaxWidthWideNotifications', clampChatBubbleWidthPercent(globalSettings.chatBubbleMaxWidthWideNotifications, 96));
-        safeSet(
-            'chatBubbleMaxWidthWideNarrow',
-            clampChatBubbleWidthPercent(
-                globalSettings.chatBubbleMaxWidthWideNarrow,
-                clampChatBubbleWidthPercent(globalSettings.chatBubbleMaxWidthWideDefault, 92)
-            )
-        );
-        safeSet('minChunkBufferSize', globalSettings.minChunkBufferSize ?? 16);
-        safeSet('smoothStreamIntervalMs', globalSettings.smoothStreamIntervalMs ?? 100);
+        if (!typedSettingsProjectionActive) {
+            safeCheck(`chatPresentationMode${presentationMode[0].toUpperCase()}${presentationMode.slice(1)}`, true);
+            safeCheck('chatLayoutModeWide', globalSettings.enableWideChatLayout === true);
+            safeCheck('chatLayoutModeNormal', globalSettings.enableWideChatLayout !== true);
+            safeCheck('enableUserChatBubbleUi', globalSettings.enableUserChatBubbleUi !== false);
+            safeCheck('showUserMetaInChatBubbleUi', globalSettings.showUserMetaInChatBubbleUi !== false);
+            safeSet('chatBubbleMaxWidthWideDefault', clampChatBubbleWidthPercent(globalSettings.chatBubbleMaxWidthWideDefault, 92));
+            safeSet('chatBubbleMaxWidthWideNotifications', clampChatBubbleWidthPercent(globalSettings.chatBubbleMaxWidthWideNotifications, 96));
+            safeSet(
+                'chatBubbleMaxWidthWideNarrow',
+                clampChatBubbleWidthPercent(
+                    globalSettings.chatBubbleMaxWidthWideNarrow,
+                    clampChatBubbleWidthPercent(globalSettings.chatBubbleMaxWidthWideDefault, 92)
+                )
+            );
+            safeSet('minChunkBufferSize', globalSettings.minChunkBufferSize ?? 16);
+            safeSet('smoothStreamIntervalMs', globalSettings.smoothStreamIntervalMs ?? 100);
+        }
         if (!typedSettingsProjectionActive) syncChatFontControls();
-        syncWideChatLayoutControls();
+        if (!typedSettingsProjectionActive) syncWideChatLayoutControls();
         if (!typedSettingsProjectionActive) syncUserChatBubbleControls();
-        syncChatPresentationModeControls(presentationMode);
+        if (!typedSettingsProjectionActive) syncChatPresentationModeControls(presentationMode);
 
         const chatFontPresetSelect = document.getElementById('chatFontPreset');
         const chatFontCustomInput = document.getElementById('chatFontCustom');

@@ -135,6 +135,18 @@ function mountTypedSettingsConsumer(root) {
             ['enableMiddleClickAdvanced', 'enableMiddleClickAdvanced', 'checked'],
             ['middleClickAdvancedDelay', 'middleClickAdvancedDelay'],
             ['enableRegenerateConfirmation', 'enableRegenerateConfirmation', 'checked'],
+            ['chatPresentationModeBubble', 'chatPresentationMode', 'checked-value', 'bubble'],
+            ['chatPresentationModePanel', 'chatPresentationMode', 'checked-value', 'panel'],
+            ['chatPresentationModeImmersive', 'chatPresentationMode', 'checked-value', 'immersive'],
+            ['chatLayoutModeWide', 'enableWideChatLayout', 'checked'],
+            ['chatLayoutModeNormal', 'enableWideChatLayout', 'checked-inverse'],
+            ['enableUserChatBubbleUi', 'enableUserChatBubbleUi', 'checked'],
+            ['showUserMetaInChatBubbleUi', 'showUserMetaInChatBubbleUi', 'checked'],
+            ['chatBubbleMaxWidthWideDefault', 'chatBubbleMaxWidthWideDefault'],
+            ['chatBubbleMaxWidthWideNotifications', 'chatBubbleMaxWidthWideNotifications'],
+            ['chatBubbleMaxWidthWideNarrow', 'chatBubbleMaxWidthWideNarrow'],
+            ['minChunkBufferSize', 'minChunkBufferSize'],
+            ['smoothStreamIntervalMs', 'smoothStreamIntervalMs'],
             ['showHomeVisualBrand', 'showHomeVisualBrand', 'checked'],
             ['homeVisualTagline', 'homeVisualTagline'],
             ['appearanceDensity', 'appearanceProfile.density'],
@@ -174,6 +186,7 @@ function mountTypedSettingsConsumer(root) {
             const value = path.split('.').reduce((current, key) => current?.[key], settings);
             if (value === undefined || value === null) return;
             if (mode === 'checked-value') control.checked = String(value) === expected;
+            else if (mode === 'checked-inverse') control.checked = value !== true;
             else if (mode === 'checked' || control.type === 'checkbox') control.checked = Boolean(value);
             else if (mode === 'px-output') {
                 control.value = `${value}px`;
@@ -191,6 +204,11 @@ function mountTypedSettingsConsumer(root) {
         if (quickActionContainer) quickActionContainer.style.display = middleClickEnabled ? 'block' : 'none';
         if (advancedContainer) advancedContainer.style.display = middleClickEnabled ? 'block' : 'none';
         if (advancedSettings) advancedSettings.style.display = settings.enableMiddleClickAdvanced === true ? 'block' : 'none';
+        const mode = settings.chatPresentationMode || 'bubble';
+        const bubbleWidthSettings = form.querySelector('#chatBubbleWidthSettings');
+        if (bubbleWidthSettings) bubbleWidthSettings.hidden = mode !== 'bubble';
+        const bubbleMetaSettings = form.querySelector('#userChatBubbleMetaSettings');
+        if (bubbleMetaSettings) bubbleMetaSettings.style.display = settings.enableUserChatBubbleUi === true ? 'flex' : 'none';
     };
     const release = service.state.subscribe(apply);
     ensurePresentationScope()?.own(release, 'typed-settings-consumer', 'ui-presentation');
