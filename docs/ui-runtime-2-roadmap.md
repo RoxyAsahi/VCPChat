@@ -321,3 +321,5 @@ R2-02 root-identity 修复（2026-08-24）：readiness refresh 不再捕获旧 S
 UI System gate audit（2026-08-24）：`npm run check:ui-system` 当前在 `guard:design-subtraction` 阶段失败；大量既有 UIUX/Settings 文件相对旧 baseline `b5931a69...` 未登记，且另有 `styles/themes.css` composer focus contract 报告。该失败不能归因于本批 Settings readiness 修复，也不能通过扩大 allowlist 或重写 baseline 伪造绿色；发布门禁缺口保持独立记录。
 
 可归因子门禁复核（2026-08-24）：`check-ui-async-state-matrix`（5 surfaces × 6 states）、`check-ui-task-journeys`（7 journeys）与 `check-theme-provenance` 均通过；因此当前 Settings readiness 变更的异步状态/任务旅程/主题来源子证据保持绿色，总门禁失败仍限于 baseline/design-subtraction 账本缺口。
+
+Artifact runtime refresh（2026-08-24）：`build:uiux`、`check:uiux:artifacts`、`test:uiux:artifacts` 与 `test:electron-uiux:artifacts` 均通过；generated 20 文件一致，Electron generated theme journey 的 light → dark → reload light 与 subscriber teardown 合同通过。
