@@ -45,7 +45,7 @@ function ensureTypedSettingsService() {
     const externalListeners = new Set();
     const publishExternal = settings => {
         if (typedSettingsDisposed) return;
-        typedSettingsState = Object.freeze({ ...(settings || {}) });
+        typedSettingsState = Object.freeze({ ...typedSettingsState, ...(settings || {}) });
         externalListeners.forEach(listener => listener(typedSettingsState));
     };
     const onExternalSettings = event => publishExternal(event.detail?.settings);

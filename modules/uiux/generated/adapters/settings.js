@@ -35,7 +35,10 @@ export function createSettingsUiService(input) {
         });
         return nextSnapshot;
     };
-    const externalRelease = input.subscribe?.(next => publish(next, 'settings-external')) || null;
+    // External notifications are allowed to be partial patches (for example,
+    // a presentation owner may publish only the field it changed). Merge them
+    // into the authoritative snapshot instead of erasing unrelated settings.
+    const externalRelease = input.subscribe?.(next => publish({ ...state, ...(next || {}) }, 'settings-external')) || null;
     const service = {
         state: {
             get: () => state,
