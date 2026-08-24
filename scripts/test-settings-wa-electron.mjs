@@ -467,6 +467,10 @@ try {
     assert.equal(await page.$eval('#userNameTextColor', node => node.value), '#abcdef', 'clean name color consumes typed Settings snapshot');
     assert.equal(await page.$eval('#userNameTextColorText', node => node.value), '#abcdef', 'clean name color mirror consumes typed Settings snapshot');
     assert.deepEqual(await page.$$eval('#networkNotesPathsContainer input[name="networkNotesPath"]', nodes => nodes.map(node => node.value)), ['typed-nas', '/typed/notes'], 'clean network notes list consumes typed Settings snapshot');
+    await page.$eval('#addNetworkPathBtn', button => button.click());
+    assert.equal(await page.$$eval('#networkNotesPathsContainer input[name="networkNotesPath"]', nodes => nodes.length), 3, 'typed network path consumer owns Add row creation');
+    await page.$$eval('#networkNotesPathsContainer .network-path-input-group:last-child button', buttons => buttons[0]?.click());
+    assert.equal(await page.$$eval('#networkNotesPathsContainer input[name="networkNotesPath"]', nodes => nodes.length), 2, 'typed network path consumer owns Remove row teardown');
     assert.equal(await page.$eval('#continueWritingPrompt', node => node.value), 'typed-external-prompt', 'clean form consumes typed Settings snapshot');
     assert.equal(await page.$eval('#vcpServerUrl', node => node.value), 'http://typed-external:6005', 'clean text control consumes typed Settings snapshot');
     assert.equal(await page.$eval('#vcpApiKey', node => node.value), 'typed-api-key', 'clean API key control consumes typed Settings snapshot');
