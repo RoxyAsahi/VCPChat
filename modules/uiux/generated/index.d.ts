@@ -2,3 +2,5 @@ export type { UiCommand, UiContext, UiDisposer, UiReadable, UiScope, UiServiceDe
 export { createUiScope, createUiScopeFromGlobal } from './runtime/scope.js';
 export { mountThemePresenter, themeUiDefinition, } from './providers/theme.js';
 export type { ThemeReadable, ThemeState, ThemeUiService } from './providers/theme.js';
+export { createSettingsUiService, settingsUiDefinition } from './adapters/settings.js';
+export type { SettingsPatch, SettingsSaveResult, SettingsState, SettingsUiAdapterInput, SettingsUiService } from './adapters/settings.js';
