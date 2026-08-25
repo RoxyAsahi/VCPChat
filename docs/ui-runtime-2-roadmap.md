@@ -337,3 +337,5 @@ R2-02 URL capability fallback 修复（2026-08-25）：legacy owner 对可选 `c
 R2-02 path-listener ownership（2026-08-25）：network path Add 兼容监听改用 renderer `listenerOwner` 注册，继续优先 typed bridge capability、无 capability 时才 fallback 到旧 helper；Settings Electron gate 与 UIUX type check 通过。
 
 R2-02 post-abort verification（2026-08-25）：上一轮中断后工作树保持干净；`VCPCHAT_SETTINGS_REOPEN_CYCLES=60 node scripts/test-settings-wa-electron.mjs`、source-equivalence、unified-surface 与 UIUX type check 均重新通过。
+
+R2-02 assistant-options capability 修复（2026-08-25）：legacy owner 对不存在于仓库稳定实现中的 `populateAssistantAgentSelect` 改为可选 capability 调用；缺失时保留现有 options 并继续 typed snapshot projection，不再中断 Settings 初始化。owner tests、WA persistence、Electron Settings gate 与 UIUX type check 通过。
