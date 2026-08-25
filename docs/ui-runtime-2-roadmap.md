@@ -290,7 +290,7 @@ const owned = slots.mount('chat.composer.leading', host, snapshot, { scope });
 ## 8. 当前下一步
 
 1. R2-02C 首先生成完整 Settings 字段 ownership report；每项必须列出 persisted key、DOM id/name、读写 owner、dirty/save/retry owner、legacy path、删除条件与验收证据。
-2. 只迁移外观/工作区中的一小批真实控件：它们从 `SettingsUiService.state` 读取、由 `save.execute` 提交，并将 draft、dirty、autosave、timeout、retry 和 close flush 收束到同一个明确 owner；行为等价后删除对应 `settings-bridge.js` projection。
+2. 首批已迁移 `appearanceProfile.sidebarRowHeight`、`appearanceProfile.sidebarAvatarSize`、`appearanceProfile.sidebarRadius` 与 `showHomeVisualTagline`：真实控件从 `SettingsUiService.state` 读取、由 `save.execute` 提交，draft/dirty/close flush 由 typed field owner 收束；通用 typed projection 已删除。仍需补齐 reload/Classic 等价证据后删除 `mainChatSettingsPresentationOwner.js` 中的兼容 fallback。
 3. 新 Settings primitive 必须遵循上位规范的 Harness-compatible renderer：Light DOM 同构、来源映射、interaction/lifecycle owner，以及 DOM/geometry/sequence/screenshot 四层门禁。它不成为独立设计系统，也不先实现泛化 Virtual DOM。
 4. R2-02C 关闭后，才把 R2-03 从 snapshot projection 推进到 document-level single ThemeTokenOwner，并记录/逐步删除 legacy theme reads。
 5. R2-08 已进入 scoped-service-assembly-active：`modules/uiux/package.json` 建立局部 ESM boundary；scope-owned `UiServiceRegistry` 已由 Settings 生产 bridge 安装并被 SettingsRoot consumer 读取；artifact gate 以临时干净目录重建并逐字节校验 generated JS/d.ts 文件，Node artifact smoke 与 `npm run test:electron-uiux:artifacts` 均实际加载 generated Settings adapter 并执行 save/subscribe/release/dispose contract。runtime 仍委托 legacy `LifecycleScope`，且缺完整 packaged artifact/跨平台证据，因此不声明 public runtime ready。
