@@ -25,9 +25,9 @@
 | `appearanceProfile.fontScale` | `appearanceFontScale` | 外观 | UI 字号 / 调整壳层文字缩放 | select | typed snapshot | `save.execute` | 同上 | settings-bridge projection | Settings primitive | 同上 | `typed-projection-active` |
 | `appearanceProfile.contentWidth` | `appearanceContentWidth` | 工作区 | 内容宽度 / 调整工作区最大宽度 | select | typed snapshot | `save.execute` | 同上 | settings-bridge + presentation owner | Settings primitive | 同上 | `typed-projection-active` |
 | `appearanceProfile.surface` | `appearanceSurface` | 外观 | 页面材质 / 选择壳层表面效果 | select | typed snapshot | `save.execute` | 同上 | settings-bridge projection | Settings primitive + ThemeTokenOwner | 删除旧 surface projection 后验收 token | `typed-projection-active`; theme legacy reads remain |
-| `appearanceProfile.sidebarRowHeight` | `appearanceSidebarRowHeight` / `appearanceSidebarRowHeightValue` | 工作区 | 侧栏行高 / 调整导航行的高度 | range + output | typed snapshot normalized by appearance engine | `save.execute` | range draft 不被外部 snapshot 覆盖；失败重试 | settings-bridge projection | Settings primitive | 删除 range/output projection 与旧 input listener | `typed-projection-active`; 60-cycle Settings |
-| `appearanceProfile.sidebarAvatarSize` | `appearanceSidebarAvatarSize` / `appearanceSidebarAvatarSizeValue` | 工作区 | 侧栏头像大小 / 调整导航头像尺寸 | range + output | typed snapshot normalized | `save.execute` | 同上 | settings-bridge projection | Settings primitive | 同上 | `typed-projection-active`; 60-cycle Settings |
-| `appearanceProfile.sidebarRadius` | `appearanceSidebarRadius`, `appearanceSidebarRadiusChoice-*` | 工作区 | 侧栏圆角 / 选择导航项圆角 | choice group | typed snapshot | `save.execute` | choice draft 保留；失败重试 | settings-bridge + presentation owner | Settings Choice primitive | 删除 hidden compatibility select 与重复 radio projection | `typed-projection-active`; unified-surface |
+| `appearanceProfile.sidebarRowHeight` | `appearanceSidebarRowHeight` / `appearanceSidebarRowHeightValue` | 工作区 | 侧栏行高 / 调整导航行的高度 | range + output | typed snapshot normalized by appearance engine | `save.execute` | range draft 不被外部 snapshot 覆盖；失败重试 | legacy startup fallback retained; generic typed projection removed | typed Settings field owner | 删除 `mainChatSettingsPresentationOwner` fallback after reload/Classic equivalence evidence | `typed-field-owner-active`; Electron gate + 60-cycle pending |
+| `appearanceProfile.sidebarAvatarSize` | `appearanceSidebarAvatarSize` / `appearanceSidebarAvatarSizeValue` | 工作区 | 侧栏头像大小 / 调整导航头像尺寸 | range + output | typed snapshot normalized | `save.execute` | 同上 | legacy startup fallback retained; generic typed projection removed | typed Settings field owner | 同上 | `typed-field-owner-active`; Electron gate passed |
+| `appearanceProfile.sidebarRadius` | `appearanceSidebarRadius`, `appearanceSidebarRadiusChoice-*` | 工作区 | 侧栏圆角 / 选择导航项圆角 | choice group | typed snapshot | `save.execute` | choice draft 保留；失败重试 | legacy startup fallback retained; generic typed projection removed | typed Settings field owner | 删除 fallback 与 hidden compatibility projection after equivalence evidence | `typed-field-owner-active`; Electron gate passed |
 | `appearanceProfile.customRadius` | `appearanceCustomRadius` / `appearanceCustomRadiusValue` | 外观 | 自定义圆角 / 设置自定义容器圆角 | range + output | typed snapshot | `save.execute` | 同上 | settings-bridge projection | Settings primitive | 删除旧 range listener | `typed-projection-active` |
 | `chatFontPreset` | `chatFontPreset` | 外观 | 聊天字体 / 选择聊天文字字体 | select | typed snapshot | `save.execute` | 失败重试；不得改消息 renderer 语义 | settings-bridge + presentation owner | Settings primitive | 删除 legacy projection，保留 business key | `typed-projection-active` |
 | `chatFontCustom` | `chatFontCustom` | 外观 | 自定义聊天字体 / 输入字体名称 | text | typed snapshot | `save.execute` | dirty 保留；错误显示在字段级 | settings-bridge projection | Settings primitive | 同上 | `typed-projection-active` |
@@ -38,7 +38,7 @@
 | `chatToolFontPreset` | `chatToolFontPreset` | 外观 | 工具字体 / 选择工具结果字体 | select | typed snapshot | `save.execute` | 同上；不改工具结果渲染 | settings-bridge projection | Settings primitive | 同上 | `typed-projection-active` |
 | `chatToolFontCustom` | `chatToolFontCustom` | 外观 | 自定义工具字体 / 输入字体名称 | text | typed snapshot | `save.execute` | 同上 | settings-bridge projection | Settings primitive | 同上 | `typed-projection-active` |
 | `showHomeVisualBrand` | `showHomeVisualBrand` | 工作区 | 显示首页品牌 / 控制首页品牌图形 | checkbox | typed snapshot | `save.execute` | 失败重试 | settings-bridge + presentation owner | Settings primitive | 删除旧 `safeCheck` projection | `typed-projection-active`; Electron |
-| `showHomeVisualTagline` | `showHomeVisualTagline` | 工作区 | 显示首页标语 / 控制首页辅助文案 | checkbox | typed snapshot | `save.execute` | 同上 | settings-bridge + presentation owner | Settings primitive | 删除旧 `safeCheck` projection | `typed-projection-active`; Electron |
+| `showHomeVisualTagline` | `showHomeVisualTagline` | 工作区 | 显示首页标语 / 控制首页辅助文案 | checkbox | typed snapshot | `save.execute` | 同上 | legacy startup fallback retained; generic typed projection removed | typed Settings field owner | 删除 `mainChatSettingsPresentationOwner` fallback after reload/Classic equivalence evidence | `typed-field-owner-active`; Electron gate passed |
 | `homeVisualTagline` | `homeVisualTagline` | 工作区 | 首页标语 / 编辑首页辅助文案 | text | typed snapshot | `save.execute` | dirty 保留；失败重试 | settings-bridge projection | Settings primitive | 删除旧 input projection | `typed-projection-active` |
 | `sidebarWidth` | `sidebarWidth`（若存在） | 工作区 | 侧栏宽度 / 调整导航区域宽度 | range/number | typed snapshot + existing settings manager | `save.execute`（需确认 capability） | close flush；超时失效 generation | legacy manager + presentation owner | Settings primitive | 明确 DOM contract 后删除旧 style write | `inventory-only`; command owner 待核验 |
 | `sidebarActive` | sidebar toggle（无稳定 global id） | 工作区 | 显示侧栏 / 控制导航区域可见性 | toggle | typed snapshot + event owner | `save.execute`（需确认） | dirty/close flush | event-listeners.js | Settings primitive | 建立稳定 DOM id/name 后删除旧 listener | `inventory-only`; DOM seam 待核验 |
@@ -71,3 +71,15 @@
 ## 5. 下一步
 
 先从 `appearanceProfile.sidebarRowHeight`、`appearanceProfile.sidebarAvatarSize`、`appearanceProfile.sidebarRadius` 和 `showHomeVisualTagline` 组成一个可回滚批次：它们已有稳定 DOM、typed snapshot 和 Electron 证据，且不要求触碰聊天 renderer。批次必须在同一个 Settings owner 内实现真实控件更新与保存，随后删除 bridge 中仅服务这些字段的 projection/listener，并补齐 close flush 与 teardown 计数。
+
+## 6. 2026-08-25 implementation update
+
+首批字段已进入 `mountTypedFieldOwner()`：
+
+- 输入与 choice 事件标记为 typed-owned，不再进入 legacy `form.requestSubmit()` autosave 链；
+- draft 按字段合并，appearance profile 的多字段修改不会互相覆盖；
+- snapshot 在 clean form 上投影，dirty/in-flight 时拒绝外部覆盖；
+- save、failure/retry、close flush、late-result invalidation 和 owner teardown 走同一 service/owner；
+- 通用 typed projection 已删除上述四个字段的重复写入。
+
+仍未 complete：`mainChatSettingsPresentationOwner.js` 中的启动兼容 fallback 尚未删除，需要单独的 reload/Classic/upstream 等价证据后再退役。

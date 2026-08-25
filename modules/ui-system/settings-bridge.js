@@ -20,6 +20,7 @@ const shellRoots = new Set();
 const customSelectStates = new Set();
 const customChoiceStates = new Set();
 const autosaveStates = new Set();
+const typedFieldStates = new Set();
 const disclosureStates = new Set();
 const selectObserverStates = new Map();
 let harnessSelectOwnerMounted = false;
@@ -192,7 +193,6 @@ function mountTypedSettingsConsumer(root) {
             ['minChunkBufferSize', 'minChunkBufferSize'],
             ['smoothStreamIntervalMs', 'smoothStreamIntervalMs'],
             ['showHomeVisualBrand', 'showHomeVisualBrand', 'checked'],
-            ['showHomeVisualTagline', 'showHomeVisualTagline', 'checked'],
             ['homeVisualTagline', 'homeVisualTagline'],
             ['appearanceDensity', 'appearanceProfile.density'],
             ['appearanceRadius', 'appearanceProfile.radius'],
@@ -200,18 +200,6 @@ function mountTypedSettingsConsumer(root) {
             ['appearanceFontScale', 'appearanceProfile.fontScale'],
             ['appearanceContentWidth', 'appearanceProfile.contentWidth'],
             ['appearanceSurface', 'appearanceProfile.surface'],
-            ['appearanceSidebarRowHeight', 'appearanceProfile.sidebarRowHeight'],
-            ['appearanceSidebarRowHeightValue', 'appearanceProfile.sidebarRowHeight', 'px-output'],
-            ['appearanceSidebarAvatarSize', 'appearanceProfile.sidebarAvatarSize'],
-            ['appearanceSidebarAvatarSizeValue', 'appearanceProfile.sidebarAvatarSize', 'px-output'],
-            ['appearanceSidebarRadius', 'appearanceProfile.sidebarRadius'],
-            ['appearanceSidebarRadiusChoice-tuned', 'appearanceProfile.sidebarRadius', 'checked-value', 'tuned'],
-            ['appearanceSidebarRadiusChoice-follow', 'appearanceProfile.sidebarRadius', 'checked-value', 'follow'],
-            ['appearanceSidebarRadiusChoice-square', 'appearanceProfile.sidebarRadius', 'checked-value', 'square'],
-            ['appearanceSidebarRadiusChoice-small', 'appearanceProfile.sidebarRadius', 'checked-value', 'small'],
-            ['appearanceSidebarRadiusChoice-medium', 'appearanceProfile.sidebarRadius', 'checked-value', 'medium'],
-            ['appearanceSidebarRadiusChoice-round', 'appearanceProfile.sidebarRadius', 'checked-value', 'round'],
-            ['appearanceSidebarRadiusChoice-custom', 'appearanceProfile.sidebarRadius', 'checked-value', 'custom'],
             ['appearanceCustomRadius', 'appearanceProfile.customRadius'],
             ['appearanceCustomRadiusValue', 'appearanceProfile.customRadius', 'px-output'],
             ['chatFontPreset', 'chatFontPreset'],
@@ -562,6 +550,7 @@ function enhanceGlobalSettings(root, form) {
     });
     mountSettingsShell(root);
     mountSettingsAutosave(root, form);
+    mountTypedFieldOwner(root, form);
     normalizeFormIcons(root);
 }
 
@@ -712,8 +701,13 @@ function mountSettingsAutosave(root, form) {
         if (state.timer) clearTimeout(state.timer);
         state.timer = setTimeout(submit, 400);
     };
-    const onInput = event => { if (event.target?.matches?.('input, select, textarea')) schedule(); };
+    const onInput = event => {
+        if (!event.target?.matches?.('input, select, textarea')) return;
+        if (event.target.dataset.vcpTypedFieldOwner === 'true') return;
+        schedule();
+    };
     const onResult = event => {
+        if (event.detail?.owner === 'typed-settings-field-owner') return;
         state.saving = false;
         if (event.detail?.success) {
             delete form.dataset.vcpSettingsDirty;
@@ -739,6 +733,153 @@ function mountSettingsAutosave(root, form) {
     autosaveStates.add(state);
 }
 
+// R2-02C: these controls have a single draft/save owner. They continue to
+// use the canonical business nodes and persisted keys, but no longer enter
+// the legacy form-submit/autosave chain.
+const TYPED_FIELD_DEFINITIONS = Object.freeze({
+    showHomeVisualTagline: { path: 'showHomeVisualTagline', kind: 'boolean' },
+    appearanceSidebarRowHeight: { path: 'appearanceProfile.sidebarRowHeight', kind: 'number' },
+    appearanceSidebarAvatarSize: { path: 'appearanceProfile.sidebarAvatarSize', kind: 'number' },
+    appearanceSidebarRadius: { path: 'appearanceProfile.sidebarRadius', kind: 'string' },
+    'appearanceSidebarRadiusChoice-tuned': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'tuned' },
+    'appearanceSidebarRadiusChoice-follow': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'follow' },
+    'appearanceSidebarRadiusChoice-square': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'square' },
+    'appearanceSidebarRadiusChoice-small': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'small' },
+    'appearanceSidebarRadiusChoice-medium': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'medium' },
+    'appearanceSidebarRadiusChoice-round': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'round' },
+    'appearanceSidebarRadiusChoice-custom': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'custom' },
+});
+
+function readTypedFieldPatch(control, service) {
+    const definition = TYPED_FIELD_DEFINITIONS[control?.id];
+    if (!definition) return null;
+    const raw = control.type === 'checkbox' ? control.checked : control.value;
+    const value = definition.kind === 'choice' ? definition.value : definition.kind === 'number' ? Number(raw) : definition.kind === 'boolean' ? Boolean(raw) : String(raw);
+    if (definition.path.startsWith('appearanceProfile.')) {
+        const current = service.state.get()?.appearanceProfile || {};
+        const key = definition.path.slice('appearanceProfile.'.length);
+        return { appearanceProfile: { ...current, [key]: value } };
+    }
+    return { [definition.path]: value };
+}
+
+function mountTypedFieldOwner(root, form) {
+    if (!root || !form || form.dataset.vcpTypedFieldOwnerMounted === 'true') return;
+    const service = typedSettingsRegistry?.get('settings-ui') || ensureTypedSettingsService();
+    if (!service?.save?.execute) return;
+    const controls = Object.keys(TYPED_FIELD_DEFINITIONS)
+        .map(id => form.querySelector(`#${id}`))
+        .filter(Boolean);
+    if (!controls.length) return;
+    const state = { root, form, timer: null, pendingPatch: null, inFlight: null, disposed: false, cleanups: [], run: null };
+    const project = snapshot => {
+        if (state.disposed || form.dataset.vcpSettingsDirty === 'true' || form.dataset.globalSettingsSaving === 'true') return;
+        const settings = snapshot?.value || {};
+        const appearance = settings.appearanceProfile || {};
+        const set = (id, value) => { const node = form.querySelector(`#${id}`); if (node && value !== undefined && value !== null) node.value = String(value); };
+        const check = (id, value) => { const node = form.querySelector(`#${id}`); if (node) node.checked = Boolean(value); };
+        set('appearanceSidebarRowHeight', appearance.sidebarRowHeight ?? 46);
+        set('appearanceSidebarRowHeightValue', `${appearance.sidebarRowHeight ?? 46}px`);
+        set('appearanceSidebarAvatarSize', appearance.sidebarAvatarSize ?? 32);
+        set('appearanceSidebarAvatarSizeValue', `${appearance.sidebarAvatarSize ?? 32}px`);
+        set('appearanceSidebarRadius', appearance.sidebarRadius || 'tuned');
+        const radius = appearance.sidebarRadius || 'tuned';
+        Object.keys(TYPED_FIELD_DEFINITIONS).filter(id => id.startsWith('appearanceSidebarRadiusChoice-'))
+            .forEach(id => check(id, id === `appearanceSidebarRadiusChoice-${radius}`));
+        check('showHomeVisualTagline', settings.showHomeVisualTagline !== false);
+    };
+    const status = () => root.querySelector('.vcp-settings-autosave-status');
+    const publish = (success, error = '') => {
+        form.dispatchEvent(new CustomEvent('vcp-settings-save-result', { detail: { success, error: error || undefined, owner: 'typed-settings-field-owner' } }));
+    };
+    const run = async () => {
+        state.timer = null;
+        if (state.disposed || !state.pendingPatch || state.inFlight) return;
+        const patch = state.pendingPatch;
+        state.pendingPatch = null;
+        state.inFlight = service.save.execute(patch);
+        status()?.setAttribute('data-state', 'saving');
+        if (status()) status().textContent = '保存中…';
+        try {
+            const result = await state.inFlight;
+            if (state.disposed) return;
+            if (!result?.success) {
+                form.dataset.vcpSettingsDirty = 'true';
+                status()?.setAttribute('data-state', 'error');
+                if (status()) status().textContent = '保存失败 · 重试';
+                publish(false, result?.error || '设置保存失败');
+                return;
+            }
+            if (!state.pendingPatch) delete form.dataset.vcpSettingsDirty;
+            status()?.setAttribute('data-state', 'saved');
+            if (status()) status().textContent = '已保存';
+            publish(true);
+            if (state.pendingPatch) schedule();
+        } catch (error) {
+            if (!state.disposed) {
+                form.dataset.vcpSettingsDirty = 'true';
+                status()?.setAttribute('data-state', 'error');
+                if (status()) status().textContent = '保存失败 · 重试';
+                publish(false, error?.message || String(error));
+            }
+        } finally {
+            state.inFlight = null;
+        }
+    };
+    const schedule = () => {
+        if (state.disposed) return;
+        if (state.timer) clearTimeout(state.timer);
+        state.timer = setTimeout(run, 400);
+    };
+    state.run = run;
+    const onInput = event => {
+        const control = event.target;
+        if (!TYPED_FIELD_DEFINITIONS[control?.id]) return;
+        const patch = readTypedFieldPatch(control, service) || {};
+        if (patch.appearanceProfile) {
+            state.pendingPatch = {
+                ...(state.pendingPatch || {}),
+                appearanceProfile: {
+                    ...(state.pendingPatch?.appearanceProfile || service.state.get()?.appearanceProfile || {}),
+                    ...patch.appearanceProfile,
+                },
+            };
+        } else {
+            state.pendingPatch = { ...(state.pendingPatch || {}), ...patch };
+        }
+        form.dataset.vcpSettingsDirty = 'true';
+        status()?.setAttribute('data-state', 'dirty');
+        if (status()) status().textContent = '未保存';
+        schedule();
+    };
+    controls.forEach(control => {
+        control.dataset.vcpTypedFieldOwner = 'true';
+        control.addEventListener('input', onInput);
+        control.addEventListener('change', onInput);
+        state.cleanups.push(() => {
+            control.removeEventListener('input', onInput);
+            control.removeEventListener('change', onInput);
+            delete control.dataset.vcpTypedFieldOwner;
+        });
+    });
+    const release = service.state.subscribe((_value, snapshot) => project(snapshot));
+    state.cleanups.push(() => release?.());
+    state.cleanups.push(() => {
+        if (state.timer) clearTimeout(state.timer);
+        state.timer = null;
+        state.pendingPatch = null;
+        state.disposed = true;
+        service.cancelPendingSaves?.();
+        delete form.dataset.vcpTypedFieldOwnerMounted;
+    });
+    form.dataset.vcpTypedFieldOwnerMounted = 'true';
+    typedFieldStates.add(state);
+    ensurePresentationScope()?.own(() => {
+        state.cleanups.forEach(cleanup => cleanup());
+        typedFieldStates.delete(state);
+    }, 'typed-settings-field-owner', 'ui-presentation');
+}
+
 function flushSettingsAutosave() {
     autosaveStates.forEach(state => {
         if (!state.pending) return;
@@ -750,12 +891,25 @@ function flushSettingsAutosave() {
             state.form.requestSubmit();
         }
     });
+    typedFieldStates.forEach(state => {
+        if (state.disposed || !state.pendingPatch || state.inFlight) return;
+        if (state.timer) clearTimeout(state.timer);
+        state.timer = null;
+        // The field owner intentionally starts its own command and does not
+        // route through form.requestSubmit(), which would re-enter legacy
+        // presentation and close the modal.
+        void state.run?.();
+    });
 }
 
 function teardownSettingsAutosave() {
     [...autosaveStates].forEach(state => {
         state.cleanups.forEach(cleanup => cleanup());
         autosaveStates.delete(state);
+    });
+    [...typedFieldStates].forEach(state => {
+        state.cleanups.forEach(cleanup => cleanup());
+        typedFieldStates.delete(state);
     });
 }
 
