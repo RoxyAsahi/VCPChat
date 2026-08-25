@@ -333,3 +333,5 @@ R2-02 network-path consumer 增量（2026-08-24）：`networkNotesPaths` 的 typ
 R2-02 late-command 修复（2026-08-24）：`VCPUISettingsBridge.addNetworkPathInput()` 在 bridge dispose 后拒绝 late command；Electron teardown gate 已验证 disposed Settings owner 不会被 late network-path row command 复活。
 
 R2-02 URL capability fallback 修复（2026-08-25）：legacy owner 对可选 `completeVcpUrl` capability 改为 capability-aware 调用；缺失时保留 authoritative snapshot 原值，不再因 typed consumer 未挂载而抛异常，也不在 UI 层复制 URL 规范化规则。Settings owner、WA persistence 与 UIUX type check 通过。
+
+R2-02 path-listener ownership（2026-08-25）：network path Add 兼容监听改用 renderer `listenerOwner` 注册，继续优先 typed bridge capability、无 capability 时才 fallback 到旧 helper；Settings Electron gate 与 UIUX type check 通过。
