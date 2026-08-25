@@ -331,3 +331,5 @@ R2-02 network-path consumer 增量（2026-08-24）：`networkNotesPaths` 的 typ
 账本校准（2026-08-24）：本节早期 R2-02 段落中的“3 次/10-cycle repeated reopen”属于历史记录；当前权威 Settings-only 证据为 60 cycles，详见上方 stress evidence 与 network-path consumer 增量。状态仍为 `typed-production-consumer-active`，不标 complete。
 
 R2-02 late-command 修复（2026-08-24）：`VCPUISettingsBridge.addNetworkPathInput()` 在 bridge dispose 后拒绝 late command；Electron teardown gate 已验证 disposed Settings owner 不会被 late network-path row command 复活。
+
+R2-02 URL capability fallback 修复（2026-08-25）：legacy owner 对可选 `completeVcpUrl` capability 改为 capability-aware 调用；缺失时保留 authoritative snapshot 原值，不再因 typed consumer 未挂载而抛异常，也不在 UI 层复制 URL 规范化规则。Settings owner、WA persistence 与 UIUX type check 通过。

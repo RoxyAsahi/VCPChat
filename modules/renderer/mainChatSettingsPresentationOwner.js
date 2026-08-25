@@ -619,7 +619,11 @@ export function createMainChatSettingsPresentationOwner({
         }
 
         if (!typedSettingsProjectionActive) {
-            const completedUrl = getSettingsManager().completeVcpUrl(globalSettings.vcpServerUrl || '');
+            const settingsManager = getSettingsManager?.();
+            const rawVcpUrl = globalSettings.vcpServerUrl || '';
+            const completedUrl = typeof settingsManager?.completeVcpUrl === 'function'
+                ? settingsManager.completeVcpUrl(rawVcpUrl)
+                : rawVcpUrl;
             safeSet('vcpServerUrl', completedUrl);
         }
         if (!typedSettingsProjectionActive) {
