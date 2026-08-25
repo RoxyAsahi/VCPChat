@@ -1,8 +1,8 @@
 # VCPChat Harness UI/UX 架构重构规范
 
-> 状态：提案，作为 UI/UX 重构的上位约束
+> 状态：已采纳，作为 UI/UX 重构的上位约束
 > 
-> 目标：在不引入 React/Vue/Cordis、不改造业务域和聊天核心的前提下，使 VCPChat 的 UI/UX 运行时、Surface、组件、主题和生命周期尽可能接近 DeepSeek Harness 的源码组织方式。
+> 目标：在不引入 React/Vue/Cordis、不改造业务域和聊天核心的前提下，使 VCPChat 的 UI/UX 运行时、Surface、组件、主题和生命周期尽可能接近 DeepSeek Harness 的源码组织方式；当前施工目标为 R2-02C Settings single-owner migration。
 
 ## 1. 范围与冻结边界
 

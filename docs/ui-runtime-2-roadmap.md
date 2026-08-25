@@ -148,18 +148,18 @@ DOM、Web Components、原生 Electron View
 ### 2.3 当前工作批次
 
 ```yaml
-batch: R2-02
+batch: R2-02C
 mode: target
-focus: scoped-settings-service-assembly-and-real-controls
+focus: settings-single-owner-migration
 status: active
 production_consumer: global SettingsRoot + Appearance Studio
 consumer_kind: internal production consumer; typed adapter migration slice
 first_slice: existing settings capability boundary + modules/uiux/adapters/settings.ts
-completed_slice: semantic token projection + scope-owned SettingsUiService/RustAssistantUiService assembly + appearance/font/streaming/base-text/VCP connection/voice/advanced/middle-click/chat-layout/assistant/Rust controls, combo-control synchronization, legacy projection gating, and Electron evidence
-next_slice: migrate remaining SettingsRoot controls to SettingsUiService commands, then retire matching legacy bridge presentation paths
+completed_slice: semantic token projection + scope-owned SettingsUiService/RustAssistantUiService assembly + typed SettingsRoot observation, failure/retry/timeout/late-result/teardown evidence
+next_slice: migrate a bounded appearance/workspace field group to one SettingsUiService draft/save owner, then retire matching legacy bridge presentation paths
 blocked_by: UI Apps smoke 的 dynamic-wallpaper disabled-manifest readiness（不阻塞 Settings Surface contract）
-excluded: chat-message-internals, plugin-loader, child-page-migration
-last_verified: 2026-08-24
+excluded: chat-message-internals, plugin-loader, child-page-migration, generic-vdom-before-consumer
+last_verified: 2026-08-25
 evidence: npm run check:uiux; npm run test:uiux; node --test tests/creation-controller.test.js; node scripts/test-ui-system.mjs; node scripts/test-appearance-studio.mjs; node scripts/test-settings-wa-electron.mjs; npm run test:electron-uiux-theme
 ```
 
