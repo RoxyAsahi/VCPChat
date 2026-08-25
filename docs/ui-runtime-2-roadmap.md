@@ -5,7 +5,7 @@
 > 适用目录：`/Users/asahi/Documents/Codex/VCPChat-newarchitecture`  
 > 对照对象：本机 `deepseek-harness` 的 Client UI / Slot / Theme / lifecycle 机制
 > 上位规范：[vcpchat-harness-uiux-architecture.md](/Users/asahi/Documents/Codex/VCPChat-newarchitecture/docs/vcpchat-harness-uiux-architecture.md)；本文件只负责执行顺序、consumer、证据与删除账本
-> 最近核验：2026-08-24；R2-00 Composer slice 已达到 complete；R2-01 Overlay/notification slice 已闭合；R2-03 为 semantic-token-projection-active；R2-08 为 scoped-service-assembly-active（仍委托 legacy LifecycleScope，public API 未就绪）；R2-02 为 typed-production-consumer-active（legacy bridge、Classic fallback 与完整 stress 证据仍未闭合）；当前 active slice：Settings scoped assembly → 剩余真实控件迁移与旧 bridge 收缩
+> 最近核验：2026-08-25；R2-00 Composer slice 已达到 complete；R2-01 Overlay/notification slice 已闭合；R2-03 为 semantic-token-projection-active；R2-08 为 scoped-service-assembly-active（仍委托 legacy LifecycleScope，public API 未就绪）；R2-02 为 typed-production-consumer-active（legacy bridge、Classic fallback 与完整 stress 证据仍未闭合）；当前 active slice：R2-02C Settings single-owner migration（先登记字段 owner，再迁移外观/工作区真实控件，并删除对应 legacy projection）
 > 最近证据：`node --test tests/chat-surface.test.mjs tests/chat-surface-slots.test.mjs tests/main-chat-surface-adapter.test.mjs tests/chat-plugin-manifest.test.mjs`（19/19）；`npm run test:electron-main-chat-sequences`（next-main-chat-default，24 actions，25 VCP requests，required 1/1）
 > R2-01 证据：`node --test tests/overlay-coordinator.test.js tests/escape-dispatcher.test.js tests/notification-menu-controller.test.js`（9/9）；`node scripts/test-ui-system.mjs`；`node scripts/test-settings-wa-electron.mjs`（Settings Harness structure gate passed）。R2-03 证据：`npm run test:uiux` 的 ThemePresenter semantic token/teardown 合同；`node scripts/test-appearance-studio.mjs`。R2-08 证据：`npm run check:uiux`；`npm run test:uiux`（Settings、Theme、scoped registry contracts）；`npm run check:uiux:artifacts`；`npm run test:uiux:artifacts`；`npm run test:electron-uiux:artifacts`（Electron 仅加载 generated browser-entry 并执行 generated Settings adapter save/dispose contract）；`tests/uiux-service-registry.test.mjs`（parent invalidation、reverse unwind、async disposer quiescence）。仍不声明 public runtime ready，因为 UiScope 继续委托 legacy LifecycleScope，且缺完整 packaged artifact/跨平台证据。
 
@@ -289,10 +289,12 @@ const owned = slots.mount('chat.composer.leading', host, snapshot, { scope });
 
 ## 8. 当前下一步
 
-1. 先把 R2-03 从 snapshot projection 推进到真正 semantic token presenter，并记录/逐步删除 legacy theme reads。
-2. 再让 SettingsRoot 的真实控件通过 `SettingsUiService.state` 与 `save.execute` 工作；在行为等价证据后删除旧 presentation bridge 路径。
-3. R2-08 已进入 scoped-service-assembly-active：`modules/uiux/package.json` 建立局部 ESM boundary；scope-owned `UiServiceRegistry` 已由 Settings 生产 bridge 安装并被 SettingsRoot consumer 读取；artifact gate 以临时干净目录重建并逐字节校验 generated JS/d.ts 文件，Node artifact smoke 与 `npm run test:electron-uiux:artifacts` 均实际加载 generated Settings adapter 并执行 save/subscribe/release/dispose contract。runtime 仍委托 legacy `LifecycleScope`，且缺完整 packaged artifact/跨平台证据，因此不声明 public runtime ready。
-4. 保持 R2-00/R2-01 的能力由真实 consumer 驱动，不开放任意 selector/HTML 注入，也不创建第二套生命周期或 durable UI Store；Plugin Loader 与 chat plugin protocol 保持冻结。
+1. R2-02C 首先生成完整 Settings 字段 ownership report；每项必须列出 persisted key、DOM id/name、读写 owner、dirty/save/retry owner、legacy path、删除条件与验收证据。
+2. 只迁移外观/工作区中的一小批真实控件：它们从 `SettingsUiService.state` 读取、由 `save.execute` 提交，并将 draft、dirty、autosave、timeout、retry 和 close flush 收束到同一个明确 owner；行为等价后删除对应 `settings-bridge.js` projection。
+3. 新 Settings primitive 必须遵循上位规范的 Harness-compatible renderer：Light DOM 同构、来源映射、interaction/lifecycle owner，以及 DOM/geometry/sequence/screenshot 四层门禁。它不成为独立设计系统，也不先实现泛化 Virtual DOM。
+4. R2-02C 关闭后，才把 R2-03 从 snapshot projection 推进到 document-level single ThemeTokenOwner，并记录/逐步删除 legacy theme reads。
+5. R2-08 已进入 scoped-service-assembly-active：`modules/uiux/package.json` 建立局部 ESM boundary；scope-owned `UiServiceRegistry` 已由 Settings 生产 bridge 安装并被 SettingsRoot consumer 读取；artifact gate 以临时干净目录重建并逐字节校验 generated JS/d.ts 文件，Node artifact smoke 与 `npm run test:electron-uiux:artifacts` 均实际加载 generated Settings adapter 并执行 save/subscribe/release/dispose contract。runtime 仍委托 legacy `LifecycleScope`，且缺完整 packaged artifact/跨平台证据，因此不声明 public runtime ready。
+6. 保持 R2-00/R2-01 的能力由真实 consumer 驱动，不开放任意 selector/HTML 注入，也不创建第二套生命周期或 durable UI Store；Plugin Loader 与 chat plugin protocol 保持冻结。
 
 补充门禁记录：本批补回 `nextUiNotificationForum` / `nextUiNotificationMemo`，并让 NextShell controller 成为唯一 owner；旧 `event-listeners.js` 中对应的重复 document-level binding 仍保持注释隔离。Plugin Loader 与 chat plugin manifest 的越界改动已回退，UI Runtime 只消费既有插件能力；完整 UI Apps smoke 仍受 `VCPDistributedServer/Plugin/VChatDynamicWallpaper/plugin-manifest.json.block` 外部 readiness blocker 影响，本轮不擅自启用用户禁用插件。
 

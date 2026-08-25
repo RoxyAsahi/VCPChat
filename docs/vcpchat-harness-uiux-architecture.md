@@ -180,24 +180,47 @@ UI Runtime 只提供 `MainChatSurface`、Slot、Theme、Overlay 和 Focus consum
 
 每个 UI 迁移切片都必须继续通过 chunk 顺序、取消、重试、历史切换、迟到结果隔离、terminal persistence 和 Surface dispose 测试。
 
-## 8. Renderer 策略
+## 8. Harness-compatible Renderer 策略
 
-不用 React 不代表继续保留散落 DOM 操作。目标采用：
+目标不是重新设计一套“没有 React 的 VCP UI”，也不是只在现有节点上叠加 class。目标是建立一个 **Harness-compatible renderer**：复刻可验证的 Harness DOM、CSS、交互和生命周期合同，只将 React renderer 替换为窄的 TypeScript DOM renderer。
 
-- TypeScript Surface controller；
-- Web Components 形式的共享 primitive；
-- 显式 root 和 capability 注入；
-- native / Web Awesome / fallback provider；
-- 一个业务节点和一个可见 projection；
-- projection 由 owner 管理并可回滚。
+```text
+Harness React component
+        ↓ 同构 contract
+VCP Harness-compatible primitive
+        ↓
+TypeScript Light-DOM renderer / lifecycle shell
+        ↓
+Native / Web Awesome / fallback provider
+```
 
-Primitive 不持有业务 Store，只处理：
+第一阶段默认使用 Light DOM。Web Component 可以作为 mount、update、dispose 的生命周期壳，但不得把可见结构、CSS 或业务状态藏进 Shadow DOM。这样 Harness CSS 能直接镜像，DOM nesting 与 computed style 可比较，语义 token 也能穿透到 Surface。只有确有浏览器隔离需求的控件才可以提出 Shadow DOM 例外，并必须单独记录其等价验证方法。
 
-- DOM 结构；
-- keyboard/focus；
-- visual state；
-- accessibility attributes；
-- provider fallback。
+### 8.1 Primitive 合同
+
+每个 primitive 不是一个 CSS class，而是以下四层的唯一 owner：
+
+1. Harness 对应的 DOM structure、class name 和 ARIA；
+2. 源码镜像的 CSS geometry 与 semantic-token 映射；
+3. 完整 interaction state machine；
+4. listener、portal、focus 和 transient DOM 的 lifecycle owner。
+
+例如 `Select` 必须拥有 trigger、保留的 native business select、menu portal、option rows 以及 `closed/open/focused/hovered/selected/disabled/outside-dismissed/escape-dismissed/destroyed` 状态。它不读取 IPC、不保存 settings、不持有聊天状态。
+
+renderer 第一阶段只提供显式 mount/update/dispose、keyed list、属性/text 差异更新、owner-bound event、portal 和 focus restore；不得为了概念完整性先造通用 Virtual DOM。provider 只能替换底层实现，不能改变 primitive 的 DOM 语义、尺寸、键盘、Escape/outside-dismiss、ARIA 或 teardown 合同。
+
+### 8.2 源码映射与等价门禁
+
+每个进入生产的 primitive 必须在 `docs/reference/deepseek-harness-primitives/` 下登记源文件和保留项；VCP 实现文件顶部也必须注明 Harness 来源。不得手工“重新解释”间距、line-height、radius 或状态色；颜色仅允许通过 VCP semantic token 映射。
+
+等价门禁分为四层，缺一层只能保持 candidate：
+
+1. DOM nesting：关键节点、tag、class 和 ARIA 与参考 contract 对齐；
+2. computed geometry：字体、line-height、padding、gap、border 与 radius 逐项采样；
+3. interaction sequence：hover、focus、keyboard、disabled、outside-dismiss、Escape 和 dispose；
+4. screenshot diff：同一 Electron 主题与窗口条件下可解释的像素差异。
+
+当前 Settings 仍处于 R2-02C 单一 owner 迁移，不得在其遗留 projection、Theme token owner 和 listener 增长闭合前批量实现 primitive。首个实现只能服务一个真实 Settings 字段批次，并同时删除相应 legacy presentation 路径。
 
 ## 9. 迁移顺序
 
@@ -297,4 +320,3 @@ Primitive 不持有业务 Store，只处理：
 - 不为所有业务子页面提前建立通用 Runtime；
 - 不以组件库展示页作为生产 consumer；
 - 不以“已经有一个 wrapper”代替旧实现删除。
-
