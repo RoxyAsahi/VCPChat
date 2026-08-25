@@ -619,7 +619,11 @@ export function createMainChatSettingsPresentationOwner({
         }
 
         if (!typedSettingsProjectionActive) {
-            const completedUrl = getSettingsManager().completeVcpUrl(globalSettings.vcpServerUrl || '');
+            const settingsManager = getSettingsManager?.();
+            const rawVcpUrl = globalSettings.vcpServerUrl || '';
+            const completedUrl = typeof settingsManager?.completeVcpUrl === 'function'
+                ? settingsManager.completeVcpUrl(rawVcpUrl)
+                : rawVcpUrl;
             safeSet('vcpServerUrl', completedUrl);
         }
         if (!typedSettingsProjectionActive) {
@@ -818,7 +822,10 @@ export function createMainChatSettingsPresentationOwner({
         // Assistant Select
         const assistantAgentSelect = document.getElementById('assistantAgent');
         if (assistantAgentSelect) {
-            await getSettingsManager().populateAssistantAgentSelect();
+            const settingsManager = getSettingsManager?.();
+            if (typeof settingsManager?.populateAssistantAgentSelect === 'function') {
+                await settingsManager.populateAssistantAgentSelect();
+            }
             if (!isCurrent(token)) return false;
             if (!typedSettingsProjectionActive) assistantAgentSelect.value = globalSettings.assistantAgent || '';
         }

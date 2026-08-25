@@ -530,7 +530,7 @@ export function setupEventListeners(deps) {
 
         const addPathBtn = modal.querySelector('#addNetworkPathBtn');
         if (addPathBtn && !addPathBtn.dataset.globalSettingsBound) {
-            addPathBtn.addEventListener('click', () => {
+            addListener(addPathBtn, 'click', () => {
                 if (window.VCPUISettingsBridge?.addNetworkPathInput?.()) return;
                 addNetworkPathInput();
             });
