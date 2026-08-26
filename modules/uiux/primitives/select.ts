@@ -40,20 +40,27 @@ export function mountSelect(select: HTMLSelectElement, props: SelectProps = {}, 
         });
     };
     const close = (restoreFocus = false) => { menu.hidden = true; trigger.setAttribute('aria-expanded', 'false'); menu.remove(); if (restoreFocus && document.contains(trigger)) trigger.focus(); };
+    const placePortal = () => {
+        if (!props.portal || menu.hidden || trigger.getAttribute('aria-expanded') !== 'true') return;
+        const anchor = trigger.getBoundingClientRect();
+        const margin = 12; const width = menu.offsetWidth || anchor.width; const height = menu.offsetHeight;
+        const maxLeft = Math.max(margin, window.innerWidth - width - margin);
+        const maxTop = Math.max(margin, window.innerHeight - height - margin);
+        menu.style.left = `${Math.min(Math.max(anchor.left, margin), maxLeft)}px`;
+        menu.style.top = `${Math.min(Math.max(anchor.bottom + 4, margin), maxTop)}px`;
+        menu.style.width = `${anchor.width}px`;
+    };
     const open = () => {
         if (select.disabled) return;
         if (props.portal) {
-            const anchor = trigger.getBoundingClientRect();
             document.body.append(menu);
             menu.style.position = 'fixed';
-            menu.style.left = `${anchor.left}px`;
-            menu.style.top = `${anchor.bottom + 4}px`;
-            menu.style.width = `${anchor.width}px`;
         } else if (!menu.parentNode) {
             wrap.append(menu);
         }
         menu.hidden = false;
         trigger.setAttribute('aria-expanded', 'true');
+        placePortal();
         const current = menu.querySelector<HTMLElement>('[data-selected="true"]');
         (current || menu.querySelector<HTMLElement>('[role="menuitem"]'))?.focus();
     };
@@ -67,6 +74,7 @@ export function mountSelect(select: HTMLSelectElement, props: SelectProps = {}, 
     });
     select.parentNode?.insertBefore(wrap, select); wrap.append(select, trigger, menu); select.tabIndex = -1;
     scope.listen(trigger, 'click', onTrigger); scope.listen(select, 'change', onChange); scope.listen(select, 'vcp-uiux-sync', onSync);
+    scope.listen(window, 'scroll', placePortal, { capture: true }); scope.listen(window, 'resize', placePortal);
     scope.listen(document, 'pointerdown', event => { if (!wrap.contains(event.target as Node) && !menu.contains(event.target as Node)) close(); }, { capture: true });
     scope.listen(document, 'keydown', event => {
         const key = (event as KeyboardEvent).key;
