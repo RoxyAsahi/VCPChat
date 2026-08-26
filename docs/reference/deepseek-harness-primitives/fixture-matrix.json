@@ -1,0 +1,12 @@
+{
+  "viewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 },
+  "font": "system-ui",
+  "themes": ["light"],
+  "cases": [
+    ["input", "default"], ["input", "focus"], ["input", "disabled"],
+    ["field", "description"], ["field", "error"],
+    ["select", "closed"], ["select", "open"], ["select", "selected"], ["select", "disabled"]
+  ],
+  "outputs": ["dom", "geometry", "computed-style", "screenshot", "pixel-diff"],
+  "status": "matrix-defined-harness-capture-pending"
+}
