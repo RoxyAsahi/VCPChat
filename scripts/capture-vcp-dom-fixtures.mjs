@@ -27,11 +27,22 @@ try {
     const selectRelease = mountSelect(select, { label: 'Mode', portal: false }, scope);
     const inputRelease = mountInput(input, { placeholder: 'Search' }, scope);
     fs.writeFileSync(path.join(out, 'input.default.dom.html'), input.parentElement.outerHTML, 'utf8');
+    input.focus();
+    fs.writeFileSync(path.join(out, 'input.focus.dom.html'), input.parentElement.outerHTML, 'utf8');
+    input.disabled = true;
+    fs.writeFileSync(path.join(out, 'input.disabled.dom.html'), input.parentElement.outerHTML, 'utf8');
+    input.disabled = false;
     fs.writeFileSync(path.join(out, 'field.description.dom.html'), field.outerHTML, 'utf8');
-    document.querySelector('.vcp-harness-select-trigger').click();
+    const trigger = document.querySelector('.vcp-harness-select-trigger');
+    fs.writeFileSync(path.join(out, 'select.closed.dom.html'), field.outerHTML, 'utf8');
+    trigger.click();
     fs.writeFileSync(path.join(out, 'select.open.dom.html'), field.outerHTML, 'utf8');
+    fs.writeFileSync(path.join(out, 'select.selected.dom.html'), field.outerHTML, 'utf8');
+    select.disabled = true;
+    trigger.click();
+    fs.writeFileSync(path.join(out, 'select.disabled.dom.html'), field.outerHTML, 'utf8');
     await inputRelease?.(); await selectRelease?.(); await fieldRelease?.(); await scope.dispose('fixture-complete');
-    console.log('VCP generated DOM fixtures captured (Input.default, Field.description, Select.open).');
+    console.log('VCP generated DOM fixtures captured (Input default/focus/disabled, Field.description, Select closed/open/selected/disabled).');
 } finally {
     globalThis.document = previousDocument;
     globalThis.window = previousWindow;

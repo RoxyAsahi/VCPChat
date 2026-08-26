@@ -15,7 +15,12 @@ const normalizeClass = value => [...new Set(String(value || '').split(/\s+/).fil
 const shape = node => node ? { tag: node.tagName.toLowerCase(), class: normalizeClass(node.getAttribute('class')), role: node.getAttribute('role'), aria: [...node.attributes].filter(attribute => attribute.name.startsWith('aria-')).sort((a, b) => a.name.localeCompare(b.name)).map(attribute => [attribute.name, attribute.value]), children: [...node.children].map(shape) } : null;
 const cases = [
   ['input.default', 'input.default.dom.html'],
+  ['input.focus', 'input.focus.dom.html'],
+  ['input.disabled', 'input.disabled.dom.html'],
+  ['select.closed', 'select.closed.dom.html'],
   ['select.open', 'select.open.dom.html'],
+  ['select.selected', 'select.selected.dom.html'],
+  ['select.disabled', 'select.disabled.dom.html'],
 ];
 const results = [];
 for (const [name, file] of cases) {
