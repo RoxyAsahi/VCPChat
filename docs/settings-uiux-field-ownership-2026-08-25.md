@@ -95,3 +95,5 @@ Appearance select group 扩展（2026-08-26）：`appearanceProfile.density`、`
 Legacy projection retirement（2026-08-26）：`mainChatSettingsPresentationOwner.js` 已删除 Appearance/Home/Radius 首批字段的 safeSet/safeCheck 写入（19 行）。这些字段现在只有 typed Settings field owner 负责可见控件投影；其余未迁移字段和兼容 orchestration 保持不变。Settings Electron gate、source-equivalence、unified-surface 与 UIUX typecheck 通过。
 
 Harness vertical slice（2026-08-26）：`appearanceDensity` 由 `modules/uiux/primitives/field.ts` 与 `select.ts` 以 Light DOM 接管。Select 保留 native `<select>` 作为唯一业务源，拥有 40px/8px/10px 菜单几何、ARIA menu/menuitem、Arrow/Home/End/Escape/outside-dismiss、focus restore 与 scope-owned teardown。Electron Settings gate 已验证 DOM、geometry、交互与截图路径；`node scripts/test-electron-uiux-theme.mjs` 已验证 generated artifact-only Electron primitive contract。legacy projection 暂保留，待独立 interaction sequence 后删除。
+
+Interaction evidence（2026-08-26）：`tests/uiux-primitives.test.mjs` 新增独立序列，覆盖 portal 打开、初始 focus、ArrowDown/End 键盘导航、选项提交与 native source 同步、outside-dismiss、Escape focus restore，以及 dispose 后 tabindex/aria-hidden/DOM 恢复；源码平面 `npm run test:uiux` 19/19 通过。外部 snapshot 投影通过非业务 `vcp-uiux-sync` 事件刷新 Select trigger，避免伪造 change/autosave。
