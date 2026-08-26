@@ -1,0 +1,10 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+const root = process.cwd();
+const source = path.join(root, 'reports/harness-select-production.json');
+const target = path.join(root, 'docs/reference/deepseek-harness-primitives/fixtures/harness/select.production.dom.html');
+const capture = JSON.parse(await fs.readFile(source, 'utf8'));
+if (capture.source !== 'Harness production web E2E scaffold') throw new Error('capture source is not the approved Harness production scaffold');
+if (!capture.dom || !capture.items?.length) throw new Error('capture has no Select menu DOM/items');
+await fs.writeFile(target, `${capture.dom}\n`, 'utf8');
+console.log(`Promoted Harness Select production fixture (${capture.items.length} menuitems).`);

@@ -40,6 +40,7 @@
     "check:harness-fixture-evidence": "node scripts/check-harness-fixture-evidence.mjs",
     "check:harness-vcp-evidence-schema": "node scripts/check-harness-vcp-evidence-schema.mjs",
     "check:harness-select-source-evidence": "node scripts/check-harness-select-source-evidence.mjs",
+    "promote:harness-select-fixture": "node scripts/promote-harness-select-fixture.mjs",
     "check:harness-snapshot": "node scripts/check-harness-snapshot-contract.mjs",
     "test:uiux:artifacts": "node scripts/test-uiux-artifact-smoke.mjs",
     "build:uiux": "tsc --project tsconfig.uiux.build.json --pretty false",

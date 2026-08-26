@@ -20,7 +20,7 @@ const reference = await readJson(path.join(referencePath, 'input.geometry.json')
 const select = await readJson(path.join(referencePath, 'select.geometry.json'));
 const vcp = await readJson(vcpPath);
 const harness = await readJson(harnessPath);
-const harnessSelect = harness?.select;
+const harnessSelect = await readJson(path.join(root, 'reports/harness-select-production.json'));
 
 // This report deliberately separates a one-sided contract check from a real
 // Harness↔VCP computed-style diff. The latter is pending until a browser capture
@@ -32,14 +32,14 @@ const checks = [
     ['input.root.borderRadius', harness?.computedStyle?.borderRadius ?? reference?.root?.borderRadius, vcp?.geometry?.inputWrapRadius],
     ['input.fontSize', harness?.computedStyle?.fontSize ?? reference?.input?.fontSize, vcp?.geometry?.inputFontSize],
     ['input.lineHeight', harness?.computedStyle?.lineHeight ?? reference?.input?.lineHeight, vcp?.geometry?.inputLineHeight],
-    ['select.list.minWidth', select?.selectors?.['.list']?.minWidth, vcp?.geometry?.menuMinWidth],
-    ['select.list.borderRadius', select?.selectors?.['.list']?.borderRadius, vcp?.geometry?.menuRadius],
-    ['select.item.minHeight', select?.selectors?.['.item']?.minHeight, vcp?.geometry?.minHeight],
-    ['select.item.padding', select?.selectors?.['.item']?.padding, vcp?.geometry?.padding],
-    ['select.item.gap', select?.selectors?.['.item']?.gap, vcp?.geometry?.itemGap],
-    ['select.item.borderRadius', select?.selectors?.['.item']?.borderRadius, vcp?.geometry?.itemRadius],
-    ['select.item.fontSize', select?.selectors?.['.item']?.fontSize, vcp?.geometry?.itemFontSize],
-    ['select.item.lineHeight', select?.selectors?.['.item']?.lineHeight, vcp?.geometry?.itemLineHeight],
+    ['select.list.minWidth', harnessSelect?.style?.minWidth ?? select?.selectors?.['.list']?.minWidth, vcp?.geometry?.menuMinWidth],
+    ['select.list.borderRadius', harnessSelect?.style?.borderRadius ?? select?.selectors?.['.list']?.borderRadius, vcp?.geometry?.menuRadius],
+    ['select.item.minHeight', harnessSelect?.items?.[0]?.style?.minHeight ?? select?.selectors?.['.item']?.minHeight, vcp?.geometry?.minHeight],
+    ['select.item.padding', harnessSelect?.items?.[0]?.style?.padding ?? select?.selectors?.['.item']?.padding, vcp?.geometry?.padding],
+    ['select.item.gap', harnessSelect?.items?.[0]?.style?.gap ?? select?.selectors?.['.item']?.gap, vcp?.geometry?.itemGap],
+    ['select.item.borderRadius', harnessSelect?.items?.[0]?.style?.borderRadius ?? select?.selectors?.['.item']?.borderRadius, vcp?.geometry?.itemRadius],
+    ['select.item.fontSize', harnessSelect?.items?.[0]?.style?.fontSize ?? select?.selectors?.['.item']?.fontSize, vcp?.geometry?.itemFontSize],
+    ['select.item.lineHeight', harnessSelect?.items?.[0]?.style?.lineHeight ?? select?.selectors?.['.item']?.lineHeight, vcp?.geometry?.itemLineHeight],
 ];
 
 const canonicalize = value => {
@@ -61,7 +61,7 @@ const report = {
     pass: false,
     harnessComputedStyleCapture: { status: harness ? 'available' : 'pending', path: 'reports/harness-primitive-geometry.json' },
     vcpComputedStyleCapture: { status: vcp ? 'available' : 'missing', path: 'reports/vcp-primitive-geometry.json' },
-    semanticFixture: { harness: harness?.selector ?? null, vcp: vcp?.primitive ?? null, same: false },
+    semanticFixture: { harness: harnessSelect ? 'agent-preset-selection/Standard mode' : harness?.selector ?? null, vcp: vcp?.primitive ?? null, same: false, reason: 'Harness capture is Select-only while VCP artifact capture is Input+Select scene' },
     contract,
     missingEvidence: [
         ...(harness ? [] : ['Harness browser computed-style capture']),

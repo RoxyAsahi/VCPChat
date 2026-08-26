@@ -8,5 +8,5 @@
     ["select", "closed"], ["select", "open"], ["select", "selected"], ["select", "disabled"]
   ],
   "outputs": ["dom", "geometry", "computed-style", "screenshot", "pixel-diff"],
-  "status": "structural-diff-8-pass-1-fail-1-pending"
+  "status": "structural-diff-8-pass-1-fail-1-pending-select-production-captured"
 }
