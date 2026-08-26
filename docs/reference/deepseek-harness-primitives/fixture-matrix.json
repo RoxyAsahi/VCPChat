@@ -12,13 +12,14 @@
     "select/closed": "AgentPresetSeat ready trigger; production fixture captured, raw DOM/geometry/pixel comparison is failing",
     "select/open": "AgentPresetSeat ready open/selected/hover menu; VCP-owned production capture is replayable",
     "select/selected": "AgentPresetSeat ready menu with Standard mode selected and hovered; VCP-owned production capture is replayable",
-    "select/disabled": "MenuItem.disabled source/DOM fixture only; AgentPresetSeat busy trigger production fixture is pending",
+    "select/disabled": "AgentPresetSeat busy trigger is captured through delayed production host select; VCP comparison remains blocked because no in-scope AgentPreset consumer exists",
     "select/focus": "AgentPresetSeat keyboard-open focus owner is captured independently; Harness and VCP both retain trigger focus"
   },
   "status": {
     "domStructural": "10/10 pass",
     "selectMenuOpenSelectedHoverPixel": "pass (menu ROI only)",
     "selectMenuKeyboardFocus": "pass (Harness and VCP retain trigger focus; no roving keyboard ownership)",
+    "selectBusyTrigger": "Harness production capture active; VCP cross-page comparison blocked by consumer boundary",
     "fieldBrowserVisual": "pass (description/error production fixture at 1680x1000 @1x)",
     "inputFullVisualMatrix": "blocked (Harness ui-primitives/Input has no production consumer)"
   }
