@@ -38,9 +38,14 @@ try {
     trigger.click();
     fs.writeFileSync(path.join(out, 'select.open.dom.html'), field.outerHTML, 'utf8');
     fs.writeFileSync(path.join(out, 'select.selected.dom.html'), field.outerHTML, 'utf8');
-    select.disabled = true;
-    trigger.click();
-    fs.writeFileSync(path.join(out, 'select.disabled.dom.html'), field.outerHTML, 'utf8');
+    const disabledHost = document.createElement('div');
+    disabledHost.innerHTML = '<select id="disabled-mode"><option selected disabled>Comfortable</option></select>';
+    document.body.append(disabledHost);
+    const disabledSelect = disabledHost.querySelector('select');
+    const disabledRelease = mountSelect(disabledSelect, { label: 'Density', portal: false }, scope);
+    disabledHost.querySelector('.vcp-harness-select-trigger').click();
+    fs.writeFileSync(path.join(out, 'select.disabled.dom.html'), disabledHost.querySelector('.vcp-harness-select').outerHTML, 'utf8');
+    await disabledRelease?.(); disabledHost.remove();
     await inputRelease?.(); await selectRelease?.(); await fieldRelease?.(); await scope.dispose('fixture-complete');
     console.log('VCP generated DOM fixtures captured (Input default/focus/disabled, Field.description, Select closed/open/selected/disabled).');
 } finally {
