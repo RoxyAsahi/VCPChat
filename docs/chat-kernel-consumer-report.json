@@ -481,6 +481,7 @@
     "modules/uiux/generated/contracts.js",
     "modules/uiux/generated/index.js",
     "modules/uiux/generated/primitives/choice.js",
+    "modules/uiux/generated/primitives/color-pair.js",
     "modules/uiux/generated/primitives/field.js",
     "modules/uiux/generated/primitives/input.js",
     "modules/uiux/generated/primitives/range.js",
@@ -2556,7 +2557,7 @@
       "definitions": [
         {
           "file": "modules/ui-system/settings-bridge.js",
-          "line": 429,
+          "line": 427,
           "syntax": "dot-assignment",
           "snippet": "window.__vcpHarnessSelectOwnerCleanup = () => {"
         }
@@ -2564,19 +2565,19 @@
       "production": [
         {
           "file": "modules/ui-system/settings-bridge.js",
-          "line": 435,
+          "line": 433,
           "surface": "internal-app",
           "snippet": "delete window.__vcpHarnessSelectOwnerCleanup;"
         },
         {
           "file": "modules/ui-system/settings-bridge.js",
-          "line": 441,
+          "line": 439,
           "surface": "internal-app",
           "snippet": "if (harnessSelectOpenCount === 0) window.__vcpHarnessSelectOwnerCleanup?.();"
         },
         {
           "file": "modules/ui-system/settings-bridge.js",
-          "line": 1301,
+          "line": 1315,
           "surface": "internal-app",
           "snippet": "window.__vcpHarnessSelectOwnerCleanup?.();"
         }
@@ -7157,13 +7158,13 @@
         },
         {
           "file": "modules/ui-system/settings-bridge.js",
-          "line": 259,
+          "line": 257,
           "surface": "internal-app",
           "snippet": "|| window.uiHelperFunctions?.addNetworkPathInput?.(path);"
         },
         {
           "file": "modules/ui-system/settings-bridge.js",
-          "line": 1664,
+          "line": 1678,
           "surface": "internal-app",
           "snippet": "|| window.uiHelperFunctions?.addNetworkPathInput?.(path)"
         },
@@ -10028,13 +10029,13 @@
         },
         {
           "file": "modules/ui-system/settings-bridge.js",
-          "line": 467,
+          "line": 465,
           "surface": "internal-app",
           "snippet": "if (!element || window.VCPUI.getController(element)) return;"
         },
         {
           "file": "modules/ui-system/settings-bridge.js",
-          "line": 469,
+          "line": 467,
           "surface": "internal-app",
           "snippet": "const controller = window.VCPUI.enhance(name, element, options);"
         }
@@ -10046,7 +10047,7 @@
       "definitions": [
         {
           "file": "modules/ui-system/settings-bridge.js",
-          "line": 1658,
+          "line": 1672,
           "syntax": "dot-assignment",
           "snippet": "window.VCPUISettingsBridge = Object.freeze({"
         }
@@ -15162,7 +15163,7 @@
       "mutableMaps": 0
     },
     "modules/ui-system/settings-bridge.js": {
-      "windowReferences": 51,
+      "windowReferences": 52,
       "documentReferences": 60,
       "electronReferences": 0,
       "timers": 4,
@@ -15340,6 +15341,14 @@
     "modules/uiux/generated/primitives/choice.js": {
       "windowReferences": 0,
       "documentReferences": 5,
+      "electronReferences": 0,
+      "timers": 0,
+      "listeners": 0,
+      "mutableMaps": 0
+    },
+    "modules/uiux/generated/primitives/color-pair.js": {
+      "windowReferences": 0,
+      "documentReferences": 6,
       "electronReferences": 0,
       "timers": 0,
       "listeners": 0,
