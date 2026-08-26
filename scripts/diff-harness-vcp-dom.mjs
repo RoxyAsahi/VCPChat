@@ -22,6 +22,7 @@ const cases = [
   ['select.open', 'select.open.dom.html'],
   ['select.selected', 'select.selected.dom.html'],
   ['select.disabled', 'select.disabled.dom.html'],
+  ['field.error', 'field.error.dom.html'],
 ];
 const results = [];
 for (const [name, file] of cases) {

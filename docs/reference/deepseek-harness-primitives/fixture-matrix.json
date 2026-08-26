@@ -8,5 +8,5 @@
     ["select", "closed"], ["select", "open"], ["select", "selected"], ["select", "disabled"]
   ],
   "outputs": ["dom", "geometry", "computed-style", "screenshot", "pixel-diff"],
-  "status": "structural-diff-8-of-10-pass"
+  "status": "structural-diff-8-of-10-pass-field-error-captured"
 }
