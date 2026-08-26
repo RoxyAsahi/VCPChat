@@ -88,6 +88,7 @@ try {
         `Electron UIUX smoke loaded source-plane UIUX modules: ${JSON.stringify(artifactBoundary)}`);
     assert.deepEqual(artifactBoundary.save, { success: true });
     assert.equal(artifactBoundary.value, 'electron-artifact-next');
+    const primitiveScreenshot = path.join(appData, 'uiux-primitive-contract.png');
     const primitiveBoundary = await page.evaluate(() => {
         const host = document.createElement('div');
         host.innerHTML = '<label id="artifact-field"><span>Density</span><select id="artifact-density"><option>Comfortable</option><option>Compact</option></select></label><input id="artifact-input" value="hello"><div id="artifact-choice"><label><input type="radio" name="artifact-choice" value="a">A</label><label><input type="radio" name="artifact-choice" value="b">B</label></div><div id="artifact-range-field"><input id="artifact-range" type="range" value="32"><output id="artifact-range-output"></output></div><label id="artifact-toggle"><input type="checkbox" checked><span class="slider"></span></label><div id="artifact-color-pair"><input id="artifact-color" type="color" value="#3d5a80"><input id="artifact-color-text" type="text" value="#3d5a80"></div>';
@@ -133,6 +134,9 @@ try {
         return result;
     });
     assert.deepEqual(primitiveBoundary, { trigger: 'menu', menu: true, viewport: true, itemWrap: true, item: 'menuitem', minHeight: '40px', padding: '8px 10px', expanded: 'true', inputWrap: 'vcp-uiux-input-wrap wrap', inputWrapHeight: '32px', inputWrapGap: '6px', inputWrapRadius: '8px', inputWrapPadding: '0px 8px', inputFontSize: '14px', inputLineHeight: '22px', choiceClass: true, choiceValue: 'b', rangeWrap: 'vcp-uiux-range', rangeOutput: '40px', toggleWrap: 'vcp-uiux-toggle', toggleChecked: true, legacySliderDisplay: 'none', toggleRestored: true, colorPairWrap: 'vcp-uiux-color-pair', colorValue: '#112233', colorText: '#112233' }, `generated artifact primitive contract mismatch: ${JSON.stringify(primitiveBoundary)}`);
+    await page.screenshot({ path: primitiveScreenshot });
+    const screenshotStat = await fs.stat(primitiveScreenshot);
+    assert.ok(screenshotStat.size > 1024, `primitive screenshot is unexpectedly empty: ${screenshotStat.size} bytes`);
     const readBoundary = () => page.evaluate(() => {
         const dock = document.querySelector('.next-ui-account-dock');
         const theme = window.VCPStateChannels?.diagnostics?.().find(item => item.name === 'theme');

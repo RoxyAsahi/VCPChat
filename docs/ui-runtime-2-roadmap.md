@@ -212,6 +212,7 @@ evidence: npm run check:uiux; npm run test:uiux; node --test tests/creation-cont
 2026-08-26 Select DOM alignment：Select menu 已从 `list → item` 调整为 Harness 目标层级 `list → viewport → itemWrap → item`，保留 native select、键盘导航、outside-dismiss、portal 和 owner dispose 行为；`npm run test:uiux` 29/29、`npm run check:harness-snapshot` 与 generated Electron journey 均通过。该切片仍未宣称完整 CSS/pixel equivalence，viewport/itemWrap 的最终 geometry 继续由后续 computed-style diff 门禁确认。
 2026-08-26 Select token provenance：Select trigger/menu/item/description/error 的颜色改为 `--dsw-alias-*` 优先、VCP token fallback；`check:harness-contracts` 新增 token provenance 检查，UIUX、snapshot 与 Electron artifact journey 全部通过。该变更只影响 UI presentation，不改变 native select 或 Settings command path。
 2026-08-26 Select hierarchy evidence：静态 contract gate 与 Electron generated snapshot 现在同时断言 `menu-viewport`、`menu-item-wrap` 层级存在，防止回退到 list 直接承载 item；Electron journey 通过。下一步仍是固定 viewport 截图与像素容差，不把结构证据扩大解释为视觉等价。
+2026-08-26 screenshot evidence：Electron generated journey 现在在固定 primitive 场景写出 `uiux-primitive-contract.png` 并断言截图大小超过 1KiB；该证据证明 screenshot capture 可重复执行，但尚未与 Harness reference image 做 pixel diff，暂不提升 equivalence 状态。
 
 2026-08-26 priority recalibration：根据 Harness 等价审计，施工顺序调整为四层门禁：
 1. `reference automation`：reference pack 必须能从固定 viewport 产出 DOM/computed-style/state 快照并生成 diff 报告；
