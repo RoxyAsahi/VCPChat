@@ -5,7 +5,7 @@
 > 适用目录：`/Users/asahi/Documents/Codex/VCPChat-newarchitecture`  
 > 对照对象：本机 `deepseek-harness` 的 Client UI / Slot / Theme / lifecycle 机制
 > 上位规范：[vcpchat-harness-uiux-architecture.md](/Users/asahi/Documents/Codex/VCPChat-newarchitecture/docs/vcpchat-harness-uiux-architecture.md)；本文件只负责执行顺序、consumer、证据与删除账本
-> 最近核验：2026-08-26；R2-00 Composer slice 已达到 complete；R2-01 Overlay/notification slice 已闭合；R2-03 为 semantic-token-projection-active；R2-08 为 scoped-service-assembly-active（仍委托 legacy LifecycleScope，public API 未就绪）；R2-02 为 typed-production-consumer-active（legacy bridge、Classic fallback 与完整 stress 证据仍未闭合）；当前 active slice：R2-02C harness-reference-pack-and-first-primitive-vertical-slice。TS Light-DOM Field/Select 已接入 density、radius 及其余 appearance selects，Settings Electron 已具备 DOM/geometry/interaction/screenshot 证据；Settings-only 20-cycle lifecycle stress 保持 613 listeners / 312 resources 稳定；不宣布 R2-02C complete，后续继续迁移 range/choice primitives。
+> 最近核验：2026-08-26；R2-00 Composer slice 已达到 complete；R2-01 Overlay/notification slice 已闭合；R2-03 为 semantic-token-projection-active；R2-08 为 scoped-service-assembly-active（仍委托 legacy LifecycleScope，public API 未就绪）；R2-02 为 typed-production-consumer-active（legacy bridge、Classic fallback 与完整 stress 证据仍未闭合）。目标模式本轮收窄为可测量的 Harness 等价链：`reference pack → 单个 Light-DOM primitive → SettingsRoot 真实 consumer → DOM/geometry/interaction/screenshot/artifact 证据 → 删除对应 legacy presentation`。当前 active slice：R2-02C `harness-reference-pack-and-first-primitive-vertical-slice`；已接入的 primitives 只算迁移期 production slices，不代表完整 renderer 或 pixel-level equivalence 已完成。
 > 本轮补充 Harness `Input` reference pack（DOM/geometry），作为下一批 range/choice 之前的 CSS/DOM 基线；尚未将 Input 或 Range 宣布为生产 primitive。
 > 2026-08-26：`homeVisualTagline` 已接入 TS Light-DOM Input primitive，保留 native input 与 SettingsUiService 业务链；源码 `npm run test:uiux` 21/21、Settings Electron gate 通过。该字段 legacy input wrapper 已跳过，待 artifact-only Input smoke 与完整 screenshot geometry 证据后再扩大迁移。
 > 2026-08-26：generated-only Electron smoke 已覆盖 Input primitive（`vcp-uiux-input-wrap`）的产物加载与 teardown 路径；`node scripts/test-electron-uiux-theme.mjs` 通过。
@@ -184,12 +184,14 @@ production_consumer: global SettingsRoot + Appearance Studio
 consumer_kind: internal production consumer; typed adapter migration slice
 first_slice: existing settings capability boundary + modules/uiux/adapters/settings.ts
 completed_slice: semantic token projection + scope-owned SettingsUiService/RustAssistantUiService assembly + typed SettingsRoot observation, failure/retry/timeout/late-result/teardown evidence
-next_slice: build Harness reference pack, then implement one Light-DOM Field/Select primitive vertical slice; pause broad field migration until four-layer equivalence evidence exists
+next_slice: pause broad field migration; audit the next real Settings consumer against the existing reference pack and close one primitive's four-layer evidence plus legacy deletion before adding fields
 blocked_by: UI Apps smoke 的 dynamic-wallpaper disabled-manifest readiness（不阻塞 Settings Surface contract）
 excluded: chat-message-internals, plugin-loader, child-page-migration, generic-vdom-before-consumer
-last_verified: 2026-08-25
+last_verified: 2026-08-26
 evidence: npm run check:uiux; npm run test:uiux; node --test tests/creation-controller.test.js; node scripts/test-ui-system.mjs; node scripts/test-appearance-studio.mjs; node scripts/test-settings-wa-electron.mjs; npm run test:electron-uiux-theme
 ```
+
+2026-08-26 target-mode correction：目标工具中的 objective 保持 active 且无法原地改写，因此以本账本作为可执行目标的权威镜像。后续批次不得以“更多字段已迁移”作为单独进度；必须先闭合 Harness reference、Light-DOM contract、真实 consumer、四层等价证据和对应 legacy deletion。聊天渲染/流式/协议/持久化/Plugin Loader 继续冻结。
 
 ## 3. 分阶段路线
 
