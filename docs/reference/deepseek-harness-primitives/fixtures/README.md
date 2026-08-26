@@ -32,7 +32,7 @@ selected.
 
 ## VCP source of truth
 
-VCP fixtures must load only `modules/uiux/generated/` and mount the same nine
+VCP fixtures must load only `modules/uiux/generated/` and mount the same ten
 cases from `../fixture-matrix.json`. Both pages use the same Chromium/Electron
 engine, 800×600 viewport, DPR 1, system-ui font, and frozen animation policy.
 
@@ -40,5 +40,5 @@ engine, 800×600 viewport, DPR 1, system-ui font, and frozen animation policy.
 
 For every case, the runner writes DOM shape, geometry, contract-scoped
 computed styles, screenshot, and pixel diff reports. Until the Harness web
-fixture runner exists, the matrix status remains
-`structural-diff-8-of-10-pass-field-error-captured` and no pixel-equivalence claim may be made.
+Select production fixture runner is available, the matrix status remains
+`structural-diff-8-pass-1-fail-1-pending` and no pixel-equivalence claim may be made.

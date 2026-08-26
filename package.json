@@ -37,6 +37,7 @@
     "diff:harness-vcp-geometry": "node scripts/diff-harness-vcp-geometry.mjs",
     "capture:harness-browser-geometry": "node scripts/capture-harness-browser-geometry.mjs",
     "diff:harness-vcp-pixels": "node scripts/diff-harness-vcp-pixels.mjs",
+    "check:harness-fixture-evidence": "node scripts/check-harness-fixture-evidence.mjs",
     "check:harness-snapshot": "node scripts/check-harness-snapshot-contract.mjs",
     "test:uiux:artifacts": "node scripts/test-uiux-artifact-smoke.mjs",
     "build:uiux": "tsc --project tsconfig.uiux.build.json --pretty false",
