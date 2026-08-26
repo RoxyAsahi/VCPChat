@@ -195,6 +195,7 @@ evidence: npm run check:uiux; npm run test:uiux; node --test tests/creation-cont
 
 2026-08-26 target-mode verification：目标收窄后的最小证据集通过：`npm run check:uiux`、`npm run test:uiux`（26/26）、`npm run check:uiux:artifacts`（34 generated files）、`npm run test:uiux:artifacts`、`node scripts/check-settings-source-equivalence.mjs`（legacyClean=true）、`node scripts/test-settings-wa-electron.mjs`（Settings Harness structure gate passed）以及 `npm run guard:chat-kernel-consumers`。本批没有新增字段迁移，未触碰聊天冻结边界。
 2026-08-26：新增 `npm run check:harness-reference`，对 reference pack 的 17 个文件、8 个 primitive DOM/geometry 合同执行可重复静态门禁。Forum `adminUsername/adminPassword` 暂不进入施工：全局提交路径仍会编排 Forum 保存，直接接入字段 owner 会形成第二个 command owner；待 dirty/autosave seam 可单一化后再推进。
+2026-08-26：Forum `adminUsername` / `adminPassword` 已进入 typed field-owner 阶段：TS Light-DOM Input primitive 提供 32px/8px/8px geometry 与 scope-owned teardown；字段 owner 负责 debounce、save、failure/retry 状态和 close flush，native inputs 与 ForumConfigUiService 保持业务/command source；全局提交路径在 owner 挂载时跳过重复 Forum save。Electron Settings gate 新增两项 primitive DOM 断言并通过；仍需补齐独立 failure/timeout/reload/teardown 证据后，才能删除剩余 legacy orchestration。
 
 ## 3. 分阶段路线
 

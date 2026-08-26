@@ -600,10 +600,14 @@ try {
             available: Boolean(service?.state?.get),
             username: service?.state?.get()?.username ?? '',
             controlUsername: document.getElementById('adminUsername')?.value ?? '',
+            usernameInputPrimitive: Boolean(document.getElementById('adminUsername')?.closest('.vcp-uiux-input-wrap')),
+            passwordInputPrimitive: Boolean(document.getElementById('adminPassword')?.closest('.vcp-uiux-input-wrap')),
         };
     });
     assert.equal(forumConsumerState.available, true, 'Forum config UI service is assembled in the production bridge');
     assert.equal(forumConsumerState.controlUsername, forumConsumerState.username, 'Forum admin control consumes the typed forum snapshot');
+    assert.equal(forumConsumerState.usernameInputPrimitive, true, 'Forum username uses the typed Light-DOM Input primitive');
+    assert.equal(forumConsumerState.passwordInputPrimitive, true, 'Forum password uses the typed Light-DOM Input primitive');
     const runtimeConsumerState = await page.evaluate(() => {
         const service = window.VCPUISettingsBridge?.getAssistantRuntimeService?.();
         return {
