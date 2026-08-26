@@ -283,6 +283,19 @@ try {
         assert.equal(await page.$eval(`#${id}`, node => Boolean(node.closest('.vcp-harness-field')?.querySelector('.vcp-harness-select-trigger'))), true, `typed ${id} Select is mounted`);
     }
     assert.equal(await page.$eval('#homeVisualTagline', node => node.parentElement?.classList.contains('vcp-uiux-input-wrap')), true, 'typed Home tagline Input is mounted');
+    const choiceEvidence = await page.evaluate(() => {
+        const group = document.querySelector('.appearance-radius-choice-grid');
+        const options = [...(group?.querySelectorAll('label') || [])];
+        const checked = options.find(label => label.querySelector('input')?.checked);
+        const before = checked?.querySelector('input')?.value || null;
+        const target = options.find(label => label.querySelector('input')?.value === 'square');
+        target?.querySelector('input')?.click();
+        return { mounted: group?.classList.contains('vcp-uiux-choice'), options: options.length, before, after: target?.querySelector('input')?.checked ? 'square' : null, optionClass: target?.classList.contains('vcp-uiux-choice-option') };
+    });
+    assert.equal(choiceEvidence.mounted, true, 'typed Choice owns sidebar radius group');
+    assert.ok(choiceEvidence.options >= 4, 'sidebar radius Choice exposes all native options');
+    assert.equal(choiceEvidence.after, 'square', 'Choice click updates native selected source');
+    assert.equal(choiceEvidence.optionClass, true, 'Choice options expose Harness presentation class');
     await page.evaluate(() => document.querySelector('.vcp-harness-settings-nav-cell[data-section="user-identity"]')?.click());
     await page.waitForFunction(() => document.querySelector('#globalSettingsModal #section-user-identity.active'), { timeout: timeoutMs });
 
