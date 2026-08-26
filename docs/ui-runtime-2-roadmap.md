@@ -200,6 +200,7 @@ evidence: npm run check:uiux; npm run test:uiux; node --test tests/creation-cont
 2026-08-26 Forum owner evidence：Settings Electron journey 新增真实 username 输入保存、password close-flush、重新打开持久化恢复断言；`ForumConfigUiService` state 与 Input DOM 均验证通过。failure/timeout 注入和剩余 legacy orchestration 删除仍待独立批次。
 2026-08-26：`ForumConfigUiService` 新增确定性的 `timeoutMs` adapter 合同；hung save 会返回 retryable failure，不再依赖文件权限模拟。`tests/uiux-forum-config-adapter.test.mjs` 覆盖 timeout，generated artifact consistency/smoke 与完整 UIUX tests（27/27）通过。
 2026-08-26 artifact evidence：`test-uiux-artifact-smoke.mjs` 新增 generated Forum timeout 场景；源码与 generated 平面的 hung-save→retryable-failure 合同均通过。
+2026-08-26 primitive contract alignment：TS Input primitive 现在复刻 Harness 的 `wrap → optional icon → input.input` Light-DOM 层级，并优先使用 `--dsw-alias-*` token、保留 VCP fallback；dispose 精确恢复原始 input class/父级。`npm run test:uiux` 27/27 与 artifact consistency 通过。该切片仍不等同于全量 pixel diff。
 
 ## 3. 分阶段路线
 
