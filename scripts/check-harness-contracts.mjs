@@ -31,6 +31,9 @@ for (const role of ['menu', 'menuitem']) {
 for (const marker of ['vcp-uiux', 'menu-list', 'aria-expanded']) {
   if (!selectSource.includes(marker)) fail(`Select source missing structural marker ${marker}`);
 }
+for (const token of ['--dsw-alias-border-l2', '--dsw-alias-bg-layer-1', '--dsw-alias-label-primary', '--dsw-alias-brand-primary']) {
+  if (!selectSource.includes(token)) fail(`Select source missing token ${token}`);
+}
 const selectGeometry = json('select.geometry.json');
 for (const key of ['.list', '.item']) {
   const section = selectGeometry.selectors?.[key] || {};
