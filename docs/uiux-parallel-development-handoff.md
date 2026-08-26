@@ -189,10 +189,10 @@ delete condition
 
 ### R2-02C：Settings single-owner migration
 
-不要新增更多零散 adapter，也不要继续批量迁移字段。当前下一切片必须先闭合 Harness 等价证据，再扩大字段覆盖；必须完成以下工作：
+不要新增更多零散 adapter，也不要继续批量迁移字段。当前唯一阻断切片是 Harness↔VCP 双页面 fixture 对照流水线；在该切片闭合前暂停字段迁移与 renderer 扩展。必须完成以下工作：
 
 1. 保持并维护完整字段 ownership report；
-2. 建立可自动重放的 Harness reference pack，固定 viewport 产出 DOM/computed-style/state 快照与 diff；
+2. 从真实 Harness 生产组件生成 fixture，和 VCP generated fixture 使用同一 viewport/DPR/font/theme；自动产出 DOM/computed-style/geometry/pixel 四层 diff；
 3. 只做一个真实 `Field + Select` Light-DOM primitive vertical slice，并接入最小 renderer kernel；
 4. 让该 slice 的真实控件从 `SettingsUiService.state` 读取、保存从 `save.execute` 发出；
 5. 将 draft、dirty、autosave、retry、timeout、close flush 归入一个明确 owner；
