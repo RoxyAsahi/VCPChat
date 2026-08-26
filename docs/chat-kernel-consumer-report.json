@@ -488,8 +488,10 @@
     "modules/uiux/generated/primitives/select.js",
     "modules/uiux/generated/primitives/toggle.js",
     "modules/uiux/generated/providers/theme.js",
+    "modules/uiux/generated/runtime/dom-renderer.js",
     "modules/uiux/generated/runtime/scope.js",
     "modules/uiux/generated/runtime/service-registry.js",
+    "modules/uiux/runtime/dom-renderer.js",
     "modules/utils/agentConfigManager.js",
     "modules/utils/appSettingsManager.js",
     "modules/vcpClient.js",
@@ -2557,7 +2559,7 @@
       "definitions": [
         {
           "file": "modules/ui-system/settings-bridge.js",
-          "line": 427,
+          "line": 428,
           "syntax": "dot-assignment",
           "snippet": "window.__vcpHarnessSelectOwnerCleanup = () => {"
         }
@@ -2565,19 +2567,19 @@
       "production": [
         {
           "file": "modules/ui-system/settings-bridge.js",
-          "line": 433,
+          "line": 434,
           "surface": "internal-app",
           "snippet": "delete window.__vcpHarnessSelectOwnerCleanup;"
         },
         {
           "file": "modules/ui-system/settings-bridge.js",
-          "line": 439,
+          "line": 440,
           "surface": "internal-app",
           "snippet": "if (harnessSelectOpenCount === 0) window.__vcpHarnessSelectOwnerCleanup?.();"
         },
         {
           "file": "modules/ui-system/settings-bridge.js",
-          "line": 1315,
+          "line": 1428,
           "surface": "internal-app",
           "snippet": "window.__vcpHarnessSelectOwnerCleanup?.();"
         }
@@ -4154,13 +4156,13 @@
       "production": [
         {
           "file": "modules/global-settings-manager.js",
-          "line": 370,
+          "line": 371,
           "surface": "shared-renderer",
           "snippet": "if (window.notificationRenderer) window.notificationRenderer.updateVCPLogStatus({ status: 'error', message: 'VCPLog未配置' }, document.getElementById('vcpLogConnectionStatus'));"
         },
         {
           "file": "modules/global-settings-manager.js",
-          "line": 370,
+          "line": 371,
           "surface": "shared-renderer",
           "snippet": "if (window.notificationRenderer) window.notificationRenderer.updateVCPLogStatus({ status: 'error', message: 'VCPLog未配置' }, document.getElementById('vcpLogConnectionStatus'));"
         },
@@ -7158,13 +7160,13 @@
         },
         {
           "file": "modules/ui-system/settings-bridge.js",
-          "line": 257,
+          "line": 258,
           "surface": "internal-app",
           "snippet": "|| window.uiHelperFunctions?.addNetworkPathInput?.(path);"
         },
         {
           "file": "modules/ui-system/settings-bridge.js",
-          "line": 1678,
+          "line": 1793,
           "surface": "internal-app",
           "snippet": "|| window.uiHelperFunctions?.addNetworkPathInput?.(path)"
         },
@@ -10029,13 +10031,13 @@
         },
         {
           "file": "modules/ui-system/settings-bridge.js",
-          "line": 465,
+          "line": 466,
           "surface": "internal-app",
           "snippet": "if (!element || window.VCPUI.getController(element)) return;"
         },
         {
           "file": "modules/ui-system/settings-bridge.js",
-          "line": 467,
+          "line": 468,
           "surface": "internal-app",
           "snippet": "const controller = window.VCPUI.enhance(name, element, options);"
         }
@@ -10047,7 +10049,7 @@
       "definitions": [
         {
           "file": "modules/ui-system/settings-bridge.js",
-          "line": 1672,
+          "line": 1785,
           "syntax": "dot-assignment",
           "snippet": "window.VCPUISettingsBridge = Object.freeze({"
         }
@@ -10067,19 +10069,19 @@
         },
         {
           "file": "modules/global-settings-manager.js",
-          "line": 279,
+          "line": 280,
           "surface": "shared-renderer",
           "snippet": "const forumService = window.VCPUISettingsBridge?.getForumConfigService?.();"
         },
         {
           "file": "modules/global-settings-manager.js",
-          "line": 300,
+          "line": 301,
           "surface": "shared-renderer",
           "snippet": "const typedSettingsService = window.VCPUISettingsBridge?.getTypedService?.();"
         },
         {
           "file": "modules/global-settings-manager.js",
-          "line": 316,
+          "line": 317,
           "surface": "shared-renderer",
           "snippet": "const rustService = window.VCPUISettingsBridge?.getRustAssistantService?.();"
         },
@@ -15163,11 +15165,11 @@
       "mutableMaps": 0
     },
     "modules/ui-system/settings-bridge.js": {
-      "windowReferences": 52,
+      "windowReferences": 53,
       "documentReferences": 60,
       "electronReferences": 0,
-      "timers": 4,
-      "listeners": 29,
+      "timers": 5,
+      "listeners": 32,
       "mutableMaps": 3
     },
     "modules/ui-system/settlement.js": {
@@ -15294,7 +15296,7 @@
       "windowReferences": 0,
       "documentReferences": 0,
       "electronReferences": 0,
-      "timers": 0,
+      "timers": 1,
       "listeners": 0,
       "mutableMaps": 0
     },
@@ -15364,7 +15366,7 @@
     },
     "modules/uiux/generated/primitives/input.js": {
       "windowReferences": 0,
-      "documentReferences": 6,
+      "documentReferences": 7,
       "electronReferences": 0,
       "timers": 0,
       "listeners": 0,
@@ -15380,7 +15382,7 @@
     },
     "modules/uiux/generated/primitives/select.js": {
       "windowReferences": 0,
-      "documentReferences": 16,
+      "documentReferences": 18,
       "electronReferences": 0,
       "timers": 0,
       "listeners": 0,
@@ -15402,6 +15404,14 @@
       "listeners": 0,
       "mutableMaps": 2
     },
+    "modules/uiux/generated/runtime/dom-renderer.js": {
+      "windowReferences": 0,
+      "documentReferences": 0,
+      "electronReferences": 0,
+      "timers": 0,
+      "listeners": 1,
+      "mutableMaps": 1
+    },
     "modules/uiux/generated/runtime/scope.js": {
       "windowReferences": 0,
       "documentReferences": 0,
@@ -15417,6 +15427,14 @@
       "timers": 0,
       "listeners": 0,
       "mutableMaps": 2
+    },
+    "modules/uiux/runtime/dom-renderer.js": {
+      "windowReferences": 0,
+      "documentReferences": 0,
+      "electronReferences": 0,
+      "timers": 0,
+      "listeners": 0,
+      "mutableMaps": 0
     },
     "modules/utils/agentConfigManager.js": {
       "windowReferences": 0,
