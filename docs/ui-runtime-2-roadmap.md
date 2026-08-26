@@ -5,7 +5,7 @@
 > 适用目录：`/Users/asahi/Documents/Codex/VCPChat-newarchitecture`  
 > 对照对象：本机 `deepseek-harness` 的 Client UI / Slot / Theme / lifecycle 机制
 > 上位规范：[vcpchat-harness-uiux-architecture.md](/Users/asahi/Documents/Codex/VCPChat-newarchitecture/docs/vcpchat-harness-uiux-architecture.md)；本文件只负责执行顺序、consumer、证据与删除账本
-> 最近核验：2026-08-26；R2-00 Composer slice 已达到 complete；R2-01 Overlay/notification slice 已闭合；R2-03 为 semantic-token-projection-active；R2-08 为 scoped-service-assembly-active（仍委托 legacy LifecycleScope，public API 未就绪）；R2-02 为 typed-production-consumer-active（legacy bridge、Classic fallback 与完整 stress 证据仍未闭合）；当前 active slice：R2-02C harness-reference-pack-and-first-primitive-vertical-slice。TS Light-DOM Field/Select 已接入 density、radius 及其余 appearance selects，Settings Electron 已具备 DOM/geometry/interaction/screenshot 证据；Settings-only 20-cycle lifecycle stress 保持 613 listeners / 312 resources 稳定；不宣布 R2-02C complete，后续继续迁移 range/choice primitives。
+> 最近核验：2026-08-26；R2-00 Composer slice 已达到 complete；R2-01 Overlay/notification slice 已闭合；R2-03 为 semantic-token-projection-active；R2-08 为 scoped-service-assembly-active（仍委托 legacy LifecycleScope，public API 未就绪）；R2-02 为 typed-production-consumer-active（legacy bridge、Classic fallback 与完整 stress 证据仍未闭合）。目标模式本轮收窄为可测量的 Harness 等价链：`reference pack → 单个 Light-DOM primitive → SettingsRoot 真实 consumer → DOM/geometry/interaction/screenshot/artifact 证据 → 删除对应 legacy presentation`。当前 active slice：R2-02C `harness-reference-pack-and-first-primitive-vertical-slice`；已接入的 primitives 只算迁移期 production slices，不代表完整 renderer 或 pixel-level equivalence 已完成。
 > 本轮补充 Harness `Input` reference pack（DOM/geometry），作为下一批 range/choice 之前的 CSS/DOM 基线；尚未将 Input 或 Range 宣布为生产 primitive。
 > 2026-08-26：`homeVisualTagline` 已接入 TS Light-DOM Input primitive，保留 native input 与 SettingsUiService 业务链；源码 `npm run test:uiux` 21/21、Settings Electron gate 通过。该字段 legacy input wrapper 已跳过，待 artifact-only Input smoke 与完整 screenshot geometry 证据后再扩大迁移。
 > 2026-08-26：generated-only Electron smoke 已覆盖 Input primitive（`vcp-uiux-input-wrap`）的产物加载与 teardown 路径；`node scripts/test-electron-uiux-theme.mjs` 通过。
@@ -20,8 +20,10 @@
 > 2026-08-26：generated-only Electron smoke 已覆盖 Toggle artifact 的 checked source、legacy slider 隐藏和 teardown 路径；`node scripts/test-electron-uiux-theme.mjs` 通过。Toggle 双平面证据闭合。
 > 2026-08-26：Toggle generated smoke 进一步断言 dispose 后 native checkbox 回到原始 label、legacy slider display 恢复为空；artifact 可逆性闭合。
 > 2026-08-26 latest checkpoint：Toggle/Range/Choice/Input/Select/ThemeTokenOwner 全部启用后，Settings Electron gate、generated artifact smoke、60-cycle lifecycle stress 均通过；stress 指标稳定为 listeners 618、resources 341、nodes 8410、detached 0。
+> 2026-08-26：ColorPair 接入后再次完成 Settings-only 60-cycle stress；listeners 625、resources 347、nodes 8412，cycle 1→60 稳定且 detached roots/options/icons 为 0。
 > 下一候选 `userAvatarBorderColor` 为 color input + text mirror 双控件，已建立 `color-pair.dom.json` / `color-pair.geometry.json` 基线；在单一 source/mirror owner、invalid-text 恢复和双控件 teardown 证据齐全前不接入生产。
 > 2026-08-26：ColorPair 已完成 production integration；artifact consistency（34 files）、artifact smoke、Theme Electron journey 与 Settings-only 20-cycle stress 均通过。该双控件现可作为后续 color/text Settings 字段迁移模板。
+> 2026-08-26：Settings Electron journey 新增 ColorPair snapshot probe，外部 `userAvatarBorderColor` 更新会同步刷新 color source 与 text mirror；双控件 snapshot ownership 证据闭合。
 > 2026-08-26：Settings Electron journey 新增 Home Visual Toggle snapshot probe，验证两个 checkbox 可由外部 snapshot false→true 往返恢复，且不触发聊天业务路径；Toggle ownership 证据闭合，旧 startup fallback 仍按兼容边界保留。
 > 2026-08-26：新增 Toggle DOM/geometry reference pack（`toggle.dom.json`、`toggle.geometry.json`），与已通过的 generated-only artifact smoke 对齐。
 > 当前 primitive ledger：Field、Select、Input、Range、Choice、Toggle 均已有 TypeScript Light-DOM 实现；Settings 外观/首页字段已按单一 typed owner 接入，覆盖源码测试、generated artifact smoke、Electron DOM/geometry/interaction、snapshot/reload 与 60-cycle lifecycle stress。R2-02C 仍未 complete：ThemeTokenOwner、剩余未迁移 Settings 字段、Classic fallback 收口和全量 legacy deletion 仍是后续工作；聊天渲染/流式/协议/Plugin Loader 继续冻结。
@@ -182,12 +184,17 @@ production_consumer: global SettingsRoot + Appearance Studio
 consumer_kind: internal production consumer; typed adapter migration slice
 first_slice: existing settings capability boundary + modules/uiux/adapters/settings.ts
 completed_slice: semantic token projection + scope-owned SettingsUiService/RustAssistantUiService assembly + typed SettingsRoot observation, failure/retry/timeout/late-result/teardown evidence
-next_slice: build Harness reference pack, then implement one Light-DOM Field/Select primitive vertical slice; pause broad field migration until four-layer equivalence evidence exists
+next_slice: pause broad field migration; audit the next real Settings consumer against the existing reference pack and close one primitive's four-layer evidence plus legacy deletion before adding fields
 blocked_by: UI Apps smoke 的 dynamic-wallpaper disabled-manifest readiness（不阻塞 Settings Surface contract）
 excluded: chat-message-internals, plugin-loader, child-page-migration, generic-vdom-before-consumer
-last_verified: 2026-08-25
+last_verified: 2026-08-26
 evidence: npm run check:uiux; npm run test:uiux; node --test tests/creation-controller.test.js; node scripts/test-ui-system.mjs; node scripts/test-appearance-studio.mjs; node scripts/test-settings-wa-electron.mjs; npm run test:electron-uiux-theme
 ```
+
+2026-08-26 target-mode correction：目标工具中的 objective 保持 active 且无法原地改写，因此以本账本作为可执行目标的权威镜像。后续批次不得以“更多字段已迁移”作为单独进度；必须先闭合 Harness reference、Light-DOM contract、真实 consumer、四层等价证据和对应 legacy deletion。聊天渲染/流式/协议/持久化/Plugin Loader 继续冻结。
+
+2026-08-26 target-mode verification：目标收窄后的最小证据集通过：`npm run check:uiux`、`npm run test:uiux`（26/26）、`npm run check:uiux:artifacts`（34 generated files）、`npm run test:uiux:artifacts`、`node scripts/check-settings-source-equivalence.mjs`（legacyClean=true）、`node scripts/test-settings-wa-electron.mjs`（Settings Harness structure gate passed）以及 `npm run guard:chat-kernel-consumers`。本批没有新增字段迁移，未触碰聊天冻结边界。
+2026-08-26：新增 `npm run check:harness-reference`，对 reference pack 的 17 个文件、8 个 primitive DOM/geometry 合同执行可重复静态门禁。Forum `adminUsername/adminPassword` 暂不进入施工：全局提交路径仍会编排 Forum 保存，直接接入字段 owner 会形成第二个 command owner；待 dirty/autosave seam 可单一化后再推进。
 
 ## 3. 分阶段路线
 
