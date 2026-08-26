@@ -214,6 +214,7 @@ evidence: npm run check:uiux; npm run test:uiux; node --test tests/creation-cont
 2026-08-26 Select hierarchy evidence：静态 contract gate 与 Electron generated snapshot 现在同时断言 `menu-viewport`、`menu-item-wrap` 层级存在，防止回退到 list 直接承载 item；Electron journey 通过。下一步仍是固定 viewport 截图与像素容差，不把结构证据扩大解释为视觉等价。
 2026-08-26 screenshot evidence：Electron generated journey 现在在固定 primitive 场景写出 `uiux-primitive-contract.png` 并断言截图大小超过 1KiB；该证据证明 screenshot capture 可重复执行，但尚未与 Harness reference image 做 pixel diff，暂不提升 equivalence 状态。
 2026-08-26 Select CSS provenance：补齐 Harness Menu 的 `viewport`（flex column）与 `itemWrap`（relative）几何语义，并保持 DSW alias token 优先；source/build、contract、29 项 UIUX 测试及 Electron artifact journey 全部通过。
+2026-08-26 freeze-boundary audit：最近三项提交仅涉及 UIUX Select、Harness contract/screenshot 脚本和路线文档；`npm run guard:chat-kernel-consumers` 通过（17 个冻结 kernel files），确认未修改 StreamCoordinator/StreamProjection/MessageRenderer、聊天协议、持久化或 Plugin Loader。
 
 2026-08-26 priority recalibration：根据 Harness 等价审计，施工顺序调整为四层门禁：
 1. `reference automation`：reference pack 必须能从固定 viewport 产出 DOM/computed-style/state 快照并生成 diff 报告；
