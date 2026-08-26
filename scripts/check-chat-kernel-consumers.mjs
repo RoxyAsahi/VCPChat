@@ -38,7 +38,10 @@ const testFiles = fs.readdirSync(path.join(root, 'tests'))
     .filter(file => /chat|stream|main-chat|lifecycle/i.test(file))
     .map(file => `tests/${file}`);
 
-const source = file => read(file);
+// Dependency guards inspect executable source, not prose comments. This keeps
+// contract documentation such as "not exported through window" from becoming
+// a false runtime dependency finding.
+const source = file => read(file).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 const count = (text, pattern) => [...text.matchAll(pattern)].length;
 const providerFiles = Object.freeze({
     chatManager: 'modules/chatManager.js',
