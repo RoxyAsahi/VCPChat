@@ -17,10 +17,12 @@ const cases = [
   ['input.default', 'input.default.dom.html'],
   ['input.focus', 'input.focus.dom.html'],
   ['input.disabled', 'input.disabled.dom.html'],
+  ['input.icon', 'input.icon.dom.html'],
   ['select.closed', 'select.closed.dom.html'],
   ['select.open', 'select.open.dom.html'],
   ['select.selected', 'select.selected.dom.html'],
   ['select.disabled', 'select.disabled.dom.html'],
+  ['field.error', 'field.error.dom.html'],
 ];
 const results = [];
 for (const [name, file] of cases) {
