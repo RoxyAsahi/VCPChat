@@ -196,3 +196,38 @@ test('Harness Select external snapshot sync is presentation-only and owner-bound
         dom.window.close();
     }
 });
+
+test('Harness Input/Field/Select expose stable error, disabled and selected state contracts', async () => {
+    const dom = new JSDOM('<!doctype html><main><div id="field"><select id="mode" disabled><option value="a">Alpha</option><option value="b" selected>Beta</option></select></div><input id="name" disabled></main>');
+    const previousDocument = globalThis.document;
+    const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document;
+    globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('primitive-state-contract'));
+        const fieldRoot = document.getElementById('field');
+        const select = document.getElementById('mode');
+        const input = document.getElementById('name');
+        const fieldRelease = mountField(fieldRoot, { label: 'Mode', description: 'Choose a mode.', error: 'Mode is unavailable.', control: select }, scope);
+        const selectRelease = mountSelect(select, { label: 'Mode' }, scope);
+        const inputRelease = mountInput(input, {}, scope);
+        const trigger = fieldRoot.querySelector('.vcp-harness-select-trigger');
+        assert.equal(select.getAttribute('aria-invalid'), 'true');
+        assert.equal(select.getAttribute('aria-describedby'), 'mode-description mode-error');
+        assert.equal(trigger.textContent, 'Beta');
+        assert.equal(fieldRoot.querySelector('[role="menuitem"][data-selected="true"]')?.textContent, 'Beta');
+        trigger.click();
+        assert.equal(trigger.getAttribute('aria-expanded'), 'false', 'disabled select must not open');
+        assert.equal(input.disabled, true);
+        await inputRelease?.();
+        await selectRelease?.();
+        await fieldRelease?.();
+        await scope.dispose('state-contract-complete');
+        assert.equal(select.getAttribute('aria-invalid'), null);
+        assert.equal(select.getAttribute('aria-describedby'), null);
+    } finally {
+        globalThis.document = previousDocument;
+        globalThis.window = previousWindow;
+        dom.window.close();
+    }
+});
