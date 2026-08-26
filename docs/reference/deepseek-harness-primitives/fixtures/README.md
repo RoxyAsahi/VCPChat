@@ -24,6 +24,12 @@ render production `Input` and `Menu` components. The resulting HTML is stored
 under `harness/`; CSS-module hash classes are intentionally preserved and must
 be normalized by the structural diff runner rather than replaced by hand.
 
+Field description/error are not standalone Harness primitives: the production
+settings consumers render labels and error paragraphs directly. A VCP Field
+error fixture is therefore stored for contract review, but no Harness Field
+error image is fabricated until a concrete production consumer fixture is
+selected.
+
 ## VCP source of truth
 
 VCP fixtures must load only `modules/uiux/generated/` and mount the same nine

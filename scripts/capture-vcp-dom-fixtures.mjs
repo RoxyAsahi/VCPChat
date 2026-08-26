@@ -33,6 +33,13 @@ try {
     fs.writeFileSync(path.join(out, 'input.disabled.dom.html'), input.parentElement.outerHTML, 'utf8');
     input.disabled = false;
     fs.writeFileSync(path.join(out, 'field.description.dom.html'), field.outerHTML, 'utf8');
+    const errorHost = document.createElement('div');
+    errorHost.innerHTML = '<input id="error-input" value="bad">';
+    document.body.append(errorHost);
+    const errorControl = errorHost.querySelector('input');
+    const errorRelease = mountField(errorHost, { label: 'Mode', error: 'Invalid mode.', control: errorControl }, scope);
+    fs.writeFileSync(path.join(out, 'field.error.dom.html'), errorHost.outerHTML, 'utf8');
+    await errorRelease?.(); errorHost.remove();
     const trigger = document.querySelector('.vcp-harness-select-trigger');
     fs.writeFileSync(path.join(out, 'select.closed.dom.html'), field.outerHTML, 'utf8');
     trigger.click();
@@ -47,7 +54,7 @@ try {
     fs.writeFileSync(path.join(out, 'select.disabled.dom.html'), disabledHost.querySelector('.vcp-harness-select').outerHTML, 'utf8');
     await disabledRelease?.(); disabledHost.remove();
     await inputRelease?.(); await selectRelease?.(); await fieldRelease?.(); await scope.dispose('fixture-complete');
-    console.log('VCP generated DOM fixtures captured (Input default/focus/disabled, Field.description, Select closed/open/selected/disabled).');
+    console.log('VCP generated DOM fixtures captured (Input default/focus/disabled, Field description/error, Select closed/open/selected/disabled).');
 } finally {
     globalThis.document = previousDocument;
     globalThis.window = previousWindow;
