@@ -39,3 +39,16 @@ test('Forum config UI adapter silences late refresh after dispose', async () => 
     await refresh;
     assert.deepEqual(service.state.get(), {});
 });
+
+test('Forum config UI adapter turns hung saves into retryable timeout failures', async () => {
+    const service = createForumConfigUiService({
+        get: () => ({ username: 'admin' }),
+        timeoutMs: 5,
+        save: () => new Promise(() => {}),
+    });
+    const result = await service.save.execute({ username: 'hung' });
+    assert.equal(result.success, false);
+    assert.match(result.error || '', /timed out/);
+    assert.equal(service.state.get().username, undefined);
+    await service.dispose();
+});

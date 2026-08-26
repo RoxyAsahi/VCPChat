@@ -19,10 +19,19 @@ export interface ForumConfigUiService {
 export interface ForumConfigUiAdapterInput {
     readonly get: () => Promise<ForumConfigState> | ForumConfigState;
     readonly save: (patch: ForumConfigPatch) => Promise<ForumConfigResult> | ForumConfigResult;
+    readonly timeoutMs?: number;
 }
 
 const message = (error: unknown) => error instanceof Error ? error.message : String(error);
 const freeze = (value: ForumConfigState): ForumConfigState => Object.freeze({ ...(value || {}) });
+const withTimeout = <T>(value: Promise<T> | T, timeoutMs: number): Promise<T> => {
+    const duration = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 15000;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    return Promise.race([
+        Promise.resolve(value),
+        new Promise<T>((_, reject) => { timer = setTimeout(() => reject(new Error(`Forum config operation timed out (${duration}ms)`)), duration); }),
+    ]).finally(() => { if (timer) clearTimeout(timer); });
+};
 
 export function createForumConfigUiService(input: ForumConfigUiAdapterInput): ForumConfigUiService {
     if (!input || typeof input.get !== 'function' || typeof input.save !== 'function') {
@@ -33,6 +42,7 @@ export function createForumConfigUiService(input: ForumConfigUiAdapterInput): Fo
     let source = 'initial';
     let disposed = false;
     let generation = 0;
+    const timeoutMs = input.timeoutMs ?? 15000;
     const listeners = new Set<(value: ForumConfigState, snapshot: UiSnapshot<ForumConfigState>) => void>();
     const snapshot = () => Object.freeze({ value: state, revision, source });
     const publish = (next: ForumConfigState, nextSource: string) => {
@@ -62,7 +72,7 @@ export function createForumConfigUiService(input: ForumConfigUiAdapterInput): Fo
             if (disposed) return Object.freeze({ success: false, error: 'Forum config UI service disposed' });
             const token = ++generation;
             try {
-                const next = await input.get();
+                const next = await withTimeout(input.get(), timeoutMs);
                 if (disposed || token !== generation) return Object.freeze({ success: true });
                 publish(next, 'forum-config-refresh');
                 return Object.freeze({ success: true });
@@ -72,7 +82,7 @@ export function createForumConfigUiService(input: ForumConfigUiAdapterInput): Fo
             if (disposed) return Object.freeze({ success: false, error: 'Forum config UI service disposed' });
             const token = ++generation;
             try {
-                const result = await input.save(Object.freeze({ ...patch }));
+                const result = await withTimeout(input.save(Object.freeze({ ...patch })), timeoutMs);
                 if (!result?.success) return Object.freeze({ success: false, error: result?.error || 'Forum config save failed' });
                 if (!disposed && token === generation) publish({ ...state, ...patch }, 'forum-config-save');
                 return Object.freeze({ ...result, success: true });
