@@ -17,6 +17,11 @@ for (const className of ['wrap', 'icon', 'input']) {
 for (const token of ['--dsw-alias-border-l2', '--dsw-alias-bg-layer-1', '--dsw-alias-label-primary']) {
   if (!inputSource.includes(token)) fail(`Input source missing token ${token}`);
 }
+const inputGeometry = json('input.geometry.json');
+for (const value of Object.values(inputGeometry.root || {}).concat(Object.values(inputGeometry.input || {}))) {
+  if (typeof value !== 'string' || value === 'none') continue;
+  if (!inputSource.includes(value)) fail(`Input source missing geometry value ${value}`);
+}
 
 const selectDom = json('select.dom.json');
 const selectSource = read('select.ts');
@@ -25,6 +30,13 @@ for (const role of ['menu', 'menuitem']) {
 }
 for (const marker of ['vcp-uiux', 'menu-list', 'aria-expanded']) {
   if (!selectSource.includes(marker)) fail(`Select source missing structural marker ${marker}`);
+}
+const selectGeometry = json('select.geometry.json');
+for (const key of ['.list', '.item']) {
+  const section = selectGeometry.selectors?.[key] || {};
+  for (const value of Object.values(section || {})) {
+    if (typeof value === 'string' && !selectSource.includes(value)) fail(`Select source missing geometry value ${value}`);
+  }
 }
 
 console.log('Harness primitive source contracts passed (Input + Select structural/token checks).');
