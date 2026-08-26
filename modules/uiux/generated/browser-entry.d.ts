@@ -6,6 +6,7 @@ import type { ThemeUiService } from './providers/theme.js';
 import type { UiDisposer } from './contracts.js';
 import { mountField } from './primitives/field.js';
 import { mountSelect } from './primitives/select.js';
+import { mountInput } from './primitives/input.js';
 interface LegacyScopeLike {
     readonly label: string;
     readonly active: boolean;
@@ -30,5 +31,6 @@ declare const api: {
     assistantRuntimeUiDefinition: import("./contracts.js").UiServiceDefinition<import("./adapters/assistant-runtime.js").AssistantRuntimeUiService>;
     mountField: typeof mountField;
     mountSelect: typeof mountSelect;
+    mountInput: typeof mountInput;
 };
 export { api as uiuxBrowserApi };

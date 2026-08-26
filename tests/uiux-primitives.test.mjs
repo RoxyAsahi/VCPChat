@@ -8,6 +8,7 @@ const { LifecycleScope } = require('../modules/ui-system/lifecycle-scope.js');
 const { createUiScope } = await import('../modules/uiux/runtime/scope.ts');
 const { mountField } = await import('../modules/uiux/primitives/field.ts');
 const { mountSelect } = await import('../modules/uiux/primitives/select.ts');
+const { mountInput } = await import('../modules/uiux/primitives/input.ts');
 
 test('Harness-compatible Field and Select keep Light DOM contract and dispose cleanly', async () => {
     const dom = new JSDOM('<!doctype html><form><div id="field"><select id="density"><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></div></form>');
@@ -35,6 +36,29 @@ test('Harness-compatible Field and Select keep Light DOM contract and dispose cl
         assert.equal(fieldRoot.querySelector('.vcp-harness-field'), null);
         assert.equal(document.querySelector('.vcp-harness-select-trigger'), null);
         assert.equal(document.getElementById('density')?.tabIndex, 0);
+    } finally {
+        globalThis.document = previousDocument;
+        globalThis.window = previousWindow;
+        dom.window.close();
+    }
+});
+
+test('Harness Input keeps native control and restores DOM on dispose', async () => {
+    const dom = new JSDOM('<!doctype html><label id="field"><span>Tagline</span><input id="tagline" value="Hello"></label>');
+    const previousDocument = globalThis.document;
+    const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document;
+    globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('input-test'));
+        const input = document.getElementById('tagline');
+        const release = mountInput(input, {}, scope);
+        assert.equal(input.parentElement.className, 'vcp-uiux-input-wrap');
+        assert.equal(input.value, 'Hello');
+        assert.equal(input.parentElement.getAttribute('role'), null);
+        await release?.();
+        assert.equal(input.parentElement.id, 'field');
+        await scope.dispose('input-complete');
     } finally {
         globalThis.document = previousDocument;
         globalThis.window = previousWindow;

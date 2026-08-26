@@ -10,6 +10,7 @@ import type { ThemeUiService } from './providers/theme.js';
 import type { UiDisposer } from './contracts.js';
 import { mountField } from './primitives/field.js';
 import { mountSelect } from './primitives/select.js';
+import { mountInput } from './primitives/input.js';
 
 interface LegacyScopeLike {
     readonly label: string;
@@ -45,6 +46,7 @@ const api = {
     assistantRuntimeUiDefinition,
     mountField,
     mountSelect,
+    mountInput,
 };
 
 Object.defineProperty(globalThis, 'VCPUIUX', {

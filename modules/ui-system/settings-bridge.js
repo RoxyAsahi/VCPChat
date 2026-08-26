@@ -529,6 +529,7 @@ function enhanceGlobalSettings(root, form) {
     // one authoritative business node.
     mountHarnessSelects(form);
     mountTypedAppearanceSelects(root, form);
+    mountTypedHomeTaglineInput(root, form);
     form.querySelectorAll('input[type="range"]').forEach(range => enhance('Range', range));
     form.querySelectorAll('label.switch').forEach(control => enhance('Switch', control));
     form.querySelectorAll('.agent-style-collapsible-container').forEach(disclosure => {
@@ -543,6 +544,18 @@ function enhanceGlobalSettings(root, form) {
     mountSettingsAutosave(root, form);
     mountTypedFieldOwner(root, form);
     normalizeFormIcons(root);
+}
+
+function mountTypedHomeTaglineInput(root, form) {
+    const input = form?.querySelector?.('#homeVisualTagline');
+    const api = window.VCPUIUX;
+    if (!input || !api?.mountInput || input.dataset.vcpTypedPrimitiveMounted === 'true') return;
+    const scope = ensurePresentationScope();
+    if (!scope) return;
+    const release = api.mountInput(input, {}, scope);
+    input.dataset.vcpTypedPrimitiveMounted = 'true';
+    scope.own(() => { delete input.dataset.vcpTypedPrimitiveMounted; }, 'typed-home-tagline-marker', 'ui-primitive');
+    if (release) scope.own(release, 'typed-home-tagline-input', 'ui-primitive');
 }
 
 function mountTypedAppearanceSelects(root, form) {
@@ -574,6 +587,7 @@ function mountTypedAppearanceSelects(root, form) {
 function mountHarnessInputWrappers(form) {
     const selector = 'input:is(:not([type]), [type="text"], [type="url"], [type="password"], [type="number"], [type="email"], [type="search"], [type="tel"]), textarea';
     form.querySelectorAll(selector).forEach(control => {
+        if (control.id === 'homeVisualTagline') return;
         if (control.closest('.vcp-harness-input-wrap')) return;
         const wrap = document.createElement('span');
         wrap.className = 'vcp-harness-input-wrap';
