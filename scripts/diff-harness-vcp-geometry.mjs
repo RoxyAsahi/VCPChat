@@ -61,6 +61,7 @@ const report = {
     pass: false,
     harnessComputedStyleCapture: { status: harness ? 'available' : 'pending', path: 'reports/harness-primitive-geometry.json' },
     vcpComputedStyleCapture: { status: vcp ? 'available' : 'missing', path: 'reports/vcp-primitive-geometry.json' },
+    semanticFixture: { harness: harness?.selector ?? null, vcp: vcp?.primitive ?? null, same: false },
     contract,
     missingEvidence: [
         ...(harness ? [] : ['Harness browser computed-style capture']),
