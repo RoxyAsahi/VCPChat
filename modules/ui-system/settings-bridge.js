@@ -531,7 +531,8 @@ function enhanceGlobalSettings(root, form) {
     mountTypedAppearanceSelects(root, form);
     mountTypedHomeTaglineInput(root, form);
     mountTypedRadiusChoice(root, form);
-    form.querySelectorAll('input[type="range"]').forEach(range => enhance('Range', range));
+    mountTypedAvatarRange(root, form);
+    form.querySelectorAll('input[type="range"]').forEach(range => { if (range.id !== 'appearanceSidebarAvatarSize') enhance('Range', range); });
     form.querySelectorAll('label.switch').forEach(control => enhance('Switch', control));
     form.querySelectorAll('.agent-style-collapsible-container').forEach(disclosure => {
         disclosure.dataset.settingPrimitive = 'disclosure';
@@ -557,6 +558,18 @@ function mountTypedRadiusChoice(root, form) {
     group.dataset.vcpTypedPrimitiveMounted = 'true';
     scope.own(() => { delete group.dataset.vcpTypedPrimitiveMounted; }, 'typed-radius-choice-marker', 'ui-primitive');
     if (release) scope.own(release, 'typed-radius-choice', 'ui-primitive');
+}
+
+function mountTypedAvatarRange(root, form) {
+    const input = form?.querySelector?.('#appearanceSidebarAvatarSize');
+    const output = form?.querySelector?.('#appearanceSidebarAvatarSizeValue');
+    const api = window.VCPUIUX;
+    if (!input || !api?.mountRange || input.dataset.vcpTypedPrimitiveMounted === 'true') return;
+    const scope = ensurePresentationScope(); if (!scope) return;
+    const release = api.mountRange(input, { output, format: value => `${value}px` }, scope);
+    input.dataset.vcpTypedPrimitiveMounted = 'true';
+    scope.own(() => { delete input.dataset.vcpTypedPrimitiveMounted; }, 'typed-avatar-range-marker', 'ui-primitive');
+    if (release) scope.own(release, 'typed-avatar-range', 'ui-primitive');
 }
 
 function mountTypedHomeTaglineInput(root, form) {
