@@ -9,7 +9,7 @@ surface is finished.
 | Active section projection | `SettingsRoot` renders only the selected slot into `options` | Active section lives in `.vcp-harness-active-section`; inactive business sections remain in a hidden form bank | aligned with compatibility adaptation |
 | Close primitive | 28px icon button with an accessible hidden label | Existing business close button is converted once into icon + hidden label, retaining its listener and identity | aligned in structure |
 | Text/select field | 32px, 8px radius, 1px L2 border, layer-1 fill, 14/22 text | Native global inputs and long Select trigger now use this contract | aligned at source level |
-| Dropdown surface | 4px inset, 12px radius, inverted hairline, lv3 shadow | Portaled/fixed Harness select popover | aligned in geometry; token mapping differs |
+| Dropdown surface | 4px inset, 12px radius, inverted hairline, lv3 shadow | Portaled/fixed Harness select popover with `--dsw-alias-*` first and VCP fallback | aligned in geometry; semantic token provenance gated |
 | Dropdown row | 40px min-height, 8px/10px padding, 10px radius, 14/22 text, hover only | Long Select option rows | aligned at source level |
 | Short enum | Harness uses compact buttons/segmented controls instead of field-width dropdowns | 2–4 option global selects use Choice primitive | aligned in intent; visual screenshot pending |
 | Disclosure | 24px row, 16px leading icon, 6px gap, 14/24 title | Global custom-style disclosure gets scoped geometry | partial; other legacy disclosures remain |
@@ -21,8 +21,15 @@ Known follow-up items:
   are added or removed after mount; Electron evidence still needs to cover the
   assistant and voice controls;
 - long Select menus have keyboard movement, Escape, outside-click close and
-  active descendant projection; remaining gap is exact Harness Menu token/source
+  active descendant projection; remaining gap is exact Harness Menu source/pixel
   equivalence rather than lifecycle ownership;
+- generated Electron evidence now captures a fixed primitive screenshot and
+  asserts menu/viewport/item computed geometry against the reference pack;
+  reference-image pixel diff is still pending;
+- selected menu rows remain an explicit visual delta: Harness uses a trailing
+  check marker with transparent row fill, while VCP currently projects a
+  selected background token without a check node; track this as the next
+  isolated Select primitive slice before claiming pixel equivalence;
 - all global sections still contain legacy copy/card markup and need a field
   schema migration after the primitive contract is stable;
 - the screenshot review found legacy sidebar disclosure pseudo-background and
