@@ -35,5 +35,5 @@ engine, 800×600 viewport, DPR 1, system-ui font, and frozen animation policy.
 For every case, the runner writes DOM shape, geometry, contract-scoped
 computed styles, screenshot, and pixel diff reports. Until the Harness web
 fixture runner exists, the matrix status remains
-`harness-dom-captured-vcp-capture-pending` and no pixel-equivalence claim may
-be made.
+`harness-vcp-dom-captured-structural-diff-active` and no pixel-equivalence
+claim may be made.
