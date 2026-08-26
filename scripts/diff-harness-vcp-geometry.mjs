@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const referencePath = path.join(root, 'docs/reference/deepseek-harness-primitives');
 const vcpPath = path.join(root, 'reports/vcp-primitive-geometry.json');
+const harnessPath = path.join(root, 'reports/harness-primitive-geometry.json');
 const outputPath = path.join(root, 'reports/harness-vcp-geometry-diff.json');
 
 const readJson = async file => {
@@ -18,17 +19,18 @@ const readJson = async file => {
 const reference = await readJson(path.join(referencePath, 'input.geometry.json'));
 const select = await readJson(path.join(referencePath, 'select.geometry.json'));
 const vcp = await readJson(vcpPath);
+const harness = await readJson(harnessPath);
 
 // This report deliberately separates a one-sided contract check from a real
 // Harness↔VCP computed-style diff. The latter is pending until a browser capture
 // from the Harness production page is supplied.
 const checks = [
-    ['input.root.height', reference?.root?.height, vcp?.geometry?.inputWrapHeight],
-    ['input.root.gap', reference?.root?.gap, vcp?.geometry?.inputWrapGap],
+    ['input.root.height', harness?.computedStyle?.height ?? reference?.root?.height, vcp?.geometry?.inputWrapHeight],
     ['input.root.padding', reference?.root?.padding, vcp?.geometry?.inputWrapPadding],
-    ['input.root.borderRadius', reference?.root?.borderRadius, vcp?.geometry?.inputWrapRadius],
-    ['input.fontSize', reference?.input?.fontSize, vcp?.geometry?.inputFontSize],
-    ['input.lineHeight', reference?.input?.lineHeight, vcp?.geometry?.inputLineHeight],
+    ['input.padding', harness?.computedStyle?.padding, vcp?.geometry?.inputPadding],
+    ['input.root.borderRadius', harness?.computedStyle?.borderRadius ?? reference?.root?.borderRadius, vcp?.geometry?.inputWrapRadius],
+    ['input.fontSize', harness?.computedStyle?.fontSize ?? reference?.input?.fontSize, vcp?.geometry?.inputFontSize],
+    ['input.lineHeight', harness?.computedStyle?.lineHeight ?? reference?.input?.lineHeight, vcp?.geometry?.inputLineHeight],
     ['select.list.minWidth', select?.selectors?.['.list']?.minWidth, vcp?.geometry?.menuMinWidth],
     ['select.list.borderRadius', select?.selectors?.['.list']?.borderRadius, vcp?.geometry?.menuRadius],
     ['select.item.minHeight', select?.selectors?.['.item']?.minHeight, vcp?.geometry?.minHeight],
@@ -54,12 +56,17 @@ const contract = checks.map(([property, expected, actual]) => ({
 const report = {
     generatedAt: new Date().toISOString(),
     viewport: vcp?.viewport ?? null,
-    status: vcp ? 'contract-scoped-one-sided-check' : 'pending-vcp-capture',
+    status: harness && vcp ? 'cross-page-input-computed-style-plus-select-contract' : (vcp ? 'contract-scoped-one-sided-check' : 'pending-vcp-capture'),
     pass: false,
-    harnessComputedStyleCapture: { status: 'pending', path: 'reports/harness-primitive-geometry.json' },
+    harnessComputedStyleCapture: { status: harness ? 'available' : 'pending', path: 'reports/harness-primitive-geometry.json' },
     vcpComputedStyleCapture: { status: vcp ? 'available' : 'missing', path: 'reports/vcp-primitive-geometry.json' },
     contract,
-    missingEvidence: ['Harness browser computed-style capture', 'cross-page geometry diff', 'screenshot/pixel diff'],
+    missingEvidence: [
+        ...(harness ? [] : ['Harness browser computed-style capture']),
+        'Harness Select browser computed-style capture',
+        'complete cross-page geometry diff',
+        'screenshot/pixel diff',
+    ],
 };
 
 await fs.mkdir(path.dirname(outputPath), { recursive: true });
