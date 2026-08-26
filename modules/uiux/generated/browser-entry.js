@@ -8,6 +8,7 @@ import { createForumConfigUiService, forumConfigUiDefinition } from './adapters/
 import { createAssistantRuntimeUiService, assistantRuntimeUiDefinition } from './adapters/assistant-runtime.js';
 import { mountField } from './primitives/field.js';
 import { mountSelect } from './primitives/select.js';
+import { mountInput } from './primitives/input.js';
 const api = {
     mountThemePresenterFromScope(root, theme, legacyScope) {
         const scope = createUiScope(legacyScope);
@@ -26,6 +27,7 @@ const api = {
     assistantRuntimeUiDefinition,
     mountField,
     mountSelect,
+    mountInput,
 };
 Object.defineProperty(globalThis, 'VCPUIUX', {
     value: Object.freeze(api),

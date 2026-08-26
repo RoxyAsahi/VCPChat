@@ -7,4 +7,5 @@ export type { SettingsPatch, SettingsSaveResult, SettingsState, SettingsUiAdapte
 export { mountField } from './primitives/field.js';
 export type { FieldProps } from './primitives/field.js';
 export { mountSelect } from './primitives/select.js';
+export { mountInput } from './primitives/input.js';
 export type { SelectProps } from './primitives/select.js';
