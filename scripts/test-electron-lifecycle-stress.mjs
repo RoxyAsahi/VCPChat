@@ -30,6 +30,7 @@ const checkpointEvery = Math.max(2, positiveInteger(process.env.VCPCHAT_STRESS_C
 const debugDetached = ['1', 'verbose'].includes(process.env.VCPCHAT_STRESS_DEBUG_DETACHED);
 const verboseDetached = process.env.VCPCHAT_STRESS_DEBUG_DETACHED === 'verbose';
 const skipDestructivePreflight = process.env.VCPCHAT_STRESS_SKIP_PREFLIGHT === '1';
+const traceListeners = process.env.VCPCHAT_STRESS_TRACE_LISTENERS === '1';
 const supportedStages = Object.freeze(['ask-nova', 'settings', 'agent-settings', 'embedded', 'detached-app', 'mode-round-trip']);
 const selectedStages = new Set((process.env.VCPCHAT_STRESS_STAGES || supportedStages.join(','))
     .split(',')
@@ -188,6 +189,75 @@ async function assertClassicSurface(page, browser, label) {
     assert.ok(state.bodyText > 20, `${label}: renderer became visually empty: ${JSON.stringify(state)}`);
 }
 
+async function installListenerTracker(page) {
+    if (!traceListeners) return;
+    await page.evaluate(() => {
+        if (window.__vcpStressListenerTracker) return;
+        const originalAdd = EventTarget.prototype.addEventListener;
+        const originalRemove = EventTarget.prototype.removeEventListener;
+        const targetIds = new WeakMap();
+        const listenerIds = new WeakMap();
+        const records = new Map();
+        let nextTargetId = 1;
+        let nextListenerId = 1;
+        const idFor = (map, value, next) => {
+            if (!map.has(value)) map.set(value, next());
+            return map.get(value);
+        };
+        const captureOf = options => typeof options === 'boolean' ? options : Boolean(options?.capture);
+        const targetLabel = target => {
+            if (target === window) return 'window';
+            if (target === document) return 'document';
+            if (target instanceof Element) {
+                const id = target.id ? `#${target.id}` : '';
+                const classes = [...target.classList].slice(0, 3).map(value => `.${value}`).join('');
+                return `${target.tagName.toLowerCase()}${id}${classes}`;
+            }
+            return target?.constructor?.name || 'EventTarget';
+        };
+        const keyFor = (target, type, listener, options) => {
+            if ((!listener || (typeof listener !== 'function' && typeof listener !== 'object'))) return null;
+            const targetId = idFor(targetIds, target, () => nextTargetId++);
+            const listenerId = idFor(listenerIds, listener, () => nextListenerId++);
+            return `${targetId}:${type}:${captureOf(options) ? 1 : 0}:${listenerId}`;
+        };
+        EventTarget.prototype.addEventListener = function(type, listener, options) {
+            const key = keyFor(this, type, listener, options);
+            if (key && !records.has(key)) {
+                records.set(key, {
+                    key,
+                    type: String(type),
+                    target: targetLabel(this),
+                    capture: captureOf(options),
+                    once: Boolean(typeof options === 'object' && options?.once),
+                    stack: new Error().stack?.split('\n').slice(2, 8).map(line => line.trim()) || [],
+                });
+            }
+            return originalAdd.call(this, type, listener, options);
+        };
+        EventTarget.prototype.removeEventListener = function(type, listener, options) {
+            const key = keyFor(this, type, listener, options);
+            if (key) records.delete(key);
+            return originalRemove.call(this, type, listener, options);
+        };
+        window.__vcpStressListenerTracker = {
+            reset() { records.clear(); },
+            snapshot() {
+                const active = [...records.values()].filter(record => !record.once);
+                const grouped = new Map();
+                active.forEach(record => {
+                    const stackHead = record.stack.find(line => !line.includes('addEventListener')) || '';
+                    const groupKey = `${record.target}|${record.type}|${stackHead}`;
+                    const group = grouped.get(groupKey) || { target: record.target, type: record.type, stack: record.stack, count: 0 };
+                    group.count += 1;
+                    grouped.set(groupKey, group);
+                });
+                return [...grouped.values()].sort((left, right) => right.count - left.count).slice(0, 20);
+            },
+        };
+    });
+}
+
 async function collectRendererSnapshot(page, cdp, browserCdp, browser, label) {
     // Release any Puppeteer JSHandle wrappers whose promises were intentionally
     // ignored by the scenario before measuring the renderer graph.
@@ -239,6 +309,7 @@ async function collectRendererSnapshot(page, cdp, browserCdp, browser, label) {
                 .filter(entry => Number(entry.cycle || 0) <= Number(window.__vcpStressCycle || 0) - 2)
                 .filter(entry => Boolean(entry.ref.deref()))
                 .map(entry => `${entry.cycle}:${entry.label}`),
+            listenerTrace: window.__vcpStressListenerTracker?.snapshot?.() || [],
         })),
         browser.pages(),
     ]);
@@ -945,6 +1016,7 @@ try {
     cdp = await page.createCDPSession();
     browserCdp = await browser.target().createCDPSession();
     await cdp.send('HeapProfiler.enable');
+    await installListenerTracker(page);
     await collectDetachedDiagnostic(cdp, 'diagnostic no-op A', page);
     await collectDetachedDiagnostic(cdp, 'diagnostic no-op B', page);
     if (debugDetached) {
@@ -956,6 +1028,7 @@ try {
         await assertMainSurface(page, browser, 'Canonical Agent diagnostic cleanup');
     }
     for (let cycle = 0; cycle < warmupCycles; cycle += 1) await runCycle(cycle, 'warmup');
+    if (traceListeners) await page.evaluate(() => window.__vcpStressListenerTracker?.reset?.());
     const baseline = await collectRendererSnapshot(page, cdp, browserCdp, browser, 'baseline');
     checkpoints.push(baseline);
     console.log(`Lifecycle stress baseline: ${JSON.stringify(baseline)}`);
