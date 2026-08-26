@@ -11,6 +11,7 @@ import type { UiDisposer } from './contracts.js';
 import { mountField } from './primitives/field.js';
 import { mountSelect } from './primitives/select.js';
 import { mountInput } from './primitives/input.js';
+import { mountChoice } from './primitives/choice.js';
 
 interface LegacyScopeLike {
     readonly label: string;
@@ -47,6 +48,7 @@ const api = {
     mountField,
     mountSelect,
     mountInput,
+    mountChoice,
 };
 
 Object.defineProperty(globalThis, 'VCPUIUX', {

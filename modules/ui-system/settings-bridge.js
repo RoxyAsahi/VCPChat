@@ -530,6 +530,7 @@ function enhanceGlobalSettings(root, form) {
     mountHarnessSelects(form);
     mountTypedAppearanceSelects(root, form);
     mountTypedHomeTaglineInput(root, form);
+    mountTypedRadiusChoice(root, form);
     form.querySelectorAll('input[type="range"]').forEach(range => enhance('Range', range));
     form.querySelectorAll('label.switch').forEach(control => enhance('Switch', control));
     form.querySelectorAll('.agent-style-collapsible-container').forEach(disclosure => {
@@ -544,6 +545,18 @@ function enhanceGlobalSettings(root, form) {
     mountSettingsAutosave(root, form);
     mountTypedFieldOwner(root, form);
     normalizeFormIcons(root);
+}
+
+function mountTypedRadiusChoice(root, form) {
+    const group = form?.querySelector?.('.appearance-radius-choice-grid');
+    const api = window.VCPUIUX;
+    if (!group || !api?.mountChoice || group.dataset.vcpTypedPrimitiveMounted === 'true') return;
+    const scope = ensurePresentationScope();
+    if (!scope) return;
+    const release = api.mountChoice(group, scope);
+    group.dataset.vcpTypedPrimitiveMounted = 'true';
+    scope.own(() => { delete group.dataset.vcpTypedPrimitiveMounted; }, 'typed-radius-choice-marker', 'ui-primitive');
+    if (release) scope.own(release, 'typed-radius-choice', 'ui-primitive');
 }
 
 function mountTypedHomeTaglineInput(root, form) {

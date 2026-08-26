@@ -9,6 +9,7 @@ import { createAssistantRuntimeUiService, assistantRuntimeUiDefinition } from '.
 import { mountField } from './primitives/field.js';
 import { mountSelect } from './primitives/select.js';
 import { mountInput } from './primitives/input.js';
+import { mountChoice } from './primitives/choice.js';
 const api = {
     mountThemePresenterFromScope(root, theme, legacyScope) {
         const scope = createUiScope(legacyScope);
@@ -28,6 +29,7 @@ const api = {
     mountField,
     mountSelect,
     mountInput,
+    mountChoice,
 };
 Object.defineProperty(globalThis, 'VCPUIUX', {
     value: Object.freeze(api),
