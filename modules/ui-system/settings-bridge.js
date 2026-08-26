@@ -146,8 +146,6 @@ function mountTypedSettingsConsumer(root) {
         const settings = snapshot.value || {};
         const projection = [
             ['userName', 'userName'],
-            ['userAvatarBorderColor', 'userAvatarBorderColor'],
-            ['userAvatarBorderColorText', 'userAvatarBorderColor'],
             ['userNameTextColor', 'userNameTextColor'],
             ['userNameTextColorText', 'userNameTextColor'],
             ['userUseThemeColorsInChat', 'userUseThemeColorsInChat', 'checked'],
@@ -533,6 +531,7 @@ function enhanceGlobalSettings(root, form) {
     mountTypedRadiusChoice(root, form);
     mountTypedAppearanceRanges(root, form);
     mountTypedHomeVisualToggles(root, form);
+    mountTypedAvatarColorPair(root, form);
     form.querySelectorAll('input[type="range"]').forEach(range => { if (!['appearanceSidebarAvatarSize', 'appearanceSidebarRowHeight', 'appearanceCustomRadius'].includes(range.id)) enhance('Range', range); });
     form.querySelectorAll('label.switch').forEach(control => { if (!control.querySelector('#showHomeVisualBrand, #showHomeVisualTagline')) enhance('Switch', control); });
     form.querySelectorAll('.agent-style-collapsible-container').forEach(disclosure => {
@@ -588,6 +587,17 @@ function mountTypedHomeVisualToggles(root, form) {
     });
 }
 
+function mountTypedAvatarColorPair(root, form) {
+    const color = form?.querySelector?.('#userAvatarBorderColor');
+    const text = form?.querySelector?.('#userAvatarBorderColorText');
+    const api = window.VCPUIUX; if (!color || !text || !api?.mountColorPair) return;
+    const scope = ensurePresentationScope(); if (!scope || color.dataset.vcpTypedPrimitiveMounted === 'true') return;
+    const release = api.mountColorPair(color, text, scope);
+    color.dataset.vcpTypedPrimitiveMounted = 'true';
+    scope.own(() => { delete color.dataset.vcpTypedPrimitiveMounted; }, 'typed-avatar-color-marker', 'ui-primitive');
+    if (release) scope.own(release, 'typed-avatar-color-pair', 'ui-primitive');
+}
+
 function mountTypedHomeTaglineInput(root, form) {
     const input = form?.querySelector?.('#homeVisualTagline');
     const api = window.VCPUIUX;
@@ -629,7 +639,7 @@ function mountTypedAppearanceSelects(root, form) {
 function mountHarnessInputWrappers(form) {
     const selector = 'input:is(:not([type]), [type="text"], [type="url"], [type="password"], [type="number"], [type="email"], [type="search"], [type="tel"]), textarea';
     form.querySelectorAll(selector).forEach(control => {
-        if (control.id === 'homeVisualTagline') return;
+        if (control.id === 'homeVisualTagline' || control.id === 'userAvatarBorderColorText') return;
         if (control.closest('.vcp-harness-input-wrap')) return;
         const wrap = document.createElement('span');
         wrap.className = 'vcp-harness-input-wrap';
@@ -813,6 +823,8 @@ function mountSettingsAutosave(root, form) {
 // use the canonical business nodes and persisted keys, but no longer enter
 // the legacy form-submit/autosave chain.
 const TYPED_FIELD_DEFINITIONS = Object.freeze({
+    userAvatarBorderColor: { path: 'userAvatarBorderColor', kind: 'string' },
+    userAvatarBorderColorText: { path: 'userAvatarBorderColor', kind: 'string' },
     showHomeVisualBrand: { path: 'showHomeVisualBrand', kind: 'boolean' },
     showHomeVisualTagline: { path: 'showHomeVisualTagline', kind: 'boolean' },
     homeVisualTagline: { path: 'homeVisualTagline', kind: 'string' },
@@ -863,6 +875,8 @@ function mountTypedFieldOwner(root, form) {
         const appearance = settings.appearanceProfile || {};
         const set = (id, value) => { const node = form.querySelector(`#${id}`); if (node && value !== undefined && value !== null) { const next = String(value); if (node.value !== next) { node.value = next; const EventCtor = node.ownerDocument.defaultView?.CustomEvent ?? CustomEvent; node.dispatchEvent(new EventCtor('vcp-uiux-sync')); } } };
         const check = (id, value) => { const node = form.querySelector(`#${id}`); if (node) node.checked = Boolean(value); };
+        set('userAvatarBorderColor', settings.userAvatarBorderColor || '#3d5a80');
+        set('userAvatarBorderColorText', settings.userAvatarBorderColor || '#3d5a80');
         set('appearanceDensity', appearance.density || 'comfortable');
         set('appearanceRadius', appearance.radius || 'small');
         set('appearanceTypography', appearance.typography || 'system');
