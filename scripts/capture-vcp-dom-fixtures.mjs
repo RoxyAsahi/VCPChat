@@ -13,7 +13,7 @@ const { mountField } = await import('../modules/uiux/generated/primitives/field.
 const { mountSelect } = await import('../modules/uiux/generated/primitives/select.js');
 const { mountInput } = await import('../modules/uiux/generated/primitives/input.js');
 
-const dom = new JSDOM('<!doctype html><main id="fixture"><div id="field"><select id="mode"><option>Comfortable</option><option selected>Compact</option></select></div><input id="name" value=""></main>');
+const dom = new JSDOM('<!doctype html><main id="fixture"><div id="field"><select id="mode"><option selected>Comfortable</option><option>Compact</option></select></div><input id="name" value=""></main>');
 const previousDocument = globalThis.document;
 const previousWindow = globalThis.window;
 globalThis.document = dom.window.document;
