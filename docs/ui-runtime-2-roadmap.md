@@ -22,6 +22,7 @@
 > 2026-08-26：新增 Toggle DOM/geometry reference pack（`toggle.dom.json`、`toggle.geometry.json`），与已通过的 generated-only artifact smoke 对齐。
 > 当前 primitive ledger：Field、Select、Input、Range、Choice、Toggle 均已有 TypeScript Light-DOM 实现；Settings 外观/首页字段已按单一 typed owner 接入，覆盖源码测试、generated artifact smoke、Electron DOM/geometry/interaction、snapshot/reload 与 60-cycle lifecycle stress。R2-02C 仍未 complete：ThemeTokenOwner、剩余未迁移 Settings 字段、Classic fallback 收口和全量 legacy deletion 仍是后续工作；聊天渲染/流式/协议/Plugin Loader 继续冻结。
 > 2026-08-26：修正 `check-chat-kernel-consumers.mjs` 依赖扫描为忽略注释文本；`npm run guard:chat-kernel-consumers` 重新通过（17 kernel files），未修改任何聊天运行时代码。
+> 2026-08-26 checkpoint：`npm run test:uiux` 25/25、`npm run check:uiux:artifacts`、`npm run guard:chat-kernel-consumers` 全部通过；primitive 与聊天冻结边界保持稳定。
 > 2026-08-26：ThemeTokenOwner 已落地为 document-level reference counting；多个 ThemePresenter 共存时，单个 presenter dispose 不会恢复/清空仍被其他 presenter 使用的 semantic tokens。`npm run test:uiux` 25/25 通过。
 > 2026-08-26：ThemeTokenOwner 变更后的 generated artifact smoke、Electron theme journey、Settings Electron gate 全部通过；主题切换/reload 与 Settings visual contract 未回归。
 > 2026-08-26：Settings-only 60-cycle lifecycle stress 通过；cycle-1..60 listeners 620、lifecycle resources 337、nodes 8406、detached roots/options/icons 0，确认 Range/Choice/Input 扩展未引入 listener 或 owner 增长。Range 三字段不存在旧 presentation fallback；仅保留 global-settings-manager 持久化读取。
