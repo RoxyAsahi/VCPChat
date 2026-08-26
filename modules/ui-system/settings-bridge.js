@@ -663,6 +663,13 @@ function mountTypedForumFieldOwner(root, form) {
                 if (status()) status().textContent = '已保存';
                 form.dispatchEvent(new CustomEvent('vcp-settings-save-result', { detail: { success: true, owner: 'typed-forum-field-owner' } }));
             }
+        } catch (error) {
+            if (!state.disposed) {
+                form.dataset.vcpSettingsDirty = 'true';
+                status()?.setAttribute('data-state', 'error');
+                if (status()) status().textContent = '保存失败 · 重试';
+                form.dispatchEvent(new CustomEvent('vcp-settings-save-result', { detail: { success: false, error: error?.message || String(error), owner: 'typed-forum-field-owner' } }));
+            }
         } finally { state.inFlight = null; if (state.pending) schedule(); }
     };
     const schedule = () => {
