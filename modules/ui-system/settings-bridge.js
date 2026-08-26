@@ -531,7 +531,8 @@ function enhanceGlobalSettings(root, form) {
     mountTypedAppearanceSelects(root, form);
     mountTypedHomeTaglineInput(root, form);
     mountTypedRadiusChoice(root, form);
-    form.querySelectorAll('input[type="range"]').forEach(range => enhance('Range', range));
+    mountTypedAppearanceRanges(root, form);
+    form.querySelectorAll('input[type="range"]').forEach(range => { if (!['appearanceSidebarAvatarSize', 'appearanceSidebarRowHeight', 'appearanceCustomRadius'].includes(range.id)) enhance('Range', range); });
     form.querySelectorAll('label.switch').forEach(control => enhance('Switch', control));
     form.querySelectorAll('.agent-style-collapsible-container').forEach(disclosure => {
         disclosure.dataset.settingPrimitive = 'disclosure';
@@ -557,6 +558,20 @@ function mountTypedRadiusChoice(root, form) {
     group.dataset.vcpTypedPrimitiveMounted = 'true';
     scope.own(() => { delete group.dataset.vcpTypedPrimitiveMounted; }, 'typed-radius-choice-marker', 'ui-primitive');
     if (release) scope.own(release, 'typed-radius-choice', 'ui-primitive');
+}
+
+function mountTypedAppearanceRanges(root, form) {
+    const api = window.VCPUIUX;
+    if (!api?.mountRange) return;
+    const scope = ensurePresentationScope(); if (!scope) return;
+    [['appearanceSidebarAvatarSize', 'appearanceSidebarAvatarSizeValue'], ['appearanceSidebarRowHeight', 'appearanceSidebarRowHeightValue'], ['appearanceCustomRadius', 'appearanceCustomRadiusValue']].forEach(([id, outputId]) => {
+        const input = form?.querySelector?.(`#${id}`); const output = form?.querySelector?.(`#${outputId}`);
+        if (!input || input.dataset.vcpTypedPrimitiveMounted === 'true') return;
+        const release = api.mountRange(input, { output, format: value => `${value}px` }, scope);
+        input.dataset.vcpTypedPrimitiveMounted = 'true';
+        scope.own(() => { delete input.dataset.vcpTypedPrimitiveMounted; }, `typed-${id}-marker`, 'ui-primitive');
+        if (release) scope.own(release, `typed-${id}-range`, 'ui-primitive');
+    });
 }
 
 function mountTypedHomeTaglineInput(root, form) {

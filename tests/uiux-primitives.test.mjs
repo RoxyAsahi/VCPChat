@@ -10,6 +10,7 @@ const { mountField } = await import('../modules/uiux/primitives/field.ts');
 const { mountSelect } = await import('../modules/uiux/primitives/select.ts');
 const { mountInput } = await import('../modules/uiux/primitives/input.ts');
 const { mountChoice } = await import('../modules/uiux/primitives/choice.ts');
+const { mountRange } = await import('../modules/uiux/primitives/range.ts');
 
 test('Harness-compatible Field and Select keep Light DOM contract and dispose cleanly', async () => {
     const dom = new JSDOM('<!doctype html><form><div id="field"><select id="density"><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></div></form>');
@@ -80,6 +81,19 @@ test('Harness Choice decorates native radios and retracts cleanly', async () => 
         await release?.(); await scope.dispose('choice-complete');
         assert.equal(root.classList.contains('vcp-uiux-choice'), false);
         assert.equal(root.querySelector('label').classList.contains('vcp-uiux-choice-option'), false);
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
+
+test('Harness Range keeps native value, output sync, and teardown', async () => {
+    const dom = new JSDOM('<!doctype html><label id="field"><input id="range" type="range" value="32"><output id="out"></output></label>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('range-test')); const input = document.getElementById('range'); const output = document.getElementById('out');
+        const release = mountRange(input, { output }, scope);
+        assert.equal(input.parentElement.className, 'vcp-uiux-range'); assert.equal(output.textContent, '32px');
+        input.value = '40'; input.dispatchEvent(new dom.window.Event('input')); assert.equal(output.textContent, '40px');
+        await release?.(); await scope.dispose('range-complete'); assert.equal(input.parentElement.id, 'field'); assert.equal(output.parentElement.id, 'field');
     } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
 });
 
