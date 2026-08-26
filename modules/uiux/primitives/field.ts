@@ -1,6 +1,17 @@
 import type { UiDisposer, UiScope } from '../contracts.js';
 import { createDomRenderer } from '../runtime/dom-renderer.js';
 
+const STYLE_ID = 'vcp-harness-uiux-field';
+function ensureStyles() {
+    if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) return;
+    const style = document.createElement('style');
+    style.id = STYLE_ID;
+    // Matches the captured Harness ValueField output, including its current
+    // invalid-control browser-default anomaly rather than normalizing it away.
+    style.textContent = `.vcp-harness-field{display:flex;flex-direction:column;gap:6px;padding:12px 0;font-size:14px;color:var(--dsw-alias-label-primary,#0f1115)}.vcp-harness-field-head{display:flex;align-items:center;gap:8px}.vcp-harness-field-label{display:block;flex:1;min-width:0;font-size:13px;font-weight:500;line-height:1.5;color:var(--dsw-alias-label-primary,#0f1115)}.vcp-harness-field-input{box-sizing:content-box;width:calc(100% - 26px);height:34px;padding:0 12px;border:1px solid var(--dsw-alias-border-l2,rgba(0,0,0,.1));border-radius:8px;background:var(--dsw-alias-bg-layer-3,#fff);font:inherit;font-size:13px;line-height:1.5;color:var(--dsw-alias-label-primary,#0f1115)}.vcp-harness-field-input:focus-visible{outline:none;border-color:var(--dsw-alias-brand-primary,#1677ff)}.vcp-harness-field-description,.vcp-harness-field-error{margin:0;font-size:12px;line-height:1.5}.vcp-harness-field-description{color:var(--dsw-alias-label-tertiary,#81858c)}.vcp-harness-field-error{color:var(--dsw-alias-label-error,#0f1115)}.vcp-harness-field-input-invalid{box-sizing:content-box;width:calc(100% - 8px);height:16px;padding:1px 2px;border:2px solid #000;border-radius:0;background:#fff;font-size:13.3333px;font-weight:400;line-height:normal;color:#000}`;
+    (document.head || document.documentElement).append(style);
+}
+
 export interface FieldProps {
     readonly label: string;
     readonly description?: string;
@@ -11,6 +22,7 @@ export interface FieldProps {
 /** Harness Field contract rendered in Light DOM; no business state or IPC. */
 export function mountField(root: HTMLElement, props: FieldProps, scope: UiScope): UiDisposer {
     if (!root || !props?.control || !scope) throw new TypeError('Field requires root, control and scope.');
+    ensureStyles();
     const fieldId = props.control.id || `vcp-field-${Math.random().toString(36).slice(2)}`;
     const originalId = props.control.getAttribute('id');
     const originalDescribedBy = props.control.getAttribute('aria-describedby');
