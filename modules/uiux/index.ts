@@ -24,4 +24,5 @@ export { mountInput } from './primitives/input.js';
 export { mountChoice } from './primitives/choice.js';
 export { mountRange } from './primitives/range.js';
 export { mountToggle } from './primitives/toggle.js';
+export { mountColorPair } from './primitives/color-pair.js';
 export type { SelectProps } from './primitives/select.js';
