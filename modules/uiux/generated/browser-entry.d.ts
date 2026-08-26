@@ -1,4 +1,5 @@
 import { createSettingsUiService } from './adapters/settings.js';
+import { createDomRenderer } from './runtime/dom-renderer.js';
 import { createRustAssistantUiService } from './adapters/rust-assistant.js';
 import { createForumConfigUiService } from './adapters/forum-config.js';
 import { createAssistantRuntimeUiService } from './adapters/assistant-runtime.js';
@@ -25,6 +26,7 @@ interface LegacyScopeLike {
 declare const api: {
     mountThemePresenterFromScope(root: HTMLElement, theme: ThemeUiService["theme"], legacyScope: LegacyScopeLike): UiDisposer;
     createSettingsUiService: typeof createSettingsUiService;
+    createDomRenderer: typeof createDomRenderer;
     createUiServiceRegistryFromScope(legacyScope: LegacyScopeLike): import("./runtime/service-registry.js").UiServiceRegistry;
     settingsUiDefinition: import("./contracts.js").UiServiceDefinition<import("./index.js").SettingsUiService>;
     createRustAssistantUiService: typeof createRustAssistantUiService;
