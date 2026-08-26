@@ -9,6 +9,8 @@ const vcpFile = process.env.VCP_SCREENSHOT || path.join(root, 'docs/reference/de
 const output = path.join(root, 'reports/harness-vcp-pixel-diff.json');
 const policy = JSON.parse(await fs.readFile(path.join(root, 'docs/reference/deepseek-harness-primitives/pixel-policy.json'), 'utf8'));
 const geometryReport = JSON.parse(await fs.readFile(path.join(root, 'reports/harness-vcp-geometry-diff.json'), 'utf8').catch(() => '{}'));
+const harnessSelect = JSON.parse(await fs.readFile(path.join(root, 'reports/harness-select-production.json'), 'utf8'));
+const vcpSelect = JSON.parse(await fs.readFile(path.join(root, 'reports/vcp-select-production.json'), 'utf8'));
 
 function decodePng(buffer) {
     if (buffer.readUInt32BE(0) !== 0x89504e47) throw new Error('not PNG');
@@ -34,6 +36,18 @@ function encodePng(width, height, pixels) {
     return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
 }
 
+function crop(image, rect) {
+    const x = Math.max(0, Math.round(rect.x));
+    const y = Math.max(0, Math.round(rect.y));
+    const width = Math.min(image.width - x, Math.round(rect.width));
+    const height = Math.min(image.height - y, Math.round(rect.height));
+    const pixels = Buffer.alloc(width * height * 4);
+    for (let row = 0; row < height; row++) {
+        image.pixels.copy(pixels, row * width * 4, ((y + row) * image.width + x) * 4, ((y + row) * image.width + x + width) * 4);
+    }
+    return { width, height, pixels, rect: { x, y, width, height } };
+}
+
 let report;
 try {
     if (policy.semanticFixtureRequired && geometryReport.semanticFixture?.same !== true) {
@@ -43,7 +57,8 @@ try {
         process.exit(0);
     }
     const [harnessBuffer, vcpBuffer] = await Promise.all([fs.readFile(harnessFile), fs.readFile(vcpFile)]);
-    const harness = decodePng(harnessBuffer); const vcp = decodePng(vcpBuffer);
+    const harnessSource = decodePng(harnessBuffer); const vcpSource = decodePng(vcpBuffer);
+    const harness = crop(harnessSource, harnessSelect.rect); const vcp = crop(vcpSource, vcpSelect.rect);
     const comparable = harness.width === vcp.width && harness.height === vcp.height;
     const count = comparable ? harness.width * harness.height : 0; let different = 0; let totalDelta = 0;
     let diffPixels = null;
@@ -57,8 +72,9 @@ try {
         status: comparable ? (semanticFixture?.same === true ? 'compared' : 'compared-but-semantic-baseline-mismatch') : 'pending-dimension-mismatch',
         policy,
         semanticFixture,
-        harness: { path: harnessFile, width: harness.width, height: harness.height },
-        vcp: { path: vcpFile, width: vcp.width, height: vcp.height },
+        comparisonRegion: 'select-menu-rect',
+        harness: { path: harnessFile, sourceWidth: harnessSource.width, sourceHeight: harnessSource.height, ...harness.rect },
+        vcp: { path: vcpFile, sourceWidth: vcpSource.width, sourceHeight: vcpSource.height, ...vcp.rect },
         comparable,
         differentPixels: different,
         totalPixels: count,
@@ -66,8 +82,8 @@ try {
         meanChannelDelta,
         diffImage: diffPixels ? diffImage : null,
         pass: semanticFixture?.same === true && withinTolerance,
-        missingEvidence: semanticFixture?.same === true ? (withinTolerance ? [] : ['pixel tolerance']) : ['same semantic fixture route'],
+        missingEvidence: semanticFixture?.same !== true ? ['same semantic fixture route'] : !comparable ? ['same comparison dimensions'] : withinTolerance ? [] : ['pixel tolerance'],
     };
 } catch (error) { report = { generatedAt: new Date().toISOString(), status: 'pending-missing-or-invalid-input', pass: false, error: error.message, harness: harnessFile, vcp: vcpFile }; }
 await fs.writeFile(output, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
-console.log(`Harness↔VCP pixel diff report written (status=${report.status}; pass=false).`);
+console.log(`Harness↔VCP pixel diff report written (status=${report.status}; pass=${report.pass}).`);

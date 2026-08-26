@@ -55,23 +55,45 @@ const contract = checks.map(([property, expected, actual]) => ({
     pass: expected != null && actual != null && canonicalize(expected) === canonicalize(actual),
 }));
 
+const closeNumber = (expected, actual, tolerance = 1) => Number.isFinite(expected) && Number.isFinite(actual) && Math.abs(expected - actual) <= tolerance;
+const selectGeometry = [];
+if (harnessSelect && vcpSelect) {
+    for (const property of ['x', 'y', 'width', 'height']) {
+        selectGeometry.push({ property: `select.list.rect.${property}`, expected: harnessSelect.rect?.[property] ?? null, actual: vcpSelect.rect?.[property] ?? null, tolerance: 1, pass: closeNumber(harnessSelect.rect?.[property], vcpSelect.rect?.[property]) });
+    }
+    for (const property of ['padding', 'borderRadius', 'minWidth', 'boxShadow']) {
+        const expected = harnessSelect.style?.[property] ?? null;
+        const actual = vcpSelect.style?.[property] ?? null;
+        selectGeometry.push({ property: `select.list.style.${property}`, expected, actual, pass: canonicalize(expected) === canonicalize(actual) });
+    }
+    harnessSelect.items?.forEach((item, index) => {
+        for (const property of ['x', 'y', 'width', 'height']) {
+            const expected = item.rect?.[property] ?? null;
+            const actual = vcpSelect.items?.[index]?.rect?.[property] ?? null;
+            selectGeometry.push({ property: `select.item.${index}.rect.${property}`, expected, actual, tolerance: 1, pass: closeNumber(expected, actual) });
+        }
+    });
+}
+const selectGeometryPass = selectGeometry.length > 0 && selectGeometry.every(item => item.pass);
+
 const report = {
     generatedAt: new Date().toISOString(),
     viewport: vcp?.viewport ?? null,
-    status: harness && vcp ? 'cross-page-input-computed-style-plus-select-contract' : (vcp ? 'contract-scoped-one-sided-check' : 'pending-vcp-capture'),
-    pass: false,
+    status: selectGeometryPass ? 'cross-page-select-geometry-equivalent' : (harness && vcp ? 'cross-page-select-geometry-mismatch' : (vcp ? 'contract-scoped-one-sided-check' : 'pending-vcp-capture')),
+    pass: contract.every(item => item.pass) && selectGeometryPass,
     harnessComputedStyleCapture: { status: harness ? 'available' : 'pending', path: 'reports/harness-primitive-geometry.json' },
     vcpComputedStyleCapture: { status: vcp ? 'available' : 'missing', path: 'reports/vcp-primitive-geometry.json' },
     semanticFixture: { harness: harnessSelect ? 'agent-preset-selection/Standard mode' : harness?.selector ?? null, vcp: vcpSelect ? 'agent-preset-select/4 options' : vcp?.primitive ?? null, same: Boolean(harnessSelect && vcpSelect && harnessSelect.items?.length === vcpSelect.items?.length), reason: harnessSelect && vcpSelect ? null : 'one or both Select-only captures missing' },
     contract,
+    selectGeometry,
     missingEvidence: [
         ...(harness ? [] : ['Harness browser computed-style capture']),
         ...(harnessSelect ? [] : ['Harness Select browser computed-style capture']),
-        'complete cross-page geometry diff',
+        ...(selectGeometryPass ? [] : ['complete cross-page Select geometry diff']),
         'screenshot/pixel diff',
     ],
 };
 
 await fs.mkdir(path.dirname(outputPath), { recursive: true });
 await fs.writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
-console.log(`Harness↔VCP geometry report written (${contract.filter(item => item.pass).length}/${contract.length} contract checks; cross-page diff pending).`);
+console.log(`Harness↔VCP geometry report written (${report.status}; pass=${report.pass}).`);
