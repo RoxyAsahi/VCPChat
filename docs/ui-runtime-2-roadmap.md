@@ -209,6 +209,7 @@ evidence: npm run check:uiux; npm run test:uiux; node --test tests/creation-cont
 2026-08-26 primitive state contract：新增 Input/Field/Select 的 disabled、selected、error、`aria-describedby` 与 teardown 回滚测试；`npm run test:uiux` 29/29 通过。该证据仍属于 jsdom 行为合同，尚不能替代 Electron 固定 viewport 的 computed-style/pixel diff。
 2026-08-26 generated snapshot gate：新增 `npm run check:harness-snapshot`，从 generated artifact 实际挂载 Input/Field/Select，并依据 reference pack 验证 Light-DOM nesting、ARIA、selected state 与 teardown 恢复；该 gate 已通过，明确作为 DOM/state 快照层，后续继续扩展 Electron computed-style 与截图容差层。
 2026-08-26 Electron geometry evidence：`test-electron-uiux-theme.mjs` 扩展为读取 generated Input 的 computed `height/gap/padding/borderRadius/fontSize/lineHeight`，并与 Harness geometry reference 断言；重试后 journey 通过。首次启动因本机缺失 VCP-CDS 二进制与 renderer ready 时序失败，保留为环境阻断证据，不计入通过次数。
+2026-08-26 Select DOM alignment：Select menu 已从 `list → item` 调整为 Harness 目标层级 `list → viewport → itemWrap → item`，保留 native select、键盘导航、outside-dismiss、portal 和 owner dispose 行为；`npm run test:uiux` 29/29、`npm run check:harness-snapshot` 与 generated Electron journey 均通过。该切片仍未宣称完整 CSS/pixel equivalence，viewport/itemWrap 的最终 geometry 继续由后续 computed-style diff 门禁确认。
 
 2026-08-26 priority recalibration：根据 Harness 等价审计，施工顺序调整为四层门禁：
 1. `reference automation`：reference pack 必须能从固定 viewport 产出 DOM/computed-style/state 快照并生成 diff 报告；

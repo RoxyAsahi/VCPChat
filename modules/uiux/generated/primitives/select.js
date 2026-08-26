@@ -32,6 +32,9 @@ export function mountSelect(select, props = {}, scope) {
     menu.className = 'vcp-harness-menu-list vcp-uiux-primitive-menu';
     menu.setAttribute('role', 'menu');
     menu.hidden = true;
+    const viewport = document.createElement('div');
+    viewport.className = 'vcp-harness-menu-viewport';
+    menu.append(viewport);
     select.classList.add('vcp-harness-select-native');
     trigger.setAttribute('aria-controls', `${select.id || 'vcp-select'}-menu`);
     menu.id = `${select.id || 'vcp-select'}-menu`;
@@ -55,19 +58,22 @@ export function mountSelect(select, props = {}, scope) {
     const onChange = () => sync();
     const onSync = () => sync();
     Array.from(select.options).forEach((option, index) => {
+        const itemWrap = document.createElement('div');
+        itemWrap.className = 'vcp-harness-menu-item-wrap';
         const item = document.createElement('button');
         item.type = 'button';
         item.className = 'vcp-harness-menu-item';
         item.setAttribute('role', 'menuitem');
         item.textContent = option.textContent?.trim() || '';
         item.disabled = option.disabled;
+        itemWrap.append(item);
         scope.listen(item, 'click', () => { if (!option.disabled) {
             select.selectedIndex = index;
             const EventCtor = select.ownerDocument.defaultView?.Event ?? Event;
             select.dispatchEvent(new EventCtor('change', { bubbles: true }));
             close(true);
         } });
-        menu.append(item);
+        viewport.append(itemWrap);
     });
     select.parentNode?.insertBefore(wrap, select);
     wrap.append(select, trigger, menu);
