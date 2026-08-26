@@ -4,7 +4,7 @@ function ensureStyles() {
         return;
     const style = document.createElement('style');
     style.id = STYLE_ID;
-    style.textContent = `.vcp-harness-select{position:relative;display:inline-flex;min-width:218px}.vcp-harness-select>.vcp-harness-select-native{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important}.vcp-harness-select>.vcp-harness-select-trigger{display:inline-flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:40px;padding:8px 10px;border:1px solid var(--dsw-alias-border-l2,var(--vcp-color-border,#c8ccd4));border-radius:10px;background:var(--dsw-alias-bg-layer-1,var(--vcp-color-surface,#fff));color:var(--dsw-alias-label-primary,var(--vcp-color-text,#1f2329));font:inherit;font-size:14px;line-height:22px;cursor:pointer}.vcp-harness-select>.vcp-harness-select-trigger:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,var(--vcp-color-focus,#4c8dff));outline-offset:2px}.vcp-harness-select>.vcp-harness-menu-list,.vcp-uiux-primitive-menu{z-index:1000;min-width:218px;padding:4px;background:var(--dsw-alias-bg-layer-1,var(--vcp-color-surface,#fff));border:1px solid var(--dsw-alias-border-l2,var(--vcp-color-border,#c8ccd4));border-radius:12px;box-shadow:0 8px 24px rgb(0 0 0/.14)}.vcp-harness-menu-viewport{display:flex;flex-direction:column;min-height:0}.vcp-harness-menu-item-wrap{position:relative}.vcp-uiux-primitive-menu .vcp-harness-menu-item{display:flex;align-items:center;width:100%;min-height:40px;padding:8px 10px;gap:8px;border:0;border-radius:10px;background:transparent;color:var(--dsw-alias-label-primary,var(--vcp-color-text,#1f2329));font:inherit;font-size:14px;line-height:22px;text-align:left;cursor:pointer}.vcp-uiux-primitive-menu .vcp-harness-menu-item:hover:not(:disabled),.vcp-uiux-primitive-menu .vcp-harness-menu-item:focus-visible{background:var(--dsw-alias-interactive-bg-hover,var(--vcp-color-surface-selected,#eef3ff))}.vcp-uiux-primitive-menu .vcp-harness-menu-item:disabled{opacity:.5;cursor:not-allowed}.vcp-harness-menu-item-check{display:inline-flex;flex:none;width:16px;height:16px;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary,var(--vcp-color-text,#1f2329))}.vcp-harness-menu-item-check::before{content:'✓';font-size:14px;line-height:16px}.vcp-harness-field-description{margin-top:4px;color:var(--dsw-alias-label-secondary,var(--vcp-color-muted,#68707d));font-size:12px;line-height:18px}.vcp-harness-field-error{margin-top:4px;color:var(--dsw-alias-label-danger,var(--vcp-color-danger,#c62828));font-size:12px;line-height:18px}`;
+    style.textContent = `.vcp-harness-select{position:relative;display:inline-flex;min-width:218px}.vcp-harness-select>.vcp-harness-select-native{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important}.vcp-harness-select>.vcp-harness-select-trigger{display:inline-flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:40px;padding:8px 10px;border:1px solid var(--dsw-alias-border-l2,var(--vcp-color-border,#c8ccd4));border-radius:10px;background:var(--dsw-alias-bg-layer-1,var(--vcp-color-surface,#fff));color:var(--dsw-alias-label-primary,var(--vcp-color-text,#1f2329));font:inherit;font-size:14px;line-height:22px;cursor:pointer}.vcp-harness-select>.vcp-harness-select-trigger:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,var(--vcp-color-focus,#4c8dff));outline-offset:2px}.vcp-harness-select>.vcp-harness-menu-list,.vcp-uiux-primitive-menu{box-sizing:border-box;z-index:1000;min-width:218px;padding:4px;background:var(--dsw-alias-bg-layer-1,var(--vcp-color-surface,#fff));border:1px solid var(--dsw-alias-border-l2,var(--vcp-color-border,#c8ccd4));border-radius:12px;box-shadow:0 8px 24px rgb(0 0 0/.14)}.vcp-harness-menu-viewport{display:flex;flex-direction:column;min-height:0}.vcp-harness-menu-item-wrap{position:relative}.vcp-uiux-primitive-menu .vcp-harness-menu-item{display:flex;align-items:center;width:100%;min-height:40px;padding:8px 10px;gap:8px;border:0;border-radius:10px;background:transparent;color:var(--dsw-alias-label-primary,var(--vcp-color-text,#1f2329));font:inherit;font-size:14px;line-height:22px;text-align:left;cursor:pointer}.vcp-uiux-primitive-menu .vcp-harness-menu-item:hover:not(:disabled),.vcp-uiux-primitive-menu .vcp-harness-menu-item:focus-visible{background:var(--dsw-alias-interactive-bg-hover,var(--vcp-color-surface-selected,#eef3ff))}.vcp-uiux-primitive-menu .vcp-harness-menu-item:disabled{opacity:.5;cursor:not-allowed}.vcp-harness-menu-item-label{display:flex;flex:1;min-width:0;flex-direction:column}.vcp-harness-menu-item-name{color:var(--dsw-alias-label-primary,var(--vcp-color-text,#1f2329));font-size:14px;line-height:22px}.vcp-harness-menu-item-description{color:var(--dsw-alias-label-tertiary,var(--vcp-color-muted,#9aa0aa));font-size:12px;line-height:18px}.vcp-harness-menu-item-check{display:inline-flex;flex:none;width:16px;height:16px;align-items:center;justify-content:center;color:var(--dsw-alias-label-primary,var(--vcp-color-text,#1f2329))}.vcp-harness-menu-item-check::before{content:'✓';font-size:14px;line-height:16px}.vcp-harness-field-description{margin-top:4px;color:var(--dsw-alias-label-secondary,var(--vcp-color-muted,#68707d));font-size:12px;line-height:18px}.vcp-harness-field-error{margin-top:4px;color:var(--dsw-alias-label-danger,var(--vcp-color-danger,#c62828));font-size:12px;line-height:18px}`;
     (document.head || document.documentElement).append(style);
 }
 /**
@@ -21,6 +21,7 @@ export function mountSelect(select, props = {}, scope) {
     const previousActive = document.activeElement;
     const wrap = document.createElement('span');
     wrap.className = 'vcp-harness-select';
+    wrap.style.width = '100%';
     const trigger = document.createElement('button');
     trigger.type = 'button';
     trigger.className = 'vcp-harness-select-trigger';
@@ -64,8 +65,14 @@ export function mountSelect(select, props = {}, scope) {
         trigger.focus(); };
     const open = () => { if (select.disabled)
         return; if (!menu.parentNode)
-        wrap.append(menu); menu.hidden = false; trigger.setAttribute('aria-expanded', 'true'); if (props.portal)
-        document.body.append(menu); const current = menu.querySelector('[data-selected="true"]'); (current || menu.querySelector('[role="menuitem"]'))?.focus(); };
+        wrap.append(menu); menu.hidden = false; trigger.setAttribute('aria-expanded', 'true'); if (props.portal) {
+        const anchor = trigger.getBoundingClientRect();
+        document.body.append(menu);
+        menu.style.position = 'fixed';
+        menu.style.left = `${anchor.left}px`;
+        menu.style.top = `${anchor.bottom + 4}px`;
+        menu.style.width = `${anchor.width}px`;
+    } const current = menu.querySelector('[data-selected="true"]'); (current || menu.querySelector('[role="menuitem"]'))?.focus(); };
     const onTrigger = () => trigger.getAttribute('aria-expanded') === 'true' ? close() : open();
     const onChange = () => sync();
     const onSync = () => sync();
@@ -79,7 +86,17 @@ export function mountSelect(select, props = {}, scope) {
         item.disabled = option.disabled;
         const label = document.createElement('span');
         label.className = 'vcp-harness-menu-item-label';
-        label.textContent = option.textContent?.trim() || '';
+        const name = document.createElement('span');
+        name.className = 'vcp-harness-menu-item-name';
+        name.textContent = option.textContent?.trim() || '';
+        label.append(name);
+        const description = option.dataset.description?.trim();
+        if (description) {
+            const detail = document.createElement('span');
+            detail.className = 'vcp-harness-menu-item-description';
+            detail.textContent = description;
+            label.append(detail);
+        }
         item.append(label);
         itemWrap.append(item);
         scope.listen(item, 'click', () => { if (!option.disabled) {
