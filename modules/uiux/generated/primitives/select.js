@@ -60,11 +60,11 @@ export function mountSelect(select, props = {}, scope) {
                 check.remove();
         });
     };
-    const close = (restoreFocus = false) => { menu.hidden = true; trigger.setAttribute('aria-expanded', 'false'); if (menu.parentNode !== wrap)
-        wrap.append(menu); if (restoreFocus && document.contains(trigger))
+    const close = (restoreFocus = false) => { menu.hidden = true; trigger.setAttribute('aria-expanded', 'false'); menu.remove(); if (restoreFocus && document.contains(trigger))
         trigger.focus(); };
     const open = () => { if (select.disabled)
-        return; menu.hidden = false; trigger.setAttribute('aria-expanded', 'true'); if (props.portal)
+        return; if (!menu.parentNode)
+        wrap.append(menu); menu.hidden = false; trigger.setAttribute('aria-expanded', 'true'); if (props.portal)
         document.body.append(menu); const current = menu.querySelector('[data-selected="true"]'); (current || menu.querySelector('[role="menuitem"]'))?.focus(); };
     const onTrigger = () => trigger.getAttribute('aria-expanded') === 'true' ? close() : open();
     const onChange = () => sync();
@@ -118,6 +118,7 @@ export function mountSelect(select, props = {}, scope) {
         }
     });
     sync();
+    menu.remove();
     return scope.own(() => { close(false); if (originalTabIndex === null)
         select.removeAttribute('tabindex');
     else

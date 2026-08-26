@@ -38,8 +38,8 @@ export function mountSelect(select: HTMLSelectElement, props: SelectProps = {}, 
             const active = index === select.selectedIndex; item.dataset.selected = String(active); item.classList.toggle('vcp-harness-menu-item-selected', active); item.tabIndex = active ? 0 : -1; const check = item.querySelector<HTMLElement>('.vcp-harness-menu-item-check'); if (active && !check) { const marker = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); marker.classList.add('vcp-harness-menu-item-check'); marker.setAttribute('viewBox', '0 0 16 16'); marker.setAttribute('focusable', 'false'); marker.innerHTML = '<path d="M3 8.5 6.5 12 13 4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>'; item.append(marker); } else if (!active && check) check.remove();
         });
     };
-    const close = (restoreFocus = false) => { menu.hidden = true; trigger.setAttribute('aria-expanded', 'false'); if (menu.parentNode !== wrap) wrap.append(menu); if (restoreFocus && document.contains(trigger)) trigger.focus(); };
-    const open = () => { if (select.disabled) return; menu.hidden = false; trigger.setAttribute('aria-expanded', 'true'); if (props.portal) document.body.append(menu); const current = menu.querySelector<HTMLElement>('[data-selected="true"]'); (current || menu.querySelector<HTMLElement>('[role="menuitem"]'))?.focus(); };
+    const close = (restoreFocus = false) => { menu.hidden = true; trigger.setAttribute('aria-expanded', 'false'); menu.remove(); if (restoreFocus && document.contains(trigger)) trigger.focus(); };
+    const open = () => { if (select.disabled) return; if (!menu.parentNode) wrap.append(menu); menu.hidden = false; trigger.setAttribute('aria-expanded', 'true'); if (props.portal) document.body.append(menu); const current = menu.querySelector<HTMLElement>('[data-selected="true"]'); (current || menu.querySelector<HTMLElement>('[role="menuitem"]'))?.focus(); };
     const onTrigger = () => trigger.getAttribute('aria-expanded') === 'true' ? close() : open();
     const onChange = () => sync();
     const onSync = () => sync();
@@ -62,5 +62,6 @@ export function mountSelect(select: HTMLSelectElement, props: SelectProps = {}, 
         if (next >= 0) { event.preventDefault(); items[next].focus(); }
     });
     sync();
+    menu.remove();
     return scope.own(() => { close(false); if (originalTabIndex === null) select.removeAttribute('tabindex'); else select.setAttribute('tabindex', originalTabIndex); if (originalAriaHidden === null) select.removeAttribute('aria-hidden'); else select.setAttribute('aria-hidden', originalAriaHidden); select.classList.remove('vcp-harness-select-native'); wrap.replaceWith(select); if (previousActive && typeof (previousActive as HTMLElement).focus === 'function' && document.contains(previousActive)) (previousActive as HTMLElement).focus(); }, 'harness-select', 'ui-primitive');
 }

@@ -30,13 +30,14 @@ test('Harness-compatible Field and Select keep Light DOM contract and dispose cl
         assert.equal(select.getAttribute('aria-describedby'), 'density-description');
         assert.equal(fieldRoot.querySelector('#density-description')?.textContent, 'Controls UI density.');
         assert.equal(fieldRoot.querySelector('.vcp-harness-select-trigger')?.textContent, 'Comfortable');
+        assert.equal(fieldRoot.querySelector('[role="menu"]'), null);
+        const trigger = fieldRoot.querySelector('.vcp-harness-select-trigger');
+        trigger.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
         assert.equal(fieldRoot.querySelector('[role="menu"]')?.children.length, 1);
         assert.equal(fieldRoot.querySelector('[role="menu"] > .vcp-harness-menu-viewport')?.children.length, 2);
         assert.equal(fieldRoot.querySelector('.vcp-harness-menu-item-wrap > [role="menuitem"]')?.textContent, 'Comfortable');
         assert.ok(fieldRoot.querySelector('[role="menuitem"][data-selected="true"] .vcp-harness-menu-item-check'));
         assert.equal(fieldRoot.querySelector('[role="menuitem"]:not([data-selected="true"]) .vcp-harness-menu-item-check'), null);
-        const trigger = fieldRoot.querySelector('.vcp-harness-select-trigger');
-        trigger.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
         assert.equal(trigger.getAttribute('aria-expanded'), 'true');
         document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         assert.equal(trigger.getAttribute('aria-expanded'), 'false');
@@ -202,7 +203,7 @@ test('Harness Select external snapshot sync is presentation-only and owner-bound
 });
 
 test('Harness Input/Field/Select expose stable error, disabled and selected state contracts', async () => {
-    const dom = new JSDOM('<!doctype html><main><div id="field"><select id="mode" disabled><option value="a">Alpha</option><option value="b" selected>Beta</option></select></div><input id="name" disabled></main>');
+    const dom = new JSDOM('<!doctype html><main><div id="field"><select id="mode"><option value="a">Alpha</option><option value="b" selected>Beta</option></select></div><input id="name" disabled></main>');
     const previousDocument = globalThis.document;
     const previousWindow = globalThis.window;
     globalThis.document = dom.window.document;
@@ -219,7 +220,9 @@ test('Harness Input/Field/Select expose stable error, disabled and selected stat
         assert.equal(select.getAttribute('aria-invalid'), 'true');
         assert.equal(select.getAttribute('aria-describedby'), 'mode-description mode-error');
         assert.equal(trigger.textContent, 'Beta');
+        trigger.click();
         assert.equal(fieldRoot.querySelector('[role="menuitem"][data-selected="true"]')?.textContent, 'Beta');
+        select.disabled = true;
         trigger.click();
         assert.equal(trigger.getAttribute('aria-expanded'), 'false', 'disabled select must not open');
         assert.equal(input.disabled, true);
