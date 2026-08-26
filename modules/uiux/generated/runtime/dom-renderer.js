@@ -6,6 +6,17 @@ export function createDomRenderer(scope) {
         parent.insertBefore(node, before);
         return scope.own(() => { node.parentNode?.removeChild(node); }, 'dom-renderer-node', 'ui-renderer');
     };
+    const portal = (node, container) => {
+        const parent = node.parentNode;
+        const before = node.nextSibling;
+        container.appendChild(node);
+        return scope.own(() => {
+            if (parent)
+                parent.insertBefore(node, before && before.parentNode === parent ? before : null);
+            else
+                node.remove();
+        }, 'dom-renderer-portal', 'ui-renderer');
+    };
     const updateText = (node, value) => { node.data = String(value ?? ''); };
     const keyed = (parent, items, key, render) => {
         const nodes = new Map();
@@ -26,5 +37,5 @@ export function createDomRenderer(scope) {
         const disposer = scope.own(() => { nodes.forEach(node => node.remove()); nodes.clear(); }, 'dom-renderer-keyed', 'ui-renderer');
         return Object.assign(disposer, { update: reconcile });
     };
-    return Object.freeze({ mount, updateText, keyed });
+    return Object.freeze({ mount, portal, updateText, keyed });
 }

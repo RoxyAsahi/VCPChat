@@ -2,6 +2,7 @@ import type { UiDisposer, UiScope } from '../contracts.js';
 
 export interface DomRenderer {
     mount(parent: Node, node: Node, before?: Node | null): UiDisposer;
+    portal(node: Node, container: Node): UiDisposer;
     updateText(node: Text, value: unknown): void;
     keyed<T>(parent: Element, items: readonly T[], key: (item: T) => string, render: (item: T) => Element): UiDisposer & { update(items: readonly T[]): void };
 }
@@ -12,6 +13,15 @@ export function createDomRenderer(scope: UiScope): DomRenderer {
     const mount = (parent: Node, node: Node, before: Node | null = null) => {
         parent.insertBefore(node, before);
         return scope.own(() => { node.parentNode?.removeChild(node); }, 'dom-renderer-node', 'ui-renderer');
+    };
+    const portal = (node: Node, container: Node) => {
+        const parent = node.parentNode;
+        const before = node.nextSibling;
+        container.appendChild(node);
+        return scope.own(() => {
+            if (parent) parent.insertBefore(node, before && before.parentNode === parent ? before : null);
+            else (node as ChildNode).remove();
+        }, 'dom-renderer-portal', 'ui-renderer');
     };
     const updateText = (node: Text, value: unknown) => { node.data = String(value ?? ''); };
     const keyed = <T>(parent: Element, items: readonly T[], key: (item: T) => string, render: (item: T) => Element) => {
@@ -30,5 +40,5 @@ export function createDomRenderer(scope: UiScope): DomRenderer {
         const disposer = scope.own(() => { nodes.forEach(node => node.remove()); nodes.clear(); }, 'dom-renderer-keyed', 'ui-renderer');
         return Object.assign(disposer, { update: reconcile });
     };
-    return Object.freeze({ mount, updateText, keyed });
+    return Object.freeze({ mount, portal, updateText, keyed });
 }
