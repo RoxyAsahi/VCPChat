@@ -252,9 +252,32 @@ try {
         };
         return [probe('.vcp-harness-select-trigger'), probe('.vcp-harness-menu-item'), probe('.vcp-harness-choice-option')].filter(Boolean);
     });
-    assert.ok(visibleGeometry.some(item => item.selector === '.vcp-harness-select-trigger' && item.height === '36px' && item.borderRadius === '18px' && item.fontSize === '14px' && item.lineHeight === '22px'), 'visible select geometry matches Harness trigger contract');
+    assert.ok(visibleGeometry.some(item => item.selector === '.vcp-harness-select-trigger' && ((item.height === '36px' && item.borderRadius === '18px') || (item.minHeight === '40px' && item.borderRadius === '10px')) && item.fontSize === '14px' && item.lineHeight === '22px'), 'visible select geometry matches Harness trigger contract');
     assert.ok(shellState.computedGeometry.some(item => item.selector === '.vcp-harness-input-wrap' && item.borderRadius === '8px'), 'Input wrapper geometry matches Harness contract');
     console.log(`  [INFO] visible control geometry ${JSON.stringify(visibleGeometry)}`);
+    const typedPrimitiveEvidence = await page.evaluate(() => {
+        const select = document.getElementById('appearanceDensity');
+        const root = select?.closest('.vcp-harness-field');
+        const trigger = root?.querySelector('.vcp-harness-select-trigger');
+        trigger?.click();
+        const menu = root?.querySelector('[role="menu"]');
+        const item = menu?.querySelector('[role="menuitem"]');
+        const style = item ? getComputedStyle(item) : null;
+        return {
+            field: Boolean(root?.classList.contains('vcp-harness-field')),
+            trigger: Boolean(trigger?.matches('button[aria-haspopup="menu"]')),
+            menu: Boolean(menu?.matches('.vcp-harness-menu-list[role="menu"]')),
+            item: Boolean(item?.matches('button[role="menuitem"]')),
+            itemGeometry: style && { minHeight: style.minHeight, padding: style.padding, borderRadius: style.borderRadius, fontSize: style.fontSize, lineHeight: style.lineHeight },
+        };
+    });
+    assert.equal(typedPrimitiveEvidence.field, true, 'typed Field owns appearance density root');
+    assert.equal(typedPrimitiveEvidence.trigger, true, 'typed Select exposes Harness trigger contract');
+    assert.equal(typedPrimitiveEvidence.menu, true, 'typed Select exposes Light-DOM menu contract');
+    assert.equal(typedPrimitiveEvidence.item, true, 'typed Select exposes menuitem contract');
+    assert.deepEqual(typedPrimitiveEvidence.itemGeometry, { minHeight: '40px', padding: '8px 10px', borderRadius: '8px', fontSize: '14px', lineHeight: '22px' }, 'typed Select menu item geometry matches reference pack');
+    await page.evaluate(() => document.querySelector('#appearanceDensity')?.closest('.vcp-harness-field')?.querySelector('.vcp-harness-select-trigger')?.click());
+    console.log(`  [PASS] 1d. typed Field/Select DOM and geometry contract ${JSON.stringify(typedPrimitiveEvidence)}`);
     await page.evaluate(() => document.querySelector('.vcp-harness-settings-nav-cell[data-section="user-identity"]')?.click());
     await page.waitForFunction(() => document.querySelector('#globalSettingsModal #section-user-identity.active'), { timeout: timeoutMs });
 
@@ -279,7 +302,7 @@ try {
         assert.ok(disclosureState.controls, 'DisclosureRow exposes aria-controls');
         assert.ok(['true', 'false'].includes(disclosureState.expanded), 'DisclosureRow exposes aria-expanded');
     }
-    assert.equal(controlState.nativeSources, controlState.longSelects.length, 'native select remains the sole source for long controls');
+    assert.equal(controlState.nativeSources, controlState.longSelects.length + 1, 'native select remains the sole source for long controls and typed vertical slice');
     assert.equal(controlState.visibleSelectProjections, controlState.longSelects.length, 'each long select has exactly one visible Harness trigger');
     await page.evaluate(() => {
         const select = document.getElementById('chatFontPreset');

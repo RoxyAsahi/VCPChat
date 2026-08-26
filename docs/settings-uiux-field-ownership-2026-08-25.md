@@ -19,7 +19,7 @@
 
 | persisted key | legacy DOM id/name | 分类 | 用户标题 / 描述 | 控件 | read source | write command | dirty / error | legacy owner | 目标 owner | 删除条件 | 状态 / 证据 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `appearanceProfile.density` | `appearanceDensity` | 外观 | 界面密度 / 调整壳层控件间距 | select | `SettingsUiService.state` | `settings.save.execute({ appearanceProfile })` | dirty draft 保留；失败可重试 | settings-bridge projection | Settings primitive + service | 删除对应 projection 与重复 change listener | `typed-projection-active`; WA + Electron Settings |
+| `appearanceProfile.density` | `appearanceDensity` | 外观 | 界面密度 / 调整壳层控件间距 | select | `SettingsUiService.state` | `settings.save.execute({ appearanceProfile })` | dirty draft 保留；失败可重试 | settings-bridge projection（legacy skip 保留） | TS Light-DOM Field + Select + service | 四层等价证据稳定后删除对应 projection 与重复 change listener | `typed-primitive-active`; DOM/geometry/interaction/screenshot Electron evidence |
 | `appearanceProfile.radius` | `appearanceRadius` | 外观 | 圆角风格 / 调整页面容器圆角 | select | `SettingsUiService.state` | 同上 | 同上 | settings-bridge projection | 同上 | 同上 | `typed-projection-active`; source equivalence |
 | `appearanceProfile.typography` | `appearanceTypography` | 外观 | UI 字体 / 选择界面字体风格 | select | typed snapshot | `save.execute` | 保留输入；失败重试 | settings-bridge + appearance owner | Settings primitive | 删除 legacy projection 分支 | `typed-projection-active`; appearance studio |
 | `appearanceProfile.fontScale` | `appearanceFontScale` | 外观 | UI 字号 / 调整壳层文字缩放 | select | typed snapshot | `save.execute` | 同上 | settings-bridge projection | Settings primitive | 同上 | `typed-projection-active` |
@@ -93,3 +93,5 @@ Appearance select group 扩展（2026-08-26）：`appearanceProfile.density`、`
 2026-08-26 lifecycle 修复：`mountHarnessDisclosures()` 的幂等判断已改为按 container 查找 state record；此前错误使用 `Set.has(container)` 导致每次 refresh 重复注册 header click/keydown。Settings-only listener attribution 从 `589 → 597 → 601` 修复为 `585 → 585 → 585`，managed lifecycle 资源、DOM 和 detached-node 指标保持稳定。该修复属于 shared Settings primitive lifecycle，不改变任何 persisted key、IPC 或业务行为。
 
 Legacy projection retirement（2026-08-26）：`mainChatSettingsPresentationOwner.js` 已删除 Appearance/Home/Radius 首批字段的 safeSet/safeCheck 写入（19 行）。这些字段现在只有 typed Settings field owner 负责可见控件投影；其余未迁移字段和兼容 orchestration 保持不变。Settings Electron gate、source-equivalence、unified-surface 与 UIUX typecheck 通过。
+
+Harness vertical slice（2026-08-26）：`appearanceDensity` 由 `modules/uiux/primitives/field.ts` 与 `select.ts` 以 Light DOM 接管。Select 保留 native `<select>` 作为唯一业务源，拥有 40px/8px/10px 菜单几何、ARIA menu/menuitem、Arrow/Home/End/Escape/outside-dismiss、focus restore 与 scope-owned teardown。Electron Settings gate 已验证 DOM、geometry、交互与截图路径；legacy projection 暂保留，待独立 interaction sequence 和 artifact-only Electron smoke 后删除。
