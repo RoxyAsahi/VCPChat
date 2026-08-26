@@ -9,6 +9,9 @@ if (matrix.viewport?.width !== 800 || matrix.viewport?.height !== 600 || matrix.
 if (matrix.font !== 'system-ui') fail('font baseline must remain system-ui');
 if (!Array.isArray(matrix.cases) || matrix.cases.length !== 10) fail('expected exactly 10 primitive state cases');
 for (const [primitive, state] of matrix.cases) if (!['input', 'field', 'select'].includes(primitive) || typeof state !== 'string') fail(`invalid case ${primitive}/${state}`);
+const interaction = Object.fromEntries((matrix.interactionCases ?? []).map(entry => [entry.case, entry]));
+if (interaction['select/keyboard-open-focus']?.status !== 'pass' || interaction['select/keyboard-open-focus']?.evidence !== 'same semantic fixture; Harness and VCP retain trigger focus') fail('Select keyboard-open focus must remain a passing cross-page interaction case');
+if (interaction['select/busy-trigger-disabled']?.status !== 'blocked-vcp-consumer' || interaction['select/busy-trigger-disabled']?.evidence !== 'Harness production capture passes; no in-scope VCP AgentPreset consumer') fail('Select busy trigger must remain an explicitly consumer-blocked interaction case');
 for (const output of ['dom', 'geometry', 'computed-style', 'screenshot', 'pixel-diff']) if (!matrix.outputs.includes(output)) fail(`missing output layer ${output}`);
 if (matrix.stateSemantics?.['select/closed'] !== 'AgentPresetSeat ready trigger; production fixture captured, raw DOM/geometry/pixel comparison is failing') fail('Select closed state must retain its Agent Preset production-fixture boundary');
 if (matrix.stateSemantics?.['select/open'] !== 'AgentPresetSeat ready open/selected/hover menu; VCP-owned production capture is replayable') fail('Select open state must retain its VCP-owned Harness capture boundary');
@@ -20,4 +23,4 @@ if (matrix.status?.selectMenuKeyboardFocus !== 'pass (Harness and VCP retain tri
 if (matrix.status?.selectBusyTrigger !== 'Harness production capture active; VCP cross-page comparison blocked by consumer boundary') fail('Select busy checkpoint must retain its production-capture and consumer boundary');
 if (matrix.status?.fieldBrowserVisual !== 'pass (description/error production fixture at 1680x1000 @1x)') fail('Field browser evidence must remain scoped to its production fixture');
 if (matrix.status?.inputFullVisualMatrix !== 'blocked (Harness ui-primitives/Input has no production consumer)') fail('Input status must distinguish an absent production consumer from visual completion');
-console.log(`Harness fixture matrix passed (${matrix.cases.length} cases; ${matrix.outputs.length} output layers; DOM=${matrix.status.domStructural}; Field browser=${matrix.status.fieldBrowserVisual}).`);
+console.log(`Harness fixture matrix passed (${matrix.cases.length} visual cases; ${matrix.interactionCases.length} interaction cases; ${matrix.outputs.length} output layers; DOM=${matrix.status.domStructural}; Field browser=${matrix.status.fieldBrowserVisual}).`);

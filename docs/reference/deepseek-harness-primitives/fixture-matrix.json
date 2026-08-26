@@ -7,6 +7,10 @@
     ["field", "description"], ["field", "error"],
     ["select", "closed"], ["select", "open"], ["select", "selected"], ["select", "disabled"]
   ],
+  "interactionCases": [
+    { "case": "select/keyboard-open-focus", "status": "pass", "evidence": "same semantic fixture; Harness and VCP retain trigger focus" },
+    { "case": "select/busy-trigger-disabled", "status": "blocked-vcp-consumer", "evidence": "Harness production capture passes; no in-scope VCP AgentPreset consumer" }
+  ],
   "outputs": ["dom", "geometry", "computed-style", "screenshot", "pixel-diff"],
   "stateSemantics": {
     "select/closed": "AgentPresetSeat ready trigger; production fixture captured, raw DOM/geometry/pixel comparison is failing",
