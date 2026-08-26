@@ -568,7 +568,10 @@ function mountHarnessInputWrappers(form) {
 
 function mountHarnessDisclosures(form) {
     form.querySelectorAll('.agent-style-collapsible-container').forEach(container => {
-        if (disclosureStates.has(container)) return;
+        // disclosureStates stores state records, not raw containers.  Using
+        // Set.has(container) here silently missed the existing record and
+        // re-bound click/keydown listeners on every Settings refresh.
+        if ([...disclosureStates].some(state => state.container === container)) return;
         const header = container.querySelector('.style-collapse-header');
         const content = container.querySelector('.agent-style-controls');
         if (!header || !content) return;
