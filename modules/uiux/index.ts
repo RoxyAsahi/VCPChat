@@ -10,6 +10,8 @@ export type {
     UiSurface,
 } from './contracts.js';
 export { createUiScope, createUiScopeFromGlobal } from './runtime/scope.js';
+export { createDomRenderer } from './runtime/dom-renderer.js';
+export type { DomRenderer } from './runtime/dom-renderer.js';
 export {
     mountThemePresenter,
     themeUiDefinition,

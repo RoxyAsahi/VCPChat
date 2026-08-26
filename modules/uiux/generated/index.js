@@ -1,4 +1,5 @@
 export { createUiScope, createUiScopeFromGlobal } from './runtime/scope.js';
+export { createDomRenderer } from './runtime/dom-renderer.js';
 export { mountThemePresenter, themeUiDefinition, } from './providers/theme.js';
 export { createSettingsUiService, settingsUiDefinition } from './adapters/settings.js';
 export { mountField } from './primitives/field.js';
