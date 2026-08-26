@@ -470,16 +470,10 @@
             max: avatarMaximum,
             value: avatarSize
         });
-        const rowOutput = document.getElementById('appearanceSidebarRowHeightValue');
-        const avatarOutput = document.getElementById('appearanceSidebarAvatarSizeValue');
-        if (rowOutput) rowOutput.value = `${rowHeight}px`;
-        if (avatarOutput) avatarOutput.value = `${avatarSize}px`;
         const customRadiusControl = document.getElementById('appearanceCustomRadius');
-        const customRadiusOutput = document.getElementById('appearanceCustomRadiusValue');
-        if (customRadiusControl && customRadiusOutput) {
+        if (customRadiusControl) {
             const customRadius = Math.min(32, Math.max(0, Math.round(Number(customRadiusControl.value) || 0)));
             customRadiusControl.value = String(customRadius);
-            customRadiusOutput.value = `${customRadius}px`;
             window.VCPUI?.getController?.(customRadiusControl)?.update({ value: customRadius });
         }
         const sidebarRadiusControl = document.getElementById('appearanceSidebarRadius');
@@ -509,8 +503,6 @@
             });
             bindSummary(form, 'input', event => {
                 if (event.target.id === 'appearanceCustomRadius') {
-                    const output = document.getElementById('appearanceCustomRadiusValue');
-                    if (output) output.value = `${event.target.value}px`;
                     return;
                 }
                 if (!['appearanceSidebarRowHeight', 'appearanceSidebarAvatarSize'].includes(event.target.id)) return;
