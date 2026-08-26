@@ -3,10 +3,10 @@
   "font": "system-ui",
   "themes": ["light"],
   "cases": [
-    ["input", "default"], ["input", "focus"], ["input", "disabled"],
+    ["input", "default"], ["input", "focus"], ["input", "disabled"], ["input", "icon"],
     ["field", "description"], ["field", "error"],
     ["select", "closed"], ["select", "open"], ["select", "selected"], ["select", "disabled"]
   ],
   "outputs": ["dom", "geometry", "computed-style", "screenshot", "pixel-diff"],
-  "status": "structural-diff-7-of-9-pass"
+  "status": "structural-diff-8-of-10-pass"
 }

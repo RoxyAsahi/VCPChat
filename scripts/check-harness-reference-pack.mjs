@@ -39,6 +39,6 @@ const matrix = readJson('fixture-matrix.json');
 if (matrix.viewport?.width !== 800 || matrix.viewport?.height !== 600 || matrix.viewport?.deviceScaleFactor !== 1) {
   fail('fixture-matrix.json must pin 800x600 @1x for cross-page capture');
 }
-if (!Array.isArray(matrix.cases) || matrix.cases.length !== 9) fail('fixture matrix must define nine primitive state cases');
+if (!Array.isArray(matrix.cases) || matrix.cases.length !== 10) fail('fixture matrix must define ten primitive state cases');
 
 console.log(`Harness reference pack passed (${required.length} files; ${primitives.length} primitive contracts).`);

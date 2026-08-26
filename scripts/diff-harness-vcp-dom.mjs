@@ -17,6 +17,7 @@ const cases = [
   ['input.default', 'input.default.dom.html'],
   ['input.focus', 'input.focus.dom.html'],
   ['input.disabled', 'input.disabled.dom.html'],
+  ['input.icon', 'input.icon.dom.html'],
   ['select.closed', 'select.closed.dom.html'],
   ['select.open', 'select.open.dom.html'],
   ['select.selected', 'select.selected.dom.html'],

@@ -41,4 +41,4 @@ engine, 800×600 viewport, DPR 1, system-ui font, and frozen animation policy.
 For every case, the runner writes DOM shape, geometry, contract-scoped
 computed styles, screenshot, and pixel diff reports. Until the Harness web
 fixture runner exists, the matrix status remains
-`structural-diff-7-of-9-pass` and no pixel-equivalence claim may be made.
+`structural-diff-8-of-10-pass` and no pixel-equivalence claim may be made.

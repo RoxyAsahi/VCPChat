@@ -27,6 +27,11 @@ try {
     const selectRelease = mountSelect(select, { label: 'Mode', portal: false }, scope);
     const inputRelease = mountInput(input, { placeholder: 'Search' }, scope);
     fs.writeFileSync(path.join(out, 'input.default.dom.html'), input.parentElement.outerHTML, 'utf8');
+    const icon = document.createElement('svg'); icon.setAttribute('data-testid', 'icon');
+    const iconHost = document.createElement('input'); iconHost.id = 'icon-input'; document.body.append(iconHost);
+    const iconRelease = mountInput(iconHost, { placeholder: 'Search', icon }, scope);
+    fs.writeFileSync(path.join(out, 'input.icon.dom.html'), iconHost.parentElement.outerHTML, 'utf8');
+    await iconRelease?.(); iconHost.remove();
     input.focus();
     fs.writeFileSync(path.join(out, 'input.focus.dom.html'), input.parentElement.outerHTML, 'utf8');
     input.disabled = true;
