@@ -28,7 +28,7 @@ const selectSource = read('select.ts');
 for (const role of ['menu', 'menuitem']) {
   if (JSON.stringify(selectDom).includes(`"role": "${role}"`) && !selectSource.includes(`'${role}'`)) fail(`Select source missing role ${role}`);
 }
-for (const marker of ['vcp-uiux', 'menu-list', 'aria-expanded']) {
+for (const marker of ['vcp-uiux', 'menu-list', 'menu-viewport', 'menu-item-wrap', 'aria-expanded']) {
   if (!selectSource.includes(marker)) fail(`Select source missing structural marker ${marker}`);
 }
 for (const token of ['--dsw-alias-border-l2', '--dsw-alias-bg-layer-1', '--dsw-alias-label-primary', '--dsw-alias-brand-primary']) {
