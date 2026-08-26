@@ -197,6 +197,7 @@ evidence: npm run check:uiux; npm run test:uiux; node --test tests/creation-cont
 2026-08-26：新增 `npm run check:harness-reference`，对 reference pack 的 17 个文件、8 个 primitive DOM/geometry 合同执行可重复静态门禁。Forum `adminUsername/adminPassword` 暂不进入施工：全局提交路径仍会编排 Forum 保存，直接接入字段 owner 会形成第二个 command owner；待 dirty/autosave seam 可单一化后再推进。
 2026-08-26：Forum `adminUsername` / `adminPassword` 已进入 typed field-owner 阶段：TS Light-DOM Input primitive 提供 32px/8px/8px geometry 与 scope-owned teardown；字段 owner 负责 debounce、save、failure/retry 状态和 close flush，native inputs 与 ForumConfigUiService 保持业务/command source；全局提交路径在 owner 挂载时跳过重复 Forum save。Electron Settings gate 新增两项 primitive DOM 断言并通过；仍需补齐独立 failure/timeout/reload/teardown 证据后，才能删除剩余 legacy orchestration。
 2026-08-26 lifecycle correction：Forum owner 已将 `run` 注册到 state，`flushSettingsAutosave()` 现在可以在关闭时真正提交 pending credentials；此前只设置 timer 而未暴露 run 的缺口已修复，`check:uiux`、global save regression 与 Settings Electron gate 通过。
+2026-08-26 Forum owner evidence：Settings Electron journey 新增真实 username 输入保存、password close-flush、重新打开持久化恢复断言；`ForumConfigUiService` state 与 Input DOM 均验证通过。failure/timeout 注入和剩余 legacy orchestration 删除仍待独立批次。
 
 ## 3. 分阶段路线
 
