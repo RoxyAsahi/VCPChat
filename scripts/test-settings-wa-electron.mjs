@@ -278,6 +278,7 @@ try {
     assert.deepEqual(typedPrimitiveEvidence.itemGeometry, { minHeight: '40px', padding: '8px 10px', borderRadius: '8px', fontSize: '14px', lineHeight: '22px' }, 'typed Select menu item geometry matches reference pack');
     await page.evaluate(() => document.querySelector('#appearanceDensity')?.closest('.vcp-harness-field')?.querySelector('.vcp-harness-select-trigger')?.click());
     console.log(`  [PASS] 1d. typed Field/Select DOM and geometry contract ${JSON.stringify(typedPrimitiveEvidence)}`);
+    assert.equal(await page.$eval('#appearanceRadius', node => Boolean(node.closest('.vcp-harness-field')?.querySelector('.vcp-harness-select-trigger'))), true, 'typed radius Select is mounted as the second vertical slice');
     await page.evaluate(() => document.querySelector('.vcp-harness-settings-nav-cell[data-section="user-identity"]')?.click());
     await page.waitForFunction(() => document.querySelector('#globalSettingsModal #section-user-identity.active'), { timeout: timeoutMs });
 
@@ -302,7 +303,7 @@ try {
         assert.ok(disclosureState.controls, 'DisclosureRow exposes aria-controls');
         assert.ok(['true', 'false'].includes(disclosureState.expanded), 'DisclosureRow exposes aria-expanded');
     }
-    assert.equal(controlState.nativeSources, controlState.longSelects.length + 1, 'native select remains the sole source for long controls and typed vertical slice');
+    assert.equal(controlState.nativeSources, controlState.longSelects.length + 2, 'native select remains the sole source for long controls and typed vertical slices');
     assert.equal(controlState.visibleSelectProjections, controlState.longSelects.length, 'each long select has exactly one visible Harness trigger');
     await page.evaluate(() => {
         const select = document.getElementById('chatFontPreset');

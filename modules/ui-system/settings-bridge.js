@@ -528,7 +528,7 @@ function enhanceGlobalSettings(root, form) {
     // get a Harness-style popover, but the native select is retained as the
     // one authoritative business node.
     mountHarnessSelects(form);
-    mountTypedAppearanceDensitySelect(root, form);
+    mountTypedAppearanceSelects(root, form);
     form.querySelectorAll('input[type="range"]').forEach(range => enhance('Range', range));
     form.querySelectorAll('label.switch').forEach(control => enhance('Switch', control));
     form.querySelectorAll('.agent-style-collapsible-container').forEach(disclosure => {
@@ -545,20 +545,23 @@ function enhanceGlobalSettings(root, form) {
     normalizeFormIcons(root);
 }
 
-function mountTypedAppearanceDensitySelect(root, form) {
-    const select = form?.querySelector?.('#appearanceDensity');
+function mountTypedAppearanceSelects(root, form) {
     const api = window.VCPUIUX;
-    if (!select || !api?.mountSelect || select.dataset.vcpTypedPrimitiveMounted === 'true') return;
     const scope = ensurePresentationScope();
-    if (!scope) return;
-    if (api.mountField && select.parentElement) {
-        const fieldRelease = api.mountField(select.parentElement, { label: '界面密度', control: select }, scope);
-        if (fieldRelease) scope.own(fieldRelease, 'typed-appearance-density-field', 'ui-primitive');
-    }
-    const release = api.mountSelect(select, { label: '界面密度' }, scope);
-    select.dataset.vcpTypedPrimitiveMounted = 'true';
-    scope.own(() => { delete select.dataset.vcpTypedPrimitiveMounted; }, 'typed-appearance-density-marker', 'ui-primitive');
-    if (release) scope.own(release, 'typed-appearance-density-select', 'ui-primitive');
+    if (!scope || !api?.mountSelect) return;
+    const fields = [['appearanceDensity', '界面密度'], ['appearanceRadius', '圆角风格']];
+    fields.forEach(([id, label]) => {
+        const select = form?.querySelector?.(`#${id}`);
+        if (!select || select.dataset.vcpTypedPrimitiveMounted === 'true') return;
+        if (api.mountField && select.parentElement) {
+            const fieldRelease = api.mountField(select.parentElement, { label, control: select }, scope);
+            if (fieldRelease) scope.own(fieldRelease, `typed-${id}-field`, 'ui-primitive');
+        }
+        const release = api.mountSelect(select, { label }, scope);
+        select.dataset.vcpTypedPrimitiveMounted = 'true';
+        scope.own(() => { delete select.dataset.vcpTypedPrimitiveMounted; }, `typed-${id}-marker`, 'ui-primitive');
+        if (release) scope.own(release, `typed-${id}-select`, 'ui-primitive');
+    });
 }
 
 function mountHarnessInputWrappers(form) {
@@ -965,7 +968,7 @@ function mountHarnessSelects(form) {
         ordinal += 1;
         // The first TypeScript Light-DOM vertical slice owns this field;
         // never wrap it in the legacy Harness bridge during the same pass.
-        if (select.id === 'appearanceDensity') return;
+        if (select.id === 'appearanceDensity' || select.id === 'appearanceRadius') return;
         if (select.multiple || select.disabled || select.closest('.vcp-harness-select-wrap, .vcp-harness-choice-wrap')) return;
         if (select.options.length > 1 && select.options.length <= 4) { mountHarnessChoice(select); return; }
         if (select.options.length <= 1) return;
