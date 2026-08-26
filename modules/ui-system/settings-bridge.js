@@ -675,6 +675,7 @@ function mountTypedForumFieldOwner(root, form) {
         state.timer = setTimeout(run, 400);
     };
     const onInput = event => { if (controls.includes(event.target)) schedule(); };
+    state.run = run;
     controls.forEach(control => control.addEventListener('input', onInput));
     controls.forEach(control => control.addEventListener('change', onInput));
     controls.forEach(control => { control.dataset.vcpTypedForumFieldOwner = 'true'; });
