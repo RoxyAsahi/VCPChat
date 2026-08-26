@@ -26,9 +26,9 @@ test('Harness-compatible Field and Select keep Light DOM contract and dispose cl
         const select = document.getElementById('density');
         const fieldRelease = mountField(fieldRoot, { label: 'Density', description: 'Controls UI density.', control: select }, scope);
         const selectRelease = mountSelect(select, { label: 'Density' }, scope);
-        assert.equal(fieldRoot.querySelector('.vcp-harness-field-label')?.htmlFor, 'density');
-        assert.equal(select.getAttribute('aria-describedby'), 'density-description');
-        assert.equal(fieldRoot.querySelector('#density-description')?.textContent, 'Controls UI density.');
+        assert.equal(fieldRoot.querySelector('.vcp-harness-field-head > .vcp-harness-field-label')?.htmlFor, 'density');
+        assert.equal(select.getAttribute('aria-describedby'), null);
+        assert.equal(fieldRoot.querySelector('p.vcp-harness-field-description')?.textContent, 'Controls UI density.');
         assert.equal(fieldRoot.querySelector('.vcp-harness-select-trigger')?.textContent, 'Comfortable');
         assert.equal(fieldRoot.querySelector('[role="menu"]'), null);
         const trigger = fieldRoot.querySelector('.vcp-harness-select-trigger');
@@ -229,7 +229,7 @@ test('Harness Input/Field/Select expose stable error, disabled and selected stat
         const inputRelease = mountInput(input, {}, scope);
         const trigger = fieldRoot.querySelector('.vcp-harness-select-trigger');
         assert.equal(select.getAttribute('aria-invalid'), 'true');
-        assert.equal(select.getAttribute('aria-describedby'), 'mode-description mode-error');
+        assert.equal(select.getAttribute('aria-describedby'), null);
         assert.equal(trigger.textContent, 'Beta');
         trigger.click();
         assert.equal(fieldRoot.querySelector('[role="menuitem"][data-selected="true"]')?.textContent, 'Beta');

@@ -7,6 +7,7 @@ export function mountField(root, props, scope) {
     const originalId = props.control.getAttribute('id');
     const originalDescribedBy = props.control.getAttribute('aria-describedby');
     const originalInvalid = props.control.getAttribute('aria-invalid');
+    const originalControlClass = props.control.getAttribute('class');
     props.control.id = fieldId;
     const existingLabel = root.tagName === 'LABEL' ? root : null;
     const label = existingLabel || document.createElement('label');
@@ -22,22 +23,27 @@ export function mountField(root, props, scope) {
         existingLabel.classList.add('vcp-harness-field-label');
         existingLabel.htmlFor = fieldId;
     }
-    const description = props.description ? document.createElement('div') : null;
+    const head = document.createElement('div');
+    head.className = 'vcp-harness-field-head';
+    if (!existingLabel) {
+        root.insertBefore(head, label);
+        head.append(label);
+    }
+    else
+        head.remove();
+    props.control.classList.add('vcp-harness-field-input');
+    const description = props.description ? document.createElement('p') : null;
     if (description) {
         description.className = 'vcp-harness-field-description';
-        description.id = `${fieldId}-description`;
         description.textContent = props.description ?? '';
     }
-    const error = props.error ? document.createElement('div') : null;
+    const error = props.error ? document.createElement('p') : null;
     if (error) {
         error.className = 'vcp-harness-field-error';
         error.textContent = props.error ?? '';
-        error.id = `${fieldId}-error`;
+        props.control.classList.replace('vcp-harness-field-input', 'vcp-harness-field-input-invalid');
         props.control.setAttribute('aria-invalid', 'true');
     }
-    const describedBy = [originalDescribedBy, description?.id, error?.id].filter(Boolean).join(' ');
-    if (describedBy)
-        props.control.setAttribute('aria-describedby', describedBy);
     root.classList.add('vcp-harness-field');
     const renderer = createDomRenderer(scope);
     if (description)
@@ -45,6 +51,7 @@ export function mountField(root, props, scope) {
     if (error)
         renderer.mount(root, error);
     return scope.own(() => {
+        head.remove();
         if (!existingLabel)
             label.remove();
         else {
@@ -66,5 +73,9 @@ export function mountField(root, props, scope) {
             props.control.removeAttribute('aria-describedby');
         else
             props.control.setAttribute('aria-describedby', originalDescribedBy);
+        if (originalControlClass === null)
+            props.control.removeAttribute('class');
+        else
+            props.control.setAttribute('class', originalControlClass);
     }, 'harness-field', 'ui-primitive');
 }

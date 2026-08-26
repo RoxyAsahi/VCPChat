@@ -8,5 +8,5 @@
     ["select", "closed"], ["select", "open"], ["select", "selected"], ["select", "disabled"]
   ],
   "outputs": ["dom", "geometry", "computed-style", "screenshot", "pixel-diff"],
-  "status": "structural-diff-8-pass-2-fail-field-production-baselines-captured-select-open-menu-roi-pass"
+  "status": "structural-diff-7-pass-3-fail-field-dom-contract-pass-select-fixtures-refreshed"
 }
