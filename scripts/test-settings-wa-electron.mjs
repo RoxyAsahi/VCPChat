@@ -570,6 +570,12 @@ try {
     assert.equal(await page.$eval('#appearanceSidebarAvatarSize', node => node.value), '36', 'clean sidebar avatar size consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceSidebarRowHeightValue', node => node.value), '52px', 'clean row-height output consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceSidebarAvatarSizeValue', node => node.value), '36px', 'clean avatar-size output consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#showHomeVisualBrand', node => node.checked), true, 'clean Home brand toggle consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#showHomeVisualTagline', node => node.checked), true, 'clean Home tagline toggle consumes typed Settings snapshot');
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent('global-settings-updated', { detail: { settings: { showHomeVisualBrand: false, showHomeVisualTagline: false }, source: 'toggle-snapshot-probe' } })));
+    await page.waitForFunction(() => document.getElementById('showHomeVisualBrand')?.checked === false && document.getElementById('showHomeVisualTagline')?.checked === false, { timeout: timeoutMs });
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent('global-settings-updated', { detail: { settings: { showHomeVisualBrand: true, showHomeVisualTagline: true }, source: 'toggle-snapshot-restore' } })));
+    await page.waitForFunction(() => document.getElementById('showHomeVisualBrand')?.checked === true && document.getElementById('showHomeVisualTagline')?.checked === true, { timeout: timeoutMs });
     assert.equal(await page.$eval('#appearanceCustomRadius', node => node.value), '14', 'clean custom radius consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceCustomRadiusValue', node => node.value), '14px', 'clean custom-radius output consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceSidebarRadiusChoice-round', node => node.checked), true, 'clean radius choice consumes typed Settings snapshot');
