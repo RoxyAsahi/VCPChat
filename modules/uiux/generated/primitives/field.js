@@ -3,11 +3,15 @@ export function mountField(root, props, scope) {
     if (!root || !props?.control || !scope)
         throw new TypeError('Field requires root, control and scope.');
     const fieldId = props.control.id || `vcp-field-${Math.random().toString(36).slice(2)}`;
+    const originalId = props.control.getAttribute('id');
+    const originalDescribedBy = props.control.getAttribute('aria-describedby');
+    const originalInvalid = props.control.getAttribute('aria-invalid');
     props.control.id = fieldId;
     const existingLabel = root.tagName === 'LABEL' ? root : null;
     const label = existingLabel || document.createElement('label');
     if (!existingLabel) {
         label.className = 'vcp-harness-field-label';
+        label.id = `${fieldId}-label`;
         label.textContent = props.label;
         label.htmlFor = fieldId;
         root.prepend(label);
@@ -20,6 +24,7 @@ export function mountField(root, props, scope) {
     const description = props.description ? document.createElement('div') : null;
     if (description) {
         description.className = 'vcp-harness-field-description';
+        description.id = `${fieldId}-description`;
         description.textContent = props.description ?? '';
     }
     const error = props.error ? document.createElement('div') : null;
@@ -28,8 +33,10 @@ export function mountField(root, props, scope) {
         error.textContent = props.error ?? '';
         error.id = `${fieldId}-error`;
         props.control.setAttribute('aria-invalid', 'true');
-        props.control.setAttribute('aria-describedby', error.id);
     }
+    const describedBy = [originalDescribedBy, description?.id, error?.id].filter(Boolean).join(' ');
+    if (describedBy)
+        props.control.setAttribute('aria-describedby', describedBy);
     root.classList.add('vcp-harness-field');
     if (description)
         root.append(description);
@@ -45,9 +52,17 @@ export function mountField(root, props, scope) {
         description?.remove();
         error?.remove();
         root.classList.remove('vcp-harness-field');
-        if (error) {
+        if (originalId === null)
+            props.control.removeAttribute('id');
+        else
+            props.control.setAttribute('id', originalId);
+        if (originalInvalid === null)
             props.control.removeAttribute('aria-invalid');
+        else
+            props.control.setAttribute('aria-invalid', originalInvalid);
+        if (originalDescribedBy === null)
             props.control.removeAttribute('aria-describedby');
-        }
+        else
+            props.control.setAttribute('aria-describedby', originalDescribedBy);
     }, 'harness-field', 'ui-primitive');
 }

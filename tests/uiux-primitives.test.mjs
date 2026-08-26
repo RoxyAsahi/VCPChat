@@ -27,6 +27,8 @@ test('Harness-compatible Field and Select keep Light DOM contract and dispose cl
         const fieldRelease = mountField(fieldRoot, { label: 'Density', description: 'Controls UI density.', control: select }, scope);
         const selectRelease = mountSelect(select, { label: 'Density' }, scope);
         assert.equal(fieldRoot.querySelector('.vcp-harness-field-label')?.htmlFor, 'density');
+        assert.equal(select.getAttribute('aria-describedby'), 'density-description');
+        assert.equal(fieldRoot.querySelector('#density-description')?.textContent, 'Controls UI density.');
         assert.equal(fieldRoot.querySelector('.vcp-harness-select-trigger')?.textContent, 'Comfortable');
         assert.equal(fieldRoot.querySelector('[role="menu"]')?.children.length, 2);
         const trigger = fieldRoot.querySelector('.vcp-harness-select-trigger');
@@ -40,6 +42,7 @@ test('Harness-compatible Field and Select keep Light DOM contract and dispose cl
         assert.equal(fieldRoot.querySelector('.vcp-harness-field'), null);
         assert.equal(document.querySelector('.vcp-harness-select-trigger'), null);
         assert.equal(document.getElementById('density')?.tabIndex, 0);
+        assert.equal(select.getAttribute('aria-describedby'), null);
     } finally {
         globalThis.document = previousDocument;
         globalThis.window = previousWindow;
