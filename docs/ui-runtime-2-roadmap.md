@@ -207,6 +207,7 @@ evidence: npm run check:uiux; npm run test:uiux; node --test tests/creation-cont
 2026-08-26 renderer-kernel listener：新增 scope-owned `listen(target, type, handler)`，dispose 后 listener 不再触发；renderer kernel 最小合同现覆盖 mount/update/keyed/portal/listen/dispose，`npm run test:uiux` 28/28 通过。
 2026-08-26 target-mode checkpoint：目标模式继续保持 active，但本阶段验收口径进一步收窄为可测量的 Harness 等价链。Field description/error 节点已通过 `DomRenderer.mount` 接入一个真实 Settings primitive consumer；source-plane bridge 与 generated artifact 已同步，`npm run check:uiux`、`npm run test:uiux`（28/28）、`npm run build:uiux`、`npm run check:uiux:artifacts`、`npm run check:harness-reference`、`npm run check:harness-contracts` 全部通过。该 checkpoint 只证明 renderer kernel 的真实 consumer 接入，不提升为 public runtime 或 pixel-equivalent；下一切片固定为 Input/Field/Select 的固定 viewport DOM/computed-style/state 快照与 diff 自动化，并在证据闭合后删除对应 legacy presentation。
 2026-08-26 primitive state contract：新增 Input/Field/Select 的 disabled、selected、error、`aria-describedby` 与 teardown 回滚测试；`npm run test:uiux` 29/29 通过。该证据仍属于 jsdom 行为合同，尚不能替代 Electron 固定 viewport 的 computed-style/pixel diff。
+2026-08-26 generated snapshot gate：新增 `npm run check:harness-snapshot`，从 generated artifact 实际挂载 Input/Field/Select，并依据 reference pack 验证 Light-DOM nesting、ARIA、selected state 与 teardown 恢复；该 gate 已通过，明确作为 DOM/state 快照层，后续继续扩展 Electron computed-style 与截图容差层。
 
 2026-08-26 priority recalibration：根据 Harness 等价审计，施工顺序调整为四层门禁：
 1. `reference automation`：reference pack 必须能从固定 viewport 产出 DOM/computed-style/state 快照并生成 diff 报告；
