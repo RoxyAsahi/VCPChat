@@ -29,11 +29,12 @@ export function mountSelect(select, props = {}, scope) {
     if (props.label)
         trigger.setAttribute('aria-label', props.label);
     const menu = document.createElement('div');
-    menu.className = 'vcp-harness-menu-list vcp-uiux-primitive-menu';
+    menu.className = 'vcp-harness-menu-list vcp-uiux-primitive-menu vcp-harness-menu-scrollable';
     menu.setAttribute('role', 'menu');
     menu.hidden = true;
     const viewport = document.createElement('div');
     viewport.className = 'vcp-harness-menu-viewport';
+    viewport.setAttribute('role', 'presentation');
     menu.append(viewport);
     select.classList.add('vcp-harness-select-native');
     trigger.setAttribute('aria-controls', `${select.id || 'vcp-select'}-menu`);
@@ -45,11 +46,18 @@ export function mountSelect(select, props = {}, scope) {
             const active = index === select.selectedIndex;
             item.dataset.selected = String(active);
             item.classList.toggle('vcp-harness-menu-item-selected', active);
-            item.setAttribute('aria-checked', String(active));
             item.tabIndex = active ? 0 : -1;
             const check = item.querySelector('.vcp-harness-menu-item-check');
-            if (check)
-                check.toggleAttribute('hidden', !active);
+            if (active && !check) {
+                const marker = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                marker.classList.add('vcp-harness-menu-item-check');
+                marker.setAttribute('viewBox', '0 0 16 16');
+                marker.setAttribute('focusable', 'false');
+                marker.innerHTML = '<path d="M3 8.5 6.5 12 13 4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
+                item.append(marker);
+            }
+            else if (!active && check)
+                check.remove();
         });
     };
     const close = (restoreFocus = false) => { menu.hidden = true; trigger.setAttribute('aria-expanded', 'false'); if (menu.parentNode !== wrap)
@@ -73,14 +81,6 @@ export function mountSelect(select, props = {}, scope) {
         label.className = 'vcp-harness-menu-item-label';
         label.textContent = option.textContent?.trim() || '';
         item.append(label);
-        const check = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        check.classList.add('vcp-harness-menu-item-check');
-        check.setAttribute('aria-hidden', 'true');
-        check.setAttribute('viewBox', '0 0 16 16');
-        check.setAttribute('focusable', 'false');
-        check.innerHTML = '<path d="M3 8.5 6.5 12 13 4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
-        check.toggleAttribute('hidden', true);
-        item.append(check);
         itemWrap.append(item);
         scope.listen(item, 'click', () => { if (!option.disabled) {
             select.selectedIndex = index;
