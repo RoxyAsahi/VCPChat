@@ -663,6 +663,13 @@ function mountTypedForumFieldOwner(root, form) {
                 if (status()) status().textContent = '已保存';
                 form.dispatchEvent(new CustomEvent('vcp-settings-save-result', { detail: { success: true, owner: 'typed-forum-field-owner' } }));
             }
+        } catch (error) {
+            if (!state.disposed) {
+                form.dataset.vcpSettingsDirty = 'true';
+                status()?.setAttribute('data-state', 'error');
+                if (status()) status().textContent = '保存失败 · 重试';
+                form.dispatchEvent(new CustomEvent('vcp-settings-save-result', { detail: { success: false, error: error?.message || String(error), owner: 'typed-forum-field-owner' } }));
+            }
         } finally { state.inFlight = null; if (state.pending) schedule(); }
     };
     const schedule = () => {
@@ -675,9 +682,12 @@ function mountTypedForumFieldOwner(root, form) {
         state.timer = setTimeout(run, 400);
     };
     const onInput = event => { if (controls.includes(event.target)) schedule(); };
+    const onStatusClick = () => { if (status()?.dataset.state === 'error') schedule(); };
     state.run = run;
     controls.forEach(control => control.addEventListener('input', onInput));
     controls.forEach(control => control.addEventListener('change', onInput));
+    const statusNode = status();
+    statusNode?.addEventListener('click', onStatusClick);
     controls.forEach(control => { control.dataset.vcpTypedForumFieldOwner = 'true'; });
     form.dataset.vcpTypedForumFieldOwnerMounted = 'true';
     typedForumFieldStates.add(state);
@@ -685,6 +695,7 @@ function mountTypedForumFieldOwner(root, form) {
         state.disposed = true;
         if (state.timer) clearTimeout(state.timer);
         controls.forEach(control => { control.removeEventListener('input', onInput); control.removeEventListener('change', onInput); delete control.dataset.vcpTypedForumFieldOwner; });
+        statusNode?.removeEventListener('click', onStatusClick);
         typedForumFieldStates.delete(state);
         delete form.dataset.vcpTypedForumFieldOwnerMounted;
     }, 'typed-forum-field-owner', 'ui-presentation');
@@ -881,7 +892,10 @@ function mountSettingsAutosave(root, form) {
             if (state.pending) schedule();
         } else setStatus('保存失败 · 重试', 'error');
     };
-    const onStatusClick = () => { if (status.dataset.state === 'error') schedule(); };
+    const onStatusClick = () => {
+        if (form.dataset.vcpTypedForumFieldOwnerMounted === 'true') return;
+        if (status.dataset.state === 'error') schedule();
+    };
     form.addEventListener('input', onInput);
     form.addEventListener('change', onInput);
     form.addEventListener('vcp-settings-save-result', onResult);
