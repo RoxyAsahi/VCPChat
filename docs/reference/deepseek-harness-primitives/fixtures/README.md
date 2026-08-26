@@ -19,6 +19,11 @@ entry importing the production components) before recording PNG/DOM/style
 artifacts. Copying the JSON contract or manually recreating the markup is not
 valid reference evidence.
 
+The first capture uses a temporary Vitest test inside the Harness repository to
+render production `Input` and `Menu` components. The resulting HTML is stored
+under `harness/`; CSS-module hash classes are intentionally preserved and must
+be normalized by the structural diff runner rather than replaced by hand.
+
 ## VCP source of truth
 
 VCP fixtures must load only `modules/uiux/generated/` and mount the same nine
@@ -30,5 +35,5 @@ engine, 800×600 viewport, DPR 1, system-ui font, and frozen animation policy.
 For every case, the runner writes DOM shape, geometry, contract-scoped
 computed styles, screenshot, and pixel diff reports. Until the Harness web
 fixture runner exists, the matrix status remains
-`matrix-defined-harness-capture-pending` and no pixel-equivalence claim may be
-made.
+`harness-dom-captured-vcp-capture-pending` and no pixel-equivalence claim may
+be made.
