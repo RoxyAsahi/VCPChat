@@ -49,27 +49,35 @@ const SEMANTIC_THEME_TOKENS = Object.freeze({
         '--vcp-ui-theme-on-accent': 'oklch(1 0 0)',
     }),
 });
+const tokenOwners = new WeakMap();
 function applySemanticTokens(root, effective) {
     const tokenRoot = root.ownerDocument?.documentElement || root;
+    const doc = root.ownerDocument;
+    const owners = doc ? (tokenOwners.get(doc) || new Map()) : new Map();
+    if (doc && !tokenOwners.has(doc))
+        tokenOwners.set(doc, owners);
     const tokens = SEMANTIC_THEME_TOKENS[effective];
-    const previous = new Map();
     Object.entries(tokens).forEach(([name, value]) => {
-        previous.set(name, tokenRoot.style.getPropertyValue(name));
+        const owner = owners.get(name) || { count: 0, previous: tokenRoot.style.getPropertyValue(name), value };
+        owner.count += 1;
+        owner.value = value;
+        owners.set(name, owner);
         tokenRoot.style.setProperty(name, value);
     });
-    const previousScheme = tokenRoot.style.getPropertyValue('color-scheme');
+    const scheme = owners.get('color-scheme') || { count: 0, previous: tokenRoot.style.getPropertyValue('color-scheme'), value: effective };
+    scheme.count += 1;
+    scheme.value = effective;
+    owners.set('color-scheme', scheme);
     tokenRoot.style.setProperty('color-scheme', effective);
     return () => {
-        previous.forEach((value, name) => {
-            if (value)
-                tokenRoot.style.setProperty(name, value);
-            else
-                tokenRoot.style.removeProperty(name);
-        });
-        if (previousScheme)
-            tokenRoot.style.setProperty('color-scheme', previousScheme);
+        Object.keys(tokens).concat('color-scheme').forEach(name => { const owner = owners.get(name); if (!owner)
+            return; owner.count -= 1; if (owner.count > 0)
+            return; owners.delete(name); if (owner.previous)
+            tokenRoot.style.setProperty(name, owner.previous);
         else
-            tokenRoot.style.removeProperty('color-scheme');
+            tokenRoot.style.removeProperty(name); });
+        if (owners.size === 0 && doc)
+            tokenOwners.delete(doc);
     };
 }
 /**

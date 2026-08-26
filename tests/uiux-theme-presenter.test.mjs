@@ -57,3 +57,18 @@ test('typed ThemePresenter projects snapshots and releases through LifecycleScop
     assert.equal(root.dataset.themeEffective, 'dark', 'disposed consumer must ignore late theme updates');
     dom.window.close();
 });
+
+test('ThemeTokenOwner keeps document tokens while another presenter remains mounted', async () => {
+    const dom = new JSDOM('<!doctype html><section id="a"></section><section id="b"></section>', { pretendToBeVisual: true });
+    const theme = createThemeReadable();
+    const scopeA = createUiScope(new LifecycleScope('theme-a'));
+    const scopeB = createUiScope(new LifecycleScope('theme-b'));
+    mountThemePresenter(dom.window.document.getElementById('a'), { theme }, { scope: scopeA, services: { theme } });
+    mountThemePresenter(dom.window.document.getElementById('b'), { theme }, { scope: scopeB, services: { theme } });
+    assert.notEqual(dom.window.document.documentElement.style.getPropertyValue('--vcp-ui-theme-bg-primary'), '');
+    await scopeA.dispose('a-close');
+    assert.notEqual(dom.window.document.documentElement.style.getPropertyValue('--vcp-ui-theme-bg-primary'), '', 'token remains while presenter B owns document');
+    await scopeB.dispose('b-close');
+    assert.equal(dom.window.document.documentElement.style.getPropertyValue('--vcp-ui-theme-bg-primary'), '');
+    dom.window.close();
+});
