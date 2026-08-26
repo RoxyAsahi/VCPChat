@@ -41,3 +41,46 @@ test('Harness-compatible Field and Select keep Light DOM contract and dispose cl
         dom.window.close();
     }
 });
+
+test('Harness Select interaction sequence matches keyboard and ownership contract', async () => {
+    const dom = new JSDOM('<!doctype html><main><select id="mode" tabindex="3" aria-hidden="false"><option>One</option><option>Two</option><option>Three</option></select><button id="outside">Outside</button></main>');
+    const previousDocument = globalThis.document;
+    const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document;
+    globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('select-sequence'));
+        const select = document.getElementById('mode');
+        const outside = document.getElementById('outside');
+        const release = mountSelect(select, { label: 'Mode', portal: true }, scope);
+        const trigger = document.querySelector('.vcp-harness-select-trigger');
+        trigger.focus();
+        trigger.click();
+        const items = [...document.querySelectorAll('[role="menuitem"]')];
+        assert.equal(trigger.getAttribute('aria-expanded'), 'true');
+        assert.equal(document.activeElement, items[0]);
+        document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+        assert.equal(document.activeElement, items[1]);
+        document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+        assert.equal(document.activeElement, items[2]);
+        items[2].click();
+        assert.equal(select.value, 'Three');
+        assert.equal(trigger.textContent, 'Three');
+        assert.equal(document.activeElement, trigger);
+        trigger.click();
+        outside.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true }));
+        assert.equal(trigger.getAttribute('aria-expanded'), 'false');
+        trigger.click();
+        document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        assert.equal(document.activeElement, trigger);
+        await release?.();
+        await scope.dispose('sequence-complete');
+        assert.equal(select.getAttribute('tabindex'), '3');
+        assert.equal(select.getAttribute('aria-hidden'), 'false');
+        assert.equal(document.querySelector('.vcp-harness-select'), null);
+    } finally {
+        globalThis.document = previousDocument;
+        globalThis.window = previousWindow;
+        dom.window.close();
+    }
+});
