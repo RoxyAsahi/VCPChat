@@ -84,3 +84,33 @@ test('Harness Select interaction sequence matches keyboard and ownership contrac
         dom.window.close();
     }
 });
+
+test('Harness Select external snapshot sync is presentation-only and owner-bound', async () => {
+    const dom = new JSDOM('<!doctype html><select id="density"><option>Comfortable</option><option>Compact</option></select>');
+    const previousDocument = globalThis.document;
+    const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document;
+    globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('select-sync'));
+        const select = document.getElementById('density');
+        let changes = 0;
+        select.addEventListener('change', () => { changes += 1; });
+        const release = mountSelect(select, { label: 'Density' }, scope);
+        select.value = 'Compact';
+        select.dispatchEvent(new dom.window.Event('vcp-uiux-sync'));
+        const trigger = document.querySelector('.vcp-harness-select-trigger');
+        assert.equal(trigger.textContent, 'Compact');
+        assert.equal(changes, 0);
+        await release?.();
+        select.value = 'Comfortable';
+        select.dispatchEvent(new dom.window.Event('vcp-uiux-sync'));
+        assert.equal(document.querySelector('.vcp-harness-select-trigger'), null);
+        assert.equal(changes, 0);
+        await scope.dispose('sync-complete');
+    } finally {
+        globalThis.document = previousDocument;
+        globalThis.window = previousWindow;
+        dom.window.close();
+    }
+});

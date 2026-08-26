@@ -1,0 +1,10 @@
+{
+  "primitive": "Input",
+  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/Input.tsx",
+  "root": { "tag": "span", "class": "wrap", "role": null },
+  "children": [
+    { "tag": "span", "class": "icon", "optional": true },
+    { "tag": "input", "class": "input", "native": true }
+  ],
+  "states": ["focus-within", "placeholder", "disabled"]
+}
