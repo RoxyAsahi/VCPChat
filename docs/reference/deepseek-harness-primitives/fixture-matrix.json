@@ -8,5 +8,5 @@
     ["select", "closed"], ["select", "open"], ["select", "selected"], ["select", "disabled"]
   ],
   "outputs": ["dom", "geometry", "computed-style", "screenshot", "pixel-diff"],
-  "status": "harness-vcp-dom-captured-structural-diff-active"
+  "status": "structural-diff-partial-pass"
 }
