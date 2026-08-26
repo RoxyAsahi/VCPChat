@@ -192,8 +192,6 @@ function mountTypedSettingsConsumer(root) {
             ['chatBubbleMaxWidthWideNarrow', 'chatBubbleMaxWidthWideNarrow'],
             ['minChunkBufferSize', 'minChunkBufferSize'],
             ['smoothStreamIntervalMs', 'smoothStreamIntervalMs'],
-            ['showHomeVisualBrand', 'showHomeVisualBrand', 'checked'],
-            ['homeVisualTagline', 'homeVisualTagline'],
             ['appearanceDensity', 'appearanceProfile.density'],
             ['appearanceRadius', 'appearanceProfile.radius'],
             ['appearanceTypography', 'appearanceProfile.typography'],
@@ -740,7 +738,9 @@ function mountSettingsAutosave(root, form) {
 // use the canonical business nodes and persisted keys, but no longer enter
 // the legacy form-submit/autosave chain.
 const TYPED_FIELD_DEFINITIONS = Object.freeze({
+    showHomeVisualBrand: { path: 'showHomeVisualBrand', kind: 'boolean' },
     showHomeVisualTagline: { path: 'showHomeVisualTagline', kind: 'boolean' },
+    homeVisualTagline: { path: 'homeVisualTagline', kind: 'string' },
     appearanceSidebarRowHeight: { path: 'appearanceProfile.sidebarRowHeight', kind: 'number' },
     appearanceSidebarAvatarSize: { path: 'appearanceProfile.sidebarAvatarSize', kind: 'number' },
     appearanceSidebarRadius: { path: 'appearanceProfile.sidebarRadius', kind: 'string' },
@@ -789,7 +789,9 @@ function mountTypedFieldOwner(root, form) {
         const radius = appearance.sidebarRadius || 'tuned';
         Object.keys(TYPED_FIELD_DEFINITIONS).filter(id => id.startsWith('appearanceSidebarRadiusChoice-'))
             .forEach(id => check(id, id === `appearanceSidebarRadiusChoice-${radius}`));
+        check('showHomeVisualBrand', settings.showHomeVisualBrand !== false);
         check('showHomeVisualTagline', settings.showHomeVisualTagline !== false);
+        set('homeVisualTagline', settings.homeVisualTagline || '语义级打穿 AI、UI/UX、APP 与人类想象力的边界');
     };
     const status = () => root.querySelector('.vcp-settings-autosave-status');
     const publish = (success, error = '') => {
