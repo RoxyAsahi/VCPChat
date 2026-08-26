@@ -1,3 +1,4 @@
+import { createDomRenderer } from '../runtime/dom-renderer.js';
 /** Harness Field contract rendered in Light DOM; no business state or IPC. */
 export function mountField(root, props, scope) {
     if (!root || !props?.control || !scope)
@@ -38,10 +39,11 @@ export function mountField(root, props, scope) {
     if (describedBy)
         props.control.setAttribute('aria-describedby', describedBy);
     root.classList.add('vcp-harness-field');
+    const renderer = createDomRenderer(scope);
     if (description)
-        root.append(description);
+        renderer.mount(root, description);
     if (error)
-        root.append(error);
+        renderer.mount(root, error);
     return scope.own(() => {
         if (!existingLabel)
             label.remove();

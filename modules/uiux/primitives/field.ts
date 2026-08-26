@@ -1,4 +1,5 @@
 import type { UiDisposer, UiScope } from '../contracts.js';
+import { createDomRenderer } from '../runtime/dom-renderer.js';
 
 export interface FieldProps {
     readonly label: string;
@@ -35,8 +36,9 @@ export function mountField(root: HTMLElement, props: FieldProps, scope: UiScope)
     const describedBy = [originalDescribedBy, description?.id, error?.id].filter(Boolean).join(' ');
     if (describedBy) props.control.setAttribute('aria-describedby', describedBy);
     root.classList.add('vcp-harness-field');
-    if (description) root.append(description);
-    if (error) root.append(error);
+    const renderer = createDomRenderer(scope);
+    if (description) renderer.mount(root, description);
+    if (error) renderer.mount(root, error);
     return scope.own(() => {
         if (!existingLabel) label.remove(); else { delete existingLabel.dataset.vcpFieldLabel; existingLabel.classList.remove('vcp-harness-field-label'); }
         description?.remove(); error?.remove();

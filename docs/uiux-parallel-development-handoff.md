@@ -189,18 +189,19 @@ delete condition
 
 ### R2-02C：Settings single-owner migration
 
-不要新增更多零散 adapter，也不要继续批量迁移字段。当前下一切片必须完成以下工作：
+不要新增更多零散 adapter，也不要继续批量迁移字段。当前下一切片必须先闭合 Harness 等价证据，再扩大字段覆盖；必须完成以下工作：
 
 1. 保持并维护完整字段 ownership report；
-2. 建立 Harness reference pack，明确 DOM/CSS/geometry/interaction 来源；
-3. 只做一个真实 `Field + Select` Light-DOM primitive vertical slice；
+2. 建立可自动重放的 Harness reference pack，固定 viewport 产出 DOM/computed-style/state 快照与 diff；
+3. 只做一个真实 `Field + Select` Light-DOM primitive vertical slice，并接入最小 renderer kernel；
 4. 让该 slice 的真实控件从 `SettingsUiService.state` 读取、保存从 `save.execute` 发出；
 5. 将 draft、dirty、autosave、retry、timeout、close flush 归入一个明确 owner；
 6. 删除这些字段在 `settings-bridge.js` 中对应的 legacy projection；
 7. 保留业务 DOM id/name 和 IPC capability；
 8. 为字段迁移补齐 Electron failure/retry/reload/teardown evidence；
 9. 归因混合 lifecycle stress 的 listener 增长；
-10. 更新本文件和 `ui-runtime-2-roadmap.md` 的迁移账本。
+10. 在对应 primitive 的 DOM/geometry/interaction/screenshot 证据闭合前，不扩展新的 Settings 字段；
+11. 更新本文件和 `ui-runtime-2-roadmap.md` 的迁移账本。
 
 ### 完成条件
 

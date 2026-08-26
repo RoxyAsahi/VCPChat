@@ -205,6 +205,7 @@ evidence: npm run check:uiux; npm run test:uiux; node --test tests/creation-cont
 2026-08-26 renderer-kernel update：keyed handle 新增 deterministic `update()`，覆盖 reorder/add/remove 后的节点复用与 owner dispose；`npm run test:uiux` 28/28、generated artifact consistency 通过。kernel 仍仅服务 UIUX 内部真实 consumer。
 2026-08-26 renderer-kernel portal：`DomRenderer` 新增 owner-bound `portal(node, container)`，支持节点迁移、原位置恢复和 dispose；与 keyed update 一起形成 mount/update/keyed/portal/dispose 最小合同，测试 28/28 通过。
 2026-08-26 renderer-kernel listener：新增 scope-owned `listen(target, type, handler)`，dispose 后 listener 不再触发；renderer kernel 最小合同现覆盖 mount/update/keyed/portal/listen/dispose，`npm run test:uiux` 28/28 通过。
+2026-08-26 target-mode checkpoint：目标模式继续保持 active，但本阶段验收口径进一步收窄为可测量的 Harness 等价链。Field description/error 节点已通过 `DomRenderer.mount` 接入一个真实 Settings primitive consumer；source-plane bridge 与 generated artifact 已同步，`npm run check:uiux`、`npm run test:uiux`（28/28）、`npm run build:uiux`、`npm run check:uiux:artifacts`、`npm run check:harness-reference`、`npm run check:harness-contracts` 全部通过。该 checkpoint 只证明 renderer kernel 的真实 consumer 接入，不提升为 public runtime 或 pixel-equivalent；下一切片固定为 Input/Field/Select 的固定 viewport DOM/computed-style/state 快照与 diff 自动化，并在证据闭合后删除对应 legacy presentation。
 
 2026-08-26 priority recalibration：根据 Harness 等价审计，施工顺序调整为四层门禁：
 1. `reference automation`：reference pack 必须能从固定 viewport 产出 DOM/computed-style/state 快照并生成 diff 报告；
