@@ -26,6 +26,10 @@ Known follow-up items:
 - generated Electron evidence now captures a fixed primitive screenshot and
   asserts menu/viewport/item computed geometry against the reference pack;
   reference-image pixel diff is still pending;
+- selected menu rows remain an explicit visual delta: Harness uses a trailing
+  check marker with transparent row fill, while VCP currently projects a
+  selected background token without a check node; track this as the next
+  isolated Select primitive slice before claiming pixel equivalence;
 - all global sections still contain legacy copy/card markup and need a field
   schema migration after the primitive contract is stable;
 - the screenshot review found legacy sidebar disclosure pseudo-background and
