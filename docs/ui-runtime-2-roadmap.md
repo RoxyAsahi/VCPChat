@@ -216,6 +216,7 @@ evidence: npm run check:uiux; npm run test:uiux; node --test tests/creation-cont
 2026-08-26 Select CSS provenance：补齐 Harness Menu 的 `viewport`（flex column）与 `itemWrap`（relative）几何语义，并保持 DSW alias token 优先；source/build、contract、29 项 UIUX 测试及 Electron artifact journey 全部通过。
 2026-08-26 Select geometry diff：Electron artifact journey 扩展断言 menu `min-width/radius`、viewport `display/flex-direction`、item `gap/radius/font/line-height`，与 Harness geometry reference 对齐；journey 通过。该证据仍是固定场景 computed-style gate，不等同跨页面 pixel diff。
 2026-08-26 Select visual delta audit：确认 Harness selected row 的 trailing check marker/透明背景与当前 VCP selected background projection 不同；已登记为下一条隔离 primitive slice，在实现真实 check node 与状态截图前不宣称 pixel equivalence。
+2026-08-26 Select selected marker：已新增 Light-DOM trailing `.vcp-harness-menu-item-check`（`aria-hidden`、CSS glyph、selected-only visibility），selected row 改用 Harness interactive hover token，不再依赖 selected fill；UIUX 29/29、snapshot 与 build 通过。Electron selected-marker 断言待下一次脚本切片补入。
 2026-08-26 freeze-boundary audit：最近三项提交仅涉及 UIUX Select、Harness contract/screenshot 脚本和路线文档；`npm run guard:chat-kernel-consumers` 通过（17 个冻结 kernel files），确认未修改 StreamCoordinator/StreamProjection/MessageRenderer、聊天协议、持久化或 Plugin Loader。
 2026-08-26 legacy retirement audit：`npm run guard:classic-retirement` 与 `node scripts/check-settings-source-equivalence.mjs` 通过；已迁移 Range/Toggle 字段的 legacy rows、inline styles、CSS selectors 均为 0。`appearance-studio` 对这些 key 的读取仅用于规范化/语义应用，未发现重复 presentation output；该证据支持继续收窄 legacy deletion，但不代表全量 Settings bridge 已退役。
 
