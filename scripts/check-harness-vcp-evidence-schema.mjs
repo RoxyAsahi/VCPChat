@@ -1,0 +1,14 @@
+import fs from 'node:fs';
+import path from 'node:path';
+const root = process.cwd();
+const read = file => JSON.parse(fs.readFileSync(path.join(root, file), 'utf8'));
+const geometry = read('reports/harness-vcp-geometry-diff.json');
+const pixels = read('reports/harness-vcp-pixel-diff.json');
+const policy = read('docs/reference/deepseek-harness-primitives/pixel-policy.json');
+const errors = [];
+if (geometry.pass !== false || typeof geometry.status !== 'string') errors.push('geometry report must remain explicit non-pass until equivalent pages exist');
+if (pixels.pass !== false || typeof pixels.status !== 'string') errors.push('pixel report must remain explicit non-pass until equivalent pages exist');
+if (policy.semanticFixtureRequired !== true || policy.maxDifferingRatio <= 0) errors.push('pixel policy is invalid');
+if (!Array.isArray(geometry.missingEvidence) || !geometry.missingEvidence.length) errors.push('geometry missingEvidence must be non-empty');
+if (errors.length) throw new Error(`[harness-evidence-schema] ${errors.join('; ')}`);
+console.log('Harness/VCP evidence schema passed (pending states are explicit and policy is present).');
