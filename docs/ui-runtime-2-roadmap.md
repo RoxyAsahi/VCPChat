@@ -178,13 +178,13 @@ DOM、Web Components、原生 Electron View
 ```yaml
 batch: R2-02C
 mode: target
-focus: harness-reference-pack-and-first-primitive-vertical-slice
+focus: harness-reference-automation-and-primitive-contract
 status: active
 production_consumer: global SettingsRoot + Appearance Studio
 consumer_kind: internal production consumer; typed adapter migration slice
 first_slice: existing settings capability boundary + modules/uiux/adapters/settings.ts
 completed_slice: semantic token projection + scope-owned SettingsUiService/RustAssistantUiService assembly + typed SettingsRoot observation, failure/retry/timeout/late-result/teardown evidence
-next_slice: pause broad field migration; audit the next real Settings consumer against the existing reference pack and close one primitive's four-layer evidence plus legacy deletion before adding fields
+next_slice: automate Harness DOM/computed-style/state diff for Input/Field/Select, then use the diff to drive one production primitive contract and only afterward resume Forum/Settings field expansion
 blocked_by: UI Apps smoke 的 dynamic-wallpaper disabled-manifest readiness（不阻塞 Settings Surface contract）
 excluded: chat-message-internals, plugin-loader, child-page-migration, generic-vdom-before-consumer
 last_verified: 2026-08-26
@@ -200,6 +200,14 @@ evidence: npm run check:uiux; npm run test:uiux; node --test tests/creation-cont
 2026-08-26 Forum owner evidence：Settings Electron journey 新增真实 username 输入保存、password close-flush、重新打开持久化恢复断言；`ForumConfigUiService` state 与 Input DOM 均验证通过。failure/timeout 注入和剩余 legacy orchestration 删除仍待独立批次。
 2026-08-26：`ForumConfigUiService` 新增确定性的 `timeoutMs` adapter 合同；hung save 会返回 retryable failure，不再依赖文件权限模拟。`tests/uiux-forum-config-adapter.test.mjs` 覆盖 timeout，generated artifact consistency/smoke 与完整 UIUX tests（27/27）通过。
 2026-08-26 artifact evidence：`test-uiux-artifact-smoke.mjs` 新增 generated Forum timeout 场景；源码与 generated 平面的 hung-save→retryable-failure 合同均通过。
+2026-08-26 primitive contract alignment：TS Input primitive 现在复刻 Harness 的 `wrap → optional icon → input.input` Light-DOM 层级，并优先使用 `--dsw-alias-*` token、保留 VCP fallback；dispose 精确恢复原始 input class/父级。`npm run test:uiux` 27/27 与 artifact consistency 通过。该切片仍不等同于全量 pixel diff。
+
+2026-08-26 priority recalibration：根据 Harness 等价审计，施工顺序调整为四层门禁：
+1. `reference automation`：reference pack 必须能从固定 viewport 产出 DOM/computed-style/state 快照并生成 diff 报告；
+2. `primitive contract`：Input/Field/Select 先完成源码级 DOM nesting、`--dsw-alias-*` token、icon/ARIA/focus 状态；
+3. `renderer kernel`：仅实现已有真实 consumer 需要的 mount/update/keyed list/portal/focus/dispose，不提前造通用 Virtual DOM；
+4. `legacy deletion`：每个 primitive 证据闭合后删除对应 bridge/projection，未满足前不得继续扩大字段迁移。
+Forum 字段当前降级为上述门禁的 consumer 验证，不再单独作为“迁移完成率”指标。
 
 ## 3. 分阶段路线
 
@@ -328,16 +336,17 @@ const owned = slots.mount('chat.composer.leading', host, snapshot, { scope });
 ## 8. 当前下一步
 
 1. R2-02C 首先生成完整 Settings 字段 ownership report；每项必须列出 persisted key、DOM id/name、读写 owner、dirty/save/retry owner、legacy path、删除条件与验收证据。
-2. 已暂停扩大字段迁移。首批 Appearance/Home/Radius typed owner 保持 active；Harness reference pack 已建立，首个 Field/Select vertical slice 正在闭合，期间不新增字段。
+1.1 新增 `reference automation` 子批次：从 DeepSeek Harness 固定 viewport 生成 DOM/computed-style/state 快照，建立结构 diff、逐属性 geometry diff、状态截图 diff 与 token provenance 报告；在该门禁前不宣称 pixel-equivalent。
+2. 已暂停扩大字段迁移。首批 Appearance/Home/Radius typed owner 保持 active；Harness reference pack 已建立，Input/Field/Select vertical slice 继续按源码级 contract 闭合，期间不新增字段。
    2026-08-26 增量：`showHomeVisualBrand` 与 `homeVisualTagline` 已加入同一 owner，通用 projection 重复写入已删除；Settings Electron failure/retry/reload/teardown 与 60-cycle listener-stable 证据通过。
    同日增量：`appearanceProfile.customRadius` 与 px output 纳入同一 owner，圆角 draft 合并路径完整化；chat/message renderer 仍未触碰。
    Appearance select group 同步纳入 typed owner（density/radius/typography/fontScale/contentWidth/surface），Settings Electron gate 通过；兼容 fallback 退役仍待 reload/Classic 等价证据。
    Legacy projection retirement 同步完成：`mainChatSettingsPresentationOwner.js` 中上述 Appearance/Home/Radius 的 19 行 safeSet/safeCheck 已删除；Settings Electron/source/unified/UIUX gates 通过。该 owner 仍保留其他未迁移字段，因此 R2-02C 不标 complete。
-3. 建立 `docs/reference/deepseek-harness-primitives/`，登记 Harness 生产源码的 DOM、geometry、状态和 CSS 来源；无 reference pack 的 primitive 只能保持 candidate。
-4. 只实现一个真实 Light-DOM `Field + Select` primitive，接入 SettingsRoot 的 `appearanceDensity`；Settings/interaction/artifact Electron gates 均已通过，且该字段 legacy projection 已删除。下一步扩大前，必须为下一字段组建立同等级证据。
-4. R2-02C 关闭后，才把 R2-03 从 snapshot projection 推进到 document-level single ThemeTokenOwner，并记录/逐步删除 legacy theme reads。当前 R2-02C 的 Settings-only listener attribution 已通过；字段兼容 fallback 退役仍未完成。
-5. R2-08 已进入 scoped-service-assembly-active：`modules/uiux/package.json` 建立局部 ESM boundary；scope-owned `UiServiceRegistry` 已由 Settings 生产 bridge 安装并被 SettingsRoot consumer 读取；artifact gate 以临时干净目录重建并逐字节校验 generated JS/d.ts 文件，Node artifact smoke 与 `npm run test:electron-uiux:artifacts` 均实际加载 generated Settings adapter 并执行 save/subscribe/release/dispose contract。runtime 仍委托 legacy `LifecycleScope`，且缺完整 packaged artifact/跨平台证据，因此不声明 public runtime ready。
-6. 保持 R2-00/R2-01 的能力由真实 consumer 驱动，不开放任意 selector/HTML 注入，也不创建第二套生命周期或 durable UI Store；Plugin Loader 与 chat plugin protocol 保持冻结。
+3. 继续维护 `docs/reference/deepseek-harness-primitives/`，并把人工登记逐步替换为自动产物；无自动 diff 的 primitive 只能保持 candidate。
+4. 在已有 Input/Field/Select 真实 consumer 上抽取最小 renderer kernel；退出条件是 mount/update、keyed list、portal、focus 和 deterministic dispose 至少有一个生产 Settings consumer 与 artifact smoke 证据。
+5. 每个 primitive 的四层证据闭合后，立即删除对应 legacy projection；R2-02C 关闭后才推进 R2-03 的 Theme legacy reads 清零。
+6. R2-08 继续保持 scoped-service-assembly-active：`UiServiceRegistry`、generated artifact 与 `LifecycleScope` 委托均保留现状；在补齐 packaged artifact/跨平台证据前，不声明 public runtime ready。
+7. 保持 R2-00/R2-01 的能力由真实 consumer 驱动，不开放任意 selector/HTML 注入，也不创建第二套生命周期或 durable UI Store；Plugin Loader 与 chat plugin protocol 保持冻结。
 
 补充门禁记录：本批补回 `nextUiNotificationForum` / `nextUiNotificationMemo`，并让 NextShell controller 成为唯一 owner；旧 `event-listeners.js` 中对应的重复 document-level binding 仍保持注释隔离。Plugin Loader 与 chat plugin manifest 的越界改动已回退，UI Runtime 只消费既有插件能力；完整 UI Apps smoke 仍受 `VCPDistributedServer/Plugin/VChatDynamicWallpaper/plugin-manifest.json.block` 外部 readiness blocker 影响，本轮不擅自启用用户禁用插件。
 

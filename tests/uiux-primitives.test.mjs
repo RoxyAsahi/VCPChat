@@ -57,7 +57,9 @@ test('Harness Input keeps native control and restores DOM on dispose', async () 
         const scope = createUiScope(new LifecycleScope('input-test'));
         const input = document.getElementById('tagline');
         const release = mountInput(input, {}, scope);
-        assert.equal(input.parentElement.className, 'vcp-uiux-input-wrap');
+        assert.equal(input.parentElement.classList.contains('vcp-uiux-input-wrap'), true);
+        assert.equal(input.parentElement.classList.contains('wrap'), true);
+        assert.equal(input.classList.contains('input'), true);
         assert.equal(input.value, 'Hello');
         assert.equal(input.parentElement.getAttribute('role'), null);
         await release?.();
