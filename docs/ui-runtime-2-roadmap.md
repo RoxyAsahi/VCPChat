@@ -208,6 +208,7 @@ evidence: npm run check:uiux; npm run test:uiux; node --test tests/creation-cont
 3. `renderer kernel`：仅实现已有真实 consumer 需要的 mount/update/keyed list/portal/focus/dispose，不提前造通用 Virtual DOM；
 4. `legacy deletion`：每个 primitive 证据闭合后删除对应 bridge/projection，未满足前不得继续扩大字段迁移。
 Forum 字段当前降级为上述门禁的 consumer 验证，不再单独作为“迁移完成率”指标。
+2026-08-26：新增 `npm run check:harness-contracts`，静态对照 Harness Input/Select reference JSON 与 VCP primitive source 的 DOM class、ARIA marker 和 `--dsw-alias-*` token；该门禁通过，作为自动 computed-style/pixel diff 之前的早期 contract drift 检查。
 
 ## 3. 分阶段路线
 
