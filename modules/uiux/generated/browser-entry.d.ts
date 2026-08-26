@@ -4,6 +4,8 @@ import { createForumConfigUiService } from './adapters/forum-config.js';
 import { createAssistantRuntimeUiService } from './adapters/assistant-runtime.js';
 import type { ThemeUiService } from './providers/theme.js';
 import type { UiDisposer } from './contracts.js';
+import { mountField } from './primitives/field.js';
+import { mountSelect } from './primitives/select.js';
 interface LegacyScopeLike {
     readonly label: string;
     readonly active: boolean;
@@ -26,5 +28,7 @@ declare const api: {
     forumConfigUiDefinition: import("./contracts.js").UiServiceDefinition<import("./adapters/forum-config.js").ForumConfigUiService>;
     createAssistantRuntimeUiService: typeof createAssistantRuntimeUiService;
     assistantRuntimeUiDefinition: import("./contracts.js").UiServiceDefinition<import("./adapters/assistant-runtime.js").AssistantRuntimeUiService>;
+    mountField: typeof mountField;
+    mountSelect: typeof mountSelect;
 };
 export { api as uiuxBrowserApi };

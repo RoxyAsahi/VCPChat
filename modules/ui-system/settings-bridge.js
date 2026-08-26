@@ -528,6 +528,7 @@ function enhanceGlobalSettings(root, form) {
     // get a Harness-style popover, but the native select is retained as the
     // one authoritative business node.
     mountHarnessSelects(form);
+    mountTypedAppearanceDensitySelect(root, form);
     form.querySelectorAll('input[type="range"]').forEach(range => enhance('Range', range));
     form.querySelectorAll('label.switch').forEach(control => enhance('Switch', control));
     form.querySelectorAll('.agent-style-collapsible-container').forEach(disclosure => {
@@ -542,6 +543,22 @@ function enhanceGlobalSettings(root, form) {
     mountSettingsAutosave(root, form);
     mountTypedFieldOwner(root, form);
     normalizeFormIcons(root);
+}
+
+function mountTypedAppearanceDensitySelect(root, form) {
+    const select = form?.querySelector?.('#appearanceDensity');
+    const api = window.VCPUIUX;
+    if (!select || !api?.mountSelect || select.dataset.vcpTypedPrimitiveMounted === 'true') return;
+    const scope = ensurePresentationScope();
+    if (!scope) return;
+    if (api.mountField && select.parentElement) {
+        const fieldRelease = api.mountField(select.parentElement, { label: '界面密度', control: select }, scope);
+        if (fieldRelease) scope.own(fieldRelease, 'typed-appearance-density-field', 'ui-primitive');
+    }
+    const release = api.mountSelect(select, { label: '界面密度' }, scope);
+    select.dataset.vcpTypedPrimitiveMounted = 'true';
+    scope.own(() => { delete select.dataset.vcpTypedPrimitiveMounted; }, 'typed-appearance-density-marker', 'ui-primitive');
+    if (release) scope.own(release, 'typed-appearance-density-select', 'ui-primitive');
 }
 
 function mountHarnessInputWrappers(form) {
@@ -946,6 +963,9 @@ function mountHarnessSelects(form) {
     let ordinal = 0;
     form.querySelectorAll('select').forEach(select => {
         ordinal += 1;
+        // The first TypeScript Light-DOM vertical slice owns this field;
+        // never wrap it in the legacy Harness bridge during the same pass.
+        if (select.id === 'appearanceDensity') return;
         if (select.multiple || select.disabled || select.closest('.vcp-harness-select-wrap, .vcp-harness-choice-wrap')) return;
         if (select.options.length > 1 && select.options.length <= 4) { mountHarnessChoice(select); return; }
         if (select.options.length <= 1) return;

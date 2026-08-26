@@ -17,3 +17,7 @@ export {
 export type { ThemeReadable, ThemeState, ThemeUiService } from './providers/theme.js';
 export { createSettingsUiService, settingsUiDefinition } from './adapters/settings.js';
 export type { SettingsPatch, SettingsSaveResult, SettingsState, SettingsUiAdapterInput, SettingsUiService } from './adapters/settings.js';
+export { mountField } from './primitives/field.js';
+export type { FieldProps } from './primitives/field.js';
+export { mountSelect } from './primitives/select.js';
+export type { SelectProps } from './primitives/select.js';

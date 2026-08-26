@@ -30,7 +30,7 @@
     "check:uiux:artifacts": "node scripts/check-uiux-artifacts.mjs",
     "test:uiux:artifacts": "node scripts/test-uiux-artifact-smoke.mjs",
     "build:uiux": "tsc --project tsconfig.uiux.build.json --pretty false",
-    "test:uiux": "node --experimental-strip-types --test tests/uiux-theme-presenter.test.mjs tests/uiux-settings-adapter.test.mjs tests/uiux-service-registry.test.mjs tests/uiux-rust-assistant-adapter.test.mjs tests/uiux-forum-config-adapter.test.mjs tests/uiux-assistant-runtime-adapter.test.mjs",
+    "test:uiux": "node --experimental-strip-types --test tests/uiux-theme-presenter.test.mjs tests/uiux-settings-adapter.test.mjs tests/uiux-primitives.test.mjs tests/uiux-service-registry.test.mjs tests/uiux-rust-assistant-adapter.test.mjs tests/uiux-forum-config-adapter.test.mjs tests/uiux-assistant-runtime-adapter.test.mjs",
     "test:electron-uiux-theme": "node scripts/test-electron-uiux-theme.mjs",
     "test:electron-uiux:artifacts": "node scripts/test-electron-uiux-theme.mjs",
     "guard:design-subtraction": "node scripts/check-design-system-boundary.mjs",

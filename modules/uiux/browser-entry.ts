@@ -8,6 +8,8 @@ import { createForumConfigUiService, forumConfigUiDefinition } from './adapters/
 import { createAssistantRuntimeUiService, assistantRuntimeUiDefinition } from './adapters/assistant-runtime.js';
 import type { ThemeUiService } from './providers/theme.js';
 import type { UiDisposer } from './contracts.js';
+import { mountField } from './primitives/field.js';
+import { mountSelect } from './primitives/select.js';
 
 interface LegacyScopeLike {
     readonly label: string;
@@ -41,6 +43,8 @@ const api = {
     forumConfigUiDefinition,
     createAssistantRuntimeUiService,
     assistantRuntimeUiDefinition,
+    mountField,
+    mountSelect,
 };
 
 Object.defineProperty(globalThis, 'VCPUIUX', {
