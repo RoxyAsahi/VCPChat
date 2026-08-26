@@ -549,7 +549,14 @@ function mountTypedAppearanceSelects(root, form) {
     const api = window.VCPUIUX;
     const scope = ensurePresentationScope();
     if (!scope || !api?.mountSelect) return;
-    const fields = [['appearanceDensity', '界面密度'], ['appearanceRadius', '圆角风格']];
+    const fields = [
+        ['appearanceDensity', '界面密度'],
+        ['appearanceRadius', '圆角风格'],
+        ['appearanceTypography', '界面字体'],
+        ['appearanceFontScale', '界面字号'],
+        ['appearanceContentWidth', '内容宽度'],
+        ['appearanceSurface', '页面材质'],
+    ];
     fields.forEach(([id, label]) => {
         const select = form?.querySelector?.(`#${id}`);
         if (!select || select.dataset.vcpTypedPrimitiveMounted === 'true') return;
@@ -968,7 +975,7 @@ function mountHarnessSelects(form) {
         ordinal += 1;
         // The first TypeScript Light-DOM vertical slice owns this field;
         // never wrap it in the legacy Harness bridge during the same pass.
-        if (select.id === 'appearanceDensity' || select.id === 'appearanceRadius') return;
+        if (['appearanceDensity', 'appearanceRadius', 'appearanceTypography', 'appearanceFontScale', 'appearanceContentWidth', 'appearanceSurface'].includes(select.id)) return;
         if (select.multiple || select.disabled || select.closest('.vcp-harness-select-wrap, .vcp-harness-choice-wrap')) return;
         if (select.options.length > 1 && select.options.length <= 4) { mountHarnessChoice(select); return; }
         if (select.options.length <= 1) return;
