@@ -140,6 +140,7 @@ try {
     await page.screenshot({ path: primitiveScreenshot });
     const screenshotStat = await fs.stat(primitiveScreenshot);
     assert.ok(screenshotStat.size > 1024, `primitive screenshot is unexpectedly empty: ${screenshotStat.size} bytes`);
+    await fs.writeFile(path.join(root, 'reports', 'vcp-primitive-geometry.json'), `${JSON.stringify({ viewport: { width: 800, height: 600, deviceScaleFactor: 1 }, primitive: 'Input+Select', source: 'generated-artifact-electron', geometry: primitiveBoundary }, null, 2)}\n`, 'utf8');
     const readBoundary = () => page.evaluate(() => {
         const dock = document.querySelector('.next-ui-account-dock');
         const theme = window.VCPStateChannels?.diagnostics?.().find(item => item.name === 'theme');
