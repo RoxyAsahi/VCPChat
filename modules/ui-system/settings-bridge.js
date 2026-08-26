@@ -532,6 +532,7 @@ function enhanceGlobalSettings(root, form) {
     mountTypedAppearanceRanges(root, form);
     mountTypedHomeVisualToggles(root, form);
     mountTypedAvatarColorPair(root, form);
+    mountTypedForumInputs(root, form);
     form.querySelectorAll('input[type="range"]').forEach(range => { if (!['appearanceSidebarAvatarSize', 'appearanceSidebarRowHeight', 'appearanceCustomRadius'].includes(range.id)) enhance('Range', range); });
     form.querySelectorAll('label.switch').forEach(control => { if (!control.querySelector('#showHomeVisualBrand, #showHomeVisualTagline')) enhance('Switch', control); });
     form.querySelectorAll('.agent-style-collapsible-container').forEach(disclosure => {
@@ -610,6 +611,25 @@ function mountTypedHomeTaglineInput(root, form) {
     if (release) scope.own(release, 'typed-home-tagline-input', 'ui-primitive');
 }
 
+// Forum credentials are presentation-only in this phase.  The existing
+// ForumConfigUiService/global submit path remains the command owner until its
+// dirty/autosave seam is migrated; this primitive only establishes the
+// Harness Light-DOM geometry and scope-owned teardown contract.
+function mountTypedForumInputs(root, form) {
+    const api = window.VCPUIUX;
+    if (!api?.mountInput) return;
+    const scope = ensurePresentationScope();
+    if (!scope) return;
+    ['adminUsername', 'adminPassword'].forEach(id => {
+        const input = form?.querySelector?.(`#${id}`);
+        if (!input || input.dataset.vcpTypedPrimitiveMounted === 'true') return;
+        const release = api.mountInput(input, {}, scope);
+        input.dataset.vcpTypedPrimitiveMounted = 'true';
+        scope.own(() => { delete input.dataset.vcpTypedPrimitiveMounted; }, `typed-${id}-marker`, 'ui-primitive');
+        if (release) scope.own(release, `typed-${id}-input`, 'ui-primitive');
+    });
+}
+
 function mountTypedAppearanceSelects(root, form) {
     const api = window.VCPUIUX;
     const scope = ensurePresentationScope();
@@ -639,7 +659,7 @@ function mountTypedAppearanceSelects(root, form) {
 function mountHarnessInputWrappers(form) {
     const selector = 'input:is(:not([type]), [type="text"], [type="url"], [type="password"], [type="number"], [type="email"], [type="search"], [type="tel"]), textarea';
     form.querySelectorAll(selector).forEach(control => {
-        if (control.id === 'homeVisualTagline' || control.id === 'userAvatarBorderColorText') return;
+        if (control.id === 'homeVisualTagline' || control.id === 'userAvatarBorderColorText' || control.id === 'adminUsername' || control.id === 'adminPassword') return;
         if (control.closest('.vcp-harness-input-wrap')) return;
         const wrap = document.createElement('span');
         wrap.className = 'vcp-harness-input-wrap';
