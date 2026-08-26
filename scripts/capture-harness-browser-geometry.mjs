@@ -18,6 +18,11 @@ try {
         const rect = input.getBoundingClientRect();
         input.focus();
         const focused = getComputedStyle(input);
+        const select = document.querySelector('select, [role="combobox"]');
+        const selectCapture = select ? (() => {
+            const s = getComputedStyle(select); const r = select.getBoundingClientRect();
+            return { selector: select.tagName.toLowerCase(), rect: { x: r.x, y: r.y, width: r.width, height: r.height }, computedStyle: { display: s.display, height: s.height, padding: s.padding, borderRadius: s.borderRadius, fontSize: s.fontSize, lineHeight: s.lineHeight } };
+        })() : null;
         return {
             status: 'captured',
             source: 'Harness production web entry',
@@ -30,6 +35,7 @@ try {
                 lineHeight: style.lineHeight, border: style.border,
                 outline: focused.outline, outlineOffset: focused.outlineOffset,
             },
+            select: selectCapture,
         };
     });
     const report = { generatedAt: new Date().toISOString(), url, viewport, ...capture };

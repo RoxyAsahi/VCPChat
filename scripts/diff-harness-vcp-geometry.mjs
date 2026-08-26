@@ -20,6 +20,7 @@ const reference = await readJson(path.join(referencePath, 'input.geometry.json')
 const select = await readJson(path.join(referencePath, 'select.geometry.json'));
 const vcp = await readJson(vcpPath);
 const harness = await readJson(harnessPath);
+const harnessSelect = harness?.select;
 
 // This report deliberately separates a one-sided contract check from a real
 // Harness↔VCP computed-style diff. The latter is pending until a browser capture
@@ -63,7 +64,7 @@ const report = {
     contract,
     missingEvidence: [
         ...(harness ? [] : ['Harness browser computed-style capture']),
-        'Harness Select browser computed-style capture',
+        ...(harnessSelect ? [] : ['Harness Select browser computed-style capture']),
         'complete cross-page geometry diff',
         'screenshot/pixel diff',
     ],
