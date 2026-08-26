@@ -35,7 +35,7 @@ export function mountSelect(select: HTMLSelectElement, props: SelectProps = {}, 
         const selected = select.options[select.selectedIndex];
         trigger.textContent = selected?.textContent?.trim() || props.label || '选择';
         Array.from(menu.querySelectorAll<HTMLElement>('[role="menuitem"]')).forEach((item, index) => {
-            const active = index === select.selectedIndex; item.dataset.selected = String(active); item.setAttribute('aria-checked', String(active)); item.tabIndex = active ? 0 : -1; const check = item.querySelector<HTMLElement>('.vcp-harness-menu-item-check'); if (check) check.hidden = !active;
+            const active = index === select.selectedIndex; item.dataset.selected = String(active); item.setAttribute('aria-checked', String(active)); item.tabIndex = active ? 0 : -1; const check = item.querySelector<HTMLElement>('.vcp-harness-menu-item-check'); if (check) check.toggleAttribute('hidden', !active);
         });
     };
     const close = (restoreFocus = false) => { menu.hidden = true; trigger.setAttribute('aria-expanded', 'false'); if (menu.parentNode !== wrap) wrap.append(menu); if (restoreFocus && document.contains(trigger)) trigger.focus(); };
@@ -45,7 +45,7 @@ export function mountSelect(select: HTMLSelectElement, props: SelectProps = {}, 
     const onSync = () => sync();
     Array.from(select.options).forEach((option, index) => {
         const itemWrap = document.createElement('div'); itemWrap.className = 'vcp-harness-menu-item-wrap';
-        const item = document.createElement('button'); item.type = 'button'; item.className = 'vcp-harness-menu-item'; item.setAttribute('role', 'menuitem'); item.textContent = option.textContent?.trim() || ''; item.disabled = option.disabled; const check = document.createElement('span'); check.className = 'vcp-harness-menu-item-check'; check.setAttribute('aria-hidden', 'true'); check.hidden = true; item.append(check); itemWrap.append(item);
+        const item = document.createElement('button'); item.type = 'button'; item.className = 'vcp-harness-menu-item'; item.setAttribute('role', 'menuitem'); item.textContent = option.textContent?.trim() || ''; item.disabled = option.disabled; const check = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); check.classList.add('vcp-harness-menu-item-check'); check.setAttribute('aria-hidden', 'true'); check.setAttribute('viewBox', '0 0 16 16'); check.setAttribute('focusable', 'false'); check.innerHTML = '<path d="M3 8.5 6.5 12 13 4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>'; check.toggleAttribute('hidden', true); item.append(check); itemWrap.append(item);
         scope.listen(item, 'click', () => { if (!option.disabled) { select.selectedIndex = index; const EventCtor = select.ownerDocument.defaultView?.Event ?? Event; select.dispatchEvent(new EventCtor('change', { bubbles: true })); close(true); } }); viewport.append(itemWrap);
     });
     select.parentNode?.insertBefore(wrap, select); wrap.append(select, trigger, menu); select.tabIndex = -1;

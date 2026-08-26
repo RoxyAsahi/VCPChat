@@ -33,8 +33,8 @@ test('Harness-compatible Field and Select keep Light DOM contract and dispose cl
         assert.equal(fieldRoot.querySelector('[role="menu"]')?.children.length, 1);
         assert.equal(fieldRoot.querySelector('[role="menu"] > .vcp-harness-menu-viewport')?.children.length, 2);
         assert.equal(fieldRoot.querySelector('.vcp-harness-menu-item-wrap > [role="menuitem"]')?.textContent, 'Comfortable');
-        assert.equal(fieldRoot.querySelector('[role="menuitem"][data-selected="true"] .vcp-harness-menu-item-check')?.hidden, false);
-        assert.equal(fieldRoot.querySelector('[role="menuitem"]:not([data-selected="true"]) .vcp-harness-menu-item-check')?.hidden, true);
+        assert.equal(fieldRoot.querySelector('[role="menuitem"][data-selected="true"] .vcp-harness-menu-item-check')?.hasAttribute('hidden'), false);
+        assert.equal(fieldRoot.querySelector('[role="menuitem"]:not([data-selected="true"]) .vcp-harness-menu-item-check')?.hasAttribute('hidden'), true);
         const trigger = fieldRoot.querySelector('.vcp-harness-select-trigger');
         trigger.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
         assert.equal(trigger.getAttribute('aria-expanded'), 'true');
