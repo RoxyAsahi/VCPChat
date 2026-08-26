@@ -46,6 +46,7 @@
     "diff:harness-vcp-field-geometry": "node scripts/diff-harness-vcp-field-geometry.mjs",
     "diff:harness-vcp-field-pixels": "node scripts/diff-harness-vcp-field-pixels.mjs",
     "check:harness-field-visual-evidence": "node scripts/check-harness-field-visual-evidence.mjs",
+    "check:harness-input-production-consumer": "node scripts/check-harness-input-production-consumer.mjs",
     "check:harness-fixture-evidence": "node scripts/check-harness-fixture-evidence.mjs",
     "check:harness-vcp-evidence-schema": "node scripts/check-harness-vcp-evidence-schema.mjs",
     "check:harness-select-source-evidence": "node scripts/check-harness-select-source-evidence.mjs",
