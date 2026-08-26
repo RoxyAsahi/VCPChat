@@ -71,6 +71,16 @@ await forumService.save.execute({ username: 'artifact-next' });
 assert.equal(forumService.state.get().username, 'artifact-next');
 await forumService.dispose();
 
+const timedForumService = createForumConfigUiService({
+    get: () => ({ username: 'artifact-timeout' }),
+    timeoutMs: 5,
+    save: () => new Promise(() => {}),
+});
+const timedForumResult = await timedForumService.save.execute({ username: 'hung' });
+assert.equal(timedForumResult.success, false);
+assert.match(timedForumResult.error || '', /timed out/);
+await timedForumService.dispose();
+
 const runtimeService = createAssistantRuntimeUiService({ get: async () => ({ mode: 'rust', active: true }) });
 await runtimeService.refresh.execute();
 assert.equal(runtimeService.state.get().mode, 'rust');

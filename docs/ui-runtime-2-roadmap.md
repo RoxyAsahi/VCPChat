@@ -199,6 +199,7 @@ evidence: npm run check:uiux; npm run test:uiux; node --test tests/creation-cont
 2026-08-26 lifecycle correction：Forum owner 已将 `run` 注册到 state，`flushSettingsAutosave()` 现在可以在关闭时真正提交 pending credentials；此前只设置 timer 而未暴露 run 的缺口已修复，`check:uiux`、global save regression 与 Settings Electron gate 通过。
 2026-08-26 Forum owner evidence：Settings Electron journey 新增真实 username 输入保存、password close-flush、重新打开持久化恢复断言；`ForumConfigUiService` state 与 Input DOM 均验证通过。failure/timeout 注入和剩余 legacy orchestration 删除仍待独立批次。
 2026-08-26：`ForumConfigUiService` 新增确定性的 `timeoutMs` adapter 合同；hung save 会返回 retryable failure，不再依赖文件权限模拟。`tests/uiux-forum-config-adapter.test.mjs` 覆盖 timeout，generated artifact consistency/smoke 与完整 UIUX tests（27/27）通过。
+2026-08-26 artifact evidence：`test-uiux-artifact-smoke.mjs` 新增 generated Forum timeout 场景；源码与 generated 平面的 hung-save→retryable-failure 合同均通过。
 
 ## 3. 分阶段路线
 
