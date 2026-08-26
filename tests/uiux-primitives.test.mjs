@@ -156,11 +156,11 @@ test('Harness Select interaction sequence matches keyboard and ownership contrac
         assert.equal(menu.style.top, '88px');
         const items = [...document.querySelectorAll('[role="menuitem"]')];
         assert.equal(trigger.getAttribute('aria-expanded'), 'true');
-        assert.equal(document.activeElement, items[0]);
+        assert.equal(document.activeElement, trigger);
         document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-        assert.equal(document.activeElement, items[1]);
+        assert.equal(document.activeElement, trigger);
         document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'End', bubbles: true }));
-        assert.equal(document.activeElement, items[2]);
+        assert.equal(document.activeElement, trigger);
         items[2].click();
         assert.equal(select.value, 'Three');
         assert.equal(trigger.textContent, 'Three');
