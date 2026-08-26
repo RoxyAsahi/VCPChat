@@ -1,0 +1,13 @@
+{
+  "source": "packages/client/ui-settings-general/src/client/SettingsRoot.module.css",
+  "viewport": "fixed reference viewport; capture in Electron gate",
+  "selectors": {
+    ".panel": { "width": "800px", "height": "min(800px, calc(100vh - 48px))", "maxWidth": "calc(100vw - 48px)", "borderRadius": "24px" },
+    ".nav": { "width": "188px", "padding": "22px 12px 0", "gap": "18px" },
+    ".navCell": { "height": "40px", "padding": "9px 16px 9px 12px", "gap": "8px", "borderRadius": "12px", "fontSize": "14px", "lineHeight": "22px" },
+    ".header": { "height": "54px", "padding": "20px 14px 8px 10px", "gap": "8px" },
+    ".options": { "padding": "0 24px 24px" },
+    ".close": { "width": "28px", "height": "28px", "borderRadius": "28px" }
+  },
+  "states": ["default", "hover", "focus", "active", "closed", "destroyed"]
+}

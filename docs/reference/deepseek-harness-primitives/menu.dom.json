@@ -1,0 +1,4 @@
+{
+  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/Menu.tsx",
+  "contract": { "roles": ["menu", "menuitem", "separator", "presentation"], "portal": "optional", "submenu": "optional", "footer": "optional", "owner": "mount/update/dispose" }
+}
