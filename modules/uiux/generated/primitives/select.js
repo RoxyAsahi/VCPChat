@@ -53,6 +53,7 @@ export function mountSelect(select, props = {}, scope) {
         document.body.append(menu); const current = menu.querySelector('[data-selected="true"]'); (current || menu.querySelector('[role="menuitem"]'))?.focus(); };
     const onTrigger = () => trigger.getAttribute('aria-expanded') === 'true' ? close() : open();
     const onChange = () => sync();
+    const onSync = () => sync();
     Array.from(select.options).forEach((option, index) => {
         const item = document.createElement('button');
         item.type = 'button';
@@ -73,6 +74,7 @@ export function mountSelect(select, props = {}, scope) {
     select.tabIndex = -1;
     scope.listen(trigger, 'click', onTrigger);
     scope.listen(select, 'change', onChange);
+    scope.listen(select, 'vcp-uiux-sync', onSync);
     scope.listen(document, 'pointerdown', event => { if (!wrap.contains(event.target) && !menu.contains(event.target))
         close(); }, { capture: true });
     scope.listen(document, 'keydown', event => {

@@ -795,7 +795,7 @@ function mountTypedFieldOwner(root, form) {
         if (state.disposed || form.dataset.vcpSettingsDirty === 'true' || form.dataset.globalSettingsSaving === 'true') return;
         const settings = snapshot?.value || {};
         const appearance = settings.appearanceProfile || {};
-        const set = (id, value) => { const node = form.querySelector(`#${id}`); if (node && value !== undefined && value !== null) node.value = String(value); };
+        const set = (id, value) => { const node = form.querySelector(`#${id}`); if (node && value !== undefined && value !== null) { const next = String(value); if (node.value !== next) { node.value = next; const EventCtor = node.ownerDocument.defaultView?.CustomEvent ?? CustomEvent; node.dispatchEvent(new EventCtor('vcp-uiux-sync')); } } };
         const check = (id, value) => { const node = form.querySelector(`#${id}`); if (node) node.checked = Boolean(value); };
         set('appearanceDensity', appearance.density || 'comfortable');
         set('appearanceRadius', appearance.radius || 'small');

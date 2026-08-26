@@ -41,12 +41,13 @@ export function mountSelect(select: HTMLSelectElement, props: SelectProps = {}, 
     const open = () => { if (select.disabled) return; menu.hidden = false; trigger.setAttribute('aria-expanded', 'true'); if (props.portal) document.body.append(menu); const current = menu.querySelector<HTMLElement>('[data-selected="true"]'); (current || menu.querySelector<HTMLElement>('[role="menuitem"]'))?.focus(); };
     const onTrigger = () => trigger.getAttribute('aria-expanded') === 'true' ? close() : open();
     const onChange = () => sync();
+    const onSync = () => sync();
     Array.from(select.options).forEach((option, index) => {
         const item = document.createElement('button'); item.type = 'button'; item.className = 'vcp-harness-menu-item'; item.setAttribute('role', 'menuitem'); item.textContent = option.textContent?.trim() || ''; item.disabled = option.disabled;
         scope.listen(item, 'click', () => { if (!option.disabled) { select.selectedIndex = index; const EventCtor = select.ownerDocument.defaultView?.Event ?? Event; select.dispatchEvent(new EventCtor('change', { bubbles: true })); close(true); } }); menu.append(item);
     });
     select.parentNode?.insertBefore(wrap, select); wrap.append(select, trigger, menu); select.tabIndex = -1;
-    scope.listen(trigger, 'click', onTrigger); scope.listen(select, 'change', onChange);
+    scope.listen(trigger, 'click', onTrigger); scope.listen(select, 'change', onChange); scope.listen(select, 'vcp-uiux-sync', onSync);
     scope.listen(document, 'pointerdown', event => { if (!wrap.contains(event.target as Node) && !menu.contains(event.target as Node)) close(); }, { capture: true });
     scope.listen(document, 'keydown', event => {
         const key = (event as KeyboardEvent).key;
