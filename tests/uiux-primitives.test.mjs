@@ -11,6 +11,7 @@ const { mountSelect } = await import('../modules/uiux/primitives/select.ts');
 const { mountInput } = await import('../modules/uiux/primitives/input.ts');
 const { mountChoice } = await import('../modules/uiux/primitives/choice.ts');
 const { mountRange } = await import('../modules/uiux/primitives/range.ts');
+const { mountToggle } = await import('../modules/uiux/primitives/toggle.ts');
 
 test('Harness-compatible Field and Select keep Light DOM contract and dispose cleanly', async () => {
     const dom = new JSDOM('<!doctype html><form><div id="field"><select id="density"><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></div></form>');
@@ -95,6 +96,19 @@ test('Harness Range keeps native value, output sync, and teardown', async () => 
         input.value = '40'; input.dispatchEvent(new dom.window.Event('input')); assert.equal(output.textContent, '40px');
         await release?.(); await scope.dispose('range-complete'); assert.equal(input.parentElement.id, 'field'); assert.equal(output.parentElement.id, 'field');
         assert.deepEqual([...document.getElementById('field').children].map(node => node.id), ['out', 'range', 'after']);
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
+
+test('Harness Toggle keeps native checkbox and retires legacy slider', async () => {
+    const dom = new JSDOM('<!doctype html><label class="switch" id="toggle"><input type="checkbox"><span class="slider"></span></label>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('toggle-test')); const input = document.querySelector('input'); const slider = document.querySelector('.slider');
+        const release = mountToggle(input, scope);
+        assert.equal(input.parentElement.className, 'vcp-uiux-toggle'); assert.equal(slider.style.display, 'none');
+        await release?.(); await scope.dispose('toggle-complete');
+        assert.equal(input.parentElement.id, 'toggle'); assert.equal(slider.style.display, '');
     } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
 });
 

@@ -532,8 +532,9 @@ function enhanceGlobalSettings(root, form) {
     mountTypedHomeTaglineInput(root, form);
     mountTypedRadiusChoice(root, form);
     mountTypedAppearanceRanges(root, form);
+    mountTypedHomeVisualToggles(root, form);
     form.querySelectorAll('input[type="range"]').forEach(range => { if (!['appearanceSidebarAvatarSize', 'appearanceSidebarRowHeight', 'appearanceCustomRadius'].includes(range.id)) enhance('Range', range); });
-    form.querySelectorAll('label.switch').forEach(control => enhance('Switch', control));
+    form.querySelectorAll('label.switch').forEach(control => { if (!control.querySelector('#showHomeVisualBrand, #showHomeVisualTagline')) enhance('Switch', control); });
     form.querySelectorAll('.agent-style-collapsible-container').forEach(disclosure => {
         disclosure.dataset.settingPrimitive = 'disclosure';
         disclosure.querySelector('.style-collapse-header')?.classList.add('vcp-harness-disclosure-row');
@@ -571,6 +572,19 @@ function mountTypedAppearanceRanges(root, form) {
         input.dataset.vcpTypedPrimitiveMounted = 'true';
         scope.own(() => { delete input.dataset.vcpTypedPrimitiveMounted; }, `typed-${id}-marker`, 'ui-primitive');
         if (release) scope.own(release, `typed-${id}-range`, 'ui-primitive');
+    });
+}
+
+function mountTypedHomeVisualToggles(root, form) {
+    const api = window.VCPUIUX; if (!api?.mountToggle) return;
+    const scope = ensurePresentationScope(); if (!scope) return;
+    ['showHomeVisualBrand', 'showHomeVisualTagline'].forEach(id => {
+        const input = form?.querySelector?.(`#${id}`);
+        if (!input || input.dataset.vcpTypedPrimitiveMounted === 'true') return;
+        const release = api.mountToggle(input, scope);
+        input.dataset.vcpTypedPrimitiveMounted = 'true';
+        scope.own(() => { delete input.dataset.vcpTypedPrimitiveMounted; }, `typed-${id}-marker`, 'ui-primitive');
+        if (release) scope.own(release, `typed-${id}-toggle`, 'ui-primitive');
     });
 }
 

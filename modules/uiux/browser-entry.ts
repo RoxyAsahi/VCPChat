@@ -13,6 +13,7 @@ import { mountSelect } from './primitives/select.js';
 import { mountInput } from './primitives/input.js';
 import { mountChoice } from './primitives/choice.js';
 import { mountRange } from './primitives/range.js';
+import { mountToggle } from './primitives/toggle.js';
 
 interface LegacyScopeLike {
     readonly label: string;
@@ -51,6 +52,7 @@ const api = {
     mountInput,
     mountChoice,
     mountRange,
+    mountToggle,
 };
 
 Object.defineProperty(globalThis, 'VCPUIUX', {

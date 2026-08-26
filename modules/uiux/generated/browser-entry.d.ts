@@ -9,6 +9,7 @@ import { mountSelect } from './primitives/select.js';
 import { mountInput } from './primitives/input.js';
 import { mountChoice } from './primitives/choice.js';
 import { mountRange } from './primitives/range.js';
+import { mountToggle } from './primitives/toggle.js';
 interface LegacyScopeLike {
     readonly label: string;
     readonly active: boolean;
@@ -36,5 +37,6 @@ declare const api: {
     mountInput: typeof mountInput;
     mountChoice: typeof mountChoice;
     mountRange: typeof mountRange;
+    mountToggle: typeof mountToggle;
 };
 export { api as uiuxBrowserApi };
