@@ -90,7 +90,7 @@ try {
     assert.equal(artifactBoundary.value, 'electron-artifact-next');
     const primitiveBoundary = await page.evaluate(() => {
         const host = document.createElement('div');
-        host.innerHTML = '<label id="artifact-field"><select id="artifact-density"><option>Comfortable</option><option>Compact</option></select></label>';
+        host.innerHTML = '<label id="artifact-field"><span>Density</span><select id="artifact-density"><option>Comfortable</option><option>Compact</option></select></label><input id="artifact-input" value="hello">';
         document.body.append(host);
         const disposers = [];
         const scope = {
@@ -100,16 +100,18 @@ try {
         const select = host.querySelector('select');
         window.VCPUIUX.mountField(host.querySelector('label'), { label: 'Density', control: select }, scope);
         window.VCPUIUX.mountSelect(select, { label: 'Density', portal: true }, scope);
+        const input = host.querySelector('#artifact-input');
+        window.VCPUIUX.mountInput(input, {}, scope);
         const trigger = host.querySelector('.vcp-harness-select-trigger');
         trigger.click();
         const item = document.querySelector('.vcp-harness-menu-list [role="menuitem"]');
         const style = item && getComputedStyle(item);
-        const result = { trigger: trigger?.getAttribute('aria-haspopup'), menu: document.querySelector('.vcp-harness-menu-list[role="menu"]') !== null, item: item?.getAttribute('role'), minHeight: style?.minHeight, padding: style?.padding, expanded: trigger?.getAttribute('aria-expanded') };
+        const result = { trigger: trigger?.getAttribute('aria-haspopup'), menu: document.querySelector('.vcp-harness-menu-list[role="menu"]') !== null, item: item?.getAttribute('role'), minHeight: style?.minHeight, padding: style?.padding, expanded: trigger?.getAttribute('aria-expanded'), inputWrap: input?.parentElement?.className };
         for (const dispose of disposers.reverse()) dispose();
         host.remove();
         return result;
     });
-    assert.deepEqual(primitiveBoundary, { trigger: 'menu', menu: true, item: 'menuitem', minHeight: '40px', padding: '8px 10px', expanded: 'true' }, `generated artifact primitive contract mismatch: ${JSON.stringify(primitiveBoundary)}`);
+    assert.deepEqual(primitiveBoundary, { trigger: 'menu', menu: true, item: 'menuitem', minHeight: '40px', padding: '8px 10px', expanded: 'true', inputWrap: 'vcp-uiux-input-wrap' }, `generated artifact primitive contract mismatch: ${JSON.stringify(primitiveBoundary)}`);
     const readBoundary = () => page.evaluate(() => {
         const dock = document.querySelector('.next-ui-account-dock');
         const theme = window.VCPStateChannels?.diagnostics?.().find(item => item.name === 'theme');
