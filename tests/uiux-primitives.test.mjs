@@ -12,6 +12,7 @@ const { mountInput } = await import('../modules/uiux/primitives/input.ts');
 const { mountChoice } = await import('../modules/uiux/primitives/choice.ts');
 const { mountRange } = await import('../modules/uiux/primitives/range.ts');
 const { mountToggle } = await import('../modules/uiux/primitives/toggle.ts');
+const { mountColorPair } = await import('../modules/uiux/primitives/color-pair.ts');
 
 test('Harness-compatible Field and Select keep Light DOM contract and dispose cleanly', async () => {
     const dom = new JSDOM('<!doctype html><form><div id="field"><select id="density"><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></div></form>');
@@ -110,6 +111,12 @@ test('Harness Toggle keeps native checkbox and retires legacy slider', async () 
         await release?.(); await scope.dispose('toggle-complete');
         assert.equal(input.parentElement.id, 'toggle'); assert.equal(slider.style.display, '');
     } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
+
+test('Harness ColorPair synchronizes source and mirror with invalid rollback', async () => {
+    const dom = new JSDOM('<!doctype html><div id="pair"><input id="color" type="color" value="#3d5a80"><input id="text" type="text" value="#3d5a80"></div>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window; globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try { const scope = createUiScope(new LifecycleScope('color-pair')); const color = document.getElementById('color'); const text = document.getElementById('text'); const release = mountColorPair(color, text, scope); assert.equal(text.value, '#3d5a80'); text.value = '#112233'; text.dispatchEvent(new dom.window.Event('change')); assert.equal(color.value, '#112233'); text.value = 'invalid'; text.dispatchEvent(new dom.window.Event('change')); assert.equal(text.value, '#112233'); await release?.(); await scope.dispose('color-pair-complete'); assert.equal(color.parentElement.id, 'pair'); } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
 });
 
 test('Harness Select interaction sequence matches keyboard and ownership contract', async () => {
