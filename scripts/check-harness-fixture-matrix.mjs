@@ -10,7 +10,7 @@ if (matrix.font !== 'system-ui') fail('font baseline must remain system-ui');
 if (!Array.isArray(matrix.cases) || matrix.cases.length !== 10) fail('expected exactly 10 primitive state cases');
 for (const [primitive, state] of matrix.cases) if (!['input', 'field', 'select'].includes(primitive) || typeof state !== 'string') fail(`invalid case ${primitive}/${state}`);
 for (const output of ['dom', 'geometry', 'computed-style', 'screenshot', 'pixel-diff']) if (!matrix.outputs.includes(output)) fail(`missing output layer ${output}`);
-if (matrix.stateSemantics?.['select/closed'] !== 'AgentPresetSeat ready trigger; production fixture pending') fail('Select closed state must retain its Agent Preset production-fixture boundary');
+if (matrix.stateSemantics?.['select/closed'] !== 'AgentPresetSeat ready trigger; production fixture captured, raw DOM/geometry/pixel comparison is failing') fail('Select closed state must retain its Agent Preset production-fixture boundary');
 if (matrix.stateSemantics?.['select/disabled'] !== 'MenuItem.disabled source/DOM fixture only; AgentPresetSeat busy trigger production fixture is pending') fail('Select disabled state must distinguish Menu source evidence from the pending Agent Preset busy trigger');
 if (matrix.status?.domStructural !== '10/10 pass') fail('DOM structural checkpoint must remain explicit');
 if (matrix.status?.selectMenuOpenSelectedHoverPixel !== 'pass (menu ROI only)') fail('Select pixel checkpoint must remain ROI-scoped');
