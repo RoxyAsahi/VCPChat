@@ -44,6 +44,7 @@ export function mountSelect(select, props = {}, scope) {
         Array.from(menu.querySelectorAll('[role="menuitem"]')).forEach((item, index) => {
             const active = index === select.selectedIndex;
             item.dataset.selected = String(active);
+            item.classList.toggle('vcp-harness-menu-item-selected', active);
             item.setAttribute('aria-checked', String(active));
             item.tabIndex = active ? 0 : -1;
             const check = item.querySelector('.vcp-harness-menu-item-check');
@@ -67,8 +68,11 @@ export function mountSelect(select, props = {}, scope) {
         item.type = 'button';
         item.className = 'vcp-harness-menu-item';
         item.setAttribute('role', 'menuitem');
-        item.textContent = option.textContent?.trim() || '';
         item.disabled = option.disabled;
+        const label = document.createElement('span');
+        label.className = 'vcp-harness-menu-item-label';
+        label.textContent = option.textContent?.trim() || '';
+        item.append(label);
         const check = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         check.classList.add('vcp-harness-menu-item-check');
         check.setAttribute('aria-hidden', 'true');
