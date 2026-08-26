@@ -90,7 +90,7 @@ try {
     assert.equal(artifactBoundary.value, 'electron-artifact-next');
     const primitiveBoundary = await page.evaluate(() => {
         const host = document.createElement('div');
-        host.innerHTML = '<label id="artifact-field"><span>Density</span><select id="artifact-density"><option>Comfortable</option><option>Compact</option></select></label><input id="artifact-input" value="hello"><div id="artifact-choice"><label><input type="radio" name="artifact-choice" value="a">A</label><label><input type="radio" name="artifact-choice" value="b">B</label></div>';
+        host.innerHTML = '<label id="artifact-field"><span>Density</span><select id="artifact-density"><option>Comfortable</option><option>Compact</option></select></label><input id="artifact-input" value="hello"><div id="artifact-choice"><label><input type="radio" name="artifact-choice" value="a">A</label><label><input type="radio" name="artifact-choice" value="b">B</label></div><div id="artifact-range-field"><input id="artifact-range" type="range" value="32"><output id="artifact-range-output"></output></div>';
         document.body.append(host);
         const disposers = [];
         const scope = {
@@ -104,17 +104,22 @@ try {
         window.VCPUIUX.mountInput(input, {}, scope);
         const choice = host.querySelector('#artifact-choice');
         window.VCPUIUX.mountChoice(choice, scope);
+        const range = host.querySelector('#artifact-range');
+        const rangeOutput = host.querySelector('#artifact-range-output');
+        window.VCPUIUX.mountRange(range, { output: rangeOutput }, scope);
+        range.value = '40';
+        range.dispatchEvent(new Event('input', { bubbles: true }));
         const trigger = host.querySelector('.vcp-harness-select-trigger');
         trigger.click();
         const item = document.querySelector('.vcp-harness-menu-list [role="menuitem"]');
         const style = item && getComputedStyle(item);
         choice.querySelector('input[value="b"]').click();
-        const result = { trigger: trigger?.getAttribute('aria-haspopup'), menu: document.querySelector('.vcp-harness-menu-list[role="menu"]') !== null, item: item?.getAttribute('role'), minHeight: style?.minHeight, padding: style?.padding, expanded: trigger?.getAttribute('aria-expanded'), inputWrap: input?.parentElement?.className, choiceClass: choice.classList.contains('vcp-uiux-choice'), choiceValue: choice.dataset.value };
+        const result = { trigger: trigger?.getAttribute('aria-haspopup'), menu: document.querySelector('.vcp-harness-menu-list[role="menu"]') !== null, item: item?.getAttribute('role'), minHeight: style?.minHeight, padding: style?.padding, expanded: trigger?.getAttribute('aria-expanded'), inputWrap: input?.parentElement?.className, choiceClass: choice.classList.contains('vcp-uiux-choice'), choiceValue: choice.dataset.value, rangeWrap: range?.parentElement?.className, rangeOutput: rangeOutput?.textContent };
         for (const dispose of disposers.reverse()) dispose();
         host.remove();
         return result;
     });
-    assert.deepEqual(primitiveBoundary, { trigger: 'menu', menu: true, item: 'menuitem', minHeight: '40px', padding: '8px 10px', expanded: 'true', inputWrap: 'vcp-uiux-input-wrap', choiceClass: true, choiceValue: 'b' }, `generated artifact primitive contract mismatch: ${JSON.stringify(primitiveBoundary)}`);
+    assert.deepEqual(primitiveBoundary, { trigger: 'menu', menu: true, item: 'menuitem', minHeight: '40px', padding: '8px 10px', expanded: 'true', inputWrap: 'vcp-uiux-input-wrap', choiceClass: true, choiceValue: 'b', rangeWrap: 'vcp-uiux-range', rangeOutput: '40px' }, `generated artifact primitive contract mismatch: ${JSON.stringify(primitiveBoundary)}`);
     const readBoundary = () => page.evaluate(() => {
         const dock = document.querySelector('.next-ui-account-dock');
         const theme = window.VCPStateChannels?.diagnostics?.().find(item => item.name === 'theme');
