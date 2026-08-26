@@ -15,6 +15,7 @@ export interface ForumConfigUiService {
 export interface ForumConfigUiAdapterInput {
     readonly get: () => Promise<ForumConfigState> | ForumConfigState;
     readonly save: (patch: ForumConfigPatch) => Promise<ForumConfigResult> | ForumConfigResult;
+    readonly timeoutMs?: number;
 }
 export declare function createForumConfigUiService(input: ForumConfigUiAdapterInput): ForumConfigUiService;
 export declare const forumConfigUiDefinition: UiServiceDefinition<ForumConfigUiService>;
