@@ -88,7 +88,7 @@ try {
         `Electron UIUX smoke loaded source-plane UIUX modules: ${JSON.stringify(artifactBoundary)}`);
     assert.deepEqual(artifactBoundary.save, { success: true });
     assert.equal(artifactBoundary.value, 'electron-artifact-next');
-    const primitiveScreenshot = path.join(appData, 'uiux-primitive-contract.png');
+    const primitiveScreenshot = path.join(root, 'reports', 'vcp-uiux-primitive-contract.png');
     const primitiveBoundary = await page.evaluate(() => {
         const host = document.createElement('div');
         host.innerHTML = '<label id="artifact-field"><span>Density</span><select id="artifact-density"><option>Comfortable</option><option>Compact</option></select></label><input id="artifact-input" value="hello"><div id="artifact-choice"><label><input type="radio" name="artifact-choice" value="a">A</label><label><input type="radio" name="artifact-choice" value="b">B</label></div><div id="artifact-range-field"><input id="artifact-range" type="range" value="32"><output id="artifact-range-output"></output></div><label id="artifact-toggle"><input type="checkbox" checked><span class="slider"></span></label><div id="artifact-color-pair"><input id="artifact-color" type="color" value="#3d5a80"><input id="artifact-color-text" type="text" value="#3d5a80"></div>';
