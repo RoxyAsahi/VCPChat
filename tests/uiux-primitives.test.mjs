@@ -30,7 +30,9 @@ test('Harness-compatible Field and Select keep Light DOM contract and dispose cl
         assert.equal(select.getAttribute('aria-describedby'), 'density-description');
         assert.equal(fieldRoot.querySelector('#density-description')?.textContent, 'Controls UI density.');
         assert.equal(fieldRoot.querySelector('.vcp-harness-select-trigger')?.textContent, 'Comfortable');
-        assert.equal(fieldRoot.querySelector('[role="menu"]')?.children.length, 2);
+        assert.equal(fieldRoot.querySelector('[role="menu"]')?.children.length, 1);
+        assert.equal(fieldRoot.querySelector('[role="menu"] > .vcp-harness-menu-viewport')?.children.length, 2);
+        assert.equal(fieldRoot.querySelector('.vcp-harness-menu-item-wrap > [role="menuitem"]')?.textContent, 'Comfortable');
         const trigger = fieldRoot.querySelector('.vcp-harness-select-trigger');
         trigger.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
         assert.equal(trigger.getAttribute('aria-expanded'), 'true');
