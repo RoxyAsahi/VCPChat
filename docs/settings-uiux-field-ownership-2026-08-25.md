@@ -71,7 +71,7 @@
 
 ## 5. 下一步
 
-先从 `appearanceProfile.sidebarRowHeight`、`appearanceProfile.sidebarAvatarSize`、`appearanceProfile.sidebarRadius` 和 `showHomeVisualTagline` 组成一个可回滚批次：它们已有稳定 DOM、typed snapshot 和 Electron 证据，且不要求触碰聊天 renderer。批次必须在同一个 Settings owner 内实现真实控件更新与保存，随后删除 bridge 中仅服务这些字段的 projection/listener，并补齐 close flush 与 teardown 计数。
+已完成上述外观/工作区批次；后续不再扩大聊天字体或消息布局相关字段。下一候选为 Forum 配置的 `adminUsername` / `adminPassword`：它们已有稳定 DOM id、`ForumConfigUiService` snapshot/command capability 和现有 Electron save/failure 证据，且不触碰聊天 renderer。进入施工前必须先补齐独立的 Light-DOM Input reference 对照、字段级 dirty/autosave owner、snapshot clean projection、失败/重试/timeout/close-flush、reload/teardown 及 generated-artifact smoke；只有这些证据齐全后，才能删除 `settings-bridge.js` 中对应的双轨 projection。若 command owner 或 dirty seam 无法在 Forum service 内闭合，则保持 `inventory-only`，不得以包装旧表单制造进度。
 
 ## 6. 2026-08-25 implementation update
 
