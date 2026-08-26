@@ -3,5 +3,5 @@
   "maxDifferingRatio": 0.01,
   "maxMeanChannelDelta": 2,
   "semanticFixtureRequired": true,
-  "status": "policy-defined-not-yet-applied-to-equivalent-pages"
+  "status": "active-for-semantic-equivalent-fixtures"
 }

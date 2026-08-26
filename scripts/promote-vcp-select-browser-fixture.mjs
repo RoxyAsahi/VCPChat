@@ -1,0 +1,10 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+const root = process.cwd();
+const capture = JSON.parse(await fs.readFile(path.join(root, 'reports/vcp-select-browser-production.json'), 'utf8'));
+if (capture.source !== 'VCP generated artifact Playwright fixture' || capture.status !== 'captured' || capture.items?.length !== 4) throw new Error('VCP browser Select capture failed provenance contract');
+const dir = path.join(root, 'docs/reference/deepseek-harness-primitives/fixtures/vcp');
+await fs.mkdir(dir, { recursive: true });
+await fs.writeFile(path.join(dir, 'select.browser.production.dom.html'), `${capture.dom}\n`);
+await fs.copyFile(path.join(root, 'reports/vcp-select-browser-production.png'), path.join(dir, 'select.browser.production.png'));
+console.log('Promoted VCP browser Select production fixture.');

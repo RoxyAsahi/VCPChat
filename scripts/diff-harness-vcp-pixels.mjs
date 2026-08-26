@@ -5,12 +5,12 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const harnessFile = process.env.HARNESS_SCREENSHOT || path.join(root, 'docs/reference/deepseek-harness-primitives/fixtures/harness/select.production.png');
-const vcpFile = process.env.VCP_SCREENSHOT || path.join(root, 'docs/reference/deepseek-harness-primitives/fixtures/vcp/select.production.png');
+const vcpFile = process.env.VCP_SCREENSHOT || path.join(root, 'docs/reference/deepseek-harness-primitives/fixtures/vcp/select.browser.production.png');
 const output = path.join(root, 'reports/harness-vcp-pixel-diff.json');
 const policy = JSON.parse(await fs.readFile(path.join(root, 'docs/reference/deepseek-harness-primitives/pixel-policy.json'), 'utf8'));
 const geometryReport = JSON.parse(await fs.readFile(path.join(root, 'reports/harness-vcp-geometry-diff.json'), 'utf8').catch(() => '{}'));
 const harnessSelect = JSON.parse(await fs.readFile(path.join(root, 'reports/harness-select-production.json'), 'utf8'));
-const vcpSelect = JSON.parse(await fs.readFile(path.join(root, 'reports/vcp-select-production.json'), 'utf8'));
+const vcpSelect = JSON.parse(await fs.readFile(path.join(root, 'reports/vcp-select-browser-production.json'), 'utf8'));
 
 function decodePng(buffer) {
     if (buffer.readUInt32BE(0) !== 0x89504e47) throw new Error('not PNG');
@@ -60,9 +60,9 @@ try {
     const harnessSource = decodePng(harnessBuffer); const vcpSource = decodePng(vcpBuffer);
     const harness = crop(harnessSource, harnessSelect.rect); const vcp = crop(vcpSource, vcpSelect.rect);
     const comparable = harness.width === vcp.width && harness.height === vcp.height;
-    const count = comparable ? harness.width * harness.height : 0; let different = 0; let totalDelta = 0;
+    const count = comparable ? harness.width * harness.height : 0; let different = 0; let totalDelta = 0; const thresholdCounts = { 0: 0, 2: 0, 4: 0, 8: 0, 16: 0, 32: 0 };
     let diffPixels = null;
-    if (comparable) { diffPixels = Buffer.alloc(harness.pixels.length); for (let i = 0; i < harness.pixels.length; i += 4) { const d = Math.max(Math.abs(harness.pixels[i]-vcp.pixels[i]), Math.abs(harness.pixels[i+1]-vcp.pixels[i+1]), Math.abs(harness.pixels[i+2]-vcp.pixels[i+2]), Math.abs(harness.pixels[i+3]-vcp.pixels[i+3])); totalDelta += d; if (d > 0) different++; diffPixels[i] = d > 0 ? 255 : 0; diffPixels[i + 1] = 0; diffPixels[i + 2] = 0; diffPixels[i + 3] = d > 0 ? 255 : 0; } }
+    if (comparable) { diffPixels = Buffer.alloc(harness.pixels.length); for (let i = 0; i < harness.pixels.length; i += 4) { const d = Math.max(Math.abs(harness.pixels[i]-vcp.pixels[i]), Math.abs(harness.pixels[i+1]-vcp.pixels[i+1]), Math.abs(harness.pixels[i+2]-vcp.pixels[i+2]), Math.abs(harness.pixels[i+3]-vcp.pixels[i+3])); totalDelta += d; if (d > 0) different++; for (const threshold of Object.keys(thresholdCounts)) if (d > Number(threshold)) thresholdCounts[threshold]++; diffPixels[i] = d > 0 ? 255 : 0; diffPixels[i + 1] = 0; diffPixels[i + 2] = 0; diffPixels[i + 3] = d > 0 ? 255 : 0; } }
     const diffImage = path.join(root, 'reports/harness-vcp-pixel-diff.png'); if (diffPixels) await fs.writeFile(diffImage, encodePng(harness.width, harness.height, diffPixels));
     const differingRatio = count ? different / count : null; const meanChannelDelta = count ? totalDelta / count : null;
     const semanticFixture = geometryReport.semanticFixture ?? null;
@@ -80,6 +80,7 @@ try {
         totalPixels: count,
         differingRatio,
         meanChannelDelta,
+        differingRatioByMaxDelta: Object.fromEntries(Object.entries(thresholdCounts).map(([threshold, value]) => [threshold, count ? value / count : null])),
         diffImage: diffPixels ? diffImage : null,
         pass: semanticFixture?.same === true && withinTolerance,
         missingEvidence: semanticFixture?.same !== true ? ['same semantic fixture route'] : !comparable ? ['same comparison dimensions'] : withinTolerance ? [] : ['pixel tolerance'],

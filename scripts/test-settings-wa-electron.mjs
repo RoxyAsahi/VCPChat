@@ -260,11 +260,12 @@ try {
         const root = select?.closest('.vcp-harness-field');
         const trigger = root?.querySelector('.vcp-harness-select-trigger');
         trigger?.click();
-        const menu = root?.querySelector('[role="menu"]');
+        const menu = trigger?.getAttribute('aria-controls') ? document.getElementById(trigger.getAttribute('aria-controls')) : null;
         const item = menu?.querySelector('[role="menuitem"]');
         const style = item ? getComputedStyle(item) : null;
         return {
             field: Boolean(root?.classList.contains('vcp-harness-field')),
+            legacyWrap: Boolean(select?.closest('.vcp-harness-select-wrap')),
             trigger: Boolean(trigger?.matches('button[aria-haspopup="menu"]')),
             menu: Boolean(menu?.matches('.vcp-harness-menu-list[role="menu"]')),
             item: Boolean(item?.matches('button[role="menuitem"]')),
@@ -272,15 +273,18 @@ try {
         };
     });
     assert.equal(typedPrimitiveEvidence.field, true, 'typed Field owns appearance density root');
+    assert.equal(typedPrimitiveEvidence.legacyWrap, false, 'typed Select has no legacy presentation wrapper');
     assert.equal(typedPrimitiveEvidence.trigger, true, 'typed Select exposes Harness trigger contract');
     assert.equal(typedPrimitiveEvidence.menu, true, 'typed Select exposes Light-DOM menu contract');
     assert.equal(typedPrimitiveEvidence.item, true, 'typed Select exposes menuitem contract');
-    assert.deepEqual(typedPrimitiveEvidence.itemGeometry, { minHeight: '40px', padding: '8px 10px', borderRadius: '8px', fontSize: '14px', lineHeight: '22px' }, 'typed Select menu item geometry matches reference pack');
+    assert.deepEqual(typedPrimitiveEvidence.itemGeometry, { minHeight: '40px', padding: '8px 10px', borderRadius: '10px', fontSize: '14px', lineHeight: '22px' }, 'typed Select menu item geometry matches reference pack');
     await page.evaluate(() => document.querySelector('#appearanceDensity')?.closest('.vcp-harness-field')?.querySelector('.vcp-harness-select-trigger')?.click());
     console.log(`  [PASS] 1d. typed Field/Select DOM and geometry contract ${JSON.stringify(typedPrimitiveEvidence)}`);
     assert.equal(await page.$eval('#appearanceRadius', node => Boolean(node.closest('.vcp-harness-field')?.querySelector('.vcp-harness-select-trigger'))), true, 'typed radius Select is mounted as the second vertical slice');
+    assert.equal(await page.$eval('#appearanceRadius', node => Boolean(node.closest('.vcp-harness-select-wrap'))), false, 'typed radius legacy Select wrapper is deleted');
     for (const id of ['appearanceTypography', 'appearanceFontScale', 'appearanceContentWidth', 'appearanceSurface']) {
         assert.equal(await page.$eval(`#${id}`, node => Boolean(node.closest('.vcp-harness-field')?.querySelector('.vcp-harness-select-trigger'))), true, `typed ${id} Select is mounted`);
+        assert.equal(await page.$eval(`#${id}`, node => Boolean(node.closest('.vcp-harness-select-wrap'))), false, `typed ${id} legacy Select wrapper is deleted`);
     }
     assert.equal(await page.$eval('#homeVisualTagline', node => node.parentElement?.classList.contains('vcp-uiux-input-wrap')), true, 'typed Home tagline Input is mounted');
     assert.equal(await page.$eval('#userAvatarBorderColor', node => node.parentElement?.classList.contains('vcp-uiux-color-pair')), true, 'typed avatar color pair is mounted');
