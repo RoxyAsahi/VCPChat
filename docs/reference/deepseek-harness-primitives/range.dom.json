@@ -1,0 +1,10 @@
+{
+  "primitive": "Range",
+  "source": "VCPChat appearance range contract (native input preserved)",
+  "root": { "tag": "span", "class": "vcp-uiux-range", "display": "grid" },
+  "children": [
+    { "tag": "input", "type": "range", "native": true },
+    { "tag": "output", "optional": true }
+  ],
+  "states": ["input", "change", "disabled", "dispose-restore"]
+}
