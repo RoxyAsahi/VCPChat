@@ -85,7 +85,7 @@ test('Harness Choice decorates native radios and retracts cleanly', async () => 
 });
 
 test('Harness Range keeps native value, output sync, and teardown', async () => {
-    const dom = new JSDOM('<!doctype html><label id="field"><input id="range" type="range" value="32"><output id="out"></output></label>');
+    const dom = new JSDOM('<!doctype html><label id="field"><output id="out"></output><input id="range" type="range" value="32"><span id="after"></span></label>');
     const previousDocument = globalThis.document; const previousWindow = globalThis.window;
     globalThis.document = dom.window.document; globalThis.window = dom.window;
     try {
@@ -94,6 +94,7 @@ test('Harness Range keeps native value, output sync, and teardown', async () => 
         assert.equal(input.parentElement.className, 'vcp-uiux-range'); assert.equal(output.textContent, '32px');
         input.value = '40'; input.dispatchEvent(new dom.window.Event('input')); assert.equal(output.textContent, '40px');
         await release?.(); await scope.dispose('range-complete'); assert.equal(input.parentElement.id, 'field'); assert.equal(output.parentElement.id, 'field');
+        assert.deepEqual([...document.getElementById('field').children].map(node => node.id), ['out', 'range', 'after']);
     } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
 });
 

@@ -15,6 +15,9 @@ export function mountRange(input, props = {}, scope) {
     const parent = input.parentNode;
     if (!parent)
         throw new Error('Range requires a connected parent.');
+    const inputNextSibling = input.nextSibling;
+    const outputParent = props.output?.parentNode ?? null;
+    const outputNextSibling = props.output?.nextSibling ?? null;
     const wrap = document.createElement('span');
     wrap.className = 'vcp-uiux-range';
     const output = props.output ?? null;
@@ -27,7 +30,19 @@ export function mountRange(input, props = {}, scope) {
     scope.listen(input, 'input', sync);
     scope.listen(input, 'change', sync);
     sync();
-    return scope.own(() => { if (input.parentNode === wrap)
-        parent.insertBefore(input, wrap); if (output?.parentNode === wrap)
-        parent.append(output); wrap.remove(); }, 'harness-range', 'ui-primitive');
+    return scope.own(() => {
+        if (input.parentNode === wrap) {
+            if (inputNextSibling && inputNextSibling.parentNode === parent)
+                parent.insertBefore(input, inputNextSibling);
+            else
+                parent.append(input);
+        }
+        if (output?.parentNode === wrap) {
+            if (outputNextSibling && outputNextSibling.parentNode === outputParent)
+                outputParent?.insertBefore(output, outputNextSibling);
+            else if (outputParent)
+                outputParent.append(output);
+        }
+        wrap.remove();
+    }, 'harness-range', 'ui-primitive');
 }
