@@ -48,7 +48,7 @@ export function mountSelect(select, props = {}, scope) {
             item.tabIndex = active ? 0 : -1;
             const check = item.querySelector('.vcp-harness-menu-item-check');
             if (check)
-                check.hidden = !active;
+                check.toggleAttribute('hidden', !active);
         });
     };
     const close = (restoreFocus = false) => { menu.hidden = true; trigger.setAttribute('aria-expanded', 'false'); if (menu.parentNode !== wrap)
@@ -69,10 +69,13 @@ export function mountSelect(select, props = {}, scope) {
         item.setAttribute('role', 'menuitem');
         item.textContent = option.textContent?.trim() || '';
         item.disabled = option.disabled;
-        const check = document.createElement('span');
-        check.className = 'vcp-harness-menu-item-check';
+        const check = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        check.classList.add('vcp-harness-menu-item-check');
         check.setAttribute('aria-hidden', 'true');
-        check.hidden = true;
+        check.setAttribute('viewBox', '0 0 16 16');
+        check.setAttribute('focusable', 'false');
+        check.innerHTML = '<path d="M3 8.5 6.5 12 13 4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
+        check.toggleAttribute('hidden', true);
         item.append(check);
         itemWrap.append(item);
         scope.listen(item, 'click', () => { if (!option.disabled) {
