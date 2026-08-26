@@ -9,6 +9,7 @@ const { createUiScope } = await import('../modules/uiux/runtime/scope.ts');
 const { mountField } = await import('../modules/uiux/primitives/field.ts');
 const { mountSelect } = await import('../modules/uiux/primitives/select.ts');
 const { mountInput } = await import('../modules/uiux/primitives/input.ts');
+const { mountChoice } = await import('../modules/uiux/primitives/choice.ts');
 
 test('Harness-compatible Field and Select keep Light DOM contract and dispose cleanly', async () => {
     const dom = new JSDOM('<!doctype html><form><div id="field"><select id="density"><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></div></form>');
@@ -64,6 +65,22 @@ test('Harness Input keeps native control and restores DOM on dispose', async () 
         globalThis.window = previousWindow;
         dom.window.close();
     }
+});
+
+test('Harness Choice decorates native radios and retracts cleanly', async () => {
+    const dom = new JSDOM('<!doctype html><div id="choices"><label><input type="radio" name="r" value="a">A</label><label><input type="radio" name="r" value="b">B</label></div>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('choice-test')); const root = document.getElementById('choices');
+        const release = mountChoice(root, scope);
+        assert.equal(root.classList.contains('vcp-uiux-choice'), true);
+        root.querySelector('input[value="b"]').click();
+        assert.equal(root.dataset.value, 'b');
+        await release?.(); await scope.dispose('choice-complete');
+        assert.equal(root.classList.contains('vcp-uiux-choice'), false);
+        assert.equal(root.querySelector('label').classList.contains('vcp-uiux-choice-option'), false);
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
 });
 
 test('Harness Select interaction sequence matches keyboard and ownership contract', async () => {
