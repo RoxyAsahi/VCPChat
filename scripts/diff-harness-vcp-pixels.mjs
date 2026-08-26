@@ -24,14 +24,24 @@ function decodePng(buffer) {
     return { width, height, pixels };
 }
 
+function crc32(buffer) { let c = 0xffffffff; for (const byte of buffer) { c ^= byte; for (let i = 0; i < 8; i++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1)); } return (c ^ 0xffffffff) >>> 0; }
+function encodePng(width, height, pixels) {
+    const chunk = (type, data) => { const t = Buffer.from(type); const out = Buffer.alloc(12 + data.length); out.writeUInt32BE(data.length, 0); t.copy(out, 4); data.copy(out, 8); out.writeUInt32BE(crc32(Buffer.concat([t, data])), 8 + data.length); return out; };
+    const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(width, 0); ihdr.writeUInt32BE(height, 4); ihdr[8] = 8; ihdr[9] = 6;
+    const raw = Buffer.alloc(height * (width * 4 + 1)); for (let y = 0; y < height; y++) { raw[y * (width * 4 + 1)] = 0; pixels.copy(raw, y * (width * 4 + 1) + 1, y * width * 4, (y + 1) * width * 4); }
+    return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
+}
+
 let report;
 try {
     const [harnessBuffer, vcpBuffer] = await Promise.all([fs.readFile(harnessFile), fs.readFile(vcpFile)]);
     const harness = decodePng(harnessBuffer); const vcp = decodePng(vcpBuffer);
     const comparable = harness.width === vcp.width && harness.height === vcp.height;
     const count = comparable ? harness.width * harness.height : 0; let different = 0; let totalDelta = 0;
-    if (comparable) for (let i = 0; i < harness.pixels.length; i += 4) { const d = Math.max(Math.abs(harness.pixels[i]-vcp.pixels[i]), Math.abs(harness.pixels[i+1]-vcp.pixels[i+1]), Math.abs(harness.pixels[i+2]-vcp.pixels[i+2]), Math.abs(harness.pixels[i+3]-vcp.pixels[i+3])); totalDelta += d; if (d > 0) different++; }
-    report = { generatedAt: new Date().toISOString(), status: comparable ? 'compared-but-semantic-baseline-mismatch' : 'pending-dimension-mismatch', harness: { path: harnessFile, width: harness.width, height: harness.height }, vcp: { path: vcpFile, width: vcp.width, height: vcp.height }, comparable, differentPixels: different, totalPixels: count, differingRatio: count ? different / count : null, meanChannelDelta: count ? totalDelta / count : null, pass: false, missingEvidence: ['same semantic fixture route', 'pixel tolerance policy', 'reviewable diff image'] };
+    let diffPixels = null;
+    if (comparable) { diffPixels = Buffer.alloc(harness.pixels.length); for (let i = 0; i < harness.pixels.length; i += 4) { const d = Math.max(Math.abs(harness.pixels[i]-vcp.pixels[i]), Math.abs(harness.pixels[i+1]-vcp.pixels[i+1]), Math.abs(harness.pixels[i+2]-vcp.pixels[i+2]), Math.abs(harness.pixels[i+3]-vcp.pixels[i+3])); totalDelta += d; if (d > 0) different++; diffPixels[i] = d > 0 ? 255 : 0; diffPixels[i + 1] = 0; diffPixels[i + 2] = 0; diffPixels[i + 3] = d > 0 ? 255 : 0; } }
+    const diffImage = path.join(root, 'reports/harness-vcp-pixel-diff.png'); if (diffPixels) await fs.writeFile(diffImage, encodePng(harness.width, harness.height, diffPixels));
+    report = { generatedAt: new Date().toISOString(), status: comparable ? 'compared-but-semantic-baseline-mismatch' : 'pending-dimension-mismatch', harness: { path: harnessFile, width: harness.width, height: harness.height }, vcp: { path: vcpFile, width: vcp.width, height: vcp.height }, comparable, differentPixels: different, totalPixels: count, differingRatio: count ? different / count : null, meanChannelDelta: count ? totalDelta / count : null, diffImage: diffPixels ? diffImage : null, pass: false, missingEvidence: ['same semantic fixture route', 'pixel tolerance policy'] };
 } catch (error) { report = { generatedAt: new Date().toISOString(), status: 'pending-missing-or-invalid-input', pass: false, error: error.message, harness: harnessFile, vcp: vcpFile }; }
 await fs.writeFile(output, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
 console.log(`Harness↔VCP pixel diff report written (status=${report.status}; pass=false).`);
