@@ -664,25 +664,6 @@ export function createMainChatSettingsPresentationOwner({
 
         if (!typedSettingsProjectionActive) {
             safeCheck('enableSmoothStreaming', globalSettings.enableSmoothStreaming === true);
-            safeCheck('showHomeVisualBrand', globalSettings.showHomeVisualBrand !== false);
-            safeCheck('showHomeVisualTagline', globalSettings.showHomeVisualTagline !== false);
-            safeSet('homeVisualTagline', globalSettings.homeVisualTagline || '语义级打穿 AI、UI/UX、APP 与人类想象力的边界');
-            const appearance = getAppearance()?.normalize(globalSettings.appearanceProfile, 'next');
-            safeSet('appearanceDensity', appearance?.density || 'comfortable');
-            safeSet('appearanceRadius', appearance?.radius || 'small');
-            safeSet('appearanceTypography', appearance?.typography || 'system');
-            safeSet('appearanceFontScale', appearance?.fontScale || 'normal');
-            safeSet('appearanceContentWidth', appearance?.contentWidth || 'full');
-            safeSet('appearanceSidebarRowHeight', appearance?.sidebarRowHeight ?? 46);
-            safeSet('appearanceSidebarRowHeightValue', `${appearance?.sidebarRowHeight ?? 46}px`);
-            safeSet('appearanceSidebarAvatarSize', appearance?.sidebarAvatarSize ?? 32);
-            safeSet('appearanceSidebarAvatarSizeValue', `${appearance?.sidebarAvatarSize ?? 32}px`);
-            safeSet('appearanceSidebarRadius', appearance?.sidebarRadius || 'tuned');
-            safeCheck(`appearanceSidebarRadiusChoice-${appearance?.sidebarRadius || 'tuned'}`, true);
-            safeSet('appearanceCustomRadius', appearance?.customRadius ?? 10);
-            safeSet('appearanceCustomRadiusValue', `${appearance?.customRadius ?? 10}px`);
-            document.getElementById('appearanceSidebarAvatarSize')?.dispatchEvent(new Event('input', { bubbles: true }));
-            safeSet('appearanceSurface', appearance?.surface || 'translucent');
             safeSet('chatFontPreset', globalSettings.chatFontPreset || 'system');
             safeSet('chatFontCustom', globalSettings.chatFontCustom || '');
             safeSet('chatCodeFontPreset', globalSettings.chatCodeFontPreset || 'consolas');
