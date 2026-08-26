@@ -526,8 +526,8 @@ function enhanceGlobalSettings(root, form) {
     // Short enumerations remain native/segmented controls. Long enumerations
     // get a Harness-style popover, but the native select is retained as the
     // one authoritative business node.
-    mountHarnessSelects(form);
     mountTypedAppearanceSelects(root, form);
+    mountHarnessSelects(form);
     mountTypedHomeTaglineInput(root, form);
     mountTypedRadiusChoice(root, form);
     mountTypedAppearanceRanges(root, form);
@@ -720,7 +720,7 @@ function mountTypedAppearanceSelects(root, form) {
             const fieldRelease = api.mountField(select.parentElement, { label, control: select }, scope);
             if (fieldRelease) scope.own(fieldRelease, `typed-${id}-field`, 'ui-primitive');
         }
-        const release = api.mountSelect(select, { label }, scope);
+        const release = api.mountSelect(select, { label, portal: true }, scope);
         select.dataset.vcpTypedPrimitiveMounted = 'true';
         scope.own(() => { delete select.dataset.vcpTypedPrimitiveMounted; }, `typed-${id}-marker`, 'ui-primitive');
         if (release) scope.own(release, `typed-${id}-select`, 'ui-primitive');
@@ -1148,6 +1148,7 @@ function mountHarnessSelects(form) {
     // otherwise a Choice that became a long Select (or vice versa) would be
     // treated as already mounted forever.
     const requiresReclassification = [...form.querySelectorAll('select')].some(select => {
+        if (select.dataset.vcpTypedPrimitiveMounted === 'true') return false;
         const isChoice = Boolean(select.closest('.vcp-harness-choice-wrap'));
         const isSelect = Boolean(select.closest('.vcp-harness-select-wrap'));
         const shouldChoice = !select.multiple && !select.disabled && select.options.length > 1 && select.options.length <= 4;
@@ -1157,9 +1158,9 @@ function mountHarnessSelects(form) {
     let ordinal = 0;
     form.querySelectorAll('select').forEach(select => {
         ordinal += 1;
-        // The first TypeScript Light-DOM vertical slice owns this field;
-        // never wrap it in the legacy Harness bridge during the same pass.
-        if (['appearanceDensity', 'appearanceRadius', 'appearanceTypography', 'appearanceFontScale', 'appearanceContentWidth', 'appearanceSurface'].includes(select.id)) return;
+        // Typed primitives mount first and mark their native business node.
+        // Legacy presentation may only decorate controls with no typed owner.
+        if (select.dataset.vcpTypedPrimitiveMounted === 'true') return;
         if (select.multiple || select.disabled || select.closest('.vcp-harness-select-wrap, .vcp-harness-choice-wrap')) return;
         if (select.options.length > 1 && select.options.length <= 4) { mountHarnessChoice(select); return; }
         if (select.options.length <= 1) return;
@@ -1343,6 +1344,7 @@ function mountHarnessSelects(form) {
                 // full transaction so no stale instance or portal survives.
                 const changedSelects = [...form.querySelectorAll('select')];
                 const requiresReclassification = changedSelects.some(select => {
+                    if (select.dataset.vcpTypedPrimitiveMounted === 'true') return false;
                     const isChoice = Boolean(select.closest('.vcp-harness-choice-wrap'));
                     const shouldChoice = !select.multiple && !select.disabled && select.options.length > 1 && select.options.length <= 4;
                     return isChoice !== shouldChoice;

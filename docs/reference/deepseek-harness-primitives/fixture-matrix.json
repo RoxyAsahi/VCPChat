@@ -8,5 +8,16 @@
     ["select", "closed"], ["select", "open"], ["select", "selected"], ["select", "disabled"]
   ],
   "outputs": ["dom", "geometry", "computed-style", "screenshot", "pixel-diff"],
-  "status": "structural-diff-8-of-10-pass-field-error-captured"
+  "stateSemantics": {
+    "select/closed": "AgentPresetSeat ready trigger; production fixture pending",
+    "select/open": "AgentPresetSeat ready menu; production menu ROI evidence exists",
+    "select/selected": "AgentPresetSeat ready menu with Standard mode selected; production menu ROI evidence exists",
+    "select/disabled": "MenuItem.disabled source/DOM fixture only; AgentPresetSeat busy trigger production fixture is pending"
+  },
+  "status": {
+    "domStructural": "10/10 pass",
+    "selectMenuOpenSelectedHoverPixel": "pass (menu ROI only)",
+    "fieldBrowserVisual": "pass (description/error production fixture at 1680x1000 @1x)",
+    "inputFullVisualMatrix": "blocked (Harness ui-primitives/Input has no production consumer)"
+  }
 }

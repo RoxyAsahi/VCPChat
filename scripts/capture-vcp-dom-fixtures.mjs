@@ -23,7 +23,7 @@ try {
     const field = document.getElementById('field');
     const select = document.getElementById('mode');
     const input = document.getElementById('name');
-    const fieldRelease = mountField(field, { label: 'Mode', description: 'Choose a mode.', control: select }, scope);
+    const fieldRelease = mountField(field, { label: 'Mode', control: select }, scope);
     const selectRelease = mountSelect(select, { label: 'Mode', portal: false }, scope);
     const inputRelease = mountInput(input, { placeholder: 'Search' }, scope);
     fs.writeFileSync(path.join(out, 'input.default.dom.html'), input.parentElement.outerHTML, 'utf8');
@@ -37,12 +37,16 @@ try {
     input.disabled = true;
     fs.writeFileSync(path.join(out, 'input.disabled.dom.html'), input.parentElement.outerHTML, 'utf8');
     input.disabled = false;
-    fs.writeFileSync(path.join(out, 'field.description.dom.html'), field.outerHTML, 'utf8');
+    const descriptionHost = document.createElement('div'); descriptionHost.innerHTML = '<input id="description-input" value="60000">'; document.body.append(descriptionHost);
+    const descriptionControl = descriptionHost.querySelector('input');
+    const descriptionRelease = mountField(descriptionHost, { label: 'Command timeout', description: 'How long one command may run.', control: descriptionControl }, scope);
+    fs.writeFileSync(path.join(out, 'field.description.dom.html'), descriptionHost.outerHTML, 'utf8');
+    await descriptionRelease?.(); descriptionHost.remove();
     const errorHost = document.createElement('div');
-    errorHost.innerHTML = '<input id="error-input" value="bad">';
+    errorHost.innerHTML = '<input id="error-input" value="soon">';
     document.body.append(errorHost);
     const errorControl = errorHost.querySelector('input');
-    const errorRelease = mountField(errorHost, { label: 'Mode', error: 'Invalid mode.', control: errorControl }, scope);
+    const errorRelease = mountField(errorHost, { label: 'Command timeout', error: 'Enter a number.', control: errorControl }, scope);
     fs.writeFileSync(path.join(out, 'field.error.dom.html'), errorHost.outerHTML, 'utf8');
     await errorRelease?.(); errorHost.remove();
     const trigger = document.querySelector('.vcp-harness-select-trigger');

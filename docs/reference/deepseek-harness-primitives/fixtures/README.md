@@ -24,6 +24,12 @@ render production `Input` and `Menu` components. The resulting HTML is stored
 under `harness/`; CSS-module hash classes are intentionally preserved and must
 be normalized by the structural diff runner rather than replaced by hand.
 
+The production Select supplement is captured through the official
+`agent-preset-selection.e2e.ts` scaffold after connecting a temporary workspace;
+it is stored as `harness/select.production.dom.html` plus a fixed viewport PNG.
+This is a real production web interaction fixture, but it remains a separate
+Select-only scene until VCP captures the same agent-preset scenario.
+
 Field description/error are not standalone Harness primitives: the production
 settings consumers render labels and error paragraphs directly. A VCP Field
 error fixture is therefore stored for contract review, but no Harness Field
@@ -32,7 +38,7 @@ selected.
 
 ## VCP source of truth
 
-VCP fixtures must load only `modules/uiux/generated/` and mount the same nine
+VCP fixtures must load only `modules/uiux/generated/` and mount the same ten
 cases from `../fixture-matrix.json`. Both pages use the same Chromium/Electron
 engine, 800×600 viewport, DPR 1, system-ui font, and frozen animation policy.
 
@@ -40,5 +46,5 @@ engine, 800×600 viewport, DPR 1, system-ui font, and frozen animation policy.
 
 For every case, the runner writes DOM shape, geometry, contract-scoped
 computed styles, screenshot, and pixel diff reports. Until the Harness web
-fixture runner exists, the matrix status remains
-`structural-diff-8-of-10-pass-field-error-captured` and no pixel-equivalence claim may be made.
+Select production fixture runner is available, the matrix status remains
+`structural-diff-8-pass-1-fail-1-pending` and no pixel-equivalence claim may be made.
