@@ -1,14 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 const root = process.cwd();
-const files = { harnessInput: 'reports/harness-primitive-geometry.json', harnessSelect: 'reports/harness-select-production.json', vcpGeometry: 'reports/vcp-primitive-geometry.json', geometryDiff: 'reports/harness-vcp-geometry-diff.json', pixelDiff: 'reports/harness-vcp-pixel-diff.json' };
+const files = { harnessInput: 'reports/harness-primitive-geometry.json', harnessSelect: 'reports/harness-select-menu-open.json', vcpGeometry: 'reports/vcp-primitive-geometry.json', geometryDiff: 'reports/harness-vcp-geometry-diff.json', pixelDiff: 'reports/harness-vcp-pixel-diff.json' };
 const present = Object.fromEntries(Object.entries(files).map(([key, file]) => [key, fs.existsSync(path.join(root, file))]));
 const geometry = JSON.parse(fs.readFileSync(path.join(root, files.geometryDiff), 'utf8'));
 const pixel = JSON.parse(fs.readFileSync(path.join(root, files.pixelDiff), 'utf8'));
 const vcpSelect = fs.existsSync(path.join(root, 'reports/vcp-select-production.json')) ? JSON.parse(fs.readFileSync(path.join(root, 'reports/vcp-select-production.json'), 'utf8')) : null;
 const vcpSelectValid = vcpSelect?.source === 'VCP generated artifact Electron fixture' && typeof vcpSelect.dom === 'string' && vcpSelect.dom.includes('vcp-harness-menu-list') && Array.isArray(vcpSelect.items) && vcpSelect.items.length > 0;
 const vcpBrowserSelect = fs.existsSync(path.join(root, 'reports/vcp-select-browser-production.json')) ? JSON.parse(fs.readFileSync(path.join(root, 'reports/vcp-select-browser-production.json'), 'utf8')) : null;
-const vcpBrowserSelectValid = vcpBrowserSelect?.source === 'VCP generated artifact Playwright fixture' && typeof vcpBrowserSelect.dom === 'string' && Array.isArray(vcpBrowserSelect.items) && vcpBrowserSelect.items.length === 4;
+const vcpBrowserSelectValid = vcpBrowserSelect?.source === 'VCP generated artifact Playwright fixture' && vcpBrowserSelect?.semanticFixture === 'agent-preset-selection/ready/Standard mode/open-selected-hover-menu' && typeof vcpBrowserSelect.dom === 'string' && Array.isArray(vcpBrowserSelect.items) && vcpBrowserSelect.items.length === 4;
 const report = { generatedAt: new Date().toISOString(), present: { ...present, vcpSelect: vcpSelectValid, vcpBrowserSelect: vcpBrowserSelectValid }, harnessSelectStatus: present.harnessSelect ? 'available' : 'pending', vcpSelectStatus: vcpSelectValid ? 'available' : 'pending-invalid-or-missing', vcpBrowserSelectStatus: vcpBrowserSelectValid ? 'available' : 'pending-invalid-or-missing', geometryStatus: geometry.status, geometryPass: geometry.pass === true, pixelStatus: pixel.status, pixelPass: pixel.pass === true, pass: present.harnessInput && present.vcpGeometry && present.harnessSelect && vcpSelectValid && vcpBrowserSelectValid && geometry.pass === true && pixel.pass === true };
 fs.writeFileSync(path.join(root, 'reports/harness-vcp-fixture-evidence.json'), `${JSON.stringify(report, null, 2)}\n`);
 console.log(`Harness fixture evidence: select=${report.harnessSelectStatus}, geometry=${report.geometryStatus}, pixel=${report.pixelStatus}, pass=${report.pass}`);

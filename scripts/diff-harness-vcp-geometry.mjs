@@ -3,10 +3,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const interaction = process.env.VCP_SELECT_MENU_STATE === 'focus' ? 'focus' : 'hover';
+const selectReportStem = interaction === 'focus' ? 'harness-select-menu-focus' : 'harness-select-menu-open';
+const vcpSelectReportStem = interaction === 'focus' ? 'vcp-select-browser-focus' : 'vcp-select-browser-production';
 const referencePath = path.join(root, 'docs/reference/deepseek-harness-primitives');
 const vcpPath = path.join(root, 'reports/vcp-primitive-geometry.json');
 const harnessPath = path.join(root, 'reports/harness-primitive-geometry.json');
-const outputPath = path.join(root, 'reports/harness-vcp-geometry-diff.json');
+const outputPath = path.join(root, 'reports', interaction === 'focus' ? 'harness-vcp-focus-geometry-diff.json' : 'harness-vcp-geometry-diff.json');
 
 const readJson = async file => {
     try { return JSON.parse(await fs.readFile(file, 'utf8')); }
@@ -20,8 +23,8 @@ const reference = await readJson(path.join(referencePath, 'input.geometry.json')
 const select = await readJson(path.join(referencePath, 'select.geometry.json'));
 const vcp = await readJson(vcpPath);
 const harness = await readJson(harnessPath);
-const harnessSelect = await readJson(path.join(root, 'reports/harness-select-production.json'));
-const vcpSelect = await readJson(path.join(root, 'reports/vcp-select-production.json'));
+const harnessSelect = await readJson(path.join(root, 'reports', `${selectReportStem}.json`));
+const vcpSelect = await readJson(path.join(root, 'reports', `${vcpSelectReportStem}.json`));
 
 // This report deliberately separates a one-sided contract check from a real
 // Harness↔VCP computed-style diff. The latter is pending until a browser capture
@@ -75,21 +78,36 @@ if (harnessSelect && vcpSelect) {
     });
 }
 const selectGeometryPass = selectGeometry.length > 0 && selectGeometry.every(item => item.pass);
+const focusOwner = {
+    harness: harnessSelect?.focusOwner ?? null,
+    vcp: vcpSelect?.focusOwner ?? null,
+    same: Boolean(harnessSelect?.focusOwner?.kind && harnessSelect.focusOwner.kind === vcpSelect?.focusOwner?.kind),
+    reason: !harnessSelect?.focusOwner || !vcpSelect?.focusOwner
+        ? 'one or both focus captures are missing'
+        : harnessSelect.focusOwner.kind === vcpSelect.focusOwner.kind
+            ? null
+            : 'keyboard-open focus owner differs',
+};
+const interactionPass = interaction !== 'focus' || focusOwner.same;
 
 const report = {
     generatedAt: new Date().toISOString(),
     viewport: vcp?.viewport ?? null,
-    status: selectGeometryPass ? 'cross-page-select-geometry-equivalent' : (harness && vcp ? 'cross-page-select-geometry-mismatch' : (vcp ? 'contract-scoped-one-sided-check' : 'pending-vcp-capture')),
-    pass: contract.every(item => item.pass) && selectGeometryPass,
+    status: interaction === 'focus' && !interactionPass
+        ? 'cross-page-select-focus-owner-mismatch'
+        : selectGeometryPass ? 'cross-page-select-geometry-equivalent' : (harness && vcp ? 'cross-page-select-geometry-mismatch' : (vcp ? 'contract-scoped-one-sided-check' : 'pending-vcp-capture')),
+    pass: contract.every(item => item.pass) && selectGeometryPass && interactionPass,
     harnessComputedStyleCapture: { status: harness ? 'available' : 'pending', path: 'reports/harness-primitive-geometry.json' },
     vcpComputedStyleCapture: { status: vcp ? 'available' : 'missing', path: 'reports/vcp-primitive-geometry.json' },
-    semanticFixture: { harness: harnessSelect ? 'agent-preset-selection/Standard mode' : harness?.selector ?? null, vcp: vcpSelect ? 'agent-preset-select/4 options' : vcp?.primitive ?? null, same: Boolean(harnessSelect && vcpSelect && harnessSelect.items?.length === vcpSelect.items?.length), reason: harnessSelect && vcpSelect ? null : 'one or both Select-only captures missing' },
+    semanticFixture: { harness: harnessSelect?.semanticFixture ?? harness?.selector ?? null, vcp: vcpSelect?.semanticFixture ?? vcp?.primitive ?? null, same: Boolean(harnessSelect?.semanticFixture && harnessSelect.semanticFixture === vcpSelect?.semanticFixture), reason: !harnessSelect || !vcpSelect ? 'one or both Select-only captures missing' : harnessSelect.semanticFixture === vcpSelect.semanticFixture ? null : 'fixture identifiers differ' },
+    interaction: interaction === 'focus' ? { state: 'keyboard-open', focusOwner, pass: interactionPass } : null,
     contract,
     selectGeometry,
     missingEvidence: [
         ...(harness ? [] : ['Harness browser computed-style capture']),
         ...(harnessSelect ? [] : ['Harness Select browser computed-style capture']),
         ...(selectGeometryPass ? [] : ['complete cross-page Select geometry diff']),
+        ...(interactionPass ? [] : ['keyboard-open focus ownership equivalence']),
         'screenshot/pixel diff',
     ],
 };
