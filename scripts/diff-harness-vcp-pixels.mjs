@@ -8,6 +8,7 @@ const harnessFile = process.env.HARNESS_SCREENSHOT || path.join(root, 'reports/h
 const vcpFile = process.env.VCP_SCREENSHOT || path.join(root, 'reports/vcp-uiux-primitive-contract.png');
 const output = path.join(root, 'reports/harness-vcp-pixel-diff.json');
 const policy = JSON.parse(await fs.readFile(path.join(root, 'docs/reference/deepseek-harness-primitives/pixel-policy.json'), 'utf8'));
+const geometryReport = JSON.parse(await fs.readFile(path.join(root, 'reports/harness-vcp-geometry-diff.json'), 'utf8').catch(() => '{}'));
 
 function decodePng(buffer) {
     if (buffer.readUInt32BE(0) !== 0x89504e47) throw new Error('not PNG');
@@ -35,6 +36,12 @@ function encodePng(width, height, pixels) {
 
 let report;
 try {
+    if (policy.semanticFixtureRequired && geometryReport.semanticFixture?.same !== true) {
+        report = { generatedAt: new Date().toISOString(), status: 'semantic-fixture-pending', policy, semanticFixture: geometryReport.semanticFixture ?? null, harness: harnessFile, vcp: vcpFile, comparable: false, pass: false, missingEvidence: ['same semantic fixture route'] };
+        await fs.writeFile(output, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+        console.log(`Harness↔VCP pixel diff report written (status=${report.status}; pass=false).`);
+        process.exit(0);
+    }
     const [harnessBuffer, vcpBuffer] = await Promise.all([fs.readFile(harnessFile), fs.readFile(vcpFile)]);
     const harness = decodePng(harnessBuffer); const vcp = decodePng(vcpBuffer);
     const comparable = harness.width === vcp.width && harness.height === vcp.height;
