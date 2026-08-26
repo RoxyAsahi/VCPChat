@@ -90,7 +90,7 @@ try {
     assert.equal(artifactBoundary.value, 'electron-artifact-next');
     const primitiveBoundary = await page.evaluate(() => {
         const host = document.createElement('div');
-        host.innerHTML = '<label id="artifact-field"><span>Density</span><select id="artifact-density"><option>Comfortable</option><option>Compact</option></select></label><input id="artifact-input" value="hello"><div id="artifact-choice"><label><input type="radio" name="artifact-choice" value="a">A</label><label><input type="radio" name="artifact-choice" value="b">B</label></div><div id="artifact-range-field"><input id="artifact-range" type="range" value="32"><output id="artifact-range-output"></output></div><label id="artifact-toggle"><input type="checkbox" checked><span class="slider"></span></label>';
+        host.innerHTML = '<label id="artifact-field"><span>Density</span><select id="artifact-density"><option>Comfortable</option><option>Compact</option></select></label><input id="artifact-input" value="hello"><div id="artifact-choice"><label><input type="radio" name="artifact-choice" value="a">A</label><label><input type="radio" name="artifact-choice" value="b">B</label></div><div id="artifact-range-field"><input id="artifact-range" type="range" value="32"><output id="artifact-range-output"></output></div><label id="artifact-toggle"><input type="checkbox" checked><span class="slider"></span></label><div id="artifact-color-pair"><input id="artifact-color" type="color" value="#3d5a80"><input id="artifact-color-text" type="text" value="#3d5a80"></div>';
         document.body.append(host);
         const disposers = [];
         const scope = {
@@ -110,6 +110,13 @@ try {
         const toggle = host.querySelector('#artifact-toggle input');
         const legacySlider = host.querySelector('#artifact-toggle .slider');
         window.VCPUIUX.mountToggle(toggle, scope);
+        const color = host.querySelector('#artifact-color');
+        const colorText = host.querySelector('#artifact-color-text');
+        window.VCPUIUX.mountColorPair(color, colorText, scope);
+        colorText.value = '#112233';
+        colorText.dispatchEvent(new Event('change', { bubbles: true }));
+        colorText.value = 'invalid';
+        colorText.dispatchEvent(new Event('change', { bubbles: true }));
         range.value = '40';
         range.dispatchEvent(new Event('input', { bubbles: true }));
         const trigger = host.querySelector('.vcp-harness-select-trigger');
@@ -117,13 +124,13 @@ try {
         const item = document.querySelector('.vcp-harness-menu-list [role="menuitem"]');
         const style = item && getComputedStyle(item);
         choice.querySelector('input[value="b"]').click();
-        const result = { trigger: trigger?.getAttribute('aria-haspopup'), menu: document.querySelector('.vcp-harness-menu-list[role="menu"]') !== null, item: item?.getAttribute('role'), minHeight: style?.minHeight, padding: style?.padding, expanded: trigger?.getAttribute('aria-expanded'), inputWrap: input?.parentElement?.className, choiceClass: choice.classList.contains('vcp-uiux-choice'), choiceValue: choice.dataset.value, rangeWrap: range?.parentElement?.className, rangeOutput: rangeOutput?.textContent, toggleWrap: toggle?.parentElement?.className, toggleChecked: toggle?.checked, legacySliderDisplay: legacySlider?.style.display };
+        const result = { trigger: trigger?.getAttribute('aria-haspopup'), menu: document.querySelector('.vcp-harness-menu-list[role="menu"]') !== null, item: item?.getAttribute('role'), minHeight: style?.minHeight, padding: style?.padding, expanded: trigger?.getAttribute('aria-expanded'), inputWrap: input?.parentElement?.className, choiceClass: choice.classList.contains('vcp-uiux-choice'), choiceValue: choice.dataset.value, rangeWrap: range?.parentElement?.className, rangeOutput: rangeOutput?.textContent, toggleWrap: toggle?.parentElement?.className, toggleChecked: toggle?.checked, legacySliderDisplay: legacySlider?.style.display, colorPairWrap: color?.parentElement?.className, colorValue: color?.value, colorText: colorText?.value };
         for (const dispose of disposers.reverse()) dispose();
         result.toggleRestored = toggle?.parentElement?.id === 'artifact-toggle' && legacySlider?.style.display === '';
         host.remove();
         return result;
     });
-    assert.deepEqual(primitiveBoundary, { trigger: 'menu', menu: true, item: 'menuitem', minHeight: '40px', padding: '8px 10px', expanded: 'true', inputWrap: 'vcp-uiux-input-wrap', choiceClass: true, choiceValue: 'b', rangeWrap: 'vcp-uiux-range', rangeOutput: '40px', toggleWrap: 'vcp-uiux-toggle', toggleChecked: true, legacySliderDisplay: 'none', toggleRestored: true }, `generated artifact primitive contract mismatch: ${JSON.stringify(primitiveBoundary)}`);
+    assert.deepEqual(primitiveBoundary, { trigger: 'menu', menu: true, item: 'menuitem', minHeight: '40px', padding: '8px 10px', expanded: 'true', inputWrap: 'vcp-uiux-input-wrap', choiceClass: true, choiceValue: 'b', rangeWrap: 'vcp-uiux-range', rangeOutput: '40px', toggleWrap: 'vcp-uiux-toggle', toggleChecked: true, legacySliderDisplay: 'none', toggleRestored: true, colorPairWrap: 'vcp-uiux-color-pair', colorValue: '#112233', colorText: '#112233' }, `generated artifact primitive contract mismatch: ${JSON.stringify(primitiveBoundary)}`);
     const readBoundary = () => page.evaluate(() => {
         const dock = document.querySelector('.next-ui-account-dock');
         const theme = window.VCPStateChannels?.diagnostics?.().find(item => item.name === 'theme');
