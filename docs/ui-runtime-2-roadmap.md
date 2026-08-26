@@ -204,6 +204,7 @@ evidence: npm run check:uiux; npm run test:uiux; node --test tests/creation-cont
 2026-08-26 renderer-kernel slice：新增 `modules/uiux/runtime/dom-renderer.ts`，提供 scope-owned `mount`、text update 与 keyed insertion/dispose；首次真实 contract test 通过，暂不作为 public runtime API 或通用 Virtual DOM。
 2026-08-26 renderer-kernel update：keyed handle 新增 deterministic `update()`，覆盖 reorder/add/remove 后的节点复用与 owner dispose；`npm run test:uiux` 28/28、generated artifact consistency 通过。kernel 仍仅服务 UIUX 内部真实 consumer。
 2026-08-26 renderer-kernel portal：`DomRenderer` 新增 owner-bound `portal(node, container)`，支持节点迁移、原位置恢复和 dispose；与 keyed update 一起形成 mount/update/keyed/portal/dispose 最小合同，测试 28/28 通过。
+2026-08-26 renderer-kernel listener：新增 scope-owned `listen(target, type, handler)`，dispose 后 listener 不再触发；renderer kernel 最小合同现覆盖 mount/update/keyed/portal/listen/dispose，`npm run test:uiux` 28/28 通过。
 
 2026-08-26 priority recalibration：根据 Harness 等价审计，施工顺序调整为四层门禁：
 1. `reference automation`：reference pack 必须能从固定 viewport 产出 DOM/computed-style/state 快照并生成 diff 报告；

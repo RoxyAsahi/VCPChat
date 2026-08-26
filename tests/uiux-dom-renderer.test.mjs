@@ -16,6 +16,10 @@ test('DomRenderer owns mount, text update, keyed insertion and dispose', async (
         const scope = createUiScope(new LifecycleScope('dom-renderer-test'));
         const renderer = createDomRenderer(scope);
         const root = document.getElementById('root');
+        let clicks = 0;
+        renderer.listen(root, 'click', () => { clicks += 1; });
+        root.dispatchEvent(new dom.window.Event('click'));
+        assert.equal(clicks, 1);
         const text = document.createTextNode('old');
         const release = renderer.mount(root, text);
         const portalNode = document.createElement('div');
@@ -34,5 +38,7 @@ test('DomRenderer owns mount, text update, keyed insertion and dispose', async (
         assert.equal(root.children.length, 1);
         await release();
         await scope.dispose('dom-renderer-complete');
+        root.dispatchEvent(new dom.window.Event('click'));
+        assert.equal(clicks, 1);
     } finally { globalThis.document = previous; dom.window.close(); }
 });
