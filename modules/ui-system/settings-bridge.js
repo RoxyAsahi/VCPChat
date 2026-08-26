@@ -192,12 +192,6 @@ function mountTypedSettingsConsumer(root) {
             ['chatBubbleMaxWidthWideNarrow', 'chatBubbleMaxWidthWideNarrow'],
             ['minChunkBufferSize', 'minChunkBufferSize'],
             ['smoothStreamIntervalMs', 'smoothStreamIntervalMs'],
-            ['appearanceDensity', 'appearanceProfile.density'],
-            ['appearanceRadius', 'appearanceProfile.radius'],
-            ['appearanceTypography', 'appearanceProfile.typography'],
-            ['appearanceFontScale', 'appearanceProfile.fontScale'],
-            ['appearanceContentWidth', 'appearanceProfile.contentWidth'],
-            ['appearanceSurface', 'appearanceProfile.surface'],
             ['chatFontPreset', 'chatFontPreset'],
             ['chatFontCustom', 'chatFontCustom'],
             ['chatCodeFontPreset', 'chatCodeFontPreset'],
@@ -739,6 +733,12 @@ const TYPED_FIELD_DEFINITIONS = Object.freeze({
     showHomeVisualBrand: { path: 'showHomeVisualBrand', kind: 'boolean' },
     showHomeVisualTagline: { path: 'showHomeVisualTagline', kind: 'boolean' },
     homeVisualTagline: { path: 'homeVisualTagline', kind: 'string' },
+    appearanceDensity: { path: 'appearanceProfile.density', kind: 'string' },
+    appearanceRadius: { path: 'appearanceProfile.radius', kind: 'string' },
+    appearanceTypography: { path: 'appearanceProfile.typography', kind: 'string' },
+    appearanceFontScale: { path: 'appearanceProfile.fontScale', kind: 'string' },
+    appearanceContentWidth: { path: 'appearanceProfile.contentWidth', kind: 'string' },
+    appearanceSurface: { path: 'appearanceProfile.surface', kind: 'string' },
     appearanceSidebarRowHeight: { path: 'appearanceProfile.sidebarRowHeight', kind: 'number' },
     appearanceSidebarAvatarSize: { path: 'appearanceProfile.sidebarAvatarSize', kind: 'number' },
     appearanceSidebarRadius: { path: 'appearanceProfile.sidebarRadius', kind: 'string' },
@@ -780,6 +780,12 @@ function mountTypedFieldOwner(root, form) {
         const appearance = settings.appearanceProfile || {};
         const set = (id, value) => { const node = form.querySelector(`#${id}`); if (node && value !== undefined && value !== null) node.value = String(value); };
         const check = (id, value) => { const node = form.querySelector(`#${id}`); if (node) node.checked = Boolean(value); };
+        set('appearanceDensity', appearance.density || 'comfortable');
+        set('appearanceRadius', appearance.radius || 'small');
+        set('appearanceTypography', appearance.typography || 'system');
+        set('appearanceFontScale', appearance.fontScale || 'normal');
+        set('appearanceContentWidth', appearance.contentWidth || 'full');
+        set('appearanceSurface', appearance.surface || 'translucent');
         set('appearanceSidebarRowHeight', appearance.sidebarRowHeight ?? 46);
         set('appearanceSidebarRowHeightValue', `${appearance.sidebarRowHeight ?? 46}px`);
         set('appearanceSidebarAvatarSize', appearance.sidebarAvatarSize ?? 32);
