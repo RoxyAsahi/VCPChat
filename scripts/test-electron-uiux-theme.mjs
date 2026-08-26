@@ -119,10 +119,11 @@ try {
         choice.querySelector('input[value="b"]').click();
         const result = { trigger: trigger?.getAttribute('aria-haspopup'), menu: document.querySelector('.vcp-harness-menu-list[role="menu"]') !== null, item: item?.getAttribute('role'), minHeight: style?.minHeight, padding: style?.padding, expanded: trigger?.getAttribute('aria-expanded'), inputWrap: input?.parentElement?.className, choiceClass: choice.classList.contains('vcp-uiux-choice'), choiceValue: choice.dataset.value, rangeWrap: range?.parentElement?.className, rangeOutput: rangeOutput?.textContent, toggleWrap: toggle?.parentElement?.className, toggleChecked: toggle?.checked, legacySliderDisplay: legacySlider?.style.display };
         for (const dispose of disposers.reverse()) dispose();
+        result.toggleRestored = toggle?.parentElement?.id === 'artifact-toggle' && legacySlider?.style.display === '';
         host.remove();
         return result;
     });
-    assert.deepEqual(primitiveBoundary, { trigger: 'menu', menu: true, item: 'menuitem', minHeight: '40px', padding: '8px 10px', expanded: 'true', inputWrap: 'vcp-uiux-input-wrap', choiceClass: true, choiceValue: 'b', rangeWrap: 'vcp-uiux-range', rangeOutput: '40px', toggleWrap: 'vcp-uiux-toggle', toggleChecked: true, legacySliderDisplay: 'none' }, `generated artifact primitive contract mismatch: ${JSON.stringify(primitiveBoundary)}`);
+    assert.deepEqual(primitiveBoundary, { trigger: 'menu', menu: true, item: 'menuitem', minHeight: '40px', padding: '8px 10px', expanded: 'true', inputWrap: 'vcp-uiux-input-wrap', choiceClass: true, choiceValue: 'b', rangeWrap: 'vcp-uiux-range', rangeOutput: '40px', toggleWrap: 'vcp-uiux-toggle', toggleChecked: true, legacySliderDisplay: 'none', toggleRestored: true }, `generated artifact primitive contract mismatch: ${JSON.stringify(primitiveBoundary)}`);
     const readBoundary = () => page.evaluate(() => {
         const dock = document.querySelector('.next-ui-account-dock');
         const theme = window.VCPStateChannels?.diagnostics?.().find(item => item.name === 'theme');

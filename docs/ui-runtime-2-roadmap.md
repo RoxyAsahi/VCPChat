@@ -18,6 +18,7 @@
 > 2026-08-26：Range 批次 source-equivalence 审计通过（legacy rows/inline styles/selectors 均为 0）。`global-settings-manager.js` 对 range 的读取是持久化命令输入，不属于 presentation projection；启动 fallback 仍按 reload/Classic 等价条件保留。
 > 2026-08-26：`showHomeVisualBrand` 与 `showHomeVisualTagline` 已接入 TS Toggle primitive；native checkbox 保持业务源，legacy `.slider` presentation 在该字段上隐藏并由 owner teardown 恢复。源码 `npm run test:uiux` 24/24、Settings Electron gate 通过。
 > 2026-08-26：generated-only Electron smoke 已覆盖 Toggle artifact 的 checked source、legacy slider 隐藏和 teardown 路径；`node scripts/test-electron-uiux-theme.mjs` 通过。Toggle 双平面证据闭合。
+> 2026-08-26：Toggle generated smoke 进一步断言 dispose 后 native checkbox 回到原始 label、legacy slider display 恢复为空；artifact 可逆性闭合。
 > 2026-08-26：Settings Electron journey 新增 Home Visual Toggle snapshot probe，验证两个 checkbox 可由外部 snapshot false→true 往返恢复，且不触发聊天业务路径；Toggle ownership 证据闭合，旧 startup fallback 仍按兼容边界保留。
 > 2026-08-26：新增 Toggle DOM/geometry reference pack（`toggle.dom.json`、`toggle.geometry.json`），与已通过的 generated-only artifact smoke 对齐。
 > 当前 primitive ledger：Field、Select、Input、Range、Choice、Toggle 均已有 TypeScript Light-DOM 实现；Settings 外观/首页字段已按单一 typed owner 接入，覆盖源码测试、generated artifact smoke、Electron DOM/geometry/interaction、snapshot/reload 与 60-cycle lifecycle stress。R2-02C 仍未 complete：ThemeTokenOwner、剩余未迁移 Settings 字段、Classic fallback 收口和全量 legacy deletion 仍是后续工作；聊天渲染/流式/协议/Plugin Loader 继续冻结。
