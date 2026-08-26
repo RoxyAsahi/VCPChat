@@ -12,9 +12,15 @@ const harnessRoot = '/Users/asahi/Documents/Codex/deepseek-harness'
 const harnessRequire = createRequire(`${harnessRoot}/apps/web/package.json`)
 const { chromium } = harnessRequire('playwright') as { chromium: { launch(): Promise<Browser> } }
 const viewport = { width: 800, height: 600, deviceScaleFactor: 1 }
-const interaction = process.env.VCP_SELECT_MENU_STATE === 'focus' ? 'focus' : 'hover'
-const fixtureState = interaction === 'focus' ? 'open-selected-focus-menu' : 'open-selected-hover-menu'
-const outputStem = interaction === 'focus' ? 'harness-select-menu-focus' : 'harness-select-menu-open'
+const interaction = process.env.VCP_SELECT_MENU_STATE === 'focus' ? 'focus' : process.env.VCP_SELECT_MENU_STATE === 'busy' ? 'busy' : 'hover'
+const fixtureState = interaction === 'focus' ? 'open-selected-focus-menu' : interaction === 'busy' ? 'busy-trigger-disabled' : 'open-selected-hover-menu'
+const outputStem = interaction === 'focus' ? 'harness-select-menu-focus' : interaction === 'busy' ? 'harness-select-trigger-busy' : 'harness-select-menu-open'
+
+type DeferredAgentPresetSelect = {
+  select(request: unknown): Promise<unknown>
+}
+
+let settleBusySelect: (() => Promise<void>) | undefined
 
 async function captureOpenMenu(page: Page) {
   const trigger = page.getByRole('button', { name: 'Standard mode', exact: true })
@@ -70,6 +76,31 @@ async function captureOpenMenu(page: Page) {
   await page.screenshot({ path: join(root, 'reports', `${outputStem}.png`) })
 }
 
+async function captureBusyTrigger(page: Page) {
+  await page.getByRole('button', { name: 'Standard mode', exact: true }).click()
+  const menu = page.getByRole('menu')
+  await menu.waitFor({ timeout: 10_000 })
+  await menu.getByRole('menuitem', { name: /Minimal mode/ }).click()
+  const trigger = page.getByRole('button', { name: 'Minimal mode', exact: true })
+  await page.waitForFunction(() => [...document.querySelectorAll('button')]
+    .some(button => button.textContent?.trim() === 'Minimal mode' && (button as HTMLButtonElement).disabled))
+  const evidence = await trigger.evaluate((element, state) => {
+    const rect = element.getBoundingClientRect()
+    const style = getComputedStyle(element)
+    return {
+      source: 'Harness production web agent-preset seat with delayed host select',
+      semanticFixture: `agent-preset-selection/blank session/Minimal mode/${state}`,
+      state,
+      dom: element.outerHTML,
+      disabled: (element as HTMLButtonElement).disabled,
+      rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+      style: { padding: style.padding, gap: style.gap, border: style.border, borderRadius: style.borderRadius, opacity: style.opacity, cursor: style.cursor },
+    }
+  }, fixtureState)
+  await writeFile(join(root, 'reports', `${outputStem}.json`), `${JSON.stringify({ viewport, ...evidence }, null, 2)}\n`)
+  await page.screenshot({ path: join(root, 'reports', `${outputStem}.png`) })
+}
+
 describe('Harness production Agent Preset Select menu fixture', () => {
   let scaffold: WebScaffold
   let browser: Browser
@@ -85,14 +116,25 @@ describe('Harness production Agent Preset Select menu fixture', () => {
     await page.goto(scaffold.baseUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
     await connectFreshWorkspace(page, scaffold.workspaceCwd)
+    if (interaction === 'busy') {
+      const api = scaffold.ctx.apiProxy.agentPresets as DeferredAgentPresetSelect
+      const original = api.select.bind(api)
+      api.select = request => new Promise((resolve, reject) => {
+        settleBusySelect = async () => {
+          try { resolve(await original(request)) } catch (error) { reject(error) }
+        }
+      })
+    }
   }, 120_000)
 
   afterAll(async () => {
+    await settleBusySelect?.()
     await browser?.close()
     await scaffold?.close()
   })
 
-  it('captures the ready open menu from the production new-session surface', async () => {
-    await captureOpenMenu(page)
+  it('captures the requested production Agent Preset state', async () => {
+    if (interaction === 'busy') await captureBusyTrigger(page)
+    else await captureOpenMenu(page)
   }, 60_000)
 })
