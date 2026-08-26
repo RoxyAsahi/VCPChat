@@ -40,6 +40,7 @@
     "capture:vcp-select-browser-fixture": "node scripts/capture-vcp-select-browser-fixture.mjs",
     "capture:harness-select-focus-fixture": "VCP_SELECT_MENU_STATE=focus npm run capture:harness-select-fixtures",
     "capture:harness-select-busy-fixture": "VCP_SELECT_MENU_STATE=busy npm run capture:harness-select-fixtures",
+    "check:harness-select-busy-evidence": "node scripts/check-harness-select-busy-evidence.mjs",
     "capture:vcp-select-focus-browser-fixture": "VCP_SELECT_MENU_STATE=focus node scripts/capture-vcp-select-browser-fixture.mjs",
     "diff:harness-vcp-select-focus": "VCP_SELECT_MENU_STATE=focus node scripts/diff-harness-vcp-geometry.mjs && VCP_SELECT_MENU_STATE=focus node scripts/diff-harness-vcp-pixels.mjs",
     "capture:harness-select-fixtures": "pnpm --dir /Users/asahi/Documents/Codex/deepseek-harness exec vitest run --config /Users/asahi/Documents/Codex/VCPChat-newarchitecture/scripts/harness-select-trigger-fixture.vitest.config.ts",
