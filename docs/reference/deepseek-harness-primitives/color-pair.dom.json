@@ -1,0 +1,10 @@
+{
+  "primitive": "ColorPair",
+  "source": "VCPChat user-avatar border color pair (color input + text mirror)",
+  "root": { "tag": "span", "class": "vcp-uiux-color-pair" },
+  "children": [
+    { "tag": "input", "type": "color", "native": true, "role": "source" },
+    { "tag": "input", "type": "text", "native": true, "role": "mirror" }
+  ],
+  "states": ["color-input", "text-input", "invalid-text", "focus-within", "dispose-restore"]
+}

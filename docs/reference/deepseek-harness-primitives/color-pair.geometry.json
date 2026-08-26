@@ -1,0 +1,6 @@
+{
+  "primitive": "ColorPair",
+  "root": { "display": "inline-flex", "alignItems": "center", "gap": "6px", "height": "32px" },
+  "colorInput": { "width": "32px", "height": "32px", "padding": "2px", "borderRadius": "8px" },
+  "textMirror": { "height": "32px", "padding": "0 8px", "borderRadius": "8px", "fontSize": "14px", "lineHeight": "22px" }
+}
