@@ -1,0 +1,18 @@
+{
+  "primitive": "Input",
+  "root": {
+    "display": "inline-flex",
+    "alignItems": "center",
+    "gap": "6px",
+    "height": "32px",
+    "padding": "0 8px",
+    "borderRadius": "8px"
+  },
+  "input": {
+    "fontSize": "14px",
+    "lineHeight": "22px",
+    "border": "none",
+    "outline": "none"
+  },
+  "icon": { "width": "16px", "height": "16px" }
+}
