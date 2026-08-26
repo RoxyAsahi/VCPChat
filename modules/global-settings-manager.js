@@ -274,7 +274,8 @@ async function saveGlobalSettings(deps, settingsForm) {
     // 保存论坛配置 (forum.config.json)
     const adminUsername = document.getElementById('adminUsername')?.value?.trim() || '';
     const adminPassword = document.getElementById('adminPassword')?.value || '';
-    if (adminUsername || adminPassword) {
+    const forumFieldOwnerMounted = settingsForm?.dataset.vcpTypedForumFieldOwnerMounted === 'true';
+    if ((adminUsername || adminPassword) && !forumFieldOwnerMounted) {
         try {
             const forumConfig = {
                 username: adminUsername,

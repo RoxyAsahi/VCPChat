@@ -21,6 +21,7 @@ const customSelectStates = new Set();
 const customChoiceStates = new Set();
 const autosaveStates = new Set();
 const typedFieldStates = new Set();
+const typedForumFieldStates = new Set();
 const disclosureStates = new Set();
 const selectObserverStates = new Map();
 let harnessSelectOwnerMounted = false;
@@ -533,6 +534,7 @@ function enhanceGlobalSettings(root, form) {
     mountTypedHomeVisualToggles(root, form);
     mountTypedAvatarColorPair(root, form);
     mountTypedForumInputs(root, form);
+    mountTypedForumFieldOwner(root, form);
     form.querySelectorAll('input[type="range"]').forEach(range => { if (!['appearanceSidebarAvatarSize', 'appearanceSidebarRowHeight', 'appearanceCustomRadius'].includes(range.id)) enhance('Range', range); });
     form.querySelectorAll('label.switch').forEach(control => { if (!control.querySelector('#showHomeVisualBrand, #showHomeVisualTagline')) enhance('Switch', control); });
     form.querySelectorAll('.agent-style-collapsible-container').forEach(disclosure => {
@@ -628,6 +630,63 @@ function mountTypedForumInputs(root, form) {
         scope.own(() => { delete input.dataset.vcpTypedPrimitiveMounted; }, `typed-${id}-marker`, 'ui-primitive');
         if (release) scope.own(release, `typed-${id}-input`, 'ui-primitive');
     });
+}
+
+function mountTypedForumFieldOwner(root, form) {
+    if (!root || !form || form.dataset.vcpTypedForumFieldOwnerMounted === 'true') return;
+    const service = typedSettingsRegistry?.get('forum-config-ui') || ensureForumConfigUiService();
+    if (!service?.save?.execute) return;
+    const controls = ['adminUsername', 'adminPassword'].map(id => form.querySelector(`#${id}`)).filter(Boolean);
+    if (controls.length !== 2) return;
+    const state = { form, timer: null, pending: false, inFlight: null, disposed: false };
+    const status = () => root.querySelector('.vcp-settings-autosave-status');
+    const run = async () => {
+        state.timer = null;
+        if (state.disposed || !state.pending || state.inFlight) return;
+        state.pending = false;
+        const username = form.querySelector('#adminUsername')?.value?.trim() || '';
+        const password = form.querySelector('#adminPassword')?.value || '';
+        state.inFlight = service.save.execute({ username, password, rememberCredentials: true });
+        status()?.setAttribute('data-state', 'saving');
+        if (status()) status().textContent = '保存中…';
+        try {
+            const result = await state.inFlight;
+            if (state.disposed) return;
+            if (!result?.success) {
+                form.dataset.vcpSettingsDirty = 'true';
+                status()?.setAttribute('data-state', 'error');
+                if (status()) status().textContent = '保存失败 · 重试';
+                form.dispatchEvent(new CustomEvent('vcp-settings-save-result', { detail: { success: false, error: result?.error || '论坛配置保存失败', owner: 'typed-forum-field-owner' } }));
+            } else {
+                if (!state.pending) delete form.dataset.vcpSettingsDirty;
+                status()?.setAttribute('data-state', 'saved');
+                if (status()) status().textContent = '已保存';
+                form.dispatchEvent(new CustomEvent('vcp-settings-save-result', { detail: { success: true, owner: 'typed-forum-field-owner' } }));
+            }
+        } finally { state.inFlight = null; if (state.pending) schedule(); }
+    };
+    const schedule = () => {
+        if (state.disposed) return;
+        state.pending = true;
+        form.dataset.vcpSettingsDirty = 'true';
+        status()?.setAttribute('data-state', 'dirty');
+        if (status()) status().textContent = '未保存';
+        if (state.timer) clearTimeout(state.timer);
+        state.timer = setTimeout(run, 400);
+    };
+    const onInput = event => { if (controls.includes(event.target)) schedule(); };
+    controls.forEach(control => control.addEventListener('input', onInput));
+    controls.forEach(control => control.addEventListener('change', onInput));
+    controls.forEach(control => { control.dataset.vcpTypedForumFieldOwner = 'true'; });
+    form.dataset.vcpTypedForumFieldOwnerMounted = 'true';
+    typedForumFieldStates.add(state);
+    ensurePresentationScope()?.own(() => {
+        state.disposed = true;
+        if (state.timer) clearTimeout(state.timer);
+        controls.forEach(control => { control.removeEventListener('input', onInput); control.removeEventListener('change', onInput); delete control.dataset.vcpTypedForumFieldOwner; });
+        typedForumFieldStates.delete(state);
+        delete form.dataset.vcpTypedForumFieldOwnerMounted;
+    }, 'typed-forum-field-owner', 'ui-presentation');
 }
 
 function mountTypedAppearanceSelects(root, form) {
@@ -1029,6 +1088,12 @@ function flushSettingsAutosave() {
         // presentation and close the modal.
         void state.run?.();
     });
+    typedForumFieldStates.forEach(state => {
+        if (state.disposed || !state.pending || state.inFlight) return;
+        if (state.timer) clearTimeout(state.timer);
+        state.timer = null;
+        void state.run?.();
+    });
 }
 
 function teardownSettingsAutosave() {
@@ -1039,6 +1104,11 @@ function teardownSettingsAutosave() {
     [...typedFieldStates].forEach(state => {
         state.cleanups.forEach(cleanup => cleanup());
         typedFieldStates.delete(state);
+    });
+    [...typedForumFieldStates].forEach(state => {
+        state.disposed = true;
+        if (state.timer) clearTimeout(state.timer);
+        typedForumFieldStates.delete(state);
     });
 }
 
