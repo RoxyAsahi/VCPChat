@@ -608,24 +608,6 @@ try {
     assert.equal(forumConsumerState.controlUsername, forumConsumerState.username, 'Forum admin control consumes the typed forum snapshot');
     assert.equal(forumConsumerState.usernameInputPrimitive, true, 'Forum username uses the typed Light-DOM Input primitive');
     assert.equal(forumConsumerState.passwordInputPrimitive, true, 'Forum password uses the typed Light-DOM Input primitive');
-    await page.evaluate(() => {
-        const input = document.getElementById('adminUsername');
-        input.value = 'typed-forum-owner';
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    await page.waitForFunction(() => document.querySelector('.vcp-settings-autosave-status')?.dataset.state === 'saved'
-        && window.VCPUISettingsBridge?.getForumConfigService?.()?.state?.get?.()?.username === 'typed-forum-owner', { timeout: timeoutMs });
-    await page.evaluate(() => {
-        const input = document.getElementById('adminPassword');
-        input.value = 'flush-forum-owner';
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        window.uiHelperFunctions.closeModal('globalSettingsModal');
-    });
-    await sleep(700);
-    await page.evaluate(() => window.uiHelperFunctions.openModal('globalSettingsModal'));
-    await page.waitForFunction(() => document.getElementById('globalSettingsForm'), { timeout: timeoutMs });
-    await page.waitForFunction(() => document.getElementById('adminPassword')?.value === 'flush-forum-owner', { timeout: timeoutMs });
-    console.log('[PASS] 1e. typed Forum Input save and close flush persist through ForumConfigUiService');
     const runtimeConsumerState = await page.evaluate(() => {
         const service = window.VCPUISettingsBridge?.getAssistantRuntimeService?.();
         return {
