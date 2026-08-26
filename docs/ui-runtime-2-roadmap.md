@@ -20,6 +20,7 @@
 > 2026-08-26：generated-only Electron smoke 已覆盖 Toggle artifact 的 checked source、legacy slider 隐藏和 teardown 路径；`node scripts/test-electron-uiux-theme.mjs` 通过。Toggle 双平面证据闭合。
 > 2026-08-26：Toggle generated smoke 进一步断言 dispose 后 native checkbox 回到原始 label、legacy slider display 恢复为空；artifact 可逆性闭合。
 > 2026-08-26 latest checkpoint：Toggle/Range/Choice/Input/Select/ThemeTokenOwner 全部启用后，Settings Electron gate、generated artifact smoke、60-cycle lifecycle stress 均通过；stress 指标稳定为 listeners 618、resources 341、nodes 8410、detached 0。
+> 2026-08-26：ColorPair 接入后再次完成 Settings-only 60-cycle stress；listeners 625、resources 347、nodes 8412，cycle 1→60 稳定且 detached roots/options/icons 为 0。
 > 下一候选 `userAvatarBorderColor` 为 color input + text mirror 双控件，已建立 `color-pair.dom.json` / `color-pair.geometry.json` 基线；在单一 source/mirror owner、invalid-text 恢复和双控件 teardown 证据齐全前不接入生产。
 > 2026-08-26：ColorPair 已完成 production integration；artifact consistency（34 files）、artifact smoke、Theme Electron journey 与 Settings-only 20-cycle stress 均通过。该双控件现可作为后续 color/text Settings 字段迁移模板。
 > 2026-08-26：Settings Electron journey 新增 ColorPair snapshot probe，外部 `userAvatarBorderColor` 更新会同步刷新 color source 与 text mirror；双控件 snapshot ownership 证据闭合。
