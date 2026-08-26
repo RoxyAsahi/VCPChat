@@ -1,0 +1,6 @@
+{
+  "primitive": "Toggle",
+  "root": { "display": "inline-flex", "width": "36px", "height": "20px", "borderRadius": "10px" },
+  "thumb": { "width": "16px", "height": "16px", "translateChecked": "16px" },
+  "focus": { "outline": "2px solid focus-token", "outlineOffset": "2px" }
+}

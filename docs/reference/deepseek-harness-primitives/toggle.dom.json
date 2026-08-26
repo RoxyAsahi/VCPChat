@@ -1,0 +1,7 @@
+{
+  "primitive": "Toggle",
+  "source": "VCPChat Home Visual toggle contract (native checkbox preserved)",
+  "root": { "tag": "span", "class": "vcp-uiux-toggle" },
+  "children": [{ "tag": "input", "type": "checkbox", "native": true }],
+  "states": ["checked", "unchecked", "focus-within", "disabled", "dispose-restore"]
+}

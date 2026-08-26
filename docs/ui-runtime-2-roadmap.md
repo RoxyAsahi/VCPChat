@@ -19,6 +19,7 @@
 > 2026-08-26：`showHomeVisualBrand` 与 `showHomeVisualTagline` 已接入 TS Toggle primitive；native checkbox 保持业务源，legacy `.slider` presentation 在该字段上隐藏并由 owner teardown 恢复。源码 `npm run test:uiux` 24/24、Settings Electron gate 通过。
 > 2026-08-26：generated-only Electron smoke 已覆盖 Toggle artifact 的 checked source、legacy slider 隐藏和 teardown 路径；`node scripts/test-electron-uiux-theme.mjs` 通过。Toggle 双平面证据闭合。
 > 2026-08-26：Settings Electron journey 新增 Home Visual Toggle snapshot probe，验证两个 checkbox 可由外部 snapshot false→true 往返恢复，且不触发聊天业务路径；Toggle ownership 证据闭合，旧 startup fallback 仍按兼容边界保留。
+> 2026-08-26：新增 Toggle DOM/geometry reference pack（`toggle.dom.json`、`toggle.geometry.json`），与已通过的 generated-only artifact smoke 对齐。
 > 2026-08-26：Settings-only 60-cycle lifecycle stress 通过；cycle-1..60 listeners 620、lifecycle resources 337、nodes 8406、detached roots/options/icons 0，确认 Range/Choice/Input 扩展未引入 listener 或 owner 增长。Range 三字段不存在旧 presentation fallback；仅保留 global-settings-manager 持久化读取。
 > 2026-08-26：Classic parity 与 retirement boundary guards 均通过；Range 三字段在旧路径中仅保留 global-settings-manager 的持久化读取和 appearance-studio 的规范化/语义应用，无重复 presentation output 写入。新增 `range.dom.json` / `range.geometry.json` reference contract。
 > 最近证据：`node --test tests/chat-surface.test.mjs tests/chat-surface-slots.test.mjs tests/main-chat-surface-adapter.test.mjs tests/chat-plugin-manifest.test.mjs`（19/19）；`npm run test:electron-main-chat-sequences`（next-main-chat-default，24 actions，25 VCP requests，required 1/1）
