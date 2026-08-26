@@ -12,17 +12,40 @@ const harnessRoot = '/Users/asahi/Documents/Codex/deepseek-harness'
 const harnessRequire = createRequire(`${harnessRoot}/apps/web/package.json`)
 const { chromium } = harnessRequire('playwright') as { chromium: { launch(): Promise<Browser> } }
 const viewport = { width: 800, height: 600, deviceScaleFactor: 1 }
+const interaction = process.env.VCP_SELECT_MENU_STATE === 'focus' ? 'focus' : 'hover'
+const fixtureState = interaction === 'focus' ? 'open-selected-focus-menu' : 'open-selected-hover-menu'
+const outputStem = interaction === 'focus' ? 'harness-select-menu-focus' : 'harness-select-menu-open'
 
 async function captureOpenMenu(page: Page) {
-  await page.getByRole('button', { name: 'Standard mode', exact: true }).click()
+  const trigger = page.getByRole('button', { name: 'Standard mode', exact: true })
+  if (interaction === 'focus') {
+    await trigger.focus()
+    await page.keyboard.press('Enter')
+  } else {
+    await trigger.click()
+  }
   const menu = page.getByRole('menu')
   await menu.waitFor({ timeout: 10_000 })
   const firstMenuItem = menu.getByRole('menuitem').first()
   const firstItemBox = await firstMenuItem.boundingBox()
   if (!firstItemBox) throw new Error('Harness Agent Preset fixture has no measurable first menu item')
-  await page.mouse.move(firstItemBox.x + 20, firstItemBox.y + 20)
-  await page.waitForTimeout(50)
-  const evidence = await menu.evaluate((element) => {
+  if (interaction !== 'focus') {
+    await page.mouse.move(firstItemBox.x + 20, firstItemBox.y + 20)
+    await page.waitForTimeout(50)
+  }
+  const focusOwner = await page.evaluate(async ({ trigger, firstMenuItem }) => {
+    const active = document.activeElement as HTMLElement | null
+    const describe = (kind: 'trigger' | 'menuitem' | 'other') => ({
+      kind,
+      tag: active?.tagName.toLowerCase() ?? null,
+      role: active?.getAttribute('role') ?? null,
+      ariaLabel: active?.getAttribute('aria-label') ?? null,
+    })
+    if (active === trigger) return describe('trigger')
+    if (active === firstMenuItem) return describe('menuitem')
+    return describe('other')
+  }, { trigger: await trigger.elementHandle(), firstMenuItem: await firstMenuItem.elementHandle() })
+  const evidence = await menu.evaluate((element, state) => {
     const rect = (node: Element) => { const value = node.getBoundingClientRect(); return { x: value.x, y: value.y, width: value.width, height: value.height } }
     const menuStyle = getComputedStyle(element)
     const item = (node: Element) => {
@@ -37,14 +60,14 @@ async function captureOpenMenu(page: Page) {
       }
     }
     return {
-      source: 'Harness production web agent-preset seat', semanticFixture: 'agent-preset-selection/ready/Standard mode/open-selected-hover-menu', state: 'open-selected-hover-menu',
+      source: 'Harness production web agent-preset seat', semanticFixture: `agent-preset-selection/ready/Standard mode/${state}`, state,
       dom: element.outerHTML, rect: rect(element),
       style: { padding: menuStyle.padding, borderRadius: menuStyle.borderRadius, minWidth: menuStyle.minWidth, boxShadow: menuStyle.boxShadow, backgroundColor: menuStyle.backgroundColor, borderColor: menuStyle.borderColor, fontFamily: menuStyle.fontFamily },
       items: [...element.querySelectorAll('[role="menuitem"]')].map(item),
     }
-  })
-  await writeFile(join(root, 'reports', 'harness-select-menu-open.json'), `${JSON.stringify({ viewport, ...evidence }, null, 2)}\n`)
-  await page.screenshot({ path: join(root, 'reports', 'harness-select-menu-open.png') })
+  }, fixtureState)
+  await writeFile(join(root, 'reports', `${outputStem}.json`), `${JSON.stringify({ viewport, ...evidence, focusOwner }, null, 2)}\n`)
+  await page.screenshot({ path: join(root, 'reports', `${outputStem}.png`) })
 }
 
 describe('Harness production Agent Preset Select menu fixture', () => {

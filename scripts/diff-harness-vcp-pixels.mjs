@@ -4,13 +4,14 @@ import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const harnessFile = process.env.HARNESS_SCREENSHOT || path.join(root, 'reports/harness-select-menu-open.png');
-const vcpFile = process.env.VCP_SCREENSHOT || path.join(root, 'reports/vcp-select-browser-production.png');
-const output = path.join(root, 'reports/harness-vcp-pixel-diff.json');
+const interaction = process.env.VCP_SELECT_MENU_STATE === 'focus' ? 'focus' : 'hover';
+const harnessFile = process.env.HARNESS_SCREENSHOT || path.join(root, 'reports', interaction === 'focus' ? 'harness-select-menu-focus.png' : 'harness-select-menu-open.png');
+const vcpFile = process.env.VCP_SCREENSHOT || path.join(root, 'reports', interaction === 'focus' ? 'vcp-select-browser-focus.png' : 'vcp-select-browser-production.png');
+const output = path.join(root, 'reports', interaction === 'focus' ? 'harness-vcp-focus-pixel-diff.json' : 'harness-vcp-pixel-diff.json');
 const policy = JSON.parse(await fs.readFile(path.join(root, 'docs/reference/deepseek-harness-primitives/pixel-policy.json'), 'utf8'));
-const geometryReport = JSON.parse(await fs.readFile(path.join(root, 'reports/harness-vcp-geometry-diff.json'), 'utf8').catch(() => '{}'));
-const harnessSelect = JSON.parse(await fs.readFile(path.join(root, 'reports/harness-select-menu-open.json'), 'utf8'));
-const vcpSelect = JSON.parse(await fs.readFile(path.join(root, 'reports/vcp-select-browser-production.json'), 'utf8'));
+const geometryReport = JSON.parse(await fs.readFile(path.join(root, 'reports', interaction === 'focus' ? 'harness-vcp-focus-geometry-diff.json' : 'harness-vcp-geometry-diff.json'), 'utf8').catch(() => '{}'));
+const harnessSelect = JSON.parse(await fs.readFile(path.join(root, 'reports', interaction === 'focus' ? 'harness-select-menu-focus.json' : 'harness-select-menu-open.json'), 'utf8'));
+const vcpSelect = JSON.parse(await fs.readFile(path.join(root, 'reports', interaction === 'focus' ? 'vcp-select-browser-focus.json' : 'vcp-select-browser-production.json'), 'utf8'));
 
 function decodePng(buffer) {
     if (buffer.readUInt32BE(0) !== 0x89504e47) throw new Error('not PNG');
@@ -63,9 +64,11 @@ try {
     const count = comparable ? harness.width * harness.height : 0; let different = 0; let totalDelta = 0; const thresholdCounts = { 0: 0, 2: 0, 4: 0, 8: 0, 16: 0, 32: 0 };
     let diffPixels = null;
     if (comparable) { diffPixels = Buffer.alloc(harness.pixels.length); for (let i = 0; i < harness.pixels.length; i += 4) { const d = Math.max(Math.abs(harness.pixels[i]-vcp.pixels[i]), Math.abs(harness.pixels[i+1]-vcp.pixels[i+1]), Math.abs(harness.pixels[i+2]-vcp.pixels[i+2]), Math.abs(harness.pixels[i+3]-vcp.pixels[i+3])); totalDelta += d; if (d > 0) different++; for (const threshold of Object.keys(thresholdCounts)) if (d > Number(threshold)) thresholdCounts[threshold]++; diffPixels[i] = d > 0 ? 255 : 0; diffPixels[i + 1] = 0; diffPixels[i + 2] = 0; diffPixels[i + 3] = d > 0 ? 255 : 0; } }
-    const diffImage = path.join(root, 'reports/harness-vcp-pixel-diff.png'); if (diffPixels) await fs.writeFile(diffImage, encodePng(harness.width, harness.height, diffPixels));
+    const diffImage = path.join(root, 'reports', interaction === 'focus' ? 'harness-vcp-focus-pixel-diff.png' : 'harness-vcp-pixel-diff.png'); if (diffPixels) await fs.writeFile(diffImage, encodePng(harness.width, harness.height, diffPixels));
     const differingRatio = count ? different / count : null; const meanChannelDelta = count ? totalDelta / count : null;
     const semanticFixture = geometryReport.semanticFixture ?? null;
+    const interactionEvidence = geometryReport.interaction ?? null;
+    const interactionPass = interaction !== 'focus' || interactionEvidence?.pass === true;
     const withinTolerance = comparable && differingRatio <= policy.maxDifferingRatio && meanChannelDelta <= policy.maxMeanChannelDelta;
     report = {
         generatedAt: new Date().toISOString(),
@@ -82,8 +85,9 @@ try {
         meanChannelDelta,
         differingRatioByMaxDelta: Object.fromEntries(Object.entries(thresholdCounts).map(([threshold, value]) => [threshold, count ? value / count : null])),
         diffImage: diffPixels ? diffImage : null,
-        pass: semanticFixture?.same === true && withinTolerance,
-        missingEvidence: semanticFixture?.same !== true ? ['same semantic fixture route'] : !comparable ? ['same comparison dimensions'] : withinTolerance ? [] : ['pixel tolerance'],
+        interaction: interactionEvidence,
+        pass: semanticFixture?.same === true && withinTolerance && interactionPass,
+        missingEvidence: semanticFixture?.same !== true ? ['same semantic fixture route'] : !comparable ? ['same comparison dimensions'] : !interactionPass ? ['keyboard-open focus ownership equivalence'] : withinTolerance ? [] : ['pixel tolerance'],
     };
 } catch (error) { report = { generatedAt: new Date().toISOString(), status: 'pending-missing-or-invalid-input', pass: false, error: error.message, harness: harnessFile, vcp: vcpFile }; }
 await fs.writeFile(output, `${JSON.stringify(report, null, 2)}\n`, 'utf8');

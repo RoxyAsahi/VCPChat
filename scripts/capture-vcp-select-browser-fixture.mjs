@@ -9,6 +9,9 @@ const harnessPnpm = '/Users/asahi/Documents/Codex/deepseek-harness/node_modules/
 const playwrightDir = (await fs.readdir(harnessPnpm)).filter(name => name.startsWith('playwright@')).sort().at(-1);
 assert.ok(playwrightDir, 'Harness Playwright runtime is unavailable');
 const { chromium } = await import(pathToFileURL(path.join(harnessPnpm, playwrightDir, 'node_modules/playwright/index.mjs')).href);
+const interaction = process.env.VCP_SELECT_MENU_STATE === 'focus' ? 'focus' : 'hover';
+const fixtureState = interaction === 'focus' ? 'open-selected-focus-menu' : 'open-selected-hover-menu';
+const outputStem = interaction === 'focus' ? 'vcp-select-browser-focus' : 'vcp-select-browser-production';
 
 const html = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;width:100%;height:100%;background:#fff}body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;color:#0f1115}</style><script type="module" src="/modules/uiux/generated/browser-entry.js"></script></head><body></body></html>`;
 const server = http.createServer(async (request, response) => {
@@ -39,14 +42,22 @@ try {
         return true;
     });
     assert.equal(capture, true);
-    await page.locator('.vcp-harness-select-trigger').click();
+    const trigger = page.locator('.vcp-harness-select-trigger');
+    if (interaction === 'focus') {
+        await trigger.focus();
+        await page.keyboard.press('Enter');
+    } else {
+        await trigger.click();
+    }
     const menu = page.locator('#vcp-browser-select-menu');
     await menu.waitFor();
     const firstMenuItem = menu.getByRole('menuitem').first();
     const firstItemBox = await firstMenuItem.boundingBox();
     assert.ok(firstItemBox, 'VCP Select fixture has no measurable first menu item');
-    await page.mouse.move(firstItemBox.x + 20, firstItemBox.y + 20);
-    await page.waitForTimeout(50);
+    if (interaction !== 'focus') {
+        await page.mouse.move(firstItemBox.x + 20, firstItemBox.y + 20);
+        await page.waitForTimeout(50);
+    }
     const evidence = await menu.evaluate(element => {
         const rect = element.getBoundingClientRect();
         const computed = getComputedStyle(element);
@@ -54,12 +65,19 @@ try {
             const style = getComputedStyle(item); const name = getComputedStyle(item.querySelector('.vcp-harness-menu-item-name')); const description = getComputedStyle(item.querySelector('.vcp-harness-menu-item-description')); const r = item.getBoundingClientRect();
             return { tag: item.tagName.toLowerCase(), class: item.className, role: item.getAttribute('role'), rect: { x: r.x, y: r.y, width: r.width, height: r.height }, style: { display: style.display, minHeight: style.minHeight, padding: style.padding, gap: style.gap, borderRadius: style.borderRadius, fontFamily: style.fontFamily, fontWeight: style.fontWeight, fontSize: style.fontSize, lineHeight: style.lineHeight, color: style.color, backgroundColor: style.backgroundColor }, nameStyle: { fontFamily: name.fontFamily, fontWeight: name.fontWeight, fontSize: name.fontSize, lineHeight: name.lineHeight, color: name.color }, descriptionStyle: { fontFamily: description.fontFamily, fontWeight: description.fontWeight, fontSize: description.fontSize, lineHeight: description.lineHeight, color: description.color } };
         });
-        return { status: 'captured', dom: element.outerHTML, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }, style: { padding: computed.padding, borderRadius: computed.borderRadius, minWidth: computed.minWidth, boxShadow: computed.boxShadow }, items };
+        const active = document.activeElement;
+        const trigger = document.querySelector(`[aria-controls="${element.id}"]`);
+        const focusOwner = active === trigger
+            ? { kind: 'trigger', tag: active?.tagName.toLowerCase() ?? null, role: active?.getAttribute('role') ?? null, ariaLabel: active?.getAttribute('aria-label') ?? null }
+            : active && element.contains(active) && active.getAttribute('role') === 'menuitem'
+                ? { kind: 'menuitem', tag: active.tagName.toLowerCase(), role: active.getAttribute('role'), ariaLabel: active.getAttribute('aria-label') }
+                : { kind: 'other', tag: active?.tagName.toLowerCase() ?? null, role: active?.getAttribute('role') ?? null, ariaLabel: active?.getAttribute('aria-label') ?? null };
+        return { status: 'captured', dom: element.outerHTML, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }, style: { padding: computed.padding, borderRadius: computed.borderRadius, minWidth: computed.minWidth, boxShadow: computed.boxShadow }, items, focusOwner };
     });
     assert.equal(evidence.items.length, 4);
     await fs.mkdir(path.join(root, 'reports'), { recursive: true });
-    await fs.writeFile(path.join(root, 'reports/vcp-select-browser-production.json'), `${JSON.stringify({ source: 'VCP generated artifact Playwright fixture', semanticFixture: 'agent-preset-selection/ready/Standard mode/open-selected-hover-menu', state: 'open-selected-hover-menu', viewport: { width: 800, height: 600, deviceScaleFactor: 1 }, ...evidence }, null, 2)}\n`);
-    await page.screenshot({ path: path.join(root, 'reports/vcp-select-browser-production.png') });
+    await fs.writeFile(path.join(root, 'reports', `${outputStem}.json`), `${JSON.stringify({ source: 'VCP generated artifact Playwright fixture', semanticFixture: `agent-preset-selection/ready/Standard mode/${fixtureState}`, state: fixtureState, viewport: { width: 800, height: 600, deviceScaleFactor: 1 }, ...evidence }, null, 2)}\n`);
+    await page.screenshot({ path: path.join(root, 'reports', `${outputStem}.png`) });
     console.log(`VCP browser Select fixture captured (${evidence.items.length} menuitems).`);
 } finally {
     await browser.close();
