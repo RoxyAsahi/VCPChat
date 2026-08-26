@@ -554,6 +554,7 @@ try {
     assert.equal(await page.$eval('#chatFontPreset', node => node.value), 'serif', 'clean select control consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceDensity', node => node.value), 'compact', 'clean appearance density consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceRadius', node => node.value), 'round', 'clean appearance radius consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#appearanceSidebarRadiusChoice-round', node => node.checked), true, 'clean sidebar radius Choice consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceTypography', node => node.value), 'humanist', 'clean appearance typography consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceFontScale', node => node.value), 'large', 'clean appearance scale consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceContentWidth', node => node.value), 'centered', 'clean appearance width consumes typed Settings snapshot');
