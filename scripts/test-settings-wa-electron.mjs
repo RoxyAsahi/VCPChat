@@ -287,6 +287,9 @@ try {
     for (const id of ['appearanceSidebarRowHeight', 'appearanceCustomRadius']) {
         assert.equal(await page.$eval(`#${id}`, node => node.parentElement?.classList.contains('vcp-uiux-range')), true, `typed ${id} Range is mounted`);
     }
+    for (const id of ['showHomeVisualBrand', 'showHomeVisualTagline']) {
+        assert.equal(await page.$eval(`#${id}`, node => node.parentElement?.classList.contains('vcp-uiux-toggle')), true, `typed ${id} Toggle is mounted`);
+    }
     const choiceEvidence = await page.evaluate(() => {
         const group = document.querySelector('.appearance-radius-choice-grid');
         const options = [...(group?.querySelectorAll('label') || [])];

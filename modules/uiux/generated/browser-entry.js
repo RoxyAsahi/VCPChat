@@ -11,6 +11,7 @@ import { mountSelect } from './primitives/select.js';
 import { mountInput } from './primitives/input.js';
 import { mountChoice } from './primitives/choice.js';
 import { mountRange } from './primitives/range.js';
+import { mountToggle } from './primitives/toggle.js';
 const api = {
     mountThemePresenterFromScope(root, theme, legacyScope) {
         const scope = createUiScope(legacyScope);
@@ -32,6 +33,7 @@ const api = {
     mountInput,
     mountChoice,
     mountRange,
+    mountToggle,
 };
 Object.defineProperty(globalThis, 'VCPUIUX', {
     value: Object.freeze(api),
