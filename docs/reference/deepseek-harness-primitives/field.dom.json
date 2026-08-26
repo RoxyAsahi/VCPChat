@@ -1,0 +1,5 @@
+{
+  "source": "Harness settings field consumers; exact source selected per vertical slice",
+  "status": "candidate-reference",
+  "contract": { "required": ["label", "control", "description?", "error?"], "lightDom": true, "aria": ["label-for", "describedby", "invalid"] }
+}

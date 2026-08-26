@@ -192,16 +192,6 @@ function mountTypedSettingsConsumer(root) {
             ['chatBubbleMaxWidthWideNarrow', 'chatBubbleMaxWidthWideNarrow'],
             ['minChunkBufferSize', 'minChunkBufferSize'],
             ['smoothStreamIntervalMs', 'smoothStreamIntervalMs'],
-            ['showHomeVisualBrand', 'showHomeVisualBrand', 'checked'],
-            ['homeVisualTagline', 'homeVisualTagline'],
-            ['appearanceDensity', 'appearanceProfile.density'],
-            ['appearanceRadius', 'appearanceProfile.radius'],
-            ['appearanceTypography', 'appearanceProfile.typography'],
-            ['appearanceFontScale', 'appearanceProfile.fontScale'],
-            ['appearanceContentWidth', 'appearanceProfile.contentWidth'],
-            ['appearanceSurface', 'appearanceProfile.surface'],
-            ['appearanceCustomRadius', 'appearanceProfile.customRadius'],
-            ['appearanceCustomRadiusValue', 'appearanceProfile.customRadius', 'px-output'],
             ['chatFontPreset', 'chatFontPreset'],
             ['chatFontCustom', 'chatFontCustom'],
             ['chatCodeFontPreset', 'chatCodeFontPreset'],
@@ -740,10 +730,19 @@ function mountSettingsAutosave(root, form) {
 // use the canonical business nodes and persisted keys, but no longer enter
 // the legacy form-submit/autosave chain.
 const TYPED_FIELD_DEFINITIONS = Object.freeze({
+    showHomeVisualBrand: { path: 'showHomeVisualBrand', kind: 'boolean' },
     showHomeVisualTagline: { path: 'showHomeVisualTagline', kind: 'boolean' },
+    homeVisualTagline: { path: 'homeVisualTagline', kind: 'string' },
+    appearanceDensity: { path: 'appearanceProfile.density', kind: 'string' },
+    appearanceRadius: { path: 'appearanceProfile.radius', kind: 'string' },
+    appearanceTypography: { path: 'appearanceProfile.typography', kind: 'string' },
+    appearanceFontScale: { path: 'appearanceProfile.fontScale', kind: 'string' },
+    appearanceContentWidth: { path: 'appearanceProfile.contentWidth', kind: 'string' },
+    appearanceSurface: { path: 'appearanceProfile.surface', kind: 'string' },
     appearanceSidebarRowHeight: { path: 'appearanceProfile.sidebarRowHeight', kind: 'number' },
     appearanceSidebarAvatarSize: { path: 'appearanceProfile.sidebarAvatarSize', kind: 'number' },
     appearanceSidebarRadius: { path: 'appearanceProfile.sidebarRadius', kind: 'string' },
+    appearanceCustomRadius: { path: 'appearanceProfile.customRadius', kind: 'number' },
     'appearanceSidebarRadiusChoice-tuned': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'tuned' },
     'appearanceSidebarRadiusChoice-follow': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'follow' },
     'appearanceSidebarRadiusChoice-square': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'square' },
@@ -781,15 +780,25 @@ function mountTypedFieldOwner(root, form) {
         const appearance = settings.appearanceProfile || {};
         const set = (id, value) => { const node = form.querySelector(`#${id}`); if (node && value !== undefined && value !== null) node.value = String(value); };
         const check = (id, value) => { const node = form.querySelector(`#${id}`); if (node) node.checked = Boolean(value); };
+        set('appearanceDensity', appearance.density || 'comfortable');
+        set('appearanceRadius', appearance.radius || 'small');
+        set('appearanceTypography', appearance.typography || 'system');
+        set('appearanceFontScale', appearance.fontScale || 'normal');
+        set('appearanceContentWidth', appearance.contentWidth || 'full');
+        set('appearanceSurface', appearance.surface || 'translucent');
         set('appearanceSidebarRowHeight', appearance.sidebarRowHeight ?? 46);
         set('appearanceSidebarRowHeightValue', `${appearance.sidebarRowHeight ?? 46}px`);
         set('appearanceSidebarAvatarSize', appearance.sidebarAvatarSize ?? 32);
         set('appearanceSidebarAvatarSizeValue', `${appearance.sidebarAvatarSize ?? 32}px`);
         set('appearanceSidebarRadius', appearance.sidebarRadius || 'tuned');
+        set('appearanceCustomRadius', appearance.customRadius ?? 10);
+        set('appearanceCustomRadiusValue', `${appearance.customRadius ?? 10}px`);
         const radius = appearance.sidebarRadius || 'tuned';
         Object.keys(TYPED_FIELD_DEFINITIONS).filter(id => id.startsWith('appearanceSidebarRadiusChoice-'))
             .forEach(id => check(id, id === `appearanceSidebarRadiusChoice-${radius}`));
+        check('showHomeVisualBrand', settings.showHomeVisualBrand !== false);
         check('showHomeVisualTagline', settings.showHomeVisualTagline !== false);
+        set('homeVisualTagline', settings.homeVisualTagline || '语义级打穿 AI、UI/UX、APP 与人类想象力的边界');
     };
     const status = () => root.querySelector('.vcp-settings-autosave-status');
     const publish = (success, error = '') => {

@@ -1,0 +1,15 @@
+{
+  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-settings-general/src/client/SettingsRoot.tsx",
+  "reference": "SettingsRoot / SettingsPanel",
+  "contract": {
+    "trigger": { "tag": "button", "type": "button", "aria-haspopup": "dialog", "aria-expanded": "boolean" },
+    "overlay": { "tag": "div", "role": "presentation", "children": ["mask", "panel"] },
+    "panel": { "tag": "div", "role": "dialog", "aria-modal": "true", "children": ["nav", "content"] },
+    "nav": { "children": ["navTitle", "navList"] },
+    "navList": { "children": ["navCell*"] },
+    "navCell": { "tag": "button", "type": "button", "aria-current": "true|absent" },
+    "content": { "children": ["header", "options"] },
+    "close": { "tag": "button", "type": "button", "hiddenLabel": true },
+    "options": { "children": ["active section"] }
+  }
+}

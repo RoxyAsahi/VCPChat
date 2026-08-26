@@ -1,0 +1,5 @@
+{
+  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/Menu.module.css",
+  "selectors": { ".list": { "padding": "4px", "borderRadius": "12px" }, ".item": { "minHeight": "40px", "padding": "8px 10px", "borderRadius": "10px" }, ".separator": { "height": "1px", "margin": "4px 2px" } },
+  "states": ["default", "hover", "focus", "disabled", "selected", "danger", "submenu-open"]
+}

@@ -1,0 +1,6 @@
+{
+  "source": "Harness field CSS must be pinned when Field vertical slice is selected",
+  "status": "candidate-reference",
+  "selectors": {},
+  "states": ["default", "hover", "focus", "disabled", "error"]
+}

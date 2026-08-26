@@ -150,13 +150,13 @@ DOM、Web Components、原生 Electron View
 ```yaml
 batch: R2-02C
 mode: target
-focus: settings-single-owner-migration
+focus: harness-reference-pack-and-first-primitive-vertical-slice
 status: active
 production_consumer: global SettingsRoot + Appearance Studio
 consumer_kind: internal production consumer; typed adapter migration slice
 first_slice: existing settings capability boundary + modules/uiux/adapters/settings.ts
 completed_slice: semantic token projection + scope-owned SettingsUiService/RustAssistantUiService assembly + typed SettingsRoot observation, failure/retry/timeout/late-result/teardown evidence
-next_slice: migrate a bounded appearance/workspace field group to one SettingsUiService draft/save owner, then retire matching legacy bridge presentation paths
+next_slice: build Harness reference pack, then implement one Light-DOM Field/Select primitive vertical slice; pause broad field migration until four-layer equivalence evidence exists
 blocked_by: UI Apps smoke 的 dynamic-wallpaper disabled-manifest readiness（不阻塞 Settings Surface contract）
 excluded: chat-message-internals, plugin-loader, child-page-migration, generic-vdom-before-consumer
 last_verified: 2026-08-25
@@ -290,8 +290,13 @@ const owned = slots.mount('chat.composer.leading', host, snapshot, { scope });
 ## 8. 当前下一步
 
 1. R2-02C 首先生成完整 Settings 字段 ownership report；每项必须列出 persisted key、DOM id/name、读写 owner、dirty/save/retry owner、legacy path、删除条件与验收证据。
-2. 首批已迁移 `appearanceProfile.sidebarRowHeight`、`appearanceProfile.sidebarAvatarSize`、`appearanceProfile.sidebarRadius` 与 `showHomeVisualTagline`：真实控件从 `SettingsUiService.state` 读取、由 `save.execute` 提交，draft/dirty/close flush 由 typed field owner 收束；通用 typed projection 已删除。仍需补齐 reload/Classic 等价证据后删除 `mainChatSettingsPresentationOwner.js` 中的兼容 fallback。
-3. 新 Settings primitive 必须遵循上位规范的 Harness-compatible renderer：Light DOM 同构、来源映射、interaction/lifecycle owner，以及 DOM/geometry/sequence/screenshot 四层门禁。它不成为独立设计系统，也不先实现泛化 Virtual DOM。
+2. 已暂停扩大字段迁移。首批 Appearance/Home/Radius typed owner 保持 active，但不再新增字段，直到 Harness reference pack 与首个 Field/Select vertical slice 完成。
+   2026-08-26 增量：`showHomeVisualBrand` 与 `homeVisualTagline` 已加入同一 owner，通用 projection 重复写入已删除；Settings Electron failure/retry/reload/teardown 与 60-cycle listener-stable 证据通过。
+   同日增量：`appearanceProfile.customRadius` 与 px output 纳入同一 owner，圆角 draft 合并路径完整化；chat/message renderer 仍未触碰。
+   Appearance select group 同步纳入 typed owner（density/radius/typography/fontScale/contentWidth/surface），Settings Electron gate 通过；兼容 fallback 退役仍待 reload/Classic 等价证据。
+   Legacy projection retirement 同步完成：`mainChatSettingsPresentationOwner.js` 中上述 Appearance/Home/Radius 的 19 行 safeSet/safeCheck 已删除；Settings Electron/source/unified/UIUX gates 通过。该 owner 仍保留其他未迁移字段，因此 R2-02C 不标 complete。
+3. 建立 `docs/reference/deepseek-harness-primitives/`，登记 Harness 生产源码的 DOM、geometry、状态和 CSS 来源；无 reference pack 的 primitive 只能保持 candidate。
+4. 只实现一个真实 Light-DOM `Field + Select` primitive，接入 SettingsRoot，并通过 DOM nesting、computed geometry、interaction sequence、Electron screenshot 四层等价门禁；provider 服从 primitive contract。
 4. R2-02C 关闭后，才把 R2-03 从 snapshot projection 推进到 document-level single ThemeTokenOwner，并记录/逐步删除 legacy theme reads。当前 R2-02C 的 Settings-only listener attribution 已通过；字段兼容 fallback 退役仍未完成。
 5. R2-08 已进入 scoped-service-assembly-active：`modules/uiux/package.json` 建立局部 ESM boundary；scope-owned `UiServiceRegistry` 已由 Settings 生产 bridge 安装并被 SettingsRoot consumer 读取；artifact gate 以临时干净目录重建并逐字节校验 generated JS/d.ts 文件，Node artifact smoke 与 `npm run test:electron-uiux:artifacts` 均实际加载 generated Settings adapter 并执行 save/subscribe/release/dispose contract。runtime 仍委托 legacy `LifecycleScope`，且缺完整 packaged artifact/跨平台证据，因此不声明 public runtime ready。
 6. 保持 R2-00/R2-01 的能力由真实 consumer 驱动，不开放任意 selector/HTML 注入，也不创建第二套生命周期或 durable UI Store；Plugin Loader 与 chat plugin protocol 保持冻结。

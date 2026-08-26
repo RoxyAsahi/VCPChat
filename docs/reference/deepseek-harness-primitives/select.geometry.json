@@ -1,0 +1,9 @@
+{
+  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/Menu.module.css",
+  "selectors": {
+    ".list": { "minWidth": "218px", "padding": "4px", "borderRadius": "12px" },
+    ".item": { "minHeight": "40px", "padding": "8px 10px", "gap": "8px", "borderRadius": "10px", "fontSize": "14px", "lineHeight": "22px" },
+    ".compactList .item": { "minHeight": "26px", "padding": "3px 7px", "borderRadius": "5px", "fontSize": "12px", "lineHeight": "18px" }
+  },
+  "states": ["closed", "open", "hover", "focus", "disabled", "selected", "outside-dismissed", "escape-dismissed", "destroyed"]
+}

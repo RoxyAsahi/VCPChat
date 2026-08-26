@@ -1,0 +1,12 @@
+{
+  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/Menu.tsx",
+  "reference": "Menu used as Select popup contract",
+  "contract": {
+    "anchor": { "tag": "span", "class": "root" },
+    "list": { "tag": "div", "class": "list|portal", "children": ["viewport"] },
+    "viewport": { "class": "viewport", "children": ["itemWrap*"] },
+    "item": { "tag": "button", "type": "button", "class": "item", "disabled": "native", "selected": "check marker" },
+    "dismiss": ["outside pointer", "Escape"],
+    "keyboard": ["ArrowUp", "ArrowDown", "Home", "End", "Enter", "Space"]
+  }
+}
