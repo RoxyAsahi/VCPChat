@@ -198,8 +198,6 @@ function mountTypedSettingsConsumer(root) {
             ['appearanceFontScale', 'appearanceProfile.fontScale'],
             ['appearanceContentWidth', 'appearanceProfile.contentWidth'],
             ['appearanceSurface', 'appearanceProfile.surface'],
-            ['appearanceCustomRadius', 'appearanceProfile.customRadius'],
-            ['appearanceCustomRadiusValue', 'appearanceProfile.customRadius', 'px-output'],
             ['chatFontPreset', 'chatFontPreset'],
             ['chatFontCustom', 'chatFontCustom'],
             ['chatCodeFontPreset', 'chatCodeFontPreset'],
@@ -744,6 +742,7 @@ const TYPED_FIELD_DEFINITIONS = Object.freeze({
     appearanceSidebarRowHeight: { path: 'appearanceProfile.sidebarRowHeight', kind: 'number' },
     appearanceSidebarAvatarSize: { path: 'appearanceProfile.sidebarAvatarSize', kind: 'number' },
     appearanceSidebarRadius: { path: 'appearanceProfile.sidebarRadius', kind: 'string' },
+    appearanceCustomRadius: { path: 'appearanceProfile.customRadius', kind: 'number' },
     'appearanceSidebarRadiusChoice-tuned': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'tuned' },
     'appearanceSidebarRadiusChoice-follow': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'follow' },
     'appearanceSidebarRadiusChoice-square': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'square' },
@@ -786,6 +785,8 @@ function mountTypedFieldOwner(root, form) {
         set('appearanceSidebarAvatarSize', appearance.sidebarAvatarSize ?? 32);
         set('appearanceSidebarAvatarSizeValue', `${appearance.sidebarAvatarSize ?? 32}px`);
         set('appearanceSidebarRadius', appearance.sidebarRadius || 'tuned');
+        set('appearanceCustomRadius', appearance.customRadius ?? 10);
+        set('appearanceCustomRadiusValue', `${appearance.customRadius ?? 10}px`);
         const radius = appearance.sidebarRadius || 'tuned';
         Object.keys(TYPED_FIELD_DEFINITIONS).filter(id => id.startsWith('appearanceSidebarRadiusChoice-'))
             .forEach(id => check(id, id === `appearanceSidebarRadiusChoice-${radius}`));

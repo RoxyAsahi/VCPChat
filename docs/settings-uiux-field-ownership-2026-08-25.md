@@ -84,6 +84,8 @@
 
 Home visual 扩展（2026-08-26）：`showHomeVisualBrand`、`showHomeVisualTagline` 与 `homeVisualTagline` 也已加入同一 typed field owner；通用 projection 不再重复写入，业务 key 与首页视觉行为保持不变。该扩展仍保留 `mainChatSettingsPresentationOwner.js` 的未接管 fallback，待独立 reload/Classic 等价证据后删除。
 
+Radius group 扩展（2026-08-26）：`appearanceProfile.customRadius` 与其 px output 已加入同一 typed field owner；sidebar radius choice 与 custom value 现在共享一个 `appearanceProfile` draft 合并路径，避免两个 legacy projection 分别覆盖圆角设置。
+
 仍未 complete：`mainChatSettingsPresentationOwner.js` 中的启动兼容 fallback 尚未删除，需要单独的 reload/Classic/upstream 等价证据后再退役。
 
 2026-08-26 lifecycle 修复：`mountHarnessDisclosures()` 的幂等判断已改为按 container 查找 state record；此前错误使用 `Set.has(container)` 导致每次 refresh 重复注册 header click/keydown。Settings-only listener attribution 从 `589 → 597 → 601` 修复为 `585 → 585 → 585`，managed lifecycle 资源、DOM 和 detached-node 指标保持稳定。该修复属于 shared Settings primitive lifecycle，不改变任何 persisted key、IPC 或业务行为。
