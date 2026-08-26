@@ -283,6 +283,8 @@ try {
         assert.equal(await page.$eval(`#${id}`, node => Boolean(node.closest('.vcp-harness-field')?.querySelector('.vcp-harness-select-trigger'))), true, `typed ${id} Select is mounted`);
     }
     assert.equal(await page.$eval('#homeVisualTagline', node => node.parentElement?.classList.contains('vcp-uiux-input-wrap')), true, 'typed Home tagline Input is mounted');
+    assert.equal(await page.$eval('#userAvatarBorderColor', node => node.parentElement?.classList.contains('vcp-uiux-color-pair')), true, 'typed avatar color pair is mounted');
+    assert.equal(await page.$eval('#userAvatarBorderColorText', node => node.value === node.previousElementSibling?.value), true, 'avatar color mirror follows native source');
     assert.equal(await page.$eval('#appearanceSidebarAvatarSize', node => node.parentElement?.classList.contains('vcp-uiux-range')), true, 'typed avatar Range is mounted');
     for (const id of ['appearanceSidebarRowHeight', 'appearanceCustomRadius']) {
         assert.equal(await page.$eval(`#${id}`, node => node.parentElement?.classList.contains('vcp-uiux-range')), true, `typed ${id} Range is mounted`);
