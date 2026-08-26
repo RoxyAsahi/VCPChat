@@ -23,13 +23,20 @@ const cases = [
   ['select.selected', 'select.selected.dom.html'],
   ['select.disabled', 'select.disabled.dom.html'],
   ['field.error', 'field.error.dom.html'],
+  ['field.description', 'field.description.dom.html'],
 ];
 const results = [];
 for (const [name, file] of cases) {
-  const harness = shape(primitiveRoot(name, parse(path.join(fixtureRoot, 'harness', file))));
-  const vcp = shape(primitiveRoot(name, parse(path.join(fixtureRoot, 'vcp', file))));
-  results.push({ case: name, pass: JSON.stringify(harness) === JSON.stringify(vcp), harness, vcp });
+  const harnessFile = path.join(fixtureRoot, 'harness', file);
+  const vcpFile = path.join(fixtureRoot, 'vcp', file);
+  if (!fs.existsSync(harnessFile) || !fs.existsSync(vcpFile)) {
+    results.push({ case: name, status: 'pending', pass: false, missing: [!fs.existsSync(harnessFile) ? 'harness' : null, !fs.existsSync(vcpFile) ? 'vcp' : null].filter(Boolean) });
+    continue;
+  }
+  const harness = shape(primitiveRoot(name, parse(harnessFile)));
+  const vcp = shape(primitiveRoot(name, parse(vcpFile)));
+  results.push({ case: name, status: 'compared', pass: JSON.stringify(harness) === JSON.stringify(vcp), harness, vcp });
 }
-const report = { generatedAt: new Date().toISOString(), cases: results, pass: results.every(result => result.pass) };
+const report = { generatedAt: new Date().toISOString(), cases: results, compared: results.filter(result => result.status === 'compared').length, pending: results.filter(result => result.status === 'pending').length, pass: results.every(result => result.pass) };
 fs.writeFileSync(path.join(reportDir, 'harness-vcp-dom-diff.json'), JSON.stringify(report, null, 2) + '\n', 'utf8');
 console.log(`Harness↔VCP DOM diff report written (${results.filter(result => result.pass).length}/${results.length} cases structurally equal; pass=${report.pass}).`);

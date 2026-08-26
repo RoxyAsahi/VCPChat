@@ -5,7 +5,7 @@
 > 适用目录：`/Users/asahi/Documents/Codex/VCPChat-newarchitecture`  
 > 对照对象：本机 `deepseek-harness` 的 Client UI / Slot / Theme / lifecycle 机制
 > 上位规范：[vcpchat-harness-uiux-architecture.md](/Users/asahi/Documents/Codex/VCPChat-newarchitecture/docs/vcpchat-harness-uiux-architecture.md)；本文件只负责执行顺序、consumer、证据与删除账本
-> 最近核验：2026-08-26；R2-00 Composer slice 已达到 complete；R2-01 Overlay/notification slice 已闭合；R2-03 为 semantic-token-projection-active；R2-08 为 scoped-service-assembly-active（仍委托 legacy LifecycleScope，public API 未就绪）；R2-02 为 typed-production-consumer-active（legacy bridge、Classic fallback 与完整 stress 证据仍未闭合）。目标模式本轮收窄为可测量的 Harness 等价链：`reference pack → 单个 Light-DOM primitive → SettingsRoot 真实 consumer → DOM/geometry/interaction/screenshot/artifact 证据 → 删除对应 legacy presentation`。当前 active slice：R2-02C `harness-reference-pack-and-first-primitive-vertical-slice`；已接入的 primitives 只算迁移期 production slices，不代表完整 renderer 或 pixel-level equivalence 已完成。
+> 最近核验：2026-08-26；R2-00 Composer slice 已达到 complete（仅指已登记的 `mainChatComposition`/standalone history consumers）；R2-01 Overlay/notification slice 已闭合；R2-03 为 semantic-token-projection-active；R2-08 为 scoped-service-assembly-active（仍委托 legacy LifecycleScope，public API 未就绪）；R2-02 为 typed-production-consumer-active（legacy bridge、Classic fallback 与完整 stress 证据仍未闭合）。目标模式本轮收窄为可测量的 Harness 等价链：`reference pack → 单个 Light-DOM primitive → SettingsRoot 真实 consumer → DOM structural diff → geometry/computed-style diff → screenshot/pixel diff → 删除对应 legacy presentation`；当前只闭合了 DOM structural 子层，后四层仍未完成。当前 active slice：R2-02C `harness-reference-pack-and-first-primitive-vertical-slice`；已接入的 primitives 只算迁移期 production slices，不代表完整 renderer 或 pixel-level equivalence 已完成。
 > 本轮补充 Harness `Input` reference pack（DOM/geometry），作为下一批 range/choice 之前的 CSS/DOM 基线；尚未将 Input 或 Range 宣布为生产 primitive。
 > 2026-08-26：`homeVisualTagline` 已接入 TS Light-DOM Input primitive，保留 native input 与 SettingsUiService 业务链；源码 `npm run test:uiux` 21/21、Settings Electron gate 通过。该字段 legacy input wrapper 已跳过，待 artifact-only Input smoke 与完整 screenshot geometry 证据后再扩大迁移。
 > 2026-08-26：generated-only Electron smoke 已覆盖 Input primitive（`vcp-uiux-input-wrap`）的产物加载与 teardown 路径；`node scripts/test-electron-uiux-theme.mjs` 通过。
@@ -26,7 +26,7 @@
 > 2026-08-26：Settings Electron journey 新增 ColorPair snapshot probe，外部 `userAvatarBorderColor` 更新会同步刷新 color source 与 text mirror；双控件 snapshot ownership 证据闭合。
 > 2026-08-26：Settings Electron journey 新增 Home Visual Toggle snapshot probe，验证两个 checkbox 可由外部 snapshot false→true 往返恢复，且不触发聊天业务路径；Toggle ownership 证据闭合，旧 startup fallback 仍按兼容边界保留。
 > 2026-08-26：新增 Toggle DOM/geometry reference pack（`toggle.dom.json`、`toggle.geometry.json`），与已通过的 generated-only artifact smoke 对齐。
-> 当前 primitive ledger：Field、Select、Input、Range、Choice、Toggle 均已有 TypeScript Light-DOM 实现；Settings 外观/首页字段已按单一 typed owner 接入，覆盖源码测试、generated artifact smoke、Electron DOM/geometry/interaction、snapshot/reload 与 60-cycle lifecycle stress。R2-02C 仍未 complete：ThemeTokenOwner、剩余未迁移 Settings 字段、Classic fallback 收口和全量 legacy deletion 仍是后续工作；聊天渲染/流式/协议/Plugin Loader 继续冻结。
+> 当前 primitive ledger：Field、Select、Input、Range、Choice、Toggle 均已有 TypeScript Light-DOM 实现；已迁移的 Settings 外观/首页字段子集按单一 typed owner 接入，并有源码测试、generated artifact smoke、Electron DOM/geometry/interaction、snapshot/reload 与 Settings-only stress 证据。该证据不代表全量 Settings 或 Harness 等价完成。R2-02C 仍未 complete：Theme legacy reads、剩余未迁移 Settings 字段、Classic fallback 收口和全量 legacy deletion 仍是后续工作；聊天渲染/流式/协议/Plugin Loader 继续冻结。
 > 2026-08-26：修正 `check-chat-kernel-consumers.mjs` 依赖扫描为忽略注释文本；`npm run guard:chat-kernel-consumers` 重新通过（17 kernel files），未修改任何聊天运行时代码。
 > 2026-08-26 checkpoint：`npm run test:uiux` 25/25、`npm run check:uiux:artifacts`、`npm run guard:chat-kernel-consumers` 全部通过；primitive 与聊天冻结边界保持稳定。
 > 2026-08-26：在 ThemeTokenOwner + Toggle/Range/Choice/Input 全部启用后重新完成 Settings-only 60-cycle stress；listeners 618、lifecycle resources 341、nodes 8410 全程稳定，detached roots/options/icons 仍为 0。
@@ -235,7 +235,7 @@ evidence: npm run check:uiux; npm run test:uiux; node --test tests/creation-cont
 2026-08-26 fixture source audit：确认 Harness 生产组件通过 `packages/client/web` Vite/React 入口和 Vitest/jsdom 测试暴露，没有可直接加载的静态 fixture 页面；新增 `fixtures/README.md` 记录真实 source-of-truth、同内核要求和禁止手工复制 markup 的规则。双页面 capture 仍为当前唯一主线。
 2026-08-26 Harness web build probe：在本机执行 `pnpm --dir /Users/asahi/Documents/Codex/deepseek-harness run build:web` 成功（Vite 6.4.3，413 modules）；确认可从生产 web entry 产出浏览器 artifact。尚未生成 primitive-isolated fixture 页面，因此 matrix 状态仍保持 `matrix-defined-harness-capture-pending`。
 2026-08-26 Harness component evidence：执行 `pnpm --dir /Users/asahi/Documents/Codex/deepseek-harness exec vitest run packages/client/ui-primitives/tests/atoms.client.spec.tsx packages/client/ui-settings-general/tests/settings-root.client.spec.tsx`，2 个真实 client test files、43 tests 全部通过；该证据确认生产 Input/Menu/Settings 组件可渲染并具备行为合同，但仍不等同 fixture PNG 或跨页面 pixel diff。
-2026-08-26 reference gate integration：`check:harness-reference` 现在强制读取 `fixture-matrix.json`，校验 800×600 @1x 与九组状态；reference pack 与独立 matrix gate 均通过，后续 fixture capture 不能绕过固定矩阵。
+2026-08-26 reference gate integration：`check:harness-reference` 现在强制读取 `fixture-matrix.json`，校验 800×600 @1x 与十组状态；reference pack 与独立 matrix gate 均通过，后续 fixture capture 不能绕过固定矩阵。
 2026-08-26 fixture readiness gate：新增 `npm run check:harness-fixture-readiness`，只读验证 Harness `apps/web/dist/index.html`、Input/Menu 生产源码/CSS 与 VCP generated browser entry 均存在；该 gate 通过，fixture runner 可在不降级为单页面的前提下启动。
 2026-08-26 freeze-boundary audit：最近三项提交仅涉及 UIUX Select、Harness contract/screenshot 脚本和路线文档；`npm run guard:chat-kernel-consumers` 通过（17 个冻结 kernel files），确认未修改 StreamCoordinator/StreamProjection/MessageRenderer、聊天协议、持久化或 Plugin Loader。
 2026-08-26 legacy retirement audit：`npm run guard:classic-retirement` 与 `node scripts/check-settings-source-equivalence.mjs` 通过；已迁移 Range/Toggle 字段的 legacy rows、inline styles、CSS selectors 均为 0。`appearance-studio` 对这些 key 的读取仅用于规范化/语义应用，未发现重复 presentation output；该证据支持继续收窄 legacy deletion，但不代表全量 Settings bridge 已退役。
@@ -249,6 +249,14 @@ Forum 字段当前降级为上述门禁的 consumer 验证，不再单独作为�
 2026-08-26：新增 `npm run check:harness-contracts`，静态对照 Harness Input/Select reference JSON 与 VCP primitive source 的 DOM class、ARIA marker 和 `--dsw-alias-*` token；该门禁通过，作为自动 computed-style/pixel diff 之前的早期 contract drift 检查。
 
 ## 3. 分阶段路线
+
+### R2-08：TypeScript UI foundation / scoped service assembly（施工中）
+
+- 范围：`modules/uiux/` 的 typed contracts、UiScope、局部 `UiServiceRegistry`、generated artifact 与已有 Settings/Theme consumers。
+- 当前状态：`scoped-service-assembly-active`；UiScope 仍委托 legacy `LifecycleScope`，registry 只服务真实 UI assembly，不是全局插件容器。
+- 已有证据：source typecheck、focused service/renderer tests、generated artifact consistency 与 artifact-only Electron smoke。
+- 未闭合：独立 runtime 实现、packaged artifact/跨平台证据、完整 Harness fixture equivalence；因此 `public API ready = false`。
+- 施工约束：在 R2-02C 双页面 DOM/geometry/computed-style/screenshot/pixel diff 闭合前，不扩展 kernel 能力或新增 public seam。
 
 ### R2-00：Chat Surface Slots 目标模式合同（已完成）
 
@@ -297,7 +305,7 @@ Creation 现状核验（2026-08-24）：`tests/creation-controller.test.js` 8/8 
 
 ### R2-03：Theme Runtime 与语义 Token 真源
 
-目标：主题状态只有一个 snapshot owner，组件不再通过 `body.classList` 猜测主题。
+目标（迁移完成后的门禁）：主题状态只有一个 snapshot owner，组件不再通过 `body.classList` 猜测主题；当前 semantic tokens 已启用，但 legacy theme reads 仍未清零。
 
 退出证据：source → generated artifact → runtime presenter 一致；light/dark/system、壁纸、DPI 和 fallback 矩阵通过。
 
@@ -434,3 +442,6 @@ R2-02 path-listener ownership（2026-08-25）：network path Add 兼容监听改
 R2-02 post-abort verification（2026-08-25）：上一轮中断后工作树保持干净；`VCPCHAT_SETTINGS_REOPEN_CYCLES=60 node scripts/test-settings-wa-electron.mjs`、source-equivalence、unified-surface 与 UIUX type check 均重新通过。
 
 R2-02 assistant-options capability 修复（2026-08-25）：legacy owner 对不存在于仓库稳定实现中的 `populateAssistantAgentSelect` 改为可选 capability 调用；缺失时保留现有 options 并继续 typed snapshot projection，不再中断 Settings 初始化。owner tests、WA persistence、Electron Settings gate 与 UIUX type check 通过。
+
+Harness 等价链施工校准（2026-08-26）：当前主线固定为 Harness↔VCP 双页面 fixture 对照流水线；R2-02C Settings 字段迁移与 renderer kernel/新 primitive 扩展暂停，直到 DOM structural、contract-scoped computed-style/geometry、固定 viewport screenshot 与 pixel diff 四层证据闭合。现有 10-case matrix 中 9 个案例已有可比较 fixture，8 个结构相等；`field.error` 已捕获真实 Harness `ModelsSection` error branch 但与 VCP Field error 语义不同，`field.description` 尚无稳定真实 Harness consumer，因此 `npm run diff:harness-vcp-dom` 保持 `pass=false`（8/10，1 pending），禁止手工伪造 fixture 或宣称 pixel-equivalent。下一施工批次只允许建立 Harness/VCP 双页面 computed-style/geometry capture 与 diff 输入；在四层证据完成前不得扩大 Settings 字段、renderer 或 Chat/Overlay Surface 范围。
+Harness geometry gate scaffold（2026-08-26）：新增 `npm run diff:harness-vcp-geometry` 与 `reports/harness-vcp-geometry-diff.json`。该门禁将 VCP generated Electron geometry 与 Harness reference contract 做显式逐属性检查（CSS shorthand canonicalization 后当前 14/14 contract checks 通过），同时把 Harness 浏览器 computed-style capture、跨页面 geometry diff、screenshot/pixel diff 标为 pending；因此单页 VCP geometry 不再被误报为 Harness 等价证据。下一步必须提供 Harness production browser capture 后才能将此门禁提升为双页面 computed-style diff。
