@@ -1111,6 +1111,15 @@ function flushSettingsAutosave() {
     });
 }
 
+function flushTypedForumFields() {
+    typedForumFieldStates.forEach(state => {
+        if (state.disposed || !state.pending || state.inFlight) return;
+        if (state.timer) clearTimeout(state.timer);
+        state.timer = null;
+        void state.run?.();
+    });
+}
+
 function teardownSettingsAutosave() {
     [...autosaveStates].forEach(state => {
         state.cleanups.forEach(cleanup => cleanup());
@@ -1790,6 +1799,8 @@ scheduleRefresh();
 
 window.VCPUISettingsBridge = Object.freeze({
     refresh: scheduleRefresh,
+    flush: flushSettingsAutosave,
+    flushForum: flushTypedForumFields,
     addNetworkPathInput(path = '') {
         if (destroyed) return false;
         const root = document.getElementById('globalSettingsModal');
