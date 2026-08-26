@@ -30,6 +30,14 @@ const checkpointEvery = Math.max(2, positiveInteger(process.env.VCPCHAT_STRESS_C
 const debugDetached = ['1', 'verbose'].includes(process.env.VCPCHAT_STRESS_DEBUG_DETACHED);
 const verboseDetached = process.env.VCPCHAT_STRESS_DEBUG_DETACHED === 'verbose';
 const skipDestructivePreflight = process.env.VCPCHAT_STRESS_SKIP_PREFLIGHT === '1';
+const supportedStages = Object.freeze(['ask-nova', 'settings', 'agent-settings', 'embedded', 'detached-app', 'mode-round-trip']);
+const selectedStages = new Set((process.env.VCPCHAT_STRESS_STAGES || supportedStages.join(','))
+    .split(',')
+    .map(stage => stage.trim())
+    .filter(Boolean));
+const unknownStages = [...selectedStages].filter(stage => !supportedStages.includes(stage));
+if (unknownStages.length) throw new Error(`Unknown VCPCHAT_STRESS_STAGES: ${unknownStages.join(', ')}`);
+if (!selectedStages.size) throw new Error('VCPCHAT_STRESS_STAGES must select at least one stage.');
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 async function rememberRendererNode(page, label, selector) {
@@ -899,19 +907,31 @@ try {
         await page.evaluate(() => {
             window.__vcpStressCycle = Number(window.__vcpStressCycle || 0) + 1;
         });
-        await cycleAskNova(page, targets[cycle % targets.length], label);
-        await collectDetachedDiagnostic(cdp, `${label}: Ask Nova`, page);
-        await cycleSettings(page, label);
-        await collectDetachedDiagnostic(cdp, `${label}: global settings`, page);
-        await cycleAgentSettings(page, label);
-        await collectDetachedDiagnostic(cdp, `${label}: Agent settings`, page);
-        if (cycle % 2 === 0) await cycleEmbeddedEscape(page, browser, noteApp, label);
-        else await cycleAskNovaOverEmbedded(page, browser, pluginApp, targets[(cycle + 1) % targets.length], label);
-        await collectDetachedDiagnostic(cdp, `${label}: embedded overlay`, page);
-        if (cycle % 4 === 0) await cycleDetachedApp(page, browser, noteApp, label);
-        await collectDetachedDiagnostic(cdp, `${label}: detached app`, page);
-        await assertCanonicalModeCompatibility(page, browser, label);
-        await collectDetachedDiagnostic(cdp, `${label}: mode round-trip`, page);
+        if (selectedStages.has('ask-nova')) {
+            await cycleAskNova(page, targets[cycle % targets.length], label);
+            await collectDetachedDiagnostic(cdp, `${label}: Ask Nova`, page);
+        }
+        if (selectedStages.has('settings')) {
+            await cycleSettings(page, label);
+            await collectDetachedDiagnostic(cdp, `${label}: global settings`, page);
+        }
+        if (selectedStages.has('agent-settings')) {
+            await cycleAgentSettings(page, label);
+            await collectDetachedDiagnostic(cdp, `${label}: Agent settings`, page);
+        }
+        if (selectedStages.has('embedded')) {
+            if (cycle % 2 === 0) await cycleEmbeddedEscape(page, browser, noteApp, label);
+            else await cycleAskNovaOverEmbedded(page, browser, pluginApp, targets[(cycle + 1) % targets.length], label);
+            await collectDetachedDiagnostic(cdp, `${label}: embedded overlay`, page);
+        }
+        if (selectedStages.has('detached-app')) {
+            if (cycle % 4 === 0) await cycleDetachedApp(page, browser, noteApp, label);
+            await collectDetachedDiagnostic(cdp, `${label}: detached app`, page);
+        }
+        if (selectedStages.has('mode-round-trip')) {
+            await assertCanonicalModeCompatibility(page, browser, label);
+            await collectDetachedDiagnostic(cdp, `${label}: mode round-trip`, page);
+        }
         await assertMainSurface(page, browser, label);
     };
 
@@ -952,7 +972,7 @@ try {
     await assertMainSurface(page, browser, 'final');
     assertNoSustainedLeak(baseline, checkpoints);
     assert.equal(rendererErrors.length, 0, `renderer errors observed:\n${rendererErrors.slice(0, 12).join('\n')}`);
-    console.log(`Electron lifecycle stress passed (${warmupCycles} warmup + ${cycles} measured cycles).`);
+    console.log(`Electron lifecycle stress passed (${warmupCycles} warmup + ${cycles} measured cycles; stages: ${[...selectedStages].join(', ')}).`);
     console.table(checkpoints.map(point => ({
         checkpoint: point.label,
         heap: formatBytes(point.heapUsed),
