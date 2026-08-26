@@ -42,6 +42,11 @@ try {
     await page.locator('.vcp-harness-select-trigger').click();
     const menu = page.locator('#vcp-browser-select-menu');
     await menu.waitFor();
+    const firstMenuItem = menu.getByRole('menuitem').first();
+    const firstItemBox = await firstMenuItem.boundingBox();
+    assert.ok(firstItemBox, 'VCP Select fixture has no measurable first menu item');
+    await page.mouse.move(firstItemBox.x + 20, firstItemBox.y + 20);
+    await page.waitForTimeout(50);
     const evidence = await menu.evaluate(element => {
         const rect = element.getBoundingClientRect();
         const computed = getComputedStyle(element);
@@ -52,10 +57,8 @@ try {
         return { status: 'captured', dom: element.outerHTML, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }, style: { padding: computed.padding, borderRadius: computed.borderRadius, minWidth: computed.minWidth, boxShadow: computed.boxShadow }, items };
     });
     assert.equal(evidence.items.length, 4);
-    await page.mouse.move(evidence.items[0].rect.x + 20, evidence.items[0].rect.y + 20);
-    await page.waitForTimeout(50);
     await fs.mkdir(path.join(root, 'reports'), { recursive: true });
-    await fs.writeFile(path.join(root, 'reports/vcp-select-browser-production.json'), `${JSON.stringify({ source: 'VCP generated artifact Playwright fixture', semanticFixture: 'agent-preset-selection/ready/Standard mode/open-selected-menu', state: 'open-selected-menu', viewport: { width: 800, height: 600, deviceScaleFactor: 1 }, ...evidence }, null, 2)}\n`);
+    await fs.writeFile(path.join(root, 'reports/vcp-select-browser-production.json'), `${JSON.stringify({ source: 'VCP generated artifact Playwright fixture', semanticFixture: 'agent-preset-selection/ready/Standard mode/open-selected-hover-menu', state: 'open-selected-hover-menu', viewport: { width: 800, height: 600, deviceScaleFactor: 1 }, ...evidence }, null, 2)}\n`);
     await page.screenshot({ path: path.join(root, 'reports/vcp-select-browser-production.png') });
     console.log(`VCP browser Select fixture captured (${evidence.items.length} menuitems).`);
 } finally {

@@ -10,8 +10,8 @@
   "outputs": ["dom", "geometry", "computed-style", "screenshot", "pixel-diff"],
   "stateSemantics": {
     "select/closed": "AgentPresetSeat ready trigger; production fixture captured, raw DOM/geometry/pixel comparison is failing",
-    "select/open": "AgentPresetSeat ready menu; VCP-owned production capture is replayable",
-    "select/selected": "AgentPresetSeat ready menu with Standard mode selected; VCP-owned production capture is replayable",
+    "select/open": "AgentPresetSeat ready open/selected/hover menu; VCP-owned production capture is replayable",
+    "select/selected": "AgentPresetSeat ready menu with Standard mode selected and hovered; VCP-owned production capture is replayable",
     "select/disabled": "MenuItem.disabled source/DOM fixture only; AgentPresetSeat busy trigger production fixture is pending"
   },
   "status": {

@@ -17,6 +17,11 @@ async function captureOpenMenu(page: Page) {
   await page.getByRole('button', { name: 'Standard mode', exact: true }).click()
   const menu = page.getByRole('menu')
   await menu.waitFor({ timeout: 10_000 })
+  const firstMenuItem = menu.getByRole('menuitem').first()
+  const firstItemBox = await firstMenuItem.boundingBox()
+  if (!firstItemBox) throw new Error('Harness Agent Preset fixture has no measurable first menu item')
+  await page.mouse.move(firstItemBox.x + 20, firstItemBox.y + 20)
+  await page.waitForTimeout(50)
   const evidence = await menu.evaluate((element) => {
     const rect = (node: Element) => { const value = node.getBoundingClientRect(); return { x: value.x, y: value.y, width: value.width, height: value.height } }
     const menuStyle = getComputedStyle(element)
@@ -32,7 +37,7 @@ async function captureOpenMenu(page: Page) {
       }
     }
     return {
-      source: 'Harness production web agent-preset seat', semanticFixture: 'agent-preset-selection/ready/Standard mode/open-selected-menu', state: 'open-selected-menu',
+      source: 'Harness production web agent-preset seat', semanticFixture: 'agent-preset-selection/ready/Standard mode/open-selected-hover-menu', state: 'open-selected-hover-menu',
       dom: element.outerHTML, rect: rect(element),
       style: { padding: menuStyle.padding, borderRadius: menuStyle.borderRadius, minWidth: menuStyle.minWidth, boxShadow: menuStyle.boxShadow, backgroundColor: menuStyle.backgroundColor, borderColor: menuStyle.borderColor, fontFamily: menuStyle.fontFamily },
       items: [...element.querySelectorAll('[role="menuitem"]')].map(item),
