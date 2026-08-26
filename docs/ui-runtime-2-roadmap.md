@@ -193,6 +193,8 @@ evidence: npm run check:uiux; npm run test:uiux; node --test tests/creation-cont
 
 2026-08-26 target-mode correction：目标工具中的 objective 保持 active 且无法原地改写，因此以本账本作为可执行目标的权威镜像。后续批次不得以“更多字段已迁移”作为单独进度；必须先闭合 Harness reference、Light-DOM contract、真实 consumer、四层等价证据和对应 legacy deletion。聊天渲染/流式/协议/持久化/Plugin Loader 继续冻结。
 
+2026-08-26 target-mode verification：目标收窄后的最小证据集通过：`npm run check:uiux`、`npm run test:uiux`（26/26）、`npm run check:uiux:artifacts`（34 generated files）、`npm run test:uiux:artifacts`、`node scripts/check-settings-source-equivalence.mjs`（legacyClean=true）、`node scripts/test-settings-wa-electron.mjs`（Settings Harness structure gate passed）以及 `npm run guard:chat-kernel-consumers`。本批没有新增字段迁移，未触碰聊天冻结边界。
+
 ## 3. 分阶段路线
 
 ### R2-00：Chat Surface Slots 目标模式合同（已完成）
