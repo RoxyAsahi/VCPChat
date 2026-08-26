@@ -1,0 +1,70 @@
+import { mkdir, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
+import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
+import { afterAll, beforeAll, describe, it } from 'vitest'
+import type { Browser, Page } from '/Users/asahi/Documents/Codex/deepseek-harness/node_modules/.pnpm/playwright@1.61.1/node_modules/playwright/index.d.ts'
+import { launchWebScaffold, type WebScaffold } from '/Users/asahi/Documents/Codex/deepseek-harness/apps/web/tests/scaffold.ts'
+import { connectFreshWorkspace } from '/Users/asahi/Documents/Codex/deepseek-harness/apps/web/tests/support.ts'
+
+const root = fileURLToPath(new URL('..', import.meta.url))
+const harnessRoot = '/Users/asahi/Documents/Codex/deepseek-harness'
+const harnessRequire = createRequire(`${harnessRoot}/apps/web/package.json`)
+const { chromium } = harnessRequire('playwright') as { chromium: { launch(): Promise<Browser> } }
+const viewport = { width: 800, height: 600, deviceScaleFactor: 1 }
+
+async function captureOpenMenu(page: Page) {
+  await page.getByRole('button', { name: 'Standard mode', exact: true }).click()
+  const menu = page.getByRole('menu')
+  await menu.waitFor({ timeout: 10_000 })
+  const evidence = await menu.evaluate((element) => {
+    const rect = (node: Element) => { const value = node.getBoundingClientRect(); return { x: value.x, y: value.y, width: value.width, height: value.height } }
+    const menuStyle = getComputedStyle(element)
+    const item = (node: Element) => {
+      const style = getComputedStyle(node)
+      const name = node.querySelector('[class*=itemName]')
+      const description = node.querySelector('[class*=itemDesc]')
+      return {
+        tag: node.tagName.toLowerCase(), class: node.className, role: node.getAttribute('role'), rect: rect(node),
+        style: { display: style.display, minHeight: style.minHeight, padding: style.padding, gap: style.gap, borderRadius: style.borderRadius, fontFamily: style.fontFamily, fontWeight: style.fontWeight, fontSize: style.fontSize, lineHeight: style.lineHeight, color: style.color, backgroundColor: style.backgroundColor },
+        nameStyle: name ? { fontFamily: getComputedStyle(name).fontFamily, fontWeight: getComputedStyle(name).fontWeight, fontSize: getComputedStyle(name).fontSize, lineHeight: getComputedStyle(name).lineHeight, color: getComputedStyle(name).color } : null,
+        descriptionStyle: description ? { fontFamily: getComputedStyle(description).fontFamily, fontWeight: getComputedStyle(description).fontWeight, fontSize: getComputedStyle(description).fontSize, lineHeight: getComputedStyle(description).lineHeight, color: getComputedStyle(description).color } : null,
+      }
+    }
+    return {
+      source: 'Harness production web agent-preset seat', semanticFixture: 'agent-preset-selection/ready/Standard mode/open-selected-menu', state: 'open-selected-menu',
+      dom: element.outerHTML, rect: rect(element),
+      style: { padding: menuStyle.padding, borderRadius: menuStyle.borderRadius, minWidth: menuStyle.minWidth, boxShadow: menuStyle.boxShadow, backgroundColor: menuStyle.backgroundColor, borderColor: menuStyle.borderColor, fontFamily: menuStyle.fontFamily },
+      items: [...element.querySelectorAll('[role="menuitem"]')].map(item),
+    }
+  })
+  await writeFile(join(root, 'reports', 'harness-select-menu-open.json'), `${JSON.stringify({ viewport, ...evidence }, null, 2)}\n`)
+  await menu.screenshot({ path: join(root, 'reports', 'harness-select-menu-open.png') })
+}
+
+describe('Harness production Agent Preset Select menu fixture', () => {
+  let scaffold: WebScaffold
+  let browser: Browser
+  let page: Page
+
+  beforeAll(async () => {
+    await mkdir(join(root, 'reports'), { recursive: true })
+    scaffold = await launchWebScaffold({
+      agentPresets: { roots: [{ path: `${harnessRoot}/apps/cli/config/agent-presets`, trust: 'system' }], default: 'standard' },
+    })
+    browser = await chromium.launch()
+    page = await browser.newPage({ viewport })
+    await page.goto(scaffold.baseUrl, { waitUntil: 'load' })
+    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await connectFreshWorkspace(page, scaffold.workspaceCwd)
+  }, 120_000)
+
+  afterAll(async () => {
+    await browser?.close()
+    await scaffold?.close()
+  })
+
+  it('captures the ready open menu from the production new-session surface', async () => {
+    await captureOpenMenu(page)
+  }, 60_000)
+})
