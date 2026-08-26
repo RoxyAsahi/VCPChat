@@ -21,6 +21,7 @@ const select = await readJson(path.join(referencePath, 'select.geometry.json'));
 const vcp = await readJson(vcpPath);
 const harness = await readJson(harnessPath);
 const harnessSelect = await readJson(path.join(root, 'reports/harness-select-production.json'));
+const vcpSelect = await readJson(path.join(root, 'reports/vcp-select-production.json'));
 
 // This report deliberately separates a one-sided contract check from a real
 // Harness↔VCP computed-style diff. The latter is pending until a browser capture
@@ -61,7 +62,7 @@ const report = {
     pass: false,
     harnessComputedStyleCapture: { status: harness ? 'available' : 'pending', path: 'reports/harness-primitive-geometry.json' },
     vcpComputedStyleCapture: { status: vcp ? 'available' : 'missing', path: 'reports/vcp-primitive-geometry.json' },
-    semanticFixture: { harness: harnessSelect ? 'agent-preset-selection/Standard mode' : harness?.selector ?? null, vcp: vcp?.primitive ?? null, same: false, reason: 'Harness capture is Select-only while VCP artifact capture is Input+Select scene' },
+    semanticFixture: { harness: harnessSelect ? 'agent-preset-selection/Standard mode' : harness?.selector ?? null, vcp: vcpSelect ? 'agent-preset-select/4 options' : vcp?.primitive ?? null, same: Boolean(harnessSelect && vcpSelect && harnessSelect.items?.length === vcpSelect.items?.length), reason: harnessSelect && vcpSelect ? null : 'one or both Select-only captures missing' },
     contract,
     missingEvidence: [
         ...(harness ? [] : ['Harness browser computed-style capture']),
