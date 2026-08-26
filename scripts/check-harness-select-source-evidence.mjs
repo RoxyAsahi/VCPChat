@@ -8,7 +8,7 @@ const errors = [];
 for (const file of [source, menu, css]) if (!fs.existsSync(file)) errors.push(`missing ${file}`);
 const text = fs.existsSync(source) ? fs.readFileSync(source, 'utf8') : '';
 for (const marker of ['connectFreshWorkspace', 'Standard mode', 'getByRole(\'menu\')', 'getByRole(\'menuitem\'']) if (!text.includes(marker)) errors.push(`source E2E missing ${marker}`);
-const report = { generatedAt: new Date().toISOString(), status: errors.length ? 'invalid' : 'official-production-interaction-covered', source, menu, css, browserFixture: fs.existsSync(path.join(process.cwd(), 'reports/harness-select-production.json')) ? 'available' : 'pending', errors, pass: errors.length === 0 };
+const report = { generatedAt: new Date().toISOString(), status: errors.length ? 'invalid' : 'official-production-interaction-covered', source, menu, css, browserFixture: fs.existsSync(path.join(process.cwd(), 'reports/harness-select-menu-open.json')) ? 'available' : 'pending', errors, pass: errors.length === 0 };
 fs.writeFileSync(path.join(process.cwd(), 'reports/harness-select-source-evidence.json'), `${JSON.stringify(report, null, 2)}\n`);
 if (errors.length) throw new Error(`[harness-select-source-evidence] ${errors.join('; ')}`);
 console.log(`Harness Select source evidence passed (official E2E interaction covered; browser fixture=${report.browserFixture}).`);

@@ -20,8 +20,8 @@ const reference = await readJson(path.join(referencePath, 'input.geometry.json')
 const select = await readJson(path.join(referencePath, 'select.geometry.json'));
 const vcp = await readJson(vcpPath);
 const harness = await readJson(harnessPath);
-const harnessSelect = await readJson(path.join(root, 'reports/harness-select-production.json'));
-const vcpSelect = await readJson(path.join(root, 'reports/vcp-select-production.json'));
+const harnessSelect = await readJson(path.join(root, 'reports/harness-select-menu-open.json'));
+const vcpSelect = await readJson(path.join(root, 'reports/vcp-select-browser-production.json'));
 
 // This report deliberately separates a one-sided contract check from a real
 // Harness↔VCP computed-style diff. The latter is pending until a browser capture
@@ -83,7 +83,7 @@ const report = {
     pass: contract.every(item => item.pass) && selectGeometryPass,
     harnessComputedStyleCapture: { status: harness ? 'available' : 'pending', path: 'reports/harness-primitive-geometry.json' },
     vcpComputedStyleCapture: { status: vcp ? 'available' : 'missing', path: 'reports/vcp-primitive-geometry.json' },
-    semanticFixture: { harness: harnessSelect ? 'agent-preset-selection/Standard mode' : harness?.selector ?? null, vcp: vcpSelect ? 'agent-preset-select/4 options' : vcp?.primitive ?? null, same: Boolean(harnessSelect && vcpSelect && harnessSelect.items?.length === vcpSelect.items?.length), reason: harnessSelect && vcpSelect ? null : 'one or both Select-only captures missing' },
+    semanticFixture: { harness: harnessSelect?.semanticFixture ?? harness?.selector ?? null, vcp: vcpSelect?.semanticFixture ?? vcp?.primitive ?? null, same: Boolean(harnessSelect?.semanticFixture && harnessSelect.semanticFixture === vcpSelect?.semanticFixture), reason: !harnessSelect || !vcpSelect ? 'one or both Select-only captures missing' : harnessSelect.semanticFixture === vcpSelect.semanticFixture ? null : 'fixture identifiers differ' },
     contract,
     selectGeometry,
     missingEvidence: [

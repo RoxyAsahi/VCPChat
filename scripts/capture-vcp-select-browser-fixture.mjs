@@ -55,7 +55,7 @@ try {
     await page.mouse.move(evidence.items[0].rect.x + 20, evidence.items[0].rect.y + 20);
     await page.waitForTimeout(50);
     await fs.mkdir(path.join(root, 'reports'), { recursive: true });
-    await fs.writeFile(path.join(root, 'reports/vcp-select-browser-production.json'), `${JSON.stringify({ source: 'VCP generated artifact Playwright fixture', viewport: { width: 800, height: 600, deviceScaleFactor: 1 }, ...evidence }, null, 2)}\n`);
+    await fs.writeFile(path.join(root, 'reports/vcp-select-browser-production.json'), `${JSON.stringify({ source: 'VCP generated artifact Playwright fixture', semanticFixture: 'agent-preset-selection/ready/Standard mode/open-selected-menu', state: 'open-selected-menu', viewport: { width: 800, height: 600, deviceScaleFactor: 1 }, ...evidence }, null, 2)}\n`);
     await page.screenshot({ path: path.join(root, 'reports/vcp-select-browser-production.png') });
     console.log(`VCP browser Select fixture captured (${evidence.items.length} menuitems).`);
 } finally {

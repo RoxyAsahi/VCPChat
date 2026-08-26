@@ -39,7 +39,7 @@ async function captureOpenMenu(page: Page) {
     }
   })
   await writeFile(join(root, 'reports', 'harness-select-menu-open.json'), `${JSON.stringify({ viewport, ...evidence }, null, 2)}\n`)
-  await menu.screenshot({ path: join(root, 'reports', 'harness-select-menu-open.png') })
+  await page.screenshot({ path: join(root, 'reports', 'harness-select-menu-open.png') })
 }
 
 describe('Harness production Agent Preset Select menu fixture', () => {

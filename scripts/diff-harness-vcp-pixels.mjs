@@ -4,12 +4,12 @@ import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const harnessFile = process.env.HARNESS_SCREENSHOT || path.join(root, 'docs/reference/deepseek-harness-primitives/fixtures/harness/select.production.png');
-const vcpFile = process.env.VCP_SCREENSHOT || path.join(root, 'docs/reference/deepseek-harness-primitives/fixtures/vcp/select.browser.production.png');
+const harnessFile = process.env.HARNESS_SCREENSHOT || path.join(root, 'reports/harness-select-menu-open.png');
+const vcpFile = process.env.VCP_SCREENSHOT || path.join(root, 'reports/vcp-select-browser-production.png');
 const output = path.join(root, 'reports/harness-vcp-pixel-diff.json');
 const policy = JSON.parse(await fs.readFile(path.join(root, 'docs/reference/deepseek-harness-primitives/pixel-policy.json'), 'utf8'));
 const geometryReport = JSON.parse(await fs.readFile(path.join(root, 'reports/harness-vcp-geometry-diff.json'), 'utf8').catch(() => '{}'));
-const harnessSelect = JSON.parse(await fs.readFile(path.join(root, 'reports/harness-select-production.json'), 'utf8'));
+const harnessSelect = JSON.parse(await fs.readFile(path.join(root, 'reports/harness-select-menu-open.json'), 'utf8'));
 const vcpSelect = JSON.parse(await fs.readFile(path.join(root, 'reports/vcp-select-browser-production.json'), 'utf8'));
 
 function decodePng(buffer) {
