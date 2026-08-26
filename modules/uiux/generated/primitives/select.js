@@ -93,8 +93,6 @@ export function mountSelect(select, props = {}, scope) {
         menu.hidden = false;
         trigger.setAttribute('aria-expanded', 'true');
         placePortal();
-        const current = menu.querySelector('[data-selected="true"]');
-        (current || menu.querySelector('[role="menuitem"]'))?.focus();
     };
     const onTrigger = () => trigger.getAttribute('aria-expanded') === 'true' ? close() : open();
     const onChange = () => sync();
@@ -152,15 +150,6 @@ export function mountSelect(select, props = {}, scope) {
             event.preventDefault();
             close(true);
             return;
-        }
-        const items = Array.from(menu.querySelectorAll('[role="menuitem"]:not(:disabled)'));
-        if (!items.length)
-            return;
-        const index = Math.max(0, items.indexOf(document.activeElement));
-        const next = key === 'ArrowDown' ? (index + 1) % items.length : key === 'ArrowUp' ? (index - 1 + items.length) % items.length : key === 'Home' ? 0 : key === 'End' ? items.length - 1 : -1;
-        if (next >= 0) {
-            event.preventDefault();
-            items[next].focus();
         }
     });
     sync();
