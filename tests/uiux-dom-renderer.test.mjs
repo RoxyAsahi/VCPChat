@@ -22,6 +22,8 @@ test('DomRenderer owns mount, text update, keyed insertion and dispose', async (
         assert.equal(root.textContent, 'new');
         const keyedRelease = renderer.keyed(root, [{ id: 'a' }, { id: 'b' }], item => item.id, item => { const node = document.createElement('span'); node.dataset.key = item.id; return node; });
         assert.deepEqual([...root.children].map(node => node.dataset.key), ['a', 'b']);
+        keyedRelease.update([{ id: 'b' }, { id: 'c' }]);
+        assert.deepEqual([...root.children].map(node => node.dataset.key), ['b', 'c']);
         await keyedRelease();
         assert.equal(root.children.length, 0);
         await release();
