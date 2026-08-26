@@ -4,3 +4,4 @@ export { createSettingsUiService, settingsUiDefinition } from './adapters/settin
 export { mountField } from './primitives/field.js';
 export { mountSelect } from './primitives/select.js';
 export { mountInput } from './primitives/input.js';
+export { mountChoice } from './primitives/choice.js';

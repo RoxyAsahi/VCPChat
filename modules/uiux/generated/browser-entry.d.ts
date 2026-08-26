@@ -7,6 +7,7 @@ import type { UiDisposer } from './contracts.js';
 import { mountField } from './primitives/field.js';
 import { mountSelect } from './primitives/select.js';
 import { mountInput } from './primitives/input.js';
+import { mountChoice } from './primitives/choice.js';
 interface LegacyScopeLike {
     readonly label: string;
     readonly active: boolean;
@@ -32,5 +33,6 @@ declare const api: {
     mountField: typeof mountField;
     mountSelect: typeof mountSelect;
     mountInput: typeof mountInput;
+    mountChoice: typeof mountChoice;
 };
 export { api as uiuxBrowserApi };
