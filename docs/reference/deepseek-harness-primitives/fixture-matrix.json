@@ -13,6 +13,7 @@
     ["state-dot", "done"], ["state-dot", "warning"], ["state-dot", "ongoing"], ["state-dot", "error"],
     ["toast", "viewport-centered"], ["toast", "anchor-centered"], ["toast", "icon"],
     ["risk-confirmation", "unacknowledged"], ["risk-confirmation", "acknowledged"], ["risk-confirmation", "disabled"]
+    , ["semantic-icon", "warning"], ["semantic-icon", "close"], ["semantic-icon", "check"], ["semantic-icon", "chevron-down"]
   ],
   "interactionCases": [
     { "case": "select/keyboard-open-focus", "status": "pass", "evidence": "same semantic fixture; Harness and VCP retain trigger focus" },
@@ -25,6 +26,7 @@
     { "case": "state-dot/four-state-shape-size-phase-dispose", "status": "candidate-interaction-active", "evidence": "focused source test and generated Electron journey cover solid halo states, eight-cell phased ongoing matrix, custom size, aria-hidden and exact host restoration" },
     { "case": "toast/portal-anchor-lifetime-dispose", "status": "candidate-interaction-active", "evidence": "focused source test covers 3000ms hold + 1000ms fade completion and timer cancellation; generated Electron covers body portal, role=alert, anchor resize placement, icon and geometry" },
     { "case": "risk-confirmation/acknowledgement-gate-close-reopen-dispose", "status": "candidate-interaction-active", "evidence": "focused generated-artifact test covers controlled acknowledgement, disabled confirm, cancel/mask/Escape, autofocus, reopen and owner disposal; Electron candidate evidence pending" }
+    , { "case": "semantic-icon/owner-refresh-size-name-dispose", "status": "candidate-interaction-active", "evidence": "focused source test covers four semantic names, currentColor slot, aria-hidden, adapter refresh, name/size update and exact host restoration; generated Electron Lab verifies all four names render through VCPIcons as aria-hidden, non-focusable SVG" }
   ],
   "outputs": ["dom", "geometry", "computed-style", "screenshot", "pixel-diff"],
   "stateSemantics": {
@@ -54,6 +56,10 @@
     "risk-confirmation/unacknowledged": "Primary action remains disabled until caller-controlled acknowledgement is checked",
     "risk-confirmation/acknowledged": "Checked acknowledgement enables the primary action without creating a second business state",
     "risk-confirmation/disabled": "Disabled owner state disables acknowledgement and primary action"
+    , "semantic-icon/warning": "Private 18px warning slot delegates to the existing VCPIcons semantic adapter"
+    , "semantic-icon/close": "Private 16px close slot delegates to the existing VCPIcons semantic adapter"
+    , "semantic-icon/check": "Private 16px check slot delegates to the existing VCPIcons semantic adapter"
+    , "semantic-icon/chevron-down": "Private 16px chevron slot delegates to the existing VCPIcons semantic adapter"
   },
   "status": {
     "domStructural": "10/10 pass",
@@ -70,5 +76,6 @@
     "stateDotCandidate": "four-state shape/size/phase and screenshot active; same-semantic Harness pixel diff pending",
     "toastCandidate": "portal/alert/anchor/lifetime/dispose and screenshot active; same-semantic Harness pixel diff pending",
     "riskConfirmationCandidate": "controlled acknowledgement gate, close/reopen/dispose source-artifact test active; Electron screenshot/geometry pending"
+    , "semanticIconCandidate": "four-name private slot, adapter refresh, size/name update, teardown and generated Electron SVG rendering active; standalone screenshot/geometry and same-semantic Harness pixel diff pending"
   }
 }

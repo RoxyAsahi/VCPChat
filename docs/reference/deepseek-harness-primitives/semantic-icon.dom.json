@@ -1,0 +1,11 @@
+{
+  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/icons/index.tsx",
+  "productionConsumers": [
+    "packages/client/ui-primitives/src/RiskConfirmation.tsx",
+    "packages/client/ui-primitives/src/Modal.tsx",
+    "packages/client/ui-primitives/src/Menu.tsx",
+    "packages/client/ui-primitives/src/DisclosureRow.tsx"
+  ],
+  "harnessContract": { "element": "svg", "decorative": "consumer-owned aria semantics", "paint": "paths fill=currentColor", "sizes": [14, 16, 18] },
+  "vcpCandidate": { "tree": "host > slot[aria-hidden=true] > .vcp-ui-icon or VCPIcons-rendered svg", "names": ["warning", "close", "check", "chevron-down"], "owner": "existing modules/ui-system/lucide-adapter.js VCPIcons", "maturity": "candidate-interaction-active", "stableApi": false }
+}

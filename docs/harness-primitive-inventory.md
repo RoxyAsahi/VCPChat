@@ -29,6 +29,7 @@
 | StateDot | `ui-primitives/src/StateDot.tsx`；Chat、Tool、Skill、Job、Subagent、Workspace | candidate-interaction-active；四态 geometry/animation evidence active，pixel diff pending | B1 |
 | Toast | `ui-primitives/src/Toast.tsx`；Composer、Model selection | candidate-interaction-active；Composer integration frozen，ModelSelect adoption/pixel diff pending | B1 |
 | RiskConfirmation | `ui-primitives/src/RiskConfirmation.tsx`；Permission、Command selection | candidate-interaction-active；VCP 无同语义非冻结 consumer，pixel diff pending | B1 |
+| Semantic icon slots | `ui-primitives/src/icons/index.tsx`；RiskConfirmation/Modal/Menu/Disclosure | candidate-interaction-active；仅覆盖 warning/close/check/chevron-down，复用现有 VCPIcons，非公共 catalog | B1 |
 | JsonTree | `ui-primitives/src/JsonTree.tsx`；Trajectory | inventoried | B2 |
 | Terminal/Read/Diff/Search/Web Block | matching `ui-primitives/src/*Block.tsx`；Tool details/rows | inventoried | B2 |
 | MarkdownText / MessageText / CodeBlock / JsonBlock | `ui-primitives/src/markdown/`；Chat、Tool、Deliverables、Trajectory | inventoried；VCP production integration frozen | B4 |

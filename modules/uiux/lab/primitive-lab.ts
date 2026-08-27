@@ -10,6 +10,7 @@ import { mountDisclosureRow, type DisclosureRowController } from '../primitives/
 import { mountStateDot, type StateDotState } from '../primitives/state-dot.js';
 import { mountToast } from '../primitives/toast.js';
 import { mountRiskConfirmation } from '../primitives/risk-confirmation.js';
+import { mountSemanticIcon, type HarnessSemanticIconName } from '../primitives/semantic-icon.js';
 import { mountSelect } from '../primitives/select.js';
 
 const STYLE_ID = 'vcp-harness-primitive-lab';
@@ -44,7 +45,7 @@ export function mountPrimitiveLab(root: HTMLElement, scope: UiScope): UiDisposer
     const labScope = scope.child('harness-primitive-lab');
     const originalNodes = Array.from(root.childNodes);
     const lab = document.createElement('div');
-    lab.className = 'vcp-harness-primitive-lab';
+    lab.className = 'vcp-harness-primitive-lab vcp-ui-scope';
     lab.dataset.maturity = 'candidate';
     root.replaceChildren(lab);
 
@@ -281,6 +282,19 @@ export function mountPrimitiveLab(root: HTMLElement, scope: UiScope): UiDisposer
         onConfirm: () => risk.setOpen(false),
     }, labScope);
     labScope.listen(riskTrigger, 'click', () => { risk.setAcknowledged(false); risk.setDisabled(false); risk.setOpen(true); });
+
+    const iconRow = group(lab, 'Semantic icon slots', 'deepseek-harness/packages/client/ui-primitives/src/icons/index.tsx; delegates to existing VCP Lucide adapter, private Candidate contract');
+    (['warning', 'close', 'check', 'chevron-down'] as const satisfies readonly HarnessSemanticIconName[]).forEach(name => {
+        const fixture = document.createElement('span');
+        fixture.className = 'vcp-harness-lab-icon-fixture';
+        fixture.dataset.icon = name;
+        const iconHost = document.createElement('span');
+        const label = document.createElement('span');
+        label.textContent = name;
+        fixture.append(iconHost, label);
+        iconRow.append(fixture);
+        mountSemanticIcon(iconHost, { name, size: name === 'warning' ? 18 : 16 }, labScope);
+    });
 
     return scope.own(async () => {
         await labScope.dispose('primitive-lab-unmounted');

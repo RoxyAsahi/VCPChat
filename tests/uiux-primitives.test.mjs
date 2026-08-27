@@ -20,6 +20,7 @@ const { mountToast, TOAST_HOLD_MS, TOAST_FADE_MS } = await import('../modules/ui
 // RiskConfirmation is the first composed primitive; source-plane Node cannot
 // resolve its emitted .js sibling imports, so exercise its checked-in artifact.
 const { mountRiskConfirmation } = await import('../modules/uiux/generated/primitives/risk-confirmation.js');
+const { mountSemanticIcon } = await import('../modules/uiux/primitives/semantic-icon.ts');
 const { mountChoice } = await import('../modules/uiux/primitives/choice.ts');
 const { mountRange } = await import('../modules/uiux/primitives/range.ts');
 const { mountToggle } = await import('../modules/uiux/primitives/toggle.ts');
@@ -390,6 +391,36 @@ test('Harness RiskConfirmation gates confirm behind a controlled acknowledgement
         assert.equal(document.querySelector('.vcp-harness-modal-root'), null);
         await scope.dispose('risk-confirmation-complete');
     } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
+
+test('Harness semantic icon slots preserve one VCP icon owner and retract cleanly', async () => {
+    const dom = new JSDOM('<!doctype html><main><span id="host" class="legacy"><em id="legacy">legacy</em></span></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window; const previousIcons = globalThis.VCPIcons;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    const refreshed = [];
+    globalThis.VCPIcons = { refresh(root) { refreshed.push(root); } };
+    try {
+        const scope = createUiScope(new LifecycleScope('semantic-icon-test'));
+        const host = document.getElementById('host');
+        const icon = mountSemanticIcon(host, { name: 'warning', size: 18 }, scope);
+        assert.equal(icon.root.getAttribute('aria-hidden'), 'true');
+        assert.equal(icon.root.style.getPropertyValue('--vcp-harness-icon-size'), '18px');
+        assert.equal(icon.root.querySelector('.vcp-ui-icon')?.textContent, 'warning');
+        assert.equal(refreshed.length, 1);
+        icon.setName('chevron-down');
+        assert.equal(icon.root.querySelector('.vcp-ui-icon')?.textContent, 'chevron_down');
+        icon.setSize(14);
+        assert.equal(icon.root.style.getPropertyValue('--vcp-harness-icon-size'), '14px');
+        assert.throws(() => icon.setName('unknown'), /Unknown Harness semantic icon/);
+        await icon.dispose();
+        assert.equal(host.className, 'legacy');
+        assert.equal(host.firstElementChild.id, 'legacy');
+        await scope.dispose('semantic-icon-complete');
+    } finally {
+        globalThis.document = previousDocument; globalThis.window = previousWindow;
+        if (previousIcons === undefined) Reflect.deleteProperty(globalThis, 'VCPIcons'); else globalThis.VCPIcons = previousIcons;
+        dom.window.close();
+    }
 });
 
 test('Harness Menu owns open effects, composite entries, portal placement and teardown', async () => {

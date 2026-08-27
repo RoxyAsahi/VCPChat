@@ -17,6 +17,7 @@ import { mountDisclosureRow } from './primitives/disclosure-row.js';
 import { mountStateDot } from './primitives/state-dot.js';
 import { mountToast } from './primitives/toast.js';
 import { mountRiskConfirmation } from './primitives/risk-confirmation.js';
+import { mountSemanticIcon } from './primitives/semantic-icon.js';
 import { mountChoice } from './primitives/choice.js';
 import { mountRange } from './primitives/range.js';
 import { mountToggle } from './primitives/toggle.js';
@@ -56,6 +57,7 @@ declare const api: {
     mountStateDot: typeof mountStateDot;
     mountToast: typeof mountToast;
     mountRiskConfirmation: typeof mountRiskConfirmation;
+    mountSemanticIcon: typeof mountSemanticIcon;
     mountChoice: typeof mountChoice;
     mountRange: typeof mountRange;
     mountToggle: typeof mountToggle;

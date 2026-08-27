@@ -242,6 +242,19 @@ try {
         result.riskAcknowledged = riskConfirm?.disabled === false;
         riskConfirm?.click();
         result.riskClosed = !document.querySelector('.vcp-harness-risk-confirmation[role="dialog"]');
+        const icons = [...host.querySelectorAll('.vcp-harness-lab-icon-fixture')];
+        await new Promise(resolve => setTimeout(resolve, 0));
+        result.semanticIconNames = icons.map(fixture => fixture.getAttribute('data-icon'));
+        result.semanticIconRendered = icons.every(fixture => {
+            const icon = fixture.querySelector('.vcp-harness-icon-slot > svg[data-vcp-icon]');
+            return icon?.getAttribute('aria-hidden') === 'true' && icon?.getAttribute('focusable') === 'false';
+        });
+        result.semanticIconGeometry = icons.map(fixture => {
+            const slot = fixture.querySelector('.vcp-harness-icon-slot');
+            const svg = slot?.querySelector('svg[data-vcp-icon]');
+            const slotStyle = slot ? getComputedStyle(slot) : null;
+            return { name: fixture.getAttribute('data-icon'), width: slotStyle?.width || '', height: slotStyle?.height || '', hasInheritedColor: Boolean(slotStyle?.color), ariaHidden: svg?.getAttribute('aria-hidden') || null, focusable: svg?.getAttribute('focusable') || null };
+        });
         await release();
         result.restored = host.childNodes.length === 0;
         result.scopeActive = scope.active;
@@ -295,6 +308,14 @@ try {
         riskAutofocus: true,
         riskAcknowledged: true,
         riskClosed: true,
+        semanticIconNames: ['warning', 'close', 'check', 'chevron-down'],
+        semanticIconRendered: true,
+        semanticIconGeometry: [
+            { name: 'warning', width: '18px', height: '18px', hasInheritedColor: true, ariaHidden: 'true', focusable: 'false' },
+            { name: 'close', width: '16px', height: '16px', hasInheritedColor: true, ariaHidden: 'true', focusable: 'false' },
+            { name: 'check', width: '16px', height: '16px', hasInheritedColor: true, ariaHidden: 'true', focusable: 'false' },
+            { name: 'chevron-down', width: '16px', height: '16px', hasInheritedColor: true, ariaHidden: 'true', focusable: 'false' },
+        ],
         restored: true,
         scopeActive: true,
     }, `generated Harness Candidate Lab mismatch: ${JSON.stringify(candidateLabBoundary)}`);

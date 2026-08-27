@@ -76,6 +76,8 @@
 
 2026-08-27 RiskConfirmation checkpoint：新增受控 `modules/uiux/primitives/risk-confirmation.ts`，复用 Candidate Modal/Button，以 Light DOM 复刻 warning icon、description、checkbox acknowledgement 和 primary action gate。只接受 caller 的 `open`/`acknowledged`/`disabled` 投影与 action callbacks，不持有 VCP durable state，不替换 `showConfirmDialog()` 或接入冻结的聊天 Permission/Command consumer。当前 focused generated-artifact test 覆盖 unacknowledged/acknowledged/disabled、cancel/mask/Escape、reopen、autofocus 与 dispose；Electron geometry/screenshot、Harness same-semantic pixel diff、合法 VCP production consumer 和 legacy deletion均 pending，因此为 `candidate-interaction-active`，不是 Stable 或 public business API。
 
+2026-08-27 private icon contract checkpoint：新增 `modules/uiux/primitives/semantic-icon.ts`，只覆盖 RiskConfirmation/Modal/Menu/Disclosure 所需的 `warning`、`close`、`check`、`chevron-down`。slot 自身只规定 `aria-hidden`、`currentColor` 和 14/16/18px geometry，glyph 渲染仍唯一委托给现有 `VCPIcons` Lucide adapter；不新增 SVG catalog、icon Provider 或业务 API。source test 覆盖 adapter refresh、name/size update 和精确 restore；generated Electron Lab 已确认四个名称渲染为非焦点 SVG。独立 screenshot/geometry、Harness pixel diff、真实 consumer adoption 和 legacy deletion仍 pending，成熟度为 `candidate-interaction-active`。
+
 本批次不解冻聊天内核、消息渲染、Composer 内部、协议、IPC、持久化、Plugin Loader、chat manifest 或动态壁纸。Harness conversation/tool/markdown 控件可以在实验室复刻，但不得借实验室接入改变这些冻结边界。
 
 ## 0.3 上位规范到执行批次的映射
