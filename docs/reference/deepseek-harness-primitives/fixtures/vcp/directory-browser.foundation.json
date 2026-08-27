@@ -31,9 +31,20 @@
     "columnMinWidth": "256px",
     "footerPadding": "12px 24px"
   },
+  "nestedCreate": {
+    "beforeEscape": {
+      "parentDisabled": true,
+      "childWidth": "380px",
+      "childPadding": "0px",
+      "inputHeight": "44px"
+    },
+    "escaped": true,
+    "selected": "labs",
+    "childRemoved": true
+  },
   "lifecycle": {
     "opened": [
-      "/home/projects"
+      "/home/projects/labs"
     ],
     "closed": true,
     "onClose": 0

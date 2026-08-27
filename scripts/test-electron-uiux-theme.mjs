@@ -1101,7 +1101,7 @@ try {
         const closed = [];
         const listings = {
             '/home': { path: '/home', crumbs: [{ name: 'Home', path: '/home' }], entries: [{ name: 'projects', path: '/home/projects' }, { name: '.hidden', path: '/home/.hidden', hidden: true }] },
-            '/home/projects': { path: '/home/projects', crumbs: [{ name: 'Home', path: '/home' }, { name: 'projects', path: '/home/projects' }], entries: [{ name: 'vcpchat', path: '/home/projects/vcpchat' }] },
+            '/home/projects': { path: '/home/projects', crumbs: [{ name: 'Home', path: '/home' }, { name: 'projects', path: '/home/projects' }], entries: [{ name: 'vcpchat', path: '/home/projects/vcpchat' }, { name: 'labs', path: '/home/projects/labs' }] },
         };
         const browser = window.VCPUIUX.mountDirectoryBrowser({
             open: true,
@@ -1144,6 +1144,28 @@ try {
     assert.equal(directoryBrowserGeometry.selected, 'projects');
     assert.equal(directoryBrowserGeometry.hiddenPressed, 'true');
     assert.deepEqual(directoryBrowserGeometry.geometry, { rowHeight: '28px', rowRadius: '6px', columnMinWidth: '256px', footerPadding: '12px 24px' });
+    const directoryBrowserCreateGeometry = await page.evaluate(async () => {
+        const dialog = document.querySelector('.vcp-directory-browser[role="dialog"]');
+        [...dialog.querySelectorAll('.vcp-directory-browser-footer button')].find(button => button.textContent === 'New folder')?.click();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const child = document.querySelector('.vcp-directory-browser-create-dialog[role="dialog"]');
+        const childStyle = getComputedStyle(child);
+        const parentRow = dialog.querySelector('.vcp-directory-browser-row');
+        const input = child.querySelector('.vcp-directory-browser-create-input');
+        const beforeEscape = { parentDisabled: parentRow.disabled, childWidth: childStyle.width, childPadding: childStyle.padding, inputHeight: getComputedStyle(input).height };
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const escaped = document.querySelector('.vcp-directory-browser-create-dialog') === null && dialog.isConnected;
+        [...dialog.querySelectorAll('.vcp-directory-browser-footer button')].find(button => button.textContent === 'New folder')?.click();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const activeInput = document.querySelector('.vcp-directory-browser-create-input');
+        activeInput.value = 'labs'; activeInput.dispatchEvent(new Event('input', { bubbles: true }));
+        [...document.querySelectorAll('.vcp-directory-browser-create-actions button')].find(button => button.textContent === 'Create')?.click();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const selected = dialog.querySelector('.vcp-directory-browser-row[aria-current="true"]')?.textContent || '';
+        return { beforeEscape, escaped, selected, childRemoved: document.querySelector('.vcp-directory-browser-create-dialog') === null };
+    });
+    assert.deepEqual(directoryBrowserCreateGeometry, { beforeEscape: { parentDisabled: true, childWidth: '380px', childPadding: '0px', inputHeight: '44px' }, escaped: true, selected: 'labs', childRemoved: true });
     const directoryBrowserScreenshot = path.join(root, 'reports', 'vcp-harness-directory-browser-foundation.png');
     await page.screenshot({ path: directoryBrowserScreenshot });
     assert.ok((await fs.stat(directoryBrowserScreenshot)).size > 1024, 'DirectoryBrowser foundation screenshot is unexpectedly empty');
@@ -1158,8 +1180,8 @@ try {
         delete window.__harnessDirectoryBrowserFixture;
         return { opened: fixture.opened, closed, onClose: fixture.closed.length };
     });
-    assert.deepEqual(directoryBrowserLifecycle, { opened: ['/home/projects'], closed: true, onClose: 0 });
-    await fs.writeFile(path.join(root, 'reports', 'vcp-harness-directory-browser-foundation.json'), `${JSON.stringify({ ...directoryBrowserGeometry, lifecycle: directoryBrowserLifecycle }, null, 2)}\n`, 'utf8');
+    assert.deepEqual(directoryBrowserLifecycle, { opened: ['/home/projects/labs'], closed: true, onClose: 0 });
+    await fs.writeFile(path.join(root, 'reports', 'vcp-harness-directory-browser-foundation.json'), `${JSON.stringify({ ...directoryBrowserGeometry, nestedCreate: directoryBrowserCreateGeometry, lifecycle: directoryBrowserLifecycle }, null, 2)}\n`, 'utf8');
     await page.screenshot({ path: primitiveScreenshot });
     const screenshotStat = await fs.stat(primitiveScreenshot);
     assert.ok(screenshotStat.size > 1024, `primitive screenshot is unexpectedly empty: ${screenshotStat.size} bytes`);

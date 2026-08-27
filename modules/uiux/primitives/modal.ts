@@ -20,6 +20,8 @@ export interface ModalProps {
     readonly footer?: Node | readonly Node[];
     readonly headless?: boolean;
     readonly open?: boolean;
+    /** Lets an owning composite decline mask/Escape/close-button dismissal while a child owns interaction. */
+    readonly canClose?: () => boolean;
     readonly onClose?: () => void;
 }
 
@@ -124,6 +126,7 @@ export function mountModal(props: ModalProps, scope: UiScope): ModalController {
     };
     const close = (notify = false) => {
         if (!active) return;
+        if (notify && props.canClose && !props.canClose()) return;
         active = false;
         releaseOpenEffects();
         root.remove();

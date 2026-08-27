@@ -14,6 +14,7 @@
     "screenshot": "fixtures/vcp/directory-browser.foundation.png",
     "report": "fixtures/vcp/directory-browser.foundation.json",
     "status": "foundation-electron-active",
+    "nestedCreate": "fixed-viewport Electron evidence: 380px child dialog, 44px input, parent inert, Escape retracts child, injected create selects result",
     "pixelDiff": "pending-same-semantic-harness-fixture"
   }
 }

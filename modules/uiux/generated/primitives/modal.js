@@ -108,6 +108,8 @@ export function mountModal(props, scope) {
     const close = (notify = false) => {
         if (!active)
             return;
+        if (notify && props.canClose && !props.canClose())
+            return;
         active = false;
         releaseOpenEffects();
         root.remove();

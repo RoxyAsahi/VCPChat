@@ -98,13 +98,14 @@ test('Harness DirectoryBrowser foundation aborts stale listings and retracts on 
         const pending = [];
         const opened = [];
         const closed = [];
+        const created = [];
         const browser = mountDirectoryBrowser({
             open: true,
             listDirectory: (path, signal) => new Promise((resolve, reject) => {
                 pending.push({ path, signal, resolve, reject });
                 signal?.addEventListener('abort', () => reject(new dom.window.DOMException('Aborted', 'AbortError')));
             }),
-            createDirectory: async () => '/home/new',
+            createDirectory: async (path, name) => { created.push({ path, name }); return `${path}/${name}`; },
             onOpen: path => opened.push(path),
             onClose: () => closed.push(true),
         }, scope);
@@ -146,10 +147,30 @@ test('Harness DirectoryBrowser foundation aborts stale listings and retracts on 
         assert.ok(document.querySelector('.vcp-directory-browser-path-input'));
         document.querySelector('.vcp-directory-browser-path-input').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         assert.equal(document.querySelector('.vcp-directory-browser-path-input'), null);
+        const newFolder = [...document.querySelectorAll('.vcp-directory-browser-footer button')].find(button => button.textContent === 'New folder');
+        newFolder?.click();
+        assert.ok(document.querySelector('.vcp-directory-browser-create-dialog'));
+        assert.equal(document.querySelector('.vcp-directory-browser[role="dialog"]')?.isConnected, true);
+        const folderInput = document.querySelector('.vcp-directory-browser-create-input');
+        folderInput.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        assert.equal(document.querySelector('.vcp-directory-browser-create-dialog'), null);
+        assert.equal(browser.open, true);
+        newFolder?.click();
+        const activeFolderInput = document.querySelector('.vcp-directory-browser-create-input');
+        activeFolderInput.value = 'labs';
+        activeFolderInput.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+        [...document.querySelectorAll('.vcp-directory-browser-create-actions button')].find(button => button.textContent === 'Create')?.click();
+        await delay(0);
+        assert.deepEqual(created, [{ path: '/home/projects', name: 'labs' }]);
+        assert.equal(pending.length, 1);
+        pending.shift().resolve({ path: '/home/projects', entries: [{ name: 'labs', path: '/home/projects/labs' }] });
+        await delay(0);
+        assert.equal(document.querySelector('.vcp-directory-browser-create-dialog'), null);
+        assert.equal(document.querySelector('.vcp-directory-browser-row[aria-current="true"]')?.textContent, 'folder-openlabs');
         const openButton = document.querySelector('.vcp-directory-browser-footer button:last-of-type');
         assert.equal(openButton?.disabled, false);
         openButton?.click();
-        assert.deepEqual(opened, ['/home/projects']);
+        assert.deepEqual(opened, ['/home/projects/labs']);
         [...document.querySelectorAll('.vcp-directory-browser-footer button')].find(button => button.textContent === 'Cancel')?.click();
         assert.equal(closed.length, 1);
         await browser.dispose();

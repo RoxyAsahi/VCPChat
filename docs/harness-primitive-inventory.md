@@ -45,7 +45,7 @@
 | Model / permission picker | `ui-model-selection/`, `ui-permission-presets/` | loading/selected/risk/error/dismiss | B2 |
 | Settings fields/cards | `ui-settings-plugins/src/client/` | description/invalid/disabled/secret/loading | B2 |
 | Model editor | `ui-settings-models/src/client/` | provider/key/list/empty/error/dialog | B3 |
-| Directory flow | `ui-directory-picker-native/`, `ui-directory-picker-browse/` | foundation-electron-active：Light-DOM Miller browser 已使用 injected listing/create/open/close capabilities，覆盖 single/two pane、hidden entries、abort/close/reopen/dispose，并有 800×600 Electron fixture；breadcrumb → submission-only path editor（Enter scan / Escape cancel）已有 artifact 回归证据。绝不接入 VCP directory IPC、Workspace persistence 或 dynamic-wallpaper path selection。Harness 的 draft preview/filter、nested create dialog、slow scan 与 pixel diff pending | B2 |
+| Directory flow | `ui-directory-picker-native/`, `ui-directory-picker-browse/` | foundation-electron-active：Light-DOM Miller browser 已使用 injected listing/create/open/close capabilities，覆盖 single/two pane、hidden entries、abort/close/reopen/dispose，并有 800×600 Electron fixture；breadcrumb → submission-only path editor（Enter scan / Escape cancel）和 nested create dialog（parent inert、Escape retract、创建后选中）已有 artifact/Electron 证据。绝不接入 VCP directory IPC、Workspace persistence 或 dynamic-wallpaper path selection。Harness 的 draft preview/filter、slow scan 与 pixel diff pending | B2 |
 | Attachment flow | `ui-attachment/src/` | rail/drop/image/lightbox/error | B3 |
 | Tool-call presentation | `ui-tool/src/client/tool/` | queued/running/success/failure/collapsed | B3 |
 | Question / plan review | `ui-user-questions/src/client/` | unanswered/selected/review/submitting/error | B3 |

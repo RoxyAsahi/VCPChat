@@ -94,6 +94,8 @@
 
 2026-08-27 DirectoryBrowser path-submit checkpoint：在同一 Candidate owner 内接入 Harness breadcrumb → Light-DOM path input 的最小安全垂直切片：以当前 list path 预填、Enter 通过 injected `listDirectory` 提交扫描、Escape 仅退出编辑并 `stopPropagation()`（不可让 shared Modal 误关闭）。focused generated-artifact test 覆盖提交、取消、Open target 与重开；该路径编辑仍只是 submission-only，尚未实现 Harness draft debounce、prefix filter、two-leg landing 或 Electron visual fixture，不能扩大成熟度声明。
 
+2026-08-27 DirectoryBrowser nested-create checkpoint：新增 Harness 目录浏览器的 nested create dialog，但仍只经由 injected `createDirectory(path, name)` 工作。子 dialog 打开时 parent Dialog 的 rows、crumbs 与 footer 控件均 inert；Escape 只收回 child；成功 create 由 request token 约束、重扫目标 level 并选中新建 entry。generated artifact focused test 与 800×600@1x Electron fixture 都验证 380px 子 dialog、44px input、parent inert、Escape retract、选择与 Open target。尚未实现 Harness draft preview/filter、slow-scan、two-leg landing 或同语义 pixel diff，因此仍是 `foundation-electron-active`。
+
 本批次不解冻聊天内核、消息渲染、Composer 内部、协议、IPC、持久化、Plugin Loader、chat manifest 或动态壁纸。Harness conversation/tool/markdown 控件可以在实验室复刻，但不得借实验室接入改变这些冻结边界。
 
 ## 0.3 上位规范到执行批次的映射
