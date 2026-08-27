@@ -153,6 +153,15 @@ test('ProducedFiles source audit preserves frozen-domain measurement boundaries'
     assert.ok(report.note.includes('does not create a VCP turn-tail consumer'));
 });
 
+test('ProducedFiles reference audit preserves DOM and geometry provenance', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-produced-files-reference.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-produced-files-reference.json'), 'utf8'));
+    assert.equal(report.domContract, true);
+    assert.equal(report.cssGeometry, '23/23');
+    assert.equal(report.candidateStatus, 'source-only frozen chat deliverables; no VCP production consumer or paired visual capture');
+    assert.ok(report.evidenceGaps.includes('no VCP turn-tail consumer'));
+});
+
 test('Harness fixture coverage reports contracts without replayable cases', () => {
     execFileSync(process.execPath, ['scripts/check-harness-fixture-coverage.mjs'], { cwd: root, stdio: 'pipe' });
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-fixture-coverage.json'), 'utf8'));
