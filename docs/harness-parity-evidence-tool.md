@@ -26,4 +26,8 @@ Run `npm run check:harness-capture-prerequisites` before browser capture. It
 reports missing Harness package aliases or scaffold files without installing
 dependencies or mutating the source checkout.
 
+Run `npm run scan:harness-ui-inventory` to rescan exported Harness client
+components. The report separates portable primitives, composites, and frozen
+domain surfaces, then lists source exports without a reference contract.
+
 The command is intentionally report-first: Candidate Lab entries remain gaps and do not become production parity claims. Use `--strict` only when a release gate requires every provenance and interaction gap to be closed.
