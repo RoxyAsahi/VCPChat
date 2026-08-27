@@ -40,7 +40,7 @@
 
 | Pattern | Harness source | Lab states | 批次 |
 | --- | --- | --- | --- |
-| Agent Preset picker | `ui-agent-preset/src/client/AgentPresetSeat.tsx`, `PresetMenu.tsx`, `AgentPresetRow.tsx` | candidate-interaction-active（seat form：closed/open/selected/hover/focus/busy-disabled/error 已复刻并有 geometry/screenshot fixture；PresetMenu `· Custom` trust 后缀、AgentPresetRow 36px pill、introduce-cue 动画仍未复刻；`--dsw-alias-label-quaternary` 上游未定义的 token 缺口已如实记录；VCP 无合法 production consumer，禁止 Stable） | B2 |
+| Agent Preset picker | `ui-agent-preset/src/client/AgentPresetSeat.tsx`, `PresetMenu.tsx`, `AgentPresetRow.tsx` | candidate-interaction-active（seat form 与 row form 均已复刻并有 geometry/screenshot fixture：seat 28px pill + hero chip 合同；row = title/desc 列（error 时 desc `role="alert"`）+ 36px PresetMenu pill，portal menu align-end、string label、trust==='user' 时 `· Custom` 后缀、disabled=busy‖!writable‖empty、loading/`name ?? id` label 回退链；仅 introduce-cue 动画仍未复刻；`--dsw-alias-label-quaternary` 上游未定义的 token 缺口已如实记录；VCP 无合法 production consumer，禁止 Stable） | B2 |
 | Command / mention popup | `ui-input-trigger/src/client/`, `ui-commands/.../PopupSelectView.tsx` | query/empty/highlight/keyboard/commit/dismiss | B2 |
 | Model / permission picker | `ui-model-selection/`, `ui-permission-presets/` | loading/selected/risk/error/dismiss | B2 |
 | Settings fields/cards | `ui-settings-plugins/src/client/` | description/invalid/disabled/secret/loading | B2 |
