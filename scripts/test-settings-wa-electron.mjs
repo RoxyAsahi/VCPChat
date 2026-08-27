@@ -810,6 +810,76 @@ try {
     assert.equal(flushedSnapshot.forumUsername, flushValues.forumUser, `close flush committed forum username draft via ForumConfigUiService (${JSON.stringify(flushedSnapshot)})`);
     console.log('  [PASS] 6b. close flush commits per-field typed drafts (settings fields + forum credentials)');
 
+    // ---- 6c. Wide layout radio pair is owned by the typed field owner:
+    // toggling marks dirty without driving legacy submit, and closing the
+    // modal before the debounce commits the boolean through the same owner.
+    const wideLayoutBefore = await page.evaluate(() => window.VCPUISettingsBridge.getTypedService().state.get().enableWideChatLayout);
+    await page.evaluate(() => window.uiHelperFunctions.openModal('globalSettingsModal'));
+    await page.waitForFunction(() => document.getElementById('globalSettingsForm'), { timeout: timeoutMs });
+    await new Promise(resolve => setTimeout(resolve, 250));
+    const wideLayoutSeam = {
+        requestSubmitCalls: 0,
+    };
+    const seamProbesBound = await page.evaluate((baseline) => {
+        const form = document.getElementById('globalSettingsForm');
+        if (!form || !form.requestSubmit) return false;
+        const originalSubmit = form.requestSubmit.bind(form);
+        form.requestSubmit = (...args) => {
+            baseline.requestSubmitCalls += 1;
+            return originalSubmit(...args);
+        };
+        return true;
+    }, wideLayoutSeam);
+    assert.equal(seamProbesBound, true, 'wide-layout seam probes bound');
+    // Attribution: the save-result CustomEvent does not bubble, so listen
+    // directly on the form node itself; a listener keeps firing even after
+    // the modal tree is torn down, since dispatch does not need connectivity.
+    await page.evaluate(() => {
+        window.__wideLayoutSaveResult = null;
+        const form = document.getElementById('globalSettingsForm');
+        form?.addEventListener('vcp-settings-save-result', event => {
+            window.__wideLayoutSaveResult = { owner: event.detail?.owner || null, success: event.detail?.success === true };
+        }, false);
+    });
+    const wideLayoutToggle = wideLayoutBefore === true ? 'chatLayoutModeNormal' : 'chatLayoutModeWide';
+    const expectedWideLayout = wideLayoutBefore !== true;
+    await page.evaluate(id => {
+        const radio = document.getElementById(id);
+        radio.checked = true;
+        radio.dispatchEvent(new Event('change', { bubbles: true }));
+    }, wideLayoutToggle);
+    const wideDirtyAtClose = await page.evaluate(() => {
+        const form = document.getElementById('globalSettingsForm');
+        return {
+            dirty: form.dataset.vcpSettingsDirty === 'true',
+            ownerMarker: document.getElementById('chatLayoutModeWide')?.dataset.vcpTypedFieldOwner || null,
+            normalChecked: document.getElementById('chatLayoutModeNormal')?.checked,
+            wideChecked: document.getElementById('chatLayoutModeWide')?.checked,
+        };
+    });
+    assert.equal(wideDirtyAtClose.dirty && wideDirtyAtClose.ownerMarker === 'true', true, `wide-layout radio is typed-owned and marks dirty (${JSON.stringify(wideDirtyAtClose)})`);
+    assert.equal(wideDirtyAtClose.wideChecked, expectedWideLayout, `wide-layout radio draft matches toggle (${JSON.stringify(wideDirtyAtClose)})`);
+    assert.equal(wideDirtyAtClose.normalChecked, !expectedWideLayout, `normal-layout radio draft matches toggle (${JSON.stringify(wideDirtyAtClose)})`);
+    await page.evaluate(() => window.uiHelperFunctions.closeModal('globalSettingsModal'));
+    await page.waitForFunction(() => !document.getElementById('globalSettingsModal')?.classList.contains('active'), { timeout: timeoutMs });
+    const wideFlushDeadline = Date.now() + timeoutMs;
+    let flushedWideLayout = null;
+    while (Date.now() < wideFlushDeadline) {
+        flushedWideLayout = await page.evaluate(() => window.VCPUISettingsBridge.getTypedService().state.get().enableWideChatLayout);
+        if (flushedWideLayout === expectedWideLayout) break;
+        await sleep(250);
+    }
+    assert.equal(flushedWideLayout, expectedWideLayout, `close flush committed the wide-layout boolean draft (${JSON.stringify({ flushedWideLayout, expectedWideLayout })})`);
+    assert.equal(wideLayoutSeam.requestSubmitCalls, 0, `wide-layout drafting never drives legacy whole-form submit (${JSON.stringify(wideLayoutSeam)})`);
+    let wideSaveAttribution = null;
+    const attributionDeadline = Date.now() + timeoutMs;
+    while (Date.now() < attributionDeadline) {
+        wideSaveAttribution = await page.evaluate(() => window.__wideLayoutSaveResult);
+        if (wideSaveAttribution?.owner === 'typed-settings-field-owner') break;
+        await sleep(250);
+    }
+    assert.equal(wideSaveAttribution?.owner === 'typed-settings-field-owner' && wideSaveAttribution.success === true, true, `wide-layout close flush published by typed field owner (${JSON.stringify({ wideSaveAttribution })})`);
+    console.log('  [PASS] 6c. wide layout radio pair is a single-owner typed field with close-flush evidence');
     // Reopen after a full reload: the form must be re-populated from settings.json.
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout: timeoutMs });
