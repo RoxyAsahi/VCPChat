@@ -1,0 +1,54 @@
+{
+  "primitive": "ProducedFiles",
+  "provenance": {
+    "sources": [
+      "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-deliverables/src/client/ProducedFiles.tsx"
+    ],
+    "style": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-deliverables/src/client/ProducedFiles.module.css"
+  },
+  "root": {
+    "tag": "div",
+    "class": "root",
+    "children": ["span.label", "div.row", "div.measure[aria-hidden=true]"]
+  },
+  "row": {
+    "class": "row",
+    "children": ["button.file*", "span.more?"],
+    "visibleLimit": 6,
+    "overflow": "hidden paths become localized span.more"
+  },
+  "file": {
+    "tag": "button",
+    "type": "button",
+    "class": "file",
+    "title": "full path",
+    "ariaLabel": "localized open action with basename",
+    "action": "openFile(path)"
+  },
+  "showFolder": {
+    "conditional": "hidden > 0 && isLoopback && hostDescription.canOpenPath === true",
+    "tag": "button",
+    "type": "button",
+    "action": "openFile('.')"
+  },
+  "measurement": {
+    "class": "measure",
+    "ariaHidden": true,
+    "purpose": "measure chip and remainder widths without affecting layout or accessibility",
+    "observer": "ResizeObserver disconnects on effect cleanup"
+  },
+  "states": ["empty-no-row", "single-file", "six-files-fit", "overflow-more", "overflow-show-folder", "loopback-disabled", "resize-remeasure", "dispose"],
+  "interaction": [
+    "visible file buttons open their full path",
+    "long paths remain title-disambiguated while basename is rendered",
+    "overflow count never silently drops hidden paths",
+    "show-folder action requires loopback and Host canOpenPath",
+    "ResizeObserver recomputes shown prefix and disconnects on dispose"
+  ],
+  "aria": [
+    "file buttons expose localized open labels",
+    "measurement probes are aria-hidden",
+    "show-folder remains a native button"
+  ],
+  "vcpDeviation": "Turn-tail produced files are frozen chat deliverables. This source-only contract must not be used to modify VCP chat rendering or create a production consumer."
+}
