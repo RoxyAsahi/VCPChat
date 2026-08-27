@@ -32,14 +32,14 @@ The capture includes fixed-viewport screenshots and runtime records for:
 - narrow resize followed by exact viewport restoration;
 - live CDP matched-selector/cascade records, including Settings field rules.
 
-## Finding: Agent Settings interaction stress exits 13
+## Finding (resolved): Agent Settings interaction stress cleanup
 
-Command:
+Initial command:
 
 `npm run test:electron-agent-settings-interaction`
 
-The stress script prints `Electron lifecycle stress passed`, but Node exits
-with code 13 and reports an unsettled top-level await at
+The stress script initially printed `Electron lifecycle stress passed`, but
+Node exited with code 13 and reported an unsettled top-level await at
 `scripts/test-electron-lifecycle-stress.mjs:1336`:
 
 ```js
@@ -48,9 +48,11 @@ await new Promise(resolve => modelServer?.close?.(() => resolve()));
 
 The Agent Select interaction mode does not create `modelServer`, so the
 optional `close` call does not invoke the callback and the Promise never
-settles. This is a QA harness cleanup defect, not a renderer visual failure;
-it must be fixed before treating the Agent Settings interaction command as a
-clean gate.
+settles. This was a QA harness cleanup defect, not a renderer visual failure.
+
+Parallel commit `431cbc6a` guarded the optional server cleanup. A rerun after
+that fix exits 0 with stable lifecycle counts (`listeners=472`,
+`lifecycleResources=327`, `detachedRoots=0`, `detachedOptions=0`).
 
 ## Visual conclusion
 
