@@ -245,3 +245,15 @@ roadmap checkpoint 追加于 `38ec8bb8`。
 - 新增 journey 6b 证据：关闭模态绕过 400ms 防抖，六个字段（三个 range、radius choice、home tagline、论坛凭据）在关闭瞬间的屏幕草稿必须由 modal-visibility flush 原样提交至两个 typed owner 的服务端快照。诊断方式记录：`chatAPI.*` 为 contextBridge 只读访问器不可 monkey-patch，需拦截 renderer 层可变对象（typed service `.save.execute`）或在 bridge 内临时暴露 pendingPatch 观察点。
 - 门禁：Electron journey 全绿（14 PASS 含 6b）、`check:uiux`、`test:uiux`、`check-settings-source-equivalence`、`check:uiux:artifacts`（60 文件，线程 A menu 工件已同步）均通过。
 - 待补证据不变：packaged-artifact / 非 darwin 平台运行证据仍为 pending。
+
+### 2026-08-27 批次 7：enableWideChatLayout 单选对单一 owner 收口
+
+状态：`stable`（真实 consumer 单一 owner + Electron 证据闭合）。提交 `a6d5c208`。
+
+- 真实 consumer/owner：宽屏布局 `#chatLayoutModeWide`/`#chatLayoutModeNormal` 加入 TYPED_FIELD_DEFINITIONS（新增 `inverse-boolean` kind；radio 以 checked 而非 value 取值），draft/dirty/close flush/retry 归属同一 typed field owner。
+- 删除的 legacy path：settings-bridge 通用 snapshot projection 中的 `chatLayoutModeWide`（checked）与 `chatLayoutModeNormal`（checked-inverse）两行；presentationOwner 兜底本已被 `typedSettingsProjectionActive` 抑制，不再双轨。manager 的持久化读保留（Classic 兼容，与 Forum 模式一致）。
+- Electron journey 新增 6c：切换单选 → typed dirty + owner 标记；反向证据 `requestSubmitCalls===0`；关闭模态绕过防抖后布尔草稿经关闭 flush 提交至服务端快照；save-result 发布者归因为 `typed-settings-field-owner`。旅程全绿（15 PASS）。
+- 门禁：journey、`test:uiux`、source-equivalence、`guard:classic-retirement`、`test:uiux:artifacts` 通过；`check:uiux` 与 `check:uiux:artifacts` 在 B 范围内通过（影子拷贝移出线程 A 在途的 popup-select.ts 及生成件后验证，62 文件一致；随后已原样恢复）。污染原因是线程 A 未提交的 WIP，非本批回归。
+- 方法论记录：typed service 经 UI-service registry 解析，`getTypedService()` 可能返回与 owner 闭包不同的实例——monkey-patch 拦截不可靠；owner 归属证据应监听表单节点上的 `vcp-settings-save-result`（该事件无 `bubbles:true`，不能 document 冒泡监听）。
+- roadmap checkpoint：线程 A 正在并发编辑 roadmap.md，按 §8 冲突规则本轮不写入，checkpoint 下轮文件空闲时补记。
+- 待补证据不变：packaged-artifact / 非 darwin 平台运行证据仍为 evidence-pending。
