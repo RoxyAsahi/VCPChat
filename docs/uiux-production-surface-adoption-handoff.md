@@ -404,3 +404,11 @@ roadmap checkpoint 追加于 `38ec8bb8`。
 3. **门禁**：journey 新增 legacyInputWraps===0、primitiveInputs>0、textareas 全部裸态、continueWritingPrompt min-height 64px 断言，几何 pick 改指 `.vcp-uiux-input-wrap`（r8）；source-equivalence 增 bridge/ui-helpers mountInput 契约与退场类清零断言；test-ui-system jsdom 段改断「无 primitive 运行时时 input 保持裸态」的退化契约。
 
 探针取证：全 8 tab 36 输入框中 32 个桥挂真件（r8/32px/fill）、3 个 typed 挂载（r8/32px，无 fill 属预期）、1 个 ColorPair 文本半区归 typed ColorPair；4 textarea 全部裸态 64px；`.vcp-harness-input-wrap` 全模态清零。Electron journey 23 PASS；四个快门禁全绿。
+
+### 2026-08-27 补记七（批次③）：开关全量换真 mountToggle，本地 slider 退场
+
+批次③把三张设置表单（agent/group/global）的 `enhance('Switch')` 遗留增强退役，共享新 owner `mountHarnessSwitches`：每个 `label.switch` 内的 checkbox 逐个 `api.mountToggle(input, scope)`——原生 input 仍是唯一业务节点，真件 wrap（36×20、r10 轨道、`:has(:checked)` 变色、focus-within ring）接管呈现，并用内联 `display:none` 隐藏旧 `.slider`（dispose 恢复）。typed 主页视觉双开关（showHomeVisualBrand/Tagline）维持自身挂载跳过；无 VCPUIUX/scope 的退化面保留 `enhance('Switch')` 原生内核呈现（jsdom 契约不破）。settings.css 删除全部 6 组 `.slider` 规则（agent×2、group×2、global×2，含 `/* ---- switches ---- */` 组注释）——真件 unlayered 样式表成为开关呈现唯一来源。
+
+探针取证：global 表单 17 个 checkbox（含 2 个 typed）全部投影为 `.vcp-uiux-toggle`、可见 slider 清零、label 点击 round-trip 写回原生 checked、轨道 r10。Electron journey 新增 switchInputs===primitiveToggles 与 visibleLegacySliders===0 断言；source-equivalence 增 `mountHarnessSwitches`/`api.mountToggle` 契约与 css `.slider` 清零断言。四个快门禁 + journey 全绿。
+
+至此计划内三批完成：设置页非 typed 控件的呈现层已全量收敛到真组件库 primitive（select/input/toggle），bridge 本地复刻件（select/menu 投影、input 壳、slider 开关、情性 enhance 注册）全部退场；设置壳（导航/行/头部）、directory-browser/popup-select 维持既有结论不动。上游契约缺口累计报线程 A：mountSelect 无 roving 导航与重建 API、mountInput 无多行形态。
