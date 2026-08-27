@@ -37,6 +37,13 @@
 | BrandWordmark / FishLogo / icons | `ui-primitives/src/` and `src/icons/`；app-wide assets | inventoried | B1 |
 | ConnectionBanner | `ui-primitives/src/ConnectionBanner.tsx`；连接重试提示 | candidate-interaction-active；reconnecting/hidden、aria-live、owner teardown 已建立，Harness pixel fixture与 VCP production consumer pending | B3 |
 | OnboardingSurface | `ui-primitives/src/OnboardingSurface.tsx`；首运行 takeover | candidate-interaction-active；body portal、mask/stage、root inert 与 teardown 已建立，Harness pixel fixture与 VCP production consumer pending | B3 |
+| LanguageRow | `locale/src/client/LanguageRow.tsx`；locale plugin 的 General settings row | candidate-source-only；Light-DOM row + 36px selector + Menu portal、snapshot 更新和 teardown 已建立；VCP 无 locale capability/persisted key，Harness 同语义 pixel fixture pending | B2 |
+
+## Real consumer migration ledger
+
+| Surface / field | Canonical source | Current owner | Legacy path | Deletion condition | Evidence | Gate |
+| --- | --- | --- | --- | --- | --- | --- |
+| Home tagline / `homeVisualTagline` | existing Settings snapshot + persisted key | `typed-settings-field-owner` + generated Light-DOM Input | generic `mountHarnessInputWrappers` is already skipped for this id; remaining Settings dirty/autosave orchestration is shared legacy infrastructure | remove the field-specific compatibility projection only after generated Input default/placeholder/focus/disabled/error DOM, computed-style, geometry, pixel, artifact-only Electron and reload/teardown evidence pass | `scripts/test-settings-wa-electron.mjs`, `scripts/capture-vcp-dom-fixtures.mjs`, `scripts/check-harness-field-visual-evidence.mjs` | `production-consumer-active / visual-equivalence-pending`; not `verified-candidate` |
 
 ## Interaction patterns and composites
 

@@ -179,7 +179,6 @@ try {
                     pick('.vcp-harness-general-item'),
                     pick('.vcp-harness-input-wrap'),
                     pick('.vcp-harness-select-trigger'),
-                    pick('.vcp-harness-choice-option'),
                 ].filter(Boolean);
             })(),
         };
@@ -252,7 +251,7 @@ try {
             const style = getComputedStyle(node);
             return { selector, rect: node.getBoundingClientRect().toJSON(), height: style.height, minHeight: style.minHeight, padding: style.padding, borderRadius: style.borderRadius, fontSize: style.fontSize, lineHeight: style.lineHeight };
         };
-        return [probe('.vcp-harness-select-trigger'), probe('.vcp-harness-menu-item'), probe('.vcp-harness-choice-option')].filter(Boolean);
+        return [probe('.vcp-harness-select-trigger'), probe('.vcp-harness-menu-item')].filter(Boolean);
     });
     assert.ok(visibleGeometry.some(item => item.selector === '.vcp-harness-select-trigger' && ((item.height === '36px' && item.borderRadius === '18px') || (item.minHeight === '40px' && item.borderRadius === '10px')) && item.fontSize === '14px' && item.lineHeight === '22px'), 'visible select geometry matches Harness trigger contract');
     assert.ok(shellState.computedGeometry.some(item => item.selector === '.vcp-harness-input-wrap' && item.borderRadius === '8px'), 'Input wrapper geometry matches Harness contract');
@@ -314,17 +313,18 @@ try {
     assert.equal(Number(portalStacking.menuZ) > 1400, true, `portal menu z-index stacks above the settings overlay 1400 (got ${portalStacking.menuZ})`);
     assert.equal(portalStacking.menuHitInside, true, 'portal menu is the topmost hit-target at its own position (visible to pointer events)');
     console.log('  [PASS] 1e. portal menu stacks above the settings overlay (z-index + hit-test evidence)');
-    // The bridge's own Harness select (font presets, quick actions) appends a
-    // second portal family to document.body with the same hard-coded z-index;
-    // the stacking override must cover it too.
+    // The library Select primitive mounted by the bridge for every non-typed
+    // select (font presets, quick actions) also appends its menu to
+    // document.body with the same hard-coded z-index; the stacking override
+    // must cover it too.
     const harnessPortalStacking = await page.evaluate(async () => {
-        const fontTrigger = document.querySelector('#chatFontPreset')?.closest('.vcp-harness-select-wrap')?.querySelector('.vcp-harness-select-trigger');
+        const fontTrigger = document.querySelector('#chatFontPreset')?.closest('.vcp-harness-select')?.querySelector('.vcp-harness-select-trigger');
         if (!fontTrigger) return { triggerFound: false };
         fontTrigger.scrollIntoView({ block: 'center' });
         await new Promise(resolve => setTimeout(resolve, 150));
         fontTrigger.click();
         await new Promise(resolve => setTimeout(resolve, 250));
-        const menu = document.body.querySelector(':scope > .vcp-harness-menu-portal');
+        const menu = document.body.querySelector(':scope > .vcp-uiux-primitive-menu:not([hidden])');
         const evidence = {
             triggerFound: true,
             expanded: fontTrigger.getAttribute('aria-expanded'),
@@ -342,7 +342,7 @@ try {
         // a plain click; a synthetic click alone leaves the portal open.
         document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
         await new Promise(resolve => setTimeout(resolve, 150));
-        evidence.closedAfterPointerdown = !document.body.querySelector(':scope > .vcp-harness-menu-portal:not([hidden])');
+        evidence.closedAfterPointerdown = !document.body.querySelector(':scope > .vcp-uiux-primitive-menu:not([hidden])');
         return evidence;
     });
     assert.equal(harnessPortalStacking.triggerFound && harnessPortalStacking.expanded === 'true' && harnessPortalStacking.menuFound, true, `harness font-preset select opens a body-level portal (${JSON.stringify(harnessPortalStacking)})`);
@@ -357,6 +357,44 @@ try {
         assert.equal(await page.$eval(`#${id}`, node => Boolean(node.closest('.vcp-harness-select-wrap'))), false, `typed ${id} legacy Select wrapper is deleted`);
     }
     assert.equal(await page.$eval('#homeVisualTagline', node => node.parentElement?.classList.contains('vcp-uiux-input-wrap')), true, 'typed Home tagline Input is mounted');
+    // Keep a field-level artifact for the Harness equivalence chain. This is
+    // observational only: the native input remains the canonical business node.
+    const taglineEvidence = await page.$eval('#homeVisualTagline', (input) => {
+        const node = input.parentElement;
+        const rect = (element) => {
+            const value = element.getBoundingClientRect();
+            return { x: value.x, y: value.y, width: value.width, height: value.height };
+        };
+        const style = (element) => {
+            const value = getComputedStyle(element);
+            return {
+                display: value.display,
+                padding: value.padding,
+                gap: value.gap,
+                height: value.height,
+                borderRadius: value.borderRadius,
+                fontSize: value.fontSize,
+                fontWeight: value.fontWeight,
+                lineHeight: value.lineHeight,
+                color: value.color,
+                backgroundColor: value.backgroundColor,
+                borderColor: value.borderColor,
+            };
+        };
+        return {
+            source: 'VCP real Electron Settings consumer',
+            viewport: { width: innerWidth, height: innerHeight, deviceScaleFactor: devicePixelRatio },
+            fieldId: input.id,
+            dom: node?.outerHTML || null,
+            root: node ? { tag: node.tagName.toLowerCase(), class: node.className, rect: rect(node), style: style(node) } : null,
+            input: { tag: input.tagName.toLowerCase(), class: input.className, rect: rect(input), style: style(input) },
+            states: { disabled: input.disabled, placeholder: input.getAttribute('placeholder') || '', value: input.value },
+        };
+    });
+    await fs.mkdir(path.join(root, 'reports'), { recursive: true });
+    await fs.writeFile(path.join(root, 'reports/vcp-home-tagline-input.json'), `${JSON.stringify(taglineEvidence, null, 2)}\n`, 'utf8');
+    await page.$eval('#homeVisualTagline', (input) => input.parentElement?.scrollIntoView({ block: 'center', inline: 'nearest' }));
+    await page.$('#homeVisualTagline').then((handle) => handle?.screenshot({ path: path.join(root, 'reports/vcp-home-tagline-input.png') }));
     assert.equal(await page.$eval('#userAvatarBorderColor', node => node.parentElement?.classList.contains('vcp-uiux-color-pair')), true, 'typed avatar color pair is mounted');
     assert.equal(await page.$eval('#userAvatarBorderColorText', node => node.value === node.previousElementSibling?.value), true, 'avatar color mirror follows native source');
     await page.evaluate(() => window.dispatchEvent(new CustomEvent('global-settings-updated', { detail: { settings: { userAvatarBorderColor: '#112233' }, source: 'avatar-color-snapshot-probe' } })));
@@ -384,18 +422,24 @@ try {
     await page.evaluate(() => document.querySelector('.vcp-harness-settings-nav-cell[data-section="user-identity"]')?.click());
     await page.waitForFunction(() => document.querySelector('#globalSettingsModal #section-user-identity.active'), { timeout: timeoutMs });
 
-    // ---- 1b. Harness select and compact choice primitives ----
+    // ---- 1b. Library select primitive adoption over every business select ----
     const controlState = await page.evaluate(() => ({
-        longSelects: [...document.querySelectorAll('#globalSettingsModal .vcp-harness-select-wrap select')].map(select => select.id),
-        choiceRows: document.querySelectorAll('#globalSettingsModal .vcp-harness-choice-wrap').length,
+        primitiveSelects: [...document.querySelectorAll('#globalSettingsModal .vcp-harness-select select')].map(select => select.id),
+        typedSelects: [...document.querySelectorAll('#globalSettingsModal .vcp-harness-field .vcp-harness-select select')].map(select => select.id),
+        legacyChoiceRows: document.querySelectorAll('#globalSettingsModal .vcp-harness-choice-wrap').length,
+        legacyWraps: document.querySelectorAll('#globalSettingsModal .vcp-harness-select-wrap').length,
+        bareSelects: [...document.querySelectorAll('#globalSettingsModal select.vcp-settings-bare-select')].map(select => select.id),
         nativeSources: document.querySelectorAll('#globalSettingsModal select.vcp-harness-select-native').length,
-        visibleSelectProjections: [...document.querySelectorAll('#globalSettingsModal select.vcp-harness-select-native')].filter(select => {
-            const trigger = select.closest('.vcp-harness-select-wrap')?.querySelector('.vcp-harness-select-trigger');
+        visibleSelectProjections: [...document.querySelectorAll('#globalSettingsModal .vcp-harness-select select')].filter(select => {
+            const trigger = select.closest('.vcp-harness-select')?.querySelector('.vcp-harness-select-trigger');
             return trigger && getComputedStyle(trigger).display !== 'none';
         }).length,
     }));
-    assert.ok(controlState.longSelects.includes('chatFontPreset'), `font preset uses Harness select: ${controlState.longSelects.join(',')}`);
-    assert.ok(controlState.choiceRows >= 1, 'short enumerations use compact choice rows');
+    assert.ok(controlState.primitiveSelects.includes('chatFontPreset'), `font preset uses the library select primitive: ${controlState.primitiveSelects.join(',')}`);
+    assert.ok(controlState.typedSelects.length === 6, `six typed appearance selects stay inside the typed Field owner (${controlState.typedSelects.join(',')})`);
+    assert.equal(controlState.legacyChoiceRows, 0, 'retired local choice projection is deleted');
+    assert.equal(controlState.legacyWraps, 0, 'retired local select wrap is deleted');
+    assert.ok(controlState.bareSelects.includes('assistantAgent'), `empty enumerations keep the bare-select fallback: ${controlState.bareSelects.join(',')}`);
     const disclosureState = await page.evaluate(() => {
         const header = document.querySelector('#globalSettingsModal .vcp-harness-disclosure-row');
         return header ? { role: header.getAttribute('role'), controls: header.getAttribute('aria-controls'), expanded: header.getAttribute('aria-expanded') } : null;
@@ -405,69 +449,71 @@ try {
         assert.ok(disclosureState.controls, 'DisclosureRow exposes aria-controls');
         assert.ok(['true', 'false'].includes(disclosureState.expanded), 'DisclosureRow exposes aria-expanded');
     }
-    assert.equal(controlState.nativeSources, controlState.longSelects.length + 6, 'native select remains the sole source for long controls and typed vertical slices');
-    assert.equal(controlState.visibleSelectProjections, controlState.longSelects.length, 'each long select has exactly one visible Harness trigger');
+    assert.equal(controlState.nativeSources, controlState.primitiveSelects.length, 'the native select remains the sole business source behind every primitive projection');
+    assert.equal(controlState.visibleSelectProjections, controlState.primitiveSelects.length, 'each projected select has exactly one visible primitive trigger');
     await page.evaluate(() => {
         const select = document.getElementById('chatFontPreset');
-        const trigger = select.closest('.vcp-harness-select-wrap')?.querySelector('.vcp-harness-select-trigger');
+        const trigger = select.closest('.vcp-harness-select')?.querySelector('.vcp-harness-select-trigger');
         trigger?.click();
     });
-    await page.waitForFunction(() => document.querySelector('#chatFontPreset')?.closest('.vcp-harness-select-wrap')?.querySelector('.vcp-harness-select-trigger[aria-expanded="true"]')
-        && document.querySelector('.vcp-harness-menu-portal:not([hidden])'), { timeout: timeoutMs });
+    await page.waitForFunction(() => document.querySelector('#chatFontPreset')?.closest('.vcp-harness-select')?.querySelector('.vcp-harness-select-trigger[aria-expanded="true"]')
+        && document.querySelector('.vcp-uiux-primitive-menu:not([hidden])'), { timeout: timeoutMs });
     const popoverState = await page.evaluate(() => {
-        const wrap = document.getElementById('chatFontPreset').closest('.vcp-harness-select-wrap');
-        const popover = document.querySelector('.vcp-harness-menu-portal:not([hidden])');
+        const wrap = document.getElementById('chatFontPreset').closest('.vcp-harness-select');
+        const popover = document.querySelector('.vcp-uiux-primitive-menu:not([hidden])');
+        const trigger = wrap.querySelector('.vcp-harness-select-trigger');
+        const style = getComputedStyle(trigger);
         return {
             options: popover?.querySelectorAll('[role="menuitem"]').length || 0,
-            checked: popover?.querySelectorAll('[role="menuitem"].is-selected').length || 0,
-            triggerHasMenu: wrap.querySelector('.vcp-harness-select-trigger')?.getAttribute('aria-haspopup') === 'menu',
-            background: getComputedStyle(wrap.querySelector('.vcp-harness-select-trigger')).backgroundColor,
-            border: getComputedStyle(wrap.querySelector('.vcp-harness-select-trigger')).borderTopColor,
-            height: getComputedStyle(wrap.querySelector('.vcp-harness-select-trigger')).height,
-            radius: getComputedStyle(wrap.querySelector('.vcp-harness-select-trigger')).borderTopLeftRadius,
+            checked: popover?.querySelectorAll('[role="menuitem"][data-selected="true"]').length || 0,
+            triggerHasMenu: trigger?.getAttribute('aria-haspopup') === 'menu',
+            background: style.backgroundColor,
+            border: style.borderTopColor,
+            height: style.height,
+            minHeight: style.minHeight,
+            radius: style.borderTopLeftRadius,
+            triggerWidth: wrap.getBoundingClientRect().width,
         };
     });
     assert.ok(popoverState.options >= 5, 'long select renders a real option popover');
-    assert.equal(popoverState.triggerHasMenu, true, 'Harness select trigger owns a Menu primitive');
+    assert.equal(popoverState.triggerHasMenu, true, 'primitive select trigger owns a Menu primitive');
     assert.equal(popoverState.checked, 1, 'popover exposes one checked option');
-    assert.equal(popoverState.height, '36px', 'Harness trigger uses 36px capsule height');
-    assert.equal(popoverState.radius, '18px', 'Harness trigger uses 18px capsule radius');
-    assert.equal(await page.$eval('.vcp-harness-menu-portal:not([hidden])', menu => getComputedStyle(menu).borderRadius), '12px', 'Harness menu surface uses r12');
-    const menuWidth = await page.$eval('.vcp-harness-menu-portal:not([hidden])', menu => ({ min: getComputedStyle(menu).minWidth, max: getComputedStyle(menu).maxWidth }));
-    assert.equal(menuWidth.min, '218px', 'Harness menu surface uses min-width 218px');
-    assert.equal(menuWidth.max, '360px', 'Harness menu surface uses max-width 360px');
-    assert.equal(await page.$eval('.vcp-harness-menu-portal:not([hidden]) [role="menuitem"]', option => getComputedStyle(option).minHeight), '40px', 'Harness menu item uses min-height 40px');
+    assert.equal(popoverState.minHeight, '40px', 'primitive trigger uses the 40px control contract');
+    assert.equal(popoverState.radius, '10px', 'primitive trigger uses the 10px control radius');
+    assert.equal(await page.$eval('.vcp-uiux-primitive-menu:not([hidden])', menu => getComputedStyle(menu).borderRadius), '12px', 'primitive menu surface uses r12');
+    assert.equal(await page.$eval('.vcp-uiux-primitive-menu:not([hidden]) [role="menuitem"]', option => getComputedStyle(option).minHeight), '40px', 'primitive menu item uses min-height 40px');
     await page.waitForFunction(() => {
-        const menu = document.querySelector('.vcp-harness-menu-portal:not([hidden])');
+        const menu = document.querySelector('.vcp-uiux-primitive-menu:not([hidden])');
         return menu && getComputedStyle(menu).visibility === 'visible';
     }, { timeout: timeoutMs });
-    const focusedMenuItem = await page.$eval('.vcp-harness-menu-portal:not([hidden]) [role="menuitem"]:not(:disabled)', option => {
+    const focusedMenuItem = await page.$eval('.vcp-uiux-primitive-menu:not([hidden]) [role="menuitem"]:not(:disabled)', option => {
         option.focus();
         return document.activeElement === option;
     });
     assert.equal(focusedMenuItem, true, 'menu item receives keyboard focus');
     await page.keyboard.press('ArrowDown');
     const activeAfterArrow = await page.evaluate(() => ({ role: document.activeElement?.getAttribute('role'), selected: document.querySelector('#chatFontPreset')?.value, active: document.activeElement?.id }));
-    assert.equal(activeAfterArrow.role, 'menuitem', 'menu ArrowDown keeps focus inside the Menu primitive');
+    assert.equal(activeAfterArrow.role, 'menuitem', 'menu ArrowDown keeps focus inside the Menu primitive (bridge keyboard glue)');
     assert.equal(activeAfterArrow.selected, await page.$eval('#chatFontPreset', select => select.value), 'menu highlight does not write business value before Enter');
     await page.keyboard.press('Escape');
-    await page.waitForFunction(() => !document.querySelector('.vcp-harness-menu-portal:not([hidden])'), { timeout: timeoutMs });
-    await page.evaluate(() => document.querySelector('#chatFontPreset')?.closest('.vcp-harness-select-wrap')?.querySelector('.vcp-harness-select-trigger')?.click());
-    await page.waitForFunction(() => document.querySelector('.vcp-harness-menu-portal:not([hidden])'), { timeout: timeoutMs });
-    await page.evaluate(() => document.querySelectorAll('.vcp-harness-menu-portal:not([hidden]) [role="menuitem"]')[1]?.click());
+    await page.waitForFunction(() => !document.querySelector('.vcp-uiux-primitive-menu:not([hidden])'), { timeout: timeoutMs });
+    await page.evaluate(() => document.querySelector('#chatFontPreset')?.closest('.vcp-harness-select')?.querySelector('.vcp-harness-select-trigger')?.click());
+    await page.waitForFunction(() => document.querySelector('.vcp-uiux-primitive-menu:not([hidden])'), { timeout: timeoutMs });
+    await page.evaluate(() => document.querySelectorAll('.vcp-uiux-primitive-menu:not([hidden]) [role="menuitem"]')[1]?.click());
     assert.equal(await page.$eval('#chatFontPreset', select => select.value), await page.$eval('#chatFontPreset', select => select.options[1].value), 'select choice writes through to native source');
-    await page.evaluate(() => document.querySelector('#chatFontPreset')?.closest('.vcp-harness-select-wrap')?.querySelector('.vcp-harness-select-trigger')?.click());
-    await page.waitForFunction(() => Boolean(document.querySelector('.vcp-harness-menu-portal:not([hidden])')), { timeout: timeoutMs });
+    await page.evaluate(() => document.querySelector('#chatFontPreset')?.closest('.vcp-harness-select')?.querySelector('.vcp-harness-select-trigger')?.click());
+    await page.waitForFunction(() => Boolean(document.querySelector('.vcp-uiux-primitive-menu:not([hidden])')), { timeout: timeoutMs });
     await page.mouse.click(4, 4);
-    await page.waitForFunction(() => !document.querySelector('.vcp-harness-menu-portal:not([hidden])'), { timeout: timeoutMs });
-    assert.equal(await page.$eval('#chatFontPreset', select => select.closest('.vcp-harness-select-wrap')?.querySelector('.vcp-harness-select-trigger')?.getAttribute('aria-expanded')), 'false', 'outside click closes the owned portal');
+    await page.waitForFunction(() => !document.querySelector('.vcp-uiux-primitive-menu:not([hidden])'), { timeout: timeoutMs });
+    assert.equal(await page.$eval('#chatFontPreset', select => select.closest('.vcp-harness-select')?.querySelector('.vcp-harness-select-trigger')?.getAttribute('aria-expanded')), 'false', 'outside click closes the owned portal');
     await page.evaluate(() => {
         const select = document.getElementById('assistantAgent');
         select.replaceChildren(new Option('助手 A', 'agent-a'), new Option('助手 B', 'agent-b'));
     });
-    await page.waitForFunction(() => Boolean(document.querySelector('#assistantAgent')?.closest('.vcp-harness-choice-wrap, .vcp-harness-select-wrap')), { timeout: timeoutMs });
-    assert.ok(await page.$eval('#assistantAgent', select => Boolean(select.closest('.vcp-harness-choice-wrap') || select.closest('.vcp-harness-select-wrap'))), 'dynamic assistant options receive a Harness primitive');
-    console.log(`  [PASS] 1b. Harness select popover + compact choices (background ${popoverState.background}, border ${popoverState.border})`);
+    await page.waitForFunction(() => Boolean(document.querySelector('#assistantAgent')?.closest('.vcp-harness-select')?.querySelector('.vcp-harness-select-trigger')), { timeout: timeoutMs });
+    assert.ok(await page.$eval('#assistantAgent', select => Boolean(select.closest('.vcp-harness-select'))), 'dynamic assistant options receive a library Select primitive');
+    assert.equal(await page.$eval('#assistantAgent', select => select.classList.contains('vcp-settings-bare-select')), false, 'dynamic assistant options drop the bare-select fallback');
+    console.log(`  [PASS] 1b. library select primitive adoption (background ${popoverState.background}, border ${popoverState.border})`);
 
     // ---- 2. Category switching keeps unsaved values ----
     await page.evaluate(() => {
