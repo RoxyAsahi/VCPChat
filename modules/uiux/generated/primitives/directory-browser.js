@@ -70,12 +70,13 @@ export function mountDirectoryBrowser(props, scope) {
     mountButton(confirm, { variant: 'primary', size: 'sm' }, browserScope);
     let generation = 0;
     let controller = null;
-    let parent = null;
-    let selected = null;
-    let child = null;
     let loading = false;
     let slowLoading = false;
     let slowTimer = null;
+    let previewTimer = null;
+    let parent = null;
+    let selected = null;
+    let child = null;
     let busy = Boolean(props.busy);
     let showHidden = false;
     let failure = null;
@@ -138,7 +139,16 @@ export function mountDirectoryBrowser(props, scope) {
             input.value = pathDraft;
             input.setAttribute('aria-label', 'Folder path');
             input.disabled = busy || loading || creating || createOpen;
-            browserScope.listen(input, 'input', () => { pathDraft = input.value; sync(); });
+            browserScope.listen(input, 'input', () => { pathDraft = input.value; sync(); if (previewTimer !== null)
+                clearTimeout(previewTimer); const draft = pathDraft; if (!draft.endsWith('/') && !draft.endsWith('\\'))
+                return; previewTimer = setTimeout(() => { previewTimer = null; if (!modal.open || !editingPath || !draft.trim())
+                return; const request = ++generation; controller?.abort(); controller = new AbortController(); loading = true; failure = null; sync(); void props.listDirectory(draft, controller.signal).then(listing => { if (request !== generation || !modal.open)
+                return; parent = listing; selected = null; child = null; }, reason => { if (request !== generation || !modal.open)
+                return; failure = errorText(reason); }).finally(() => { if (request === generation && modal.open) {
+                clearSlowScan();
+                loading = false;
+                sync();
+            } }); }, 250); });
             browserScope.listen(input, 'keydown', event => { const key = event.key; if (key === 'Escape') {
                 event.preventDefault();
                 event.stopPropagation();
@@ -197,7 +207,8 @@ export function mountDirectoryBrowser(props, scope) {
         createConfirm.disabled = creating || createName.trim() === '';
     };
     const clearSlowScan = () => { if (slowTimer !== null)
-        clearTimeout(slowTimer); slowTimer = null; slowLoading = false; };
+        clearTimeout(slowTimer); slowTimer = null; slowLoading = false; if (previewTimer !== null)
+        clearTimeout(previewTimer); previewTimer = null; };
     const scan = async (path, commit) => { const request = ++generation; controller?.abort(); controller = new AbortController(); clearSlowScan(); loading = true; failure = null; slowTimer = setTimeout(() => { if (request === generation && modal.open && loading) {
         slowTimer = null;
         slowLoading = true;

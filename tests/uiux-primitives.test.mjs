@@ -140,7 +140,7 @@ test('Harness DirectoryBrowser foundation aborts stale listings and retracts on 
         assert.equal(document.querySelector('.vcp-directory-browser'), null);
         browser.setOpen(true);
         assert.equal(pending.length, 1);
-        pending.shift().resolve({ path: '/home', entries: [] });
+        pending.shift().resolve({ path: '/home', entries: [{ name: 'projects', path: '/home/projects' }] });
         await delay(0);
         assert.equal(document.querySelector('.vcp-directory-browser-status')?.hidden, true);
         const editPath = document.querySelector('.vcp-directory-browser-path-edit');
@@ -149,6 +149,14 @@ test('Harness DirectoryBrowser foundation aborts stale listings and retracts on 
         const pathInput = document.querySelector('.vcp-directory-browser-path-input');
         assert.equal(pathInput?.getAttribute('aria-label'), 'Folder path');
         assert.equal(pathInput?.value, '/home/');
+        pathInput.value = '/home/projects/';
+        pathInput.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+        await delay(260);
+        assert.equal(pending.length, 1);
+        assert.equal(pending[0].path, '/home/projects/');
+        pending.shift().resolve({ path: '/home/projects', entries: [{ name: 'vcpchat', path: '/home/projects/vcpchat' }] });
+        await delay(0);
+        assert.ok(document.querySelector('.vcp-directory-browser-path-input'), 'draft preview must keep the editor mounted');
         pathInput.value = '/home/projects';
         pathInput.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
         pathInput.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));

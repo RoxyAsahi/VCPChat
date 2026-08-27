@@ -100,6 +100,8 @@
 
 2026-08-27 DirectoryBrowser draft-prefix checkpoint：路径编辑现在会在 Light DOM 内即时重绘当前 pane 的最后路径段前缀；命中时收窄列表，无匹配时保留原列表，避免编辑过程出现空白 pane；输入仍不会触发 host listing，Enter 才提交导航。focused artifact test 覆盖命中、无匹配与 Escape 恢复。该切片尚未实现 Harness draft directory debounce、two-leg landing 或同语义 pixel diff，状态仍为 `foundation-electron-active`。
 
+2026-08-27 DirectoryBrowser draft-preview checkpoint：路径草稿在以分隔符结束时启动 250ms debounce，稳定后仅通过 injected `listDirectory` 预览目标 directory；结果替换 pane 但保持 editor 挂载，最后未完成段仍走 local prefix filter。预览 timer 与 listing generation 都随 owner 被新输入、close/reopen/dispose 取消。focused artifact test 验证 debounce、capability call、pane 更新和 editor 保持。仍缺 Harness two-leg landing 与同语义 pixel diff，状态保持 `foundation-electron-active`。
+
 本批次不解冻聊天内核、消息渲染、Composer 内部、协议、IPC、持久化、Plugin Loader、chat manifest 或动态壁纸。Harness conversation/tool/markdown 控件可以在实验室复刻，但不得借实验室接入改变这些冻结边界。
 
 ## 0.3 上位规范到执行批次的映射
