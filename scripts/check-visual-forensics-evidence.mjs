@@ -41,7 +41,7 @@ for (const dir of targets) {
     assert.equal(manifest.observations?.length, requiredViewports.length);
     for (const [width, height] of requiredViewports) {
       const name = `${width}x${height}`;
-      for (const suffix of ['initial', 'reopen', 'settings', 'states', 'scrolled', 'narrow', 'restored', 'hover', 'focus']) {
+      for (const suffix of ['initial', 'reopen', 'menu', 'modal', 'tooltip', 'settings', 'states', 'scrolled', 'narrow', 'restored', 'hover', 'focus']) {
         await fs.access(path.join(dir, `${name}-${suffix}.png`));
       }
       const observation = manifest.observations.find(item => item.viewport?.width === width && item.viewport?.height === height);
