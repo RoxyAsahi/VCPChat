@@ -1332,6 +1332,8 @@ try {
     // it here would hang the test runner and retain the isolated process tree.
     try { browser?.disconnect(); } catch { /* debugger may already be gone */ }
     await terminateChildTree(child);
-    try { await new Promise(resolve => modelServer?.close?.(() => resolve())); } catch { /* probe server may already be closed */ }
+    try {
+        if (modelServer) await new Promise(resolve => modelServer.close(() => resolve()));
+    } catch { /* probe server may already be closed */ }
     await fs.rm(appData, { recursive: true, force: true });
 }
