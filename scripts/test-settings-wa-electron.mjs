@@ -442,6 +442,11 @@ try {
             const textarea = document.getElementById('continueWritingPrompt');
             return textarea ? getComputedStyle(textarea).minHeight : null;
         })(),
+        switchInputs: document.querySelectorAll('#globalSettingsModal label.switch input[type="checkbox"]').length,
+        primitiveToggles: [...document.querySelectorAll('#globalSettingsModal label.switch input[type="checkbox"]')]
+            .filter(input => input.parentElement?.classList.contains('vcp-uiux-toggle')).length,
+        visibleLegacySliders: [...document.querySelectorAll('#globalSettingsModal .slider')]
+            .filter(slider => getComputedStyle(slider).display !== 'none').length,
     }));
     assert.ok(controlState.primitiveSelects.includes('chatFontPreset'), `font preset uses the library select primitive: ${controlState.primitiveSelects.join(',')}`);
     assert.ok(controlState.typedSelects.length === 6, `six typed appearance selects stay inside the typed Field owner (${controlState.typedSelects.join(',')})`);
@@ -463,6 +468,9 @@ try {
     assert.ok(controlState.primitiveInputs > 0, `single-line inputs are projected by the library Input primitive (${controlState.primitiveInputs})`);
     assert.equal(controlState.bareTextareas, controlState.totalTextareas, 'textareas stay bare controls outside the fixed-height Input wrap');
     assert.equal(controlState.textareaMinHeight, '64px', 'bare textareas keep their multiline geometry contract');
+    assert.ok(controlState.switchInputs > 0, `switch checkboxes present (${controlState.switchInputs})`);
+    assert.equal(controlState.switchInputs, controlState.primitiveToggles, 'every switch checkbox is projected by the library Toggle primitive');
+    assert.equal(controlState.visibleLegacySliders, 0, 'retired local slider spans are hidden or gone');
     await page.evaluate(() => {
         const select = document.getElementById('chatFontPreset');
         const trigger = select.closest('.vcp-harness-select')?.querySelector('.vcp-harness-select-trigger');

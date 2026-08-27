@@ -11,7 +11,8 @@ function ensureStyles() {
 export function mountChoice(root: HTMLElement, scope: UiScope): UiDisposer {
     if (!root || !scope) throw new TypeError('Choice requires root and scope.');
     ensureStyles();
-    const labels = Array.from(root.querySelectorAll('label')) as HTMLLabelElement[];
+    const labels = Array.from(root.querySelectorAll('label'))
+        .filter(label => label.querySelector('input[type="radio"]')) as HTMLLabelElement[];
     root.classList.add('vcp-uiux-choice');
     labels.forEach(label => { label.classList.add('vcp-uiux-choice-option'); const input = label.querySelector('input[type="radio"]') as HTMLInputElement | null; if (input) scope.listen(input, 'change', () => root.dataset.value = input.value); });
     return scope.own(() => { root.classList.remove('vcp-uiux-choice'); delete root.dataset.value; labels.forEach(label => label.classList.remove('vcp-uiux-choice-option')); }, 'harness-choice', 'ui-primitive');
