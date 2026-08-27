@@ -52,6 +52,9 @@ files are available:
 - `node scripts/check-harness-permission-row-source.mjs` checks loading,
   unavailable/read-only projection, menu selection, error alert, and the
   acknowledgement gate.
+- `node scripts/check-harness-produced-files-source.mjs` checks measured chip
+  fitting, overflow/open-folder capability gating, and ResizeObserver cleanup
+  for the frozen turn-tail reference.
 
 These checks are read-only evidence. They do not create VCP consumers, alter
 business state, or promote Candidate Lab work.
