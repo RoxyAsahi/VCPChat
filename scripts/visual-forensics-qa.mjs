@@ -361,6 +361,32 @@ try {
     if (resized.overflowX) evidence.gate.failures.push(`${name}: horizontal overflow after resize`);
     if (restored.width !== width || restored.height !== height || restored.overflowX) evidence.gate.failures.push(`${name}: wide viewport did not restore cleanly`);
   }
+  for (const observation of evidence.observations) {
+    const { width, height } = observation.viewport;
+    const name = `${width}x${height}`;
+    await page.setViewport({ width, height, deviceScaleFactor: 1 });
+    await page.evaluate(() => {
+      window.scrollTo(0, 0);
+      const owner = document.querySelector('.vcp-ui-showcase-shell, .vcp-ui-page-shell-content');
+      if (owner) owner.scrollTo(0, 0);
+    }).catch(() => {});
+    await sleep(150);
+    const reopen = await page.evaluate(async () => {
+      const before = document.querySelector('.vcp-ui-showcase-root');
+      await window.topTabManager?.closeView?.('app:ui-component-library');
+      await new Promise(resolve => setTimeout(resolve, 80));
+      const afterClose = document.querySelector('.vcp-ui-showcase-root');
+      const cleanup = { bodyClasses: [...document.body.classList], bodyInlineStyle: document.body.getAttribute('style') || '' };
+      await window.topTabManager?.openInternalApp?.('ui-component-library');
+      await new Promise(resolve => setTimeout(resolve, 400));
+      const afterOpen = document.querySelector('.vcp-ui-showcase-root');
+      return { openedBefore: Boolean(before), removedOnClose: !afterClose, reopened: Boolean(afterOpen), newRootIdentity: Boolean(before && afterOpen && before !== afterOpen), bodyAfterClose: cleanup };
+    }).catch(error => ({ error: error.message }));
+    await page.waitForSelector('.vcp-ui-showcase-root', { timeout: 15_000 }).catch(() => {});
+    await page.screenshot({ path: path.join(output, `${name}-reopen.png`), fullPage: true });
+    observation.reopen = reopen;
+    if (reopen.error || !reopen.openedBefore || !reopen.removedOnClose || !reopen.reopened || !reopen.newRootIdentity) evidence.gate.failures.push(`${name}: viewport reopen lifecycle ${JSON.stringify(reopen)}`);
+  }
   evidence.gate.pass = evidence.gate.failures.length === 0;
   await fs.writeFile(path.join(output, 'manifest.json'), JSON.stringify(evidence, null, 2));
   console.log(JSON.stringify({ ...evidence, stderr: stderr || undefined }, null, 2));

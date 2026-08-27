@@ -41,10 +41,14 @@ for (const dir of targets) {
     assert.equal(manifest.observations?.length, requiredViewports.length);
     for (const [width, height] of requiredViewports) {
       const name = `${width}x${height}`;
-      for (const suffix of ['initial', 'settings', 'states', 'scrolled', 'narrow', 'restored', 'hover', 'focus']) {
+      for (const suffix of ['initial', 'reopen', 'settings', 'states', 'scrolled', 'narrow', 'restored', 'hover', 'focus']) {
         await fs.access(path.join(dir, `${name}-${suffix}.png`));
       }
       const observation = manifest.observations.find(item => item.viewport?.width === width && item.viewport?.height === height);
+      assert.equal(observation?.reopen?.removedOnClose, true);
+      assert.equal(observation?.reopen?.reopened, true);
+      assert.equal(observation?.reopen?.newRootIdentity, true);
+      assert.equal(observation?.reopen?.bodyAfterClose?.bodyInlineStyle, '');
       assert.ok(observation?.scrolled?.ownerY > 0 || observation?.scrolled?.ownerScrollHeight <= observation?.scrolled?.ownerViewport, `scroll owner did not move for ${name}`);
       assert.ok(observation?.initial?.cdpCascade?.length > 0);
       assert.ok(observation?.initial?.interactionStates?.hover);
