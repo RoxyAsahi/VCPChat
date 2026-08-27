@@ -6,6 +6,7 @@ const dir = path.join(root, 'docs/reference/deepseek-harness-primitives');
 const primitives = ['settings-root', 'field', 'select', 'menu', 'modal', 'tooltip', 'hover-card', 'disclosure-row', 'state-dot', 'toast', 'risk-confirmation', 'semantic-icon', 'button', 'input', 'range', 'toggle', 'color-pair', 'agent-preset-seat', 'agent-preset-row', 'popup-select', 'directory-browser', 'model-picker'];
 const required = [
   'reference.css',
+  'model-picker.capture.schema.json',
   'fixture-matrix.json',
   ...primitives.flatMap(name => [`${name}.dom.json`, `${name}.geometry.json`]),
 ];
