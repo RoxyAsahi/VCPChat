@@ -211,6 +211,12 @@ try {
       await new Promise(resolve => setTimeout(resolve, 40));
     }, lab).catch(() => {});
     await page.screenshot({ path: path.join(output, `${name}-menu.png`), fullPage: false });
+    const menuViewport = await page.evaluate(() => {
+      const node = document.querySelector('.vcp-harness-menu-list[role="menu"]');
+      if (!node) return { open: false, rect: null };
+      const r = node.getBoundingClientRect(); const s = getComputedStyle(node);
+      return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: s.position, zIndex: s.zIndex, parent: node.parentElement === document.body ? 'body' : node.parentElement?.className || '' };
+    }).catch(() => ({ open: false, rect: null }));
     await page.evaluate(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))).catch(() => {});
     await page.evaluate(async selector => {
       const root = document.querySelector(selector);
@@ -219,6 +225,12 @@ try {
       await new Promise(resolve => setTimeout(resolve, 40));
     }, lab).catch(() => {});
     await page.screenshot({ path: path.join(output, `${name}-modal.png`), fullPage: false });
+    const modalViewport = await page.evaluate(() => {
+      const node = document.querySelector('.vcp-harness-modal-root [role="dialog"]');
+      if (!node) return { open: false, rect: null };
+      const r = node.getBoundingClientRect(); const s = getComputedStyle(node);
+      return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: s.position, zIndex: s.zIndex, mask: Boolean(document.querySelector('.vcp-harness-modal-mask')) };
+    }).catch(() => ({ open: false, rect: null }));
     await page.evaluate(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))).catch(() => {});
     const tooltipButtons = await page.$$(`${lab} button`);
     let tooltipTarget = null;
@@ -226,11 +238,20 @@ try {
       if (await button.evaluate(node => node.textContent.trim() === 'Hover for details').catch(() => false)) { tooltipTarget = button; break; }
     }
     if (tooltipTarget) {
+      await tooltipTarget.evaluate(element => element.scrollIntoView({ block: 'center', inline: 'center' })).catch(() => {});
+      await sleep(80);
       await tooltipTarget.hover().catch(() => {});
       await sleep(160);
       await page.screenshot({ path: path.join(output, `${name}-tooltip.png`), fullPage: false });
+      var tooltipViewport = await page.evaluate(() => {
+        const node = document.querySelector('[role="tooltip"], .vcp-harness-tooltip-bubble');
+        if (!node) return { open: false, rect: null };
+        const r = node.getBoundingClientRect(); const s = getComputedStyle(node);
+        return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: s.position, zIndex: s.zIndex, side: node.getAttribute('data-side') || '' };
+      }).catch(() => ({ open: false, rect: null }));
       await page.mouse.move(2, 2).catch(() => {});
-    }
+    } else tooltipViewport = { open: false, rect: null };
+    const overlayViewport = { menu: menuViewport, modal: modalViewport, tooltip: tooltipViewport };
     await page.evaluate(async () => {
       await window.uiHelperFunctions?.openModal?.('globalSettingsModal');
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -342,7 +363,10 @@ try {
         if (!node || depth > 4) return null;
         return { tag: node.tagName?.toLowerCase() || '', id: node.id || '', className: typeof node.className === 'string' ? node.className : '', role: node.getAttribute?.('role') || '', children: [...(node.children || [])].slice(0, 80).map(child => tree(child, depth + 1)).filter(Boolean) };
       };
-      return { url: location.href, surface: document.querySelector('.vcp-ui-showcase-root') ? 'component-showcase' : 'main', uiMode: document.documentElement.dataset.uiMode || '', theme: document.documentElement.dataset.theme || document.documentElement.dataset.themeMode || '', bodyClass: document.body.className, scroll: { x: document.documentElement.scrollWidth, y: document.documentElement.scrollHeight, clientWidth: document.documentElement.clientWidth, clientHeight: document.documentElement.clientHeight }, controls: rects, portals, stateCounts, stateTargets, focused, cascade: cascade(focusTarget), dom: { bodyLength: document.body.innerHTML.length, classes: [...document.body.classList], inlineStyle: document.body.getAttribute('style') || '', rootTree: tree(document.querySelector('.vcp-ui-showcase-root')) }, overlap, overlapPairs };
+      const rootStyle = getComputedStyle(document.documentElement); const bodyStyle = getComputedStyle(document.body);
+      const token = name => rootStyle.getPropertyValue(name).trim();
+      const themeTokens = { accent: token('--vcp-ui-accent') || token('--vcp-ui-theme-accent'), accentHover: token('--vcp-ui-accent-hover') || token('--vcp-ui-theme-accent-hover'), surface: token('--vcp-ui-surface') || token('--vcp-ui-bg-primary'), inputBackground: token('--vcp-ui-bg-input') || token('--vcp-ui-theme-bg-input'), textPrimary: token('--vcp-ui-text-primary') || token('--vcp-ui-theme-text-primary'), textSecondary: token('--vcp-ui-text-secondary') || token('--vcp-ui-theme-text-secondary'), bodyBackground: bodyStyle.backgroundColor, bodyColor: bodyStyle.color };
+      return { url: location.href, surface: document.querySelector('.vcp-ui-showcase-root') ? 'component-showcase' : 'main', uiMode: document.documentElement.dataset.uiMode || '', theme: document.documentElement.dataset.theme || document.documentElement.dataset.themeMode || '', bodyClass: document.body.className, themeTokens, scroll: { x: document.documentElement.scrollWidth, y: document.documentElement.scrollHeight, clientWidth: document.documentElement.clientWidth, clientHeight: document.documentElement.clientHeight }, controls: rects, portals, stateCounts, stateTargets, focused, cascade: cascade(focusTarget), dom: { bodyLength: document.body.innerHTML.length, classes: [...document.body.classList], inlineStyle: document.body.getAttribute('style') || '', rootTree: tree(document.querySelector('.vcp-ui-showcase-root')) }, overlap, overlapPairs };
     });
     initial.cdpCascade = await captureMatchedRules('#toggleSidebarModeBtn');
     const stateTarget = await page.$('.vcp-harness-primitive-lab button:not([disabled])');
@@ -384,7 +408,7 @@ try {
     await sleep(150);
     const restored = await page.evaluate(() => ({ width: innerWidth, height: innerHeight, overflowX: document.documentElement.scrollWidth > innerWidth + 1, overflowY: document.documentElement.scrollHeight > innerHeight + 1 }));
     await page.screenshot({ path: path.join(output, `${name}-restored.png`), fullPage: false });
-    evidence.observations.push({ viewport: { width, height }, initial, settingsViewport, stateTransitions, scrolled, resized, restored });
+    evidence.observations.push({ viewport: { width, height }, initial, overlayViewport, settingsViewport, stateTransitions, scrolled, resized, restored });
     if (initial.overlap) evidence.gate.failures.push(`${name}: visible control overlap`);
     if (resized.overflowX) evidence.gate.failures.push(`${name}: horizontal overflow after resize`);
     if (restored.width !== width || restored.height !== height || restored.overflowX) evidence.gate.failures.push(`${name}: wide viewport did not restore cleanly`);

@@ -1,0 +1,16 @@
+{
+  "primitive": "WebBlock",
+  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/WebBlock.module.css",
+  "selectors": {
+    ".block": { "margin": "16px 0", "padding": "12px 14px", "borderRadius": "var(--dsl-web-radius)" },
+    ".answer": { "marginBottom": "8px" },
+    ".sources": { "margin": "0", "paddingLeft": "2.5em", "display": "flex", "flexDirection": "column", "gap": "10px", "maxHeight": "320px", "overflowY": "auto" },
+    ".sourceLink": { "fontSize": "14px", "lineHeight": "20px", "wordBreak": "break-word" },
+    ".snippet": { "marginTop": "2px", "fontSize": "13px", "lineHeight": "19px", "wordBreak": "break-word" },
+    ".fetch": { "display": "flex", "flexDirection": "column", "gap": "6px" },
+    ".fetchMeta": { "display": "flex", "alignItems": "baseline", "gap": "12px" }
+  },
+  "tokens": ["--dsw-alias-label-primary", "--dsw-alias-label-secondary", "--dsw-alias-label-tertiary", "--dsw-alias-markdown-code-block", "--dsw-alias-state-business-primary", "--dsw-font-xs-13"],
+  "geometryInvariants": ["search sources cap at 320px and scroll vertically", "ordered-list marker space is reserved by 2.5em padding", "citation prose wraps while preserving card width", "fetch metadata aligns status and truncation inline"],
+  "candidateStatus": "source-only frozen tool detail; no VCP consumer or paired visual capture"
+}
