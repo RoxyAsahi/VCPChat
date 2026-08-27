@@ -12,6 +12,16 @@
     "properties": ["height", "width", "maxHeight", "padding", "gap", "borderRadius", "fontSize", "lineHeight"]
   },
   "interaction": ["root-pane", "model-pane", "effort-pane", "loading", "error-retry", "selecting", "locked", "escape-pane-back", "escape-close", "focus-restore", "dispose"],
-  "pixel": { "optional": true, "format": "png", "roi": "model-picker-menu-or-full-fixture" },
+  "fixtureModes": {
+    "harness-equivalent": {
+      "searchEnabled": false,
+      "required": "provider-grouped modelmenuitemradio structure matching the Harness production capture"
+    },
+    "vcp-enhanced": {
+      "searchEnabled": true,
+      "purpose": "VCP product interaction evidence only; not a Harness pixel comparison"
+    }
+  },
+  "pixel": { "optional": true, "format": "png", "roi": "model-picker-menu-or-full-fixture", "requiresMode": "harness-equivalent" },
   "productionConsumer": false
 }
