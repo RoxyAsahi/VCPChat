@@ -285,9 +285,14 @@ try {
     await sleep(150);
     const resized = await page.evaluate(() => ({ width: innerWidth, height: innerHeight, overflowX: document.documentElement.scrollWidth > innerWidth + 1, overflowY: document.documentElement.scrollHeight > innerHeight + 1 }));
     await page.screenshot({ path: path.join(output, `${name}-narrow.png`), fullPage: false });
-    evidence.observations.push({ viewport: { width, height }, initial, settingsViewport, stateTransitions, scrolled, resized });
+    await page.setViewport({ width, height, deviceScaleFactor: 1 });
+    await sleep(150);
+    const restored = await page.evaluate(() => ({ width: innerWidth, height: innerHeight, overflowX: document.documentElement.scrollWidth > innerWidth + 1, overflowY: document.documentElement.scrollHeight > innerHeight + 1 }));
+    await page.screenshot({ path: path.join(output, `${name}-restored.png`), fullPage: false });
+    evidence.observations.push({ viewport: { width, height }, initial, settingsViewport, stateTransitions, scrolled, resized, restored });
     if (initial.overlap) evidence.gate.failures.push(`${name}: visible control overlap`);
     if (resized.overflowX) evidence.gate.failures.push(`${name}: horizontal overflow after resize`);
+    if (restored.width !== width || restored.height !== height || restored.overflowX) evidence.gate.failures.push(`${name}: wide viewport did not restore cleanly`);
   }
   evidence.gate.pass = evidence.gate.failures.length === 0;
   await fs.writeFile(path.join(output, 'manifest.json'), JSON.stringify(evidence, null, 2));
