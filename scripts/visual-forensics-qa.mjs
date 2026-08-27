@@ -120,6 +120,18 @@ try {
   }).catch(error => ({ error: error.message }));
   evidence.settingsContext = settingsContext;
   if (settingsContext.error || (settingsContext.rowCount === 0 && settingsContext.controls?.length === 0)) evidence.gate.failures.push(`settings context: ${JSON.stringify(settingsContext)}`);
+  const cdp = await page.createCDPSession();
+  await cdp.send('DOM.enable').catch(() => {});
+  await cdp.send('CSS.enable').catch(() => {});
+  const captureMatchedRules = async selector => {
+    try {
+      const { root: documentNode } = await cdp.send('DOM.getDocument', { depth: 0 });
+      const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: documentNode.nodeId, selector });
+      if (!nodeId) return [];
+      const matched = await cdp.send('CSS.getMatchedStylesForNode', { nodeId });
+      return [...(matched.matchedCSSRules || [])].slice(-40).map(entry => ({ selector: entry.rule?.selectorList?.text || '', origin: entry.rule?.origin || '', styleSheetId: entry.rule?.styleSheetId || '', properties: (entry.rule?.style?.cssProperties || []).filter(property => ['color', 'background', 'background-color', 'padding', 'border-radius', 'z-index'].includes(property.name)).map(property => ({ name: property.name, value: property.value })) }));
+    } catch { return []; }
+  };
   for (const [width, height] of viewports) {
     await page.setViewport({ width, height, deviceScaleFactor: 1 });
     await page.evaluate(() => window.scrollTo(0, 0));
@@ -148,8 +160,34 @@ try {
       const focusTarget = [...document.querySelectorAll('button, input, select')].find(el => el.getClientRects().length && !el.disabled);
       focusTarget?.focus?.();
       const focused = document.activeElement && document.activeElement !== document.body ? visible(document.activeElement) : null;
-      return { url: location.href, surface: document.querySelector('.vcp-ui-showcase-root') ? 'component-showcase' : 'main', uiMode: document.documentElement.dataset.uiMode || '', theme: document.documentElement.dataset.theme || document.documentElement.dataset.themeMode || '', bodyClass: document.body.className, scroll: { x: document.documentElement.scrollWidth, y: document.documentElement.scrollHeight, clientWidth: document.documentElement.clientWidth, clientHeight: document.documentElement.clientHeight }, controls: rects, portals, stateCounts, focused, dom: { bodyLength: document.body.innerHTML.length, classes: [...document.body.classList], inlineStyle: document.body.getAttribute('style') || '' }, overlap, overlapPairs };
+      const cascade = element => {
+        if (!element) return [];
+        const matched = [];
+        const visit = (rules, source) => [...rules].forEach(rule => {
+          if (rule.cssRules) return visit(rule.cssRules, source);
+          if (!rule.selectorText || !rule.style) return;
+          try {
+            if (element.matches(rule.selectorText)) matched.push({ selector: rule.selectorText, source, color: rule.style.color || '', background: rule.style.background || rule.style.backgroundColor || '', padding: rule.style.padding || '', borderRadius: rule.style.borderRadius || '', zIndex: rule.style.zIndex || '' });
+          } catch {}
+        });
+        [...document.styleSheets].forEach(sheet => { try { visit(sheet.cssRules, sheet.href || 'inline'); } catch {} });
+        return matched.slice(-40);
+      };
+      return { url: location.href, surface: document.querySelector('.vcp-ui-showcase-root') ? 'component-showcase' : 'main', uiMode: document.documentElement.dataset.uiMode || '', theme: document.documentElement.dataset.theme || document.documentElement.dataset.themeMode || '', bodyClass: document.body.className, scroll: { x: document.documentElement.scrollWidth, y: document.documentElement.scrollHeight, clientWidth: document.documentElement.clientWidth, clientHeight: document.documentElement.clientHeight }, controls: rects, portals, stateCounts, focused, cascade: cascade(focusTarget), dom: { bodyLength: document.body.innerHTML.length, classes: [...document.body.classList], inlineStyle: document.body.getAttribute('style') || '' }, overlap, overlapPairs };
     });
+    initial.cdpCascade = await captureMatchedRules('#toggleSidebarModeBtn');
+    const stateTarget = await page.$('.vcp-harness-primitive-lab button:not([disabled])');
+    if (stateTarget) {
+      await stateTarget.hover().catch(() => {});
+      await page.screenshot({ path: path.join(output, `${name}-hover.png`), fullPage: true });
+      const hoverState = await page.evaluate(() => { const el = document.querySelector('.vcp-harness-primitive-lab button:not([disabled]):hover'); if (!el) return null; const s = getComputedStyle(el); return { className: el.className, backgroundColor: s.backgroundColor, color: s.color, outline: s.outline, boxShadow: s.boxShadow }; });
+      await stateTarget.focus().catch(() => {});
+      await page.screenshot({ path: path.join(output, `${name}-focus.png`), fullPage: true });
+      const focusState = await page.evaluate(() => { const el = document.activeElement; if (!el?.closest('.vcp-harness-primitive-lab')) return null; const s = getComputedStyle(el); return { className: el.className, backgroundColor: s.backgroundColor, color: s.color, outline: s.outline, boxShadow: s.boxShadow }; });
+      initial.interactionStates = { hover: hoverState, focus: focusState };
+    } else {
+      initial.interactionStates = { hover: null, focus: null };
+    }
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
     await sleep(100);
     const scrolled = await page.evaluate(() => ({ y: window.scrollY, scrollHeight: document.documentElement.scrollHeight, viewport: innerHeight }));
