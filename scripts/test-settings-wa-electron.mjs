@@ -738,6 +738,7 @@ try {
         radiusChoice: 'small',
         tagline: `close-flush-tagline-${Date.now()}`,
         forumUser: `flush-user-${Date.now()}`,
+        forumPassword: `flush-pass-${Date.now()}`,
     };
     await page.evaluate((values) => {
         const set = (id, value) => {
@@ -762,6 +763,7 @@ try {
         choice.checked = true;
         choice.dispatchEvent(new Event('change', { bubbles: true }));
         set('adminUsername', values.forumUser);
+        set('adminPassword', values.forumPassword);
     }, flushValues);
     const dirtyAtClose = await page.evaluate(() => {
         const form = document.getElementById('globalSettingsForm');
@@ -805,6 +807,7 @@ try {
                 showHomeVisualBrand: settingsService?.state?.get?.()?.showHomeVisualBrand === true,
                 showHomeVisualTagline: settingsService?.state?.get?.()?.showHomeVisualTagline === true,
                 forumUsername: String(forumService?.state?.get?.()?.username ?? ''),
+                forumPassword: String(forumService?.state?.get?.()?.password ?? ''),
             };
         });
         if (
@@ -814,6 +817,7 @@ try {
             && flushedSnapshot.showHomeVisualBrand === expectedFlush.showHomeVisualBrand
             && flushedSnapshot.showHomeVisualTagline === expectedFlush.showHomeVisualTagline
             && flushedSnapshot.forumUsername === flushValues.forumUser
+            && flushedSnapshot.forumPassword === flushValues.forumPassword
         ) break;
         await sleep(250);
     }
@@ -825,6 +829,7 @@ try {
     assert.equal(flushedSnapshot.showHomeVisualBrand, expectedFlush.showHomeVisualBrand, `close flush committed home brand toggle draft (${JSON.stringify({ flushedSnapshot, expectedFlush })})`);
     assert.equal(flushedSnapshot.showHomeVisualTagline, expectedFlush.showHomeVisualTagline, `close flush committed home tagline toggle draft (${JSON.stringify({ flushedSnapshot, expectedFlush })})`);
     assert.equal(flushedSnapshot.forumUsername, flushValues.forumUser, `close flush committed forum username draft via ForumConfigUiService (${JSON.stringify(flushedSnapshot)})`);
+    assert.equal(flushedSnapshot.forumPassword, flushValues.forumPassword, `close flush committed forum password draft via ForumConfigUiService (${JSON.stringify(flushedSnapshot)})`);
     console.log('  [PASS] 6b. close flush commits per-field typed drafts (settings fields + forum credentials)');
 
     // ---- 6c. Wide layout radio pair is owned by the typed field owner:
