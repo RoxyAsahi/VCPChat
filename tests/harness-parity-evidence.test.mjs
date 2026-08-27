@@ -27,6 +27,9 @@ test('Model picker diff stays pending until a Harness capture exists', () => {
     assert.equal(report.status, 'pending-harness-capture');
     assert.equal(report.pass, false);
     assert.equal(report.dom.ariaContractPass, true);
+    assert.equal(report.dom.structuralPass, false);
+    assert.ok(report.missingEvidence.includes('Candidate DOM/ARIA structural contract'));
+    assert.equal(report.dom.deviations[0].declared, true);
     assert.ok(report.missingEvidence.includes('Harness ModelSelect browser capture (DOM + computed style)'));
     assert.ok(report.missingEvidence.includes('Candidate computed-style contract'));
 });
@@ -50,5 +53,14 @@ test('Harness geometry audit reports source equivalence without hiding gaps', ()
     assert.ok(['geometry-evidence-gaps-present', 'source-equivalent'].includes(report.status));
     assert.ok(report.counts.contracts >= 20);
     assert.ok(report.checks.some(item => item.name === 'model-picker' && item.status === 'source-equivalent'));
+    assert.ok(report.checks.find(item => item.name === 'model-picker')?.tokens.pass);
     assert.ok(report.checks.some(item => item.status !== 'source-equivalent'));
+});
+
+test('Model picker pixel diff remains pending without the Harness screenshot', () => {
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-model-picker-pixels.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-model-picker-pixel-diff.json'), 'utf8'));
+    assert.equal(report.status, 'pending-screenshot-capture');
+    assert.equal(report.pass, false);
+    assert.ok(report.missingEvidence.includes('Harness ModelSelect screenshot'));
 });

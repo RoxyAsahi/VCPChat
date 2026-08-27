@@ -18,6 +18,10 @@ the geometry contract. It remains `pending-harness-capture` until a same-engine
 Harness browser report is supplied, and records Candidate contract mismatches
 without turning a one-sided check into a parity pass.
 
+`npm run diff:harness-vcp-model-picker-pixels` compares the two PNG captures
+with the repository pixel policy and reports missing screenshots, dimension
+mismatches, ratios, and mean channel delta.
+
 The expected capture shape is pinned in
 `model-picker.capture.schema.json`, including the fixed viewport, ARIA links,
 computed-style selectors, interaction states, and optional PNG ROI.

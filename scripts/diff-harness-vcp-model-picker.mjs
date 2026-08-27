@@ -31,6 +31,21 @@ try {
         triggerControlsMenu: Boolean(trigger?.getAttribute('aria-controls')),
         ariaContractPass: trigger?.tagName.toLowerCase() === 'button' && trigger?.getAttribute('aria-haspopup') === 'menu' && Boolean(trigger?.getAttribute('aria-controls')),
     };
+    const expectedDom = readJson(path.join(root, 'docs/reference/deepseek-harness-primitives/model-picker.dom.json'));
+    const menuContract = expectedDom.menu;
+    const structuralChecks = [
+        { contract: 'root.tag', expected: expectedDom.root.tag, actual: rootNode?.tagName.toLowerCase() ?? null },
+        { contract: 'trigger.tag', expected: expectedDom.trigger.tag, actual: trigger?.tagName.toLowerCase() ?? null },
+        { contract: 'trigger.type', expected: expectedDom.trigger.type, actual: trigger?.getAttribute('type') ?? null },
+        { contract: 'trigger.aria-haspopup', expected: menuContract.role, actual: trigger?.getAttribute('aria-haspopup') ?? null },
+        { contract: 'menu.role', expected: menuContract.role, actual: candidate.menu?.role ?? null },
+        { contract: 'root-pane.rows', expected: 2, actual: Number(candidate.rootPane?.modelRowVisible === true) + Number(candidate.rootPane?.effortRowVisible === true) },
+        { contract: 'model-pane.options', expected: '>0', actual: candidate.modelPane?.optionCount ?? 0 },
+    ];
+    report.dom.structuralChecks = structuralChecks.map(check => ({ ...check, pass: check.expected === '>0' ? Number(check.actual) > 0 : check.actual === check.expected }));
+    report.dom.structuralPass = report.dom.structuralChecks.every(check => check.pass);
+    const rootDeviation = expectedDom.vcpDeviation?.rootTag;
+    report.dom.deviations = rootDeviation ? [{ contract: 'root.tag', ...rootDeviation, observed: rootNode?.tagName.toLowerCase() ?? null, declared: rootDeviation.vcp === (rootNode?.tagName.toLowerCase() ?? null) }] : [];
     const expected = geometry.selectors;
     const actual = {
         '.trigger': candidate.trigger ?? {},
@@ -65,7 +80,7 @@ try {
         report.status = 'harness-capture-available-pixel-pending';
         report.missingEvidence.push('same-semantic ModelSelect pixel diff');
     }
-    if (!report.dom.ariaContractPass) report.missingEvidence.push('Candidate DOM/ARIA contract');
+    if (!report.dom.ariaContractPass || !report.dom.structuralPass) report.missingEvidence.push('Candidate DOM/ARIA structural contract');
     if (!report.computedStyle.pass) report.missingEvidence.push('Candidate computed-style contract');
     report.pass = report.status === 'harness-capture-available-pixel-pending' && report.missingEvidence.length === 1 && report.dom.ariaContractPass && report.computedStyle.pass;
 } catch (error) {
