@@ -412,3 +412,7 @@ roadmap checkpoint 追加于 `38ec8bb8`。
 探针取证：global 表单 17 个 checkbox（含 2 个 typed）全部投影为 `.vcp-uiux-toggle`、可见 slider 清零、label 点击 round-trip 写回原生 checked、轨道 r10。Electron journey 新增 switchInputs===primitiveToggles 与 visibleLegacySliders===0 断言；source-equivalence 增 `mountHarnessSwitches`/`api.mountToggle` 契约与 css `.slider` 清零断言。四个快门禁 + journey 全绿。
 
 至此计划内三批完成：设置页非 typed 控件的呈现层已全量收敛到真组件库 primitive（select/input/toggle），bridge 本地复刻件（select/menu 投影、input 壳、slider 开关、情性 enhance 注册）全部退场；设置壳（导航/行/头部）、directory-browser/popup-select 维持既有结论不动。上游契约缺口累计报线程 A：mountSelect 无 roving 导航与重建 API、mountInput 无多行形态。
+
+### 2026-08-27 补记八（批次13前置收口）：networkNotesPaths 动态列表单 owner 归一
+
+directory-browser 接入前置达成。typed field owner 本就以 `#networkNotesPathsContainer` 为单一 owned 单元（input/change 委托 → 重收集整表 → 单 patch 保存），但两条行创建路径存在行为分叉：ui-helpers fallback 行创建器 (1) 不打 `vcpTypedFieldOwner` 抑制标记——owner 挂载后经它创建的行会同时驱动 legacy 整表 autosave 链与 typed 链，双 owner 争写一个状态条；(2) 删除按钮静默移除行、不广播 change——经该路径删除行时任何 dirty 链都收不到通知，序列化列表在保存里残留已删路径。收口：ui-helpers 行创建器补齐标记逻辑（`globalSettingsForm.dataset.vcpTypedFieldOwnerMounted === 'true'` 时即刻打标，与 bridge 行创建器一致）并补删除广播（`container.dispatchEvent(change)`）。此后 bridge 公共 API `VCPUISettingsBridge.addNetworkPathInput(path)` 之下的两条创建路径行为等价，加/删/改全部收敛到 typed field owner 单 owner；directory-browser 接入只需消费这一条 seam。source-equivalence 增三条源码级断言钉住契约（owner 重收集、ui-helpers 打标、删除广播）。四个快门禁 + Electron journey（含 6e 双路径 close flush）全绿。
