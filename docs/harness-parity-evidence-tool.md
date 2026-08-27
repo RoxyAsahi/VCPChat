@@ -49,6 +49,12 @@ domain surfaces, then lists source exports without a reference contract. It
 also emits `surfacePatterns`, a package-level summary of source files, export
 categories, contract coverage, and remaining gaps.
 
+Run `node scripts/check-harness-fixture-coverage.mjs` to compare the registered
+DOM contracts with visual cases in `fixture-matrix.json`. Its report separates
+contracts without replayable fixtures from fixture-only pending candidates;
+`--strict` is reserved for a gate that intentionally requires every contract
+to have a case.
+
 The source-only lifecycle gates can be replayed directly when their Harness
 files are available:
 

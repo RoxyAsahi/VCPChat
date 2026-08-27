@@ -134,3 +134,13 @@ test('ProducedFiles source audit preserves frozen-domain measurement boundaries'
     assert.equal(report.checks.length, 8);
     assert.ok(report.note.includes('does not create a VCP turn-tail consumer'));
 });
+
+test('Harness fixture coverage reports contracts without replayable cases', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-fixture-coverage.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-fixture-coverage.json'), 'utf8'));
+    assert.equal(report.status, 'coverage-gaps-present');
+    assert.equal(report.pass, false);
+    assert.ok(report.counts.contracts > report.counts.contractsWithFixtures);
+    assert.ok(report.uncoveredContracts.includes('settings-root'));
+    assert.ok(report.note.includes('does not imply a replayable visual fixture'));
+});

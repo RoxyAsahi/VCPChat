@@ -1,0 +1,15 @@
+{
+  "primitive": "ImageGallery",
+  "provenance": {
+    "sources": [
+      "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-attachment/src/MessageImage.tsx"
+    ],
+    "style": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-attachment/src/MessageImage.module.css"
+  },
+  "root": { "tag": "div", "class": "gallery", "empty": "null when images.length === 0", "dataAlign": "start | end" },
+  "children": { "oneImage": "MessageImage variant=single", "multipleImages": "MessageImage variant=tile", "key": "attachmentId:index" },
+  "states": ["empty-null", "single-large", "multiple-tiles", "align-start", "align-end", "child-retry", "child-lightbox", "dispose"],
+  "interaction": ["gallery delegates loading/retry/open to each MessageImage", "single image uses aspect-ratio fit", "multiple images use fixed tile geometry"],
+  "aria": "child MessageImage buttons retain their localized names",
+  "vcpDeviation": "ImageGallery is frozen chat attachment rendering; no VCP production consumer or chat integration is authorized."
+}

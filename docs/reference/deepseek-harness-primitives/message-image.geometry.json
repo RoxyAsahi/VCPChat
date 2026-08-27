@@ -1,0 +1,16 @@
+{
+  "primitive": "MessageImage",
+  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-attachment/src/MessageImage.module.css",
+  "selectors": {
+    ".gallery": { "display": "flex", "flexWrap": "wrap", "gap": "10px", "maxWidth": "100%" },
+    ".frame": { "display": "grid", "flex": "0 0 auto", "placeItems": "center", "minWidth": "44px", "minHeight": "44px", "padding": "0", "overflow": "hidden", "borderRadius": "16px" },
+    ".frame[data-variant='tile']": { "width": "64px", "height": "64px", "minWidth": "64px", "minHeight": "64px" },
+    ".frame img": { "display": "block", "width": "100%", "height": "100%", "objectFit": "cover" },
+    ".loading": { "color": "var(--dsw-alias-label-tertiary)", "fontSize": "12px", "lineHeight": "18px" },
+    ".error": { "maxWidth": "240px", "padding": "10px 12px", "borderRadius": "10px" },
+    ".error[data-variant='tile']": { "width": "64px", "height": "64px", "padding": "4px", "overflow": "hidden", "borderRadius": "16px" }
+  },
+  "tokens": ["--dsw-alias-border-l2-darkmode-thin", "--dsw-alias-interactive-bg-hover", "--dsw-alias-label-tertiary", "--dsw-alias-interactive-bg-hover-danger"],
+  "geometryInvariants": ["tile variant is a fixed 64px square", "single frame never falls below 44px minimum", "gallery wraps with a 10px gap", "error tile preserves the 64px grid cell"],
+  "candidateStatus": "source-only frozen chat attachment; no VCP consumer or paired visual capture"
+}
