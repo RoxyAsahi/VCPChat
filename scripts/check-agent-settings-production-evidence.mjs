@@ -31,6 +31,14 @@ assert.match(report.dom, /<button[^>]*id="refreshTtsModelsBtn"[^>]*class="[^"]*v
     'TTS refresh action must retain its canonical button id and Harness Button presentation');
 assert.match(report.dom, /<button[^>]*id="refreshTtsModelsBtn"[^>]*aria-label="刷新模型列表"/,
     'TTS refresh action must expose an explicit accessible name');
+assert.match(report.dom, /<button(?=[^>]*id="openModelSelectBtn")(?=[^>]*type="button")[^>]*>/,
+    'model trigger must remain a non-submitting native button');
+assert.match(report.dom, /<button(?=[^>]*id="refreshTtsModelsBtn")(?=[^>]*type="button")[^>]*>/,
+    'TTS refresh action must remain a non-submitting native button');
+assert.match(report.dom, /<button(?=[^>]*id="deleteAgentBtn")(?=[^>]*type="button")[^>]*>/,
+    'Agent delete action must remain a non-submitting native button');
+assert.match(report.dom, /<button[^>]*type="submit"[^>]*class="[^"]*vcp-harness-button[^\"]*"/,
+    'Agent save action must retain submit semantics after Button mounting');
 
 assert.ok(Array.isArray(report.inputs) && report.inputs.length >= 7, 'typed Agent Input evidence is incomplete');
 assert.ok(Array.isArray(report.inputNodes) && report.inputNodes.length >= 7, 'native Agent Input style evidence is incomplete');
