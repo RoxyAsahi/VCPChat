@@ -26,7 +26,7 @@
     { "case": "state-dot/four-state-shape-size-phase-dispose", "status": "candidate-interaction-active", "evidence": "focused source test and generated Electron journey cover solid halo states, eight-cell phased ongoing matrix, custom size, aria-hidden and exact host restoration" },
     { "case": "toast/portal-anchor-lifetime-dispose", "status": "candidate-interaction-active", "evidence": "focused source test covers 3000ms hold + 1000ms fade completion and timer cancellation; generated Electron covers body portal, role=alert, anchor resize placement, icon and geometry" },
     { "case": "risk-confirmation/acknowledgement-gate-close-reopen-dispose", "status": "candidate-interaction-active", "evidence": "focused generated-artifact test covers controlled acknowledgement, disabled confirm, cancel/mask/Escape, autofocus, reopen and owner disposal; Electron candidate evidence pending" }
-    , { "case": "semantic-icon/owner-refresh-size-name-dispose", "status": "candidate-interaction-active", "evidence": "focused source test covers four semantic names, currentColor slot, aria-hidden, adapter refresh, name/size update and exact host restoration; generated Electron Lab verifies all four names render through VCPIcons as aria-hidden, non-focusable SVG" }
+    , { "case": "semantic-icon/owner-refresh-size-name-dispose", "status": "candidate-interaction-active", "evidence": "focused source test covers four semantic names, currentColor slot, aria-hidden, adapter refresh, name/size update and exact host restoration; generated artifact smoke imports the module; independent generated Electron fixture records four rendered SVGs, currentColor inheritance, geometry and dispose" }
   ],
   "outputs": ["dom", "geometry", "computed-style", "screenshot", "pixel-diff"],
   "stateSemantics": {
@@ -76,6 +76,6 @@
     "stateDotCandidate": "four-state shape/size/phase and screenshot active; same-semantic Harness pixel diff pending",
     "toastCandidate": "portal/alert/anchor/lifetime/dispose and screenshot active; same-semantic Harness pixel diff pending",
     "riskConfirmationCandidate": "controlled acknowledgement gate, close/reopen/dispose source-artifact test active; Electron screenshot/geometry pending"
-    , "semanticIconCandidate": "four-name private slot, adapter refresh, size/name update, teardown and generated Electron SVG rendering active; standalone screenshot/geometry and same-semantic Harness pixel diff pending"
+    , "semanticIconCandidate": "four-name private slot, adapter refresh, size/name update, teardown, generated artifact smoke, fixed 800x600 screenshot/geometry and generated Electron SVG rendering active; same-semantic Harness pixel diff pending"
   }
 }

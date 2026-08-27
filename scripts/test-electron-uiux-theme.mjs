@@ -739,6 +739,52 @@ try {
         delete window.__harnessCandidateRiskController;
         delete window.__harnessCandidateRiskScope;
     });
+    const semanticIconGeometry = await page.evaluate(async () => {
+        const host = document.createElement('div');
+        host.dataset.electronCandidateSemanticIcons = 'true';
+        host.className = 'vcp-ui-scope';
+        host.style.cssText = 'position:fixed;left:80px;top:120px;display:flex;align-items:center;gap:16px;padding:24px;background:#fff;color:#2678ff;border:1px solid rgba(0,0,0,.08);border-radius:12px';
+        document.body.append(host);
+        const scope = new window.VCPLifecycle.LifecycleScope('test:harness-candidate-semantic-icons-visual');
+        const controllers = [];
+        for (const [name, size] of [['warning', 18], ['close', 16], ['check', 16], ['chevron-down', 14]]) {
+            const fixture = document.createElement('span');
+            fixture.dataset.icon = name;
+            const iconHost = document.createElement('span');
+            fixture.append(iconHost, document.createTextNode(name));
+            host.append(fixture);
+            controllers.push(window.VCPUIUX.mountSemanticIcon(iconHost, { name, size }, scope));
+        }
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const states = [...host.querySelectorAll('[data-icon]')].map(fixture => {
+            const slot = fixture.querySelector('.vcp-harness-icon-slot');
+            const svg = slot?.querySelector('svg[data-vcp-icon]');
+            const style = slot ? getComputedStyle(slot) : null;
+            return { name: fixture.dataset.icon, width: style?.width || '', height: style?.height || '', color: style?.color || '', ariaHidden: svg?.getAttribute('aria-hidden') || null, focusable: svg?.getAttribute('focusable') || null, dataIcon: svg?.getAttribute('data-vcp-icon') || null };
+        });
+        const screenshot = { viewport: { width: innerWidth, height: innerHeight, deviceScaleFactor: devicePixelRatio }, source: 'generated-artifact-electron', state: 'four-semantic-icons-current-color', states };
+        window.__harnessCandidateSemanticIconControllers = controllers;
+        window.__harnessCandidateSemanticIconScope = scope;
+        return screenshot;
+    });
+    assert.deepEqual(semanticIconGeometry.viewport, { width: 800, height: 600, deviceScaleFactor: 1 });
+    assert.deepEqual(semanticIconGeometry.states, [
+        { name: 'warning', width: '18px', height: '18px', color: semanticIconGeometry.states[0].color, ariaHidden: 'true', focusable: 'false', dataIcon: 'warning' },
+        { name: 'close', width: '16px', height: '16px', color: semanticIconGeometry.states[0].color, ariaHidden: 'true', focusable: 'false', dataIcon: 'close' },
+        { name: 'check', width: '16px', height: '16px', color: semanticIconGeometry.states[0].color, ariaHidden: 'true', focusable: 'false', dataIcon: 'check' },
+        { name: 'chevron-down', width: '14px', height: '14px', color: semanticIconGeometry.states[0].color, ariaHidden: 'true', focusable: 'false', dataIcon: 'chevron_down' },
+    ]);
+    const semanticIconScreenshot = path.join(root, 'reports', 'vcp-harness-semantic-icons-candidate.png');
+    await page.screenshot({ path: semanticIconScreenshot });
+    assert.ok((await fs.stat(semanticIconScreenshot)).size > 1024, 'Semantic icon Candidate screenshot is unexpectedly empty');
+    await fs.writeFile(path.join(root, 'reports', 'vcp-harness-semantic-icons-candidate.json'), `${JSON.stringify(semanticIconGeometry, null, 2)}\n`, 'utf8');
+    await page.evaluate(async () => {
+        for (const controller of window.__harnessCandidateSemanticIconControllers || []) await controller.dispose?.();
+        await window.__harnessCandidateSemanticIconScope?.dispose?.('candidate-semantic-icons-visual-complete');
+        delete window.__harnessCandidateSemanticIconControllers;
+        delete window.__harnessCandidateSemanticIconScope;
+        document.querySelector('[data-electron-candidate-semantic-icons]')?.remove();
+    });
     await page.screenshot({ path: primitiveScreenshot });
     const screenshotStat = await fs.stat(primitiveScreenshot);
     assert.ok(screenshotStat.size > 1024, `primitive screenshot is unexpectedly empty: ${screenshotStat.size} bytes`);
