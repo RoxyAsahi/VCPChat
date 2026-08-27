@@ -276,6 +276,16 @@ try {
         error: document.querySelectorAll('.is-error, [aria-invalid="true"], [role="alert"]').length,
         loading: document.querySelectorAll('.is-loading, [aria-busy="true"], [data-loading="true"]').length,
       };
+      const stateTarget = selector => {
+        const element = [...document.querySelectorAll(selector)].find(candidate => candidate.getClientRects().length);
+        if (!element) return null;
+        const r = element.getBoundingClientRect(); const s = getComputedStyle(element);
+        return { tag: element.tagName.toLowerCase(), id: element.id || '', className: typeof element.className === 'string' ? element.className : '', rect: { x: r.x, y: r.y, width: r.width, height: r.height }, display: s.display, position: s.position, color: s.color, backgroundColor: s.backgroundColor, borderRadius: s.borderRadius, padding: s.padding, outline: s.outline, boxShadow: s.boxShadow };
+      };
+      const stateTargets = {
+        disabled: stateTarget(':disabled, .is-disabled, [aria-disabled="true"]'),
+        selected: stateTarget('.is-selected, [aria-selected="true"], [data-selected="true"], [aria-checked="true"]'),
+      };
       const focusTarget = [...document.querySelectorAll('button, input, select')].find(el => el.getClientRects().length && !el.disabled);
       focusTarget?.focus?.();
       const focused = document.activeElement && document.activeElement !== document.body ? visible(document.activeElement) : null;
@@ -296,7 +306,7 @@ try {
         if (!node || depth > 4) return null;
         return { tag: node.tagName?.toLowerCase() || '', id: node.id || '', className: typeof node.className === 'string' ? node.className : '', role: node.getAttribute?.('role') || '', children: [...(node.children || [])].slice(0, 80).map(child => tree(child, depth + 1)).filter(Boolean) };
       };
-      return { url: location.href, surface: document.querySelector('.vcp-ui-showcase-root') ? 'component-showcase' : 'main', uiMode: document.documentElement.dataset.uiMode || '', theme: document.documentElement.dataset.theme || document.documentElement.dataset.themeMode || '', bodyClass: document.body.className, scroll: { x: document.documentElement.scrollWidth, y: document.documentElement.scrollHeight, clientWidth: document.documentElement.clientWidth, clientHeight: document.documentElement.clientHeight }, controls: rects, portals, stateCounts, focused, cascade: cascade(focusTarget), dom: { bodyLength: document.body.innerHTML.length, classes: [...document.body.classList], inlineStyle: document.body.getAttribute('style') || '', rootTree: tree(document.querySelector('.vcp-ui-showcase-root')) }, overlap, overlapPairs };
+      return { url: location.href, surface: document.querySelector('.vcp-ui-showcase-root') ? 'component-showcase' : 'main', uiMode: document.documentElement.dataset.uiMode || '', theme: document.documentElement.dataset.theme || document.documentElement.dataset.themeMode || '', bodyClass: document.body.className, scroll: { x: document.documentElement.scrollWidth, y: document.documentElement.scrollHeight, clientWidth: document.documentElement.clientWidth, clientHeight: document.documentElement.clientHeight }, controls: rects, portals, stateCounts, stateTargets, focused, cascade: cascade(focusTarget), dom: { bodyLength: document.body.innerHTML.length, classes: [...document.body.classList], inlineStyle: document.body.getAttribute('style') || '', rootTree: tree(document.querySelector('.vcp-ui-showcase-root')) }, overlap, overlapPairs };
     });
     initial.cdpCascade = await captureMatchedRules('#toggleSidebarModeBtn');
     const stateTarget = await page.$('.vcp-harness-primitive-lab button:not([disabled])');
