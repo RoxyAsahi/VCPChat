@@ -197,7 +197,6 @@
         contentWidth: 'appearanceContentWidth',
         sidebarRowHeight: 'appearanceSidebarRowHeight',
         sidebarAvatarSize: 'appearanceSidebarAvatarSize',
-        sidebarRadius: 'appearanceSidebarRadius',
         customRadius: 'appearanceCustomRadius',
         surface: 'appearanceSurface'
     });
@@ -380,7 +379,11 @@
             ...base.profile,
             ...Object.fromEntries(Object.entries(PROFILE_CONTROL_IDS).map(([field, id]) => (
                 [field, document.getElementById(id)?.value || base.profile[field]]
-            )))
+            ))),
+            // The visible choice group is the only sidebar-radius control; the
+            // retired hidden compatibility select no longer mirrors it.
+            sidebarRadius: document.querySelector('input[name="appearanceSidebarRadiusChoice"]:checked')?.value
+                || base.profile.sidebarRadius
         };
         return normalizeState({
             profile,
@@ -476,11 +479,6 @@
             customRadiusControl.value = String(customRadius);
             window.VCPUI?.getController?.(customRadiusControl)?.update({ value: customRadius });
         }
-        const sidebarRadiusControl = document.getElementById('appearanceSidebarRadius');
-        const sidebarRadiusChoice = document.getElementById(
-            `appearanceSidebarRadiusChoice-${sidebarRadiusControl?.value || 'tuned'}`
-        );
-        if (sidebarRadiusChoice) sidebarRadiusChoice.checked = true;
     }
 
     function bindSettingsSummary() {
@@ -493,10 +491,6 @@
                 ? moduleScope.listen(target, type, handler, undefined, `appearance-settings-summary:${type}`)
                 : target.addEventListener(type, handler);
             bindSummary(form, 'change', event => {
-                if (event.target.matches('input[name="appearanceSidebarRadiusChoice"]')) {
-                    const compatibilityControl = document.getElementById('appearanceSidebarRadius');
-                    if (compatibilityControl) compatibilityControl.value = event.target.value;
-                }
                 if (event.target.matches('[id^="appearance"], #showHomeVisualBrand, #showHomeVisualTagline, #homeVisualTagline, input[name="chatPresentationMode"]')) {
                     syncSettingsSummary();
                 }
@@ -1080,6 +1074,13 @@
                 control.dispatchEvent(new Event('change', { bubbles: true }));
             }
         });
+        const sidebarRadiusChoice = document.querySelector(
+            `input[name="appearanceSidebarRadiusChoice"][value="${draft.profile.sidebarRadius}"]`
+        );
+        if (sidebarRadiusChoice) {
+            sidebarRadiusChoice.checked = true;
+            sidebarRadiusChoice.dispatchEvent(new Event('change', { bubbles: true }));
+        }
         const presentation = document.querySelector(
             `input[name="chatPresentationMode"][value="${draft.presentation}"]`
         );

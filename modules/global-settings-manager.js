@@ -129,7 +129,6 @@ async function saveGlobalSettings(deps, settingsForm) {
             shellRadius: currentSettings.appearanceProfile?.shellRadius,
             composerRadius: currentSettings.appearanceProfile?.composerRadius,
             sidebarRadius: document.querySelector('input[name="appearanceSidebarRadiusChoice"]:checked')?.value
-                || document.getElementById('appearanceSidebarRadius')?.value
                 || currentSettings.appearanceProfile?.sidebarRadius,
             cardRadius: currentSettings.appearanceProfile?.cardRadius
         }, 'next') || currentSettings.appearanceProfile,

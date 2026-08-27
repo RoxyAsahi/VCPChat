@@ -930,7 +930,6 @@ const TYPED_FIELD_DEFINITIONS = Object.freeze({
     appearanceSurface: { path: 'appearanceProfile.surface', kind: 'string' },
     appearanceSidebarRowHeight: { path: 'appearanceProfile.sidebarRowHeight', kind: 'number' },
     appearanceSidebarAvatarSize: { path: 'appearanceProfile.sidebarAvatarSize', kind: 'number' },
-    appearanceSidebarRadius: { path: 'appearanceProfile.sidebarRadius', kind: 'string' },
     appearanceCustomRadius: { path: 'appearanceProfile.customRadius', kind: 'number' },
     'appearanceSidebarRadiusChoice-tuned': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'tuned' },
     'appearanceSidebarRadiusChoice-follow': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'follow' },
@@ -981,7 +980,6 @@ function mountTypedFieldOwner(root, form) {
         set('appearanceSidebarRowHeightValue', `${appearance.sidebarRowHeight ?? 46}px`);
         set('appearanceSidebarAvatarSize', appearance.sidebarAvatarSize ?? 32);
         set('appearanceSidebarAvatarSizeValue', `${appearance.sidebarAvatarSize ?? 32}px`);
-        set('appearanceSidebarRadius', appearance.sidebarRadius || 'tuned');
         set('appearanceCustomRadius', appearance.customRadius ?? 10);
         set('appearanceCustomRadiusValue', `${appearance.customRadius ?? 10}px`);
         const radius = appearance.sidebarRadius || 'tuned';
