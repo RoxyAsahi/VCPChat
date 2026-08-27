@@ -655,7 +655,16 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
                 const form = document.getElementById('agentSettingsForm');
                 const panel = document.getElementById('tabContentSettings');
                 const pick = selector => [...document.querySelectorAll(selector)].map(node => ({
-                    tag: node.tagName.toLowerCase(), class: node.className, rect: rect(node), style: style(node),
+                    tag: node.tagName.toLowerCase(),
+                    id: node.id || null,
+                    controlId: node.id || node.querySelector?.('input,select,button')?.id || null,
+                    name: node.getAttribute('name'),
+                    class: node.className,
+                    ariaLabel: node.getAttribute('aria-label'),
+                    ariaExpanded: node.getAttribute('aria-expanded'),
+                    disabled: Boolean(node.disabled),
+                    rect: rect(node),
+                    style: style(node),
                 }));
                 return {
                     source: 'VCP production Agent Settings Electron Surface',

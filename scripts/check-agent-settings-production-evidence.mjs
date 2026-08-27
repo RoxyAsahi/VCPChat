@@ -36,6 +36,10 @@ assert.equal(Array.isArray(report.ranges) ? report.ranges.length : 0, 1, 'typed 
 assert.equal(Array.isArray(report.rangeInputs) ? report.rangeInputs.length : 0, 1, 'native Agent range evidence is incomplete');
 assert.equal(Array.isArray(report.selects) ? report.selects.length : 0, 2, 'typed Agent Select evidence is incomplete');
 assert.equal(Array.isArray(report.selectNodes) ? report.selectNodes.length : 0, 2, 'native Agent Select evidence is incomplete');
+assert.equal(report.rangeInputs[0].id, 'agentTtsSpeed', 'typed Agent Range must retain the canonical TTS speed node');
+assert.deepEqual(report.selectNodes.map(node => node.id).sort(), ['agentTtsVoicePrimary', 'agentTtsVoiceSecondary'], 'typed Agent Select evidence must target both canonical TTS voice nodes');
+assert.deepEqual(report.selects.map(node => node.controlId).sort(), ['agentTtsVoicePrimary', 'agentTtsVoiceSecondary'], 'typed Agent Select wrappers must target both canonical TTS voice nodes');
+assert.equal(report.choiceOptions.every(node => node.tag === 'label'), true, 'Choice options must remain native radio labels');
 
 console.log(JSON.stringify({
     source: report.source,
