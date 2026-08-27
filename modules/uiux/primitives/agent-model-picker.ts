@@ -159,6 +159,7 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
     effortList.className = 'vcp-harness-agent-model-picker-effort-list';
     effortList.setAttribute('role', 'group');
     view.card.prepend(effortCell, effortList);
+    let effortSelectionGeneration = 0;
     const renderEfforts = () => {
         effortList.replaceChildren();
         for (const option of props.efforts ?? []) {
@@ -184,8 +185,10 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
             check.textContent = option.id === selectedEffort ? '✓' : '';
             row.append(copy, check);
             pickerScope.listen(row, 'click', async () => {
-                selectedEffort = option.id;
+                const generation = ++effortSelectionGeneration;
                 await props.onEffortSelect?.(option);
+                if (!pickerScope.active || generation !== effortSelectionGeneration) return;
+                selectedEffort = option.id;
                 pane = 'root';
                 syncPane();
             });
@@ -193,6 +196,7 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
         }
     };
     view.card.prepend(paneCell);
+    const invalidateEffortSelection = () => { effortSelectionGeneration += 1; };
     const syncPane = () => {
         const open = popup.getSnapshot().open;
         const setVisibility = (element: HTMLElement, visible: boolean) => {
@@ -225,8 +229,9 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
         // button. Capture-phase interception keeps that behavior available
         // after disposal without proxying through a hidden control.
         event.stopImmediatePropagation();
-        if (popup.getSnapshot().open) popup.dismiss();
+        if (popup.getSnapshot().open) { invalidateEffortSelection(); popup.dismiss(); }
         else {
+            invalidateEffortSelection();
             pane = 'root';
             popup.open('agent-model', {}, { via: 'menu', span: { source: 'agent-model-picker' } });
         }
@@ -259,11 +264,12 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
         root,
         trigger,
         popup,
-        open: () => { pane = 'root'; popup.open('agent-model', {}, { via: 'menu', span: { source: 'agent-model-picker' } }); },
+        open: () => { invalidateEffortSelection(); pane = 'root'; popup.open('agent-model', {}, { via: 'menu', span: { source: 'agent-model-picker' } }); },
         // Closing from the trigger/picker surface must return focus to the
         // trigger, matching the Harness menu focus contract.
-        close: () => popup.dismiss({ focusComposer: true }),
+        close: () => { invalidateEffortSelection(); popup.dismiss({ focusComposer: true }); },
         refresh: () => {
+            invalidateEffortSelection();
             if (popup.getSnapshot().open) popup.dismiss();
             pane = 'root'; popup.open('agent-model', {}, { via: 'menu', span: { source: 'agent-model-picker-refresh' } });
         },
@@ -272,9 +278,9 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
             const selected = lastOptions.find(option => option.id === id);
             if (selected) triggerLabel.textContent = selected.label;
         },
-        setPane: next => { pane = next; syncPane(); },
+        setPane: next => { invalidateEffortSelection(); pane = next; syncPane(); },
         // Dispose the child scope itself so listeners, subscriptions, icon
         // owners and the popup binding all reach quiescence on surface swap.
-        dispose: async () => { await pickerScope.dispose('agent-model-picker-disposed'); },
+        dispose: async () => { invalidateEffortSelection(); await pickerScope.dispose('agent-model-picker-disposed'); },
     };
 }
