@@ -1007,6 +1007,8 @@ try {
             select: Boolean(lab?.querySelector('.vcp-harness-select-trigger')),
             menu: Boolean(lab?.querySelector('.vcp-harness-menu-root')),
             modalTriggers: [...(lab?.querySelectorAll('button') || [])].filter(button => /Open (modal|headless)/.test(button.textContent || '')).length,
+            tooltipAnchor: Boolean([...(lab?.querySelectorAll('button') || [])].find(button => button.textContent === 'Hover for details')),
+            hoverCardAnchor: Boolean([...(lab?.querySelectorAll('*') || [])].find(node => node.textContent === 'Workspace path')),
         };
     });
     assert.deepEqual(harnessLabContract, {
@@ -1019,6 +1021,8 @@ try {
         select: true,
         menu: true,
         modalTriggers: 2,
+        tooltipAnchor: true,
+        hoverCardAnchor: true,
     }, `Harness Candidate Lab contract missing: ${JSON.stringify(harnessLabContract)}`);
     let waDefined = false;
     while (Date.now() < deadline) {

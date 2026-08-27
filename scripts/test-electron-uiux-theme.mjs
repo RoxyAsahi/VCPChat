@@ -190,6 +190,24 @@ try {
             && !modalRoot?.querySelector('.vcp-harness-modal-footer');
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         result.modalHeadlessClosed = !document.querySelector('.vcp-harness-modal-root');
+        const tooltipAnchor = [...host.querySelectorAll('button')].find(button => button.textContent === 'Hover for details');
+        tooltipAnchor?.dispatchEvent(new MouseEvent('mouseenter'));
+        await new Promise(resolve => setTimeout(resolve, 140));
+        const tooltipBubble = host.querySelector('.vcp-harness-tooltip-bubble[role="tooltip"]');
+        result.tooltipOpen = tooltipBubble?.textContent === 'Open workspace details';
+        result.tooltipSide = tooltipBubble?.getAttribute('data-side') || '';
+        tooltipAnchor?.dispatchEvent(new MouseEvent('mouseleave'));
+        result.tooltipClosed = !host.querySelector('.vcp-harness-tooltip-bubble');
+        const hoverRoot = [...host.querySelectorAll('.vcp-harness-hover-card-root')].find(node => node.textContent?.includes('Workspace path'));
+        hoverRoot?.dispatchEvent(new PointerEvent('pointerenter'));
+        await new Promise(resolve => setTimeout(resolve, 140));
+        const hoverCard = document.querySelector('.vcp-harness-hover-card');
+        result.hoverCardOpen = hoverCard?.parentElement === document.body;
+        result.hoverCardCopyable = hoverCard?.getAttribute('role') === 'button' && hoverCard?.tabIndex === 0;
+        result.hoverCardLabel = hoverCard?.getAttribute('aria-label') || '';
+        hoverRoot?.dispatchEvent(new PointerEvent('pointerleave'));
+        await new Promise(resolve => setTimeout(resolve, 220));
+        result.hoverCardClosed = !document.querySelector('.vcp-harness-hover-card');
         await release();
         result.restored = host.childNodes.length === 0;
         result.scopeActive = scope.active;
@@ -198,7 +216,7 @@ try {
     });
     assert.deepEqual(candidateLabBoundary, {
         maturity: 'candidate',
-        buttons: 8,
+        buttons: 9,
         input: true,
         field: true,
         select: true,
@@ -221,6 +239,13 @@ try {
         modalButtonClosed: true,
         modalHeadless: true,
         modalHeadlessClosed: true,
+        tooltipOpen: true,
+        tooltipSide: 'top',
+        tooltipClosed: true,
+        hoverCardOpen: true,
+        hoverCardCopyable: true,
+        hoverCardLabel: 'Copy path: /Users/asahi/Documents/Codex/VCPChat-newarchitecture',
+        hoverCardClosed: true,
         restored: true,
         scopeActive: true,
     }, `generated Harness Candidate Lab mismatch: ${JSON.stringify(candidateLabBoundary)}`);
@@ -358,6 +383,80 @@ try {
         await window.__harnessCandidateModalScope?.dispose?.('candidate-modal-visual-complete');
         delete window.__harnessCandidateModalController;
         delete window.__harnessCandidateModalScope;
+    });
+    const tooltipHoverCardGeometry = await page.evaluate(async () => {
+        const host = document.createElement('section');
+        host.dataset.electronCandidateTooltipHoverCard = 'true';
+        host.className = 'vcp-ui-scope';
+        host.style.cssText = 'position:fixed;left:48px;top:80px;z-index:1200;display:grid;gap:72px;width:260px;padding:24px;background:#fff;color:#0f1115;border:1px solid rgba(0,0,0,.08);border-radius:12px';
+        document.body.append(host);
+        const scope = new window.VCPLifecycle.LifecycleScope('test:harness-candidate-tooltip-hover-card-visual');
+        const tooltipAnchor = document.createElement('button');
+        tooltipAnchor.type = 'button';
+        tooltipAnchor.textContent = 'Workspace details';
+        host.append(tooltipAnchor);
+        window.VCPUIUX.mountButton(tooltipAnchor, { variant: 'toolbar', size: 'sm' }, scope);
+        const tooltip = window.VCPUIUX.mountTooltip(tooltipAnchor, { label: 'Open workspace details', side: 'bottom', maxWidth: 240 }, scope);
+        tooltipAnchor.focus();
+        const hoverAnchor = document.createElement('div');
+        hoverAnchor.textContent = 'Workspace path';
+        hoverAnchor.style.cssText = 'padding:10px 12px;border:1px solid rgba(0,0,0,.12);border-radius:8px';
+        host.append(hoverAnchor);
+        const content = document.createElement('div');
+        content.textContent = '/Users/asahi/Documents/Codex/VCPChat-newarchitecture';
+        content.style.cssText = 'font-size:13px;line-height:20px;overflow-wrap:anywhere';
+        const hoverCard = window.VCPUIUX.mountHoverCard(hoverAnchor, { content, openDelayMs: 0, copyText: '/Users/asahi/Documents/Codex/VCPChat-newarchitecture', copyLabel: 'Copy path', copiedLabel: 'Copied' }, scope);
+        hoverCard.root.dispatchEvent(new PointerEvent('pointerenter'));
+        await new Promise(resolve => setTimeout(resolve, 180));
+        const bubble = tooltip.bubble;
+        const card = hoverCard.card;
+        const bubbleStyle = bubble ? getComputedStyle(bubble) : null;
+        const cardStyle = card ? getComputedStyle(card) : null;
+        const rootStyle = getComputedStyle(hoverCard.root);
+        const bubbleRect = bubble?.getBoundingClientRect();
+        const cardRect = card?.getBoundingClientRect();
+        window.__harnessCandidateTooltipController = tooltip;
+        window.__harnessCandidateHoverCardController = hoverCard;
+        window.__harnessCandidateTooltipHoverCardScope = scope;
+        return {
+            viewport: { width: window.innerWidth, height: window.innerHeight, deviceScaleFactor: window.devicePixelRatio },
+            source: 'generated-artifact-electron',
+            tooltip: {
+                text: bubble?.textContent || '',
+                side: bubble?.dataset.side || '',
+                rect: bubbleRect ? { x: bubbleRect.x, y: bubbleRect.y, width: bubbleRect.width, height: bubbleRect.height } : null,
+                style: bubbleStyle ? { position: bubbleStyle.position, zIndex: bubbleStyle.zIndex, padding: bubbleStyle.padding, borderRadius: bubbleStyle.borderRadius, fontSize: bubbleStyle.fontSize, lineHeight: bubbleStyle.lineHeight, maxWidth: bubbleStyle.maxWidth, backgroundColor: bubbleStyle.backgroundColor, color: bubbleStyle.color } : null,
+            },
+            hoverCard: {
+                role: card?.getAttribute('role') || null,
+                tabIndex: card?.tabIndex ?? null,
+                ariaLabel: card?.getAttribute('aria-label') || null,
+                rect: cardRect ? { x: cardRect.x, y: cardRect.y, width: cardRect.width, height: cardRect.height } : null,
+                root: { position: rootStyle.position, display: rootStyle.display },
+                style: cardStyle ? { position: cardStyle.position, zIndex: cardStyle.zIndex, width: cardStyle.width, padding: cardStyle.padding, borderRadius: cardStyle.borderRadius, backgroundColor: cardStyle.backgroundColor } : null,
+            },
+        };
+    });
+    assert.deepEqual(tooltipHoverCardGeometry.viewport, { width: 800, height: 600, deviceScaleFactor: 1 });
+    assert.deepEqual(tooltipHoverCardGeometry.tooltip.style, { position: 'fixed', zIndex: '100', padding: '3px 7px', borderRadius: '8px', fontSize: '13px', lineHeight: '20px', maxWidth: '240px', backgroundColor: 'rgb(44, 44, 46)', color: 'rgb(255, 255, 255)' });
+    assert.equal(tooltipHoverCardGeometry.tooltip.text, 'Open workspace details');
+    assert.equal(tooltipHoverCardGeometry.tooltip.side, 'bottom');
+    assert.deepEqual(tooltipHoverCardGeometry.hoverCard.root, { position: 'relative', display: 'block' });
+    assert.deepEqual(tooltipHoverCardGeometry.hoverCard.style, { position: 'fixed', zIndex: '100', width: '244px', padding: '12px 16px', borderRadius: '12px', backgroundColor: 'rgb(44, 44, 46)' });
+    assert.equal(tooltipHoverCardGeometry.hoverCard.role, 'button');
+    assert.equal(tooltipHoverCardGeometry.hoverCard.tabIndex, 0);
+    const tooltipHoverCardScreenshot = path.join(root, 'reports', 'vcp-harness-tooltip-hover-card-candidate.png');
+    await page.screenshot({ path: tooltipHoverCardScreenshot });
+    assert.ok((await fs.stat(tooltipHoverCardScreenshot)).size > 1024, 'Tooltip/HoverCard Candidate screenshot is unexpectedly empty');
+    await fs.writeFile(path.join(root, 'reports', 'vcp-harness-tooltip-hover-card-candidate.json'), `${JSON.stringify(tooltipHoverCardGeometry, null, 2)}\n`, 'utf8');
+    await page.evaluate(async () => {
+        await window.__harnessCandidateTooltipController?.dispose?.();
+        await window.__harnessCandidateHoverCardController?.dispose?.();
+        await window.__harnessCandidateTooltipHoverCardScope?.dispose?.('candidate-tooltip-hover-card-visual-complete');
+        delete window.__harnessCandidateTooltipController;
+        delete window.__harnessCandidateHoverCardController;
+        delete window.__harnessCandidateTooltipHoverCardScope;
+        document.querySelector('[data-electron-candidate-tooltip-hover-card]')?.remove();
     });
     await page.screenshot({ path: primitiveScreenshot });
     const screenshotStat = await fs.stat(primitiveScreenshot);

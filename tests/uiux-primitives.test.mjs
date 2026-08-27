@@ -12,10 +12,108 @@ const { mountSelect } = await import('../modules/uiux/primitives/select.ts');
 const { mountInput } = await import('../modules/uiux/primitives/input.ts');
 const { mountMenu } = await import('../modules/uiux/primitives/menu.ts');
 const { mountModal } = await import('../modules/uiux/primitives/modal.ts');
+const { mountTooltip } = await import('../modules/uiux/primitives/tooltip.ts');
+const { mountHoverCard } = await import('../modules/uiux/primitives/hover-card.ts');
 const { mountChoice } = await import('../modules/uiux/primitives/choice.ts');
 const { mountRange } = await import('../modules/uiux/primitives/range.ts');
 const { mountToggle } = await import('../modules/uiux/primitives/toggle.ts');
 const { mountColorPair } = await import('../modules/uiux/primitives/color-pair.ts');
+
+const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+
+test('Harness Tooltip keeps the anchor DOM and owns hover/focus/delay/disabled effects', async () => {
+    const dom = new JSDOM('<!doctype html><main><button id="anchor">Details</button><span id="after">After</span></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('tooltip-test'));
+        const anchor = document.getElementById('anchor');
+        anchor.getBoundingClientRect = () => ({ left: 40, right: 140, top: 30, bottom: 64, width: 100, height: 34, x: 40, y: 30, toJSON() {} });
+        let labelReads = 0;
+        const tooltip = mountTooltip(anchor, { label: () => { labelReads += 1; return 'Open workspace'; }, side: 'bottom', delayMs: 15, maxWidth: 360 }, scope);
+        assert.equal(anchor.parentElement.tagName, 'MAIN', 'Tooltip must not add an anchor wrapper');
+        anchor.dispatchEvent(new dom.window.MouseEvent('mouseenter'));
+        await delay(10);
+        assert.equal(tooltip.open, false);
+        await delay(10);
+        assert.equal(tooltip.bubble?.getAttribute('role'), 'tooltip');
+        assert.equal(tooltip.bubble?.dataset.side, 'bottom');
+        assert.equal(tooltip.bubble?.style.left, '90px');
+        assert.equal(tooltip.bubble?.style.top, '72px');
+        assert.equal(tooltip.bubble?.style.maxWidth, '360px');
+        assert.equal(labelReads, 1, 'lazy label must resolve only while visible');
+        anchor.dispatchEvent(new dom.window.FocusEvent('focus'));
+        anchor.dispatchEvent(new dom.window.MouseEvent('mouseleave'));
+        assert.equal(tooltip.open, false, 'Harness mouseleave hides even while focus is still set');
+        anchor.dispatchEvent(new dom.window.FocusEvent('blur'));
+        anchor.dispatchEvent(new dom.window.FocusEvent('focus'));
+        assert.equal(tooltip.open, true, 'keyboard focus is immediate');
+        tooltip.setDisabled(true);
+        assert.equal(tooltip.open, false);
+        anchor.dispatchEvent(new dom.window.FocusEvent('focus'));
+        assert.equal(tooltip.open, false);
+        await tooltip.dispose();
+        assert.deepEqual([...document.querySelector('main').children].map(node => node.id), ['anchor', 'after']);
+        await scope.dispose('tooltip-complete');
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
+
+test('Harness HoverCard owns dwell, portal, grace, copy feedback and teardown', async () => {
+    const dom = new JSDOM('<!doctype html><main><div id="anchor">Workspace path</div><section id="source"><div id="content">/full/path</div><span id="after">After</span></section></main>', { pretendToBeVisual: true });
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: dom.window.navigator });
+    const writes = [];
+    Object.defineProperty(dom.window.navigator, 'clipboard', { configurable: true, value: { writeText: async text => { writes.push(text); } } });
+    try {
+        const scope = createUiScope(new LifecycleScope('hover-card-test'));
+        const anchor = document.getElementById('anchor');
+        const content = document.getElementById('content');
+        const hover = mountHoverCard(anchor, { content, openDelayMs: 15, copyText: '/full/path', copyLabel: 'Copy path', copiedLabel: 'Copied' }, scope);
+        hover.root.getBoundingClientRect = () => ({ left: 40, right: 200, top: 60, bottom: 94, width: 160, height: 34, x: 40, y: 60, toJSON() {} });
+        hover.root.dispatchEvent(new dom.window.Event('pointerenter'));
+        await delay(10);
+        assert.equal(hover.open, false);
+        await delay(10);
+        assert.equal(hover.card?.parentElement, document.body);
+        assert.equal(hover.card?.style.left, '208px');
+        assert.equal(hover.card?.style.top, '60px');
+        assert.equal(hover.card?.getAttribute('role'), 'button');
+        assert.equal(hover.card?.getAttribute('aria-label'), 'Copy path: /full/path');
+        hover.root.dispatchEvent(new dom.window.Event('pointerleave'));
+        await delay(100);
+        hover.card?.dispatchEvent(new dom.window.Event('pointerenter'));
+        await delay(120);
+        assert.equal(hover.open, true, 'pointer reaching the card inside grace keeps it open');
+        hover.root.getBoundingClientRect = () => ({ left: 80, right: 300, top: 90, bottom: 124, width: 220, height: 34, x: 80, y: 90, toJSON() {} });
+        window.dispatchEvent(new dom.window.Event('scroll'));
+        assert.equal(hover.card?.style.left, '308px');
+        assert.equal(hover.card?.style.top, '90px');
+        hover.card?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+        await delay(0);
+        assert.deepEqual(writes, ['/full/path']);
+        assert.equal(hover.root.querySelector('[role="status"]')?.textContent, 'Copied');
+        assert.equal(hover.card?.querySelector('.vcp-harness-hover-card-copied')?.textContent, 'Copied');
+        hover.card?.dispatchEvent(new dom.window.Event('pointerleave'));
+        await delay(210);
+        assert.equal(hover.open, false);
+        assert.deepEqual([...document.getElementById('source').children].map(node => node.id), ['content', 'after']);
+        hover.root.dispatchEvent(new dom.window.Event('pointerenter'));
+        await delay(20);
+        hover.setDisabled(true);
+        assert.equal(hover.open, false);
+        await hover.dispose();
+        assert.equal(anchor.parentElement.tagName, 'MAIN');
+        assert.deepEqual([...document.querySelector('main').children].map(node => node.id), ['anchor', 'source']);
+        await scope.dispose('hover-card-complete');
+    } finally {
+        globalThis.document = previousDocument; globalThis.window = previousWindow;
+        if (navigatorDescriptor) Object.defineProperty(globalThis, 'navigator', navigatorDescriptor);
+        else Reflect.deleteProperty(globalThis, 'navigator');
+        dom.window.close();
+    }
+});
 
 test('Harness Modal portals controlled standard/headless DOM and restores owned nodes', async () => {
     const dom = new JSDOM('<!doctype html><main><button id="trigger">Open</button><section id="source"><div id="body">Body</div><button id="cancel">Cancel</button><span id="after">After</span></section></main>');

@@ -1,0 +1,24 @@
+{
+  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/Tooltip.module.css",
+  "bubble": {
+    "position": "fixed",
+    "zIndex": "100",
+    "width": "max-content",
+    "maxWidth": "50vw",
+    "padding": "3px 7px",
+    "borderRadius": "8px",
+    "fontSize": "13px",
+    "lineHeight": "20px",
+    "edgeMargin": "12px",
+    "rightGap": "10px",
+    "verticalGap": "8px"
+  },
+  "vcpCandidateEvidence": {
+    "viewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 },
+    "engine": "Electron Chromium",
+    "screenshot": "fixtures/vcp/tooltip-hover-card.candidate.png",
+    "report": "fixtures/vcp/tooltip-hover-card.candidate.json",
+    "status": "candidate-interaction-active",
+    "pixelDiff": "pending-same-semantic-harness-fixture"
+  }
+}

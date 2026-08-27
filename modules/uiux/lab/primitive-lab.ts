@@ -4,6 +4,8 @@ import { mountField } from '../primitives/field.js';
 import { mountInput } from '../primitives/input.js';
 import { mountMenu } from '../primitives/menu.js';
 import { mountModal } from '../primitives/modal.js';
+import { mountTooltip } from '../primitives/tooltip.js';
+import { mountHoverCard } from '../primitives/hover-card.js';
 import { mountSelect } from '../primitives/select.js';
 
 const STYLE_ID = 'vcp-harness-primitive-lab';
@@ -164,6 +166,29 @@ export function mountPrimitiveLab(root: HTMLElement, scope: UiScope): UiDisposer
     const headless = mountModal({ title: 'Custom modal frame', body: headlessBody, headless: true, onClose: () => headless.setOpen(false) }, labScope);
     labScope.listen(headlessTrigger, 'click', () => headless.setOpen(true));
     labScope.listen(headlessClose, 'click', () => headless.setOpen(false));
+
+    const tooltipRow = group(lab, 'Tooltip / HoverCard', 'deepseek-harness/packages/client/ui-primitives/src/Tooltip.tsx + HoverCard.tsx; Goal/Sidebar/Workspace consumers');
+    const tooltipButton = document.createElement('button');
+    tooltipButton.type = 'button';
+    tooltipButton.textContent = 'Hover for details';
+    tooltipRow.append(tooltipButton);
+    mountButton(tooltipButton, { variant: 'toolbar', size: 'sm' }, labScope);
+    mountTooltip(tooltipButton, { label: 'Open workspace details', side: 'bottom', delayMs: 120 }, labScope);
+
+    const hoverAnchor = document.createElement('div');
+    hoverAnchor.className = 'vcp-harness-lab-hover-anchor';
+    hoverAnchor.textContent = 'Workspace path';
+    tooltipRow.append(hoverAnchor);
+    const hoverContent = document.createElement('div');
+    hoverContent.className = 'vcp-harness-lab-hover-content';
+    hoverContent.textContent = '/Users/asahi/Documents/Codex/VCPChat-newarchitecture';
+    mountHoverCard(hoverAnchor, {
+        content: hoverContent,
+        openDelayMs: 120,
+        copyText: '/Users/asahi/Documents/Codex/VCPChat-newarchitecture',
+        copyLabel: 'Copy path',
+        copiedLabel: 'Copied',
+    }, labScope);
 
     return scope.own(async () => {
         await labScope.dispose('primitive-lab-unmounted');

@@ -1,0 +1,21 @@
+{
+  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/HoverCard.module.css",
+  "root": { "position": "relative", "display": "block" },
+  "card": {
+    "position": "fixed",
+    "zIndex": "100",
+    "width": "244px",
+    "padding": "12px 16px",
+    "borderRadius": "12px",
+    "gapFromAnchor": "8px",
+    "viewportBottomMargin": "8px"
+  },
+  "vcpCandidateEvidence": {
+    "viewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 },
+    "engine": "Electron Chromium",
+    "screenshot": "fixtures/vcp/tooltip-hover-card.candidate.png",
+    "report": "fixtures/vcp/tooltip-hover-card.candidate.json",
+    "status": "candidate-interaction-active",
+    "pixelDiff": "pending-same-semantic-harness-fixture"
+  }
+}

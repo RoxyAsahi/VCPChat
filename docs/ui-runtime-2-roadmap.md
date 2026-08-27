@@ -66,6 +66,8 @@
 
 2026-08-27 Modal checkpoint：新增独立 `modules/uiux/primitives/modal.ts`，复刻 Harness body portal、mask、standard/headless DOM、`className`/`contentClassName` 生产扩展点、24px card、Escape/mask/close-button 与 close/reopen/dispose。Candidate 不添加 Harness 源码没有的 focus trap/autofocus/restoration；交给 Modal 的已有 body/footer DOM 只在 open 时进入 portal，close 时按逆序锚点恢复原父节点和精确顺序。源码 focused test 12/12、44 generated artifact consistency、artifact smoke 和 Electron journey 通过；固定 800×600@1x standard screenshot/geometry 已登记到 `fixtures/vcp/modal.candidate.*`，headless/三种关闭路径也由 Electron 重放。当前为 `candidate-interaction-active`；同语义 Harness production screenshot/pixel diff、VCP production consumer 与 legacy deletion 仍 pending。
 
+2026-08-27 Tooltip/HoverCard checkpoint：新增独立 `modules/uiux/primitives/tooltip.ts` 与 `hover-card.ts`。Tooltip 保持原 anchor DOM、不添加 wrapper，覆盖 lazy label、hover delay、focus immediate、right/bottom/top、12px viewport clamp、vertical flip、disabled-mid-open 和 dispose；HoverCard 覆盖 500ms 默认 dwell、200ms pointer grace、body portal、scroll/resize/bottom clamp、copy button/selection guard/status feedback、迟到 clipboard epoch 失效和精确 DOM 恢复。源码 focused test 14/14、全量 UIUX 34/34、48 generated artifact consistency、artifact smoke 和 Electron generated journey 通过；固定 800×600@1x geometry/screenshot 已登记到 `fixtures/vcp/tooltip-hover-card.candidate.*`，Lab journey 还真实触发了 bottom→top viewport flip。当前为 `candidate-interaction-active`；同语义 Harness pixel diff、VCP production consumer 与 legacy deletion仍 pending。
+
 本批次不解冻聊天内核、消息渲染、Composer 内部、协议、IPC、持久化、Plugin Loader、chat manifest 或动态壁纸。Harness conversation/tool/markdown 控件可以在实验室复刻，但不得借实验室接入改变这些冻结边界。
 
 ## 0.3 上位规范到执行批次的映射

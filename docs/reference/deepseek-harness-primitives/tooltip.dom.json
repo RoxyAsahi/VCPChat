@@ -1,0 +1,22 @@
+{
+  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/Tooltip.tsx",
+  "productionConsumers": [
+    "packages/client/ui-goal/src/client/GoalBar.tsx",
+    "packages/client/ui-sidebar/src/client/SidebarRoot.tsx",
+    "packages/client/ui-workspace/src/client/WorkspaceBrowser.tsx",
+    "packages/client/ui-agent-preset/src/client/AgentPresetSection.tsx"
+  ],
+  "contract": {
+    "anchor": "existing child element; no wrapper",
+    "bubble": "anchor sibling span[role=tooltip][data-side] with fixed positioning",
+    "triggers": ["delayed mouseenter", "immediate focus", "mouseleave", "blur", "disabled-mid-open"],
+    "label": "string or lazy resolver evaluated only while visible",
+    "sides": ["right", "bottom", "top"]
+  },
+  "vcpCandidate": {
+    "source": "modules/uiux/primitives/tooltip.ts",
+    "host": "modules/uiux/lab/primitive-lab.ts",
+    "maturity": "candidate-interaction-active",
+    "stableApi": false
+  }
+}
