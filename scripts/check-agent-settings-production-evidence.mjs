@@ -101,6 +101,10 @@ if (report.agentSelectInteraction !== null && report.agentSelectInteraction !== 
         opened: true, menuOwner: true, role: 'menu', closed: true, focusRestored: true,
     }, 'voice Select interaction evidence must prove portal open, Escape close, and focus restore');
 }
+if (report.agentPromptInteraction !== null && report.agentPromptInteraction !== undefined) {
+    assert.deepEqual(report.agentPromptInteraction, { available: true, switched: true, restored: true },
+        'prompt mode Button interaction evidence must prove modular switch and original restoration');
+}
 
 console.log(JSON.stringify({
     source: report.source,
