@@ -59,15 +59,15 @@
 
 | 条件 | 证据 | 当前 |
 | --- | --- | --- |
-| 单一 projection owner | `check-settings-source-equivalence.mjs` + DOM inspection | 部分通过；legacy projection 仍存在 |
-| 单一 save command owner | `tests/global-settings-save.test.mjs` | typed save active；legacy autosave 仍在 |
+| 单一 projection owner | `check-settings-source-equivalence.mjs` + DOM inspection | 部分通过（2026-08-27 批次 14 归因）：残余 legacy projection = 通用 consumer 45 行 + presentationOwner 启动兜底；45 行中 40 行（38 键）命中 §3 冻结清单，唯一非冻结余量为 userName 簇 4 键 |
+| 单一 save command owner | `tests/global-settings-save.test.mjs` | typed save active；legacy autosave 经批次 14 归因后仅驱动 §3 冻结字段与 userName 簇（论坛凭据、networkNotesPaths、外观/工作区/字体/宽屏均已走 service.save.execute） |
 | dirty draft 不被 snapshot 覆盖 | Settings Electron dirty/reopen journey | 已有 focused evidence |
 | failure/retry 保留输入 | Settings WA/Electron failure journey | 已通过 |
 | timeout late result 无复活 | `tests/uiux-settings-adapter.test.mjs` | 已通过 |
 | close flush 或明确失败 | Electron close path | 已按批次闭合（journey 6b/6c：typed 字段 + 论坛凭据 + 宽屏布局，绕过防抖提交） |
 | reload durable restore | Settings Electron reload | 已通过 |
 | teardown quiescence | 60-cycle + explicit teardown | 已通过 Settings-only |
-| legacy projection 删除 | source-equivalence + diff | 外观/工作区批次与 enableWideChatLayout 已删除；其余按字段推进 |
+| legacy projection 删除 | source-equivalence + diff | 外观/工作区批次、enableWideChatLayout 与 networkNotesPaths 已删除；余量 = §3 冻结 40 行（责任保留）+ userName 簇 4 键（见批次 14 盘点） |
 | 混合 listener 增长归因 | lifecycle stress 分层对照 | 已闭合（2026-08-27，R2-02E 批次 8）：Settings-only stress 3 warmup + 20 cycles，listener 643 / lifecycle 资源 366 五 checkpoint 恒定、detached=0，树含批次 6/7 变更 |
 
 ## 5. 下一步
@@ -112,5 +112,7 @@ Forum `adminUsername`/`adminPassword` 的 dirty/autosave seam 已收口：论坛
 `enableWideChatLayout` 收口（2026-08-27，R2-02E 批次 7）：宽屏布局单选对加入 `mountTypedFieldOwner()` 的 TYPED_FIELD_DEFINITIONS（新增 `inverse-boolean` kind，radio 按 checked 而非 value 取值）；settings-bridge 通用 projection 的 `chatLayoutModeWide/Normal` 两行删除，typed project() 在 clean form 上接管该单选对的快照投影。Electron journey 新增 6c：切换单选即出现 typed dirty 与 owner 标记、全程不触发 legacy `requestSubmit`、关闭模态绕过防抖后布尔草稿由关闭 flush 提交、save-result 归属为 `typed-settings-field-owner`。manager 对该 key 的持久化读保留（Classic 兼容）。提交 `a6d5c208`。
 
 八个字体字段收口（2026-08-27，R2-02E 批次 11；§2 表随行升级为 `typed-owner-active`）：`chatFontPreset`、`chatFontCustom`、`chatCodeFontPreset`、`chatCodeFontCustom`、`chatDiaryFontPreset`、`chatDiaryFontCustom`、`chatToolFontPreset`、`chatToolFontCustom` 全部加入 TYPED_FIELD_DEFINITIONS（kind: string），通用 projection 中对应的 8 行退役；typed project() 接管快照填充与 preset/custom 行显隐。批内发现并修复既有潜在缺陷：`mountHarnessSelects()` 在重复 refresh 时 disconnect 旧 MutationObserver 但因注册表条目残留而不重建，动态 option 替换（如 assistantAgent）从此无人监听——该缺陷被本批引入的双次 enhance 时序必现化；修复为断开时同步删除注册表条目、挂载尾部必然重挂新 observer。Electron journey 新增 6d：preset select + custom text 双字段关闭 flush 提交断言。
+
+验收矩阵残余 legacy 写入面盘点（2026-08-27，R2-02E 批次 14）：线程 A 在 `af281a22` 之后新交付 4 个 directory-browser 提交（draft prefix filtering / draft navigation preview / two-leg landing / landing timing parity），各 checkpoint 状态仍为 `foundation-electron-active`（仍缺同语义 Harness DOM/computed-style/pixel diff 与合法 VCP production consumer），Candidate-active unlock 未满足，按指令转入矩阵盘点。settings-bridge 通用 consumer projection 残余 45 行（settings-bridge.js:159-203）经逐行对照归因为三类：(1) **§3 冻结责任保留**——第 165-203 行共 40 行 / 38 键（vcpServerUrl、vcpApiKey、fileKey、vcpLogUrl/Key、topicSummaryModel、assistantAgent、voiceMode 双 radio、speechRecognizer* 两键、voiceLocal/NetworkSettings 四键、enableDistributedServer、agentMusicControl、注入/清洗/消息按钮组、flowlockContinueDelay、middle-click 组四键、enableRegenerateConfirmation、chatPresentationMode 三 radio、气泡组五键、minChunkBufferSize、smoothStreamIntervalMs、enableSmoothStreaming）全部命中本档 §3 冻结清单，是协议允许的 legacy 链存量，不视为欠账；(2) **唯一非冻结待迁量**——「userName 簇」5 行 / 4 键（userName、userNameTextColor + userNameTextColorText 镜像对、userUseThemeColorsInChat、continueWritingPrompt）；(3) presentationOwner 对 userName 簇的全部 safeSet/safeCheck 写入均位于 `!typedSettingsProjectionActive` 兜底分支（mainChatSettingsPresentationOwner.js:605/609/618/637 一带），typed owner 挂载后惰性，运行时真实写入方只有通用 projection 与 legacy 整表 collect，不存在三重活跃写入。据此把矩阵行 62/63/70 的模糊状态改写为上述精确边界。userName 簇迁移条件登记如下（不在批次 14 施工）：`userNameTextColor` 可复用 `userAvatarBorderColor` 已验证的 color+text 镜像对范式；`continueWritingPrompt` 是 failure/retry journey（矩阵行 65）的证据承载字段，迁移前必须先产出 typed 路径的失败/重试等价证据并迁移该 journey 断言；`userName` 为 string 直迁、`userUseThemeColorsInChat` 为 boolean 直迁。代码面自批次 13 门禁全绿的 180fb5bc 起零变更，本批为 docs-only 审计。
 
 `networkNotesPaths` 动态列表单一 owner 收口（2026-08-27，R2-02E 批次 13；§2 新增该行）：动态路径行无法表达为「一控件一 id」的 TYPED_FIELD_DEFINITIONS 条目，采用等价的容器级 owner 通道——`#networkNotesPathsContainer` 成为 owned unit，input/change 委托覆盖事后添加的行（helper 在 owner 已挂载时为新行预置抑制标记），每次事件重收集整列表进入 pendingPatch 并经 `save.execute` 提交；静默删除行（remove 按钮）现在会主动宣告并触发草稿重收集（旧行为下删除不产生任何 dirty）。行投影从通用 consumer 迁入 typed project()，presentationOwner 的 `!typedSettingsProjectionActive` 兜底保留；legacy manager 的 DOM 收集仅在 typed owner 未挂载面上继续生效（Classic 兼容，当前 Settings 面不再消费它作为提交路径）。journey 6e 覆盖编辑、新增、删除三类交互 + 绕过防抖的关闭 flush 整列表提交 + save-result 归属 typed-settings-field-owner。方法论记录：批次内 toggle 快照探针曾出现跨实例投影竞态假象，影子还原对照实验证明其由 journey 中增删行断言触发的 debounced save 与探针交叠造成，以结算等待收敛（见 handoff §11 批次 13）。

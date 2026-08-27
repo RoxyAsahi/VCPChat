@@ -331,3 +331,14 @@ roadmap checkpoint 追加于 `38ec8bb8`。
 - journey 新增 6e：编辑首行 → 删除行 → 经生产 add 按钮加行 → 填入唯一值 → 关闭模态绕过防抖 → 断言 typed service 快照 networkNotesPaths 与屏幕列表逐项相等、全部行携带 owner 抑制标记、save-result 归属 typed-settings-field-owner。全轮 17 PASS。
 - 门禁全绿：check:uiux、test:uiux（44/44）、check:uiux:artifacts（66 文件）、test:uiux:artifacts、Electron journey（17 PASS）、lifecycle stress、guard:classic-retirement、source-equivalence。
 - 台账：§2 新增 `networkNotesPaths` 行（typed-owner-active，close-flush 证据 journey 6e），§7 增补批次段落。批次 12 审计中登记的「先决工序：动态列表字段单一 owner 化」就此闭合；directory-browser production consumer 接入仅剩线程 A primitive 成熟度与目录列举能力两项外部前置。
+
+### 2026-08-27 批次 14：验收矩阵未闭合项盘点（directory-browser 未解锁分支）
+
+状态：docs-only 审计落盘。
+
+- 前置复查：`af281a22` 之后线程 A 新交付 4 个 directory-browser 提交（2524e717 draft prefix filtering、8d72772e draft navigation preview、b0183953 two-leg landing、7a2b431c landing timing parity），roadmap 各 checkpoint 状态仍为 `foundation-electron-active`——仍缺同语义 Harness DOM/computed-style/pixel diff 与合法 VCP production consumer。unlock 条件未满足，按指令转入「盘点 handoff 验收矩阵中其余未闭合项」分支。
+- 盘点结论（三向归因）：settings-bridge 通用 consumer projection 残余 45 行 = (1) 40 行 / 38 键全部命中台账 §3 冻结清单（vcpServerUrl、voiceMode、speechRecognizer*、注入/清洗组、气泡组、流式组等），属协议责任保留而非欠账；(2) 5 行 / 4 键「userName 簇」（userName、userNameTextColor(+Text) 镜像、userUseThemeColorsInChat、continueWritingPrompt）为唯一非冻结待迁量；(3) presentationOwner 对该簇的全部写入均位于 `!typedSettingsProjectionActive` 兜底分支（mainChatSettingsPresentationOwner.js:605/609/618/637 一带），typed owner 挂载后惰性——无三重活跃写入。
+- 矩阵行 62/63/70 已按上述归因改写（settings-uiux-field-ownership-2026-08-25.md §4）：legacy projection/save 链的存量边界从模糊的「仍存在」收敛为精确清单；新增结论均注明批次 14 归因来源。
+- userName 簇迁移条件登记（不在本批施工）：`userNameTextColor` 复用 `userAvatarBorderColor` 的 color+text 镜像对范式；`continueWritingPrompt` 是 failure/retry journey（矩阵行 65）的证据承载字段，迁移前必须先产出 typed 路径失败/重试等价证据并同步迁移该断言；其余两键直迁。
+- 门禁口径：代码面自批次 13 门禁全绿的 `180fb5bc` 起零变更（`git diff --stat 180fb5bc..HEAD` 为空），本批 docs-only 不重跑八项门禁；未完成门禁不虚构。win32/Linux packaged evidence 维持 evidence-pending。
+- 台账：§4 三行改写 + §7 追加盘点段落；roadmap 追加 R2-02E 存量盘点 checkpoint。
