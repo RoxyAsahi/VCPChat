@@ -109,3 +109,12 @@ test('JobListAction source audit preserves lifecycle and ordering evidence', () 
     assert.equal(report.checks.length, 10);
     assert.ok(report.note.includes('does not create a VCP jobs consumer'));
 });
+
+test('PermissionRow source audit preserves settings capability boundaries', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-permission-row-source.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-permission-row-source.json'), 'utf8'));
+    assert.equal(report.status, 'source-contract-pass');
+    assert.equal(report.pass, true);
+    assert.equal(report.checks.length, 10);
+    assert.ok(report.note.includes('does not create a VCP permission-settings consumer'));
+});
