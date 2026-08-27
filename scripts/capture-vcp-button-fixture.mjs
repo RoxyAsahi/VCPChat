@@ -9,8 +9,11 @@ const pnpmRoot = '/Users/asahi/Documents/Codex/deepseek-harness/node_modules/.pn
 const playwrightDir = (await fs.readdir(pnpmRoot)).filter(name => name.startsWith('playwright@')).sort().at(-1);
 assert.ok(playwrightDir, 'Playwright runtime is unavailable');
 const { chromium } = await import(pathToFileURL(path.join(pnpmRoot, playwrightDir, 'node_modules/playwright/index.mjs')).href);
-const welcomeMode = process.env.VCP_BUTTON_FIXTURE === 'welcome';
-const html = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;width:100%;height:100%;background:#fff}body{font-family:system-ui;color:#0f1115}.fixture{display:flex;gap:12px;align-items:center;padding:24px}${welcomeMode ? ';position:fixed;left:552px;top:384px;padding:0' : ''}</style><script type="module" src="/modules/uiux/generated/browser-entry.js"></script></head><body><div class="fixture"></div></body></html>`;
+const fixtureMode = process.env.VCP_BUTTON_FIXTURE || 'variants';
+const welcomeMode = fixtureMode === 'welcome' || fixtureMode === 'welcome-projection';
+const settingsDocumentMode = fixtureMode === 'settings-document';
+const consumerProjection = fixtureMode === 'welcome-projection';
+const html = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;width:100%;height:100%;background:#fff}body{font-family:-apple-system,system-ui,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei','Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;color:#0f1115}.fixture{display:flex;gap:12px;align-items:center;padding:24px}.fixture.welcome,.fixture.settings-document{position:fixed;left:552px;top:384px;padding:0}.fixture.welcome-projection,.fixture.settings-document{--dsw-alias-button-primary-fill:rgb(15,17,21);--dsw-alias-label-primary-foreground:#fff;--dsw-alias-border-l2:rgb(229,229,229)}.fixture.welcome-projection>button{min-width:120px}</style><script type="module" src="/modules/uiux/generated/browser-entry.js"></script></head><body><div class="fixture${welcomeMode ? ' welcome' : ''}${settingsDocumentMode ? ' settings-document' : ''}${consumerProjection ? ' welcome-projection' : ''}"></div></body></html>`;
 const server = http.createServer(async (request, response) => {
     try {
         const pathname = new URL(request.url, 'http://127.0.0.1').pathname;
@@ -28,33 +31,38 @@ try {
     const page = await browser.newPage({ viewport: { width: 800, height: 600 }, deviceScaleFactor: 1 });
     await page.goto(`http://127.0.0.1:${address.port}/`, { waitUntil: 'load' });
     await page.waitForFunction(() => Boolean(globalThis.VCPUIUX));
-    const evidence = await page.evaluate((isWelcomeMode) => {
+    const evidence = await page.evaluate(({ isWelcomeMode, settingsDocumentMode, isConsumerProjection }) => {
         const host = document.querySelector('.fixture');
+        if (isConsumerProjection) {
+            host.style.setProperty('--dsw-alias-button-primary-fill', 'rgb(15, 17, 21)');
+            host.style.setProperty('--dsw-alias-label-primary-foreground', 'rgb(255, 255, 255)');
+        }
         const releases = [];
         const scope = {
             own(disposer) { releases.push(disposer); return disposer; },
             listen(target, type, handler, options) { target.addEventListener(type, handler, options); const release = () => target.removeEventListener(type, handler, options); releases.push(release); return release; },
         };
-        const cases = isWelcomeMode ? [['continue', { variant: 'primary' }]] : [
+        const cases = isWelcomeMode ? [['continue', { variant: 'primary' }]] : settingsDocumentMode ? [['open-document', { variant: 'outline', size: 'sm' }]] : [
             ['primary', { variant: 'primary' }], ['ghost', { variant: 'ghost' }],
             ['outline', { variant: 'outline' }], ['toolbar', { variant: 'toolbar' }],
             ['compact', { variant: 'ghost', size: 'sm' }], ['disabled', { variant: 'primary', disabled: true }],
         ];
         const nodes = cases.map(([name, props]) => {
             const button = document.createElement('button');
-            button.textContent = isWelcomeMode ? '继续' : name;
+            button.textContent = isWelcomeMode ? '继续' : settingsDocumentMode ? '打开配置文件' : name;
             host.append(button);
             window.VCPUIUX.mountButton(button, props, scope);
+            if (isConsumerProjection) button.style.minWidth = '120px';
             const rect = button.getBoundingClientRect();
             const style = getComputedStyle(button);
-            return { name, dom: button.outerHTML, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }, style: { display: style.display, gap: style.gap, borderRadius: style.borderRadius, padding: style.padding, fontSize: style.fontSize, lineHeight: style.lineHeight, backgroundColor: style.backgroundColor, opacity: style.opacity } };
+            return { name, dom: button.outerHTML, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }, style: { display: style.display, alignItems: style.alignItems, gap: style.gap, borderWidth: style.borderWidth, borderRadius: style.borderRadius, padding: style.padding, fontFamily: style.fontFamily, fontSize: style.fontSize, fontWeight: style.fontWeight, lineHeight: style.lineHeight, backgroundColor: style.backgroundColor, color: style.color, boxShadow: style.boxShadow, cursor: style.cursor, opacity: style.opacity } };
         });
         window.__vcpButtonFixtureReleases = releases;
-        return { source: 'VCP generated artifact Candidate Lab', semanticFixture: isWelcomeMode ? 'settings-onboarding/welcome-notice/continue/primary-md/enabled' : 'portable-button/all-variants-and-disabled', viewport: { width: 800, height: 600, deviceScaleFactor: 1 }, cases: nodes, ownerRegistrations: releases.length };
-    }, welcomeMode);
-    assert.equal(evidence.cases.length, welcomeMode ? 1 : 6);
+        return { source: 'VCP generated artifact Candidate Lab', semanticFixture: isWelcomeMode ? 'settings-onboarding/welcome-notice/continue/primary-md/enabled' : settingsDocumentMode ? 'settings-general/document-action/open-document/outline-sm/enabled' : 'portable-button/all-variants-and-disabled', consumerProjection: isConsumerProjection ? 'WelcomeNotice.module.css .primary min-width plus resolved primary token, fixture-only' : null, viewport: { width: 800, height: 600, deviceScaleFactor: 1 }, cases: nodes, ownerRegistrations: releases.length };
+    }, { isWelcomeMode: welcomeMode, settingsDocumentMode, isConsumerProjection: consumerProjection });
+    assert.equal(evidence.cases.length, welcomeMode || settingsDocumentMode ? 1 : 6);
     await fs.mkdir(path.join(root, 'reports'), { recursive: true });
-    const outputStem = welcomeMode ? 'vcp-button-welcome-production' : 'vcp-button-candidate';
+    const outputStem = consumerProjection ? 'vcp-button-welcome-projection' : welcomeMode ? 'vcp-button-welcome-production' : settingsDocumentMode ? 'vcp-button-settings-document-candidate' : 'vcp-button-candidate';
     await fs.writeFile(path.join(root, 'reports', `${outputStem}.json`), `${JSON.stringify(evidence, null, 2)}\n`);
     await page.locator('.fixture > button').first().screenshot({ path: path.join(root, 'reports', `${outputStem}.png`) });
     const disposed = await page.evaluate(() => {
@@ -64,9 +72,9 @@ try {
         delete window.__vcpButtonFixtureReleases;
         return { count: releases.length, restored };
     });
-    assert.equal(disposed.count, welcomeMode ? 1 : 6);
+    assert.equal(disposed.count, welcomeMode || settingsDocumentMode ? 1 : 6);
     assert.equal(disposed.restored, true, 'Button fixture owner must restore each native button after capture');
-    console.log(`VCP Button fixture captured (${evidence.cases.length} states; 800x600 @1x; ${welcomeMode ? 'WelcomeNotice semantic' : 'portable variants'}).`);
+    console.log(`VCP Button fixture captured (${evidence.cases.length} states; 800x600 @1x; ${consumerProjection ? 'WelcomeNotice consumer projection' : welcomeMode ? 'WelcomeNotice semantic' : settingsDocumentMode ? 'SettingsDocumentAction semantic' : 'portable variants'}).`);
 } finally {
     await browser.close();
     await new Promise(resolve => server.close(resolve));
