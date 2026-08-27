@@ -58,6 +58,7 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
             label: option.label,
             detail: [option.provider, option.favorite ? 'Favorite' : undefined].filter(Boolean).join(' · ') || undefined,
             active: option.active === true || option.id === selectedId,
+            disabled: option.disabled === true,
         }));
     };
     const popup = createPopupSelectController({
@@ -95,8 +96,8 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
         open: () => popup.open('agent-model', {}, { via: 'menu', span: { source: 'agent-model-picker' } }),
         close: () => popup.dismiss(),
         refresh: () => {
-            if (popup.getSnapshot().open) popup.retry();
-            else popup.open('agent-model', {}, { via: 'menu', span: { source: 'agent-model-picker-refresh' } });
+            if (popup.getSnapshot().open) popup.dismiss();
+            popup.open('agent-model', {}, { via: 'menu', span: { source: 'agent-model-picker-refresh' } });
         },
         setSelected: id => {
             selectedId = id;
