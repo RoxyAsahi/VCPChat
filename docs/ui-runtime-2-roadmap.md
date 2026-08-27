@@ -5,6 +5,7 @@
 > **2026-08-27 portable inventory expansion：** 依据 Harness `packages/client` 真源补登记 `DiffBlock`、`JsonTree`、`ProducedFiles`、`PlanChip`。它们目前均为 `inventoried`，没有新增 VCP runtime 或生产 consumer；其中 DiffBlock/JsonTree/ProducedFiles/PlanChip 涉及冻结的 structured message、tool-result、turn-tail 或 composer slot，只允许后续 B4 Candidate Lab 复刻，不能借 inventory 条目解冻聊天生产接入。
 > **2026-08-27 Agent Settings slice：** `agentSettingsForm #agentNameInput` 已接入生成的 Light-DOM Input 作为首个 Agent 设置字段切片；原生 input 仍是唯一业务节点，主聊天页 assistant switching 与其余 Agent 字段保持冻结/legacy。当前仅记录为 `production-consumer-active / visual-equivalence-pending`，待 Agent Settings 同引擎状态矩阵、Electron reload/teardown 与 field-specific legacy deletion 证据后再晋级。
 > **2026-08-27 Agent model slice：** `agentSettingsForm #agentModel` 现加入同一生成 Light-DOM Input presentation slice；其自由文本 model id、`openModelSelectBtn`、异步 `modelSelectModal` 和 `saveAgentConfig` 语义全部保留。不得将该字段误套成 Select/AgentPreset；模型 picker 另行作为 B2 composite candidate。当前状态为 `production-consumer-active / visual-equivalence-pending`，等待 Agent Settings Input + picker 的同引擎状态、reload/teardown 和 field-specific legacy deletion 证据。
+> **2026-08-27 Agent temperature slice：** `agentSettingsForm #agentTemperature` 现加入生成的 Light-DOM Input presentation slice；原生 `type=number`、`min/max/step`、settings manager 数值解析、保存和聊天参数消费全部保留。通用旧 Input enhancer 已跳过该字段。当前状态为 `production-consumer-active / visual-equivalence-pending`，仍需补 number Input 状态矩阵、同引擎 geometry/pixel、Electron reload/teardown 与字段级 legacy CSS/projection 删除证据；不得将其替换为 Range。
 
 > 状态：施工中（目标模式已启动）  
 > 建立日期：2026-08-24  

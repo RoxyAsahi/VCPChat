@@ -565,6 +565,27 @@ function mountTypedAgentModelInput(form) {
     }
 }
 
+// Temperature remains a native number input because min/max/step and the
+// settings manager's numeric parsing are part of the canonical business
+// contract. Only its presentation is upgraded to the typed Harness Input.
+function mountTypedAgentTemperatureInput(form) {
+    const input = form?.querySelector?.('#agentTemperature');
+    const api = window.VCPUIUX;
+    const scope = ensurePresentationScope();
+    if (!input || !api?.mountInput || !scope || input.dataset.vcpTypedAgentTemperature === 'true') return;
+    const originalClass = input.className;
+    try {
+        api.mountInput(input, {}, scope);
+        input.dataset.vcpTypedAgentTemperature = 'true';
+        scope.own(() => {
+            delete input.dataset.vcpTypedAgentTemperature;
+            if (input.isConnected && input.className !== originalClass) input.className = originalClass;
+        }, 'agent-temperature-input-marker', 'ui-presentation');
+    } catch (error) {
+        console.warn('[VCPUI SettingsBridge] Could not mount typed Agent temperature Input:', error);
+    }
+}
+
 // Lucide icon names for the global settings categories. Icons are always
 // rendered through VCPUI (`.vcp-ui-icon` -> lucide-adapter); no inline SVG,
 // emoji or text arrows on this surface.
