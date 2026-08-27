@@ -16,6 +16,13 @@ assert.equal(report.productionConsumer, false, 'Candidate evidence must not clai
 assert.equal(report.status, 'candidate-interaction-active');
 assert.equal(report.rootPane.triggerHeight, '28px');
 assert.equal(report.rootPane.cardPresent, true);
+assert.match(report.dom, /vcp-harness-agent-model-picker-trigger/);
+assert.equal(report.trigger.tag, 'button');
+assert.equal(report.trigger.ariaHaspopup, 'menu');
+assert.equal(report.trigger.height, '28px');
+assert.equal(report.trigger.borderRadius, '24px');
+assert.equal(report.menu?.tag, 'div');
+assert.equal(report.menu?.borderRadius, '12px');
 assert.equal(report.modelPane.searchVisible, true);
 assert.equal(report.modelPane.optionCount, 3);
 assert.equal(report.effortPane.optionCount, 2);

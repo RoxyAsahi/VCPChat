@@ -38,6 +38,14 @@ const child = spawn(electron, ['.', '--allow-multiple-instances', `--user-data-d
 });
 let stderr = '';
 child.stderr.on('data', chunk => { stderr = `${stderr}${chunk}`.slice(-8_000); });
+const stopChild = async () => {
+    if (child.exitCode !== null || child.signalCode !== null) return;
+    const exited = new Promise(resolve => child.once('exit', resolve));
+    child.kill('SIGTERM');
+    await Promise.race([exited, sleep(1_000)]);
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    child.unref();
+};
 let browser;
 try {
     const deadline = Date.now() + timeout;
@@ -96,11 +104,32 @@ try {
             optionCount: host.querySelectorAll('.vcp-harness-agent-model-picker-option').length,
             selected: host.querySelector('.vcp-harness-agent-model-picker-option[aria-checked="true"]')?.textContent?.trim() || null,
         };
+        const triggerStyle = getComputedStyle(picker.trigger);
+        const menu = host.querySelector('.vcp-harness-popup-select-card');
+        const menuStyle = menu ? getComputedStyle(menu) : null;
         const screenshot = {
             source: 'VCP generated AgentModelPicker Candidate Electron capture',
             provenance: 'deepseek-harness/packages/client/ui-model-selection/src/client/ModelSelect.tsx',
             viewport: { width: innerWidth, height: innerHeight, deviceScaleFactor: devicePixelRatio },
             rootPane, modelPane, effortPane,
+            dom: host.querySelector('.vcp-harness-agent-model-picker')?.outerHTML || '',
+            trigger: {
+                tag: picker.trigger.tagName.toLowerCase(),
+                role: picker.trigger.getAttribute('role'),
+                ariaHaspopup: picker.trigger.getAttribute('aria-haspopup'),
+                ariaExpanded: picker.trigger.getAttribute('aria-expanded'),
+                height: triggerStyle.height,
+                borderRadius: triggerStyle.borderRadius,
+                padding: triggerStyle.padding,
+                gap: triggerStyle.gap,
+            },
+            menu: menuStyle ? {
+                tag: menu.tagName.toLowerCase(),
+                role: menu.getAttribute('role'),
+                borderRadius: menuStyle.borderRadius,
+                padding: menuStyle.padding,
+                minWidth: menuStyle.minWidth,
+            } : null,
             selected, efforts,
             productionConsumer: false,
             status: 'candidate-interaction-active',
@@ -125,7 +154,13 @@ try {
     await fs.writeFile(path.join(root, 'reports', 'vcp-agent-model-picker-candidate.json'), `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
     console.log(JSON.stringify(evidence, null, 2));
 } finally {
-    await browser?.close().catch(() => {});
-    child.kill('SIGTERM');
-    await sleep(100);
+    // Disconnect without waiting for DevTools target shutdown; Electron is
+    // explicitly terminated below and lingering inspector handles must not
+    // keep this standalone capture alive.
+    browser?.disconnect?.();
+    await stopChild();
 }
+// Puppeteer can retain an inspector/socket handle after the browser target
+// closes; this standalone evidence command must terminate once cleanup is
+// complete so automation runs do not remain alive indefinitely.
+process.exit(0);
