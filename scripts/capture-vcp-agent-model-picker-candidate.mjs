@@ -181,10 +181,20 @@ try {
             productionConsumer: false,
             status: 'candidate-interaction-active',
         };
-        await picker.dispose();
-        await scope.dispose('candidate-agent-model-picker-complete');
-        screenshot.disposed = host.querySelector('.vcp-harness-agent-model-picker') === null;
-        host.remove();
+        // Cleanup happens after the caller captures the semantic menu ROI.
+        // Keeping the mounted surface alive here lets Puppeteer clip the same
+        // open menu state used by the Harness production fixture.
+        window.__vcpAgentModelPickerCleanup = async () => {
+            await picker.dispose();
+            await scope.dispose('candidate-agent-model-picker-complete');
+            const disposed = host.querySelector('.vcp-harness-agent-model-picker') === null;
+            host.remove();
+            return disposed;
+        };
+        window.__vcpAgentModelPickerOpenModel = () => {
+            picker.open();
+            picker.setPane('model');
+        };
         return screenshot;
     });
     assert.deepEqual(evidence.viewport, { width: 800, height: 600, deviceScaleFactor: 1 });
@@ -200,9 +210,21 @@ try {
     assert.equal(evidence.effortEscape.returnedToRoot, true);
     assert.equal(evidence.effortEscape.effortHidden, true);
     assert.equal(evidence.focusRestored, true);
-    assert.equal(evidence.disposed, true);
+    assert.equal(evidence.menu?.rect?.width > 0, true);
     await fs.mkdir(path.join(root, 'reports'), { recursive: true });
-    await page.screenshot({ path: path.join(root, 'reports', 'vcp-agent-model-picker-candidate.png') });
+    await page.screenshot({ path: path.join(root, 'reports', 'vcp-agent-model-picker-candidate-full.png') });
+    await page.evaluate(() => window.__vcpAgentModelPickerOpenModel?.());
+    await sleep(0);
+    const menuRect = await page.$eval('[data-vcp-candidate-agent-model-picker="true"] .vcp-harness-popup-select-card', element => {
+        const rect = element.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    });
+    await page.screenshot({
+        path: path.join(root, 'reports', 'vcp-agent-model-picker-candidate.png'),
+        clip: menuRect,
+    });
+    evidence.disposed = await page.evaluate(() => window.__vcpAgentModelPickerCleanup?.() ?? false);
+    assert.equal(evidence.disposed, true);
     await fs.writeFile(path.join(root, 'reports', 'vcp-agent-model-picker-candidate.json'), `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
     console.log(JSON.stringify(evidence, null, 2));
 } finally {
