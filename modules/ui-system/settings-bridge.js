@@ -500,11 +500,12 @@ function enhance(name, element, options = {}) {
 
 function enhanceForm(form) {
     mountTypedAgentIdentityInput(form);
+    mountTypedAgentModelInput(form);
     form.querySelectorAll('.agent-settings-section, .group-settings-section').forEach(section => {
         enhance('SettingsSection', section);
     });
     form.querySelectorAll('input:is(:not([type]), [type="text"], [type="url"], [type="password"], [type="number"], [type="email"], [type="search"], [type="tel"])').forEach(input => {
-        if (input.id === 'agentNameInput') return;
+        if (input.id === 'agentNameInput' || input.id === 'agentModel') return;
         enhance('Input', input);
     });
     form.querySelectorAll('textarea').forEach(textarea => enhance('Textarea', textarea));
@@ -543,6 +544,24 @@ function mountTypedAgentIdentityInput(form) {
         }, 'agent-name-input-marker', 'ui-presentation');
     } catch (error) {
         console.warn('[VCPUI SettingsBridge] Could not mount typed Agent name Input:', error);
+    }
+}
+
+// Agent model remains a free-form native value with a separate legacy model
+// picker button/modal. Upgrade only the input presentation; the picker and
+// persistence semantics stay owned by the existing Agent settings flow.
+function mountTypedAgentModelInput(form) {
+    const input = form?.querySelector?.('#agentModel');
+    const api = window.VCPUIUX;
+    const scope = ensurePresentationScope();
+    if (!input || !api?.mountInput || !scope || input.dataset.vcpTypedAgentModel === 'true') return;
+    const originalPlaceholder = input.getAttribute('placeholder');
+    try {
+        api.mountInput(input, { placeholder: originalPlaceholder || undefined }, scope);
+        input.dataset.vcpTypedAgentModel = 'true';
+        scope.own(() => { delete input.dataset.vcpTypedAgentModel; }, 'agent-model-input-marker', 'ui-presentation');
+    } catch (error) {
+        console.warn('[VCPUI SettingsBridge] Could not mount typed Agent model Input:', error);
     }
 }
 
