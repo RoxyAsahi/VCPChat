@@ -1,0 +1,13 @@
+{
+  "primitive": "ImageGallery",
+  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-attachment/src/MessageImage.module.css",
+  "selectors": {
+    ".gallery": { "display": "flex", "flexWrap": "wrap", "gap": "10px", "maxWidth": "100%" },
+    ".gallery[data-align='end']": { "justifyContent": "flex-end", "alignSelf": "flex-end" },
+    ".gallery[data-align='start']": { "justifyContent": "flex-start", "alignSelf": "flex-start" },
+    ".frame[data-variant='tile']": { "width": "64px", "height": "64px", "minWidth": "64px", "minHeight": "64px" }
+  },
+  "tokens": ["--dsw-alias-border-l2-darkmode-thin", "--dsw-alias-interactive-bg-hover"],
+  "geometryInvariants": ["alignment is data-align driven", "one image and many images share gallery wrapping", "child tile sizing remains fixed"],
+  "candidateStatus": "source-only frozen chat attachment; no VCP consumer or paired visual capture"
+}

@@ -1,0 +1,37 @@
+{
+  "primitive": "MessageImage",
+  "provenance": {
+    "sources": [
+      "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-attachment/src/MessageImage.tsx"
+    ],
+    "style": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-attachment/src/MessageImage.module.css"
+  },
+  "root": {
+    "success": "button.frame[data-variant] > span.loading | img",
+    "failure": "button.error[data-variant]"
+  },
+  "trigger": {
+    "tag": "button",
+    "class": "frame",
+    "type": "button",
+    "title": "localized open label",
+    "ariaLabel": "localized named image label",
+    "open": "only when src is resolved"
+  },
+  "image": {
+    "tag": "img",
+    "alt": "attachment name or localized fallback",
+    "objectFit": "cover",
+    "singleFit": "long edge 240px, aspect ratio clamped to [0.25, 4]"
+  },
+  "loadingAndError": {
+    "loading": "localized loading span",
+    "error": "retry button increments load attempt",
+    "staleResolution": "ignored after effect cleanup"
+  },
+  "lightbox": "ImageLightbox mounts only when open and src are both present",
+  "states": ["loading-single", "loaded-single", "loaded-tile", "load-error", "retrying", "lightbox-open", "attachment-replaced", "dispose"],
+  "interaction": ["load runs on attachment/load/attempt change", "retry resets loading state", "successful click opens ImageLightbox", "unmount ignores late loader resolution"],
+  "aria": ["thumbnail button has localized accessible name", "image alt names the attachment", "retry remains a native button"],
+  "vcpDeviation": "MessageImage is frozen chat attachment rendering; this contract is Harness source-only and must not be wired into VCP chat consumers."
+}
