@@ -15,6 +15,7 @@ const walk = directory => {
 };
 const files = walk(clientRoot).filter(file => /\.tsx$/.test(file) && !file.includes('/tests/'));
 const componentPattern = /export\s+(?:function|const|class)\s+([A-Z][A-Za-z0-9_]*)/g;
+const isUiExport = name => !/^DEFAULT_[A-Z0-9_]+$/.test(name);
 const referenceNames = new Set(fs.existsSync(referenceDir)
     ? fs.readdirSync(referenceDir).filter(file => file.endsWith('.dom.json')).map(file => file.replace('.dom.json', ''))
     : []);
@@ -23,7 +24,8 @@ const contractAliases = new Map([
 ]);
 const inventory = files.flatMap(file => {
     const source = fs.readFileSync(file, 'utf8');
-    const exports = [...source.matchAll(componentPattern)].map(match => match[1]);
+    const discovered = [...source.matchAll(componentPattern)].map(match => match[1]);
+    const exports = discovered.filter(isUiExport);
     if (!exports.length) return [];
     const relative = path.relative(clientRoot, file);
     const packageName = relative.split(path.sep)[0];
@@ -41,6 +43,15 @@ const entries = inventory.map(item => ({
     ...item,
     referenceContract: referenceNames.has(item.contractKey),
 }));
+const ignoredExports = files.flatMap(file => {
+    const source = fs.readFileSync(file, 'utf8');
+    return [...source.matchAll(componentPattern)].map(match => match[1]).filter(name => !isUiExport(name)).map(name => ({
+        name,
+        source: file,
+        relative: path.relative(clientRoot, file),
+        reason: 'non-UI exported constant',
+    }));
+});
 const missingContracts = entries.filter(item => !item.referenceContract && item.category !== 'frozen-domain-surface');
 const report = {
     generatedAt: new Date().toISOString(),
@@ -49,6 +60,7 @@ const report = {
     status: missingContracts.length ? 'inventory-gaps-present' : 'inventory-covered',
     counts: {
         sourceFiles: files.length,
+        ignoredExports: ignoredExports.length,
         exports: entries.length,
         portablePrimitives: entries.filter(item => item.category === 'portable-primitive').length,
         composites: entries.filter(item => item.category === 'composite-surface').length,
@@ -56,6 +68,7 @@ const report = {
         missingContracts: missingContracts.length,
     },
     entries,
+    ignoredExports,
     missingContracts,
     nextCandidates: missingContracts.slice(0, 12).map(item => ({ name: item.name, package: item.package, source: item.source })),
 };
