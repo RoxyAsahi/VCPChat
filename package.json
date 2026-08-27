@@ -46,6 +46,7 @@
     "capture:harness-select-fixtures": "pnpm --dir /Users/asahi/Documents/Codex/deepseek-harness exec vitest run --config /Users/asahi/Documents/Codex/VCPChat-newarchitecture/scripts/harness-select-trigger-fixture.vitest.config.ts",
     "capture:harness-select-trigger-fixture": "npm run capture:harness-select-fixtures -- --testNamePattern=trigger",
     "capture:vcp-select-trigger-browser-fixture": "node scripts/capture-vcp-select-trigger-browser-fixture.mjs",
+    "capture:vcp-button-fixture": "node scripts/capture-vcp-button-fixture.mjs",
     "diff:harness-vcp-select-trigger": "node scripts/diff-harness-vcp-select-trigger.mjs",
     "capture:harness-field-browser-fixture": "pnpm --dir /Users/asahi/Documents/Codex/deepseek-harness exec vitest run --config /Users/asahi/Documents/Codex/VCPChat-newarchitecture/scripts/harness-field-fixture.vitest.config.ts",
     "capture:vcp-field-browser-fixture": "node scripts/capture-vcp-field-browser-fixture.mjs",
