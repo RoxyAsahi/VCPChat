@@ -7,6 +7,20 @@ const dirs = process.argv.slice(2).filter(Boolean);
 const targets = dirs.length ? dirs : [path.join(root, 'reports/visual-forensics-qa/light'), path.join(root, 'reports/visual-forensics-qa/dark')];
 const requiredViewports = [[800, 600], [1280, 800], [1680, 1000]];
 const failures = [];
+try {
+  const fixturePath = path.join(root, 'docs/visual-qa/fixtures/visual-forensics-fixture-matrix.json');
+  const fixtureMatrix = JSON.parse(await fs.readFile(fixturePath, 'utf8'));
+  assert.equal(fixtureMatrix.schemaVersion, 1);
+  assert.deepEqual(fixtureMatrix.viewports, requiredViewports.map(([width, height]) => `${width}x${height}`));
+  assert.deepEqual(fixtureMatrix.themes, ['light', 'dark']);
+  assert.ok(Array.isArray(fixtureMatrix.fixtures) && fixtureMatrix.fixtures.length >= 4);
+  fixtureMatrix.fixtures.forEach(fixture => {
+    assert.ok(fixture.id && fixture.trigger && Array.isArray(fixture.selectors) && fixture.selectors.length > 0);
+    assert.ok(fixture.screenshotSuffix === null || typeof fixture.screenshotSuffix === 'string');
+  });
+} catch (error) {
+  failures.push(`fixture matrix: ${error.message}`);
+}
 for (const dir of targets) {
   try {
     const manifest = JSON.parse(await fs.readFile(path.join(dir, 'manifest.json'), 'utf8'));
@@ -28,6 +42,7 @@ for (const dir of targets) {
       assert.ok(observation?.initial?.interactionStates?.hover);
       assert.ok(observation?.initial?.interactionStates?.focus);
       assert.ok(observation?.initial?.stateCounts && Object.values(observation.initial.stateCounts).every(value => Number.isInteger(value)));
+      assert.ok(['div', 'section'].includes(observation?.initial?.dom?.rootTree?.tag));
       assert.equal(observation?.settingsViewport?.active, true);
       assert.ok(observation?.settingsViewport?.visible?.length > 0);
       assert.equal(observation?.stateTransitions?.loading?.visible, true);

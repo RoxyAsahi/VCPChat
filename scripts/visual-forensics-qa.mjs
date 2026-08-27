@@ -247,7 +247,11 @@ try {
         [...document.styleSheets].forEach(sheet => { try { visit(sheet.cssRules, sheet.href || 'inline'); } catch {} });
         return matched.slice(-40);
       };
-      return { url: location.href, surface: document.querySelector('.vcp-ui-showcase-root') ? 'component-showcase' : 'main', uiMode: document.documentElement.dataset.uiMode || '', theme: document.documentElement.dataset.theme || document.documentElement.dataset.themeMode || '', bodyClass: document.body.className, scroll: { x: document.documentElement.scrollWidth, y: document.documentElement.scrollHeight, clientWidth: document.documentElement.clientWidth, clientHeight: document.documentElement.clientHeight }, controls: rects, portals, stateCounts, focused, cascade: cascade(focusTarget), dom: { bodyLength: document.body.innerHTML.length, classes: [...document.body.classList], inlineStyle: document.body.getAttribute('style') || '' }, overlap, overlapPairs };
+      const tree = (node, depth = 0) => {
+        if (!node || depth > 4) return null;
+        return { tag: node.tagName?.toLowerCase() || '', id: node.id || '', className: typeof node.className === 'string' ? node.className : '', role: node.getAttribute?.('role') || '', children: [...(node.children || [])].slice(0, 80).map(child => tree(child, depth + 1)).filter(Boolean) };
+      };
+      return { url: location.href, surface: document.querySelector('.vcp-ui-showcase-root') ? 'component-showcase' : 'main', uiMode: document.documentElement.dataset.uiMode || '', theme: document.documentElement.dataset.theme || document.documentElement.dataset.themeMode || '', bodyClass: document.body.className, scroll: { x: document.documentElement.scrollWidth, y: document.documentElement.scrollHeight, clientWidth: document.documentElement.clientWidth, clientHeight: document.documentElement.clientHeight }, controls: rects, portals, stateCounts, focused, cascade: cascade(focusTarget), dom: { bodyLength: document.body.innerHTML.length, classes: [...document.body.classList], inlineStyle: document.body.getAttribute('style') || '', rootTree: tree(document.querySelector('.vcp-ui-showcase-root')) }, overlap, overlapPairs };
     });
     initial.cdpCascade = await captureMatchedRules('#toggleSidebarModeBtn');
     const stateTarget = await page.$('.vcp-harness-primitive-lab button:not([disabled])');

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Runtime fixture map for real Electron visual-forensics evidence",
+  "sourceSurface": "ui-component-library",
+  "viewports": ["800x600", "1280x800", "1680x1000"],
+  "themes": ["light", "dark"],
+  "fixtures": [
+    {
+      "id": "showcase-initial",
+      "trigger": "openInternalApp('ui-component-library')",
+      "screenshotSuffix": "initial",
+      "selectors": [".vcp-ui-showcase-root", ".vcp-harness-primitive-lab"]
+    },
+    {
+      "id": "showcase-settings-user-identity",
+      "trigger": "openModal('globalSettingsModal')",
+      "screenshotSuffix": "settings",
+      "selectors": ["#globalSettingsModal", ".settings-section.active", ".vcp-settings-row"]
+    },
+    {
+      "id": "showcase-loading-error",
+      "trigger": "click('模拟加载 1.2 秒'); click('error'); click('loading')",
+      "screenshotSuffix": "states",
+      "selectors": [".vcp-ui-loading-layer", ".vcp-ui-async-boundary[data-status=error]", ".vcp-ui-async-boundary[data-status=loading]"]
+    },
+    {
+      "id": "showcase-menu-modal-tooltip",
+      "trigger": "click('View options'); click('Open modal'); hover('Hover for details')",
+      "screenshotSuffix": null,
+      "evidenceKeys": ["overlays.menu", "overlays.modal", "overlays.tooltip", "overlays.cdpCascade"],
+      "selectors": ["[role=menu]", ".vcp-harness-modal-root [role=dialog]", "[role=tooltip]"]
+    },
+    {
+      "id": "showcase-resize-restore",
+      "trigger": "resize(narrow); resize(original)",
+      "screenshotSuffix": "restored",
+      "selectors": [".vcp-ui-showcase-shell"]
+    }
+  ]
+}
