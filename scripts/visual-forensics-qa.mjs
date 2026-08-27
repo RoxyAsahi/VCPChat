@@ -292,6 +292,7 @@ try {
       const contextSample = { showcase: describeContext(document.querySelector('.vcp-harness-primitive-lab input, .vcp-harness-primitive-lab textarea, .vcp-harness-primitive-lab select')), settings: describeContext([...((modal?.querySelector('.settings-section.active') || modal)?.querySelectorAll('input, select, textarea, button, wa-input, wa-select') || [])].find(node => node.getClientRects().length)) };
       return { active: Boolean(modal?.classList.contains('active') || modal), visible, activeSection: modal?.querySelector('.settings-section.active')?.id || '', sections, contextSample };
     }).catch(error => ({ error: error.message }));
+    settingsViewport.cascade = await captureMatchedRules('#globalSettingsModal #userName');
     await page.evaluate(() => window.uiHelperFunctions?.closeModal?.('globalSettingsModal')).catch(() => {});
     await sleep(80);
     const stateTransitions = await page.evaluate(async () => {

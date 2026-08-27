@@ -72,6 +72,7 @@ for (const dir of targets) {
       assert.ok(observation?.settingsViewport?.visible?.length > 0);
       assert.equal(observation?.settingsViewport?.sections?.length, 8);
       assert.ok(observation.settingsViewport.sections.every(section => section.activeId && section.visibleControls > 0));
+      assert.ok(observation.settingsViewport?.cascade?.length > 0);
       assert.ok(observation.settingsViewport?.contextSample?.showcase?.ancestry?.length > 0);
       assert.ok(observation.settingsViewport?.contextSample?.settings?.ancestry?.length > 0);
       assert.equal(observation?.stateTransitions?.loading?.visible, true);

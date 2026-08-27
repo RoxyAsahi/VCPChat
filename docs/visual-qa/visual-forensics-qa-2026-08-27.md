@@ -57,6 +57,8 @@ On 2026-08-27 in the current dirty worktree:
 - Every viewport manifest now includes a computed theme-token snapshot for accent, hover accent, surface, input background, primary/secondary text, and body colors. The evidence checker compares the formal light and dark manifests and rejects indistinguishable token sets; current runs show distinct light/dark values across all three sizes.
 - CDP cascade provenance now includes the live production Settings field (`#globalSettingsModal #userName`) in addition to the showcase sidebar and overlay targets, preserving matched selectors, origins, stylesheet ids, and key declarations for the context-transform fixture.
 - Per-viewport overlay evidence now includes Modal and Tooltip parent classes alongside Menu's body portal parent, proving the concrete runtime ownership/stacking context for each captured overlay.
+- Settings cascade provenance is now captured while the modal is open at every viewport, so responsive rule changes are evidenced directly rather than inferred from a single default-size CDP sample.
+- Fresh formal manifests contain 17 matched Settings-field rules at each required viewport in both themes, including the responsive modal and input selectors used by the real row context.
 - Resize restoration evidence from `/tmp/vqa-restored-light/` passed: after each narrow resize, the real renderer returned to exactly `800x600`, `1280x800`, and `1680x1000` with no horizontal overflow, and each case now emits a `*-restored.png` screenshot. The evidence checker requires this restored state.
 
 ## Scope and frozen boundaries
