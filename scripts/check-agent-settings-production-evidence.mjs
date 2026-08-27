@@ -21,12 +21,16 @@ for (const id of [
 ]) assert.match(report.dom, new RegExp(`id="${id}"`), `production DOM is missing ${id}`);
 assert.match(report.dom, /<button[^>]*id="openModelSelectBtn"[^>]*class="[^"]*vcp-harness-button[^\"]*"/,
     'model trigger must retain the canonical button id and Harness Button presentation');
+assert.match(report.dom, /<button[^>]*id="openModelSelectBtn"[^>]*aria-label="选择模型"/,
+    'model trigger must expose an explicit accessible name');
 assert.match(report.dom, /<button[^>]*type="submit"[^>]*class="[^"]*vcp-harness-button[^\"]*"/,
     'Agent save action must remain a native submit button with Harness Button presentation');
 assert.match(report.dom, /<button[^>]*id="deleteAgentBtn"[^>]*class="[^"]*vcp-harness-button[^\"]*"/,
     'Agent delete action must retain its canonical button id and Harness Button presentation');
 assert.match(report.dom, /<button[^>]*id="refreshTtsModelsBtn"[^>]*class="[^"]*vcp-harness-button[^\"]*"/,
     'TTS refresh action must retain its canonical button id and Harness Button presentation');
+assert.match(report.dom, /<button[^>]*id="refreshTtsModelsBtn"[^>]*aria-label="刷新模型列表"/,
+    'TTS refresh action must expose an explicit accessible name');
 
 assert.ok(Array.isArray(report.inputs) && report.inputs.length >= 7, 'typed Agent Input evidence is incomplete');
 assert.ok(Array.isArray(report.inputNodes) && report.inputNodes.length >= 7, 'native Agent Input style evidence is incomplete');
