@@ -20,3 +20,13 @@ test('Harness parity evidence audit preserves provenance and explicit gaps', () 
     assert.ok(report.missingEvidence.includes('language-row/open-select-dismiss-focus-dispose: candidate-source-only'));
     assert.equal(report.nextCandidate, 'select/busy-trigger-disabled');
 });
+
+test('Model picker diff stays pending until a Harness capture exists', () => {
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-model-picker.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-model-picker-diff.json'), 'utf8'));
+    assert.equal(report.status, 'pending-harness-capture');
+    assert.equal(report.pass, false);
+    assert.equal(report.dom.ariaContractPass, true);
+    assert.ok(report.missingEvidence.includes('Harness ModelSelect browser capture (DOM + computed style)'));
+    assert.ok(report.missingEvidence.includes('Candidate computed-style contract'));
+});
