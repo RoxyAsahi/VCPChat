@@ -635,9 +635,13 @@
         font-size: var(--vcp-ui-font-helper);
     }
 
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm textarea {
+    /* Two IDs required: the generic bare-control rule above carries a
+       (1,5,1) :not() chain that would otherwise out-rank this multiline
+       contract and squash bare textareas to the 32px control height. */
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal #globalSettingsForm textarea {
         padding: var(--vcp-ui-space-2);
         min-height: 64px;
+        height: auto;
         line-height: var(--vcp-ui-line-body);
         resize: vertical;
     }
@@ -664,7 +668,7 @@
        wrap must stay excluded: the wrapper owns the focus border surface,
        and a second outline on the inner input renders as a stray halo.
        .vcp-settings-bare-select gets the full control contract below. */
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm :is(input, select, textarea, button):focus-visible:not(:is(.vcp-harness-input-wrap > *, .vcp-harness-select > *, .vcp-settings-bare-select, input[type="color"])) {
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm :is(input, select, textarea, button):focus-visible:not(:is(.vcp-uiux-input-wrap > *, .vcp-harness-select > *, .vcp-settings-bare-select, input[type="color"])) {
         outline: 2px solid var(--vcp-ui-focus-ring);
         outline-offset: 2px;
     }
@@ -1047,14 +1051,16 @@
     line-height: 22px;
 }
 
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-general-row > :is(input, select, textarea, .vcp-harness-input-wrap, .vcp-harness-select, .model-input-container, .switch) {
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-general-row > :is(input, select, textarea, .vcp-uiux-input-wrap, .vcp-harness-select, .model-input-container, .switch) {
     min-width: 0;
     justify-self: stretch;
 }
 
 /* Input.module.css contract: settings inputs use the same 32px/r8/14-22
-   primitive as Harness, with focus owned by the wrapper rather than a glow. */
-:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-general-row > :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea) {
+   primitive as Harness, with focus owned by the wrapper rather than a glow.
+   Textareas stay bare controls (the Input primitive wrap is a fixed 32px
+   single-line frame) and keep their own multiline contract above. */
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-general-row > input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) {
     min-height: 32px;
     height: 32px;
     border-radius: 8px;
@@ -1062,43 +1068,16 @@
     line-height: 22px;
 }
 
-/* Input.module.css contract: the wrapper owns the 1px focus/border surface;
-   the native business input remains the only value-bearing node. */
-:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-input-wrap {
-    display: flex;
-    min-width: 0;
-    width: 100%;
-    height: 32px;
-    min-height: 32px;
-    box-sizing: border-box;
-    align-items: center;
-    border: 1px solid var(--vcp-ui-control-border, var(--vcp-ui-border));
-    border-radius: 8px;
-    background: var(--vcp-ui-control-bg, var(--vcp-ui-bg-1));
-}
-
-:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-input-wrap:focus-within {
-    border-color: var(--vcp-ui-control-focus, var(--vcp-ui-accent));
-}
-
-:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-input-wrap > :is(input, textarea) {
+/* Bridge-mounted Harness Input primitive (window.VCPUIUX.mountInput): the
+   generated wrap is inline-flex and content-sized, but settings rows expect
+   the wrap to fill the control slot the way the retired local wrapper did.
+   Layered declarations here do not compete with the primitive's unlayered
+   stylesheet (no overlapping properties), so the primitive keeps owning the
+   border/focus surface while the row layout owns the slot width. */
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-uiux-input-wrap.vcp-harness-input-fill {
     width: 100%;
     min-width: 0;
-    height: 30px;
-    min-height: 30px;
     box-sizing: border-box;
-    border: 0;
-    border-radius: 7px;
-    background: transparent;
-    box-shadow: none;
-    font-size: 14px;
-    line-height: 22px;
-    /* Row-stacking legacy rules (e.g. .modal-content input) must not leak
-       into the wrapper's centered flex box; a stray bottom margin lifts the
-       text/hover surface ~7px off the border frame. The wrapper also owns
-       the whole focus surface, so the inner input never outlines itself. */
-    margin: 0;
-    outline: none;
 }
 
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-row-copy {

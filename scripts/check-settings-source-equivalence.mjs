@@ -81,6 +81,17 @@ assert.match(bridge, /primitiveSelectStates/, 'primitive select projections must
 assert.match(bridge, /mountSelectKeyboardGlue/, 'select keyboard projection must keep a11y parity');
 assert.doesNotMatch(bridge, /vcp-harness-select-wrap|vcp-harness-choice-wrap|rebuildOptions/, 'retired local select/choice projection must be deleted');
 assert.doesNotMatch(css, /vcp-harness-select-wrap|vcp-harness-choice-wrap|vcp-harness-menu-portal/, 'retired local select/menu CSS must be deleted');
+
+// Single-line text input presentation is owned by the real library Input
+// primitive (window.VCPUIUX.mountInput): the bridge mounts it per control
+// (static rows and dynamic network-path rows alike) and the retired local
+// wrapper must be gone from bridge and CSS.  Textareas stay bare controls —
+// the primitive wrap is a fixed 32px single-line frame.
+assert.match(bridge, /api\.mountInput\(control, \{\}, scope\)/, 'Input presentation must come from the library primitive');
+assert.match(bridge, /inputApi\.mountInput\(input, \{\}, inputScope\)/, 'dynamic network-path rows must adopt the library Input primitive');
+assert.doesNotMatch(bridge, /vcp-harness-input-wrap/, 'retired local input wrapper must be deleted from the bridge');
+assert.doesNotMatch(css, /vcp-harness-input-wrap/, 'retired local input wrapper CSS must be deleted');
+assert.match(css, /vcp-uiux-input-wrap\.vcp-harness-input-fill/, 'bridge-mounted Input wraps keep the row fill contract');
 assert.match(bridge, /vcp-harness-row-copy/);
 assert.match(bridge, /vcp-harness-active-section/);
 assert.match(bridge, /vcp-harness-section-bank/);

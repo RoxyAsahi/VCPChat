@@ -529,7 +529,7 @@ modalContainer.append(globalModal);
 scope.append(modalContainer);
 window.VCPUISettingsBridge.refresh();
 await new Promise(resolve => setTimeout(resolve, 0));
-assert.ok(document.getElementById('globalUserName').classList.contains('vcp-ui-native-input'), 'global input enhanced');
+assert.equal(document.getElementById('globalUserName').closest('.vcp-uiux-input-wrap'), null, 'without the primitive runtime the bare input keeps the degraded no-wrap contract');
 assert.equal(document.getElementById('globalSelect').closest('.vcp-harness-select'), null, 'select presentation is delegated to the library primitive runtime, not a bridge-local projection');
 assert.equal(globalModal.querySelector('.vcp-harness-choice-wrap'), null, 'retired local Choice projection is gone');
 assert.equal(document.getElementById('globalSelect').tagName, 'SELECT', 'the native business node survives when no primitive runtime is present');
@@ -545,7 +545,8 @@ assert.equal(globalStatus.dataset.state, 'saving', 'global autosave status track
 document.documentElement.dataset.uiMode = 'classic';
 window.dispatchEvent(new CustomEvent('ui-mode-changed', { detail: { mode: 'classic', previousMode: 'next' } }));
 await new Promise(resolve => setTimeout(resolve, 0));
-assert.ok(document.getElementById('globalUserName').classList.contains('vcp-ui-native-input'),
+assert.ok(document.getElementById('globalUserName').isConnected
+    && document.getElementById('globalUserName').closest('.vcp-uiux-input-wrap') === null,
     'legacy mode events must not tear down canonical settings controls');
 assert.ok(globalModal.classList.contains('vcp-global-settings-surface'),
     'legacy mode events must not remove the canonical modal marker');
