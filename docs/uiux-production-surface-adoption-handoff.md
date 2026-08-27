@@ -495,3 +495,13 @@ directory-browser 接入前置达成。typed field owner 本就以 `#networkNote
 - **本批施工**：(1) section 7 `restored` 补 `adminUsername`/`adminPassword` 两断言——6b flush 的唯一值经 reload 后由 typed forum consumer 重投影（`flushValues.forumUser/forumPassword` 相等），日志行更新为「full fallback-id coverage + forum credentials」；(2) source-equivalence 新增论坛凭据 seam 负向守护——`adminUsername`/`adminPassword` 的 `getElementById` 写入方集合必须 deepEqual 等于 `global-settings-manager.js` 单元素（Classic 兜底）、bridge 必须经 `querySelector('#id')` 持有投影、save 路由必须经 forum config service、manager 的 `forumFieldOwnerMounted` 门禁必须存在——新第二写入方即门禁失败（E6 范式复用）。排障记录：初版期望把 bridge 误列入 `getElementById` 写入方（实际用 querySelector）、把 `forumFieldOwnerMounted` 门禁 regex 指向 bridge（实际在 manager），各改一处后通过。
 - 门禁：node --check + 四快全绿；Electron journey 全轮 PASS（含新 6b/7 论坛断言）。
 - 台账：§7 追加批次 23 段落；roadmap 追加 R2-02E checkpoint；归属台账 §5/L113 现状注记随批更新。下一批候选：unlock 复查；或视线程 A Input reference fixture 进展把 G2 证据补齐后，按 §5 条件评估论坛凭据行升级 `single-owner-active`。
+
+### 2026-08-27 批次 24：兜底退役后 Settings-only lifecycle stress 复跑（docs-only）
+
+状态：stress 复跑 + docs；代码面自批次 23 提交 `c90776cd` 起零变更。
+
+- unlock 复查：DirectoryBrowser 各 checkpoint 保持 `foundation-electron-active`，unlock 条件不满足。
+- **触发原因**：批次 20 删除 presentationOwner 兜底投影（159 行，含 19 守卫分支）属 mount/打开路径变更，按 §6 协议「涉及生命周期或重复打开时必须追加 Settings-only stress」复跑。
+- **结果**：`test-electron-lifecycle-stress.mjs` settings stage，3 warmup + 20 measured cycles 通过。五 checkpoint（baseline/cycle-5/10/15/20）全量恒定：listeners=831、nodes=8707、connected=1901、enhancedSettingsControls=40、lifecycleActiveScopes=9、lifecycleActiveResources=720（listener 395 / ui-primitive 181 / ui-presentation 71 / ui-registration 42 / controller 10 / ui-service 5 / subscription 4 / dom-state 4 / child-scope 4 / observer 2 / ui-registry 1 / theme-tokens 1）、detachedRoots/detachedIcons/detachedOptions=0、listenerTrace 空、staleWeakNodes 空。heap 缓慢线性爬升 ~0.6 MiB/20 cycles 与批次 8 记录一致（V8 采样口径，非泄漏形态）。
+- 结论：兜底退役未引入重复挂载、监听累积或 detached 残留；typed 投影 + retired owner 的拆分在重复打开/teardown 压力下资源面稳定。
+- 台账：§7 追加批次 24 段落；roadmap 追加 R2-02E checkpoint。下一批候选：unlock 复查 directory-browser；或评估其他接缝候选。
