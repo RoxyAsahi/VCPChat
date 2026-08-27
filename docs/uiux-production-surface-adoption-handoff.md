@@ -220,3 +220,10 @@ draft/dirty/autosave/retry/close flush 均已绑定同一个 Settings Surface ty
 | forum.config.json `username`/`password` | Input `#adminUsername` / `#adminPassword` | ForumConfigUiService 快照 | 论坛字段 owner → `forumService.save.execute` | presentationOwner 镜像已删除；manager 兜底仅在 typed owner 未挂载时执行（Classic 兼容保留） |
 
 roadmap checkpoint 追加于 `38ec8bb8`。
+
+### 2026-08-27 批次 4：Settings-only lifecycle stress 复跑
+
+状态：`stable`（证据闭合）。
+
+- `VCPCHAT_STRESS_STAGES=settings node scripts/test-electron-lifecycle-stress.mjs` 通过（3 warmup + 20 measured cycles），listener/DOM/detached-node 指标平稳。
+- 备注：默认 `VCPCHAT_STRESS_PROTOCOL_TIMEOUT_MS=120000` 在本机高负载下会在启动阶段抛 CDP ProtocolError；以 300000 重试通过。该超时属环境参数，不是代码回归；后续并行线程复跑建议显式调大。
