@@ -54,6 +54,51 @@ try {
     }).catch(() => {});
     await page.waitForSelector('.vcp-ui-showcase-root', { timeout: 15_000 }).catch(() => {});
   }
+  const lifecycle = await page.evaluate(async () => {
+    const before = document.querySelector('.vcp-ui-showcase-root');
+    const beforeIdentity = before || null;
+    await window.topTabManager?.closeView?.('app:ui-component-library');
+    await new Promise(resolve => setTimeout(resolve, 80));
+    const afterClose = document.querySelector('.vcp-ui-showcase-root');
+    const bodyAfterClose = { classes: [...document.body.classList], inlineStyle: document.body.getAttribute('style') || '' };
+    await window.topTabManager?.openInternalApp?.('ui-component-library');
+    await new Promise(resolve => setTimeout(resolve, 250));
+    const afterReopen = document.querySelector('.vcp-ui-showcase-root');
+    return {
+      openedInitially: Boolean(before),
+      removedOnClose: !afterClose,
+      bodyAfterClose,
+      reopened: Boolean(afterReopen),
+      newRootIdentity: Boolean(afterReopen && beforeIdentity && afterReopen !== beforeIdentity),
+    };
+  }).catch(error => ({ error: error.message }));
+  evidence.lifecycle = lifecycle;
+  if (lifecycle.error || !lifecycle.openedInitially || !lifecycle.removedOnClose || !lifecycle.reopened) {
+    evidence.gate.failures.push(`showcase lifecycle: ${JSON.stringify(lifecycle)}`);
+  }
+  await page.waitForSelector('.vcp-harness-primitive-lab', { timeout: 15_000 }).catch(() => {});
+  const overlays = await page.evaluate(async () => {
+    const lab = document.querySelector('.vcp-harness-primitive-lab');
+    const byText = text => [...(lab?.querySelectorAll('button') || [])].find(button => button.textContent.trim() === text);
+    const rect = node => { if (!node) return null; const r = node.getBoundingClientRect(); const s = getComputedStyle(node); return { x: r.x, y: r.y, width: r.width, height: r.height, position: s.position, zIndex: s.zIndex, parent: node.parentElement === document.body ? 'body' : node.parentElement?.className || '' }; };
+    const menuTrigger = byText('View options'); menuTrigger?.click(); await new Promise(resolve => setTimeout(resolve, 30));
+    const menu = document.querySelector('.vcp-harness-menu-list[role="menu"]');
+    const menuEvidence = { triggerExpanded: menuTrigger?.getAttribute('aria-expanded') || '', rect: rect(menu), itemCount: menu?.querySelectorAll('[role="menuitem"]').length || 0 };
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    const modalTrigger = byText('Open modal'); modalTrigger?.click(); await new Promise(resolve => setTimeout(resolve, 30));
+    const modal = document.querySelector('.vcp-harness-modal-root [role="dialog"]');
+    const modalEvidence = { open: Boolean(modal), rect: rect(modal), mask: Boolean(document.querySelector('.vcp-harness-modal-mask')), zIndex: modal ? getComputedStyle(modal).zIndex : '' };
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    const tooltipAnchor = byText('Hover for details'); tooltipAnchor?.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true })); await new Promise(resolve => setTimeout(resolve, 160));
+    const tooltip = document.querySelector('[role="tooltip"], .vcp-harness-tooltip-bubble');
+    const tooltipEvidence = { open: Boolean(tooltip), rect: rect(tooltip), side: tooltip?.getAttribute('data-side') || '' };
+    tooltipAnchor?.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+    return { menu: menuEvidence, modal: modalEvidence, tooltip: tooltipEvidence };
+  }).catch(error => ({ error: error.message }));
+  evidence.overlays = overlays;
+  if (overlays.error || !overlays.menu?.rect || !overlays.modal?.open || !overlays.tooltip?.open) {
+    evidence.gate.failures.push(`showcase overlays: ${JSON.stringify(overlays)}`);
+  }
   for (const [width, height] of viewports) {
     await page.setViewport({ width, height, deviceScaleFactor: 1 });
     await page.evaluate(() => window.scrollTo(0, 0));
