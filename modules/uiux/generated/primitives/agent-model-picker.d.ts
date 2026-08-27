@@ -8,10 +8,18 @@ export interface AgentModelOption {
     readonly active?: boolean;
     readonly disabled?: boolean;
 }
+export interface AgentModelEffortOption {
+    readonly id: string;
+    readonly label: string;
+    readonly description?: string;
+}
 export interface AgentModelPickerProps {
     readonly label?: string;
     readonly options: (signal: AbortSignal) => Promise<readonly AgentModelOption[]>;
     readonly onSelect: (option: AgentModelOption) => void | Promise<void>;
+    readonly efforts?: readonly AgentModelEffortOption[];
+    readonly onEffortSelect?: (option: AgentModelEffortOption) => void | Promise<void>;
+    readonly selectedEffort?: string;
     readonly selectedId?: string;
     readonly open?: boolean;
 }
@@ -23,7 +31,7 @@ export interface AgentModelPickerController {
     close(): void;
     refresh(): void;
     setSelected(id: string | undefined): void;
-    setPane(pane: 'root' | 'model'): void;
+    setPane(pane: 'root' | 'model' | 'effort'): void;
     dispose(): UiDisposer | Promise<void>;
 }
 /**

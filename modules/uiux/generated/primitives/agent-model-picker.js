@@ -57,26 +57,74 @@ export function mountAgentModelPicker(host, props, scope) {
     });
     const view = mountPopupSelectView(root, { popup, overlayAria: `${props.label ?? 'Model'} picker`, searchAria: 'Search models' }, pickerScope);
     let pane = 'root';
+    let selectedEffort = props.selectedEffort;
     const paneCell = document.createElement('button');
     paneCell.type = 'button';
     paneCell.className = 'vcp-harness-agent-model-picker-cell';
     paneCell.setAttribute('role', 'menuitem');
     paneCell.innerHTML = '<span class="vcp-harness-agent-model-picker-cell-label">Model</span><span class="vcp-harness-agent-model-picker-cell-value"></span><span aria-hidden="true">›</span>';
     paneCell.addEventListener('click', () => { pane = 'model'; syncPane(); });
+    const effortCell = document.createElement('button');
+    effortCell.type = 'button';
+    effortCell.className = 'vcp-harness-agent-model-picker-cell';
+    effortCell.setAttribute('role', 'menuitem');
+    effortCell.innerHTML = '<span class="vcp-harness-agent-model-picker-cell-label">Effort</span><span class="vcp-harness-agent-model-picker-cell-value"></span><span aria-hidden="true">›</span>';
+    effortCell.addEventListener('click', () => { pane = 'effort'; syncPane(); });
+    const effortList = document.createElement('div');
+    effortList.className = 'vcp-harness-agent-model-picker-effort-list';
+    effortList.setAttribute('role', 'group');
+    view.card.prepend(effortCell, effortList);
+    const renderEfforts = () => {
+        effortList.replaceChildren();
+        for (const option of props.efforts ?? []) {
+            const row = document.createElement('button');
+            row.type = 'button';
+            row.className = 'vcp-harness-agent-model-picker-option';
+            row.setAttribute('role', 'menuitemradio');
+            row.setAttribute('aria-checked', String(option.id === selectedEffort));
+            const copy = document.createElement('span');
+            copy.className = 'vcp-harness-agent-model-picker-option-copy';
+            const label = document.createElement('span');
+            label.className = 'vcp-harness-agent-model-picker-option-label';
+            label.textContent = option.label;
+            copy.append(label);
+            if (option.description) {
+                const description = document.createElement('span');
+                description.className = 'vcp-harness-agent-model-picker-option-description';
+                description.textContent = option.description;
+                copy.append(description);
+            }
+            const check = document.createElement('span');
+            check.setAttribute('aria-hidden', 'true');
+            check.textContent = option.id === selectedEffort ? '✓' : '';
+            row.append(copy, check);
+            row.addEventListener('click', async () => {
+                selectedEffort = option.id;
+                await props.onEffortSelect?.(option);
+                pane = 'root';
+                syncPane();
+            });
+            effortList.append(row);
+        }
+    };
     view.card.prepend(paneCell);
     const syncPane = () => {
         const open = popup.getSnapshot().open;
         paneCell.querySelector('.vcp-harness-agent-model-picker-cell-value').textContent = trigger.textContent || 'Select model';
         paneCell.hidden = !open || pane !== 'root';
-        view.search.hidden = pane === 'root';
-        view.card.querySelector('.vcp-harness-popup-select-viewport')?.toggleAttribute('hidden', pane === 'root');
-        view.card.querySelector('.vcp-harness-popup-select-status')?.toggleAttribute('hidden', pane === 'root');
-        view.card.querySelector('.vcp-harness-popup-select-error')?.toggleAttribute('hidden', pane === 'root');
+        effortCell.hidden = !open || pane !== 'root' || !(props.efforts?.length);
+        effortCell.querySelector('.vcp-harness-agent-model-picker-cell-value').textContent = selectedEffort ?? 'Provider default';
+        effortList.hidden = !open || pane !== 'effort';
+        view.search.hidden = pane !== 'model';
+        view.card.querySelector('.vcp-harness-popup-select-viewport')?.toggleAttribute('hidden', pane !== 'model');
+        view.card.querySelector('.vcp-harness-popup-select-status')?.toggleAttribute('hidden', pane !== 'model');
+        view.card.querySelector('.vcp-harness-popup-select-error')?.toggleAttribute('hidden', pane !== 'model');
+        renderEfforts();
     };
     pickerScope.listen(view.card, 'keydown', event => {
         if (event.key !== 'Escape')
             return;
-        if (pane === 'model') {
+        if (pane === 'model' || pane === 'effort') {
             event.preventDefault();
             pane = 'root';
             syncPane();

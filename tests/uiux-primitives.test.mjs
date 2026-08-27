@@ -106,6 +106,9 @@ test('Harness AgentModelPicker maps provider metadata and retracts its popup own
         let loads = 0;
         const controller = mountAgentModelPicker(host, {
             selectedId: 'gpt',
+            selectedEffort: 'balanced',
+            efforts: [{ id: 'balanced', label: 'Balanced', description: 'Provider default' }, { id: 'deep', label: 'Deep', description: 'More reasoning' }],
+            onEffortSelect: option => { selected.push(`effort:${option.id}`); },
             options: async signal => {
                 assert.equal(signal.aborted, false);
                 loads += 1;
@@ -127,12 +130,16 @@ test('Harness AgentModelPicker maps provider metadata and retracts its popup own
         controller.setPane('model');
         assert.equal(controller.root.querySelector('.vcp-harness-agent-model-picker-cell')?.hidden, true);
         assert.equal(controller.root.querySelector('.vcp-harness-popup-select-search')?.hidden, false);
+        controller.setPane('effort');
+        assert.equal(controller.root.querySelector('.vcp-harness-agent-model-picker-effort-list')?.hidden, false);
+        controller.root.querySelector('.vcp-harness-agent-model-picker-option:last-child')?.click();
+        assert.deepEqual(selected, ['effort:deep']);
         assert.match(controller.popup.getSnapshot().options[0].detail, /OpenAI/);
         assert.match(controller.popup.getSnapshot().options[0].detail, /Favorite/);
         assert.equal(controller.popup.getSnapshot().options[2].disabled, true);
         controller.popup.setSearch('local');
         await controller.popup.select(0);
-        assert.deepEqual(selected, ['local']);
+        assert.deepEqual(selected, ['effort:deep', 'local']);
         assert.equal(controller.popup.getSnapshot().open, false);
         controller.refresh();
         await new Promise(resolve => setTimeout(resolve, 0));

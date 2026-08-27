@@ -16,7 +16,8 @@
     "role": "menu",
     "ariaLabel": "localized menu label",
     "ariaBusy": "loading or selecting",
-    "panes": ["root", "model", "effort"]
+    "panes": ["root", "model", "effort"],
+    "vcpCandidate": "root/model/effort panes implemented with injected effort options; provider directory remains external"
   },
   "rootPaneItem": { "tag": "button", "role": "menuitem", "class": "cell", "children": ["span.cellLabel", "span.cellValue", "IconChevronRightOutline14"] },
   "modelPaneItem": { "tag": "button", "role": "menuitem", "class": "option", "children": ["span.optionCopy > span.modelName", "span.description?", "span.check?"] },

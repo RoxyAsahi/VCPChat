@@ -274,6 +274,11 @@ export function mountPrimitiveLab(root, scope) {
     const modelPicker = mountAgentModelPicker(modelPickerHost, {
         label: 'Agent model',
         selectedId: 'gpt-4o',
+        selectedEffort: 'balanced',
+        efforts: [
+            { id: 'balanced', label: 'Balanced', description: 'Provider default' },
+            { id: 'deep', label: 'Deep reasoning', description: 'More reasoning effort' },
+        ],
         options: async (signal) => {
             if (signal.aborted)
                 return [];

@@ -5,6 +5,7 @@ import { mountInput } from '../primitives/input.js';
 import { mountMenu } from '../primitives/menu.js';
 import { mountAgentPresetSeat, type AgentPresetSeatController } from '../primitives/agent-preset-seat.js';
 import { mountAgentPresetRow, type AgentPresetRowController } from '../primitives/agent-preset-row.js';
+import { mountLanguageRow } from '../primitives/language-row.js';
 import { mountModal } from '../primitives/modal.js';
 import { mountTooltip } from '../primitives/tooltip.js';
 import { mountHoverCard } from '../primitives/hover-card.js';
@@ -19,6 +20,7 @@ import { mountDirectoryBrowser } from '../primitives/directory-browser.js';
 import { mountPill } from '../primitives/pill.js';
 import { mountConnectionBanner } from '../primitives/connection-banner.js';
 import { mountOnboardingSurface } from '../primitives/onboarding-surface.js';
+import { mountAgentModelPicker } from '../primitives/agent-model-picker.js';
 
 const STYLE_ID = 'vcp-harness-primitive-lab';
 
@@ -232,6 +234,24 @@ export function mountPrimitiveLab(root: HTMLElement, scope: UiScope): UiDisposer
         presetRow.setError(presetRowHasError ? 'Could not load presets. Try again.' : null);
     });
 
+    // Harness locale/LanguageRow is a real General-settings composite. VCP
+    // currently has no UI-locale capability or persisted setting, so the Lab
+    // projection owns only its temporary selection and is never a consumer.
+    const languageRowGroup = group(lab, 'Language row', 'deepseek-harness/packages/client/locale/src/client/LanguageRow.tsx; Candidate only, no VCP locale capability or production consumer');
+    const languageRowHost = document.createElement('div');
+    languageRowHost.className = 'vcp-harness-lab-field';
+    languageRowGroup.append(languageRowHost);
+    const languageRow = mountLanguageRow(languageRowHost, {
+        activeId: 'en',
+        options: [
+            { id: 'en', label: 'English' },
+            { id: 'zh-CN', label: 'Simplified Chinese' },
+            { id: 'ja', label: 'Japanese' },
+        ],
+        onSelect: id => { languageRow.setActive(id); languageRowHost.dataset.selected = id; },
+        onClose: () => { languageRowHost.dataset.menuClosed = 'true'; },
+    }, labScope);
+
     // Harness provenance: ui-commands PopupSelectView is normally owned by the
     // conversation.input.overlay slot. That slot and the composer are frozen
     // in VCP, so this is a standalone Lab-only host: its deps are local DOM
@@ -265,6 +285,11 @@ export function mountPrimitiveLab(root: HTMLElement, scope: UiScope): UiDisposer
     const modelPicker = mountAgentModelPicker(modelPickerHost, {
         label: 'Agent model',
         selectedId: 'gpt-4o',
+        selectedEffort: 'balanced',
+        efforts: [
+            { id: 'balanced', label: 'Balanced', description: 'Provider default' },
+            { id: 'deep', label: 'Deep reasoning', description: 'More reasoning effort' },
+        ],
         options: async signal => {
             if (signal.aborted) return [];
             return [
