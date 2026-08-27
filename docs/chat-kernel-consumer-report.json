@@ -481,6 +481,7 @@
     "modules/uiux/generated/contracts.js",
     "modules/uiux/generated/index.js",
     "modules/uiux/generated/lab/primitive-lab.js",
+    "modules/uiux/generated/primitives/agent-preset-row.js",
     "modules/uiux/generated/primitives/agent-preset-seat.js",
     "modules/uiux/generated/primitives/button.js",
     "modules/uiux/generated/primitives/choice.js",
@@ -2591,7 +2592,7 @@
         },
         {
           "file": "modules/ui-system/settings-bridge.js",
-          "line": 1446,
+          "line": 1450,
           "surface": "internal-app",
           "snippet": "window.__vcpHarnessSelectOwnerCleanup?.();"
         }
@@ -7178,7 +7179,7 @@
         },
         {
           "file": "modules/ui-system/settings-bridge.js",
-          "line": 1811,
+          "line": 1815,
           "surface": "internal-app",
           "snippet": "|| window.uiHelperFunctions?.addNetworkPathInput?.(path)"
         },
@@ -10061,7 +10062,7 @@
       "definitions": [
         {
           "file": "modules/ui-system/settings-bridge.js",
-          "line": 1803,
+          "line": 1807,
           "syntax": "dot-assignment",
           "snippet": "window.VCPUISettingsBridge = Object.freeze({"
         }
@@ -15177,7 +15178,7 @@
       "mutableMaps": 0
     },
     "modules/ui-system/settings-bridge.js": {
-      "windowReferences": 54,
+      "windowReferences": 53,
       "documentReferences": 60,
       "electronReferences": 0,
       "timers": 5,
@@ -15354,9 +15355,17 @@
     },
     "modules/uiux/generated/lab/primitive-lab.js": {
       "windowReferences": 0,
-      "documentReferences": 47,
+      "documentReferences": 49,
       "electronReferences": 0,
-      "timers": 1,
+      "timers": 2,
+      "listeners": 0,
+      "mutableMaps": 0
+    },
+    "modules/uiux/generated/primitives/agent-preset-row.js": {
+      "windowReferences": 0,
+      "documentReferences": 12,
+      "electronReferences": 0,
+      "timers": 0,
       "listeners": 0,
       "mutableMaps": 0
     },
