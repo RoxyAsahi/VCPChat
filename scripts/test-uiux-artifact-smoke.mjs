@@ -5,6 +5,7 @@ import { createUiServiceRegistry } from '../modules/uiux/generated/runtime/servi
 import { createRustAssistantUiService } from '../modules/uiux/generated/adapters/rust-assistant.js';
 import { createForumConfigUiService } from '../modules/uiux/generated/adapters/forum-config.js';
 import { createAssistantRuntimeUiService } from '../modules/uiux/generated/adapters/assistant-runtime.js';
+import { mountSemanticIcon } from '../modules/uiux/generated/primitives/semantic-icon.js';
 
 const lifecycleModule = await import('../modules/ui-system/lifecycle-scope.js');
 const { LifecycleScope } = lifecycleModule.default || lifecycleModule;
@@ -85,4 +86,5 @@ const runtimeService = createAssistantRuntimeUiService({ get: async () => ({ mod
 await runtimeService.refresh.execute();
 assert.equal(runtimeService.state.get().mode, 'rust');
 await runtimeService.dispose();
-console.log('UIUX generated artifact smoke passed (Settings + Rust + Forum + Runtime adapters + scoped registry contracts).');
+assert.equal(typeof mountSemanticIcon, 'function');
+console.log('UIUX generated artifact smoke passed (Settings + Rust + Forum + Runtime adapters + scoped registry + semantic icon contracts).');

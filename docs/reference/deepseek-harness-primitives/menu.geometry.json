@@ -1,5 +1,14 @@
 {
   "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/Menu.module.css",
   "selectors": { ".list": { "padding": "4px", "borderRadius": "12px" }, ".item": { "minHeight": "40px", "padding": "8px 10px", "borderRadius": "10px" }, ".separator": { "height": "1px", "margin": "4px 2px" } },
-  "states": ["default", "hover", "focus", "disabled", "selected", "danger", "submenu-open"]
+  "states": ["default", "hover", "focus", "disabled", "selected", "danger", "submenu-open"],
+  "vcpCandidateEvidence": {
+    "viewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 },
+    "engine": "Electron Chromium",
+    "screenshot": "fixtures/vcp/menu.candidate.png",
+    "report": "fixtures/vcp/menu.candidate.json",
+    "geometry": { "padding": "4px", "borderRadius": "12px", "minWidth": "218px", "itemMinHeightDense": "34px", "itemPaddingDense": "5px 10px", "itemRadius": "10px" },
+    "status": "candidate-interaction-active",
+    "pixelDiff": "pending-same-semantic-harness-fixture"
+  }
 }

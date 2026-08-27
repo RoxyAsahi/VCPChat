@@ -5,11 +5,28 @@
   "cases": [
     ["input", "default"], ["input", "focus"], ["input", "disabled"], ["input", "icon"],
     ["field", "description"], ["field", "error"],
-    ["select", "closed"], ["select", "open"], ["select", "selected"], ["select", "disabled"]
+    ["select", "closed"], ["select", "open"], ["select", "selected"], ["select", "disabled"],
+    ["modal", "standard-open"], ["modal", "headless-open"],
+    ["tooltip", "right"], ["tooltip", "bottom"], ["tooltip", "top-flip"],
+    ["hover-card", "open"], ["hover-card", "copyable"],
+    ["disclosure-row", "collapsed-preview"], ["disclosure-row", "open"], ["disclosure-row", "forced-open"],
+    ["state-dot", "done"], ["state-dot", "warning"], ["state-dot", "ongoing"], ["state-dot", "error"],
+    ["toast", "viewport-centered"], ["toast", "anchor-centered"], ["toast", "icon"],
+    ["risk-confirmation", "unacknowledged"], ["risk-confirmation", "acknowledged"], ["risk-confirmation", "disabled"]
+    , ["semantic-icon", "warning"], ["semantic-icon", "close"], ["semantic-icon", "check"], ["semantic-icon", "chevron-down"]
   ],
   "interactionCases": [
     { "case": "select/keyboard-open-focus", "status": "pass", "evidence": "same semantic fixture; Harness and VCP retain trigger focus" },
-    { "case": "select/busy-trigger-disabled", "status": "blocked-vcp-consumer", "evidence": "Harness production capture passes; no in-scope VCP AgentPreset consumer" }
+    { "case": "select/busy-trigger-disabled", "status": "blocked-vcp-consumer", "evidence": "Harness production capture passes; no in-scope VCP AgentPreset consumer" },
+    { "case": "menu/candidate-composite-states", "status": "candidate-interaction-active", "evidence": "generated Electron fixture covers label/separator/footer/selected/disabled/danger/submenu, portal placement, outside-dismiss, Escape and dispose; same-semantic Harness pixel fixture pending" },
+    { "case": "modal/close-reopen-dispose", "status": "candidate-interaction-active", "evidence": "generated Electron fixture covers standard/headless portals, mask/Escape/close-button, reopen, close icon, exact owned-node restoration and dispose; same-semantic Harness pixel fixture pending" },
+    { "case": "tooltip/hover-focus-delay-disable", "status": "candidate-interaction-active", "evidence": "focused source test and generated Electron journey cover delayed hover, immediate focus, mouseleave/blur, lazy label and disabled-mid-open" },
+    { "case": "hover-card/dwell-grace-copy-dispose", "status": "candidate-interaction-active", "evidence": "focused source test and generated Electron journey cover dwell, portal, 200ms grace, scroll placement, copy feedback, disable and exact DOM restoration" },
+    { "case": "disclosure-row/controlled-row-leading-keyboard-dispose", "status": "candidate-interaction-active", "evidence": "focused source test and generated Electron journey cover controlled row click, Enter/Space, leading-only button, preview chevron, keep/hide content, forced-open and exact DOM restoration" },
+    { "case": "state-dot/four-state-shape-size-phase-dispose", "status": "candidate-interaction-active", "evidence": "focused source test and generated Electron journey cover solid halo states, eight-cell phased ongoing matrix, custom size, aria-hidden and exact host restoration" },
+    { "case": "toast/portal-anchor-lifetime-dispose", "status": "candidate-interaction-active", "evidence": "focused source test covers 3000ms hold + 1000ms fade completion and timer cancellation; generated Electron covers body portal, role=alert, anchor resize placement, icon and geometry" },
+    { "case": "risk-confirmation/acknowledgement-gate-close-reopen-dispose", "status": "candidate-interaction-active", "evidence": "focused generated-artifact test covers controlled acknowledgement, disabled confirm, cancel/mask/Escape, autofocus, reopen and owner disposal; Electron candidate evidence pending" }
+    , { "case": "semantic-icon/owner-refresh-size-name-dispose", "status": "candidate-interaction-active", "evidence": "focused source test covers four semantic names, currentColor slot, aria-hidden, adapter refresh, name/size update and exact host restoration; generated artifact smoke imports the module; independent generated Electron fixture records four rendered SVGs, currentColor inheritance, geometry and dispose" }
   ],
   "outputs": ["dom", "geometry", "computed-style", "screenshot", "pixel-diff"],
   "stateSemantics": {
@@ -17,7 +34,32 @@
     "select/open": "AgentPresetSeat ready open/selected/hover menu; VCP-owned production capture is replayable",
     "select/selected": "AgentPresetSeat ready menu with Standard mode selected and hovered; VCP-owned production capture is replayable",
     "select/disabled": "AgentPresetSeat busy trigger is captured through delayed production host select; VCP comparison remains blocked because no in-scope AgentPreset consumer exists",
-    "select/focus": "AgentPresetSeat keyboard-open focus owner is captured independently; Harness and VCP both retain trigger focus"
+    "select/focus": "AgentPresetSeat keyboard-open focus owner is captured independently; Harness and VCP both retain trigger focus",
+    "menu/candidate": "WorkspaceBrowser-style dense portal menu with multi-selection, disabled/danger rows, footer and submenu; Candidate-only until same-semantic Harness visual diff and VCP production adoption",
+    "modal/standard-open": "Harness standard Modal with mask, title, close, description, body and footer",
+    "modal/headless-open": "Harness headless Modal retains mask/dialog/aria contract while owner supplies the card contents",
+    "tooltip/right": "Existing anchor remains unwrapped; fixed bubble uses the Harness right-side gap and vertical centering",
+    "tooltip/bottom": "Fixed bubble centers below the anchor and clamps horizontally inside a 12px viewport margin",
+    "tooltip/top-flip": "Requested vertical placement flips only when the opposite side genuinely fits",
+    "hover-card/open": "244px body portal opens after dwell and tracks the anchor through scroll/resize",
+    "hover-card/copyable": "Copyable card exposes button semantics, preserves selection and publishes one-second success feedback",
+    "disclosure-row/collapsed-preview": "Collapsed 24px header shows the supplied icon and previews a chevron on hover",
+    "disclosure-row/open": "Controlled open state replaces leading icon with chevron and mounts owner content after the row",
+    "disclosure-row/forced-open": "Workflow status may remain open while expandable=false and exposes no toggle semantics",
+    "state-dot/done": "Green solid core with same-color 10% halo",
+    "state-dot/warning": "Amber solid core with same-color 10% halo",
+    "state-dot/ongoing": "Eight-cell blue pixel chase with unique negative phase delays",
+    "state-dot/error": "Red solid core with same-color 10% halo",
+    "toast/viewport-centered": "Top-center transient alert uses left 50% when no anchor is supplied",
+    "toast/anchor-centered": "Toast follows an owner-provided anchor horizontal center and remeasures on resize",
+    "toast/icon": "Optional warning glyph is aria-hidden while the banner remains a single role=alert announcement",
+    "risk-confirmation/unacknowledged": "Primary action remains disabled until caller-controlled acknowledgement is checked",
+    "risk-confirmation/acknowledged": "Checked acknowledgement enables the primary action without creating a second business state",
+    "risk-confirmation/disabled": "Disabled owner state disables acknowledgement and primary action"
+    , "semantic-icon/warning": "Private 18px warning slot delegates to the existing VCPIcons semantic adapter"
+    , "semantic-icon/close": "Private 16px close slot delegates to the existing VCPIcons semantic adapter"
+    , "semantic-icon/check": "Private 16px check slot delegates to the existing VCPIcons semantic adapter"
+    , "semantic-icon/chevron-down": "Private 16px chevron slot delegates to the existing VCPIcons semantic adapter"
   },
   "status": {
     "domStructural": "10/10 pass",
@@ -25,6 +67,15 @@
     "selectMenuKeyboardFocus": "pass (Harness and VCP retain trigger focus; no roving keyboard ownership)",
     "selectBusyTrigger": "Harness production capture active; VCP cross-page comparison blocked by consumer boundary",
     "fieldBrowserVisual": "pass (description/error production fixture at 1680x1000 @1x)",
-    "inputFullVisualMatrix": "blocked (Harness ui-primitives/Input has no production consumer)"
+    "inputFullVisualMatrix": "blocked (Harness ui-primitives/Input has no production consumer)",
+    "menuCandidate": "interaction/geometry/screenshot active at 800x600 @1x; same-semantic Harness pixel diff pending",
+    "modalCandidate": "standard/headless interaction, geometry and screenshot active at 800x600 @1x; same-semantic Harness pixel diff pending",
+    "tooltipCandidate": "hover/focus/delay/disabled interaction and fixed geometry active; same-semantic Harness pixel diff pending",
+    "hoverCardCandidate": "dwell/grace/portal/copy/dispose interaction and fixed geometry active; same-semantic Harness pixel diff pending",
+    "disclosureRowCandidate": "row/leading/keyboard/forced-open interaction and 24px geometry active; same-semantic Harness pixel diff pending",
+    "stateDotCandidate": "four-state shape/size/phase and screenshot active; same-semantic Harness pixel diff pending",
+    "toastCandidate": "portal/alert/anchor/lifetime/dispose and screenshot active; same-semantic Harness pixel diff pending",
+    "riskConfirmationCandidate": "controlled acknowledgement gate, close/reopen/dispose source-artifact test active; Electron screenshot/geometry pending"
+    , "semanticIconCandidate": "four-name private slot, adapter refresh, size/name update, teardown, generated artifact smoke, fixed 800x600 screenshot/geometry and generated Electron SVG rendering active; same-semantic Harness pixel diff pending"
   }
 }

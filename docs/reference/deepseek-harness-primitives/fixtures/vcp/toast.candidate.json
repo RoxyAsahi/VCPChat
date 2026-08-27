@@ -1,0 +1,30 @@
+{
+  "viewport": {
+    "width": 800,
+    "height": 600,
+    "deviceScaleFactor": 1
+  },
+  "source": "generated-artifact-electron",
+  "state": "anchor-centered-icon-alert",
+  "rect": {
+    "x": 169.75390625,
+    "y": 114,
+    "width": 340.4921875,
+    "height": 46
+  },
+  "style": {
+    "position": "fixed",
+    "top": "120px",
+    "left": "340px",
+    "zIndex": "1100",
+    "pointerEvents": "none",
+    "gap": "10px",
+    "padding": "12px 16px",
+    "borderRadius": "14px",
+    "fontSize": "14px",
+    "lineHeight": "22px"
+  },
+  "role": "alert",
+  "iconAriaHidden": "true",
+  "anchorCenter": 340
+}

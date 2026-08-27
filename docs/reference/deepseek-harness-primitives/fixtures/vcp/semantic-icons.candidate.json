@@ -1,0 +1,47 @@
+{
+  "viewport": {
+    "width": 800,
+    "height": 600,
+    "deviceScaleFactor": 1
+  },
+  "source": "generated-artifact-electron",
+  "state": "four-semantic-icons-current-color",
+  "states": [
+    {
+      "name": "warning",
+      "width": "18px",
+      "height": "18px",
+      "color": "rgb(38, 120, 255)",
+      "ariaHidden": "true",
+      "focusable": "false",
+      "dataIcon": "warning"
+    },
+    {
+      "name": "close",
+      "width": "16px",
+      "height": "16px",
+      "color": "rgb(38, 120, 255)",
+      "ariaHidden": "true",
+      "focusable": "false",
+      "dataIcon": "close"
+    },
+    {
+      "name": "check",
+      "width": "16px",
+      "height": "16px",
+      "color": "rgb(38, 120, 255)",
+      "ariaHidden": "true",
+      "focusable": "false",
+      "dataIcon": "check"
+    },
+    {
+      "name": "chevron-down",
+      "width": "14px",
+      "height": "14px",
+      "color": "rgb(38, 120, 255)",
+      "ariaHidden": "true",
+      "focusable": "false",
+      "dataIcon": "chevron_down"
+    }
+  ]
+}

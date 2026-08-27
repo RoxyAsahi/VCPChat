@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const root = process.cwd();
 const dir = path.join(root, 'docs/reference/deepseek-harness-primitives');
-const primitives = ['settings-root', 'field', 'select', 'menu', 'input', 'range', 'toggle', 'color-pair'];
+const primitives = ['settings-root', 'field', 'select', 'menu', 'modal', 'tooltip', 'hover-card', 'disclosure-row', 'state-dot', 'toast', 'risk-confirmation', 'semantic-icon', 'input', 'range', 'toggle', 'color-pair'];
 const required = [
   'reference.css',
   'fixture-matrix.json',
@@ -29,6 +29,12 @@ for (const name of primitives) {
   if (!Object.keys(dom).length) fail(`${name}.dom.json is empty`);
   if (!Object.keys(geometry).length) fail(`${name}.geometry.json is empty`);
 }
+for (const name of ['toast', 'risk-confirmation', 'semantic-icon']) {
+  const evidence = readJson(`${name}.geometry.json`).vcpCandidateEvidence;
+  for (const file of [evidence?.screenshot, evidence?.report]) {
+    if (!file || !fs.existsSync(path.join(dir, file))) fail(`${name} evidence file missing: ${file}`);
+  }
+}
 
 const css = fs.readFileSync(path.join(dir, 'reference.css'), 'utf8');
 if (!css.includes('--harness-') && !css.includes('.harness-')) {
@@ -39,6 +45,6 @@ const matrix = readJson('fixture-matrix.json');
 if (matrix.viewport?.width !== 800 || matrix.viewport?.height !== 600 || matrix.viewport?.deviceScaleFactor !== 1) {
   fail('fixture-matrix.json must pin 800x600 @1x for cross-page capture');
 }
-if (!Array.isArray(matrix.cases) || matrix.cases.length !== 10) fail('fixture matrix must define ten primitive state cases');
+if (!Array.isArray(matrix.cases) || matrix.cases.length < 10) fail('fixture matrix must retain at least the ten original primitive state cases');
 
 console.log(`Harness reference pack passed (${required.length} files; ${primitives.length} primitive contracts).`);

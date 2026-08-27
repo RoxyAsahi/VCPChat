@@ -10,12 +10,23 @@ import { createAssistantRuntimeUiService, assistantRuntimeUiDefinition } from '.
 import type { ThemeUiService } from './providers/theme.js';
 import type { UiDisposer } from './contracts.js';
 import { mountField } from './primitives/field.js';
+import { mountButton } from './primitives/button.js';
 import { mountSelect } from './primitives/select.js';
 import { mountInput } from './primitives/input.js';
+import { mountMenu } from './primitives/menu.js';
+import { mountModal } from './primitives/modal.js';
+import { mountTooltip } from './primitives/tooltip.js';
+import { mountHoverCard } from './primitives/hover-card.js';
+import { mountDisclosureRow } from './primitives/disclosure-row.js';
+import { mountStateDot } from './primitives/state-dot.js';
+import { mountToast } from './primitives/toast.js';
+import { mountRiskConfirmation } from './primitives/risk-confirmation.js';
+import { mountSemanticIcon } from './primitives/semantic-icon.js';
 import { mountChoice } from './primitives/choice.js';
 import { mountRange } from './primitives/range.js';
 import { mountToggle } from './primitives/toggle.js';
 import { mountColorPair } from './primitives/color-pair.js';
+import { mountPrimitiveLab } from './lab/primitive-lab.js';
 
 interface LegacyScopeLike {
     readonly label: string;
@@ -51,12 +62,25 @@ const api = {
     createAssistantRuntimeUiService,
     assistantRuntimeUiDefinition,
     mountField,
+    mountButton,
     mountSelect,
     mountInput,
+    mountMenu,
+    mountModal,
+    mountTooltip,
+    mountHoverCard,
+    mountDisclosureRow,
+    mountStateDot,
+    mountToast,
+    mountRiskConfirmation,
+    mountSemanticIcon,
     mountChoice,
     mountRange,
     mountToggle,
     mountColorPair,
+    mountPrimitiveLabFromScope(root: HTMLElement, legacyScope: LegacyScopeLike): UiDisposer {
+        return mountPrimitiveLab(root, createUiScope(legacyScope));
+    },
 };
 
 Object.defineProperty(globalThis, 'VCPUIUX', {

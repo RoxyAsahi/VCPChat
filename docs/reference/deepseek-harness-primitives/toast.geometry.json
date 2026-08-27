@@ -1,0 +1,29 @@
+{
+  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/Toast.module.css",
+  "toast": {
+    "position": "fixed",
+    "top": "120px",
+    "left": "50% or anchor center",
+    "zIndex": "1100",
+    "pointerEvents": "none",
+    "gap": "10px",
+    "maxWidth": "min(560px, calc(100vw - 48px))",
+    "padding": "12px 16px",
+    "borderRadius": "14px",
+    "fontSize": "14px",
+    "lineHeight": "22px"
+  },
+  "animation": {
+    "entry": "160ms ease-out from translateY(-6px)",
+    "fade": "1000ms ease after 3000ms delay forwards",
+    "reducedMotion": "fade only; same delay and duration"
+  },
+  "vcpCandidateEvidence": {
+    "viewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 },
+    "engine": "Electron Chromium",
+    "screenshot": "fixtures/vcp/toast.candidate.png",
+    "report": "fixtures/vcp/toast.candidate.json",
+    "status": "candidate-interaction-active",
+    "pixelDiff": "pending-same-semantic-harness-fixture"
+  }
+}
