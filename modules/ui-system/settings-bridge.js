@@ -182,8 +182,6 @@ function mountTypedSettingsConsumer(root) {
             ['chatPresentationModeBubble', 'chatPresentationMode', 'checked-value', 'bubble'],
             ['chatPresentationModePanel', 'chatPresentationMode', 'checked-value', 'panel'],
             ['chatPresentationModeImmersive', 'chatPresentationMode', 'checked-value', 'immersive'],
-            ['chatLayoutModeWide', 'enableWideChatLayout', 'checked'],
-            ['chatLayoutModeNormal', 'enableWideChatLayout', 'checked-inverse'],
             ['enableUserChatBubbleUi', 'enableUserChatBubbleUi', 'checked'],
             ['showUserMetaInChatBubbleUi', 'showUserMetaInChatBubbleUi', 'checked'],
             ['chatBubbleMaxWidthWideDefault', 'chatBubbleMaxWidthWideDefault'],
@@ -938,6 +936,10 @@ const TYPED_FIELD_DEFINITIONS = Object.freeze({
     showHomeVisualBrand: { path: 'showHomeVisualBrand', kind: 'boolean' },
     showHomeVisualTagline: { path: 'showHomeVisualTagline', kind: 'boolean' },
     homeVisualTagline: { path: 'homeVisualTagline', kind: 'string' },
+    // Wide layout is one boolean behind a radio pair; the Normal radio owns
+    // the inverted value so both half-states flow through the same draft.
+    chatLayoutModeWide: { path: 'enableWideChatLayout', kind: 'boolean' },
+    chatLayoutModeNormal: { path: 'enableWideChatLayout', kind: 'inverse-boolean' },
     appearanceDensity: { path: 'appearanceProfile.density', kind: 'string' },
     appearanceRadius: { path: 'appearanceProfile.radius', kind: 'string' },
     appearanceTypography: { path: 'appearanceProfile.typography', kind: 'string' },
@@ -959,8 +961,8 @@ const TYPED_FIELD_DEFINITIONS = Object.freeze({
 function readTypedFieldPatch(control, service, pendingPatch) {
     const definition = TYPED_FIELD_DEFINITIONS[control?.id];
     if (!definition) return null;
-    const raw = control.type === 'checkbox' ? control.checked : control.value;
-    const value = definition.kind === 'choice' ? definition.value : definition.kind === 'number' ? Number(raw) : definition.kind === 'boolean' ? Boolean(raw) : String(raw);
+    const raw = control.type === 'checkbox' || control.type === 'radio' ? control.checked : control.value;
+    const value = definition.kind === 'choice' ? definition.value : definition.kind === 'number' ? Number(raw) : definition.kind === 'inverse-boolean' ? Boolean(raw) !== true : definition.kind === 'boolean' ? Boolean(raw) : String(raw);
     if (definition.path.startsWith('appearanceProfile.')) {
         // Build the full-profile snapshot on top of the accumulated draft, not
         // bare service state: every later event in one debounce window would
@@ -1007,6 +1009,8 @@ function mountTypedFieldOwner(root, form) {
         const radius = appearance.sidebarRadius || 'tuned';
         Object.keys(TYPED_FIELD_DEFINITIONS).filter(id => id.startsWith('appearanceSidebarRadiusChoice-'))
             .forEach(id => check(id, id === `appearanceSidebarRadiusChoice-${radius}`));
+        check('chatLayoutModeWide', settings.enableWideChatLayout === true);
+        check('chatLayoutModeNormal', settings.enableWideChatLayout !== true);
         check('showHomeVisualBrand', settings.showHomeVisualBrand !== false);
         check('showHomeVisualTagline', settings.showHomeVisualTagline !== false);
         set('homeVisualTagline', settings.homeVisualTagline || '语义级打穿 AI、UI/UX、APP 与人类想象力的边界');

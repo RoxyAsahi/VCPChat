@@ -44,7 +44,7 @@
 | `sidebarWidth` | `sidebarWidth`（若存在） | 工作区 | 侧栏宽度 / 调整导航区域宽度 | range/number | typed snapshot + existing settings manager | `save.execute`（需确认 capability） | close flush；超时失效 generation | legacy manager + presentation owner | Settings primitive | 明确 DOM contract 后删除旧 style write | `inventory-only`; command owner 待核验 |
 | `sidebarActive` | sidebar toggle（无稳定 global id） | 工作区 | 显示侧栏 / 控制导航区域可见性 | toggle | typed snapshot + event owner | `save.execute`（需确认） | dirty/close flush | event-listeners.js | Settings primitive | 建立稳定 DOM id/name 后删除旧 listener | `inventory-only`; DOM seam 待核验 |
 | `sidebarAvatarOnly` | sidebar mode control（无稳定 global id） | 工作区 | 仅显示头像 / 收窄导航显示 | choice/toggle | typed snapshot + event owner | `save.execute`（需确认） | 同上 | event-listeners.js | Settings primitive | 同上 | `inventory-only`; DOM seam 待核验 |
-| `enableWideChatLayout` | `chatLayoutModeWide`, `chatLayoutModeNormal` | 工作区 | 宽屏布局 / 使用更宽的聊天工作区 | choice | typed snapshot | `save.execute` | dirty 不被覆盖；失败可重试 | settings-bridge + presentation owner | Settings Choice primitive | 删除重复 radio projection；聊天消息内部布局冻结 | `typed-projection-active`; Electron |
+| `enableWideChatLayout` | `chatLayoutModeWide`, `chatLayoutModeNormal` | 工作区 | 宽屏布局 / 使用更宽的聊天工作区 | choice | typed snapshot | `save.execute` | dirty 不被覆盖；失败可重试 | 通用 projection 两行与 presentation 兜底已退役（2026-08-27，R2-02E 批次 7）；manager 持久化读保留（Classic 兼容） | Settings Choice primitive | 已满足；聊天消息内部布局冻结不变 | `typed-owner-active`; Electron dirty/close-flush/retry-attribution + 反向 submit 证据（journey 6c） |
 
 ## 3. 暂不进入 R2-02C 的兼容字段
 
@@ -107,3 +107,5 @@ Range ownership update（2026-08-26）：`appearanceSidebarAvatarSize`、`appear
 Forum `adminUsername`/`adminPassword` 的 dirty/autosave seam 已收口：论坛输入不再驱动 legacy whole-form submit，保存唯一经由 ForumConfigUiService.save.execute；presentationOwner 的 loadForumConfig 镜像投影已删除。manager 兜底仅在 typed owner 未挂载时执行，属 Classic 兼容责任，保留。Electron journey 已含 seam 反向证据。
 
 `sidebarWidth`、`sidebarActive`、`sidebarAvatarOnly` 评估结论（2026-08-27）：三者没有 Settings 表单 DOM seam——由 shell 拖拽手柄/切换按钮直接驱动并即时持久化（event-listeners.js `saveSidebarState`、uiManager.js resizer），不属于「Settings Surface 单一 owner」模型可收编的字段；维持 `inventory-only`，不得为迁移而新建表单控件或改写 shell 行为。
+
+`enableWideChatLayout` 收口（2026-08-27，R2-02E 批次 7）：宽屏布局单选对加入 `mountTypedFieldOwner()` 的 TYPED_FIELD_DEFINITIONS（新增 `inverse-boolean` kind，radio 按 checked 而非 value 取值）；settings-bridge 通用 projection 的 `chatLayoutModeWide/Normal` 两行删除，typed project() 在 clean form 上接管该单选对的快照投影。Electron journey 新增 6c：切换单选即出现 typed dirty 与 owner 标记、全程不触发 legacy `requestSubmit`、关闭模态绕过防抖后布尔草稿由关闭 flush 提交、save-result 归属为 `typed-settings-field-owner`。manager 对该 key 的持久化读保留（Classic 兼容）。提交 `a6d5c208`。
