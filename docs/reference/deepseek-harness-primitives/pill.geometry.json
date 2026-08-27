@@ -1,0 +1,6 @@
+{
+  "primitive": "Pill",
+  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/Pill.module.css",
+  "root": { "display": "inline-flex", "alignItems": "center", "gap": "4px", "height": "24px", "padding": "0 8px", "borderRadius": "12px", "fontSize": "12px", "lineHeight": "18px" },
+  "tokens": ["--dsw-alias-label-secondary", "--dsw-alias-bg-layer-2", "--dsw-alias-interactive-bg-hover", "--dsw-alias-button-ghost-active-fill", "--dsw-alias-button-ghost-active-border"]
+}

@@ -8,6 +8,7 @@ const { LifecycleScope } = require('../modules/ui-system/lifecycle-scope.js');
 const { createUiScope } = await import('../modules/uiux/runtime/scope.ts');
 const { mountField } = await import('../modules/uiux/primitives/field.ts');
 const { mountButton } = await import('../modules/uiux/primitives/button.ts');
+const { mountPill } = await import('../modules/uiux/primitives/pill.ts');
 const { mountSelect } = await import('../modules/uiux/primitives/select.ts');
 const { mountInput } = await import('../modules/uiux/primitives/input.ts');
 const { mountMenu } = await import('../modules/uiux/primitives/menu.ts');
@@ -29,6 +30,29 @@ const { mountChoice } = await import('../modules/uiux/primitives/choice.ts');
 const { mountRange } = await import('../modules/uiux/primitives/range.ts');
 const { mountToggle } = await import('../modules/uiux/primitives/toggle.ts');
 const { mountColorPair } = await import('../modules/uiux/primitives/color-pair.ts');
+
+test('Harness Pill preserves static and native interactive semantics and retracts cleanly', async () => {
+    const dom = new JSDOM('<!doctype html><main><span id="static">Static</span><button id="interactive">Active</button></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('pill-test'));
+        const staticHost = document.getElementById('static');
+        const interactiveHost = document.getElementById('interactive');
+        let clicks = 0;
+        mountPill(staticHost, { active: true }, scope);
+        mountPill(interactiveHost, { interactive: true, onClick: () => { clicks += 1; } }, scope);
+        assert.equal(staticHost.className, 'vcp-harness-pill pill active');
+        assert.equal(interactiveHost.className, 'vcp-harness-pill pill interactive');
+        assert.equal(interactiveHost.type, 'button');
+        interactiveHost.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+        assert.equal(clicks, 1);
+        await scope.dispose('pill-complete');
+        assert.equal(staticHost.className, '');
+        assert.equal(interactiveHost.className, '');
+        assert.equal(interactiveHost.getAttribute('type'), null);
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
 
 const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 

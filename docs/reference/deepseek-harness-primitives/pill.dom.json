@@ -1,0 +1,9 @@
+{
+  "primitive": "Pill",
+  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/Pill.tsx",
+  "root": { "staticTag": "span", "interactiveTag": "button", "native": true, "type": "button" },
+  "classes": ["pill", "interactive", "active"],
+  "states": ["static", "interactive", "hover", "active", "dispose"],
+  "owner": "scope owns click listener and restores original class/type on dispose",
+  "vcpStatus": "candidate-interaction-active"
+}

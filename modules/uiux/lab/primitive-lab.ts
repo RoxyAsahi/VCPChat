@@ -16,6 +16,7 @@ import { mountSemanticIcon, type HarnessSemanticIconName } from '../primitives/s
 import { mountSelect } from '../primitives/select.js';
 import { createPopupSelectController, mountPopupSelectView } from '../primitives/popup-select.js';
 import { mountDirectoryBrowser } from '../primitives/directory-browser.js';
+import { mountPill } from '../primitives/pill.js';
 
 const STYLE_ID = 'vcp-harness-primitive-lab';
 
@@ -68,6 +69,14 @@ export function mountPrimitiveLab(root: HTMLElement, scope: UiScope): UiDisposer
         buttonRow.append(button);
         mountButton(button, props, labScope);
     });
+
+    const pillRow = group(lab, 'Pill', 'deepseek-harness/packages/client/ui-primitives/src/Pill.tsx');
+    for (const [label, active] of [['Static', false], ['Interactive', false], ['Active', true] ] as const) {
+        const pill = document.createElement(label === 'Interactive' ? 'button' : 'span');
+        pill.textContent = label;
+        pillRow.append(pill);
+        mountPill(pill, { active, interactive: label === 'Interactive', onClick: label === 'Interactive' ? () => { pill.dataset.clicked = 'true'; } : undefined }, labScope);
+    }
 
     const inputRow = group(lab, 'Input', 'deepseek-harness/packages/client/ui-primitives/src/Input.tsx');
     const inputHost = document.createElement('span');
