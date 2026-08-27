@@ -227,3 +227,21 @@ roadmap checkpoint 追加于 `38ec8bb8`。
 
 - `VCPCHAT_STRESS_STAGES=settings node scripts/test-electron-lifecycle-stress.mjs` 通过（3 warmup + 20 measured cycles），listener/DOM/detached-node 指标平稳。
 - 备注：默认 `VCPCHAT_STRESS_PROTOCOL_TIMEOUT_MS=120000` 在本机高负载下会在启动阶段抛 CDP ProtocolError；以 300000 重试通过。该超时属环境参数，不是代码回归；后续并行线程复跑建议显式调大。
+
+### 2026-08-27 批次 5：sidebarRadius ownership 收尾与 ledger 结转
+
+状态：`stable`。
+
+- 外观 Studio 与测试套件的 radius 读/写全部改为 `appearanceSidebarRadiusChoice-*` 单选组，不再读写任何 hidden 兼容控件；`docs/settings-uiux-field-ownership-2026-08-25.md` sidebarRadius 行升级为 `stable`。
+- 审计结论：`sidebarWidth`/`sidebarActive`/`sidebarAvatarOnly` 没有 Settings 表单 DOM seam（由 shell 端 `event-listeners.js saveSidebarState` 与 `uiManager.js` resizer 直接驱动），不适用 typed Settings field owner 迁移路径；账本登记为 inventory-only。
+- 相关提交：`c242b3c8`、`bc84df60`、`e593d515`。
+
+### 2026-08-27 批次 6：Settings 关闭时 flush 的逐字段补证 + 草稿互覆缺陷修复
+
+状态：`stable`（真实缺陷修复 + Electron 证据闭合）。提交 `26333d52`。
+
+- 发现：`readTypedFieldPatch` 每次都从裸服务端快照物化**全量** appearanceProfile；同一防抖窗口内后到的字段事件会把先编辑的兄弟字段草稿键用过期服务端值覆盖回去。探针实测：编辑 rowHeight=53 → avatarSize=33 → customRadius=17 → choice small 后，pendingPatch 里三个 range 键全部回退到旧值（52/36/14），只有 choice 生效。真用户在同一窗口内连续拖两个滑块同样会丢前一个草稿，不是合成事件特例。
+- 修复：全量快照改为叠在已积累草稿之上（以 `{...serviceState.appearanceProfile, ...pendingPatch.appearanceProfile}` 为基底），保存命令线格式不变。
+- 新增 journey 6b 证据：关闭模态绕过 400ms 防抖，六个字段（三个 range、radius choice、home tagline、论坛凭据）在关闭瞬间的屏幕草稿必须由 modal-visibility flush 原样提交至两个 typed owner 的服务端快照。诊断方式记录：`chatAPI.*` 为 contextBridge 只读访问器不可 monkey-patch，需拦截 renderer 层可变对象（typed service `.save.execute`）或在 bridge 内临时暴露 pendingPatch 观察点。
+- 门禁：Electron journey 全绿（14 PASS 含 6b）、`check:uiux`、`test:uiux`、`check-settings-source-equivalence`、`check:uiux:artifacts`（60 文件，线程 A menu 工件已同步）均通过。
+- 待补证据不变：packaged-artifact / 非 darwin 平台运行证据仍为 pending。

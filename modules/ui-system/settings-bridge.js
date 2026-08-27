@@ -956,13 +956,19 @@ const TYPED_FIELD_DEFINITIONS = Object.freeze({
     'appearanceSidebarRadiusChoice-custom': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'custom' },
 });
 
-function readTypedFieldPatch(control, service) {
+function readTypedFieldPatch(control, service, pendingPatch) {
     const definition = TYPED_FIELD_DEFINITIONS[control?.id];
     if (!definition) return null;
     const raw = control.type === 'checkbox' ? control.checked : control.value;
     const value = definition.kind === 'choice' ? definition.value : definition.kind === 'number' ? Number(raw) : definition.kind === 'boolean' ? Boolean(raw) : String(raw);
     if (definition.path.startsWith('appearanceProfile.')) {
-        const current = service.state.get()?.appearanceProfile || {};
+        // Build the full-profile snapshot on top of the accumulated draft, not
+        // bare service state: every later event in one debounce window would
+        // otherwise revert earlier drafts of sibling appearance fields.
+        const current = {
+            ...(service.state.get()?.appearanceProfile || {}),
+            ...(pendingPatch?.appearanceProfile || {}),
+        };
         const key = definition.path.slice('appearanceProfile.'.length);
         return { appearanceProfile: { ...current, [key]: value } };
     }
@@ -1052,7 +1058,7 @@ function mountTypedFieldOwner(root, form) {
     const onInput = event => {
         const control = event.target;
         if (!TYPED_FIELD_DEFINITIONS[control?.id]) return;
-        const patch = readTypedFieldPatch(control, service) || {};
+        const patch = readTypedFieldPatch(control, service, state.pendingPatch) || {};
         if (patch.appearanceProfile) {
             state.pendingPatch = {
                 ...(state.pendingPatch || {}),
