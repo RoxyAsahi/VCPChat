@@ -9,4 +9,8 @@ The report records, for every primitive contract:
 - interaction states from `fixture-matrix.json`;
 - explicit evidence gaps and the next candidate whose evidence is still pending.
 
+Contracts marked `sourceKind: vcp-local-contract` are intentional VCP-specific
+boundaries rather than missing Harness provenance; Harness-derived consumers
+must instead list concrete paths under `provenance.sources`.
+
 The command is intentionally report-first: Candidate Lab entries remain gaps and do not become production parity claims. Use `--strict` only when a release gate requires every provenance and interaction gap to be closed.
