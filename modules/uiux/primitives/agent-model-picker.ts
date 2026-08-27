@@ -215,7 +215,8 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
         }
         if (error) {
             error.hidden = !(open && pane === 'model');
-            error.style.display = open && pane === 'model' && error.textContent !== '' ? '' : 'none';
+            const errorText = error.querySelector('.vcp-harness-popup-select-error-text')?.textContent ?? '';
+            error.style.display = open && pane === 'model' && errorText !== '' ? '' : 'none';
         }
         renderEfforts();
     };
