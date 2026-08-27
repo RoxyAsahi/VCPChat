@@ -505,3 +505,12 @@ directory-browser 接入前置达成。typed field owner 本就以 `#networkNote
 - **结果**：`test-electron-lifecycle-stress.mjs` settings stage，3 warmup + 20 measured cycles 通过。五 checkpoint（baseline/cycle-5/10/15/20）全量恒定：listeners=831、nodes=8707、connected=1901、enhancedSettingsControls=40、lifecycleActiveScopes=9、lifecycleActiveResources=720（listener 395 / ui-primitive 181 / ui-presentation 71 / ui-registration 42 / controller 10 / ui-service 5 / subscription 4 / dom-state 4 / child-scope 4 / observer 2 / ui-registry 1 / theme-tokens 1）、detachedRoots/detachedIcons/detachedOptions=0、listenerTrace 空、staleWeakNodes 空。heap 缓慢线性爬升 ~0.6 MiB/20 cycles 与批次 8 记录一致（V8 采样口径，非泄漏形态）。
 - 结论：兜底退役未引入重复挂载、监听累积或 detached 残留；typed 投影 + retired owner 的拆分在重复打开/teardown 压力下资源面稳定。
 - 台账：§7 追加批次 24 段落；roadmap 追加 R2-02E checkpoint。下一批候选：unlock 复查 directory-browser；或评估其他接缝候选。
+
+### 2026-08-27 批次 25：兜底退役后 §6 门禁全集补跑（docs-only）
+
+状态：门禁复跑 + docs；代码面自批次 23 提交 `c90776cd` 起零变更。
+
+- unlock 复查：DirectoryBrowser 各 checkpoint 保持 `foundation-electron-active`，unlock 条件不满足。
+- **触发原因**：批次 20-24 期间只复跑了四快门禁（source-equivalence / unified-surface / test-settings-wa / test-ui-system）+ Electron journey + settings-only stress；§6 最小集合的其余四项（`check:uiux`、`test:uiux`、`check:uiux:artifacts`/`test:uiux:artifacts`、`guard:classic-retirement`）在退役后未跑过，本批补齐。
+- **结果全绿**：`check:uiux`（tsc --project tsconfig.uiux.json）通过；`test:uiux` 50/50（0 fail，含 forum timeout、rust retry、typed service 订阅回滚等 adapter 契约）；artifact consistency 78 generated files 一致、artifact smoke（Settings + Rust + Forum + Runtime adapters + scoped registry + semantic icon + PopupSelect candidate 契约）通过；`guard:classic-retirement` 边界门禁通过——兜底退役未越出 classic 退休边界。
+- 台账：§7 追加批次 25 段落；roadmap 追加 R2-02E checkpoint。下一批候选：unlock 复查 directory-browser；或视线程 A 进展轮转。
