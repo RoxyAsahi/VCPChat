@@ -525,6 +525,7 @@ function enhanceForm(form) {
     mountTypedAgentTtsSpeedRange(form);
     mountTypedAgentColorPairs(form);
     mountTypedAgentButtons(form);
+    mountTypedAgentPromptModeButtons(form);
     mountHarnessSelects(form);
     form.querySelectorAll('.agent-settings-section, .group-settings-section').forEach(section => {
         enhance('SettingsSection', section);
@@ -578,6 +579,20 @@ function mountTypedAgentButtons(form) {
         } catch (error) {
             console.warn(`[VCPUI SettingsBridge] Could not mount typed Agent ${key} Button:`, error);
         }
+    });
+}
+
+function mountTypedAgentPromptModeButtons(form) {
+    const api = window.VCPUIUX;
+    if (!api?.mountButton) return;
+    const scope = ensurePresentationScope();
+    if (!scope) return;
+    form?.querySelectorAll?.('.prompt-mode-button').forEach((button, index) => {
+        if (!(button instanceof HTMLButtonElement) || button.dataset.vcpTypedPrimitiveMounted === 'true') return;
+        const release = api.mountButton(button, { variant: 'ghost', size: 'sm' }, scope);
+        button.dataset.vcpTypedPrimitiveMounted = 'true';
+        scope.own(() => { delete button.dataset.vcpTypedPrimitiveMounted; }, `typed-agent-prompt-mode-${index}-marker`, 'ui-primitive');
+        if (release) scope.own(release, `typed-agent-prompt-mode-${index}`, 'ui-primitive');
     });
 }
 
