@@ -451,3 +451,16 @@ directory-browser 接入前置达成。typed field owner 本就以 `#networkNote
 - **E1-E6 全部闭合**：E1 入口面清单 ✅（批次 18）、E2 首开时序+快照镜像 ✅（批次 17/19）、E3 部分挂载失败契约 ✅（本批）、E4 事件路由盘点 ✅（批次 17）、E5 reload 断言扩容 ✅（批次 17）、E6 负向守护 ✅（批次 18）。兜底退役批次现在具备全部前置证据，剩余裁决项已落盘：两个 renderer.js 显示默认值的归属、completeVcpUrl 首开差量的接受与否、以及 modal-ready 窗口的替代 owner 设计。
 - 门禁：Electron journey 全轮 PASS（1p/1q/8c-1/8c-2 契约探针）+ 四快门禁（source-equivalence / unified-surface / test-settings-wa / test-ui-system）全绿。win32/Linux packaged evidence 维持 evidence-pending。
 - 台账：§7 追加批次 19 段落；roadmap 追加 R2-02E checkpoint。下一批候选：兜底退役施工批次（按落盘裁决项执行删除与替代 owner 设计），或视 unlock 复查结果轮转 directory-browser。
+
+### 2026-08-27 批次 20：兜底退役施工（startup fallback projection 正式删除）
+
+状态：生产代码删除 + 门禁反转 + journey 契约反转；E1-E6 前置证据全部兑现为删除施工。typed 投影（settings-bridge generic projection + typed field owner）成为全局设置表单的唯一写入方。
+
+- unlock 复查：DirectoryBrowser 各 checkpoint 保持 `foundation-electron-active`，unlock 条件不满足，按批次 16 预案执行兜底退役施工。
+- **presentationOwner 删除（159 行）**：`mainChatSettingsPresentationOwner.js` 中全部 19 处 `!typedSettingsProjectionActive` 守卫分支删除——userName 簇、颜色簇（含 `|| '#3d5a80'` / `|| '#ffffff'` 兜底默认）、vcpServerUrl completeVcpUrl 首开补全、api/file/log 键、topicSummaryModel/continueWritingPrompt、flowlock、语音簇、networkNotesPaths 容器重建、字体簇、presentation/layout/bubble 块、四个 sync 调用、头像预览、sanitizer/AI 按钮、中键、可见性开关。`typedSettingsProjectionActive` 状态计算与 refresh 一并删除，文件内 grep 归零。保留职责：safeSet/safeCheck（rust chatAPI 回退路径仍用）、监听绑定（字体/布局/气泡/presentation）、assistantAgent 填充、modal-ready 订阅（现为纯生命周期事件，无填充义务）。
+- **三个裁决项兑现**（批次 19 落盘）：(1) `speechRecognizerPagePath`（`Voicechatmodules/recognizer.html`）与 `voiceNetworkProviderUrl`（`https://api.siliconflow.cn`）两个首开显示默认迁入 bridge 投影尾部——仅在控件空值时补填（`if (control && !control.value)`），typed state 保持原始持久化数据语义，注释标注来源为已退役兜底；(2) `vcpServerUrl` 接受原值显示差量（save 期 completeVcpUrl 归一照旧，仅一次性外观差量，1q oracle 按 `String(s.vcpServerUrl ?? '')` 书写）；(3) modal-ready 窗口由 typed service subscribe 回放所有（`adapters/settings.ts` immediate 默认回放已确认，sameState 对等值通知去重）。
+- **journey 契约反转**：1p 从「证明兜底在 modal-ready 瞬时填充」反转为「证明兜底不再填充」——`formAtReady === true`、`revisionAtReady === null`、`userNameAtReady === ''`（HTML 默认值可见），随后 revision 同周期就绪；日志行更新为「the typed subscribe replay owns the modal-ready window」。1q 首开 oracle、section 6/7、8c 契约探针全部维持并通过。
+- **E6 门禁反转**：`check-settings-source-equivalence.mjs` 新增退役断言——presentationOwner 不得再含 `typedSettingsProjectionActive` 与 `safeSet('userName'/'vcpServerUrl'/'chatFontPreset'` 投影分支；bridge 必须持有两个迁入的显示默认字面量。FALLBACK_TOUCHERS 逐 id 循环删去「兜底仍持有该 id」断言（退役后语义改为：main.html 控件存在 + bridge 覆盖 + 外部触碰集合 deepEqual 三件套），并注明新第二写入方须同提交更新清单。
+- 门禁：node --check 四文件通过；四快全绿（source-equivalence / unified-surface / test-settings-wa / test-ui-system）；Electron journey 全轮 PASS（1p/1q 反转后首跑通过——迁入默认使 1q 的语音簇期望值保持有效）。win32/Linux packaged evidence 维持 evidence-pending。
+- 台账：§7 追加批次 20 段落；roadmap 追加 R2-02E checkpoint。ledger §6「启动兼容 fallback 尚未删除」项就此关闭。下一批候选：unlock 复查 directory-browser（若线程 A 成熟度晋级），或按 handoff §10 继续审计下一族 primitive 接缝。
+- 提交归属更正：bridge 的两个迁入显示默认在批次 20 施工期间被线程 A 的并发提交 `9b3d4c27`（ui(agent-settings): adopt harness reset color button）随工作区一并带入——内容正确、门禁/journey 均按该状态验证，但归属混合；后续批次如需引用该 diff 应以 `9b3d4c27` + 本批次提交两处为准。

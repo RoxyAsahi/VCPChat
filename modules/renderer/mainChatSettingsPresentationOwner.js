@@ -564,25 +564,6 @@ export function createMainChatSettingsPresentationOwner({
             const el = document.getElementById(id);
             if (el) el.checked = !!checked;
         };
-        // The SettingsRoot typed consumer owns the migrated projection fields
-        // once its real subscription is mounted. Keep this legacy startup
-        // owner responsible for the remaining business controls, but do not
-        // overwrite clean snapshots or dirty drafts that the typed consumer
-        // deliberately protects.
-        // Service assembly alone is not consumer readiness.  The bridge may
-        // expose a typed service before SettingsRoot has mounted (or after a
-        // partial mount failure); in that window the legacy owner must still
-        // populate the canonical business controls.
-        let typedSettingsProjectionActive = Boolean(
-            windowRef?.VCPUISettingsBridge?.getTypedService?.()
-            && document.getElementById('globalSettingsModal')?.dataset?.vcpSettingsRevision !== undefined
-        );
-        const refreshTypedSettingsProjectionState = () => {
-            typedSettingsProjectionActive = Boolean(
-                windowRef?.VCPUISettingsBridge?.getTypedService?.()
-                && document.getElementById('globalSettingsModal')?.dataset?.vcpSettingsRevision !== undefined
-            );
-        };
         const syncRustDebugPanelVisibility = () => {
             const rustDebugModeEl = document.getElementById('rustDebugMode');
             const rustDebugPanelEl = document.getElementById('rustDebugPanel');
@@ -602,100 +583,11 @@ export function createMainChatSettingsPresentationOwner({
             }
         };
 
-        if (!typedSettingsProjectionActive) {
-            safeSet('userName', globalSettings.userName || '用户');
-        }
 
-        if (!typedSettingsProjectionActive) {
-            const borderColor = globalSettings.userAvatarBorderColor || '#3d5a80';
-            safeSet('userAvatarBorderColor', borderColor);
-            safeSet('userAvatarBorderColorText', borderColor);
 
-            const nameColor = globalSettings.userNameTextColor || '#ffffff';
-            safeSet('userNameTextColor', nameColor);
-            safeSet('userNameTextColorText', nameColor);
 
-            safeCheck('userUseThemeColorsInChat', globalSettings.userUseThemeColorsInChat);
-        }
 
-        if (!typedSettingsProjectionActive) {
-            const settingsManager = getSettingsManager?.();
-            const rawVcpUrl = globalSettings.vcpServerUrl || '';
-            const completedUrl = typeof settingsManager?.completeVcpUrl === 'function'
-                ? settingsManager.completeVcpUrl(rawVcpUrl)
-                : rawVcpUrl;
-            safeSet('vcpServerUrl', completedUrl);
-        }
-        if (!typedSettingsProjectionActive) {
-            safeSet('vcpApiKey', globalSettings.vcpApiKey || '');
-            safeSet('fileKey', globalSettings.fileKey || '');
-            safeSet('vcpLogUrl', globalSettings.vcpLogUrl || '');
-            safeSet('vcpLogKey', globalSettings.vcpLogKey || '');
-        }
-        if (!typedSettingsProjectionActive) {
-            safeSet('topicSummaryModel', globalSettings.topicSummaryModel || '');
-            safeSet('continueWritingPrompt', globalSettings.continueWritingPrompt || '请继续');
-        }
-        if (!typedSettingsProjectionActive) safeSet('flowlockContinueDelay', globalSettings.flowlockContinueDelay ?? 5);
-        if (!typedSettingsProjectionActive) {
-            safeCheck('voiceModeLocal', (globalSettings.voiceMode || 'local') !== 'network');
-            safeCheck('voiceModeNetwork', (globalSettings.voiceMode || 'local') === 'network');
-            safeSet('speechRecognizerBrowserPath', globalSettings.speechRecognizerBrowserPath || '');
-            safeSet('speechRecognizerPagePath', globalSettings.speechRecognizerPagePath || 'Voicechatmodules/recognizer.html');
-            safeSet('voiceLocalSovitsUrl', globalSettings.voiceLocalSettings?.sovitsUrl || '');
-            safeSet('voiceLocalSovitsKey', globalSettings.voiceLocalSettings?.sovitsKey || '');
-            safeSet('voiceNetworkProviderUrl', globalSettings.voiceNetworkSettings?.providerUrl || '');
-            safeSet('voiceNetworkProviderKey', globalSettings.voiceNetworkSettings?.providerKey || '');
-        }
-
-        // Network Notes Paths
-        if (!typedSettingsProjectionActive) {
-            const networkNotesPathsContainer = document.getElementById('networkNotesPathsContainer');
-            if (networkNotesPathsContainer) {
-                networkNotesPathsContainer.innerHTML = '';
-                const paths = Array.isArray(globalSettings.networkNotesPaths) ? globalSettings.networkNotesPaths : (globalSettings.networkNotesPath ? [globalSettings.networkNotesPath] : []);
-                if (paths.length === 0) {
-                    uiHelperFunctions.addNetworkPathInput('');
-                } else {
-                    paths.forEach(path => uiHelperFunctions.addNetworkPathInput(path));
-                }
-            }
-        }
-
-        if (!typedSettingsProjectionActive) {
-            safeCheck('enableSmoothStreaming', globalSettings.enableSmoothStreaming === true);
-            safeSet('chatFontPreset', globalSettings.chatFontPreset || 'system');
-            safeSet('chatFontCustom', globalSettings.chatFontCustom || '');
-            safeSet('chatCodeFontPreset', globalSettings.chatCodeFontPreset || 'consolas');
-            safeSet('chatCodeFontCustom', globalSettings.chatCodeFontCustom || '');
-            safeSet('chatDiaryFontPreset', globalSettings.chatDiaryFontPreset || 'serif');
-            safeSet('chatDiaryFontCustom', globalSettings.chatDiaryFontCustom || '');
-            safeSet('chatToolFontPreset', globalSettings.chatToolFontPreset || 'system');
-            safeSet('chatToolFontCustom', globalSettings.chatToolFontCustom || '');
-        }
         const presentationMode = normalizeChatPresentationMode(globalSettings.chatPresentationMode);
-        if (!typedSettingsProjectionActive) {
-            safeCheck(`chatPresentationMode${presentationMode[0].toUpperCase()}${presentationMode.slice(1)}`, true);
-            safeCheck('chatLayoutModeWide', globalSettings.enableWideChatLayout === true);
-            safeCheck('chatLayoutModeNormal', globalSettings.enableWideChatLayout !== true);
-            safeCheck('enableUserChatBubbleUi', globalSettings.enableUserChatBubbleUi !== false);
-            safeCheck('showUserMetaInChatBubbleUi', globalSettings.showUserMetaInChatBubbleUi !== false);
-            safeSet('chatBubbleMaxWidthWideDefault', clampChatBubbleWidthPercent(globalSettings.chatBubbleMaxWidthWideDefault, 92));
-            safeSet('chatBubbleMaxWidthWideNotifications', clampChatBubbleWidthPercent(globalSettings.chatBubbleMaxWidthWideNotifications, 96));
-            safeSet(
-                'chatBubbleMaxWidthWideNarrow',
-                clampChatBubbleWidthPercent(
-                    globalSettings.chatBubbleMaxWidthWideNarrow,
-                    clampChatBubbleWidthPercent(globalSettings.chatBubbleMaxWidthWideDefault, 92)
-                )
-            );
-            safeSet('minChunkBufferSize', globalSettings.minChunkBufferSize ?? 16);
-            safeSet('smoothStreamIntervalMs', globalSettings.smoothStreamIntervalMs ?? 100);
-        }
-        if (!typedSettingsProjectionActive) syncChatFontControls();
-        if (!typedSettingsProjectionActive) syncWideChatLayoutControls();
-        if (!typedSettingsProjectionActive) syncUserChatBubbleControls();
-        if (!typedSettingsProjectionActive) syncChatPresentationModeControls(presentationMode);
 
         const chatFontPresetSelect = document.getElementById('chatFontPreset');
         const chatFontCustomInput = document.getElementById('chatFontCustom');
@@ -767,29 +659,11 @@ export function createMainChatSettingsPresentationOwner({
             radio.dataset.boundPresentationModeToggle = 'true';
         });
 
-        // User Avatar Preview remains a Classic compatibility projection until
-        // the typed Settings consumer is assembled for this renderer.
-        if (!typedSettingsProjectionActive) {
-            const userAvatarPreview = document.getElementById('userAvatarPreview');
-            const userAvatarWrapper = userAvatarPreview?.closest('.agent-avatar-wrapper');
-            if (userAvatarPreview) {
-                if (globalSettings.userAvatarUrl) {
-                    userAvatarPreview.src = globalSettings.userAvatarUrl;
-                    userAvatarPreview.style.display = 'block';
-                    userAvatarWrapper?.classList.remove('no-avatar');
-                } else {
-                    userAvatarPreview.src = '#';
-                    userAvatarPreview.style.display = 'none';
-                    userAvatarWrapper?.classList.add('no-avatar');
-                }
-            }
-        }
 
         // Forum adminUsername/adminPassword are projected by the typed
         // ForumConfigUiService consumer in settings-bridge; this owner no
         // longer mirrors them through loadForumConfig.
 
-        refreshTypedSettingsProjectionState();
 
         // Assistant Select
         const assistantAgentSelect = document.getElementById('assistantAgent');
@@ -799,36 +673,10 @@ export function createMainChatSettingsPresentationOwner({
                 await settingsManager.populateAssistantAgentSelect();
             }
             if (!isCurrent(token)) return false;
-            if (!typedSettingsProjectionActive) assistantAgentSelect.value = globalSettings.assistantAgent || '';
-        }
-        refreshTypedSettingsProjectionState();
-
-        if (!typedSettingsProjectionActive) {
-            safeCheck('enableDistributedServer', globalSettings.enableDistributedServer === true);
-            safeCheck('agentMusicControl', globalSettings.agentMusicControl === true);
-            safeCheck('enableVcpToolInjection', globalSettings.enableVcpToolInjection === true);
-            safeCheck('enableThoughtChainInjection', globalSettings.enableThoughtChainInjection === true);
-            safeCheck('enableContextSanitizer', globalSettings.enableContextSanitizer === true);
-            safeSet('contextSanitizerDepth', globalSettings.contextSanitizerDepth ?? 2);
-
-            const contextSanitizerDepthContainer = document.getElementById('contextSanitizerDepthContainer');
-            if (contextSanitizerDepthContainer) {
-                contextSanitizerDepthContainer.style.display = globalSettings.enableContextSanitizer === true ? 'block' : 'none';
-            }
-
-            safeCheck('enableAiMessageButtons', globalSettings.enableAiMessageButtons !== false);
-        }
-        if (!typedSettingsProjectionActive) {
-            safeCheck('enableMiddleClickQuickAction', globalSettings.enableMiddleClickQuickAction === true);
-            safeSet('middleClickQuickAction', globalSettings.middleClickQuickAction || '');
-            safeCheck('enableMiddleClickAdvanced', globalSettings.enableMiddleClickAdvanced === true);
-            safeSet('middleClickAdvancedDelay', Math.max(1000, globalSettings.middleClickAdvancedDelay ?? 1000));
-            safeCheck('enableRegenerateConfirmation', globalSettings.enableRegenerateConfirmation !== false);
         }
 
-        const typedRustAssistantService = typedSettingsProjectionActive
-            ? windowRef?.VCPUISettingsBridge?.getRustAssistantService?.()
-            : null;
+
+        const typedRustAssistantService = windowRef?.VCPUISettingsBridge?.getRustAssistantService?.() || null;
         if (!typedRustAssistantService && chatAPI?.getRustAssistantConfig) {
             try {
                 const rustConfig = await chatAPI.getRustAssistantConfig();
@@ -860,7 +708,7 @@ export function createMainChatSettingsPresentationOwner({
             }
         }
 
-        if (!typedSettingsProjectionActive && chatAPI?.getAssistantRuntimeStatus && document.getElementById('rustDebugMode')?.checked) {
+        if (chatAPI?.getAssistantRuntimeStatus && document.getElementById('rustDebugMode')?.checked) {
             try {
                 const runtime = await chatAPI.getAssistantRuntimeStatus();
                 if (!isCurrent(token)) return false;
@@ -903,15 +751,6 @@ export function createMainChatSettingsPresentationOwner({
             }
         }
 
-        // Visibility toggles
-        if (!typedSettingsProjectionActive) {
-            const middleClickContainer = document.getElementById('middleClickQuickActionContainer');
-            if (middleClickContainer) middleClickContainer.style.display = globalSettings.enableMiddleClickQuickAction ? 'block' : 'none';
-            const middleClickAdvancedContainer = document.getElementById('middleClickAdvancedContainer');
-            if (middleClickAdvancedContainer) middleClickAdvancedContainer.style.display = globalSettings.enableMiddleClickQuickAction ? 'block' : 'none';
-            const middleClickAdvancedSettings = document.getElementById('middleClickAdvancedSettings');
-            if (middleClickAdvancedSettings) middleClickAdvancedSettings.style.display = globalSettings.enableMiddleClickAdvanced ? 'block' : 'none';
-        }
         return true;
     }
 
