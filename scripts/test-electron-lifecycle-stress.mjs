@@ -596,6 +596,11 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
         nativeSettingsSelects: [...document.querySelectorAll('#agentSettingsForm select')]
             .filter(select => window.VCPUI?.getController?.(select)?.kernel === 'native').length,
         settingsSelectProxies: document.querySelectorAll('#agentSettingsForm .vcp-ui-select-proxy').length,
+        typedAgentInputs: document.querySelectorAll('#agentSettingsForm .vcp-uiux-input-wrap input').length,
+        typedAgentChoiceGroups: document.querySelectorAll('#agentSettingsForm .vcp-uiux-choice').length,
+        typedAgentChoiceOptions: document.querySelectorAll('#agentSettingsForm .vcp-uiux-choice .vcp-uiux-choice-option').length,
+        typedAgentToggles: document.querySelectorAll('#agentSettingsForm .vcp-uiux-toggle input').length,
+        nativeAgentStreamRadios: document.querySelectorAll('#agentSettingsForm input[name="streamOutput"][type="radio"]').length,
     }));
     assert.ok(state.promptNodes > 0, `${label}: agent settings prompt editor disappeared: ${JSON.stringify(state)}`);
     if (expectEnhanced) {
@@ -609,6 +614,16 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
         }
         assert.equal(state.settingsSelectProxies, 0,
             `${label}: settings form retained Web Awesome Select proxies: ${JSON.stringify(state)}`);
+        assert.ok(state.typedAgentInputs >= 7,
+            `${label}: common Agent text/number inputs were not projected by the typed Input primitive: ${JSON.stringify(state)}`);
+        assert.equal(state.typedAgentChoiceGroups, 1,
+            `${label}: Agent stream output must have one typed Choice group: ${JSON.stringify(state)}`);
+        assert.equal(state.typedAgentChoiceOptions, 2,
+            `${label}: Agent stream output Choice must expose both native radio options: ${JSON.stringify(state)}`);
+        assert.ok(state.typedAgentToggles >= 2,
+            `${label}: Agent appearance toggles were not projected by the typed Toggle primitive: ${JSON.stringify(state)}`);
+        assert.equal(state.nativeAgentStreamRadios, 2,
+            `${label}: native Agent stream radios must remain the canonical business nodes: ${JSON.stringify(state)}`);
     } else {
         assert.equal(state.enhanced, 0, `${label}: Next settings adapters leaked into Classic: ${JSON.stringify(state)}`);
     }

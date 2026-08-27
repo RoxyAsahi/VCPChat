@@ -92,6 +92,14 @@ assert.match(bridge, /inputApi\.mountInput\(input, \{\}, inputScope\)/, 'dynamic
 assert.doesNotMatch(bridge, /vcp-harness-input-wrap/, 'retired local input wrapper must be deleted from the bridge');
 assert.doesNotMatch(css, /vcp-harness-input-wrap/, 'retired local input wrapper CSS must be deleted');
 assert.match(css, /vcp-uiux-input-wrap\.vcp-harness-input-fill/, 'bridge-mounted Input wraps keep the row fill contract');
+
+// Switch presentation is owned by the real library Toggle primitive
+// (window.VCPUIUX.mountToggle): the bridge mounts it per checkbox (typed
+// home-visual toggles keep their own mounts) and the retired local `.slider`
+// styling must be gone from the settings CSS.
+assert.match(bridge, /function mountHarnessSwitches/, 'switch mounting must be a shared real-primitive owner');
+assert.match(bridge, /api\.mountToggle\(input, scope\)/, 'Switch presentation must come from the library primitive');
+assert.doesNotMatch(css, /\.slider/, 'retired local slider CSS must be deleted');
 assert.match(bridge, /vcp-harness-row-copy/);
 assert.match(bridge, /vcp-harness-active-section/);
 assert.match(bridge, /vcp-harness-section-bank/);

@@ -11,7 +11,8 @@ export function mountChoice(root, scope) {
     if (!root || !scope)
         throw new TypeError('Choice requires root and scope.');
     ensureStyles();
-    const labels = Array.from(root.querySelectorAll('label'));
+    const labels = Array.from(root.querySelectorAll('label'))
+        .filter(label => label.querySelector('input[type="radio"]'));
     root.classList.add('vcp-uiux-choice');
     labels.forEach(label => { label.classList.add('vcp-uiux-choice-option'); const input = label.querySelector('input[type="radio"]'); if (input)
         scope.listen(input, 'change', () => root.dataset.value = input.value); });

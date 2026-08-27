@@ -97,17 +97,6 @@
         font-weight: 500;
     }
 
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .switch .slider {
-        border: 1px solid var(--vcp-ui-control-border);
-        background: var(--vcp-ui-fill-1);
-        box-shadow: none;
-    }
-
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .switch input:checked + .slider {
-        border-color: var(--vcp-ui-accent);
-        background: var(--vcp-ui-accent);
-    }
-
     :is(html, html.vcp-global-settings-host) .vcp-ui-scope #agentSettingsForm .form-actions {
         gap: var(--vcp-ui-space-2);
         padding: var(--vcp-ui-space-3) 0 0;
@@ -488,17 +477,6 @@
         outline: none;
     }
 
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsForm .switch .slider {
-        border: 1px solid var(--vcp-ui-control-border);
-        background: var(--vcp-ui-fill-1);
-        box-shadow: none;
-    }
-
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsForm .switch input:checked + .slider {
-        border-color: var(--vcp-ui-accent);
-        background: var(--vcp-ui-accent);
-    }
-
     :is(html, html.vcp-global-settings-host) .vcp-ui-scope #groupSettingsForm .form-actions {
         gap: var(--vcp-ui-space-2);
         padding: var(--vcp-ui-space-3) 0 0;
@@ -736,17 +714,6 @@
         margin: 0;
         opacity: 0;
         pointer-events: none;
-    }
-
-    /* ---- switches ---- */
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm .switch .slider {
-        border: 0;
-        background: var(--vcp-ui-fill-1);
-        box-shadow: none;
-    }
-
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm .switch input:checked + .slider {
-        background: var(--vcp-ui-accent);
     }
 
     /* ---- subsections (cards) ---- */

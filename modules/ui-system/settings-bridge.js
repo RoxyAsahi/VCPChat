@@ -893,6 +893,35 @@ function uniqueSettingsKey() {
     return `anon-${settingsKeySeed}`;
 }
 
+// Switch labels adopt the real library Toggle primitive per checkbox: the
+// native input stays the authoritative node while the primitive wrap draws
+// the track/knob and hides the retired local `.slider` span.  The typed home
+// visual toggles keep their own mounts, and the legacy VCPUI native-kernel
+// switch stays as the degraded presentation when the primitive runtime or
+// the presentation scope is unavailable.
+function mountHarnessSwitches(form) {
+    if (!form) return;
+    const api = window.VCPUIUX;
+    const scope = ensurePresentationScope();
+    form.querySelectorAll('label.switch').forEach(control => {
+        if (control.querySelector('#showHomeVisualBrand, #showHomeVisualTagline')) return;
+        const input = control.querySelector('input[type="checkbox"]');
+        if (!input || input.dataset.vcpHarnessToggleMounted === 'true') return;
+        if (!api?.mountToggle || !scope) {
+            enhance('Switch', control);
+            return;
+        }
+        try {
+            const release = api.mountToggle(input, scope);
+            if (!release) return;
+            input.dataset.vcpHarnessToggleMounted = 'true';
+            scope.own(() => { delete input.dataset.vcpHarnessToggleMounted; }, `harness-toggle-${input.id || control.querySelector('input[name]')?.name || uniqueSettingsKey()}`, 'ui-presentation');
+        } catch (error) {
+            console.warn('[VCPUI SettingsBridge] Could not mount Harness Toggle primitive:', error);
+        }
+    });
+}
+
 function mountHarnessInputs(form) {
     const api = window.VCPUIUX;
     const scope = ensurePresentationScope();
