@@ -42,6 +42,7 @@ for (const dir of targets) {
       assert.ok(observation?.initial?.interactionStates?.hover);
       assert.ok(observation?.initial?.interactionStates?.focus);
       assert.ok(observation?.initial?.stateCounts && Object.values(observation.initial.stateCounts).every(value => Number.isInteger(value)));
+      assert.ok(['div', 'section'].includes(observation?.initial?.dom?.rootTree?.tag));
       assert.equal(observation?.settingsViewport?.active, true);
       assert.ok(observation?.settingsViewport?.visible?.length > 0);
       assert.equal(observation?.stateTransitions?.loading?.visible, true);
