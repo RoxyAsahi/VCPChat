@@ -660,7 +660,10 @@
         outline: none;
     }
 
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm :is(input, select, textarea, button):focus-visible {
+    /* Keyboard a11y ring for bare controls only. Controls inside a Harness
+       wrap must stay excluded: the wrapper owns the focus border surface,
+       and a second outline on the inner input renders as a stray halo. */
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm :is(input, select, textarea, button):focus-visible:not(:is(.vcp-harness-input-wrap > *, .vcp-harness-select-wrap > *, .vcp-harness-choice-wrap > *)) {
         outline: 2px solid var(--vcp-ui-focus-ring);
         outline-offset: 2px;
     }
@@ -1300,8 +1303,10 @@
     line-height: 22px;
     /* Row-stacking legacy rules (e.g. .modal-content input) must not leak
        into the wrapper's centered flex box; a stray bottom margin lifts the
-       text/hover surface ~7px off the border frame. */
+       text/hover surface ~7px off the border frame. The wrapper also owns
+       the whole focus surface, so the inner input never outlines itself. */
     margin: 0;
+    outline: none;
 }
 
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-row-copy {
@@ -2018,3 +2023,13 @@
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal [data-vcp-style="39"] { color: var(--highlight-text); }
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal [data-vcp-style="40"] { color: var(--text-on-accent); margin-top: 5px; display: block; }
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal [data-vcp-style="41"] { display: none; margin-bottom: 15px; }
+
+/* Body-level primitive portal menus must stack above the settings overlay.
+   The generated select primitive appends its menu to document.body with a
+   hard-coded z-index (1100); the unified settings overlay sits at
+   var(--vcp-ui-z-overlay) (1400), so with the modal open every appearance
+   select menu rendered invisibly behind it ("selects cannot be opened").
+   Lift them above the overlay only while the settings host is active. */
+:is(html, html.vcp-global-settings-host) > body .vcp-uiux-primitive-menu {
+    z-index: calc(var(--vcp-ui-z-overlay) + 10);
+}
