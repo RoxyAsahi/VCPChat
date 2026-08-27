@@ -27,6 +27,8 @@ assert.equal(report.trigger.borderRadius, '24px');
 assert.equal(report.menu?.tag, 'div');
 assert.equal(report.menu?.role, 'menu');
 assert.match(report.menu?.id || '', /^vcp-harness-agent-model-picker-menu-/);
+assert.ok(report.menu?.ariaLabel, 'model picker menu must expose an accessible label');
+assert.equal(report.menu?.ariaBusy, null, 'ready model picker menu must not remain aria-busy');
 assert.equal(report.menu?.cssContract?.borderRadius, '12px');
 assert.equal(typeof report.menu?.borderRadius, 'string');
 assert.ok(report.menu?.rect?.width > 0 && report.menu?.rect?.height > 0,

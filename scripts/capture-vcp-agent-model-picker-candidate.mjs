@@ -155,6 +155,8 @@ try {
                 tag: menu.tagName.toLowerCase(),
                 id: menu.id,
                 role: menu.getAttribute('role'),
+                ariaLabel: menu.getAttribute('aria-label'),
+                ariaBusy: menu.getAttribute('aria-busy'),
                 borderRadius: menuStyle.borderRadius,
                 padding: menuStyle.padding,
                 minWidth: menuStyle.minWidth,
