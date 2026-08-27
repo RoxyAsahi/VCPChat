@@ -1,5 +1,13 @@
 {
   "source": "Harness settings field consumers; exact source selected per vertical slice",
+  "sourceKind": "harness-derived-consumer-contract",
+  "provenance": {
+    "sources": [
+      "packages/client/ui-settings-models/src/client/ModelsSection.tsx",
+      "packages/client/ui-settings-models/src/client/ModelsSection.module.css"
+    ],
+    "selectionRule": "Use the consumer's field markup and CSS for the vertical slice under audit."
+  },
   "status": "candidate-reference",
   "contract": { "required": ["label", "control", "description?", "error?"], "lightDom": true, "aria": ["label-for", "describedby", "invalid"] }
 }
