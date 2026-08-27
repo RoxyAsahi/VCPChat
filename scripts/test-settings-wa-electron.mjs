@@ -128,15 +128,13 @@ try {
     await page.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout: timeoutMs });
     await page.waitForFunction(() => document.documentElement.dataset.uiMode === 'next', { timeout: timeoutMs });
 
-    // ---- 1p (retirement evidence E2/E3). First-open ordering contract:
-    // the modal is template-instantiated by the first openModal, and
-    // `modal-ready` fires synchronously inside that task - before the
-    // bridge's MutationObserver microtask can mount the typed consumer and
-    // stamp the revision.  The startup fallback therefore owns the
-    // first-open fill window by construction, and the typed projection
-    // deterministically reclaims it within the same open cycle.  Retirement
-    // of the fallback is only allowed once a replacement owns this exact
-    // window. ----
+    // ---- 1p (retirement contract). First-open ordering: the modal is
+    // template-instantiated by the first openModal, and `modal-ready` fires
+    // synchronously inside that task - before the bridge's MutationObserver
+    // microtask can mount the typed consumer and stamp the revision.  The
+    // startup fallback projection is retired, so at modal-ready the form
+    // still shows its HTML defaults; the typed service's subscribe replay
+    // fills it within the same open cycle and stamps the revision. ----
     await page.evaluate(() => {
         window.__e3FirstOpenProbe = null;
         document.addEventListener('modal-ready', event => {
@@ -152,15 +150,15 @@ try {
     await page.evaluate(() => window.uiHelperFunctions.openModal('globalSettingsModal'));
     const e3FirstOpen = await page.evaluate(() => window.__e3FirstOpenProbe);
     assert.equal(e3FirstOpen.formAtReady, true, `E3: the form exists at modal-ready (${JSON.stringify(e3FirstOpen)})`);
-    assert.equal(e3FirstOpen.revisionAtReady, null, `E3: typed readiness is absent at modal-ready - the fallback owns the first-open fill window (${JSON.stringify(e3FirstOpen)})`);
-    assert.equal(String(e3FirstOpen.userNameAtReady || '').length > 0, true, `E3: the fallback fills the identity cluster synchronously at modal-ready (${JSON.stringify(e3FirstOpen)})`);
+    assert.equal(e3FirstOpen.revisionAtReady, null, `E3: typed readiness is absent at modal-ready (${JSON.stringify(e3FirstOpen)})`);
+    assert.equal(String(e3FirstOpen.userNameAtReady ?? ''), '', `E3: the retired fallback no longer fills at modal-ready - HTML defaults show (${JSON.stringify(e3FirstOpen)})`);
     await page.waitForFunction(() => {
         const revision = document.getElementById('globalSettingsModal')?.dataset?.vcpSettingsRevision;
         return Boolean(document.getElementById('globalSettingsForm')
             && window.VCPUISettingsBridge?.getTypedService?.()
             && Number.isInteger(Number(revision)));
     }, { timeout: timeoutMs });
-    console.log('  [PASS] 1p. fallback owns the modal-ready fill window; the typed projection reclaims the revision in the same open cycle');
+    console.log('  [PASS] 1p. the typed subscribe replay owns the modal-ready window (form fills and revision stamps in the same open cycle)');
 
     // ---- 1. SettingsShell layout ----
     await page.waitForFunction(() => document.getElementById('globalSettingsForm'), { timeout: timeoutMs });

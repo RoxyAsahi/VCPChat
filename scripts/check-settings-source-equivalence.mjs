@@ -35,14 +35,18 @@ for (const page of embeddedPages) {
     assert.doesNotMatch(pageSource, /globalSettingsForm|globalSettingsModal/, `embedded page must not render the global settings surface: ${page}`);
 }
 
-// ---- Retirement evidence E6 (negative guard): pin the control-touch
-// inventory of every id the presentationOwner startup fallback fills.
-// Allowed touchers per id are exactly the two owners (settings-bridge typed
-// projection/field owner + the fallback itself, asserted separately below)
-// plus the explicitly enumerated legacy seams (whole-form collect, blur
-// completion, color pickers, appearance studio, renderer wiring).  A new
-// second writer for any fallback id must update this inventory in the same
-// commit, so a retired id cannot silently reappear under a new owner. ----
+// ---- Retirement (E1/E6, handoff ledger): main.html is the only document
+// that renders the global settings form, and it declares uiMode=next
+// statically.  The only uiMode:'classic' producer is the embedded-app
+// session manager, whose allowlist pages never contain the settings modal.
+// The presentationOwner startup fallback projection is retired; the typed
+// projection owners are the sole form writers, and the control-touch
+// inventory below guards every id against a new second writer. ----
+assert.match(html, /data-ui-mode="next"/, 'main.html must declare the canonical next uiMode statically');
+assert.doesNotMatch(presentationOwner, /typedSettingsProjectionActive/, 'the retired startup fallback guard must stay deleted');
+assert.doesNotMatch(presentationOwner, /safeSet\('userName'|safeSet\('vcpServerUrl'|safeSet\('chatFontPreset'/, 'the retired fallback projection branches must stay deleted');
+assert.match(bridge, /speechRecognizerPagePath', 'Voicechatmodules\/recognizer\.html'/, 'the ported speech page-path display default must live in the typed projection');
+assert.match(bridge, /voiceNetworkProviderUrl', 'https:\/\/api\.siliconflow\.cn'/, 'the ported provider-url display default must live in the typed projection');
 const FALLBACK_TOUCHERS = {
     userName: ['modules/global-settings-manager.js'],
     userAvatarBorderColor: ['modules/event-listeners.js', 'modules/global-settings-manager.js'],
@@ -91,9 +95,13 @@ const collectJsFiles = (dir) => fs.readdirSync(dir, { withFileTypes: true }).fla
     return entry.name.endsWith('.js') ? [child] : [];
 });
 const moduleFiles = [...collectJsFiles(path.join(root, 'modules')), path.join(root, 'renderer.js')];
+// Post-retirement negative guard: each fallback-era control id must still
+// exist in main.html, must be covered by the typed projection/field owner
+// (never by a resurrected presentationOwner fallback), and must keep its
+// pinned external toucher set — a new second writer must update this
+// inventory in the same commit.
 for (const [id, expectedTouchers] of Object.entries(FALLBACK_TOUCHERS)) {
     assert.match(html, new RegExp(`id="${id}"`), `fallback id must exist as a control in main.html: ${id}`);
-    assert.ok(presentationOwner.includes(`'${id}'`), `the startup fallback must still own its id inventory until retirement: ${id}`);
     assert.ok(bridge.includes(`'${id}'`), `the typed projection/field owner must cover the fallback id: ${id}`);
     const actualTouchers = moduleFiles
         .filter(file => !OWNER_FILES.has(path.relative(root, file).split(path.sep).join('/')))
