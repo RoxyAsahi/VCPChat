@@ -19,6 +19,7 @@ not add a runtime dependency and must not be imported by the Electron app.
 | buttons | `packages/client/ui-primitives/src/Button.module.css` | `button.css` |
 | agent preset section | `packages/client/ui-agent-preset/src/client/AgentPresetSection.tsx` | `agent-preset-section.dom.json`, `agent-preset-section.geometry.json` |
 | agent preset label | `packages/client/ui-agent-preset/src/client/AgentPresetLabel.tsx` | `agent-preset-label.dom.json`, `agent-preset-label.geometry.json` |
+| preset menu composition | `packages/client/ui-agent-preset/src/client/PresetMenu.tsx` | `preset-menu.dom.json`, `preset-menu.geometry.json` (delegates geometry to `menu.geometry.json`) |
 | disclosure | `packages/client/ui-primitives/src/DisclosureRow.module.css` | `disclosure.css` |
 
 ## Comparison rules
