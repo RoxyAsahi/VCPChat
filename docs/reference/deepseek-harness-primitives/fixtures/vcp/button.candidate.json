@@ -1,0 +1,8 @@
+{
+  "source": "VCP generated artifact Candidate Lab",
+  "semanticFixture": "portable-button/all-variants-and-disabled",
+  "status": "candidate-interaction-active",
+  "viewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 },
+  "states": ["primary", "ghost", "outline", "toolbar", "compact", "disabled"],
+  "pending": ["same-semantic Harness production capture", "DOM/computed-style/pixel diff", "VCP production consumer", "legacy presentation deletion"]
+}

@@ -1,0 +1,15 @@
+{
+  "primitive": "Button",
+  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/Button.tsx",
+  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/Button.module.css",
+  "root": { "tag": "button", "class": "button", "native": true, "type": "button" },
+  "children": [
+    { "tag": "span", "class": "icon", "optional": true, "ariaHidden": true },
+    { "text": "ReactNode children", "required": true }
+  ],
+  "variants": ["primary", "ghost", "outline", "toolbar"],
+  "sizes": ["md", "sm"],
+  "states": ["default", "hover", "active", "disabled", "loading-consumer"],
+  "aria": ["native button semantics", "consumer-provided aria-label/pressed/busy"],
+  "vcpDeviation": "Light-DOM mount adds vcp-harness-button marker and restores the original class/type/disabled state on dispose."
+}

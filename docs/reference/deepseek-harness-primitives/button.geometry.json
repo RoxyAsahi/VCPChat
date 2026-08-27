@@ -1,0 +1,22 @@
+{
+  "primitive": "Button",
+  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/Button.module.css",
+  "root": {
+    "display": "inline-flex",
+    "alignItems": "center",
+    "justifyContent": "center",
+    "gap": "4px",
+    "border": "none",
+    "borderRadius": "18px",
+    "fontSize": "14px",
+    "lineHeight": "22px",
+    "padding": "0 14px"
+  },
+  "sizes": {
+    "md": { "height": "36px" },
+    "sm": { "height": "28px", "fontSize": "12px", "lineHeight": "18px", "padding": "0 10px", "borderRadius": "14px" }
+  },
+  "icon": { "width": "16px", "height": "16px" },
+  "tokens": ["--dsw-alias-label-primary", "--dsw-alias-button-primary-fill", "--dsw-alias-button-primary-hover", "--dsw-alias-interactive-bg-hover", "--dsw-alias-interactive-bg-active"],
+  "vcpCandidateEvidence": { "screenshot": "fixtures/vcp/button.candidate.png", "report": "fixtures/vcp/button.candidate.json" }
+}
