@@ -78,3 +78,11 @@ test('Model picker pixel diff remains pending or records a real mismatch', () =>
         assert.ok(report.missingEvidence.includes('same viewport dimensions') || report.missingEvidence.includes('pixel tolerance'));
     }
 });
+
+test('Harness capture freshness gate reports paired artifacts without promoting them', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-capture-freshness.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-capture-freshness.json'), 'utf8'));
+    assert.ok(['capture-pairs-fresh', 'capture-pairs-incomplete'].includes(report.status));
+    assert.equal(report.pass, report.checks.every(item => item.pass));
+    assert.equal(report.note.includes('does not create'), true);
+});

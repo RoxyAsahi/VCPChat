@@ -31,6 +31,7 @@
     "check:harness-reference": "node scripts/check-harness-reference-pack.mjs",
     "check:harness-parity-evidence": "node scripts/check-harness-parity-evidence.mjs",
     "check:harness-capture-prerequisites": "node scripts/check-harness-capture-prerequisites.mjs",
+    "check:harness-capture-freshness": "node scripts/check-harness-capture-freshness.mjs",
     "scan:harness-ui-inventory": "node scripts/scan-harness-ui-inventory.mjs",
     "check:harness-geometry-contracts": "node scripts/check-harness-geometry-contracts.mjs",
     "test:harness-parity-evidence": "node --test tests/harness-parity-evidence.test.mjs",
