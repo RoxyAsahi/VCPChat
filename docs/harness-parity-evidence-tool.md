@@ -15,6 +15,11 @@ Contracts marked `sourceKind: vcp-local-contract` are intentional VCP-specific
 boundaries rather than missing Harness provenance; Harness-derived consumers
 must instead list concrete paths under `provenance.sources`.
 
+Those local contracts still contribute to `provenanceGaps`: the count means
+"not backed by a Harness source path", not "the declared file is stale". Keep
+that distinction explicit when reading the report; do not manufacture a
+Harness path for a native VCP contract just to lower the count.
+
 `npm run diff:harness-vcp-model-picker` consumes the VCP Candidate capture and
 the geometry contract. It remains `pending-harness-capture` until a same-engine
 Harness browser report is supplied, and records Candidate contract mismatches
@@ -52,6 +57,9 @@ files are available:
 - `node scripts/check-harness-permission-row-source.mjs` checks loading,
   unavailable/read-only projection, menu selection, error alert, and the
   acknowledgement gate.
+- `node scripts/check-harness-produced-files-source.mjs` checks measured chip
+  fitting, overflow/open-folder capability gating, and ResizeObserver cleanup
+  for the frozen turn-tail reference.
 
 These checks are read-only evidence. They do not create VCP consumers, alter
 business state, or promote Candidate Lab work.

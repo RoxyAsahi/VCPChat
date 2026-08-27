@@ -142,7 +142,15 @@ try {
       settings: describeContext([...((modal?.querySelector('.settings-section.active') || modal)?.querySelectorAll('input, select, textarea, button, wa-input, wa-select') || [])].find(node => node.getClientRects().length)),
     };
     await window.uiHelperFunctions?.closeModal?.('globalSettingsModal');
-    return { opened: Boolean(modal?.classList.contains('active') || modal), rowCount: rows.length, rows, controls, shell: shellStyle, sections, contextSample };
+    await new Promise(resolve => setTimeout(resolve, 80));
+    const settingsCleanup = {
+      active: Boolean(modal?.classList.contains('active')),
+      visible: Boolean(modal?.getClientRects().length),
+      visibleDialogCount: [...document.querySelectorAll('#globalSettingsModal [role="dialog"], #globalSettingsModal .vcp-harness-settings-shell')].filter(node => node.getClientRects().length).length,
+      bodyClasses: [...document.body.classList],
+      bodyInlineStyle: document.body.getAttribute('style') || '',
+    };
+    return { opened: Boolean(modal?.classList.contains('active') || modal), rowCount: rows.length, rows, controls, shell: shellStyle, sections, contextSample, settingsCleanup };
   }).catch(error => ({ error: error.message }));
   evidence.settingsContext = settingsContext;
   if (settingsContext.error || (settingsContext.rowCount === 0 && settingsContext.controls?.length === 0)) evidence.gate.failures.push(`settings context: ${JSON.stringify(settingsContext)}`);
