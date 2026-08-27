@@ -50,7 +50,10 @@ assert.ok(Array.isArray(report.inputs) && report.inputs.length >= 7, 'typed Agen
 assert.ok(Array.isArray(report.inputNodes) && report.inputNodes.length >= 7, 'native Agent Input style evidence is incomplete');
 assert.deepEqual(report.inputNodes.map(node => node.id).sort(), [
     'agentContextTokenLimit', 'agentMaxOutputTokens', 'agentModel', 'agentNameInput', 'agentTemperature', 'agentTopK', 'agentTopP',
+    'agentTtsRegexPrimary', 'agentTtsRegexSecondary',
 ].sort(), 'typed Agent Input evidence must target the seven canonical fields');
+assert.deepEqual((report.regexInputs ?? []).map(node => node.id).sort(), ['agentTtsRegexPrimary', 'agentTtsRegexSecondary'],
+    'typed Agent TTS regex Input evidence must target both canonical regex fields');
 for (const node of report.inputNodes) {
     assert.equal(node.style.height, '22px', 'typed Agent native input must keep the Harness 22px line box');
     assert.equal(node.style.padding, '0px 10px', 'typed Agent native input padding drifted');
