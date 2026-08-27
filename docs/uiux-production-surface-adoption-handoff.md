@@ -342,3 +342,16 @@ roadmap checkpoint 追加于 `38ec8bb8`。
 - userName 簇迁移条件登记（不在本批施工）：`userNameTextColor` 复用 `userAvatarBorderColor` 的 color+text 镜像对范式；`continueWritingPrompt` 是 failure/retry journey（矩阵行 65）的证据承载字段，迁移前必须先产出 typed 路径失败/重试等价证据并同步迁移该断言；其余两键直迁。
 - 门禁口径：代码面自批次 13 门禁全绿的 `180fb5bc` 起零变更（`git diff --stat 180fb5bc..HEAD` 为空），本批 docs-only 不重跑八项门禁；未完成门禁不虚构。win32/Linux packaged evidence 维持 evidence-pending。
 - 台账：§4 三行改写 + §7 追加盘点段落；roadmap 追加 R2-02E 存量盘点 checkpoint。
+
+### 2026-08-27 批次 15：userName 簇 typed owner 收口（unlock 未满足 → 按批次 14 条件施工）
+
+状态：`typed-owner-active`（3 键 / 5 定义）+ `inventory-only` 裁定 1 键。
+
+- unlock 复查：`8247c82a` 之后线程 A 零新提交（DirectoryBrowser 在途改动未落 roadmap，状态仍 `foundation-electron-active`），按指令转入「按批次 14 登记的迁移条件评估是否施工」分支。
+- 语义契约收口（本批核心）：legacy 整表收集对 `userName`/`continueWritingPrompt` 是 trim + 空值回填（'用户' / '请继续'）、颜色键有空值兜底，原 string kind 为裸 String(raw)。为使 typed 保存命令线与 legacy 收集产物逐字节等价，`readTypedFieldPatch` 新增定义级 `trimValue`/`fallback` 归一化——归一化发生在事件读取时（与 legacy 防抖时收集语义同位），DOM 输入过程不受干预。
+- 施工范围：`userName`、`userNameTextColor`(+Text 镜像)、`continueWritingPrompt` 加入 TYPED_FIELD_DEFINITIONS；typed project() 接管四条投影（含 color 镜像双控件）；通用 consumer projection 前 5 行退役，残余从此仅剩 §3 冻结行。
+- 关键查证与批次 14 初判修正：`userUseThemeColorsInChat` 在 globalSettingsForm 内**无任何控件**——main.html 中同名前缀的 `useThemeColorsInChat` 复选框位于 agentSettingsForm（per-agent 配置域，agentHandlers 读写 agentConfig 键）；global 键仅存在于持久化 schema、惰性兜底读与惰性通用行。按 sidebar 三键同类裁定 `inventory-only`：不新建表单控件、不加定义，惰性行随批退役并在 bridge 源码注释中记录结论。
+- journey 兼容性验证：failure/retry 段的打字字段正是 `continueWritingPrompt`，迁移后该段经 typed dirty→typed save→错误归属→点击重试链路全绿（重试成功仍走 legacy 整表提交收敛，属既有双 owner 归属设计）；新增 6f：未 trim 名称 trim 后落盘、清空提示词「请继续」回填、文本镜像 #123abc 共享单键提交、归属断言。全轮 19 PASS。
+- 门禁全绿八项：check:uiux、test:uiux（44/44）、check:uiux:artifacts（66 文件）、test:uiux:artifacts、Electron journey（19 PASS）、lifecycle stress（listener 680 / resources 367 五 checkpoint 恒定、detached=0）、guard:classic-retirement、source-equivalence（legacyClean=true）。
+- 矩阵影响：「单一 projection owner」「单一 save command owner」「legacy projection 删除」三行再次收敛——非冻结 legacy 写入面清零，唯一存量即 §3 冻结责任保留。presentationOwner 启动兜底维持惰性（待独立 reload/Classic/upstream 等价证据后统一退役）。
+- 台账：§2 新增 userName/userNameTextColor/continueWritingPrompt 三行（typed-owner-active），§7 追加批次 15 段落（含批次 14 初判修正记录）。

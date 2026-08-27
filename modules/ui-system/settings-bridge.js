@@ -157,11 +157,10 @@ function mountTypedSettingsConsumer(root) {
         if (form.dataset.vcpSettingsDirty === 'true' || form.dataset.globalSettingsSaving === 'true') return;
         const settings = snapshot.value || {};
         const projection = [
-            ['userName', 'userName'],
-            ['userNameTextColor', 'userNameTextColor'],
-            ['userNameTextColorText', 'userNameTextColor'],
-            ['userUseThemeColorsInChat', 'userUseThemeColorsInChat', 'checked'],
-            ['continueWritingPrompt', 'continueWritingPrompt'],
+            // The retired userUseThemeColorsInChat row never wrote anything:
+            // the persisted key has no control inside #globalSettingsForm (its
+            // namesake checkbox lives in the per-agent agentSettingsForm), so
+            // that lookup resolved to null on every projection pass.
             ['vcpServerUrl', 'vcpServerUrl'],
             ['vcpApiKey', 'vcpApiKey'],
             ['fileKey', 'fileKey'],
@@ -921,6 +920,11 @@ function mountSettingsAutosave(root, form) {
 const TYPED_FIELD_DEFINITIONS = Object.freeze({
     userAvatarBorderColor: { path: 'userAvatarBorderColor', kind: 'string' },
     userAvatarBorderColorText: { path: 'userAvatarBorderColor', kind: 'string' },
+    // Name color mirrors the avatar pair: two controls, one persisted key.
+    userNameTextColor: { path: 'userNameTextColor', kind: 'string', fallback: '#ffffff' },
+    userNameTextColorText: { path: 'userNameTextColor', kind: 'string', fallback: '#ffffff' },
+    userName: { path: 'userName', kind: 'string', trimValue: true, fallback: '用户' },
+    continueWritingPrompt: { path: 'continueWritingPrompt', kind: 'string', trimValue: true, fallback: '请继续' },
     showHomeVisualBrand: { path: 'showHomeVisualBrand', kind: 'boolean' },
     showHomeVisualTagline: { path: 'showHomeVisualTagline', kind: 'boolean' },
     homeVisualTagline: { path: 'homeVisualTagline', kind: 'string' },
@@ -961,7 +965,12 @@ function readTypedFieldPatch(control, service, pendingPatch) {
     const definition = TYPED_FIELD_DEFINITIONS[control?.id];
     if (!definition) return null;
     const raw = control.type === 'checkbox' || control.type === 'radio' ? control.checked : control.value;
-    const value = definition.kind === 'choice' ? definition.value : definition.kind === 'number' ? Number(raw) : definition.kind === 'inverse-boolean' ? Boolean(raw) !== true : definition.kind === 'boolean' ? Boolean(raw) : String(raw);
+    let value = definition.kind === 'choice' ? definition.value : definition.kind === 'number' ? Number(raw) : definition.kind === 'inverse-boolean' ? Boolean(raw) !== true : definition.kind === 'boolean' ? Boolean(raw) : String(raw);
+    // Keep the legacy whole-form collect contract for fields whose persisted
+    // semantics depend on it (trim + default fill), so the save command line
+    // cannot diverge from what the legacy chain used to persist.
+    if (definition.trimValue && typeof value === 'string') value = value.trim();
+    if (definition.fallback !== undefined && typeof value === 'string' && !value) value = definition.fallback;
     if (definition.path.startsWith('appearanceProfile.')) {
         // Build the full-profile snapshot on top of the accumulated draft, not
         // bare service state: every later event in one debounce window would
@@ -1020,6 +1029,15 @@ function mountTypedFieldOwner(root, form) {
         check('showHomeVisualBrand', settings.showHomeVisualBrand !== false);
         check('showHomeVisualTagline', settings.showHomeVisualTagline !== false);
         set('homeVisualTagline', settings.homeVisualTagline || '语义级打穿 AI、UI/UX、APP 与人类想象力的边界');
+        // Name cluster owns its snapshot reads now; the color mirror keeps
+        // both controls on one persisted key like the avatar pair.  The
+        // legacy userUseThemeColorsInChat key has no control inside the
+        // Settings form (the visible useThemeColorsInChat checkbox belongs
+        // to the per-agent form), so there is nothing to project for it.
+        set('userName', settings.userName);
+        set('userNameTextColor', settings.userNameTextColor || '#ffffff');
+        set('userNameTextColorText', settings.userNameTextColor || '#ffffff');
+        set('continueWritingPrompt', settings.continueWritingPrompt);
         // Chat typography owns its fallbacks here now that the generic
         // snapshot projection no longer writes these nodes.
         set('chatFontPreset', settings.chatFontPreset || 'system');

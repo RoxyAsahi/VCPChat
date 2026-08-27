@@ -1060,6 +1060,59 @@ try {
     }, { timeout: timeoutMs });
     console.log('  [PASS] 8. canonical unified SettingsShell survives reload');
 
+    // ---- 6f. Name cluster keeps legacy collect semantics under the typed owner:
+    // trimmed name, default-filled prompt and one color key mirrored by two ids
+    // commit through the same close-flush channel.  (userUseThemeColorsInChat is
+    // excluded: the persisted key has no control inside #globalSettingsForm.)
+    await page.evaluate(() => {
+        window.__nameClusterAttributionProbe = [];
+        document.getElementById('globalSettingsForm').addEventListener('vcp-settings-save-result', event => {
+            window.__nameClusterAttributionProbe.push(event.detail?.owner || 'unknown');
+        });
+    });
+    await page.evaluate(() => {
+        const name = document.getElementById('userName');
+        name.value = '  batch15-typed-user  ';
+        name.dispatchEvent(new Event('input', { bubbles: true }));
+        const mirror = document.getElementById('userNameTextColorText');
+        mirror.value = '#123abc';
+        mirror.dispatchEvent(new Event('input', { bubbles: true }));
+        const prompt = document.getElementById('continueWritingPrompt');
+        prompt.value = '';
+        prompt.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    const nameClusterDirtyState = await page.evaluate(() => ({
+        dirty: document.getElementById('globalSettingsForm').dataset.vcpSettingsDirty === 'true',
+        markers: ['userName', 'userNameTextColor', 'userNameTextColorText', 'continueWritingPrompt']
+            .map(id => document.getElementById(id)?.dataset.vcpTypedFieldOwner || null),
+    }));
+    assert.equal(nameClusterDirtyState.dirty && nameClusterDirtyState.markers.every(marker => marker === 'true'), true, `name cluster controls carry the typed owner marker (${JSON.stringify(nameClusterDirtyState)})`);
+    await page.evaluate(() => window.uiHelperFunctions.closeModal('globalSettingsModal'));
+    await page.waitForFunction(() => !document.getElementById('globalSettingsModal')?.classList.contains('active'), { timeout: timeoutMs });
+    let flushedNameCluster = null;
+    const nameFlushDeadline = Date.now() + timeoutMs;
+    while (Date.now() < nameFlushDeadline) {
+        flushedNameCluster = await page.evaluate(() => {
+            const snapshot = window.VCPUISettingsBridge.getTypedService().state.get();
+            return {
+                userName: snapshot.userName,
+                userTextColor: snapshot.userNameTextColor,
+                prompt: snapshot.continueWritingPrompt,
+                attributions: window.__nameClusterAttributionProbe,
+            };
+        });
+        if (flushedNameCluster.userName === 'batch15-typed-user'
+            && flushedNameCluster.userTextColor === '#123abc'
+            && flushedNameCluster.prompt === '请继续'
+            && flushedNameCluster.attributions.length > 0) break;
+        await sleep(250);
+    }
+    assert.equal(flushedNameCluster.userName, 'batch15-typed-user', `close flush persists the trimmed typed name draft (${JSON.stringify(flushedNameCluster)})`);
+    assert.equal(flushedNameCluster.prompt, '请继续', 'cleared prompt commits the legacy default fill under the typed owner');
+    assert.equal(flushedNameCluster.userTextColor, '#123abc', 'color mirror id commits the shared persisted key');
+    assert.equal(flushedNameCluster.attributions.includes('typed-settings-field-owner'), true, `name cluster save attributed to the typed field owner (${JSON.stringify(flushedNameCluster.attributions)})`);
+    console.log('  [PASS] 6f. name cluster keeps trim/fallback/mirror semantics through the typed close flush');
+
     // ---- 8b. Repeated close/reopen must not duplicate owners or rows ----
     const reopenLedgers = [];
     for (let cycle = 0; cycle < reopenCycles; cycle += 1) {
