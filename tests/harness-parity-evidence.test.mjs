@@ -125,3 +125,12 @@ test('PermissionRow source audit preserves settings capability boundaries', () =
 test('Harness fixture matrix guard preserves explicit Candidate boundaries', () => {
     execFileSync(process.execPath, ['scripts/check-harness-fixture-matrix.mjs'], { cwd: root, stdio: 'pipe' });
 });
+
+test('ProducedFiles source audit preserves frozen-domain measurement boundaries', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-produced-files-source.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-produced-files-source.json'), 'utf8'));
+    assert.equal(report.status, 'source-contract-pass');
+    assert.equal(report.pass, true);
+    assert.equal(report.checks.length, 8);
+    assert.ok(report.note.includes('does not create a VCP turn-tail consumer'));
+});
