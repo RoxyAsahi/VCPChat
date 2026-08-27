@@ -1034,10 +1034,13 @@ test('Harness Button preserves native semantics and retracts candidate styling',
         assert.equal(button.classList.contains('sm'), true);
         assert.equal(button.style.getPropertyValue('display'), 'inline-flex');
         assert.equal(button.style.getPropertyPriority('display'), 'important');
+        assert.equal(button.style.getPropertyValue('height'), '28px');
+        assert.equal(button.style.getPropertyPriority('height'), 'important');
         assert.equal(button.querySelector(':scope > .icon')?.textContent, '+');
         await release?.(); await scope.dispose('button-complete');
         assert.equal(button.getAttribute('class'), 'existing');
         assert.equal(button.style.getPropertyValue('display'), '');
+        assert.equal(button.style.getPropertyValue('height'), '');
         assert.equal(button.querySelector('.icon'), null);
     } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
 });
