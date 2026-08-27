@@ -30,6 +30,7 @@
   "check:uiux:artifacts": "node scripts/check-uiux-artifacts.mjs",
     "check:harness-reference": "node scripts/check-harness-reference-pack.mjs",
     "check:harness-parity-evidence": "node scripts/check-harness-parity-evidence.mjs",
+    "test:harness-parity-evidence": "node --test tests/harness-parity-evidence.test.mjs",
     "check:harness-contracts": "node scripts/check-harness-contracts.mjs",
     "check:harness-fixture-matrix": "node scripts/check-harness-fixture-matrix.mjs",
     "check:harness-model-picker-reference": "node scripts/check-harness-model-picker-reference.mjs",
