@@ -1298,6 +1298,10 @@
     box-shadow: none;
     font-size: 14px;
     line-height: 22px;
+    /* Row-stacking legacy rules (e.g. .modal-content input) must not leak
+       into the wrapper's centered flex box; a stray bottom margin lifts the
+       text/hover surface ~7px off the border frame. */
+    margin: 0;
 }
 
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-row-copy {
