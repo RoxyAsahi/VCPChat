@@ -100,3 +100,12 @@ test('Harness reference pack validates fixture case shape while retaining pendin
     assert.ok(matrix.cases.some(([primitive]) => primitive === 'language-row'));
     assert.ok(matrix.cases.some(([primitive]) => primitive === 'permission-row'));
 });
+
+test('JobListAction source audit preserves lifecycle and ordering evidence', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-job-list-action-source.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-job-list-action-source.json'), 'utf8'));
+    assert.equal(report.status, 'source-contract-pass');
+    assert.equal(report.pass, true);
+    assert.equal(report.checks.length, 10);
+    assert.ok(report.note.includes('does not create a VCP jobs consumer'));
+});
