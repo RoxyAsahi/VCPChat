@@ -196,6 +196,12 @@ describe('Harness production ModelSelect fixture', () => {
     const closed = await page.getByRole('menu').count() === 0
     const focusRestore = await trigger.evaluate(element => document.activeElement === element)
 
+    const missingEvidence = [
+      ...(escapePaneBack.modelRowVisible && !escapePaneBack.modelOptionsVisible ? [] : ['escape-pane-back']),
+      ...(closed ? [] : ['escape-close']),
+      ...(focusRestore ? [] : ['focus-restore']),
+    ]
+
     const evidence = {
       source: 'Harness production web ModelSelect',
       sourcePath: 'packages/client/ui-model-selection/src/client/ModelSelect.tsx',
@@ -224,7 +230,7 @@ describe('Harness production ModelSelect fixture', () => {
         focusRestore,
         dispose: false,
       },
-      missingEvidence: [],
+      missingEvidence,
       pixel: { roi: 'model-picker-menu', screenshot: 'harness-agent-model-picker.png' },
     }
     await writeFile(join(root, 'reports', 'harness-agent-model-picker.json'), `${JSON.stringify(evidence, null, 2)}\n`)

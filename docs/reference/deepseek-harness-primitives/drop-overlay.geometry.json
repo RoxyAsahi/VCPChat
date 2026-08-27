@@ -1,0 +1,13 @@
+{
+  "primitive": "DropOverlay",
+  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-attachment/src/DropOverlay.module.css",
+  "selectors": {
+    ".mask": { "position": "fixed", "inset": "0", "zIndex": "1000", "display": "flex", "alignItems": "center", "justifyContent": "center", "pointerEvents": "none", "backdropFilter": "blur(10px)" },
+    ".wrap": { "display": "flex", "flexDirection": "column", "alignItems": "center", "marginTop": "-3%", "padding": "0 40px", "textAlign": "center" },
+    ".illustration": { "width": "115px", "height": "84px" },
+    ".title": { "marginTop": "16px", "font": "var(--dsw-font-l-20)" },
+    ".desc": { "marginTop": "16px", "font": "var(--dsw-font-s-14)", "whiteSpace": "pre-wrap" }
+  },
+  "tokens": ["--dsw-alias-bg-mask-drop", "--dsw-alias-label-primary", "--dsw-alias-label-tertiary", "--dsw-font-l-20", "--dsw-font-s-14"],
+  "candidateStatus": "source-only; no VCP attachment consumer or paired visual capture"
+}
