@@ -176,6 +176,18 @@ try {
       return { url: location.href, surface: document.querySelector('.vcp-ui-showcase-root') ? 'component-showcase' : 'main', uiMode: document.documentElement.dataset.uiMode || '', theme: document.documentElement.dataset.theme || document.documentElement.dataset.themeMode || '', bodyClass: document.body.className, scroll: { x: document.documentElement.scrollWidth, y: document.documentElement.scrollHeight, clientWidth: document.documentElement.clientWidth, clientHeight: document.documentElement.clientHeight }, controls: rects, portals, stateCounts, focused, cascade: cascade(focusTarget), dom: { bodyLength: document.body.innerHTML.length, classes: [...document.body.classList], inlineStyle: document.body.getAttribute('style') || '' }, overlap, overlapPairs };
     });
     initial.cdpCascade = await captureMatchedRules('#toggleSidebarModeBtn');
+    const stateTarget = await page.$('.vcp-harness-primitive-lab button:not([disabled])');
+    if (stateTarget) {
+      await stateTarget.hover().catch(() => {});
+      await page.screenshot({ path: path.join(output, `${name}-hover.png`), fullPage: true });
+      const hoverState = await page.evaluate(() => { const el = document.querySelector('.vcp-harness-primitive-lab button:not([disabled]):hover'); if (!el) return null; const s = getComputedStyle(el); return { className: el.className, backgroundColor: s.backgroundColor, color: s.color, outline: s.outline, boxShadow: s.boxShadow }; });
+      await stateTarget.focus().catch(() => {});
+      await page.screenshot({ path: path.join(output, `${name}-focus.png`), fullPage: true });
+      const focusState = await page.evaluate(() => { const el = document.activeElement; if (!el?.closest('.vcp-harness-primitive-lab')) return null; const s = getComputedStyle(el); return { className: el.className, backgroundColor: s.backgroundColor, color: s.color, outline: s.outline, boxShadow: s.boxShadow }; });
+      initial.interactionStates = { hover: hoverState, focus: focusState };
+    } else {
+      initial.interactionStates = { hover: null, focus: null };
+    }
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
     await sleep(100);
     const scrolled = await page.evaluate(() => ({ y: window.scrollY, scrollHeight: document.documentElement.scrollHeight, viewport: innerHeight }));
