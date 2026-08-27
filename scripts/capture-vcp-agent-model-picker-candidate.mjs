@@ -116,6 +116,59 @@ try {
             optionCount: host.querySelectorAll(`${optionRoot} ${optionSelector}`).length,
             selectedOption: host.querySelector(selectedSelector)?.textContent?.trim() || null,
             disabledOptions: [...host.querySelectorAll(`${optionRoot} ${optionSelector}[aria-disabled="true"]`)].map(node => node.textContent?.trim() || null),
+            optionRects: [...host.querySelectorAll(`${optionRoot} ${optionSelector}`)].map(node => {
+                const rect = node.getBoundingClientRect();
+                return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+            }),
+            groupTitleRects: [...host.querySelectorAll(`${optionRoot} .vcp-harness-popup-select-group-title`)].map(node => {
+                const rect = node.getBoundingClientRect();
+                return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+            }),
+            groupRects: [...host.querySelectorAll(`${optionRoot} section[role="group"]`)].map(node => {
+                const rect = node.getBoundingClientRect();
+                return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+            }),
+            menuChildren: (() => {
+                const menuNode = host.querySelector('.vcp-harness-popup-select-card');
+                const viewport = menuNode?.querySelector('.vcp-harness-popup-select-viewport');
+                const viewportStyle = viewport ? getComputedStyle(viewport) : null;
+                const children = menuNode ? [...viewport?.children ?? []].map(node => {
+                    const rect = node.getBoundingClientRect();
+                    const style = getComputedStyle(node);
+                    return {
+                        tag: node.tagName.toLowerCase(),
+                        className: node.className,
+                        rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+                        marginTop: style.marginTop,
+                        marginBottom: style.marginBottom,
+                        padding: style.padding,
+                        gap: style.gap,
+                        boxSizing: style.boxSizing,
+                    };
+                }) : [];
+                return {
+                    viewport: viewport && viewportStyle ? {
+                        rect: (() => { const rect = viewport.getBoundingClientRect(); return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }; })(),
+                        height: viewportStyle.height,
+                        flex: viewportStyle.flex,
+                        flexGrow: viewportStyle.flexGrow,
+                        flexShrink: viewportStyle.flexShrink,
+                        flexBasis: viewportStyle.flexBasis,
+                        gap: viewportStyle.gap,
+                        rowGap: viewportStyle.rowGap,
+                        padding: viewportStyle.padding,
+                        boxSizing: viewportStyle.boxSizing,
+                        borderTop: viewportStyle.borderTopWidth,
+                        borderBottom: viewportStyle.borderBottomWidth,
+                        marginTop: viewportStyle.marginTop,
+                        marginBottom: viewportStyle.marginBottom,
+                        offsetHeight: viewport.offsetHeight,
+                        clientHeight: viewport.clientHeight,
+                        scrollHeight: viewport.scrollHeight,
+                    } : null,
+                    children,
+                };
+            })(),
         };
         const menu = host.querySelector('.vcp-harness-popup-select-card');
         const menuStyle = menu ? getComputedStyle(menu) : null;
@@ -124,6 +177,37 @@ try {
         }).filter(rule => rule.selectorText?.includes('.vcp-harness-popup-select-card'));
         const declaration = property => menuRules.map(rule => rule.style?.getPropertyValue(property)).find(Boolean) || null;
         const menuRect = menu?.getBoundingClientRect();
+        const modelMenuChildren = menu ? [...menu.children].map(node => {
+            const rect = node.getBoundingClientRect();
+            const style = getComputedStyle(node);
+            return {
+                tag: node.tagName.toLowerCase(),
+                className: node.className,
+                hidden: node.hidden,
+                display: style.display,
+                rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+            };
+        }) : [];
+        const modelViewportMetrics = (() => {
+            const viewport = menu?.querySelector('.vcp-harness-popup-select-viewport');
+            if (!viewport) return null;
+            const style = getComputedStyle(viewport);
+            const rect = viewport.getBoundingClientRect();
+            return {
+                scrollHeight: viewport.scrollHeight,
+                clientHeight: viewport.clientHeight,
+                rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+                display: style.display,
+                boxSizing: style.boxSizing,
+                padding: style.padding,
+                margin: style.margin,
+                gap: style.gap,
+                minHeight: style.minHeight,
+                height: style.height,
+                flex: style.flex,
+                border: `${style.borderTopWidth} ${style.borderBottomWidth}`,
+            };
+        })();
         const search = host.querySelector('.vcp-harness-popup-select-search');
         const card = host.querySelector('.vcp-harness-popup-select-card');
         if (search) search.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
@@ -150,6 +234,17 @@ try {
             returnedToRoot: host.querySelector('.vcp-harness-agent-model-picker-cell')?.hidden === false,
             effortHidden: host.querySelector('.vcp-harness-agent-model-picker-effort-list')?.hidden === true,
         };
+        const menuChildren = menu ? [...menu.children].map(node => {
+            const rect = node.getBoundingClientRect();
+            const style = getComputedStyle(node);
+            return {
+                tag: node.tagName.toLowerCase(),
+                className: node.className,
+                hidden: node.hidden,
+                display: style.display,
+                rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+            };
+        }) : [];
         picker.close();
         await new Promise(resolve => setTimeout(resolve, 0));
         const focusRestored = document.activeElement === picker.trigger;
@@ -198,6 +293,8 @@ try {
                     maxHeight: declaration('max-height'),
                     minWidth: declaration('min-width'),
                 },
+                children: modelMenuChildren,
+                viewportStyle: modelViewportMetrics,
             } : null,
             selected, efforts,
             productionConsumer: false,
