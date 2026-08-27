@@ -85,6 +85,8 @@ assert.deepEqual(report.colorPairs.map(node => node.controlId).sort(), [
 assert.ok(Array.isArray(report.promptButtons) && report.promptButtons.length >= 3, 'typed Agent prompt mode Button evidence is incomplete');
 assert.deepEqual(report.promptButtons.map(node => node.controlId), [null, null, null],
     'prompt mode Buttons must retain their original no-id contract');
+assert.deepEqual(report.promptButtons.map(node => node.ariaPressed), ['true', 'false', 'false'],
+    'prompt mode Buttons must expose the selected mode through aria-pressed');
 for (const button of report.promptButtons) {
     assert.match(button.class, /vcp-harness-button/, 'prompt mode Button must retain Harness presentation');
 }

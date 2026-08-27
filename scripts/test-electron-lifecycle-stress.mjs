@@ -736,6 +736,7 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
                     class: node.className,
                     ariaLabel: node.getAttribute('aria-label'),
                     ariaExpanded: node.getAttribute('aria-expanded'),
+                    ariaPressed: node.getAttribute('aria-pressed'),
                     disabled: Boolean(node.disabled),
                     rect: rect(node),
                     style: style(node),

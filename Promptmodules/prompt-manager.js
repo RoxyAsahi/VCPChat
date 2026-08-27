@@ -179,7 +179,9 @@ class PromptManager {
     modes.forEach((mode) => {
       const button = document.createElement("button");
       button.className = "prompt-mode-button";
+      button.type = "button";
       button.dataset.mode = mode.id;
+      button.setAttribute("aria-pressed", String(this.currentMode === mode.id));
       button.innerHTML = `
                 <span class="prompt-mode-button-icon" aria-hidden="true">${this.getModeIcon(
                   mode.id
@@ -414,8 +416,10 @@ class PromptManager {
     buttons.forEach((button) => {
       if (button.dataset.mode === this.currentMode) {
         button.classList.add("active");
+        button.setAttribute("aria-pressed", "true");
       } else {
         button.classList.remove("active");
+        button.setAttribute("aria-pressed", "false");
       }
     });
   }
