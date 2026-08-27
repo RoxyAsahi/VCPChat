@@ -1,0 +1,25 @@
+{
+  "primitive": "DiffBlock",
+  "provenance": {
+    "sources": [
+      "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/DiffBlock.tsx"
+    ]
+  },
+  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/DiffBlock.module.css",
+  "root": { "tag": "div", "class": "block", "dataDiff": "", "positioning": "relative" },
+  "children": [
+    { "tag": "button", "class": "copyButton", "type": "button", "action": "copy rendered rows" },
+    { "tag": "div", "class": "body", "children": ["path", "gap?", "del?", "add?", "expand?"] },
+    { "tag": "div", "class": "footer", "text": "added/removed/file summary" }
+  ],
+  "rowSemantics": {
+    "path": { "tag": "div", "class": "path", "fontWeight": 600 },
+    "gap": { "tag": "div", "class": "gap" },
+    "del": { "tag": "div", "class": "del", "prefix": "- " },
+    "add": { "tag": "div", "class": "add", "prefix": "+ " },
+    "expand": { "tag": "button", "class": "expand", "type": "button", "ariaExpanded": "expanded state", "ariaLabel": "localized hidden-line count" }
+  },
+  "states": ["empty-null", "default", "collapsed", "expanded", "copy-success", "dispose"],
+  "aria": ["native button semantics", "expand control exposes aria-expanded and aria-label", "diff signs remain textual as well as color-coded"],
+  "vcpDeviation": "Candidate uses Light-DOM vcp-harness-diff-* classes, injected Copy callback, and restores the host children on dispose; it does not consume chat or tool state."
+}
