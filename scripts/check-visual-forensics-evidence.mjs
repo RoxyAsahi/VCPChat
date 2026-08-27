@@ -29,6 +29,8 @@ for (const dir of targets) {
     assert.equal(manifest.lifecycle?.removedOnClose, true);
     assert.equal(manifest.lifecycle?.reopened, true);
     assert.ok(manifest.settingsContext?.controls?.length > 0);
+    assert.equal(manifest.settingsContext?.sections?.length, 8);
+    assert.ok(manifest.settingsContext.sections.every(section => section.activeId && section.visibleControls > 0));
     assert.ok(manifest.overlays?.menu?.rect && manifest.overlays?.modal?.open && manifest.overlays?.tooltip?.open);
     assert.equal(manifest.observations?.length, requiredViewports.length);
     for (const [width, height] of requiredViewports) {

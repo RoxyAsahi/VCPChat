@@ -35,6 +35,30 @@
       "trigger": "resize(narrow); resize(original)",
       "screenshotSuffix": "restored",
       "selectors": [".vcp-ui-showcase-shell"]
+    },
+    {
+      "id": "showcase-scroll-owner",
+      "trigger": "scroll(owner, bottom)",
+      "screenshotSuffix": "scrolled",
+      "selectors": [".vcp-ui-showcase-shell", ".vcp-ui-page-shell-content"]
+    },
+    {
+      "id": "showcase-narrow-resize",
+      "trigger": "resize(width - 240)",
+      "screenshotSuffix": "narrow",
+      "selectors": [".vcp-ui-showcase-shell"]
+    },
+    {
+      "id": "showcase-hover",
+      "trigger": "hover(real element handle)",
+      "screenshotSuffix": "hover",
+      "selectors": [".vcp-harness-primitive-lab button"]
+    },
+    {
+      "id": "showcase-focus-visible",
+      "trigger": "keyboard Tab/Shift+Tab focus",
+      "screenshotSuffix": "focus",
+      "selectors": [".vcp-harness-primitive-lab button", ":focus-visible"]
     }
   ]
 }

@@ -115,8 +115,18 @@ try {
         const r = node.getBoundingClientRect(); const s = getComputedStyle(node);
         return { tag: node.tagName.toLowerCase(), id: node.id, className: node.className, parentClass: node.parentElement?.className || '', rect: { x: r.x, y: r.y, width: r.width, height: r.height }, display: s.display, color: s.color, backgroundColor: s.backgroundColor };
       });
+    const sectionIds = ['user-identity', 'server-connection', 'appearance-settings', 'render-settings', 'selection-assistant', 'voice-settings', 'advanced-features', 'quick-actions'];
+    const sections = [];
+    for (const sectionId of sectionIds) {
+      const tab = modal?.querySelector(`#vcpSettingsTab-${sectionId}`);
+      tab?.click();
+      await new Promise(resolve => setTimeout(resolve, 20));
+      const active = modal?.querySelector('.settings-section.active');
+      const visibleControls = [...(active?.querySelectorAll('input, select, textarea, button, wa-input, wa-select') || [])].filter(node => node.getClientRects().length);
+      sections.push({ sectionId, activeId: active?.id || '', visibleControls: visibleControls.length, rect: active ? (() => { const r = active.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })() : null });
+    }
     await window.uiHelperFunctions?.closeModal?.('globalSettingsModal');
-    return { opened: Boolean(modal?.classList.contains('active') || modal), rowCount: rows.length, rows, controls, shell: shellStyle };
+    return { opened: Boolean(modal?.classList.contains('active') || modal), rowCount: rows.length, rows, controls, shell: shellStyle, sections };
   }).catch(error => ({ error: error.message }));
   evidence.settingsContext = settingsContext;
   if (settingsContext.error || (settingsContext.rowCount === 0 && settingsContext.controls?.length === 0)) evidence.gate.failures.push(`settings context: ${JSON.stringify(settingsContext)}`);
