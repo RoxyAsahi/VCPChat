@@ -163,6 +163,38 @@ test('Harness AgentModelPicker maps provider metadata and retracts its popup own
     } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
 });
 
+test('Harness AgentModelPicker drops late effort settlements after close and reopen', async () => {
+    const dom = new JSDOM('<!doctype html><main><div id="host"></div></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('agent-model-picker-late-effort-test'));
+        const host = document.getElementById('host');
+        let resolveEffort;
+        const effortSettled = new Promise(resolve => { resolveEffort = resolve; });
+        const controller = mountAgentModelPicker(host, {
+            efforts: [{ id: 'high', label: 'High' }, { id: 'max', label: 'Max' }],
+            options: async () => [],
+            onSelect: () => {},
+            onEffortSelect: async () => effortSettled,
+        }, scope);
+        controller.open();
+        controller.setPane('effort');
+        const selected = controller.root.querySelector('.vcp-harness-agent-model-picker-option');
+        assert.ok(selected);
+        selected.click();
+        controller.close();
+        controller.open();
+        controller.setPane('effort');
+        resolveEffort();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.equal(controller.root.querySelector('.vcp-harness-agent-model-picker-effort-list')?.hidden, false,
+            'a late effort result must not switch a reopened picker back to root');
+        await controller.dispose();
+        await scope.dispose('agent-model-picker-late-effort-complete');
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
+
 test('Harness Pill preserves static and native interactive semantics and retracts cleanly', async () => {
     const dom = new JSDOM('<!doctype html><main><span id="static">Static</span><button id="interactive">Active</button></main>');
     const previousDocument = globalThis.document; const previousWindow = globalThis.window;
