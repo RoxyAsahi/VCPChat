@@ -366,3 +366,7 @@ roadmap checkpoint 追加于 `38ec8bb8`。
 - 退役前证据清单（E1-E6，落盘台账批次 16 段落）：E1 渲染 `#globalSettingsForm` 的入口面清单与 uiMode≠next 排除证明；E2 冷启动 `vcpSettingsRevision` 先于模态可打开的确定性断言 + 首开全 id == snapshot 扩容；E3 部分挂载失败契约定义（typed readiness 门禁拒绝半挂载 shell）；E4 global-settings-updated 全 source 路由等价盘点（临时插桩按协议剥离）；E5 reload durable restore 断言集扩至全部原兜底 id；E6 source-equivalence 负向守护（被删 id 再现第二写入方即失败）。
 - 施工裁定：本批不删兜底代码；下一批可独立推进 E2/E5 journey 断言扩容与 E4 source 盘点。docs-only——代码面自 3bc85d98 起零变更，不重跑门禁；win32/Linux packaged evidence 维持 evidence-pending。
 - 台账：§7 追加批次 16 段落；roadmap 追加 R2-02E checkpoint。
+
+### 2026-08-27 补记（用户实机反馈修复）：input-wrap 内部 margin 泄漏
+
+用户运行真实实例报告：非 appearance 各 tab 的文本输入框提示文字/hover 面整体上浮约 7px 与外框错位。隔离探针逐 tab 取证定位：`globalSettingsModal` 的 modal-content 容器存在 row-stacking legacy 规则 `.modal-content input { margin-bottom: 15px }`，harness 契约覆盖了 padding/border/height 但漏掉了 margin；15px 下边距参与 wrap 的 flex 居中计算后内容被顶高 7.5px。修复为在 `.vcp-harness-input-wrap > :is(input, textarea)` 归零 `margin: 0`（settings.css）。探针复测：29/29 包裹输入框对齐；Electron journey 18 PASS、source-equivalence 通过。同轮发现 assistantAgent 在无 agent 配置时仅剩占位 option → 裸 select 无 primitive 包装的退化态，与用户「部分 select 点不开」观感相关，留待批次 13 一并处理。
