@@ -1,0 +1,23 @@
+{
+  "source": [
+    "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-agent-preset/src/client/AgentPresetSeat.tsx",
+    "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-agent-preset/src/client/PresetMenu.tsx"
+  ],
+  "productionConsumers": [
+    "packages/client/ui-conversation/src/client/hero/NewConversationHero.tsx"
+  ],
+  "harnessContract": {
+    "tree": "Menu(portal=true, align=start) > button.seat[aria-haspopup=menu][aria-expanded] > agent-preset-outline svg[aria-hidden=true] + staged label + chevron svg[aria-hidden=true]; menu item > name + description",
+    "stateOwner": "calling surface owns open, selectedId, busy, roster and error; Menu only projects presentation",
+    "states": ["closed", "open", "selected", "hover", "focus", "busy-disabled", "error-title", "empty-description", "roster-rebuild"],
+    "dispose": "the surface owner retracts the portal/listeners and restores the supplied trigger"
+  },
+  "vcpCandidate": {
+    "source": "modules/uiux/primitives/agent-preset-seat.ts",
+    "host": "modules/uiux/lab/primitive-lab.ts",
+    "maturity": "candidate-interaction-active",
+    "stableApi": false,
+    "productionConsumer": "none; the VCP assistantAgent/chat switching chain is frozen and intentionally untouched",
+    "pixelDiff": "pending-same-semantic-harness-fixture"
+  }
+}
