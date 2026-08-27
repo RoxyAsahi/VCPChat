@@ -98,6 +98,8 @@
 
 2026-08-27 DirectoryBrowser slow-scan checkpoint：listing owner 增加 300ms 静默窗口；快速响应不产生 Loading 闪烁，慢响应才在 content 角落显示状态，新的导航或 close/reopen/dispose 会取消旧定时器。focused generated-artifact test 已验证快/慢两条路径。状态保持 `foundation-electron-active`，下一缺口收敛为 Harness draft preview/prefix filter、two-leg landing、same-semantic pixel diff 与 VCP production consumer。
 
+2026-08-27 DirectoryBrowser draft-prefix checkpoint：路径编辑现在会在 Light DOM 内即时重绘当前 pane 的最后路径段前缀；命中时收窄列表，无匹配时保留原列表，避免编辑过程出现空白 pane；输入仍不会触发 host listing，Enter 才提交导航。focused artifact test 覆盖命中、无匹配与 Escape 恢复。该切片尚未实现 Harness draft directory debounce、two-leg landing 或同语义 pixel diff，状态仍为 `foundation-electron-active`。
+
 本批次不解冻聊天内核、消息渲染、Composer 内部、协议、IPC、持久化、Plugin Loader、chat manifest 或动态壁纸。Harness conversation/tool/markdown 控件可以在实验室复刻，但不得借实验室接入改变这些冻结边界。
 
 ## 0.3 上位规范到执行批次的映射

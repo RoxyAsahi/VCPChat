@@ -119,7 +119,14 @@ export function mountDirectoryBrowser(props, scope) {
             createRequest += 1;
             sync();
         } } }, browserScope);
-    const visible = (entries) => entries.filter(entry => showHidden || !entry.hidden);
+    const visible = (entries, prefix = '') => {
+        const needle = prefix.toLowerCase();
+        const base = entries.filter(entry => showHidden || !entry.hidden);
+        if (!needle)
+            return base;
+        const matches = base.filter(entry => entry.name.toLowerCase().startsWith(needle));
+        return matches.length ? matches : base;
+    };
     const sync = () => {
         crumbs.replaceChildren();
         const source = child ?? parent;
@@ -131,7 +138,7 @@ export function mountDirectoryBrowser(props, scope) {
             input.value = pathDraft;
             input.setAttribute('aria-label', 'Folder path');
             input.disabled = busy || loading || creating || createOpen;
-            browserScope.listen(input, 'input', () => { pathDraft = input.value; });
+            browserScope.listen(input, 'input', () => { pathDraft = input.value; sync(); });
             browserScope.listen(input, 'keydown', event => { const key = event.key; if (key === 'Escape') {
                 event.preventDefault();
                 event.stopPropagation();
@@ -160,14 +167,15 @@ export function mountDirectoryBrowser(props, scope) {
             crumbs.append(edit);
         }
         columns.replaceChildren();
-        const renderColumn = (listing, current, onPick) => { const column = document.createElement('div'); column.className = 'vcp-directory-browser-column'; visible(listing.entries).forEach(entry => { const row = document.createElement('button'); row.type = 'button'; row.className = 'vcp-directory-browser-row'; row.setAttribute('aria-current', String(current?.path === entry.path)); row.disabled = busy || loading || creating || createOpen; const icon = document.createElement('span'); icon.className = 'vcp-directory-browser-row-icon vcp-ui-icon'; icon.setAttribute('aria-hidden', 'true'); icon.textContent = current?.path === entry.path ? 'folder-open' : 'folder'; const name = document.createElement('span'); name.className = 'vcp-directory-browser-row-name'; name.textContent = entry.name; row.append(icon, name); browserScope.listen(row, 'click', () => onPick(entry)); column.append(row); }); columns.append(column); };
+        const draftPrefix = editingPath ? pathDraft.slice(Math.max(pathDraft.lastIndexOf('/'), pathDraft.lastIndexOf('\\')) + 1) : '';
+        const renderColumn = (listing, current, onPick, prefix = '') => { const column = document.createElement('div'); column.className = 'vcp-directory-browser-column'; visible(listing.entries, prefix).forEach(entry => { const row = document.createElement('button'); row.type = 'button'; row.className = 'vcp-directory-browser-row'; row.setAttribute('aria-current', String(current?.path === entry.path)); row.disabled = busy || loading || creating || createOpen; const icon = document.createElement('span'); icon.className = 'vcp-directory-browser-row-icon vcp-ui-icon'; icon.setAttribute('aria-hidden', 'true'); icon.textContent = current?.path === entry.path ? 'folder-open' : 'folder'; const name = document.createElement('span'); name.className = 'vcp-directory-browser-row-name'; name.textContent = entry.name; row.append(icon, name); browserScope.listen(row, 'click', () => onPick(entry)); column.append(row); }); columns.append(column); };
         if (parent)
-            renderColumn(parent, selected, pick);
+            renderColumn(parent, selected, pick, child ? '' : draftPrefix);
         if (selected && child) {
             const divider = document.createElement('span');
             divider.className = 'vcp-directory-browser-divider';
             columns.append(divider);
-            renderColumn(child, null, advance);
+            renderColumn(child, null, advance, draftPrefix);
         }
         status.textContent = slowLoading ? 'Loading…' : parent?.truncated || child?.truncated ? 'Some entries are not shown.' : '';
         status.hidden = status.textContent === '';

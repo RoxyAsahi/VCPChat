@@ -114,6 +114,16 @@ test('Harness DirectoryBrowser foundation aborts stale listings and retracts on 
         await delay(0);
         assert.equal(document.querySelector('.vcp-directory-browser-status')?.hidden, true, 'fast initial listing must not flash a loading status');
         assert.equal(document.querySelectorAll('.vcp-directory-browser-row').length, 1);
+        document.querySelector('.vcp-directory-browser-path-edit').click();
+        const previewInput = document.querySelector('.vcp-directory-browser-path-input');
+        previewInput.value = '/home/pro';
+        previewInput.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+        assert.deepEqual([...document.querySelectorAll('.vcp-directory-browser-row-name')].map(node => node.textContent), ['projects'], 'matching final path segment must prefix-filter the active pane');
+        previewInput.value = '/home/no-match';
+        previewInput.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+        assert.deepEqual([...document.querySelectorAll('.vcp-directory-browser-row-name')].map(node => node.textContent), ['projects'], 'unmatched draft must preserve the readable pane');
+        previewInput.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        assert.equal(document.querySelector('.vcp-directory-browser-path-input'), null);
         document.querySelector('.vcp-directory-browser-hidden').click();
         assert.equal(document.querySelectorAll('.vcp-directory-browser-row').length, 2);
         document.querySelector('.vcp-directory-browser-row').click();

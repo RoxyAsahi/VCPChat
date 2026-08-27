@@ -16,6 +16,7 @@
     "status": "foundation-electron-active",
     "nestedCreate": "fixed-viewport Electron evidence: 380px child dialog, 44px input, parent inert, Escape retracts child, injected create selects result",
     "slowScan": "generated artifact focused evidence: fast listing stays silent; Loading status appears only after 300ms and is cancelled on close/reopen/dispose",
+    "draftPrefix": "generated artifact focused evidence: editing input locally filters the active pane by final segment; unmatched prefixes preserve the readable list",
     "pixelDiff": "pending-same-semantic-harness-fixture"
   }
 }
