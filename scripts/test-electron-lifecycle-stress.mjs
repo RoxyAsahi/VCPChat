@@ -725,6 +725,7 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
                     selects: pick('#agentSettingsForm .vcp-harness-select'),
                     selectNodes: pick('#agentSettingsForm select.vcp-harness-select-native'),
                     actions: pick('#agentSettingsForm button.vcp-harness-button'),
+                    colorPairs: pick('#agentSettingsForm .vcp-uiux-color-pair'),
                 };
             });
             evidence.agentSelectInteraction = agentSelectInteractionEvidence;

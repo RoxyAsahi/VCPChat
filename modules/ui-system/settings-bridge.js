@@ -523,6 +523,7 @@ function enhanceForm(form) {
     mountTypedAgentNumericInputs(form);
     mountTypedAgentStreamChoice(form);
     mountTypedAgentTtsSpeedRange(form);
+    mountTypedAgentColorPairs(form);
     mountTypedAgentButtons(form);
     mountHarnessSelects(form);
     form.querySelectorAll('.agent-settings-section, .group-settings-section').forEach(section => {
@@ -707,6 +708,25 @@ function mountTypedAgentTtsSpeedRange(form) {
     } catch (error) {
         console.warn('[VCPUI SettingsBridge] Could not mount typed Agent TTS speed Range:', error);
     }
+}
+
+function mountTypedAgentColorPairs(form) {
+    const api = window.VCPUIUX;
+    if (!api?.mountColorPair) return;
+    const scope = ensurePresentationScope();
+    if (!scope) return;
+    [
+        ['#agentAvatarBorderColor', '#agentAvatarBorderColorText', 'agent-avatar-border-color'],
+        ['#agentNameTextColor', '#agentNameTextColorText', 'agent-name-text-color'],
+    ].forEach(([colorSelector, textSelector, key]) => {
+        const color = form?.querySelector?.(colorSelector);
+        const text = form?.querySelector?.(textSelector);
+        if (!color || !text || color.dataset.vcpTypedPrimitiveMounted === 'true') return;
+        const release = api.mountColorPair(color, text, scope);
+        color.dataset.vcpTypedPrimitiveMounted = 'true';
+        scope.own(() => { delete color.dataset.vcpTypedPrimitiveMounted; }, `typed-${key}-marker`, 'ui-primitive');
+        if (release) scope.own(release, `typed-${key}`, 'ui-primitive');
+    });
 }
 
 // Lucide icon names for the global settings categories. Icons are always

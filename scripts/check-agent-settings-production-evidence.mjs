@@ -78,6 +78,10 @@ assert.deepEqual(report.actions.map(node => node.controlId).sort(), [
 ].sort().concat([null]).sort(), 'Agent action evidence must include the four canonical id buttons and the submit action');
 assert.equal(report.actions.filter(node => node.controlId === 'resetAvatarColorsBtn').length, 1,
     'Avatar color reset action must have exactly one mounted Button projection');
+assert.ok(Array.isArray(report.colorPairs) && report.colorPairs.length >= 2, 'typed Agent ColorPair evidence is incomplete');
+assert.deepEqual(report.colorPairs.map(node => node.controlId).sort(), [
+    'agentAvatarBorderColor', 'agentNameTextColor',
+].sort(), 'typed Agent ColorPair evidence must target both canonical color inputs');
 for (const action of report.actions) {
     assert.match(action.class, /vcp-harness-button/, `Agent action ${action.controlId} must retain Harness Button presentation`);
     assert.ok(Array.isArray(action.style?.displayRules), `Agent action ${action.controlId} must report authored display rules`);
