@@ -662,10 +662,76 @@
 
     /* Keyboard a11y ring for bare controls only. Controls inside a Harness
        wrap must stay excluded: the wrapper owns the focus border surface,
-       and a second outline on the inner input renders as a stray halo. */
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm :is(input, select, textarea, button):focus-visible:not(:is(.vcp-harness-input-wrap > *, .vcp-harness-select-wrap > *, .vcp-harness-choice-wrap > *)) {
+       and a second outline on the inner input renders as a stray halo.
+       .vcp-settings-bare-select gets the full control contract below. */
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm :is(input, select, textarea, button):focus-visible:not(:is(.vcp-harness-input-wrap > *, .vcp-harness-select-wrap > *, .vcp-harness-choice-wrap > *, .vcp-settings-bare-select, input[type="color"])) {
         outline: 2px solid var(--vcp-ui-focus-ring);
         outline-offset: 2px;
+    }
+
+    /* Bare-select fallback: a select no primitive covered yet (e.g.
+       #assistantAgent before the agent list populates) must still meet the
+       control contract instead of rendering as a borderless native box.
+       Carries both #globalSettingsModal and #globalSettingsForm so it
+       out-ranks the form-level "border: 1px solid transparent" legacy
+       reset above, which would otherwise keep the box invisible. */
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal #globalSettingsForm .vcp-settings-bare-select {
+        min-height: 32px;
+        padding: 0 10px;
+        border: 1px solid var(--vcp-ui-control-border, var(--vcp-ui-border));
+        border-radius: 8px;
+        background: var(--vcp-ui-control-bg, var(--vcp-ui-bg-1));
+        color: var(--vcp-ui-text-0, inherit);
+        font-size: 14px;
+        line-height: 22px;
+    }
+
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal #globalSettingsForm .vcp-settings-bare-select:is(:focus-visible, :focus) {
+        border-color: var(--vcp-ui-control-focus, var(--vcp-ui-border-strong));
+        box-shadow: 0 0 0 3px var(--vcp-ui-focus-ring);
+        outline: none;
+    }
+
+    /* ColorPair adoption: the primitive's stylesheet hooks --vcp-color-border
+       but the settings surface never fed it a token, so the text half kept
+       its legacy gray and had no focus feedback. Thread the token through,
+       and drive the focus border by overriding the variable on :focus-within.
+       The variable override (not border-color) is load-bearing: this whole
+       sheet lives in @layer vcp-ui.components, and layered declarations lose
+       to the primitive's unlayered inline stylesheet no matter how specific
+       they are — but no unlayered rule declares the custom property itself. */
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal {
+        --vcp-color-border: var(--vcp-ui-control-border, var(--vcp-ui-border));
+    }
+
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal #globalSettingsForm .vcp-uiux-color-pair:focus-within {
+        --vcp-color-border: var(--vcp-ui-control-focus, var(--vcp-ui-border-strong));
+    }
+
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal #globalSettingsForm .vcp-uiux-color-pair input[type="text"]:is(:focus-visible, :focus) {
+        box-shadow: 0 0 0 3px var(--vcp-ui-focus-ring);
+        outline: none;
+    }
+
+    /* Typed primitive wraps (.vcp-uiux-input-wrap / .vcp-uiux-color-pair)
+       flex-center their inner control, so the legacy
+       `.modal-content input { margin-bottom: 15px }` margin leaks into the
+       centering math and lifts the input ~7px out of the wrap — the same
+       "placeholder/text sits high" defect already fixed for harness wraps.
+       Zero it at matching strength. */
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm :is(.vcp-uiux-input-wrap, .vcp-uiux-color-pair) > :is(input, textarea) {
+        margin: 0;
+    }
+
+    /* The avatar file picker is driven by its overlay label; the raw native
+       widget must not render as an unstyled box under the avatar. */
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope .agent-avatar-wrapper > input[type="file"] {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: 0;
+        opacity: 0;
+        pointer-events: none;
     }
 
     /* ---- switches ---- */
@@ -2024,12 +2090,19 @@
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal [data-vcp-style="40"] { color: var(--text-on-accent); margin-top: 5px; display: block; }
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal [data-vcp-style="41"] { display: none; margin-bottom: 15px; }
 
-/* Body-level primitive portal menus must stack above the settings overlay.
-   The generated select primitive appends its menu to document.body with a
-   hard-coded z-index (1100); the unified settings overlay sits at
-   var(--vcp-ui-z-overlay) (1400), so with the modal open every appearance
-   select menu rendered invisibly behind it ("selects cannot be opened").
-   Lift them above the overlay only while the settings host is active. */
-:is(html, html.vcp-global-settings-host) > body .vcp-uiux-primitive-menu {
-    z-index: calc(var(--vcp-ui-z-overlay) + 10);
+/* Body-level portal menus must stack above the settings overlay.  Both menu
+   implementations append their open menu to document.body with a hard-coded
+   z-index (1100): the generated select primitive (.vcp-uiux-primitive-menu)
+   and the bridge's own Harness select (.vcp-harness-menu-portal, which only
+   carries the 1100 rule while it lives inside the modal subtree).  The
+   unified settings overlay sits at var(--vcp-ui-z-overlay) (1400), so with
+   the modal open every menu rendered invisibly behind it ("selects cannot
+   be opened").  Lift body-level menus above the overlay only while the
+   settings host is active; in-modal portals already inherit the overlay's
+   stacking context and need no lift.  The var() fallback matters because
+   the vcp-ui tokens are declared on .vcp-ui-scope subtrees and cannot be
+   resolved by body-level elements. */
+:is(html, html.vcp-global-settings-host) > body .vcp-uiux-primitive-menu,
+:is(html, html.vcp-global-settings-host) > body .vcp-harness-menu-portal {
+    z-index: calc(var(--vcp-ui-z-overlay, 1400) + 10);
 }

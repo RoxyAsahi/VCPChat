@@ -24,6 +24,19 @@ if (process.env.VCPCHAT_BOOTSTRAP_OPERATION_ID && process.env.VCPCHAT_STATE_DIR)
     });
 }
 
+// 托管/打包启动或调试器附着时，stdout/stderr 是管道；读取端（终端、父进程）
+// 先退出后，任何 console 输出都会以 write EPIPE 抛错。管道式 stdio 在 Node 里
+// 报错走事件而不是同步抛出，这里吞掉 EPIPE 防止普通日志升级成未捕获异常
+// （VCPLog onerror 里的 console.error 即因此把连接错误顶成了崩溃）。
+for (const stdioStream of [process.stdout, process.stderr]) {
+    if (stdioStream && typeof stdioStream.on === 'function') {
+        stdioStream.on('error', (streamError) => {
+            if (streamError && streamError.code === 'EPIPE') return;
+            throw streamError;
+        });
+    }
+}
+
 function reportLauncherProgress(stage, progress, message) {
     if (process.env.VCP_LAUNCHER_PROTOCOL !== '1') return;
     const payload = JSON.stringify({ stage, progress, message });
