@@ -46,12 +46,12 @@ assert.match(report.dom, /<button(?=[^>]*id="resetAvatarColorsBtn")(?=[^>]*style
 assert.match(report.dom, /<button[^>]*type="submit"[^>]*class="[^"]*vcp-harness-button[^\"]*"/,
     'Agent save action must retain submit semantics after Button mounting');
 
-assert.ok(Array.isArray(report.inputs) && report.inputs.length >= 7, 'typed Agent Input evidence is incomplete');
-assert.ok(Array.isArray(report.inputNodes) && report.inputNodes.length >= 7, 'native Agent Input style evidence is incomplete');
+assert.ok(Array.isArray(report.inputs) && report.inputs.length >= 9, 'typed Agent Input evidence is incomplete');
+assert.ok(Array.isArray(report.inputNodes) && report.inputNodes.length >= 9, 'native Agent Input style evidence is incomplete');
 assert.deepEqual(report.inputNodes.map(node => node.id).sort(), [
     'agentContextTokenLimit', 'agentMaxOutputTokens', 'agentModel', 'agentNameInput', 'agentTemperature', 'agentTopK', 'agentTopP',
     'agentTtsRegexPrimary', 'agentTtsRegexSecondary',
-].sort(), 'typed Agent Input evidence must target the seven canonical fields');
+].sort(), 'typed Agent Input evidence must target the nine canonical fields');
 assert.deepEqual((report.regexInputs ?? []).map(node => node.id).sort(), ['agentTtsRegexPrimary', 'agentTtsRegexSecondary'],
     'typed Agent TTS regex Input evidence must target both canonical regex fields');
 for (const node of report.inputNodes) {
