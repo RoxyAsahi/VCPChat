@@ -23,4 +23,7 @@
   "modelPaneItem": { "tag": "button", "role": "menuitem", "class": "option", "children": ["span.optionCopy > span.modelName", "span.description?", "span.check?"] },
   "states": ["available", "locked", "loading", "load-error-retry", "selecting", "selection-error-toast", "empty", "outside-dismiss", "escape-pane-back", "escape-close"],
   "escapeContract": "owner intercepts Escape in model/effort panes; root pane delegates to popup dismiss and restores trigger focus"
+  , "vcpDeviation": {
+    "rootTag": { "harness": "div", "vcp": "span", "reason": "Candidate mount preserves the injected host as a Light-DOM inline seat wrapper; no business node is replaced." }
+  }
 }

@@ -29,6 +29,7 @@ test('Model picker diff stays pending until a Harness capture exists', () => {
     assert.equal(report.dom.ariaContractPass, true);
     assert.equal(report.dom.structuralPass, false);
     assert.ok(report.missingEvidence.includes('Candidate DOM/ARIA structural contract'));
+    assert.equal(report.dom.deviations[0].declared, true);
     assert.ok(report.missingEvidence.includes('Harness ModelSelect browser capture (DOM + computed style)'));
     assert.ok(report.missingEvidence.includes('Candidate computed-style contract'));
 });

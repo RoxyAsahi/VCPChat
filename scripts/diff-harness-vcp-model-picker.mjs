@@ -44,6 +44,8 @@ try {
     ];
     report.dom.structuralChecks = structuralChecks.map(check => ({ ...check, pass: check.expected === '>0' ? Number(check.actual) > 0 : check.actual === check.expected }));
     report.dom.structuralPass = report.dom.structuralChecks.every(check => check.pass);
+    const rootDeviation = expectedDom.vcpDeviation?.rootTag;
+    report.dom.deviations = rootDeviation ? [{ contract: 'root.tag', ...rootDeviation, observed: rootNode?.tagName.toLowerCase() ?? null, declared: rootDeviation.vcp === (rootNode?.tagName.toLowerCase() ?? null) }] : [];
     const expected = geometry.selectors;
     const actual = {
         '.trigger': candidate.trigger ?? {},
