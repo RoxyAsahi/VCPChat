@@ -20,7 +20,9 @@ const dom = new JSDOM(`<!doctype html><html data-ui-mode="next"><body class="dar
         <output id="appearanceSidebarRowHeightValue">46px</output>
         <input type="range" id="appearanceSidebarAvatarSize" min="20" max="52" value="32">
         <output id="appearanceSidebarAvatarSizeValue">32px</output>
-        <select id="appearanceSidebarRadius"><option value="tuned">原设计</option><option value="medium">中</option><option value="round">大</option></select>
+        <input type="radio" id="appearanceSidebarRadiusChoice-tuned" name="appearanceSidebarRadiusChoice" value="tuned" checked>
+        <input type="radio" id="appearanceSidebarRadiusChoice-medium" name="appearanceSidebarRadiusChoice" value="medium">
+        <input type="radio" id="appearanceSidebarRadiusChoice-round" name="appearanceSidebarRadiusChoice" value="round">
         <input type="range" id="appearanceCustomRadius" min="0" max="32" value="10">
         <output id="appearanceCustomRadiusValue">10px</output>
         <select id="appearanceSurface"><option value="solid">实色</option><option value="translucent">主题</option><option value="custom">自定义</option></select>
@@ -383,10 +385,13 @@ assert.equal(window.globalSettings.showHomeVisualBrand, false);
 assert.equal(window.globalSettings.showHomeVisualTagline, false);
 assert.equal(window.globalSettings.homeVisualTagline, '为想象力打开新的边界');
 assert.equal(document.getElementById('showHomeVisualBrand').checked, false);
-assert.equal(document.getElementById('appearanceSidebarRowHeightValue').value, '54px');
-assert.equal(document.getElementById('appearanceSidebarAvatarSizeValue').value, '40px');
-assert.equal(document.getElementById('appearanceSidebarRadius').value, 'tuned');
-assert.equal(document.getElementById('appearanceCustomRadiusValue').value, '14px');
+// <output> values are projected by the typed Range primitive through
+// settings-bridge; this fixture mounts no primitives, so assert the
+// canonical business inputs the studio owner writes back.
+assert.equal(document.getElementById('appearanceSidebarRowHeight').value, '54');
+assert.equal(document.getElementById('appearanceSidebarAvatarSize').value, '40');
+assert.equal(document.getElementById('appearanceSidebarRadiusChoice-tuned').checked, true, 'studio save projects sidebar radius back onto the visible choice group');
+assert.equal(document.getElementById('appearanceCustomRadius').value, '14');
 assert.equal(document.getElementById('chatLayoutModeWide').checked, true);
 assert.equal(window.globalSettings.appearanceProfile.radius, 'round');
 assert.deepEqual(window.chatAPI.appliedColorThemes, ['themes森林.css']);

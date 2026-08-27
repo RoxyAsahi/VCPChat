@@ -638,7 +638,7 @@ function mountTypedForumFieldOwner(root, form) {
     if (!service?.save?.execute) return;
     const controls = ['adminUsername', 'adminPassword'].map(id => form.querySelector(`#${id}`)).filter(Boolean);
     if (controls.length !== 2) return;
-    const state = { form, timer: null, pending: false, inFlight: null, disposed: false };
+    const state = { form, timer: null, pending: false, inFlight: null, disposed: false, failed: false };
     const status = () => root.querySelector('.vcp-settings-autosave-status');
     const run = async () => {
         state.timer = null;
@@ -653,11 +653,13 @@ function mountTypedForumFieldOwner(root, form) {
             const result = await state.inFlight;
             if (state.disposed) return;
             if (!result?.success) {
+                state.failed = true;
                 form.dataset.vcpSettingsDirty = 'true';
                 status()?.setAttribute('data-state', 'error');
                 if (status()) status().textContent = '保存失败 · 重试';
                 form.dispatchEvent(new CustomEvent('vcp-settings-save-result', { detail: { success: false, error: result?.error || '论坛配置保存失败', owner: 'typed-forum-field-owner' } }));
             } else {
+                state.failed = false;
                 if (!state.pending) delete form.dataset.vcpSettingsDirty;
                 status()?.setAttribute('data-state', 'saved');
                 if (status()) status().textContent = '已保存';
@@ -665,6 +667,7 @@ function mountTypedForumFieldOwner(root, form) {
             }
         } catch (error) {
             if (!state.disposed) {
+                state.failed = true;
                 form.dataset.vcpSettingsDirty = 'true';
                 status()?.setAttribute('data-state', 'error');
                 if (status()) status().textContent = '保存失败 · 重试';
@@ -682,7 +685,11 @@ function mountTypedForumFieldOwner(root, form) {
         state.timer = setTimeout(run, 400);
     };
     const onInput = event => { if (controls.includes(event.target)) schedule(); };
-    const onStatusClick = () => { if (status()?.dataset.state === 'error') schedule(); };
+    // Retry clicks belong to whichever owner produced the current error.
+    // Routing them unconditionally turns a legacy autosave failure into a
+    // spurious forum save instead of retrying the failed field.
+    const ownsError = () => state.failed && status()?.dataset.state === 'error';
+    const onStatusClick = () => { if (ownsError()) schedule(); };
     state.run = run;
     controls.forEach(control => control.addEventListener('input', onInput));
     controls.forEach(control => control.addEventListener('change', onInput));
@@ -880,20 +887,29 @@ function mountSettingsAutosave(root, form) {
     };
     const onInput = event => {
         if (!event.target?.matches?.('input, select, textarea')) return;
+        // Forum fields carry the same suppression marker as typed settings
+        // fields; otherwise typing there also drives this whole-form
+        // autosave chain and both owners fight over one status bar.
         if (event.target.dataset.vcpTypedFieldOwner === 'true') return;
+        if (event.target.dataset.vcpTypedForumFieldOwner === 'true') return;
         schedule();
     };
     const onResult = event => {
         if (event.detail?.owner === 'typed-settings-field-owner') return;
         state.saving = false;
         if (event.detail?.success) {
+            delete state.failureOwner;
             delete form.dataset.vcpSettingsDirty;
             setStatus('已保存', 'saved');
             if (state.pending) schedule();
-        } else setStatus('保存失败 · 重试', 'error');
+        } else {
+            // Remember which owner failed so retry clicks can be routed.
+            state.failureOwner = event.detail?.owner || 'legacy-autosave';
+            setStatus('保存失败 · 重试', 'error');
+        }
     };
     const onStatusClick = () => {
-        if (form.dataset.vcpTypedForumFieldOwnerMounted === 'true') return;
+        if (state.failureOwner === 'typed-forum-field-owner') return;
         if (status.dataset.state === 'error') schedule();
     };
     form.addEventListener('input', onInput);
@@ -930,7 +946,6 @@ const TYPED_FIELD_DEFINITIONS = Object.freeze({
     appearanceSurface: { path: 'appearanceProfile.surface', kind: 'string' },
     appearanceSidebarRowHeight: { path: 'appearanceProfile.sidebarRowHeight', kind: 'number' },
     appearanceSidebarAvatarSize: { path: 'appearanceProfile.sidebarAvatarSize', kind: 'number' },
-    appearanceSidebarRadius: { path: 'appearanceProfile.sidebarRadius', kind: 'string' },
     appearanceCustomRadius: { path: 'appearanceProfile.customRadius', kind: 'number' },
     'appearanceSidebarRadiusChoice-tuned': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'tuned' },
     'appearanceSidebarRadiusChoice-follow': { path: 'appearanceProfile.sidebarRadius', kind: 'choice', value: 'follow' },
@@ -981,7 +996,6 @@ function mountTypedFieldOwner(root, form) {
         set('appearanceSidebarRowHeightValue', `${appearance.sidebarRowHeight ?? 46}px`);
         set('appearanceSidebarAvatarSize', appearance.sidebarAvatarSize ?? 32);
         set('appearanceSidebarAvatarSizeValue', `${appearance.sidebarAvatarSize ?? 32}px`);
-        set('appearanceSidebarRadius', appearance.sidebarRadius || 'tuned');
         set('appearanceCustomRadius', appearance.customRadius ?? 10);
         set('appearanceCustomRadiusValue', `${appearance.customRadius ?? 10}px`);
         const radius = appearance.sidebarRadius || 'tuned';
