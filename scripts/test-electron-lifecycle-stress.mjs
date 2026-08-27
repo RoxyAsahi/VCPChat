@@ -31,6 +31,7 @@ const debugDetached = ['1', 'verbose'].includes(process.env.VCPCHAT_STRESS_DEBUG
 const verboseDetached = process.env.VCPCHAT_STRESS_DEBUG_DETACHED === 'verbose';
 const skipDestructivePreflight = process.env.VCPCHAT_STRESS_SKIP_PREFLIGHT === '1';
 const traceListeners = process.env.VCPCHAT_STRESS_TRACE_LISTENERS === '1';
+const captureAgentSettings = process.env.VCPCHAT_STRESS_CAPTURE_AGENT_SETTINGS === '1';
 const supportedStages = Object.freeze(['ask-nova', 'settings', 'agent-settings', 'embedded', 'detached-app', 'mode-round-trip']);
 const selectedStages = new Set((process.env.VCPCHAT_STRESS_STAGES || supportedStages.join(','))
     .split(',')
@@ -624,6 +625,47 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
             `${label}: Agent appearance toggles were not projected by the typed Toggle primitive: ${JSON.stringify(state)}`);
         assert.equal(state.nativeAgentStreamRadios, 2,
             `${label}: native Agent stream radios must remain the canonical business nodes: ${JSON.stringify(state)}`);
+        if (captureAgentSettings) {
+            const evidence = await page.evaluate(() => {
+                const rect = node => {
+                    const value = node.getBoundingClientRect();
+                    return { x: value.x, y: value.y, width: value.width, height: value.height };
+                };
+                const style = node => {
+                    const value = getComputedStyle(node);
+                    return {
+                        display: value.display,
+                        gap: value.gap,
+                        padding: value.padding,
+                        height: value.height,
+                        borderRadius: value.borderRadius,
+                        fontSize: value.fontSize,
+                        lineHeight: value.lineHeight,
+                        color: value.color,
+                        backgroundColor: value.backgroundColor,
+                        borderColor: value.borderColor,
+                    };
+                };
+                const form = document.getElementById('agentSettingsForm');
+                const panel = document.getElementById('tabContentSettings');
+                const pick = selector => [...document.querySelectorAll(selector)].map(node => ({
+                    tag: node.tagName.toLowerCase(), class: node.className, rect: rect(node), style: style(node),
+                }));
+                return {
+                    source: 'VCP production Agent Settings Electron Surface',
+                    viewport: { width: window.innerWidth, height: window.innerHeight, deviceScaleFactor: window.devicePixelRatio },
+                    dom: form?.outerHTML || '',
+                    panel: panel ? { rect: rect(panel), style: style(panel) } : null,
+                    inputs: pick('#agentSettingsForm .vcp-uiux-input-wrap'),
+                    choice: pick('#agentSettingsForm .vcp-uiux-choice'),
+                    toggles: pick('#agentSettingsForm .vcp-uiux-toggle'),
+                    streamRadios: pick('#agentSettingsForm input[name="streamOutput"]'),
+                };
+            });
+            await fs.mkdir(path.join(root, 'reports'), { recursive: true });
+            await fs.writeFile(path.join(root, 'reports', 'vcp-agent-settings-production.json'), `${JSON.stringify(evidence, null, 2)}\n`);
+            await page.screenshot({ path: path.join(root, 'reports', 'vcp-agent-settings-production.png') });
+        }
     } else {
         assert.equal(state.enhanced, 0, `${label}: Next settings adapters leaked into Classic: ${JSON.stringify(state)}`);
     }
