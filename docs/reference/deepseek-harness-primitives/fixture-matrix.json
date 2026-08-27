@@ -11,7 +11,8 @@
     ["hover-card", "open"], ["hover-card", "copyable"],
     ["disclosure-row", "collapsed-preview"], ["disclosure-row", "open"], ["disclosure-row", "forced-open"],
     ["state-dot", "done"], ["state-dot", "warning"], ["state-dot", "ongoing"], ["state-dot", "error"],
-    ["toast", "viewport-centered"], ["toast", "anchor-centered"], ["toast", "icon"]
+    ["toast", "viewport-centered"], ["toast", "anchor-centered"], ["toast", "icon"],
+    ["risk-confirmation", "unacknowledged"], ["risk-confirmation", "acknowledged"], ["risk-confirmation", "disabled"]
   ],
   "interactionCases": [
     { "case": "select/keyboard-open-focus", "status": "pass", "evidence": "same semantic fixture; Harness and VCP retain trigger focus" },
@@ -22,7 +23,8 @@
     { "case": "hover-card/dwell-grace-copy-dispose", "status": "candidate-interaction-active", "evidence": "focused source test and generated Electron journey cover dwell, portal, 200ms grace, scroll placement, copy feedback, disable and exact DOM restoration" },
     { "case": "disclosure-row/controlled-row-leading-keyboard-dispose", "status": "candidate-interaction-active", "evidence": "focused source test and generated Electron journey cover controlled row click, Enter/Space, leading-only button, preview chevron, keep/hide content, forced-open and exact DOM restoration" },
     { "case": "state-dot/four-state-shape-size-phase-dispose", "status": "candidate-interaction-active", "evidence": "focused source test and generated Electron journey cover solid halo states, eight-cell phased ongoing matrix, custom size, aria-hidden and exact host restoration" },
-    { "case": "toast/portal-anchor-lifetime-dispose", "status": "candidate-interaction-active", "evidence": "focused source test covers 3000ms hold + 1000ms fade completion and timer cancellation; generated Electron covers body portal, role=alert, anchor resize placement, icon and geometry" }
+    { "case": "toast/portal-anchor-lifetime-dispose", "status": "candidate-interaction-active", "evidence": "focused source test covers 3000ms hold + 1000ms fade completion and timer cancellation; generated Electron covers body portal, role=alert, anchor resize placement, icon and geometry" },
+    { "case": "risk-confirmation/acknowledgement-gate-close-reopen-dispose", "status": "candidate-interaction-active", "evidence": "focused generated-artifact test covers controlled acknowledgement, disabled confirm, cancel/mask/Escape, autofocus, reopen and owner disposal; Electron candidate evidence pending" }
   ],
   "outputs": ["dom", "geometry", "computed-style", "screenshot", "pixel-diff"],
   "stateSemantics": {
@@ -48,7 +50,10 @@
     "state-dot/error": "Red solid core with same-color 10% halo",
     "toast/viewport-centered": "Top-center transient alert uses left 50% when no anchor is supplied",
     "toast/anchor-centered": "Toast follows an owner-provided anchor horizontal center and remeasures on resize",
-    "toast/icon": "Optional warning glyph is aria-hidden while the banner remains a single role=alert announcement"
+    "toast/icon": "Optional warning glyph is aria-hidden while the banner remains a single role=alert announcement",
+    "risk-confirmation/unacknowledged": "Primary action remains disabled until caller-controlled acknowledgement is checked",
+    "risk-confirmation/acknowledged": "Checked acknowledgement enables the primary action without creating a second business state",
+    "risk-confirmation/disabled": "Disabled owner state disables acknowledgement and primary action"
   },
   "status": {
     "domStructural": "10/10 pass",
@@ -63,6 +68,7 @@
     "hoverCardCandidate": "dwell/grace/portal/copy/dispose interaction and fixed geometry active; same-semantic Harness pixel diff pending",
     "disclosureRowCandidate": "row/leading/keyboard/forced-open interaction and 24px geometry active; same-semantic Harness pixel diff pending",
     "stateDotCandidate": "four-state shape/size/phase and screenshot active; same-semantic Harness pixel diff pending",
-    "toastCandidate": "portal/alert/anchor/lifetime/dispose and screenshot active; same-semantic Harness pixel diff pending"
+    "toastCandidate": "portal/alert/anchor/lifetime/dispose and screenshot active; same-semantic Harness pixel diff pending",
+    "riskConfirmationCandidate": "controlled acknowledgement gate, close/reopen/dispose source-artifact test active; Electron screenshot/geometry pending"
   }
 }

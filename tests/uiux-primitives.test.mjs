@@ -17,6 +17,9 @@ const { mountHoverCard } = await import('../modules/uiux/primitives/hover-card.t
 const { mountDisclosureRow } = await import('../modules/uiux/primitives/disclosure-row.ts');
 const { mountStateDot } = await import('../modules/uiux/primitives/state-dot.ts');
 const { mountToast, TOAST_HOLD_MS, TOAST_FADE_MS } = await import('../modules/uiux/primitives/toast.ts');
+// RiskConfirmation is the first composed primitive; source-plane Node cannot
+// resolve its emitted .js sibling imports, so exercise its checked-in artifact.
+const { mountRiskConfirmation } = await import('../modules/uiux/generated/primitives/risk-confirmation.js');
 const { mountChoice } = await import('../modules/uiux/primitives/choice.ts');
 const { mountRange } = await import('../modules/uiux/primitives/range.ts');
 const { mountToggle } = await import('../modules/uiux/primitives/toggle.ts');
@@ -341,6 +344,51 @@ test('Harness Modal portals controlled standard/headless DOM and restores owned 
         assert.equal(headlessBody.parentNode, null);
         await headless.dispose();
         await scope.dispose('modal-complete');
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
+
+test('Harness RiskConfirmation gates confirm behind a controlled acknowledgement and retracts cleanly', async () => {
+    const dom = new JSDOM('<!doctype html><main><span id="before"></span><span id="after"></span></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('risk-confirmation-test'));
+        const events = [];
+        let risk;
+        risk = mountRiskConfirmation({
+            title: 'Allow external command?', description: 'This may access files.', acknowledgeLabel: 'I understand.',
+            cancelLabel: 'Cancel', confirmLabel: 'Allow command', acknowledged: false,
+            onAcknowledgedChange: value => { events.push(`ack:${value}`); risk.setAcknowledged(value); },
+            onCancel: () => { events.push('cancel'); risk.setOpen(false); }, onConfirm: () => { events.push('confirm'); risk.setOpen(false); },
+        }, scope);
+        assert.equal(risk.open, false);
+        risk.setOpen(true);
+        assert.equal(risk.modal.root.parentElement, document.body);
+        assert.equal(risk.modal.dialog.classList.contains('vcp-harness-risk-confirmation'), true);
+        assert.equal(risk.modal.root.querySelector('.vcp-harness-risk-warning-icon')?.getAttribute('aria-hidden'), 'true');
+        assert.equal(risk.acknowledgement.type, 'checkbox');
+        assert.equal(risk.confirmButton.disabled, true);
+        assert.equal(document.activeElement, risk.acknowledgement);
+        risk.confirmButton.click();
+        assert.deepEqual(events, []);
+        risk.acknowledgement.checked = true;
+        risk.acknowledgement.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+        assert.deepEqual(events, ['ack:true']);
+        assert.equal(risk.confirmButton.disabled, false);
+        risk.confirmButton.click();
+        assert.deepEqual(events, ['ack:true', 'confirm']);
+        assert.equal(risk.open, false);
+        risk.setOpen(true); risk.setDisabled(true);
+        assert.equal(risk.acknowledgement.disabled, true);
+        assert.equal(risk.confirmButton.disabled, true);
+        risk.modal.root.querySelector('.vcp-harness-modal-mask').click();
+        assert.deepEqual(events, ['ack:true', 'confirm', 'cancel']);
+        risk.setOpen(true);
+        document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        assert.deepEqual(events, ['ack:true', 'confirm', 'cancel', 'cancel']);
+        await risk.dispose();
+        assert.equal(document.querySelector('.vcp-harness-modal-root'), null);
+        await scope.dispose('risk-confirmation-complete');
     } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
 });
 

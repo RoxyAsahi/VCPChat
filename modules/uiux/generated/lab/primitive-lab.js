@@ -8,6 +8,7 @@ import { mountHoverCard } from '../primitives/hover-card.js';
 import { mountDisclosureRow } from '../primitives/disclosure-row.js';
 import { mountStateDot } from '../primitives/state-dot.js';
 import { mountToast } from '../primitives/toast.js';
+import { mountRiskConfirmation } from '../primitives/risk-confirmation.js';
 import { mountSelect } from '../primitives/select.js';
 const STYLE_ID = 'vcp-harness-primitive-lab';
 function ensureStyles() {
@@ -246,6 +247,25 @@ export function mountPrimitiveLab(root, scope) {
         }, labScope);
         activeToast = toast;
     });
+    const riskRow = group(lab, 'RiskConfirmation', 'deepseek-harness/packages/client/ui-primitives/src/RiskConfirmation.tsx + Permission/Command production consumers; Candidate only, no VCP business command');
+    const riskTrigger = document.createElement('button');
+    riskTrigger.type = 'button';
+    riskTrigger.textContent = 'Open risk confirmation';
+    riskRow.append(riskTrigger);
+    mountButton(riskTrigger, { variant: 'outline', size: 'sm' }, labScope);
+    let risk;
+    risk = mountRiskConfirmation({
+        title: 'Allow external command?',
+        description: 'This action may access files outside the current workspace.',
+        acknowledgeLabel: 'I understand the risk.',
+        cancelLabel: 'Cancel',
+        confirmLabel: 'Allow command',
+        acknowledged: false,
+        onAcknowledgedChange: value => risk.setAcknowledged(value),
+        onCancel: () => risk.setOpen(false),
+        onConfirm: () => risk.setOpen(false),
+    }, labScope);
+    labScope.listen(riskTrigger, 'click', () => { risk.setAcknowledged(false); risk.setDisabled(false); risk.setOpen(true); });
     return scope.own(async () => {
         await labScope.dispose('primitive-lab-unmounted');
         root.replaceChildren(...originalNodes);

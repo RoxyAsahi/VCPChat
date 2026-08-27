@@ -230,6 +230,18 @@ try {
         result.toastText = toast?.querySelector('.vcp-harness-toast-text')?.textContent || '';
         result.toastIcon = Boolean(toast?.querySelector('.vcp-harness-toast-icon[aria-hidden="true"] .vcp-ui-icon'));
         result.toastAnchorLeft = toast?.style.left || '';
+        const riskTrigger = [...host.querySelectorAll('button')].find(button => button.textContent === 'Open risk confirmation');
+        riskTrigger?.click();
+        const riskDialog = document.querySelector('.vcp-harness-risk-confirmation[role="dialog"]');
+        const riskCheckbox = riskDialog?.querySelector('.vcp-harness-risk-acknowledgement input');
+        const riskConfirm = [...(riskDialog?.querySelectorAll('button') || [])].find(button => button.textContent === 'Allow command');
+        result.riskOpen = Boolean(riskDialog);
+        result.riskConfirmDisabled = riskConfirm?.disabled === true;
+        result.riskAutofocus = document.activeElement === riskCheckbox;
+        riskCheckbox?.click();
+        result.riskAcknowledged = riskConfirm?.disabled === false;
+        riskConfirm?.click();
+        result.riskClosed = !document.querySelector('.vcp-harness-risk-confirmation[role="dialog"]');
         await release();
         result.restored = host.childNodes.length === 0;
         result.scopeActive = scope.active;
@@ -238,7 +250,7 @@ try {
     });
     assert.deepEqual(candidateLabBoundary, {
         maturity: 'candidate',
-        buttons: 10,
+        buttons: 11,
         input: true,
         field: true,
         select: true,
@@ -278,6 +290,11 @@ try {
         toastText: 'The selected model is temporarily unavailable.',
         toastIcon: true,
         toastAnchorLeft: candidateLabBoundary.toastAnchorLeft,
+        riskOpen: true,
+        riskConfirmDisabled: true,
+        riskAutofocus: true,
+        riskAcknowledged: true,
+        riskClosed: true,
         restored: true,
         scopeActive: true,
     }, `generated Harness Candidate Lab mismatch: ${JSON.stringify(candidateLabBoundary)}`);
@@ -661,6 +678,45 @@ try {
         await window.__harnessCandidateToastScope?.dispose?.('candidate-toast-visual-complete');
         document.querySelector('[data-electron-candidate-toast]')?.remove();
         document.querySelector('.vcp-harness-toast')?.remove();
+    });
+    const riskConfirmationGeometry = await page.evaluate(() => {
+        const scope = new window.VCPLifecycle.LifecycleScope('test:harness-candidate-risk-confirmation-visual');
+        let controller;
+        controller = window.VCPUIUX.mountRiskConfirmation({
+            title: 'Allow external command?', description: 'This action may access files outside the current workspace.',
+            acknowledgeLabel: 'I understand the risk.', cancelLabel: 'Cancel', confirmLabel: 'Allow command', acknowledged: false,
+            onAcknowledgedChange: value => controller.setAcknowledged(value), onCancel: () => controller.setOpen(false), onConfirm: () => controller.setOpen(false), open: true,
+        }, scope);
+        window.__harnessCandidateRiskController = controller;
+        window.__harnessCandidateRiskScope = scope;
+        const dialog = controller.modal.dialog;
+        const warning = dialog.querySelector('.vcp-harness-risk-warning');
+        const acknowledgement = dialog.querySelector('.vcp-harness-risk-acknowledgement');
+        const dialogStyle = getComputedStyle(dialog);
+        const warningStyle = getComputedStyle(warning);
+        const acknowledgementStyle = getComputedStyle(acknowledgement);
+        return {
+            viewport: { width: innerWidth, height: innerHeight, deviceScaleFactor: devicePixelRatio }, source: 'generated-artifact-electron', state: 'unacknowledged-autofocused',
+            dialog: { width: dialogStyle.width, maxHeight: dialogStyle.maxHeight, overflow: dialogStyle.overflow, role: dialog.getAttribute('role'), ariaModal: dialog.getAttribute('aria-modal') },
+            warning: { gap: warningStyle.gap, fontSize: warningStyle.fontSize, lineHeight: warningStyle.lineHeight },
+            acknowledgement: { gap: acknowledgementStyle.gap, marginTop: acknowledgementStyle.marginTop, fontSize: acknowledgementStyle.fontSize, lineHeight: acknowledgementStyle.lineHeight, checked: controller.acknowledgement.checked, disabled: controller.acknowledgement.disabled, autofocus: document.activeElement === controller.acknowledgement },
+            actions: { cancelMinWidth: getComputedStyle([...dialog.querySelectorAll('button')].find(button => button.textContent === 'Cancel')).minWidth, confirmMinWidth: getComputedStyle(controller.confirmButton).minWidth, confirmDisabled: controller.confirmButton.disabled },
+        };
+    });
+    assert.deepEqual(riskConfirmationGeometry.viewport, { width: 800, height: 600, deviceScaleFactor: 1 });
+    assert.deepEqual(riskConfirmationGeometry.dialog, { width: '440px', maxHeight: '552px', overflow: 'hidden', role: 'dialog', ariaModal: 'true' });
+    assert.deepEqual(riskConfirmationGeometry.warning, { gap: '10px', fontSize: '14px', lineHeight: '22px' });
+    assert.deepEqual(riskConfirmationGeometry.acknowledgement, { gap: '10px', marginTop: '20px', fontSize: '14px', lineHeight: '22px', checked: false, disabled: false, autofocus: true });
+    assert.deepEqual(riskConfirmationGeometry.actions, { cancelMinWidth: '72px', confirmMinWidth: '136px', confirmDisabled: true });
+    const riskConfirmationScreenshot = path.join(root, 'reports', 'vcp-harness-risk-confirmation-candidate.png');
+    await page.screenshot({ path: riskConfirmationScreenshot });
+    assert.ok((await fs.stat(riskConfirmationScreenshot)).size > 1024, 'RiskConfirmation Candidate screenshot is unexpectedly empty');
+    await fs.writeFile(path.join(root, 'reports', 'vcp-harness-risk-confirmation-candidate.json'), `${JSON.stringify(riskConfirmationGeometry, null, 2)}\n`, 'utf8');
+    await page.evaluate(async () => {
+        await window.__harnessCandidateRiskController?.dispose?.();
+        await window.__harnessCandidateRiskScope?.dispose?.('candidate-risk-confirmation-visual-complete');
+        delete window.__harnessCandidateRiskController;
+        delete window.__harnessCandidateRiskScope;
     });
     await page.screenshot({ path: primitiveScreenshot });
     const screenshotStat = await fs.stat(primitiveScreenshot);

@@ -26,6 +26,8 @@ export { mountStateDot } from './primitives/state-dot.js';
 export type { StateDotController, StateDotProps, StateDotState } from './primitives/state-dot.js';
 export { mountToast, TOAST_FADE_MS, TOAST_HOLD_MS } from './primitives/toast.js';
 export type { ToastController, ToastProps } from './primitives/toast.js';
+export { mountRiskConfirmation } from './primitives/risk-confirmation.js';
+export type { RiskConfirmationController, RiskConfirmationProps } from './primitives/risk-confirmation.js';
 export { mountChoice } from './primitives/choice.js';
 export { mountRange } from './primitives/range.js';
 export { mountToggle } from './primitives/toggle.js';

@@ -1,0 +1,18 @@
+{
+  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/RiskConfirmation.tsx",
+  "productionConsumers": [
+    "packages/client/ui-permission-presets/src/client/PermissionRow.tsx",
+    "packages/client/ui-commands/src/client/PopupSelectView.tsx",
+    "packages/client/ui-conversation/src/client/skeleton/PermissionSelect.tsx"
+  ],
+  "tree": "Modal portal > dialog[role=dialog][aria-modal=true] > content > body > warning(icon[aria-hidden=true] + p) + label(checkbox[autofocus] + span) ; footer > outline cancel + primary confirm[disabled until acknowledgement]",
+  "controlledInputs": ["open", "acknowledged", "disabled"],
+  "actions": ["onAcknowledgedChange", "onCancel", "onConfirm"],
+  "vcpCandidate": {
+    "source": "modules/uiux/primitives/risk-confirmation.ts",
+    "host": "modules/uiux/lab/primitive-lab.ts",
+    "maturity": "candidate-interaction-active",
+    "stableApi": false,
+    "productionConsumer": "none; VCP generic confirm is not acknowledgement-equivalent and is intentionally untouched"
+  }
+}

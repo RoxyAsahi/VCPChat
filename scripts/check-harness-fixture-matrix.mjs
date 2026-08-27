@@ -20,6 +20,7 @@ if (interaction['hover-card/dwell-grace-copy-dispose']?.status !== 'candidate-in
 if (interaction['disclosure-row/controlled-row-leading-keyboard-dispose']?.status !== 'candidate-interaction-active') fail('DisclosureRow interaction lifecycle must remain explicitly Candidate');
 if (interaction['state-dot/four-state-shape-size-phase-dispose']?.status !== 'candidate-interaction-active') fail('StateDot interaction lifecycle must remain explicitly Candidate');
 if (interaction['toast/portal-anchor-lifetime-dispose']?.status !== 'candidate-interaction-active') fail('Toast interaction lifecycle must remain explicitly Candidate');
+if (interaction['risk-confirmation/acknowledgement-gate-close-reopen-dispose']?.status !== 'candidate-interaction-active') fail('RiskConfirmation interaction lifecycle must remain explicitly Candidate');
 for (const output of ['dom', 'geometry', 'computed-style', 'screenshot', 'pixel-diff']) if (!matrix.outputs.includes(output)) fail(`missing output layer ${output}`);
 if (matrix.stateSemantics?.['select/closed'] !== 'AgentPresetSeat ready trigger; production fixture captured, raw DOM/geometry/pixel comparison is failing') fail('Select closed state must retain its Agent Preset production-fixture boundary');
 if (matrix.stateSemantics?.['select/open'] !== 'AgentPresetSeat ready open/selected/hover menu; VCP-owned production capture is replayable') fail('Select open state must retain its VCP-owned Harness capture boundary');
