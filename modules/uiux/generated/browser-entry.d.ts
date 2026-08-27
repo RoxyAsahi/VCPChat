@@ -13,6 +13,7 @@ import { mountMenu } from './primitives/menu.js';
 import { mountAgentPresetSeat } from './primitives/agent-preset-seat.js';
 import { mountAgentPresetRow } from './primitives/agent-preset-row.js';
 import { mountLanguageRow } from './primitives/language-row.js';
+import { mountAgentModelPicker } from './primitives/agent-model-picker.js';
 import { mountModal } from './primitives/modal.js';
 import { mountTooltip } from './primitives/tooltip.js';
 import { mountHoverCard } from './primitives/hover-card.js';
@@ -60,6 +61,7 @@ declare const api: {
     mountAgentPresetSeat: typeof mountAgentPresetSeat;
     mountAgentPresetRow: typeof mountAgentPresetRow;
     mountLanguageRow: typeof mountLanguageRow;
+    mountAgentModelPicker: typeof mountAgentModelPicker;
     mountModal: typeof mountModal;
     mountTooltip: typeof mountTooltip;
     mountHoverCard: typeof mountHoverCard;

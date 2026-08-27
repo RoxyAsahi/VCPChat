@@ -8,6 +8,7 @@
 > **2026-08-27 Agent temperature slice：** `agentSettingsForm #agentTemperature` 现加入生成的 Light-DOM Input presentation slice；原生 `type=number`、`min/max/step`、settings manager 数值解析、保存和聊天参数消费全部保留。通用旧 Input enhancer 已跳过该字段。当前状态为 `production-consumer-active / visual-equivalence-pending`，仍需补 number Input 状态矩阵、同引擎 geometry/pixel、Electron reload/teardown 与字段级 legacy CSS/projection 删除证据；不得将其替换为 Range。
 > **2026-08-27 Agent numeric parameter cluster：** `agentContextTokenLimit`、`agentMaxOutputTokens`、`agentTopP`、`agentTopK` 现加入同一生成 Light-DOM Input presentation owner；原生 `type=number`、约束、settings manager 解析/默认值、持久化 key 与聊天请求组装全部保留。它们暂记为 `production-consumer-active / visual-equivalence-pending`，待字段级状态矩阵、同引擎 geometry/pixel、Electron reload/teardown 和 legacy selector 删除证据后再晋级；不得改为 Range。
 > **2026-08-27 下一施工游标：** Agent 设置的基础 Input 字段已覆盖 name/model/temperature 与常用 numeric cluster；下一切片转为 `B2 Agent model-picker composite contract`。先在 Candidate Lab 复刻 Harness provider/search/favorite/refresh/loading/error/dismiss 与 keyboard/focus/owner 语义，再评估真实 `agentSettingsForm` 接入。现有自由文本 `#agentModel`、`openModelSelectBtn`、异步 modal、IPC、持久化和 `saveAgentConfig` 继续作为 canonical 业务边界；不得用通用 Select 直接替换，也不扩展 DiffBlock 或冻结聊天内容。
+> **2026-08-27 Agent model-picker Candidate：** 新增 `mountAgentModelPicker`，将 provider/favorite/current 元数据映射到 owner-bound PopupSelect，覆盖搜索、异步加载、刷新、选择、关闭、焦点恢复和 dispose；仅通过注入的 `options/onSelect` 能力工作。它目前是 `candidate-interaction-active / source-equivalence-pending`，没有接入现有 `modelSelectModal`、IPC 或持久化，不构成生产等价。
 
 > 状态：施工中（目标模式已启动）  
 > 建立日期：2026-08-24  
