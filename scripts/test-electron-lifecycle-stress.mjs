@@ -708,6 +708,7 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
                     rangeInputs: pick('#agentSettingsForm .vcp-uiux-range input[type="range"]'),
                     selects: pick('#agentSettingsForm .vcp-harness-select'),
                     selectNodes: pick('#agentSettingsForm select.vcp-harness-select-native'),
+                    actions: pick('#agentSettingsForm button.vcp-harness-button'),
                 };
             });
             evidence.agentSelectInteraction = agentSelectInteractionEvidence;

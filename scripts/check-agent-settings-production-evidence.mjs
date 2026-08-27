@@ -70,6 +70,15 @@ assert.equal(report.ranges[0].controlId, 'agentTtsSpeed', 'typed Agent Range wra
 assert.deepEqual(report.selectNodes.map(node => node.id).sort(), ['agentTtsVoicePrimary', 'agentTtsVoiceSecondary'], 'typed Agent Select evidence must target both canonical TTS voice nodes');
 assert.deepEqual(report.selects.map(node => node.controlId).sort(), ['agentTtsVoicePrimary', 'agentTtsVoiceSecondary'], 'typed Agent Select wrappers must target both canonical TTS voice nodes');
 assert.equal(report.choiceOptions.every(node => node.tag === 'label'), true, 'Choice options must remain native radio labels');
+assert.ok(Array.isArray(report.actions) && report.actions.length >= 5, 'typed Agent Button evidence is incomplete');
+assert.deepEqual(report.actions.map(node => node.controlId).sort(), [
+    'deleteAgentBtn', 'openModelSelectBtn', 'refreshTtsModelsBtn', 'resetAvatarColorsBtn',
+].sort().concat([null]).sort(), 'Agent action evidence must include the four canonical id buttons and the submit action');
+assert.equal(report.actions.filter(node => node.controlId === 'resetAvatarColorsBtn').length, 1,
+    'Avatar color reset action must have exactly one mounted Button projection');
+for (const action of report.actions) {
+    assert.match(action.class, /vcp-harness-button/, `Agent action ${action.controlId} must retain Harness Button presentation`);
+}
 if (report.agentSelectInteraction !== null && report.agentSelectInteraction !== undefined) {
     assert.deepEqual(report.agentSelectInteraction, {
         opened: true, menuOwner: true, role: 'menu', closed: true, focusRestored: true,
