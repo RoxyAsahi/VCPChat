@@ -22,6 +22,12 @@ for (const id of [
 
 assert.ok(Array.isArray(report.inputs) && report.inputs.length >= 7, 'typed Agent Input evidence is incomplete');
 assert.ok(Array.isArray(report.inputNodes) && report.inputNodes.length >= 7, 'native Agent Input style evidence is incomplete');
+for (const node of report.inputNodes) {
+    assert.equal(node.style.height, '22px', 'typed Agent native input must keep the Harness 22px line box');
+    assert.equal(node.style.padding, '0px 10px', 'typed Agent native input padding drifted');
+    assert.equal(node.style.lineHeight, '22px', 'typed Agent native input line-height drifted');
+    assert.equal(node.style.borderRadius, '0px', 'typed Agent native input must defer radius to the Harness wrapper');
+}
 assert.ok(Array.isArray(report.toggles) && report.toggles.length >= 2, 'typed Agent Toggle evidence is incomplete');
 assert.equal(Array.isArray(report.choice) ? report.choice.length : 0, 1, 'typed Agent Choice evidence is incomplete');
 assert.equal(Array.isArray(report.streamRadios) ? report.streamRadios.length : 0, 2, 'native Agent stream radio evidence is incomplete');
