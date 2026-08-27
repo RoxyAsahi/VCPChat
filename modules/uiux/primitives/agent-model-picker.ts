@@ -148,13 +148,13 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
     paneCell.className = 'vcp-harness-agent-model-picker-cell';
     paneCell.setAttribute('role', 'menuitem');
     paneCell.innerHTML = '<span class="vcp-harness-agent-model-picker-cell-label">Model</span><span class="vcp-harness-agent-model-picker-cell-value"></span><span aria-hidden="true">›</span>';
-    paneCell.addEventListener('click', () => { pane = 'model'; syncPane(); });
+    pickerScope.listen(paneCell, 'click', () => { pane = 'model'; syncPane(); });
     const effortCell = document.createElement('button');
     effortCell.type = 'button';
     effortCell.className = 'vcp-harness-agent-model-picker-cell';
     effortCell.setAttribute('role', 'menuitem');
     effortCell.innerHTML = '<span class="vcp-harness-agent-model-picker-cell-label">Effort</span><span class="vcp-harness-agent-model-picker-cell-value"></span><span aria-hidden="true">›</span>';
-    effortCell.addEventListener('click', () => { pane = 'effort'; syncPane(); });
+    pickerScope.listen(effortCell, 'click', () => { pane = 'effort'; syncPane(); });
     const effortList = document.createElement('div');
     effortList.className = 'vcp-harness-agent-model-picker-effort-list';
     effortList.setAttribute('role', 'group');
@@ -183,7 +183,7 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
             check.setAttribute('aria-hidden', 'true');
             check.textContent = option.id === selectedEffort ? '✓' : '';
             row.append(copy, check);
-            row.addEventListener('click', async () => {
+            pickerScope.listen(row, 'click', async () => {
                 selectedEffort = option.id;
                 await props.onEffortSelect?.(option);
                 pane = 'root';
