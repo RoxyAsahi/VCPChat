@@ -166,6 +166,13 @@ try {
       return [...(matched.matchedCSSRules || [])].slice(-40).map(entry => ({ selector: entry.rule?.selectorList?.text || '', origin: entry.rule?.origin || '', styleSheetId: entry.rule?.styleSheetId || '', properties: (entry.rule?.style?.cssProperties || []).filter(property => ['color', 'background', 'background-color', 'padding', 'border-radius', 'z-index'].includes(property.name)).map(property => ({ name: property.name, value: property.value })) }));
     } catch { return []; }
   };
+  await page.evaluate(async () => {
+    await window.uiHelperFunctions?.openModal?.('globalSettingsModal');
+    await new Promise(resolve => setTimeout(resolve, 120));
+  }).catch(() => {});
+  evidence.settingsCascade = await captureMatchedRules('#globalSettingsModal #userName');
+  await page.evaluate(() => window.uiHelperFunctions?.closeModal?.('globalSettingsModal')).catch(() => {});
+  if (!evidence.settingsCascade.length) evidence.gate.failures.push('settings cascade provenance incomplete');
   const overlayCascade = {};
   await page.evaluate(() => document.querySelector('.vcp-harness-primitive-lab button')?.focus()).catch(() => {});
   await page.evaluate(async () => {

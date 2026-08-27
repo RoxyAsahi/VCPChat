@@ -31,6 +31,7 @@ for (const dir of targets) {
     assert.ok(manifest.settingsContext?.controls?.length > 0);
     assert.ok(manifest.settingsContext?.contextSample?.showcase?.ancestry?.length > 0);
     assert.ok(manifest.settingsContext?.contextSample?.settings?.ancestry?.length > 0);
+    assert.ok(manifest.settingsCascade?.length > 0);
     assert.equal(manifest.settingsContext?.sections?.length, 8);
     assert.ok(manifest.settingsContext.sections.every(section => section.activeId && section.visibleControls > 0));
     assert.equal(manifest.settingsContext?.settingsCleanup?.active, false);
