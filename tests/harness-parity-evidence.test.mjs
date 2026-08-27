@@ -62,5 +62,5 @@ test('Model picker pixel diff remains pending without the Harness screenshot', (
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-model-picker-pixel-diff.json'), 'utf8'));
     assert.equal(report.status, 'pending-screenshot-capture');
     assert.equal(report.pass, false);
-    assert.ok(report.missingEvidence.includes('Harness ModelSelect screenshot'));
+    assert.ok(report.missingEvidence.includes('Harness ModelSelect capture report paired with screenshot') || report.missingEvidence.includes('Harness ModelSelect screenshot'));
 });

@@ -58,6 +58,14 @@ for (const geometryFile of fs.readdirSync(referenceDir).filter(file => file.ends
             entry.checks.push({ selector, property: cssProperty, expected, actual, pass: actual !== null && normalize(actual) === normalize(expected) });
         }
     }
+    if (entry.checks.length === 0 && geometry.root && typeof geometry.root === 'object') {
+        const rootClass = dom?.root?.class ? `.${String(dom.root.class).split(/\s+/)[0]}` : `.${name}`;
+        for (const [property, expected] of Object.entries(geometry.root)) {
+            const cssProperty = kebab(property);
+            const actual = declarations.get(rootClass)?.[cssProperty] ?? null;
+            entry.checks.push({ selector: rootClass, property: cssProperty, expected, actual, pass: actual !== null && normalize(actual) === normalize(expected) });
+        }
+    }
     entry.status = entry.checks.length === 0 ? 'pending' : entry.checks.every(item => item.pass) ? 'source-equivalent' : 'source-mismatch';
     if (!entry.tokens.pass) entry.missing.push('Harness --dsw-* token usage');
     entry.missing = entry.checks.filter(item => !item.pass).map(item => `${item.selector} ${item.property}`);
