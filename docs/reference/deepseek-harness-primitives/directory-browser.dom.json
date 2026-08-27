@@ -16,9 +16,9 @@
   "vcpCandidate": {
     "source": "modules/uiux/primitives/directory-browser.ts",
     "host": "modules/uiux/lab/primitive-lab.ts",
-    "maturity": "foundation-under-test",
+    "maturity": "foundation-electron-active",
     "stableApi": false,
     "productionConsumer": "none; VCP directory IPC, dynamic-wallpaper selection and Workspace persistence are intentionally untouched",
-    "missing": ["path editor", "nested create-folder dialog", "slow scan gate", "same-semantic Harness pixel diff"]
+    "missing": ["same-semantic Harness pixel diff", "VCP production consumer", "legacy presentation deletion"]
   }
 }
