@@ -28,6 +28,7 @@ On 2026-08-27 in the current dirty worktree:
 - `npm run check:harness-fixture-matrix` passed (63 visual cases, 20 interaction cases, DOM 10/10).
 - `npm run check:harness-capture-prerequisites` reported missing prerequisites (expected until the external Harness checkout supplies the aliases).
 - `npm run test:visual-forensics-qa` launched the real Electron renderer and wrote evidence to `reports/visual-forensics-qa/2026-08-27T21-47-38.601Z/` and `/tmp/vqa-third/`. The initial run exposed a false positive caused by comparing controls from the underlying chat surface with showcase controls. The scanner now groups overlap checks by owning Surface; the corrected three-viewport run passed with no same-Surface overlap or horizontal overflow. Electron stderr still records the missing local CDS binary and intentionally unreachable model endpoint as environment prerequisites.
+- Lifecycle follow-up runs passed independently for both themes: `/tmp/vqa-light-final/manifest.json` and `/tmp/vqa-dark-final/manifest.json`. Each covered all three viewports, recorded `disabled=27`, `selected=9`, `error=6`, `loading=2`, and ended with a passing overlap/overflow gate. Dark evidence has `bodyClass=dark-theme`; light evidence has `bodyClass=light-theme`. The scanner now tears down the Electron process group with bounded browser-close/child-close waits so the theme matrix does not leak processes.
 
 ## Scope and frozen boundaries
 

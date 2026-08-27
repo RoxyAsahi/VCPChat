@@ -27,7 +27,9 @@ const appData = await fs.mkdtemp(path.join(os.tmpdir(), 'vcpchat-visual-qa-'));
 await fs.mkdir(path.join(appData, 'Agents', 'VisualQA'), { recursive: true });
 await fs.writeFile(path.join(appData, 'Agents', 'VisualQA', 'config.json'), JSON.stringify({ name: 'Visual QA', model: 'visual-qa', promptMode: 'original', originalSystemPrompt: 'Visual QA', systemPrompt: 'Visual QA', stripRegexes: [] }));
 await fs.writeFile(path.join(appData, 'settings.json'), JSON.stringify({ uiMode: 'next', enableDistributedServer: false, vcpServerUrl: 'http://127.0.0.1:1', vcpApiKey: 'visual-qa', assistantAgent: 'VisualQA', currentThemeMode: process.env.VCPCHAT_VISUAL_QA_THEME || 'light' }));
-const child = spawn(electron, ['.', '--allow-multiple-instances', `--user-data-dir=${path.join(appData, 'ElectronProfile')}`, `--remote-debugging-port=${port}`], { cwd: root, env: { ...process.env, VCPCHAT_APP_DATA_DIR: appData, VCPCHAT_E2E_TEST: '1' }, stdio: ['ignore', 'ignore', 'pipe'] });
+const child = spawn(electron, ['.', '--allow-multiple-instances', `--user-data-dir=${path.join(appData, 'ElectronProfile')}`, `--remote-debugging-port=${port}`], { cwd: root, env: { ...process.env, VCPCHAT_APP_DATA_DIR: appData, VCPCHAT_E2E_TEST: '1' }, stdio: ['ignore', 'ignore', 'pipe'], detached: true });
+let childClosed = false;
+child.once('close', () => { childClosed = true; });
 let stderr = ''; child.stderr.on('data', chunk => { stderr = `${stderr}${chunk}`.slice(-12_000); });
 let browser;
 const evidence = { generatedAt: new Date().toISOString(), viewports, output, observations: [], gate: { pass: true, failures: [] } };
@@ -101,5 +103,15 @@ try {
 } catch (error) {
   evidence.gate.pass = false; evidence.gate.failures.push(error.message); await fs.writeFile(path.join(output, 'manifest.json'), JSON.stringify(evidence, null, 2)); throw error;
 } finally {
-  await browser?.close().catch(() => {}); child.kill('SIGTERM');
+  if (browser) await Promise.race([browser.close().catch(() => {}), sleep(2_000)]);
+  // Electron forks GPU/renderer helpers. Kill the private process group so a
+  // theme matrix cannot leak a renderer and block the next case on teardown.
+  try { if (child.pid) process.kill(-child.pid, 'SIGTERM'); } catch {}
+  child.kill('SIGTERM');
+  if (!childClosed && child.exitCode === null) {
+    await Promise.race([
+      new Promise(resolve => child.once('close', resolve)),
+      sleep(2_000),
+    ]);
+  }
 }
