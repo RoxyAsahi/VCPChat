@@ -1,0 +1,17 @@
+{
+  "primitive": "TerminalBlock",
+  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/TerminalBlock.module.css",
+  "selectors": {
+    ".block": { "position": "relative", "margin": "16px 0", "paddingLeft": "var(--dsl-terminal-gutter)", "borderRadius": "var(--dsl-terminal-radius)", "overflow": "hidden" },
+    ".header": { "display": "flex", "alignItems": "flex-start", "gap": "12px", "padding": "9px 14px 9px var(--dsl-terminal-gutter)", "maxHeight": "150px", "overflowY": "auto" },
+    ".prompt": { "display": "flex", "flexDirection": "column", "minWidth": "0", "flex": "1", "font": "var(--dsl-terminal-font)" },
+    ".promptLine": { "position": "relative", "display": "flex", "alignItems": "baseline", "gap": "8px", "minWidth": "0", "lineHeight": "var(--dsl-terminal-line-height)" },
+    ".output": { "maxHeight": "var(--dsl-terminal-output-max-height, none)", "padding": "12px 14px 12px 0", "overflowX": "auto", "overflowY": "auto" },
+    ".line": { "minHeight": "var(--dsl-terminal-line-height)", "whiteSpace": "pre" },
+    ".expand": { "display": "block", "width": "100%", "padding": "0", "textAlign": "left" },
+    ".empty": { "padding": "12px 14px 12px 0" }
+  },
+  "tokens": ["--dsw-alias-label-primary", "--dsw-alias-label-secondary", "--dsw-alias-label-tertiary", "--dsw-alias-markdown-code-block", "--dsw-alias-border-l2", "--dsw-alias-state-error-primary", "--dsw-font-xs-13"],
+  "geometryInvariants": ["card reserves a 30px state gutter", "header scrolls independently and is capped at 150px", "prompt/output preserve preformatted horizontal alignment", "output owns vertical scrolling when capped"],
+  "candidateStatus": "source-only frozen tool detail; no VCP consumer or paired visual capture"
+}
