@@ -642,7 +642,7 @@
         outline: none;
     }
 
-    /* Keyboard a11y ring for bare controls only. Controls inside a Harness
+    /* Keyboard a11y ring for bare controls only. Controls inside a control
        wrap must stay excluded: the wrapper owns the focus border surface,
        and a second outline on the inner input renders as a stray halo.
        .vcp-settings-bare-select gets the full control contract below. */
@@ -664,7 +664,7 @@
         border-radius: 8px;
         background: var(--vcp-ui-control-bg, var(--vcp-ui-bg-1));
         color: var(--vcp-ui-text-0, inherit);
-        font-size: 14px;
+        font-size: var(--vcp-ui-font-body);
         line-height: 22px;
     }
 
@@ -926,11 +926,10 @@
         margin: 0;
         padding: 0 12px;
         color: var(--vcp-ui-text-0);
-        font-size: 16px;
+        font-size: var(--vcp-ui-font-section);
         font-weight: 500;
         line-height: 24px;
     }
-
 
     /* DisclosureRow geometry copied from Harness: 16px leading control,
        6px gap, 24px row, 14/24 title. */
@@ -957,7 +956,7 @@
         justify-content: center;
         margin: 0;
         color: var(--vcp-ui-text-2);
-        font-size: 12px;
+        font-size: var(--vcp-ui-font-caption);
         line-height: 16px;
     }
 
@@ -975,7 +974,7 @@
     border: 0;
     background: transparent;
     color: var(--vcp-ui-text-1);
-    font-size: 14px;
+    font-size: var(--vcp-ui-font-body);
     line-height: 24px;
 }
 
@@ -1013,7 +1012,7 @@
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-general-row > span:first-child {
     min-width: 0;
     color: var(--vcp-ui-text-1);
-    font-size: 14px;
+    font-size: var(--vcp-ui-font-body);
     font-weight: 400;
     line-height: 22px;
 }
@@ -1031,7 +1030,7 @@
     min-height: 32px;
     height: 32px;
     border-radius: 8px;
-    font-size: 14px;
+    font-size: var(--vcp-ui-font-body);
     line-height: 22px;
 }
 
@@ -1057,7 +1056,7 @@
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-row-copy > :is(label, span, strong) {
     margin: 0;
     color: var(--vcp-ui-text-1);
-    font-size: 14px;
+    font-size: var(--vcp-ui-font-body);
     font-weight: 400;
     line-height: 22px;
 }
@@ -1065,7 +1064,7 @@
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-row-copy > :is(small, p) {
     margin: 0;
     color: var(--vcp-ui-text-2);
-    font-size: 12px;
+    font-size: var(--vcp-ui-font-caption);
     font-weight: 400;
     line-height: 18px;
 }
@@ -1118,7 +1117,7 @@
         background: var(--vcp-ui-bg-1);
         box-shadow: var(--vcp-ui-shadow-lg);
         font-family: inherit;
-        font-size: 14px;
+        font-size: var(--vcp-ui-font-body);
         line-height: 22px;
     }
 
@@ -1158,7 +1157,7 @@
     margin: 0;
     padding: 0 12px;
     color: var(--vcp-ui-text-0);
-    font-size: 16px;
+    font-size: var(--vcp-ui-font-section);
     font-weight: 500;
     line-height: 24px;
 }
@@ -1188,7 +1187,7 @@
     color: var(--vcp-ui-text-0);
     background: transparent;
     font-family: inherit;
-    font-size: 14px;
+    font-size: var(--vcp-ui-font-body);
     font-weight: 400;
     line-height: 22px;
     text-align: left;
@@ -1236,7 +1235,7 @@
 
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal.vcp-global-settings-surface .vcp-harness-settings-nav-copy strong {
     color: inherit;
-    font-size: 14px;
+    font-size: var(--vcp-ui-font-body);
     font-weight: 400;
     line-height: 22px;
 }
@@ -1367,7 +1366,7 @@
     padding: 0;
     border: 0;
     color: var(--vcp-ui-text-0);
-    font-size: 16px;
+    font-size: var(--vcp-ui-font-section);
     font-weight: 500;
     line-height: 24px;
 }
@@ -1404,7 +1403,7 @@
     border: 0;
     border-radius: 0;
     color: transparent;
-    font-size: 0;
+    font-size: var(--vcp-ui-font-suppress);
     line-height: 0;
     transform: none;
 }
@@ -1434,7 +1433,7 @@
     flex: 1 1 auto;
     min-width: 0;
     color: var(--vcp-ui-text-1);
-    font-size: 14px;
+    font-size: var(--vcp-ui-font-body);
     font-weight: 400;
     line-height: 24px;
 }
@@ -1467,7 +1466,7 @@
     padding: 0 14px;
     border-radius: 15px;
     color: var(--vcp-ui-text-2);
-    font-size: 14px;
+    font-size: var(--vcp-ui-font-body);
     line-height: 22px;
     cursor: pointer;
 }
@@ -1476,7 +1475,7 @@
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .form-group:has(> .vcp-settings-control-row #voiceModeLocal) > .vcp-settings-control-row > label:has(input:checked) {
     color: var(--vcp-ui-text-0);
     background: var(--vcp-ui-bg-1);
-    box-shadow: 0 1px 3px rgb(15 23 42 / 10%);
+    box-shadow: var(--vcp-ui-shadow-elevation-hairline);
 }
 
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .form-group:has(> .vcp-settings-control-row #chatLayoutModeNormal) > .vcp-settings-control-row input[type="radio"],
@@ -1547,7 +1546,7 @@
     grid-column: 1;
     grid-row: 1;
     margin: 0;
-    font-size: 14px;
+    font-size: var(--vcp-ui-font-body);
     line-height: 22px;
 }
 
@@ -1705,7 +1704,7 @@
     border-radius: 28px;
     background: transparent;
     color: var(--vcp-ui-text-1);
-    font-size: 0;
+    font-size: var(--vcp-ui-font-suppress);
 }
 
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal .vcp-harness-settings-options {
@@ -1741,10 +1740,10 @@
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal [data-vcp-style="19"] { width: 80px; }
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal [data-vcp-style="20"] { margin-top: 15px; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; }
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal [data-vcp-style="21"] { margin: 0 0 10px 0; }
-:is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal [data-vcp-style="22"] { display: none; margin-bottom: 10px; padding: 8px; border-radius: 6px; background: var(--bg-secondary, rgba(127,127,127,0.08)); }
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal [data-vcp-style="22"] { display: none; margin-bottom: 10px; padding: 8px; border-radius: 6px; background: var(--bg-secondary, var(--vcp-ui-veil-8)); }
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal [data-vcp-style="23"] { justify-content: space-between; align-items: center; margin-bottom: 10px; }
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal [data-vcp-style="24"] { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border-color); }
-:is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal [data-vcp-style="25"] { display: none; margin-bottom: 15px; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary, rgba(127,127,127,0.05)); }
+:is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal [data-vcp-style="25"] { display: none; margin-bottom: 15px; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-secondary, var(--vcp-ui-veil-5)); }
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal [data-vcp-style="26"] { margin-bottom: 8px; }
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal [data-vcp-style="27"] { width: 100px; }
 :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsModal [data-vcp-style="28"] { color: var(--text-secondary); margin-top: 3px; display: block; }
