@@ -33,6 +33,10 @@ for (const dir of targets) {
     assert.ok(manifest.settingsContext?.contextSample?.settings?.ancestry?.length > 0);
     assert.equal(manifest.settingsContext?.sections?.length, 8);
     assert.ok(manifest.settingsContext.sections.every(section => section.activeId && section.visibleControls > 0));
+    assert.equal(manifest.settingsContext?.settingsCleanup?.active, false);
+    assert.equal(manifest.settingsContext?.settingsCleanup?.visible, false);
+    assert.equal(manifest.settingsContext?.settingsCleanup?.visibleDialogCount, 0);
+    assert.equal(manifest.settingsContext?.settingsCleanup?.bodyInlineStyle, '');
     assert.ok(manifest.overlays?.menu?.rect && manifest.overlays?.modal?.open && manifest.overlays?.tooltip?.open);
     assert.equal(manifest.observations?.length, requiredViewports.length);
     for (const [width, height] of requiredViewports) {
