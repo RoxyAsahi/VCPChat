@@ -17,6 +17,7 @@
 > **2026-08-27 ModelSelect effort pane：** Candidate 已补齐注入式 `effort` pane，支持 effort label/description/selected 状态、选择回调和 Escape 返回 root；三层 pane 现在均有 Light-DOM contract 与 focused test。Harness 同引擎截图/geometry/pixel 对照、真实模型目录 consumer 和生产 modal 替换仍 pending。
 > **2026-08-27 ModelSelect Candidate evidence refresh：** 固定 `800×600@1x` Electron capture 现验证 `ArrowDown` active option、model/effort 两层 Escape 返回 root、关闭后 trigger focus restore，以及 menu `240px` 宽度与 viewport 内 `getBoundingClientRect`。这提升了 Candidate interaction/geometry 证据，但不改变 `productionConsumer=false` 与 source-equivalence-pending 状态。
 > **2026-08-27 ModelSelect Escape owner contract：** PopupSelectView 新增可选 `onEscape` interception；AgentModelPicker 在 model/effort pane 消费 Escape 返回 root，root pane 才执行 dismiss/focus restore。该生命周期修复已通过 30/30 primitive tests 和 artifact gate，仍不改变生产模型 modal。
+> **2026-08-27 ModelSelect ARIA contract：** Candidate menu 现在使用稳定 id 与 `role="menu"`，trigger 通过 `aria-controls` 绑定 menu，并提供非空 `aria-label`；fixed Electron capture/gate 已覆盖该关系。仍保持 Candidate-only，未接入生产 `modelSelectModal`。
 
 > 状态：施工中（目标模式已启动）  
 > 建立日期：2026-08-24  
