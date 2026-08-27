@@ -21,6 +21,7 @@ const { mountToast, TOAST_HOLD_MS, TOAST_FADE_MS } = await import('../modules/ui
 // resolve its emitted .js sibling imports, so exercise its checked-in artifact.
 const { mountRiskConfirmation } = await import('../modules/uiux/generated/primitives/risk-confirmation.js');
 const { mountAgentPresetSeat } = await import('../modules/uiux/generated/primitives/agent-preset-seat.js');
+const { mountAgentPresetRow } = await import('../modules/uiux/generated/primitives/agent-preset-row.js');
 const { mountSemanticIcon } = await import('../modules/uiux/primitives/semantic-icon.ts');
 const { mountChoice } = await import('../modules/uiux/primitives/choice.ts');
 const { mountRange } = await import('../modules/uiux/primitives/range.ts');
@@ -469,6 +470,92 @@ test('Harness AgentPresetSeat stages picks over a portal menu and retracts clean
         assert.equal(seatButton.hasAttribute('title'), false);
         assert.equal(document.body.querySelector('.vcp-harness-menu-list'), null);
         await scope.dispose('agent-preset-seat-complete');
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
+
+test('Harness AgentPresetRow composes the 36px PresetMenu pill with the trust suffix and retracts cleanly', async () => {
+    const dom = new JSDOM('<!doctype html><main><div id="host"><span class="legacy-child">legacy</span></div></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('agent-preset-row-test'));
+        const host = document.getElementById('host');
+        const events = [];
+        // Harness presets: trust==='user' options get `· <userTrust>` appended
+        // by PresetMenu; built-in ones render bare.
+        const options = [
+            { id: 'standard', name: 'Standard mode', trust: 'system' },
+            { id: 'draft', name: 'Research draft', trust: 'user' },
+            { id: 'minimal', description: 'Two-tool agent.' },
+        ];
+        const row = mountAgentPresetRow(host, {
+            options,
+            currentValue: 'standard',
+            onSelect: id => { events.push(id); row.setCurrent(id); },
+            onClose: () => events.push('close'),
+        }, scope);
+        // Row contract (AgentPresetRow.module.css): text column over pill inside
+        // a bordered flex row; the host's original children come back on dispose.
+        assert.equal(document.querySelector('.vcp-agent-preset-row') instanceof dom.window.HTMLDivElement, true);
+        assert.ok(document.querySelector('.vcp-agent-preset-row-title')?.textContent === 'Agent preset');
+        assert.ok(document.querySelector('.vcp-agent-preset-row-desc')?.textContent === 'Applies to sessions you start from now on. Running sessions keep the preset they began with.');
+        assert.equal(document.querySelector('.vcp-agent-preset-row-desc')?.getAttribute('role'), null);
+        const trigger = document.querySelector('.vcp-agent-preset-selector');
+        assert.ok(trigger === row.trigger);
+        assert.equal(trigger.getAttribute('aria-haspopup'), 'menu');
+        assert.equal(trigger.getAttribute('aria-expanded'), 'false');
+        assert.ok(row.root.textContent.includes('Standard mode'));
+
+        row.setOpen(true);
+        assert.equal(row.open, true);
+        assert.equal(trigger.getAttribute('aria-expanded'), 'true');
+        const portalList = document.body.querySelector('.vcp-harness-menu-list[role="menu"]');
+        assert.ok(portalList, 'expected align-end body-portal menu');
+        assert.equal(portalList.classList.contains('vcp-harness-menu-align-end'), true);
+        const labels = [...portalList.querySelectorAll('.vcp-harness-menu-item-label')];
+        assert.deepEqual(labels.map(node => node.textContent), [
+            'Standard mode',
+            'Research draft · Custom',
+            'minimal',
+        ]);
+        assert.equal(portalList.querySelector('[data-selected="true"] .vcp-harness-menu-item-label')?.textContent, 'Standard mode');
+
+        // Picking closes the menu (PresetMenu: onOpenChange(false) then select)
+        // and reports the pick to the caller, who owns the projection.
+        portalList.querySelectorAll('[role="menuitem"]')[1].click();
+        assert.deepEqual(events, ['draft']);
+        assert.equal(row.selectedLabel(), 'Research draft');
+        assert.equal(row.open, false);
+
+        // Disabled rule mirrors AgentPresetRow.tsx: busy || !writable || none.
+        row.setBusy(true);
+        assert.equal(trigger.disabled, true);
+        row.setBusy(false);
+        row.setWritable(false);
+        assert.equal(trigger.disabled, true);
+        row.setWritable(true);
+        await row.setOptions([]);
+        assert.equal(trigger.disabled, true);
+        // Loading copy wins while the current value is empty (label fallback chain).
+        row.setCurrent('');
+        assert.ok(trigger.textContent.startsWith('Loading presets…'));
+        await row.setOptions(options);
+        row.setCurrent('unknown-id');
+        assert.ok(row.trigger.textContent.includes('unknown-id'));
+
+        // Errors replace the description and surface through role="alert".
+        row.setError('Could not load presets. Try again.');
+        const desc = document.querySelector('.vcp-agent-preset-row-desc');
+        assert.ok(desc?.textContent === 'Could not load presets. Try again.');
+        assert.equal(desc?.getAttribute('role'), 'alert');
+        row.setError(null);
+        assert.equal(desc?.getAttribute('role'), null);
+
+        await row.dispose();
+        assert.equal(host.querySelector('.vcp-agent-preset-row'), null);
+        assert.ok(host.querySelector('.legacy-child'), 'expected original children restored');
+        assert.equal(document.body.querySelector('.vcp-harness-menu-list'), null);
+        await scope.dispose('agent-preset-row-complete');
     } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
 });
 

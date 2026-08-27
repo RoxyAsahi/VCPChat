@@ -3,6 +3,7 @@ import { mountField } from '../primitives/field.js';
 import { mountInput } from '../primitives/input.js';
 import { mountMenu } from '../primitives/menu.js';
 import { mountAgentPresetSeat } from '../primitives/agent-preset-seat.js';
+import { mountAgentPresetRow } from '../primitives/agent-preset-row.js';
 import { mountModal } from '../primitives/modal.js';
 import { mountTooltip } from '../primitives/tooltip.js';
 import { mountHoverCard } from '../primitives/hover-card.js';
@@ -165,6 +166,41 @@ export function mountPrimitiveLab(root, scope) {
     labScope.listen(errorToggle, 'click', () => {
         seatHasError = !seatHasError;
         seat.setError(seatHasError ? 'Could not stage the preset. Try again.' : null);
+    });
+    // Harness provenance: ui-agent-preset/src/client/AgentPresetRow.tsx +
+    // PresetMenu.tsx render the settings preference row. VCP has no legal
+    // production consumer yet (production Settings field adoption is thread B's
+    // R2-02E ledger), so this composite stays a Candidate fixture. The picker
+    // appends `· <userTrust>` to locally authored presets, matching
+    // PresetMenu's trust==='user' label rule.
+    const presetRowHost = document.createElement('div');
+    const presetRowGroup = group(lab, 'Agent Preset row', 'deepseek-harness/packages/client/ui-agent-preset/src/client/AgentPresetRow.tsx; Candidate only, no VCP production consumer');
+    presetRowGroup.append(presetRowHost);
+    let presetRow;
+    const presetRowOptions = [
+        { id: 'standard', name: 'Standard mode', trust: 'system' },
+        { id: 'custom-1', name: 'Research draft', description: 'Locally authored preset.', trust: 'user' },
+        { id: 'minimal', name: 'Minimal mode', trust: 'system' },
+    ];
+    presetRow = mountAgentPresetRow(presetRowHost, {
+        options: presetRowOptions,
+        currentValue: 'standard',
+        onSelect: id => {
+            presetRow.setCurrent(id);
+            presetRow.setBusy(true);
+            setTimeout(() => presetRow.setBusy(false), 600);
+        },
+        onClose: () => { presetRow.trigger.dataset.closed = 'true'; },
+    }, labScope);
+    const rowErrorToggle = document.createElement('button');
+    rowErrorToggle.type = 'button';
+    rowErrorToggle.textContent = 'Set row error';
+    presetRowGroup.append(rowErrorToggle);
+    mountButton(rowErrorToggle, { variant: 'ghost', size: 'sm' }, labScope);
+    let presetRowHasError = false;
+    labScope.listen(rowErrorToggle, 'click', () => {
+        presetRowHasError = !presetRowHasError;
+        presetRow.setError(presetRowHasError ? 'Could not load presets. Try again.' : null);
     });
     const modalRow = group(lab, 'Modal', 'deepseek-harness/packages/client/ui-primitives/src/Modal.tsx + Workspace/Settings production consumers');
     const modalTrigger = document.createElement('button');

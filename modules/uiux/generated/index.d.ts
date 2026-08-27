@@ -16,6 +16,8 @@ export { mountMenu } from './primitives/menu.js';
 export type { MenuController, MenuEntry, MenuItem, MenuLabel, MenuProps, MenuSeparator } from './primitives/menu.js';
 export { AGENT_PRESET_SEAT_DEFAULT_HINT, AGENT_PRESET_SEAT_NO_DESCRIPTION, mountAgentPresetSeat } from './primitives/agent-preset-seat.js';
 export type { AgentPresetSeatController, AgentPresetSeatOption, AgentPresetSeatProps } from './primitives/agent-preset-seat.js';
+export { AGENT_PRESET_ROW_DEFAULT_DESCRIPTION, AGENT_PRESET_ROW_DEFAULT_TITLE, AGENT_PRESET_ROW_LOADING_LABEL, AGENT_PRESET_ROW_USER_TRUST_LABEL, mountAgentPresetRow } from './primitives/agent-preset-row.js';
+export type { AgentPresetRowController, AgentPresetRowOption, AgentPresetRowProps } from './primitives/agent-preset-row.js';
 export { mountModal } from './primitives/modal.js';
 export type { ModalController, ModalProps } from './primitives/modal.js';
 export { mountTooltip } from './primitives/tooltip.js';
