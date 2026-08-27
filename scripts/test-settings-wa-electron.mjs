@@ -738,6 +738,7 @@ try {
         radiusChoice: 'small',
         tagline: `close-flush-tagline-${Date.now()}`,
         forumUser: `flush-user-${Date.now()}`,
+        forumPassword: `flush-pass-${Date.now()}`,
     };
     await page.evaluate((values) => {
         const set = (id, value) => {
@@ -751,10 +752,18 @@ try {
         set('appearanceSidebarAvatarSize', values.avatarSize);
         set('appearanceCustomRadius', values.customRadius);
         set('homeVisualTagline', values.tagline);
+        // First-batch toggles: flip both home-visual booleans so their
+        // checkbox drafts also ride the same close flush.
+        ['showHomeVisualBrand', 'showHomeVisualTagline'].forEach(id => {
+            const node = document.getElementById(id);
+            node.checked = !node.checked;
+            node.dispatchEvent(new Event('change', { bubbles: true }));
+        });
         const choice = document.getElementById(`appearanceSidebarRadiusChoice-${values.radiusChoice}`);
         choice.checked = true;
         choice.dispatchEvent(new Event('change', { bubbles: true }));
         set('adminUsername', values.forumUser);
+        set('adminPassword', values.forumPassword);
     }, flushValues);
     const dirtyAtClose = await page.evaluate(() => {
         const form = document.getElementById('globalSettingsForm');
@@ -767,6 +776,8 @@ try {
             rowHeight: document.getElementById('appearanceSidebarRowHeight')?.value,
             avatarSize: document.getElementById('appearanceSidebarAvatarSize')?.value,
             customRadius: document.getElementById('appearanceCustomRadius')?.value,
+            showHomeVisualBrand: document.getElementById('showHomeVisualBrand')?.checked === true,
+            showHomeVisualTagline: document.getElementById('showHomeVisualTagline')?.checked === true,
         };
     });
     assert.equal(dirtyAtClose.dirty, true, `typed drafts mark the form dirty before close (${JSON.stringify(dirtyAtClose)})`);
@@ -775,6 +786,8 @@ try {
         rowHeight: dirtyAtClose.rowHeight,
         avatarSize: dirtyAtClose.avatarSize,
         customRadius: dirtyAtClose.customRadius,
+        showHomeVisualBrand: dirtyAtClose.showHomeVisualBrand,
+        showHomeVisualTagline: dirtyAtClose.showHomeVisualTagline,
     };
     await page.evaluate(() => window.uiHelperFunctions.closeModal('globalSettingsModal'));
     await page.waitForFunction(() => !document.getElementById('globalSettingsModal')?.classList.contains('active'), { timeout: timeoutMs });
@@ -791,14 +804,20 @@ try {
                 customRadius: profile.customRadius,
                 sidebarRadius: profile.sidebarRadius,
                 homeVisualTagline: settingsService?.state?.get?.()?.homeVisualTagline || '',
+                showHomeVisualBrand: settingsService?.state?.get?.()?.showHomeVisualBrand === true,
+                showHomeVisualTagline: settingsService?.state?.get?.()?.showHomeVisualTagline === true,
                 forumUsername: String(forumService?.state?.get?.()?.username ?? ''),
+                forumPassword: String(forumService?.state?.get?.()?.password ?? ''),
             };
         });
         if (
             String(flushedSnapshot.sidebarRowHeight) === expectedFlush.rowHeight
             && Number(flushedSnapshot.customRadius) === Number(expectedFlush.customRadius)
             && flushedSnapshot.homeVisualTagline.startsWith('close-flush-tagline-')
+            && flushedSnapshot.showHomeVisualBrand === expectedFlush.showHomeVisualBrand
+            && flushedSnapshot.showHomeVisualTagline === expectedFlush.showHomeVisualTagline
             && flushedSnapshot.forumUsername === flushValues.forumUser
+            && flushedSnapshot.forumPassword === flushValues.forumPassword
         ) break;
         await sleep(250);
     }
@@ -807,7 +826,10 @@ try {
     assert.equal(Number(flushedSnapshot.customRadius), Number(expectedFlush.customRadius), `close flush committed the on-screen custom-radius draft (${JSON.stringify({ flushedSnapshot, expectedFlush })})`);
     assert.equal(flushedSnapshot.sidebarRadius, 'small', `close flush committed radius choice draft (${JSON.stringify(flushedSnapshot)})`);
     assert.ok(flushedSnapshot.homeVisualTagline.startsWith('close-flush-tagline-'), `close flush committed home tagline draft (${JSON.stringify(flushedSnapshot)})`);
+    assert.equal(flushedSnapshot.showHomeVisualBrand, expectedFlush.showHomeVisualBrand, `close flush committed home brand toggle draft (${JSON.stringify({ flushedSnapshot, expectedFlush })})`);
+    assert.equal(flushedSnapshot.showHomeVisualTagline, expectedFlush.showHomeVisualTagline, `close flush committed home tagline toggle draft (${JSON.stringify({ flushedSnapshot, expectedFlush })})`);
     assert.equal(flushedSnapshot.forumUsername, flushValues.forumUser, `close flush committed forum username draft via ForumConfigUiService (${JSON.stringify(flushedSnapshot)})`);
+    assert.equal(flushedSnapshot.forumPassword, flushValues.forumPassword, `close flush committed forum password draft via ForumConfigUiService (${JSON.stringify(flushedSnapshot)})`);
     console.log('  [PASS] 6b. close flush commits per-field typed drafts (settings fields + forum credentials)');
 
     // ---- 6c. Wide layout radio pair is owned by the typed field owner:
