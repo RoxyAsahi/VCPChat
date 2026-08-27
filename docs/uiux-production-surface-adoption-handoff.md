@@ -320,3 +320,49 @@ roadmap checkpoint 追加于 `38ec8bb8`。
 3. 先决工序建议：`networkNotesPaths` 动态行本身仍是双轨序列化（typed consumer 写行 + legacy manager 收集），可先做「动态列表字段的单一 owner 化」（TYPED_FIELD_DEFINITIONS 引入 list kind 或等价机制）作为独立批次，再在其上挂接目录选择交互。
 
 **门禁**：本批为纯审计+文档，代码零改动；不重跑运行时门禁（最近一次批次 11 全绿证据仍然有效，HEAD 仅前进文档提交）。
+
+### 2026-08-27 批次 13：networkNotesPaths 动态列表字段单一 owner 收口
+
+状态：`stable`。
+
+- 机制决策（评估结论）：动态路径行无法塞进「一控件一 id」的 `TYPED_FIELD_DEFINITIONS` 表驱动，选择**等价的容器级 owner 通道**而非为此泛化 list kind——`#networkNotesPathsContainer` 成为 owned unit，事件委托天然覆盖 helper 之后追加的行，避免为单字段扩张通用表结构的复杂度。若未来出现第二个列表型字段，再考虑抽 formal kind。
+- 实现：input/change 委托 → 重收集整行列表（trim + 过滤空值，与 legacy collect 语义一致）→ 进入 pendingPatch → 同一 debounce/关闭 flush/run 链提交；`addTypedNetworkPathInput` 在 owner 已挂载时为新行预置抑制标记；删除按钮的静默移除现在显式宣告并重收集（旧实现下删行不产生任何 dirty 与保存）。行投影从通用 consumer apply() 迁入 typed project()（单一 writer）；presentationOwner 兜底与 legacy manager 的 DOM 收集保留于 Classic 面。
+- 回归调查与方法论：新 journey 曾在既有 toggle 快照探针失败，表现为「服务状态已是 false 而 DOM 未更新」。插桩链（投影计数、checked setter 栈拦截、发射流水 emitLog、外部事件日志、影子还原对照实验）最终证明：HEAD 基线同样运行时其失败点不同，真实原因是本批使 journey 的增/删行断言会触发一次 debounced typed save，与探针的发射交错产生竞态假象——产品逻辑无缺陷。修复：journey 在增删行断言后等待 dirty 结算与 status 离开 saving，再进入后续快照消费段。
+- journey 新增 6e：编辑首行 → 删除行 → 经生产 add 按钮加行 → 填入唯一值 → 关闭模态绕过防抖 → 断言 typed service 快照 networkNotesPaths 与屏幕列表逐项相等、全部行携带 owner 抑制标记、save-result 归属 typed-settings-field-owner。全轮 17 PASS。
+- 门禁全绿：check:uiux、test:uiux（44/44）、check:uiux:artifacts（66 文件）、test:uiux:artifacts、Electron journey（17 PASS）、lifecycle stress、guard:classic-retirement、source-equivalence。
+- 台账：§2 新增 `networkNotesPaths` 行（typed-owner-active，close-flush 证据 journey 6e），§7 增补批次段落。批次 12 审计中登记的「先决工序：动态列表字段单一 owner 化」就此闭合；directory-browser production consumer 接入仅剩线程 A primitive 成熟度与目录列举能力两项外部前置。
+
+### 2026-08-27 批次 14：验收矩阵未闭合项盘点（directory-browser 未解锁分支）
+
+状态：docs-only 审计落盘。
+
+- 前置复查：`af281a22` 之后线程 A 新交付 4 个 directory-browser 提交（2524e717 draft prefix filtering、8d72772e draft navigation preview、b0183953 two-leg landing、7a2b431c landing timing parity），roadmap 各 checkpoint 状态仍为 `foundation-electron-active`——仍缺同语义 Harness DOM/computed-style/pixel diff 与合法 VCP production consumer。unlock 条件未满足，按指令转入「盘点 handoff 验收矩阵中其余未闭合项」分支。
+- 盘点结论（三向归因）：settings-bridge 通用 consumer projection 残余 45 行 = (1) 40 行 / 38 键全部命中台账 §3 冻结清单（vcpServerUrl、voiceMode、speechRecognizer*、注入/清洗组、气泡组、流式组等），属协议责任保留而非欠账；(2) 5 行 / 4 键「userName 簇」（userName、userNameTextColor(+Text) 镜像、userUseThemeColorsInChat、continueWritingPrompt）为唯一非冻结待迁量；(3) presentationOwner 对该簇的全部写入均位于 `!typedSettingsProjectionActive` 兜底分支（mainChatSettingsPresentationOwner.js:605/609/618/637 一带），typed owner 挂载后惰性——无三重活跃写入。
+- 矩阵行 62/63/70 已按上述归因改写（settings-uiux-field-ownership-2026-08-25.md §4）：legacy projection/save 链的存量边界从模糊的「仍存在」收敛为精确清单；新增结论均注明批次 14 归因来源。
+- userName 簇迁移条件登记（不在本批施工）：`userNameTextColor` 复用 `userAvatarBorderColor` 的 color+text 镜像对范式；`continueWritingPrompt` 是 failure/retry journey（矩阵行 65）的证据承载字段，迁移前必须先产出 typed 路径失败/重试等价证据并同步迁移该断言；其余两键直迁。
+- 门禁口径：代码面自批次 13 门禁全绿的 `180fb5bc` 起零变更（`git diff --stat 180fb5bc..HEAD` 为空），本批 docs-only 不重跑八项门禁；未完成门禁不虚构。win32/Linux packaged evidence 维持 evidence-pending。
+- 台账：§4 三行改写 + §7 追加盘点段落；roadmap 追加 R2-02E 存量盘点 checkpoint。
+
+### 2026-08-27 批次 15：userName 簇 typed owner 收口（unlock 未满足 → 按批次 14 条件施工）
+
+状态：`typed-owner-active`（3 键 / 5 定义）+ `inventory-only` 裁定 1 键。
+
+- unlock 复查：`8247c82a` 之后线程 A 零新提交（DirectoryBrowser 在途改动未落 roadmap，状态仍 `foundation-electron-active`），按指令转入「按批次 14 登记的迁移条件评估是否施工」分支。
+- 语义契约收口（本批核心）：legacy 整表收集对 `userName`/`continueWritingPrompt` 是 trim + 空值回填（'用户' / '请继续'）、颜色键有空值兜底，原 string kind 为裸 String(raw)。为使 typed 保存命令线与 legacy 收集产物逐字节等价，`readTypedFieldPatch` 新增定义级 `trimValue`/`fallback` 归一化——归一化发生在事件读取时（与 legacy 防抖时收集语义同位），DOM 输入过程不受干预。
+- 施工范围：`userName`、`userNameTextColor`(+Text 镜像)、`continueWritingPrompt` 加入 TYPED_FIELD_DEFINITIONS；typed project() 接管四条投影（含 color 镜像双控件）；通用 consumer projection 前 5 行退役，残余从此仅剩 §3 冻结行。
+- 关键查证与批次 14 初判修正：`userUseThemeColorsInChat` 在 globalSettingsForm 内**无任何控件**——main.html 中同名前缀的 `useThemeColorsInChat` 复选框位于 agentSettingsForm（per-agent 配置域，agentHandlers 读写 agentConfig 键）；global 键仅存在于持久化 schema、惰性兜底读与惰性通用行。按 sidebar 三键同类裁定 `inventory-only`：不新建表单控件、不加定义，惰性行随批退役并在 bridge 源码注释中记录结论。
+- journey 兼容性验证：failure/retry 段的打字字段正是 `continueWritingPrompt`，迁移后该段经 typed dirty→typed save→错误归属→点击重试链路全绿（重试成功仍走 legacy 整表提交收敛，属既有双 owner 归属设计）；新增 6f：未 trim 名称 trim 后落盘、清空提示词「请继续」回填、文本镜像 #123abc 共享单键提交、归属断言。全轮 19 PASS。
+- 门禁全绿八项：check:uiux、test:uiux（44/44）、check:uiux:artifacts（66 文件）、test:uiux:artifacts、Electron journey（19 PASS）、lifecycle stress（listener 680 / resources 367 五 checkpoint 恒定、detached=0）、guard:classic-retirement、source-equivalence（legacyClean=true）。
+- 矩阵影响：「单一 projection owner」「单一 save command owner」「legacy projection 删除」三行再次收敛——非冻结 legacy 写入面清零，唯一存量即 §3 冻结责任保留。presentationOwner 启动兜底维持惰性（待独立 reload/Classic/upstream 等价证据后统一退役）。
+- 台账：§2 新增 userName/userNameTextColor/continueWritingPrompt 三行（typed-owner-active），§7 追加批次 15 段落（含批次 14 初判修正记录）。
+
+### 2026-08-27 批次 16：presentationOwner 启动兜底退役证据清单（unlock 未满足分支）
+
+状态：docs-only 评估落盘；施工裁定 = 兜底代码零删除。
+
+- unlock 复查：`3bc85d98` 后线程 A 零新提交；main.js / check-harness-fixture-matrix.mjs / chat-kernel-consumer-report.json 在途改动未落盘；全部 DirectoryBrowser checkpoint 保持 `foundation-electron-active`。按指令转入矩阵存量评估分支，选定 ledger §6 遗留项「启动兼容 fallback 尚未删除」为下一候选并产出前置证据清单。
+- 现状盘点：presentationOwner 存在 19 个 `!typedSettingsProjectionActive` 守卫分支（约 60+ 处 safeSet/safeCheck，行 605-695），覆盖全表单兜底；守卫条件为「bridge 服务已暴露且 `vcpSettingsRevision` 就绪」，apply() 内两处刷新。
+- 关键定性更正：`uiMode: 'classic'` 仅存在于 embeddedAppSessionManager 的独立入口页参数；main.html 恒为 `uiMode: 'next'` 且 settings-bridge 无 uiMode 门控自举。**兜底的真实职责是启动挂载窗口与部分挂载失败窗口的填充安全网，不是跨页面 Classic 兼容**——退役难度低于原「需 reload/Classic/upstream 全量等价」的表述，但挂载窗口竞态证明是硬前置。
+- 退役前证据清单（E1-E6，落盘台账批次 16 段落）：E1 渲染 `#globalSettingsForm` 的入口面清单与 uiMode≠next 排除证明；E2 冷启动 `vcpSettingsRevision` 先于模态可打开的确定性断言 + 首开全 id == snapshot 扩容；E3 部分挂载失败契约定义（typed readiness 门禁拒绝半挂载 shell）；E4 global-settings-updated 全 source 路由等价盘点（临时插桩按协议剥离）；E5 reload durable restore 断言集扩至全部原兜底 id；E6 source-equivalence 负向守护（被删 id 再现第二写入方即失败）。
+- 施工裁定：本批不删兜底代码；下一批可独立推进 E2/E5 journey 断言扩容与 E4 source 盘点。docs-only——代码面自 3bc85d98 起零变更，不重跑门禁；win32/Linux packaged evidence 维持 evidence-pending。
+- 台账：§7 追加批次 16 段落；roadmap 追加 R2-02E checkpoint。
