@@ -81,9 +81,23 @@ try {
         const requiredFields = schema.required.filter(field => harness[field] == null);
         const viewportPass = JSON.stringify(harness.viewport ?? null) === JSON.stringify(schema.viewport);
         const harnessSchemaPass = requiredFields.length === 0 && viewportPass && harness.productionConsumer === false;
-        report.harnessCapture = { source: harness.source ?? null, viewport: harness.viewport ?? null, domPresent: Boolean(harness.dom), computedStylePresent: Boolean(harness.trigger || harness.menu || harness.computedStyle), schema: { requiredFields, viewportPass, productionConsumerPass: harness.productionConsumer === false, pass: harnessSchemaPass } };
+        const interaction = harness.interaction ?? {};
+        const interactionPass = interaction.rootPane === true
+            && interaction.modelPane === true
+            && interaction.effortPane === true
+            && interaction.escapePaneBack?.modelRowVisible === true
+            && interaction.escapePaneBack?.modelOptionsVisible === false
+            && interaction.escapeClose === true
+            && interaction.focusRestore === true
+            && Array.isArray(harness.missingEvidence)
+            && harness.missingEvidence.length === 0;
+        report.harnessCapture = { source: harness.source ?? null, viewport: harness.viewport ?? null, domPresent: Boolean(harness.dom), computedStylePresent: Boolean(harness.trigger || harness.menu || harness.computedStyle), interaction: { ...interaction, pass: interactionPass }, schema: { requiredFields, viewportPass, productionConsumerPass: harness.productionConsumer === false, pass: harnessSchemaPass } };
         if (!harnessSchemaPass) report.missingEvidence.push('Harness capture schema/viewport/production boundary');
-        report.status = 'harness-capture-available-pixel-pending';
+        if (!interactionPass) {
+            report.status = 'pending-harness-interaction-evidence';
+            report.missingEvidence.push('Harness ModelSelect keyboard/focus interaction evidence');
+        }
+        if (report.status !== 'pending-harness-interaction-evidence') report.status = 'harness-capture-available-pixel-pending';
         report.missingEvidence.push('same-semantic ModelSelect pixel diff');
     }
     if (!report.dom.ariaContractPass || !report.dom.structuralPass) report.missingEvidence.push('Candidate DOM/ARIA structural contract');

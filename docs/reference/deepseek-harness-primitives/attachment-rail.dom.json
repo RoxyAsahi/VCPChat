@@ -1,0 +1,24 @@
+{
+  "primitive": "AttachmentRail",
+  "provenance": {
+    "sources": [
+      "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-attachment/src/AttachmentRail.tsx"
+    ]
+  },
+  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-attachment/src/AttachmentRail.module.css",
+  "root": { "tag": "div", "class": "root", "positioning": "relative" },
+  "rail": { "tag": "div", "class": "rail", "role": "group", "ariaLabel": "labels.group", "scrollAxis": "horizontal" },
+  "item": {
+    "tag": "div",
+    "class": "item",
+    "children": [
+      { "tag": "button", "class": "thumbnail", "title": "labels.open", "children": ["img alt=item.alt"] },
+      { "tag": "button", "class": "remove", "ariaLabel": "item.removeLabel" }
+    ]
+  },
+  "arrows": { "left": { "class": "arrowLeft", "conditional": "edges.left" }, "right": { "class": "arrowRight", "conditional": "edges.right" } },
+  "states": ["empty-null", "single-item", "overflow-left-right-arrows", "hover-remove", "focus-remove", "touch-remove-visible", "reduced-motion", "wheel-page", "resize-recompute", "dispose"],
+  "interaction": ["vertical wheel is consumed and converted to horizontal scroll", "new item reveals rail end", "remove/open callbacks are injected"],
+  "aria": ["rail uses group role and localized label", "thumbnail image exposes item alt", "remove and paging buttons use localized labels"],
+  "vcpDeviation": "No VCP attachment consumer is declared; this contract is Harness source-only and does not modify chat rendering."
+}

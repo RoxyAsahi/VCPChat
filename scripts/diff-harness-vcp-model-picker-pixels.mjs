@@ -25,16 +25,23 @@ try {
             harness: {
                 modelOptions: harnessReport.modelPane?.options?.length ?? null,
                 effortOptions: harnessReport.effortPane?.options?.length ?? null,
-                searchVisible: null,
+                groupCount: harnessReport.modelPane?.groupCount ?? null,
+                searchVisible: harnessReport.interaction?.searchVisible ?? false,
+                optionRole: harnessReport.modelPane?.options?.[0] ? 'menuitemradio' : null,
             },
             vcp: {
                 modelOptions: vcpReport.modelPane?.optionCount ?? null,
                 effortOptions: vcpReport.effortPane?.optionCount ?? null,
+                groupCount: vcpReport.modelPane?.groupCount ?? 0,
                 searchVisible: vcpReport.modelPane?.searchVisible ?? null,
+                optionRole: vcpReport.modelPane?.optionRole ?? 'option',
             },
         };
         report.semanticEquivalent = report.semanticFixture.harness.modelOptions === report.semanticFixture.vcp.modelOptions
-            && report.semanticFixture.harness.effortOptions === report.semanticFixture.vcp.effortOptions;
+            && report.semanticFixture.harness.effortOptions === report.semanticFixture.vcp.effortOptions
+            && report.semanticFixture.harness.groupCount === report.semanticFixture.vcp.groupCount
+            && report.semanticFixture.harness.searchVisible === report.semanticFixture.vcp.searchVisible
+            && report.semanticFixture.harness.optionRole === report.semanticFixture.vcp.optionRole;
         if (!report.semanticEquivalent) {
             report.status = 'pending-semantic-fixture-alignment';
             report.missingEvidence.push('semantic fixture alignment');
