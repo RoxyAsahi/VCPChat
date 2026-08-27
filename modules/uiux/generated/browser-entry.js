@@ -16,6 +16,7 @@ import { mountModal } from './primitives/modal.js';
 import { mountTooltip } from './primitives/tooltip.js';
 import { mountHoverCard } from './primitives/hover-card.js';
 import { mountDisclosureRow } from './primitives/disclosure-row.js';
+import { mountStateDot } from './primitives/state-dot.js';
 import { mountChoice } from './primitives/choice.js';
 import { mountRange } from './primitives/range.js';
 import { mountToggle } from './primitives/toggle.js';
@@ -47,6 +48,7 @@ const api = {
     mountTooltip,
     mountHoverCard,
     mountDisclosureRow,
+    mountStateDot,
     mountChoice,
     mountRange,
     mountToggle,

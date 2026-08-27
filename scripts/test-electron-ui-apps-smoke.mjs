@@ -1010,6 +1010,7 @@ try {
             tooltipAnchor: Boolean([...(lab?.querySelectorAll('button') || [])].find(button => button.textContent === 'Hover for details')),
             hoverCardAnchor: Boolean([...(lab?.querySelectorAll('*') || [])].find(node => node.textContent === 'Workspace path')),
             disclosureRow: Boolean(lab?.querySelector('.vcp-harness-disclosure-row[role="button"]')),
+            stateDots: lab?.querySelectorAll('.vcp-harness-lab-state-dot-fixture').length || 0,
         };
     });
     assert.deepEqual(harnessLabContract, {
@@ -1025,6 +1026,7 @@ try {
         tooltipAnchor: true,
         hoverCardAnchor: true,
         disclosureRow: true,
+        stateDots: 4,
     }, `Harness Candidate Lab contract missing: ${JSON.stringify(harnessLabContract)}`);
     let waDefined = false;
     while (Date.now() < deadline) {

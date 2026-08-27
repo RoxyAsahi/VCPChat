@@ -6,6 +6,7 @@ import { mountModal } from '../primitives/modal.js';
 import { mountTooltip } from '../primitives/tooltip.js';
 import { mountHoverCard } from '../primitives/hover-card.js';
 import { mountDisclosureRow } from '../primitives/disclosure-row.js';
+import { mountStateDot } from '../primitives/state-dot.js';
 import { mountSelect } from '../primitives/select.js';
 const STYLE_ID = 'vcp-harness-primitive-lab';
 function ensureStyles() {
@@ -203,6 +204,18 @@ export function mountPrimitiveLab(root, scope) {
         children: disclosureBody,
         onToggle: () => disclosure.setOpen(!disclosure.open),
     }, labScope);
+    const stateDotRow = group(lab, 'StateDot', 'deepseek-harness/packages/client/ui-primitives/src/StateDot.tsx + Jobs/Workflow/Workspace production consumers');
+    ['done', 'warning', 'ongoing', 'error'].forEach(state => {
+        const fixture = document.createElement('span');
+        fixture.className = 'vcp-harness-lab-state-dot-fixture';
+        fixture.dataset.state = state;
+        const dotHost = document.createElement('span');
+        const label = document.createElement('span');
+        label.textContent = state;
+        fixture.append(dotHost, label);
+        stateDotRow.append(fixture);
+        mountStateDot(dotHost, { state }, labScope);
+    });
     return scope.own(async () => {
         await labScope.dispose('primitive-lab-unmounted');
         root.replaceChildren(...originalNodes);

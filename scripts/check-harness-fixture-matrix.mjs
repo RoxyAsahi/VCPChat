@@ -18,6 +18,7 @@ if (interaction['modal/close-reopen-dispose']?.status !== 'candidate-interaction
 if (interaction['tooltip/hover-focus-delay-disable']?.status !== 'candidate-interaction-active') fail('Tooltip interaction lifecycle must remain explicitly Candidate');
 if (interaction['hover-card/dwell-grace-copy-dispose']?.status !== 'candidate-interaction-active') fail('HoverCard interaction lifecycle must remain explicitly Candidate');
 if (interaction['disclosure-row/controlled-row-leading-keyboard-dispose']?.status !== 'candidate-interaction-active') fail('DisclosureRow interaction lifecycle must remain explicitly Candidate');
+if (interaction['state-dot/four-state-shape-size-phase-dispose']?.status !== 'candidate-interaction-active') fail('StateDot interaction lifecycle must remain explicitly Candidate');
 for (const output of ['dom', 'geometry', 'computed-style', 'screenshot', 'pixel-diff']) if (!matrix.outputs.includes(output)) fail(`missing output layer ${output}`);
 if (matrix.stateSemantics?.['select/closed'] !== 'AgentPresetSeat ready trigger; production fixture captured, raw DOM/geometry/pixel comparison is failing') fail('Select closed state must retain its Agent Preset production-fixture boundary');
 if (matrix.stateSemantics?.['select/open'] !== 'AgentPresetSeat ready open/selected/hover menu; VCP-owned production capture is replayable') fail('Select open state must retain its VCP-owned Harness capture boundary');

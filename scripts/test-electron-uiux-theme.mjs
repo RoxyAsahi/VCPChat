@@ -219,6 +219,10 @@ try {
         disclosure?.click();
         result.disclosureClosed = disclosure?.getAttribute('aria-expanded') === 'false'
             && !host.querySelector('.vcp-harness-lab-disclosure-body');
+        result.stateDotStates = [...host.querySelectorAll('.vcp-harness-lab-state-dot-fixture')].map(fixture => fixture.getAttribute('data-state'));
+        const ongoingDot = host.querySelector('.vcp-harness-state-matrix[data-state="ongoing"]');
+        result.stateDotOngoingCells = ongoingDot?.querySelectorAll('rect').length || 0;
+        result.stateDotAriaHidden = [...host.querySelectorAll('.vcp-harness-state-dot,.vcp-harness-state-matrix')].every(dot => dot.getAttribute('aria-hidden') === 'true');
         await release();
         result.restored = host.childNodes.length === 0;
         result.scopeActive = scope.active;
@@ -260,6 +264,9 @@ try {
         disclosureCollapsed: true,
         disclosureOpen: true,
         disclosureClosed: true,
+        stateDotStates: ['done', 'warning', 'ongoing', 'error'],
+        stateDotOngoingCells: 8,
+        stateDotAriaHidden: true,
         restored: true,
         scopeActive: true,
     }, `generated Harness Candidate Lab mismatch: ${JSON.stringify(candidateLabBoundary)}`);
@@ -542,6 +549,64 @@ try {
         delete window.__harnessCandidateDisclosureController;
         delete window.__harnessCandidateDisclosureScope;
         document.querySelector('[data-electron-candidate-disclosure]')?.remove();
+    });
+    const stateDotGeometry = await page.evaluate(() => {
+        const host = document.createElement('section');
+        host.dataset.electronCandidateStateDot = 'true';
+        host.className = 'vcp-ui-scope';
+        host.style.cssText = 'position:fixed;left:64px;top:96px;z-index:1200;display:flex;align-items:center;gap:28px;padding:24px;background:#fff;color:#0f1115;border:1px solid rgba(0,0,0,.08);border-radius:12px';
+        document.body.append(host);
+        const scope = new window.VCPLifecycle.LifecycleScope('test:harness-candidate-state-dot-visual');
+        const controllers = [];
+        for (const state of ['done', 'warning', 'ongoing', 'error']) {
+            const fixture = document.createElement('span');
+            fixture.style.cssText = 'display:inline-flex;align-items:center;gap:8px;font-size:13px;line-height:20px';
+            const dotHost = document.createElement('span');
+            const label = document.createElement('span');
+            label.textContent = state;
+            fixture.append(dotHost, label);
+            host.append(fixture);
+            controllers.push(window.VCPUIUX.mountStateDot(dotHost, { state }, scope));
+        }
+        const dots = [...host.querySelectorAll('.vcp-harness-state-dot,.vcp-harness-state-matrix')];
+        const states = dots.map(dot => {
+            const rect = dot.getBoundingClientRect();
+            const style = getComputedStyle(dot);
+            return {
+                state: dot.getAttribute('data-state'),
+                tag: dot.tagName,
+                ariaHidden: dot.getAttribute('aria-hidden'),
+                rect: { width: rect.width, height: rect.height },
+                color: style.color,
+                cells: dot.querySelectorAll('rect').length,
+                delays: [...dot.querySelectorAll('rect')].map(cell => cell.style.animationDelay),
+                animation: dot.querySelector('rect') ? getComputedStyle(dot.querySelector('rect')).animationName : null,
+            };
+        });
+        window.__harnessCandidateStateDotControllers = controllers;
+        window.__harnessCandidateStateDotScope = scope;
+        return { viewport: { width: window.innerWidth, height: window.innerHeight, deviceScaleFactor: window.devicePixelRatio }, source: 'generated-artifact-electron', states };
+    });
+    assert.deepEqual(stateDotGeometry.viewport, { width: 800, height: 600, deviceScaleFactor: 1 });
+    assert.deepEqual(stateDotGeometry.states.map(item => ({ state: item.state, tag: item.tag, ariaHidden: item.ariaHidden, rect: item.rect, cells: item.cells })), [
+        { state: 'done', tag: 'SPAN', ariaHidden: 'true', rect: { width: 10, height: 10 }, cells: 0 },
+        { state: 'warning', tag: 'SPAN', ariaHidden: 'true', rect: { width: 10, height: 10 }, cells: 0 },
+        { state: 'ongoing', tag: 'svg', ariaHidden: 'true', rect: { width: 10, height: 10 }, cells: 8 },
+        { state: 'error', tag: 'SPAN', ariaHidden: 'true', rect: { width: 10, height: 10 }, cells: 0 },
+    ]);
+    assert.deepEqual(stateDotGeometry.states[2].delays, ['-1000ms', '-875ms', '-750ms', '-625ms', '-500ms', '-375ms', '-250ms', '-125ms']);
+    assert.equal(stateDotGeometry.states[2].animation, 'vcp-harness-state-dot-chase');
+    assert.equal(stateDotGeometry.states[2].color, 'rgb(86, 134, 254)');
+    const stateDotScreenshot = path.join(root, 'reports', 'vcp-harness-state-dot-candidate.png');
+    await page.screenshot({ path: stateDotScreenshot });
+    assert.ok((await fs.stat(stateDotScreenshot)).size > 1024, 'StateDot Candidate screenshot is unexpectedly empty');
+    await fs.writeFile(path.join(root, 'reports', 'vcp-harness-state-dot-candidate.json'), `${JSON.stringify(stateDotGeometry, null, 2)}\n`, 'utf8');
+    await page.evaluate(async () => {
+        for (const controller of window.__harnessCandidateStateDotControllers || []) await controller.dispose?.();
+        await window.__harnessCandidateStateDotScope?.dispose?.('candidate-state-dot-visual-complete');
+        delete window.__harnessCandidateStateDotControllers;
+        delete window.__harnessCandidateStateDotScope;
+        document.querySelector('[data-electron-candidate-state-dot]')?.remove();
     });
     await page.screenshot({ path: primitiveScreenshot });
     const screenshotStat = await fs.stat(primitiveScreenshot);

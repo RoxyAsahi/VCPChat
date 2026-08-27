@@ -22,6 +22,8 @@ export { mountHoverCard } from './primitives/hover-card.js';
 export type { HoverCardController, HoverCardProps } from './primitives/hover-card.js';
 export { mountDisclosureRow } from './primitives/disclosure-row.js';
 export type { DisclosureRowController, DisclosureRowProps } from './primitives/disclosure-row.js';
+export { mountStateDot } from './primitives/state-dot.js';
+export type { StateDotController, StateDotProps, StateDotState } from './primitives/state-dot.js';
 export { mountChoice } from './primitives/choice.js';
 export { mountRange } from './primitives/range.js';
 export { mountToggle } from './primitives/toggle.js';

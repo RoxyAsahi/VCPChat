@@ -15,12 +15,50 @@ const { mountModal } = await import('../modules/uiux/primitives/modal.ts');
 const { mountTooltip } = await import('../modules/uiux/primitives/tooltip.ts');
 const { mountHoverCard } = await import('../modules/uiux/primitives/hover-card.ts');
 const { mountDisclosureRow } = await import('../modules/uiux/primitives/disclosure-row.ts');
+const { mountStateDot } = await import('../modules/uiux/primitives/state-dot.ts');
 const { mountChoice } = await import('../modules/uiux/primitives/choice.ts');
 const { mountRange } = await import('../modules/uiux/primitives/range.ts');
 const { mountToggle } = await import('../modules/uiux/primitives/toggle.ts');
 const { mountColorPair } = await import('../modules/uiux/primitives/color-pair.ts');
 
 const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+
+test('Harness StateDot renders solid halos and the phased ongoing pixel matrix', async () => {
+    const dom = new JSDOM('<!doctype html><main><span id="host"><em id="legacy">legacy</em></span></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('state-dot-test'));
+        const host = document.getElementById('host');
+        const dot = mountStateDot(host, { state: 'done', size: 12, className: 'row-dot' }, scope);
+        assert.equal(dot.element.tagName, 'SPAN');
+        assert.equal(dot.element.dataset.state, 'done');
+        assert.equal(dot.element.getAttribute('aria-hidden'), 'true');
+        assert.equal(dot.element.style.width, '12px');
+        assert.equal(dot.element.style.height, '12px');
+        assert.equal(dot.element.classList.contains('row-dot'), true);
+        dot.setState('ongoing');
+        assert.equal(dot.element.tagName.toLowerCase(), 'svg');
+        assert.equal(dot.element.dataset.state, 'ongoing');
+        assert.equal(dot.element.getAttribute('width'), '12');
+        assert.equal(dot.element.getAttribute('height'), '12');
+        assert.equal(dot.element.getAttribute('shape-rendering'), 'crispEdges');
+        const cells = [...dot.element.querySelectorAll('rect')];
+        assert.equal(cells.length, 8);
+        assert.equal(new Set(cells.map(cell => cell.style.animationDelay)).size, 8);
+        assert.deepEqual(cells.map(cell => cell.style.animationDelay), ['-1000ms', '-875ms', '-750ms', '-625ms', '-500ms', '-375ms', '-250ms', '-125ms']);
+        dot.setSize(10);
+        assert.equal(dot.element.getAttribute('width'), '10');
+        dot.setState('error');
+        assert.equal(dot.element.tagName, 'SPAN');
+        assert.equal(dot.element.dataset.state, 'error');
+        assert.throws(() => dot.setState('paused'), /Unknown StateDot state/);
+        assert.throws(() => dot.setSize(0), /positive finite/);
+        await dot.dispose();
+        assert.equal(host.firstElementChild.id, 'legacy');
+        await scope.dispose('state-dot-complete');
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
 
 test('Harness DisclosureRow preserves controlled row-click and leading-button contracts', async () => {
     const dom = new JSDOM('<!doctype html><main><section id="row"><span id="icon">I</span><span id="summary"> · command</span><div id="body">Result</div></section><section id="button-row"><span id="icon-2">J</span><span id="summary-2"> · phase</span><div id="body-2">Members</div></section></main>');

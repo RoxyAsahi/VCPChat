@@ -1,0 +1,14 @@
+{
+  "viewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 },
+  "source": "generated-artifact-electron",
+  "implementation": "modules/uiux/generated/primitives/state-dot.js",
+  "harnessSource": "packages/client/ui-primitives/src/StateDot.tsx",
+  "states": [
+    { "state": "done", "tag": "SPAN", "ariaHidden": "true", "rect": { "width": 10, "height": 10 }, "color": "rgb(34, 197, 94)", "cells": 0 },
+    { "state": "warning", "tag": "SPAN", "ariaHidden": "true", "rect": { "width": 10, "height": 10 }, "color": "rgb(245, 158, 11)", "cells": 0 },
+    { "state": "ongoing", "tag": "svg", "ariaHidden": "true", "rect": { "width": 10, "height": 10 }, "color": "rgb(86, 134, 254)", "cells": 8, "delays": ["-1000ms", "-875ms", "-750ms", "-625ms", "-500ms", "-375ms", "-250ms", "-125ms"], "animation": "vcp-harness-state-dot-chase" },
+    { "state": "error", "tag": "SPAN", "ariaHidden": "true", "rect": { "width": 10, "height": 10 }, "color": "rgb(217, 45, 32)", "cells": 0 }
+  ],
+  "status": "candidate-interaction-active",
+  "pixelDiff": "pending-same-semantic-harness-fixture"
+}
