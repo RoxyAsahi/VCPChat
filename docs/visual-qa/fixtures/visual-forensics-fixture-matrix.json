@@ -18,6 +18,13 @@
       "selectors": ["#globalSettingsModal", ".settings-section.active", ".vcp-settings-row"]
     },
     {
+      "id": "showcase-settings-row-context",
+      "trigger": "compare(showcase control, real Settings row control)",
+      "screenshotSuffix": "settings",
+      "evidenceKeys": ["settingsContext.contextSample"],
+      "selectors": [".vcp-harness-primitive-lab input", "#globalSettingsModal #userName"]
+    },
+    {
       "id": "showcase-loading-error",
       "trigger": "click('模拟加载 1.2 秒'); click('error'); click('loading')",
       "screenshotSuffix": "states",

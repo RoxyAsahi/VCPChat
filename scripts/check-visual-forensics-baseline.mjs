@@ -65,11 +65,15 @@ for (const dir of targets) {
         assert.ok(deltaRatio(images.initial, images[suffix]) >= baseline.minInteractionDeltaRatio, `${name}-${suffix}: no measurable pixel delta from initial`);
       }
       assert.ok(deltaRatio(images.initial, images.states) >= baseline.minStateDeltaRatio, `${name}-states: no measurable pixel delta from initial`);
-      const finiteRect = rect => rect && [rect.x, rect.y, rect.width, rect.height].every(value => Number.isFinite(value) && value >= -baseline.geometryTolerancePx);
+      const finiteRect = rect => rect && [rect.x, rect.y, rect.width, rect.height].every(value => Number.isFinite(value)) && rect.width > 0 && rect.height > 0;
       assert.ok(observation.initial?.controls?.some(control => finiteRect(control.rect)), `${name}: no finite initial control geometry`);
       assert.ok(observation.settingsViewport?.visible?.some(control => finiteRect(control.rect)), `${name}: no finite settings geometry`);
       assert.equal(observation.settingsViewport?.sections?.length, 8, `${name}: incomplete settings section geometry`);
       assert.ok(observation.settingsViewport.sections.every(section => finiteRect(section.rect) && section.visibleControls > 0), `${name}: invalid settings section geometry`);
+      assert.ok(finiteRect(manifest.settingsContext?.contextSample?.showcase?.rect), `${name}: missing showcase context geometry`);
+      assert.ok(finiteRect(manifest.settingsContext?.contextSample?.settings?.rect), `${name}: missing Settings context geometry`);
+      assert.ok(finiteRect(observation.settingsViewport?.contextSample?.showcase?.rect), `${name}: missing viewport showcase context geometry`);
+      assert.ok(finiteRect(observation.settingsViewport?.contextSample?.settings?.rect), `${name}: missing viewport Settings context geometry`);
       assert.ok(finiteRect(observation.restored && { x: 0, y: 0, width: observation.restored.width, height: observation.restored.height }), `${name}: invalid restored geometry`);
       console.log(`Visual forensics pixel/geometry baseline passed: ${dir} ${name}`);
     }
