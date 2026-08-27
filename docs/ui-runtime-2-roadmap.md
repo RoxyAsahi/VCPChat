@@ -2,6 +2,7 @@
 
 > **2026-08-27 Harness 生产接入门禁：** 真实 VCPChat Surface 可以开始试接，但只允许显式白名单。组件 manifest 的 `status` 仅表示 VCP API 稳定性；`harnessMaturity` 表示 Harness 等价证据，`productionEligible` 必须同时满足 `verified-candidate`、真实 VCP consumer、Electron journey、reload/stress 和对应 legacy presentation 删除。旧组件继续保留用于兼容和回归，但组件页按 Harness Verified / Candidate Lab / Legacy Compatibility 解释；当前不把任何控件宣称为全局 Harness Stable。首个真实迁移应从已有、非冻结的 Settings typed consumer 切片开始，LanguageRow 因缺少 locale capability 暂不得接入。
 > **2026-08-27 Home tagline slice audit：** `homeVisualTagline` 确认为首个真实 Harness Input 接入候选：既有 persisted key、SettingsUiService typed owner、debounced save/close-flush/retry/reload/teardown 与 Electron 挂载证据均存在，且 legacy generic Input wrapper 已跳过该字段。Harness/VCP Field description/error browser geometry 与 pixel 链本轮复验通过，但这不是 tagline Input 的完整等价证明；`inputFullVisualMatrix` 仍保持 blocked。下一步只补固定 viewport 的 tagline Input default/placeholder/focus/disabled DOM、computed-style、geometry、pixel、generated-artifact Electron smoke，再考虑 `verified-candidate`，不扩大字段迁移。
+> **2026-08-27 portable inventory expansion：** 依据 Harness `packages/client` 真源补登记 `DiffBlock`、`JsonTree`、`ProducedFiles`、`PlanChip`。它们目前均为 `inventoried`，没有新增 VCP runtime 或生产 consumer；其中 DiffBlock/JsonTree/ProducedFiles/PlanChip 涉及冻结的 structured message、tool-result、turn-tail 或 composer slot，只允许后续 B4 Candidate Lab 复刻，不能借 inventory 条目解冻聊天生产接入。
 
 > 状态：施工中（目标模式已启动）  
 > 建立日期：2026-08-24  
