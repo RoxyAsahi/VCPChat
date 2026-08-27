@@ -549,16 +549,24 @@ function mountTypedAgentButtons(form) {
     const api = window.VCPUIUX;
     const scope = ensurePresentationScope();
     if (!api?.mountButton || !scope) return;
-    const button = form?.querySelector?.('#openModelSelectBtn');
-    if (!button || button.dataset.vcpTypedAgentModelTrigger === 'true') return;
-    try {
-        const release = api.mountButton(button, { variant: 'outline', size: 'sm' }, scope);
-        button.dataset.vcpTypedAgentModelTrigger = 'true';
-        scope.own(() => { delete button.dataset.vcpTypedAgentModelTrigger; }, 'agent-model-trigger-marker', 'ui-presentation');
-        if (release) scope.own(release, 'agent-model-trigger-button', 'ui-primitive');
-    } catch (error) {
-        console.warn('[VCPUI SettingsBridge] Could not mount typed Agent model trigger Button:', error);
-    }
+    const buttons = [
+        ['#openModelSelectBtn', 'outline', 'agent-model-trigger'],
+        ['.form-actions button[type="submit"]', 'primary', 'agent-save'],
+        ['#deleteAgentBtn', 'outline', 'agent-delete'],
+    ];
+    buttons.forEach(([selector, variant, key]) => {
+        const button = form?.querySelector?.(selector);
+        const marker = `vcpTyped${key.replace(/(^|-)(\w)/g, (_, __, value) => value.toUpperCase())}`;
+        if (!button || button.dataset[marker] === 'true') return;
+        try {
+            const release = api.mountButton(button, { variant, size: key === 'agent-model-trigger' ? 'sm' : 'md' }, scope);
+            button.dataset[marker] = 'true';
+            scope.own(() => { delete button.dataset[marker]; }, `${key}-button-marker`, 'ui-presentation');
+            if (release) scope.own(release, `${key}-button`, 'ui-primitive');
+        } catch (error) {
+            console.warn(`[VCPUI SettingsBridge] Could not mount typed Agent ${key} Button:`, error);
+        }
+    });
 }
 
 // The agent editor keeps the native input as its canonical form/business node;
