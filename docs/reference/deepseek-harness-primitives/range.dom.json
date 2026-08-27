@@ -1,6 +1,8 @@
 {
   "primitive": "Range",
   "source": "VCPChat appearance range contract (native input preserved)",
+  "sourceKind": "vcp-local-contract",
+  "provenanceNote": "No portable Harness primitive exists; geometry and native range semantics are VCP-specific.",
   "root": { "tag": "span", "class": "vcp-uiux-range", "display": "grid" },
   "children": [
     { "tag": "input", "type": "range", "native": true },

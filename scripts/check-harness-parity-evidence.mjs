@@ -42,11 +42,12 @@ for (const domFile of domFiles) {
         if (/ENOENT/.test(geometry.message ?? '')) missingEvidence.push(`${name}: geometry contract is not captured`);
         else invalid.push({ name, geometry });
     }
-    for (const source of asArray(dom.source)) {
+    const declaredSources = dom.provenance?.sources ?? dom.source;
+    for (const source of asArray(declaredSources)) {
         const resolved = resolveSource(source);
         const exists = Boolean(resolved && fs.existsSync(resolved));
         entry.provenance.push({ kind: 'source', declared: source, resolved, exists });
-        if (!resolved) missingEvidence.push(`${name}: source is descriptive rather than a Harness path`);
+        if (!resolved && dom.sourceKind !== 'vcp-local-contract') missingEvidence.push(`${name}: source is descriptive rather than a Harness path`);
         else if (!exists) missingEvidence.push(`${name}: missing Harness source ${source}`);
     }
     for (const styleSource of asArray(dom.styleSource ?? geometry.styleSource)) {
