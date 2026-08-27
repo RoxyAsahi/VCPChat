@@ -14,7 +14,10 @@ test('Harness parity evidence audit preserves provenance and explicit gaps', () 
     assert.equal(report.pass, false, 'open evidence gaps must not be reported as complete');
     assert.ok(report.counts.primitives >= 20);
     assert.ok(report.counts.provenanceRecords >= report.counts.primitives);
+    assert.ok(report.counts.provenanceComplete > 0);
+    assert.ok(report.counts.provenanceGaps > 0);
     assert.ok(report.primitives.some(item => item.name === 'model-picker'));
+    assert.equal(report.primitives.find(item => item.name === 'model-picker')?.provenancePass, true);
     assert.ok(report.primitives.some(item => item.name === 'field' && item.provenance.some(source => source.declared.endsWith('ModelsSection.tsx'))));
     assert.ok(report.missingEvidence.includes('select/busy-trigger-disabled: blocked-vcp-consumer'));
     assert.ok(report.missingEvidence.includes('language-row/open-select-dismiss-focus-dispose: candidate-source-only'));
