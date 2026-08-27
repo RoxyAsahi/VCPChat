@@ -302,6 +302,7 @@ export function mountPopupSelectView(host: HTMLElement, props: PopupSelectViewPr
 
     const card = document.createElement('div');
     card.className = 'vcp-harness-popup-select-card';
+    card.setAttribute('role', 'menu');
     card.tabIndex = -1;
     const search = document.createElement('input');
     search.type = 'text';
