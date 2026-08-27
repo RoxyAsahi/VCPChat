@@ -145,6 +145,7 @@ try {
                 role: picker.trigger.getAttribute('role'),
                 ariaHaspopup: picker.trigger.getAttribute('aria-haspopup'),
                 ariaExpanded: picker.trigger.getAttribute('aria-expanded'),
+                ariaControls: picker.trigger.getAttribute('aria-controls'),
                 height: triggerStyle.height,
                 borderRadius: triggerStyle.borderRadius,
                 padding: triggerStyle.padding,
@@ -152,6 +153,7 @@ try {
             },
             menu: menuStyle ? {
                 tag: menu.tagName.toLowerCase(),
+                id: menu.id,
                 role: menu.getAttribute('role'),
                 borderRadius: menuStyle.borderRadius,
                 padding: menuStyle.padding,

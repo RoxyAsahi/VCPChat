@@ -3,6 +3,7 @@ import { createPopupSelectController, mountPopupSelectView, type PopupSelectCont
 import { mountSemanticIcon } from './semantic-icon.js';
 
 const STYLE_ID = 'vcp-harness-uiux-agent-model-picker';
+let pickerSequence = 0;
 function ensureStyles() {
     if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) return;
     const style = document.createElement('style');
@@ -116,6 +117,9 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
             return true;
         },
     }, pickerScope);
+    const menuId = `vcp-harness-agent-model-picker-menu-${++pickerSequence}`;
+    view.card.id = menuId;
+    trigger.setAttribute('aria-controls', menuId);
     const paneCell = document.createElement('button');
     paneCell.type = 'button';
     paneCell.className = 'vcp-harness-agent-model-picker-cell';

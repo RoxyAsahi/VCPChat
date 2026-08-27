@@ -20,10 +20,13 @@ assert.equal(report.rootPane.cardPresent, true);
 assert.match(report.dom, /vcp-harness-agent-model-picker-trigger/);
 assert.equal(report.trigger.tag, 'button');
 assert.equal(report.trigger.ariaHaspopup, 'menu');
+assert.ok(report.trigger.ariaControls && report.trigger.ariaControls === report.menu?.id,
+    'model trigger aria-controls must reference the rendered menu id');
 assert.equal(report.trigger.height, '28px');
 assert.equal(report.trigger.borderRadius, '24px');
 assert.equal(report.menu?.tag, 'div');
 assert.equal(report.menu?.role, 'menu');
+assert.match(report.menu?.id || '', /^vcp-harness-agent-model-picker-menu-/);
 assert.equal(report.menu?.cssContract?.borderRadius, '12px');
 assert.equal(typeof report.menu?.borderRadius, 'string');
 assert.ok(report.menu?.rect?.width > 0 && report.menu?.rect?.height > 0,
