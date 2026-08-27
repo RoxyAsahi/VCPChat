@@ -266,3 +266,10 @@ roadmap checkpoint 追加于 `38ec8bb8`。
 - 分层指标：listeners `643` 五个 checkpoint 全部恒定；lifecycle activeResources `366`（listener 158 / ui-registration 110 / ui-primitive 60 等）恒定；detachedRoots/Icons/Options 均 0；nodes 8475 恒定；heap 9.9→10.5 MiB（正常波动）。包含批次 6（readTypedFieldPatch 草稿基底修复 + journey 6b）与批次 7（wide-layout 两控件入 typed owner + journey 6c）后的树。
 - 验收矩阵「混合 listener 增长归因」随之从未完成改为已闭合。
 - 同轮门禁归因：线程 A 新投递未跟踪 `directory-browser.ts` 且 generated 工件集处于其迭代中，`check:uiux:artifacts` 的唯一差异为 `primitives/directory-browser.*` 一对文件（影子拷贝验证 B 范围不含其它差异）；按 §3/§8 规则 B 不代生成，不阻断本批。
+
+### 2026-08-27 批次 9：首批六字段 close-flush 证据矩阵补全
+
+状态：`stable`。提交 `8eaeb5f0`。
+
+- journey 6b 扩展：`showHomeVisualBrand`/`showHomeVisualTagline` 两个 Toggle 的布尔翻转纳入同一关闭 flush 提交断言；至此首批六字段（三个 range、radius choice、两个 toggle）+ home tagline + 论坛凭据 + 宽屏布局单选对全部具备「关闭时绕过防抖、原样提交屏幕草稿」的逐字段证据。
+- Electron journey 全绿（15 PASS）。
