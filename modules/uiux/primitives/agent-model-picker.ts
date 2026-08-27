@@ -198,7 +198,9 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
         trigger,
         popup,
         open: () => { pane = 'root'; popup.open('agent-model', {}, { via: 'menu', span: { source: 'agent-model-picker' } }); },
-        close: () => popup.dismiss(),
+        // Closing from the trigger/picker surface must return focus to the
+        // trigger, matching the Harness menu focus contract.
+        close: () => popup.dismiss({ focusComposer: true }),
         refresh: () => {
             if (popup.getSnapshot().open) popup.dismiss();
             pane = 'root'; popup.open('agent-model', {}, { via: 'menu', span: { source: 'agent-model-picker-refresh' } });
