@@ -377,7 +377,7 @@
         flex: 1;
     }
 
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope :is(#agentSettingsContainer, #groupSettingsContainer) .model-input-container > button {
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope :is(#agentSettingsContainer, #groupSettingsContainer) .model-input-container > button:not(.vcp-harness-agent-model-picker-trigger) {
         width: var(--vcp-ui-control-md);
         min-width: var(--vcp-ui-control-md);
         padding: 0;

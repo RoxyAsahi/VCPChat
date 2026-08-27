@@ -6,9 +6,9 @@ Reference: `deepseek-harness/packages/client/ui-model-selection/src/client/Model
 
 ## Findings
 
-### VF-AGENT-MODEL-001: legacy `display:flex` still matches the Harness trigger
+### VF-AGENT-MODEL-001: legacy `display:flex` still matches the Harness trigger (resolved)
 
-The real Electron report for `#openModelSelectBtn` fails the authored cascade check with `display:flex` still present in the production presentation path. The trigger has both `.vcp-harness-button.button` and `.vcp-harness-agent-model-picker-trigger`, and its current computed layout is being protected by owner-bound inline declarations. That is a migration bridge, not legacy retirement: an old selector can still affect geometry when the inline declaration is removed, restored during dispose, or reordered by a future enhancer.
+The original report found a generic Settings Shell `display:flex` rule matching `#openModelSelectBtn`. The Agent picker now excludes `.vcp-harness-agent-model-picker-trigger` from that rule, and the legacy trigger SVG rule is similarly gated. The generated Harness trigger remains the sole presentation owner for this control.
 
 Reproduce with:
 
@@ -16,13 +16,13 @@ Reproduce with:
 npm run check:agent-settings-production-evidence
 ```
 
-Current result: `FAIL: Agent action openModelSelectBtn has a conflicting authored display:flex rule`.
+Current result: `PASS: npm run check:agent-settings-production-evidence`.
 
-The minimal CSS fixture is [agent-model-picker-trigger-cascade.html](/Users/asahi/Documents/Codex/VCPChat-newarchitecture/docs/visual-qa/fixtures/agent-model-picker-trigger-cascade.html). The smallest correction is to retire the Agent-specific legacy selector for this trigger and add a negative selector gate; group/global model controls remain out of scope.
+The minimal CSS fixture remains [agent-model-picker-trigger-cascade.html](/Users/asahi/Documents/Codex/VCPChat-newarchitecture/docs/visual-qa/fixtures/agent-model-picker-trigger-cascade.html). Group/global model controls remain out of scope.
 
-### VF-AGENT-MODEL-002: reopen after selection does not close on first Escape
+### VF-AGENT-MODEL-002: reopen after selection does not close on first Escape (resolved)
 
-The production interaction probe selects `Probe Secondary`, reopens the picker, and dispatches Escape. The observed result is `escaped=false` and `focusRestored=false`; the first Escape only changes the internal pane from `model` to `root`. The trigger click path calls `popup.open()` directly, while the public `open()` helper is the only path that resets `pane='root'`.
+The production interaction probe previously selected `Probe Secondary`, reopened the picker, and observed the first Escape only changing the internal pane. The trigger path now resets `pane='root'` before opening, so Escape dismisses the popup and restores trigger focus.
 
 Reproduce with:
 
@@ -30,9 +30,9 @@ Reproduce with:
 VCPCHAT_STRESS_AGENT_MODEL_PICKER_INTERACTION=1 npm run test:electron-agent-settings-interaction
 ```
 
-Current result: `FAIL ... escaped=false, focusRestored=false`.
+Current result: `PASS ... escaped=true, focusRestored=true`.
 
-The minimal correction is to reset the pane before opening from the trigger, then retain the existing root-pane Escape dismissal and focus restoration contract. This is a production consumer defect, not a Candidate Lab-only gap.
+The correction is covered by the Agent picker production interaction sequence and late-settlement regression test. This remains a production consumer contract, not a Candidate Lab-only gap.
 
 ## Scope and evidence gaps
 
@@ -42,4 +42,4 @@ The default Agent Settings npm command does not enable the model-picker interact
 
 ## Verification
 
-`npm run check:uiux` passes. Candidate-only model picker evidence passes. Agent Settings production evidence currently fails on the authored cascade rule, and the explicit model-picker interaction run fails on reopen/Escape focus behavior.
+`npm run check:uiux` passes. Candidate-only model picker evidence passes. Agent Settings production evidence and the explicit model-picker interaction run pass. Strict Harness pixel diff remains pending (the latest equivalent capture is approximately 6.19% differing pixels), so the control is still `production-consumer-active / visual-equivalence-pending`, not Stable.

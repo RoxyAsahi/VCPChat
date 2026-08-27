@@ -105,7 +105,7 @@
     background-color: var(--accent-bg);
 }
 
-#openModelSelectBtn svg,
+#openModelSelectBtn:not(.vcp-harness-agent-model-picker-trigger) svg,
 #openTopicSummaryModelSelectBtn svg,
 #openGroupModelSelectBtn svg {
     stroke: var(--secondary-text);
