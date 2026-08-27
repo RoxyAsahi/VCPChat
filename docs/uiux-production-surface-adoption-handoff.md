@@ -355,3 +355,14 @@ roadmap checkpoint 追加于 `38ec8bb8`。
 - 门禁全绿八项：check:uiux、test:uiux（44/44）、check:uiux:artifacts（66 文件）、test:uiux:artifacts、Electron journey（19 PASS）、lifecycle stress（listener 680 / resources 367 五 checkpoint 恒定、detached=0）、guard:classic-retirement、source-equivalence（legacyClean=true）。
 - 矩阵影响：「单一 projection owner」「单一 save command owner」「legacy projection 删除」三行再次收敛——非冻结 legacy 写入面清零，唯一存量即 §3 冻结责任保留。presentationOwner 启动兜底维持惰性（待独立 reload/Classic/upstream 等价证据后统一退役）。
 - 台账：§2 新增 userName/userNameTextColor/continueWritingPrompt 三行（typed-owner-active），§7 追加批次 15 段落（含批次 14 初判修正记录）。
+
+### 2026-08-27 批次 16：presentationOwner 启动兜底退役证据清单（unlock 未满足分支）
+
+状态：docs-only 评估落盘；施工裁定 = 兜底代码零删除。
+
+- unlock 复查：`3bc85d98` 后线程 A 零新提交；main.js / check-harness-fixture-matrix.mjs / chat-kernel-consumer-report.json 在途改动未落盘；全部 DirectoryBrowser checkpoint 保持 `foundation-electron-active`。按指令转入矩阵存量评估分支，选定 ledger §6 遗留项「启动兼容 fallback 尚未删除」为下一候选并产出前置证据清单。
+- 现状盘点：presentationOwner 存在 19 个 `!typedSettingsProjectionActive` 守卫分支（约 60+ 处 safeSet/safeCheck，行 605-695），覆盖全表单兜底；守卫条件为「bridge 服务已暴露且 `vcpSettingsRevision` 就绪」，apply() 内两处刷新。
+- 关键定性更正：`uiMode: 'classic'` 仅存在于 embeddedAppSessionManager 的独立入口页参数；main.html 恒为 `uiMode: 'next'` 且 settings-bridge 无 uiMode 门控自举。**兜底的真实职责是启动挂载窗口与部分挂载失败窗口的填充安全网，不是跨页面 Classic 兼容**——退役难度低于原「需 reload/Classic/upstream 全量等价」的表述，但挂载窗口竞态证明是硬前置。
+- 退役前证据清单（E1-E6，落盘台账批次 16 段落）：E1 渲染 `#globalSettingsForm` 的入口面清单与 uiMode≠next 排除证明；E2 冷启动 `vcpSettingsRevision` 先于模态可打开的确定性断言 + 首开全 id == snapshot 扩容；E3 部分挂载失败契约定义（typed readiness 门禁拒绝半挂载 shell）；E4 global-settings-updated 全 source 路由等价盘点（临时插桩按协议剥离）；E5 reload durable restore 断言集扩至全部原兜底 id；E6 source-equivalence 负向守护（被删 id 再现第二写入方即失败）。
+- 施工裁定：本批不删兜底代码；下一批可独立推进 E2/E5 journey 断言扩容与 E4 source 盘点。docs-only——代码面自 3bc85d98 起零变更，不重跑门禁；win32/Linux packaged evidence 维持 evidence-pending。
+- 台账：§7 追加批次 16 段落；roadmap 追加 R2-02E checkpoint。
