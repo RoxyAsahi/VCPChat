@@ -522,7 +522,14 @@ try {
         content.style.cssText = 'font-size:13px;line-height:20px;overflow-wrap:anywhere';
         const hoverCard = window.VCPUIUX.mountHoverCard(hoverAnchor, { content, openDelayMs: 0, copyText: '/Users/asahi/Documents/Codex/VCPChat-newarchitecture', copyLabel: 'Copy path', copiedLabel: 'Copied' }, scope);
         hoverCard.root.dispatchEvent(new PointerEvent('pointerenter'));
-        await new Promise(resolve => setTimeout(resolve, 180));
+        // Wait for the owner-controlled portals to reach their observable
+        // open state instead of assuming a fixed timer is enough on every
+        // Electron run. The timeout keeps a broken mount diagnostic rather
+        // than allowing an unbounded evidence journey.
+        const deadline = Date.now() + 1000;
+        while ((!tooltip.open || !hoverCard.open) && Date.now() < deadline) {
+            await new Promise(resolve => setTimeout(resolve, 20));
+        }
         const bubble = tooltip.bubble;
         const card = hoverCard.card;
         const bubbleStyle = bubble ? getComputedStyle(bubble) : null;

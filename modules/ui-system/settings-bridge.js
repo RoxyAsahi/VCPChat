@@ -1269,9 +1269,16 @@ function mountHarnessSelects(form) {
         // Legacy presentation may only decorate controls with no typed owner.
         if (select.dataset.vcpTypedPrimitiveMounted === 'true') return;
         if (select.multiple || select.disabled || select.closest('.vcp-harness-select-wrap, .vcp-harness-choice-wrap')) return;
-        if (select.options.length > 1 && select.options.length <= 4) { mountHarnessChoice(select); return; }
-        if (select.options.length <= 1) return;
+        if (select.options.length > 1 && select.options.length <= 4) { select.classList.remove('vcp-settings-bare-select'); mountHarnessChoice(select); return; }
+        if (select.options.length <= 1) {
+            // A select with no real choices yet (e.g. #assistantAgent before
+            // the agent list populates) stays a bare native control; tag it
+            // so the surface can still give it the standard control look.
+            select.classList.add('vcp-settings-bare-select');
+            return;
+        }
         const controlId = select.id || `vcp-select-${ordinal}`;
+        select.classList.remove('vcp-settings-bare-select');
         const originalTabIndex = select.getAttribute('tabindex');
         const originalAriaHidden = select.getAttribute('aria-hidden');
         const wrap = document.createElement('div');
