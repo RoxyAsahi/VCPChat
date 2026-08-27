@@ -180,3 +180,12 @@ test('MessageImage source audit preserves frozen attachment lifecycle evidence',
     assert.equal(report.checks.length, 10);
     assert.ok(report.note.includes('does not create a VCP chat attachment consumer'));
 });
+
+test('MessageImage reference audit preserves DOM and geometry provenance', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-message-image-reference.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-message-image-reference.json'), 'utf8'));
+    assert.equal(report.domContract, true);
+    assert.equal(report.cssGeometry, '30/30');
+    assert.equal(report.candidateStatus, 'source-only frozen chat attachment; no VCP consumer or paired visual capture');
+    assert.ok(report.evidenceGaps.includes('no VCP chat attachment consumer'));
+});
