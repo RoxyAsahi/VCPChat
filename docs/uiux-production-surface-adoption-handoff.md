@@ -464,3 +464,13 @@ directory-browser 接入前置达成。typed field owner 本就以 `#networkNote
 - 门禁：node --check 四文件通过；四快全绿（source-equivalence / unified-surface / test-settings-wa / test-ui-system）；Electron journey 全轮 PASS（1p/1q 反转后首跑通过——迁入默认使 1q 的语音簇期望值保持有效）。win32/Linux packaged evidence 维持 evidence-pending。
 - 台账：§7 追加批次 20 段落；roadmap 追加 R2-02E checkpoint。ledger §6「启动兼容 fallback 尚未删除」项就此关闭。下一批候选：unlock 复查 directory-browser（若线程 A 成熟度晋级），或按 handoff §10 继续审计下一族 primitive 接缝。
 - 提交归属更正：bridge 的两个迁入显示默认在批次 20 施工期间被线程 A 的并发提交 `9b3d4c27`（ui(agent-settings): adopt harness reset color button）随工作区一并带入——内容正确、门禁/journey 均按该状态验证，但归属混合；后续批次如需引用该 diff 应以 `9b3d4c27` + 本批次提交两处为准。
+
+### 2026-08-27 批次 21：兜底退役后死代码清扫（presentationOwner hygiene）
+
+状态：生产代码微删（6 行）+ 门禁复跑；零行为变更。
+
+- unlock 复查：DirectoryBrowser 各 checkpoint 保持 `foundation-electron-active`（线程 A 本窗口新增 harness button 几何修复等提交，未见 primitive 成熟度晋级），unlock 条件不满足。按批次 20 的自然后续转入退役后卫生批次。
+- **全量未引用符号扫描**：对 presentationOwner 95 个顶层声明做 `\b` 引用计数，命中两处死代码，均为兜底投影分支删除后失去唯一消费方：(1) `CHAT_PRESENTATION_MODES` + `CHAT_PRESENTATION_MODE_CLASSES` 常量对——后者唯一的构建来源就是前者、自身无引用；(2) `presentationOwner` 挂载体内的 `const presentationMode = normalizeChatPresentationMode(...)` 局部量（原 presentation/layout/bubble 投影块的输入，块已随兜底删除）。`normalizeChatPresentationMode` 本体保留（presentation radio 同步器 L199 仍在用）。
+- 其余保留职责经扫描确认全部存活引用：`safeSet`(17)/`safeCheck`(3)（rust chatAPI 回退路径）、`syncChatFontControls`(5)（字体 preset change 监听回调，实时预览职责）。
+- 门禁：node --check + 四快（source-equivalence / unified-surface / test-ui-system / test-settings-wa jsdom 8/8）+ Electron journey 全轮 PASS（1p/1q 反转契约维持）。
+- 台账：§7 追加批次 21 段落；roadmap 追加 R2-02E checkpoint。下一批候选：unlock 复查 directory-browser，或按 handoff §10 审计下一族 primitive 接缝。
