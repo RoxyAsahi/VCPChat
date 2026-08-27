@@ -51,6 +51,9 @@ for (const dir of targets) {
       assert.equal(observation?.reopen?.reopened, true);
       assert.equal(observation?.reopen?.newRootIdentity, true);
       assert.equal(observation?.reopen?.bodyAfterClose?.bodyInlineStyle, '');
+      const expectedThemeClass = `${path.basename(dir)}-theme`;
+      assert.ok(observation?.reopen?.bodyAfterClose?.bodyClasses?.includes(expectedThemeClass));
+      assert.ok(!observation?.reopen?.bodyAfterClose?.bodyClasses?.includes('next-ui-internal-app-open'));
       assert.equal(observation?.overlayViewport?.menu?.open, true);
       assert.ok(observation?.overlayViewport?.menu?.rect);
       assert.equal(observation?.overlayViewport?.modal?.open, true);
