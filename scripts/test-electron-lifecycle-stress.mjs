@@ -664,6 +664,21 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
                     const value = node.getBoundingClientRect();
                     return { x: value.x, y: value.y, width: value.width, height: value.height };
                 };
+                const displayRules = node => {
+                    const matches = [];
+                    const visit = rules => {
+                        for (const rule of rules || []) {
+                            if (rule.cssRules) visit(rule.cssRules);
+                            if (rule.selectorText && rule.style?.display && node.matches(rule.selectorText)) {
+                                matches.push({ selector: rule.selectorText, display: rule.style.display, important: rule.style.getPropertyPriority('display') });
+                            }
+                        }
+                    };
+                    for (const sheet of document.styleSheets) {
+                        try { visit(sheet.cssRules); } catch { /* cross-origin sheets are outside this report */ }
+                    }
+                    return matches;
+                };
                 const style = node => {
                     const value = getComputedStyle(node);
                     return {
@@ -677,6 +692,7 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
                         color: value.color,
                         backgroundColor: value.backgroundColor,
                         borderColor: value.borderColor,
+                        displayRules: displayRules(node),
                     };
                 };
                 const form = document.getElementById('agentSettingsForm');

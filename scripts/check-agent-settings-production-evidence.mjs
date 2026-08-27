@@ -80,6 +80,11 @@ assert.equal(report.actions.filter(node => node.controlId === 'resetAvatarColors
     'Avatar color reset action must have exactly one mounted Button projection');
 for (const action of report.actions) {
     assert.match(action.class, /vcp-harness-button/, `Agent action ${action.controlId} must retain Harness Button presentation`);
+    assert.ok(Array.isArray(action.style?.displayRules), `Agent action ${action.controlId} must report authored display rules`);
+    assert.ok(action.style.displayRules.some(rule => rule.selector === '.vcp-harness-button.button' && rule.display === 'inline-flex'),
+        `Agent action ${action.controlId} must retain the Harness inline-flex rule`);
+    assert.equal(action.style.displayRules.some(rule => rule.display === 'flex'), false,
+        `Agent action ${action.controlId} has a conflicting authored display:flex rule`);
 }
 if (report.agentSelectInteraction !== null && report.agentSelectInteraction !== undefined) {
     assert.deepEqual(report.agentSelectInteraction, {
