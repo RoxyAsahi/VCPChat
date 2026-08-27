@@ -9,7 +9,13 @@
     ".footerBar": { "padding": "12px 24px", "gap": "8px" }
   },
   "vcpCandidateEvidence": {
-    "status": "pending-electron-fixture",
+    "viewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 },
+    "engine": "Electron Chromium",
+    "screenshot": "fixtures/vcp/directory-browser.foundation.png",
+    "report": "fixtures/vcp/directory-browser.foundation.json",
+    "status": "foundation-electron-active",
+    "nestedCreate": "fixed-viewport Electron evidence: 380px child dialog, 44px input, parent inert, Escape retracts child, injected create selects result",
+    "slowScan": "generated artifact focused evidence: fast listing stays silent; Loading status appears only after 300ms and is cancelled on close/reopen/dispose",
     "pixelDiff": "pending-same-semantic-harness-fixture"
   }
 }

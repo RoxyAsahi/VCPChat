@@ -29,7 +29,7 @@ for (const name of primitives) {
   if (!Object.keys(dom).length) fail(`${name}.dom.json is empty`);
   if (!Object.keys(geometry).length) fail(`${name}.geometry.json is empty`);
 }
-for (const name of ['toast', 'risk-confirmation', 'semantic-icon', 'agent-preset-seat', 'agent-preset-row', 'popup-select']) {
+for (const name of ['toast', 'risk-confirmation', 'semantic-icon', 'agent-preset-seat', 'agent-preset-row', 'popup-select', 'directory-browser']) {
   const evidence = readJson(`${name}.geometry.json`).vcpCandidateEvidence;
   for (const file of [evidence?.screenshot, evidence?.report]) {
     if (!file || !fs.existsSync(path.join(dir, file))) fail(`${name} evidence file missing: ${file}`);

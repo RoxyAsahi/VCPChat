@@ -9,6 +9,8 @@ export interface ModalProps {
     readonly footer?: Node | readonly Node[];
     readonly headless?: boolean;
     readonly open?: boolean;
+    /** Lets an owning composite decline mask/Escape/close-button dismissal while a child owns interaction. */
+    readonly canClose?: () => boolean;
     readonly onClose?: () => void;
 }
 export interface ModalController {
