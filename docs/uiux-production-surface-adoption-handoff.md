@@ -295,3 +295,28 @@ roadmap checkpoint 追加于 `38ec8bb8`。
 - 门禁全绿：`check:uiux`、`test:uiux`（44/44）、`check:uiux:artifacts`（66 文件）、`test:uiux:artifacts`、Electron journey（16 PASS 含新增 6d）、lifecycle stress（3 warmup + 20 cycles，listeners/lifecycle 指标恒定）、`guard:classic-retirement`、source-equivalence。
 - 台账行升级：8 个字体字段状态 `typed-projection-active` → `typed-owner-active`（docs/settings-uiux-field-ownership-2026-08-25.md §2 与 §7 同步）。
 - 归因说明：工作树中线程 A 的 WIP（directory-browser 等）与生成产物 `docs/chat-kernel-consumer-report.json` 的行号漂移均不属本批提交范围；按 §3/§8 规则 B 不代改不代生成，本批仅提交 B 所属文件。
+
+### 2026-08-27 批次 12：directory-browser / popup-select 生产面 consumer 接缝审计
+
+状态：`audited-hold`（结论=本批不接线；接缝盘点与前置条件清单落盘）。
+
+**契约面审计**（依据 `modules/uiux/generated/primitives/*.d.ts` 与线程 A roadmap）：
+
+1. **popup-select**：headless controller 复刻 ui-commands `popup.ts` 的 composer 命令面板——deps 要求 `consume(PopupTokenSegment)` 与 `focusComposer()` 回调，选项加载绑定 open-time context。Settings 面既无命令语义、也无法满足注入 face；按线程 A 自己的「不得为完成状态矩阵新建 fixture-only provider」边界，在 Settings 接线属误用。**结论：无合法 Settings consumer，不接入。**
+2. **directory-browser**：Light-DOM Miller browser，严格 injected `listDirectory/createDirectory/onOpen/onClose` face，自身无任何 Electron/IPC 依赖。当前成熟度 `foundation-electron-active`，线程 A 明确 pending：path editor draft debounce/prefix filter、two-leg landing、same-semantic pixel diff、以及 **VCP production consumer**。
+
+**Settings 面候选接缝盘点**（`main.html` 全量路径类输入）：
+
+| 候选 | 现状 | 判定 |
+|---|---|---|
+| `#networkNotesPathsContainer` 动态行（`input[name="networkNotesPath"]`） | Settings 表单唯一真正开放的路径类字段。值语义为网络共享路径（UNC，如 `\\NAS\Shared\Notes`），不保证本地可浏览；序列化为双轨：typed consumer 投影写行、legacy `global-settings-manager.js` 收集提交 | Miller 浏览器需要受控目录列举能力，而全仓不存在通用目录列举 IPC（现有 handler 均为域内目录：agents/canvas/wallpaper）；复用原生 `select-directory` 只能给 OS 对话框、非浏览器 primitive 注入 face。新增列目录 IPC 属系统能力新增，超出两线程所有权边界（main 进程文件归协议外），需单独决策 |
+| `speechRecognizerBrowserPath` / `speechRecognizerPagePath` | 文件/页面相对路径，且在 §3 冻结清单内 | 按协议排除，不做 |
+| avatar/color/wallpaper 等图像类选择 | 图像选择器（native dialog / ColorPair typed owner）非目录语义 | 不适用 |
+
+**接入前置条件清单**（后续批次解锁条件）：
+
+1. 线程 A 将 directory-browser 从 `foundation-electron-active` 推进到 Candidate active（补齐 draft/filter/two-leg landing/pixel diff 缺口）。
+2. 跨线程决策「通用目录列举能力」落地方式：新增最小 face 的主进程 IPC（如 sandboxed `list-directory` handle），或降级为原生 `select-directory` 互操作——前者需要 thread-A/B 之外的所有权确认。
+3. 先决工序建议：`networkNotesPaths` 动态行本身仍是双轨序列化（typed consumer 写行 + legacy manager 收集），可先做「动态列表字段的单一 owner 化」（TYPED_FIELD_DEFINITIONS 引入 list kind 或等价机制）作为独立批次，再在其上挂接目录选择交互。
+
+**门禁**：本批为纯审计+文档，代码零改动；不重跑运行时门禁（最近一次批次 11 全绿证据仍然有效，HEAD 仅前进文档提交）。
