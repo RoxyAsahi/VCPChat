@@ -236,7 +236,7 @@ try {
       const node = document.querySelector('.vcp-harness-modal-root [role="dialog"]');
       if (!node) return { open: false, rect: null };
       const r = node.getBoundingClientRect(); const s = getComputedStyle(node);
-      return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: s.position, zIndex: s.zIndex, mask: Boolean(document.querySelector('.vcp-harness-modal-mask')) };
+      return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: s.position, zIndex: s.zIndex, parent: node.parentElement?.className || '', mask: Boolean(document.querySelector('.vcp-harness-modal-mask')) };
     }).catch(() => ({ open: false, rect: null }));
     await page.evaluate(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))).catch(() => {});
     const tooltipButtons = await page.$$(`${lab} button`);
@@ -254,7 +254,7 @@ try {
         const node = document.querySelector('[role="tooltip"], .vcp-harness-tooltip-bubble');
         if (!node) return { open: false, rect: null };
         const r = node.getBoundingClientRect(); const s = getComputedStyle(node);
-        return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: s.position, zIndex: s.zIndex, side: node.getAttribute('data-side') || '' };
+        return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: s.position, zIndex: s.zIndex, parent: node.parentElement?.className || '', side: node.getAttribute('data-side') || '' };
       }).catch(() => ({ open: false, rect: null }));
       await page.mouse.move(2, 2).catch(() => {});
     } else tooltipViewport = { open: false, rect: null };

@@ -56,6 +56,7 @@ On 2026-08-27 in the current dirty worktree:
 - Tooltip capture scrolls the actual showcase owner to the hovered anchor before taking the screenshot. Fresh evidence records fixed positioning and visible viewport placement at every size, with side selection changing from `top` at 800px to `bottom` at 1280px and 1680px.
 - Every viewport manifest now includes a computed theme-token snapshot for accent, hover accent, surface, input background, primary/secondary text, and body colors. The evidence checker compares the formal light and dark manifests and rejects indistinguishable token sets; current runs show distinct light/dark values across all three sizes.
 - CDP cascade provenance now includes the live production Settings field (`#globalSettingsModal #userName`) in addition to the showcase sidebar and overlay targets, preserving matched selectors, origins, stylesheet ids, and key declarations for the context-transform fixture.
+- Per-viewport overlay evidence now includes Modal and Tooltip parent classes alongside Menu's body portal parent, proving the concrete runtime ownership/stacking context for each captured overlay.
 - Resize restoration evidence from `/tmp/vqa-restored-light/` passed: after each narrow resize, the real renderer returned to exactly `800x600`, `1280x800`, and `1680x1000` with no horizontal overflow, and each case now emits a `*-restored.png` screenshot. The evidence checker requires this restored state.
 
 ## Scope and frozen boundaries

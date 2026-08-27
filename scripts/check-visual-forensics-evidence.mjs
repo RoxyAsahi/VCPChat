@@ -55,8 +55,10 @@ for (const dir of targets) {
       assert.equal(observation?.overlayViewport?.modal?.open, true);
       assert.ok(observation?.overlayViewport?.modal?.rect);
       assert.equal(observation?.overlayViewport?.modal?.mask, true);
+      assert.ok(observation?.overlayViewport?.modal?.parent);
       assert.equal(observation?.overlayViewport?.tooltip?.open, true);
       assert.ok(observation?.overlayViewport?.tooltip?.rect);
+      assert.ok(observation?.overlayViewport?.tooltip?.parent);
       assert.ok(observation?.scrolled?.ownerY > 0 || observation?.scrolled?.ownerScrollHeight <= observation?.scrolled?.ownerViewport, `scroll owner did not move for ${name}`);
       assert.ok(observation?.initial?.cdpCascade?.length > 0);
       assert.ok(observation?.initial?.interactionStates?.hover);
