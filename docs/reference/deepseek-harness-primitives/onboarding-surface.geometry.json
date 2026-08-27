@@ -1,0 +1,8 @@
+{
+  "primitive": "OnboardingSurface",
+  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/OnboardingSurface.module.css",
+  "overlay": { "position": "fixed", "inset": "0", "zIndex": "1100" },
+  "mask": { "top": "80px", "bottom": "0", "background": "rgba(0,0,0,.24)", "backdropFilter": "blur(2px)" },
+  "stage": { "position": "absolute", "inset": "0", "display": "flex", "justifyContent": "center", "overflow": "hidden" },
+  "tokens": ["--dsw-alias-bg-layer-1"]
+}

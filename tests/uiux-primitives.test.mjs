@@ -10,6 +10,22 @@ const { mountField } = await import('../modules/uiux/primitives/field.ts');
 const { mountButton } = await import('../modules/uiux/primitives/button.ts');
 const { mountPill } = await import('../modules/uiux/primitives/pill.ts');
 const { mountConnectionBanner } = await import('../modules/uiux/primitives/connection-banner.ts');
+const { mountOnboardingSurface } = await import('../modules/uiux/primitives/onboarding-surface.ts');
+
+test('Harness OnboardingSurface owns body portal and app-root inert lifetime', async () => {
+    const dom = new JSDOM('<!doctype html><div id="root"><main><span id="content">step</span></main></div>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('onboarding-surface-test'));
+        const content = document.getElementById('content'); const appRoot = document.getElementById('root');
+        const controller = mountOnboardingSurface({ content, appRoot, open: true }, scope);
+        assert.equal(controller.open, true); assert.equal(appRoot.inert, true); assert.equal(controller.stage.contains(content), true);
+        controller.setOpen(false); assert.equal(appRoot.inert, false); assert.equal(document.querySelector('#root #content'), content);
+        controller.setOpen(true); assert.equal(appRoot.inert, true); await scope.dispose('onboarding-complete');
+        assert.equal(appRoot.inert, false); assert.equal(document.querySelector('#root #content'), content); assert.equal(document.querySelector('.vcp-harness-onboarding-overlay'), null);
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
 
 test('Harness ConnectionBanner owns reconnecting projection and restores host on dispose', async () => {
     const dom = new JSDOM('<!doctype html><main><div id="host"><span>original</span></div></main>');

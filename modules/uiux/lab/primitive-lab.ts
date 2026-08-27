@@ -18,6 +18,7 @@ import { createPopupSelectController, mountPopupSelectView } from '../primitives
 import { mountDirectoryBrowser } from '../primitives/directory-browser.js';
 import { mountPill } from '../primitives/pill.js';
 import { mountConnectionBanner } from '../primitives/connection-banner.js';
+import { mountOnboardingSurface } from '../primitives/onboarding-surface.js';
 
 const STYLE_ID = 'vcp-harness-primitive-lab';
 
@@ -81,6 +82,9 @@ export function mountPrimitiveLab(root: HTMLElement, scope: UiScope): UiDisposer
     const connectionRow = group(lab, 'ConnectionBanner', 'deepseek-harness/packages/client/ui-primitives/src/ConnectionBanner.tsx');
     const connectionHost = document.createElement('div'); connectionRow.append(connectionHost);
     mountConnectionBanner(connectionHost, { reconnecting: true }, labScope);
+    const onboardingRow = group(lab, 'OnboardingSurface', 'deepseek-harness/packages/client/ui-primitives/src/OnboardingSurface.tsx');
+    const onboardingContent = document.createElement('div'); onboardingContent.textContent = 'Onboarding content'; onboardingRow.append(onboardingContent);
+    mountOnboardingSurface({ content: onboardingContent, appRoot: null, open: false }, labScope);
 
     const inputRow = group(lab, 'Input', 'deepseek-harness/packages/client/ui-primitives/src/Input.tsx');
     const inputHost = document.createElement('span');
