@@ -42,6 +42,12 @@ VCP fixtures must load only `modules/uiux/generated/` and mount the same ten
 cases from `../fixture-matrix.json`. Both pages use the same Chromium/Electron
 engine, 800×600 viewport, DPR 1, system-ui font, and frozen animation policy.
 
+Model Picker uses two explicit evidence modes. `harness-equivalent` disables
+search and requires provider-grouped `menuitemradio` rows before DOM/geometry or
+pixel comparison is eligible. `vcp-enhanced` keeps search, favorite, disabled,
+and provider-detail extensions for product interaction evidence only; it must
+not be compared pixel-for-pixel with the Harness capture.
+
 ## Required capture outputs
 
 For every case, the runner writes DOM shape, geometry, contract-scoped

@@ -85,6 +85,8 @@ export interface PopupSelectViewProps {
     readonly anchor?: HTMLElement;
     readonly searchPlaceholder?: string;
     readonly searchAria?: string;
+    /** Render the filter control; false is used by ModelSelect-equivalent menus. */
+    readonly searchEnabled?: boolean;
     readonly retryLabel?: string;
     readonly statusLoading?: string;
     readonly statusApplying?: string;

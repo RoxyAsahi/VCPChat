@@ -1,0 +1,21 @@
+{
+  "primitive": "PopupSelectView",
+  "provenance": {
+    "sources": [
+      "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-commands/src/client/PopupSelectView.tsx"
+    ]
+  },
+  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-commands/src/client/PopupSelectView.module.css",
+  "root": { "tag": "div", "class": "card", "portal": "conversation.input.overlay", "closedRender": "null" },
+  "children": [
+    { "tag": "input", "class": "search", "type": "text", "ariaLabel": "localized search" },
+    { "tag": "div", "class": "error", "role": "alert", "conditional": "state.error !== null" },
+    { "tag": "div", "class": "status", "conditional": "pending/submitting/empty" },
+    { "tag": "div", "class": "viewport", "role": "listbox", "children": ["div[role=option]"] }
+  ],
+  "option": { "tag": "div", "role": "option", "ariaSelected": "active index", "children": ["label", "detail?", "check?"] },
+  "states": ["closed-null", "loading", "ready-empty", "ready-options", "filtered-highlight", "submitting", "error-retry", "risk-confirmation", "outside-dismiss", "escape-dismiss", "dispose"],
+  "interaction": ["search owns focus on open", "ArrowUp/ArrowDown move active option", "Enter selects", "Escape dismisses to composer", "outside pointerdown dismisses in capture phase"],
+  "aria": ["listbox/options expose selection semantics", "error uses role=alert", "search has localized aria-label"],
+  "vcpDeviation": "No VCP production consumer is declared; Candidate PopupSelect keeps command wiring injected and remains Lab-only."
+}

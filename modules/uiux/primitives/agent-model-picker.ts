@@ -37,6 +37,8 @@ export interface AgentModelPickerProps {
     readonly onEffortSelect?: (option: AgentModelEffortOption) => void | Promise<void>;
     readonly selectedEffort?: string;
     readonly selectedId?: string;
+    /** Keep the product extension searchable by default; disable for parity fixtures. */
+    readonly searchEnabled?: boolean;
     readonly open?: boolean;
 }
 
@@ -123,6 +125,7 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
         anchor: trigger,
         overlayAria: `${props.label ?? 'Model'} picker`,
         searchAria: 'Search models',
+        searchEnabled: props.searchEnabled,
         onEscape: () => {
             if (pane === 'root') return false;
             pane = 'root';

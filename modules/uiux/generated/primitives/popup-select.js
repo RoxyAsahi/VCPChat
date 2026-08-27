@@ -207,6 +207,7 @@ export function mountPopupSelectView(host, props, scope) {
         overlayAria: props.overlayAria ?? '/{command} options',
         listboxAria: props.listboxAria ?? '/{command} matches',
     };
+    const searchEnabled = props.searchEnabled !== false;
     const template = (pattern, command) => pattern.replace('{command}', String(command));
     const card = document.createElement('div');
     card.className = 'vcp-harness-popup-select-card';
@@ -217,6 +218,7 @@ export function mountPopupSelectView(host, props, scope) {
     search.className = 'vcp-harness-popup-select-search';
     search.placeholder = labels.searchPlaceholder;
     search.setAttribute('aria-label', labels.searchAria);
+    search.hidden = !searchEnabled;
     const error = document.createElement('div');
     error.className = 'vcp-harness-popup-select-error';
     error.setAttribute('role', 'alert');
@@ -344,6 +346,7 @@ export function mountPopupSelectView(host, props, scope) {
         else
             card.removeAttribute('aria-busy');
         search.value = s.search;
+        search.hidden = !searchEnabled;
         search.readOnly = s.submitting;
         // The gated shell hides the picker card and shows only the risk modal.
         card.style.display = s.confirming === null ? '' : 'none';
@@ -362,7 +365,7 @@ export function mountPopupSelectView(host, props, scope) {
                     : '';
         status.style.display = status.textContent === '' ? 'none' : '';
         renderRows(s);
-        if (s.confirming === null)
+        if (s.confirming === null && searchEnabled)
             search.focus({ preventScroll: true });
     };
     let renderConfirmingId = null;

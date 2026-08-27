@@ -84,6 +84,7 @@ export function mountAgentModelPicker(host, props, scope) {
         anchor: trigger,
         overlayAria: `${props.label ?? 'Model'} picker`,
         searchAria: 'Search models',
+        searchEnabled: props.searchEnabled,
         onEscape: () => {
             if (pane === 'root')
                 return false;

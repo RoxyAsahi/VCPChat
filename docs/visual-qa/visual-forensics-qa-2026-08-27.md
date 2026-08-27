@@ -38,6 +38,7 @@ On 2026-08-27 in the current dirty worktree:
 - Settings row viewport evidence from `/tmp/vqa-settings-matrix-light/` and `/tmp/vqa-settings-matrix-dark/` passed. Every required viewport now has a real `*-settings.png`; each opened `globalSettingsModal`, captured 19 visible controls with field parent/context classes and state flags, and recorded active section `section-user-identity` before closing the modal and continuing the showcase scan.
 - Error/loading state evidence from `/tmp/vqa-state-matrix-light/` and `/tmp/vqa-state-matrix-dark/` passed. Each viewport triggered the real feedback loading layer (`position: fixed`), verified its label and automatic clearing, switched the real AsyncBoundary through `error` and `loading` with computed alert/skeleton styles, then restored `idle`.
 - Overlay cascade evidence from `/tmp/vqa-overlay-cascade-light/` and `/tmp/vqa-overlay-cascade-dark/` passed. CDP matched-rule captures contain 5 Menu, 4 Modal, and 3 Tooltip rules per theme, alongside the runtime geometry/z-index records; all overlays were closed before the viewport sweep.
+- The formal theme directories under `reports/visual-forensics-qa/light/` and `/dark/` were regenerated after these additions and pass `npm run check:visual-forensics`. This keeps the checked-in QA entrypoint aligned with the latest scanner contract rather than relying only on temporary evidence directories.
 
 ## Scope and frozen boundaries
 
