@@ -1,0 +1,12 @@
+{
+  "primitive": "ImageLightbox",
+  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-attachment/src/ImageLightbox.module.css",
+  "selectors": {
+    ".backdrop": { "position": "fixed", "inset": "0", "zIndex": "1000", "display": "grid", "padding": "40px" },
+    ".mask": { "position": "absolute", "inset": "0", "backdropFilter": "var(--dsw-mask-blur)" },
+    ".image": { "position": "relative", "maxWidth": "min(100%, 1600px)", "maxHeight": "calc(100vh - 80px)", "borderRadius": "12px", "objectFit": "contain" },
+    ".close": { "position": "fixed", "top": "20px", "right": "20px", "width": "36px", "height": "36px", "borderRadius": "999px" }
+  },
+  "tokens": ["--dsw-alias-bg-mask-1", "--dsw-mask-blur", "--dsw-specific-input-major", "--dsw-shadow-lv3", "--dsw-alias-border-l2-darkmode-thin", "--dsw-alias-label-primary"],
+  "candidateStatus": "source-only; no VCP attachment consumer or paired visual capture"
+}

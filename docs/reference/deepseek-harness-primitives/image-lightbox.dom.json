@@ -1,0 +1,19 @@
+{
+  "primitive": "ImageLightbox",
+  "provenance": {
+    "sources": [
+      "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-attachment/src/ImageLightbox.tsx"
+    ]
+  },
+  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-attachment/src/ImageLightbox.module.css",
+  "root": { "tag": "div", "class": "backdrop", "role": "dialog", "ariaModal": "true", "ariaLabel": "labels.dialog", "portal": "document.body" },
+  "children": [
+    { "tag": "div", "class": "mask", "ariaHidden": true, "action": "mousedown closes" },
+    { "tag": "img", "class": "image", "alt": "props.alt", "src": "props.src" },
+    { "tag": "button", "class": "close", "type": "button", "ariaLabel": "labels.close", "focusOnMount": true }
+  ],
+  "states": ["open", "close-button", "backdrop-dismiss", "escape-dismiss", "focus-restore", "dispose"],
+  "interaction": ["window Escape listener is removed on cleanup", "opener focus is restored on unmount"],
+  "aria": ["dialog uses aria-modal=true and localized label", "mask and close icon are hidden/decorative", "image alt is caller-provided"],
+  "vcpDeviation": "No VCP Candidate or attachment consumer is declared; this is a Harness source-only contract outside chat rendering."
+}
