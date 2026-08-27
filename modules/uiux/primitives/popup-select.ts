@@ -8,7 +8,7 @@ function ensureStyles() {
     if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) return;
     const style = document.createElement('style');
     style.id = STYLE_ID;
-    style.textContent = `.vcp-harness-popup-select-card{position:absolute;bottom:calc(100% + 4px);left:0;z-index:100;display:flex;flex-direction:column;padding:4px;min-width:min(220px,100%);max-width:100%;max-height:320px;overflow:hidden;border:1px solid var(--dsw-alias-border-inverted,transparent);border-radius:12px;background:var(--dsw-specific-menu,#fff);box-shadow:var(--dsw-shadow-lv3,0 0 1px rgba(0,0,0,.2),0 0 4px rgba(0,0,0,.02),0 12px 32px rgba(0,0,0,.08));outline:none;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei','Helvetica Neue',Helvetica,Arial,sans-serif}.vcp-harness-popup-select-viewport{display:flex;flex-direction:column;min-height:0;overflow-y:auto}.vcp-harness-popup-select-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border:0;border-radius:8px;cursor:pointer;font-size:13px;color:var(--dsw-alias-label-primary,#0f1115);background:transparent;text-align:left}.vcp-harness-popup-select-row-active{background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06))}.vcp-harness-popup-select-label{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vcp-harness-popup-select-detail{font-size:12px;color:var(--dsw-alias-label-tertiary,#737780);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vcp-harness-popup-select-check{display:inline-flex;flex:none;color:var(--dsw-alias-label-primary,#0f1115)}.vcp-harness-popup-select-group{display:flex;flex-direction:column}.vcp-harness-popup-select-group-title{padding:5px 8px 3px;color:var(--dsw-alias-label-tertiary,#737780);font-size:12px;line-height:18px;font-weight:500}.vcp-harness-popup-select-status{padding:8px 10px;font-size:13px;color:var(--dsw-alias-label-tertiary,#737780)}.vcp-harness-popup-select-search{margin:2px 2px 4px;padding:6px 8px;border:1px solid var(--dsw-alias-border-inverted,transparent);border-radius:8px;background:transparent;font-size:13px;color:var(--dsw-alias-label-primary,#0f1115);outline:none}.vcp-harness-popup-select-error{display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:12px;color:var(--dsw-alias-state-error-primary,#d92d20)}.vcp-harness-popup-select-error-text{flex:1;overflow:hidden;text-overflow:ellipsis}.vcp-harness-popup-select-retry{padding:2px 8px;border:1px solid var(--dsw-alias-border-inverted,transparent);border-radius:6px;background:transparent;font-size:12px;color:var(--dsw-alias-label-primary,#0f1115);cursor:pointer}`;
+    style.textContent = `.vcp-harness-popup-select-card{position:absolute;bottom:calc(100% + 4px);left:0;z-index:100;display:flex;flex-direction:column;padding:4px;min-width:min(220px,100%);max-width:100%;max-height:320px;overflow:hidden;border:1px solid var(--dsw-alias-border-inverted,transparent);border-radius:12px;background:var(--dsw-specific-menu,#fff);box-shadow:var(--dsw-shadow-lv3,0 0 1px rgba(0,0,0,.2),0 0 4px rgba(0,0,0,.02),0 12px 32px rgba(0,0,0,.08));outline:none;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei','Helvetica Neue',Helvetica,Arial,sans-serif}.vcp-harness-popup-select-viewport{display:flex;flex-direction:column;min-height:0;overflow-y:auto}.vcp-harness-popup-select-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border:0;border-radius:8px;cursor:pointer;font-size:13px;color:var(--dsw-alias-label-primary,#0f1115);background:transparent;text-align:left}.vcp-harness-popup-select-row-active{background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06))}.vcp-harness-popup-select-label{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vcp-harness-popup-select-detail{font-size:12px;color:var(--dsw-alias-label-tertiary,#737780);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vcp-harness-popup-select-check{display:inline-flex;flex:none;color:var(--dsw-alias-label-primary,#0f1115)}.vcp-harness-popup-select-group{display:flex;flex-direction:column}.vcp-harness-popup-select-group-title{padding:5px 8px 3px;color:var(--dsw-alias-label-tertiary,#737780);font-size:12px;line-height:18px;font-weight:500}.vcp-harness-popup-select-option{display:flex;align-items:center;gap:8px;width:100%;min-height:38px;padding:6px 8px;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-primary,#0f1115);font:inherit;text-align:left;cursor:pointer}.vcp-harness-popup-select-option:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06))}.vcp-harness-popup-select-option-copy{display:flex;flex:1;min-width:0;flex-direction:column;gap:0}.vcp-harness-popup-select-option-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vcp-harness-popup-select-option-detail{font-size:12px;line-height:16px;color:var(--dsw-alias-label-tertiary,#737780);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vcp-harness-popup-select-option-check{display:inline-flex;flex:none;color:var(--dsw-alias-label-primary,#0f1115)}.vcp-harness-popup-select-option-disabled{color:var(--dsw-alias-label-dimmed,#a0a5ad);cursor:default}.vcp-harness-popup-select-option-disabled:hover{background:transparent}.vcp-harness-popup-select-status{padding:8px 10px;font-size:13px;color:var(--dsw-alias-label-tertiary,#737780)}.vcp-harness-popup-select-search{margin:2px 2px 4px;padding:6px 8px;border:1px solid var(--dsw-alias-border-inverted,transparent);border-radius:8px;background:transparent;font-size:13px;color:var(--dsw-alias-label-primary,#0f1115);outline:none}.vcp-harness-popup-select-error{display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:12px;color:var(--dsw-alias-state-error-primary,#d92d20)}.vcp-harness-popup-select-error-text{flex:1;overflow:hidden;text-overflow:ellipsis}.vcp-harness-popup-select-retry{padding:2px 8px;border:1px solid var(--dsw-alias-border-inverted,transparent);border-radius:6px;background:transparent;font-size:12px;color:var(--dsw-alias-label-primary,#0f1115);cursor:pointer}`;
     (document.head || document.documentElement).append(style);
 }
 
@@ -334,7 +334,7 @@ export function mountPopupSelectView(host: HTMLElement, props: PopupSelectViewPr
     const status = document.createElement('div');
     status.className = 'vcp-harness-popup-select-status';
     const listbox = document.createElement('div');
-    listbox.setAttribute('role', 'listbox');
+    if (optionRole === 'option') listbox.setAttribute('role', 'listbox');
     listbox.className = 'vcp-harness-popup-select-viewport';
     card.append(search, error, status, listbox);
     card.remove(); // Closed renders null until the first open snapshot lands.
@@ -375,7 +375,8 @@ export function mountPopupSelectView(host: HTMLElement, props: PopupSelectViewPr
         void previousRowsScope?.dispose('harness-popup-select-rows-rebuilt');
         listbox.replaceChildren();
         if (s.status !== 'ready') return;
-        listbox.setAttribute('aria-label', template(labels.listboxAria, s.command ?? ''));
+        if (optionRole === 'option') listbox.setAttribute('aria-label', template(labels.listboxAria, s.command ?? ''));
+        else listbox.removeAttribute('aria-label');
         const rows = filterOptions(s.options, s.search);
         const renderOption = (option: PopupSelectOption, index: number) => {
             const row = document.createElement(optionRole === 'menuitemradio' ? 'button' : 'div');
@@ -385,23 +386,28 @@ export function mountPopupSelectView(host: HTMLElement, props: PopupSelectViewPr
             row.setAttribute('aria-disabled', String(option.disabled === true));
             if (optionRole === 'menuitemradio') row.setAttribute('aria-checked', String(option.active === true));
             else row.setAttribute('aria-selected', String(index === s.active));
-            row.className = index === s.active
-                ? 'vcp-harness-popup-select-row vcp-harness-popup-select-row-active'
-                : 'vcp-harness-popup-select-row';
-            if (option.disabled === true) row.classList.add('vcp-harness-popup-select-row-disabled');
+            row.className = optionRole === 'menuitemradio'
+                ? 'vcp-harness-popup-select-option'
+                : (index === s.active
+                    ? 'vcp-harness-popup-select-row vcp-harness-popup-select-row-active'
+                    : 'vcp-harness-popup-select-row');
+            if (option.disabled === true) row.classList.add(optionRole === 'menuitemradio' ? 'vcp-harness-popup-select-option-disabled' : 'vcp-harness-popup-select-row-disabled');
+            const copy = document.createElement('span');
+            copy.className = optionRole === 'menuitemradio' ? 'vcp-harness-popup-select-option-copy' : 'vcp-harness-popup-select-label';
             const labelNode = document.createElement('span');
-            labelNode.className = 'vcp-harness-popup-select-label';
+            labelNode.className = optionRole === 'menuitemradio' ? 'vcp-harness-popup-select-option-label' : '';
             labelNode.textContent = option.label;
-            row.append(labelNode);
+            copy.append(labelNode);
             if (option.detail !== undefined) {
                 const detail = document.createElement('span');
-                detail.className = 'vcp-harness-popup-select-detail';
+                detail.className = optionRole === 'menuitemradio' ? 'vcp-harness-popup-select-option-detail' : 'vcp-harness-popup-select-detail';
                 detail.textContent = option.detail;
-                row.append(detail);
+                copy.append(detail);
             }
+            row.append(copy);
             if (option.active === true) {
                 const check = document.createElement('span');
-                check.className = 'vcp-harness-popup-select-check';
+                check.className = optionRole === 'menuitemradio' ? 'vcp-harness-popup-select-option-check' : 'vcp-harness-popup-select-check';
                 check.setAttribute('aria-hidden', 'true');
                 mountSemanticIcon(check, { name: 'check', size: 16 }, nextRowsScope.child('harness-popup-select-check'));
                 row.append(check);
@@ -423,6 +429,8 @@ export function mountPopupSelectView(host: HTMLElement, props: PopupSelectViewPr
                         const title = document.createElement('div');
                         title.className = 'vcp-harness-popup-select-group-title';
                         title.textContent = key;
+                        title.id = `vcp-harness-popup-select-group-title-${groups.size}`;
+                        group.setAttribute('aria-labelledby', title.id);
                         group.append(title);
                     }
                     groups.set(key, group);
@@ -433,7 +441,7 @@ export function mountPopupSelectView(host: HTMLElement, props: PopupSelectViewPr
         } else rows.forEach((option, index) => listbox.append(renderOption(option, index)));
         // Focus ownership sits with the search input, so scrolling the virtual
         // highlight into view is explicit here (source useEffect on `active`).
-        listbox.querySelector('[aria-selected="true"]')?.scrollIntoView?.({ block: 'nearest' });
+        listbox.querySelector('[aria-selected="true"], [aria-checked="true"]')?.scrollIntoView?.({ block: 'nearest' });
     };
 
     const sync = () => {

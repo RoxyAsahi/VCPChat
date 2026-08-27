@@ -12,6 +12,10 @@ const electron = process.platform === 'darwin'
     ? path.join(root, 'node_modules', 'electron', 'dist', 'Electron.app', 'Contents', 'MacOS', 'Electron')
     : path.join(root, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron');
 const timeout = 45_000;
+const captureMode = process.env.VCP_MODEL_PICKER_MODE === 'harness-equivalent' ? 'harness-equivalent' : 'vcp-enhanced';
+const outputStem = captureMode === 'harness-equivalent'
+    ? 'vcp-agent-model-picker-harness-equivalent'
+    : 'vcp-agent-model-picker-candidate';
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const request = url => new Promise((resolve, reject) => {
     http.get(url, response => { response.resume(); response.once('end', resolve); }).once('error', reject);
@@ -56,7 +60,7 @@ try {
     const page = (await browser.pages()).find(candidate => candidate.url().includes('main.html'));
     assert.ok(page, `Agent Model Picker renderer missing: ${stderr}`);
     await page.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout });
-    const evidence = await page.evaluate(async () => {
+    const evidence = await page.evaluate(async (mode) => {
         const host = document.createElement('div');
         host.dataset.vcpCandidateAgentModelPicker = 'true';
         host.style.cssText = 'position:fixed;left:480px;top:420px;width:280px;height:140px;padding:16px;background:#fff;color:#0f1115;border:1px solid rgba(0,0,0,.08);border-radius:12px';
@@ -65,14 +69,23 @@ try {
         const selected = [];
         const efforts = [];
         const picker = window.VCPUIUX.mountAgentModelPicker(host, {
-            label: 'Agent model', selectedId: 'gpt-4o', selectedEffort: 'balanced',
-            efforts: [
+            label: 'Agent model', selectedId: mode === 'harness-equivalent' ? 'acme-think' : 'gpt-4o', selectedEffort: mode === 'harness-equivalent' ? 'high' : 'balanced',
+            searchEnabled: mode !== 'harness-equivalent',
+            harnessEquivalent: mode === 'harness-equivalent',
+            efforts: mode === 'harness-equivalent' ? [
+                { id: 'off', label: 'Off' },
+                { id: 'high', label: 'High' },
+                { id: 'max', label: 'Max' },
+            ] : [
                 { id: 'balanced', label: 'Balanced', description: 'Provider default' },
                 { id: 'deep', label: 'Deep reasoning', description: 'More reasoning effort' },
             ],
             options: async signal => {
                 if (signal.aborted) return [];
-                return [
+                return mode === 'harness-equivalent' ? [
+                    { id: 'deepseek-v4-flash', label: 'DeepSeek-V4-Flash', provider: 'DeepSeek' },
+                    { id: 'acme-think', label: 'Acme Think', provider: 'Acme Gateway' },
+                ] : [
                     { id: 'gpt-4o', label: 'GPT-4o', provider: 'OpenAI', favorite: true },
                     { id: 'claude-3-7', label: 'Claude 3.7 Sonnet', provider: 'Anthropic' },
                     { id: 'local-llama', label: 'Llama 3.3', provider: 'Local', disabled: true },
@@ -93,13 +106,16 @@ try {
         const modelRow = host.querySelector('.vcp-harness-agent-model-picker-cell');
         modelRow?.click();
         await new Promise(resolve => setTimeout(resolve, 0));
+        const optionSelector = mode === 'harness-equivalent' ? '[role="menuitemradio"]' : '[role="option"]';
+        const optionRoot = '.vcp-harness-popup-select-viewport';
+        const selectedSelector = `${optionRoot} ${mode === 'harness-equivalent' ? `${optionSelector}[aria-checked="true"]` : `${optionSelector}[aria-selected="true"]`}`;
         const modelPane = {
             searchVisible: host.querySelector('.vcp-harness-popup-select-search')?.hidden === false,
-            groupCount: host.querySelectorAll('section[role="group"]').length,
-            optionRole: host.querySelector('[role="option"]') ? 'option' : null,
-            optionCount: host.querySelectorAll('[role="option"]').length,
-            selectedOption: host.querySelector('[role="option"][aria-selected="true"]')?.textContent?.trim() || null,
-            disabledOptions: [...host.querySelectorAll('[role="option"][aria-disabled="true"]')].map(node => node.textContent?.trim() || null),
+            groupCount: host.querySelectorAll(`${optionRoot} section[role="group"]`).length,
+            optionRole: host.querySelector(`${optionRoot} ${optionSelector}`) ? (mode === 'harness-equivalent' ? 'menuitemradio' : 'option') : null,
+            optionCount: host.querySelectorAll(`${optionRoot} ${optionSelector}`).length,
+            selectedOption: host.querySelector(selectedSelector)?.textContent?.trim() || null,
+            disabledOptions: [...host.querySelectorAll(`${optionRoot} ${optionSelector}[aria-disabled="true"]`)].map(node => node.textContent?.trim() || null),
         };
         const menu = host.querySelector('.vcp-harness-popup-select-card');
         const menuStyle = menu ? getComputedStyle(menu) : null;
@@ -109,12 +125,13 @@ try {
         const declaration = property => menuRules.map(rule => rule.style?.getPropertyValue(property)).find(Boolean) || null;
         const menuRect = menu?.getBoundingClientRect();
         const search = host.querySelector('.vcp-harness-popup-select-search');
-        search?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+        const card = host.querySelector('.vcp-harness-popup-select-card');
+        if (search) search.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+        else card?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
         await new Promise(resolve => setTimeout(resolve, 0));
         const keyboardNavigation = {
-            activeOption: host.querySelector('[role="option"][aria-selected="true"]')?.textContent?.trim() || null,
+            activeOption: host.querySelector(selectedSelector)?.textContent?.trim() || null,
         };
-        const card = host.querySelector('.vcp-harness-popup-select-card');
         card?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         await new Promise(resolve => setTimeout(resolve, 0));
         const modelEscape = {
@@ -138,7 +155,10 @@ try {
         const focusRestored = document.activeElement === picker.trigger;
         const triggerStyle = getComputedStyle(picker.trigger);
         const screenshot = {
-            source: 'VCP generated AgentModelPicker Candidate Electron capture',
+            source: mode === 'harness-equivalent'
+                ? 'VCP generated AgentModelPicker Harness-equivalent Electron capture'
+                : 'VCP generated AgentModelPicker Candidate Electron capture',
+            fixtureMode: mode,
             provenance: 'deepseek-harness/packages/client/ui-model-selection/src/client/ModelSelect.tsx',
             viewport: { width: innerWidth, height: innerHeight, deviceScaleFactor: devicePixelRatio },
             rootPane, modelPane, keyboardNavigation, modelEscape, effortPane, effortEscape, focusRestored,
@@ -181,7 +201,7 @@ try {
             } : null,
             selected, efforts,
             productionConsumer: false,
-            status: 'candidate-interaction-active',
+            status: mode === 'harness-equivalent' ? 'harness-equivalent-fixture-active' : 'candidate-interaction-active',
         };
         // Cleanup happens after the caller captures the semantic menu ROI.
         // Keeping the mounted surface alive here lets Puppeteer clip the same
@@ -198,15 +218,15 @@ try {
             picker.setPane('model');
         };
         return screenshot;
-    });
+    }, captureMode);
     assert.deepEqual(evidence.viewport, { width: 800, height: 600, deviceScaleFactor: 1 });
     assert.equal(evidence.rootPane.expanded, 'true');
     assert.equal(evidence.rootPane.cardPresent, true);
     assert.equal(evidence.rootPane.modelRowVisible, true);
     assert.equal(evidence.rootPane.effortRowVisible, true);
-    assert.equal(evidence.modelPane.searchVisible, true);
-    assert.equal(evidence.modelPane.optionCount, 3);
-    assert.equal(evidence.effortPane.optionCount, 2);
+    assert.equal(evidence.modelPane.searchVisible, captureMode !== 'harness-equivalent');
+    assert.equal(evidence.modelPane.optionCount, captureMode === 'harness-equivalent' ? 2 : 3);
+    assert.equal(evidence.effortPane.optionCount, captureMode === 'harness-equivalent' ? 3 : 2);
     assert.equal(evidence.modelEscape.returnedToRoot, true);
     assert.equal(evidence.modelEscape.searchHidden, true);
     assert.equal(evidence.effortEscape.returnedToRoot, true);
@@ -214,7 +234,7 @@ try {
     assert.equal(evidence.focusRestored, true);
     assert.equal(evidence.menu?.rect?.width > 0, true);
     await fs.mkdir(path.join(root, 'reports'), { recursive: true });
-    await page.screenshot({ path: path.join(root, 'reports', 'vcp-agent-model-picker-candidate-full.png') });
+    await page.screenshot({ path: path.join(root, 'reports', `${outputStem}-full.png`) });
     await page.evaluate(() => window.__vcpAgentModelPickerOpenModel?.());
     await sleep(0);
     const menuRect = await page.$eval('[data-vcp-candidate-agent-model-picker="true"] .vcp-harness-popup-select-card', element => {
@@ -222,12 +242,12 @@ try {
         return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
     });
     await page.screenshot({
-        path: path.join(root, 'reports', 'vcp-agent-model-picker-candidate.png'),
+        path: path.join(root, 'reports', `${outputStem}.png`),
         clip: menuRect,
     });
     evidence.disposed = await page.evaluate(() => window.__vcpAgentModelPickerCleanup?.() ?? false);
     assert.equal(evidence.disposed, true);
-    await fs.writeFile(path.join(root, 'reports', 'vcp-agent-model-picker-candidate.json'), `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
+    await fs.writeFile(path.join(root, 'reports', `${outputStem}.json`), `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
     console.log(JSON.stringify(evidence, null, 2));
 } finally {
     // Disconnect without waiting for DevTools target shutdown; Electron is
