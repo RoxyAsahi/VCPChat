@@ -68,9 +68,12 @@ test('Model picker pixel diff remains pending or records a real mismatch', () =>
     execFileSync(process.execPath, ['scripts/diff-harness-vcp-model-picker-pixels.mjs'], { cwd: root, stdio: 'pipe' });
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-model-picker-pixel-diff.json'), 'utf8'));
     assert.equal(report.pass, false);
-    assert.ok(['pending-screenshot-capture', 'pixel-dimension-mismatch', 'compared'].includes(report.status));
+    assert.ok(['pending-screenshot-capture', 'pending-semantic-fixture-alignment', 'pixel-dimension-mismatch', 'compared'].includes(report.status));
     if (report.status === 'pending-screenshot-capture') {
         assert.ok(report.missingEvidence.includes('Harness ModelSelect capture report paired with screenshot') || report.missingEvidence.includes('Harness ModelSelect screenshot'));
+    } else if (report.status === 'pending-semantic-fixture-alignment') {
+        assert.ok(report.missingEvidence.includes('semantic fixture alignment'));
+        assert.equal(report.semanticEquivalent, false);
     } else {
         assert.ok(report.missingEvidence.includes('same viewport dimensions') || report.missingEvidence.includes('pixel tolerance'));
     }

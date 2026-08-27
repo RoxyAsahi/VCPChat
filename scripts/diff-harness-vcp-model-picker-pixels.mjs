@@ -17,13 +17,35 @@ try {
     if (report.missingEvidence.length) {
         report.status = 'pending-screenshot-capture';
     } else {
+        const [harnessReport, vcpReport] = await Promise.all([
+            import('node:fs/promises').then(fs => fs.readFile(harnessReportPath, 'utf8')).then(JSON.parse),
+            import('node:fs/promises').then(fs => fs.readFile(path.join(root, 'reports/vcp-agent-model-picker-candidate.json'), 'utf8')).then(JSON.parse),
+        ]);
+        report.semanticFixture = {
+            harness: {
+                modelOptions: harnessReport.modelPane?.options?.length ?? null,
+                effortOptions: harnessReport.effortPane?.options?.length ?? null,
+                searchVisible: null,
+            },
+            vcp: {
+                modelOptions: vcpReport.modelPane?.optionCount ?? null,
+                effortOptions: vcpReport.effortPane?.optionCount ?? null,
+                searchVisible: vcpReport.modelPane?.searchVisible ?? null,
+            },
+        };
+        report.semanticEquivalent = report.semanticFixture.harness.modelOptions === report.semanticFixture.vcp.modelOptions
+            && report.semanticFixture.harness.effortOptions === report.semanticFixture.vcp.effortOptions;
+        if (!report.semanticEquivalent) {
+            report.status = 'pending-semantic-fixture-alignment';
+            report.missingEvidence.push('semantic fixture alignment');
+        }
         const [harness, vcp] = await Promise.all([sharp(harnessPath).ensureAlpha().raw().toBuffer({ resolveWithObject: true }), sharp(vcpPath).ensureAlpha().raw().toBuffer({ resolveWithObject: true })]);
         report.dimensions = { harness: harness.info, vcp: vcp.info };
         const sameSize = harness.info.width === vcp.info.width && harness.info.height === vcp.info.height;
-        if (!sameSize) {
+        if (!sameSize && report.semanticEquivalent) {
             report.status = 'pixel-dimension-mismatch';
             report.missingEvidence.push('same viewport dimensions');
-        } else {
+        } else if (sameSize && report.semanticEquivalent) {
             let different = 0;
             let totalDelta = 0;
             const pixels = harness.info.width * harness.info.height;
