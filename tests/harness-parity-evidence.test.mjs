@@ -113,6 +113,15 @@ test('JobListAction source audit preserves lifecycle and ordering evidence', () 
     assert.ok(report.note.includes('does not create a VCP jobs consumer'));
 });
 
+test('JobListAction reference audit preserves DOM and geometry provenance', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-job-list-action-reference.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-job-list-action-reference.json'), 'utf8'));
+    assert.equal(report.domContract, true);
+    assert.equal(report.cssGeometry, '21/21');
+    assert.equal(report.candidateStatus, 'source-only; no VCP jobs consumer or paired visual capture');
+    assert.ok(report.evidenceGaps.includes('no VCP jobs consumer or runtime registry'));
+});
+
 test('PermissionRow source audit preserves settings capability boundaries', () => {
     execFileSync(process.execPath, ['scripts/check-harness-permission-row-source.mjs'], { cwd: root, stdio: 'pipe' });
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-permission-row-source.json'), 'utf8'));

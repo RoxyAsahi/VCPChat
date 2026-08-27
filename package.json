@@ -41,6 +41,7 @@
     "check:harness-diff-block-reference": "node scripts/check-harness-diff-block-reference.mjs",
     "check:harness-diff-block-source": "node scripts/check-harness-diff-block-source.mjs",
     "check:harness-permission-row-reference": "node scripts/check-harness-permission-row-reference.mjs",
+    "check:harness-job-list-action-reference": "node scripts/check-harness-job-list-action-reference.mjs",
     "check:harness-fixture-readiness": "node scripts/check-harness-fixture-readiness.mjs",
     "capture:vcp-dom-fixtures": "node scripts/capture-vcp-dom-fixtures.mjs",
     "diff:harness-vcp-dom": "node scripts/diff-harness-vcp-dom.mjs",
