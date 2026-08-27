@@ -1,0 +1,15 @@
+{
+  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-directory-picker-browse/src/client/DirectoryBrowser.module.css",
+  "selectors": {
+    ".dialog": { "width": "min(680px, 100%)", "height": "min(500px, calc(100dvh - 32px))", "padding": "0" },
+    ".header": { "gap": "8px", "padding": "16px 14px 8px 24px" },
+    ".content": { "padding": "16px 16px 16px 24px" },
+    ".column": { "minWidth": "256px", "gap": "2px", "paddingRight": "8px" },
+    ".row": { "height": "28px", "gap": "4px", "padding": "4px", "borderRadius": "6px" },
+    ".footerBar": { "padding": "12px 24px", "gap": "8px" }
+  },
+  "vcpCandidateEvidence": {
+    "status": "pending-electron-fixture",
+    "pixelDiff": "pending-same-semantic-harness-fixture"
+  }
+}

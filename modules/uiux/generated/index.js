@@ -23,4 +23,6 @@ export { mountToggle } from './primitives/toggle.js';
 export { mountColorPair } from './primitives/color-pair.js';
 /** Candidate-only Harness command-popup contract; not a stable VCP business API. */
 export { createPopupSelectController, filterOptions, mountPopupSelectView } from './primitives/popup-select.js';
+/** Candidate-only in-app directory browser; its filesystem capabilities are injected by the caller. */
+export { mountDirectoryBrowser } from './primitives/directory-browser.js';
 export { mountPrimitiveLab } from './lab/primitive-lab.js';

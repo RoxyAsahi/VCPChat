@@ -14,6 +14,7 @@ import { mountRiskConfirmation } from '../primitives/risk-confirmation.js';
 import { mountSemanticIcon } from '../primitives/semantic-icon.js';
 import { mountSelect } from '../primitives/select.js';
 import { createPopupSelectController, mountPopupSelectView } from '../primitives/popup-select.js';
+import { mountDirectoryBrowser } from '../primitives/directory-browser.js';
 const STYLE_ID = 'vcp-harness-primitive-lab';
 function ensureStyles() {
     if (typeof document === 'undefined' || document.getElementById(STYLE_ID))
@@ -228,6 +229,29 @@ export function mountPrimitiveLab(root, scope) {
     });
     mountPopupSelectView(popupHost, { popup }, labScope);
     labScope.listen(popupTrigger, 'click', () => popup.open('model', {}, { via: 'enter', token: '/model' }));
+    // Harness provenance: ui-directory-picker-browse DirectoryBrowser. The
+    // Candidate owns only presentation state; this Lab supplies an in-memory
+    // fixture tree, never VCP filesystem IPC, persisted Workspace paths or
+    // workspace adoption.
+    const directoryRow = group(lab, 'Directory Browser', 'deepseek-harness/packages/client/ui-directory-picker-browse/src/client/DirectoryBrowser.tsx; Candidate Lab only, injected in-memory tree');
+    const directoryTrigger = document.createElement('button');
+    directoryTrigger.type = 'button';
+    directoryTrigger.textContent = 'Browse fixture folder';
+    directoryRow.append(directoryTrigger);
+    mountButton(directoryTrigger, { variant: 'outline', size: 'sm' }, labScope);
+    const listing = new Map([
+        ['/home', { path: '/home', crumbs: [{ name: 'Home', path: '/home' }], entries: [{ name: 'projects', path: '/home/projects' }, { name: 'archive', path: '/home/archive' }, { name: '.secrets', path: '/home/.secrets', hidden: true }] }],
+        ['/home/projects', { path: '/home/projects', crumbs: [{ name: 'Home', path: '/home' }, { name: 'projects', path: '/home/projects' }], entries: [{ name: 'vcpchat', path: '/home/projects/vcpchat' }, { name: 'harness', path: '/home/projects/harness' }] }],
+        ['/home/archive', { path: '/home/archive', crumbs: [{ name: 'Home', path: '/home' }, { name: 'archive', path: '/home/archive' }], entries: [] }],
+    ]);
+    let directory;
+    directory = mountDirectoryBrowser({
+        listDirectory: async (path) => listing.get(path ?? '/home') ?? { path: path ?? '/home', entries: [] },
+        createDirectory: async (parent, name) => `${parent}/${name}`,
+        onOpen: path => { directoryTrigger.dataset.path = path; directory.setOpen(false); },
+        onClose: () => directory.setOpen(false),
+    }, labScope);
+    labScope.listen(directoryTrigger, 'click', () => directory.setOpen(true));
     const modalRow = group(lab, 'Modal', 'deepseek-harness/packages/client/ui-primitives/src/Modal.tsx + Workspace/Settings production consumers');
     const modalTrigger = document.createElement('button');
     modalTrigger.type = 'button';

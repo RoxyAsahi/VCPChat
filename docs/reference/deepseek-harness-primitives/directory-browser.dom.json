@@ -1,0 +1,24 @@
+{
+  "source": [
+    "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-directory-picker-browse/src/client/DirectoryBrowser.tsx",
+    "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-directory-picker-browse/src/client/flow.ts"
+  ],
+  "productionConsumers": [
+    "packages/client/ui-workspace/src/client/WorkspacePicker.tsx",
+    "packages/client/ui-directory-picker-browse/src/client/index.ts"
+  ],
+  "harnessContract": {
+    "tree": "headless Modal > header(title + breadcrumb/path editor) + Miller content(one listing column or selected parent + divider + child column) + footer(new folder + show hidden + cancel + open)",
+    "businessBoundary": "listDirectory, createDirectory, onOpen and onClose are owner-injected capabilities; the browser neither owns Workspace adoption nor host filesystem access",
+    "states": ["closed", "initial-loading", "single-pane", "two-pane-selected", "hidden-files", "listing-error", "busy", "create-folder", "close-reopen", "dispose"],
+    "liveness": "superseding browse intent aborts its signal; close/reopen/dispose invalidate late listing and create settlements"
+  },
+  "vcpCandidate": {
+    "source": "modules/uiux/primitives/directory-browser.ts",
+    "host": "modules/uiux/lab/primitive-lab.ts",
+    "maturity": "foundation-under-test",
+    "stableApi": false,
+    "productionConsumer": "none; VCP directory IPC, dynamic-wallpaper selection and Workspace persistence are intentionally untouched",
+    "missing": ["path editor", "nested create-folder dialog", "slow scan gate", "same-semantic Harness pixel diff"]
+  }
+}
