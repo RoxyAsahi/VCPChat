@@ -118,3 +118,7 @@ test('PermissionRow source audit preserves settings capability boundaries', () =
     assert.equal(report.checks.length, 10);
     assert.ok(report.note.includes('does not create a VCP permission-settings consumer'));
 });
+
+test('Harness fixture matrix guard preserves explicit Candidate boundaries', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-fixture-matrix.mjs'], { cwd: root, stdio: 'pipe' });
+});
