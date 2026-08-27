@@ -40,6 +40,11 @@ assert.equal(report.rangeInputs[0].id, 'agentTtsSpeed', 'typed Agent Range must 
 assert.deepEqual(report.selectNodes.map(node => node.id).sort(), ['agentTtsVoicePrimary', 'agentTtsVoiceSecondary'], 'typed Agent Select evidence must target both canonical TTS voice nodes');
 assert.deepEqual(report.selects.map(node => node.controlId).sort(), ['agentTtsVoicePrimary', 'agentTtsVoiceSecondary'], 'typed Agent Select wrappers must target both canonical TTS voice nodes');
 assert.equal(report.choiceOptions.every(node => node.tag === 'label'), true, 'Choice options must remain native radio labels');
+if (report.agentSelectInteraction !== null && report.agentSelectInteraction !== undefined) {
+    assert.deepEqual(report.agentSelectInteraction, {
+        opened: true, menuOwner: true, role: 'menu', closed: true, focusRestored: true,
+    }, 'voice Select interaction evidence must prove portal open, Escape close, and focus restore');
+}
 
 console.log(JSON.stringify({
     source: report.source,
@@ -51,6 +56,7 @@ console.log(JSON.stringify({
     streamRadios: report.streamRadios.length,
     ranges: report.ranges.length,
     selects: report.selects.length,
+    agentSelectInteraction: report.agentSelectInteraction ?? null,
     screenshotBytes: fs.statSync(screenshotPath).size,
     status: 'production-baseline-valid',
 }, null, 2));

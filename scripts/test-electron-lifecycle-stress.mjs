@@ -632,6 +632,7 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
             `${label}: Agent TTS voice select contract changed unexpectedly: ${JSON.stringify(state)}`);
         assert.equal(state.typedAgentSelects, 2,
             `${label}: Agent TTS voice selects must use the typed Select projection: ${JSON.stringify(state)}`);
+        let agentSelectInteractionEvidence = null;
         if (agentSelectInteraction) {
             const interaction = await page.evaluate(() => {
                 const trigger = document.querySelector('#agentTtsVoicePrimary + .vcp-harness-select-trigger');
@@ -646,13 +647,16 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
             });
             assert.deepEqual(interaction, { opened: true, menuOwner: true, role: 'menu' },
                 `${label}: voice Select interaction open contract drifted: ${JSON.stringify(interaction)}`);
+            agentSelectInteractionEvidence = { ...interaction, closed: false, focusRestored: false };
             await page.keyboard.press('Escape');
             await page.waitForFunction(() => {
                 const trigger = document.querySelector('#agentTtsVoicePrimary + .vcp-harness-select-trigger');
                 return trigger?.getAttribute('aria-expanded') === 'false'
                     && document.activeElement === trigger
-                    && !document.querySelector('body > .vcp-harness-menu-list');
+                && !document.querySelector('body > .vcp-harness-menu-list');
             }, { timeout: timeoutMs });
+            agentSelectInteractionEvidence.closed = true;
+            agentSelectInteractionEvidence.focusRestored = true;
         }
         if (captureAgentSettings) {
             const evidence = await page.evaluate(() => {
@@ -706,6 +710,7 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
                     selectNodes: pick('#agentSettingsForm select.vcp-harness-select-native'),
                 };
             });
+            evidence.agentSelectInteraction = agentSelectInteractionEvidence;
             await fs.mkdir(path.join(root, 'reports'), { recursive: true });
             await fs.writeFile(path.join(root, 'reports', 'vcp-agent-settings-production.json'), `${JSON.stringify(evidence, null, 2)}\n`);
             await page.screenshot({ path: path.join(root, 'reports', 'vcp-agent-settings-production.png') });
