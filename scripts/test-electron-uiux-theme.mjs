@@ -291,7 +291,7 @@ try {
     });
     assert.deepEqual(candidateLabBoundary, {
         maturity: 'candidate',
-        buttons: 13,
+        buttons: 14,
         input: true,
         field: true,
         select: true,
@@ -910,6 +910,110 @@ try {
         delete window.__harnessCandidateAgentPresetSeatController;
         delete window.__harnessCandidateAgentPresetSeatScope;
         document.querySelector('[data-electron-candidate-agent-preset-seat]')?.remove();
+    });
+    const agentPresetRowGeometry = await page.evaluate(async () => {
+        const host = document.createElement('div');
+        host.dataset.electronCandidateAgentPresetRow = 'true';
+        host.style.cssText = 'position:fixed;left:80px;top:240px;width:560px;padding:0 24px;background:#fff;color:#0f1115;border:1px solid rgba(0,0,0,.08);border-radius:12px';
+        document.body.append(host);
+        const scope = new window.VCPLifecycle.LifecycleScope('test:harness-candidate-agent-preset-row');
+        const picks = [];
+        const row = window.VCPUIUX.mountAgentPresetRow(host, {
+            options: [
+                { id: 'standard', name: 'Standard mode', trust: 'system' },
+                { id: 'draft', name: 'Research draft', trust: 'user' },
+                { id: 'minimal', name: 'Minimal mode', trust: 'system' },
+            ],
+            currentValue: 'standard',
+            onSelect: (id) => { picks.push(id); row.setCurrent(id); },
+            onClose: () => {},
+        }, scope);
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const triggerStyle = getComputedStyle(row.trigger);
+        const rowStyle = getComputedStyle(row.root);
+        const titleStyle = getComputedStyle(document.querySelector('.vcp-agent-preset-row-title'));
+        const descNode = document.querySelector('.vcp-agent-preset-row-desc');
+        const descStyle = getComputedStyle(descNode);
+        const closed = {
+            height: triggerStyle.height,
+            padding: triggerStyle.padding,
+            borderRadius: triggerStyle.borderRadius,
+            gap: triggerStyle.gap,
+            background: triggerStyle.backgroundColor,
+            fontSize: triggerStyle.fontSize,
+            lineHeight: triggerStyle.lineHeight,
+            ariaExpanded: row.trigger.getAttribute('aria-expanded'),
+            hasPopup: row.trigger.getAttribute('aria-haspopup'),
+            label: row.selectedLabel(),
+            rowBorderBottomWidth: rowStyle.borderBottomWidth,
+            rowGap: rowStyle.gap,
+            titleFontSize: titleStyle.fontSize,
+            titleLineHeight: titleStyle.lineHeight,
+            descFontSize: descStyle.fontSize,
+            descLineHeight: descStyle.lineHeight,
+            descRole: descNode?.getAttribute('role') ?? null,
+        };
+        row.setOpen(true);
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const menu = document.body.querySelector('.vcp-harness-menu-list[role="menu"]');
+        const items = [...(menu?.querySelectorAll('.vcp-harness-menu-item-label') ?? [])].map(label => label.textContent);
+        // Read placement while open: closing the menu detaches the portal list.
+        const portalToBody = menu?.parentElement === document.body;
+        menu?.querySelectorAll('[role="menuitem"]')[1].click();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const pickedLabel = row.selectedLabel();
+        const pickedClosed = row.trigger.getAttribute('aria-expanded') === 'false' && !document.querySelector('.vcp-harness-menu-list');
+        row.setBusy(true);
+        const busyDisabled = row.trigger.disabled;
+        row.setBusy(false);
+        row.setError('Could not load presets. Try again.');
+        const errorRole = document.querySelector('.vcp-agent-preset-row-desc')?.getAttribute('role') ?? null;
+        row.setError(null);
+        const screenshot = { viewport: { width: innerWidth, height: innerHeight, deviceScaleFactor: devicePixelRatio }, source: 'generated-artifact-electron', primitive: 'AgentPresetRow', state: 'open-selected-busy-error-picked-closed', closed, open: { alignEnd: menu?.classList.contains('vcp-harness-menu-align-end') === true, itemCount: items.length, items, portalToBody }, picks, pickedLabel, pickedClosed, busyDisabled, errorRole };
+        window.__harnessCandidateAgentPresetRowController = row;
+        window.__harnessCandidateAgentPresetRowScope = scope;
+        return screenshot;
+    });
+    assert.deepEqual(agentPresetRowGeometry.viewport, { width: 800, height: 600, deviceScaleFactor: 1 });
+    assert.deepEqual(agentPresetRowGeometry.closed, {
+        height: '36px',
+        padding: '0px 14px',
+        borderRadius: '18px',
+        gap: '12px',
+        background: 'rgb(245, 246, 247)',
+        fontSize: '14px',
+        lineHeight: '22px',
+        ariaExpanded: 'false',
+        hasPopup: 'menu',
+        label: 'Standard mode',
+        rowBorderBottomWidth: '1px',
+        rowGap: '8px',
+        titleFontSize: '14px',
+        titleLineHeight: '22px',
+        descFontSize: '12px',
+        descLineHeight: '18px',
+        descRole: null,
+    });
+    assert.equal(agentPresetRowGeometry.open.alignEnd, true);
+    assert.equal(agentPresetRowGeometry.open.portalToBody, true);
+    assert.equal(agentPresetRowGeometry.open.itemCount, 3);
+    // PresetMenu appends `· <userTrust>` only for locally authored presets.
+    assert.deepEqual(agentPresetRowGeometry.open.items, ['Standard mode', 'Research draft · Custom', 'Minimal mode']);
+    assert.deepEqual(agentPresetRowGeometry.picks, ['draft']);
+    assert.equal(agentPresetRowGeometry.pickedLabel, 'Research draft');
+    assert.equal(agentPresetRowGeometry.pickedClosed, true);
+    assert.equal(agentPresetRowGeometry.busyDisabled, true);
+    assert.equal(agentPresetRowGeometry.errorRole, 'alert');
+    const agentPresetRowScreenshot = path.join(root, 'reports', 'vcp-harness-agent-preset-row-candidate.png');
+    await page.screenshot({ path: agentPresetRowScreenshot });
+    assert.ok((await fs.stat(agentPresetRowScreenshot)).size > 1024, 'Agent preset row Candidate screenshot is unexpectedly empty');
+    await fs.writeFile(path.join(root, 'reports', 'vcp-harness-agent-preset-row-candidate.json'), `${JSON.stringify(agentPresetRowGeometry, null, 2)}\n`, 'utf8');
+    await page.evaluate(async () => {
+        await window.__harnessCandidateAgentPresetRowController?.dispose?.();
+        await window.__harnessCandidateAgentPresetRowScope?.dispose?.('candidate-agent-preset-row-visual-complete');
+        delete window.__harnessCandidateAgentPresetRowController;
+        delete window.__harnessCandidateAgentPresetRowScope;
+        document.querySelector('[data-electron-candidate-agent-preset-row]')?.remove();
     });
     await page.screenshot({ path: primitiveScreenshot });
     const screenshotStat = await fs.stat(primitiveScreenshot);
