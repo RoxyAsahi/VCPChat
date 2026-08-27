@@ -6,7 +6,7 @@ function ensureStyles() {
         return;
     const style = document.createElement('style');
     style.id = STYLE_ID;
-    style.textContent = `.vcp-harness-popup-select-card{position:absolute;bottom:calc(100% + 4px);left:0;z-index:100;display:flex;flex-direction:column;padding:4px;min-width:min(220px,100%);max-width:100%;max-height:320px;overflow:hidden;border:1px solid var(--dsw-alias-border-inverted,transparent);border-radius:12px;background:var(--dsw-specific-menu,#fff);box-shadow:var(--dsw-shadow-lv3,0 0 1px rgba(0,0,0,.2),0 0 4px rgba(0,0,0,.02),0 12px 32px rgba(0,0,0,.08));outline:none;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei','Helvetica Neue',Helvetica,Arial,sans-serif}.vcp-harness-popup-select-viewport{display:flex;flex-direction:column;min-height:0;overflow-y:auto}.vcp-harness-popup-select-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;cursor:pointer;font-size:13px;color:var(--dsw-alias-label-primary,#0f1115)}.vcp-harness-popup-select-row-active{background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06))}.vcp-harness-popup-select-label{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vcp-harness-popup-select-detail{font-size:12px;color:var(--dsw-alias-label-tertiary,#737780);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vcp-harness-popup-select-check{display:inline-flex;flex:none;color:var(--dsw-alias-label-primary,#0f1115)}.vcp-harness-popup-select-status{padding:8px 10px;font-size:13px;color:var(--dsw-alias-label-tertiary,#737780)}.vcp-harness-popup-select-search{margin:2px 2px 4px;padding:6px 8px;border:1px solid var(--dsw-alias-border-inverted,transparent);border-radius:8px;background:transparent;font-size:13px;color:var(--dsw-alias-label-primary,#0f1115);outline:none}.vcp-harness-popup-select-error{display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:12px;color:var(--dsw-alias-state-error-primary,#d92d20)}.vcp-harness-popup-select-error-text{flex:1;overflow:hidden;text-overflow:ellipsis}.vcp-harness-popup-select-retry{padding:2px 8px;border:1px solid var(--dsw-alias-border-inverted,transparent);border-radius:6px;background:transparent;font-size:12px;color:var(--dsw-alias-label-primary,#0f1115);cursor:pointer}`;
+    style.textContent = `.vcp-harness-popup-select-card{position:absolute;bottom:calc(100% + 4px);left:0;z-index:100;display:flex;flex-direction:column;padding:4px;min-width:min(220px,100%);max-width:100%;max-height:320px;overflow:hidden;border:1px solid var(--dsw-alias-border-inverted,transparent);border-radius:12px;background:var(--dsw-specific-menu,#fff);box-shadow:var(--dsw-shadow-lv3,0 0 1px rgba(0,0,0,.2),0 0 4px rgba(0,0,0,.02),0 12px 32px rgba(0,0,0,.08));outline:none;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei','Helvetica Neue',Helvetica,Arial,sans-serif}.vcp-harness-popup-select-viewport{display:flex;flex-direction:column;min-height:0;overflow-y:auto}.vcp-harness-popup-select-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border:0;border-radius:8px;cursor:pointer;font-size:13px;color:var(--dsw-alias-label-primary,#0f1115);background:transparent;text-align:left}.vcp-harness-popup-select-row-active{background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06))}.vcp-harness-popup-select-label{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vcp-harness-popup-select-detail{font-size:12px;color:var(--dsw-alias-label-tertiary,#737780);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vcp-harness-popup-select-check{display:inline-flex;flex:none;color:var(--dsw-alias-label-primary,#0f1115)}.vcp-harness-popup-select-group{display:flex;flex-direction:column}.vcp-harness-popup-select-group-title{padding:5px 8px 3px;color:var(--dsw-alias-label-tertiary,#737780);font-size:12px;line-height:18px;font-weight:500}.vcp-harness-popup-select-status{padding:8px 10px;font-size:13px;color:var(--dsw-alias-label-tertiary,#737780)}.vcp-harness-popup-select-search{margin:2px 2px 4px;padding:6px 8px;border:1px solid var(--dsw-alias-border-inverted,transparent);border-radius:8px;background:transparent;font-size:13px;color:var(--dsw-alias-label-primary,#0f1115);outline:none}.vcp-harness-popup-select-error{display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:12px;color:var(--dsw-alias-state-error-primary,#d92d20)}.vcp-harness-popup-select-error-text{flex:1;overflow:hidden;text-overflow:ellipsis}.vcp-harness-popup-select-retry{padding:2px 8px;border:1px solid var(--dsw-alias-border-inverted,transparent);border-radius:6px;background:transparent;font-size:12px;color:var(--dsw-alias-label-primary,#0f1115);cursor:pointer}`;
     (document.head || document.documentElement).append(style);
 }
 const POPUP_CLOSED = {
@@ -208,6 +208,8 @@ export function mountPopupSelectView(host, props, scope) {
         listboxAria: props.listboxAria ?? '/{command} matches',
     };
     const searchEnabled = props.searchEnabled !== false;
+    const grouped = props.grouped === true;
+    const optionRole = props.optionRole ?? 'option';
     const template = (pattern, command) => pattern.replace('{command}', String(command));
     const card = document.createElement('div');
     card.className = 'vcp-harness-popup-select-card';
@@ -286,12 +288,17 @@ export function mountPopupSelectView(host, props, scope) {
             return;
         listbox.setAttribute('aria-label', template(labels.listboxAria, s.command ?? ''));
         const rows = filterOptions(s.options, s.search);
-        rows.forEach((option, index) => {
-            const row = document.createElement('div');
+        const renderOption = (option, index) => {
+            const row = document.createElement(optionRole === 'menuitemradio' ? 'button' : 'div');
             row.dataset.optionId = option.id;
-            row.setAttribute('role', 'option');
+            if (row.tagName.toLowerCase() === 'button')
+                row.setAttribute('type', 'button');
+            row.setAttribute('role', optionRole);
             row.setAttribute('aria-disabled', String(option.disabled === true));
-            row.setAttribute('aria-selected', String(index === s.active));
+            if (optionRole === 'menuitemradio')
+                row.setAttribute('aria-checked', String(option.active === true));
+            else
+                row.setAttribute('aria-selected', String(index === s.active));
             row.className = index === s.active
                 ? 'vcp-harness-popup-select-row vcp-harness-popup-select-row-active'
                 : 'vcp-harness-popup-select-row';
@@ -318,8 +325,31 @@ export function mountPopupSelectView(host, props, scope) {
                 void popup.select(index); });
             nextRowsScope.listen(row, 'mouseenter', () => { if (option.disabled !== true)
                 popup.highlight(index); });
-            listbox.append(row);
-        });
+            return row;
+        };
+        if (grouped) {
+            const groups = new Map();
+            rows.forEach((option, index) => {
+                const key = option.group ?? '';
+                let group = groups.get(key);
+                if (!group) {
+                    group = document.createElement('section');
+                    group.className = 'vcp-harness-popup-select-group';
+                    group.setAttribute('role', 'group');
+                    if (key) {
+                        const title = document.createElement('div');
+                        title.className = 'vcp-harness-popup-select-group-title';
+                        title.textContent = key;
+                        group.append(title);
+                    }
+                    groups.set(key, group);
+                    listbox.append(group);
+                }
+                group.append(renderOption(option, index));
+            });
+        }
+        else
+            rows.forEach((option, index) => listbox.append(renderOption(option, index)));
         // Focus ownership sits with the search input, so scrolling the virtual
         // highlight into view is explicit here (source useEffect on `active`).
         listbox.querySelector('[aria-selected="true"]')?.scrollIntoView?.({ block: 'nearest' });

@@ -14,6 +14,7 @@ export interface PopupSelectOption {
     readonly detail?: string;
     readonly active?: boolean;
     readonly disabled?: boolean;
+    readonly group?: string;
     readonly confirmation?: PopupSelectConfirmation;
 }
 /** Command token segment snapshotted at shell-open time (popup.ts contract). */
@@ -87,6 +88,9 @@ export interface PopupSelectViewProps {
     readonly searchAria?: string;
     /** Render the filter control; false is used by ModelSelect-equivalent menus. */
     readonly searchEnabled?: boolean;
+    /** Render provider groups and Harness menuitemradio buttons when enabled. */
+    readonly grouped?: boolean;
+    readonly optionRole?: 'option' | 'menuitemradio';
     readonly retryLabel?: string;
     readonly statusLoading?: string;
     readonly statusApplying?: string;

@@ -59,6 +59,7 @@ export function mountAgentModelPicker(host, props, scope) {
             id: option.id,
             label: option.label,
             detail: [option.provider, option.favorite ? 'Favorite' : undefined].filter(Boolean).join(' · ') || undefined,
+            group: option.provider,
             active: option.active === true || option.id === selectedId,
             disabled: option.disabled === true,
         }));
@@ -85,6 +86,8 @@ export function mountAgentModelPicker(host, props, scope) {
         overlayAria: `${props.label ?? 'Model'} picker`,
         searchAria: 'Search models',
         searchEnabled: props.searchEnabled,
+        grouped: props.harnessEquivalent === true,
+        optionRole: props.harnessEquivalent === true ? 'menuitemradio' : 'option',
         onEscape: () => {
             if (pane === 'root')
                 return false;

@@ -25,6 +25,8 @@ export interface AgentModelPickerProps {
     readonly selectedId?: string;
     /** Keep the product extension searchable by default; disable for parity fixtures. */
     readonly searchEnabled?: boolean;
+    /** Opt into Harness provider-grouped menuitemradio DOM for equivalence fixtures. */
+    readonly harnessEquivalent?: boolean;
     readonly open?: boolean;
 }
 export interface AgentModelPickerController {

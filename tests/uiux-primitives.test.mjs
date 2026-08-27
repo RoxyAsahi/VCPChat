@@ -266,6 +266,32 @@ test('Harness PopupSelect parity mode can omit the search control without changi
     } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
 });
 
+test('Harness PopupSelect parity mode preserves provider groups and menuitemradio semantics', async () => {
+    const dom = new JSDOM('<!doctype html><main><div id="host"></div></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('popup-select-grouped-test'));
+        const host = document.getElementById('host');
+        const popup = createPopupSelectController({
+            options: async () => [
+                { id: 'deepseek', label: 'DeepSeek-V4-Flash', group: 'DeepSeek' },
+                { id: 'acme', label: 'Acme Think', group: 'Acme Gateway', active: true },
+            ],
+            onSelect: async () => {},
+        }, { consume: () => true, focusComposer: () => {} });
+        const view = mountPopupSelectView(host, { popup, searchEnabled: false, grouped: true, optionRole: 'menuitemradio' }, scope);
+        popup.open('model', {}, { via: 'menu', span: {} });
+        await delay(0);
+        assert.equal(view.card.querySelectorAll('section[role=group]').length, 2);
+        assert.equal(view.card.querySelectorAll('button[role=menuitemradio]').length, 2);
+        assert.equal(view.card.querySelectorAll('[role=option]').length, 0);
+        assert.equal(view.card.querySelector('button[aria-checked="true"]')?.textContent?.includes('Acme Think'), true);
+        await view.dispose();
+        await scope.dispose('popup-select-grouped-complete');
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
+
 test('Harness DirectoryBrowser foundation aborts stale listings and retracts on close', async () => {
     const dom = new JSDOM('<!doctype html><main></main>');
     const previousDocument = globalThis.document; const previousWindow = globalThis.window;
