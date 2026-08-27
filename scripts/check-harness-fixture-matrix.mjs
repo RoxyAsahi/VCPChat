@@ -35,7 +35,7 @@ if (matrix.stateSemantics?.['select/open'] !== 'AgentPresetSeat ready open/selec
 if (matrix.stateSemantics?.['select/disabled'] !== 'AgentPresetSeat busy trigger is captured through delayed production host select; VCP comparison remains blocked because no in-scope AgentPreset consumer exists') fail('Select disabled state must distinguish the captured Harness trigger from the blocked VCP comparison');
 if (matrix.stateSemantics?.['select/focus'] !== 'AgentPresetSeat keyboard-open focus owner is captured independently; Harness and VCP both retain trigger focus') fail('Select focus state must preserve the verified shared focus owner');
 if (matrix.status?.domStructural !== '10/10 pass') fail('DOM structural checkpoint must remain explicit');
-if (!String(matrix.status?.buttonCandidate).includes('same-semantic Harness production capture')) fail('Button Candidate must retain its same-semantic Harness gap');
+if (!String(matrix.status?.buttonCandidate).includes('consumer geometry mismatch')) fail('Button Candidate must retain its explicit consumer geometry mismatch');
 if (matrix.status?.selectMenuOpenSelectedHoverPixel !== 'pass (menu ROI only)') fail('Select pixel checkpoint must remain ROI-scoped');
 if (matrix.status?.selectMenuKeyboardFocus !== 'pass (Harness and VCP retain trigger focus; no roving keyboard ownership)') fail('Select focus checkpoint must retain the verified interaction contract');
 if (matrix.status?.selectBusyTrigger !== 'Harness production capture active; VCP cross-page comparison blocked by consumer boundary') fail('Select busy checkpoint must retain its production-capture and consumer boundary');
