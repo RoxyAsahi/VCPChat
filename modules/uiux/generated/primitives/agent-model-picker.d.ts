@@ -23,6 +23,8 @@ export interface AgentModelPickerProps {
     readonly onEffortSelect?: (option: AgentModelEffortOption) => void | Promise<void>;
     readonly selectedEffort?: string;
     readonly selectedId?: string;
+    /** Keep the product extension searchable by default; disable for parity fixtures. */
+    readonly searchEnabled?: boolean;
     readonly open?: boolean;
 }
 export interface AgentModelPickerController {

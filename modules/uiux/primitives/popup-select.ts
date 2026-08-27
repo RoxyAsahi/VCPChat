@@ -262,6 +262,8 @@ export interface PopupSelectViewProps {
     /* Locale seat defaults mirror ui-commands/src/client/locales.ts en. */
     readonly searchPlaceholder?: string;
     readonly searchAria?: string;
+    /** Render the filter control; false is used by ModelSelect-equivalent menus. */
+    readonly searchEnabled?: boolean;
     readonly retryLabel?: string;
     readonly statusLoading?: string;
     readonly statusApplying?: string;
@@ -300,6 +302,7 @@ export function mountPopupSelectView(host: HTMLElement, props: PopupSelectViewPr
         overlayAria: props.overlayAria ?? '/{command} options',
         listboxAria: props.listboxAria ?? '/{command} matches',
     };
+    const searchEnabled = props.searchEnabled !== false;
     const template = (pattern: string, command: string) => pattern.replace('{command}', String(command));
 
     const card = document.createElement('div');
@@ -311,6 +314,7 @@ export function mountPopupSelectView(host: HTMLElement, props: PopupSelectViewPr
     search.className = 'vcp-harness-popup-select-search';
     search.placeholder = labels.searchPlaceholder;
     search.setAttribute('aria-label', labels.searchAria);
+    search.hidden = !searchEnabled;
     const error = document.createElement('div');
     error.className = 'vcp-harness-popup-select-error';
     error.setAttribute('role', 'alert');
@@ -420,6 +424,7 @@ export function mountPopupSelectView(host: HTMLElement, props: PopupSelectViewPr
         if (s.status === 'pending' || s.submitting) card.setAttribute('aria-busy', 'true');
         else card.removeAttribute('aria-busy');
         search.value = s.search;
+        search.hidden = !searchEnabled;
         search.readOnly = s.submitting;
         // The gated shell hides the picker card and shows only the risk modal.
         card.style.display = s.confirming === null ? '' : 'none';
@@ -437,7 +442,7 @@ export function mountPopupSelectView(host: HTMLElement, props: PopupSelectViewPr
             : '';
         status.style.display = status.textContent === '' ? 'none' : '';
         renderRows(s);
-        if (s.confirming === null) search.focus({ preventScroll: true });
+        if (s.confirming === null && searchEnabled) search.focus({ preventScroll: true });
     };
     let renderConfirmingId: string | null = null;
     let riskController: ReturnType<typeof mountRiskConfirmation> | null = null;

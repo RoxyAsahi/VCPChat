@@ -245,6 +245,27 @@ test('Harness PopupSelect Candidate keeps command wiring injected, owns focus an
     } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
 });
 
+test('Harness PopupSelect parity mode can omit the search control without changing option loading', async () => {
+    const dom = new JSDOM('<!doctype html><main><div id="host"></div></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('popup-select-parity-test'));
+        const host = document.getElementById('host');
+        const popup = createPopupSelectController({
+            options: async () => [{ id: 'acme-think', label: 'Acme Think', active: true }],
+            onSelect: async () => {},
+        }, { consume: () => true, focusComposer: () => {} });
+        const view = mountPopupSelectView(host, { popup, searchEnabled: false }, scope);
+        popup.open('model', {}, { via: 'menu', span: {} });
+        await delay(0);
+        assert.equal(view.search.hidden, true);
+        assert.equal(view.card.querySelectorAll('[role=option]').length, 1);
+        await view.dispose();
+        await scope.dispose('popup-select-parity-complete');
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
+
 test('Harness DirectoryBrowser foundation aborts stale listings and retracts on close', async () => {
     const dom = new JSDOM('<!doctype html><main></main>');
     const previousDocument = globalThis.document; const previousWindow = globalThis.window;
