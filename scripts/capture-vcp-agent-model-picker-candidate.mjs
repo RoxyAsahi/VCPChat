@@ -128,6 +128,22 @@ try {
                 const rect = node.getBoundingClientRect();
                 return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
             }),
+            optionStyles: [...host.querySelectorAll(`${optionRoot} ${optionSelector}`)].slice(0, 2).map(node => {
+                const style = getComputedStyle(node);
+                return {
+                    color: style.color,
+                    backgroundColor: style.backgroundColor,
+                    opacity: style.opacity,
+                    fontFamily: style.fontFamily,
+                    fontSize: style.fontSize,
+                    fontWeight: style.fontWeight,
+                    lineHeight: style.lineHeight,
+                    padding: style.padding,
+                    gap: style.gap,
+                    borderRadius: style.borderRadius,
+                    boxSizing: style.boxSizing,
+                };
+            }),
             menuChildren: (() => {
                 const menuNode = host.querySelector('.vcp-harness-popup-select-card');
                 const viewport = menuNode?.querySelector('.vcp-harness-popup-select-viewport');
@@ -172,6 +188,18 @@ try {
         };
         const menu = host.querySelector('.vcp-harness-popup-select-card');
         const menuStyle = menu ? getComputedStyle(menu) : null;
+        const menuStyleSnapshot = menuStyle ? {
+            backgroundColor: menuStyle.backgroundColor,
+            color: menuStyle.color,
+            opacity: menuStyle.opacity,
+            filter: menuStyle.filter,
+            boxShadow: menuStyle.boxShadow,
+            fontFamily: menuStyle.fontFamily,
+            fontSize: menuStyle.fontSize,
+            lineHeight: menuStyle.lineHeight,
+            borderTopWidth: menuStyle.borderTopWidth,
+            borderBottomWidth: menuStyle.borderBottomWidth,
+        } : null;
         const menuRules = [...document.styleSheets].flatMap(sheet => {
             try { return [...sheet.cssRules]; } catch { return []; }
         }).filter(rule => rule.selectorText?.includes('.vcp-harness-popup-select-card'));
@@ -293,6 +321,7 @@ try {
                     maxHeight: declaration('max-height'),
                     minWidth: declaration('min-width'),
                 },
+                computed: menuStyleSnapshot,
                 children: modelMenuChildren,
                 viewportStyle: modelViewportMetrics,
             } : null,
@@ -333,7 +362,12 @@ try {
     await fs.mkdir(path.join(root, 'reports'), { recursive: true });
     await page.screenshot({ path: path.join(root, 'reports', `${outputStem}-full.png`) });
     await page.evaluate(() => window.__vcpAgentModelPickerOpenModel?.());
-    await sleep(0);
+    await page.waitForFunction(({ mode }) => {
+        const root = document.querySelector('[data-vcp-candidate-agent-model-picker="true"]');
+        const viewport = root?.querySelector('.vcp-harness-popup-select-viewport');
+        const selector = mode === 'harness-equivalent' ? '[role="menuitemradio"]' : '[role="option"]';
+        return viewport && viewport.hidden === false && viewport.querySelectorAll(selector).length > 0;
+    }, { timeout }, { mode: captureMode });
     const menuRect = await page.$eval('[data-vcp-candidate-agent-model-picker="true"] .vcp-harness-popup-select-card', element => {
         const rect = element.getBoundingClientRect();
         return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
