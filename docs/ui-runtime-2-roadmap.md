@@ -5,6 +5,7 @@
 > 适用目录：`/Users/asahi/Documents/Codex/VCPChat-newarchitecture`  
 > 对照对象：本机 `deepseek-harness` 的 Client UI / Slot / Theme / lifecycle 机制
 > 上位规范：[vcpchat-harness-uiux-architecture.md](/Users/asahi/Documents/Codex/VCPChat-newarchitecture/docs/vcpchat-harness-uiux-architecture.md)；本文件只负责执行顺序、consumer、证据与删除账本
+> **2026-08-27 目标调整（覆盖下方旧施工游标）：** 当前 active slice 改为 `R2-02D Harness Primitive Lab`。现有 UI 组件库成为 generated-artifact Candidate fixture host，允许先复刻没有 VCP 生产 consumer 的 Harness 控件。等价链拆成两段：`Harness source → Candidate lab → DOM/style/interaction/pixel evidence` 与 `verified Candidate → production consumer → legacy deletion → Stable`。展示通过、source-only fixture 或组件数量均不等于生产完成。Field/Select 既有生产证据继续有效；AgentPreset busy trigger 不再阻断 Candidate 施工，但在出现合法 VCP production consumer 前仍不得晋级 Stable。权威清单见 [harness-primitive-inventory.md](/Users/asahi/Documents/Codex/VCPChat-newarchitecture/docs/harness-primitive-inventory.md)。
 > 最近核验：2026-08-26；R2-00 Composer slice 已达到 complete（仅指已登记的 `mainChatComposition`/standalone history consumers）；R2-01 Overlay/notification slice 已闭合；R2-03 为 semantic-token-projection-active；R2-08 为 scoped-service-assembly-active（仍委托 legacy LifecycleScope，public API 未就绪）；R2-02 为 typed-production-consumer-active（legacy bridge、Classic fallback 与完整 stress 证据仍未闭合）。目标模式本轮收窄为可测量的 Harness 等价链：`reference pack → 单个 Light-DOM primitive → SettingsRoot 真实 consumer → DOM structural diff → geometry/computed-style diff → screenshot/pixel diff → 删除对应 legacy presentation`。当前证据按 primitive/state 独立记账：DOM structural matrix 为 10/10 pass；Select 的 open/selected/hover menu ROI 和 keyboard-open focus ownership 已有 cross-page geometry/computed-style 与 same-engine pixel evidence，trigger/closed/disabled 未闭合；Field description/error 的真实 Plugin Settings production fixture 已有 generated-artifact DOM、computed-style/geometry 与 pixel evidence（1680×1000@1x，因 800px 下该导航入口不可达），但未覆盖 Field 的 disabled/focus/override 等状态；Input 的 Harness `ui-primitives/Input` 在当前仓库没有 production consumer，因而只能维持 source/DOM contract，不能伪装成 production browser equivalence。不得把其中任一项写成全 primitive 或全矩阵 pixel equivalence。当前 active slice：R2-02C `select-full-state-production-fixture`；已接入的 primitives 只算迁移期 production slices，不代表完整 renderer 或 pixel-level equivalence 已完成。
 > 本轮补充 Harness `Input` reference pack（DOM/geometry），作为下一批 range/choice 之前的 CSS/DOM 基线；尚未将 Input 或 Range 宣布为生产 primitive。
 > 2026-08-26：`homeVisualTagline` 已接入 TS Light-DOM Input primitive，保留 native input 与 SettingsUiService 业务链；源码 `npm run test:uiux` 21/21、Settings Electron gate 通过。该字段 legacy input wrapper 已跳过，待 artifact-only Input smoke 与完整 screenshot geometry 证据后再扩大迁移。
@@ -47,6 +48,23 @@
 4. 相对上一版路线的新增、删除和原因。
 
 每次进入新的施工批次，必须同时更新本文件的“状态账本”、对应代码、最小测试和证据链接。计划中的能力不得写成已交付；只有生产消费者、owner、撤销路径和行为证据齐全，才能从 `planned` 变为 `active` 或 `complete`。
+
+## 0.0 当前施工批次：R2-02D Harness Primitive Lab
+
+当前状态：`candidate-lab-active`。
+
+- `UI 组件库` 是真实 Electron internal app，继续由 `next:component-showcase` scope 负责 mount/dispose；
+- `modules/uiux/generated/browser-entry.js` 提供 TS generated artifact，组件库只调用 Candidate lab mount，不建立第二份 runtime；
+- 第一批纳入 Button、Input、Field、Select/Menu；Button 为新 Candidate，Input 明确标注 Harness 当前没有生产 consumer；
+- 下一批按 B1 依赖顺序推进 Menu atom、Modal、Tooltip/HoverCard、DisclosureRow、StateDot、Toast、RiskConfirmation 和 icons；
+- 每个控件必须展示可枚举 states，并建立独立 provenance、DOM/ARIA、geometry/token、interaction、dispose 和 screenshot ledger；
+- 生产晋级仍要求真实 VCP consumer、canonical state、legacy deletion、Electron journey 和相应平台证据。
+
+2026-08-27 首批证据：`npm run check:uiux`、`npm run test:uiux`（30/30）、`npm run check:uiux:artifacts`（40 generated files）、`npm run test:uiux:artifacts` 与 `node scripts/test-electron-uiux-theme.mjs` 均通过。Electron generated-artifact journey 已真实挂载 Button 六态、Input、Field、Select/Menu，并验证 Candidate marker 与 teardown 恢复。全量 `test-electron-ui-apps-smoke.mjs` 在到达组件库前等待既有 `vchat-dynamic-wallpaper` frontend plugin readiness 超时，因此当前不将其计作 Harness Lab 整页 Electron pass；脚本内已加入 lab contract，待该外部启动阻断解除后自动覆盖真实 internal-app 路径。
+
+2026-08-27 Menu atom checkpoint：新增独立 `modules/uiux/primitives/menu.ts`，没有复用 Select 的业务 source，也没有增加 durable state。合同覆盖 owner-controlled open/selection、open-only outside/Escape/scroll/resize effects、12px portal clamp、label/separator/footer、multi-selected trailing checks、disabled、danger、submenu、dense/compact 与 awaitable scope teardown。源码 focused test 11/11、42 generated artifact consistency、artifact smoke 和 Electron generated journey 通过；固定 800×600@1x screenshot/geometry 已登记到 `fixtures/vcp/menu.candidate.*`。当前成熟度为 `candidate-interaction-active`，因为还缺 WorkspaceBrowser 同语义 Harness capture 的 DOM/computed-style/pixel diff，也没有 VCP production consumer/legacy deletion，禁止标记 Stable。
+
+本批次不解冻聊天内核、消息渲染、Composer 内部、协议、IPC、持久化、Plugin Loader、chat manifest 或动态壁纸。Harness conversation/tool/markdown 控件可以在实验室复刻，但不得借实验室接入改变这些冻结边界。
 
 ## 0.3 上位规范到执行批次的映射
 

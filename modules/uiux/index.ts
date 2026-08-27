@@ -20,11 +20,16 @@ export type { ThemeReadable, ThemeState, ThemeUiService } from './providers/them
 export { createSettingsUiService, settingsUiDefinition } from './adapters/settings.js';
 export type { SettingsPatch, SettingsSaveResult, SettingsState, SettingsUiAdapterInput, SettingsUiService } from './adapters/settings.js';
 export { mountField } from './primitives/field.js';
+export { mountButton } from './primitives/button.js';
+export type { ButtonProps, ButtonSize, ButtonVariant } from './primitives/button.js';
 export type { FieldProps } from './primitives/field.js';
 export { mountSelect } from './primitives/select.js';
 export { mountInput } from './primitives/input.js';
+export { mountMenu } from './primitives/menu.js';
+export type { MenuController, MenuEntry, MenuItem, MenuLabel, MenuProps, MenuSeparator } from './primitives/menu.js';
 export { mountChoice } from './primitives/choice.js';
 export { mountRange } from './primitives/range.js';
 export { mountToggle } from './primitives/toggle.js';
 export { mountColorPair } from './primitives/color-pair.js';
 export type { SelectProps } from './primitives/select.js';
+export { mountPrimitiveLab } from './lab/primitive-lab.js';

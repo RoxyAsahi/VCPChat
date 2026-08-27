@@ -137,6 +137,129 @@ try {
         return result;
     });
     assert.deepEqual(primitiveBoundary, { trigger: 'menu', menu: true, menuMinWidth: '218px', menuRadius: '12px', viewport: true, viewportDisplay: 'flex', viewportDirection: 'column', itemWrap: true, selectedCheck: true, item: 'menuitem', minHeight: '40px', padding: '8px 10px', itemGap: '8px', itemRadius: '10px', itemFontSize: '14px', itemLineHeight: '22px', expanded: 'true', inputWrap: 'vcp-uiux-input-wrap wrap', inputWrapHeight: '32px', inputWrapGap: '6px', inputWrapRadius: '8px', inputWrapPadding: '0px 8px', inputPadding: '0px 10px', inputFontSize: '14px', inputLineHeight: '22px', choiceClass: true, choiceValue: 'b', rangeWrap: 'vcp-uiux-range', rangeOutput: '40px', toggleWrap: 'vcp-uiux-toggle', toggleChecked: true, legacySliderDisplay: 'none', toggleRestored: true, colorPairWrap: 'vcp-uiux-color-pair', colorValue: '#112233', colorText: '#112233' }, `generated artifact primitive contract mismatch: ${JSON.stringify(primitiveBoundary)}`);
+    const candidateLabBoundary = await page.evaluate(async () => {
+        const host = document.createElement('div');
+        document.body.append(host);
+        const scope = new window.VCPLifecycle.LifecycleScope('test:harness-candidate-lab');
+        const release = window.VCPUIUX.mountPrimitiveLabFromScope(host, scope);
+        const result = {
+            maturity: host.querySelector('.vcp-harness-primitive-lab')?.dataset.maturity || '',
+            buttons: host.querySelectorAll('.vcp-harness-button.button').length,
+            input: Boolean(host.querySelector('.vcp-uiux-input-wrap > .input')),
+            field: Boolean(host.querySelector('.vcp-harness-field-head')),
+            select: Boolean(host.querySelector('.vcp-harness-select-trigger')),
+            menuRoot: Boolean(host.querySelector('.vcp-harness-menu-root')),
+        };
+        const menuTrigger = [...host.querySelectorAll('button')].find(button => button.textContent === 'View options');
+        menuTrigger?.click();
+        const atomMenu = document.querySelector('.vcp-harness-menu-list.vcp-harness-menu-portal');
+        result.menuOpen = menuTrigger?.getAttribute('aria-expanded') === 'true' && atomMenu?.getAttribute('role') === 'menu';
+        result.menuLabels = atomMenu?.querySelectorAll('.vcp-harness-menu-label').length || 0;
+        result.menuSeparators = atomMenu?.querySelectorAll('[role="separator"]').length || 0;
+        result.menuSelected = atomMenu?.querySelectorAll('.vcp-harness-menu-item-check').length || 0;
+        result.menuDanger = Boolean(atomMenu?.querySelector('.vcp-harness-menu-item-danger'));
+        const layout = [...(atomMenu?.querySelectorAll('[role="menuitem"]') || [])].find(item => item.textContent === 'Layout');
+        layout?.focus();
+        result.menuSubmenu = Boolean(atomMenu?.querySelector('.vcp-harness-submenu[role="menu"]'));
+        document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+        result.menuOutsideClosed = menuTrigger?.getAttribute('aria-expanded') === 'false';
+        menuTrigger?.click();
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        result.menuEscapeClosed = menuTrigger?.getAttribute('aria-expanded') === 'false';
+        await release();
+        result.restored = host.childNodes.length === 0;
+        result.scopeActive = scope.active;
+        host.remove();
+        return result;
+    });
+    assert.deepEqual(candidateLabBoundary, {
+        maturity: 'candidate',
+        buttons: 6,
+        input: true,
+        field: true,
+        select: true,
+        menuRoot: true,
+        menuOpen: true,
+        menuLabels: 2,
+        menuSeparators: 1,
+        menuSelected: 2,
+        menuDanger: true,
+        menuSubmenu: true,
+        menuOutsideClosed: true,
+        menuEscapeClosed: true,
+        restored: true,
+        scopeActive: true,
+    }, `generated Harness Candidate Lab mismatch: ${JSON.stringify(candidateLabBoundary)}`);
+    const menuCandidateGeometry = await page.evaluate(() => {
+        const host = document.createElement('div');
+        host.dataset.electronCandidateMenu = 'true';
+        host.className = 'vcp-ui-scope';
+        host.style.cssText = 'position:fixed;left:40px;top:40px;z-index:1000;padding:16px;background:#fff;color:#0f1115';
+        document.body.append(host);
+        const trigger = document.createElement('button');
+        trigger.type = 'button';
+        trigger.textContent = 'View options';
+        host.append(trigger);
+        const scope = new window.VCPLifecycle.LifecycleScope('test:harness-candidate-menu-visual');
+        const controller = window.VCPUIUX.mountMenu(trigger, {
+            portal: true,
+            dense: true,
+            open: true,
+            selectedIds: ['workspace', 'updated'],
+            items: [
+                { type: 'label', id: 'group-label', text: 'Group by' },
+                { id: 'workspace', label: 'Workspace' },
+                { id: 'flat', label: 'Flat list' },
+                { type: 'separator', id: 'order-separator' },
+                { type: 'label', id: 'order-label', text: 'Order by' },
+                { id: 'manual', label: 'Manual' },
+                { id: 'updated', label: 'Recently updated' },
+                { id: 'disabled', label: 'Unavailable', disabled: true },
+                { id: 'danger', label: 'Remove view', danger: true },
+                { id: 'layout', label: 'Layout', submenu: [{ id: 'list', label: 'List' }, { id: 'grid', label: 'Grid' }] },
+            ],
+            footer: [{ id: 'settings', label: 'View settings' }],
+            onSelect: () => {},
+        }, scope);
+        window.__harnessCandidateMenuController = controller;
+        window.__harnessCandidateMenuScope = scope;
+        const menu = document.querySelector('.vcp-harness-menu-list.vcp-harness-menu-portal');
+        const layout = [...(menu?.querySelectorAll('[role="menuitem"]') || [])].find(item => item.textContent === 'Layout');
+        layout?.focus();
+        const menuStyle = menu ? getComputedStyle(menu) : null;
+        const item = menu?.querySelector('[role="menuitem"]');
+        const itemStyle = item ? getComputedStyle(item) : null;
+        const rect = menu?.getBoundingClientRect();
+        return {
+            viewport: { width: window.innerWidth, height: window.innerHeight, deviceScaleFactor: window.devicePixelRatio },
+            source: 'generated-artifact-electron',
+            state: 'open-selected-disabled-danger-submenu',
+            rect: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
+            menu: menuStyle ? { padding: menuStyle.padding, borderRadius: menuStyle.borderRadius, minWidth: menuStyle.minWidth, maxWidth: menuStyle.maxWidth, position: menuStyle.position } : null,
+            item: itemStyle ? { minHeight: itemStyle.minHeight, padding: itemStyle.padding, gap: itemStyle.gap, borderRadius: itemStyle.borderRadius, fontSize: itemStyle.fontSize, lineHeight: itemStyle.lineHeight } : null,
+            labels: menu?.querySelectorAll('.vcp-harness-menu-label').length || 0,
+            separators: menu?.querySelectorAll('[role="separator"]').length || 0,
+            selected: menu?.querySelectorAll('.vcp-harness-menu-item-check').length || 0,
+            disabled: menu?.querySelectorAll('[role="menuitem"]:disabled').length || 0,
+            danger: menu?.querySelectorAll('.vcp-harness-menu-item-danger').length || 0,
+            submenu: menu?.querySelectorAll('.vcp-harness-submenu[role="menu"]').length || 0,
+        };
+    });
+    assert.deepEqual(menuCandidateGeometry.viewport, { width: 800, height: 600, deviceScaleFactor: 1 });
+    assert.deepEqual(menuCandidateGeometry.menu, { padding: '4px', borderRadius: '12px', minWidth: '218px', maxWidth: '360px', position: 'fixed' });
+    assert.deepEqual(menuCandidateGeometry.item, { minHeight: '34px', padding: '5px 10px', gap: '8px', borderRadius: '10px', fontSize: '14px', lineHeight: '22px' });
+    assert.deepEqual({ labels: menuCandidateGeometry.labels, separators: menuCandidateGeometry.separators, selected: menuCandidateGeometry.selected, disabled: menuCandidateGeometry.disabled, danger: menuCandidateGeometry.danger, submenu: menuCandidateGeometry.submenu }, { labels: 2, separators: 1, selected: 2, disabled: 1, danger: 1, submenu: 1 });
+    const menuCandidateScreenshot = path.join(root, 'reports', 'vcp-harness-menu-candidate.png');
+    await page.screenshot({ path: menuCandidateScreenshot });
+    assert.ok((await fs.stat(menuCandidateScreenshot)).size > 1024, 'Menu Candidate screenshot is unexpectedly empty');
+    await fs.writeFile(path.join(root, 'reports', 'vcp-harness-menu-candidate.json'), `${JSON.stringify(menuCandidateGeometry, null, 2)}\n`, 'utf8');
+    await page.evaluate(async () => {
+        await window.__harnessCandidateMenuController?.dispose?.();
+        await window.__harnessCandidateMenuScope?.dispose?.('candidate-menu-visual-complete');
+        delete window.__harnessCandidateMenuController;
+        delete window.__harnessCandidateMenuScope;
+        document.querySelector('[data-electron-candidate-menu]')?.remove();
+    });
     await page.screenshot({ path: primitiveScreenshot });
     const screenshotStat = await fs.stat(primitiveScreenshot);
     assert.ok(screenshotStat.size > 1024, `primitive screenshot is unexpectedly empty: ${screenshotStat.size} bytes`);

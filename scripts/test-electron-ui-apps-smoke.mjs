@@ -994,6 +994,30 @@ try {
         await showcaseHandle.asElement().click();
     }
     await page.waitForFunction(() => document.querySelector('.vcp-ui-showcase-root'), { timeout: timeoutMs });
+    await page.waitForFunction(() => document.querySelector('.vcp-harness-primitive-lab'), { timeout: timeoutMs });
+    const harnessLabContract = await page.evaluate(() => {
+        const lab = document.querySelector('.vcp-harness-primitive-lab');
+        return {
+            maturity: lab?.dataset.maturity || '',
+            buttons: lab?.querySelectorAll('.vcp-harness-button.button').length || 0,
+            primary: Boolean(lab?.querySelector('.vcp-harness-button.primary.md')),
+            disabled: Boolean(lab?.querySelector('.vcp-harness-button:disabled')),
+            input: Boolean(lab?.querySelector('.vcp-uiux-input-wrap > .input')),
+            field: Boolean(lab?.querySelector('.vcp-harness-field > .vcp-harness-field-head')),
+            select: Boolean(lab?.querySelector('.vcp-harness-select-trigger')),
+            menu: Boolean(lab?.querySelector('.vcp-harness-menu-root')),
+        };
+    });
+    assert.deepEqual(harnessLabContract, {
+        maturity: 'candidate',
+        buttons: 6,
+        primary: true,
+        disabled: true,
+        input: true,
+        field: true,
+        select: true,
+        menu: true,
+    }, `Harness Candidate Lab contract missing: ${JSON.stringify(harnessLabContract)}`);
     let waDefined = false;
     while (Date.now() < deadline) {
         waDefined = await page.evaluate(() => Boolean(customElements.get('wa-button')));
@@ -1063,7 +1087,7 @@ try {
         window.topTabManager.openInternalApp('ui-component-library');
     });
     await page.waitForFunction(() => document.querySelector('.vcp-ui-showcase-root'), { timeout: timeoutMs });
-    summary.push({ surface: 'UI 组件库', mode: 'next', pass: true, lucide: 0, note: 'lazy-registers WA；feedback owner 关闭后不影响主 Surface' });
+    summary.push({ surface: 'UI 组件库', mode: 'next', pass: true, lucide: 0, note: 'generated Harness Candidate Lab + lazy WA；feedback owner 关闭后不影响主 Surface' });
 
     // The standalone chat app must mount a second, independently owned root
     // and retract it completely when its tab closes.

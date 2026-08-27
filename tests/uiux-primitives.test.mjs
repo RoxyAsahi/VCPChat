@@ -7,12 +7,96 @@ const require = createRequire(import.meta.url);
 const { LifecycleScope } = require('../modules/ui-system/lifecycle-scope.js');
 const { createUiScope } = await import('../modules/uiux/runtime/scope.ts');
 const { mountField } = await import('../modules/uiux/primitives/field.ts');
+const { mountButton } = await import('../modules/uiux/primitives/button.ts');
 const { mountSelect } = await import('../modules/uiux/primitives/select.ts');
 const { mountInput } = await import('../modules/uiux/primitives/input.ts');
+const { mountMenu } = await import('../modules/uiux/primitives/menu.ts');
 const { mountChoice } = await import('../modules/uiux/primitives/choice.ts');
 const { mountRange } = await import('../modules/uiux/primitives/range.ts');
 const { mountToggle } = await import('../modules/uiux/primitives/toggle.ts');
 const { mountColorPair } = await import('../modules/uiux/primitives/color-pair.ts');
+
+test('Harness Menu owns open effects, composite entries, portal placement and teardown', async () => {
+    const dom = new JSDOM('<!doctype html><main><button id="trigger" aria-expanded="legacy">Options</button><button id="outside">Outside</button></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('menu-test'));
+        const trigger = document.getElementById('trigger');
+        const selected = [];
+        let closes = 0;
+        const menu = mountMenu(trigger, {
+            portal: true,
+            dense: true,
+            align: 'end',
+            selectedIds: ['workspace', 'updated'],
+            items: [
+                { type: 'label', id: 'group', text: 'Group by' },
+                { id: 'workspace', label: 'Workspace' },
+                { id: 'flat', label: 'Flat', disabled: true },
+                { type: 'separator', id: 'separator' },
+                { id: 'updated', label: 'Updated' },
+                { id: 'danger', label: 'Remove', danger: true },
+                { id: 'layout', label: 'Layout', submenu: [{ id: 'list', label: 'List' }, { id: 'grid', label: 'Grid' }] },
+            ],
+            footer: [{ id: 'settings', label: 'Settings' }],
+            onSelect: id => selected.push(id),
+            onClose: () => { closes += 1; },
+        }, scope);
+        trigger.getBoundingClientRect = () => ({ left: 900, right: 1020, top: 700, bottom: 740, width: 120, height: 40, x: 900, y: 700, toJSON() {} });
+        Object.defineProperties(menu.list, { offsetWidth: { value: 218 }, offsetHeight: { value: 300 } });
+        menu.setOpen(true);
+        window.dispatchEvent(new dom.window.Event('resize'));
+        assert.equal(menu.list.getAttribute('role'), 'menu');
+        assert.equal(menu.list.style.left, '794px');
+        assert.equal(menu.list.style.top, '456px');
+        assert.equal(menu.list.querySelector('.vcp-harness-menu-label')?.textContent, 'Group by');
+        assert.ok(menu.list.querySelector('[role="separator"]'));
+        assert.ok(menu.list.querySelector('.vcp-harness-menu-footer'));
+        assert.equal(menu.list.querySelector('[role="menuitem"]:disabled')?.textContent, 'Flat');
+        assert.equal(menu.list.querySelector('.vcp-harness-menu-item-danger')?.textContent, 'Remove');
+        assert.equal(menu.list.querySelectorAll('.vcp-harness-menu-item-check').length, 2);
+        const layout = [...menu.list.querySelectorAll('[role="menuitem"]')].find(item => item.textContent === 'Layout');
+        layout.focus();
+        assert.equal(layout.getAttribute('aria-expanded'), 'true');
+        assert.equal(menu.list.querySelector('.vcp-harness-submenu[role="menu"]')?.children.length, 2);
+        menu.list.querySelector('.vcp-harness-submenu [role="menuitem"]').click();
+        assert.deepEqual(selected, ['list']);
+        menu.setSelected('danger');
+        assert.equal(menu.list.querySelectorAll('.vcp-harness-menu-item-check').length, 1);
+        document.getElementById('outside').dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true }));
+        assert.equal(menu.open, false);
+        assert.equal(closes, 1);
+        menu.setOpen(true);
+        document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        assert.equal(menu.open, false);
+        assert.equal(closes, 2);
+        await menu.dispose();
+        assert.equal(trigger.parentElement.tagName, 'MAIN');
+        assert.equal(trigger.getAttribute('aria-haspopup'), null);
+        assert.equal(trigger.getAttribute('aria-expanded'), 'legacy');
+        await scope.dispose('menu-complete');
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
+
+test('Harness Button preserves native semantics and retracts candidate styling', async () => {
+    const dom = new JSDOM('<!doctype html><button id="action" class="existing">Run</button>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('button-test'));
+        const button = document.getElementById('action');
+        const icon = document.createElement('span'); icon.textContent = '+';
+        const release = mountButton(button, { variant: 'primary', size: 'sm', icon }, scope);
+        assert.equal(button.tagName, 'BUTTON');
+        assert.equal(button.classList.contains('primary'), true);
+        assert.equal(button.classList.contains('sm'), true);
+        assert.equal(button.querySelector(':scope > .icon')?.textContent, '+');
+        await release?.(); await scope.dispose('button-complete');
+        assert.equal(button.getAttribute('class'), 'existing');
+        assert.equal(button.querySelector('.icon'), null);
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
 
 test('Harness-compatible Field and Select keep Light DOM contract and dispose cleanly', async () => {
     const dom = new JSDOM('<!doctype html><form><div id="field"><select id="density"><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></div></form>');

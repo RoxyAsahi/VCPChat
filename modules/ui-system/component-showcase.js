@@ -3,6 +3,7 @@ import { register } from './next-ui-apps.js';
 import { mountWebAwesomeComparison } from './webawesome-comparison.js';
 
 const CATEGORIES = [
+    { id: 'harness', label: 'Harness Lab', icon: 'science' },
     { id: 'foundation', label: '基础', icon: 'foundation' },
     { id: 'actions', label: '操作', icon: 'ads_click' },
     { id: 'forms', label: '表单', icon: 'edit_note' },
@@ -146,6 +147,31 @@ function mountShowcase(container, context = {}) {
         }
         host.append(group);
         return group;
+    }
+
+    categoryHeading('harness', 'Harness Candidate Lab', '按 DeepSeek Harness 源码复刻的 Light-DOM 候选控件；展示通过不代表生产晋级。');
+    const harnessSection = document.createElement('section');
+    harnessSection.className = 'vcp-ui-showcase-section';
+    harnessSection.dataset.component = 'harness primitive lab candidate button input field select menu';
+    const harnessHeader = document.createElement('header');
+    const harnessTitleRow = document.createElement('div');
+    harnessTitleRow.className = 'vcp-ui-showcase-section-title';
+    const harnessTitle = document.createElement('h3');
+    harnessTitle.textContent = 'Harness Primitive Lab';
+    const harnessStatus = create('Badge', { label: 'Candidate', variant: 'warning' });
+    harnessTitleRow.append(harnessTitle, harnessStatus.element);
+    const harnessDescription = document.createElement('p');
+    harnessDescription.textContent = '固定状态矩阵与源码 provenance 的候选控件实验室。';
+    harnessHeader.append(harnessTitleRow, harnessDescription);
+    const harnessLab = document.createElement('div');
+    harnessLab.className = 'vcp-ui-showcase-demo';
+    harnessSection.append(harnessHeader, harnessLab);
+    content.append(harnessSection);
+    sections.push(harnessSection);
+    if (scope && window.VCPUIUX?.mountPrimitiveLabFromScope) {
+        disposers.push(window.VCPUIUX.mountPrimitiveLabFromScope(harnessLab, scope));
+    } else {
+        harnessLab.textContent = 'UIUX generated artifact unavailable.';
     }
 
     categoryHeading('foundation', '基础', '语义状态、内容容器与空态表达。');

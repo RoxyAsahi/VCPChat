@@ -8,12 +8,15 @@ import { createRustAssistantUiService, rustAssistantUiDefinition } from './adapt
 import { createForumConfigUiService, forumConfigUiDefinition } from './adapters/forum-config.js';
 import { createAssistantRuntimeUiService, assistantRuntimeUiDefinition } from './adapters/assistant-runtime.js';
 import { mountField } from './primitives/field.js';
+import { mountButton } from './primitives/button.js';
 import { mountSelect } from './primitives/select.js';
 import { mountInput } from './primitives/input.js';
+import { mountMenu } from './primitives/menu.js';
 import { mountChoice } from './primitives/choice.js';
 import { mountRange } from './primitives/range.js';
 import { mountToggle } from './primitives/toggle.js';
 import { mountColorPair } from './primitives/color-pair.js';
+import { mountPrimitiveLab } from './lab/primitive-lab.js';
 const api = {
     mountThemePresenterFromScope(root, theme, legacyScope) {
         const scope = createUiScope(legacyScope);
@@ -32,12 +35,17 @@ const api = {
     createAssistantRuntimeUiService,
     assistantRuntimeUiDefinition,
     mountField,
+    mountButton,
     mountSelect,
     mountInput,
+    mountMenu,
     mountChoice,
     mountRange,
     mountToggle,
     mountColorPair,
+    mountPrimitiveLabFromScope(root, legacyScope) {
+        return mountPrimitiveLab(root, createUiScope(legacyScope));
+    },
 };
 Object.defineProperty(globalThis, 'VCPUIUX', {
     value: Object.freeze(api),

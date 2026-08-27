@@ -6,8 +6,10 @@ import { createAssistantRuntimeUiService } from './adapters/assistant-runtime.js
 import type { ThemeUiService } from './providers/theme.js';
 import type { UiDisposer } from './contracts.js';
 import { mountField } from './primitives/field.js';
+import { mountButton } from './primitives/button.js';
 import { mountSelect } from './primitives/select.js';
 import { mountInput } from './primitives/input.js';
+import { mountMenu } from './primitives/menu.js';
 import { mountChoice } from './primitives/choice.js';
 import { mountRange } from './primitives/range.js';
 import { mountToggle } from './primitives/toggle.js';
@@ -36,11 +38,14 @@ declare const api: {
     createAssistantRuntimeUiService: typeof createAssistantRuntimeUiService;
     assistantRuntimeUiDefinition: import("./contracts.js").UiServiceDefinition<import("./adapters/assistant-runtime.js").AssistantRuntimeUiService>;
     mountField: typeof mountField;
+    mountButton: typeof mountButton;
     mountSelect: typeof mountSelect;
     mountInput: typeof mountInput;
+    mountMenu: typeof mountMenu;
     mountChoice: typeof mountChoice;
     mountRange: typeof mountRange;
     mountToggle: typeof mountToggle;
     mountColorPair: typeof mountColorPair;
+    mountPrimitiveLabFromScope(root: HTMLElement, legacyScope: LegacyScopeLike): UiDisposer;
 };
 export { api as uiuxBrowserApi };
