@@ -91,6 +91,7 @@
     , "popup-select/open-filter-highlight": "Standalone Candidate Lab host opens the command card with injected local callbacks only; it is not connected to VCP Composer or command execution"
     , "popup-select/risk-confirmation": "A candidate option may hide the card and display the controlled acknowledgement gate without creating business state"
     , "popup-select/failure-retry-dismiss": "Load failure exposes retry; dismiss/reopen/dispose abort prior fetches and prevent late publication"
+    , "agent-model-picker/pane-keyboard-escape-focus-geometry-dispose": "Candidate model/effort panes expose ArrowDown navigation, Escape-to-root, trigger focus restore, role/menu ARIA binding, 240px in-viewport geometry and owner disposal; no VCP production consumer"
   },
   "status": {
     "domStructural": "10/10 pass",
@@ -112,6 +113,7 @@
     , "agentPresetSeatCandidate": "start-aligned hero chip candidate has source contract, generated-artifact interaction, fixed 800x600 geometry/screenshot and owner disposal evidence; VCP production consumer and same-semantic Harness pixel diff pending"
     , "agentPresetRowCandidate": "end-aligned settings-row candidate has source contract, generated-artifact interaction, fixed 800x600 geometry/screenshot and owner disposal evidence; VCP production consumer and same-semantic Harness pixel diff pending"
     , "popupSelectCandidate": "generated-artifact controller, Candidate Lab and fixed 800x600 Electron evidence active; VCP production consumer and same-semantic Harness pixel diff pending"
+    , "agentModelPickerCandidate": "root/model/effort panes, provider/favorite/disabled rows, keyboard Escape/focus, ARIA menu binding, 240px viewport geometry and dispose evidence active; same-semantic Harness pixel diff and VCP production consumer pending"
     , "directoryBrowserFoundation": "injected Light-DOM Miller browser has generated artifact, Candidate Lab, focused owner/liveness, submission-only path-editor, local draft prefix filtering, separator-debounced draft navigation preview, two-leg selected landing with 200ms timeout/late upgrade, nested create dialog, 300ms slow-scan gate and fixed 800x600 Electron evidence; VCP production consumer and same-semantic Harness pixel diff pending"
   }
 }
