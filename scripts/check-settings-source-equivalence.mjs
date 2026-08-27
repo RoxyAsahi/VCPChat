@@ -72,22 +72,15 @@ assert.match(harnessMenuCss, /border-radius:\s*12px/);
 assert.match(harnessMenuCss, /min-height:\s*40px/);
 assert.match(harnessInputCss, /height:\s*32px/);
 assert.match(harnessInputCss, /border-radius:\s*8px/);
-assert.match(css, /vcp-harness-general-row[\s\S]*?border-radius:\s*8px[\s\S]*?font-size:\s*14px[\s\S]*?line-height:\s*22px/);
-// The projection must retain the same primitive ownership layers as Harness
-// Menu, including the portal case (the menu leaves the modal subtree).
-for (const primitive of [
-    'vcp-harness-menu-list',
-    'vcp-harness-menu-viewport',
-    'vcp-harness-menu-item-wrap',
-    'vcp-harness-menu-item',
-    'vcp-harness-menu-item-label',
-    'vcp-harness-menu-check',
-]) {
-    assert.match(bridge, new RegExp(primitive.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')), `Select/Menu primitive missing: ${primitive}`);
-}
-assert.match(css, /\.vcp-harness-menu-portal\.vcp-harness-menu-list[\s\S]*?border-radius:\s*12px/);
-assert.match(css, /\.vcp-harness-menu-portal \.vcp-harness-menu-item[\s\S]*?min-height:\s*40px/);
-assert.match(bridge, /dataset\.settingPrimitive\s*=\s*'disclosure'/);
+assert.match(css, /vcp-harness-general-row[\s\S]*?border-radius:\s*8px[\s\S]*?font-size:\s*var\(--vcp-ui-font-body\)[\s\S]*?line-height:\s*22px/);
+// Select presentation is owned by the real library Select primitive
+// (window.VCPUIUX.mountSelect): the bridge must mount it for every non-typed
+// select and must not retain the retired local Harness Menu projection.
+assert.match(bridge, /api\.mountSelect\(select, \{ label: labelText, portal: true \}, scope\)/, 'Select presentation must come from the library primitive');
+assert.match(bridge, /primitiveSelectStates/, 'primitive select projections must be tracked for dispose/remount');
+assert.match(bridge, /mountSelectKeyboardGlue/, 'select keyboard projection must keep a11y parity');
+assert.doesNotMatch(bridge, /vcp-harness-select-wrap|vcp-harness-choice-wrap|rebuildOptions/, 'retired local select/choice projection must be deleted');
+assert.doesNotMatch(css, /vcp-harness-select-wrap|vcp-harness-choice-wrap|vcp-harness-menu-portal/, 'retired local select/menu CSS must be deleted');
 assert.match(bridge, /vcp-harness-row-copy/);
 assert.match(bridge, /vcp-harness-active-section/);
 assert.match(bridge, /vcp-harness-section-bank/);
@@ -96,11 +89,8 @@ assert.match(bridge, /vcp-harness-settings-close-label/);
 assert.match(bridge, /dataset\.settingPrimitive\s*=\s*'appearance-row'/);
 assert.match(bridge, /dataset\.settingPrimitive\s*=\s*'disclosure'/);
 assert.match(css, /vcp-harness-appearance-row[\s\S]*?gap:\s*8px[\s\S]*?padding:\s*16px\s+0/);
-assert.match(bridge, /popover\.setAttribute\('role', 'menu'\)/, 'Select projection must use Harness Menu semantics');
-assert.match(bridge, /item\.setAttribute\('role', 'menuitem'\)/, 'Select projection entries must be Menu items');
-assert.match(bridge, /button\.setAttribute\('aria-haspopup', 'menu'\)/, 'Select trigger must own a Harness Menu');
-assert.match(bridge, /vcp-ui-icon[^;]*check|textContent\s*=\s*'check'/, 'selection marker must use the shared icon adapter');
-assert.match(bridge, /rebuildOptions/, 'projection must expose an atomic option rebuild owner');
+// Menu semantics (role=menu, aria-haspopup, check marker) are owned inside the
+// generated primitive; the bridge surfaces them through the mount contract.
 assert.match(bridge, /aria-controls/, 'Menu trigger/disclosure must expose controlled content');
 assert.match(bridge, /item\.append\(\.\.\.\[\.\.\.row\.childNodes\]\)/, 'legacy row wrapper must be physically removed');
 assert.doesNotMatch(bridge, /item\.append\(row\)/, 'canonical row must not wrap legacy row');

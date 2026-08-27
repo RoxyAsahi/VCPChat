@@ -382,3 +382,15 @@ roadmap checkpoint 追加于 `38ec8bb8`。
 ### 2026-08-27 补记四（用户实机反馈修复二）：typed primitive 输入框文字偏上
 
 用户报告：文字不居中多数已修，但仍有不少输入框偏上。全 tab 输入框垂直居中度量（24 控件）发现 4 个残留，特征一致 `margin-bottom: 15px`——全部是 typed primitive 包装层（`.vcp-uiux-input-wrap`：adminUsername/adminPassword/homeVisualTagline；`.vcp-uiux-color-pair`：userAvatarBorderColorText）内的控件。根因同补记一：components.css `.modal-content input { margin-bottom: 15px }` 泄漏，但上次修复只覆盖了 bridge 自己的 `.vcp-harness-input-wrap` 直接子控件；typed primitive 是另一套包装类名，flex 居中按含边距盒计算，15px 下边距把输入框整体顶高约 7.5px。修复：settings.css 增补 `#globalSettingsForm :is(.vcp-uiux-input-wrap, .vcp-uiux-color-pair) > :is(input, textarea) { margin: 0 }`。复测 24/24 上下对称归零；WA journey 门禁全过。
+
+### 2026-08-27 补记五（批次①收尾）：select 全量换真 mountSelect——CSS 退场、门禁重写与 Escape 归属修复
+
+用户确认「2–4 选项的芯片也换真 select 弹层」后批次①全量施工。bridge 侧挂载器（真 `api.mountSelect(select, { label, portal: true }, scope)` + `mountSelectKeyboardGlue` 键盘胶水 + bare 退化态 + MutationObserver 动态重挂）与 Electron journey 重写已随 71194187 落库；本笔收尾三件事：
+
+1. **CSS 退场**：settings.css 删除 bridge 本地 select/choice/menu 投影全部规则组（`.vcp-harness-select-wrap/-native/-trigger/-arrow/-popover/-menu-portal/-menu-list/-menu-viewport/-menu-item-wrap/-select-option/-select-check`、`.vcp-harness-choice-*`，约 290 行）；body 级 portal z-index 抬升规则收敛为仅 `.vcp-uiux-primitive-menu` 一个选择器；a11y ring 排除与 general-row 子元素选择器同步收敛到 `.vcp-harness-select`。
+2. **门禁重写**：`check-settings-source-equivalence.mjs` 改断真件契约（bridge 含 `api.mountSelect(...portal: true)`、`primitiveSelectStates` 追踪、`mountSelectKeyboardGlue`，且不得含 `vcp-harness-select-wrap/-choice-wrap/rebuildOptions` 本地投影；css 同步断言退场类清零）；`check-settings-unified-surface.mjs`、`test-settings-wa.mjs`（jsdom 退化契约：无 VCPUIUX 时原生 select 存活、无 wrap 残留）、`test-ui-system.mjs` 同步。
+3. **Escape 归属修复（next-shell-controller.js）**：全局设置 Escape owner（priority 20）原本无条件吞掉 Escape 关整个 modal——经 closeModal monkey-patch 探针取证，真件菜单的 document keydown 关闭逻辑被 dispatcher 的 stopImmediatePropagation 截杀，菜单被孤儿化悬在 body 上。修复：owner 的 `isActive` 在检测到 `.vcp-uiux-primitive-menu:not([hidden])` 时让位（返回 false），Escape 先关菜单、再关 modal。
+
+施工中发现并修复两个重挂竞态（均在 bridge observer 段）：(a) `vcpSelectRebuilding` 守卫必须保持到 setTimeout(0) 之后才复位——重挂自身的 DOM 变更（dispose 恢复业务节点、primitive 再插 wrap）会以微任务送回本 observer，同步复位会自触发无限重建；(b) LifecycleScope 的 `release()` 在微任务里才执行 dispose，同步 teardown→remount 会让旧 disposer 在新 wrap 插入后到达并把其剥掉（实测分区导航后 12 wraps 掉到 6）——remount 必须以 setTimeout(0) 等待异步 dispose 落地。
+
+探针取证：全 tab 12/12 非 typed select 均投影为真件（触发器 40px/r10、菜单 r12/菜单项 40px、z>1400、外点 pointerdown 关闭），assistantAgent 空态走 bare 退化态、agent 填充后动态重挂成功；Escape 契约 openedByArrow→closedByEscape→modal 仍活跃。上游契约缺口（报线程 A，不阻塞）：mountSelect 无方向键 roving 导航（bridge 胶水补齐）、无选项列表重建 API（bridge 以 dispose+remount 规避）。
