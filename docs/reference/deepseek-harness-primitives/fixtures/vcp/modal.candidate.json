@@ -1,0 +1,17 @@
+{
+  "viewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 },
+  "source": "generated-artifact-electron",
+  "implementation": "modules/uiux/generated/primitives/modal.js",
+  "harnessSource": "packages/client/ui-primitives/src/Modal.tsx",
+  "state": "standard-open-description-body-footer",
+  "rect": { "x": 210, "y": 190, "width": 380, "height": 220 },
+  "root": { "position": "fixed", "inset": "0px", "zIndex": "1000", "padding": "24px" },
+  "mask": { "backgroundColor": "rgba(0, 0, 0, 0.24)", "backdropFilter": "blur(2px)" },
+  "dialog": { "width": "380px", "padding": "0px 0px 24px", "gap": "20px", "borderRadius": "24px" },
+  "header": { "padding": "22px 14px 12px 24px", "gap": "8px" },
+  "title": { "fontSize": "16px", "lineHeight": "24px", "fontWeight": "500" },
+  "footer": { "padding": "0px 24px", "gap": "8px", "justifyContent": "flex-end" },
+  "closeIcon": true,
+  "status": "candidate-interaction-active",
+  "pixelDiff": "pending-same-semantic-harness-fixture"
+}

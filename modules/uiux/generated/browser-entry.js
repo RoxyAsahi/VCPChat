@@ -12,6 +12,7 @@ import { mountButton } from './primitives/button.js';
 import { mountSelect } from './primitives/select.js';
 import { mountInput } from './primitives/input.js';
 import { mountMenu } from './primitives/menu.js';
+import { mountModal } from './primitives/modal.js';
 import { mountChoice } from './primitives/choice.js';
 import { mountRange } from './primitives/range.js';
 import { mountToggle } from './primitives/toggle.js';
@@ -39,6 +40,7 @@ const api = {
     mountSelect,
     mountInput,
     mountMenu,
+    mountModal,
     mountChoice,
     mountRange,
     mountToggle,

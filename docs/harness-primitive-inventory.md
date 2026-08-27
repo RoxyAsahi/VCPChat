@@ -23,7 +23,7 @@
 | Button | `ui-primitives/src/Button.tsx`；Settings、Workspace、Question/Approval、Conversation shell | candidate-lab-active | B1 |
 | Input | `ui-primitives/src/Input.tsx`；当前仅 atom test/export | candidate-lab-active，source-only truth | B1 |
 | Menu | `ui-primitives/src/Menu.tsx`；Agent Preset、Language、Permission、Input Trigger、Workspace | candidate-interaction-active；同语义 label/separator/danger/submenu pixel diff pending | B1 |
-| Modal | `ui-primitives/src/Modal.tsx`；Settings、Model editor、Directory/Workspace | inventoried | B1 |
+| Modal | `ui-primitives/src/Modal.tsx`；Settings、Model editor、Directory/Workspace | candidate-interaction-active；同语义 Harness pixel diff 与 VCP production adoption pending | B1 |
 | Tooltip / HoverCard | matching `ui-primitives/src/*.tsx`；Message actions、Goal、Sidebar、Workspace | inventoried | B1 |
 | DisclosureRow | `ui-primitives/src/DisclosureRow.tsx`；Reasoning、Context、Tool、Workflow | inventoried | B1 |
 | StateDot | `ui-primitives/src/StateDot.tsx`；Chat、Tool、Skill、Job、Subagent、Workspace | inventoried | B1 |

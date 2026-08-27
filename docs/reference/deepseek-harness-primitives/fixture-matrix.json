@@ -5,12 +5,14 @@
   "cases": [
     ["input", "default"], ["input", "focus"], ["input", "disabled"], ["input", "icon"],
     ["field", "description"], ["field", "error"],
-    ["select", "closed"], ["select", "open"], ["select", "selected"], ["select", "disabled"]
+    ["select", "closed"], ["select", "open"], ["select", "selected"], ["select", "disabled"],
+    ["modal", "standard-open"], ["modal", "headless-open"]
   ],
   "interactionCases": [
     { "case": "select/keyboard-open-focus", "status": "pass", "evidence": "same semantic fixture; Harness and VCP retain trigger focus" },
     { "case": "select/busy-trigger-disabled", "status": "blocked-vcp-consumer", "evidence": "Harness production capture passes; no in-scope VCP AgentPreset consumer" },
-    { "case": "menu/candidate-composite-states", "status": "candidate-interaction-active", "evidence": "generated Electron fixture covers label/separator/footer/selected/disabled/danger/submenu, portal placement, outside-dismiss, Escape and dispose; same-semantic Harness pixel fixture pending" }
+    { "case": "menu/candidate-composite-states", "status": "candidate-interaction-active", "evidence": "generated Electron fixture covers label/separator/footer/selected/disabled/danger/submenu, portal placement, outside-dismiss, Escape and dispose; same-semantic Harness pixel fixture pending" },
+    { "case": "modal/close-reopen-dispose", "status": "candidate-interaction-active", "evidence": "generated Electron fixture covers standard/headless portals, mask/Escape/close-button, reopen, close icon, exact owned-node restoration and dispose; same-semantic Harness pixel fixture pending" }
   ],
   "outputs": ["dom", "geometry", "computed-style", "screenshot", "pixel-diff"],
   "stateSemantics": {
@@ -19,7 +21,9 @@
     "select/selected": "AgentPresetSeat ready menu with Standard mode selected and hovered; VCP-owned production capture is replayable",
     "select/disabled": "AgentPresetSeat busy trigger is captured through delayed production host select; VCP comparison remains blocked because no in-scope AgentPreset consumer exists",
     "select/focus": "AgentPresetSeat keyboard-open focus owner is captured independently; Harness and VCP both retain trigger focus",
-    "menu/candidate": "WorkspaceBrowser-style dense portal menu with multi-selection, disabled/danger rows, footer and submenu; Candidate-only until same-semantic Harness visual diff and VCP production adoption"
+    "menu/candidate": "WorkspaceBrowser-style dense portal menu with multi-selection, disabled/danger rows, footer and submenu; Candidate-only until same-semantic Harness visual diff and VCP production adoption",
+    "modal/standard-open": "Harness standard Modal with mask, title, close, description, body and footer",
+    "modal/headless-open": "Harness headless Modal retains mask/dialog/aria contract while owner supplies the card contents"
   },
   "status": {
     "domStructural": "10/10 pass",
@@ -28,6 +32,7 @@
     "selectBusyTrigger": "Harness production capture active; VCP cross-page comparison blocked by consumer boundary",
     "fieldBrowserVisual": "pass (description/error production fixture at 1680x1000 @1x)",
     "inputFullVisualMatrix": "blocked (Harness ui-primitives/Input has no production consumer)",
-    "menuCandidate": "interaction/geometry/screenshot active at 800x600 @1x; same-semantic Harness pixel diff pending"
+    "menuCandidate": "interaction/geometry/screenshot active at 800x600 @1x; same-semantic Harness pixel diff pending",
+    "modalCandidate": "standard/headless interaction, geometry and screenshot active at 800x600 @1x; same-semantic Harness pixel diff pending"
   }
 }

@@ -11,10 +11,76 @@ const { mountButton } = await import('../modules/uiux/primitives/button.ts');
 const { mountSelect } = await import('../modules/uiux/primitives/select.ts');
 const { mountInput } = await import('../modules/uiux/primitives/input.ts');
 const { mountMenu } = await import('../modules/uiux/primitives/menu.ts');
+const { mountModal } = await import('../modules/uiux/primitives/modal.ts');
 const { mountChoice } = await import('../modules/uiux/primitives/choice.ts');
 const { mountRange } = await import('../modules/uiux/primitives/range.ts');
 const { mountToggle } = await import('../modules/uiux/primitives/toggle.ts');
 const { mountColorPair } = await import('../modules/uiux/primitives/color-pair.ts');
+
+test('Harness Modal portals controlled standard/headless DOM and restores owned nodes', async () => {
+    const dom = new JSDOM('<!doctype html><main><button id="trigger">Open</button><section id="source"><div id="body">Body</div><button id="cancel">Cancel</button><span id="after">After</span></section></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('modal-test'));
+        const trigger = document.getElementById('trigger');
+        const body = document.getElementById('body');
+        const cancel = document.getElementById('cancel');
+        let closes = 0;
+        let modal;
+        modal = mountModal({
+            title: 'Create workspace',
+            closeLabel: 'Close dialog',
+            description: 'Choose a workspace.',
+            className: 'workspace-dialog constrained-dialog',
+            contentClassName: 'scrolling-content',
+            body,
+            footer: cancel,
+            onClose: () => { closes += 1; modal.setOpen(false); },
+        }, scope);
+        assert.equal(body.parentElement.id, 'source', 'closed modal must not retain canonical nodes');
+        trigger.focus();
+        modal.setOpen(true);
+        assert.equal(modal.root.parentElement, document.body);
+        assert.equal(modal.dialog.getAttribute('role'), 'dialog');
+        assert.equal(modal.dialog.getAttribute('aria-modal'), 'true');
+        assert.equal(modal.dialog.getAttribute('aria-label'), 'Create workspace');
+        assert.equal(modal.dialog.classList.contains('workspace-dialog'), true);
+        assert.equal(modal.dialog.classList.contains('constrained-dialog'), true);
+        assert.equal(modal.root.querySelector('.vcp-harness-modal-content')?.classList.contains('scrolling-content'), true);
+        assert.equal(modal.root.querySelector('.vcp-harness-modal-mask')?.getAttribute('aria-hidden'), 'true');
+        assert.equal(modal.root.querySelector('.vcp-harness-modal-title')?.textContent, 'Create workspace');
+        assert.equal(modal.root.querySelector('.vcp-harness-modal-description')?.textContent, 'Choose a workspace.');
+        assert.equal(body.parentElement.className, 'vcp-harness-modal-body');
+        assert.equal(cancel.parentElement.className, 'vcp-harness-modal-footer');
+        assert.equal(document.activeElement, trigger, 'Harness Modal does not invent focus ownership');
+        document.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        assert.equal(modal.open, false);
+        assert.equal(closes, 1);
+        assert.deepEqual([...document.getElementById('source').children].map(node => node.id), ['body', 'cancel', 'after']);
+        modal.setOpen(true);
+        modal.root.querySelector('.vcp-harness-modal-mask').click();
+        assert.equal(closes, 2);
+        modal.setOpen(true);
+        modal.root.querySelector('.vcp-harness-modal-close').click();
+        assert.equal(closes, 3);
+        await modal.dispose();
+        assert.equal(document.querySelector('.vcp-harness-modal-root'), null);
+
+        const headlessBody = document.createElement('article');
+        headlessBody.textContent = 'Custom frame';
+        let headless;
+        headless = mountModal({ title: 'Custom frame', body: headlessBody, headless: true, onClose: () => headless.setOpen(false) }, scope);
+        headless.setOpen(true);
+        assert.equal(headless.dialog.firstElementChild, headlessBody);
+        assert.equal(headless.dialog.querySelector('.vcp-harness-modal-header'), null);
+        assert.equal(headless.dialog.querySelector('.vcp-harness-modal-footer'), null);
+        headless.setOpen(false);
+        assert.equal(headlessBody.parentNode, null);
+        await headless.dispose();
+        await scope.dispose('modal-complete');
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
 
 test('Harness Menu owns open effects, composite entries, portal placement and teardown', async () => {
     const dom = new JSDOM('<!doctype html><main><button id="trigger" aria-expanded="legacy">Options</button><button id="outside">Outside</button></main>');

@@ -1006,6 +1006,7 @@ try {
             field: Boolean(lab?.querySelector('.vcp-harness-field > .vcp-harness-field-head')),
             select: Boolean(lab?.querySelector('.vcp-harness-select-trigger')),
             menu: Boolean(lab?.querySelector('.vcp-harness-menu-root')),
+            modalTriggers: [...(lab?.querySelectorAll('button') || [])].filter(button => /Open (modal|headless)/.test(button.textContent || '')).length,
         };
     });
     assert.deepEqual(harnessLabContract, {
@@ -1017,6 +1018,7 @@ try {
         field: true,
         select: true,
         menu: true,
+        modalTriggers: 2,
     }, `Harness Candidate Lab contract missing: ${JSON.stringify(harnessLabContract)}`);
     let waDefined = false;
     while (Date.now() < deadline) {

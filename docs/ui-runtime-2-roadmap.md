@@ -64,6 +64,8 @@
 
 2026-08-27 Menu atom checkpoint：新增独立 `modules/uiux/primitives/menu.ts`，没有复用 Select 的业务 source，也没有增加 durable state。合同覆盖 owner-controlled open/selection、open-only outside/Escape/scroll/resize effects、12px portal clamp、label/separator/footer、multi-selected trailing checks、disabled、danger、submenu、dense/compact 与 awaitable scope teardown。源码 focused test 11/11、42 generated artifact consistency、artifact smoke 和 Electron generated journey 通过；固定 800×600@1x screenshot/geometry 已登记到 `fixtures/vcp/menu.candidate.*`。当前成熟度为 `candidate-interaction-active`，因为还缺 WorkspaceBrowser 同语义 Harness capture 的 DOM/computed-style/pixel diff，也没有 VCP production consumer/legacy deletion，禁止标记 Stable。
 
+2026-08-27 Modal checkpoint：新增独立 `modules/uiux/primitives/modal.ts`，复刻 Harness body portal、mask、standard/headless DOM、`className`/`contentClassName` 生产扩展点、24px card、Escape/mask/close-button 与 close/reopen/dispose。Candidate 不添加 Harness 源码没有的 focus trap/autofocus/restoration；交给 Modal 的已有 body/footer DOM 只在 open 时进入 portal，close 时按逆序锚点恢复原父节点和精确顺序。源码 focused test 12/12、44 generated artifact consistency、artifact smoke 和 Electron journey 通过；固定 800×600@1x standard screenshot/geometry 已登记到 `fixtures/vcp/modal.candidate.*`，headless/三种关闭路径也由 Electron 重放。当前为 `candidate-interaction-active`；同语义 Harness production screenshot/pixel diff、VCP production consumer 与 legacy deletion 仍 pending。
+
 本批次不解冻聊天内核、消息渲染、Composer 内部、协议、IPC、持久化、Plugin Loader、chat manifest 或动态壁纸。Harness conversation/tool/markdown 控件可以在实验室复刻，但不得借实验室接入改变这些冻结边界。
 
 ## 0.3 上位规范到执行批次的映射

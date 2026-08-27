@@ -2,6 +2,7 @@ import { mountButton } from '../primitives/button.js';
 import { mountField } from '../primitives/field.js';
 import { mountInput } from '../primitives/input.js';
 import { mountMenu } from '../primitives/menu.js';
+import { mountModal } from '../primitives/modal.js';
 import { mountSelect } from '../primitives/select.js';
 const STYLE_ID = 'vcp-harness-primitive-lab';
 function ensureStyles() {
@@ -109,6 +110,50 @@ export function mountPrimitiveLab(root, scope) {
         },
     }, labScope);
     labScope.listen(menuTrigger, 'click', () => menu.setOpen(!menu.open));
+    const modalRow = group(lab, 'Modal', 'deepseek-harness/packages/client/ui-primitives/src/Modal.tsx + Workspace/Settings production consumers');
+    const modalTrigger = document.createElement('button');
+    modalTrigger.type = 'button';
+    modalTrigger.textContent = 'Open modal';
+    modalRow.append(modalTrigger);
+    mountButton(modalTrigger, { variant: 'outline', size: 'sm' }, labScope);
+    const modalBody = document.createElement('div');
+    modalBody.textContent = 'Create a workspace without leaving the current page.';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.textContent = 'Cancel';
+    const create = document.createElement('button');
+    create.type = 'button';
+    create.textContent = 'Create';
+    mountButton(cancel, { variant: 'outline', size: 'sm' }, labScope);
+    mountButton(create, { variant: 'primary', size: 'sm' }, labScope);
+    const modal = mountModal({
+        title: 'Create workspace',
+        closeLabel: 'Close dialog',
+        description: 'Choose a name and location for the workspace.',
+        body: modalBody,
+        footer: [cancel, create],
+        onClose: () => modal.setOpen(false),
+    }, labScope);
+    labScope.listen(modalTrigger, 'click', () => modal.setOpen(true));
+    labScope.listen(cancel, 'click', () => modal.setOpen(false));
+    labScope.listen(create, 'click', () => { modalTrigger.dataset.result = 'create'; modal.setOpen(false); });
+    const headlessTrigger = document.createElement('button');
+    headlessTrigger.type = 'button';
+    headlessTrigger.textContent = 'Open headless';
+    modalRow.append(headlessTrigger);
+    mountButton(headlessTrigger, { variant: 'ghost', size: 'sm' }, labScope);
+    const headlessBody = document.createElement('div');
+    headlessBody.className = 'vcp-harness-lab-headless-modal';
+    const headlessTitle = document.createElement('h2');
+    headlessTitle.textContent = 'Custom modal frame';
+    const headlessClose = document.createElement('button');
+    headlessClose.type = 'button';
+    headlessClose.textContent = 'Close';
+    mountButton(headlessClose, { variant: 'outline', size: 'sm' }, labScope);
+    headlessBody.append(headlessTitle, headlessClose);
+    const headless = mountModal({ title: 'Custom modal frame', body: headlessBody, headless: true, onClose: () => headless.setOpen(false) }, labScope);
+    labScope.listen(headlessTrigger, 'click', () => headless.setOpen(true));
+    labScope.listen(headlessClose, 'click', () => headless.setOpen(false));
     return scope.own(async () => {
         await labScope.dispose('primitive-lab-unmounted');
         root.replaceChildren(...originalNodes);

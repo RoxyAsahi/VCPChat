@@ -166,6 +166,30 @@ try {
         menuTrigger?.click();
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         result.menuEscapeClosed = menuTrigger?.getAttribute('aria-expanded') === 'false';
+        const modalTrigger = [...host.querySelectorAll('button')].find(button => button.textContent === 'Open modal');
+        modalTrigger?.click();
+        let modalRoot = document.querySelector('.vcp-harness-modal-root');
+        result.modalOpen = Boolean(modalRoot?.querySelector('[role="dialog"][aria-modal="true"][aria-label="Create workspace"]'));
+        result.modalDescription = modalRoot?.querySelector('.vcp-harness-modal-description')?.textContent || '';
+        result.modalBody = Boolean(modalRoot?.querySelector('.vcp-harness-modal-body'));
+        result.modalFooter = modalRoot?.querySelectorAll('.vcp-harness-modal-footer > button').length || 0;
+        result.modalCloseIcon = Boolean(modalRoot?.querySelector('.vcp-harness-modal-close svg[data-vcp-icon="close"]'));
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        result.modalEscapeClosed = !document.querySelector('.vcp-harness-modal-root');
+        modalTrigger?.click();
+        document.querySelector('.vcp-harness-modal-mask')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        result.modalMaskClosed = !document.querySelector('.vcp-harness-modal-root');
+        modalTrigger?.click();
+        document.querySelector('.vcp-harness-modal-close')?.click();
+        result.modalButtonClosed = !document.querySelector('.vcp-harness-modal-root');
+        const headlessTrigger = [...host.querySelectorAll('button')].find(button => button.textContent === 'Open headless');
+        headlessTrigger?.click();
+        modalRoot = document.querySelector('.vcp-harness-modal-root');
+        result.modalHeadless = Boolean(modalRoot?.querySelector('.vcp-harness-lab-headless-modal'))
+            && !modalRoot?.querySelector('.vcp-harness-modal-header')
+            && !modalRoot?.querySelector('.vcp-harness-modal-footer');
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        result.modalHeadlessClosed = !document.querySelector('.vcp-harness-modal-root');
         await release();
         result.restored = host.childNodes.length === 0;
         result.scopeActive = scope.active;
@@ -174,7 +198,7 @@ try {
     });
     assert.deepEqual(candidateLabBoundary, {
         maturity: 'candidate',
-        buttons: 6,
+        buttons: 8,
         input: true,
         field: true,
         select: true,
@@ -187,6 +211,16 @@ try {
         menuSubmenu: true,
         menuOutsideClosed: true,
         menuEscapeClosed: true,
+        modalOpen: true,
+        modalDescription: 'Choose a name and location for the workspace.',
+        modalBody: true,
+        modalFooter: 2,
+        modalCloseIcon: true,
+        modalEscapeClosed: true,
+        modalMaskClosed: true,
+        modalButtonClosed: true,
+        modalHeadless: true,
+        modalHeadlessClosed: true,
         restored: true,
         scopeActive: true,
     }, `generated Harness Candidate Lab mismatch: ${JSON.stringify(candidateLabBoundary)}`);
@@ -259,6 +293,71 @@ try {
         delete window.__harnessCandidateMenuController;
         delete window.__harnessCandidateMenuScope;
         document.querySelector('[data-electron-candidate-menu]')?.remove();
+    });
+    const modalCandidateGeometry = await page.evaluate(() => {
+        const body = document.createElement('div');
+        body.textContent = 'Create a workspace without leaving the current page.';
+        const cancel = document.createElement('button');
+        cancel.textContent = 'Cancel';
+        const create = document.createElement('button');
+        create.textContent = 'Create';
+        const scope = new window.VCPLifecycle.LifecycleScope('test:harness-candidate-modal-visual');
+        window.VCPUIUX.mountButton(cancel, { variant: 'outline', size: 'sm' }, scope);
+        window.VCPUIUX.mountButton(create, { variant: 'primary', size: 'sm' }, scope);
+        const controller = window.VCPUIUX.mountModal({
+            title: 'Create workspace',
+            closeLabel: 'Close dialog',
+            description: 'Choose a name and location for the workspace.',
+            body,
+            footer: [cancel, create],
+            open: true,
+            onClose: () => controller.setOpen(false),
+        }, scope);
+        window.__harnessCandidateModalController = controller;
+        window.__harnessCandidateModalScope = scope;
+        const root = document.querySelector('.vcp-harness-modal-root');
+        const mask = root?.querySelector('.vcp-harness-modal-mask');
+        const dialog = root?.querySelector('.vcp-harness-modal-dialog');
+        const header = root?.querySelector('.vcp-harness-modal-header');
+        const title = root?.querySelector('.vcp-harness-modal-title');
+        const footer = root?.querySelector('.vcp-harness-modal-footer');
+        const rootStyle = root ? getComputedStyle(root) : null;
+        const maskStyle = mask ? getComputedStyle(mask) : null;
+        const dialogStyle = dialog ? getComputedStyle(dialog) : null;
+        const headerStyle = header ? getComputedStyle(header) : null;
+        const titleStyle = title ? getComputedStyle(title) : null;
+        const footerStyle = footer ? getComputedStyle(footer) : null;
+        const rect = dialog?.getBoundingClientRect();
+        return {
+            viewport: { width: window.innerWidth, height: window.innerHeight, deviceScaleFactor: window.devicePixelRatio },
+            source: 'generated-artifact-electron',
+            state: 'standard-open-description-body-footer',
+            rect: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
+            root: rootStyle ? { position: rootStyle.position, inset: rootStyle.inset, zIndex: rootStyle.zIndex, padding: rootStyle.padding } : null,
+            mask: maskStyle ? { backgroundColor: maskStyle.backgroundColor, backdropFilter: maskStyle.backdropFilter } : null,
+            dialog: dialogStyle ? { width: dialogStyle.width, padding: dialogStyle.padding, gap: dialogStyle.gap, borderRadius: dialogStyle.borderRadius } : null,
+            header: headerStyle ? { padding: headerStyle.padding, gap: headerStyle.gap } : null,
+            title: titleStyle ? { fontSize: titleStyle.fontSize, lineHeight: titleStyle.lineHeight, fontWeight: titleStyle.fontWeight } : null,
+            footer: footerStyle ? { padding: footerStyle.padding, gap: footerStyle.gap, justifyContent: footerStyle.justifyContent } : null,
+            closeIcon: Boolean(root?.querySelector('.vcp-harness-modal-close svg[data-vcp-icon="close"]')),
+        };
+    });
+    assert.deepEqual(modalCandidateGeometry.viewport, { width: 800, height: 600, deviceScaleFactor: 1 });
+    assert.deepEqual(modalCandidateGeometry.root, { position: 'fixed', inset: '0px', zIndex: '1000', padding: '24px' });
+    assert.deepEqual(modalCandidateGeometry.dialog, { width: '380px', padding: '0px 0px 24px', gap: '20px', borderRadius: '24px' });
+    assert.deepEqual(modalCandidateGeometry.header, { padding: '22px 14px 12px 24px', gap: '8px' });
+    assert.deepEqual(modalCandidateGeometry.title, { fontSize: '16px', lineHeight: '24px', fontWeight: '500' });
+    assert.deepEqual(modalCandidateGeometry.footer, { padding: '0px 24px', gap: '8px', justifyContent: 'flex-end' });
+    assert.equal(modalCandidateGeometry.closeIcon, true);
+    const modalCandidateScreenshot = path.join(root, 'reports', 'vcp-harness-modal-candidate.png');
+    await page.screenshot({ path: modalCandidateScreenshot });
+    assert.ok((await fs.stat(modalCandidateScreenshot)).size > 1024, 'Modal Candidate screenshot is unexpectedly empty');
+    await fs.writeFile(path.join(root, 'reports', 'vcp-harness-modal-candidate.json'), `${JSON.stringify(modalCandidateGeometry, null, 2)}\n`, 'utf8');
+    await page.evaluate(async () => {
+        await window.__harnessCandidateModalController?.dispose?.();
+        await window.__harnessCandidateModalScope?.dispose?.('candidate-modal-visual-complete');
+        delete window.__harnessCandidateModalController;
+        delete window.__harnessCandidateModalScope;
     });
     await page.screenshot({ path: primitiveScreenshot });
     const screenshotStat = await fs.stat(primitiveScreenshot);
