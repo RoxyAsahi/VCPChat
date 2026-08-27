@@ -128,21 +128,39 @@ try {
     await page.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout: timeoutMs });
     await page.waitForFunction(() => document.documentElement.dataset.uiMode === 'next', { timeout: timeoutMs });
 
-    // ---- 1p (retirement evidence E2). The typed owner mounts within the
-    // same open cycle that first exposes the form: at the earliest
-    // observable moment the settings revision is already revision-ready, so
-    // any presentationOwner fallback fill during the cold-start mount window
-    // is immediately superseded by the typed projection (outcome parity is
-    // asserted by 1q below).  Deleting the fallback cannot change what the
-    // user can observe at first open. ----
+    // ---- 1p (retirement evidence E2/E3). First-open ordering contract:
+    // the modal is template-instantiated by the first openModal, and
+    // `modal-ready` fires synchronously inside that task - before the
+    // bridge's MutationObserver microtask can mount the typed consumer and
+    // stamp the revision.  The startup fallback therefore owns the
+    // first-open fill window by construction, and the typed projection
+    // deterministically reclaims it within the same open cycle.  Retirement
+    // of the fallback is only allowed once a replacement owns this exact
+    // window. ----
+    await page.evaluate(() => {
+        window.__e3FirstOpenProbe = null;
+        document.addEventListener('modal-ready', event => {
+            if (event.detail?.modalId !== 'globalSettingsModal') return;
+            const modal = document.getElementById('globalSettingsModal');
+            window.__e3FirstOpenProbe = {
+                revisionAtReady: modal?.dataset?.vcpSettingsRevision ?? null,
+                formAtReady: Boolean(document.getElementById('globalSettingsForm')),
+                userNameAtReady: document.getElementById('userName')?.value ?? null,
+            };
+        }, { once: true });
+    });
     await page.evaluate(() => window.uiHelperFunctions.openModal('globalSettingsModal'));
+    const e3FirstOpen = await page.evaluate(() => window.__e3FirstOpenProbe);
+    assert.equal(e3FirstOpen.formAtReady, true, `E3: the form exists at modal-ready (${JSON.stringify(e3FirstOpen)})`);
+    assert.equal(e3FirstOpen.revisionAtReady, null, `E3: typed readiness is absent at modal-ready - the fallback owns the first-open fill window (${JSON.stringify(e3FirstOpen)})`);
+    assert.equal(String(e3FirstOpen.userNameAtReady || '').length > 0, true, `E3: the fallback fills the identity cluster synchronously at modal-ready (${JSON.stringify(e3FirstOpen)})`);
     await page.waitForFunction(() => {
         const revision = document.getElementById('globalSettingsModal')?.dataset?.vcpSettingsRevision;
         return Boolean(document.getElementById('globalSettingsForm')
             && window.VCPUISettingsBridge?.getTypedService?.()
             && Number.isInteger(Number(revision)));
     }, { timeout: timeoutMs });
-    console.log('  [PASS] 1p. typed settings revision is ready in the same open cycle that exposes the form');
+    console.log('  [PASS] 1p. fallback owns the modal-ready fill window; the typed projection reclaims the revision in the same open cycle');
 
     // ---- 1. SettingsShell layout ----
     await page.waitForFunction(() => document.getElementById('globalSettingsForm'), { timeout: timeoutMs });
@@ -1479,6 +1497,58 @@ try {
         assert.equal(ledger.typedServices, 4, `reopen ${index + 1} retains all typed services`);
     });
     console.log(`  [PASS] 8b. repeated reopen (${reopenCycles} cycles) has stable owner/service/list ledgers`);
+
+    // ---- 8c (retirement evidence E3, negative contract). The fallback's
+    // only trigger surface is the one-shot `modal-ready` (first template
+    // instantiation) plus the cold-start load; reopens never re-run it.
+    // With the typed readiness marker deleted, a reopen must leave the
+    // on-screen drafts untouched (no surprise re-fill from a stale
+    // snapshot), and only a state commit may reclaim the marker and
+    // re-project. ----
+    await page.evaluate(() => window.uiHelperFunctions.closeModal('globalSettingsModal'));
+    await page.waitForFunction(() => !document.getElementById('globalSettingsModal')?.classList.contains('active'), { timeout: timeoutMs });
+    const e3BeforeReopen = await page.evaluate(() => ({
+        userName: document.getElementById('userName')?.value ?? null,
+        prompt: document.getElementById('continueWritingPrompt')?.value ?? null,
+        revisionCleared: (delete document.getElementById('globalSettingsModal').dataset.vcpSettingsRevision,
+            document.getElementById('globalSettingsModal').dataset.vcpSettingsRevision === undefined),
+    }));
+    assert.equal(e3BeforeReopen.revisionCleared, true, 'E3 probe cleared the typed readiness marker');
+    await page.evaluate(() => window.uiHelperFunctions.openModal('globalSettingsModal'));
+    await page.waitForFunction(() => document.getElementById('globalSettingsForm'), { timeout: timeoutMs });
+    await new Promise(resolve => setTimeout(resolve, 250));
+    const e3AfterReopen = await page.evaluate(() => ({
+        revision: document.getElementById('globalSettingsModal')?.dataset?.vcpSettingsRevision ?? null,
+        userName: document.getElementById('userName')?.value ?? null,
+        prompt: document.getElementById('continueWritingPrompt')?.value ?? null,
+    }));
+    assert.equal(e3AfterReopen.revision, null, 'E3: the readiness marker stays absent across a reopen (no fallback re-run)');
+    assert.equal(e3AfterReopen.userName, e3BeforeReopen.userName, `E3: reopen keeps the on-screen draft untouched while readiness is absent (${JSON.stringify({ e3BeforeReopen, e3AfterReopen })})`);
+    assert.equal(e3AfterReopen.prompt, e3BeforeReopen.prompt, 'E3: reopen keeps the prompt draft untouched while readiness is absent');
+    console.log('  [PASS] 8c-1. reopen with readiness absent never re-runs the fallback (drafts preserved verbatim)');
+    // A state commit reclaims the readiness marker and re-projects the
+    // authoritative typed snapshot over whatever is on screen.  The probe
+    // toggles a harmless key so the commit is a real state change (services
+    // may deduplicate equal-value notifications), then restores it.
+    const e3ProbeValue = await page.evaluate(() => {
+        const current = document.getElementById('topicSummaryModel')?.value || '';
+        window.dispatchEvent(new CustomEvent('global-settings-updated', {
+            detail: { settings: { topicSummaryModel: `${current}#e3` }, source: 'e3-reclaim-probe' }
+        }));
+        return current;
+    });
+    await page.waitForFunction(() => Number.isInteger(Number(document.getElementById('globalSettingsModal')?.dataset?.vcpSettingsRevision)), { timeout: timeoutMs });
+    await page.evaluate(value => {
+        window.dispatchEvent(new CustomEvent('global-settings-updated', {
+            detail: { settings: { topicSummaryModel: value }, source: 'e3-reclaim-restore' }
+        }));
+    }, e3ProbeValue);
+    const e3Reclaim = await page.evaluate(() => ({
+        userName: document.getElementById('userName')?.value || '',
+        stateUserName: String(window.VCPUISettingsBridge.getTypedService().state.get().userName ?? '') || '用户',
+    }));
+    assert.equal(e3Reclaim.userName, e3Reclaim.stateUserName, `E3: reclaim re-projects the authoritative typed snapshot (${JSON.stringify(e3Reclaim)})`);
+    console.log('  [PASS] 8c-2. a state commit reclaims the readiness marker and re-projects the authoritative snapshot');
 
     // ---- 9. Explicit renderer teardown retracts the Settings owner ledger ----
     const teardownLedger = await page.evaluate(async () => {

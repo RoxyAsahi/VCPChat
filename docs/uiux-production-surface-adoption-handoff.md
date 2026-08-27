@@ -439,3 +439,15 @@ directory-browser 接入前置达成。typed field owner 本就以 `#networkNote
 - **E6（负向守护）**：`check-settings-source-equivalence.mjs` 新增兜底 id 触碰清单钉死——39 个兜底 id 逐一断言四件事：(1) main.html 存在同 id 控件；(2) presentationOwner 仍持有该 id（退役提交必须同步更新本清单，守卫先行报警）；(3) settings-bridge（generic projection / typed field owner schema）覆盖该 id；(4) 两个 owner 之外的 modules/** + renderer.js 中 `getElementById('<id>')` 触碰文件集合与枚举清单 deepEqual 相等——现存量即 legacy 整表收集（global-settings-manager）、vcpServerUrl/topicSummaryModel blur 补全（settingsManager）、颜色簇 picker 写入（event-listeners）、chatLayoutModeWide（appearance-studio）、topicSummaryModel 接线（renderer.js）。任何新第二写入方出现即门禁失败。实测 BSD grep `\b` 词界失效曾致扫描假阴性，已改用纯字面模式复核。
 - 门禁：source-equivalence（含新 E1/E6 段）exit 0。批次为门禁+docs 批，journey 无改动不重跑；四快中其余三项不受影响（E6 只增不改既有断言）。win32/Linux packaged evidence 维持 evidence-pending。
 - 台账：§7 追加批次 18 段落；roadmap 追加 R2-02E checkpoint。E1-E6 现状：E1 ✅ E2 ✅ E4 ✅ E5 ✅ E6 ✅，仅剩 E3（部分挂载失败契约定义）；E3 完成后兜底退役批次即具备全部前置证据。
+
+### 2026-08-27 批次 19：兜底退役证据 E3（部分挂载失败契约）——E1-E6 闭合
+
+状态：journey 契约探针 + docs；兜底代码零删除。
+
+- unlock 复查：DirectoryBrowser 各 checkpoint 保持 `foundation-electron-active`，unlock 条件不满足，按预案推进最后一块前置证据 E3。
+- **契约定性更正（比批次 16/17 的表述更窄也更硬）**：兜底同步的唯一触发面 = 一次性 `modal-ready` 事件（ui-helpers 仅在模板首次实例化时派发，`openModal` 复用已存在元素时不再派发）+ 冷启动 loadAndApply。reopen 永不重跑兜底。`modal-ready` 在 openModal 的同一任务内同步派发，先于 bridge MutationObserver 微任务（typed consumer 挂载 + revision 落戳）——因此**首开填充窗口由兜底所有是结构性事实**，typed 投影在同一打开周期内收复（1p 已证）。退役兜底的前提因此不是「证明 typed 更早就绪」，而是「替代 owner 必须接管 modal-ready → typed-mount 这一窗口」。
+- **E3 journey 探针（1p 重构 + 8c 新增）**：(1p) modal-ready 瞬时探针证明 revisionAtReady=null、form 已存在、userName 已被兜底同步填充；随后 revision 在同周期就绪（收复）。(8c-1) 删除 readiness 标记后 reopen：控件草稿逐字保留（userName/prompt 与删除前相等）——ready 缺席时 reopen 不产生任何意外重填。(8c-2) 状态提交收复契约：**服务层对等值外部通知去重，等值事件不会触发 apply**——必须真实状态变更才重落 revision 并重投影权威快照（探针先临时改 topicSummaryModel 再还原）。这同时钉住「外部位面不得靠 no-op 事件扰动 typed 状态」的隐含契约。
+- 排障记录：8c 首版假设「reopen 会重跑兜底」被证伪（userName 残留 6f 草稿含空格、prompt 残留 6f 清空态）——由此发现 modal-ready 一次性派发与 6f 的空 prompt 控件残留（state 已得 '请继续' 默认、控件保持空草稿直至下次投影）两个事实。1p 首版「revision 先于模态可打开」已被批次 17 更正过一次，本批进一步把顺序钉到 modal-ready 瞬时粒度。
+- **E1-E6 全部闭合**：E1 入口面清单 ✅（批次 18）、E2 首开时序+快照镜像 ✅（批次 17/19）、E3 部分挂载失败契约 ✅（本批）、E4 事件路由盘点 ✅（批次 17）、E5 reload 断言扩容 ✅（批次 17）、E6 负向守护 ✅（批次 18）。兜底退役批次现在具备全部前置证据，剩余裁决项已落盘：两个 renderer.js 显示默认值的归属、completeVcpUrl 首开差量的接受与否、以及 modal-ready 窗口的替代 owner 设计。
+- 门禁：Electron journey 全轮 PASS（1p/1q/8c-1/8c-2 契约探针）+ 四快门禁（source-equivalence / unified-surface / test-settings-wa / test-ui-system）全绿。win32/Linux packaged evidence 维持 evidence-pending。
+- 台账：§7 追加批次 19 段落；roadmap 追加 R2-02E checkpoint。下一批候选：兜底退役施工批次（按落盘裁决项执行删除与替代 owner 设计），或视 unlock 复查结果轮转 directory-browser。
