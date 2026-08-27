@@ -110,7 +110,7 @@ Range ownership update（2026-08-26）：`appearanceSidebarAvatarSize`、`appear
 
 第一批六字段验收完成：`sidebarRowHeight`、`sidebarAvatarSize`、`customRadius` 保持 `typed-range-active` 且无待删 legacy；`showHomeVisualBrand`、`showHomeVisualTagline` 保持 `typed-toggle-active` 且无待删 legacy；`sidebarRadius` 的删除条件已闭合并晋级 `stable`（见第 2 节该行更新，证据链与提交号记录于 uiux-production-surface-adoption-handoff.md 批次 1-4）。
 
-Forum `adminUsername`/`adminPassword` 的 dirty/autosave seam 已收口：论坛输入不再驱动 legacy whole-form submit，保存唯一经由 ForumConfigUiService.save.execute；presentationOwner 的 loadForumConfig 镜像投影已删除。manager 兜底仅在 typed owner 未挂载时执行，属 Classic 兼容责任，保留。Electron journey 已含 seam 反向证据。
+Forum `adminUsername`/`adminPassword` 的 dirty/autosave seam 已收口：论坛输入不再驱动 legacy whole-form submit，保存唯一经由 ForumConfigUiService.save.execute；presentationOwner 的 loadForumConfig 镜像投影已删除。manager 兜底仅在 typed owner 未挂载时执行，属 Classic 兼容责任，保留。Electron journey 已含 seam 反向证据。（2026-08-27 R2-02E 批次 23 补证：journey section 7 reload-restore 断言补齐（6b flush 唯一值经 reload 由 typed forum consumer 重投影）；source-equivalence 新增 seam 负向守护（manager 单写入方 + bridge querySelector 投影 + forum service 路由 + owner 门禁变量）。仅剩 Harness Input reference/production-consumer gate 覆盖（线程 A fixture 域）为 evidence-pending，齐全后按本档 §5 条件评估两字段升级 `single-owner-active`。）
 
 `sidebarWidth`、`sidebarActive`、`sidebarAvatarOnly` 评估结论（2026-08-27）：三者没有 Settings 表单 DOM seam——由 shell 拖拽手柄/切换按钮直接驱动并即时持久化（event-listeners.js `saveSidebarState`、uiManager.js resizer），不属于「Settings Surface 单一 owner」模型可收编的字段；维持 `inventory-only`，不得为迁移而新建表单控件或改写 shell 行为。
 

@@ -33,6 +33,7 @@ const skipDestructivePreflight = process.env.VCPCHAT_STRESS_SKIP_PREFLIGHT === '
 const traceListeners = process.env.VCPCHAT_STRESS_TRACE_LISTENERS === '1';
 const captureAgentSettings = process.env.VCPCHAT_STRESS_CAPTURE_AGENT_SETTINGS === '1';
 const agentSelectInteraction = process.env.VCPCHAT_STRESS_AGENT_SELECT_INTERACTION === '1';
+const agentPromptInteraction = process.env.VCPCHAT_STRESS_AGENT_PROMPT_INTERACTION === '1';
 const supportedStages = Object.freeze(['ask-nova', 'settings', 'agent-settings', 'embedded', 'detached-app', 'mode-round-trip']);
 const selectedStages = new Set((process.env.VCPCHAT_STRESS_STAGES || supportedStages.join(','))
     .split(',')
@@ -658,6 +659,36 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
             agentSelectInteractionEvidence.closed = true;
             agentSelectInteractionEvidence.focusRestored = true;
         }
+        let agentPromptInteractionEvidence = null;
+        if (agentPromptInteraction) {
+            agentPromptInteractionEvidence = await page.evaluate(() => {
+                const buttons = [...document.querySelectorAll('#systemPromptContainer .prompt-mode-button')];
+                const modular = buttons.find(button => button.dataset.mode === 'modular');
+                const original = buttons.find(button => button.dataset.mode === 'original');
+                if (!(modular instanceof HTMLElement) || !(original instanceof HTMLElement)) return { available: false };
+                modular.click();
+                return { available: true };
+            });
+            if (agentPromptInteractionEvidence.available) {
+                await page.waitForFunction(() => {
+                    const modular = document.querySelector('#systemPromptContainer .prompt-mode-button[data-mode="modular"]');
+                    const original = document.querySelector('#systemPromptContainer .prompt-mode-button[data-mode="original"]');
+                    return modular?.classList.contains('active')
+                        && !original?.classList.contains('active')
+                        && document.getElementById('promptContentContainer')?.classList.contains('modular-mode');
+                }, { timeout: timeoutMs });
+                const switched = await page.evaluate(() => true);
+                await page.evaluate(() => document.querySelector('#systemPromptContainer .prompt-mode-button[data-mode="original"]')?.click());
+                await page.waitForFunction(() => {
+                    const original = document.querySelector('#systemPromptContainer .prompt-mode-button[data-mode="original"]');
+                    return original?.classList.contains('active')
+                        && document.getElementById('promptContentContainer')?.classList.contains('original-mode');
+                }, { timeout: timeoutMs });
+                agentPromptInteractionEvidence = { available: true, switched, restored: true };
+            }
+            assert.deepEqual(agentPromptInteractionEvidence, { available: true, switched: true, restored: true },
+                `${label}: prompt mode Button interaction contract drifted: ${JSON.stringify(agentPromptInteractionEvidence)}`);
+        }
         if (captureAgentSettings) {
             const evidence = await page.evaluate(() => {
                 const rect = node => {
@@ -730,6 +761,7 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
                 };
             });
             evidence.agentSelectInteraction = agentSelectInteractionEvidence;
+            evidence.agentPromptInteraction = agentPromptInteractionEvidence;
             await fs.mkdir(path.join(root, 'reports'), { recursive: true });
             await fs.writeFile(path.join(root, 'reports', 'vcp-agent-settings-production.json'), `${JSON.stringify(evidence, null, 2)}\n`);
             await page.screenshot({ path: path.join(root, 'reports', 'vcp-agent-settings-production.png') });

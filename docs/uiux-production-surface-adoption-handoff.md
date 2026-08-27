@@ -484,3 +484,42 @@ directory-browser 接入前置达成。typed field owner 本就以 `#networkNote
 - 边界说明：该台账为线程 A/B 共享文档，线程 B 批次 15/16 已有随批改判先例；本次仅改「当前」状态列与历史注记，不动 §3 冻结清单与 §5 施工条件定义。
 - 门禁：docs-only 不重跑代码门禁（与批次 14/16 惯例一致）。
 - 台账：§7 追加批次 22 段落；roadmap 追加 R2-02E checkpoint。下一批候选：unlock 复查 directory-browser；或评估 §5 Forum `adminUsername`/`adminPassword` 候选的前置证据清单落盘。
+
+### 2026-08-27 批次 23：Forum 凭据接缝审计 + reload-restore 补证 + seam 负向守护
+
+状态：journey 补断言 + 门禁扩容 + docs；生产代码零变更。
+
+- unlock 复查：DirectoryBrowser 各 checkpoint 保持 `foundation-electron-active`，unlock 条件不满足。按归属台账 §5 评估下一候选 Forum `adminUsername`/`adminPassword`，先做接缝现状审计。
+- **接缝现状审计结论（远好于台账 §5 行文暗示）**：§5 要求的施工清单大半已经闭合——(1) 字段级 dirty/autosave owner 已收口（批次 2/3：`mountTypedForumFieldOwner` 防抖 + `ForumConfigUiService.save.execute` + `vcp-settings-save-result` 归属，legacy 整表 submit 不再被论坛字段触发）；(2) snapshot clean projection 已收口（forum service subscribe → applyForum，仅 clean form 投影，bridge L322-335；presentationOwner 镜像已删）；(3) 真 mountInput primitive 已挂（`mountTypedForumInputs`）；(4) 既有证据：journey 论坛消费投影 parity + legacy-submit 抑制 + typed save（L877-927）、关闭 flush（6b）、teardown 迟到命令拒绝（section 9）、jsdom 失败→重试 UI 传播（tests/global-settings-save.test.mjs forum-denied）。
+- **残余缺口盘点**：(G1) journey section 7 reload-restore 缺论坛凭据断言（本批闭合）；(G2) Harness Input reference 对照 / production-consumer gate（`check-harness-input-production-consumer.mjs`、`diff-harness-vcp-field-geometry.mjs`）未覆盖两个论坛输入——属线程 A fixture 域，evidence-pending 上报。
+- **本批施工**：(1) section 7 `restored` 补 `adminUsername`/`adminPassword` 两断言——6b flush 的唯一值经 reload 后由 typed forum consumer 重投影（`flushValues.forumUser/forumPassword` 相等），日志行更新为「full fallback-id coverage + forum credentials」；(2) source-equivalence 新增论坛凭据 seam 负向守护——`adminUsername`/`adminPassword` 的 `getElementById` 写入方集合必须 deepEqual 等于 `global-settings-manager.js` 单元素（Classic 兜底）、bridge 必须经 `querySelector('#id')` 持有投影、save 路由必须经 forum config service、manager 的 `forumFieldOwnerMounted` 门禁必须存在——新第二写入方即门禁失败（E6 范式复用）。排障记录：初版期望把 bridge 误列入 `getElementById` 写入方（实际用 querySelector）、把 `forumFieldOwnerMounted` 门禁 regex 指向 bridge（实际在 manager），各改一处后通过。
+- 门禁：node --check + 四快全绿；Electron journey 全轮 PASS（含新 6b/7 论坛断言）。
+- 台账：§7 追加批次 23 段落；roadmap 追加 R2-02E checkpoint；归属台账 §5/L113 现状注记随批更新。下一批候选：unlock 复查；或视线程 A Input reference fixture 进展把 G2 证据补齐后，按 §5 条件评估论坛凭据行升级 `single-owner-active`。
+
+### 2026-08-27 批次 24：兜底退役后 Settings-only lifecycle stress 复跑（docs-only）
+
+状态：stress 复跑 + docs；代码面自批次 23 提交 `c90776cd` 起零变更。
+
+- unlock 复查：DirectoryBrowser 各 checkpoint 保持 `foundation-electron-active`，unlock 条件不满足。
+- **触发原因**：批次 20 删除 presentationOwner 兜底投影（159 行，含 19 守卫分支）属 mount/打开路径变更，按 §6 协议「涉及生命周期或重复打开时必须追加 Settings-only stress」复跑。
+- **结果**：`test-electron-lifecycle-stress.mjs` settings stage，3 warmup + 20 measured cycles 通过。五 checkpoint（baseline/cycle-5/10/15/20）全量恒定：listeners=831、nodes=8707、connected=1901、enhancedSettingsControls=40、lifecycleActiveScopes=9、lifecycleActiveResources=720（listener 395 / ui-primitive 181 / ui-presentation 71 / ui-registration 42 / controller 10 / ui-service 5 / subscription 4 / dom-state 4 / child-scope 4 / observer 2 / ui-registry 1 / theme-tokens 1）、detachedRoots/detachedIcons/detachedOptions=0、listenerTrace 空、staleWeakNodes 空。heap 缓慢线性爬升 ~0.6 MiB/20 cycles 与批次 8 记录一致（V8 采样口径，非泄漏形态）。
+- 结论：兜底退役未引入重复挂载、监听累积或 detached 残留；typed 投影 + retired owner 的拆分在重复打开/teardown 压力下资源面稳定。
+- 台账：§7 追加批次 24 段落；roadmap 追加 R2-02E checkpoint。下一批候选：unlock 复查 directory-browser；或评估其他接缝候选。
+
+### 2026-08-27 批次 25：兜底退役后 §6 门禁全集补跑（docs-only）
+
+状态：门禁复跑 + docs；代码面自批次 23 提交 `c90776cd` 起零变更。
+
+- unlock 复查：DirectoryBrowser 各 checkpoint 保持 `foundation-electron-active`，unlock 条件不满足。
+- **触发原因**：批次 20-24 期间只复跑了四快门禁（source-equivalence / unified-surface / test-settings-wa / test-ui-system）+ Electron journey + settings-only stress；§6 最小集合的其余四项（`check:uiux`、`test:uiux`、`check:uiux:artifacts`/`test:uiux:artifacts`、`guard:classic-retirement`）在退役后未跑过，本批补齐。
+- **结果全绿**：`check:uiux`（tsc --project tsconfig.uiux.json）通过；`test:uiux` 50/50（0 fail，含 forum timeout、rust retry、typed service 订阅回滚等 adapter 契约）；artifact consistency 78 generated files 一致、artifact smoke（Settings + Rust + Forum + Runtime adapters + scoped registry + semantic icon + PopupSelect candidate 契约）通过；`guard:classic-retirement` 边界门禁通过——兜底退役未越出 classic 退休边界。
+- 台账：§7 追加批次 25 段落；roadmap 追加 R2-02E checkpoint。下一批候选：unlock 复查 directory-browser；或视线程 A 进展轮转。
+
+### 2026-08-27 批次 26：legacy 整表 save 链 next 模式存活状态审计（docs-only）
+
+状态：审计 + docs；代码面自批次 23 提交 `c90776cd` 起零变更。
+
+- unlock 复查：线程 A 继续推进 agent-settings 按钮（`8a73d9f3`/`dc82b299` prompt mode buttons），DirectoryBrowser 保持 `foundation-electron-active`，unlock 条件不满足。四快门禁在线程 A 交错提交后的最新树上复跑全绿（无漂移）。
+- **审计结论：legacy 整表 save 链在 next 模式存活且是设计内职责，不可退役**。链路 = `mountSettingsAutosave`（bridge L1147）对非 typed 字段的 input/change 做 400ms 防抖 → `form.requestSubmit()` → event-listeners L519 的 submit 监听 → `handleSaveGlobalSettings`（global-settings-manager L4）→ 整表 collect → IPC。三条 suppress 边界：(1) typed settings 字段带 `vcpTypedFieldOwner` 标记、save-result 归属过滤（`owner === 'typed-settings-field-owner'` 时 autosave 不复位 saving）；(2) forum 字段带 `vcpTypedForumFieldOwner` 标记；(3) 重试点击路由按 failureOwner 区分（typed-forum-field-owner 除外）。该链是归属台账 §3 冻结 38 键在 next 模式的唯一保存路由，与矩阵行 66「legacy autosave 仅驱动 §3 冻结字段」的表述逐字吻合；冻结解除前置是线程 A 对应 capability adapter 交付，不是 B 侧可独立施工项。
+- 覆盖证据确认：整表 collect 链已有 jsdom 契约（tests/global-settings-save.test.mjs：typed 委托、forum-denied 失败传播）与 jsdom journey 8/8（advanced-features 等 load->modify->save->fail->reopen-restore）；Electron journey 的 forum 字段段（L894-927）显式断言 `legacySubmitCalls === 0`（typed 字段不进该链）。无需新增探针。
+- 台账：§7 追加批次 26 段落；roadmap 追加 R2-02E checkpoint。**B 线程当前无剩余可独立施工项**：剩余开放面全部被线程 A 阻塞——directory-browser unlock（其 Candidate-active 晋级）、Forum 凭据 `single-owner-active` 升级（其 Input reference/production-consumer gate 覆盖 G2）、win32/Linux packaged evidence（环境依赖）。下一批次动作 = unlock 复查轮转；线程 A 任一前置晋级后按登记条件继续施工。

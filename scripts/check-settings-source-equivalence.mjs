@@ -148,6 +148,23 @@ assert.doesNotMatch(bridge, /vcp-settings-navigation-restored|originalLegacyClas
 assert.match(bridge, /nav\.classList\.remove\('vcp-settings-source-nav'\)/, 'source nav marker must leave live tree');
 assert.match(bridge, /content\.classList\.remove\('vcp-settings-source-content'\)/, 'source content marker must leave live tree');
 
+// Forum credential seam (ownership ledger §5 candidate): the two inputs are
+// projected by the typed forum consumer and saved only through
+// ForumConfigUiService.save.execute; the legacy manager collect is gated on
+// the typed owner being absent (Classic fallback).  A second writer outside
+// the two owner files would break the single-route contract.
+for (const forumId of ['adminUsername', 'adminPassword']) {
+    const writers = moduleFiles
+        .filter(file => fs.readFileSync(file, 'utf8').includes(`getElementById('${forumId}')`))
+        .map(file => path.relative(root, file).split(path.sep).join('/'))
+        .sort();
+    assert.deepEqual(writers, ['modules/global-settings-manager.js'], `unexpected forum credential writer set for ${forumId}`);
+    assert.ok(bridge.includes(`querySelector('#${forumId}')`), `the bridge typed forum consumer must own the ${forumId} projection`);
+}
+assert.match(bridge, /ForumConfigUiService|forum-config-ui/, 'the forum credential save route must go through the forum config service');
+const globalSettingsManager = read('modules/global-settings-manager.js');
+assert.match(globalSettingsManager, /forumFieldOwnerMounted/, 'the legacy forum collect must stay gated on the typed forum owner');
+
 // Geometry values are copied from the Harness source, not inferred from VCP
 // tokens.  Verify both the reference and the VCP canonical selectors.
 const geometry = [

@@ -1316,6 +1316,12 @@ try {
         // ---- retirement evidence E5: the durable-restore assertion set
         // covers every id the presentationOwner fallback used to fill, so
         // deleting the fallback cannot change the reload-restore outcome. ----
+        // ---- forum credential seam: the 6b close flush persisted these
+        // values through the ForumConfigUiService; after reload the typed
+        // forum consumer must re-project them (single typed route, no
+        // legacy re-fill). ----
+        forumUser: document.getElementById('adminUsername')?.value,
+        forumPassword: document.getElementById('adminPassword')?.value,
         topicSummaryModel: document.getElementById('topicSummaryModel')?.value,
         chatFontPreset: document.getElementById('chatFontPreset')?.value,
         chatFontCustom: document.getElementById('chatFontCustom')?.value,
@@ -1406,7 +1412,9 @@ try {
     assert.equal(restored.minChunkBufferSize, '24', 'restore covers the chunk buffer fallback id');
     assert.equal(restored.smoothStreamIntervalMs, '140', 'restore covers the stream interval fallback id');
     assert.equal(JSON.stringify(restored.networkPaths), JSON.stringify(flushedPaths.committed), 'restore covers the network notes path list fallback owner');
-    console.log('  [PASS] 7. reopen after reload restores persisted values from settings.json (full fallback-id coverage)');
+    assert.equal(restored.forumUser, flushValues.forumUser, `restore covers the forum admin username via the typed forum consumer (${JSON.stringify({ forumUser: restored.forumUser, expected: flushValues.forumUser })})`);
+    assert.equal(restored.forumPassword, flushValues.forumPassword, 'restore covers the forum admin password via the typed forum consumer');
+    console.log('  [PASS] 7. reopen after reload restores persisted values from settings.json (full fallback-id coverage + forum credentials)');
 
     // ---- 8. Canonical next layout survives reload ----
     assert.equal(await page.evaluate(() => document.documentElement.dataset.uiMode), 'next');
