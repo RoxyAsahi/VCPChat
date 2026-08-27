@@ -52,3 +52,11 @@ test('Harness geometry audit reports source equivalence without hiding gaps', ()
     assert.ok(report.checks.some(item => item.name === 'model-picker' && item.status === 'source-equivalent'));
     assert.ok(report.checks.some(item => item.status !== 'source-equivalent'));
 });
+
+test('Model picker pixel diff remains pending without the Harness screenshot', () => {
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-model-picker-pixels.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-model-picker-pixel-diff.json'), 'utf8'));
+    assert.equal(report.status, 'pending-screenshot-capture');
+    assert.equal(report.pass, false);
+    assert.ok(report.missingEvidence.includes('Harness ModelSelect screenshot'));
+});
