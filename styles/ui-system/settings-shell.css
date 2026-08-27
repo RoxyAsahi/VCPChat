@@ -1,6 +1,7 @@
 @layer vcp-ui.components {
     /* The settings tab and global settings Surface share the unified UI scope. */
-    @scope (#tabContentSettings) {
+    /* Scope-root contracts: @scope cannot match its own root as a subject, so
+       the two #tabContentSettings surface rules live outside the block below. */
     :is(html, html.vcp-global-settings-host) .vcp-ui-scope #tabContentSettings {
         gap: var(--vcp-ui-space-3);
         color: var(--vcp-ui-text-1);
@@ -10,6 +11,16 @@
         padding-right: var(--vcp-ui-sidebar-list-gutter);
         box-sizing: border-box;
     }
+
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #tabContentSettings.sidebar-tab-content.active {
+        margin: 0;
+        padding: 0 var(--vcp-ui-sidebar-list-gutter) var(--vcp-ui-space-4);
+        overflow-x: hidden;
+        overflow-y: auto;
+        scrollbar-gutter: auto;
+    }
+
+    @scope (#tabContentSettings) {
 
     :is(html, html.vcp-global-settings-host) .vcp-ui-scope .settings-header-bar {
         /* 新版 UI 下侧栏设置 tab 的"设置"标题与"全局设置"按钮由顶栏入口承载，
@@ -151,14 +162,6 @@
         border-color: var(--vcp-ui-control-focus);
         box-shadow: 0 0 0 var(--vcp-ui-space-1) var(--vcp-ui-focus-ring);
         outline: none;
-    }
-
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #tabContentSettings.sidebar-tab-content.active {
-        margin: 0;
-        padding: 0 var(--vcp-ui-sidebar-list-gutter) var(--vcp-ui-space-4);
-        overflow-x: hidden;
-        overflow-y: auto;
-        scrollbar-gutter: auto;
     }
 
     :is(html, html.vcp-global-settings-host) .vcp-ui-scope .settings-header-bar::after {
@@ -939,7 +942,8 @@
         height: 24px;
         min-width: 0;
         gap: 6px;
-        padding: 0;
+        /* Vertical padding is owned by the unlayered overrides pass
+           (8px top / 16px bottom); a layered `padding: 0` here can never win. */
         border: 0;
         color: var(--vcp-ui-text-1);
         background: transparent;
