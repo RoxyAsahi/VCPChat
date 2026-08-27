@@ -126,9 +126,11 @@ test('Harness AgentModelPicker maps provider metadata and retracts its popup own
         assert.ok(controller.trigger.querySelector('.vcp-harness-agent-model-picker-trigger-icon'));
         assert.ok(document.getElementById('vcp-harness-uiux-agent-model-picker'));
         controller.open();
+        assert.equal(controller.root.querySelector('.vcp-harness-popup-select-card')?.getAttribute('aria-busy'), 'true');
         await new Promise(resolve => setTimeout(resolve, 0));
         assert.equal(loads, 1);
         assert.equal(controller.popup.getSnapshot().open, true);
+        assert.equal(controller.root.querySelector('.vcp-harness-popup-select-card')?.getAttribute('aria-busy'), null);
         assert.equal(controller.root.querySelector('.vcp-harness-popup-select-card')?.getAttribute('role'), 'menu');
         assert.equal(controller.root.querySelector('.vcp-harness-popup-select-card')?.id, controller.trigger.getAttribute('aria-controls'));
         assert.equal(controller.root.querySelector('.vcp-harness-agent-model-picker-cell')?.hidden, false);
