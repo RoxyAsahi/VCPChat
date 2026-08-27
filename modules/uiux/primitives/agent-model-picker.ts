@@ -94,9 +94,19 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
         consume: () => true,
         focusComposer: () => trigger.focus(),
     });
-    const view = mountPopupSelectView(root, { popup, overlayAria: `${props.label ?? 'Model'} picker`, searchAria: 'Search models' }, pickerScope);
     let pane: 'root' | 'model' | 'effort' = 'root';
     let selectedEffort = props.selectedEffort;
+    const view = mountPopupSelectView(root, {
+        popup,
+        overlayAria: `${props.label ?? 'Model'} picker`,
+        searchAria: 'Search models',
+        onEscape: () => {
+            if (pane === 'root') return false;
+            pane = 'root';
+            syncPane();
+            return true;
+        },
+    }, pickerScope);
     const paneCell = document.createElement('button');
     paneCell.type = 'button';
     paneCell.className = 'vcp-harness-agent-model-picker-cell';
@@ -160,10 +170,6 @@ export function mountAgentModelPicker(host: HTMLElement, props: AgentModelPicker
         view.card.querySelector('.vcp-harness-popup-select-error')?.toggleAttribute('hidden', pane !== 'model');
         renderEfforts();
     };
-    pickerScope.listen(view.card, 'keydown', event => {
-        if ((event as KeyboardEvent).key !== 'Escape') return;
-        if (pane === 'model' || pane === 'effort') { event.preventDefault(); pane = 'root'; syncPane(); }
-    });
     pickerScope.listen(trigger, 'click', () => {
         if (popup.getSnapshot().open) popup.dismiss();
         else popup.open('agent-model', {}, { via: 'menu', span: { source: 'agent-model-picker' } });

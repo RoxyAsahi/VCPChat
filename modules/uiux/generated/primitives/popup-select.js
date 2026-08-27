@@ -252,6 +252,8 @@ export function mountPopupSelectView(host, props, scope) {
                 return;
             case 'Escape':
                 event.preventDefault();
+                if (props.onEscape?.() === true)
+                    return;
                 popup.dismiss({ focusComposer: true });
                 return;
             default: return; // ArrowLeft/Right fall through: native caret movement.

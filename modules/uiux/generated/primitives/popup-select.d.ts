@@ -90,6 +90,8 @@ export interface PopupSelectViewProps {
     /** '{command}' substitutes the open command name. */
     readonly overlayAria?: string;
     readonly listboxAria?: string;
+    /** Return true when the owner consumed Escape without dismissing. */
+    readonly onEscape?: () => boolean;
 }
 export interface PopupSelectViewController {
     readonly card: HTMLDivElement;

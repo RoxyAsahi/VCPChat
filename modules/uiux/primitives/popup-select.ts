@@ -267,6 +267,8 @@ export interface PopupSelectViewProps {
     /** '{command}' substitutes the open command name. */
     readonly overlayAria?: string;
     readonly listboxAria?: string;
+    /** Return true when the owner consumed Escape without dismissing. */
+    readonly onEscape?: () => boolean;
 }
 
 export interface PopupSelectViewController {
@@ -333,7 +335,11 @@ export function mountPopupSelectView(host: HTMLElement, props: PopupSelectViewPr
             case 'ArrowDown': event.preventDefault(); popup.move(1); return;
             case 'ArrowUp': event.preventDefault(); popup.move(-1); return;
             case 'Enter': event.preventDefault(); void popup.select(s.active); return;
-            case 'Escape': event.preventDefault(); popup.dismiss({ focusComposer: true }); return;
+            case 'Escape':
+                event.preventDefault();
+                if (props.onEscape?.() === true) return;
+                popup.dismiss({ focusComposer: true });
+                return;
             default: return; // ArrowLeft/Right fall through: native caret movement.
         }
     });
