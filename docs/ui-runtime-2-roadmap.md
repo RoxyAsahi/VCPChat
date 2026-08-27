@@ -90,6 +90,8 @@
 
 2026-08-27 DirectoryBrowser foundation（B2 Directory flow）：新增 `modules/uiux/primitives/directory-browser.ts` 的 Light-DOM Miller browser 基础，实现严格 injected `listDirectory`/`createDirectory`/`onOpen`/`onClose` face，单/双栏 selection、hidden filter、Open/Cancel、AbortController + generation close/reopen/dispose 安全。Candidate Lab 使用内存 fixture tree；未触碰 VCP directory IPC、Workspace persistence、动态壁纸路径选择或任何聊天域。当前只标记 `foundation-under-test`：已具备 focused generated artifact owner/liveness 测试和 DOM/CSS source contract；仍缺 path editor、nested create dialog、slow scan、Electron fixture 和 same-semantic pixel diff，不能称 Candidate active 或 Stable。
 
+2026-08-27 DirectoryBrowser Electron checkpoint：固定 800×600@1x 的 generated artifact Electron journey 已验证 headless dialog 为 680×500、0 padding/gap、single → selected two-pane + divider、hidden entries toggle、row 28px/radius 6px/column 256px/footer 12×24 geometry、owner `onOpen(selectedPath)` 与 close/dispose。实现中发现 shared Modal stylesheet 后加载会覆盖单类 browser selector；按 Harness `DirectoryBrowser.module.css` 的 `.dialog.dialog` 优先级模型改为双类 selector，修正后证据通过。状态推进为 `foundation-electron-active`，但路径编辑、nested create dialog、slow scan、same-semantic pixel diff与合法 VCP production consumer仍明确 pending。
+
 本批次不解冻聊天内核、消息渲染、Composer 内部、协议、IPC、持久化、Plugin Loader、chat manifest 或动态壁纸。Harness conversation/tool/markdown 控件可以在实验室复刻，但不得借实验室接入改变这些冻结边界。
 
 ## 0.3 上位规范到执行批次的映射

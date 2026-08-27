@@ -1,0 +1,41 @@
+{
+  "viewport": {
+    "width": 800,
+    "height": 600,
+    "deviceScaleFactor": 1
+  },
+  "source": "generated-artifact-electron",
+  "state": "two-pane-selected-hidden",
+  "dialog": {
+    "width": "680px",
+    "height": "500px",
+    "padding": "0px",
+    "gap": "0px",
+    "role": "dialog",
+    "modal": "true"
+  },
+  "columns": 2,
+  "divider": true,
+  "initialRows": [
+    "projects"
+  ],
+  "visibleRows": [
+    "projects",
+    ".hidden"
+  ],
+  "selected": "projects",
+  "hiddenPressed": "true",
+  "geometry": {
+    "rowHeight": "28px",
+    "rowRadius": "6px",
+    "columnMinWidth": "256px",
+    "footerPadding": "12px 24px"
+  },
+  "lifecycle": {
+    "opened": [
+      "/home/projects"
+    ],
+    "closed": true,
+    "onClose": 0
+  }
+}

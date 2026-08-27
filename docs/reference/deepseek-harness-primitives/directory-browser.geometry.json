@@ -9,7 +9,11 @@
     ".footerBar": { "padding": "12px 24px", "gap": "8px" }
   },
   "vcpCandidateEvidence": {
-    "status": "pending-electron-fixture",
+    "viewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 },
+    "engine": "Electron Chromium",
+    "screenshot": "fixtures/vcp/directory-browser.foundation.png",
+    "report": "fixtures/vcp/directory-browser.foundation.json",
+    "status": "foundation-electron-active",
     "pixelDiff": "pending-same-semantic-harness-fixture"
   }
 }

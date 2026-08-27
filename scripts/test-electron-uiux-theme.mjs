@@ -294,7 +294,7 @@ try {
     });
     assert.deepEqual(candidateLabBoundary, {
         maturity: 'candidate',
-        buttons: 15,
+        buttons: 16,
         input: true,
         field: true,
         select: true,
@@ -1095,6 +1095,71 @@ try {
     });
     assert.deepEqual(popupSelectLifecycle, { riskVisible: true, selected: ['careful'], consumed: [{ via: 'enter', token: '/model' }], focused: 1, closed: true });
     await fs.writeFile(path.join(root, 'reports', 'vcp-harness-popup-select-candidate.json'), `${JSON.stringify({ ...popupSelectGeometry, lifecycle: popupSelectLifecycle }, null, 2)}\n`, 'utf8');
+    const directoryBrowserGeometry = await page.evaluate(async () => {
+        const scope = new window.VCPLifecycle.LifecycleScope('test:harness-directory-browser-foundation');
+        const opened = [];
+        const closed = [];
+        const listings = {
+            '/home': { path: '/home', crumbs: [{ name: 'Home', path: '/home' }], entries: [{ name: 'projects', path: '/home/projects' }, { name: '.hidden', path: '/home/.hidden', hidden: true }] },
+            '/home/projects': { path: '/home/projects', crumbs: [{ name: 'Home', path: '/home' }, { name: 'projects', path: '/home/projects' }], entries: [{ name: 'vcpchat', path: '/home/projects/vcpchat' }] },
+        };
+        const browser = window.VCPUIUX.mountDirectoryBrowser({
+            open: true,
+            listDirectory: async path => listings[path || '/home'] || { path: path || '/home', entries: [] },
+            createDirectory: async (path, name) => `${path}/${name}`,
+            onOpen: path => opened.push(path),
+            onClose: () => closed.push(true),
+        }, scope);
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const dialog = document.querySelector('.vcp-directory-browser[role="dialog"]');
+        const initialRows = [...dialog.querySelectorAll('.vcp-directory-browser-row-name')].map(node => node.textContent);
+        dialog.querySelector('.vcp-directory-browser-hidden').click();
+        const visibleRows = [...dialog.querySelectorAll('.vcp-directory-browser-row-name')].map(node => node.textContent);
+        [...dialog.querySelectorAll('.vcp-directory-browser-row')].find(row => row.textContent.includes('projects'))?.click();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const style = getComputedStyle(dialog);
+        const selectedRow = dialog.querySelector('.vcp-directory-browser-row[aria-current="true"]');
+        const result = {
+            viewport: { width: innerWidth, height: innerHeight, deviceScaleFactor: devicePixelRatio },
+            source: 'generated-artifact-electron',
+            state: 'two-pane-selected-hidden',
+            dialog: { width: style.width, height: style.height, padding: style.padding, gap: style.gap, role: dialog.getAttribute('role'), modal: dialog.getAttribute('aria-modal') },
+            columns: dialog.querySelectorAll('.vcp-directory-browser-column').length,
+            divider: dialog.querySelector('.vcp-directory-browser-divider') !== null,
+            initialRows,
+            visibleRows,
+            selected: selectedRow?.textContent || '',
+            hiddenPressed: dialog.querySelector('.vcp-directory-browser-hidden')?.getAttribute('aria-pressed'),
+            geometry: { rowHeight: getComputedStyle(selectedRow).height, rowRadius: getComputedStyle(selectedRow).borderRadius, columnMinWidth: getComputedStyle(dialog.querySelector('.vcp-directory-browser-column')).minWidth, footerPadding: getComputedStyle(dialog.querySelector('.vcp-directory-browser-footer')).padding },
+        };
+        window.__harnessDirectoryBrowserFixture = { scope, browser, opened, closed };
+        return result;
+    });
+    assert.deepEqual(directoryBrowserGeometry.viewport, { width: 800, height: 600, deviceScaleFactor: 1 });
+    assert.deepEqual(directoryBrowserGeometry.dialog, { width: '680px', height: '500px', padding: '0px', gap: '0px', role: 'dialog', modal: 'true' });
+    assert.equal(directoryBrowserGeometry.columns, 2);
+    assert.equal(directoryBrowserGeometry.divider, true);
+    assert.deepEqual(directoryBrowserGeometry.initialRows, ['projects']);
+    assert.deepEqual(directoryBrowserGeometry.visibleRows, ['projects', '.hidden']);
+    assert.equal(directoryBrowserGeometry.selected, 'projects');
+    assert.equal(directoryBrowserGeometry.hiddenPressed, 'true');
+    assert.deepEqual(directoryBrowserGeometry.geometry, { rowHeight: '28px', rowRadius: '6px', columnMinWidth: '256px', footerPadding: '12px 24px' });
+    const directoryBrowserScreenshot = path.join(root, 'reports', 'vcp-harness-directory-browser-foundation.png');
+    await page.screenshot({ path: directoryBrowserScreenshot });
+    assert.ok((await fs.stat(directoryBrowserScreenshot)).size > 1024, 'DirectoryBrowser foundation screenshot is unexpectedly empty');
+    const directoryBrowserLifecycle = await page.evaluate(async () => {
+        const fixture = window.__harnessDirectoryBrowserFixture;
+        const dialog = document.querySelector('.vcp-directory-browser[role="dialog"]');
+        [...dialog.querySelectorAll('button')].find(button => button.textContent === 'Open')?.click();
+        fixture.browser.setOpen(false);
+        const closed = fixture.browser.open === false && document.querySelector('.vcp-directory-browser') === null;
+        await fixture.browser.dispose();
+        await fixture.scope.dispose('directory-browser-foundation-complete');
+        delete window.__harnessDirectoryBrowserFixture;
+        return { opened: fixture.opened, closed, onClose: fixture.closed.length };
+    });
+    assert.deepEqual(directoryBrowserLifecycle, { opened: ['/home/projects'], closed: true, onClose: 0 });
+    await fs.writeFile(path.join(root, 'reports', 'vcp-harness-directory-browser-foundation.json'), `${JSON.stringify({ ...directoryBrowserGeometry, lifecycle: directoryBrowserLifecycle }, null, 2)}\n`, 'utf8');
     await page.screenshot({ path: primitiveScreenshot });
     const screenshotStat = await fs.stat(primitiveScreenshot);
     assert.ok(screenshotStat.size > 1024, `primitive screenshot is unexpectedly empty: ${screenshotStat.size} bytes`);
