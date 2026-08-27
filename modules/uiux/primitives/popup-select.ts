@@ -257,6 +257,8 @@ export function createPopupSelectController(spec: PopupSelectSpec, deps: PopupSe
 
 export interface PopupSelectViewProps {
     readonly popup: PopupSelectController;
+    /** Optional trigger/anchor that is part of the owning surface. */
+    readonly anchor?: HTMLElement;
     /* Locale seat defaults mirror ui-commands/src/client/locales.ts en. */
     readonly searchPlaceholder?: string;
     readonly searchAria?: string;
@@ -329,6 +331,7 @@ export function mountPopupSelectView(host: HTMLElement, props: PopupSelectViewPr
 
     let lastOpen = false;
     let riskScope: UiScope | null = null;
+    let rowsScope: UiScope | null = null;
 
     viewScope.listen(card, 'keydown', event => {
         const s = popup.getSnapshot();
@@ -351,11 +354,15 @@ export function mountPopupSelectView(host: HTMLElement, props: PopupSelectViewPr
         if (!s.open || s.confirming !== null) return;
         const target = event.target as Node | null;
         if (!(target instanceof Node)) return;
-        if (card.contains(target)) return;
+        if (card.contains(target) || props.anchor?.contains(target)) return;
         popup.dismiss();
     }, { capture: true });
 
     const renderRows = (s: PopupSelectSnapshot) => {
+        const previousRowsScope = rowsScope;
+        const nextRowsScope = viewScope.child('harness-popup-select-rows');
+        rowsScope = nextRowsScope;
+        void previousRowsScope?.dispose('harness-popup-select-rows-rebuilt');
         listbox.replaceChildren();
         if (s.status !== 'ready') return;
         listbox.setAttribute('aria-label', template(labels.listboxAria, s.command ?? ''));
@@ -384,11 +391,11 @@ export function mountPopupSelectView(host: HTMLElement, props: PopupSelectViewPr
                 const check = document.createElement('span');
                 check.className = 'vcp-harness-popup-select-check';
                 check.setAttribute('aria-hidden', 'true');
-                mountSemanticIcon(check, { name: 'check', size: 16 }, viewScope.child('harness-popup-select-check'));
+                mountSemanticIcon(check, { name: 'check', size: 16 }, nextRowsScope.child('harness-popup-select-check'));
                 row.append(check);
             }
-            viewScope.listen(row, 'click', () => { if (option.disabled !== true) void popup.select(index); });
-            viewScope.listen(row, 'mouseenter', () => { if (option.disabled !== true) popup.highlight(index); });
+            nextRowsScope.listen(row, 'click', () => { if (option.disabled !== true) void popup.select(index); });
+            nextRowsScope.listen(row, 'mouseenter', () => { if (option.disabled !== true) popup.highlight(index); });
             listbox.append(row);
         });
         // Focus ownership sits with the search input, so scrolling the virtual
@@ -398,7 +405,12 @@ export function mountPopupSelectView(host: HTMLElement, props: PopupSelectViewPr
 
     const sync = () => {
         const s = popup.getSnapshot();
-        if (!s.open && lastOpen) card.remove(); // Dismiss renders null; the anchor stays mounted.
+        if (!s.open && lastOpen) {
+            card.remove(); // Dismiss renders null; the anchor stays mounted.
+            void rowsScope?.dispose('harness-popup-select-rows-closed');
+            rowsScope = null;
+            listbox.replaceChildren();
+        }
         if (!s.open) { lastOpen = false; return; }
         if (!lastOpen) {
             host.append(card);
@@ -467,6 +479,7 @@ export function mountPopupSelectView(host: HTMLElement, props: PopupSelectViewPr
     const dispose = viewScope.own(async () => {
         unsubscribe();
         await riskScope?.dispose('harness-popup-select-risk-unmounted');
+        await rowsScope?.dispose('harness-popup-select-rows-unmounted');
         popup.dispose();
         card.remove();
     }, 'harness-popup-select-view', 'ui-primitive');

@@ -81,6 +81,8 @@ export interface PopupSelectController {
 export declare function createPopupSelectController(spec: PopupSelectSpec, deps: PopupSelectDeps): PopupSelectController;
 export interface PopupSelectViewProps {
     readonly popup: PopupSelectController;
+    /** Optional trigger/anchor that is part of the owning surface. */
+    readonly anchor?: HTMLElement;
     readonly searchPlaceholder?: string;
     readonly searchAria?: string;
     readonly retryLabel?: string;

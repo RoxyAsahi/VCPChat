@@ -35,6 +35,10 @@ assert.match(report.dom, /<button[^>]*id="refreshTtsModelsBtn"[^>]*aria-label="å
     'TTS refresh action must expose an explicit accessible name');
 assert.match(report.dom, /<button(?=[^>]*id="openModelSelectBtn")(?=[^>]*type="button")[^>]*>/,
     'model trigger must remain a non-submitting native button');
+assert.match(report.dom, /class="[^"]*vcp-harness-agent-model-picker-trigger[^"]*"/,
+    'Agent model trigger must use the Harness model-picker trigger contract');
+assert.ok(Array.isArray(report.modelPicker) && report.modelPicker.length === 1,
+    'Agent model picker production projection is missing');
 assert.match(report.dom, /<button(?=[^>]*id="refreshTtsModelsBtn")(?=[^>]*type="button")[^>]*>/,
     'TTS refresh action must remain a non-submitting native button');
 assert.match(report.dom, /<button(?=[^>]*id="deleteAgentBtn")(?=[^>]*type="button")[^>]*>/,
@@ -54,6 +58,9 @@ assert.deepEqual(report.inputNodes.map(node => node.id).sort(), [
 ].sort(), 'typed Agent Input evidence must target the nine canonical fields');
 assert.deepEqual((report.regexInputs ?? []).map(node => node.id).sort(), ['agentTtsRegexPrimary', 'agentTtsRegexSecondary'],
     'typed Agent TTS regex Input evidence must target both canonical regex fields');
+assert.ok(Array.isArray(report.actionBar) && report.actionBar.length >= 1
+    && String(report.actionBar[0].class || '').includes('vcp-ui-settings-action-bar'),
+    'Agent Settings action bar must be enhanced by the SettingsActionBar component');
 for (const node of report.inputNodes) {
     assert.equal(node.style.height, '22px', 'typed Agent native input must keep the Harness 22px line box');
     assert.equal(node.style.padding, '0px 10px', 'typed Agent native input padding drifted');
@@ -98,13 +105,29 @@ for (const action of report.actions) {
     assert.ok(Array.isArray(action.style?.displayRules), `Agent action ${action.controlId} must report authored display rules`);
     assert.ok(action.style.displayRules.some(rule => rule.selector === '.vcp-harness-button.button' && rule.display === 'inline-flex'),
         `Agent action ${action.controlId} must retain the Harness inline-flex rule`);
-    assert.equal(action.style.displayRules.some(rule => rule.display === 'flex'), false,
+    assert.equal(action.style.displayRules.some(rule => rule.display === 'flex'
+        && rule.selector !== '.vcp-harness-agent-model-picker-trigger'), false,
         `Agent action ${action.controlId} has a conflicting authored display:flex rule`);
 }
 if (report.agentSelectInteraction !== null && report.agentSelectInteraction !== undefined) {
     assert.deepEqual(report.agentSelectInteraction, {
         opened: true, menuOwner: true, role: 'menu', closed: true, focusRestored: true,
     }, 'voice Select interaction evidence must prove portal open, Escape close, and focus restore');
+}
+if (report.agentModelPickerInteraction !== null && report.agentModelPickerInteraction !== undefined) {
+    assert.deepEqual(report.agentModelPickerInteraction, {
+        available: true,
+        opened: true,
+        rootPane: true,
+        modelPane: true,
+        filteredCount: 1,
+        selectedBefore: report.agentModelPickerInteraction.selectedBefore,
+        selected: true,
+        afterSelectClosed: true,
+        reopened: true,
+        escaped: true,
+        focusRestored: true,
+    }, 'Agent model picker interaction evidence is incomplete');
 }
 if (report.agentPromptInteraction !== null && report.agentPromptInteraction !== undefined) {
     assert.deepEqual(report.agentPromptInteraction, { available: true, switched: true, restored: true },
@@ -123,6 +146,7 @@ console.log(JSON.stringify({
     selects: report.selects.length,
     modelTriggerButton: 'openModelSelectBtn',
     agentSelectInteraction: report.agentSelectInteraction ?? null,
+    agentModelPickerInteraction: report.agentModelPickerInteraction ?? null,
     screenshotBytes: fs.statSync(screenshotPath).size,
     status: 'production-baseline-valid',
 }, null, 2));
