@@ -25,7 +25,9 @@ if (interaction['semantic-icon/owner-refresh-size-name-dispose']?.status !== 'ca
 if (interaction['agent-preset-seat/open-selected-busy-roster-dispose']?.status !== 'candidate-interaction-active') fail('AgentPresetSeat lifecycle must remain explicitly Candidate');
 if (interaction['agent-preset-row/trust-error-busy-roster-dispose']?.status !== 'candidate-interaction-active') fail('AgentPresetRow lifecycle must remain explicitly Candidate');
 if (interaction['popup-select/load-filter-keyboard-risk-dismiss-dispose']?.status !== 'candidate-interaction-active') fail('PopupSelect lifecycle must remain explicitly Candidate');
-const directoryBrowserInteraction = Object.entries(interaction).find(([key]) => key.startsWith('directory-browser/'))?.[1];
+const directoryBrowserEntries = Object.entries(interaction).filter(([key]) => key.startsWith('directory-browser/'));
+if (directoryBrowserEntries.length !== 1) fail(`DirectoryBrowser interaction ledger must contain exactly one entry (found ${directoryBrowserEntries.length})`);
+const directoryBrowserInteraction = directoryBrowserEntries[0]?.[1];
 if (directoryBrowserInteraction?.status !== 'foundation-electron-active') fail('DirectoryBrowser must retain its Electron-backed foundation status');
 for (const output of ['dom', 'geometry', 'computed-style', 'screenshot', 'pixel-diff']) if (!matrix.outputs.includes(output)) fail(`missing output layer ${output}`);
 if (matrix.stateSemantics?.['select/closed'] !== 'AgentPresetSeat ready trigger; production fixture captured, raw DOM/geometry/pixel comparison is failing') fail('Select closed state must retain its Agent Preset production-fixture boundary');
