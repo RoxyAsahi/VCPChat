@@ -102,6 +102,8 @@
 
 2026-08-27 DirectoryBrowser draft-preview checkpoint：路径草稿在以分隔符结束时启动 250ms debounce，稳定后仅通过 injected `listDirectory` 预览目标 directory；结果替换 pane 但保持 editor 挂载，最后未完成段仍走 local prefix filter。预览 timer 与 listing generation 都随 owner 被新输入、close/reopen/dispose 取消。focused artifact test 验证 debounce、capability call、pane 更新和 editor 保持。仍缺 Harness two-leg landing 与同语义 pixel diff，状态保持 `foundation-electron-active`。
 
+2026-08-27 DirectoryBrowser two-leg landing checkpoint：非 root draft preview 先 list target、再在同一 generation 内 list parent；仅 parent entries 含 target 时一起提交 parent + selected target child 的双栏，否则安全退化为 target 单栏。focused artifact test 覆盖 parent-leg 请求、双栏和 selected row。Harness 的 parent-leg timeout/late upgrade 等完整 timing 仍未复刻，且无同语义 pixel diff 或 VCP production consumer；状态保持 `foundation-electron-active`。
+
 本批次不解冻聊天内核、消息渲染、Composer 内部、协议、IPC、持久化、Plugin Loader、chat manifest 或动态壁纸。Harness conversation/tool/markdown 控件可以在实验室复刻，但不得借实验室接入改变这些冻结边界。
 
 ## 0.3 上位规范到执行批次的映射

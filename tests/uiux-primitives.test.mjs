@@ -154,8 +154,14 @@ test('Harness DirectoryBrowser foundation aborts stale listings and retracts on 
         await delay(260);
         assert.equal(pending.length, 1);
         assert.equal(pending[0].path, '/home/projects/');
-        pending.shift().resolve({ path: '/home/projects', entries: [{ name: 'vcpchat', path: '/home/projects/vcpchat' }] });
+        pending.shift().resolve({ path: '/home/projects', crumbs: [{ name: 'Home', path: '/home' }, { name: 'projects', path: '/home/projects' }], entries: [{ name: 'vcpchat', path: '/home/projects/vcpchat' }] });
         await delay(0);
+        assert.equal(pending.length, 1, 'non-root path landing must request its parent leg');
+        assert.equal(pending[0].path, '/home');
+        pending.shift().resolve({ path: '/home', entries: [{ name: 'projects', path: '/home/projects' }] });
+        await delay(0);
+        assert.equal(document.querySelectorAll('.vcp-directory-browser-column').length, 2);
+        assert.equal(document.querySelector('.vcp-directory-browser-row[aria-current="true"]')?.textContent, 'folder-openprojects');
         assert.ok(document.querySelector('.vcp-directory-browser-path-input'), 'draft preview must keep the editor mounted');
         pathInput.value = '/home/projects';
         pathInput.dispatchEvent(new dom.window.Event('input', { bubbles: true }));

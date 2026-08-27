@@ -142,13 +142,7 @@ export function mountDirectoryBrowser(props, scope) {
             browserScope.listen(input, 'input', () => { pathDraft = input.value; sync(); if (previewTimer !== null)
                 clearTimeout(previewTimer); const draft = pathDraft; if (!draft.endsWith('/') && !draft.endsWith('\\'))
                 return; previewTimer = setTimeout(() => { previewTimer = null; if (!modal.open || !editingPath || !draft.trim())
-                return; const request = ++generation; controller?.abort(); controller = new AbortController(); loading = true; failure = null; sync(); void props.listDirectory(draft, controller.signal).then(listing => { if (request !== generation || !modal.open)
-                return; parent = listing; selected = null; child = null; }, reason => { if (request !== generation || !modal.open)
-                return; failure = errorText(reason); }).finally(() => { if (request === generation && modal.open) {
-                clearSlowScan();
-                loading = false;
-                sync();
-            } }); }, 250); });
+                return; preview(draft); }, 250); });
             browserScope.listen(input, 'keydown', event => { const key = event.key; if (key === 'Escape') {
                 event.preventDefault();
                 event.stopPropagation();
@@ -231,7 +225,75 @@ export function mountDirectoryBrowser(props, scope) {
             sync();
         }
     } };
-    const navigate = (path) => { editingPath = false; selected = null; child = null; void scan(path, listing => { parent = listing; }); };
+    const navigate = (path) => {
+        editingPath = false;
+        selected = null;
+        child = null;
+        void scan(path, listing => {
+            const parentCrumb = listing.crumbs?.at(-2);
+            if (!parentCrumb) {
+                parent = listing;
+                return;
+            }
+            const target = listing;
+            void scan(parentCrumb.path, parentListing => {
+                const match = parentListing.entries.find(entry => entry.path === target.path);
+                if (!match) {
+                    parent = target;
+                    return;
+                }
+                parent = parentListing;
+                selected = match;
+                child = target;
+            });
+        });
+    };
+    const preview = (path) => {
+        const request = ++generation;
+        controller?.abort();
+        controller = new AbortController();
+        loading = true;
+        failure = null;
+        sync();
+        void props.listDirectory(path, controller.signal).then(target => {
+            if (request !== generation || !modal.open)
+                return;
+            const parentCrumb = target.crumbs?.at(-2);
+            if (!parentCrumb) {
+                parent = target;
+                selected = null;
+                child = null;
+                return;
+            }
+            void props.listDirectory(parentCrumb.path, controller?.signal).then(parentListing => {
+                if (request !== generation || !modal.open)
+                    return;
+                const match = parentListing.entries.find(entry => entry.path === target.path);
+                if (!match) {
+                    parent = target;
+                    selected = null;
+                    child = null;
+                    return;
+                }
+                parent = parentListing;
+                selected = match;
+                child = target;
+            }, () => { if (request === generation && modal.open) {
+                parent = target;
+                selected = null;
+                child = null;
+            } }).finally(() => { if (request === generation && modal.open) {
+                clearSlowScan();
+                loading = false;
+                sync();
+            } });
+        }, reason => { if (request === generation && modal.open) {
+            failure = errorText(reason);
+            clearSlowScan();
+            loading = false;
+            sync();
+        } });
+    };
     const pick = (entry) => { selected = entry; child = null; void scan(entry.path, listing => { child = listing; }); };
     const advance = (entry) => { if (!child)
         return; parent = child; selected = null; child = null; pick(entry); };

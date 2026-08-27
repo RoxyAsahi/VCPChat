@@ -91,7 +91,7 @@ export function mountDirectoryBrowser(props: DirectoryBrowserProps, scope: UiSco
         const chain = source?.crumbs?.length ? source.crumbs : source ? [{ name: source.path, path: source.path }] : [];
         if (editingPath) {
             const input = document.createElement('input'); input.type = 'text'; input.className = 'vcp-directory-browser-path-input'; input.value = pathDraft; input.setAttribute('aria-label', 'Folder path'); input.disabled = busy || loading || creating || createOpen;
-            browserScope.listen(input, 'input', () => { pathDraft = input.value; sync(); if (previewTimer !== null) clearTimeout(previewTimer); const draft = pathDraft; if (!draft.endsWith('/') && !draft.endsWith('\\')) return; previewTimer = setTimeout(() => { previewTimer = null; if (!modal.open || !editingPath || !draft.trim()) return; const request = ++generation; controller?.abort(); controller = new AbortController(); loading = true; failure = null; sync(); void props.listDirectory(draft, controller.signal).then(listing => { if (request !== generation || !modal.open) return; parent = listing; selected = null; child = null; }, reason => { if (request !== generation || !modal.open) return; failure = errorText(reason); }).finally(() => { if (request === generation && modal.open) { clearSlowScan(); loading = false; sync(); } }); }, 250); });
+            browserScope.listen(input, 'input', () => { pathDraft = input.value; sync(); if (previewTimer !== null) clearTimeout(previewTimer); const draft = pathDraft; if (!draft.endsWith('/') && !draft.endsWith('\\')) return; previewTimer = setTimeout(() => { previewTimer = null; if (!modal.open || !editingPath || !draft.trim()) return; preview(draft); }, 250); });
             browserScope.listen(input, 'keydown', event => { const key = (event as KeyboardEvent).key; if (key === 'Escape') { event.preventDefault(); event.stopPropagation(); editingPath = false; sync(); } if (key === 'Enter' && pathDraft.trim()) { event.preventDefault(); event.stopPropagation(); editingPath = false; navigate(pathDraft); } });
             crumbs.append(input); queueMicrotask(() => { if (modal.open && document.activeElement !== input) input.focus(); });
         } else {
@@ -117,7 +117,33 @@ export function mountDirectoryBrowser(props: DirectoryBrowserProps, scope: UiSco
     };
     const clearSlowScan = () => { if (slowTimer !== null) clearTimeout(slowTimer); slowTimer = null; slowLoading = false; if (previewTimer !== null) clearTimeout(previewTimer); previewTimer = null; };
     const scan = async (path: string | undefined, commit: (listing: DirectoryBrowserListing) => void) => { const request = ++generation; controller?.abort(); controller = new AbortController(); clearSlowScan(); loading = true; failure = null; slowTimer = setTimeout(() => { if (request === generation && modal.open && loading) { slowTimer = null; slowLoading = true; sync(); } }, SLOW_SCAN_DELAY_MS); sync(); try { const listing = await props.listDirectory(path, controller.signal); if (request !== generation || !modal.open) return; commit(listing); } catch (reason) { if (request !== generation || !modal.open) return; failure = errorText(reason); } finally { if (request === generation && modal.open) { clearSlowScan(); loading = false; sync(); } } };
-    const navigate = (path?: string) => { editingPath = false; selected = null; child = null; void scan(path, listing => { parent = listing; }); };
+    const navigate = (path?: string) => {
+        editingPath = false; selected = null; child = null;
+        void scan(path, listing => {
+            const parentCrumb = listing.crumbs?.at(-2);
+            if (!parentCrumb) { parent = listing; return; }
+            const target = listing;
+            void scan(parentCrumb.path, parentListing => {
+                const match = parentListing.entries.find(entry => entry.path === target.path);
+                if (!match) { parent = target; return; }
+                parent = parentListing; selected = match; child = target;
+            });
+        });
+    };
+    const preview = (path: string) => {
+        const request = ++generation; controller?.abort(); controller = new AbortController(); loading = true; failure = null; sync();
+        void props.listDirectory(path, controller.signal).then(target => {
+            if (request !== generation || !modal.open) return;
+            const parentCrumb = target.crumbs?.at(-2);
+            if (!parentCrumb) { parent = target; selected = null; child = null; return; }
+            void props.listDirectory(parentCrumb.path, controller?.signal).then(parentListing => {
+                if (request !== generation || !modal.open) return;
+                const match = parentListing.entries.find(entry => entry.path === target.path);
+                if (!match) { parent = target; selected = null; child = null; return; }
+                parent = parentListing; selected = match; child = target;
+            }, () => { if (request === generation && modal.open) { parent = target; selected = null; child = null; } }).finally(() => { if (request === generation && modal.open) { clearSlowScan(); loading = false; sync(); } });
+        }, reason => { if (request === generation && modal.open) { failure = errorText(reason); clearSlowScan(); loading = false; sync(); } });
+    };
     const pick = (entry: DirectoryBrowserEntry) => { selected = entry; child = null; void scan(entry.path, listing => { child = listing; }); };
     const advance = (entry: DirectoryBrowserEntry) => { if (!child) return; parent = child; selected = null; child = null; pick(entry); };
     browserScope.listen(hidden, 'click', () => { showHidden = !showHidden; sync(); });
