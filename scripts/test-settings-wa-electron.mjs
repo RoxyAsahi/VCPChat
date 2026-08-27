@@ -725,6 +725,91 @@ try {
     const savedUserName = savedProjection?.userName;
     console.log('  [PASS] 6. failed save keeps input, retry succeeds, and IPC persists (modal closed, authority projection updated)');
 
+    // ---- 6b. Per-field close flush: edit each field then close immediately,
+    // bypassing the 400ms debounce, so only the modal-visibility flush can
+    // commit the drafts. ----
+    await page.evaluate(() => window.uiHelperFunctions.openModal('globalSettingsModal'));
+    await page.waitForFunction(() => document.getElementById('globalSettingsForm'), { timeout: timeoutMs });
+    await new Promise(resolve => setTimeout(resolve, 250));
+    const flushValues = {
+        rowHeight: '53',
+        avatarSize: '33',
+        customRadius: '17',
+        radiusChoice: 'small',
+        tagline: `close-flush-tagline-${Date.now()}`,
+        forumUser: `flush-user-${Date.now()}`,
+    };
+    await page.evaluate((values) => {
+        const set = (id, value) => {
+            const node = document.getElementById(id);
+            node.value = value;
+            node.dispatchEvent(new Event('input', { bubbles: true }));
+        };
+        // Navigate to the appearance category so all target nodes exist as they
+        // do for real users; every typed control keeps its canonical id.
+        set('appearanceSidebarRowHeight', values.rowHeight);
+        set('appearanceSidebarAvatarSize', values.avatarSize);
+        set('appearanceCustomRadius', values.customRadius);
+        set('homeVisualTagline', values.tagline);
+        const choice = document.getElementById(`appearanceSidebarRadiusChoice-${values.radiusChoice}`);
+        choice.checked = true;
+        choice.dispatchEvent(new Event('change', { bubbles: true }));
+        set('adminUsername', values.forumUser);
+    }, flushValues);
+    const dirtyAtClose = await page.evaluate(() => {
+        const form = document.getElementById('globalSettingsForm');
+        return {
+            dirty: form.dataset.vcpSettingsDirty === 'true',
+            fieldOwnerMounted: form.dataset.vcpTypedFieldOwnerMounted === 'true',
+            forumOwnerMounted: form.dataset.vcpTypedForumFieldOwnerMounted === 'true',
+            // Geometry linkage rewrites range drafts; capture the final DOM
+            // values so the assertion compares the true on-screen draft.
+            rowHeight: document.getElementById('appearanceSidebarRowHeight')?.value,
+            avatarSize: document.getElementById('appearanceSidebarAvatarSize')?.value,
+            customRadius: document.getElementById('appearanceCustomRadius')?.value,
+        };
+    });
+    assert.equal(dirtyAtClose.dirty, true, `typed drafts mark the form dirty before close (${JSON.stringify(dirtyAtClose)})`);
+    assert.equal(dirtyAtClose.fieldOwnerMounted && dirtyAtClose.forumOwnerMounted, true, `both typed owners are mounted (${JSON.stringify(dirtyAtClose)})`);
+    const expectedFlush = {
+        rowHeight: dirtyAtClose.rowHeight,
+        avatarSize: dirtyAtClose.avatarSize,
+        customRadius: dirtyAtClose.customRadius,
+    };
+    await page.evaluate(() => window.uiHelperFunctions.closeModal('globalSettingsModal'));
+    await page.waitForFunction(() => !document.getElementById('globalSettingsModal')?.classList.contains('active'), { timeout: timeoutMs });
+    const flushDeadline = Date.now() + timeoutMs;
+    let flushedSnapshot = null;
+    while (Date.now() < flushDeadline) {
+        flushedSnapshot = await page.evaluate(() => {
+            const settingsService = window.VCPUISettingsBridge?.getTypedService?.();
+            const forumService = window.VCPUISettingsBridge?.getForumConfigService?.();
+            const profile = settingsService?.state?.get?.()?.appearanceProfile || {};
+            return {
+                sidebarRowHeight: profile.sidebarRowHeight,
+                sidebarAvatarSize: profile.sidebarAvatarSize,
+                customRadius: profile.customRadius,
+                sidebarRadius: profile.sidebarRadius,
+                homeVisualTagline: settingsService?.state?.get?.()?.homeVisualTagline || '',
+                forumUsername: String(forumService?.state?.get?.()?.username ?? ''),
+            };
+        });
+        if (
+            String(flushedSnapshot.sidebarRowHeight) === expectedFlush.rowHeight
+            && Number(flushedSnapshot.customRadius) === Number(expectedFlush.customRadius)
+            && flushedSnapshot.homeVisualTagline.startsWith('close-flush-tagline-')
+            && flushedSnapshot.forumUsername === flushValues.forumUser
+        ) break;
+        await sleep(250);
+    }
+    assert.equal(String(flushedSnapshot.sidebarRowHeight), expectedFlush.rowHeight, `close flush committed the on-screen row-height draft (${JSON.stringify({ flushedSnapshot, expectedFlush })})`);
+    assert.equal(String(flushedSnapshot.sidebarAvatarSize), expectedFlush.avatarSize, `close flush committed the on-screen avatar-size draft (${JSON.stringify({ flushedSnapshot, expectedFlush })})`);
+    assert.equal(Number(flushedSnapshot.customRadius), Number(expectedFlush.customRadius), `close flush committed the on-screen custom-radius draft (${JSON.stringify({ flushedSnapshot, expectedFlush })})`);
+    assert.equal(flushedSnapshot.sidebarRadius, 'small', `close flush committed radius choice draft (${JSON.stringify(flushedSnapshot)})`);
+    assert.ok(flushedSnapshot.homeVisualTagline.startsWith('close-flush-tagline-'), `close flush committed home tagline draft (${JSON.stringify(flushedSnapshot)})`);
+    assert.equal(flushedSnapshot.forumUsername, flushValues.forumUser, `close flush committed forum username draft via ForumConfigUiService (${JSON.stringify(flushedSnapshot)})`);
+    console.log('  [PASS] 6b. close flush commits per-field typed drafts (settings fields + forum credentials)');
+
     // Reopen after a full reload: the form must be re-populated from settings.json.
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout: timeoutMs });
