@@ -551,6 +551,7 @@ function mountTypedAgentButtons(form) {
     if (!api?.mountButton || !scope) return;
     const buttons = [
         ['#openModelSelectBtn', 'outline', 'agent-model-trigger'],
+        ['#refreshTtsModelsBtn', 'outline', 'agent-tts-refresh'],
         ['.form-actions button[type="submit"]', 'primary', 'agent-save'],
         ['#deleteAgentBtn', 'outline', 'agent-delete'],
     ];
@@ -559,7 +560,7 @@ function mountTypedAgentButtons(form) {
         const marker = `vcpTyped${key.replace(/(^|-)(\w)/g, (_, __, value) => value.toUpperCase())}`;
         if (!button || button.dataset[marker] === 'true') return;
         try {
-            const release = api.mountButton(button, { variant, size: key === 'agent-model-trigger' ? 'sm' : 'md' }, scope);
+            const release = api.mountButton(button, { variant, size: key.includes('trigger') || key.includes('refresh') ? 'sm' : 'md' }, scope);
             button.dataset[marker] = 'true';
             scope.own(() => { delete button.dataset[marker]; }, `${key}-button-marker`, 'ui-presentation');
             if (release) scope.own(release, `${key}-button`, 'ui-primitive');
