@@ -56,7 +56,7 @@ try {
     await fs.mkdir(path.join(root, 'reports'), { recursive: true });
     const outputStem = welcomeMode ? 'vcp-button-welcome-production' : 'vcp-button-candidate';
     await fs.writeFile(path.join(root, 'reports', `${outputStem}.json`), `${JSON.stringify(evidence, null, 2)}\n`);
-    await page.screenshot({ path: path.join(root, 'reports', `${outputStem}.png`) });
+    await page.locator('.fixture > button').first().screenshot({ path: path.join(root, 'reports', `${outputStem}.png`) });
     const disposed = await page.evaluate(() => {
         const releases = window.__vcpButtonFixtureReleases || [];
         releases.slice().reverse().forEach(release => release());

@@ -15,19 +15,35 @@ const checks = [
   ['width', harness.rect?.width, actual?.rect?.width, Math.abs((harness.rect?.width ?? 0) - (actual?.rect?.width ?? 0)) <= 0.5],
 ];
 const [left, right] = await Promise.all([
-  sharp(path.join(root, 'reports/harness-button-welcome-production.png')).metadata(),
-  sharp(path.join(root, 'reports/vcp-button-welcome-production.png')).metadata(),
+  sharp(path.join(root, 'reports/harness-button-welcome-production.png')).ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
+  sharp(path.join(root, 'reports/vcp-button-welcome-production.png')).ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
 ]);
+const comparable = left.info.width === right.info.width && left.info.height === right.info.height;
+let differentPixels = 0;
+let meanChannelDelta = null;
+let pixelDiffPath = null;
+if (comparable) {
+  const diff = Buffer.alloc(left.data.length); let totalDelta = 0;
+  for (let index = 0; index < left.data.length; index += 4) {
+    const delta = Math.max(...[0, 1, 2, 3].map(channel => Math.abs(left.data[index + channel] - right.data[index + channel])));
+    if (delta) differentPixels += 1;
+    totalDelta += delta; diff[index] = delta ? 255 : 0; diff[index + 3] = 255;
+  }
+  meanChannelDelta = totalDelta / (left.info.width * left.info.height);
+  pixelDiffPath = path.join(root, 'reports/harness-vcp-button-welcome-pixel-diff.png');
+  await sharp(diff, { raw: { width: left.info.width, height: left.info.height, channels: 4 } }).png().toFile(pixelDiffPath);
+}
 const report = {
   generatedAt: new Date().toISOString(),
   semanticFixture: harness.semanticFixture,
-  comparison: 'Button ROI only; consumer-specific width is intentionally not normalized',
-  harness: { rect: harness.rect, style: harness.style, screenshot: { width: left.width, height: left.height } },
-  vcp: { rect: actual?.rect, style: actual?.style, screenshot: { width: right.width, height: right.height } },
+  comparison: 'Button element ROI only; WelcomeNotice min-width is consumer CSS and is not normalized into the primitive contract',
+  harness: { rect: harness.rect, style: harness.style, screenshot: { width: left.info.width, height: left.info.height } },
+  vcp: { rect: actual?.rect, style: actual?.style, screenshot: { width: right.info.width, height: right.info.height } },
   checks: checks.map(([property, expected, actualValue, pass]) => ({ property, expected, actual: actualValue, pass })),
-  pass: checks.every(item => item[3]) && left.width === right.width && left.height === right.height,
-  status: checks.every(item => item[3]) && left.width === right.width && left.height === right.height ? 'cross-page-button-pixel-equivalent' : 'cross-page-button-consumer-geometry-mismatch',
-  missingEvidence: ['VCP production consumer', 'legacy presentation deletion'],
+  pixels: { comparable, differentPixels, totalPixels: comparable ? left.info.width * left.info.height : 0, differingRatio: comparable ? differentPixels / (left.info.width * left.info.height) : null, meanChannelDelta, diffImage: pixelDiffPath },
+  pass: false,
+  status: !comparable ? 'pending-button-roi-dimension-mismatch' : 'cross-page-button-pixel-mismatch',
+  missingEvidence: ['consumer-specific width alignment or normalized comparison target', 'VCP production consumer', 'legacy presentation deletion'],
 };
 await fs.writeFile(path.join(root, 'reports/harness-vcp-button-welcome-diff.json'), `${JSON.stringify(report, null, 2)}\n`);
 console.log(`Harness↔VCP Welcome Button diff: ${report.status}; pass=${report.pass}.`);
