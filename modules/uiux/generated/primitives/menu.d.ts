@@ -1,7 +1,7 @@
 import type { UiScope } from '../contracts.js';
 export interface MenuItem {
     readonly id: string;
-    readonly label: string;
+    readonly label: string | Node;
     readonly disabled?: boolean;
     readonly icon?: Node;
     readonly danger?: boolean;

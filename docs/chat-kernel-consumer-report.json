@@ -480,13 +480,25 @@
     "modules/uiux/generated/browser-entry.js",
     "modules/uiux/generated/contracts.js",
     "modules/uiux/generated/index.js",
+    "modules/uiux/generated/lab/primitive-lab.js",
+    "modules/uiux/generated/primitives/agent-preset-seat.js",
+    "modules/uiux/generated/primitives/button.js",
     "modules/uiux/generated/primitives/choice.js",
     "modules/uiux/generated/primitives/color-pair.js",
+    "modules/uiux/generated/primitives/disclosure-row.js",
     "modules/uiux/generated/primitives/field.js",
+    "modules/uiux/generated/primitives/hover-card.js",
     "modules/uiux/generated/primitives/input.js",
+    "modules/uiux/generated/primitives/menu.js",
+    "modules/uiux/generated/primitives/modal.js",
     "modules/uiux/generated/primitives/range.js",
+    "modules/uiux/generated/primitives/risk-confirmation.js",
     "modules/uiux/generated/primitives/select.js",
+    "modules/uiux/generated/primitives/semantic-icon.js",
+    "modules/uiux/generated/primitives/state-dot.js",
+    "modules/uiux/generated/primitives/toast.js",
     "modules/uiux/generated/primitives/toggle.js",
+    "modules/uiux/generated/primitives/tooltip.js",
     "modules/uiux/generated/providers/theme.js",
     "modules/uiux/generated/runtime/dom-renderer.js",
     "modules/uiux/generated/runtime/scope.js",
@@ -2579,7 +2591,7 @@
         },
         {
           "file": "modules/ui-system/settings-bridge.js",
-          "line": 1428,
+          "line": 1446,
           "surface": "internal-app",
           "snippet": "window.__vcpHarnessSelectOwnerCleanup?.();"
         }
@@ -3623,13 +3635,13 @@
         },
         {
           "file": "modules/global-settings-manager.js",
-          "line": 236,
+          "line": 235,
           "surface": "shared-renderer",
           "snippet": "if (window.getDominantAvatarColor) {"
         },
         {
           "file": "modules/global-settings-manager.js",
-          "line": 237,
+          "line": 236,
           "surface": "shared-renderer",
           "snippet": "window.getDominantAvatarColor(avatarSaveResult.avatarUrl).then(avgColor => {"
         },
@@ -4156,13 +4168,13 @@
       "production": [
         {
           "file": "modules/global-settings-manager.js",
-          "line": 371,
+          "line": 370,
           "surface": "shared-renderer",
           "snippet": "if (window.notificationRenderer) window.notificationRenderer.updateVCPLogStatus({ status: 'error', message: 'VCPLog未配置' }, document.getElementById('vcpLogConnectionStatus'));"
         },
         {
           "file": "modules/global-settings-manager.js",
-          "line": 371,
+          "line": 370,
           "surface": "shared-renderer",
           "snippet": "if (window.notificationRenderer) window.notificationRenderer.updateVCPLogStatus({ status: 'error', message: 'VCPLog未配置' }, document.getElementById('vcpLogConnectionStatus'));"
         },
@@ -6645,19 +6657,19 @@
         },
         {
           "file": "modules/ui-system/appearance-studio.js",
-          "line": 1236,
+          "line": 1237,
           "surface": "internal-app",
           "snippet": "window.topTabManager?.releaseOverlay?.(owner);"
         },
         {
           "file": "modules/ui-system/appearance-studio.js",
-          "line": 1238,
+          "line": 1239,
           "surface": "internal-app",
           "snippet": "Promise.resolve(window.topTabManager?.acquireOverlay?.(owner)).catch(error => {"
         },
         {
           "file": "modules/ui-system/appearance-studio.js",
-          "line": 1256,
+          "line": 1257,
           "surface": "internal-app",
           "snippet": "window.topTabManager?.releaseOverlay?.(owner);"
         },
@@ -7100,25 +7112,25 @@
         },
         {
           "file": "modules/ui-system/appearance-studio.js",
-          "line": 1167,
+          "line": 1168,
           "surface": "internal-app",
           "snippet": "service('uiHelper', () => window.uiHelperFunctions)?.showToastNotification?.('外观与布局已应用。', 'success');"
         },
         {
           "file": "modules/ui-system/appearance-studio.js",
-          "line": 1176,
+          "line": 1177,
           "surface": "internal-app",
           "snippet": "service('uiHelper', () => window.uiHelperFunctions)?.showToastNotification?.("
         },
         {
           "file": "modules/ui-system/appearance-studio.js",
-          "line": 1189,
+          "line": 1190,
           "surface": "internal-app",
           "snippet": "service('uiHelper', () => window.uiHelperFunctions)?.showToastNotification?.(`外观与布局保存失败：${error.message}`, 'error');"
         },
         {
           "file": "modules/ui-system/appearance-studio.js",
-          "line": 1412,
+          "line": 1413,
           "surface": "internal-app",
           "snippet": "service('uiHelper', () => window.uiHelperFunctions)?.openModal?.('globalSettingsModal');"
         },
@@ -7166,7 +7178,7 @@
         },
         {
           "file": "modules/ui-system/settings-bridge.js",
-          "line": 1793,
+          "line": 1811,
           "surface": "internal-app",
           "snippet": "|| window.uiHelperFunctions?.addNetworkPathInput?.(path)"
         },
@@ -7554,7 +7566,7 @@
       "definitions": [
         {
           "file": "modules/ui-system/appearance-studio.js",
-          "line": 1521,
+          "line": 1522,
           "syntax": "define-property",
           "snippet": "Object.defineProperty(window, 'VCPAppearanceStudio', { value: Object.freeze({"
         }
@@ -9959,31 +9971,31 @@
         },
         {
           "file": "modules/ui-system/appearance-studio.js",
-          "line": 469,
+          "line": 472,
           "surface": "internal-app",
           "snippet": "window.VCPUI?.getController?.(avatarControl)?.update({"
         },
         {
           "file": "modules/ui-system/appearance-studio.js",
-          "line": 477,
+          "line": 480,
           "surface": "internal-app",
           "snippet": "window.VCPUI?.getController?.(customRadiusControl)?.update({ value: customRadius });"
         },
         {
           "file": "modules/ui-system/appearance-studio.js",
-          "line": 739,
+          "line": 733,
           "surface": "internal-app",
           "snippet": "if (window.VCPUI?.getController?.(control)) return;"
         },
         {
           "file": "modules/ui-system/appearance-studio.js",
-          "line": 740,
+          "line": 734,
           "surface": "internal-app",
           "snippet": "const controller = window.VCPUI?.enhance?.('Range', control);"
         },
         {
           "file": "modules/ui-system/appearance-studio.js",
-          "line": 941,
+          "line": 935,
           "surface": "internal-app",
           "snippet": "window.VCPUI?.getController?.(button)?.update({ value: current });"
         },
@@ -10049,7 +10061,7 @@
       "definitions": [
         {
           "file": "modules/ui-system/settings-bridge.js",
-          "line": 1785,
+          "line": 1803,
           "syntax": "dot-assignment",
           "snippet": "window.VCPUISettingsBridge = Object.freeze({"
         }
@@ -10069,19 +10081,19 @@
         },
         {
           "file": "modules/global-settings-manager.js",
-          "line": 280,
+          "line": 279,
           "surface": "shared-renderer",
           "snippet": "const forumService = window.VCPUISettingsBridge?.getForumConfigService?.();"
         },
         {
           "file": "modules/global-settings-manager.js",
-          "line": 301,
+          "line": 300,
           "surface": "shared-renderer",
           "snippet": "const typedSettingsService = window.VCPUISettingsBridge?.getTypedService?.();"
         },
         {
           "file": "modules/global-settings-manager.js",
-          "line": 317,
+          "line": 316,
           "surface": "shared-renderer",
           "snippet": "const rustService = window.VCPUISettingsBridge?.getRustAssistantService?.();"
         },
@@ -14030,7 +14042,7 @@
     },
     "modules/global-settings-manager.js": {
       "windowReferences": 11,
-      "documentReferences": 80,
+      "documentReferences": 79,
       "electronReferences": 1,
       "timers": 1,
       "listeners": 0,
@@ -14990,7 +15002,7 @@
     },
     "modules/ui-system/appearance-studio.js": {
       "windowReferences": 27,
-      "documentReferences": 52,
+      "documentReferences": 51,
       "electronReferences": 1,
       "timers": 3,
       "listeners": 5,
@@ -15021,8 +15033,8 @@
       "mutableMaps": 0
     },
     "modules/ui-system/component-showcase.js": {
-      "windowReferences": 1,
-      "documentReferences": 33,
+      "windowReferences": 3,
+      "documentReferences": 39,
       "electronReferences": 0,
       "timers": 0,
       "listeners": 2,
@@ -15165,7 +15177,7 @@
       "mutableMaps": 0
     },
     "modules/ui-system/settings-bridge.js": {
-      "windowReferences": 53,
+      "windowReferences": 54,
       "documentReferences": 60,
       "electronReferences": 0,
       "timers": 5,
@@ -15340,6 +15352,30 @@
       "listeners": 0,
       "mutableMaps": 0
     },
+    "modules/uiux/generated/lab/primitive-lab.js": {
+      "windowReferences": 0,
+      "documentReferences": 47,
+      "electronReferences": 0,
+      "timers": 1,
+      "listeners": 0,
+      "mutableMaps": 0
+    },
+    "modules/uiux/generated/primitives/agent-preset-seat.js": {
+      "windowReferences": 0,
+      "documentReferences": 11,
+      "electronReferences": 0,
+      "timers": 0,
+      "listeners": 0,
+      "mutableMaps": 0
+    },
+    "modules/uiux/generated/primitives/button.js": {
+      "windowReferences": 0,
+      "documentReferences": 6,
+      "electronReferences": 0,
+      "timers": 0,
+      "listeners": 0,
+      "mutableMaps": 0
+    },
     "modules/uiux/generated/primitives/choice.js": {
       "windowReferences": 0,
       "documentReferences": 5,
@@ -15356,12 +15392,28 @@
       "listeners": 0,
       "mutableMaps": 0
     },
-    "modules/uiux/generated/primitives/field.js": {
+    "modules/uiux/generated/primitives/disclosure-row.js": {
       "windowReferences": 0,
-      "documentReferences": 3,
+      "documentReferences": 13,
       "electronReferences": 0,
       "timers": 0,
       "listeners": 0,
+      "mutableMaps": 0
+    },
+    "modules/uiux/generated/primitives/field.js": {
+      "windowReferences": 0,
+      "documentReferences": 9,
+      "electronReferences": 0,
+      "timers": 0,
+      "listeners": 0,
+      "mutableMaps": 0
+    },
+    "modules/uiux/generated/primitives/hover-card.js": {
+      "windowReferences": 7,
+      "documentReferences": 16,
+      "electronReferences": 0,
+      "timers": 3,
+      "listeners": 6,
       "mutableMaps": 0
     },
     "modules/uiux/generated/primitives/input.js": {
@@ -15372,6 +15424,22 @@
       "listeners": 0,
       "mutableMaps": 0
     },
+    "modules/uiux/generated/primitives/menu.js": {
+      "windowReferences": 6,
+      "documentReferences": 22,
+      "electronReferences": 0,
+      "timers": 1,
+      "listeners": 4,
+      "mutableMaps": 2
+    },
+    "modules/uiux/generated/primitives/modal.js": {
+      "windowReferences": 0,
+      "documentReferences": 19,
+      "electronReferences": 0,
+      "timers": 0,
+      "listeners": 1,
+      "mutableMaps": 0
+    },
     "modules/uiux/generated/primitives/range.js": {
       "windowReferences": 0,
       "documentReferences": 6,
@@ -15380,11 +15448,43 @@
       "listeners": 0,
       "mutableMaps": 0
     },
-    "modules/uiux/generated/primitives/select.js": {
+    "modules/uiux/generated/primitives/risk-confirmation.js": {
       "windowReferences": 0,
-      "documentReferences": 18,
+      "documentReferences": 14,
       "electronReferences": 0,
       "timers": 0,
+      "listeners": 0,
+      "mutableMaps": 0
+    },
+    "modules/uiux/generated/primitives/select.js": {
+      "windowReferences": 4,
+      "documentReferences": 22,
+      "electronReferences": 0,
+      "timers": 0,
+      "listeners": 0,
+      "mutableMaps": 0
+    },
+    "modules/uiux/generated/primitives/semantic-icon.js": {
+      "windowReferences": 0,
+      "documentReferences": 7,
+      "electronReferences": 0,
+      "timers": 0,
+      "listeners": 0,
+      "mutableMaps": 0
+    },
+    "modules/uiux/generated/primitives/state-dot.js": {
+      "windowReferences": 0,
+      "documentReferences": 8,
+      "electronReferences": 0,
+      "timers": 0,
+      "listeners": 0,
+      "mutableMaps": 0
+    },
+    "modules/uiux/generated/primitives/toast.js": {
+      "windowReferences": 1,
+      "documentReferences": 9,
+      "electronReferences": 0,
+      "timers": 1,
       "listeners": 0,
       "mutableMaps": 0
     },
@@ -15394,6 +15494,14 @@
       "electronReferences": 0,
       "timers": 0,
       "listeners": 0,
+      "mutableMaps": 0
+    },
+    "modules/uiux/generated/primitives/tooltip.js": {
+      "windowReferences": 5,
+      "documentReferences": 6,
+      "electronReferences": 0,
+      "timers": 1,
+      "listeners": 1,
       "mutableMaps": 0
     },
     "modules/uiux/generated/providers/theme.js": {

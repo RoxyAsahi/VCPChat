@@ -159,8 +159,13 @@ try {
         result.menuSelected = atomMenu?.querySelectorAll('.vcp-harness-menu-item-check').length || 0;
         result.menuDanger = Boolean(atomMenu?.querySelector('.vcp-harness-menu-item-danger'));
         const layout = [...(atomMenu?.querySelectorAll('[role="menuitem"]') || [])].find(item => item.textContent === 'Layout');
-        layout?.focus();
-        result.menuSubmenu = Boolean(atomMenu?.querySelector('.vcp-harness-submenu[role="menu"]'));
+        let submenuOpen = false;
+        for (let attempt = 0; attempt < 5 && !submenuOpen; attempt += 1) {
+            layout?.focus();
+            await new Promise(resolve => setTimeout(resolve, 10));
+            submenuOpen = Boolean(atomMenu?.querySelector('.vcp-harness-submenu[role="menu"]'));
+        }
+        result.menuSubmenu = submenuOpen;
         document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
         result.menuOutsideClosed = menuTrigger?.getAttribute('aria-expanded') === 'false';
         menuTrigger?.click();
@@ -255,6 +260,29 @@ try {
             const slotStyle = slot ? getComputedStyle(slot) : null;
             return { name: fixture.getAttribute('data-icon'), width: slotStyle?.width || '', height: slotStyle?.height || '', hasInheritedColor: Boolean(slotStyle?.color), ariaHidden: svg?.getAttribute('aria-hidden') || null, focusable: svg?.getAttribute('focusable') || null };
         });
+        const seatButton = [...host.querySelectorAll('button')].find(button => button.classList.contains('vcp-agent-preset-seat'));
+        result.agentPresetSeatMounted = seatButton?.getAttribute('aria-haspopup') === 'menu';
+        result.agentPresetSeatInitial = seatButton?.textContent.includes('Standard mode') === true;
+        seatButton?.click();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const seatMenu = document.querySelector('.vcp-harness-menu-list.vcp-harness-menu-portal');
+        result.agentPresetSeatOpen = seatButton?.getAttribute('aria-expanded') === 'true' && seatMenu?.parentElement === document.body;
+        result.agentPresetSeatRows = [...(seatMenu?.querySelectorAll('.vcp-agent-preset-seat-item-name') || [])].map(name => name.textContent);
+        result.agentPresetSeatSelectedRow = seatMenu?.querySelector('[data-selected="true"] .vcp-agent-preset-seat-item-name')?.textContent || '';
+        seatMenu?.querySelectorAll('[role="menuitem"]')[1]?.click();
+        // The lab pick demo stages busy for 600ms; let it drain so the busy
+        // toggle below observes a settled trigger.
+        await new Promise(resolve => setTimeout(resolve, 700));
+        result.agentPresetSeatStaged = seatButton?.textContent.includes('Code mode') === true;
+        result.agentPresetSeatClosedAfterPick = seatButton?.getAttribute('aria-expanded') === 'false' && !document.querySelector('.vcp-harness-menu-list');
+        const busyToggleBtn = [...host.querySelectorAll('button')].find(button => button.textContent === 'Toggle busy');
+        busyToggleBtn?.click();
+        result.agentPresetSeatBusyDisabled = seatButton?.disabled === true;
+        busyToggleBtn?.click();
+        const errorToggleBtn = [...host.querySelectorAll('button')].find(button => button.textContent === 'Set error');
+        errorToggleBtn?.click();
+        result.agentPresetSeatErrorTitle = seatButton?.getAttribute('title') || '';
+        errorToggleBtn?.click();
         await release();
         result.restored = host.childNodes.length === 0;
         result.scopeActive = scope.active;
@@ -263,7 +291,7 @@ try {
     });
     assert.deepEqual(candidateLabBoundary, {
         maturity: 'candidate',
-        buttons: 11,
+        buttons: 13,
         input: true,
         field: true,
         select: true,
@@ -316,6 +344,15 @@ try {
             { name: 'check', width: '16px', height: '16px', hasInheritedColor: true, ariaHidden: 'true', focusable: 'false' },
             { name: 'chevron-down', width: '16px', height: '16px', hasInheritedColor: true, ariaHidden: 'true', focusable: 'false' },
         ],
+        agentPresetSeatMounted: true,
+        agentPresetSeatInitial: true,
+        agentPresetSeatOpen: true,
+        agentPresetSeatRows: ['Standard mode', 'Code mode', 'Minimal mode'],
+        agentPresetSeatSelectedRow: 'Standard mode',
+        agentPresetSeatStaged: true,
+        agentPresetSeatClosedAfterPick: true,
+        agentPresetSeatBusyDisabled: true,
+        agentPresetSeatErrorTitle: 'Could not stage the preset. Try again.',
         restored: true,
         scopeActive: true,
     }, `generated Harness Candidate Lab mismatch: ${JSON.stringify(candidateLabBoundary)}`);
@@ -784,6 +821,95 @@ try {
         delete window.__harnessCandidateSemanticIconControllers;
         delete window.__harnessCandidateSemanticIconScope;
         document.querySelector('[data-electron-candidate-semantic-icons]')?.remove();
+    });
+    const agentPresetSeatGeometry = await page.evaluate(async () => {
+        const host = document.createElement('div');
+        host.dataset.electronCandidateAgentPresetSeat = 'true';
+        host.style.cssText = 'position:fixed;left:80px;top:120px;display:inline-flex;padding:24px;background:#fff;color:#0f1115;border:1px solid rgba(0,0,0,.08);border-radius:12px';
+        document.body.append(host);
+        const scope = new window.VCPLifecycle.LifecycleScope('test:harness-candidate-agent-preset-seat');
+        const button = document.createElement('button');
+        button.type = 'button';
+        host.append(button);
+        const picks = [];
+        const seat = window.VCPUIUX.mountAgentPresetSeat(button, {
+            options: [
+                { id: 'standard', name: 'Standard mode', description: 'Full coding agent with file editing, shell and search.' },
+                { id: 'minimal', name: 'Minimal mode', description: 'Two-tool coding agent.' },
+                { id: 'code', name: 'Code mode', description: 'Standard capabilities through the Code Mode SDK.' },
+            ],
+            selectedId: 'standard',
+            onSelect: (id) => { picks.push(id); seat.setSelected(id); },
+            onClose: () => {},
+        }, scope);
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const seatStyle = getComputedStyle(button);
+        const closed = {
+            minHeight: seatStyle.minHeight,
+            padding: seatStyle.padding,
+            borderRadius: seatStyle.borderRadius,
+            fontSize: seatStyle.fontSize,
+            fontWeight: seatStyle.fontWeight,
+            ariaExpanded: button.getAttribute('aria-expanded'),
+            hasPopup: button.getAttribute('aria-haspopup'),
+            title: button.getAttribute('title'),
+            // The next-shell native tooltip bridge converts [title] into
+            // data-tooltip/aria-label on a microtask; record both carriers.
+            titleTooltipBridge: button.getAttribute('data-tooltip'),
+            titleAriaLabel: button.getAttribute('aria-label'),
+            disabled: button.disabled,
+            label: seat.selectedLabel(),
+        };
+        seat.setOpen(true);
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const menu = document.body.querySelector('.vcp-harness-menu-list[role="menu"]');
+        const items = [...(menu?.querySelectorAll('.vcp-harness-menu-item-label') ?? [])].map(label => ({
+            name: label.querySelector('.vcp-agent-preset-seat-item-name')?.textContent || '',
+            description: label.querySelector('.vcp-agent-preset-seat-item-desc')?.textContent || '',
+        }));
+        const selectedName = menu?.querySelector('[data-selected="true"] .vcp-agent-preset-seat-item-name')?.textContent || '';
+        seat.setBusy(true);
+        const busyDisabled = button.disabled;
+        seat.setBusy(false);
+        seat.setError('Could not stage the preset. Try again.');
+        const errorTitle = button.getAttribute('title');
+        seat.setError(null);
+        const screenshot = { viewport: { width: innerWidth, height: innerHeight, deviceScaleFactor: devicePixelRatio }, source: 'generated-artifact-electron', state: 'open-selected-busy-error-closed', closed, open: { ariaExpanded: button.getAttribute('aria-expanded'), itemCount: items.length, items, selectedName, minMenuWidth: menu ? getComputedStyle(menu).minWidth : null, menuRadius: menu ? getComputedStyle(menu).borderRadius : null }, busyDisabled, errorTitle, picks };
+        window.__harnessCandidateAgentPresetSeatController = seat;
+        window.__harnessCandidateAgentPresetSeatScope = scope;
+        return screenshot;
+    });
+    assert.deepEqual(agentPresetSeatGeometry.viewport, { width: 800, height: 600, deviceScaleFactor: 1 });
+    assert.deepEqual(agentPresetSeatGeometry.closed, {
+        minHeight: agentPresetSeatGeometry.closed.minHeight,
+        padding: '0px 8px',
+        borderRadius: '16px',
+        fontSize: '13px',
+        fontWeight: '500',
+        ariaExpanded: 'false',
+        hasPopup: 'menu',
+        title: null,
+        titleTooltipBridge: 'Agent preset for the session you are about to start',
+        titleAriaLabel: 'Agent preset for the session you are about to start',
+        disabled: false,
+        label: 'Standard mode',
+    });
+    assert.equal(agentPresetSeatGeometry.open.itemCount, 3);
+    assert.equal(agentPresetSeatGeometry.open.items[0].name, 'Standard mode');
+    assert.equal(agentPresetSeatGeometry.open.items[1].description, 'Two-tool coding agent.');
+    assert.equal(agentPresetSeatGeometry.open.selectedName, 'Standard mode');
+    assert.equal(agentPresetSeatGeometry.busyDisabled, true);
+    assert.equal(agentPresetSeatGeometry.errorTitle, 'Could not stage the preset. Try again.');
+    const agentPresetSeatScreenshot = path.join(root, 'reports', 'vcp-harness-agent-preset-seat-candidate.png');
+    await page.screenshot({ path: agentPresetSeatScreenshot });
+    assert.ok((await fs.stat(agentPresetSeatScreenshot)).size > 1024, 'Agent preset seat Candidate screenshot is unexpectedly empty');
+    await fs.writeFile(path.join(root, 'reports', 'vcp-harness-agent-preset-seat-candidate.json'), `${JSON.stringify(agentPresetSeatGeometry, null, 2)}\n`, 'utf8');
+    await page.evaluate(async () => {
+        await window.__harnessCandidateAgentPresetSeatController?.dispose?.();
+        await window.__harnessCandidateAgentPresetSeatScope?.dispose?.('candidate-agent-preset-seat-visual-complete');
+        delete window.__harnessCandidateAgentPresetSeatController;
+        delete window.__harnessCandidateAgentPresetSeatScope;
+        document.querySelector('[data-electron-candidate-agent-preset-seat]')?.remove();
     });
     await page.screenshot({ path: primitiveScreenshot });
     const screenshotStat = await fs.stat(primitiveScreenshot);

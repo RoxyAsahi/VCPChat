@@ -108,7 +108,10 @@ export function mountMenu(anchor, props, scope) {
         }
         const label = document.createElement('span');
         label.className = 'vcp-harness-menu-item-label';
-        label.textContent = entry.label;
+        if (typeof entry.label === 'string')
+            label.textContent = entry.label;
+        else
+            label.append(entry.label.cloneNode ? entry.label.cloneNode(true) : entry.label);
         button.append(label);
         if (!nested)
             selectedNodes.set(entry.id, button);
