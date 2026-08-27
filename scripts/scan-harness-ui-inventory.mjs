@@ -18,6 +18,9 @@ const componentPattern = /export\s+(?:function|const|class)\s+([A-Z][A-Za-z0-9_]
 const referenceNames = new Set(fs.existsSync(referenceDir)
     ? fs.readdirSync(referenceDir).filter(file => file.endsWith('.dom.json')).map(file => file.replace('.dom.json', ''))
     : []);
+const contractAliases = new Map([
+    ['ModelSelect', 'model-picker'],
+]);
 const inventory = files.flatMap(file => {
     const source = fs.readFileSync(file, 'utf8');
     const exports = [...source.matchAll(componentPattern)].map(match => match[1]);
@@ -31,7 +34,7 @@ const inventory = files.flatMap(file => {
         source: file,
         relative,
         category: frozen ? 'frozen-domain-surface' : /ui-primitives/.test(relative) ? 'portable-primitive' : 'composite-surface',
-        contractKey: name.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase(),
+        contractKey: contractAliases.get(name) ?? name.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase(),
     }));
 });
 const entries = inventory.map(item => ({
