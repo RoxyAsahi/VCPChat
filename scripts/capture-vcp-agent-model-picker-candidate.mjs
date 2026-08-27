@@ -98,20 +98,39 @@ try {
             optionCount: host.querySelectorAll('[role="option"]').length,
             selectedOption: host.querySelector('[role="option"][aria-selected="true"]')?.textContent?.trim() || null,
         };
+        const menu = host.querySelector('.vcp-harness-popup-select-card');
+        const menuStyle = menu ? getComputedStyle(menu) : null;
+        const menuRule = [...document.styleSheets].flatMap(sheet => {
+            try { return [...sheet.cssRules]; } catch { return []; }
+        }).find(rule => rule.selectorText?.includes('.vcp-harness-popup-select-card'));
+        const card = host.querySelector('.vcp-harness-popup-select-card');
+        card?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const modelEscape = {
+            returnedToRoot: host.querySelector('.vcp-harness-agent-model-picker-cell')?.hidden === false,
+            searchHidden: host.querySelector('.vcp-harness-popup-select-search')?.hidden === true,
+        };
         picker.setPane('effort');
         await new Promise(resolve => setTimeout(resolve, 0));
         const effortPane = {
             optionCount: host.querySelectorAll('.vcp-harness-agent-model-picker-option').length,
             selected: host.querySelector('.vcp-harness-agent-model-picker-option[aria-checked="true"]')?.textContent?.trim() || null,
         };
+        card?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const effortEscape = {
+            returnedToRoot: host.querySelector('.vcp-harness-agent-model-picker-cell')?.hidden === false,
+            effortHidden: host.querySelector('.vcp-harness-agent-model-picker-effort-list')?.hidden === true,
+        };
+        picker.close();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const focusRestored = document.activeElement === picker.trigger;
         const triggerStyle = getComputedStyle(picker.trigger);
-        const menu = host.querySelector('.vcp-harness-popup-select-card');
-        const menuStyle = menu ? getComputedStyle(menu) : null;
         const screenshot = {
             source: 'VCP generated AgentModelPicker Candidate Electron capture',
             provenance: 'deepseek-harness/packages/client/ui-model-selection/src/client/ModelSelect.tsx',
             viewport: { width: innerWidth, height: innerHeight, deviceScaleFactor: devicePixelRatio },
-            rootPane, modelPane, effortPane,
+            rootPane, modelPane, modelEscape, effortPane, effortEscape, focusRestored,
             dom: host.querySelector('.vcp-harness-agent-model-picker')?.outerHTML || '',
             trigger: {
                 tag: picker.trigger.tagName.toLowerCase(),
@@ -129,6 +148,11 @@ try {
                 borderRadius: menuStyle.borderRadius,
                 padding: menuStyle.padding,
                 minWidth: menuStyle.minWidth,
+                cssContract: {
+                    borderRadius: menuRule?.style?.borderRadius || null,
+                    padding: menuRule?.style?.padding || null,
+                    minWidth: menuRule?.style?.minWidth || null,
+                },
             } : null,
             selected, efforts,
             productionConsumer: false,
@@ -148,6 +172,11 @@ try {
     assert.equal(evidence.modelPane.searchVisible, true);
     assert.equal(evidence.modelPane.optionCount, 3);
     assert.equal(evidence.effortPane.optionCount, 2);
+    assert.equal(evidence.modelEscape.returnedToRoot, true);
+    assert.equal(evidence.modelEscape.searchHidden, true);
+    assert.equal(evidence.effortEscape.returnedToRoot, true);
+    assert.equal(evidence.effortEscape.effortHidden, true);
+    assert.equal(evidence.focusRestored, true);
     assert.equal(evidence.disposed, true);
     await fs.mkdir(path.join(root, 'reports'), { recursive: true });
     await page.screenshot({ path: path.join(root, 'reports', 'vcp-agent-model-picker-candidate.png') });
