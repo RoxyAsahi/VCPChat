@@ -405,6 +405,8 @@ export function mountPopupSelectView(host: HTMLElement, props: PopupSelectViewPr
             lastOpen = true;
         }
         card.setAttribute('aria-label', template(labels.overlayAria, s.command ?? ''));
+        if (s.status === 'pending' || s.submitting) card.setAttribute('aria-busy', 'true');
+        else card.removeAttribute('aria-busy');
         search.value = s.search;
         search.readOnly = s.submitting;
         // The gated shell hides the picker card and shows only the risk modal.
