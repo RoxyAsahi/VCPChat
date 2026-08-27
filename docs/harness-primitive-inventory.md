@@ -22,7 +22,7 @@
 | --- | --- | --- | --- |
 | Button | `ui-primitives/src/Button.tsx`；Settings、Workspace、Question/Approval、Conversation shell | candidate-lab-active | B1 |
 | Input | `ui-primitives/src/Input.tsx`；当前仅 atom test/export | candidate-lab-active，source-only truth | B1 |
-| Menu | `ui-primitives/src/Menu.tsx`；Agent Preset、Language、Permission、Input Trigger、Workspace | candidate-interaction-active；同语义 label/separator/danger/submenu pixel diff pending | B1 |
+| Menu | `ui-primitives/src/Menu.tsx`；Agent Preset、Language、Permission、Input Trigger、Workspace | candidate-interaction-active；`label: ReactNode` 合同已对齐并补 focused test；同语义 label/separator/danger/submenu pixel diff pending | B1 |
 | Modal | `ui-primitives/src/Modal.tsx`；Settings、Model editor、Directory/Workspace | candidate-interaction-active；同语义 Harness pixel diff 与 VCP production adoption pending | B1 |
 | Tooltip / HoverCard | matching `ui-primitives/src/*.tsx`；Message actions、Goal、Sidebar、Workspace | candidate-interaction-active；同语义 Harness pixel diff 与 VCP production adoption pending | B1 |
 | DisclosureRow | `ui-primitives/src/DisclosureRow.tsx`；Reasoning、Context、Tool、Workflow | candidate-interaction-active；VCP chat integration frozen，同语义 Harness pixel diff pending | B1 |
@@ -40,7 +40,7 @@
 
 | Pattern | Harness source | Lab states | 批次 |
 | --- | --- | --- | --- |
-| Agent Preset picker | `ui-agent-preset/src/client/AgentPresetSeat.tsx`, `PresetMenu.tsx`, `AgentPresetRow.tsx` | closed/open/selected/hover/focus/busy-disabled/error | B2 |
+| Agent Preset picker | `ui-agent-preset/src/client/AgentPresetSeat.tsx`, `PresetMenu.tsx`, `AgentPresetRow.tsx` | candidate-interaction-active（seat form：closed/open/selected/hover/focus/busy-disabled/error 已复刻并有 geometry/screenshot fixture；PresetMenu `· Custom` trust 后缀、AgentPresetRow 36px pill、introduce-cue 动画仍未复刻；`--dsw-alias-label-quaternary` 上游未定义的 token 缺口已如实记录；VCP 无合法 production consumer，禁止 Stable） | B2 |
 | Command / mention popup | `ui-input-trigger/src/client/`, `ui-commands/.../PopupSelectView.tsx` | query/empty/highlight/keyboard/commit/dismiss | B2 |
 | Model / permission picker | `ui-model-selection/`, `ui-permission-presets/` | loading/selected/risk/error/dismiss | B2 |
 | Settings fields/cards | `ui-settings-plugins/src/client/` | description/invalid/disabled/secret/loading | B2 |
