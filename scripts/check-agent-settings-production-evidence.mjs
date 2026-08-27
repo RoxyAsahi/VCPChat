@@ -30,7 +30,12 @@ for (const node of report.inputNodes) {
 }
 assert.ok(Array.isArray(report.toggles) && report.toggles.length >= 2, 'typed Agent Toggle evidence is incomplete');
 assert.equal(Array.isArray(report.choice) ? report.choice.length : 0, 1, 'typed Agent Choice evidence is incomplete');
+assert.equal(Array.isArray(report.choiceOptions) ? report.choiceOptions.length : 0, 2, 'typed Agent Choice option evidence is incomplete');
 assert.equal(Array.isArray(report.streamRadios) ? report.streamRadios.length : 0, 2, 'native Agent stream radio evidence is incomplete');
+assert.equal(Array.isArray(report.ranges) ? report.ranges.length : 0, 1, 'typed Agent Range evidence is incomplete');
+assert.equal(Array.isArray(report.rangeInputs) ? report.rangeInputs.length : 0, 1, 'native Agent range evidence is incomplete');
+assert.equal(Array.isArray(report.selects) ? report.selects.length : 0, 2, 'typed Agent Select evidence is incomplete');
+assert.equal(Array.isArray(report.selectNodes) ? report.selectNodes.length : 0, 2, 'native Agent Select evidence is incomplete');
 
 console.log(JSON.stringify({
     source: report.source,
@@ -38,7 +43,10 @@ console.log(JSON.stringify({
     inputs: report.inputs.length,
     toggles: report.toggles.length,
     choiceGroups: report.choice.length,
+    choiceOptions: report.choiceOptions.length,
     streamRadios: report.streamRadios.length,
+    ranges: report.ranges.length,
+    selects: report.selects.length,
     screenshotBytes: fs.statSync(screenshotPath).size,
     status: 'production-baseline-valid',
 }, null, 2));

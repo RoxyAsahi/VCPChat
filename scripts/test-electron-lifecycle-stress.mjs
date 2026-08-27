@@ -665,8 +665,13 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
                     inputs: pick('#agentSettingsForm .vcp-uiux-input-wrap'),
                     inputNodes: pick('#agentSettingsForm .vcp-uiux-input-wrap input'),
                     choice: pick('#agentSettingsForm .vcp-uiux-choice'),
+                    choiceOptions: pick('#agentSettingsForm .vcp-uiux-choice .vcp-uiux-choice-option'),
                     toggles: pick('#agentSettingsForm .vcp-uiux-toggle'),
                     streamRadios: pick('#agentSettingsForm input[name="streamOutput"]'),
+                    ranges: pick('#agentSettingsForm .vcp-uiux-range'),
+                    rangeInputs: pick('#agentSettingsForm .vcp-uiux-range input[type="range"]'),
+                    selects: pick('#agentSettingsForm .vcp-harness-select'),
+                    selectNodes: pick('#agentSettingsForm select.vcp-harness-select-native'),
                 };
             });
             await fs.mkdir(path.join(root, 'reports'), { recursive: true });
