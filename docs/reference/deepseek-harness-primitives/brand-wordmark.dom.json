@@ -1,0 +1,23 @@
+{
+  "primitive": "BrandWordmark",
+  "provenance": {
+    "sources": [
+      "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/BrandWordmark.tsx"
+    ]
+  },
+  "root": {
+    "tag": "svg",
+    "viewBox": "0 0 182 24",
+    "fill": "none",
+    "ariaHidden": true
+  },
+  "children": [
+    { "element": "whale mark", "fill": "currentColor" },
+    { "element": "deepseek-official letterforms", "fill": "currentColor" },
+    { "element": "HARNESS badge", "fill": "currentColor", "labelFill": "var(--dsw-alias-label-primary-inverted)" }
+  ],
+  "sizing": { "defaultHeight": "24px", "widthFormula": "size * 182 / 24", "ratio": "182:24" },
+  "states": ["default", "custom-size", "custom-class", "dispose"],
+  "aria": ["decorative SVG uses aria-hidden=true", "no focusable descendants"],
+  "vcpDeviation": "No VCP Candidate capture is declared; this contract is source-only and must not be treated as a production logo integration."
+}

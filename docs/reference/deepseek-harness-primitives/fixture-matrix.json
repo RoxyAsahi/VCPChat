@@ -19,6 +19,7 @@
     , ["popup-select", "open-filter-highlight"], ["popup-select", "risk-confirmation"], ["popup-select", "failure-retry-dismiss"]
     , ["directory-browser", "single-pane"], ["directory-browser", "two-pane-selected"], ["directory-browser", "hidden-files"], ["directory-browser", "abort-close-reopen"]
     , ["diff-block", "collapsed"], ["diff-block", "expanded"], ["diff-block", "copy-success"], ["diff-block", "empty"]
+    , ["brand-wordmark", "default"], ["brand-wordmark", "custom-size"], ["brand-wordmark", "custom-class"]
     , ["language-row", "closed"], ["language-row", "open"], ["language-row", "selected"], ["language-row", "disabled"], ["language-row", "long-label"]
     , ["agent-model-picker", "root-pane"], ["agent-model-picker", "model-pane"], ["agent-model-picker", "effort-pane"], ["agent-model-picker", "loading"], ["agent-model-picker", "error-retry"], ["agent-model-picker", "selecting"], ["agent-model-picker", "locked"]
   ],
