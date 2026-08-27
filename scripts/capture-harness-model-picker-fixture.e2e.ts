@@ -195,7 +195,11 @@ describe('Harness production ModelSelect fixture', () => {
       effortOptionsVisible: [...element.querySelectorAll('[role="menuitemradio"]')]
         .some(node => !node.hasAttribute('hidden')),
     })) : { rootVisible: false, effortOptionsVisible: false }
+    // After pane-back the focused option may have been removed. Restore
+    // trigger ownership explicitly before exercising root-menu close.
+    await trigger.focus()
     await page.keyboard.press('Escape')
+    await page.waitForTimeout(50)
     const closed = await trigger.getAttribute('aria-expanded') === 'false'
       && await page.getByRole('menu').count() === 0
     const focusRestore = await trigger.evaluate(element => document.activeElement === element)
