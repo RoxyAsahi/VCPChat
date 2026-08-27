@@ -122,6 +122,15 @@ test('PermissionRow source audit preserves settings capability boundaries', () =
     assert.ok(report.note.includes('does not create a VCP permission-settings consumer'));
 });
 
+test('PermissionRow reference audit preserves DOM and geometry provenance', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-permission-row-reference.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-permission-row-reference.json'), 'utf8'));
+    assert.equal(report.domContract, true);
+    assert.equal(report.cssGeometry, '11/11');
+    assert.equal(report.candidateStatus, 'source-only; no VCP permission-settings consumer or paired visual capture');
+    assert.ok(report.evidenceGaps.includes('no VCP permission-settings consumer'));
+});
+
 test('Harness fixture matrix guard preserves explicit Candidate boundaries', () => {
     execFileSync(process.execPath, ['scripts/check-harness-fixture-matrix.mjs'], { cwd: root, stdio: 'pipe' });
 });

@@ -78,6 +78,7 @@ for (const dir of targets) {
       assert.ok(observation.settingsViewport?.visible?.some(control => finiteRect(control.rect)), `${name}: no finite settings geometry`);
       assert.equal(observation.settingsViewport?.sections?.length, 8, `${name}: incomplete settings section geometry`);
       assert.ok(observation.settingsViewport.sections.every(section => finiteRect(section.rect) && section.visibleControls > 0), `${name}: invalid settings section geometry`);
+      assert.ok(observation.settingsViewport?.cascade?.length > 0, `${name}: missing viewport Settings cascade provenance`);
       assert.ok(finiteRect(manifest.settingsContext?.contextSample?.showcase?.rect), `${name}: missing showcase context geometry`);
       assert.ok(finiteRect(manifest.settingsContext?.contextSample?.settings?.rect), `${name}: missing Settings context geometry`);
       assert.ok(finiteRect(observation.settingsViewport?.contextSample?.showcase?.rect), `${name}: missing viewport showcase context geometry`);
