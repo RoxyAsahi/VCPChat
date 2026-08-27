@@ -713,6 +713,16 @@
         outline: none;
     }
 
+    /* Typed primitive wraps (.vcp-uiux-input-wrap / .vcp-uiux-color-pair)
+       flex-center their inner control, so the legacy
+       `.modal-content input { margin-bottom: 15px }` margin leaks into the
+       centering math and lifts the input ~7px out of the wrap — the same
+       "placeholder/text sits high" defect already fixed for harness wraps.
+       Zero it at matching strength. */
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm :is(.vcp-uiux-input-wrap, .vcp-uiux-color-pair) > :is(input, textarea) {
+        margin: 0;
+    }
+
     /* The avatar file picker is driven by its overlay label; the raw native
        widget must not render as an unstyled box under the avatar. */
     :is(html, html.vcp-global-settings-host) .vcp-ui-scope .agent-avatar-wrapper > input[type="file"] {
