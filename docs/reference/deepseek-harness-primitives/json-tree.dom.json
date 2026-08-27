@@ -1,0 +1,28 @@
+{
+  "primitive": "JsonTree",
+  "provenance": {
+    "sources": [
+      "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/JsonTree.tsx"
+    ],
+    "style": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/JsonTree.module.css"
+  },
+  "root": { "tag": "div", "class": "root", "children": ["div.container[role=tree]", "span.copyAnchor?"] },
+  "tree": {
+    "role": "tree",
+    "node": "div.row[role=treeitem]",
+    "children": "ul.children[role=group]",
+    "expand": "span.expander[role=button][aria-expanded][aria-controls]",
+    "tabNavigation": "ArrowUp/ArrowDown between expanders; ArrowLeft/ArrowRight collapse/expand"
+  },
+  "copy": {
+    "hoverTarget": "row hover exposes fixed copy button when copyable",
+    "menu": "compact portal Menu with value/json/path or prettyJson/json/path",
+    "states": ["idle", "copied", "failed"],
+    "reset": "copy state resets after 1500ms",
+    "reposition": "scroll/resize listeners track active row"
+  },
+  "states": ["expanded-root", "collapsed-root", "nested-expanded", "primitive-values", "copy-idle", "copy-success", "copy-failure", "dispose"],
+  "interaction": ["data replacement resets active copy target and tab stop", "copy menu closes through Menu onSelect/onClose", "dispose clears reset timer and viewport listeners"],
+  "aria": ["tree has caller label", "treeitems expose aria-expanded only for expandable nodes", "copy button has localized action label", "copy icon is semantic button content"],
+  "vcpDeviation": "JsonTree is a frozen trajectory/tool inspection primitive; this contract is source-only and must not alter VCP structured-message or chat rendering."
+}
