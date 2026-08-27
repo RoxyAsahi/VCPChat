@@ -52,6 +52,8 @@ On 2026-08-27 in the current dirty worktree:
 - Reopen captures run in a post-scan pass after state fixtures, preserving independent evidence for both lifecycle and loading/error transitions. This avoids conflating root-remount timing with the state-control contract while still exercising the real close/reopen path at every viewport.
 - Menu, Modal, and Tooltip now each have dedicated per-viewport regression screenshots in addition to their runtime geometry and CDP cascade records. Each overlay is opened through its shipped trigger, captured, and dismissed before the next fixture.
 - The overlay screenshot pass is included in the pixel baseline contract: `menu`, `modal`, and `tooltip` captures must have the expected viewport dimensions, non-blank coverage, and a measurable pixel delta from the initial surface in both themes.
+- Each overlay screenshot is now bound to a same-viewport runtime record: the manifest captures open state, rect, position, z-index, portal parent/mask, and tooltip side for Menu, Modal, and Tooltip before dismissing it.
+- Tooltip capture scrolls the actual showcase owner to the hovered anchor before taking the screenshot. Fresh evidence records fixed positioning and visible viewport placement at every size, with side selection changing from `top` at 800px to `bottom` at 1280px and 1680px.
 - Resize restoration evidence from `/tmp/vqa-restored-light/` passed: after each narrow resize, the real renderer returned to exactly `800x600`, `1280x800`, and `1680x1000` with no horizontal overflow, and each case now emits a `*-restored.png` screenshot. The evidence checker requires this restored state.
 
 ## Scope and frozen boundaries
