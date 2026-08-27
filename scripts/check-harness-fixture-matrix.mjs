@@ -28,6 +28,8 @@ if (interaction['semantic-icon/owner-refresh-size-name-dispose']?.status !== 'ca
 if (interaction['agent-preset-seat/open-selected-busy-roster-dispose']?.status !== 'candidate-interaction-active') fail('AgentPresetSeat lifecycle must remain explicitly Candidate');
 if (interaction['agent-preset-row/trust-error-busy-roster-dispose']?.status !== 'candidate-interaction-active') fail('AgentPresetRow lifecycle must remain explicitly Candidate');
 if (interaction['popup-select/load-filter-keyboard-risk-dismiss-dispose']?.status !== 'candidate-interaction-active') fail('PopupSelect lifecycle must remain explicitly Candidate');
+if (interaction['permission-row/load-menu-risk-confirmation-dispose']?.status !== 'candidate-source-only') fail('PermissionRow must retain its source-only boundary');
+if (interaction['job-list-action/live-sort-tick-dismiss-focus-dispose']?.status !== 'inventoried') fail('JobListAction must retain its inventoried boundary');
 const directoryBrowserEntries = Object.entries(interaction).filter(([key]) => key.startsWith('directory-browser/'));
 if (directoryBrowserEntries.length !== 1) fail(`DirectoryBrowser interaction ledger must contain exactly one entry (found ${directoryBrowserEntries.length})`);
 const directoryBrowserInteraction = directoryBrowserEntries[0]?.[1];
@@ -48,4 +50,5 @@ if (!String(matrix.status?.agentPresetSeatCandidate).includes('VCP production co
 if (!String(matrix.status?.agentPresetRowCandidate).includes('VCP production consumer and same-semantic Harness pixel diff pending')) fail('AgentPresetRow must retain both production-consumer and pixel-diff gaps');
 if (!String(matrix.status?.popupSelectCandidate).includes('VCP production consumer and same-semantic Harness pixel diff pending')) fail('PopupSelect must retain its production-consumer and pixel-diff gaps');
 if (!String(matrix.status?.directoryBrowserFoundation).includes('VCP production consumer and same-semantic Harness pixel diff pending')) fail('DirectoryBrowser must retain its explicit incomplete-state ledger');
+if (!String(matrix.status?.jobListActionCandidate).includes('no VCP jobs consumer or paired visual capture')) fail('JobListAction must retain its no-consumer evidence boundary');
 console.log(`Harness fixture matrix passed (${matrix.cases.length} visual cases; ${matrix.interactionCases.length} interaction cases; ${matrix.outputs.length} output layers; DOM=${matrix.status.domStructural}; Field browser=${matrix.status.fieldBrowserVisual}).`);

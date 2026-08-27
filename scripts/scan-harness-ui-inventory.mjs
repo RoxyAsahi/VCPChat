@@ -53,6 +53,19 @@ const ignoredExports = files.flatMap(file => {
     }));
 });
 const missingContracts = entries.filter(item => !item.referenceContract && item.category !== 'frozen-domain-surface');
+const surfacePatterns = [...new Set(entries.map(item => item.package))].sort().map(packageName => {
+    const members = entries.filter(item => item.package === packageName);
+    return {
+        pattern: packageName,
+        sourceFiles: [...new Set(members.map(item => item.relative))].sort(),
+        exports: members.length,
+        portablePrimitives: members.filter(item => item.category === 'portable-primitive').length,
+        composites: members.filter(item => item.category === 'composite-surface').length,
+        frozenDomainSurfaces: members.filter(item => item.category === 'frozen-domain-surface').length,
+        contracted: members.filter(item => item.referenceContract).length,
+        missingContracts: members.filter(item => !item.referenceContract && item.category !== 'frozen-domain-surface').length,
+    };
+});
 const report = {
     generatedAt: new Date().toISOString(),
     harnessRoot,
@@ -68,6 +81,7 @@ const report = {
         missingContracts: missingContracts.length,
     },
     entries,
+    surfacePatterns,
     ignoredExports,
     missingContracts,
     nextCandidates: missingContracts.slice(0, 12).map(item => ({ name: item.name, package: item.package, source: item.source })),
