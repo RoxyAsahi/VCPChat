@@ -166,6 +166,13 @@ try {
       return [...(matched.matchedCSSRules || [])].slice(-40).map(entry => ({ selector: entry.rule?.selectorList?.text || '', origin: entry.rule?.origin || '', styleSheetId: entry.rule?.styleSheetId || '', properties: (entry.rule?.style?.cssProperties || []).filter(property => ['color', 'background', 'background-color', 'padding', 'border-radius', 'z-index'].includes(property.name)).map(property => ({ name: property.name, value: property.value })) }));
     } catch { return []; }
   };
+  await page.evaluate(async () => {
+    await window.uiHelperFunctions?.openModal?.('globalSettingsModal');
+    await new Promise(resolve => setTimeout(resolve, 120));
+  }).catch(() => {});
+  evidence.settingsCascade = await captureMatchedRules('#globalSettingsModal #userName');
+  await page.evaluate(() => window.uiHelperFunctions?.closeModal?.('globalSettingsModal')).catch(() => {});
+  if (!evidence.settingsCascade.length) evidence.gate.failures.push('settings cascade provenance incomplete');
   const overlayCascade = {};
   await page.evaluate(() => document.querySelector('.vcp-harness-primitive-lab button')?.focus()).catch(() => {});
   await page.evaluate(async () => {
@@ -229,7 +236,7 @@ try {
       const node = document.querySelector('.vcp-harness-modal-root [role="dialog"]');
       if (!node) return { open: false, rect: null };
       const r = node.getBoundingClientRect(); const s = getComputedStyle(node);
-      return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: s.position, zIndex: s.zIndex, mask: Boolean(document.querySelector('.vcp-harness-modal-mask')) };
+      return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: s.position, zIndex: s.zIndex, parent: node.parentElement?.className || '', mask: Boolean(document.querySelector('.vcp-harness-modal-mask')) };
     }).catch(() => ({ open: false, rect: null }));
     await page.evaluate(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))).catch(() => {});
     const tooltipButtons = await page.$$(`${lab} button`);
@@ -247,7 +254,7 @@ try {
         const node = document.querySelector('[role="tooltip"], .vcp-harness-tooltip-bubble');
         if (!node) return { open: false, rect: null };
         const r = node.getBoundingClientRect(); const s = getComputedStyle(node);
-        return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: s.position, zIndex: s.zIndex, side: node.getAttribute('data-side') || '' };
+        return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: s.position, zIndex: s.zIndex, parent: node.parentElement?.className || '', side: node.getAttribute('data-side') || '' };
       }).catch(() => ({ open: false, rect: null }));
       await page.mouse.move(2, 2).catch(() => {});
     } else tooltipViewport = { open: false, rect: null };

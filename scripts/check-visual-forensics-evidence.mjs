@@ -31,6 +31,7 @@ for (const dir of targets) {
     assert.ok(manifest.settingsContext?.controls?.length > 0);
     assert.ok(manifest.settingsContext?.contextSample?.showcase?.ancestry?.length > 0);
     assert.ok(manifest.settingsContext?.contextSample?.settings?.ancestry?.length > 0);
+    assert.ok(manifest.settingsCascade?.length > 0);
     assert.equal(manifest.settingsContext?.sections?.length, 8);
     assert.ok(manifest.settingsContext.sections.every(section => section.activeId && section.visibleControls > 0));
     assert.equal(manifest.settingsContext?.settingsCleanup?.active, false);
@@ -54,8 +55,10 @@ for (const dir of targets) {
       assert.equal(observation?.overlayViewport?.modal?.open, true);
       assert.ok(observation?.overlayViewport?.modal?.rect);
       assert.equal(observation?.overlayViewport?.modal?.mask, true);
+      assert.ok(observation?.overlayViewport?.modal?.parent);
       assert.equal(observation?.overlayViewport?.tooltip?.open, true);
       assert.ok(observation?.overlayViewport?.tooltip?.rect);
+      assert.ok(observation?.overlayViewport?.tooltip?.parent);
       assert.ok(observation?.scrolled?.ownerY > 0 || observation?.scrolled?.ownerScrollHeight <= observation?.scrolled?.ownerViewport, `scroll owner did not move for ${name}`);
       assert.ok(observation?.initial?.cdpCascade?.length > 0);
       assert.ok(observation?.initial?.interactionStates?.hover);
