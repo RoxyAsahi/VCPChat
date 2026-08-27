@@ -6,6 +6,7 @@ const root = process.cwd();
 const candidatePath = process.env.VCP_MODEL_PICKER_REPORT || path.join(root, 'reports/vcp-agent-model-picker-candidate.json');
 const harnessPath = process.env.HARNESS_MODEL_PICKER_REPORT || path.join(root, 'reports/harness-agent-model-picker.json');
 const geometryPath = path.join(root, 'docs/reference/deepseek-harness-primitives/model-picker.geometry.json');
+const schemaPath = path.join(root, 'docs/reference/deepseek-harness-primitives/model-picker.capture.schema.json');
 const outputPath = path.join(root, 'reports/harness-vcp-model-picker-diff.json');
 const readJson = file => JSON.parse(fs.readFileSync(file, 'utf8'));
 const normalize = value => String(value ?? '').replace(/\s+/g, ' ').replace(/\s*,\s*/g, ',').trim();
@@ -14,6 +15,8 @@ const report = { generatedAt: new Date().toISOString(), candidate: candidatePath
 try {
     const candidate = readJson(candidatePath);
     const geometry = readJson(geometryPath);
+    const schema = readJson(schemaPath);
+    report.captureSchema = { name: schema.name, version: schema.version, path: schemaPath };
     report.viewport = candidate.viewport ?? geometry.viewport ?? null;
     report.candidateStatus = candidate.status ?? null;
     report.productionConsumer = candidate.productionConsumer ?? null;
@@ -54,7 +57,11 @@ try {
         report.missingEvidence.push('Harness ModelSelect browser capture (DOM + computed style)');
     } else {
         const harness = readJson(harnessPath);
-        report.harnessCapture = { source: harness.source ?? null, viewport: harness.viewport ?? null, domPresent: Boolean(harness.dom), computedStylePresent: Boolean(harness.trigger || harness.menu || harness.computedStyle) };
+        const requiredFields = schema.required.filter(field => harness[field] == null);
+        const viewportPass = JSON.stringify(harness.viewport ?? null) === JSON.stringify(schema.viewport);
+        const harnessSchemaPass = requiredFields.length === 0 && viewportPass && harness.productionConsumer === false;
+        report.harnessCapture = { source: harness.source ?? null, viewport: harness.viewport ?? null, domPresent: Boolean(harness.dom), computedStylePresent: Boolean(harness.trigger || harness.menu || harness.computedStyle), schema: { requiredFields, viewportPass, productionConsumerPass: harness.productionConsumer === false, pass: harnessSchemaPass } };
+        if (!harnessSchemaPass) report.missingEvidence.push('Harness capture schema/viewport/production boundary');
         report.status = 'harness-capture-available-pixel-pending';
         report.missingEvidence.push('same-semantic ModelSelect pixel diff');
     }
