@@ -514,6 +514,7 @@ function enhanceForm(form) {
     mountTypedAgentNumericInputs(form);
     mountTypedAgentStreamChoice(form);
     mountTypedAgentTtsSpeedRange(form);
+    mountTypedAgentButtons(form);
     mountHarnessSelects(form);
     form.querySelectorAll('.agent-settings-section, .group-settings-section').forEach(section => {
         enhance('SettingsSection', section);
@@ -540,6 +541,24 @@ function enhanceForm(form) {
     form.querySelectorAll(':scope > .form-actions').forEach(actionBar => {
         enhance('SettingsActionBar', actionBar, { form });
     });
+}
+
+// The model trigger remains wired to the legacy picker command/modal. The
+// typed Button only owns its Light-DOM presentation and lifecycle marker.
+function mountTypedAgentButtons(form) {
+    const api = window.VCPUIUX;
+    const scope = ensurePresentationScope();
+    if (!api?.mountButton || !scope) return;
+    const button = form?.querySelector?.('#openModelSelectBtn');
+    if (!button || button.dataset.vcpTypedAgentModelTrigger === 'true') return;
+    try {
+        const release = api.mountButton(button, { variant: 'outline', size: 'sm' }, scope);
+        button.dataset.vcpTypedAgentModelTrigger = 'true';
+        scope.own(() => { delete button.dataset.vcpTypedAgentModelTrigger; }, 'agent-model-trigger-marker', 'ui-presentation');
+        if (release) scope.own(release, 'agent-model-trigger-button', 'ui-primitive');
+    } catch (error) {
+        console.warn('[VCPUI SettingsBridge] Could not mount typed Agent model trigger Button:', error);
+    }
 }
 
 // The agent editor keeps the native input as its canonical form/business node;
