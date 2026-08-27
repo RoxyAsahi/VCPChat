@@ -16,5 +16,10 @@ for (const theme of themes) {
     child.once('close', code => resolve(code || 0));
   });
   if (result !== 0) failed = true;
+  const check = await new Promise(resolve => {
+    const child = spawn(process.execPath, [path.join(root, 'scripts/check-visual-forensics-evidence.mjs'), output], { cwd: root, stdio: 'inherit' });
+    child.once('close', code => resolve(code || 0));
+  });
+  if (check !== 0) failed = true;
 }
 process.exitCode = failed ? 2 : 0;
