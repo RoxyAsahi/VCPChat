@@ -19,7 +19,7 @@ for (const geometryFile of fs.readdirSync(referenceDir).filter(file => file.ends
     const geometry = readJson(geometryFile);
     let dom = null;
     try { dom = readJson(`${name}.dom.json`); } catch { /* geometry-only references remain reportable */ }
-    const styleSource = geometry.styleSource ?? dom?.styleSource;
+    const styleSource = geometry.styleSource ?? dom?.styleSource ?? (typeof geometry.source === 'string' && /\.css$/.test(geometry.source) ? geometry.source : null);
     const entry = { name, geometryFile, styleSource: styleSource ?? null, status: 'pending', checks: [], missing: [] };
     if (!styleSource) {
         entry.missing.push('styleSource');
@@ -58,7 +58,7 @@ for (const geometryFile of fs.readdirSync(referenceDir).filter(file => file.ends
             entry.checks.push({ selector, property: cssProperty, expected, actual, pass: actual !== null && normalize(actual) === normalize(expected) });
         }
     }
-    entry.status = entry.checks.length && entry.checks.every(item => item.pass) ? 'source-equivalent' : 'source-mismatch';
+    entry.status = entry.checks.length === 0 ? 'pending' : entry.checks.every(item => item.pass) ? 'source-equivalent' : 'source-mismatch';
     if (!entry.tokens.pass) entry.missing.push('Harness --dsw-* token usage');
     entry.missing = entry.checks.filter(item => !item.pass).map(item => `${item.selector} ${item.property}`);
     checks.push(entry);
