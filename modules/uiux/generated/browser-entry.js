@@ -26,6 +26,7 @@ import { mountChoice } from './primitives/choice.js';
 import { mountRange } from './primitives/range.js';
 import { mountToggle } from './primitives/toggle.js';
 import { mountColorPair } from './primitives/color-pair.js';
+import { createPopupSelectController, mountPopupSelectView } from './primitives/popup-select.js';
 import { mountPrimitiveLab } from './lab/primitive-lab.js';
 const api = {
     mountThemePresenterFromScope(root, theme, legacyScope) {
@@ -63,6 +64,11 @@ const api = {
     mountRange,
     mountToggle,
     mountColorPair,
+    // Candidate-only command popup primitives. They are exposed solely so the
+    // component Lab and Electron evidence can mount them; no VCP Composer or
+    // command business path consumes this API.
+    createPopupSelectController,
+    mountPopupSelectView,
     mountPrimitiveLabFromScope(root, legacyScope) {
         return mountPrimitiveLab(root, createUiScope(legacyScope));
     },

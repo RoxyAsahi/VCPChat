@@ -15,6 +15,7 @@
     ["risk-confirmation", "unacknowledged"], ["risk-confirmation", "acknowledged"], ["risk-confirmation", "disabled"]
     , ["semantic-icon", "warning"], ["semantic-icon", "close"], ["semantic-icon", "check"], ["semantic-icon", "chevron-down"]
     , ["agent-preset-seat", "open-selected-hover"], ["agent-preset-seat", "busy-disabled"], ["agent-preset-row", "open-custom"], ["agent-preset-row", "error-disabled"]
+    , ["popup-select", "open-filter-highlight"], ["popup-select", "risk-confirmation"], ["popup-select", "failure-retry-dismiss"]
   ],
   "interactionCases": [
     { "case": "select/keyboard-open-focus", "status": "pass", "evidence": "same semantic fixture; Harness and VCP retain trigger focus" },
@@ -30,6 +31,7 @@
     , { "case": "semantic-icon/owner-refresh-size-name-dispose", "status": "candidate-interaction-active", "evidence": "focused source test covers four semantic names, currentColor slot, aria-hidden, adapter refresh, name/size update and exact host restoration; generated artifact smoke imports the module; independent generated Electron fixture records four rendered SVGs, currentColor inheritance, geometry and dispose" }
     , { "case": "agent-preset-seat/open-selected-busy-roster-dispose", "status": "candidate-interaction-active", "evidence": "focused generated-artifact test and Electron fixture cover portal menu, selected nested labels, busy disable, error title, roster replacement and exact trigger restoration; no in-scope VCP production consumer or same-semantic Harness pixel fixture" }
     , { "case": "agent-preset-row/trust-error-busy-roster-dispose", "status": "candidate-interaction-active", "evidence": "focused generated-artifact test and Electron fixture cover end portal, user-trust suffix, error alert, busy/writable/empty disabled states, roster replacement and exact host restoration; no in-scope VCP production consumer or same-semantic Harness pixel fixture" }
+    , { "case": "popup-select/load-filter-keyboard-risk-dismiss-dispose", "status": "candidate-interaction-active", "evidence": "generated-artifact focused test and fixed 800x600 Electron fixture cover injected local callbacks, filtering, Enter, RiskConfirmation, success, Escape, focus restoration and teardown; Composer/input-machine/command wiring remains frozen and absent" }
   ],
   "outputs": ["dom", "geometry", "computed-style", "screenshot", "pixel-diff"],
   "stateSemantics": {
@@ -67,6 +69,9 @@
     , "agent-preset-seat/busy-disabled": "Busy state disables the hero trigger; it remains Candidate-only because VCP has no in-scope AgentPreset consumer"
     , "agent-preset-row/open-custom": "Settings-style row opens an end-aligned body portal and marks user-trust options with the Custom suffix; VCP Candidate fixture is replayable, but Harness same-semantic pixel diff is pending"
     , "agent-preset-row/error-disabled": "Settings-style row projects an error description as role=alert and disables the 36px selector while busy, non-writable or empty"
+    , "popup-select/open-filter-highlight": "Standalone Candidate Lab host opens the command card with injected local callbacks only; it is not connected to VCP Composer or command execution"
+    , "popup-select/risk-confirmation": "A candidate option may hide the card and display the controlled acknowledgement gate without creating business state"
+    , "popup-select/failure-retry-dismiss": "Load failure exposes retry; dismiss/reopen/dispose abort prior fetches and prevent late publication"
   },
   "status": {
     "domStructural": "10/10 pass",
@@ -86,5 +91,6 @@
     , "semanticIconCandidate": "four-name private slot, adapter refresh, size/name update, teardown, generated artifact smoke, fixed 800x600 screenshot/geometry and generated Electron SVG rendering active; same-semantic Harness pixel diff pending"
     , "agentPresetSeatCandidate": "start-aligned hero chip candidate has source contract, generated-artifact interaction, fixed 800x600 geometry/screenshot and owner disposal evidence; VCP production consumer and same-semantic Harness pixel diff pending"
     , "agentPresetRowCandidate": "end-aligned settings-row candidate has source contract, generated-artifact interaction, fixed 800x600 geometry/screenshot and owner disposal evidence; VCP production consumer and same-semantic Harness pixel diff pending"
+    , "popupSelectCandidate": "generated-artifact controller, Candidate Lab and fixed 800x600 Electron evidence active; VCP production consumer and same-semantic Harness pixel diff pending"
   }
 }

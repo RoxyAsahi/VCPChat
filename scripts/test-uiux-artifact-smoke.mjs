@@ -6,6 +6,7 @@ import { createRustAssistantUiService } from '../modules/uiux/generated/adapters
 import { createForumConfigUiService } from '../modules/uiux/generated/adapters/forum-config.js';
 import { createAssistantRuntimeUiService } from '../modules/uiux/generated/adapters/assistant-runtime.js';
 import { mountSemanticIcon } from '../modules/uiux/generated/primitives/semantic-icon.js';
+import { createPopupSelectController, mountPopupSelectView } from '../modules/uiux/generated/primitives/popup-select.js';
 
 const lifecycleModule = await import('../modules/ui-system/lifecycle-scope.js');
 const { LifecycleScope } = lifecycleModule.default || lifecycleModule;
@@ -87,4 +88,6 @@ await runtimeService.refresh.execute();
 assert.equal(runtimeService.state.get().mode, 'rust');
 await runtimeService.dispose();
 assert.equal(typeof mountSemanticIcon, 'function');
-console.log('UIUX generated artifact smoke passed (Settings + Rust + Forum + Runtime adapters + scoped registry + semantic icon contracts).');
+assert.equal(typeof createPopupSelectController, 'function');
+assert.equal(typeof mountPopupSelectView, 'function');
+console.log('UIUX generated artifact smoke passed (Settings + Rust + Forum + Runtime adapters + scoped registry + semantic icon + PopupSelect candidate contracts).');

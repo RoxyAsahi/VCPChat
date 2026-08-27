@@ -22,6 +22,7 @@ const { mountToast, TOAST_HOLD_MS, TOAST_FADE_MS } = await import('../modules/ui
 const { mountRiskConfirmation } = await import('../modules/uiux/generated/primitives/risk-confirmation.js');
 const { mountAgentPresetSeat } = await import('../modules/uiux/generated/primitives/agent-preset-seat.js');
 const { mountAgentPresetRow } = await import('../modules/uiux/generated/primitives/agent-preset-row.js');
+const { createPopupSelectController, mountPopupSelectView } = await import('../modules/uiux/generated/primitives/popup-select.js');
 const { mountSemanticIcon } = await import('../modules/uiux/primitives/semantic-icon.ts');
 const { mountChoice } = await import('../modules/uiux/primitives/choice.ts');
 const { mountRange } = await import('../modules/uiux/primitives/range.ts');
@@ -29,6 +30,63 @@ const { mountToggle } = await import('../modules/uiux/primitives/toggle.ts');
 const { mountColorPair } = await import('../modules/uiux/primitives/color-pair.ts');
 
 const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+
+test('Harness PopupSelect Candidate keeps command wiring injected, owns focus and retracts its overlay', async () => {
+    const dom = new JSDOM('<!doctype html><main><div id="host"></div><button id="return-focus">Composer stand-in</button></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('popup-select-test'));
+        const host = document.getElementById('host');
+        const focusTarget = document.getElementById('return-focus');
+        const consumed = [];
+        const selected = [];
+        let focused = 0;
+        const popup = createPopupSelectController({
+            options: async () => [
+                { id: 'balanced', label: 'Balanced', detail: 'General purpose', active: true },
+                { id: 'careful', label: 'Careful', detail: 'Requires acknowledgement', confirmation: { title: 'Confirm change', description: 'Candidate-only action.', acknowledgeLabel: 'I understand', cancelLabel: 'Cancel', confirmLabel: 'Apply' } },
+            ],
+            onSelect: async (option, context) => { selected.push([option.id, context]); },
+        }, {
+            consume: segment => { consumed.push(segment); return true; },
+            focusComposer: () => { focused += 1; focusTarget.focus(); },
+        });
+        const view = mountPopupSelectView(host, { popup, overlayAria: '/{command} picker' }, scope);
+
+        popup.open('model', { request: 1 }, { via: 'enter', token: '/model' });
+        await delay(0);
+        assert.equal(view.card.parentElement, host);
+        assert.equal(view.card.getAttribute('aria-label'), '/model picker');
+        assert.equal(view.search, document.activeElement);
+        assert.equal(view.card.querySelectorAll('[role=option]').length, 2);
+        view.search.value = 'care';
+        view.search.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+        assert.equal(view.card.querySelectorAll('[role=option]').length, 1);
+        view.card.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        assert.equal(popup.getSnapshot().confirming?.id, 'careful');
+        assert.equal(view.card.style.display, 'none');
+        assert.equal(document.querySelector('[role=dialog]') instanceof dom.window.HTMLElement, true);
+        popup.acknowledge(true);
+        await popup.confirm();
+        assert.deepEqual(selected, [['careful', { request: 1 }]]);
+        assert.deepEqual(consumed, [{ via: 'enter', token: '/model' }]);
+        assert.equal(focused, 1);
+        assert.equal(document.activeElement, focusTarget);
+        assert.equal(view.card.isConnected, false);
+
+        popup.open('model', { request: 2 }, { via: 'menu', span: { opaque: true } });
+        await delay(0);
+        popup.dismiss({ focusComposer: true });
+        assert.equal(popup.getSnapshot().open, false);
+        assert.equal(view.card.isConnected, false);
+        assert.equal(focused, 2);
+        await view.dispose();
+        await scope.dispose('popup-select-complete');
+        assert.equal(document.querySelector('.vcp-harness-popup-select-card'), null);
+        assert.equal(document.querySelector('[role=dialog]'), null);
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
 
 test('Harness Toast owns body portal, anchor placement, lifetime and timer cancellation', async () => {
     const dom = new JSDOM('<!doctype html><main><div id="anchor"></div></main>');

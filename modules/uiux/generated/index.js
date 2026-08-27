@@ -21,4 +21,6 @@ export { mountChoice } from './primitives/choice.js';
 export { mountRange } from './primitives/range.js';
 export { mountToggle } from './primitives/toggle.js';
 export { mountColorPair } from './primitives/color-pair.js';
+/** Candidate-only Harness command-popup contract; not a stable VCP business API. */
+export { createPopupSelectController, filterOptions, mountPopupSelectView } from './primitives/popup-select.js';
 export { mountPrimitiveLab } from './lab/primitive-lab.js';

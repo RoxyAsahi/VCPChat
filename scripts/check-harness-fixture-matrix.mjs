@@ -24,6 +24,7 @@ if (interaction['risk-confirmation/acknowledgement-gate-close-reopen-dispose']?.
 if (interaction['semantic-icon/owner-refresh-size-name-dispose']?.status !== 'candidate-interaction-active') fail('Semantic icon lifecycle must remain explicitly Candidate');
 if (interaction['agent-preset-seat/open-selected-busy-roster-dispose']?.status !== 'candidate-interaction-active') fail('AgentPresetSeat lifecycle must remain explicitly Candidate');
 if (interaction['agent-preset-row/trust-error-busy-roster-dispose']?.status !== 'candidate-interaction-active') fail('AgentPresetRow lifecycle must remain explicitly Candidate');
+if (interaction['popup-select/load-filter-keyboard-risk-dismiss-dispose']?.status !== 'candidate-interaction-active') fail('PopupSelect lifecycle must remain explicitly Candidate');
 for (const output of ['dom', 'geometry', 'computed-style', 'screenshot', 'pixel-diff']) if (!matrix.outputs.includes(output)) fail(`missing output layer ${output}`);
 if (matrix.stateSemantics?.['select/closed'] !== 'AgentPresetSeat ready trigger; production fixture captured, raw DOM/geometry/pixel comparison is failing') fail('Select closed state must retain its Agent Preset production-fixture boundary');
 if (matrix.stateSemantics?.['select/open'] !== 'AgentPresetSeat ready open/selected/hover menu; VCP-owned production capture is replayable') fail('Select open state must retain its VCP-owned Harness capture boundary');
@@ -37,4 +38,5 @@ if (matrix.status?.fieldBrowserVisual !== 'pass (description/error production fi
 if (matrix.status?.inputFullVisualMatrix !== 'blocked (Harness ui-primitives/Input has no production consumer)') fail('Input status must distinguish an absent production consumer from visual completion');
 if (!String(matrix.status?.agentPresetSeatCandidate).includes('VCP production consumer and same-semantic Harness pixel diff pending')) fail('AgentPresetSeat must retain both production-consumer and pixel-diff gaps');
 if (!String(matrix.status?.agentPresetRowCandidate).includes('VCP production consumer and same-semantic Harness pixel diff pending')) fail('AgentPresetRow must retain both production-consumer and pixel-diff gaps');
+if (!String(matrix.status?.popupSelectCandidate).includes('VCP production consumer and same-semantic Harness pixel diff pending')) fail('PopupSelect must retain its production-consumer and pixel-diff gaps');
 console.log(`Harness fixture matrix passed (${matrix.cases.length} visual cases; ${matrix.interactionCases.length} interaction cases; ${matrix.outputs.length} output layers; DOM=${matrix.status.domStructural}; Field browser=${matrix.status.fieldBrowserVisual}).`);

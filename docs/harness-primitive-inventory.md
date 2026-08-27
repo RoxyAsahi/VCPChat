@@ -41,7 +41,7 @@
 | Pattern | Harness source | Lab states | 批次 |
 | --- | --- | --- | --- |
 | Agent Preset picker | `ui-agent-preset/src/client/AgentPresetSeat.tsx`, `PresetMenu.tsx`, `AgentPresetRow.tsx` | candidate-interaction-active（seat form 与 row form 均已复刻并有 geometry/screenshot fixture：seat 28px pill + hero chip 合同；row = title/desc 列（error 时 desc `role="alert"`）+ 36px PresetMenu pill，portal menu align-end、string label、trust==='user' 时 `· Custom` 后缀、disabled=busy‖!writable‖empty、loading/`name ?? id` label 回退链；仅 introduce-cue 动画仍未复刻；`--dsw-alias-label-quaternary` 上游未定义的 token 缺口已如实记录；VCP 无合法 production consumer，禁止 Stable） | B2 |
-| Command / mention popup | `ui-input-trigger/src/client/`, `ui-commands/.../PopupSelectView.tsx` | query/empty/highlight/keyboard/commit/dismiss | B2 |
+| Command / mention popup | `ui-input-trigger/src/client/`, `ui-commands/.../PopupSelectView.tsx` | candidate-interaction-active：`popup-select` Lab-only shell 已覆盖 load/filter/highlight/Enter/Escape/risk acknowledgement/focus restore/dispose，并有 800×600 Electron fixture；仅注入本地 callback，绝不接入 VCP Composer、input machine、token/command business chain；同语义 Harness pixel diff 与合法 production consumer pending | B2 |
 | Model / permission picker | `ui-model-selection/`, `ui-permission-presets/` | loading/selected/risk/error/dismiss | B2 |
 | Settings fields/cards | `ui-settings-plugins/src/client/` | description/invalid/disabled/secret/loading | B2 |
 | Model editor | `ui-settings-models/src/client/` | provider/key/list/empty/error/dialog | B3 |
