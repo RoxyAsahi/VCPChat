@@ -28,6 +28,8 @@ assert.ok(report.menu?.rect?.width > 0 && report.menu?.rect?.height > 0,
     'visible model picker menu must have measurable geometry');
 assert.ok(report.menu.rect.x >= 0 && report.menu.rect.x + report.menu.rect.width <= report.viewport.width,
     'visible model picker menu must remain inside the fixed viewport');
+assert.ok(report.menu.rect.y >= 0 && report.menu.rect.y + report.menu.rect.height <= report.viewport.height,
+    'visible model picker menu must remain vertically inside the fixed viewport');
 assert.ok(report.menu.rect.width >= 240, 'visible model picker menu must preserve the 240px Harness width contract');
 assert.equal(report.modelPane.searchVisible, true);
 assert.equal(report.modelPane.optionCount, 3);
