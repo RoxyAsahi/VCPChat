@@ -55,9 +55,20 @@ export function mountAgentModelPicker(host, props, scope) {
         consume: () => true,
         focusComposer: () => trigger.focus(),
     });
-    const view = mountPopupSelectView(root, { popup, overlayAria: `${props.label ?? 'Model'} picker`, searchAria: 'Search models' }, pickerScope);
     let pane = 'root';
     let selectedEffort = props.selectedEffort;
+    const view = mountPopupSelectView(root, {
+        popup,
+        overlayAria: `${props.label ?? 'Model'} picker`,
+        searchAria: 'Search models',
+        onEscape: () => {
+            if (pane === 'root')
+                return false;
+            pane = 'root';
+            syncPane();
+            return true;
+        },
+    }, pickerScope);
     const paneCell = document.createElement('button');
     paneCell.type = 'button';
     paneCell.className = 'vcp-harness-agent-model-picker-cell';
@@ -121,15 +132,6 @@ export function mountAgentModelPicker(host, props, scope) {
         view.card.querySelector('.vcp-harness-popup-select-error')?.toggleAttribute('hidden', pane !== 'model');
         renderEfforts();
     };
-    pickerScope.listen(view.card, 'keydown', event => {
-        if (event.key !== 'Escape')
-            return;
-        if (pane === 'model' || pane === 'effort') {
-            event.preventDefault();
-            pane = 'root';
-            syncPane();
-        }
-    });
     pickerScope.listen(trigger, 'click', () => {
         if (popup.getSnapshot().open)
             popup.dismiss();

@@ -132,6 +132,12 @@ test('Harness AgentModelPicker maps provider metadata and retracts its popup own
         assert.equal(controller.root.querySelector('.vcp-harness-popup-select-search')?.hidden, false);
         controller.setPane('effort');
         assert.equal(controller.root.querySelector('.vcp-harness-agent-model-picker-effort-list')?.hidden, false);
+        controller.root.querySelector('.vcp-harness-popup-select-card')?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        assert.equal(controller.root.querySelector('.vcp-harness-agent-model-picker-effort-list')?.hidden, true);
+        assert.equal(controller.root.querySelector('.vcp-harness-agent-model-picker-cell')?.hidden, false);
+        controller.setPane('model');
+        controller.root.querySelector('.vcp-harness-popup-select-card')?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        assert.equal(controller.popup.getSnapshot().open, true);
         controller.root.querySelector('.vcp-harness-agent-model-picker-option:last-child')?.click();
         assert.deepEqual(selected, ['effort:deep']);
         assert.match(controller.popup.getSnapshot().options[0].detail, /OpenAI/);
