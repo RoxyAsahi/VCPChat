@@ -1,0 +1,56 @@
+{
+  "primitive": "PermissionRow",
+  "provenance": {
+    "sources": [
+      "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-permission-presets/src/client/PermissionRow.tsx"
+    ],
+    "style": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-permission-presets/src/client/PermissionRow.module.css"
+  },
+  "root": {
+    "tag": "div",
+    "class": "row",
+    "children": ["div.rowText", "Menu(portal=true, align=end) > button.selector"]
+  },
+  "text": {
+    "tree": "div.rowText > div.title + div.desc",
+    "descriptionRole": "alert only when state.error is non-null"
+  },
+  "trigger": {
+    "tag": "button",
+    "class": "selector",
+    "type": "button",
+    "ariaHasPopup": "menu",
+    "ariaExpanded": "open state",
+    "disabled": "loading || saving || confirmingFullAccess || !writable || options.length === 0"
+  },
+  "menu": {
+    "owner": "Menu",
+    "portal": true,
+    "align": "end",
+    "items": "state.options",
+    "selectedId": "state.currentValue",
+    "sameValue": "closes without select"
+  },
+  "riskConfirmation": {
+    "opensFor": "danger-full-access",
+    "acknowledgement": "caller-controlled checkbox",
+    "confirmDisabledUntilAcknowledged": true,
+    "cancel": "closes and clears acknowledgement",
+    "confirm": "selects danger-full-access and closes"
+  },
+  "states": ["unavailable-null", "loading-disabled", "ready-closed", "ready-open", "saving-disabled", "error-alert", "read-only-disabled", "full-access-confirm"],
+  "interaction": [
+    "load runs once on mount",
+    "unavailable state renders null",
+    "state status or writable loss closes menu and confirmation",
+    "outside dismiss and Escape are delegated to Menu",
+    "selecting the current option does not persist",
+    "dispose retracts portal-owned nodes"
+  ],
+  "aria": [
+    "selector exposes menu popup and expanded state",
+    "error description exposes role=alert",
+    "RiskConfirmation exposes dialog and acknowledgement checkbox"
+  ],
+  "vcpDeviation": "No VCP permission-settings consumer is declared; this contract is Harness source-only and does not authorize Settings integration."
+}
