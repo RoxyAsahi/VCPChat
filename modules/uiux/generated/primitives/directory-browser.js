@@ -8,7 +8,7 @@ function ensureStyles() {
     style.id = STYLE_ID;
     // Doubled selector deliberately beats the shared Modal dialog contract,
     // matching Harness DirectoryBrowser.module.css's `.dialog.dialog` seam.
-    style.textContent = `.vcp-directory-browser.vcp-directory-browser{width:min(680px,100%);height:min(500px,calc(100dvh - 32px));padding:0;gap:0}.vcp-directory-browser-frame{display:flex;flex:1;min-height:0;flex-direction:column}.vcp-directory-browser-header{display:flex;flex:none;flex-direction:column;gap:8px;padding:16px 14px 8px 24px;border-bottom:1px solid var(--dsw-alias-border-l3,rgba(0,0,0,.14))}.vcp-directory-browser-title{min-height:28px;margin:0;font-size:16px;font-weight:510;line-height:24px}.vcp-directory-browser-crumbs{display:flex;align-items:center;gap:4px;min-height:24px;overflow-x:auto}.vcp-directory-browser-crumb{max-width:160px;padding:0;border:0;background:transparent;overflow:hidden;color:var(--dsw-alias-label-tertiary,#737780);font:500 13px/20px inherit;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.vcp-directory-browser-crumb:hover{color:var(--dsw-alias-label-primary,#0f1115)}.vcp-directory-browser-content{position:relative;display:flex;flex:1;min-height:0;padding:16px 16px 16px 24px}.vcp-directory-browser-columns{display:flex;flex:1;min-width:0;gap:12px;overflow-x:auto}.vcp-directory-browser-column{display:flex;flex:1 1 0;flex-direction:column;min-width:256px;gap:2px;overflow-y:auto;padding-right:8px}.vcp-directory-browser-divider{flex:none;width:1px;background:var(--dsw-alias-border-l3,rgba(0,0,0,.14))}.vcp-directory-browser-row{display:flex;align-items:center;gap:4px;width:100%;height:28px;padding:4px;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-primary,#0f1115);font:500 13px/20px inherit;text-align:left;cursor:pointer}.vcp-directory-browser-row:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06))}.vcp-directory-browser-row[aria-current=true]{background:var(--dsw-alias-interactive-bg-active,var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.1)))}.vcp-directory-browser-row-icon{flex:none;color:var(--dsw-alias-label-secondary,#50545b)}.vcp-directory-browser-row-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vcp-directory-browser-status{position:absolute;right:16px;bottom:8px;padding:2px 8px;background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-secondary,#50545b);font-size:12px;line-height:18px}.vcp-directory-browser-error{position:absolute;bottom:8px;left:24px;max-width:70%;color:var(--dsw-alias-state-error-primary,#d92d20);font-size:12px;line-height:18px}.vcp-directory-browser-footer{display:flex;flex:none;align-items:center;gap:8px;padding:12px 24px;border-top:1px solid var(--dsw-alias-border-l3,rgba(0,0,0,.14))}.vcp-directory-browser-spacer{flex:1}.vcp-directory-browser-hidden{display:inline-flex;align-items:center;gap:4px;padding:4px;border:0;background:transparent;color:var(--dsw-alias-label-secondary,#50545b);font:inherit;font-size:12px;cursor:pointer}.vcp-directory-browser-hidden[aria-pressed=true]{color:var(--dsw-alias-label-primary,#0f1115)}`;
+    style.textContent = `.vcp-directory-browser.vcp-directory-browser{width:min(680px,100%);height:min(500px,calc(100dvh - 32px));padding:0;gap:0}.vcp-directory-browser-frame{display:flex;flex:1;min-height:0;flex-direction:column}.vcp-directory-browser-header{display:flex;flex:none;flex-direction:column;gap:8px;padding:16px 14px 8px 24px;border-bottom:1px solid var(--dsw-alias-border-l3,rgba(0,0,0,.14))}.vcp-directory-browser-title{min-height:28px;margin:0;font-size:16px;font-weight:510;line-height:24px}.vcp-directory-browser-crumbs{display:flex;align-items:center;gap:4px;min-height:24px;margin-left:-9px;padding:0 8px;border:1px solid transparent;border-radius:8px}.vcp-directory-browser-crumbs:has(.vcp-directory-browser-path-input){border-color:var(--dsw-alias-border-l2,rgba(0,0,0,.22))}.vcp-directory-browser-crumb{max-width:160px;padding:0;border:0;background:transparent;overflow:hidden;color:var(--dsw-alias-label-tertiary,#737780);font:500 13px/20px inherit;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}.vcp-directory-browser-crumb:hover{color:var(--dsw-alias-label-primary,#0f1115)}.vcp-directory-browser-path-edit{display:flex;align-items:center;justify-content:flex-end;flex:1 0 28px;min-width:28px;height:22px;padding:0;border:0;background:transparent;color:var(--dsw-alias-label-tertiary,#737780);cursor:text}.vcp-directory-browser-path-edit:hover,.vcp-directory-browser-path-edit:focus-visible{color:var(--dsw-alias-label-primary,#0f1115)}.vcp-directory-browser-path-input{box-sizing:border-box;flex:1 1 0;min-width:0;height:22px;padding:0;border:0;outline:0;background:transparent;color:var(--dsw-alias-label-primary,#0f1115);font:500 13px/20px inherit}.vcp-directory-browser-content{position:relative;display:flex;flex:1;min-height:0;padding:16px 16px 16px 24px}.vcp-directory-browser-columns{display:flex;flex:1;min-width:0;gap:12px;overflow-x:auto}.vcp-directory-browser-column{display:flex;flex:1 1 0;flex-direction:column;min-width:256px;gap:2px;overflow-y:auto;padding-right:8px}.vcp-directory-browser-divider{flex:none;width:1px;background:var(--dsw-alias-border-l3,rgba(0,0,0,.14))}.vcp-directory-browser-row{display:flex;align-items:center;gap:4px;width:100%;height:28px;padding:4px;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-primary,#0f1115);font:500 13px/20px inherit;text-align:left;cursor:pointer}.vcp-directory-browser-row:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06))}.vcp-directory-browser-row[aria-current=true]{background:var(--dsw-alias-interactive-bg-active,var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.1)))}.vcp-directory-browser-row-icon{flex:none;color:var(--dsw-alias-label-secondary,#50545b)}.vcp-directory-browser-row-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vcp-directory-browser-status{position:absolute;right:16px;bottom:8px;padding:2px 8px;background:var(--dsw-alias-bg-layer-2,#fff);color:var(--dsw-alias-label-secondary,#50545b);font-size:12px;line-height:18px}.vcp-directory-browser-error{position:absolute;bottom:8px;left:24px;max-width:70%;color:var(--dsw-alias-state-error-primary,#d92d20);font-size:12px;line-height:18px}.vcp-directory-browser-footer{display:flex;flex:none;align-items:center;gap:8px;padding:12px 24px;border-top:1px solid var(--dsw-alias-border-l3,rgba(0,0,0,.14))}.vcp-directory-browser-spacer{flex:1}.vcp-directory-browser-hidden{display:inline-flex;align-items:center;gap:4px;padding:4px;border:0;background:transparent;color:var(--dsw-alias-label-secondary,#50545b);font:inherit;font-size:12px;cursor:pointer}.vcp-directory-browser-hidden[aria-pressed=true]{color:var(--dsw-alias-label-primary,#0f1115)}`;
     (document.head || document.documentElement).append(style);
 }
 const errorText = (error) => error instanceof Error ? error.message : String(error);
@@ -77,6 +77,8 @@ export function mountDirectoryBrowser(props, scope) {
     let showHidden = false;
     let failure = null;
     let creating = false;
+    let editingPath = false;
+    let pathDraft = '';
     const modal = mountModal({ title: props.title ?? 'Open folder', className: 'vcp-directory-browser', body: frame, headless: true, open: props.open, onClose: () => { if (!busy && !creating)
             props.onClose(); } }, browserScope);
     const visible = (entries) => entries.filter(entry => showHidden || !entry.hidden);
@@ -84,7 +86,41 @@ export function mountDirectoryBrowser(props, scope) {
         crumbs.replaceChildren();
         const source = child ?? parent;
         const chain = source?.crumbs?.length ? source.crumbs : source ? [{ name: source.path, path: source.path }] : [];
-        chain.forEach((crumb, index) => { const button = document.createElement('button'); button.type = 'button'; button.className = 'vcp-directory-browser-crumb'; button.textContent = `${index ? '› ' : ''}${crumb.name}`; button.disabled = busy || loading || creating; browserScope.listen(button, 'click', () => navigate(crumb.path)); crumbs.append(button); });
+        if (editingPath) {
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'vcp-directory-browser-path-input';
+            input.value = pathDraft;
+            input.setAttribute('aria-label', 'Folder path');
+            input.disabled = busy || loading || creating;
+            browserScope.listen(input, 'input', () => { pathDraft = input.value; });
+            browserScope.listen(input, 'keydown', event => { const key = event.key; if (key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                editingPath = false;
+                sync();
+            } if (key === 'Enter' && pathDraft.trim()) {
+                event.preventDefault();
+                event.stopPropagation();
+                editingPath = false;
+                navigate(pathDraft);
+            } });
+            crumbs.append(input);
+            queueMicrotask(() => { if (modal.open && document.activeElement !== input)
+                input.focus(); });
+        }
+        else {
+            chain.forEach((crumb, index) => { const button = document.createElement('button'); button.type = 'button'; button.className = 'vcp-directory-browser-crumb'; button.textContent = `${index ? '› ' : ''}${crumb.name}`; button.disabled = busy || loading || creating; browserScope.listen(button, 'click', () => navigate(crumb.path)); crumbs.append(button); });
+            const edit = document.createElement('button');
+            edit.type = 'button';
+            edit.className = 'vcp-directory-browser-path-edit';
+            edit.textContent = '✎';
+            edit.setAttribute('aria-label', 'Edit folder path');
+            edit.disabled = !source || busy || loading || creating;
+            browserScope.listen(edit, 'click', () => { if (!source)
+                return; editingPath = true; pathDraft = source.path.endsWith('/') || source.path.endsWith('\\') ? source.path : `${source.path}/`; sync(); });
+            crumbs.append(edit);
+        }
         columns.replaceChildren();
         const renderColumn = (listing, current, onPick) => { const column = document.createElement('div'); column.className = 'vcp-directory-browser-column'; visible(listing.entries).forEach(entry => { const row = document.createElement('button'); row.type = 'button'; row.className = 'vcp-directory-browser-row'; row.setAttribute('aria-current', String(current?.path === entry.path)); row.disabled = busy || loading || creating; const icon = document.createElement('span'); icon.className = 'vcp-directory-browser-row-icon vcp-ui-icon'; icon.setAttribute('aria-hidden', 'true'); icon.textContent = current?.path === entry.path ? 'folder-open' : 'folder'; const name = document.createElement('span'); name.className = 'vcp-directory-browser-row-name'; name.textContent = entry.name; row.append(icon, name); browserScope.listen(row, 'click', () => onPick(entry)); column.append(row); }); columns.append(column); };
         if (parent)
@@ -122,7 +158,7 @@ export function mountDirectoryBrowser(props, scope) {
             sync();
         }
     } };
-    const navigate = (path) => { selected = null; child = null; void scan(path, listing => { parent = listing; }); };
+    const navigate = (path) => { editingPath = false; selected = null; child = null; void scan(path, listing => { parent = listing; }); };
     const pick = (entry) => { selected = entry; child = null; void scan(entry.path, listing => { child = listing; }); };
     const advance = (entry) => { if (!child)
         return; parent = child; selected = null; child = null; pick(entry); };
@@ -141,12 +177,14 @@ export function mountDirectoryBrowser(props, scope) {
         child = null;
         failure = null;
         showHidden = false;
+        editingPath = false;
         navigate();
     }
     else {
         generation += 1;
         controller?.abort();
         controller = null;
+        editingPath = false;
         modal.setOpen(false);
     } };
     const dispose = scope.own(async () => { generation += 1; controller?.abort(); controller = null; await browserScope.dispose('harness-directory-browser-unmounted'); }, 'harness-directory-browser', 'ui-primitive');
