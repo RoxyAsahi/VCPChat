@@ -1,0 +1,24 @@
+{
+  "source": "packages/client/ui-model-selection/src/client/ModelSelect.tsx",
+  "root": { "tag": "div", "class": "root", "positioning": "relative" },
+  "trigger": {
+    "tag": "button",
+    "class": "trigger",
+    "type": "button",
+    "ariaHaspopup": "menu",
+    "ariaExpanded": "open state",
+    "ariaControls": "generated menu id",
+    "children": ["span.triggerLabel", "span.triggerEffort?", "IconChevronDownOutline14"]
+  },
+  "menu": {
+    "tag": "div",
+    "class": "menu",
+    "role": "menu",
+    "ariaLabel": "localized menu label",
+    "ariaBusy": "loading or selecting",
+    "panes": ["root", "model", "effort"]
+  },
+  "rootPaneItem": { "tag": "button", "role": "menuitem", "class": "cell", "children": ["span.cellLabel", "span.cellValue", "IconChevronRightOutline14"] },
+  "modelPaneItem": { "tag": "button", "role": "menuitem", "class": "option", "children": ["span.optionCopy > span.modelName", "span.description?", "span.check?"] },
+  "states": ["available", "locked", "loading", "load-error-retry", "selecting", "selection-error-toast", "empty", "outside-dismiss", "escape-pane-back", "escape-close"]
+}

@@ -18,6 +18,8 @@
     , ["agent-preset-seat", "open-selected-hover"], ["agent-preset-seat", "busy-disabled"], ["agent-preset-row", "open-custom"], ["agent-preset-row", "error-disabled"]
     , ["popup-select", "open-filter-highlight"], ["popup-select", "risk-confirmation"], ["popup-select", "failure-retry-dismiss"]
     , ["directory-browser", "single-pane"], ["directory-browser", "two-pane-selected"], ["directory-browser", "hidden-files"], ["directory-browser", "abort-close-reopen"]
+    , ["language-row", "closed"], ["language-row", "open"], ["language-row", "selected"], ["language-row", "disabled"], ["language-row", "long-label"]
+    , ["agent-model-picker", "root-pane"], ["agent-model-picker", "model-pane"], ["agent-model-picker", "effort-pane"], ["agent-model-picker", "loading"], ["agent-model-picker", "error-retry"], ["agent-model-picker", "selecting"], ["agent-model-picker", "locked"]
   ],
   "interactionCases": [
     { "case": "select/keyboard-open-focus", "status": "pass", "evidence": "same semantic fixture; Harness and VCP retain trigger focus" },
@@ -38,8 +40,18 @@
     , { "case": "agent-preset-row/trust-error-busy-roster-dispose", "status": "candidate-interaction-active", "evidence": "focused generated-artifact test and Electron fixture cover end portal, user-trust suffix, error alert, busy/writable/empty disabled states, roster replacement and exact host restoration; no in-scope VCP production consumer or same-semantic Harness pixel fixture" }
     , { "case": "popup-select/load-filter-keyboard-risk-dismiss-dispose", "status": "candidate-interaction-active", "evidence": "generated-artifact focused test and fixed 800x600 Electron fixture cover injected local callbacks, filtering, Enter, RiskConfirmation, success, Escape, focus restoration and teardown; Composer/input-machine/command wiring remains frozen and absent" }
     , { "case": "directory-browser/injected-listing-selection-hidden-path-submit-draft-preview-two-leg-nested-create-slow-scan-abort-close-reopen-dispose", "status": "foundation-electron-active", "evidence": "generated-artifact focused test and fixed 800x600 Electron fixture cover injected listing, selected child listing, hidden filter, Open callback, abort on close, reopen and disposal; path input submits by Enter and cancels by Escape without closing its owner Modal; local separator-debounced draft preview and prefix filtering preserve selection; two-leg target/parent landing uses a 200ms target-first fallback with late parent upgrade; nested injected create uses a 380px child dialog, makes the parent inert, retracts on Escape and selects the created entry; slow scans expose a delayed status with timer cleanup. Same-semantic Harness pixel diff, VCP production consumer and legacy presentation deletion remain pending" }
+    , { "case": "language-row/open-select-dismiss-focus-dispose", "status": "candidate-source-only", "evidence": "generated artifact and focused owner test cover active/unknown locale projection, Menu selection, option replacement and dispose; VCP locale consumer and same-semantic Harness pixel diff remain pending" }
   ],
   "outputs": ["dom", "geometry", "computed-style", "screenshot", "pixel-diff"],
+  "languageRow": {
+    "visualCases": ["closed", "open", "selected", "disabled", "long-label"],
+    "interactionCase": { "case": "language-row/open-select-dismiss-focus-dispose", "status": "candidate-source-only", "evidence": "generated artifact and focused owner test; VCP locale consumer and same-semantic Harness pixel diff pending" }
+  },
+  "agentModelPicker": {
+    "visualCases": ["root-pane", "model-pane", "effort-pane", "loading", "error-retry", "selecting", "locked"],
+    "source": "packages/client/ui-model-selection/src/client/ModelSelect.tsx",
+    "vcpStatus": "candidate-lab-only; same-engine DOM/computed-style/pixel fixture pending"
+  },
   "stateSemantics": {
     "select/closed": "AgentPresetSeat ready trigger; production fixture captured, raw DOM/geometry/pixel comparison is failing",
     "select/open": "AgentPresetSeat ready open/selected/hover menu; VCP-owned production capture is replayable",
