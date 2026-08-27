@@ -117,11 +117,6 @@ export function createMainChatSettingsPresentationOwner({
         return true;
     }
 
-    const CHAT_PRESENTATION_MODES = Object.freeze(['bubble', 'panel', 'immersive']);
-    const CHAT_PRESENTATION_MODE_CLASSES = CHAT_PRESENTATION_MODES.map(
-        mode => `chat-presentation-${mode}`
-    );
-
     function normalizeChatPresentationMode(mode) { return themeOwner.normalizePresentation(mode); }
 
 
@@ -586,8 +581,6 @@ export function createMainChatSettingsPresentationOwner({
 
 
 
-
-        const presentationMode = normalizeChatPresentationMode(globalSettings.chatPresentationMode);
 
         const chatFontPresetSelect = document.getElementById('chatFontPreset');
         const chatFontCustomInput = document.getElementById('chatFontCustom');
