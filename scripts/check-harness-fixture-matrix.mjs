@@ -25,7 +25,9 @@ if (interaction['semantic-icon/owner-refresh-size-name-dispose']?.status !== 'ca
 if (interaction['agent-preset-seat/open-selected-busy-roster-dispose']?.status !== 'candidate-interaction-active') fail('AgentPresetSeat lifecycle must remain explicitly Candidate');
 if (interaction['agent-preset-row/trust-error-busy-roster-dispose']?.status !== 'candidate-interaction-active') fail('AgentPresetRow lifecycle must remain explicitly Candidate');
 if (interaction['popup-select/load-filter-keyboard-risk-dismiss-dispose']?.status !== 'candidate-interaction-active') fail('PopupSelect lifecycle must remain explicitly Candidate');
-const directoryBrowserInteraction = Object.entries(interaction).find(([key]) => key.startsWith('directory-browser/'))?.[1];
+const directoryBrowserEntries = Object.entries(interaction).filter(([key]) => key.startsWith('directory-browser/'));
+if (directoryBrowserEntries.length !== 1) fail(`DirectoryBrowser interaction ledger must contain exactly one entry (found ${directoryBrowserEntries.length})`);
+const directoryBrowserInteraction = directoryBrowserEntries[0]?.[1];
 if (directoryBrowserInteraction?.status !== 'foundation-electron-active') fail('DirectoryBrowser must retain its Electron-backed foundation status');
 for (const output of ['dom', 'geometry', 'computed-style', 'screenshot', 'pixel-diff']) if (!matrix.outputs.includes(output)) fail(`missing output layer ${output}`);
 if (matrix.stateSemantics?.['select/closed'] !== 'AgentPresetSeat ready trigger; production fixture captured, raw DOM/geometry/pixel comparison is failing') fail('Select closed state must retain its Agent Preset production-fixture boundary');
@@ -33,6 +35,7 @@ if (matrix.stateSemantics?.['select/open'] !== 'AgentPresetSeat ready open/selec
 if (matrix.stateSemantics?.['select/disabled'] !== 'AgentPresetSeat busy trigger is captured through delayed production host select; VCP comparison remains blocked because no in-scope AgentPreset consumer exists') fail('Select disabled state must distinguish the captured Harness trigger from the blocked VCP comparison');
 if (matrix.stateSemantics?.['select/focus'] !== 'AgentPresetSeat keyboard-open focus owner is captured independently; Harness and VCP both retain trigger focus') fail('Select focus state must preserve the verified shared focus owner');
 if (matrix.status?.domStructural !== '10/10 pass') fail('DOM structural checkpoint must remain explicit');
+if (!String(matrix.status?.buttonCandidate).includes('consumer geometry mismatch')) fail('Button Candidate must retain its explicit consumer geometry mismatch');
 if (matrix.status?.selectMenuOpenSelectedHoverPixel !== 'pass (menu ROI only)') fail('Select pixel checkpoint must remain ROI-scoped');
 if (matrix.status?.selectMenuKeyboardFocus !== 'pass (Harness and VCP retain trigger focus; no roving keyboard ownership)') fail('Select focus checkpoint must retain the verified interaction contract');
 if (matrix.status?.selectBusyTrigger !== 'Harness production capture active; VCP cross-page comparison blocked by consumer boundary') fail('Select busy checkpoint must retain its production-capture and consumer boundary');

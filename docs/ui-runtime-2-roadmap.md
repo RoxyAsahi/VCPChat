@@ -6,9 +6,11 @@
 > 对照对象：本机 `deepseek-harness` 的 Client UI / Slot / Theme / lifecycle 机制
 > **2026-08-27 并行批次验收：** Settings name cluster（`userName`、`userNameTextColor`/mirror、`continueWritingPrompt`）已由 typed field owner 接管并通过 close-flush、trim/default/mirror、reload 与 3-cycle teardown 证据；`npm run check:uiux`、`npm run test:uiux`（44/44）、`npm run build:uiux`、`npm run check:uiux:artifacts`（66 generated files）、`npm run test:uiux:artifacts`、`npm run check:harness-reference`、`npm run check:harness-fixture-matrix`、`npm run guard:chat-kernel-consumers` 和 Settings Electron gate 均通过。该批次不改变 R2-02 的成熟度：全量 Settings legacy retirement、Theme legacy reads、packaged/cross-platform evidence 仍未闭合。
 > **当前下一施工游标：** `B1-Harness-equivalence-button-select-fixtures`。先建立同语义 Harness production capture 与 VCP generated-artifact capture 的 DOM structural、contract-scoped computed-style/geometry、keyboard/focus、same-engine screenshot/pixel 对照；现有 Select trigger 报告必须保持 `pending-trigger-dimension-mismatch`，因为 Harness 150×28 与 VCP 219×40 尚非同一语义 fixture。对照链闭合前暂停新增 Settings 字段、DirectoryBrowser 状态和通用 renderer 扩展。
+> **2026-08-27 Button capture audit：** VCP generated-artifact Button 六态 capture 已通过 `capture:vcp-button-fixture`；尝试从 Harness 真实 web scaffold 捕获 `SettingsDocumentAction` 的 `outline/sm` Button 时，默认 scaffold 不提供可定位的 Settings/Choose workspace 初始化入口，无法在不改变 Harness composition 的前提下到达生产按钮。该跨页 capture 暂记 `blocked-scaffold-entry`，不得用 mock 或单元 fixture 代替；下一次应复用 `settings-chrome.e2e.ts` 的完整 boot 条件后再重试。
+> **2026-08-27 WelcomeNotice Button capture：** 复用 Harness `remote-welcome.e2e.ts` 的真实 production composition 成功捕获 `WelcomeNotice` 的 `继续` primary/md Button（800×600@1x）；VCP generated-artifact 同语义 fixture 也已捕获。`diff:harness-vcp-button-welcome` 诚实报告 `cross-page-button-consumer-geometry-mismatch`：两端高度、radius、padding 和文本合同一致，但 Harness `WelcomeNotice` 的 consumer CSS 将宽度扩展到 `120px`，VCP 裸 primitive 为 `56px`。这证明跨页面 capture 链已建立，同时 consumer-specific geometry 尚未对齐；VCP production consumer 与 legacy deletion 仍 pending。
 > **2026-08-27 fixture ledger correction：** DirectoryBrowser matrix 已同步实现事实：draft preview/prefix filtering、two-leg target/parent landing（200ms fallback + late upgrade）、nested create 与 300ms slow-scan 均已有 generated-artifact/Electron 证据；成熟度仍为 `foundation-electron-active`，因为 same-semantic Harness diff、合法 VCP production consumer 和 legacy presentation deletion 尚未完成。
 > 上位规范：[vcpchat-harness-uiux-architecture.md](/Users/asahi/Documents/Codex/VCPChat-newarchitecture/docs/vcpchat-harness-uiux-architecture.md)；本文件只负责执行顺序、consumer、证据与删除账本
-> **2026-08-27 目标调整（覆盖下方旧施工游标）：** 当前 active slice 为 `R2-02D-B2-AgentPresetRow-candidate`（AgentPresetSeat 与 AgentPresetRow 两个 form 的 Candidate 均已落库）（B1 RiskConfirmation/icons checkpoint 已完成，B1 atoms 全部处于 `candidate-interaction-active`）。现有 UI 组件库成为 generated-artifact Candidate fixture host，允许先复刻没有 VCP 生产 consumer 的 Harness 控件。等价链拆成两段：`Harness source → Candidate lab → DOM/style/interaction/pixel evidence` 与 `verified Candidate → production consumer → legacy deletion → Stable`。展示通过、source-only fixture 或组件数量均不等于生产完成。Field/Select 既有生产证据继续有效；AgentPreset busy trigger 不再阻断 Candidate 施工，但在出现合法 VCP production consumer 前仍不得晋级 Stable。权威清单见 [harness-primitive-inventory.md](/Users/asahi/Documents/Codex/VCPChat-newarchitecture/docs/harness-primitive-inventory.md)。
+> **2026-08-27 目标调整（覆盖下方旧施工游标）：** 当前 active slice 为 `B1-Harness-equivalence-button-select-fixtures`。RiskConfirmation、AgentPresetSeat/Row 与其他 B1/B2 控件的 Candidate 均已落库，但下一步优先闭合 Harness/VCP 同语义 DOM、computed-style、geometry、keyboard/focus 与 screenshot/pixel 证据链。现有 UI 组件库继续作为 generated-artifact Candidate fixture host，允许复刻没有 VCP 生产 consumer 的 Harness 控件；展示通过、source-only fixture 或组件数量均不等于生产完成。Field/Select 既有生产证据继续有效，但 Select trigger 当前仍是尺寸不同的语义 fixture，不能晋级等价。权威清单见 [harness-primitive-inventory.md](/Users/asahi/Documents/Codex/VCPChat-newarchitecture/docs/harness-primitive-inventory.md)。
 > 最近核验：2026-08-27；R2-00 Composer slice 已达到 complete（仅指已登记的 `mainChatComposition`/standalone history consumers）；R2-01 Overlay/notification slice 已闭合；R2-03 为 semantic-token-projection-active；R2-08 为 scoped-service-assembly-active（仍委托 legacy LifecycleScope，public API 未就绪）；R2-02 为 typed-production-consumer-active（legacy bridge、Classic fallback 与完整 stress 证据仍未闭合）。当前 Candidate Lab 游标为 RiskConfirmation：现有 Select full-state production fixture 的阻断与 legacy deletion 继续作为 R2-02C unresolved ledger，不应被 Candidate 施工覆盖。当前证据按 primitive/state 独立记账，不得把其中任一项写成全 primitive 或全矩阵 pixel equivalence。
 > 本轮补充 Harness `Input` reference pack（DOM/geometry），作为下一批 range/choice 之前的 CSS/DOM 基线；尚未将 Input 或 Range 宣布为生产 primitive。
 > 2026-08-26：`homeVisualTagline` 已接入 TS Light-DOM Input primitive，保留 native input 与 SettingsUiService 业务链；源码 `npm run test:uiux` 21/21、Settings Electron gate 通过。该字段 legacy input wrapper 已跳过，待 artifact-only Input smoke 与完整 screenshot geometry 证据后再扩大迁移。
@@ -52,14 +54,14 @@
 
 每次进入新的施工批次，必须同时更新本文件的“状态账本”、对应代码、最小测试和证据链接。计划中的能力不得写成已交付；只有生产消费者、owner、撤销路径和行为证据齐全，才能从 `planned` 变为 `active` 或 `complete`。
 
-## 0.0 当前施工批次：R2-02D-B1 RiskConfirmation / icon contract
+## 0.0 当前施工批次：B1 Harness equivalence / Button + Select fixtures
 
 当前状态：`candidate-lab-active`。
 
 - `UI 组件库` 是真实 Electron internal app，继续由 `next:component-showcase` scope 负责 mount/dispose；
 - `modules/uiux/generated/browser-entry.js` 提供 TS generated artifact，组件库只调用 Candidate lab mount，不建立第二份 runtime；
-- 第一批纳入 Button、Input、Field、Select/Menu；Button 为新 Candidate，Input 明确标注 Harness 当前没有生产 consumer；
-- Menu、Modal、Tooltip/HoverCard、DisclosureRow、StateDot、Toast 已完成各自 Candidate checkpoint；当前只推进 RiskConfirmation 与它所需的私有 icon contract，禁止迁移 Harness 全量 glyph catalog 或创建公共 icon Provider；
+- 第一批纳入 Button、Input、Field、Select/Menu；Button 为既有 Candidate，Input 明确标注 Harness 当前没有生产 consumer；
+- Menu、Modal、Tooltip/HoverCard、DisclosureRow、StateDot、Toast、RiskConfirmation 与私有 icon contract 已完成各自 Candidate checkpoint；本批只推进 Button/Select 的同语义 Harness 对照，不迁移 Harness 全量 glyph catalog 或创建公共 icon Provider；
 - 每个控件必须展示可枚举 states，并建立独立 provenance、DOM/ARIA、geometry/token、interaction、dispose 和 screenshot ledger；
 - 生产晋级仍要求真实 VCP consumer、canonical state、legacy deletion、Electron journey 和相应平台证据。
 
