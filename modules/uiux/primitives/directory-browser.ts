@@ -4,6 +4,7 @@ import { mountModal, type ModalController } from './modal.js';
 
 const STYLE_ID = 'vcp-harness-uiux-directory-browser';
 const SLOW_SCAN_DELAY_MS = 300;
+const PARENT_LEG_WAIT_MS = 200;
 
 function ensureStyles() {
     if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) return;
@@ -65,7 +66,7 @@ export function mountDirectoryBrowser(props: DirectoryBrowserProps, scope: UiSco
     const confirm = document.createElement('button'); confirm.type = 'button'; confirm.textContent = props.openLabel ?? 'Open';
     footer.append(create, hidden, spacer, cancel, confirm); frame.append(header, content, footer);
     mountButton(create, { variant: 'outline', size: 'sm' }, browserScope); mountButton(cancel, { variant: 'outline', size: 'sm' }, browserScope); mountButton(confirm, { variant: 'primary', size: 'sm' }, browserScope);
-    let generation = 0; let controller: AbortController | null = null; let parent: DirectoryBrowserListing | null = null; let selected: DirectoryBrowserEntry | null = null; let child: DirectoryBrowserListing | null = null; let loading = false; let slowLoading = false; let slowTimer: ReturnType<typeof setTimeout> | null = null; let busy = Boolean(props.busy); let showHidden = false; let failure: string | null = null; let creating = false; let editingPath = false; let pathDraft = ''; let createOpen = false; let createName = ''; let createFailure: string | null = null; let createRequest = 0;
+    let generation = 0; let controller: AbortController | null = null; let loading = false; let slowLoading = false; let slowTimer: ReturnType<typeof setTimeout> | null = null; let previewTimer: ReturnType<typeof setTimeout> | null = null; let parent: DirectoryBrowserListing | null = null; let selected: DirectoryBrowserEntry | null = null; let child: DirectoryBrowserListing | null = null; let busy = Boolean(props.busy); let showHidden = false; let failure: string | null = null; let creating = false; let editingPath = false; let pathDraft = ''; let createOpen = false; let createName = ''; let createFailure: string | null = null; let createRequest = 0;
     const createBody = document.createElement('div'); createBody.className = 'vcp-directory-browser-create-body';
     const createTitle = document.createElement('h3'); createTitle.className = 'vcp-directory-browser-create-title'; createTitle.textContent = props.newFolderLabel ?? 'New folder';
     const createIn = document.createElement('p'); createIn.className = 'vcp-directory-browser-create-in';
@@ -78,14 +79,20 @@ export function mountDirectoryBrowser(props: DirectoryBrowserProps, scope: UiSco
     mountButton(createCancel, { variant: 'outline', size: 'sm' }, browserScope); mountButton(createConfirm, { variant: 'primary', size: 'sm' }, browserScope);
     const modal = mountModal({ title: props.title ?? 'Open folder', className: 'vcp-directory-browser', body: frame, headless: true, open: props.open, canClose: () => !busy && !creating && !createOpen, onClose: () => props.onClose() }, browserScope);
     const createModal = mountModal({ title: props.newFolderLabel ?? 'New folder', className: 'vcp-directory-browser-create-dialog', body: createBody, headless: true, open: false, canClose: () => !creating, onClose: () => { if (!creating) { createOpen = false; createRequest += 1; sync(); } } }, browserScope);
-    const visible = (entries: readonly DirectoryBrowserEntry[]) => entries.filter(entry => showHidden || !entry.hidden);
+    const visible = (entries: readonly DirectoryBrowserEntry[], prefix = '') => {
+        const needle = prefix.toLowerCase();
+        const base = entries.filter(entry => showHidden || !entry.hidden);
+        if (!needle) return base;
+        const matches = base.filter(entry => entry.name.toLowerCase().startsWith(needle));
+        return matches.length ? matches : base;
+    };
     const sync = () => {
         crumbs.replaceChildren();
         const source = child ?? parent;
         const chain = source?.crumbs?.length ? source.crumbs : source ? [{ name: source.path, path: source.path }] : [];
         if (editingPath) {
             const input = document.createElement('input'); input.type = 'text'; input.className = 'vcp-directory-browser-path-input'; input.value = pathDraft; input.setAttribute('aria-label', 'Folder path'); input.disabled = busy || loading || creating || createOpen;
-            browserScope.listen(input, 'input', () => { pathDraft = input.value; });
+            browserScope.listen(input, 'input', () => { pathDraft = input.value; sync(); if (previewTimer !== null) clearTimeout(previewTimer); const draft = pathDraft; if (!draft.endsWith('/') && !draft.endsWith('\\')) return; previewTimer = setTimeout(() => { previewTimer = null; if (!modal.open || !editingPath || !draft.trim()) return; preview(draft); }, 250); });
             browserScope.listen(input, 'keydown', event => { const key = (event as KeyboardEvent).key; if (key === 'Escape') { event.preventDefault(); event.stopPropagation(); editingPath = false; sync(); } if (key === 'Enter' && pathDraft.trim()) { event.preventDefault(); event.stopPropagation(); editingPath = false; navigate(pathDraft); } });
             crumbs.append(input); queueMicrotask(() => { if (modal.open && document.activeElement !== input) input.focus(); });
         } else {
@@ -93,9 +100,10 @@ export function mountDirectoryBrowser(props: DirectoryBrowserProps, scope: UiSco
             const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'vcp-directory-browser-path-edit'; edit.textContent = '✎'; edit.setAttribute('aria-label', 'Edit folder path'); edit.disabled = !source || busy || loading || creating || createOpen; browserScope.listen(edit, 'click', () => { if (!source) return; editingPath = true; pathDraft = source.path.endsWith('/') || source.path.endsWith('\\') ? source.path : `${source.path}/`; sync(); }); crumbs.append(edit);
         }
         columns.replaceChildren();
-        const renderColumn = (listing: DirectoryBrowserListing, current: DirectoryBrowserEntry | null, onPick: (entry: DirectoryBrowserEntry) => void) => { const column = document.createElement('div'); column.className = 'vcp-directory-browser-column'; visible(listing.entries).forEach(entry => { const row = document.createElement('button'); row.type = 'button'; row.className = 'vcp-directory-browser-row'; row.setAttribute('aria-current', String(current?.path === entry.path)); row.disabled = busy || loading || creating || createOpen; const icon = document.createElement('span'); icon.className = 'vcp-directory-browser-row-icon vcp-ui-icon'; icon.setAttribute('aria-hidden', 'true'); icon.textContent = current?.path === entry.path ? 'folder-open' : 'folder'; const name = document.createElement('span'); name.className = 'vcp-directory-browser-row-name'; name.textContent = entry.name; row.append(icon, name); browserScope.listen(row, 'click', () => onPick(entry)); column.append(row); }); columns.append(column); };
-        if (parent) renderColumn(parent, selected, pick);
-        if (selected && child) { const divider = document.createElement('span'); divider.className = 'vcp-directory-browser-divider'; columns.append(divider); renderColumn(child, null, advance); }
+        const draftPrefix = editingPath ? pathDraft.slice(Math.max(pathDraft.lastIndexOf('/'), pathDraft.lastIndexOf('\\')) + 1) : '';
+        const renderColumn = (listing: DirectoryBrowserListing, current: DirectoryBrowserEntry | null, onPick: (entry: DirectoryBrowserEntry) => void, prefix = '') => { const column = document.createElement('div'); column.className = 'vcp-directory-browser-column'; visible(listing.entries, prefix).forEach(entry => { const row = document.createElement('button'); row.type = 'button'; row.className = 'vcp-directory-browser-row'; row.setAttribute('aria-current', String(current?.path === entry.path)); row.disabled = busy || loading || creating || createOpen; const icon = document.createElement('span'); icon.className = 'vcp-directory-browser-row-icon vcp-ui-icon'; icon.setAttribute('aria-hidden', 'true'); icon.textContent = current?.path === entry.path ? 'folder-open' : 'folder'; const name = document.createElement('span'); name.className = 'vcp-directory-browser-row-name'; name.textContent = entry.name; row.append(icon, name); browserScope.listen(row, 'click', () => onPick(entry)); column.append(row); }); columns.append(column); };
+        if (parent) renderColumn(parent, selected, pick, child ? '' : draftPrefix);
+        if (selected && child) { const divider = document.createElement('span'); divider.className = 'vcp-directory-browser-divider'; columns.append(divider); renderColumn(child, null, advance, draftPrefix); }
         status.textContent = slowLoading ? 'Loading…' : parent?.truncated || child?.truncated ? 'Some entries are not shown.' : '';
         status.hidden = status.textContent === '';
         error.textContent = failure ?? ''; error.hidden = failure === null;
@@ -108,9 +116,27 @@ export function mountDirectoryBrowser(props: DirectoryBrowserProps, scope: UiSco
         createIn.textContent = target ? `Create in ${target}` : '';
         createCancel.disabled = creating; createConfirm.disabled = creating || createName.trim() === '';
     };
-    const clearSlowScan = () => { if (slowTimer !== null) clearTimeout(slowTimer); slowTimer = null; slowLoading = false; };
+    const clearSlowScan = () => { if (slowTimer !== null) clearTimeout(slowTimer); slowTimer = null; slowLoading = false; if (previewTimer !== null) clearTimeout(previewTimer); previewTimer = null; };
     const scan = async (path: string | undefined, commit: (listing: DirectoryBrowserListing) => void) => { const request = ++generation; controller?.abort(); controller = new AbortController(); clearSlowScan(); loading = true; failure = null; slowTimer = setTimeout(() => { if (request === generation && modal.open && loading) { slowTimer = null; slowLoading = true; sync(); } }, SLOW_SCAN_DELAY_MS); sync(); try { const listing = await props.listDirectory(path, controller.signal); if (request !== generation || !modal.open) return; commit(listing); } catch (reason) { if (request !== generation || !modal.open) return; failure = errorText(reason); } finally { if (request === generation && modal.open) { clearSlowScan(); loading = false; sync(); } } };
-    const navigate = (path?: string) => { editingPath = false; selected = null; child = null; void scan(path, listing => { parent = listing; }); };
+    const land = (path: string | undefined, closeEditor: boolean) => {
+        const request = ++generation; controller?.abort(); controller = new AbortController(); loading = true; failure = null; sync();
+        void props.listDirectory(path, controller.signal).then(target => {
+            if (request !== generation || !modal.open) return;
+            const parentCrumb = target.crumbs?.at(-2);
+            let settled = false;
+            const settleSingle = () => { if (settled || request !== generation || !modal.open) return; settled = true; parent = target; selected = null; child = null; if (closeEditor) editingPath = false; clearSlowScan(); loading = false; sync(); };
+            if (!parentCrumb) { settleSingle(); return; }
+            const timeout = setTimeout(settleSingle, PARENT_LEG_WAIT_MS);
+            void props.listDirectory(parentCrumb.path, controller?.signal).then(parentListing => {
+                if (request !== generation || !modal.open) return;
+                const match = parentListing.entries.find(entry => entry.path === target.path);
+                if (!match) { settleSingle(); return; }
+                clearTimeout(timeout); parent = parentListing; selected = match; child = target; if (closeEditor) editingPath = false; settled = true; clearSlowScan(); loading = false; sync();
+            }, () => settleSingle());
+        }, reason => { if (request === generation && modal.open) { failure = errorText(reason); clearSlowScan(); loading = false; sync(); } });
+    };
+    const navigate = (path?: string) => { land(path, true); };
+    const preview = (path: string) => { land(path, false); };
     const pick = (entry: DirectoryBrowserEntry) => { selected = entry; child = null; void scan(entry.path, listing => { child = listing; }); };
     const advance = (entry: DirectoryBrowserEntry) => { if (!child) return; parent = child; selected = null; child = null; pick(entry); };
     browserScope.listen(hidden, 'click', () => { showHidden = !showHidden; sync(); });

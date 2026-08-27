@@ -16,6 +16,10 @@
     "status": "foundation-electron-active",
     "nestedCreate": "fixed-viewport Electron evidence: 380px child dialog, 44px input, parent inert, Escape retracts child, injected create selects result",
     "slowScan": "generated artifact focused evidence: fast listing stays silent; Loading status appears only after 300ms and is cancelled on close/reopen/dispose",
+    "draftPrefix": "generated artifact focused evidence: editing input locally filters the active pane by final segment; unmatched prefixes preserve the readable list",
+    "draftPreview": "generated artifact focused evidence: a separator-terminated draft waits 250ms, lists through injected capability, updates the pane and keeps the editor mounted",
+    "twoLegLanding": "generated artifact focused evidence: a non-root preview lists target then parent under one generation and renders selected two-pane only when parent contains target",
+    "landingTiming": "generated artifact focused evidence: parent leg timeout at 200ms first settles target single-pane; a valid late parent result upgrades to selected two-pane",
     "pixelDiff": "pending-same-semantic-harness-fixture"
   }
 }

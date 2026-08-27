@@ -98,6 +98,14 @@
 
 2026-08-27 DirectoryBrowser slow-scan checkpoint：listing owner 增加 300ms 静默窗口；快速响应不产生 Loading 闪烁，慢响应才在 content 角落显示状态，新的导航或 close/reopen/dispose 会取消旧定时器。focused generated-artifact test 已验证快/慢两条路径。状态保持 `foundation-electron-active`，下一缺口收敛为 Harness draft preview/prefix filter、two-leg landing、same-semantic pixel diff 与 VCP production consumer。
 
+2026-08-27 DirectoryBrowser draft-prefix checkpoint：路径编辑现在会在 Light DOM 内即时重绘当前 pane 的最后路径段前缀；命中时收窄列表，无匹配时保留原列表，避免编辑过程出现空白 pane；输入仍不会触发 host listing，Enter 才提交导航。focused artifact test 覆盖命中、无匹配与 Escape 恢复。该切片尚未实现 Harness draft directory debounce、two-leg landing 或同语义 pixel diff，状态仍为 `foundation-electron-active`。
+
+2026-08-27 DirectoryBrowser draft-preview checkpoint：路径草稿在以分隔符结束时启动 250ms debounce，稳定后仅通过 injected `listDirectory` 预览目标 directory；结果替换 pane 但保持 editor 挂载，最后未完成段仍走 local prefix filter。预览 timer 与 listing generation 都随 owner 被新输入、close/reopen/dispose 取消。focused artifact test 验证 debounce、capability call、pane 更新和 editor 保持。仍缺 Harness two-leg landing 与同语义 pixel diff，状态保持 `foundation-electron-active`。
+
+2026-08-27 DirectoryBrowser two-leg landing checkpoint：非 root draft preview 先 list target、再在同一 generation 内 list parent；仅 parent entries 含 target 时一起提交 parent + selected target child 的双栏，否则安全退化为 target 单栏。focused artifact test 覆盖 parent-leg 请求、双栏和 selected row。Harness 的 parent-leg timeout/late upgrade 等完整 timing 仍未复刻，且无同语义 pixel diff 或 VCP production consumer；状态保持 `foundation-electron-active`。
+
+2026-08-27 DirectoryBrowser landing-timing checkpoint：统一 `land()` helper 现在对 parent leg 施加 200ms 界限；超时先提交 target 单栏，合法的晚到 parent 结果仍可在同一 generation 内升级为 selected 双栏，失败或缺少 target 则维持单栏。focused artifact test 已覆盖慢 parent 的 single-first 与 late upgrade。DirectoryBrowser 仍缺合法 VCP production consumer 与同语义 Harness DOM/computed-style/pixel diff。
+
 本批次不解冻聊天内核、消息渲染、Composer 内部、协议、IPC、持久化、Plugin Loader、chat manifest 或动态壁纸。Harness conversation/tool/markdown 控件可以在实验室复刻，但不得借实验室接入改变这些冻结边界。
 
 ## 0.3 上位规范到执行批次的映射
