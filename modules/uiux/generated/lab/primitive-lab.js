@@ -5,6 +5,7 @@ import { mountMenu } from '../primitives/menu.js';
 import { mountModal } from '../primitives/modal.js';
 import { mountTooltip } from '../primitives/tooltip.js';
 import { mountHoverCard } from '../primitives/hover-card.js';
+import { mountDisclosureRow } from '../primitives/disclosure-row.js';
 import { mountSelect } from '../primitives/select.js';
 const STYLE_ID = 'vcp-harness-primitive-lab';
 function ensureStyles() {
@@ -176,6 +177,31 @@ export function mountPrimitiveLab(root, scope) {
         copyText: '/Users/asahi/Documents/Codex/VCPChat-newarchitecture',
         copyLabel: 'Copy path',
         copiedLabel: 'Copied',
+    }, labScope);
+    const disclosureRow = group(lab, 'DisclosureRow', 'deepseek-harness/packages/client/ui-primitives/src/DisclosureRow.tsx + ToolRow/WorkflowRun production consumers');
+    const disclosureHost = document.createElement('div');
+    disclosureHost.className = 'vcp-harness-lab-disclosure-host';
+    disclosureRow.append(disclosureHost);
+    const disclosureIcon = document.createElement('span');
+    disclosureIcon.className = 'vcp-ui-icon';
+    disclosureIcon.textContent = 'terminal';
+    const disclosureSummary = document.createElement('span');
+    disclosureSummary.className = 'vcp-harness-lab-disclosure-summary';
+    disclosureSummary.textContent = ' · npm run check:uiux';
+    const disclosureBody = document.createElement('div');
+    disclosureBody.className = 'vcp-harness-lab-disclosure-body';
+    disclosureBody.textContent = 'UIUX contract verification completed successfully.';
+    let disclosure;
+    disclosure = mountDisclosureRow(disclosureHost, {
+        icon: disclosureIcon,
+        title: 'Terminal',
+        open: false,
+        expandable: true,
+        expandOnRowClick: true,
+        keepContentWhenOpen: true,
+        collapsedContent: disclosureSummary,
+        children: disclosureBody,
+        onToggle: () => disclosure.setOpen(!disclosure.open),
     }, labScope);
     return scope.own(async () => {
         await labScope.dispose('primitive-lab-unmounted');

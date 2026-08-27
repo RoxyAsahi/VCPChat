@@ -208,6 +208,17 @@ try {
         hoverRoot?.dispatchEvent(new PointerEvent('pointerleave'));
         await new Promise(resolve => setTimeout(resolve, 220));
         result.hoverCardClosed = !document.querySelector('.vcp-harness-hover-card');
+        const disclosure = host.querySelector('.vcp-harness-disclosure-row[role="button"]');
+        result.disclosureCollapsed = disclosure?.getAttribute('aria-expanded') === 'false'
+            && Boolean(disclosure?.querySelector('.vcp-harness-disclosure-icon-idle'))
+            && Boolean(disclosure?.querySelector('.vcp-harness-disclosure-chevron-hover'));
+        disclosure?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        result.disclosureOpen = disclosure?.getAttribute('aria-expanded') === 'true'
+            && Boolean(host.querySelector('.vcp-harness-lab-disclosure-body'))
+            && Boolean(disclosure?.querySelector('.vcp-harness-disclosure-chevron'));
+        disclosure?.click();
+        result.disclosureClosed = disclosure?.getAttribute('aria-expanded') === 'false'
+            && !host.querySelector('.vcp-harness-lab-disclosure-body');
         await release();
         result.restored = host.childNodes.length === 0;
         result.scopeActive = scope.active;
@@ -246,6 +257,9 @@ try {
         hoverCardCopyable: true,
         hoverCardLabel: 'Copy path: /Users/asahi/Documents/Codex/VCPChat-newarchitecture',
         hoverCardClosed: true,
+        disclosureCollapsed: true,
+        disclosureOpen: true,
+        disclosureClosed: true,
         restored: true,
         scopeActive: true,
     }, `generated Harness Candidate Lab mismatch: ${JSON.stringify(candidateLabBoundary)}`);
@@ -457,6 +471,77 @@ try {
         delete window.__harnessCandidateHoverCardController;
         delete window.__harnessCandidateTooltipHoverCardScope;
         document.querySelector('[data-electron-candidate-tooltip-hover-card]')?.remove();
+    });
+    const disclosureGeometry = await page.evaluate(() => {
+        const host = document.createElement('section');
+        host.dataset.electronCandidateDisclosure = 'true';
+        host.className = 'vcp-ui-scope';
+        host.style.cssText = 'position:fixed;left:64px;top:96px;z-index:1200;width:520px;padding:24px;background:#fff;color:#0f1115;border:1px solid rgba(0,0,0,.08);border-radius:12px';
+        document.body.append(host);
+        const scope = new window.VCPLifecycle.LifecycleScope('test:harness-candidate-disclosure-visual');
+        const icon = document.createElement('span');
+        icon.className = 'vcp-ui-icon';
+        icon.textContent = 'terminal';
+        const summary = document.createElement('span');
+        summary.textContent = ' · npm run check:uiux';
+        summary.style.cssText = 'min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#737780;font-size:13px;line-height:20px';
+        const body = document.createElement('div');
+        body.textContent = 'UIUX contract verification completed successfully.';
+        body.style.cssText = 'margin-top:8px;padding:12px 16px;border-radius:12px;background:#2c2c2e;color:#fff;font-size:13px;line-height:20px';
+        let controller;
+        controller = window.VCPUIUX.mountDisclosureRow(host, {
+            icon,
+            title: 'Terminal',
+            open: false,
+            expandable: true,
+            expandOnRowClick: true,
+            keepContentWhenOpen: true,
+            collapsedContent: summary,
+            children: body,
+            onToggle: () => controller.setOpen(!controller.open),
+        }, scope);
+        controller.setOpen(true);
+        const row = controller.row;
+        const leading = controller.leading;
+        const title = row.querySelector('.vcp-harness-disclosure-title');
+        const rootStyle = getComputedStyle(controller.root);
+        const rowStyle = getComputedStyle(row);
+        const leadingStyle = getComputedStyle(leading);
+        const titleStyle = title ? getComputedStyle(title) : null;
+        const rect = row.getBoundingClientRect();
+        window.__harnessCandidateDisclosureController = controller;
+        window.__harnessCandidateDisclosureScope = scope;
+        return {
+            viewport: { width: window.innerWidth, height: window.innerHeight, deviceScaleFactor: window.devicePixelRatio },
+            source: 'generated-artifact-electron',
+            state: 'row-click-open-keep-content',
+            rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+            root: { display: rootStyle.display, flexDirection: rootStyle.flexDirection, width: rootStyle.width, minWidth: rootStyle.minWidth },
+            row: { display: rowStyle.display, alignItems: rowStyle.alignItems, height: rowStyle.height, overflow: rowStyle.overflow, role: row.getAttribute('role'), tabIndex: row.tabIndex, ariaExpanded: row.getAttribute('aria-expanded') },
+            leading: { tag: leading.tagName, width: leadingStyle.width, height: leadingStyle.height, marginRight: leadingStyle.marginRight, padding: leadingStyle.padding, borderWidth: leadingStyle.borderWidth, chevron: Boolean(leading.querySelector('svg[data-vcp-icon="chevron_down"],svg[data-vcp-icon="chevron-down"]')) },
+            title: titleStyle ? { text: title?.textContent || '', fontSize: titleStyle.fontSize, lineHeight: titleStyle.lineHeight } : null,
+            summaryVisible: summary.parentElement === row,
+            bodyVisible: body.parentElement === controller.root,
+        };
+    });
+    assert.deepEqual(disclosureGeometry.viewport, { width: 800, height: 600, deviceScaleFactor: 1 });
+    assert.equal(disclosureGeometry.rect.height, 24);
+    assert.deepEqual(disclosureGeometry.root, { display: 'flex', flexDirection: 'column', width: '470px', minWidth: '0px' });
+    assert.deepEqual(disclosureGeometry.row, { display: 'flex', alignItems: 'center', height: '24px', overflow: 'hidden', role: 'button', tabIndex: 0, ariaExpanded: 'true' });
+    assert.deepEqual(disclosureGeometry.leading, { tag: 'SPAN', width: '16px', height: '16px', marginRight: '6px', padding: '0px', borderWidth: '0px', chevron: true });
+    assert.deepEqual(disclosureGeometry.title, { text: 'Terminal', fontSize: '14px', lineHeight: '24px' });
+    assert.equal(disclosureGeometry.summaryVisible, true);
+    assert.equal(disclosureGeometry.bodyVisible, true);
+    const disclosureScreenshot = path.join(root, 'reports', 'vcp-harness-disclosure-row-candidate.png');
+    await page.screenshot({ path: disclosureScreenshot });
+    assert.ok((await fs.stat(disclosureScreenshot)).size > 1024, 'DisclosureRow Candidate screenshot is unexpectedly empty');
+    await fs.writeFile(path.join(root, 'reports', 'vcp-harness-disclosure-row-candidate.json'), `${JSON.stringify(disclosureGeometry, null, 2)}\n`, 'utf8');
+    await page.evaluate(async () => {
+        await window.__harnessCandidateDisclosureController?.dispose?.();
+        await window.__harnessCandidateDisclosureScope?.dispose?.('candidate-disclosure-visual-complete');
+        delete window.__harnessCandidateDisclosureController;
+        delete window.__harnessCandidateDisclosureScope;
+        document.querySelector('[data-electron-candidate-disclosure]')?.remove();
     });
     await page.screenshot({ path: primitiveScreenshot });
     const screenshotStat = await fs.stat(primitiveScreenshot);

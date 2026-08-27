@@ -14,12 +14,98 @@ const { mountMenu } = await import('../modules/uiux/primitives/menu.ts');
 const { mountModal } = await import('../modules/uiux/primitives/modal.ts');
 const { mountTooltip } = await import('../modules/uiux/primitives/tooltip.ts');
 const { mountHoverCard } = await import('../modules/uiux/primitives/hover-card.ts');
+const { mountDisclosureRow } = await import('../modules/uiux/primitives/disclosure-row.ts');
 const { mountChoice } = await import('../modules/uiux/primitives/choice.ts');
 const { mountRange } = await import('../modules/uiux/primitives/range.ts');
 const { mountToggle } = await import('../modules/uiux/primitives/toggle.ts');
 const { mountColorPair } = await import('../modules/uiux/primitives/color-pair.ts');
 
 const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+
+test('Harness DisclosureRow preserves controlled row-click and leading-button contracts', async () => {
+    const dom = new JSDOM('<!doctype html><main><section id="row"><span id="icon">I</span><span id="summary"> · command</span><div id="body">Result</div></section><section id="button-row"><span id="icon-2">J</span><span id="summary-2"> · phase</span><div id="body-2">Members</div></section></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('disclosure-test'));
+        const host = document.getElementById('row');
+        const body = document.getElementById('body');
+        const summary = document.getElementById('summary');
+        let rowToggles = 0;
+        let rowDisclosure;
+        rowDisclosure = mountDisclosureRow(host, {
+            icon: document.getElementById('icon'),
+            title: 'Terminal',
+            open: false,
+            expandable: true,
+            expandOnRowClick: true,
+            keepContentWhenOpen: true,
+            collapsedContent: document.getElementById('summary'),
+            children: document.getElementById('body'),
+            className: 'tool-root',
+            rowClassName: 'tool-row',
+            leadingClassName: 'tool-leading',
+            chevronClassName: 'tool-chevron',
+            titleClassName: 'tool-title',
+            onToggle: () => { rowToggles += 1; rowDisclosure.setOpen(!rowDisclosure.open); },
+        }, scope);
+        assert.equal(rowDisclosure.root.classList.contains('tool-root'), true);
+        assert.equal(rowDisclosure.row.getAttribute('role'), 'button');
+        assert.equal(rowDisclosure.row.tabIndex, 0);
+        assert.equal(rowDisclosure.row.getAttribute('aria-expanded'), 'false');
+        assert.equal(rowDisclosure.leading.tagName, 'SPAN');
+        assert.ok(rowDisclosure.leading.querySelector('.vcp-harness-disclosure-icon-idle > #icon'));
+        assert.ok(rowDisclosure.leading.querySelector('.vcp-harness-disclosure-chevron-hover.tool-chevron'));
+        assert.equal(body.parentNode.nodeType, 11, 'closed body must remain owned but unrendered');
+        rowDisclosure.row.click();
+        assert.equal(rowToggles, 1);
+        assert.equal(rowDisclosure.open, true);
+        assert.equal(rowDisclosure.root.dataset.open, 'true');
+        assert.equal(rowDisclosure.row.getAttribute('aria-expanded'), 'true');
+        assert.ok(rowDisclosure.leading.querySelector('.vcp-harness-disclosure-chevron.tool-chevron'));
+        assert.equal(summary.parentElement, rowDisclosure.row, 'keepContentWhenOpen keeps summary inline');
+        assert.equal(body.parentElement, rowDisclosure.root);
+        const keyEvent = new dom.window.KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
+        rowDisclosure.row.dispatchEvent(keyEvent);
+        assert.equal(keyEvent.defaultPrevented, true);
+        assert.equal(rowToggles, 2);
+        assert.equal(rowDisclosure.open, false);
+        rowDisclosure.setTitle('Terminal complete');
+        assert.equal(rowDisclosure.row.querySelector('.vcp-harness-disclosure-title')?.textContent, 'Terminal complete');
+
+        const buttonHost = document.getElementById('button-row');
+        const summary2 = document.getElementById('summary-2');
+        let buttonToggles = 0;
+        let buttonDisclosure;
+        buttonDisclosure = mountDisclosureRow(buttonHost, {
+            icon: document.getElementById('icon-2'),
+            title: 'Phase',
+            open: false,
+            expandable: true,
+            collapsedContent: document.getElementById('summary-2'),
+            children: document.getElementById('body-2'),
+            onToggle: () => { buttonToggles += 1; buttonDisclosure.setOpen(!buttonDisclosure.open); },
+        }, scope);
+        assert.equal(buttonDisclosure.row.getAttribute('role'), null);
+        assert.equal(buttonDisclosure.leading.tagName, 'BUTTON');
+        assert.equal(buttonDisclosure.leading.getAttribute('aria-expanded'), 'false');
+        buttonDisclosure.row.click();
+        assert.equal(buttonToggles, 0, 'non-row mode ignores row activation');
+        buttonDisclosure.leading.click();
+        assert.equal(buttonToggles, 1);
+        assert.equal(buttonDisclosure.leading.getAttribute('aria-expanded'), 'true');
+        assert.equal(summary2.parentNode.nodeType, 11, 'default open state hides collapsed summary');
+        buttonDisclosure.setExpandable(false);
+        assert.equal(buttonDisclosure.row.getAttribute('role'), null);
+        assert.equal(buttonDisclosure.leading.tagName, 'SPAN');
+        assert.equal(buttonDisclosure.open, true, 'non-expandable can remain forced open for active workflow phases');
+        await buttonDisclosure.dispose();
+        await rowDisclosure.dispose();
+        assert.deepEqual([...host.children].map(node => node.id), ['icon', 'summary', 'body']);
+        assert.deepEqual([...buttonHost.children].map(node => node.id), ['icon-2', 'summary-2', 'body-2']);
+        await scope.dispose('disclosure-complete');
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
 
 test('Harness Tooltip keeps the anchor DOM and owns hover/focus/delay/disabled effects', async () => {
     const dom = new JSDOM('<!doctype html><main><button id="anchor">Details</button><span id="after">After</span></main>');

@@ -1,0 +1,25 @@
+{
+  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/DisclosureRow.tsx",
+  "productionConsumers": [
+    "packages/client/ui-tool/src/client/tool/components/ToolRow.tsx",
+    "packages/client/ui-workflow-run/src/client/WorkflowRunPanel.tsx",
+    "packages/client/ui-conversation/src/client/chat/ReasoningRow.tsx",
+    "packages/client/ui-conversation/src/client/chat/ContextInjectionRow.tsx"
+  ],
+  "contract": {
+    "tree": "root[data-open?] > row[data-disclosure-row][data-expandable?] > leading + title + collapsedContent?; expanded children follow row",
+    "rowMode": "expandOnRowClick + expandable => row role=button, tabindex=0, aria-expanded, click/Enter/Space",
+    "leadingMode": "expandable without row mode => native leading button[aria-expanded]",
+    "preview": "collapsed idle icon crossfades to chevron on row hover; open always shows chevron",
+    "controlled": "onToggle is notification only; owner must update open",
+    "forcedOpen": "open may remain true while expandable=false",
+    "content": "collapsedContent hides while open unless keepContentWhenOpen; children render only while open"
+  },
+  "vcpCandidate": {
+    "source": "modules/uiux/primitives/disclosure-row.ts",
+    "host": "modules/uiux/lab/primitive-lab.ts",
+    "maturity": "candidate-interaction-active",
+    "stableApi": false,
+    "productionIntegration": "frozen for VCP chat/message internals; lab evidence only"
+  }
+}

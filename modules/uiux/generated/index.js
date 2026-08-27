@@ -10,6 +10,7 @@ export { mountMenu } from './primitives/menu.js';
 export { mountModal } from './primitives/modal.js';
 export { mountTooltip } from './primitives/tooltip.js';
 export { mountHoverCard } from './primitives/hover-card.js';
+export { mountDisclosureRow } from './primitives/disclosure-row.js';
 export { mountChoice } from './primitives/choice.js';
 export { mountRange } from './primitives/range.js';
 export { mountToggle } from './primitives/toggle.js';

@@ -25,7 +25,7 @@
 | Menu | `ui-primitives/src/Menu.tsx`；Agent Preset、Language、Permission、Input Trigger、Workspace | candidate-interaction-active；同语义 label/separator/danger/submenu pixel diff pending | B1 |
 | Modal | `ui-primitives/src/Modal.tsx`；Settings、Model editor、Directory/Workspace | candidate-interaction-active；同语义 Harness pixel diff 与 VCP production adoption pending | B1 |
 | Tooltip / HoverCard | matching `ui-primitives/src/*.tsx`；Message actions、Goal、Sidebar、Workspace | candidate-interaction-active；同语义 Harness pixel diff 与 VCP production adoption pending | B1 |
-| DisclosureRow | `ui-primitives/src/DisclosureRow.tsx`；Reasoning、Context、Tool、Workflow | inventoried | B1 |
+| DisclosureRow | `ui-primitives/src/DisclosureRow.tsx`；Reasoning、Context、Tool、Workflow | candidate-interaction-active；VCP chat integration frozen，同语义 Harness pixel diff pending | B1 |
 | StateDot | `ui-primitives/src/StateDot.tsx`；Chat、Tool、Skill、Job、Subagent、Workspace | inventoried | B1 |
 | Toast | `ui-primitives/src/Toast.tsx`；Composer、Model selection | inventoried | B1 |
 | RiskConfirmation | `ui-primitives/src/RiskConfirmation.tsx`；Permission、Command selection | inventoried | B1 |

@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const root = process.cwd();
 const dir = path.join(root, 'docs/reference/deepseek-harness-primitives');
-const primitives = ['settings-root', 'field', 'select', 'menu', 'modal', 'tooltip', 'hover-card', 'input', 'range', 'toggle', 'color-pair'];
+const primitives = ['settings-root', 'field', 'select', 'menu', 'modal', 'tooltip', 'hover-card', 'disclosure-row', 'input', 'range', 'toggle', 'color-pair'];
 const required = [
   'reference.css',
   'fixture-matrix.json',

@@ -13,6 +13,7 @@ import { mountMenu } from './primitives/menu.js';
 import { mountModal } from './primitives/modal.js';
 import { mountTooltip } from './primitives/tooltip.js';
 import { mountHoverCard } from './primitives/hover-card.js';
+import { mountDisclosureRow } from './primitives/disclosure-row.js';
 import { mountChoice } from './primitives/choice.js';
 import { mountRange } from './primitives/range.js';
 import { mountToggle } from './primitives/toggle.js';
@@ -48,6 +49,7 @@ declare const api: {
     mountModal: typeof mountModal;
     mountTooltip: typeof mountTooltip;
     mountHoverCard: typeof mountHoverCard;
+    mountDisclosureRow: typeof mountDisclosureRow;
     mountChoice: typeof mountChoice;
     mountRange: typeof mountRange;
     mountToggle: typeof mountToggle;

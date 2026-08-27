@@ -8,7 +8,8 @@
     ["select", "closed"], ["select", "open"], ["select", "selected"], ["select", "disabled"],
     ["modal", "standard-open"], ["modal", "headless-open"],
     ["tooltip", "right"], ["tooltip", "bottom"], ["tooltip", "top-flip"],
-    ["hover-card", "open"], ["hover-card", "copyable"]
+    ["hover-card", "open"], ["hover-card", "copyable"],
+    ["disclosure-row", "collapsed-preview"], ["disclosure-row", "open"], ["disclosure-row", "forced-open"]
   ],
   "interactionCases": [
     { "case": "select/keyboard-open-focus", "status": "pass", "evidence": "same semantic fixture; Harness and VCP retain trigger focus" },
@@ -16,7 +17,8 @@
     { "case": "menu/candidate-composite-states", "status": "candidate-interaction-active", "evidence": "generated Electron fixture covers label/separator/footer/selected/disabled/danger/submenu, portal placement, outside-dismiss, Escape and dispose; same-semantic Harness pixel fixture pending" },
     { "case": "modal/close-reopen-dispose", "status": "candidate-interaction-active", "evidence": "generated Electron fixture covers standard/headless portals, mask/Escape/close-button, reopen, close icon, exact owned-node restoration and dispose; same-semantic Harness pixel fixture pending" },
     { "case": "tooltip/hover-focus-delay-disable", "status": "candidate-interaction-active", "evidence": "focused source test and generated Electron journey cover delayed hover, immediate focus, mouseleave/blur, lazy label and disabled-mid-open" },
-    { "case": "hover-card/dwell-grace-copy-dispose", "status": "candidate-interaction-active", "evidence": "focused source test and generated Electron journey cover dwell, portal, 200ms grace, scroll placement, copy feedback, disable and exact DOM restoration" }
+    { "case": "hover-card/dwell-grace-copy-dispose", "status": "candidate-interaction-active", "evidence": "focused source test and generated Electron journey cover dwell, portal, 200ms grace, scroll placement, copy feedback, disable and exact DOM restoration" },
+    { "case": "disclosure-row/controlled-row-leading-keyboard-dispose", "status": "candidate-interaction-active", "evidence": "focused source test and generated Electron journey cover controlled row click, Enter/Space, leading-only button, preview chevron, keep/hide content, forced-open and exact DOM restoration" }
   ],
   "outputs": ["dom", "geometry", "computed-style", "screenshot", "pixel-diff"],
   "stateSemantics": {
@@ -32,7 +34,10 @@
     "tooltip/bottom": "Fixed bubble centers below the anchor and clamps horizontally inside a 12px viewport margin",
     "tooltip/top-flip": "Requested vertical placement flips only when the opposite side genuinely fits",
     "hover-card/open": "244px body portal opens after dwell and tracks the anchor through scroll/resize",
-    "hover-card/copyable": "Copyable card exposes button semantics, preserves selection and publishes one-second success feedback"
+    "hover-card/copyable": "Copyable card exposes button semantics, preserves selection and publishes one-second success feedback",
+    "disclosure-row/collapsed-preview": "Collapsed 24px header shows the supplied icon and previews a chevron on hover",
+    "disclosure-row/open": "Controlled open state replaces leading icon with chevron and mounts owner content after the row",
+    "disclosure-row/forced-open": "Workflow status may remain open while expandable=false and exposes no toggle semantics"
   },
   "status": {
     "domStructural": "10/10 pass",
@@ -44,6 +49,7 @@
     "menuCandidate": "interaction/geometry/screenshot active at 800x600 @1x; same-semantic Harness pixel diff pending",
     "modalCandidate": "standard/headless interaction, geometry and screenshot active at 800x600 @1x; same-semantic Harness pixel diff pending",
     "tooltipCandidate": "hover/focus/delay/disabled interaction and fixed geometry active; same-semantic Harness pixel diff pending",
-    "hoverCardCandidate": "dwell/grace/portal/copy/dispose interaction and fixed geometry active; same-semantic Harness pixel diff pending"
+    "hoverCardCandidate": "dwell/grace/portal/copy/dispose interaction and fixed geometry active; same-semantic Harness pixel diff pending",
+    "disclosureRowCandidate": "row/leading/keyboard/forced-open interaction and 24px geometry active; same-semantic Harness pixel diff pending"
   }
 }
