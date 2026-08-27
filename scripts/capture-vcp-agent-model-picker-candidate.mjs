@@ -100,9 +100,10 @@ try {
         };
         const menu = host.querySelector('.vcp-harness-popup-select-card');
         const menuStyle = menu ? getComputedStyle(menu) : null;
-        const menuRule = [...document.styleSheets].flatMap(sheet => {
+        const menuRules = [...document.styleSheets].flatMap(sheet => {
             try { return [...sheet.cssRules]; } catch { return []; }
-        }).find(rule => rule.selectorText?.includes('.vcp-harness-popup-select-card'));
+        }).filter(rule => rule.selectorText?.includes('.vcp-harness-popup-select-card'));
+        const declaration = property => menuRules.map(rule => rule.style?.getPropertyValue(property)).find(Boolean) || null;
         const menuRect = menu?.getBoundingClientRect();
         const search = host.querySelector('.vcp-harness-popup-select-search');
         search?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
@@ -159,9 +160,9 @@ try {
                     x: menuRect.x, y: menuRect.y, width: menuRect.width, height: menuRect.height,
                 } : null,
                 cssContract: {
-                    borderRadius: menuRule?.style?.borderRadius || null,
-                    padding: menuRule?.style?.padding || null,
-                    minWidth: menuRule?.style?.minWidth || null,
+                    borderRadius: declaration('border-radius'),
+                    padding: declaration('padding'),
+                    minWidth: declaration('min-width'),
                 },
             } : null,
             selected, efforts,
