@@ -514,3 +514,12 @@ directory-browser 接入前置达成。typed field owner 本就以 `#networkNote
 - **触发原因**：批次 20-24 期间只复跑了四快门禁（source-equivalence / unified-surface / test-settings-wa / test-ui-system）+ Electron journey + settings-only stress；§6 最小集合的其余四项（`check:uiux`、`test:uiux`、`check:uiux:artifacts`/`test:uiux:artifacts`、`guard:classic-retirement`）在退役后未跑过，本批补齐。
 - **结果全绿**：`check:uiux`（tsc --project tsconfig.uiux.json）通过；`test:uiux` 50/50（0 fail，含 forum timeout、rust retry、typed service 订阅回滚等 adapter 契约）；artifact consistency 78 generated files 一致、artifact smoke（Settings + Rust + Forum + Runtime adapters + scoped registry + semantic icon + PopupSelect candidate 契约）通过；`guard:classic-retirement` 边界门禁通过——兜底退役未越出 classic 退休边界。
 - 台账：§7 追加批次 25 段落；roadmap 追加 R2-02E checkpoint。下一批候选：unlock 复查 directory-browser；或视线程 A 进展轮转。
+
+### 2026-08-27 批次 26：legacy 整表 save 链 next 模式存活状态审计（docs-only）
+
+状态：审计 + docs；代码面自批次 23 提交 `c90776cd` 起零变更。
+
+- unlock 复查：线程 A 继续推进 agent-settings 按钮（`8a73d9f3`/`dc82b299` prompt mode buttons），DirectoryBrowser 保持 `foundation-electron-active`，unlock 条件不满足。四快门禁在线程 A 交错提交后的最新树上复跑全绿（无漂移）。
+- **审计结论：legacy 整表 save 链在 next 模式存活且是设计内职责，不可退役**。链路 = `mountSettingsAutosave`（bridge L1147）对非 typed 字段的 input/change 做 400ms 防抖 → `form.requestSubmit()` → event-listeners L519 的 submit 监听 → `handleSaveGlobalSettings`（global-settings-manager L4）→ 整表 collect → IPC。三条 suppress 边界：(1) typed settings 字段带 `vcpTypedFieldOwner` 标记、save-result 归属过滤（`owner === 'typed-settings-field-owner'` 时 autosave 不复位 saving）；(2) forum 字段带 `vcpTypedForumFieldOwner` 标记；(3) 重试点击路由按 failureOwner 区分（typed-forum-field-owner 除外）。该链是归属台账 §3 冻结 38 键在 next 模式的唯一保存路由，与矩阵行 66「legacy autosave 仅驱动 §3 冻结字段」的表述逐字吻合；冻结解除前置是线程 A 对应 capability adapter 交付，不是 B 侧可独立施工项。
+- 覆盖证据确认：整表 collect 链已有 jsdom 契约（tests/global-settings-save.test.mjs：typed 委托、forum-denied 失败传播）与 jsdom journey 8/8（advanced-features 等 load->modify->save->fail->reopen-restore）；Electron journey 的 forum 字段段（L894-927）显式断言 `legacySubmitCalls === 0`（typed 字段不进该链）。无需新增探针。
+- 台账：§7 追加批次 26 段落；roadmap 追加 R2-02E checkpoint。**B 线程当前无剩余可独立施工项**：剩余开放面全部被线程 A 阻塞——directory-browser unlock（其 Candidate-active 晋级）、Forum 凭据 `single-owner-active` 升级（其 Input reference/production-consumer gate 覆盖 G2）、win32/Linux packaged evidence（环境依赖）。下一批次动作 = unlock 复查轮转；线程 A 任一前置晋级后按登记条件继续施工。
