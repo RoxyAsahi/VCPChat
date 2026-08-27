@@ -50,7 +50,7 @@
   "agentModelPicker": {
     "visualCases": ["root-pane", "model-pane", "effort-pane", "loading", "error-retry", "selecting", "locked"],
     "source": "packages/client/ui-model-selection/src/client/ModelSelect.tsx",
-    "vcpStatus": "candidate-lab-only; same-engine DOM/computed-style/pixel fixture pending"
+    "vcpStatus": "candidate-lab-only; root/model/effort pane contract active; same-engine DOM/computed-style/pixel fixture pending"
   },
   "stateSemantics": {
     "select/closed": "AgentPresetSeat ready trigger; production fixture captured, raw DOM/geometry/pixel comparison is failing",
