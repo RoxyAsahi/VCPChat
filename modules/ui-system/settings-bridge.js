@@ -501,11 +501,13 @@ function enhance(name, element, options = {}) {
 function enhanceForm(form) {
     mountTypedAgentIdentityInput(form);
     mountTypedAgentModelInput(form);
+    mountTypedAgentTemperatureInput(form);
+    mountTypedAgentNumericInputs(form);
     form.querySelectorAll('.agent-settings-section, .group-settings-section').forEach(section => {
         enhance('SettingsSection', section);
     });
     form.querySelectorAll('input:is(:not([type]), [type="text"], [type="url"], [type="password"], [type="number"], [type="email"], [type="search"], [type="tel"])').forEach(input => {
-        if (input.id === 'agentNameInput' || input.id === 'agentModel') return;
+        if (['agentNameInput', 'agentModel', 'agentTemperature', 'agentContextTokenLimit', 'agentMaxOutputTokens', 'agentTopP', 'agentTopK'].includes(input.id)) return;
         enhance('Input', input);
     });
     form.querySelectorAll('textarea').forEach(textarea => enhance('Textarea', textarea));
@@ -584,6 +586,36 @@ function mountTypedAgentTemperatureInput(form) {
     } catch (error) {
         console.warn('[VCPUI SettingsBridge] Could not mount typed Agent temperature Input:', error);
     }
+}
+
+// These fields are all canonical numeric settings. Keep their native number
+// semantics and constraints while sharing the same typed Input presentation
+// owner used by the identity/model/temperature slices.
+function mountTypedAgentNumericInputs(form) {
+    const api = window.VCPUIUX;
+    const scope = ensurePresentationScope();
+    if (!api?.mountInput || !scope) return;
+    const fields = [
+        ['agentContextTokenLimit', 'vcpTypedAgentContextLimit'],
+        ['agentMaxOutputTokens', 'vcpTypedAgentMaxOutput'],
+        ['agentTopP', 'vcpTypedAgentTopP'],
+        ['agentTopK', 'vcpTypedAgentTopK'],
+    ];
+    fields.forEach(([id, marker]) => {
+        const input = form?.querySelector?.(`#${id}`);
+        if (!input || input.dataset[marker] === 'true') return;
+        const originalClass = input.className;
+        try {
+            api.mountInput(input, {}, scope);
+            input.dataset[marker] = 'true';
+            scope.own(() => {
+                delete input.dataset[marker];
+                if (input.isConnected && input.className !== originalClass) input.className = originalClass;
+            }, `${id}-input-marker`, 'ui-presentation');
+        } catch (error) {
+            console.warn(`[VCPUI SettingsBridge] Could not mount typed ${id} Input:`, error);
+        }
+    });
 }
 
 // Lucide icon names for the global settings categories. Icons are always
