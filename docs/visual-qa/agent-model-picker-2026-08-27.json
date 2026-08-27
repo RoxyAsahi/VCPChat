@@ -10,13 +10,13 @@
       "id": "VF-AGENT-MODEL-001",
       "severity": "P1",
       "type": "css-cascade",
-      "status": "reproduced",
-      "impact": "The production evidence gate detects an authored display:flex rule for the Harness model trigger. The trigger currently depends on owner-bound inline !important styles, so legacy presentation remains active and can regress after dispose or stylesheet order changes.",
+      "status": "resolved",
+      "impact": "A generic Settings Shell display:flex rule previously matched the Harness model trigger. The Agent picker now excludes its trigger class, and the legacy trigger SVG rule is similarly gated.",
       "legacySelector": "#agentSettingsForm .model-input-container button",
       "harnessSelectors": [".vcp-harness-button.button", ".vcp-harness-agent-model-picker-trigger"],
       "evidence": {
         "command": "npm run check:agent-settings-production-evidence",
-        "result": "FAIL: Agent action openModelSelectBtn has a conflicting authored display:flex rule",
+        "result": "PASS: production authored-cascade gate",
         "report": "reports/vcp-agent-settings-production.json",
         "computed": { "display": "flex", "rect": { "width": 0, "height": 0 } },
         "authoredRules": [
@@ -25,7 +25,7 @@
         ]
       },
       "minimalRepro": "docs/visual-qa/fixtures/agent-model-picker-trigger-cascade.html",
-      "smallestCorrection": "Retire every Agent-specific legacy selector that matches .vcp-harness-agent-model-picker-trigger (including the checked-in settings-model-select.css source), then add a negative selector gate. Do not broaden the change to group/global model controls until they have their own consumer contract.",
+      "smallestCorrection": "Gate Agent-specific legacy selectors with :not(.vcp-harness-agent-model-picker-trigger); group/global model controls remain out of scope.",
       "owner": "main Settings migration thread",
       "qaOwner": "Visual Forensics / CSS Cascade QA"
     },
@@ -33,8 +33,8 @@
       "id": "VF-AGENT-MODEL-002",
       "severity": "P1",
       "type": "interaction-lifecycle",
-      "status": "reproduced",
-      "impact": "After selecting a model, reopening the picker leaves its internal pane at model. Escape then only returns to the root pane and does not dismiss or restore trigger focus.",
+      "status": "resolved",
+      "impact": "The picker now resets to its root pane on trigger open; Escape dismisses the popup and restores trigger focus after a reopen.",
       "reproSequence": [
         "Open #openModelSelectBtn",
         "Enter Model pane",
@@ -44,13 +44,13 @@
       ],
       "evidence": {
         "command": "VCPCHAT_STRESS_AGENT_MODEL_PICKER_INTERACTION=1 npm run test:electron-agent-settings-interaction",
-        "result": "FAIL: escaped=false, focusRestored=false",
-        "actual": { "opened": true, "rootPane": true, "modelPane": true, "filteredCount": 1, "selected": true, "afterSelectClosed": true, "reopened": true, "escaped": false, "focusRestored": false },
+        "result": "PASS: escaped=true, focusRestored=true",
+        "actual": { "opened": true, "rootPane": true, "modelPane": true, "filteredCount": 1, "selected": true, "afterSelectClosed": true, "reopened": true, "escaped": true, "focusRestored": true },
         "expected": { "escaped": true, "focusRestored": true }
       },
       "sourceLocation": "modules/uiux/primitives/agent-model-picker.ts:199-205",
       "rootCause": "The trigger click handler opens popup directly without resetting pane='root'. The public open() helper resets the pane, but production uses the trigger listener path.",
-      "minimalCorrection": "Reset pane='root' before popup.open() in the trigger click handler, or route the trigger handler through the same open() transaction; add a reopen-after-selection regression sequence.",
+      "minimalCorrection": "Reset pane='root' before popup.open() in the trigger click handler and retain the reopen-after-selection regression sequence.",
       "owner": "main Settings migration thread",
       "qaOwner": "Visual Forensics / CSS Cascade QA"
     }
