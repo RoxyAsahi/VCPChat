@@ -30,4 +30,8 @@ Run `npm run scan:harness-ui-inventory` to rescan exported Harness client
 components. The report separates portable primitives, composites, and frozen
 domain surfaces, then lists source exports without a reference contract.
 
+Run `npm run check:harness-geometry-contracts` to compare every reference
+geometry selector/property against its declared Harness stylesheet. It is
+report-only and preserves mismatches as evidence gaps.
+
 The command is intentionally report-first: Candidate Lab entries remain gaps and do not become production parity claims. Use `--strict` only when a release gate requires every provenance and interaction gap to be closed.
