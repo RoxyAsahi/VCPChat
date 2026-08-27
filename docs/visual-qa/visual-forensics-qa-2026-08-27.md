@@ -59,6 +59,8 @@ On 2026-08-27 in the current dirty worktree:
 - Per-viewport overlay evidence now includes Modal and Tooltip parent classes alongside Menu's body portal parent, proving the concrete runtime ownership/stacking context for each captured overlay.
 - Settings cascade provenance is now captured while the modal is open at every viewport, so responsive rule changes are evidenced directly rather than inferred from a single default-size CDP sample.
 - Fresh formal manifests contain 17 matched Settings-field rules at each required viewport in both themes, including the responsive modal and input selectors used by the real row context.
+- Cascade records now include a runtime-derived specificity tuple and matched-rule order for every CDP target, allowing the gate to detect selector-precedence drift rather than only stylesheet presence.
+- Fresh Settings-field evidence shows concrete precedence tuples such as `[1,11,2]` for the form rule versus `[0,2,0]` for `.vcp-uiux-input-wrap > .input`, with matched-rule order retained for every viewport and theme.
 - Resize restoration evidence from `/tmp/vqa-restored-light/` passed: after each narrow resize, the real renderer returned to exactly `800x600`, `1280x800`, and `1680x1000` with no horizontal overflow, and each case now emits a `*-restored.png` screenshot. The evidence checker requires this restored state.
 
 ## Scope and frozen boundaries

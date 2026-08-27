@@ -157,13 +157,22 @@ try {
   const cdp = await page.createCDPSession();
   await cdp.send('DOM.enable').catch(() => {});
   await cdp.send('CSS.enable').catch(() => {});
+  const selectorSpecificity = selector => {
+    const normalized = selector.replace(/::[\w-]+/g, '').replace(/:where\([^)]*\)/g, '');
+    const ids = (normalized.match(/#[\w-]+/g) || []).length;
+    const classes = (normalized.match(/\.[\w-]+/g) || []).length;
+    const attributes = (normalized.match(/\[[^\]]+\]/g) || []).length;
+    const pseudos = (normalized.match(/:[\w-]+(?:\([^)]*\))?/g) || []).filter(value => !value.startsWith('::')).length;
+    const elements = (normalized.replace(/#[\w-]+|\.[\w-]+|\[[^\]]+\]|:[\w-]+(?:\([^)]*\))?/g, ' ').match(/(^|[\s>+~,(])([a-zA-Z][\w-]*)/g) || []).length;
+    return [ids, classes + attributes + pseudos, elements];
+  };
   const captureMatchedRules = async selector => {
     try {
       const { root: documentNode } = await cdp.send('DOM.getDocument', { depth: 0 });
       const { nodeId } = await cdp.send('DOM.querySelector', { nodeId: documentNode.nodeId, selector });
       if (!nodeId) return [];
       const matched = await cdp.send('CSS.getMatchedStylesForNode', { nodeId });
-      return [...(matched.matchedCSSRules || [])].slice(-40).map(entry => ({ selector: entry.rule?.selectorList?.text || '', origin: entry.rule?.origin || '', styleSheetId: entry.rule?.styleSheetId || '', properties: (entry.rule?.style?.cssProperties || []).filter(property => ['color', 'background', 'background-color', 'padding', 'border-radius', 'z-index'].includes(property.name)).map(property => ({ name: property.name, value: property.value })) }));
+      return [...(matched.matchedCSSRules || [])].slice(-40).map((entry, index) => { const ruleSelector = entry.rule?.selectorList?.text || ''; return { selector: ruleSelector, specificity: selectorSpecificity(ruleSelector), cascadeOrder: index, origin: entry.rule?.origin || '', styleSheetId: entry.rule?.styleSheetId || '', properties: (entry.rule?.style?.cssProperties || []).filter(property => ['color', 'background', 'background-color', 'padding', 'border-radius', 'z-index'].includes(property.name)).map(property => ({ name: property.name, value: property.value })) }; });
     } catch { return []; }
   };
   await page.evaluate(async () => {

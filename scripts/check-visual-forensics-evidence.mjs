@@ -32,6 +32,7 @@ for (const dir of targets) {
     assert.ok(manifest.settingsContext?.contextSample?.showcase?.ancestry?.length > 0);
     assert.ok(manifest.settingsContext?.contextSample?.settings?.ancestry?.length > 0);
     assert.ok(manifest.settingsCascade?.length > 0);
+    assert.ok(manifest.settingsCascade.every(rule => Array.isArray(rule.specificity) && rule.specificity.length === 3 && Number.isInteger(rule.cascadeOrder)));
     assert.equal(manifest.settingsContext?.sections?.length, 8);
     assert.ok(manifest.settingsContext.sections.every(section => section.activeId && section.visibleControls > 0));
     assert.equal(manifest.settingsContext?.settingsCleanup?.active, false);
@@ -61,6 +62,7 @@ for (const dir of targets) {
       assert.ok(observation?.overlayViewport?.tooltip?.parent);
       assert.ok(observation?.scrolled?.ownerY > 0 || observation?.scrolled?.ownerScrollHeight <= observation?.scrolled?.ownerViewport, `scroll owner did not move for ${name}`);
       assert.ok(observation?.initial?.cdpCascade?.length > 0);
+      assert.ok(observation.initial.cdpCascade.every(rule => Array.isArray(rule.specificity) && Number.isInteger(rule.cascadeOrder)));
       assert.ok(observation?.initial?.interactionStates?.hover);
       assert.ok(observation?.initial?.interactionStates?.focus);
       assert.ok(observation?.initial?.stateCounts && Object.values(observation.initial.stateCounts).every(value => Number.isInteger(value)));
