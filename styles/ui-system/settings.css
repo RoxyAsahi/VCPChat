@@ -664,7 +664,7 @@
        wrap must stay excluded: the wrapper owns the focus border surface,
        and a second outline on the inner input renders as a stray halo.
        .vcp-settings-bare-select gets the full control contract below. */
-    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm :is(input, select, textarea, button):focus-visible:not(:is(.vcp-harness-input-wrap > *, .vcp-harness-select-wrap > *, .vcp-harness-choice-wrap > *, .vcp-settings-bare-select)) {
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope #globalSettingsForm :is(input, select, textarea, button):focus-visible:not(:is(.vcp-harness-input-wrap > *, .vcp-harness-select-wrap > *, .vcp-harness-choice-wrap > *, .vcp-settings-bare-select, input[type="color"])) {
         outline: 2px solid var(--vcp-ui-focus-ring);
         outline-offset: 2px;
     }
@@ -694,14 +694,21 @@
 
     /* ColorPair adoption: the primitive's stylesheet hooks --vcp-color-border
        but the settings surface never fed it a token, so the text half kept
-       its legacy gray and had no focus feedback. Thread the token through
-       and give the interactive text half the standard focus contract. */
+       its legacy gray and had no focus feedback. Thread the token through,
+       and drive the focus border by overriding the variable on :focus-within.
+       The variable override (not border-color) is load-bearing: this whole
+       sheet lives in @layer vcp-ui.components, and layered declarations lose
+       to the primitive's unlayered inline stylesheet no matter how specific
+       they are — but no unlayered rule declares the custom property itself. */
     :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal {
         --vcp-color-border: var(--vcp-ui-control-border, var(--vcp-ui-border));
     }
 
+    :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal #globalSettingsForm .vcp-uiux-color-pair:focus-within {
+        --vcp-color-border: var(--vcp-ui-control-focus, var(--vcp-ui-border-strong));
+    }
+
     :is(html, html.vcp-global-settings-host) .vcp-ui-scope#globalSettingsModal #globalSettingsForm .vcp-uiux-color-pair input[type="text"]:is(:focus-visible, :focus) {
-        border-color: var(--vcp-ui-control-focus, var(--vcp-ui-border-strong));
         box-shadow: 0 0 0 3px var(--vcp-ui-focus-ring);
         outline: none;
     }
