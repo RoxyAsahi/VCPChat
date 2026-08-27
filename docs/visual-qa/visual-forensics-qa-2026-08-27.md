@@ -62,6 +62,7 @@ On 2026-08-27 in the current dirty worktree:
 - Cascade records now include a runtime-derived specificity tuple and matched-rule order for every CDP target, allowing the gate to detect selector-precedence drift rather than only stylesheet presence.
 - Fresh Settings-field evidence shows concrete precedence tuples such as `[1,11,2]` for the form rule versus `[0,2,0]` for `.vcp-uiux-input-wrap > .input`, with matched-rule order retained for every viewport and theme.
 - Reopen cleanup now gates body class state as well as inline style: the close snapshot must retain the active `light-theme`/`dark-theme` class and remove `next-ui-internal-app-open` before the new root is mounted.
+- Formal evidence now includes freshness binding: every required PNG must have a filesystem modification time within two minutes of its manifest `generatedAt`, preventing stale captures from being paired with a newer runtime record.
 - Resize restoration evidence from `/tmp/vqa-restored-light/` passed: after each narrow resize, the real renderer returned to exactly `800x600`, `1280x800`, and `1680x1000` with no horizontal overflow, and each case now emits a `*-restored.png` screenshot. The evidence checker requires this restored state.
 
 ## Scope and frozen boundaries

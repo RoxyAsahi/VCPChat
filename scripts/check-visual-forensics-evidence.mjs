@@ -24,6 +24,8 @@ try {
 for (const dir of targets) {
   try {
     const manifest = JSON.parse(await fs.readFile(path.join(dir, 'manifest.json'), 'utf8'));
+    const generatedAtMs = Date.parse(manifest.generatedAt);
+    assert.ok(Number.isFinite(generatedAtMs), 'manifest generatedAt is invalid');
     assert.deepEqual(manifest.viewports, requiredViewports);
     assert.equal(manifest.gate?.pass, true);
     assert.equal(manifest.lifecycle?.removedOnClose, true);
@@ -44,7 +46,10 @@ for (const dir of targets) {
     for (const [width, height] of requiredViewports) {
       const name = `${width}x${height}`;
       for (const suffix of ['initial', 'reopen', 'menu', 'modal', 'tooltip', 'settings', 'states', 'scrolled', 'narrow', 'restored', 'hover', 'focus']) {
-        await fs.access(path.join(dir, `${name}-${suffix}.png`));
+        const screenshotPath = path.join(dir, `${name}-${suffix}.png`);
+        await fs.access(screenshotPath);
+        const stat = await fs.stat(screenshotPath);
+        assert.ok(stat.mtimeMs >= generatedAtMs - 120_000, `${name}-${suffix}: screenshot is stale relative to manifest`);
       }
       const observation = manifest.observations.find(item => item.viewport?.width === width && item.viewport?.height === height);
       assert.equal(observation?.reopen?.removedOnClose, true);
