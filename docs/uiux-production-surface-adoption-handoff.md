@@ -283,3 +283,15 @@ roadmap checkpoint 追加于 `38ec8bb8`。
 - 启动级证据：`node scripts/vcpchat-packed-smoke.mjs --dist <worktree>/dist` 通过——runtime closure manifest 校验、launch-protocol ready record、隔离 state/appData 下真实启动可执行文件并正常退出清理。
 - 拒绝门禁：`npm run test:packaged-artifact-invalid` 通过（缺失 unpacked 目录被正确拒绝）。
 - 结论：ownership 报告中 packaged artifact 证据在 darwin/arm64 上已由 B 线程补齐；win32/Linux 与签名安装包路径保持 `evidence-pending`，不得宣称跨平台 stable。
+
+### 2026-08-27 批次 11：八个字体字段 typed owner 收口 + select 重挂观察器缺陷修复
+
+状态：`stable`。
+
+- 接线内容：§2 ownership 表中全部 8 个字体字段（chatFontPreset/Custom、chatCodeFontPreset/Custom、chatDiaryFontPreset/Custom、chatToolFontPreset/Custom）加入 `TYPED_FIELD_DEFINITIONS`（kind: string）；settings-bridge `mountTypedSettingsConsumer` 中对应 8 行通用 projection 退役；typed project() 接管快照填充与四个 `*FontCustomRow` 显隐。字体应用语义（消息/diary/工具结果 renderer）不动。
+- 回归与根因（方法论记录）：接入后 journey 曾稳定卡在 1b「assistantAgent 动态 options 替换后未获 Harness wrapper」。经 mount 调用栈插桩定位：批次使 `enhanceGlobalSettings←refresh` 出现无 teardown 的连续两次调用，而 `mountHarnessSelects()` 先 disconnect 旧 MutationObserver、后因 `selectObserverStates` 条目残留跳过重建——观察器静默死亡，动态 option 替换不再被监听。这是既有潜在缺陷，与本批字段解耦但被其时序必现化。修复：断开时同步删除注册表条目，挂载尾部必然重挂新 observer；不依赖任何诊断参数，journey 全序列即稳定通过。
+- journey 新增 6d：打开模态 → 设置 `chatDiaryFontPreset`（select 型）与 `chatToolFontCustom`（text 型）→ 关闭绕过防抖 → 关闭 flush 必须把两值原样提交到 typed service 快照，同时断言 dirty 与 `dataset.vcpTypedFieldOwner` 标记。至此 preset-select 与 custom-text 两类字体控件均有 close-flush 证据。
+- 附带加固：journey 子进程以 detached 进程组 spawn、finally 阶段 `process.kill(-pid)` SIGTERM→SIGKILL 兜底，杜绝此前负载尖峰调查中发现的孤儿 Electron 进程堆积。
+- 门禁全绿：`check:uiux`、`test:uiux`（44/44）、`check:uiux:artifacts`（66 文件）、`test:uiux:artifacts`、Electron journey（16 PASS 含新增 6d）、lifecycle stress（3 warmup + 20 cycles，listeners/lifecycle 指标恒定）、`guard:classic-retirement`、source-equivalence。
+- 台账行升级：8 个字体字段状态 `typed-projection-active` → `typed-owner-active`（docs/settings-uiux-field-ownership-2026-08-25.md §2 与 §7 同步）。
+- 归因说明：工作树中线程 A 的 WIP（directory-browser 等）与生成产物 `docs/chat-kernel-consumer-report.json` 的行号漂移均不属本批提交范围；按 §3/§8 规则 B 不代改不代生成，本批仅提交 B 所属文件。
