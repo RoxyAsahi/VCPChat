@@ -109,6 +109,39 @@ for (const file of filesIn(styleDir, '.css')) {
     }
 }
 
+// Legacy (classic-surface) z-index census: styles/*.css outside ui-system is
+// the pre-next-architecture surface scheduled for retirement, so existing
+// literals are frozen in this append-only registry instead of being migrated
+// to the token ladder. The registry is fail-closed: a NEW z-index literal in
+// a legacy file must be registered here with a reason (or use the tokens) —
+// this is what keeps the classic surface from re-growing stacking debt while
+// the retirement plan deletes it file by file.
+const legacyStyleDir = path.join(root, 'styles');
+const legacyZIndexRegistry = {
+    'chat.css': [1000],
+    'components.css': [1000, 1001, 1004, 1100, 1200, 10002],
+    'layout.css': [100, 160, 210, 220, 1001, 1002],
+    'search.css': [1005],
+    'notifications.css': [2000, 10000, 10020],
+    'ui-next.css': [1000, 1100],
+};
+for (const file of fs.readdirSync(legacyStyleDir).filter(name => name.endsWith('.css')).map(name => path.join(legacyStyleDir, name))) {
+    const rel = path.basename(file);
+    if (rel === 'index.css') continue;
+    const css = fs.readFileSync(file, 'utf8');
+    const allowed = new Set(legacyZIndexRegistry[rel] || []);
+    for (const match of css.matchAll(/z-index\s*:\s*([^;}\n]+)/g)) {
+        const value = match[1].trim();
+        if (value === 'auto' || value === '-1' || value === '-2') continue;
+        if (/^var\(--vcp-ui-z-[a-z-]+\)/.test(value)) continue;
+        const literal = Number(value);
+        if (Number.isInteger(literal) && literal >= 0 && literal <= 10) continue;
+        if (allowed.has(literal)) continue;
+        report(file, `legacy z-index "${value}" is not in the frozen classic-surface registry (scripts/check-ui-system.mjs legacyZIndexRegistry)`);
+        break;
+    }
+}
+
 const messageStylesFile = path.join(styleDir, 'messages.css');
 const messageStyles = postcss.parse(fs.readFileSync(messageStylesFile, 'utf8'), { from: messageStylesFile });
 const upstreamMessageComponentMarkers = [
