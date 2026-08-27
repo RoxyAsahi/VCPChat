@@ -1,6 +1,7 @@
 import { mountButton } from './button.js';
 import { mountModal } from './modal.js';
 const STYLE_ID = 'vcp-harness-uiux-directory-browser';
+const SLOW_SCAN_DELAY_MS = 300;
 function ensureStyles() {
     if (typeof document === 'undefined' || document.getElementById(STYLE_ID))
         return;
@@ -73,6 +74,8 @@ export function mountDirectoryBrowser(props, scope) {
     let selected = null;
     let child = null;
     let loading = false;
+    let slowLoading = false;
+    let slowTimer = null;
     let busy = Boolean(props.busy);
     let showHidden = false;
     let failure = null;
@@ -166,7 +169,7 @@ export function mountDirectoryBrowser(props, scope) {
             columns.append(divider);
             renderColumn(child, null, advance);
         }
-        status.textContent = loading ? 'Loading…' : parent?.truncated || child?.truncated ? 'Some entries are not shown.' : '';
+        status.textContent = slowLoading ? 'Loading…' : parent?.truncated || child?.truncated ? 'Some entries are not shown.' : '';
         status.hidden = status.textContent === '';
         error.textContent = failure ?? '';
         error.hidden = failure === null;
@@ -185,7 +188,13 @@ export function mountDirectoryBrowser(props, scope) {
         createCancel.disabled = creating;
         createConfirm.disabled = creating || createName.trim() === '';
     };
-    const scan = async (path, commit) => { const request = ++generation; controller?.abort(); controller = new AbortController(); loading = true; failure = null; sync(); try {
+    const clearSlowScan = () => { if (slowTimer !== null)
+        clearTimeout(slowTimer); slowTimer = null; slowLoading = false; };
+    const scan = async (path, commit) => { const request = ++generation; controller?.abort(); controller = new AbortController(); clearSlowScan(); loading = true; failure = null; slowTimer = setTimeout(() => { if (request === generation && modal.open && loading) {
+        slowTimer = null;
+        slowLoading = true;
+        sync();
+    } }, SLOW_SCAN_DELAY_MS); sync(); try {
         const listing = await props.listDirectory(path, controller.signal);
         if (request !== generation || !modal.open)
             return;
@@ -198,6 +207,7 @@ export function mountDirectoryBrowser(props, scope) {
     }
     finally {
         if (request === generation && modal.open) {
+            clearSlowScan();
             loading = false;
             sync();
         }
@@ -264,6 +274,7 @@ export function mountDirectoryBrowser(props, scope) {
     }
     else {
         generation += 1;
+        clearSlowScan();
         controller?.abort();
         controller = null;
         editingPath = false;
@@ -273,7 +284,7 @@ export function mountDirectoryBrowser(props, scope) {
         createModal.setOpen(false);
         modal.setOpen(false);
     } };
-    const dispose = scope.own(async () => { generation += 1; createRequest += 1; controller?.abort(); controller = null; createModal.setOpen(false); await browserScope.dispose('harness-directory-browser-unmounted'); }, 'harness-directory-browser', 'ui-primitive');
+    const dispose = scope.own(async () => { generation += 1; createRequest += 1; clearSlowScan(); controller?.abort(); controller = null; createModal.setOpen(false); await browserScope.dispose('harness-directory-browser-unmounted'); }, 'harness-directory-browser', 'ui-primitive');
     if (props.open)
         navigate();
     else

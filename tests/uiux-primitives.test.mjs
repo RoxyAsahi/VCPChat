@@ -112,12 +112,15 @@ test('Harness DirectoryBrowser foundation aborts stale listings and retracts on 
         assert.equal(pending.length, 1);
         pending.shift().resolve({ path: '/home', crumbs: [{ name: 'Home', path: '/home' }], entries: [{ name: 'projects', path: '/home/projects' }, { name: '.hidden', path: '/home/.hidden', hidden: true }] });
         await delay(0);
+        assert.equal(document.querySelector('.vcp-directory-browser-status')?.hidden, true, 'fast initial listing must not flash a loading status');
         assert.equal(document.querySelectorAll('.vcp-directory-browser-row').length, 1);
         document.querySelector('.vcp-directory-browser-hidden').click();
         assert.equal(document.querySelectorAll('.vcp-directory-browser-row').length, 2);
         document.querySelector('.vcp-directory-browser-row').click();
         assert.equal(pending.length, 1);
         const child = pending.shift();
+        await delay(320);
+        assert.equal(document.querySelector('.vcp-directory-browser-status')?.textContent, 'Loading…');
         browser.setOpen(false);
         assert.equal(child.signal.aborted, true);
         assert.equal(browser.open, false);
@@ -129,6 +132,7 @@ test('Harness DirectoryBrowser foundation aborts stale listings and retracts on 
         assert.equal(pending.length, 1);
         pending.shift().resolve({ path: '/home', entries: [] });
         await delay(0);
+        assert.equal(document.querySelector('.vcp-directory-browser-status')?.hidden, true);
         const editPath = document.querySelector('.vcp-directory-browser-path-edit');
         assert.ok(editPath);
         editPath.click();

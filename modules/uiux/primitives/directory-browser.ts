@@ -3,6 +3,7 @@ import { mountButton } from './button.js';
 import { mountModal, type ModalController } from './modal.js';
 
 const STYLE_ID = 'vcp-harness-uiux-directory-browser';
+const SLOW_SCAN_DELAY_MS = 300;
 
 function ensureStyles() {
     if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) return;
@@ -64,7 +65,7 @@ export function mountDirectoryBrowser(props: DirectoryBrowserProps, scope: UiSco
     const confirm = document.createElement('button'); confirm.type = 'button'; confirm.textContent = props.openLabel ?? 'Open';
     footer.append(create, hidden, spacer, cancel, confirm); frame.append(header, content, footer);
     mountButton(create, { variant: 'outline', size: 'sm' }, browserScope); mountButton(cancel, { variant: 'outline', size: 'sm' }, browserScope); mountButton(confirm, { variant: 'primary', size: 'sm' }, browserScope);
-    let generation = 0; let controller: AbortController | null = null; let parent: DirectoryBrowserListing | null = null; let selected: DirectoryBrowserEntry | null = null; let child: DirectoryBrowserListing | null = null; let loading = false; let busy = Boolean(props.busy); let showHidden = false; let failure: string | null = null; let creating = false; let editingPath = false; let pathDraft = ''; let createOpen = false; let createName = ''; let createFailure: string | null = null; let createRequest = 0;
+    let generation = 0; let controller: AbortController | null = null; let parent: DirectoryBrowserListing | null = null; let selected: DirectoryBrowserEntry | null = null; let child: DirectoryBrowserListing | null = null; let loading = false; let slowLoading = false; let slowTimer: ReturnType<typeof setTimeout> | null = null; let busy = Boolean(props.busy); let showHidden = false; let failure: string | null = null; let creating = false; let editingPath = false; let pathDraft = ''; let createOpen = false; let createName = ''; let createFailure: string | null = null; let createRequest = 0;
     const createBody = document.createElement('div'); createBody.className = 'vcp-directory-browser-create-body';
     const createTitle = document.createElement('h3'); createTitle.className = 'vcp-directory-browser-create-title'; createTitle.textContent = props.newFolderLabel ?? 'New folder';
     const createIn = document.createElement('p'); createIn.className = 'vcp-directory-browser-create-in';
@@ -95,7 +96,7 @@ export function mountDirectoryBrowser(props: DirectoryBrowserProps, scope: UiSco
         const renderColumn = (listing: DirectoryBrowserListing, current: DirectoryBrowserEntry | null, onPick: (entry: DirectoryBrowserEntry) => void) => { const column = document.createElement('div'); column.className = 'vcp-directory-browser-column'; visible(listing.entries).forEach(entry => { const row = document.createElement('button'); row.type = 'button'; row.className = 'vcp-directory-browser-row'; row.setAttribute('aria-current', String(current?.path === entry.path)); row.disabled = busy || loading || creating || createOpen; const icon = document.createElement('span'); icon.className = 'vcp-directory-browser-row-icon vcp-ui-icon'; icon.setAttribute('aria-hidden', 'true'); icon.textContent = current?.path === entry.path ? 'folder-open' : 'folder'; const name = document.createElement('span'); name.className = 'vcp-directory-browser-row-name'; name.textContent = entry.name; row.append(icon, name); browserScope.listen(row, 'click', () => onPick(entry)); column.append(row); }); columns.append(column); };
         if (parent) renderColumn(parent, selected, pick);
         if (selected && child) { const divider = document.createElement('span'); divider.className = 'vcp-directory-browser-divider'; columns.append(divider); renderColumn(child, null, advance); }
-        status.textContent = loading ? 'Loading…' : parent?.truncated || child?.truncated ? 'Some entries are not shown.' : '';
+        status.textContent = slowLoading ? 'Loading…' : parent?.truncated || child?.truncated ? 'Some entries are not shown.' : '';
         status.hidden = status.textContent === '';
         error.textContent = failure ?? ''; error.hidden = failure === null;
         const inert = busy || creating || createOpen;
@@ -107,7 +108,8 @@ export function mountDirectoryBrowser(props: DirectoryBrowserProps, scope: UiSco
         createIn.textContent = target ? `Create in ${target}` : '';
         createCancel.disabled = creating; createConfirm.disabled = creating || createName.trim() === '';
     };
-    const scan = async (path: string | undefined, commit: (listing: DirectoryBrowserListing) => void) => { const request = ++generation; controller?.abort(); controller = new AbortController(); loading = true; failure = null; sync(); try { const listing = await props.listDirectory(path, controller.signal); if (request !== generation || !modal.open) return; commit(listing); } catch (reason) { if (request !== generation || !modal.open) return; failure = errorText(reason); } finally { if (request === generation && modal.open) { loading = false; sync(); } } };
+    const clearSlowScan = () => { if (slowTimer !== null) clearTimeout(slowTimer); slowTimer = null; slowLoading = false; };
+    const scan = async (path: string | undefined, commit: (listing: DirectoryBrowserListing) => void) => { const request = ++generation; controller?.abort(); controller = new AbortController(); clearSlowScan(); loading = true; failure = null; slowTimer = setTimeout(() => { if (request === generation && modal.open && loading) { slowTimer = null; slowLoading = true; sync(); } }, SLOW_SCAN_DELAY_MS); sync(); try { const listing = await props.listDirectory(path, controller.signal); if (request !== generation || !modal.open) return; commit(listing); } catch (reason) { if (request !== generation || !modal.open) return; failure = errorText(reason); } finally { if (request === generation && modal.open) { clearSlowScan(); loading = false; sync(); } } };
     const navigate = (path?: string) => { editingPath = false; selected = null; child = null; void scan(path, listing => { parent = listing; }); };
     const pick = (entry: DirectoryBrowserEntry) => { selected = entry; child = null; void scan(entry.path, listing => { child = listing; }); };
     const advance = (entry: DirectoryBrowserEntry) => { if (!child) return; parent = child; selected = null; child = null; pick(entry); };
@@ -128,8 +130,8 @@ export function mountDirectoryBrowser(props: DirectoryBrowserProps, scope: UiSco
     browserScope.listen(createInput, 'input', () => { createName = createInput.value; createFailure = null; sync(); });
     browserScope.listen(createInput, 'keydown', event => { const key = (event as KeyboardEvent).key; if (key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeCreate(); } if (key === 'Enter' && createName.trim()) { event.preventDefault(); event.stopPropagation(); submitCreate(); } });
     browserScope.listen(createCancel, 'click', closeCreate); browserScope.listen(createConfirm, 'click', submitCreate);
-    const setOpen = (open: boolean) => { if (open) { modal.setOpen(true); parent = null; selected = null; child = null; failure = null; showHidden = false; editingPath = false; createOpen = false; creating = false; createRequest += 1; createModal.setOpen(false); navigate(); } else { generation += 1; controller?.abort(); controller = null; editingPath = false; createOpen = false; creating = false; createRequest += 1; createModal.setOpen(false); modal.setOpen(false); } };
-    const dispose = scope.own(async () => { generation += 1; createRequest += 1; controller?.abort(); controller = null; createModal.setOpen(false); await browserScope.dispose('harness-directory-browser-unmounted'); }, 'harness-directory-browser', 'ui-primitive');
+    const setOpen = (open: boolean) => { if (open) { modal.setOpen(true); parent = null; selected = null; child = null; failure = null; showHidden = false; editingPath = false; createOpen = false; creating = false; createRequest += 1; createModal.setOpen(false); navigate(); } else { generation += 1; clearSlowScan(); controller?.abort(); controller = null; editingPath = false; createOpen = false; creating = false; createRequest += 1; createModal.setOpen(false); modal.setOpen(false); } };
+    const dispose = scope.own(async () => { generation += 1; createRequest += 1; clearSlowScan(); controller?.abort(); controller = null; createModal.setOpen(false); await browserScope.dispose('harness-directory-browser-unmounted'); }, 'harness-directory-browser', 'ui-primitive');
     if (props.open) navigate(); else sync();
     return { modal, get open() { return modal.open; }, setOpen, setBusy(value) { busy = Boolean(value); sync(); }, dispose };
 }
