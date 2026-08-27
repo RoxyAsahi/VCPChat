@@ -16,6 +16,7 @@ import { mountInput } from './primitives/input.js';
 import { mountMenu } from './primitives/menu.js';
 import { mountAgentPresetSeat } from './primitives/agent-preset-seat.js';
 import { mountAgentPresetRow } from './primitives/agent-preset-row.js';
+import { mountLanguageRow } from './primitives/language-row.js';
 import { mountModal } from './primitives/modal.js';
 import { mountTooltip } from './primitives/tooltip.js';
 import { mountHoverCard } from './primitives/hover-card.js';
@@ -32,6 +33,7 @@ import { createPopupSelectController, mountPopupSelectView } from './primitives/
 import { mountDirectoryBrowser } from './primitives/directory-browser.js';
 import { mountPrimitiveLab } from './lab/primitive-lab.js';
 import { mountOnboardingSurface } from './primitives/onboarding-surface.js';
+import { mountDiffBlock } from './primitives/diff-block.js';
 
 interface LegacyScopeLike {
     readonly label: string;
@@ -73,6 +75,7 @@ const api = {
     mountMenu,
     mountAgentPresetSeat,
     mountAgentPresetRow,
+    mountLanguageRow,
     mountModal,
     mountTooltip,
     mountHoverCard,
@@ -94,6 +97,7 @@ const api = {
     // not connect to VCP's directory IPC or Workspace persistence.
     mountDirectoryBrowser,
     mountOnboardingSurface,
+    mountDiffBlock,
     mountPrimitiveLabFromScope(root: HTMLElement, legacyScope: LegacyScopeLike): UiDisposer {
         return mountPrimitiveLab(root, createUiScope(legacyScope));
     },

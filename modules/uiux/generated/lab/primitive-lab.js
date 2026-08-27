@@ -4,6 +4,7 @@ import { mountInput } from '../primitives/input.js';
 import { mountMenu } from '../primitives/menu.js';
 import { mountAgentPresetSeat } from '../primitives/agent-preset-seat.js';
 import { mountAgentPresetRow } from '../primitives/agent-preset-row.js';
+import { mountLanguageRow } from '../primitives/language-row.js';
 import { mountModal } from '../primitives/modal.js';
 import { mountTooltip } from '../primitives/tooltip.js';
 import { mountHoverCard } from '../primitives/hover-card.js';
@@ -223,6 +224,23 @@ export function mountPrimitiveLab(root, scope) {
         presetRowHasError = !presetRowHasError;
         presetRow.setError(presetRowHasError ? 'Could not load presets. Try again.' : null);
     });
+    // Harness locale/LanguageRow is a real General-settings composite. VCP
+    // currently has no UI-locale capability or persisted setting, so the Lab
+    // projection owns only its temporary selection and is never a consumer.
+    const languageRowGroup = group(lab, 'Language row', 'deepseek-harness/packages/client/locale/src/client/LanguageRow.tsx; Candidate only, no VCP locale capability or production consumer');
+    const languageRowHost = document.createElement('div');
+    languageRowHost.className = 'vcp-harness-lab-field';
+    languageRowGroup.append(languageRowHost);
+    const languageRow = mountLanguageRow(languageRowHost, {
+        activeId: 'en',
+        options: [
+            { id: 'en', label: 'English' },
+            { id: 'zh-CN', label: 'Simplified Chinese' },
+            { id: 'ja', label: 'Japanese' },
+        ],
+        onSelect: id => { languageRow.setActive(id); languageRowHost.dataset.selected = id; },
+        onClose: () => { languageRowHost.dataset.menuClosed = 'true'; },
+    }, labScope);
     // Harness provenance: ui-commands PopupSelectView is normally owned by the
     // conversation.input.overlay slot. That slot and the composer are frozen
     // in VCP, so this is a standalone Lab-only host: its deps are local DOM

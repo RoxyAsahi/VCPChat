@@ -47,6 +47,7 @@ test('Harness ConnectionBanner owns reconnecting projection and restores host on
 });
 const { mountSelect } = await import('../modules/uiux/primitives/select.ts');
 const { mountInput } = await import('../modules/uiux/primitives/input.ts');
+const { mountDiffBlock } = await import('../modules/uiux/primitives/diff-block.ts');
 const { mountMenu } = await import('../modules/uiux/primitives/menu.ts');
 const { mountModal } = await import('../modules/uiux/primitives/modal.ts');
 const { mountTooltip } = await import('../modules/uiux/primitives/tooltip.ts');
@@ -59,6 +60,7 @@ const { mountToast, TOAST_HOLD_MS, TOAST_FADE_MS } = await import('../modules/ui
 const { mountRiskConfirmation } = await import('../modules/uiux/generated/primitives/risk-confirmation.js');
 const { mountAgentPresetSeat } = await import('../modules/uiux/generated/primitives/agent-preset-seat.js');
 const { mountAgentPresetRow } = await import('../modules/uiux/generated/primitives/agent-preset-row.js');
+const { mountLanguageRow } = await import('../modules/uiux/generated/primitives/language-row.js');
 const { createPopupSelectController, mountPopupSelectView } = await import('../modules/uiux/generated/primitives/popup-select.js');
 const { mountDirectoryBrowser } = await import('../modules/uiux/generated/primitives/directory-browser.js');
 const { mountSemanticIcon } = await import('../modules/uiux/primitives/semantic-icon.ts');
@@ -66,6 +68,32 @@ const { mountChoice } = await import('../modules/uiux/primitives/choice.ts');
 const { mountRange } = await import('../modules/uiux/primitives/range.ts');
 const { mountToggle } = await import('../modules/uiux/primitives/toggle.ts');
 const { mountColorPair } = await import('../modules/uiux/primitives/color-pair.ts');
+
+test('Harness LanguageRow composes a locale selector and retracts cleanly', async () => {
+    const dom = new JSDOM('<!doctype html><main><div id="host"><span>original</span></div></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('language-row-test'));
+        const host = document.getElementById('host'); const picked = [];
+        const controller = mountLanguageRow(host, { activeId: 'en', options: [{ id: 'en', label: 'English' }, { id: 'zh', label: '中文' }, { id: 'de', label: 'Deutsch', disabled: true }], onSelect: id => picked.push(id) }, scope);
+        assert.equal(controller.trigger.textContent, 'English');
+        assert.equal(controller.root.className, 'vcp-harness-language-row');
+        assert.equal(controller.trigger.getAttribute('aria-haspopup'), 'menu');
+        controller.setOpen(true);
+        assert.equal(controller.menu.open, true);
+        assert.equal(controller.menu.list.querySelector('[role="menuitem"][data-selected="true"]')?.textContent, 'English');
+        controller.menu.list.querySelector('[role="menuitem"][data-selected="false"]')?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+        assert.deepEqual(picked, ['zh']);
+        controller.setActive('missing');
+        assert.equal(controller.trigger.textContent, 'missing');
+        await controller.setOptions([{ id: 'fr', label: 'Français' }]);
+        assert.equal(controller.menu.list.querySelectorAll('[role="menuitem"]').length, 1);
+        await scope.dispose('language-row-complete');
+        assert.equal(host.textContent, 'original');
+        assert.equal(document.querySelector('.vcp-harness-language-row'), null);
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
 
 test('Harness Pill preserves static and native interactive semantics and retracts cleanly', async () => {
     const dom = new JSDOM('<!doctype html><main><span id="static">Static</span><button id="interactive">Active</button></main>');
@@ -1177,4 +1205,23 @@ test('Harness Input/Field/Select expose stable error, disabled and selected stat
         globalThis.window = previousWindow;
         dom.window.close();
     }
+});
+
+test('Harness DiffBlock stays lab-only, collapses, copies and restores its host', async () => {
+    const dom = new JSDOM('<!doctype html><div id="host"><span>original</span></div>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('diff-block'));
+        const host = document.getElementById('host'); let copied = '';
+        const diff = mountDiffBlock(host, { maxLines: 2, copy: value => { copied = value; }, diffs: [{ path: 'a.ts', oldText: 'one\ntwo', newText: 'three\nfour' }] }, scope);
+        assert.equal(host.querySelector('[data-diff]'), diff.root);
+        assert.ok(host.querySelector('.vcp-harness-diff-expand'));
+        host.querySelector('.vcp-harness-diff-copy').click();
+        assert.match(copied, /- one/); assert.match(copied, /\+ three/);
+        diff.setExpanded(true);
+        assert.equal(host.querySelector('.vcp-harness-diff-expand'), null);
+        await diff.dispose(); await scope.dispose('done');
+        assert.equal(host.textContent, 'original');
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
 });
