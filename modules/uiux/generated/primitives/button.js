@@ -17,6 +17,8 @@ export function mountButton(button, props = {}, scope) {
     const originalDisabled = button.disabled;
     const originalDisplay = button.style.getPropertyValue('display');
     const originalDisplayPriority = button.style.getPropertyPriority('display');
+    const originalInline = Object.fromEntries(['gap', 'height', 'padding', 'border-radius', 'font-size', 'line-height']
+        .map(property => [property, [button.style.getPropertyValue(property), button.style.getPropertyPriority(property)]]));
     const variant = props.variant ?? 'ghost';
     const size = props.size ?? 'md';
     if (originalType === null)
@@ -26,6 +28,12 @@ export function mountButton(button, props = {}, scope) {
     // the Harness geometry with an owner-bound inline declaration and restore
     // the exact previous declaration during disposal.
     button.style.setProperty('display', 'inline-flex', 'important');
+    button.style.setProperty('gap', '4px', 'important');
+    button.style.setProperty('height', size === 'sm' ? '28px' : '36px', 'important');
+    button.style.setProperty('padding', size === 'sm' ? '0 10px' : '0 14px', 'important');
+    button.style.setProperty('border-radius', size === 'sm' ? '14px' : '18px', 'important');
+    button.style.setProperty('font-size', size === 'sm' ? '12px' : '14px', 'important');
+    button.style.setProperty('line-height', size === 'sm' ? '18px' : '22px', 'important');
     if (props.disabled !== undefined)
         button.disabled = props.disabled;
     let icon = null;
@@ -42,6 +50,12 @@ export function mountButton(button, props = {}, scope) {
             button.style.setProperty('display', originalDisplay, originalDisplayPriority);
         else
             button.style.removeProperty('display');
+        for (const [property, [value, priority]] of Object.entries(originalInline)) {
+            if (value)
+                button.style.setProperty(property, value, priority);
+            else
+                button.style.removeProperty(property);
+        }
         button.disabled = originalDisabled;
         if (originalType === null)
             button.removeAttribute('type');
