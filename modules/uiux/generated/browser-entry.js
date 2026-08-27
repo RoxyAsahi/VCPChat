@@ -29,6 +29,7 @@ import { mountColorPair } from './primitives/color-pair.js';
 import { createPopupSelectController, mountPopupSelectView } from './primitives/popup-select.js';
 import { mountDirectoryBrowser } from './primitives/directory-browser.js';
 import { mountPrimitiveLab } from './lab/primitive-lab.js';
+import { mountOnboardingSurface } from './primitives/onboarding-surface.js';
 const api = {
     mountThemePresenterFromScope(root, theme, legacyScope) {
         const scope = createUiScope(legacyScope);
@@ -73,6 +74,7 @@ const api = {
     // Candidate-only browser. Capabilities are caller-injected; this API does
     // not connect to VCP's directory IPC or Workspace persistence.
     mountDirectoryBrowser,
+    mountOnboardingSurface,
     mountPrimitiveLabFromScope(root, legacyScope) {
         return mountPrimitiveLab(root, createUiScope(legacyScope));
     },

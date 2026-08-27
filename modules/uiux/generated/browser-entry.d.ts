@@ -26,6 +26,7 @@ import { mountToggle } from './primitives/toggle.js';
 import { mountColorPair } from './primitives/color-pair.js';
 import { createPopupSelectController, mountPopupSelectView } from './primitives/popup-select.js';
 import { mountDirectoryBrowser } from './primitives/directory-browser.js';
+import { mountOnboardingSurface } from './primitives/onboarding-surface.js';
 interface LegacyScopeLike {
     readonly label: string;
     readonly active: boolean;
@@ -71,6 +72,7 @@ declare const api: {
     createPopupSelectController: typeof createPopupSelectController;
     mountPopupSelectView: typeof mountPopupSelectView;
     mountDirectoryBrowser: typeof mountDirectoryBrowser;
+    mountOnboardingSurface: typeof mountOnboardingSurface;
     mountPrimitiveLabFromScope(root: HTMLElement, legacyScope: LegacyScopeLike): UiDisposer;
 };
 export { api as uiuxBrowserApi };

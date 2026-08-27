@@ -15,6 +15,8 @@ const interaction = Object.fromEntries((matrix.interactionCases ?? []).map(entry
 if (interaction['select/keyboard-open-focus']?.status !== 'pass' || interaction['select/keyboard-open-focus']?.evidence !== 'same semantic fixture; Harness and VCP retain trigger focus') fail('Select keyboard-open focus must remain a passing cross-page interaction case');
 if (interaction['select/busy-trigger-disabled']?.status !== 'blocked-vcp-consumer' || interaction['select/busy-trigger-disabled']?.evidence !== 'Harness production capture passes; no in-scope VCP AgentPreset consumer') fail('Select busy trigger must remain an explicitly consumer-blocked interaction case');
 if (interaction['pill/static-interactive-active-dispose']?.status !== 'candidate-interaction-active') fail('Pill lifecycle must remain explicitly Candidate');
+if (interaction['connection-banner/reconnecting-hidden-label-dispose']?.status !== 'candidate-interaction-active') fail('ConnectionBanner lifecycle must remain explicitly Candidate');
+if (interaction['onboarding-surface/portal-inert-close-dispose']?.status !== 'candidate-interaction-active') fail('OnboardingSurface lifecycle must remain explicitly Candidate');
 if (interaction['modal/close-reopen-dispose']?.status !== 'candidate-interaction-active') fail('Modal interaction lifecycle must remain explicitly Candidate');
 if (interaction['tooltip/hover-focus-delay-disable']?.status !== 'candidate-interaction-active') fail('Tooltip interaction lifecycle must remain explicitly Candidate');
 if (interaction['hover-card/dwell-grace-copy-dispose']?.status !== 'candidate-interaction-active') fail('HoverCard interaction lifecycle must remain explicitly Candidate');

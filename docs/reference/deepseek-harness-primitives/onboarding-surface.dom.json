@@ -1,0 +1,8 @@
+{
+  "primitive": "OnboardingSurface",
+  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/OnboardingSurface.tsx",
+  "tree": "body > div.onboardingOverlay[role=presentation] > div.onboardingMask[aria-hidden] + div.onboardingStage > content",
+  "states": ["closed", "open", "root-inert", "close", "dispose"],
+  "owner": "surface scope owns portal and restores content; app root inert is restored to its prior value",
+  "vcpStatus": "candidate-interaction-active"
+}

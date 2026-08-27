@@ -1,0 +1,6 @@
+{
+  "primitive": "ConnectionBanner",
+  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/ConnectionBanner.module.css",
+  "root": { "position": "fixed", "top": "0", "left": "0", "right": "0", "zIndex": "100", "padding": "4px 12px", "fontSize": "12px", "lineHeight": "18px", "textAlign": "center" },
+  "tokens": ["--dsw-alias-state-error-primary", "--dsw-alias-label-primary-foreground"]
+}
