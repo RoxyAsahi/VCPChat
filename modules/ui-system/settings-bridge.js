@@ -223,6 +223,15 @@ function mountTypedSettingsConsumer(root) {
             }
             else control.value = String(value);
         });
+        // Display defaults ported from the retired startup fallback
+        // (handoff retirement batch): the typed state stores raw persisted
+        // data, but these two voice controls keep their first-open display
+        // defaults exactly as the fallback used to fill them.
+        [['speechRecognizerPagePath', 'Voicechatmodules/recognizer.html'], ['voiceNetworkProviderUrl', 'https://api.siliconflow.cn']]
+            .forEach(([id, displayDefault]) => {
+                const control = form.querySelector(`#${id}`);
+                if (control && !control.value) control.value = displayDefault;
+            });
         if (Object.prototype.hasOwnProperty.call(settings, 'userAvatarUrl')) {
             const preview = form.querySelector('#userAvatarPreview');
             const wrapper = preview?.closest('.agent-avatar-wrapper');
@@ -552,6 +561,7 @@ function mountTypedAgentButtons(form) {
     const buttons = [
         ['#openModelSelectBtn', 'outline', 'agent-model-trigger'],
         ['#refreshTtsModelsBtn', 'outline', 'agent-tts-refresh'],
+        ['#resetAvatarColorsBtn', 'outline', 'agent-reset-colors'],
         ['.form-actions button[type="submit"]', 'primary', 'agent-save'],
         ['#deleteAgentBtn', 'outline', 'agent-delete'],
     ];

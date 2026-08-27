@@ -29,6 +29,8 @@ assert.match(report.dom, /<button[^>]*id="deleteAgentBtn"[^>]*class="[^"]*vcp-ha
     'Agent delete action must retain its canonical button id and Harness Button presentation');
 assert.match(report.dom, /<button[^>]*id="refreshTtsModelsBtn"[^>]*class="[^"]*vcp-harness-button[^\"]*"/,
     'TTS refresh action must retain its canonical button id and Harness Button presentation');
+assert.match(report.dom, /<button[^>]*id="resetAvatarColorsBtn"[^>]*class="[^"]*vcp-harness-button[^\"]*"/,
+    'Avatar color reset action must retain its canonical button id and Harness Button presentation');
 assert.match(report.dom, /<button[^>]*id="refreshTtsModelsBtn"[^>]*aria-label="刷新模型列表"/,
     'TTS refresh action must expose an explicit accessible name');
 assert.match(report.dom, /<button(?=[^>]*id="openModelSelectBtn")(?=[^>]*type="button")[^>]*>/,
@@ -37,6 +39,8 @@ assert.match(report.dom, /<button(?=[^>]*id="refreshTtsModelsBtn")(?=[^>]*type="
     'TTS refresh action must remain a non-submitting native button');
 assert.match(report.dom, /<button(?=[^>]*id="deleteAgentBtn")(?=[^>]*type="button")[^>]*>/,
     'Agent delete action must remain a non-submitting native button');
+assert.match(report.dom, /<button(?=[^>]*id="resetAvatarColorsBtn")(?=[^>]*type="button")[^>]*>/,
+    'Avatar color reset action must remain a non-submitting native button');
 assert.match(report.dom, /<button[^>]*type="submit"[^>]*class="[^"]*vcp-harness-button[^\"]*"/,
     'Agent save action must retain submit semantics after Button mounting');
 
