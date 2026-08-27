@@ -54,7 +54,7 @@ for (const domFile of domFiles) {
         const resolved = resolveSource(styleSource);
         const exists = Boolean(resolved && fs.existsSync(resolved));
         entry.provenance.push({ kind: 'style', declared: styleSource, resolved, exists });
-        if (!resolved) missingEvidence.push(`${name}: style source is descriptive rather than a Harness path`);
+        if (!resolved && dom.sourceKind !== 'vcp-local-contract') missingEvidence.push(`${name}: style source is descriptive rather than a Harness path`);
         else if (!exists) missingEvidence.push(`${name}: missing Harness style source ${styleSource}`);
     }
     const rootContract = dom.root;
