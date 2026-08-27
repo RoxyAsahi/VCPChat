@@ -258,6 +258,26 @@ export function mountPrimitiveLab(root: HTMLElement, scope: UiScope): UiDisposer
     mountPopupSelectView(popupHost, { popup }, labScope);
     labScope.listen(popupTrigger, 'click', () => popup.open('model', {}, { via: 'enter', token: '/model' }));
 
+    const modelPickerRow = group(lab, 'Agent Model Picker', 'deepseek-harness/packages/client/ui-model-selection/ModelSelect.tsx; Candidate Lab only, injected capability');
+    const modelPickerHost = document.createElement('div');
+    modelPickerHost.dataset.harnessCandidate = 'agent-model-picker';
+    modelPickerRow.append(modelPickerHost);
+    const modelPicker = mountAgentModelPicker(modelPickerHost, {
+        label: 'Agent model',
+        selectedId: 'gpt-4o',
+        options: async signal => {
+            if (signal.aborted) return [];
+            return [
+                { id: 'gpt-4o', label: 'GPT-4o', provider: 'OpenAI', favorite: true },
+                { id: 'claude-3-7', label: 'Claude 3.7 Sonnet', provider: 'Anthropic' },
+                { id: 'local-llama', label: 'Llama 3.3', provider: 'Local', disabled: true },
+            ];
+        },
+        onSelect: option => { modelPicker.trigger.dataset.selected = option.id; },
+    }, labScope);
+    modelPicker.trigger.textContent = 'Select model';
+    mountButton(modelPicker.trigger, { variant: 'outline', size: 'sm' }, labScope);
+
     // Harness provenance: ui-directory-picker-browse DirectoryBrowser. The
     // Candidate owns only presentation state; this Lab supplies an in-memory
     // fixture tree, never VCP filesystem IPC, persisted Workspace paths or
