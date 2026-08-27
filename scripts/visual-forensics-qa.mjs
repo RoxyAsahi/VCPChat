@@ -59,12 +59,12 @@ try {
     const name = `${width}x${height}`;
     await page.screenshot({ path: path.join(output, `${name}-initial.png`), fullPage: true });
     const initial = await page.evaluate(() => {
-      const visible = el => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return { tag: el.tagName.toLowerCase(), id: el.id, className: el.className, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, display: s.display, position: s.position, zIndex: s.zIndex, color: s.color, backgroundColor: s.backgroundColor, borderRadius: s.borderRadius }; };
+      const visible = el => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); const owner = el.closest('.vcp-ui-showcase-root, .vcp-ui-page-shell, #main-content, #chat-container')?.className || 'document'; return { tag: el.tagName.toLowerCase(), id: el.id, className: el.className, owner, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, display: s.display, position: s.position, zIndex: s.zIndex, color: s.color, backgroundColor: s.backgroundColor, borderRadius: s.borderRadius }; };
       const controls = [...document.querySelectorAll('button, input, select, textarea, [role="dialog"], [role="menu"], [role="tooltip"]')].filter(el => el.getClientRects().length).slice(0, 400);
       const rects = controls.map(visible);
       const overlapPairs = [];
       rects.forEach((a, i) => rects.forEach((b, j) => {
-        if (i >= j || a.tag !== b.tag) return false;
+        if (i >= j || a.tag !== b.tag || a.owner !== b.owner) return false;
         const contains = (outer, inner) => inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.width <= outer.x + outer.width && inner.y + inner.height <= outer.y + outer.height;
         if (contains(a.rect, b.rect) || contains(b.rect, a.rect)) return false;
         if (a.rect.x < b.rect.x + b.rect.width && a.rect.x + a.rect.width > b.rect.x && a.rect.y < b.rect.y + b.rect.height && a.rect.y + a.rect.height > b.rect.y && overlapPairs.length < 8) overlapPairs.push([a.className, b.className]);

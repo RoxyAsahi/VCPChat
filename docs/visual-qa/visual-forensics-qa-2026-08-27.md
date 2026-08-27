@@ -25,7 +25,7 @@ On 2026-08-27 in the current dirty worktree:
 - `npm run check:harness-reference` passed (47 files, 22 primitive contracts).
 - `npm run check:harness-fixture-matrix` passed (63 visual cases, 20 interaction cases, DOM 10/10).
 - `npm run check:harness-capture-prerequisites` reported missing prerequisites (expected until the external Harness checkout supplies the aliases).
-- `npm run test:visual-forensics-qa` launched the real Electron renderer and wrote evidence to `reports/visual-forensics-qa/2026-08-27T21-47-38.601Z/` (a second run is under `2026-08-27T21-48-43.166Z/`). The 800x600 showcase pass exposed a visible same-level control overlap, so the gate correctly failed instead of masking it; stderr also records the missing local CDS binary and intentionally unreachable model endpoint.
+- `npm run test:visual-forensics-qa` launched the real Electron renderer and wrote evidence to `reports/visual-forensics-qa/2026-08-27T21-47-38.601Z/` and `/tmp/vqa-third/`. The initial run exposed a false positive caused by comparing controls from the underlying chat surface with showcase controls. The scanner now groups overlap checks by owning Surface; the corrected three-viewport run passed with no same-Surface overlap or horizontal overflow. Electron stderr still records the missing local CDS binary and intentionally unreachable model endpoint as environment prerequisites.
 
 ## Scope and frozen boundaries
 
