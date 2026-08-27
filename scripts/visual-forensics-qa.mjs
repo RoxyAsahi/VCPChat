@@ -71,7 +71,16 @@ try {
       }));
       const overlap = overlapPairs.length > 0;
       const portals = [...document.querySelectorAll('[role="dialog"], [role="menu"], [role="tooltip"], [class*="portal"], [class*="overlay"]')].filter(el => el.getClientRects().length).map(visible);
-      return { url: location.href, surface: document.querySelector('.vcp-ui-showcase-root') ? 'component-showcase' : 'main', uiMode: document.documentElement.dataset.uiMode || '', theme: document.documentElement.dataset.theme || document.documentElement.dataset.themeMode || '', bodyClass: document.body.className, scroll: { x: document.documentElement.scrollWidth, y: document.documentElement.scrollHeight, clientWidth: document.documentElement.clientWidth, clientHeight: document.documentElement.clientHeight }, controls: rects, portals, dom: { bodyLength: document.body.innerHTML.length, classes: [...document.body.classList], inlineStyle: document.body.getAttribute('style') || '' }, overlap, overlapPairs };
+      const stateCounts = {
+        disabled: document.querySelectorAll(':disabled, .is-disabled, [aria-disabled="true"]').length,
+        selected: document.querySelectorAll('.is-selected, [aria-selected="true"], [data-selected="true"], [aria-checked="true"]').length,
+        error: document.querySelectorAll('.is-error, [aria-invalid="true"], [role="alert"]').length,
+        loading: document.querySelectorAll('.is-loading, [aria-busy="true"], [data-loading="true"]').length,
+      };
+      const focusTarget = [...document.querySelectorAll('button, input, select')].find(el => el.getClientRects().length && !el.disabled);
+      focusTarget?.focus?.();
+      const focused = document.activeElement && document.activeElement !== document.body ? visible(document.activeElement) : null;
+      return { url: location.href, surface: document.querySelector('.vcp-ui-showcase-root') ? 'component-showcase' : 'main', uiMode: document.documentElement.dataset.uiMode || '', theme: document.documentElement.dataset.theme || document.documentElement.dataset.themeMode || '', bodyClass: document.body.className, scroll: { x: document.documentElement.scrollWidth, y: document.documentElement.scrollHeight, clientWidth: document.documentElement.clientWidth, clientHeight: document.documentElement.clientHeight }, controls: rects, portals, stateCounts, focused, dom: { bodyLength: document.body.innerHTML.length, classes: [...document.body.classList], inlineStyle: document.body.getAttribute('style') || '' }, overlap, overlapPairs };
     });
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
     await sleep(100);

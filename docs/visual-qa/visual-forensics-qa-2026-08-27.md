@@ -8,6 +8,8 @@ npm run test:visual-forensics-qa
 
 It launches the real Electron entry with an isolated app-data directory, attaches Puppeteer through the Electron remote-debugging endpoint, opens the component showcase when available, and writes PNG plus JSON evidence under `reports/visual-forensics-qa/<timestamp>/`. Every viewport records initial, scrolled, and resized states, visible control geometry, computed color/surface/position/z-index/radius, portal candidates, body DOM size/classes/inline style, and overflow/overlap gate results.
 
+Use `npm run test:visual-forensics-themes` for the light/dark matrix. It runs the same real Electron scanner once per theme and stores evidence under `reports/visual-forensics-qa/light/` and `reports/visual-forensics-qa/dark/`.
+
 ## First-round findings
 
 | Priority | Finding | Runtime evidence | Status |
