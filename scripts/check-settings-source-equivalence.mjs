@@ -15,6 +15,7 @@ const css = read('styles/ui-system/settings.css');
 const html = read('main.html');
 const settingsEntry = read('styles/settings.css');
 const eventListeners = read('modules/event-listeners.js');
+const uiHelpers = read('modules/ui-helpers.js');
 
 // These assertions are deliberately source-level.  A screenshot can prove a
 // visual outcome but cannot prove that an old List/search owner is absent.
@@ -100,6 +101,14 @@ assert.match(css, /vcp-uiux-input-wrap\.vcp-harness-input-fill/, 'bridge-mounted
 assert.match(bridge, /function mountHarnessSwitches/, 'switch mounting must be a shared real-primitive owner');
 assert.match(bridge, /api\.mountToggle\(input, scope\)/, 'Switch presentation must come from the library primitive');
 assert.doesNotMatch(css, /\.slider/, 'retired local slider CSS must be deleted');
+
+// Dynamic networkNotesPaths rows have one save owner (the typed field
+// owner's container delegation).  Both row builders — the bridge's and the
+// ui-helpers fallback — must mark rows into that owner and announce row
+// removal, so no creation path can bypass the dirty chain.
+assert.match(bridge, /networkNotesPaths: collectNetworkNotesPaths\(\)/, 'the typed field owner must recollect the dynamic path list as one unit');
+assert.match(uiHelpers, /vcpTypedFieldOwnerMounted/, 'ui-helpers rows must join the typed field owner when it is mounted');
+assert.match(uiHelpers, /container\.dispatchEvent\(new Event\('change'/, 'ui-helpers row removal must announce the change to the save owner');
 
 // Per-agent high-frequency controls must remain on the typed presentation
 // path.  These guards prevent a later broad enhancer change from silently

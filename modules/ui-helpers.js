@@ -833,6 +833,12 @@
         input.name = 'networkNotesPath';
         input.placeholder = '例如 \\\\NAS\\Shared\\Notes';
         input.value = path;
+        // Rows created after the typed field owner mounted belong to it: the
+        // marker suppresses the legacy whole-form autosave chain, matching
+        // the bridge's row builder so both creation paths stay single-owner.
+        if (document.getElementById('globalSettingsForm')?.dataset.vcpTypedFieldOwnerMounted === 'true') {
+            input.dataset.vcpTypedFieldOwner = 'true';
+        }
 
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
@@ -840,6 +846,9 @@
         removeBtn.className = 'sidebar-button small-button danger-button'; // Re-use existing styles
         removeBtn.onclick = () => {
             inputGroup.remove();
+            // A silent row removal previously skipped every dirty chain;
+            // announce it so the owning owner recomputes the serialized list.
+            container.dispatchEvent(new Event('change', { bubbles: true }));
         };
 
         inputGroup.append(input, removeBtn);
