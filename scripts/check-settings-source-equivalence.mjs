@@ -100,6 +100,22 @@ assert.match(css, /vcp-uiux-input-wrap\.vcp-harness-input-fill/, 'bridge-mounted
 assert.match(bridge, /function mountHarnessSwitches/, 'switch mounting must be a shared real-primitive owner');
 assert.match(bridge, /api\.mountToggle\(input, scope\)/, 'Switch presentation must come from the library primitive');
 assert.doesNotMatch(css, /\.slider/, 'retired local slider CSS must be deleted');
+
+// Per-agent high-frequency controls must remain on the typed presentation
+// path.  These guards prevent a later broad enhancer change from silently
+// reintroducing a second wrapper owner around the canonical Agent form nodes.
+for (const marker of [
+    'mountTypedAgentIdentityInput(form)',
+    'mountTypedAgentModelInput(form)',
+    'mountTypedAgentTemperatureInput(form)',
+    'mountTypedAgentNumericInputs(form)',
+    'mountTypedAgentStreamChoice(form)',
+]) {
+    assert.ok(bridge.includes(marker), `Agent control owner missing: ${marker}`);
+}
+assert.match(bridge, /mountChoice\(group, scope\)/, 'Agent stream output must use the Choice primitive');
+assert.ok(html.includes('agentStreamOutputTrue') && html.includes('agentStreamOutputFalse'), 'Agent stream radio pair contract must remain explicit');
+assert.match(bridge, /agentNameInput.*agentModel.*agentTemperature.*agentContextTokenLimit.*agentMaxOutputTokens.*agentTopP.*agentTopK/s, 'Agent Input exclusions must cover the complete high-frequency cluster');
 assert.match(bridge, /vcp-harness-row-copy/);
 assert.match(bridge, /vcp-harness-active-section/);
 assert.match(bridge, /vcp-harness-section-bank/);
