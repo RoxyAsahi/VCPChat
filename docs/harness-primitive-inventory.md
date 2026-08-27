@@ -35,8 +35,19 @@
 | Terminal/Read/Diff/Search/Web Block | matching `ui-primitives/src/*Block.tsx`；Tool details/rows | inventoried | B2 |
 | MarkdownText / MessageText / CodeBlock / JsonBlock | `ui-primitives/src/markdown/`；Chat、Tool、Deliverables、Trajectory | inventoried；VCP production integration frozen | B4 |
 | BrandWordmark / FishLogo / icons | `ui-primitives/src/` and `src/icons/`；app-wide assets | inventoried | B1 |
+| DiffBlock | `ui-primitives/src/DiffBlock.tsx`；file-mutation/tool detail presentation | inventoried；portable diff rows、copy、collapse/expand 与 distinct-file footer 已确认；VCP tool-result/structured message production 接入受冻结边界约束 | B4 |
+| JsonTree | `ui-primitives/src/JsonTree.tsx`；trajectory/tool inspection | inventoried；递归 disclosure 与 copy/expand contract 待建立；VCP structured-data production 接入受冻结边界约束 | B4 |
+| ProducedFiles | `ui-deliverables/src/client/ProducedFiles.tsx`；turn-tail produced-file chips | inventoried；host capability、responsive chip fitting、open-file 与 overflow contract 已确认；不得接入 VCP 聊天消息尾部 | B4 |
+| PlanChip | `ui-plan/src/client/PlanModeControl.tsx`；conversation input plan slot | inventoried；projection-driven transient chip 与 async exit/error lifecycle 已确认；VCP chat/composer production 接入冻结 | B4 |
 | ConnectionBanner | `ui-primitives/src/ConnectionBanner.tsx`；连接重试提示 | candidate-interaction-active；reconnecting/hidden、aria-live、owner teardown 已建立，Harness pixel fixture与 VCP production consumer pending | B3 |
 | OnboardingSurface | `ui-primitives/src/OnboardingSurface.tsx`；首运行 takeover | candidate-interaction-active；body portal、mask/stage、root inert 与 teardown 已建立，Harness pixel fixture与 VCP production consumer pending | B3 |
+| LanguageRow | `locale/src/client/LanguageRow.tsx`；locale plugin 的 General settings row | candidate-source-only；Light-DOM row + 36px selector + Menu portal、snapshot 更新和 teardown 已建立；VCP 无 locale capability/persisted key，Harness 同语义 pixel fixture pending | B2 |
+
+## Real consumer migration ledger
+
+| Surface / field | Canonical source | Current owner | Legacy path | Deletion condition | Evidence | Gate |
+| --- | --- | --- | --- | --- | --- | --- |
+| Home tagline / `homeVisualTagline` | existing Settings snapshot + persisted key | `typed-settings-field-owner` + generated Light-DOM Input | generic `mountHarnessInputWrappers` is already skipped for this id; remaining Settings dirty/autosave orchestration is shared legacy infrastructure | remove the field-specific compatibility projection only after generated Input default/placeholder/focus/disabled/error DOM, computed-style, geometry, pixel, artifact-only Electron and reload/teardown evidence pass | `scripts/test-settings-wa-electron.mjs`, `scripts/capture-vcp-dom-fixtures.mjs`, `scripts/check-harness-field-visual-evidence.mjs` | `production-consumer-active / visual-equivalence-pending`; not `verified-candidate` |
 
 ## Interaction patterns and composites
 
