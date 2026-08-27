@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const root = process.cwd();
 const dir = path.join(root, 'docs/reference/deepseek-harness-primitives');
-const primitives = ['settings-root', 'field', 'select', 'menu', 'modal', 'tooltip', 'hover-card', 'disclosure-row', 'state-dot', 'toast', 'risk-confirmation', 'semantic-icon', 'button', 'input', 'range', 'toggle', 'color-pair', 'agent-preset-seat', 'agent-preset-row', 'agent-preset-section', 'agent-preset-label', 'preset-menu', 'popup-select', 'directory-browser', 'model-picker', 'diff-block', 'brand-wordmark'];
+const primitives = ['settings-root', 'field', 'select', 'menu', 'modal', 'tooltip', 'hover-card', 'disclosure-row', 'state-dot', 'toast', 'risk-confirmation', 'semantic-icon', 'button', 'input', 'range', 'toggle', 'color-pair', 'agent-preset-seat', 'agent-preset-row', 'agent-preset-section', 'agent-preset-label', 'preset-menu', 'popup-select', 'directory-browser', 'model-picker', 'diff-block', 'brand-wordmark', 'drop-overlay'];
 const required = [
   'reference.css',
   'model-picker.capture.schema.json',
