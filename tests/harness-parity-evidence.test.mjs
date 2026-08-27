@@ -56,6 +56,8 @@ test('Harness UI inventory separates frozen surfaces from contract candidates', 
     assert.ok(report.entries.some(item => item.name === 'ModelSelect' && item.category === 'composite-surface'));
     assert.ok(report.entries.some(item => item.category === 'frozen-domain-surface'));
     assert.ok(report.nextCandidates.length > 0);
+    assert.ok(report.surfacePatterns.some(item => item.pattern === 'ui-permission-presets' && item.composites > 0));
+    assert.ok(report.surfacePatterns.some(item => item.frozenDomainSurfaces > 0));
 });
 
 test('Harness geometry audit reports source equivalence without hiding gaps', () => {
