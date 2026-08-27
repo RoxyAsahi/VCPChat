@@ -42,6 +42,13 @@
 | ConnectionBanner | `ui-primitives/src/ConnectionBanner.tsx`；连接重试提示 | candidate-interaction-active；reconnecting/hidden、aria-live、owner teardown 已建立，Harness pixel fixture与 VCP production consumer pending | B3 |
 | OnboardingSurface | `ui-primitives/src/OnboardingSurface.tsx`；首运行 takeover | candidate-interaction-active；body portal、mask/stage、root inert 与 teardown 已建立，Harness pixel fixture与 VCP production consumer pending | B3 |
 | LanguageRow | `locale/src/client/LanguageRow.tsx`；locale plugin 的 General settings row | candidate-source-only；Light-DOM row + 36px selector + Menu portal、snapshot 更新和 teardown 已建立；VCP 无 locale capability/persisted key，Harness 同语义 pixel fixture pending | B2 |
+| PermissionRow | `ui-permission-presets/src/client/PermissionRow.tsx`；new-session permission default settings row | inventoried；source provenance、DOM/ARIA、36px selector geometry、loading/saving/error/read-only 与 Full access acknowledgement state matrix 已登记；VCP 无 permission-settings consumer，未接入 Settings bridge 或持久化链 | B2 |
+
+## Jobs surface references
+
+| 控件 | Harness source / production use | VCP 状态 | 批次 |
+| --- | --- | --- | --- |
+| JobListAction | `ui-jobs/src/client/JobListAction.tsx`；live/settled job status action | inventoried；live-first/newest-settled ordering、portal menu、outside-dismiss、Escape focus restore、ticking interval 与 dispose contract 已登记；无 VCP jobs consumer 或 paired visual capture | B3 |
 
 ## Real consumer migration ledger
 
