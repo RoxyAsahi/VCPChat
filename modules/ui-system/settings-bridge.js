@@ -887,7 +887,11 @@ function mountSettingsAutosave(root, form) {
     };
     const onInput = event => {
         if (!event.target?.matches?.('input, select, textarea')) return;
+        // Forum fields carry the same suppression marker as typed settings
+        // fields; otherwise typing there also drives this whole-form
+        // autosave chain and both owners fight over one status bar.
         if (event.target.dataset.vcpTypedFieldOwner === 'true') return;
+        if (event.target.dataset.vcpTypedForumFieldOwner === 'true') return;
         schedule();
     };
     const onResult = event => {

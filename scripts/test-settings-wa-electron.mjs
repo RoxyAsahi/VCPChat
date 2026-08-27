@@ -612,6 +612,43 @@ try {
     assert.equal(forumConsumerState.controlUsername, forumConsumerState.username, 'Forum admin control consumes the typed forum snapshot');
     assert.equal(forumConsumerState.usernameInputPrimitive, true, 'Forum username uses the typed Light-DOM Input primitive');
     assert.equal(forumConsumerState.passwordInputPrimitive, true, 'Forum password uses the typed Light-DOM Input primitive');
+    // Forum fields own their draft/autosave seam: typing there must not
+    // schedule the legacy whole-form settings submit, and the save must go
+    // through the typed forum service instead.
+    const forumSeamState = await page.evaluate(async () => {
+        const form = document.getElementById('globalSettingsForm');
+        const input = document.getElementById('adminUsername');
+        const previousValue = input.value;
+        let legacySubmitCalls = 0;
+        let forumServiceCalls = 0;
+        const originalRequestSubmit = typeof form.requestSubmit === 'function' ? form.requestSubmit.bind(form) : null;
+        try { form.requestSubmit = (...args) => { legacySubmitCalls += 1; return originalRequestSubmit?.(...args); }; } catch { /* readonly */ }
+        const service = window.VCPUISettingsBridge?.getForumConfigService?.();
+        let releaseExecute = () => {};
+        if (service?.save?.execute) {
+            const originalExecute = service.save.execute.bind(service.save);
+            service.save.execute = async patch => {
+                forumServiceCalls += 1;
+                return originalExecute(patch);
+            };
+            releaseExecute = () => { service.save.execute = originalExecute; };
+        }
+        try {
+            input.value = `${previousValue}A`.slice(0, 40);
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            // Outlast both 400ms debounce chains so whichever path ran shows up.
+            await new Promise(resolve => setTimeout(resolve, 900));
+        } finally {
+            releaseExecute();
+            if (originalRequestSubmit) form.requestSubmit = originalRequestSubmit;
+            input.value = previousValue;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            await new Promise(resolve => setTimeout(resolve, 900));
+        }
+        return { legacySubmitCalls, forumServiceCalls };
+    });
+    assert.equal(forumSeamState.legacySubmitCalls, 0, `typing in forum fields never triggers the legacy whole-form settings submit (${JSON.stringify(forumSeamState)})`);
+    assert.equal(forumSeamState.forumServiceCalls >= 1, true, `typing in forum fields saves through the typed forum service (${JSON.stringify(forumSeamState)})`);
     const runtimeConsumerState = await page.evaluate(() => {
         const service = window.VCPUISettingsBridge?.getAssistantRuntimeService?.();
         return {
