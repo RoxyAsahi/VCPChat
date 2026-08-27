@@ -1,0 +1,66 @@
+{
+  "surface": "agentSettingsForm",
+  "control": "openModelSelectBtn",
+  "source": "VCP production Agent Settings Electron Surface",
+  "reference": "deepseek-harness/packages/client/ui-model-selection/src/client/ModelSelect.tsx",
+  "capturedViewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 },
+  "additionalViewports": ["1280x800", "1680x1000"],
+  "findings": [
+    {
+      "id": "VF-AGENT-MODEL-001",
+      "severity": "P1",
+      "type": "css-cascade",
+      "status": "reproduced",
+      "impact": "The production evidence gate detects an authored display:flex rule for the Harness model trigger. The trigger currently depends on owner-bound inline !important styles, so legacy presentation remains active and can regress after dispose or stylesheet order changes.",
+      "legacySelector": "#agentSettingsForm .model-input-container button",
+      "harnessSelectors": [".vcp-harness-button.button", ".vcp-harness-agent-model-picker-trigger"],
+      "evidence": {
+        "command": "npm run check:agent-settings-production-evidence",
+        "result": "FAIL: Agent action openModelSelectBtn has a conflicting authored display:flex rule",
+        "report": "reports/vcp-agent-settings-production.json",
+        "computed": { "display": "flex", "rect": { "width": 0, "height": 0 } },
+        "authoredRules": [
+          { "selector": ".vcp-harness-button.button", "display": "inline-flex" },
+          { "selector": ".vcp-harness-agent-model-picker-trigger", "display": "inline-flex" }
+        ]
+      },
+      "minimalRepro": "docs/visual-qa/fixtures/agent-model-picker-trigger-cascade.html",
+      "smallestCorrection": "Retire every Agent-specific legacy selector that matches .vcp-harness-agent-model-picker-trigger (including the checked-in settings-model-select.css source), then add a negative selector gate. Do not broaden the change to group/global model controls until they have their own consumer contract.",
+      "owner": "main Settings migration thread",
+      "qaOwner": "Visual Forensics / CSS Cascade QA"
+    },
+    {
+      "id": "VF-AGENT-MODEL-002",
+      "severity": "P1",
+      "type": "interaction-lifecycle",
+      "status": "reproduced",
+      "impact": "After selecting a model, reopening the picker leaves its internal pane at model. Escape then only returns to the root pane and does not dismiss or restore trigger focus.",
+      "reproSequence": [
+        "Open #openModelSelectBtn",
+        "Enter Model pane",
+        "Filter and select Probe Secondary",
+        "Reopen the trigger",
+        "Dispatch Escape on the picker card"
+      ],
+      "evidence": {
+        "command": "VCPCHAT_STRESS_AGENT_MODEL_PICKER_INTERACTION=1 npm run test:electron-agent-settings-interaction",
+        "result": "FAIL: escaped=false, focusRestored=false",
+        "actual": { "opened": true, "rootPane": true, "modelPane": true, "filteredCount": 1, "selected": true, "afterSelectClosed": true, "reopened": true, "escaped": false, "focusRestored": false },
+        "expected": { "escaped": true, "focusRestored": true }
+      },
+      "sourceLocation": "modules/uiux/primitives/agent-model-picker.ts:199-205",
+      "rootCause": "The trigger click handler opens popup directly without resetting pane='root'. The public open() helper resets the pane, but production uses the trigger listener path.",
+      "minimalCorrection": "Reset pane='root' before popup.open() in the trigger click handler, or route the trigger handler through the same open() transaction; add a reopen-after-selection regression sequence.",
+      "owner": "main Settings migration thread",
+      "qaOwner": "Visual Forensics / CSS Cascade QA"
+    }
+  ],
+  "excludedScope": ["DiffBlock", "chat content rendering", "Composer internals", "IPC", "persistence", "Plugin Loader"],
+  "evidenceGaps": [
+    "The default npm Agent Settings command does not enable VCPCHAT_STRESS_AGENT_MODEL_PICKER_INTERACTION=1.",
+    "No same-engine 1280x800 or 1680x1000 production capture is currently recorded for this control.",
+    "The checked-in production screenshot is collapsed at 800x600, so trigger geometry is not visually inspectable without opening the identity/model sections."
+  ],
+  "fixture": "docs/visual-qa/fixtures/agent-model-picker-trigger-cascade.html",
+  "createdAt": "2026-08-27"
+}
