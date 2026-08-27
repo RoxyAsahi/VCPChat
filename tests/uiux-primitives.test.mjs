@@ -61,6 +61,7 @@ const { mountRiskConfirmation } = await import('../modules/uiux/generated/primit
 const { mountAgentPresetSeat } = await import('../modules/uiux/generated/primitives/agent-preset-seat.js');
 const { mountAgentPresetRow } = await import('../modules/uiux/generated/primitives/agent-preset-row.js');
 const { mountLanguageRow } = await import('../modules/uiux/generated/primitives/language-row.js');
+const { mountAgentModelPicker } = await import('../modules/uiux/generated/primitives/agent-model-picker.js');
 const { createPopupSelectController, mountPopupSelectView } = await import('../modules/uiux/generated/primitives/popup-select.js');
 const { mountDirectoryBrowser } = await import('../modules/uiux/generated/primitives/directory-browser.js');
 const { mountSemanticIcon } = await import('../modules/uiux/primitives/semantic-icon.ts');
@@ -92,6 +93,46 @@ test('Harness LanguageRow composes a locale selector and retracts cleanly', asyn
         await scope.dispose('language-row-complete');
         assert.equal(host.textContent, 'original');
         assert.equal(document.querySelector('.vcp-harness-language-row'), null);
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
+
+test('Harness AgentModelPicker maps provider metadata and retracts its popup owner', async () => {
+    const dom = new JSDOM('<!doctype html><main><div id="host"></div></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('agent-model-picker-test'));
+        const host = document.getElementById('host'); const selected = [];
+        let loads = 0;
+        const controller = mountAgentModelPicker(host, {
+            selectedId: 'gpt',
+            options: async signal => {
+                assert.equal(signal.aborted, false);
+                loads += 1;
+                return [
+                    { id: 'gpt', label: 'GPT', provider: 'OpenAI', favorite: true },
+                    { id: 'local', label: 'Local', provider: 'Ollama' },
+                ];
+            },
+            onSelect: option => { selected.push(option.id); },
+        }, scope);
+        assert.equal(controller.trigger.getAttribute('aria-haspopup'), 'dialog');
+        controller.open();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.equal(loads, 1);
+        assert.equal(controller.popup.getSnapshot().open, true);
+        assert.match(controller.popup.getSnapshot().options[0].detail, /OpenAI/);
+        assert.match(controller.popup.getSnapshot().options[0].detail, /Favorite/);
+        controller.popup.setSearch('local');
+        await controller.popup.select(0);
+        assert.deepEqual(selected, ['local']);
+        assert.equal(controller.popup.getSnapshot().open, false);
+        controller.refresh();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.equal(loads, 2);
+        controller.close();
+        await controller.dispose();
+        assert.equal(host.querySelector('.vcp-harness-agent-model-picker'), null);
     } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
 });
 

@@ -33,6 +33,8 @@ export { AGENT_PRESET_ROW_DEFAULT_DESCRIPTION, AGENT_PRESET_ROW_DEFAULT_TITLE, A
 export type { AgentPresetRowController, AgentPresetRowOption, AgentPresetRowProps } from './primitives/agent-preset-row.js';
 export { mountLanguageRow } from './primitives/language-row.js';
 export type { LanguageRowController, LanguageRowOption, LanguageRowProps } from './primitives/language-row.js';
+export { mountAgentModelPicker } from './primitives/agent-model-picker.js';
+export type { AgentModelOption, AgentModelPickerController, AgentModelPickerProps } from './primitives/agent-model-picker.js';
 export { mountModal } from './primitives/modal.js';
 export type { ModalController, ModalProps } from './primitives/modal.js';
 export { mountTooltip } from './primitives/tooltip.js';
