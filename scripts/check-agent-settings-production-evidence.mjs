@@ -21,6 +21,7 @@ for (const id of [
 ]) assert.match(report.dom, new RegExp(`id="${id}"`), `production DOM is missing ${id}`);
 
 assert.ok(Array.isArray(report.inputs) && report.inputs.length >= 7, 'typed Agent Input evidence is incomplete');
+assert.ok(Array.isArray(report.inputNodes) && report.inputNodes.length >= 7, 'native Agent Input style evidence is incomplete');
 assert.ok(Array.isArray(report.toggles) && report.toggles.length >= 2, 'typed Agent Toggle evidence is incomplete');
 assert.equal(Array.isArray(report.choice) ? report.choice.length : 0, 1, 'typed Agent Choice evidence is incomplete');
 assert.equal(Array.isArray(report.streamRadios) ? report.streamRadios.length : 0, 2, 'native Agent stream radio evidence is incomplete');

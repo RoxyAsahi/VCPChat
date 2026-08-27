@@ -657,6 +657,7 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
                     dom: form?.outerHTML || '',
                     panel: panel ? { rect: rect(panel), style: style(panel) } : null,
                     inputs: pick('#agentSettingsForm .vcp-uiux-input-wrap'),
+                    inputNodes: pick('#agentSettingsForm .vcp-uiux-input-wrap input'),
                     choice: pick('#agentSettingsForm .vcp-uiux-choice'),
                     toggles: pick('#agentSettingsForm .vcp-uiux-toggle'),
                     streamRadios: pick('#agentSettingsForm input[name="streamOutput"]'),
