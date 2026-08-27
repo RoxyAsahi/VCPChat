@@ -1,0 +1,14 @@
+{
+  "primitive": "MenuView",
+  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-input-trigger/src/client/MenuView.module.css",
+  "selectors": {
+    ".menu": { "position": "absolute", "bottom": "calc(100% + 4px)", "left": "0", "zIndex": "100", "minWidth": "min(260px, 100%)", "maxWidth": "min(537px, 100%)", "maxHeight": "320px", "padding": "4px", "display": "flex", "flexDirection": "column", "borderRadius": "12px" },
+    ".viewport": { "display": "flex", "flexDirection": "column", "minHeight": "0", "overflowY": "auto" },
+    ".item": { "display": "flex", "alignItems": "center", "gap": "8px", "width": "100%", "minHeight": "40px", "padding": "8px 10px", "borderRadius": "10px", "fontSize": "14px", "lineHeight": "22px" },
+    ".itemIcon": { "width": "16px", "height": "16px" },
+    ".groupTitle": { "padding": "8px 10px", "fontSize": "12px", "lineHeight": "16px" },
+    ".loading": { "display": "flex", "alignItems": "center", "minHeight": "40px", "padding": "8px 10px", "fontSize": "14px", "lineHeight": "22px" }
+  },
+  "tokens": ["--dsw-alias-scrollbar-bg-l2", "--dsw-alias-scrollbar-hover-l2", "--dsw-alias-border-inverted", "--dsw-specific-menu", "--dsw-shadow-lv3", "--dsw-alias-interactive-bg-hover", "--dsw-alias-label-primary", "--dsw-alias-label-tertiary", "--dsw-alias-label-dimmed"],
+  "candidateStatus": "source-only; no VCP Composer/input-trigger consumer or paired visual capture"
+}
