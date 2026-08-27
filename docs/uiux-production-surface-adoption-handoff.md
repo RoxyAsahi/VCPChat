@@ -273,3 +273,13 @@ roadmap checkpoint 追加于 `38ec8bb8`。
 
 - journey 6b 扩展：`showHomeVisualBrand`/`showHomeVisualTagline` 两个 Toggle 的布尔翻转纳入同一关闭 flush 提交断言；至此首批六字段（三个 range、radius choice、两个 toggle）+ home tagline + 论坛凭据 + 宽屏布局单选对全部具备「关闭时绕过防抖、原样提交屏幕草稿」的逐字段证据。
 - Electron journey 全绿（15 PASS）。
+
+### 2026-08-27 批次 10：packaged-artifact darwin 运行证据闭合
+
+状态：`stable`（darwin 侧 evidence-pending 解除；Windows/其它平台仍 pending）。
+
+- 隔离 worktree（`git worktree add --detach /tmp/vcp-pack-worktree HEAD@1c26e2fc` + 共享 node_modules）内完成 `npm run build`（rust chat data service 编译）与 `npx electron-builder --dir --config.asar=false`。后续批次 9/10 的测试文件改动不影响打包运行时。
+- 文件系统证据：`npm run test:packaged-artifact-smoke` 通过，证据 JSON 落盘 `reports/uiux-thread-b/packaged-artifact-smoke-2026-08-27.json`（status=passed；resources/app/main.js 与 vendor tree 校验）。注意 runner 契约是未 asar 打包目录，默认 asar 输出会缺 resources/app，需要 `--config.asar=false` 复刻该布局。
+- 启动级证据：`node scripts/vcpchat-packed-smoke.mjs --dist <worktree>/dist` 通过——runtime closure manifest 校验、launch-protocol ready record、隔离 state/appData 下真实启动可执行文件并正常退出清理。
+- 拒绝门禁：`npm run test:packaged-artifact-invalid` 通过（缺失 unpacked 目录被正确拒绝）。
+- 结论：ownership 报告中 packaged artifact 证据在 darwin/arm64 上已由 B 线程补齐；win32/Linux 与签名安装包路径保持 `evidence-pending`，不得宣称跨平台 stable。
