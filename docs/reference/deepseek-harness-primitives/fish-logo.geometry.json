@@ -1,6 +1,7 @@
 {
   "primitive": "FishLogo",
   "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/FishLogo.tsx",
+  "inlineSource": true,
   "root": { "width": "24px at default size", "height": "17.04px at native size", "viewBox": "0 0 23.16 17.04", "fill": "none" },
   "svgGeometry": { "nativeWidth": "23.16px", "nativeHeight": "17.04px", "pathFill": "currentColor" },
   "tokens": ["currentColor"],

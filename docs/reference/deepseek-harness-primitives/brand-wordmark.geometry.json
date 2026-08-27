@@ -1,6 +1,7 @@
 {
   "primitive": "BrandWordmark",
   "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/BrandWordmark.tsx",
+  "inlineSource": true,
   "root": {
     "width": "182px at default size",
     "height": "24px",
