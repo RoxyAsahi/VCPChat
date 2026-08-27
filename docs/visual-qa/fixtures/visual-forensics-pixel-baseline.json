@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "minNonBackgroundRatio": 0.005,
+  "minInteractionDeltaRatio": 0.0001,
+  "minStateDeltaRatio": 0.0005,
+  "geometryTolerancePx": 2,
+  "notes": "Invariant pixel and geometry thresholds for real Electron captures. Thresholds are intentionally conservative; a baseline failure requires visual review rather than auto-approval."
+}
