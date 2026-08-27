@@ -72,6 +72,8 @@ const child = spawn(electron, ['.', '--allow-multiple-instances', `--remote-debu
     env: { ...process.env, VCPCHAT_APP_DATA_DIR: appData, VCPCHAT_E2E_TEST: '1' },
     stdio: ['ignore', 'ignore', 'pipe'],
     windowsHide: true,
+    // Own the process group so a timeout cannot leave helper children behind.
+    detached: process.platform !== 'win32',
 });
 child.stderr.on('data', (chunk) => { stderr.value = `${stderr.value}${chunk}`.slice(-12_000); });
 
@@ -695,7 +697,7 @@ try {
         footerState: document.querySelector('.vcp-settings-autosave-status')?.dataset.state || '',
         prompt: document.getElementById('continueWritingPrompt')?.value || '',
     }));
-    assert.equal(failedRetryState.active, true, `failed save keeps SettingsRoot open (${JSON.stringify(failedRetryState)})`);
+    assert.equal(failedRetryState.active, true, 'failed save keeps SettingsRoot open');
     assert.equal(failedRetryState.footerState, 'error', 'failed save exposes retry state');
     assert.equal(failedRetryState.prompt, uniquePrompt, 'failed save preserves input');
     await fs.chmod(appData, 0o700);
@@ -902,6 +904,59 @@ try {
     }
     assert.equal(wideSaveAttribution?.owner === 'typed-settings-field-owner' && wideSaveAttribution.success === true, true, `wide-layout close flush published by typed field owner (${JSON.stringify({ wideSaveAttribution })})`);
     console.log('  [PASS] 6c. wide layout radio pair is a single-owner typed field with close-flush evidence');
+
+    // ---- 6d. Chat typography preset + custom text ride the same typed
+    // owner: edit both, close before the debounce, and the flush must commit
+    // exactly what was on screen while the harness select stays canonical.
+    const fontValues = {
+        diaryPreset: 'monospace',
+        toolCustom: `flush-tool-font-${Date.now()}`,
+    };
+    await page.evaluate(() => window.uiHelperFunctions.openModal('globalSettingsModal'));
+    await page.waitForFunction(() => document.getElementById('globalSettingsForm'), { timeout: timeoutMs });
+    await new Promise(resolve => setTimeout(resolve, 250));
+    await page.evaluate(values => {
+        const set = (id, value) => {
+            const node = document.getElementById(id);
+            node.value = value;
+            node.dispatchEvent(new Event('input', { bubbles: true }));
+            node.dispatchEvent(new Event('change', { bubbles: true }));
+        };
+        // chatDiaryFontPreset defaults to serif in the snapshot; pick a value
+        // that is guaranteed different from the current service state.
+        const service = window.VCPUISettingsBridge.getTypedService();
+        const current = String(service.state.get().chatDiaryFontPreset || '');
+        set('chatDiaryFontPreset', values.diaryPreset === current ? 'serif' : values.diaryPreset);
+        set('chatToolFontCustom', values.toolCustom);
+    }, fontValues);
+    const fontDirtyAtClose = await page.evaluate(() => {
+        const form = document.getElementById('globalSettingsForm');
+        return {
+            dirty: form.dataset.vcpSettingsDirty === 'true',
+            ownerMarker: document.getElementById('chatToolFontCustom')?.dataset.vcpTypedFieldOwner || null,
+            onScreen: {
+                chatDiaryFontPreset: document.getElementById('chatDiaryFontPreset')?.value,
+                chatToolFontCustom: document.getElementById('chatToolFontCustom')?.value,
+            },
+        };
+    });
+    assert.equal(fontDirtyAtClose.dirty && fontDirtyAtClose.ownerMarker === 'true', true, `font fields are typed-owned and mark dirty (${JSON.stringify(fontDirtyAtClose)})`);
+    await page.evaluate(() => window.uiHelperFunctions.closeModal('globalSettingsModal'));
+    await page.waitForFunction(() => !document.getElementById('globalSettingsModal')?.classList.contains('active'), { timeout: timeoutMs });
+    let flushedFonts = null;
+    const fontFlushDeadline = Date.now() + timeoutMs;
+    while (Date.now() < fontFlushDeadline) {
+        flushedFonts = await page.evaluate(() => ({
+            chatDiaryFontPreset: window.VCPUISettingsBridge.getTypedService().state.get().chatDiaryFontPreset,
+            chatToolFontCustom: window.VCPUISettingsBridge.getTypedService().state.get().chatToolFontCustom,
+        }));
+        if (String(flushedFonts.chatDiaryFontPreset) === fontDirtyAtClose.onScreen.chatDiaryFontPreset
+            && flushedFonts.chatToolFontCustom === fontDirtyAtClose.onScreen.chatToolFontCustom) break;
+        await sleep(250);
+    }
+    assert.equal(String(flushedFonts.chatDiaryFontPreset), fontDirtyAtClose.onScreen.chatDiaryFontPreset, `close flush committed the font preset draft (${JSON.stringify({ flushedFonts, onScreen: fontDirtyAtClose.onScreen })})`);
+    assert.equal(flushedFonts.chatToolFontCustom, fontDirtyAtClose.onScreen.chatToolFontCustom, `close flush committed the font custom draft (${JSON.stringify({ flushedFonts, onScreen: fontDirtyAtClose.onScreen })})`);
+    console.log('  [PASS] 6d. chat typography preset/custom close flush through the single typed owner');
     // Reopen after a full reload: the form must be re-populated from settings.json.
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout: timeoutMs });
@@ -993,8 +1048,28 @@ try {
     }
     process.exitCode = 1;
 } finally {
-    child.kill();
+    try {
+        if (child.pid && process.platform !== 'win32') {
+            try {
+                process.kill(-child.pid, 'SIGTERM');
+            } catch {
+                child.kill();
+            }
+        } else {
+            child.kill();
+        }
+    } catch {
+        /* already exited */
+    }
     browser?.disconnect();
     await new Promise(resolve => setTimeout(resolve, 300));
-    child.kill('SIGKILL');
+    try {
+        if (child.pid && process.platform !== 'win32' && !child.killed) {
+            process.kill(-child.pid, 'SIGKILL');
+        } else {
+            child.kill('SIGKILL');
+        }
+    } catch {
+        /* already exited */
+    }
 }

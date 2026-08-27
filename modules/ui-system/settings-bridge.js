@@ -189,14 +189,6 @@ function mountTypedSettingsConsumer(root) {
             ['chatBubbleMaxWidthWideNarrow', 'chatBubbleMaxWidthWideNarrow'],
             ['minChunkBufferSize', 'minChunkBufferSize'],
             ['smoothStreamIntervalMs', 'smoothStreamIntervalMs'],
-            ['chatFontPreset', 'chatFontPreset'],
-            ['chatFontCustom', 'chatFontCustom'],
-            ['chatCodeFontPreset', 'chatCodeFontPreset'],
-            ['chatCodeFontCustom', 'chatCodeFontCustom'],
-            ['chatDiaryFontPreset', 'chatDiaryFontPreset'],
-            ['chatDiaryFontCustom', 'chatDiaryFontCustom'],
-            ['chatToolFontPreset', 'chatToolFontPreset'],
-            ['chatToolFontCustom', 'chatToolFontCustom'],
             ['enableSmoothStreaming', 'enableSmoothStreaming', 'checked'],
         ];
         projection.forEach(([id, path, mode, expected]) => {
@@ -940,6 +932,17 @@ const TYPED_FIELD_DEFINITIONS = Object.freeze({
     // the inverted value so both half-states flow through the same draft.
     chatLayoutModeWide: { path: 'enableWideChatLayout', kind: 'boolean' },
     chatLayoutModeNormal: { path: 'enableWideChatLayout', kind: 'inverse-boolean' },
+    // Chat typography presets/customs: selects and text inputs keep their
+    // canonical nodes; visual application stays with the settings snapshot
+    // consumers (chat renderer semantics untouched).
+    chatFontPreset: { path: 'chatFontPreset', kind: 'string' },
+    chatFontCustom: { path: 'chatFontCustom', kind: 'string' },
+    chatCodeFontPreset: { path: 'chatCodeFontPreset', kind: 'string' },
+    chatCodeFontCustom: { path: 'chatCodeFontCustom', kind: 'string' },
+    chatDiaryFontPreset: { path: 'chatDiaryFontPreset', kind: 'string' },
+    chatDiaryFontCustom: { path: 'chatDiaryFontCustom', kind: 'string' },
+    chatToolFontPreset: { path: 'chatToolFontPreset', kind: 'string' },
+    chatToolFontCustom: { path: 'chatToolFontCustom', kind: 'string' },
     appearanceDensity: { path: 'appearanceProfile.density', kind: 'string' },
     appearanceRadius: { path: 'appearanceProfile.radius', kind: 'string' },
     appearanceTypography: { path: 'appearanceProfile.typography', kind: 'string' },
@@ -1014,6 +1017,21 @@ function mountTypedFieldOwner(root, form) {
         check('showHomeVisualBrand', settings.showHomeVisualBrand !== false);
         check('showHomeVisualTagline', settings.showHomeVisualTagline !== false);
         set('homeVisualTagline', settings.homeVisualTagline || '语义级打穿 AI、UI/UX、APP 与人类想象力的边界');
+        // Chat typography owns its fallbacks here now that the generic
+        // snapshot projection no longer writes these nodes.
+        set('chatFontPreset', settings.chatFontPreset || 'system');
+        set('chatFontCustom', settings.chatFontCustom || '');
+        set('chatCodeFontPreset', settings.chatCodeFontPreset || 'consolas');
+        set('chatCodeFontCustom', settings.chatCodeFontCustom || '');
+        set('chatDiaryFontPreset', settings.chatDiaryFontPreset || 'serif');
+        set('chatDiaryFontCustom', settings.chatDiaryFontCustom || '');
+        set('chatToolFontPreset', settings.chatToolFontPreset || 'system');
+        set('chatToolFontCustom', settings.chatToolFontCustom || '');
+        [['chatFontPreset', 'chatFontCustomRow'], ['chatCodeFontPreset', 'chatCodeFontCustomRow'], ['chatDiaryFontPreset', 'chatDiaryFontCustomRow'], ['chatToolFontPreset', 'chatToolFontCustomRow']].forEach(([selectId, rowId]) => {
+            const select = form.querySelector(`#${selectId}`);
+            const row = form.querySelector(`#${rowId}`);
+            if (select && row) row.style.display = select.value === 'custom' ? 'block' : 'none';
+        });
     };
     const status = () => root.querySelector('.vcp-settings-autosave-status');
     const publish = (success, error = '') => {
@@ -1166,7 +1184,14 @@ function teardownHarnessDisclosures() {
 
 function mountHarnessSelects(form) {
     const previousObserver = selectObserverStates.get(form);
-    previousObserver?.disconnect();
+    // A repeated refresh disconnects the live observer before remounting.
+    // Drop the registry entry too so the arming block below always builds a
+    // replacement; otherwise the stale entry makes the surface believe an
+    // observer is still listening while none is.
+    if (previousObserver) {
+        previousObserver.disconnect();
+        selectObserverStates.delete(form);
+    }
     // A refresh can arrive after an async options update.  Reclassify the
     // existing projection before the per-select guard sees its wrapper;
     // otherwise a Choice that became a long Select (or vice versa) would be

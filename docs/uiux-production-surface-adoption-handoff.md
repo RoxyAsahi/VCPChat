@@ -283,3 +283,40 @@ roadmap checkpoint 追加于 `38ec8bb8`。
 - 启动级证据：`node scripts/vcpchat-packed-smoke.mjs --dist <worktree>/dist` 通过——runtime closure manifest 校验、launch-protocol ready record、隔离 state/appData 下真实启动可执行文件并正常退出清理。
 - 拒绝门禁：`npm run test:packaged-artifact-invalid` 通过（缺失 unpacked 目录被正确拒绝）。
 - 结论：ownership 报告中 packaged artifact 证据在 darwin/arm64 上已由 B 线程补齐；win32/Linux 与签名安装包路径保持 `evidence-pending`，不得宣称跨平台 stable。
+
+### 2026-08-27 批次 11：八个字体字段 typed owner 收口 + select 重挂观察器缺陷修复
+
+状态：`stable`。
+
+- 接线内容：§2 ownership 表中全部 8 个字体字段（chatFontPreset/Custom、chatCodeFontPreset/Custom、chatDiaryFontPreset/Custom、chatToolFontPreset/Custom）加入 `TYPED_FIELD_DEFINITIONS`（kind: string）；settings-bridge `mountTypedSettingsConsumer` 中对应 8 行通用 projection 退役；typed project() 接管快照填充与四个 `*FontCustomRow` 显隐。字体应用语义（消息/diary/工具结果 renderer）不动。
+- 回归与根因（方法论记录）：接入后 journey 曾稳定卡在 1b「assistantAgent 动态 options 替换后未获 Harness wrapper」。经 mount 调用栈插桩定位：批次使 `enhanceGlobalSettings←refresh` 出现无 teardown 的连续两次调用，而 `mountHarnessSelects()` 先 disconnect 旧 MutationObserver、后因 `selectObserverStates` 条目残留跳过重建——观察器静默死亡，动态 option 替换不再被监听。这是既有潜在缺陷，与本批字段解耦但被其时序必现化。修复：断开时同步删除注册表条目，挂载尾部必然重挂新 observer；不依赖任何诊断参数，journey 全序列即稳定通过。
+- journey 新增 6d：打开模态 → 设置 `chatDiaryFontPreset`（select 型）与 `chatToolFontCustom`（text 型）→ 关闭绕过防抖 → 关闭 flush 必须把两值原样提交到 typed service 快照，同时断言 dirty 与 `dataset.vcpTypedFieldOwner` 标记。至此 preset-select 与 custom-text 两类字体控件均有 close-flush 证据。
+- 附带加固：journey 子进程以 detached 进程组 spawn、finally 阶段 `process.kill(-pid)` SIGTERM→SIGKILL 兜底，杜绝此前负载尖峰调查中发现的孤儿 Electron 进程堆积。
+- 门禁全绿：`check:uiux`、`test:uiux`（44/44）、`check:uiux:artifacts`（66 文件）、`test:uiux:artifacts`、Electron journey（16 PASS 含新增 6d）、lifecycle stress（3 warmup + 20 cycles，listeners/lifecycle 指标恒定）、`guard:classic-retirement`、source-equivalence。
+- 台账行升级：8 个字体字段状态 `typed-projection-active` → `typed-owner-active`（docs/settings-uiux-field-ownership-2026-08-25.md §2 与 §7 同步）。
+- 归因说明：工作树中线程 A 的 WIP（directory-browser 等）与生成产物 `docs/chat-kernel-consumer-report.json` 的行号漂移均不属本批提交范围；按 §3/§8 规则 B 不代改不代生成，本批仅提交 B 所属文件。
+
+### 2026-08-27 批次 12：directory-browser / popup-select 生产面 consumer 接缝审计
+
+状态：`audited-hold`（结论=本批不接线；接缝盘点与前置条件清单落盘）。
+
+**契约面审计**（依据 `modules/uiux/generated/primitives/*.d.ts` 与线程 A roadmap）：
+
+1. **popup-select**：headless controller 复刻 ui-commands `popup.ts` 的 composer 命令面板——deps 要求 `consume(PopupTokenSegment)` 与 `focusComposer()` 回调，选项加载绑定 open-time context。Settings 面既无命令语义、也无法满足注入 face；按线程 A 自己的「不得为完成状态矩阵新建 fixture-only provider」边界，在 Settings 接线属误用。**结论：无合法 Settings consumer，不接入。**
+2. **directory-browser**：Light-DOM Miller browser，严格 injected `listDirectory/createDirectory/onOpen/onClose` face，自身无任何 Electron/IPC 依赖。当前成熟度 `foundation-electron-active`，线程 A 明确 pending：path editor draft debounce/prefix filter、two-leg landing、same-semantic pixel diff、以及 **VCP production consumer**。
+
+**Settings 面候选接缝盘点**（`main.html` 全量路径类输入）：
+
+| 候选 | 现状 | 判定 |
+|---|---|---|
+| `#networkNotesPathsContainer` 动态行（`input[name="networkNotesPath"]`） | Settings 表单唯一真正开放的路径类字段。值语义为网络共享路径（UNC，如 `\\NAS\Shared\Notes`），不保证本地可浏览；序列化为双轨：typed consumer 投影写行、legacy `global-settings-manager.js` 收集提交 | Miller 浏览器需要受控目录列举能力，而全仓不存在通用目录列举 IPC（现有 handler 均为域内目录：agents/canvas/wallpaper）；复用原生 `select-directory` 只能给 OS 对话框、非浏览器 primitive 注入 face。新增列目录 IPC 属系统能力新增，超出两线程所有权边界（main 进程文件归协议外），需单独决策 |
+| `speechRecognizerBrowserPath` / `speechRecognizerPagePath` | 文件/页面相对路径，且在 §3 冻结清单内 | 按协议排除，不做 |
+| avatar/color/wallpaper 等图像类选择 | 图像选择器（native dialog / ColorPair typed owner）非目录语义 | 不适用 |
+
+**接入前置条件清单**（后续批次解锁条件）：
+
+1. 线程 A 将 directory-browser 从 `foundation-electron-active` 推进到 Candidate active（补齐 draft/filter/two-leg landing/pixel diff 缺口）。
+2. 跨线程决策「通用目录列举能力」落地方式：新增最小 face 的主进程 IPC（如 sandboxed `list-directory` handle），或降级为原生 `select-directory` 互操作——前者需要 thread-A/B 之外的所有权确认。
+3. 先决工序建议：`networkNotesPaths` 动态行本身仍是双轨序列化（typed consumer 写行 + legacy manager 收集），可先做「动态列表字段的单一 owner 化」（TYPED_FIELD_DEFINITIONS 引入 list kind 或等价机制）作为独立批次，再在其上挂接目录选择交互。
+
+**门禁**：本批为纯审计+文档，代码零改动；不重跑运行时门禁（最近一次批次 11 全绿证据仍然有效，HEAD 仅前进文档提交）。
