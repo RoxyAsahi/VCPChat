@@ -1,0 +1,10 @@
+{
+  "primitive": "AgentPresetLabel",
+  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-agent-preset/src/client/AgentPresetLabel.tsx",
+  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-agent-preset/src/client/AgentPresetLabel.module.css",
+  "root": { "tag": "span", "class": "label", "interactive": false, "title": "description or localized header hint" },
+  "children": ["IconAgentPresetOutline16[aria-hidden via icon primitive]", "localized preset name or recorded id"],
+  "aria": ["static label remains ordinary span", "icon is decorative and aria-hidden"],
+  "states": ["absent-session-preset", "known-preset", "unknown-preset-id", "roster-loading", "dispose"],
+  "vcpCandidate": { "productionConsumer": false, "status": "inventoried", "reason": "Session header integration is outside this Candidate Lab reference slice" }
+}
