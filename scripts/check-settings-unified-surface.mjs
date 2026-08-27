@@ -14,7 +14,7 @@ assert.match(bridge, /vcp-harness-settings-options/);
 assert.match(bridge, /dataset\.canonicalRow = 'true'/);
 assert.match(bridge, /removeLegacySubsectionHeadings/);
 assert.match(bridge, /window\.MutationObserver/);
-assert.match(bridge, /harnessSelectOwnerMounted/);
+assert.match(bridge, /primitiveSelectStates/);
 assert.doesNotMatch(bridge, /function isNextUi\s*\(/);
 assert.doesNotMatch(bridge, /vcp-global-settings-next/);
 assert.match(css, /vcp-harness-general-item/);

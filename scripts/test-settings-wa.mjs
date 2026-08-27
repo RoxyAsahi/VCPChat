@@ -231,30 +231,17 @@ for (const value of ['appearance-settings', 'render-settings', 'selection-assist
 
 assert.equal(document.querySelectorAll('#globalSettingsModal .vcp-harness-settings-nav-cell').length, 8, 'unified nav remains stable after switching');
 
-// Projection lifecycle: option mutations must rebuild the same Harness
-// primitive atomically, and crossing the compact threshold must reclassify
-// Choice <-> Select without leaving stale wrappers or portals.
+// Projection lifecycle: select presentation is owned by the library Select
+// primitive (window.VCPUIUX.mountSelect), which jsdom does not provide — so
+// the bridge must degrade to the bare native control and option mutations
+// must never resurrect a retired local projection.
 const assistantAgent = document.getElementById('assistantAgent');
 assistantAgent.replaceChildren(new Option('助手 A', 'agent-a'), new Option('助手 B', 'agent-b'));
 document.dispatchEvent(new Event('vcp-settings-surface-updated'));
 await new Promise(resolve => setTimeout(resolve, 50));
-assert.ok(assistantAgent.closest('.vcp-harness-choice-wrap'), 'dynamic short options mount Choice');
-assert.equal(assistantAgent.closest('.vcp-harness-choice-wrap').querySelectorAll('[role="radio"]').length, 2, 'Choice projection mirrors dynamic options');
-assistantAgent.append(new Option('助手 C', 'agent-c'), new Option('助手 D', 'agent-d'), new Option('助手 E', 'agent-e'));
-document.dispatchEvent(new Event('vcp-settings-surface-updated'));
-await new Promise(resolve => setTimeout(resolve, 50));
-assert.ok(assistantAgent.closest('.vcp-harness-select-wrap'), 'threshold crossing reclassifies to Select');
-assert.equal(document.querySelectorAll('.vcp-harness-choice-wrap #assistantAgent').length, 0, 'stale Choice wrapper is removed');
-
-const choiceSource = document.getElementById('appearanceUiModeClassic');
-const choiceTrack = choiceSource?.closest('.vcp-harness-choice-wrap')?.querySelector('.vcp-harness-choice-track');
-if (choiceTrack) {
-    const radios = [...choiceTrack.querySelectorAll('[role="radio"]')];
-    assert.equal(radios.filter(item => item.tabIndex === 0).length, 1, 'Choice uses roving tabindex');
-    radios[0].focus();
-    choiceTrack.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
-    assert.equal(choiceSource.selectedIndex, choiceSource.options.length - 1, 'Choice End key selects last enabled option');
-}
+assert.equal(assistantAgent.closest('.vcp-harness-choice-wrap'), null, 'retired local Choice projection is gone');
+assert.equal(assistantAgent.closest('.vcp-harness-select-wrap'), null, 'retired local Select wrap is gone');
+assert.equal(assistantAgent.tagName, 'SELECT', 'the native business node stays the sole owner without a primitive runtime');
 
 // ---- save helper ----
 async function submitForm() {

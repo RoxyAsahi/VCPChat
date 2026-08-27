@@ -735,6 +735,11 @@
             isActive: () => {
                 const modal = document.getElementById('globalSettingsModal');
                 if (modal?.classList.contains('active') !== true) return false;
+                // A transient menu over the form (library select primitive's
+                // body-level portal) owns Escape first: closing the whole modal
+                // underneath an open menu orphans the menu and loses the user's
+                // place.  The menu's own document keydown handler closes it.
+                if (document.querySelector('.vcp-uiux-primitive-menu:not([hidden])')) return false;
                 return !document.querySelector('.vcp-ui-modal-overlay, wa-dialog[open], .confirm-dialog-overlay.visible');
             },
             close: () => {
