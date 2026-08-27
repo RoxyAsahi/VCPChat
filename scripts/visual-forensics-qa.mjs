@@ -99,6 +99,27 @@ try {
   if (overlays.error || !overlays.menu?.rect || !overlays.modal?.open || !overlays.tooltip?.open) {
     evidence.gate.failures.push(`showcase overlays: ${JSON.stringify(overlays)}`);
   }
+  const settingsContext = await page.evaluate(async () => {
+    await window.uiHelperFunctions?.openModal?.('globalSettingsModal');
+    await new Promise(resolve => setTimeout(resolve, 120));
+    const modal = document.querySelector('#globalSettingsModal');
+    const rows = [...(modal?.querySelectorAll('.vcp-settings-row, .form-group, .settings-section') || [])]
+      .filter(node => node.getClientRects().length).slice(0, 24).map(node => {
+        const r = node.getBoundingClientRect(); const s = getComputedStyle(node);
+        return { className: node.className, text: (node.textContent || '').trim().slice(0, 120), rect: { x: r.x, y: r.y, width: r.width, height: r.height }, display: s.display, gap: s.gap, padding: s.padding, borderRadius: s.borderRadius, backgroundColor: s.backgroundColor };
+      });
+    const shell = modal?.querySelector('.vcp-ui-settings-shell, #globalSettingsForm');
+    const shellStyle = shell ? (() => { const r = shell.getBoundingClientRect(); const s = getComputedStyle(shell); return { className: shell.className, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, display: s.display, gridTemplateColumns: s.gridTemplateColumns, gap: s.gap }; })() : null;
+    const controls = [...(modal?.querySelectorAll('input, select, textarea, button, wa-input, wa-select') || [])]
+      .filter(node => node.getClientRects().length).slice(0, 40).map(node => {
+        const r = node.getBoundingClientRect(); const s = getComputedStyle(node);
+        return { tag: node.tagName.toLowerCase(), id: node.id, className: node.className, parentClass: node.parentElement?.className || '', rect: { x: r.x, y: r.y, width: r.width, height: r.height }, display: s.display, color: s.color, backgroundColor: s.backgroundColor };
+      });
+    await window.uiHelperFunctions?.closeModal?.('globalSettingsModal');
+    return { opened: Boolean(modal?.classList.contains('active') || modal), rowCount: rows.length, rows, controls, shell: shellStyle };
+  }).catch(error => ({ error: error.message }));
+  evidence.settingsContext = settingsContext;
+  if (settingsContext.error || (settingsContext.rowCount === 0 && settingsContext.controls?.length === 0)) evidence.gate.failures.push(`settings context: ${JSON.stringify(settingsContext)}`);
   for (const [width, height] of viewports) {
     await page.setViewport({ width, height, deviceScaleFactor: 1 });
     await page.evaluate(() => window.scrollTo(0, 0));
