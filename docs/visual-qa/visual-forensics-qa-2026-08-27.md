@@ -50,6 +50,8 @@ On 2026-08-27 in the current dirty worktree:
 - Settings disposal is now separately evidenced: after the real `globalSettingsModal` close operation, the manifest records inactive/hidden modal state, zero visible dialog shells, and an empty body inline style; the gate rejects any lingering modal surface.
 - Reopen is now a per-viewport fixture. Each required size closes and reopens the shipped component showcase, captures a dedicated `*-reopen.png`, verifies root identity replacement, and checks body cleanup after close before continuing the rest of the scan.
 - Reopen captures run in a post-scan pass after state fixtures, preserving independent evidence for both lifecycle and loading/error transitions. This avoids conflating root-remount timing with the state-control contract while still exercising the real close/reopen path at every viewport.
+- Menu, Modal, and Tooltip now each have dedicated per-viewport regression screenshots in addition to their runtime geometry and CDP cascade records. Each overlay is opened through its shipped trigger, captured, and dismissed before the next fixture.
+- The overlay screenshot pass is included in the pixel baseline contract: `menu`, `modal`, and `tooltip` captures must have the expected viewport dimensions, non-blank coverage, and a measurable pixel delta from the initial surface in both themes.
 - Resize restoration evidence from `/tmp/vqa-restored-light/` passed: after each narrow resize, the real renderer returned to exactly `800x600`, `1280x800`, and `1680x1000` with no horizontal overflow, and each case now emits a `*-restored.png` screenshot. The evidence checker requires this restored state.
 
 ## Scope and frozen boundaries

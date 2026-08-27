@@ -203,6 +203,34 @@ try {
     await sleep(250);
     const name = `${width}x${height}`;
     await page.screenshot({ path: path.join(output, `${name}-initial.png`), fullPage: true });
+    const lab = '.vcp-harness-primitive-lab';
+    await page.evaluate(async selector => {
+      const root = document.querySelector(selector);
+      const button = [...(root?.querySelectorAll('button') || [])].find(node => node.textContent.trim() === 'View options');
+      button?.click();
+      await new Promise(resolve => setTimeout(resolve, 40));
+    }, lab).catch(() => {});
+    await page.screenshot({ path: path.join(output, `${name}-menu.png`), fullPage: false });
+    await page.evaluate(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))).catch(() => {});
+    await page.evaluate(async selector => {
+      const root = document.querySelector(selector);
+      const button = [...(root?.querySelectorAll('button') || [])].find(node => node.textContent.trim() === 'Open modal');
+      button?.click();
+      await new Promise(resolve => setTimeout(resolve, 40));
+    }, lab).catch(() => {});
+    await page.screenshot({ path: path.join(output, `${name}-modal.png`), fullPage: false });
+    await page.evaluate(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))).catch(() => {});
+    const tooltipButtons = await page.$$(`${lab} button`);
+    let tooltipTarget = null;
+    for (const button of tooltipButtons) {
+      if (await button.evaluate(node => node.textContent.trim() === 'Hover for details').catch(() => false)) { tooltipTarget = button; break; }
+    }
+    if (tooltipTarget) {
+      await tooltipTarget.hover().catch(() => {});
+      await sleep(160);
+      await page.screenshot({ path: path.join(output, `${name}-tooltip.png`), fullPage: false });
+      await page.mouse.move(2, 2).catch(() => {});
+    }
     await page.evaluate(async () => {
       await window.uiHelperFunctions?.openModal?.('globalSettingsModal');
       await new Promise(resolve => setTimeout(resolve, 100));

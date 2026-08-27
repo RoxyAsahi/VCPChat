@@ -44,6 +44,24 @@
       "selectors": ["[role=menu]", ".vcp-harness-modal-root [role=dialog]", "[role=tooltip]"]
     },
     {
+      "id": "showcase-menu-overlay-pixel",
+      "trigger": "click('View options')",
+      "screenshotSuffix": "menu",
+      "selectors": [".vcp-harness-menu-list[role=menu]"]
+    },
+    {
+      "id": "showcase-modal-overlay-pixel",
+      "trigger": "click('Open modal')",
+      "screenshotSuffix": "modal",
+      "selectors": [".vcp-harness-modal-root [role=dialog]"]
+    },
+    {
+      "id": "showcase-tooltip-overlay-pixel",
+      "trigger": "hover('Hover for details')",
+      "screenshotSuffix": "tooltip",
+      "selectors": ["[role=tooltip]", ".vcp-harness-tooltip-bubble"]
+    },
+    {
       "id": "showcase-resize-restore",
       "trigger": "resize(narrow); resize(original)",
       "screenshotSuffix": "restored",
