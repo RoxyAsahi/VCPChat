@@ -32,6 +32,7 @@ const verboseDetached = process.env.VCPCHAT_STRESS_DEBUG_DETACHED === 'verbose';
 const skipDestructivePreflight = process.env.VCPCHAT_STRESS_SKIP_PREFLIGHT === '1';
 const traceListeners = process.env.VCPCHAT_STRESS_TRACE_LISTENERS === '1';
 const captureAgentSettings = process.env.VCPCHAT_STRESS_CAPTURE_AGENT_SETTINGS === '1';
+const agentSelectInteraction = process.env.VCPCHAT_STRESS_AGENT_SELECT_INTERACTION === '1';
 const supportedStages = Object.freeze(['ask-nova', 'settings', 'agent-settings', 'embedded', 'detached-app', 'mode-round-trip']);
 const selectedStages = new Set((process.env.VCPCHAT_STRESS_STAGES || supportedStages.join(','))
     .split(',')
@@ -631,6 +632,28 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
             `${label}: Agent TTS voice select contract changed unexpectedly: ${JSON.stringify(state)}`);
         assert.equal(state.typedAgentSelects, 2,
             `${label}: Agent TTS voice selects must use the typed Select projection: ${JSON.stringify(state)}`);
+        if (agentSelectInteraction) {
+            const interaction = await page.evaluate(() => {
+                const trigger = document.querySelector('#agentTtsVoicePrimary + .vcp-harness-select-trigger');
+                if (!(trigger instanceof HTMLElement)) return { opened: false, reason: 'trigger-missing' };
+                trigger.click();
+                const menu = document.querySelector('body > .vcp-harness-menu-list');
+                return {
+                    opened: trigger.getAttribute('aria-expanded') === 'true' && menu?.hidden === false,
+                    menuOwner: menu?.parentElement === document.body,
+                    role: menu?.getAttribute('role') || null,
+                };
+            });
+            assert.deepEqual(interaction, { opened: true, menuOwner: true, role: 'menu' },
+                `${label}: voice Select interaction open contract drifted: ${JSON.stringify(interaction)}`);
+            await page.keyboard.press('Escape');
+            await page.waitForFunction(() => {
+                const trigger = document.querySelector('#agentTtsVoicePrimary + .vcp-harness-select-trigger');
+                return trigger?.getAttribute('aria-expanded') === 'false'
+                    && document.activeElement === trigger
+                    && !document.querySelector('body > .vcp-harness-menu-list');
+            }, { timeout: timeoutMs });
+        }
         if (captureAgentSettings) {
             const evidence = await page.evaluate(() => {
                 const rect = node => {
