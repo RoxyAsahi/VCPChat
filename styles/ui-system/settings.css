@@ -2031,5 +2031,5 @@
    select menu rendered invisibly behind it ("selects cannot be opened").
    Lift them above the overlay only while the settings host is active. */
 :is(html, html.vcp-global-settings-host) > body .vcp-uiux-primitive-menu {
-    z-index: calc(var(--vcp-ui-z-overlay) + 10);
+    z-index: calc(var(--vcp-ui-z-overlay, 1400) + 10);
 }

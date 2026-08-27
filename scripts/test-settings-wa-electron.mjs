@@ -282,6 +282,38 @@ try {
     assert.deepEqual(typedPrimitiveEvidence.itemGeometry, { minHeight: '40px', padding: '8px 10px', borderRadius: '10px', fontSize: '14px', lineHeight: '22px' }, 'typed Select menu item geometry matches reference pack');
     await page.evaluate(() => document.querySelector('#appearanceDensity')?.closest('.vcp-harness-field')?.querySelector('.vcp-harness-select-trigger')?.click());
     console.log(`  [PASS] 1d. typed Field/Select DOM and geometry contract ${JSON.stringify(typedPrimitiveEvidence)}`);
+    // ---- 1e. Body-level portal menus must stack above the settings overlay.
+    // The generated select primitive appends its menu to document.body; a
+    // hard-coded z-index below the modal overlay made every appearance
+    // select open invisibly behind the modal (regression 2026-08-27).
+    const portalStacking = await page.evaluate(async () => {
+        const densityTrigger = document.querySelector('#appearanceDensity')?.closest('.vcp-harness-select')?.querySelector('.vcp-harness-select-trigger');
+        if (!densityTrigger) return { triggerFound: false };
+        densityTrigger.scrollIntoView({ block: 'center' });
+        await new Promise(resolve => setTimeout(resolve, 150));
+        densityTrigger.click();
+        await new Promise(resolve => setTimeout(resolve, 250));
+        const menu = document.body.querySelector(':scope > .vcp-uiux-primitive-menu');
+        const evidence = {
+            triggerFound: true,
+            expanded: densityTrigger.getAttribute('aria-expanded'),
+            menuFound: Boolean(menu),
+            menuZ: menu ? getComputedStyle(menu).zIndex : null,
+            menuHitInside: null,
+        };
+        if (menu && menu.getBoundingClientRect().height > 0) {
+            const rect = menu.getBoundingClientRect();
+            const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + Math.min(20, rect.height / 2));
+            evidence.menuHitInside = hit ? menu.contains(hit) : false;
+        }
+        document.body.click();
+        await new Promise(resolve => setTimeout(resolve, 150));
+        return evidence;
+    });
+    assert.equal(portalStacking.triggerFound && portalStacking.expanded === 'true' && portalStacking.menuFound, true, `appearance select opens a body-level portal menu (${JSON.stringify(portalStacking)})`);
+    assert.equal(Number(portalStacking.menuZ) > 1400, true, `portal menu z-index stacks above the settings overlay 1400 (got ${portalStacking.menuZ})`);
+    assert.equal(portalStacking.menuHitInside, true, 'portal menu is the topmost hit-target at its own position (visible to pointer events)');
+    console.log('  [PASS] 1e. portal menu stacks above the settings overlay (z-index + hit-test evidence)');
     assert.equal(await page.$eval('#appearanceRadius', node => Boolean(node.closest('.vcp-harness-field')?.querySelector('.vcp-harness-select-trigger'))), true, 'typed radius Select is mounted as the second vertical slice');
     assert.equal(await page.$eval('#appearanceRadius', node => Boolean(node.closest('.vcp-harness-select-wrap'))), false, 'typed radius legacy Select wrapper is deleted');
     for (const id of ['appearanceTypography', 'appearanceFontScale', 'appearanceContentWidth', 'appearanceSurface']) {
