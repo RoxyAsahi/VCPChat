@@ -59,7 +59,7 @@ try {
     const evidence = await page.evaluate(async () => {
         const host = document.createElement('div');
         host.dataset.vcpCandidateAgentModelPicker = 'true';
-        host.style.cssText = 'position:fixed;left:80px;top:120px;width:280px;height:220px;padding:16px;background:#fff;color:#0f1115;border:1px solid rgba(0,0,0,.08);border-radius:12px';
+        host.style.cssText = 'position:fixed;left:480px;top:420px;width:280px;height:140px;padding:16px;background:#fff;color:#0f1115;border:1px solid rgba(0,0,0,.08);border-radius:12px';
         document.body.append(host);
         const scope = new window.VCPLifecycle.LifecycleScope('test:candidate-agent-model-picker');
         const selected = [];
