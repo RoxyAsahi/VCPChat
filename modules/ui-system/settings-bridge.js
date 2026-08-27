@@ -512,6 +512,7 @@ function enhanceForm(form) {
     mountTypedAgentModelInput(form);
     mountTypedAgentTemperatureInput(form);
     mountTypedAgentNumericInputs(form);
+    mountTypedAgentStreamChoice(form);
     form.querySelectorAll('.agent-settings-section, .group-settings-section').forEach(section => {
         enhance('SettingsSection', section);
     });
@@ -522,7 +523,7 @@ function enhanceForm(form) {
     form.querySelectorAll('textarea').forEach(textarea => enhance('Textarea', textarea));
     form.querySelectorAll('select').forEach(select => enhance('Select', select, { kernel: 'native' }));
     form.querySelectorAll('input[type="range"]').forEach(range => enhance('Range', range));
-    form.querySelectorAll('label.switch').forEach(control => enhance('Switch', control));
+    mountHarnessSwitches(form);
     form.querySelectorAll('.agent-style-collapsible-container').forEach(disclosure => {
         disclosure.dataset.settingPrimitive = 'disclosure';
         disclosure.querySelector('.style-collapse-header')?.classList.add('vcp-harness-disclosure-row');
@@ -627,6 +628,24 @@ function mountTypedAgentNumericInputs(form) {
     });
 }
 
+// The stream output pair is a presentation-only Choice primitive over the
+// existing native radio controls.  settingsManager remains the sole source
+// of the persisted boolean and chatManager keeps its existing consumption.
+function mountTypedAgentStreamChoice(form) {
+    const group = form?.querySelector?.('#agentStreamOutputTrue')?.closest('.form-group-inline');
+    const api = window.VCPUIUX;
+    const scope = ensurePresentationScope();
+    if (!group || !api?.mountChoice || !scope || group.dataset.vcpTypedAgentStreamChoice === 'true') return;
+    try {
+        const release = api.mountChoice(group, scope);
+        group.dataset.vcpTypedAgentStreamChoice = 'true';
+        scope.own(() => { delete group.dataset.vcpTypedAgentStreamChoice; }, 'agent-stream-choice-marker', 'ui-presentation');
+        if (release) scope.own(release, 'agent-stream-choice', 'ui-primitive');
+    } catch (error) {
+        console.warn('[VCPUI SettingsBridge] Could not mount typed Agent stream Choice:', error);
+    }
+}
+
 // Lucide icon names for the global settings categories. Icons are always
 // rendered through VCPUI (`.vcp-ui-icon` -> lucide-adapter); no inline SVG,
 // emoji or text arrows on this surface.
@@ -663,7 +682,7 @@ function enhanceGlobalSettings(root, form) {
     mountTypedForumInputs(root, form);
     mountTypedForumFieldOwner(root, form);
     form.querySelectorAll('input[type="range"]').forEach(range => { if (!['appearanceSidebarAvatarSize', 'appearanceSidebarRowHeight', 'appearanceCustomRadius'].includes(range.id)) enhance('Range', range); });
-    form.querySelectorAll('label.switch').forEach(control => { if (!control.querySelector('#showHomeVisualBrand, #showHomeVisualTagline')) enhance('Switch', control); });
+    mountHarnessSwitches(form);
     form.querySelectorAll('.agent-style-collapsible-container').forEach(disclosure => {
         disclosure.dataset.settingPrimitive = 'disclosure';
         disclosure.querySelector('.style-collapse-header')?.classList.add('vcp-harness-disclosure-row');
