@@ -121,6 +121,8 @@ test('Harness AgentModelPicker maps provider metadata and retracts its popup own
             onSelect: option => { selected.push(option.id); },
         }, scope);
         assert.equal(controller.trigger.getAttribute('aria-haspopup'), 'menu');
+        assert.equal(controller.trigger.querySelector('.vcp-harness-agent-model-picker-trigger-label')?.textContent, 'Select model');
+        assert.ok(controller.trigger.querySelector('.vcp-harness-agent-model-picker-trigger-icon'));
         assert.ok(document.getElementById('vcp-harness-uiux-agent-model-picker'));
         controller.open();
         await new Promise(resolve => setTimeout(resolve, 0));

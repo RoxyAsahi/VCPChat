@@ -1,11 +1,12 @@
 import { createPopupSelectController, mountPopupSelectView } from './popup-select.js';
+import { mountSemanticIcon } from './semantic-icon.js';
 const STYLE_ID = 'vcp-harness-uiux-agent-model-picker';
 function ensureStyles() {
     if (typeof document === 'undefined' || document.getElementById(STYLE_ID))
         return;
     const style = document.createElement('style');
     style.id = STYLE_ID;
-    style.textContent = `.vcp-harness-agent-model-picker{position:relative;min-width:0;display:inline-flex}.vcp-harness-agent-model-picker-trigger{display:flex;align-items:center;gap:4px;min-width:0;max-width:220px;height:28px;padding:0 8px;border:0;border-radius:24px;background:transparent;color:var(--dsw-alias-label-secondary,var(--vcp-color-text,#737780));font:500 13px/20px inherit;cursor:pointer}.vcp-harness-agent-model-picker-trigger:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06))}.vcp-harness-agent-model-picker-trigger:focus-visible{outline:none;box-shadow:0 0 0 2px var(--dsw-alias-border-l3,var(--vcp-color-brand,#1677ff))}.vcp-harness-agent-model-picker-trigger:disabled{color:var(--dsw-alias-label-dimmed,#a0a5ad);cursor:default}.vcp-harness-agent-model-picker .vcp-harness-popup-select-card{right:0;left:auto;bottom:calc(100% + 8px);width:min(240px,calc(100vw - 32px));max-height:min(360px,calc(100vh - 96px));border-radius:12px}.vcp-harness-agent-model-picker-cell{display:flex;align-items:center;gap:8px;width:100%;height:40px;padding:0 10px;border:0;border-radius:10px;background:transparent;color:var(--dsw-alias-label-primary,#0f1115);font:14px/22px inherit;text-align:left;cursor:pointer}.vcp-harness-agent-model-picker-cell:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06))}.vcp-harness-agent-model-picker-cell-label{flex:1;min-width:0}.vcp-harness-agent-model-picker-cell-value{color:var(--dsw-alias-label-tertiary,#737780);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vcp-harness-agent-model-picker .vcp-harness-popup-select-row{min-height:38px;padding:6px 8px;border-radius:10px}.vcp-harness-agent-model-picker .vcp-harness-popup-select-row-disabled{color:var(--dsw-alias-label-dimmed,#a0a5ad);cursor:default}.vcp-harness-agent-model-picker .vcp-harness-popup-select-row-disabled:hover{background:transparent}`;
+    style.textContent = `.vcp-harness-agent-model-picker{position:relative;min-width:0;display:inline-flex}.vcp-harness-agent-model-picker-trigger{display:flex;align-items:center;gap:4px;min-width:0;max-width:220px;height:28px;padding:0 4px 0 8px;border:0;border-radius:24px;background:transparent;color:var(--dsw-alias-label-secondary,var(--vcp-color-text,#737780));font-family:inherit;font-size:13px;line-height:20px;font-weight:500;cursor:pointer}.vcp-harness-agent-model-picker-trigger:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06))}.vcp-harness-agent-model-picker-trigger:focus-visible{outline:none;box-shadow:0 0 0 2px var(--dsw-alias-border-l3,var(--vcp-color-brand,#1677ff))}.vcp-harness-agent-model-picker-trigger:disabled{color:var(--dsw-alias-label-dimmed,#a0a5ad);cursor:default}.vcp-harness-agent-model-picker-trigger-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vcp-harness-agent-model-picker-trigger-icon{flex:none;transition:transform 120ms ease}.vcp-harness-agent-model-picker-trigger[aria-expanded="true"] .vcp-harness-agent-model-picker-trigger-icon{transform:rotate(180deg)}.vcp-harness-agent-model-picker .vcp-harness-popup-select-card{right:0;left:auto;bottom:calc(100% + 8px);width:min(240px,calc(100vw - 32px));max-height:min(360px,calc(100vh - 96px));border-radius:12px}.vcp-harness-agent-model-picker-cell{display:flex;align-items:center;gap:8px;width:100%;height:40px;padding:0 10px;border:0;border-radius:10px;background:transparent;color:var(--dsw-alias-label-primary,#0f1115);font-family:inherit;font-size:14px;line-height:22px;text-align:left;cursor:pointer}.vcp-harness-agent-model-picker-cell:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06))}.vcp-harness-agent-model-picker-cell-label{flex:1;min-width:0}.vcp-harness-agent-model-picker-cell-value{color:var(--dsw-alias-label-tertiary,#737780);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vcp-harness-agent-model-picker .vcp-harness-popup-select-row{min-height:38px;padding:6px 8px;border-radius:10px}.vcp-harness-agent-model-picker .vcp-harness-popup-select-row-disabled{color:var(--dsw-alias-label-dimmed,#a0a5ad);cursor:default}.vcp-harness-agent-model-picker .vcp-harness-popup-select-row-disabled:hover{background:transparent}`;
     (document.head || document.documentElement).append(style);
 }
 /**
@@ -26,6 +27,14 @@ export function mountAgentModelPicker(host, props, scope) {
     trigger.setAttribute('aria-haspopup', 'menu');
     trigger.setAttribute('aria-expanded', 'false');
     trigger.setAttribute('aria-label', props.label ?? 'Select model');
+    const triggerLabel = document.createElement('span');
+    triggerLabel.className = 'vcp-harness-agent-model-picker-trigger-label';
+    triggerLabel.textContent = 'Select model';
+    trigger.append(triggerLabel);
+    const triggerIcon = document.createElement('span');
+    triggerIcon.className = 'vcp-harness-agent-model-picker-trigger-icon';
+    mountSemanticIcon(triggerIcon, { name: 'chevron-down', size: 14 }, pickerScope);
+    trigger.append(triggerIcon);
     root.append(trigger);
     host.append(root);
     let selectedId = props.selectedId;
@@ -49,7 +58,7 @@ export function mountAgentModelPicker(host, props, scope) {
                 return;
             await props.onSelect(selected);
             selectedId = selected.id;
-            trigger.textContent = selected.label;
+            triggerLabel.textContent = selected.label;
         },
     }, {
         consume: () => true,
@@ -121,7 +130,7 @@ export function mountAgentModelPicker(host, props, scope) {
     view.card.prepend(paneCell);
     const syncPane = () => {
         const open = popup.getSnapshot().open;
-        paneCell.querySelector('.vcp-harness-agent-model-picker-cell-value').textContent = trigger.textContent || 'Select model';
+        paneCell.querySelector('.vcp-harness-agent-model-picker-cell-value').textContent = triggerLabel.textContent || 'Select model';
         paneCell.hidden = !open || pane !== 'root';
         effortCell.hidden = !open || pane !== 'root' || !(props.efforts?.length);
         effortCell.querySelector('.vcp-harness-agent-model-picker-cell-value').textContent = selectedEffort ?? 'Provider default';
@@ -164,7 +173,7 @@ export function mountAgentModelPicker(host, props, scope) {
             selectedId = id;
             const selected = lastOptions.find(option => option.id === id);
             if (selected)
-                trigger.textContent = selected.label;
+                triggerLabel.textContent = selected.label;
         },
         setPane: next => { pane = next; syncPane(); },
         dispose: async () => { await dispose(); },

@@ -290,7 +290,6 @@ export function mountPrimitiveLab(root, scope) {
         },
         onSelect: option => { modelPicker.trigger.dataset.selected = option.id; },
     }, labScope);
-    modelPicker.trigger.textContent = 'Select model';
     mountButton(modelPicker.trigger, { variant: 'outline', size: 'sm' }, labScope);
     // Harness provenance: ui-directory-picker-browse DirectoryBrowser. The
     // Candidate owns only presentation state; this Lab supplies an in-memory
