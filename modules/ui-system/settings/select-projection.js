@@ -79,6 +79,10 @@ export function createSelectProjection({ ensurePresentationScope }) {
         }
         const api = window.VCPUIUX;
         const scope = ensurePresentationScope();
+        // A null scope means the bridge is destroyed (or never presented):
+        // arming the observer or tagging selects here would leave ambient
+        // resources nothing will ever disconnect. The whole pass is a no-op.
+        if (!scope) return;
         form.querySelectorAll('select').forEach(select => {
             // Typed primitives mount first and mark their native business node.
             if (select.dataset.vcpTypedPrimitiveMounted === 'true') return;
@@ -143,7 +147,9 @@ export function createSelectProjection({ ensurePresentationScope }) {
                         // microtask: the old projection must have fully restored
                         // the business DOM before the remount runs, otherwise the
                         // deferred disposer strips the freshly inserted wraps.
-                        setTimeout(() => mountHarnessSelects(form), 0);
+                        // The handle is tracked so a teardown landing between the
+                        // two ticks cannot leave an orphan mount behind.
+                        form.__vcpSelectMountTimer = setTimeout(() => mountHarnessSelects(form), 0);
                     } else {
                         form.querySelectorAll('select[data-vcp-typed-primitive-mounted="true"]').forEach(select => {
                             select.dispatchEvent(new Event('vcp-uiux-sync'));
@@ -162,6 +168,8 @@ export function createSelectProjection({ ensurePresentationScope }) {
             observer.disconnect();
             clearTimeout(form.__vcpSelectRebuildTimer);
             delete form.__vcpSelectRebuildTimer;
+            clearTimeout(form.__vcpSelectMountTimer);
+            delete form.__vcpSelectMountTimer;
         });
         selectObserverStates.clear();
         [...primitiveSelectStates.keys()].forEach(select => {

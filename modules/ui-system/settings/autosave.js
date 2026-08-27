@@ -26,7 +26,16 @@ export function mountSettingsAutosave(root, form) {
         state.pending = false;
         state.saving = true;
         setStatus('保存中…', 'saving');
-        form.requestSubmit();
+        try {
+            form.requestSubmit();
+        } catch {
+            // A form without a submittable control throws synchronously; the
+            // state machine must unwind or every later save stays wedged on
+            // saving=true with the status frozen at 保存中….
+            state.saving = false;
+            state.failureOwner = 'legacy-autosave';
+            setStatus('保存失败 · 重试', 'error');
+        }
     };
     const schedule = () => {
         if (state.saving) { state.pending = true; return; }
@@ -46,7 +55,10 @@ export function mountSettingsAutosave(root, form) {
         schedule();
     };
     const onResult = event => {
+        // Typed settings/forum field owners own their own status writes; the
+        // shared status node must not be clobbered by their results.
         if (event.detail?.owner === 'typed-settings-field-owner') return;
+        if (event.detail?.owner === 'typed-forum-field-owner') return;
         state.saving = false;
         if (event.detail?.success) {
             delete state.failureOwner;
@@ -88,7 +100,13 @@ export function flushLegacyAutosave() {
         if (!state.saving) {
             state.saving = true;
             state.pending = false;
-            state.form.requestSubmit();
+            try {
+                state.form.requestSubmit();
+            } catch {
+                state.saving = false;
+                state.pending = true;
+                state.form.dataset.vcpSettingsDirty = 'true';
+            }
         }
     });
 }

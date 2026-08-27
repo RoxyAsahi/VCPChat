@@ -267,11 +267,18 @@ function mountTypedSettingsConsumer(root) {
         if (bubbleMetaSettings) bubbleMetaSettings.style.display = settings.enableUserChatBubbleUi === true ? 'flex' : 'none';
     };
     const release = service.state.subscribe(apply);
-    ensurePresentationScope()?.own(() => {
+    const consumerScope = ensurePresentationScope();
+    if (consumerScope) {
+        consumerScope.own(() => {
+            release?.();
+            delete root.dataset.vcpSettingsRevision;
+            delete root.dataset.vcpSettingsSource;
+        }, 'typed-settings-consumer', 'ui-presentation');
+    } else {
+        // No presentation scope (destroyed bridge): the subscription would
+        // fire apply() against a torn-down form forever, so retract it now.
         release?.();
-        delete root.dataset.vcpSettingsRevision;
-        delete root.dataset.vcpSettingsSource;
-    }, 'typed-settings-consumer', 'ui-presentation');
+    }
     const assistantSelect = form?.querySelector('#assistantAgent');
     if (assistantSelect && window.MutationObserver) {
         const observer = new MutationObserver(() => {
@@ -318,7 +325,9 @@ function mountTypedSettingsConsumer(root) {
             if (debugPanel) debugPanel.style.display = rust.debugMode === true ? 'block' : 'none';
         };
         const release = rustService.state.subscribe(applyRust);
-        ensurePresentationScope()?.own(release, 'typed-rust-assistant-consumer', 'ui-presentation');
+        const rustScope = ensurePresentationScope();
+        if (rustScope) rustScope.own(release, 'typed-rust-assistant-consumer', 'ui-presentation');
+        else release?.();
         void rustService.refresh.execute();
     }
     const forumService = ensureForumConfigUiService();
@@ -332,7 +341,9 @@ function mountTypedSettingsConsumer(root) {
             if (password && forum.password !== undefined) password.value = String(forum.password || '');
         };
         const release = forumService.state.subscribe(applyForum);
-        ensurePresentationScope()?.own(release, 'typed-forum-config-consumer', 'ui-presentation');
+        const forumScope = ensurePresentationScope();
+        if (forumScope) forumScope.own(release, 'typed-forum-config-consumer', 'ui-presentation');
+        else release?.();
         void forumService.refresh.execute();
     }
     const runtimeService = ensureAssistantRuntimeUiService();
@@ -357,7 +368,9 @@ function mountTypedSettingsConsumer(root) {
             setText('assistantRuntimeShowError', runtime.integrationTrace?.lastShowError || '无');
         };
         const release = runtimeService.state.subscribe(applyRuntime);
-        ensurePresentationScope()?.own(release, 'typed-assistant-runtime-consumer', 'ui-presentation');
+        const runtimeScope = ensurePresentationScope();
+        if (runtimeScope) runtimeScope.own(release, 'typed-assistant-runtime-consumer', 'ui-presentation');
+        else release?.();
         void runtimeService.refresh.execute();
     }
 }
@@ -931,14 +944,26 @@ function mountTypedHomeVisualToggles(root, form) {
 }
 
 function mountTypedAvatarColorPair(root, form) {
-    const color = form?.querySelector?.('#userAvatarBorderColor');
-    const text = form?.querySelector?.('#userAvatarBorderColorText');
-    const api = window.VCPUIUX; if (!color || !text || !api?.mountColorPair) return;
-    const scope = ensurePresentationScope(); if (!scope || color.dataset.vcpTypedPrimitiveMounted === 'true') return;
-    const release = api.mountColorPair(color, text, scope);
-    color.dataset.vcpTypedPrimitiveMounted = 'true';
-    scope.own(() => { delete color.dataset.vcpTypedPrimitiveMounted; }, 'typed-avatar-color-marker', 'ui-primitive');
-    if (release) scope.own(release, 'typed-avatar-color-pair', 'ui-primitive');
+    const api = window.VCPUIUX; if (!api?.mountColorPair) return;
+    const scope = ensurePresentationScope(); if (!scope) return;
+    // The Agent form mounts the same two pairs; the global form must keep
+    // parity so its hex text boxes and pickers stay two-way synced.
+    [['#userAvatarBorderColor', '#userAvatarBorderColorText', 'avatar-border'],
+     ['#userNameTextColor', '#userNameTextColorText', 'user-name-text']].forEach(([colorId, textId, name]) => {
+        const color = form?.querySelector?.(colorId);
+        const text = form?.querySelector?.(textId);
+        if (!color || !text || color.dataset.vcpTypedPrimitiveMounted === 'true') return;
+        try {
+            const release = api.mountColorPair(color, text, scope);
+            color.dataset.vcpTypedPrimitiveMounted = 'true';
+            scope.own(() => { delete color.dataset.vcpTypedPrimitiveMounted; }, `typed-${name}-color-marker`, 'ui-primitive');
+            if (release) scope.own(release, `typed-${name}-color-pair`, 'ui-primitive');
+        } catch (error) {
+            // A pairing contract violation (e.g. a wrap moved one input) must
+            // not break the whole enhancement chain; the pair stays native.
+            console.warn('[VCPUI SettingsBridge] Could not mount color pair primitive:', error);
+        }
+    });
 }
 
 function mountTypedHomeTaglineInput(root, form) {
@@ -1123,7 +1148,7 @@ function mountHarnessInputs(form) {
     const selector = 'input:is(:not([type]), [type="text"], [type="url"], [type="password"], [type="number"], [type="email"], [type="search"], [type="tel"])';
     form.querySelectorAll(selector).forEach(control => {
         if (control.dataset.vcpHarnessInputPrimitive === 'true') return;
-        if (control.id === 'homeVisualTagline' || control.id === 'userAvatarBorderColorText' || control.id === 'adminUsername' || control.id === 'adminPassword') return;
+        if (control.id === 'homeVisualTagline' || control.id === 'userAvatarBorderColorText' || control.id === 'userNameTextColorText' || control.id === 'adminUsername' || control.id === 'adminPassword') return;
         if (control.closest('.vcp-uiux-input-wrap')) return;
         try {
             const release = api.mountInput(control, {}, scope);
