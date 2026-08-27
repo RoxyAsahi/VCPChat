@@ -27,6 +27,7 @@
     , ["popup-select-view", "loading"], ["popup-select-view", "ready-options"], ["popup-select-view", "filtered-highlight"], ["popup-select-view", "error-retry"], ["popup-select-view", "risk-confirmation"]
     , ["menu-view", "ready-groups"], ["menu-view", "pending-group"], ["menu-view", "highlighted"], ["menu-view", "outside-dismiss"]
     , ["app-frame", "wide-three-column"], ["app-frame", "narrow-auto-collapse"], ["app-frame", "sidebar-drag"], ["app-frame", "details-drag"], ["app-frame", "reduced-motion"]
+    , ["job-list-action", "live-open-ticking"], ["job-list-action", "settled-open"], ["job-list-action", "mixed-order"], ["job-list-action", "failed-detail"], ["job-list-action", "escape-focus-restore"]
     , ["language-row", "closed"], ["language-row", "open"], ["language-row", "selected"], ["language-row", "disabled"], ["language-row", "long-label"]
     , ["agent-model-picker", "root-pane"], ["agent-model-picker", "model-pane"], ["agent-model-picker", "effort-pane"], ["agent-model-picker", "loading"], ["agent-model-picker", "error-retry"], ["agent-model-picker", "selecting"], ["agent-model-picker", "locked"]
   ],

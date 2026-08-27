@@ -1,0 +1,17 @@
+{
+  "primitive": "JobListAction",
+  "provenance": {
+    "sources": [
+      "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-jobs/src/client/JobListAction.tsx"
+    ]
+  },
+  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-jobs/src/client/JobListAction.module.css",
+  "root": { "tag": "div", "class": "root", "closedRender": "null when jobs empty" },
+  "trigger": { "tag": "button", "class": "trigger", "type": "button", "ariaExpanded": "open state", "ariaLabel": "localized job count" },
+  "menu": { "tag": "ul", "class": "menu", "ariaLabel": "localized list label", "children": ["li.row"] },
+  "row": { "tag": "li", "class": "row|rowSettled", "children": ["StateDot", "kind", "label", "status", "duration"] },
+  "states": ["empty-null", "live-closed", "live-open-ticking", "settled-open", "mixed-order", "failed-detail", "outside-dismiss", "escape-focus-restore", "job-disappears-close", "dispose"],
+  "interaction": ["outside pointerdown closes", "Escape closes and restores trigger focus", "interval exists only while open and live jobs exist", "rows sort live first then settled newest-first"],
+  "aria": ["trigger exposes aria-expanded and localized count", "menu exposes localized aria-label", "status/detail uses title for full text"],
+  "vcpDeviation": "No VCP jobs consumer or runtime registry is declared; this contract is Harness source-only."
+}
