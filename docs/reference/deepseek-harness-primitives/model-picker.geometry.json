@@ -1,0 +1,21 @@
+{
+  "primitive": "ModelSelect",
+  "source": "packages/client/ui-model-selection/src/client/ModelSelect.tsx",
+  "styleSource": "packages/client/ui-model-selection/src/client/ModelSelect.module.css",
+  "viewport": { "width": 800, "height": 600, "deviceScaleFactor": 1 },
+  "selectors": {
+    ".root": { "position": "relative", "minWidth": "0" },
+    ".trigger": { "height": "28px", "maxWidth": "220px", "padding": "0 4px 0 8px", "gap": "4px", "borderRadius": "24px", "fontSize": "13px", "lineHeight": "20px" },
+    ".menu": { "width": "min(240px, calc(100vw - 32px))", "maxHeight": "min(360px, calc(100vh - 96px))", "padding": "4px", "borderRadius": "12px", "offset": "bottom calc(100% + 8px)" },
+    ".cell": { "height": "40px", "padding": "0 10px", "gap": "8px", "borderRadius": "10px", "fontSize": "14px", "lineHeight": "22px" },
+    ".option": { "minHeight": "38px", "padding": "6px 8px", "gap": "8px", "borderRadius": "10px" },
+    ".groupTitle": { "padding": "5px 8px 3px", "fontSize": "12px", "lineHeight": "18px" }
+  },
+  "states": ["root-pane", "model-pane", "effort-pane", "loading", "error-retry", "selecting", "locked"],
+  "vcpCandidateEvidence": {
+    "screenshot": "../../reports/vcp-agent-model-picker-candidate.png",
+    "report": "../../reports/vcp-agent-model-picker-candidate.json",
+    "status": "candidate-interaction-active",
+    "productionConsumer": false
+  }
+}
