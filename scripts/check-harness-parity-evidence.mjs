@@ -60,7 +60,7 @@ for (const domFile of domFiles) {
     const domContract = dom.contract ?? dom.harnessContract ?? dom.standardContract ?? dom.headlessContract ?? dom.tree ?? dom.reference;
     entry.contract.domAria = Boolean(
         (rootContract?.tag && (Array.isArray(dom.aria) || dom.children || dom.states))
-        || (domContract && (typeof domContract === 'object' || Array.isArray(domContract)))
+        || (domContract && (typeof domContract === 'object' || Array.isArray(domContract) || typeof domContract === 'string'))
         || (dom.root && typeof dom.root === 'object')
     );
     entry.contract.geometry = Boolean(geometry && geometry.status !== 'invalid' && typeof geometry === 'object' && Object.keys(geometry).length > 0);
