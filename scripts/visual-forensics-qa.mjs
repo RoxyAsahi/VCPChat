@@ -134,7 +134,11 @@ try {
   };
   for (const [width, height] of viewports) {
     await page.setViewport({ width, height, deviceScaleFactor: 1 });
-    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.evaluate(() => {
+      window.scrollTo(0, 0);
+      const owner = document.querySelector('.vcp-ui-showcase-shell, .vcp-ui-page-shell-content');
+      if (owner) owner.scrollTo(0, 0);
+    });
     await sleep(250);
     const name = `${width}x${height}`;
     await page.screenshot({ path: path.join(output, `${name}-initial.png`), fullPage: true });
@@ -179,18 +183,33 @@ try {
     const stateTarget = await page.$('.vcp-harness-primitive-lab button:not([disabled])');
     if (stateTarget) {
       await stateTarget.hover().catch(() => {});
+      const box = await stateTarget.boundingBox().catch(() => null);
+      if (box) await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2).catch(() => {});
       await page.screenshot({ path: path.join(output, `${name}-hover.png`), fullPage: true });
-      const hoverState = await page.evaluate(() => { const el = document.querySelector('.vcp-harness-primitive-lab button:not([disabled]):hover'); if (!el) return null; const s = getComputedStyle(el); return { className: el.className, backgroundColor: s.backgroundColor, color: s.color, outline: s.outline, boxShadow: s.boxShadow }; });
+      const hoverState = await stateTarget.evaluate(el => { const s = getComputedStyle(el); return { active: el.matches(':hover'), className: el.className, backgroundColor: s.backgroundColor, color: s.color, outline: s.outline, boxShadow: s.boxShadow }; }).catch(() => null);
       await stateTarget.focus().catch(() => {});
+      // Establish real keyboard modality so :focus-visible rules are applied
+      // in Electron, rather than treating programmatic focus as visual proof.
+      await page.keyboard.press('Tab').catch(() => {});
+      await page.keyboard.down('Shift').catch(() => {});
+      await page.keyboard.press('Tab').catch(() => {});
+      await page.keyboard.up('Shift').catch(() => {});
       await page.screenshot({ path: path.join(output, `${name}-focus.png`), fullPage: true });
       const focusState = await page.evaluate(() => { const el = document.activeElement; if (!el?.closest('.vcp-harness-primitive-lab')) return null; const s = getComputedStyle(el); return { className: el.className, backgroundColor: s.backgroundColor, color: s.color, outline: s.outline, boxShadow: s.boxShadow }; });
       initial.interactionStates = { hover: hoverState, focus: focusState };
     } else {
       initial.interactionStates = { hover: null, focus: null };
     }
-    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await page.evaluate(() => {
+      const owner = document.querySelector('.vcp-ui-showcase-shell, .vcp-ui-page-shell-content');
+      if (owner) owner.scrollTo(0, owner.scrollHeight);
+      window.scrollTo(0, document.documentElement.scrollHeight);
+    });
     await sleep(100);
-    const scrolled = await page.evaluate(() => ({ y: window.scrollY, scrollHeight: document.documentElement.scrollHeight, viewport: innerHeight }));
+    const scrolled = await page.evaluate(() => {
+      const owner = document.querySelector('.vcp-ui-showcase-shell, .vcp-ui-page-shell-content');
+      return { windowY: window.scrollY, owner: owner?.className || '', ownerY: owner?.scrollTop || 0, ownerScrollHeight: owner?.scrollHeight || 0, ownerViewport: owner?.clientHeight || 0, scrollHeight: document.documentElement.scrollHeight, viewport: innerHeight };
+    });
     await page.screenshot({ path: path.join(output, `${name}-scrolled.png`), fullPage: false });
     await page.setViewport({ width: Math.max(320, width - 240), height });
     await sleep(150);
