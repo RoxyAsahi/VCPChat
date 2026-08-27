@@ -86,6 +86,7 @@
     "test:uiux": "node --experimental-strip-types --test tests/uiux-theme-presenter.test.mjs tests/uiux-settings-adapter.test.mjs tests/uiux-primitives.test.mjs tests/uiux-dom-renderer.test.mjs tests/uiux-service-registry.test.mjs tests/uiux-rust-assistant-adapter.test.mjs tests/uiux-forum-config-adapter.test.mjs tests/uiux-assistant-runtime-adapter.test.mjs tests/uiux-settings-css-parts.test.mjs tests/uiux-settings-bridge-modules.test.mjs",
     "test:electron-uiux-theme": "node scripts/test-electron-uiux-theme.mjs",
     "test:visual-forensics-qa": "node scripts/visual-forensics-qa.mjs",
+    "test:visual-forensics-themes": "node scripts/run-visual-forensics-themes.mjs",
     "test:electron-uiux:artifacts": "node scripts/test-electron-uiux-theme.mjs",
     "test:electron-agent-settings-interaction": "VCPCHAT_STRESS_SKIP_PREFLIGHT=1 VCPCHAT_STRESS_STAGES=agent-settings VCPCHAT_STRESS_CYCLES=1 VCPCHAT_STRESS_WARMUP_CYCLES=0 VCPCHAT_STRESS_AGENT_SELECT_INTERACTION=1 VCPCHAT_STRESS_CAPTURE_AGENT_SETTINGS=1 node scripts/test-electron-lifecycle-stress.mjs",
     "test:electron-agent-model-picker": "VCPCHAT_STRESS_SKIP_PREFLIGHT=1 VCPCHAT_STRESS_STAGES=agent-settings VCPCHAT_STRESS_CYCLES=1 VCPCHAT_STRESS_WARMUP_CYCLES=1 VCPCHAT_STRESS_AGENT_MODEL_PICKER_INTERACTION=1 VCPCHAT_STRESS_CAPTURE_AGENT_SETTINGS=1 node scripts/test-electron-lifecycle-stress.mjs",
