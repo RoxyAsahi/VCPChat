@@ -523,7 +523,9 @@ function enhanceForm(form) {
     mountTypedAgentNumericInputs(form);
     mountTypedAgentStreamChoice(form);
     mountTypedAgentTtsSpeedRange(form);
+    mountTypedAgentColorPairs(form);
     mountTypedAgentButtons(form);
+    mountTypedAgentPromptModeButtons(form);
     mountHarnessSelects(form);
     form.querySelectorAll('.agent-settings-section, .group-settings-section').forEach(section => {
         enhance('SettingsSection', section);
@@ -577,6 +579,20 @@ function mountTypedAgentButtons(form) {
         } catch (error) {
             console.warn(`[VCPUI SettingsBridge] Could not mount typed Agent ${key} Button:`, error);
         }
+    });
+}
+
+function mountTypedAgentPromptModeButtons(form) {
+    const api = window.VCPUIUX;
+    if (!api?.mountButton) return;
+    const scope = ensurePresentationScope();
+    if (!scope) return;
+    form?.querySelectorAll?.('.prompt-mode-button').forEach((button, index) => {
+        if (!(button instanceof HTMLButtonElement) || button.dataset.vcpTypedPrimitiveMounted === 'true') return;
+        const release = api.mountButton(button, { variant: 'ghost', size: 'sm' }, scope);
+        button.dataset.vcpTypedPrimitiveMounted = 'true';
+        scope.own(() => { delete button.dataset.vcpTypedPrimitiveMounted; }, `typed-agent-prompt-mode-${index}-marker`, 'ui-primitive');
+        if (release) scope.own(release, `typed-agent-prompt-mode-${index}`, 'ui-primitive');
     });
 }
 
@@ -707,6 +723,25 @@ function mountTypedAgentTtsSpeedRange(form) {
     } catch (error) {
         console.warn('[VCPUI SettingsBridge] Could not mount typed Agent TTS speed Range:', error);
     }
+}
+
+function mountTypedAgentColorPairs(form) {
+    const api = window.VCPUIUX;
+    if (!api?.mountColorPair) return;
+    const scope = ensurePresentationScope();
+    if (!scope) return;
+    [
+        ['#agentAvatarBorderColor', '#agentAvatarBorderColorText', 'agent-avatar-border-color'],
+        ['#agentNameTextColor', '#agentNameTextColorText', 'agent-name-text-color'],
+    ].forEach(([colorSelector, textSelector, key]) => {
+        const color = form?.querySelector?.(colorSelector);
+        const text = form?.querySelector?.(textSelector);
+        if (!color || !text || color.dataset.vcpTypedPrimitiveMounted === 'true') return;
+        const release = api.mountColorPair(color, text, scope);
+        color.dataset.vcpTypedPrimitiveMounted = 'true';
+        scope.own(() => { delete color.dataset.vcpTypedPrimitiveMounted; }, `typed-${key}-marker`, 'ui-primitive');
+        if (release) scope.own(release, `typed-${key}`, 'ui-primitive');
+    });
 }
 
 // Lucide icon names for the global settings categories. Icons are always
