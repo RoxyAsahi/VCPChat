@@ -1,0 +1,21 @@
+{
+  "primitive": "AppFrame",
+  "provenance": {
+    "sources": [
+      "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-layout/src/client/AppFrame.tsx"
+    ]
+  },
+  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-layout/src/client/AppFrame.module.css",
+  "root": { "tag": "div", "class": "frame", "layout": "sidebar | center | details", "dataStates": ["sidebar-collapsed", "details-collapsed", "dragging"] },
+  "children": [
+    { "tag": "div", "class": "sidebarCol", "slot": "sidebar" },
+    { "tag": "div", "class": "centerCol", "slot": "conversation" },
+    { "tag": "div", "class": "detailsCol", "slot": "details" },
+    { "tag": "div", "class": "overlayLayer", "dataShellOverlay": true, "slot": "shell.overlay" },
+    { "tag": "div", "class": "handle", "dataSide": "sidebar|details", "conditional": "resolved column open" }
+  ],
+  "states": ["wide-three-column", "narrow-auto-collapse", "sidebar-drag", "details-drag", "details-zero-width-mounted", "reduced-motion", "session-switch-closes-details", "resize-recompute", "dispose"],
+  "interaction": ["pointer capture + rAF-throttled drag updates", "ResizeObserver tracks frame box", "overlay layer is pointer-events none while children opt in", "details subtree remains mounted at zero width"],
+  "aria": ["drag handles are visual interaction surfaces and require consumer labels if exposed", "slot content owns its semantic landmarks"],
+  "vcpDeviation": "No VCP production shell consumer is declared; this contract records Harness layout ownership only and does not modify chat rendering."
+}
