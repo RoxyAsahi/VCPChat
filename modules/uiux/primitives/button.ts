@@ -27,10 +27,16 @@ export function mountButton(button: HTMLButtonElement, props: ButtonProps = {}, 
     const originalClass = button.getAttribute('class');
     const originalType = button.getAttribute('type');
     const originalDisabled = button.disabled;
+    const originalDisplay = button.style.getPropertyValue('display');
+    const originalDisplayPriority = button.style.getPropertyPriority('display');
     const variant = props.variant ?? 'ghost';
     const size = props.size ?? 'md';
     if (originalType === null) button.type = 'button';
     button.classList.add('vcp-harness-button', 'button', variant, size);
+    // Legacy Settings selectors can outrank the shared class rule. Preserve
+    // the Harness geometry with an owner-bound inline declaration and restore
+    // the exact previous declaration during disposal.
+    button.style.setProperty('display', 'inline-flex', 'important');
     if (props.disabled !== undefined) button.disabled = props.disabled;
     let icon: HTMLSpanElement | null = null;
     if (props.icon) {
@@ -42,6 +48,8 @@ export function mountButton(button: HTMLButtonElement, props: ButtonProps = {}, 
     }
     return scope.own(() => {
         icon?.remove();
+        if (originalDisplay) button.style.setProperty('display', originalDisplay, originalDisplayPriority);
+        else button.style.removeProperty('display');
         button.disabled = originalDisabled;
         if (originalType === null) button.removeAttribute('type'); else button.setAttribute('type', originalType);
         if (originalClass === null) button.removeAttribute('class'); else button.setAttribute('class', originalClass);
