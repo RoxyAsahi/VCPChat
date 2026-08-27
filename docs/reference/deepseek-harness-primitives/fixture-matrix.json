@@ -16,6 +16,7 @@
     , ["semantic-icon", "warning"], ["semantic-icon", "close"], ["semantic-icon", "check"], ["semantic-icon", "chevron-down"]
     , ["agent-preset-seat", "open-selected-hover"], ["agent-preset-seat", "busy-disabled"], ["agent-preset-row", "open-custom"], ["agent-preset-row", "error-disabled"]
     , ["popup-select", "open-filter-highlight"], ["popup-select", "risk-confirmation"], ["popup-select", "failure-retry-dismiss"]
+    , ["directory-browser", "single-pane"], ["directory-browser", "two-pane-selected"], ["directory-browser", "hidden-files"], ["directory-browser", "abort-close-reopen"]
   ],
   "interactionCases": [
     { "case": "select/keyboard-open-focus", "status": "pass", "evidence": "same semantic fixture; Harness and VCP retain trigger focus" },
@@ -32,6 +33,7 @@
     , { "case": "agent-preset-seat/open-selected-busy-roster-dispose", "status": "candidate-interaction-active", "evidence": "focused generated-artifact test and Electron fixture cover portal menu, selected nested labels, busy disable, error title, roster replacement and exact trigger restoration; no in-scope VCP production consumer or same-semantic Harness pixel fixture" }
     , { "case": "agent-preset-row/trust-error-busy-roster-dispose", "status": "candidate-interaction-active", "evidence": "focused generated-artifact test and Electron fixture cover end portal, user-trust suffix, error alert, busy/writable/empty disabled states, roster replacement and exact host restoration; no in-scope VCP production consumer or same-semantic Harness pixel fixture" }
     , { "case": "popup-select/load-filter-keyboard-risk-dismiss-dispose", "status": "candidate-interaction-active", "evidence": "generated-artifact focused test and fixed 800x600 Electron fixture cover injected local callbacks, filtering, Enter, RiskConfirmation, success, Escape, focus restoration and teardown; Composer/input-machine/command wiring remains frozen and absent" }
+    , { "case": "directory-browser/injected-listing-selection-hidden-abort-close-reopen-dispose", "status": "foundation-under-test", "evidence": "generated-artifact focused test covers injected listing, hidden filter, selected child listing, abort on close, reopen and disposal; Electron fixture and remaining Harness path-edit/create/slow-scan states are pending" }
   ],
   "outputs": ["dom", "geometry", "computed-style", "screenshot", "pixel-diff"],
   "stateSemantics": {

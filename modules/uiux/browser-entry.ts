@@ -29,6 +29,7 @@ import { mountRange } from './primitives/range.js';
 import { mountToggle } from './primitives/toggle.js';
 import { mountColorPair } from './primitives/color-pair.js';
 import { createPopupSelectController, mountPopupSelectView } from './primitives/popup-select.js';
+import { mountDirectoryBrowser } from './primitives/directory-browser.js';
 import { mountPrimitiveLab } from './lab/primitive-lab.js';
 
 interface LegacyScopeLike {
@@ -88,6 +89,9 @@ const api = {
     // command business path consumes this API.
     createPopupSelectController,
     mountPopupSelectView,
+    // Candidate-only browser. Capabilities are caller-injected; this API does
+    // not connect to VCP's directory IPC or Workspace persistence.
+    mountDirectoryBrowser,
     mountPrimitiveLabFromScope(root: HTMLElement, legacyScope: LegacyScopeLike): UiDisposer {
         return mountPrimitiveLab(root, createUiScope(legacyScope));
     },

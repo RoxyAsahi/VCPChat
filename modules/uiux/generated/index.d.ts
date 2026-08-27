@@ -42,4 +42,7 @@ export type { SelectProps } from './primitives/select.js';
 /** Candidate-only Harness command-popup contract; not a stable VCP business API. */
 export { createPopupSelectController, filterOptions, mountPopupSelectView } from './primitives/popup-select.js';
 export type { PopupSelectConfirmation, PopupSelectController, PopupSelectDeps, PopupSelectOption, PopupSelectSnapshot, PopupSelectSpec, PopupSelectViewController, PopupSelectViewProps, PopupTokenSegment } from './primitives/popup-select.js';
+/** Candidate-only in-app directory browser; its filesystem capabilities are injected by the caller. */
+export { mountDirectoryBrowser } from './primitives/directory-browser.js';
+export type { DirectoryBrowserController, DirectoryBrowserEntry, DirectoryBrowserListing, DirectoryBrowserProps } from './primitives/directory-browser.js';
 export { mountPrimitiveLab } from './lab/primitive-lab.js';

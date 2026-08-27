@@ -23,6 +23,7 @@ const { mountRiskConfirmation } = await import('../modules/uiux/generated/primit
 const { mountAgentPresetSeat } = await import('../modules/uiux/generated/primitives/agent-preset-seat.js');
 const { mountAgentPresetRow } = await import('../modules/uiux/generated/primitives/agent-preset-row.js');
 const { createPopupSelectController, mountPopupSelectView } = await import('../modules/uiux/generated/primitives/popup-select.js');
+const { mountDirectoryBrowser } = await import('../modules/uiux/generated/primitives/directory-browser.js');
 const { mountSemanticIcon } = await import('../modules/uiux/primitives/semantic-icon.ts');
 const { mountChoice } = await import('../modules/uiux/primitives/choice.ts');
 const { mountRange } = await import('../modules/uiux/primitives/range.ts');
@@ -85,6 +86,54 @@ test('Harness PopupSelect Candidate keeps command wiring injected, owns focus an
         await scope.dispose('popup-select-complete');
         assert.equal(document.querySelector('.vcp-harness-popup-select-card'), null);
         assert.equal(document.querySelector('[role=dialog]'), null);
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
+
+test('Harness DirectoryBrowser foundation aborts stale listings and retracts on close', async () => {
+    const dom = new JSDOM('<!doctype html><main></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('directory-browser-test'));
+        const pending = [];
+        const opened = [];
+        const closed = [];
+        const browser = mountDirectoryBrowser({
+            open: true,
+            listDirectory: (path, signal) => new Promise((resolve, reject) => {
+                pending.push({ path, signal, resolve, reject });
+                signal?.addEventListener('abort', () => reject(new dom.window.DOMException('Aborted', 'AbortError')));
+            }),
+            createDirectory: async () => '/home/new',
+            onOpen: path => opened.push(path),
+            onClose: () => closed.push(true),
+        }, scope);
+        assert.equal(pending.length, 1);
+        pending.shift().resolve({ path: '/home', crumbs: [{ name: 'Home', path: '/home' }], entries: [{ name: 'projects', path: '/home/projects' }, { name: '.hidden', path: '/home/.hidden', hidden: true }] });
+        await delay(0);
+        assert.equal(document.querySelectorAll('.vcp-directory-browser-row').length, 1);
+        document.querySelector('.vcp-directory-browser-hidden').click();
+        assert.equal(document.querySelectorAll('.vcp-directory-browser-row').length, 2);
+        document.querySelector('.vcp-directory-browser-row').click();
+        assert.equal(pending.length, 1);
+        const child = pending.shift();
+        browser.setOpen(false);
+        assert.equal(child.signal.aborted, true);
+        assert.equal(browser.open, false);
+        assert.equal(document.querySelector('.vcp-directory-browser'), null);
+        child.resolve({ path: '/home/projects', entries: [{ name: 'late', path: '/home/projects/late' }] });
+        await delay(0);
+        assert.equal(document.querySelector('.vcp-directory-browser'), null);
+        browser.setOpen(true);
+        assert.equal(pending.length, 1);
+        pending.shift().resolve({ path: '/home', entries: [] });
+        await delay(0);
+        [...document.querySelectorAll('.vcp-directory-browser-footer button')].find(button => button.textContent === 'Open')?.click();
+        assert.deepEqual(opened, ['/home']);
+        [...document.querySelectorAll('.vcp-directory-browser-footer button')].find(button => button.textContent === 'Cancel')?.click();
+        assert.equal(closed.length, 1);
+        await browser.dispose();
+        await scope.dispose('directory-browser-complete');
     } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
 });
 
