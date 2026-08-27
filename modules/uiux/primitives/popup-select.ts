@@ -27,6 +27,7 @@ export interface PopupSelectOption {
     readonly label: string;
     readonly detail?: string;
     readonly active?: boolean;
+    readonly disabled?: boolean;
     readonly confirmation?: PopupSelectConfirmation;
 }
 
@@ -215,6 +216,7 @@ export function createPopupSelectController(spec: PopupSelectSpec, deps: PopupSe
             if (binding === null || !s.open || s.status !== 'ready' || s.submitting || s.confirming !== null) return;
             const option = filterOptions(s.options, s.search)[index];
             if (option === undefined) return;
+            if (option.disabled === true) return;
             if (option.confirmation !== undefined) {
                 set({ confirming: option, acknowledged: false, error: null });
                 return;
@@ -355,10 +357,12 @@ export function mountPopupSelectView(host: HTMLElement, props: PopupSelectViewPr
             const row = document.createElement('div');
             row.dataset.optionId = option.id;
             row.setAttribute('role', 'option');
+            row.setAttribute('aria-disabled', String(option.disabled === true));
             row.setAttribute('aria-selected', String(index === s.active));
             row.className = index === s.active
                 ? 'vcp-harness-popup-select-row vcp-harness-popup-select-row-active'
                 : 'vcp-harness-popup-select-row';
+            if (option.disabled === true) row.classList.add('vcp-harness-popup-select-row-disabled');
             const labelNode = document.createElement('span');
             labelNode.className = 'vcp-harness-popup-select-label';
             labelNode.textContent = option.label;
@@ -376,8 +380,8 @@ export function mountPopupSelectView(host: HTMLElement, props: PopupSelectViewPr
                 mountSemanticIcon(check, { name: 'check', size: 16 }, viewScope.child('harness-popup-select-check'));
                 row.append(check);
             }
-            viewScope.listen(row, 'click', () => { void popup.select(index); });
-            viewScope.listen(row, 'mouseenter', () => popup.highlight(index));
+            viewScope.listen(row, 'click', () => { if (option.disabled !== true) void popup.select(index); });
+            viewScope.listen(row, 'mouseenter', () => { if (option.disabled !== true) popup.highlight(index); });
             listbox.append(row);
         });
         // Focus ownership sits with the search input, so scrolling the virtual

@@ -112,6 +112,7 @@ test('Harness AgentModelPicker maps provider metadata and retracts its popup own
                 return [
                     { id: 'gpt', label: 'GPT', provider: 'OpenAI', favorite: true },
                     { id: 'local', label: 'Local', provider: 'Ollama' },
+                    { id: 'blocked', label: 'Blocked', provider: 'Remote', disabled: true },
                 ];
             },
             onSelect: option => { selected.push(option.id); },
@@ -123,6 +124,7 @@ test('Harness AgentModelPicker maps provider metadata and retracts its popup own
         assert.equal(controller.popup.getSnapshot().open, true);
         assert.match(controller.popup.getSnapshot().options[0].detail, /OpenAI/);
         assert.match(controller.popup.getSnapshot().options[0].detail, /Favorite/);
+        assert.equal(controller.popup.getSnapshot().options[2].disabled, true);
         controller.popup.setSearch('local');
         await controller.popup.select(0);
         assert.deepEqual(selected, ['local']);

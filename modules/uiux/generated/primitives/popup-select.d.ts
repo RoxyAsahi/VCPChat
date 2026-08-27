@@ -13,6 +13,7 @@ export interface PopupSelectOption {
     readonly label: string;
     readonly detail?: string;
     readonly active?: boolean;
+    readonly disabled?: boolean;
     readonly confirmation?: PopupSelectConfirmation;
 }
 /** Command token segment snapshotted at shell-open time (popup.ts contract). */
