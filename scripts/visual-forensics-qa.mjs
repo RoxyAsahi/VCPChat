@@ -27,7 +27,9 @@ const appData = await fs.mkdtemp(path.join(os.tmpdir(), 'vcpchat-visual-qa-'));
 await fs.mkdir(path.join(appData, 'Agents', 'VisualQA'), { recursive: true });
 await fs.writeFile(path.join(appData, 'Agents', 'VisualQA', 'config.json'), JSON.stringify({ name: 'Visual QA', model: 'visual-qa', promptMode: 'original', originalSystemPrompt: 'Visual QA', systemPrompt: 'Visual QA', stripRegexes: [] }));
 await fs.writeFile(path.join(appData, 'settings.json'), JSON.stringify({ uiMode: 'next', enableDistributedServer: false, vcpServerUrl: 'http://127.0.0.1:1', vcpApiKey: 'visual-qa', assistantAgent: 'VisualQA', currentThemeMode: process.env.VCPCHAT_VISUAL_QA_THEME || 'light' }));
-const child = spawn(electron, ['.', '--allow-multiple-instances', `--user-data-dir=${path.join(appData, 'ElectronProfile')}`, `--remote-debugging-port=${port}`], { cwd: root, env: { ...process.env, VCPCHAT_APP_DATA_DIR: appData, VCPCHAT_E2E_TEST: '1' }, stdio: ['ignore', 'ignore', 'pipe'] });
+const child = spawn(electron, ['.', '--allow-multiple-instances', `--user-data-dir=${path.join(appData, 'ElectronProfile')}`, `--remote-debugging-port=${port}`], { cwd: root, env: { ...process.env, VCPCHAT_APP_DATA_DIR: appData, VCPCHAT_E2E_TEST: '1' }, stdio: ['ignore', 'ignore', 'pipe'], detached: true });
+let childClosed = false;
+child.once('close', () => { childClosed = true; });
 let stderr = ''; child.stderr.on('data', chunk => { stderr = `${stderr}${chunk}`.slice(-12_000); });
 let browser;
 const evidence = { generatedAt: new Date().toISOString(), viewports, output, observations: [], gate: { pass: true, failures: [] } };
@@ -52,6 +54,72 @@ try {
     }).catch(() => {});
     await page.waitForSelector('.vcp-ui-showcase-root', { timeout: 15_000 }).catch(() => {});
   }
+  const lifecycle = await page.evaluate(async () => {
+    const before = document.querySelector('.vcp-ui-showcase-root');
+    const beforeIdentity = before || null;
+    await window.topTabManager?.closeView?.('app:ui-component-library');
+    await new Promise(resolve => setTimeout(resolve, 80));
+    const afterClose = document.querySelector('.vcp-ui-showcase-root');
+    const bodyAfterClose = { classes: [...document.body.classList], inlineStyle: document.body.getAttribute('style') || '' };
+    await window.topTabManager?.openInternalApp?.('ui-component-library');
+    await new Promise(resolve => setTimeout(resolve, 250));
+    const afterReopen = document.querySelector('.vcp-ui-showcase-root');
+    return {
+      openedInitially: Boolean(before),
+      removedOnClose: !afterClose,
+      bodyAfterClose,
+      reopened: Boolean(afterReopen),
+      newRootIdentity: Boolean(afterReopen && beforeIdentity && afterReopen !== beforeIdentity),
+    };
+  }).catch(error => ({ error: error.message }));
+  evidence.lifecycle = lifecycle;
+  if (lifecycle.error || !lifecycle.openedInitially || !lifecycle.removedOnClose || !lifecycle.reopened) {
+    evidence.gate.failures.push(`showcase lifecycle: ${JSON.stringify(lifecycle)}`);
+  }
+  await page.waitForSelector('.vcp-harness-primitive-lab', { timeout: 15_000 }).catch(() => {});
+  const overlays = await page.evaluate(async () => {
+    const lab = document.querySelector('.vcp-harness-primitive-lab');
+    const byText = text => [...(lab?.querySelectorAll('button') || [])].find(button => button.textContent.trim() === text);
+    const rect = node => { if (!node) return null; const r = node.getBoundingClientRect(); const s = getComputedStyle(node); return { x: r.x, y: r.y, width: r.width, height: r.height, position: s.position, zIndex: s.zIndex, parent: node.parentElement === document.body ? 'body' : node.parentElement?.className || '' }; };
+    const menuTrigger = byText('View options'); menuTrigger?.click(); await new Promise(resolve => setTimeout(resolve, 30));
+    const menu = document.querySelector('.vcp-harness-menu-list[role="menu"]');
+    const menuEvidence = { triggerExpanded: menuTrigger?.getAttribute('aria-expanded') || '', rect: rect(menu), itemCount: menu?.querySelectorAll('[role="menuitem"]').length || 0 };
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    const modalTrigger = byText('Open modal'); modalTrigger?.click(); await new Promise(resolve => setTimeout(resolve, 30));
+    const modal = document.querySelector('.vcp-harness-modal-root [role="dialog"]');
+    const modalEvidence = { open: Boolean(modal), rect: rect(modal), mask: Boolean(document.querySelector('.vcp-harness-modal-mask')), zIndex: modal ? getComputedStyle(modal).zIndex : '' };
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    const tooltipAnchor = byText('Hover for details'); tooltipAnchor?.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true })); await new Promise(resolve => setTimeout(resolve, 160));
+    const tooltip = document.querySelector('[role="tooltip"], .vcp-harness-tooltip-bubble');
+    const tooltipEvidence = { open: Boolean(tooltip), rect: rect(tooltip), side: tooltip?.getAttribute('data-side') || '' };
+    tooltipAnchor?.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+    return { menu: menuEvidence, modal: modalEvidence, tooltip: tooltipEvidence };
+  }).catch(error => ({ error: error.message }));
+  evidence.overlays = overlays;
+  if (overlays.error || !overlays.menu?.rect || !overlays.modal?.open || !overlays.tooltip?.open) {
+    evidence.gate.failures.push(`showcase overlays: ${JSON.stringify(overlays)}`);
+  }
+  const settingsContext = await page.evaluate(async () => {
+    await window.uiHelperFunctions?.openModal?.('globalSettingsModal');
+    await new Promise(resolve => setTimeout(resolve, 120));
+    const modal = document.querySelector('#globalSettingsModal');
+    const rows = [...(modal?.querySelectorAll('.vcp-settings-row, .form-group, .settings-section') || [])]
+      .filter(node => node.getClientRects().length).slice(0, 24).map(node => {
+        const r = node.getBoundingClientRect(); const s = getComputedStyle(node);
+        return { className: node.className, text: (node.textContent || '').trim().slice(0, 120), rect: { x: r.x, y: r.y, width: r.width, height: r.height }, display: s.display, gap: s.gap, padding: s.padding, borderRadius: s.borderRadius, backgroundColor: s.backgroundColor };
+      });
+    const shell = modal?.querySelector('.vcp-ui-settings-shell, #globalSettingsForm');
+    const shellStyle = shell ? (() => { const r = shell.getBoundingClientRect(); const s = getComputedStyle(shell); return { className: shell.className, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, display: s.display, gridTemplateColumns: s.gridTemplateColumns, gap: s.gap }; })() : null;
+    const controls = [...(modal?.querySelectorAll('input, select, textarea, button, wa-input, wa-select') || [])]
+      .filter(node => node.getClientRects().length).slice(0, 40).map(node => {
+        const r = node.getBoundingClientRect(); const s = getComputedStyle(node);
+        return { tag: node.tagName.toLowerCase(), id: node.id, className: node.className, parentClass: node.parentElement?.className || '', rect: { x: r.x, y: r.y, width: r.width, height: r.height }, display: s.display, color: s.color, backgroundColor: s.backgroundColor };
+      });
+    await window.uiHelperFunctions?.closeModal?.('globalSettingsModal');
+    return { opened: Boolean(modal?.classList.contains('active') || modal), rowCount: rows.length, rows, controls, shell: shellStyle };
+  }).catch(error => ({ error: error.message }));
+  evidence.settingsContext = settingsContext;
+  if (settingsContext.error || (settingsContext.rowCount === 0 && settingsContext.controls?.length === 0)) evidence.gate.failures.push(`settings context: ${JSON.stringify(settingsContext)}`);
   for (const [width, height] of viewports) {
     await page.setViewport({ width, height, deviceScaleFactor: 1 });
     await page.evaluate(() => window.scrollTo(0, 0));
@@ -71,7 +139,16 @@ try {
       }));
       const overlap = overlapPairs.length > 0;
       const portals = [...document.querySelectorAll('[role="dialog"], [role="menu"], [role="tooltip"], [class*="portal"], [class*="overlay"]')].filter(el => el.getClientRects().length).map(visible);
-      return { url: location.href, surface: document.querySelector('.vcp-ui-showcase-root') ? 'component-showcase' : 'main', uiMode: document.documentElement.dataset.uiMode || '', theme: document.documentElement.dataset.theme || document.documentElement.dataset.themeMode || '', bodyClass: document.body.className, scroll: { x: document.documentElement.scrollWidth, y: document.documentElement.scrollHeight, clientWidth: document.documentElement.clientWidth, clientHeight: document.documentElement.clientHeight }, controls: rects, portals, dom: { bodyLength: document.body.innerHTML.length, classes: [...document.body.classList], inlineStyle: document.body.getAttribute('style') || '' }, overlap, overlapPairs };
+      const stateCounts = {
+        disabled: document.querySelectorAll(':disabled, .is-disabled, [aria-disabled="true"]').length,
+        selected: document.querySelectorAll('.is-selected, [aria-selected="true"], [data-selected="true"], [aria-checked="true"]').length,
+        error: document.querySelectorAll('.is-error, [aria-invalid="true"], [role="alert"]').length,
+        loading: document.querySelectorAll('.is-loading, [aria-busy="true"], [data-loading="true"]').length,
+      };
+      const focusTarget = [...document.querySelectorAll('button, input, select')].find(el => el.getClientRects().length && !el.disabled);
+      focusTarget?.focus?.();
+      const focused = document.activeElement && document.activeElement !== document.body ? visible(document.activeElement) : null;
+      return { url: location.href, surface: document.querySelector('.vcp-ui-showcase-root') ? 'component-showcase' : 'main', uiMode: document.documentElement.dataset.uiMode || '', theme: document.documentElement.dataset.theme || document.documentElement.dataset.themeMode || '', bodyClass: document.body.className, scroll: { x: document.documentElement.scrollWidth, y: document.documentElement.scrollHeight, clientWidth: document.documentElement.clientWidth, clientHeight: document.documentElement.clientHeight }, controls: rects, portals, stateCounts, focused, dom: { bodyLength: document.body.innerHTML.length, classes: [...document.body.classList], inlineStyle: document.body.getAttribute('style') || '' }, overlap, overlapPairs };
     });
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
     await sleep(100);
@@ -92,5 +169,15 @@ try {
 } catch (error) {
   evidence.gate.pass = false; evidence.gate.failures.push(error.message); await fs.writeFile(path.join(output, 'manifest.json'), JSON.stringify(evidence, null, 2)); throw error;
 } finally {
-  await browser?.close().catch(() => {}); child.kill('SIGTERM');
+  if (browser) await Promise.race([browser.close().catch(() => {}), sleep(2_000)]);
+  // Electron forks GPU/renderer helpers. Kill the private process group so a
+  // theme matrix cannot leak a renderer and block the next case on teardown.
+  try { if (child.pid) process.kill(-child.pid, 'SIGTERM'); } catch {}
+  child.kill('SIGTERM');
+  if (!childClosed && child.exitCode === null) {
+    await Promise.race([
+      new Promise(resolve => child.once('close', resolve)),
+      sleep(2_000),
+    ]);
+  }
 }

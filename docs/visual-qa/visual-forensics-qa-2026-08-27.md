@@ -8,6 +8,8 @@ npm run test:visual-forensics-qa
 
 It launches the real Electron entry with an isolated app-data directory, attaches Puppeteer through the Electron remote-debugging endpoint, opens the component showcase when available, and writes PNG plus JSON evidence under `reports/visual-forensics-qa/<timestamp>/`. Every viewport records initial, scrolled, and resized states, visible control geometry, computed color/surface/position/z-index/radius, portal candidates, body DOM size/classes/inline style, and overflow/overlap gate results.
 
+Use `npm run test:visual-forensics-themes` for the light/dark matrix. It runs the same real Electron scanner once per theme and stores evidence under `reports/visual-forensics-qa/light/` and `reports/visual-forensics-qa/dark/`.
+
 ## First-round findings
 
 | Priority | Finding | Runtime evidence | Status |
@@ -26,6 +28,9 @@ On 2026-08-27 in the current dirty worktree:
 - `npm run check:harness-fixture-matrix` passed (63 visual cases, 20 interaction cases, DOM 10/10).
 - `npm run check:harness-capture-prerequisites` reported missing prerequisites (expected until the external Harness checkout supplies the aliases).
 - `npm run test:visual-forensics-qa` launched the real Electron renderer and wrote evidence to `reports/visual-forensics-qa/2026-08-27T21-47-38.601Z/` and `/tmp/vqa-third/`. The initial run exposed a false positive caused by comparing controls from the underlying chat surface with showcase controls. The scanner now groups overlap checks by owning Surface; the corrected three-viewport run passed with no same-Surface overlap or horizontal overflow. Electron stderr still records the missing local CDS binary and intentionally unreachable model endpoint as environment prerequisites.
+- Lifecycle follow-up runs passed independently for both themes: `/tmp/vqa-light-final/manifest.json` and `/tmp/vqa-dark-final/manifest.json`. Each covered all three viewports, recorded `disabled=27`, `selected=9`, `error=6`, `loading=2`, and ended with a passing overlap/overflow gate. Dark evidence has `bodyClass=dark-theme`; light evidence has `bodyClass=light-theme`. The scanner now tears down the Electron process group with bounded browser-close/child-close waits so the theme matrix does not leak processes.
+- Overlay and lifecycle evidence from `/tmp/vqa-overlays/manifest.json` and `/tmp/vqa-overlays-dark/manifest.json` passed in both themes. Menu opened with `position:fixed; z-index:1100` under `body` (218x348, 8 items); Modal opened with a mask and a 380x220 dialog; Tooltip opened with fixed positioning and `data-side=top`. Close/reopen removed the showcase root, restored body classes/inline style, and recreated a distinct root identity.
+- Settings context evidence from `/tmp/vqa-settings-context2/manifest.json` passed in Electron. The real `globalSettingsModal` opened from the running renderer; the active settings section measured 516x302 at the captured viewport and 19 visible controls were recorded with parent classes, colors, backgrounds, and geometry. The modal then closed before the viewport sweep, preserving showcase ownership. Selector-provenance/specificity tracing remains a follow-up because DevTools does not expose a stable rule provenance API through the current CDP harness.
 
 ## Scope and frozen boundaries
 

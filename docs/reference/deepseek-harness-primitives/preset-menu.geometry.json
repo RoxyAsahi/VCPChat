@@ -1,0 +1,9 @@
+{
+  "primitive": "PresetMenu",
+  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-agent-preset/src/client/PresetMenu.tsx",
+  "delegatedGeometry": "menu.geometry.json",
+  "selectors": {},
+  "trigger": { "geometryOwner": "caller-owned buttonClassName/chevronClassName" },
+  "states": ["closed", "open", "selected", "disabled"],
+  "vcpCandidateEvidence": { "status": "reference-only", "productionConsumer": false }
+}
