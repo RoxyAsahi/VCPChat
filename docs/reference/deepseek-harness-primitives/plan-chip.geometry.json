@@ -1,0 +1,13 @@
+{
+  "primitive": "PlanChip",
+  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-plan/src/client/PlanModeControl.module.css",
+  "selectors": {
+    ".wrap": { "display": "inline-flex", "alignItems": "center", "gap": "6px" },
+    ".chip": { "display": "inline-flex", "alignItems": "center", "gap": "4px", "minWidth": "34px", "padding": "2px 8px", "borderRadius": "999px", "fontSize": "13px", "fontWeight": "500", "lineHeight": "20px" },
+    ".close": { "display": "inline-flex", "alignItems": "center", "color": "currentColor" },
+    ".error": { "color": "var(--dsw-alias-state-error-primary)", "fontSize": "12px", "lineHeight": "18px" }
+  },
+  "tokens": ["--dsw-alias-state-warn-tertiary", "--dsw-alias-state-warn-label", "--dsw-alias-state-warn-primary", "--dsw-alias-state-error-primary"],
+  "geometryInvariants": ["chip remains an intrinsic 34px-minimum pill", "wrap and chip use inline-flex alignment", "error text sits beside the chip without changing chip geometry"],
+  "candidateStatus": "source-only frozen Composer plan slot; no VCP consumer or paired visual capture"
+}
