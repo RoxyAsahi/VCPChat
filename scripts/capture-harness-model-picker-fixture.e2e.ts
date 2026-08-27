@@ -150,6 +150,52 @@ describe('Harness production ModelSelect fixture', () => {
     }, triggerEvidence.rect)
     await menu.screenshot({ path: join(root, 'reports', 'harness-agent-model-picker.png') })
 
+    await page.keyboard.press('Escape')
+    const menuAfterModelEscape = page.getByRole('menu')
+    const escapePaneBack = await menuAfterModelEscape.count() > 0 ? await menuAfterModelEscape.evaluate(element => ({
+      modelRowVisible: [...element.querySelectorAll('[role="menuitem"]')]
+        .some(node => !node.hasAttribute('hidden') && node.textContent?.includes('模型')),
+      modelOptionsVisible: [...element.querySelectorAll('[role="menuitemradio"]')]
+        .some(node => !node.hasAttribute('hidden')),
+    })) : { modelRowVisible: false, modelOptionsVisible: false }
+
+    // The production implementation may retain its last drilled pane across
+    // a close/reopen. Ensure a fresh root menu before capturing effort.
+    if (await trigger.getAttribute('aria-expanded') === 'true') {
+      await trigger.click()
+      await expect.poll(() => trigger.getAttribute('aria-expanded')).toBe('false')
+    }
+    await trigger.click()
+    await page.getByRole('menu').waitFor({ timeout: 15_000 })
+
+    const reopenedMenu = page.getByRole('menu')
+    const effortRow = reopenedMenu.getByRole('menuitem', { name: /推理等级/ })
+    await effortRow.click()
+    const effortOption = reopenedMenu.getByRole('menuitemradio').first()
+    await effortOption.waitFor({ timeout: 15_000 })
+    const effortPane = await reopenedMenu.evaluate(element => ({
+      dom: element.outerHTML,
+      options: [...element.querySelectorAll('[role="menuitemradio"]')].map(node => ({
+        text: node.textContent?.trim() || '',
+        ariaChecked: node.getAttribute('aria-checked'),
+        rect: (() => {
+          const value = node.getBoundingClientRect()
+          return { x: value.x, y: value.y, width: value.width, height: value.height }
+        })(),
+      })),
+    }))
+    await page.keyboard.press('Escape')
+    const menuAfterEffortEscape = page.getByRole('menu')
+    const effortEscape = await menuAfterEffortEscape.count() > 0 ? await menuAfterEffortEscape.evaluate(element => ({
+      rootVisible: [...element.querySelectorAll('[role="menuitem"]')]
+        .some(node => !node.hasAttribute('hidden') && node.textContent?.includes('模型')),
+      effortOptionsVisible: [...element.querySelectorAll('[role="menuitemradio"]')]
+        .some(node => !node.hasAttribute('hidden')),
+    })) : { rootVisible: false, effortOptionsVisible: false }
+    await page.keyboard.press('Escape')
+    const closed = await page.getByRole('menu').count() === 0
+    const focusRestore = await trigger.evaluate(element => document.activeElement === element)
+
     const evidence = {
       source: 'Harness production web ModelSelect',
       sourcePath: 'packages/client/ui-model-selection/src/client/ModelSelect.tsx',
@@ -163,21 +209,22 @@ describe('Harness production ModelSelect fixture', () => {
       menu: menuEvidence,
       rootPane,
       modelPane,
-      effortPane: null,
+      effortPane,
       interaction: {
         rootPane: rootPane.modelRowVisible,
         modelPane: modelPane.options.length > 0,
-        effortPane: false,
+        effortPane: effortPane.options.length > 0,
+        searchVisible: false,
         loading: false,
         errorRetry: false,
         selecting: false,
         locked: false,
-        escapePaneBack: null,
-        escapeClose: null,
-        focusRestore: null,
+        escapePaneBack,
+        escapeClose: closed,
+        focusRestore,
         dispose: false,
       },
-      missingEvidence: ['effort-pane', 'escape-pane-back', 'escape-close', 'focus-restore'],
+      missingEvidence: [],
       pixel: { roi: 'model-picker-menu', screenshot: 'harness-agent-model-picker.png' },
     }
     await writeFile(join(root, 'reports', 'harness-agent-model-picker.json'), `${JSON.stringify(evidence, null, 2)}\n`)
