@@ -125,8 +125,24 @@ try {
       const visibleControls = [...(active?.querySelectorAll('input, select, textarea, button, wa-input, wa-select') || [])].filter(node => node.getClientRects().length);
       sections.push({ sectionId, activeId: active?.id || '', visibleControls: visibleControls.length, rect: active ? (() => { const r = active.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })() : null });
     }
+    modal?.querySelector('#vcpSettingsTab-user-identity')?.click();
+    await new Promise(resolve => setTimeout(resolve, 20));
+    const describeContext = node => {
+      if (!node) return null;
+      const r = node.getBoundingClientRect(); const s = getComputedStyle(node);
+      const ancestry = [];
+      let current = node;
+      for (let depth = 0; current && depth < 5; depth += 1, current = current.parentElement) {
+        ancestry.push({ tag: current.tagName.toLowerCase(), id: current.id || '', className: typeof current.className === 'string' ? current.className : '', role: current.getAttribute('role') || '' });
+      }
+      return { tag: node.tagName.toLowerCase(), id: node.id || '', className: typeof node.className === 'string' ? node.className : '', rect: { x: r.x, y: r.y, width: r.width, height: r.height }, display: s.display, position: s.position, color: s.color, backgroundColor: s.backgroundColor, borderRadius: s.borderRadius, padding: s.padding, fontSize: s.fontSize, lineHeight: s.lineHeight, ancestry };
+    };
+    const contextSample = {
+      showcase: describeContext(document.querySelector('.vcp-harness-primitive-lab input, .vcp-harness-primitive-lab textarea, .vcp-harness-primitive-lab select')),
+      settings: describeContext([...((modal?.querySelector('.settings-section.active') || modal)?.querySelectorAll('input, select, textarea, button, wa-input, wa-select') || [])].find(node => node.getClientRects().length)),
+    };
     await window.uiHelperFunctions?.closeModal?.('globalSettingsModal');
-    return { opened: Boolean(modal?.classList.contains('active') || modal), rowCount: rows.length, rows, controls, shell: shellStyle, sections };
+    return { opened: Boolean(modal?.classList.contains('active') || modal), rowCount: rows.length, rows, controls, shell: shellStyle, sections, contextSample };
   }).catch(error => ({ error: error.message }));
   evidence.settingsContext = settingsContext;
   if (settingsContext.error || (settingsContext.rowCount === 0 && settingsContext.controls?.length === 0)) evidence.gate.failures.push(`settings context: ${JSON.stringify(settingsContext)}`);
@@ -184,7 +200,7 @@ try {
       await new Promise(resolve => setTimeout(resolve, 100));
     }).catch(() => {});
     await page.screenshot({ path: path.join(output, `${name}-settings.png`), fullPage: false });
-    const settingsViewport = await page.evaluate(() => {
+    const settingsViewport = await page.evaluate(async () => {
       const modal = document.querySelector('#globalSettingsModal');
       const visible = [...(modal?.querySelectorAll('.vcp-settings-row, .form-group, input, select, textarea, button, wa-input, wa-select') || [])]
         .filter(node => node.getClientRects().length).slice(0, 50).map(node => {
@@ -200,8 +216,17 @@ try {
         const r = active?.getBoundingClientRect();
         return { sectionId, activeId: active?.id || '', visibleControls: controls.length, rect: r ? { x: r.x, y: r.y, width: r.width, height: r.height } : null };
       });
+      const describeContext = node => {
+        if (!node) return null;
+        const r = node.getBoundingClientRect(); const s = getComputedStyle(node); const ancestry = [];
+        let current = node;
+        for (let depth = 0; current && depth < 5; depth += 1, current = current.parentElement) ancestry.push({ tag: current.tagName.toLowerCase(), id: current.id || '', className: typeof current.className === 'string' ? current.className : '', role: current.getAttribute('role') || '' });
+        return { tag: node.tagName.toLowerCase(), id: node.id || '', className: typeof node.className === 'string' ? node.className : '', rect: { x: r.x, y: r.y, width: r.width, height: r.height }, display: s.display, position: s.position, color: s.color, backgroundColor: s.backgroundColor, borderRadius: s.borderRadius, padding: s.padding, fontSize: s.fontSize, lineHeight: s.lineHeight, ancestry };
+      };
       modal?.querySelector('#vcpSettingsTab-user-identity')?.click();
-      return { active: Boolean(modal?.classList.contains('active') || modal), visible, activeSection: modal?.querySelector('.settings-section.active')?.id || '', sections };
+      await new Promise(resolve => setTimeout(resolve, 20));
+      const contextSample = { showcase: describeContext(document.querySelector('.vcp-harness-primitive-lab input, .vcp-harness-primitive-lab textarea, .vcp-harness-primitive-lab select')), settings: describeContext([...((modal?.querySelector('.settings-section.active') || modal)?.querySelectorAll('input, select, textarea, button, wa-input, wa-select') || [])].find(node => node.getClientRects().length)) };
+      return { active: Boolean(modal?.classList.contains('active') || modal), visible, activeSection: modal?.querySelector('.settings-section.active')?.id || '', sections, contextSample };
     }).catch(error => ({ error: error.message }));
     await page.evaluate(() => window.uiHelperFunctions?.closeModal?.('globalSettingsModal')).catch(() => {});
     await sleep(80);
