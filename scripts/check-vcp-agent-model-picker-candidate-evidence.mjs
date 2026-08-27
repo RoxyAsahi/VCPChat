@@ -42,6 +42,7 @@ assert.match(referenceCss, /\.menu\s*\{[^}]*right:\s*0[^}]*bottom:\s*calc\(100% 
     'Harness reference must retain right/bottom menu placement');
 assert.equal(report.modelPane.searchVisible, true);
 assert.equal(report.modelPane.optionCount, 3);
+assert.deepEqual(report.modelPane.disabledOptions, ['Llama 3.3Local']);
 assert.match(report.keyboardNavigation.activeOption || '', /Claude 3\.7 Sonnet/,
     'ArrowDown must move the active model option');
 assert.equal(report.effortPane.optionCount, 2);

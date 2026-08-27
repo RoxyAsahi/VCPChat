@@ -97,6 +97,7 @@ try {
             searchVisible: host.querySelector('.vcp-harness-popup-select-search')?.hidden === false,
             optionCount: host.querySelectorAll('[role="option"]').length,
             selectedOption: host.querySelector('[role="option"][aria-selected="true"]')?.textContent?.trim() || null,
+            disabledOptions: [...host.querySelectorAll('[role="option"][aria-disabled="true"]')].map(node => node.textContent?.trim() || null),
         };
         const menu = host.querySelector('.vcp-harness-popup-select-card');
         const menuStyle = menu ? getComputedStyle(menu) : null;
