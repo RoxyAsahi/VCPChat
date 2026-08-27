@@ -513,6 +513,7 @@ function enhanceForm(form) {
     mountTypedAgentTemperatureInput(form);
     mountTypedAgentNumericInputs(form);
     mountTypedAgentStreamChoice(form);
+    mountTypedAgentTtsSpeedRange(form);
     form.querySelectorAll('.agent-settings-section, .group-settings-section').forEach(section => {
         enhance('SettingsSection', section);
     });
@@ -522,7 +523,9 @@ function enhanceForm(form) {
     });
     form.querySelectorAll('textarea').forEach(textarea => enhance('Textarea', textarea));
     form.querySelectorAll('select').forEach(select => enhance('Select', select, { kernel: 'native' }));
-    form.querySelectorAll('input[type="range"]').forEach(range => enhance('Range', range));
+    form.querySelectorAll('input[type="range"]').forEach(range => {
+        if (!range.closest('.vcp-uiux-range')) enhance('Range', range);
+    });
     mountHarnessSwitches(form);
     form.querySelectorAll('.agent-style-collapsible-container').forEach(disclosure => {
         disclosure.dataset.settingPrimitive = 'disclosure';
@@ -643,6 +646,25 @@ function mountTypedAgentStreamChoice(form) {
         if (release) scope.own(release, 'agent-stream-choice', 'ui-primitive');
     } catch (error) {
         console.warn('[VCPUI SettingsBridge] Could not mount typed Agent stream Choice:', error);
+    }
+}
+
+// TTS speed is a stable native range with an existing output node.  The typed
+// Range owns only the visual wrapper and output synchronization; settings
+// manager remains responsible for reading/writing the persisted numeric value.
+function mountTypedAgentTtsSpeedRange(form) {
+    const input = form?.querySelector?.('#agentTtsSpeed');
+    const output = form?.querySelector?.('#ttsSpeedValue');
+    const api = window.VCPUIUX;
+    const scope = ensurePresentationScope();
+    if (!input || !output || !api?.mountRange || !scope || input.dataset.vcpTypedAgentTtsSpeed === 'true') return;
+    try {
+        const release = api.mountRange(input, { output, format: value => value }, scope);
+        input.dataset.vcpTypedAgentTtsSpeed = 'true';
+        scope.own(() => { delete input.dataset.vcpTypedAgentTtsSpeed; }, 'agent-tts-speed-range-marker', 'ui-presentation');
+        if (release) scope.own(release, 'agent-tts-speed-range', 'ui-primitive');
+    } catch (error) {
+        console.warn('[VCPUI SettingsBridge] Could not mount typed Agent TTS speed Range:', error);
     }
 }
 
