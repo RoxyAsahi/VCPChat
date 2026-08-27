@@ -1,0 +1,16 @@
+{
+  "primitive": "JobListAction",
+  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-jobs/src/client/JobListAction.module.css",
+  "selectors": {
+    ".root": { "position": "relative" },
+    ".trigger": { "display": "inline-flex", "alignItems": "center", "gap": "3px", "minHeight": "28px", "padding": "3px 2px", "borderRadius": "6px", "fontSize": "12px", "lineHeight": "18px" },
+    ".menu": { "position": "absolute", "top": "calc(100% + 5px)", "left": "0", "zIndex": "100", "width": "336px", "maxWidth": "min(400px, calc(100vw - 32px))", "maxHeight": "min(420px, calc(100vh - 140px))", "padding": "4px", "borderRadius": "12px" },
+    ".row": { "display": "flex", "alignItems": "center", "gap": "8px", "minHeight": "32px", "padding": "6px 8px", "borderRadius": "8px", "fontSize": "13px", "lineHeight": "18px" },
+    ".kind": { "padding": "0 6px", "borderRadius": "5px", "fontSize": "11px", "lineHeight": "18px" },
+    ".label": { "minWidth": "0", "fontFamily": "var(--dsw-font-mono)" },
+    ".status": { "maxWidth": "40%", "fontSize": "11px", "lineHeight": "18px" },
+    ".duration": { "fontSize": "11px", "lineHeight": "18px" }
+  },
+  "tokens": ["--dsw-alias-label-tertiary", "--dsw-alias-label-secondary", "--dsw-alias-border-l2", "--dsw-specific-menu", "--dsw-alias-scrollbar-bg-l2", "--dsw-alias-scrollbar-hover-l2", "--dsw-shadow-lv3", "--dsw-alias-fill-l2"],
+  "candidateStatus": "source-only; no VCP jobs consumer or paired visual capture"
+}
