@@ -22,6 +22,12 @@ without turning a one-sided check into a parity pass.
 with the repository pixel policy and reports missing screenshots, dimension
 mismatches, ratios, and mean channel delta.
 
+Before comparing pixels it also checks semantic-fixture alignment from the
+paired JSON captures: model/effort option counts, option role, group count, and
+search visibility. A mismatch is reported as
+`pending-semantic-fixture-alignment`; cropping or resizing images must not turn
+different interaction fixtures into a visual-parity pass.
+
 The expected capture shape is pinned in
 `model-picker.capture.schema.json`, including the fixed viewport, ARIA links,
 computed-style selectors, interaction states, and optional PNG ROI.
