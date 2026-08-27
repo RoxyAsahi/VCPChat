@@ -1,0 +1,17 @@
+{
+  "primitive": "AgentPresetSection",
+  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-agent-preset/src/client/AgentPresetSection.tsx",
+  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-agent-preset/src/client/AgentPresetSection.module.css",
+  "root": { "tag": "div", "class": "section", "content": "heading + intro + trust-group sections" },
+  "groups": { "tag": "section", "heading": "h3.groupHead", "cards": "ul.cards > li.card" },
+  "card": {
+    "main": { "tag": "button", "class": "cardMain", "ariaPressed": "default state", "ariaLabel": "localized action + preset name" },
+    "actions": "cardFoot icon buttons for view/location/copy/delete",
+    "broken": "cardBroken + brokenBadge + cardBrokenReason[role=alert]",
+    "default": "cardActive + main button disabled + inUse badge"
+  },
+  "overlays": ["Modal copy dialog", "Tooltip for truncated description"],
+  "aria": ["card main button has localized aria-label", "broken reason role=alert", "copy dialog Modal owns dialog semantics", "icon actions expose title/data-tip"],
+  "states": ["loading", "error-retry", "unavailable", "system-group", "user-group", "default", "broken", "copy-open", "copy-saving", "copy-error", "delete-confirmation", "dispose"],
+  "vcpCandidate": { "productionConsumer": false, "status": "inventoried", "reason": "Settings consumer and preset persistence remain outside this reference slice" }
+}

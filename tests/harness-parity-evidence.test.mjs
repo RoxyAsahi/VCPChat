@@ -30,3 +30,25 @@ test('Model picker diff stays pending until a Harness capture exists', () => {
     assert.ok(report.missingEvidence.includes('Harness ModelSelect browser capture (DOM + computed style)'));
     assert.ok(report.missingEvidence.includes('Candidate computed-style contract'));
 });
+
+test('Harness UI inventory separates frozen surfaces from contract candidates', () => {
+    execFileSync(process.execPath, ['scripts/scan-harness-ui-inventory.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-ui-inventory.json'), 'utf8'));
+    assert.equal(report.status, 'inventory-gaps-present');
+    assert.ok(report.counts.portablePrimitives > 0);
+    assert.ok(report.counts.composites > 0);
+    assert.ok(report.counts.frozenDomainSurfaces > 0);
+    assert.ok(report.counts.missingContracts > 0);
+    assert.ok(report.entries.some(item => item.name === 'ModelSelect' && item.category === 'composite-surface'));
+    assert.ok(report.entries.some(item => item.category === 'frozen-domain-surface'));
+    assert.ok(report.nextCandidates.length > 0);
+});
+
+test('Harness geometry audit reports source equivalence without hiding gaps', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-geometry-contracts.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-geometry-contracts.json'), 'utf8'));
+    assert.ok(['geometry-evidence-gaps-present', 'source-equivalent'].includes(report.status));
+    assert.ok(report.counts.contracts >= 20);
+    assert.ok(report.checks.some(item => item.name === 'model-picker' && item.status === 'source-equivalent'));
+    assert.ok(report.checks.some(item => item.status !== 'source-equivalent'));
+});

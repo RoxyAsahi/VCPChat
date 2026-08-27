@@ -33,6 +33,7 @@ const skipDestructivePreflight = process.env.VCPCHAT_STRESS_SKIP_PREFLIGHT === '
 const traceListeners = process.env.VCPCHAT_STRESS_TRACE_LISTENERS === '1';
 const captureAgentSettings = process.env.VCPCHAT_STRESS_CAPTURE_AGENT_SETTINGS === '1';
 const agentSelectInteraction = process.env.VCPCHAT_STRESS_AGENT_SELECT_INTERACTION === '1';
+const agentModelPickerInteraction = process.env.VCPCHAT_STRESS_AGENT_MODEL_PICKER_INTERACTION === '1';
 const agentPromptInteraction = process.env.VCPCHAT_STRESS_AGENT_PROMPT_INTERACTION === '1';
 const supportedStages = Object.freeze(['ask-nova', 'settings', 'agent-settings', 'embedded', 'detached-app', 'mode-round-trip']);
 const selectedStages = new Set((process.env.VCPCHAT_STRESS_STAGES || supportedStages.join(','))
@@ -659,6 +660,73 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
             agentSelectInteractionEvidence.closed = true;
             agentSelectInteractionEvidence.focusRestored = true;
         }
+        let agentModelPickerInteractionEvidence = null;
+        if (agentModelPickerInteraction) {
+            const interaction = await page.evaluate(async () => {
+                const trigger = document.querySelector('#agentSettingsForm #openModelSelectBtn');
+                const input = document.querySelector('#agentSettingsForm #agentModel');
+                const root = document.querySelector('#agentSettingsForm .vcp-harness-agent-model-picker');
+                if (!(trigger instanceof HTMLElement) || !(input instanceof HTMLInputElement) || !(root instanceof HTMLElement)) {
+                    return { available: false, reason: 'candidate-trigger-missing' };
+                }
+                {
+                    trigger.focus();
+                    trigger.click();
+                    await new Promise(resolve => setTimeout(resolve, 30));
+                    const card = root.querySelector('.vcp-harness-popup-select-card');
+                    const modelCell = [...(card?.querySelectorAll('.vcp-harness-agent-model-picker-cell') || [])]
+                        .find(node => node.textContent?.includes('Model'));
+                    const opened = trigger.getAttribute('aria-expanded') === 'true'
+                        && card?.getAttribute('role') === 'menu';
+                    if (!opened || !(modelCell instanceof HTMLElement)) {
+                        return { available: true, opened, rootPane: false };
+                    }
+                    modelCell.click();
+                    await new Promise(resolve => setTimeout(resolve, 30));
+                    const search = card.querySelector('.vcp-harness-popup-select-search');
+                    if (!(search instanceof HTMLInputElement)) return { available: true, opened, rootPane: true, modelPane: false };
+                    search.value = 'secondary';
+                    search.dispatchEvent(new Event('input', { bubbles: true }));
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                    const rows = [...card.querySelectorAll('.vcp-harness-popup-select-row')];
+                    const filtered = rows.filter(row => row.textContent?.includes('Probe Secondary'));
+                    const selectedBefore = input.value;
+                    filtered[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+                    await new Promise(resolve => setTimeout(resolve, 30));
+                    const selected = input.value === 'probe-secondary';
+                    const afterSelectClosed = trigger.getAttribute('aria-expanded') === 'false';
+                    trigger.click();
+                    await new Promise(resolve => setTimeout(resolve, 30));
+                    const reopened = trigger.getAttribute('aria-expanded') === 'true';
+                    card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                    const escaped = trigger.getAttribute('aria-expanded') === 'false';
+                    const focusRestored = document.activeElement === trigger;
+                    return {
+                        available: true, opened, rootPane: true, modelPane: true,
+                        filteredCount: filtered.length, selectedBefore, selected,
+                        afterSelectClosed, reopened, escaped, focusRestored,
+                    };
+                }
+            });
+            assert.deepEqual(interaction, {
+                available: true,
+                opened: true,
+                rootPane: true,
+                modelPane: true,
+                filteredCount: 1,
+                selectedBefore: interaction.selectedBefore,
+                selected: true,
+                afterSelectClosed: true,
+                reopened: true,
+                escaped: true,
+                focusRestored: true,
+            }, `${label}: Agent model picker interaction contract drifted: ${JSON.stringify(interaction)}`);
+            agentModelPickerInteractionEvidence = interaction;
+            // Popup row scopes dispose asynchronously; sample lifecycle only
+            // after the owner has had a chance to reach quiescence.
+            await sleep(100);
+        }
         let agentPromptInteractionEvidence = null;
         if (agentPromptInteraction) {
             agentPromptInteractionEvidence = await page.evaluate(() => {
@@ -757,12 +825,17 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
                     rangeInputs: pick('#agentSettingsForm .vcp-uiux-range input[type="range"]'),
                     selects: pick('#agentSettingsForm .vcp-harness-select'),
                     selectNodes: pick('#agentSettingsForm select.vcp-harness-select-native'),
+                    actionBar: pick('#agentSettingsForm .form-actions'),
                     actions: pick('#agentSettingsForm #openModelSelectBtn, #agentSettingsForm #refreshTtsModelsBtn, #agentSettingsForm #resetAvatarColorsBtn, #agentSettingsForm #deleteAgentBtn, #agentSettingsForm .form-actions button[type="submit"]'),
+                    modelPicker: pick('#agentSettingsForm .vcp-harness-agent-model-picker'),
+                    modelPickerCards: document.querySelectorAll('.vcp-harness-popup-select-card').length,
+                    modelPickerRows: document.querySelectorAll('.vcp-harness-popup-select-row').length,
                     promptButtons: pick('#agentSettingsForm .prompt-mode-button.vcp-harness-button'),
                     colorPairs: pick('#agentSettingsForm .vcp-uiux-color-pair'),
                 };
             });
             evidence.agentSelectInteraction = agentSelectInteractionEvidence;
+            evidence.agentModelPickerInteraction = agentModelPickerInteractionEvidence;
             evidence.agentPromptInteraction = agentPromptInteractionEvidence;
             await fs.mkdir(path.join(root, 'reports'), { recursive: true });
             await fs.writeFile(path.join(root, 'reports', 'vcp-agent-settings-production.json'), `${JSON.stringify(evidence, null, 2)}\n`);
@@ -771,7 +844,10 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
     } else {
         assert.equal(state.enhanced, 0, `${label}: Next settings adapters leaked into Classic: ${JSON.stringify(state)}`);
     }
-    await page.evaluate(() => window.uiManager.switchToTab('agents'));
+    // Keep the Agent Settings surface mounted for the model-picker focused
+    // stress probe so the baseline includes its one-time Light-DOM projection.
+    // The general lifecycle suite still closes the settings surface here.
+    if (!agentModelPickerInteraction) await page.evaluate(() => window.uiManager.switchToTab('agents'));
     assert.equal(page.isClosed(), false, `${label}: agent settings transition closed the main renderer`);
 }
 
@@ -1066,10 +1142,33 @@ async function assertCanonicalModeCompatibility(page, browser, label) {
 }
 
 const appData = await fs.mkdtemp(path.join(os.tmpdir(), 'vcpchat-lifecycle-stress-'));
+let modelServer = null;
+let modelServerPort = null;
+if (agentModelPickerInteraction) {
+    modelServer = http.createServer((request, response) => {
+        if (request.url !== '/v1/models') {
+            response.writeHead(404);
+            response.end();
+            return;
+        }
+        response.writeHead(200, { 'content-type': 'application/json' });
+        response.end(JSON.stringify({ data: [
+            { id: 'probe-model', name: 'Probe Model', owned_by: 'Probe' },
+            { id: 'probe-secondary', name: 'Probe Secondary', owned_by: 'Probe' },
+        ] }));
+    });
+    await new Promise((resolve, reject) => {
+        modelServer.once('error', reject);
+        modelServer.listen(0, '127.0.0.1', () => {
+            modelServerPort = modelServer.address().port;
+            resolve();
+        });
+    });
+}
 await fs.writeFile(path.join(appData, 'settings.json'), JSON.stringify({
     uiMode: 'next',
     enableDistributedServer: false,
-    vcpServerUrl: 'http://127.0.0.1:1',
+    vcpServerUrl: modelServerPort ? `http://127.0.0.1:${modelServerPort}` : 'http://127.0.0.1:1',
     vcpApiKey: 'lifecycle-stress-key',
 }), 'utf8');
 const agentDir = path.join(appData, 'Agents', 'StressAgent');
@@ -1233,5 +1332,6 @@ try {
     // it here would hang the test runner and retain the isolated process tree.
     try { browser?.disconnect(); } catch { /* debugger may already be gone */ }
     await terminateChildTree(child);
+    try { await new Promise(resolve => modelServer?.close?.(() => resolve())); } catch { /* probe server may already be closed */ }
     await fs.rm(appData, { recursive: true, force: true });
 }

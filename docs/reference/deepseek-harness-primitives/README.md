@@ -17,6 +17,7 @@ not add a runtime dependency and must not be imported by the Electron app.
 | popup select | `packages/client/ui-commands/src/client/PopupSelectView.module.css` | `popup-select.css` |
 | agent model picker | `packages/client/ui-model-selection/src/client/ModelSelect.tsx` | `model-picker.css`, `model-picker.dom.json` |
 | buttons | `packages/client/ui-primitives/src/Button.module.css` | `button.css` |
+| agent preset section | `packages/client/ui-agent-preset/src/client/AgentPresetSection.tsx` | `agent-preset-section.dom.json`, `agent-preset-section.geometry.json` |
 | disclosure | `packages/client/ui-primitives/src/DisclosureRow.module.css` | `disclosure.css` |
 
 ## Comparison rules

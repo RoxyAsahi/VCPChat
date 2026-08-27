@@ -25,6 +25,7 @@ const typedFieldStates = new Set();
 const typedForumFieldStates = new Set();
 const disclosureStates = new Set();
 const selectObserverStates = new Map();
+const agentModelPickerReleases = new Map();
 // Replaced inline SVGs inside the global form, keyed by container, so teardown
 // restores the original upstream paths during teardown.
 const iconReplacements = new Set();
@@ -526,6 +527,7 @@ function enhanceForm(form) {
     mountTypedAgentTtsSpeedRange(form);
     mountTypedAgentColorPairs(form);
     mountTypedAgentButtons(form);
+    mountTypedAgentModelPicker(form);
     mountTypedAgentPromptModeButtons(form);
     mountHarnessSelects(form);
     form.querySelectorAll('.agent-settings-section, .group-settings-section').forEach(section => {
@@ -596,6 +598,146 @@ function mountTypedAgentButtons(form) {
             console.warn(`[VCPUI SettingsBridge] Could not mount typed Agent ${key} Button:`, error);
         }
     });
+}
+
+// The Agent model picker is the first production consumer of the Harness
+// model-selection candidate.  The native #agentModel input remains the sole
+// business/persistence node; this bridge only supplies model discovery and
+// writes the same input/change events that the retired modal callback used.
+// Hot/favorite sections and the explicit refresh action remain in the legacy
+// modal for now and are intentionally recorded as a migration gap.
+function mountTypedAgentModelPicker(form) {
+    const api = window.VCPUIUX;
+    const scope = ensurePresentationScope();
+    const host = form?.querySelector?.('.model-input-container');
+    const input = form?.querySelector?.('#agentModel');
+    const trigger = form?.querySelector?.('#openModelSelectBtn');
+    const electronAPI = window.chatAPI;
+    if (!api?.mountAgentModelPicker || !scope || !host || !input || !trigger
+        || trigger.dataset.vcpTypedAgentModelPicker === 'true') return;
+
+    // Agent Settings can retain the previous section bank in the connected
+    // DOM while replacing the active form. Treat the picker as a single
+    // surface owner so a connected-but-hidden trigger cannot retain a child
+    // scope across form generations.
+    for (const [previousTrigger, release] of agentModelPickerReleases) {
+        if (previousTrigger === trigger) continue;
+        void release().catch(error => {
+            console.error('[VCPUI SettingsBridge] Failed to release replaced Agent model picker:', error);
+        });
+    }
+
+    const normalizeModels = payload => {
+        if (Array.isArray(payload)) return payload;
+        if (Array.isArray(payload?.data)) return payload.data;
+        if (Array.isArray(payload?.models)) return payload.models;
+        if (typeof payload?.id === 'string') return [payload];
+        return [];
+    };
+    const modelOptions = async signal => {
+        let models = await electronAPI?.getCachedModels?.();
+        if (signal.aborted) return [];
+        if (normalizeModels(models).length === 0 && electronAPI?.refreshModels) {
+            await electronAPI.refreshModels();
+            if (signal.aborted) return [];
+            models = await electronAPI.getCachedModels?.();
+        }
+        if (signal.aborted) return [];
+        let hotModelIds = [];
+        let favoriteModelIds = [];
+        try {
+            [hotModelIds, favoriteModelIds] = await Promise.all([
+                electronAPI?.getHotModels?.() ?? [],
+                electronAPI?.getFavoriteModels?.() ?? [],
+            ]);
+        } catch {
+            // Metadata is presentation-only; model selection remains usable.
+        }
+        if (signal.aborted) return [];
+        const hotSet = new Set(Array.isArray(hotModelIds) ? hotModelIds : []);
+        const favoriteSet = new Set(Array.isArray(favoriteModelIds) ? favoriteModelIds : []);
+        return normalizeModels(models).map(model => {
+            const id = typeof model === 'string' ? model : model?.id;
+            if (!id) return null;
+            const provider = typeof model === 'object' ? (model.provider || model.owned_by) : undefined;
+            const label = typeof model === 'object' ? (model.name || id) : id;
+            const metadata = [provider, hotSet.has(id) ? '热门' : undefined, favoriteSet.has(id) ? '收藏' : undefined]
+                .filter(Boolean).join(' · ');
+            return {
+                id: String(id),
+                label: String(label),
+                provider: metadata || undefined,
+                favorite: favoriteSet.has(id),
+                active: String(id) === String(input.value || ''),
+            };
+        }).filter(Boolean);
+    };
+
+    const originalTriggerInline = {};
+    ['position', 'right', 'top', 'transform', 'width', 'min-width', 'max-width', 'height', 'padding',
+        'border-radius', 'border', 'background', 'background-color', 'display', 'justify-content'].forEach(property => {
+        originalTriggerInline[property] = [trigger.style.getPropertyValue(property), trigger.style.getPropertyPriority(property)];
+    });
+    let picker = null;
+    const pickerScope = scope.child('agent-model-picker-production');
+    try {
+        picker = api.mountAgentModelPicker(host, {
+            trigger,
+            label: '选择模型',
+            selectedId: input.value || undefined,
+            options: modelOptions,
+            onSelect: option => {
+                if (input.disabled) return;
+                input.value = option.id;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            },
+        }, pickerScope);
+
+        // The model-input container is positioned; keep the popup and trigger
+        // in the same anchored strip while the native input keeps its width.
+        picker.root.style.setProperty('position', 'absolute', 'important');
+        picker.root.style.setProperty('right', '5px', 'important');
+        picker.root.style.setProperty('top', '50%', 'important');
+        picker.root.style.setProperty('transform', 'translateY(-50%)', 'important');
+        picker.root.style.setProperty('z-index', '2', 'important');
+        trigger.style.setProperty('position', 'static', 'important');
+        trigger.style.setProperty('right', 'auto', 'important');
+        trigger.style.setProperty('top', 'auto', 'important');
+        trigger.style.setProperty('transform', 'none', 'important');
+        trigger.style.setProperty('width', 'auto', 'important');
+        trigger.style.setProperty('min-width', '0', 'important');
+        trigger.style.setProperty('max-width', '220px', 'important');
+        trigger.style.setProperty('height', '28px', 'important');
+        trigger.style.setProperty('padding', '0 4px 0 8px', 'important');
+        trigger.style.setProperty('border-radius', '24px', 'important');
+        trigger.style.setProperty('border', '0', 'important');
+        trigger.style.setProperty('background', 'transparent', 'important');
+        trigger.style.setProperty('display', 'inline-flex', 'important');
+        trigger.style.setProperty('justify-content', 'center', 'important');
+        trigger.dataset.vcpTypedAgentModelPicker = 'true';
+
+        pickerScope.listen(input, 'input', () => picker?.setSelected(input.value || undefined));
+        pickerScope.listen(input, 'change', () => picker?.setSelected(input.value || undefined));
+        pickerScope.listen(document, 'vcp-settings-surface-updated', event => {
+            if (event.detail?.root === form || event.detail?.kind === 'agent') picker?.setSelected(input.value || undefined);
+        });
+        const release = scope.own(async () => {
+            delete trigger.dataset.vcpTypedAgentModelPicker;
+            for (const [property, [value, priority]] of Object.entries(originalTriggerInline)) {
+                if (value) trigger.style.setProperty(property, value, priority);
+                else trigger.style.removeProperty(property);
+            }
+            await picker?.dispose?.();
+            await pickerScope.dispose('agent-model-picker-production-released');
+            agentModelPickerReleases.delete(trigger);
+        }, 'agent-model-picker-production', 'ui-primitive');
+        agentModelPickerReleases.set(trigger, release);
+    } catch (error) {
+        void picker?.dispose?.();
+        void pickerScope.dispose('agent-model-picker-production-failed');
+        console.warn('[VCPUI SettingsBridge] Could not mount typed Agent model picker:', error);
+    }
 }
 
 function mountTypedAgentPromptModeButtons(form) {
@@ -1934,6 +2076,12 @@ function cleanupDisconnectedControllers() {
         controllerReleases.delete(controller);
         controllers.delete(controller);
     });
+    for (const [trigger, release] of agentModelPickerReleases) {
+        if (trigger.isConnected) continue;
+        void release().catch(error => {
+            console.error('[VCPUI SettingsBridge] Failed to release disconnected Agent model picker:', error);
+        });
+    }
 }
 
 function refresh() {
@@ -1980,6 +2128,8 @@ function teardown() {
     }
     controllers.clear();
     controllerReleases.clear();
+    for (const release of agentModelPickerReleases.values()) void release();
+    agentModelPickerReleases.clear();
     teardownSettingsAutosave();
     teardownHarnessDisclosures();
     teardownHarnessSelects();

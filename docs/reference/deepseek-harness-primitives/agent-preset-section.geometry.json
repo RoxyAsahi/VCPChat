@@ -1,0 +1,17 @@
+{
+  "primitive": "AgentPresetSection",
+  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-agent-preset/src/client/AgentPresetSection.module.css",
+  "selectors": {
+    ".section": { "maxWidth": "720px", "gap": "12px" },
+    ".group": { "gap": "10px" },
+    ".group + .group": { "marginTop": "20px" },
+    ".cards": { "gridTemplateColumns": "repeat(auto-fill, minmax(268px, 1fr))", "gap": "12px" },
+    ".card": { "borderRadius": "12px" },
+    ".cardMain": { "gap": "8px", "padding": "14px 16px 12px", "borderRadius": "12px 12px 0 0" },
+    ".cardFoot": { "gap": "2px", "padding": "6px 10px" },
+    ".iconButton": { "borderRadius": "7px", "padding": "6px" },
+    ".cardDesc": { "fontSize": "13px", "minHeight": "42px" }
+  },
+  "states": ["default", "active", "broken", "empty-custom-group", "copy-dialog-open", "tooltip-truncated"],
+  "vcpCandidateEvidence": { "status": "reference-only", "productionConsumer": false }
+}
