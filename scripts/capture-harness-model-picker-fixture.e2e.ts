@@ -73,8 +73,10 @@ describe('Harness production ModelSelect fixture', () => {
     await modelRow.click()
     const modelOption = menu.getByRole('menuitemradio', { name: 'Acme Think' })
     await modelOption.waitFor({ timeout: 15_000 })
+    await modelOption.focus()
     const modelPane = await menu.evaluate(element => ({
       dom: element.outerHTML,
+      groupCount: element.querySelectorAll('section[role="group"]').length,
       options: [...element.querySelectorAll('[role="menuitemradio"]')].map(node => ({
         text: node.textContent?.trim() || '',
         ariaChecked: node.getAttribute('aria-checked'),
@@ -173,6 +175,7 @@ describe('Harness production ModelSelect fixture', () => {
     await effortRow.click()
     const effortOption = reopenedMenu.getByRole('menuitemradio').first()
     await effortOption.waitFor({ timeout: 15_000 })
+    await effortOption.focus()
     const effortPane = await reopenedMenu.evaluate(element => ({
       dom: element.outerHTML,
       options: [...element.querySelectorAll('[role="menuitemradio"]')].map(node => ({
@@ -193,7 +196,8 @@ describe('Harness production ModelSelect fixture', () => {
         .some(node => !node.hasAttribute('hidden')),
     })) : { rootVisible: false, effortOptionsVisible: false }
     await page.keyboard.press('Escape')
-    const closed = await page.getByRole('menu').count() === 0
+    const closed = await trigger.getAttribute('aria-expanded') === 'false'
+      && await page.getByRole('menu').count() === 0
     const focusRestore = await trigger.evaluate(element => document.activeElement === element)
 
     const missingEvidence = [

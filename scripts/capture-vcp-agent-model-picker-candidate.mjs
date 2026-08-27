@@ -95,6 +95,8 @@ try {
         await new Promise(resolve => setTimeout(resolve, 0));
         const modelPane = {
             searchVisible: host.querySelector('.vcp-harness-popup-select-search')?.hidden === false,
+            groupCount: host.querySelectorAll('section[role="group"]').length,
+            optionRole: host.querySelector('[role="option"]') ? 'option' : null,
             optionCount: host.querySelectorAll('[role="option"]').length,
             selectedOption: host.querySelector('[role="option"][aria-selected="true"]')?.textContent?.trim() || null,
             disabledOptions: [...host.querySelectorAll('[role="option"][aria-disabled="true"]')].map(node => node.textContent?.trim() || null),
