@@ -144,3 +144,12 @@ test('Harness fixture coverage reports contracts without replayable cases', () =
     assert.ok(report.uncoveredContracts.includes('settings-root'));
     assert.ok(report.note.includes('does not imply a replayable visual fixture'));
 });
+
+test('MessageImage source audit preserves frozen attachment lifecycle evidence', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-message-image-source.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-message-image-source.json'), 'utf8'));
+    assert.equal(report.status, 'source-contract-pass');
+    assert.equal(report.pass, true);
+    assert.equal(report.checks.length, 10);
+    assert.ok(report.note.includes('does not create a VCP chat attachment consumer'));
+});
