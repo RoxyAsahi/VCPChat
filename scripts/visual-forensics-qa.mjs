@@ -132,6 +132,33 @@ try {
       return [...(matched.matchedCSSRules || [])].slice(-40).map(entry => ({ selector: entry.rule?.selectorList?.text || '', origin: entry.rule?.origin || '', styleSheetId: entry.rule?.styleSheetId || '', properties: (entry.rule?.style?.cssProperties || []).filter(property => ['color', 'background', 'background-color', 'padding', 'border-radius', 'z-index'].includes(property.name)).map(property => ({ name: property.name, value: property.value })) }));
     } catch { return []; }
   };
+  const overlayCascade = {};
+  await page.evaluate(() => document.querySelector('.vcp-harness-primitive-lab button')?.focus()).catch(() => {});
+  await page.evaluate(async () => {
+    const lab = document.querySelector('.vcp-harness-primitive-lab');
+    const find = text => [...(lab?.querySelectorAll('button') || [])].find(button => button.textContent.trim() === text);
+    find('View options')?.click();
+    await new Promise(resolve => setTimeout(resolve, 30));
+  }).catch(() => {});
+  overlayCascade.menu = await captureMatchedRules('.vcp-harness-menu-list[role="menu"]');
+  await page.evaluate(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))).catch(() => {});
+  await page.evaluate(async () => {
+    const lab = document.querySelector('.vcp-harness-primitive-lab');
+    [...(lab?.querySelectorAll('button') || [])].find(button => button.textContent.trim() === 'Open modal')?.click();
+    await new Promise(resolve => setTimeout(resolve, 30));
+  }).catch(() => {});
+  overlayCascade.modal = await captureMatchedRules('.vcp-harness-modal-root [role="dialog"]');
+  await page.evaluate(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))).catch(() => {});
+  await page.evaluate(async () => {
+    const lab = document.querySelector('.vcp-harness-primitive-lab');
+    const anchor = [...(lab?.querySelectorAll('button') || [])].find(button => button.textContent.trim() === 'Hover for details');
+    anchor?.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 160));
+  }).catch(() => {});
+  overlayCascade.tooltip = await captureMatchedRules('[role="tooltip"], .vcp-harness-tooltip-bubble');
+  await page.evaluate(() => document.querySelector('.vcp-harness-primitive-lab button')?.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }))).catch(() => {});
+  evidence.overlays.cdpCascade = overlayCascade;
+  if (!overlayCascade.menu.length || !overlayCascade.modal.length || !overlayCascade.tooltip.length) evidence.gate.failures.push(`overlay cascade provenance incomplete: ${JSON.stringify(Object.fromEntries(Object.entries(overlayCascade).map(([key, value]) => [key, value.length])))}`);
   for (const [width, height] of viewports) {
     await page.setViewport({ width, height, deviceScaleFactor: 1 });
     await page.evaluate(() => {
@@ -158,6 +185,33 @@ try {
     }).catch(error => ({ error: error.message }));
     await page.evaluate(() => window.uiHelperFunctions?.closeModal?.('globalSettingsModal')).catch(() => {});
     await sleep(80);
+    const stateTransitions = await page.evaluate(async () => {
+      const find = (text, root = document) => [...root.querySelectorAll('button')].find(button => button.textContent.trim() === text);
+      const loadingTrigger = find('模拟加载 1.2 秒');
+      loadingTrigger?.click();
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const loadingLayer = document.querySelector('.vcp-ui-loading-layer');
+      const loadingStyle = loadingLayer ? getComputedStyle(loadingLayer) : null;
+      const loading = { visible: Boolean(loadingLayer && !loadingLayer.hasAttribute('hidden')), label: loadingLayer?.querySelector('.vcp-ui-loading-label')?.textContent || '', className: loadingLayer?.className || '', display: loadingStyle?.display || '', position: loadingStyle?.position || '', zIndex: loadingStyle?.zIndex || '', backgroundColor: loadingStyle?.backgroundColor || '' };
+      await new Promise(resolve => setTimeout(resolve, 1_250));
+      loading.cleared = !loadingLayer || loadingLayer.hasAttribute('hidden');
+      const boundary = document.querySelector('.vcp-ui-showcase-section[data-component="asyncboundary"]');
+      const errorButton = find('error', boundary || document);
+      errorButton?.click();
+      await new Promise(resolve => setTimeout(resolve, 40));
+      const alert = boundary?.querySelector('[role="alert"], .vcp-ui-alert');
+      const alertStyle = alert ? getComputedStyle(alert) : null;
+      const errorState = { status: boundary?.querySelector('.vcp-ui-async-boundary')?.dataset.status || '', alert: alert?.textContent?.trim().slice(0, 120) || '', className: alert?.className || '', color: alertStyle?.color || '', backgroundColor: alertStyle?.backgroundColor || '', borderRadius: alertStyle?.borderRadius || '' };
+      const loadingButton = find('loading', boundary || document);
+      loadingButton?.click();
+      await new Promise(resolve => setTimeout(resolve, 40));
+      const skeleton = boundary?.querySelector('.vcp-ui-skeleton, .vcp-ui-skeleton-line');
+      const skeletonStyle = skeleton ? getComputedStyle(skeleton) : null;
+      const asyncLoading = { status: boundary?.querySelector('.vcp-ui-async-boundary')?.dataset.status || '', skeleton: Boolean(skeleton), backgroundColor: skeletonStyle?.backgroundColor || '', animationName: skeletonStyle?.animationName || '' };
+      find('idle', boundary || document)?.click();
+      return { loading, errorState, asyncLoading, reset: boundary?.querySelector('.vcp-ui-async-boundary')?.dataset.status || '' };
+    }).catch(error => ({ error: error.message }));
+    await page.screenshot({ path: path.join(output, `${name}-states.png`), fullPage: true });
     const initial = await page.evaluate(() => {
       const visible = el => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); const owner = el.closest('.vcp-ui-showcase-root, .vcp-ui-page-shell, #main-content, #chat-container')?.className || 'document'; return { tag: el.tagName.toLowerCase(), id: el.id, className: el.className, owner, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, display: s.display, position: s.position, zIndex: s.zIndex, color: s.color, backgroundColor: s.backgroundColor, borderRadius: s.borderRadius }; };
       const controls = [...document.querySelectorAll('button, input, select, textarea, [role="dialog"], [role="menu"], [role="tooltip"]')].filter(el => el.getClientRects().length).slice(0, 400);
@@ -231,7 +285,7 @@ try {
     await sleep(150);
     const resized = await page.evaluate(() => ({ width: innerWidth, height: innerHeight, overflowX: document.documentElement.scrollWidth > innerWidth + 1, overflowY: document.documentElement.scrollHeight > innerHeight + 1 }));
     await page.screenshot({ path: path.join(output, `${name}-narrow.png`), fullPage: false });
-    evidence.observations.push({ viewport: { width, height }, initial, settingsViewport, scrolled, resized });
+    evidence.observations.push({ viewport: { width, height }, initial, settingsViewport, stateTransitions, scrolled, resized });
     if (initial.overlap) evidence.gate.failures.push(`${name}: visible control overlap`);
     if (resized.overflowX) evidence.gate.failures.push(`${name}: horizontal overflow after resize`);
   }
