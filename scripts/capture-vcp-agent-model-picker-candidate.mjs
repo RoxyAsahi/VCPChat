@@ -104,6 +104,12 @@ try {
             try { return [...sheet.cssRules]; } catch { return []; }
         }).find(rule => rule.selectorText?.includes('.vcp-harness-popup-select-card'));
         const menuRect = menu?.getBoundingClientRect();
+        const search = host.querySelector('.vcp-harness-popup-select-search');
+        search?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const keyboardNavigation = {
+            activeOption: host.querySelector('[role="option"][aria-selected="true"]')?.textContent?.trim() || null,
+        };
         const card = host.querySelector('.vcp-harness-popup-select-card');
         card?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         await new Promise(resolve => setTimeout(resolve, 0));
@@ -131,7 +137,7 @@ try {
             source: 'VCP generated AgentModelPicker Candidate Electron capture',
             provenance: 'deepseek-harness/packages/client/ui-model-selection/src/client/ModelSelect.tsx',
             viewport: { width: innerWidth, height: innerHeight, deviceScaleFactor: devicePixelRatio },
-            rootPane, modelPane, modelEscape, effortPane, effortEscape, focusRestored,
+            rootPane, modelPane, keyboardNavigation, modelEscape, effortPane, effortEscape, focusRestored,
             dom: host.querySelector('.vcp-harness-agent-model-picker')?.outerHTML || '',
             trigger: {
                 tag: picker.trigger.tagName.toLowerCase(),
