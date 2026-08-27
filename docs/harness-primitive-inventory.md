@@ -22,6 +22,7 @@
 | --- | --- | --- | --- |
 | Button | `ui-primitives/src/Button.tsx`；Settings、Workspace、Question/Approval、Conversation shell | candidate-lab-active | B1 |
 | Input | `ui-primitives/src/Input.tsx`；当前仅 atom test/export | candidate-lab-active，source-only truth | B1 |
+| Pill | `ui-primitives/src/Pill.tsx`；view switcher tabs、filters、badges | candidate-interaction-active；静态/interactive/active Light-DOM 与 teardown 已建立，Harness pixel fixture pending | B1 |
 | Menu | `ui-primitives/src/Menu.tsx`；Agent Preset、Language、Permission、Input Trigger、Workspace | candidate-interaction-active；`label: ReactNode` 合同已对齐并补 focused test；同语义 label/separator/danger/submenu pixel diff pending | B1 |
 | Modal | `ui-primitives/src/Modal.tsx`；Settings、Model editor、Directory/Workspace | candidate-interaction-active；同语义 Harness pixel diff 与 VCP production adoption pending | B1 |
 | Tooltip / HoverCard | matching `ui-primitives/src/*.tsx`；Message actions、Goal、Sidebar、Workspace | candidate-interaction-active；同语义 Harness pixel diff 与 VCP production adoption pending | B1 |
