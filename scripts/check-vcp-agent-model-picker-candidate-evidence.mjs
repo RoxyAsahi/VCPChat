@@ -5,6 +5,7 @@ import path from 'node:path';
 const root = process.cwd();
 const reportPath = path.join(root, 'reports', 'vcp-agent-model-picker-candidate.json');
 const screenshotPath = path.join(root, 'reports', 'vcp-agent-model-picker-candidate.png');
+const referenceCss = fs.readFileSync(path.join(root, 'docs/reference/deepseek-harness-primitives/model-picker.css'), 'utf8');
 assert.ok(fs.existsSync(reportPath), `Agent Model Picker Candidate report is missing: ${reportPath}`);
 assert.ok(fs.existsSync(screenshotPath), `Agent Model Picker Candidate screenshot is missing: ${screenshotPath}`);
 assert.ok(fs.statSync(screenshotPath).size > 1_000, 'Agent Model Picker Candidate screenshot is unexpectedly small');
@@ -31,6 +32,8 @@ assert.ok(report.menu.rect.x >= 0 && report.menu.rect.x + report.menu.rect.width
 assert.ok(report.menu.rect.y >= 0 && report.menu.rect.y + report.menu.rect.height <= report.viewport.height,
     'visible model picker menu must remain vertically inside the fixed viewport');
 assert.ok(report.menu.rect.width >= 240, 'visible model picker menu must preserve the 240px Harness width contract');
+assert.match(referenceCss, /\.menu\s*\{[^}]*right:\s*0[^}]*bottom:\s*calc\(100% \+ 8px\)/s,
+    'Harness reference must retain right/bottom menu placement');
 assert.equal(report.modelPane.searchVisible, true);
 assert.equal(report.modelPane.optionCount, 3);
 assert.match(report.keyboardNavigation.activeOption || '', /Claude 3\.7 Sonnet/,
