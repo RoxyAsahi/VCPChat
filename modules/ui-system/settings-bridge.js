@@ -8,6 +8,10 @@
 // layout — native nav cells in the left rail, a header/options content column,
 // the original form as the business source, and autosave status in the header.
 
+import { createSelectProjection } from './settings/select-projection.js';
+import { mountSettingsAutosave, flushLegacyAutosave, teardownLegacyAutosave } from './settings/autosave.js';
+import { mountCanonicalSettingsRows, removeLegacySubsectionHeadings } from './settings/canonical-rows.js';
+
 const controllers = new Set();
 const controllerReleases = new Map();
 // Per-modal shell state is keyed by modal root so teardown can restore the
@@ -19,12 +23,9 @@ const shellRoots = new Set();
 // (window.VCPUIUX.mountSelect): the native select stays the sole business node
 // while the primitive owns trigger/menu presentation.  Keyed by select so a
 // dynamic option-list change can dispose and remount exactly one projection.
-const primitiveSelectStates = new Map();
-const autosaveStates = new Set();
 const typedFieldStates = new Set();
 const typedForumFieldStates = new Set();
 const disclosureStates = new Set();
-const selectObserverStates = new Map();
 const agentModelPickerReleases = new Map();
 // Replaced inline SVGs inside the global form, keyed by container, so teardown
 // restores the original upstream paths during teardown.
@@ -414,72 +415,9 @@ function ensurePresentationScope() {
     return presentationScope;
 }
 
-// The generated Select primitive owns open/close/selection and outside/Escape
-// dismissal, but does not implement roving keyboard focus inside the open
-// menu (thread A contract gap, reported upstream).  The bridge adds the
-// keyboard projection on its own listeners so the production surface keeps
-// the a11y parity of the retired local projection without patching the
-// primitive.  Cleanups are per-projection and run on remount/teardown.
-function mountSelectKeyboardGlue(select, cleanups) {
-    const trigger = select.parentElement?.querySelector(':scope > .vcp-harness-select-trigger');
-    if (!trigger) return;
-    const openMenuItems = () => {
-        const menuId = trigger.getAttribute('aria-controls');
-        const menu = menuId ? document.getElementById(menuId) : null;
-        if (!menu || menu.hidden) return null;
-        return [...menu.querySelectorAll('.vcp-harness-menu-item:not(:disabled)')];
-    };
-    const focusSelectedItem = () => {
-        const items = openMenuItems();
-        if (!items?.length) return;
-        const selected = items.find(item => item.dataset.selected === 'true') || items[0];
-        selected.focus();
-    };
-    const moveFocus = (items, current, next) => {
-        const count = items.length;
-        if (!count) return;
-        items[((next % count) + count) % count].focus();
-    };
-    const onTriggerKey = event => {
-        if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
-        event.preventDefault();
-        if (trigger.getAttribute('aria-expanded') !== 'true') {
-            trigger.click();
-            requestAnimationFrame(focusSelectedItem);
-            return;
-        }
-        const items = openMenuItems();
-        if (!items?.length) return;
-        const current = Math.max(0, items.findIndex(item => item.dataset.selected === 'true'));
-        moveFocus(items, current, event.key === 'ArrowDown' ? current + 1 : current - 1);
-    };
-    const onDocumentKey = event => {
-        if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
-        const target = event.target;
-        if (!(target instanceof Element) || !target.classList.contains('vcp-harness-menu-item')) return;
-        const items = openMenuItems();
-        if (!items?.length) return;
-        const current = items.indexOf(target);
-        let next = current;
-        if (event.key === 'ArrowDown') next = current + 1;
-        else if (event.key === 'ArrowUp') next = current - 1;
-        else if (event.key === 'Home') next = 0;
-        else next = items.length - 1;
-        event.preventDefault();
-        moveFocus(items, current, next);
-    };
-    // Programmatic business writes elsewhere publish global-settings-updated;
-    // the primitive only re-syncs on change/vcp-uiux-sync, so mirror the event.
-    const onGlobalUpdate = () => select.dispatchEvent(new Event('vcp-uiux-sync'));
-    trigger.addEventListener('keydown', onTriggerKey);
-    document.addEventListener('keydown', onDocumentKey, true);
-    window.addEventListener('global-settings-updated', onGlobalUpdate);
-    cleanups.push(() => {
-        trigger.removeEventListener('keydown', onTriggerKey);
-        document.removeEventListener('keydown', onDocumentKey, true);
-        window.removeEventListener('global-settings-updated', onGlobalUpdate);
-    });
-}
+// The single Select projection over the generated primitive; the bridge
+// injects the presentation scope so the module never reaches back up here.
+const selectProjection = createSelectProjection({ ensurePresentationScope });
 
 function shouldEnhanceSidebarSettings() {
     // Global settings has one presentation contract.  The data attribute is
@@ -529,7 +467,7 @@ function enhanceForm(form) {
     mountTypedAgentButtons(form);
     mountTypedAgentModelPicker(form);
     mountTypedAgentPromptModeButtons(form);
-    mountHarnessSelects(form);
+    selectProjection.mount(form);
     form.querySelectorAll('.agent-settings-section, .group-settings-section').forEach(section => {
         enhance('SettingsSection', section);
     });
@@ -929,7 +867,7 @@ function enhanceGlobalSettings(root, form) {
     // get a Harness-style popover, but the native select is retained as the
     // one authoritative business node.
     mountTypedAppearanceSelects(root, form);
-    mountHarnessSelects(form);
+    selectProjection.mount(form);
     mountTypedHomeTaglineInput(root, form);
     mountTypedRadiusChoice(root, form);
     mountTypedAppearanceRanges(root, form);
@@ -1238,149 +1176,6 @@ function mountHarnessDisclosures(form) {
     });
 }
 
-function removeLegacySubsectionHeadings(form) {
-    form.querySelectorAll('.vcp-harness-editor-section-heading').forEach(heading => {
-        const section = heading.closest('.settings-section');
-        // The section h3 is the single canonical heading.  Subsection cards
-        // must not introduce a second title/description stack.
-        if (section?.querySelector(':scope > .settings-section-title')) heading.remove();
-    });
-}
-
-/**
- * Establish one presentation owner for every persisted settings row. The
- * source row is replaced by a same-tag canonical row, so no legacy wrapper
- * remains in the live presentation tree. Business controls and their ids,
- * names, labels and child listeners are moved intact into the replacement.
- * This is intentionally idempotent because fields can be injected asynchronously.
- */
-function mountCanonicalSettingsRows(form) {
-    if (!form) return;
-    const candidates = form.querySelectorAll(
-        ':scope [data-vcp-settings-row], :scope [data-vcp-settings-control-row], :scope .vcp-settings-row, :scope .vcp-settings-control-row, :scope .settings-form-group, :scope .form-group-inline, :scope > .form-group, :scope .form-group'
-    );
-    candidates.forEach(row => {
-        if (!(row instanceof HTMLElement) || row.closest('.vcp-harness-general-item')) return;
-        if (!row.querySelector('input, select, textarea, button, [role="switch"]')) return;
-        const keyNode = row.querySelector('[name], [id]');
-        const key = keyNode?.getAttribute('name') || keyNode?.id || '';
-        const item = document.createElement(row.tagName.toLowerCase());
-        const preservedClasses = [...row.classList].filter(className => ![
-            'settings-form-group', 'form-group-inline', 'vcp-settings-row', 'vcp-settings-control-row',
-            'form-group'
-        ].includes(className));
-        item.className = ['vcp-harness-general-item', 'vcp-harness-general-row', ...preservedClasses].join(' ');
-        for (const attribute of row.attributes) {
-            if (attribute.name === 'class' || attribute.name === 'style') continue;
-            item.setAttribute(attribute.name, attribute.value);
-        }
-        item.dataset.settingPrimitive = 'general-item';
-        const appearanceOwner = row.closest('.appearance-settings-section, .appearance-sidebar-geometry-section, .appearance-home-tagline-setting');
-        if (appearanceOwner) {
-            item.dataset.settingPrimitive = 'appearance-row';
-            item.classList.add('vcp-harness-appearance-row');
-        }
-        if (key) item.dataset.settingKey = key;
-        item.dataset.canonicalRow = 'true';
-        row.replaceWith(item);
-        item.append(...[...row.childNodes]);
-        row.remove();
-        composeCanonicalRowSlots(item);
-    });
-    form.dataset.vcpCanonicalRowsMounted = 'true';
-}
-
-function composeCanonicalRowSlots(row) {
-    if (!row || row.matches('label, fieldset') || row.querySelector(':scope > .vcp-harness-row-copy')) return;
-    const children = [...row.children];
-    const controls = children.filter(node => node.matches('input, select, textarea, button, .switch, .model-input-container, .vcp-harness-select, .vcp-uiux-input-wrap'));
-    const titles = children.filter(node => node.matches('label, span, strong, h4, h5'));
-    const helpers = children.filter(node => node.matches('small, p'));
-    if (!controls.length || !titles.length) return;
-    const copy = document.createElement('div');
-    copy.className = 'vcp-harness-row-copy';
-    copy.dataset.settingPrimitive = 'row-copy';
-    [...titles, ...helpers].forEach(node => copy.append(node));
-    const remaining = children.filter(node => !copy.contains(node) && !controls.includes(node));
-    row.replaceChildren(copy, ...remaining, ...controls);
-}
-
-function mountSettingsAutosave(root, form) {
-    if (form.dataset.vcpAutosaveMounted === 'true') return;
-    const statusHost = root.querySelector('.vcp-harness-settings-actions');
-    if (!statusHost) return;
-    const state = { form, timer: null, saving: false, pending: false, cleanups: [] };
-    const status = document.createElement('button');
-    status.type = 'button';
-    status.className = 'vcp-settings-autosave-status';
-    status.setAttribute('role', 'status');
-    status.setAttribute('aria-live', 'polite');
-    status.textContent = '自动保存';
-    statusHost.append(status);
-    const setStatus = (value, mode = '') => {
-        status.textContent = value;
-        status.dataset.state = mode;
-    };
-    const submit = () => {
-        state.timer = null;
-        if (!state.pending || state.saving) return;
-        state.pending = false;
-        state.saving = true;
-        setStatus('保存中…', 'saving');
-        form.requestSubmit();
-    };
-    const schedule = () => {
-        if (state.saving) { state.pending = true; return; }
-        state.pending = true;
-        form.dataset.vcpSettingsDirty = 'true';
-        setStatus('未保存', 'dirty');
-        if (state.timer) clearTimeout(state.timer);
-        state.timer = setTimeout(submit, 400);
-    };
-    const onInput = event => {
-        if (!event.target?.matches?.('input, select, textarea')) return;
-        // Forum fields carry the same suppression marker as typed settings
-        // fields; otherwise typing there also drives this whole-form
-        // autosave chain and both owners fight over one status bar.
-        if (event.target.dataset.vcpTypedFieldOwner === 'true') return;
-        if (event.target.dataset.vcpTypedForumFieldOwner === 'true') return;
-        schedule();
-    };
-    const onResult = event => {
-        if (event.detail?.owner === 'typed-settings-field-owner') return;
-        state.saving = false;
-        if (event.detail?.success) {
-            delete state.failureOwner;
-            delete form.dataset.vcpSettingsDirty;
-            setStatus('已保存', 'saved');
-            if (state.pending) schedule();
-        } else {
-            // Remember which owner failed so retry clicks can be routed.
-            state.failureOwner = event.detail?.owner || 'legacy-autosave';
-            setStatus('保存失败 · 重试', 'error');
-        }
-    };
-    const onStatusClick = () => {
-        if (state.failureOwner === 'typed-forum-field-owner') return;
-        if (status.dataset.state === 'error') schedule();
-    };
-    form.addEventListener('input', onInput);
-    form.addEventListener('change', onInput);
-    form.addEventListener('vcp-settings-save-result', onResult);
-    status.addEventListener('click', onStatusClick);
-    state.cleanups.push(() => {
-        if (state.timer) clearTimeout(state.timer);
-        form.removeEventListener('input', onInput);
-        form.removeEventListener('change', onInput);
-        form.removeEventListener('vcp-settings-save-result', onResult);
-        status.removeEventListener('click', onStatusClick);
-        status.remove();
-        delete form.dataset.vcpAutosaveMounted;
-    });
-    form.dataset.vcpAutosaveMounted = 'true';
-    autosaveStates.add(state);
-}
-
 // R2-02C: these controls have a single draft/save owner. They continue to
 // use the canonical business nodes and persisted keys, but no longer enter
 // the legacy form-submit/autosave chain.
@@ -1651,16 +1446,7 @@ function mountTypedFieldOwner(root, form) {
 }
 
 function flushSettingsAutosave() {
-    autosaveStates.forEach(state => {
-        if (!state.pending) return;
-        if (state.timer) clearTimeout(state.timer);
-        state.timer = null;
-        if (!state.saving) {
-            state.saving = true;
-            state.pending = false;
-            state.form.requestSubmit();
-        }
-    });
+    flushLegacyAutosave();
     typedFieldStates.forEach(state => {
         if (state.disposed || !state.pendingPatch || state.inFlight) return;
         if (state.timer) clearTimeout(state.timer);
@@ -1688,10 +1474,7 @@ function flushTypedForumFields() {
 }
 
 function teardownSettingsAutosave() {
-    [...autosaveStates].forEach(state => {
-        state.cleanups.forEach(cleanup => cleanup());
-        autosaveStates.delete(state);
-    });
+    teardownLegacyAutosave();
     [...typedFieldStates].forEach(state => {
         state.cleanups.forEach(cleanup => cleanup());
         typedFieldStates.delete(state);
@@ -1705,112 +1488,6 @@ function teardownSettingsAutosave() {
 
 function teardownHarnessDisclosures() {
     [...disclosureStates].forEach(state => state.cleanup());
-}
-
-function mountHarnessSelects(form) {
-    const previousObserver = selectObserverStates.get(form);
-    // A repeated refresh disconnects the live observer before remounting.
-    // Drop the registry entry too so the arming block below always builds a
-    // replacement; otherwise the stale entry makes the surface believe an
-    // observer is still listening while none is.
-    if (previousObserver) {
-        previousObserver.disconnect();
-        selectObserverStates.delete(form);
-    }
-    const api = window.VCPUIUX;
-    const scope = ensurePresentationScope();
-    form.querySelectorAll('select').forEach(select => {
-        // Typed primitives mount first and mark their native business node.
-        if (select.dataset.vcpTypedPrimitiveMounted === 'true') return;
-        if (select.multiple || select.disabled) return;
-        if (select.closest('.vcp-harness-select')) return;
-        if (select.options.length <= 1) {
-            // A select with no real choices yet (e.g. #assistantAgent before
-            // the agent list populates) stays a bare native control; tag it
-            // so the surface can still give it the standard control look.
-            select.classList.add('vcp-settings-bare-select');
-            return;
-        }
-        const fieldLabel = select.id ? [...document.querySelectorAll('label[for]')].find(label => label.htmlFor === select.id) : null;
-        const labelText = fieldLabel?.textContent?.replace(/\s+/g, ' ').trim() || undefined;
-        const release = api?.mountSelect && scope
-            ? api.mountSelect(select, { label: labelText, portal: true }, scope)
-            : null;
-        if (!release) return; // No primitive runtime: leave the native select in place.
-        select.classList.remove('vcp-settings-bare-select');
-        select.dataset.vcpTypedPrimitiveMounted = 'true';
-        scope.own(() => { delete select.dataset.vcpTypedPrimitiveMounted; }, 'select-primitive-marker', 'ui-primitive');
-        const cleanups = [];
-        mountSelectKeyboardGlue(select, cleanups);
-        const stateRelease = () => {
-            cleanups.splice(0).forEach(cleanup => cleanup());
-            release();
-            delete select.dataset.vcpTypedPrimitiveMounted;
-            primitiveSelectStates.delete(select);
-        };
-        scope.own(stateRelease, 'select-primitive', 'ui-primitive');
-        primitiveSelectStates.set(select, { release: stateRelease });
-    });
-    if (window.MutationObserver && !selectObserverStates.has(form)) {
-        const observer = new window.MutationObserver(mutations => {
-            const relevant = mutations.some(record => {
-                if (record.type === 'attributes') return record.target.matches?.('select, option');
-                if (record.type !== 'childList') return false;
-                if (record.target.matches?.('select')) return true;
-                return [...record.addedNodes, ...record.removedNodes].some(node =>
-                    node.nodeType === window.Node.ELEMENT_NODE &&
-                    (node.matches?.('select, option') || node.querySelector?.('select, option'))
-                );
-            });
-            if (!relevant) return;
-            if (form.dataset.vcpSelectRebuilding === 'true') return;
-            clearTimeout(form.__vcpSelectRebuildTimer);
-            form.__vcpSelectRebuildTimer = setTimeout(() => {
-                // The rebuild's own DOM churn (dispose restores the business
-                // node, the primitive re-inserts its wrap) is delivered back to
-                // this observer as a microtask; keep the guard raised until
-                // after that delivery so the projection cannot rebuild itself
-                // in a loop.
-                form.dataset.vcpSelectRebuilding = 'true';
-                // The generated primitive builds its menu once at mount and has
-                // no rebuild API (thread A contract): option-list changes must
-                // dispose and remount the projection.  Attribute-only changes
-                // (programmatic value/selected writes) re-sync the live
-                // projection through the primitive's vcp-uiux-sync hook.
-                if (mutations.some(record => record.type === 'childList')) {
-                    teardownHarnessSelects();
-                    // LifecycleScope releases settle their dispose in a
-                    // microtask: the old projection must have fully restored
-                    // the business DOM before the remount runs, otherwise the
-                    // deferred disposer strips the freshly inserted wraps.
-                    setTimeout(() => mountHarnessSelects(form), 0);
-                } else {
-                    form.querySelectorAll('select[data-vcp-typed-primitive-mounted="true"]').forEach(select => {
-                        select.dispatchEvent(new Event('vcp-uiux-sync'));
-                    });
-                }
-                setTimeout(() => { delete form.dataset.vcpSelectRebuilding; }, 0);
-            }, 0);
-        });
-        observer.observe(form, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'value', 'selected'] });
-        selectObserverStates.set(form, observer);
-    }
-}
-
-function teardownHarnessSelects() {
-    selectObserverStates.forEach((observer, form) => {
-        observer.disconnect();
-        clearTimeout(form.__vcpSelectRebuildTimer);
-        delete form.__vcpSelectRebuildTimer;
-    });
-    selectObserverStates.clear();
-    [...primitiveSelectStates.keys()].forEach(select => {
-        // stateRelease retracts the keyboard glue, runs the primitive disposer
-        // (which restores the original business DOM) and clears the marker.
-        // The LifecycleScope release is idempotent and unregisters itself, so
-        // a later presentation-scope disposal will not double-dispose.
-        primitiveSelectStates.get(select)?.release?.();
-    });
 }
 
 // Replaces the handful of hand-inlined Lucide paths inside the global form
@@ -2132,7 +1809,7 @@ function teardown() {
     agentModelPickerReleases.clear();
     teardownSettingsAutosave();
     teardownHarnessDisclosures();
-    teardownHarnessSelects();
+    selectProjection.teardown();
     [...shellRoots].forEach(root => {
         const state = shellState.get(root);
         if (!state) return;

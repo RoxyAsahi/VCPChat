@@ -209,14 +209,15 @@ const runtime = fs.readFileSync(runtimeFile, 'utf8');
 const settingsBridgeSource = fs.readFileSync(path.join(moduleDir, 'settings-bridge.js'), 'utf8');
 // Ambient observers must stay an explicit, finite contract. The three
 // registered sites watch async agent-list population into #assistantAgent,
-// one dependent-control sync, and form-wide select/option reclassification —
-// each to be replaced by explicit producer events during the settings-bridge
-// module split. A fourth observer failing here means a new ambient one
+// one dependent-control sync, and the settings/* select/option
+// reclassification projection (select-projection.js, home of the split-out
+// select mount). A fourth observer failing here means a new ambient one
 // sneaked in: register it (with reason) or remove it.
 const REGISTERED_SETTINGS_BRIDGE_OBSERVERS = 3;
-const observerCount = (settingsBridgeSource.match(/new\s+(?:window\.)?MutationObserver/g) || []).length;
+const settingsBridgeSources = [settingsBridgeSource, ...filesIn(path.join(moduleDir, 'settings'), '.js').map(file => fs.readFileSync(file, 'utf8'))];
+const observerCount = settingsBridgeSources.reduce((total, source) => total + (source.match(/new\s+(?:window\.)?MutationObserver/g) || []).length, 0);
 if (observerCount > REGISTERED_SETTINGS_BRIDGE_OBSERVERS) {
-    report(path.join(moduleDir, 'settings-bridge.js'), `unregistered MutationObserver: ${observerCount} present, ${REGISTERED_SETTINGS_BRIDGE_OBSERVERS} registered`);
+    report(path.join(moduleDir, 'settings-bridge.js'), `unregistered MutationObserver across settings-bridge.js + settings/: ${observerCount} present, ${REGISTERED_SETTINGS_BRIDGE_OBSERVERS} registered`);
 }
 const registrations = [...runtime.matchAll(/\['([A-Za-z]+)',\s*[a-zA-Z]/g)].map(match => match[1]);
 const duplicateComponents = registrations.filter((name, index) => registrations.indexOf(name) !== index);
