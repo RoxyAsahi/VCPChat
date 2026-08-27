@@ -19,7 +19,7 @@ for (const dir of targets) {
     assert.equal(manifest.observations?.length, requiredViewports.length);
     for (const [width, height] of requiredViewports) {
       const name = `${width}x${height}`;
-      for (const suffix of ['initial', 'settings', 'scrolled', 'narrow', 'hover', 'focus']) {
+      for (const suffix of ['initial', 'settings', 'states', 'scrolled', 'narrow', 'hover', 'focus']) {
         await fs.access(path.join(dir, `${name}-${suffix}.png`));
       }
       const observation = manifest.observations.find(item => item.viewport?.width === width && item.viewport?.height === height);
@@ -30,6 +30,14 @@ for (const dir of targets) {
       assert.ok(observation?.initial?.stateCounts && Object.values(observation.initial.stateCounts).every(value => Number.isInteger(value)));
       assert.equal(observation?.settingsViewport?.active, true);
       assert.ok(observation?.settingsViewport?.visible?.length > 0);
+      assert.equal(observation?.stateTransitions?.loading?.visible, true);
+      assert.equal(observation?.stateTransitions?.loading?.cleared, true);
+      assert.ok(observation?.stateTransitions?.loading?.position);
+      assert.equal(observation?.stateTransitions?.errorState?.status, 'error');
+      assert.ok(observation?.stateTransitions?.errorState?.className);
+      assert.equal(observation?.stateTransitions?.asyncLoading?.status, 'loading');
+      assert.ok(observation?.stateTransitions?.asyncLoading?.animationName !== undefined);
+      assert.equal(observation?.stateTransitions?.reset, 'idle');
     }
     console.log(`Visual forensics evidence passed: ${dir}`);
   } catch (error) {
