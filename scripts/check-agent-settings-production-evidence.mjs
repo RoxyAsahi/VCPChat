@@ -41,6 +41,8 @@ assert.match(report.dom, /<button(?=[^>]*id="deleteAgentBtn")(?=[^>]*type="butto
     'Agent delete action must remain a non-submitting native button');
 assert.match(report.dom, /<button(?=[^>]*id="resetAvatarColorsBtn")(?=[^>]*type="button")[^>]*>/,
     'Avatar color reset action must remain a non-submitting native button');
+assert.match(report.dom, /<button(?=[^>]*id="resetAvatarColorsBtn")(?=[^>]*style="[^"]*display:\s*inline-flex\s*!important[^"]*")[^>]*>/,
+    'Avatar color reset action must retain the Harness inline-flex geometry declaration');
 assert.match(report.dom, /<button[^>]*type="submit"[^>]*class="[^"]*vcp-harness-button[^\"]*"/,
     'Agent save action must retain submit semantics after Button mounting');
 
