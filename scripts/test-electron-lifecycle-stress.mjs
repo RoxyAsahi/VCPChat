@@ -32,6 +32,7 @@ const verboseDetached = process.env.VCPCHAT_STRESS_DEBUG_DETACHED === 'verbose';
 const skipDestructivePreflight = process.env.VCPCHAT_STRESS_SKIP_PREFLIGHT === '1';
 const traceListeners = process.env.VCPCHAT_STRESS_TRACE_LISTENERS === '1';
 const captureAgentSettings = process.env.VCPCHAT_STRESS_CAPTURE_AGENT_SETTINGS === '1';
+const agentSelectInteraction = process.env.VCPCHAT_STRESS_AGENT_SELECT_INTERACTION === '1';
 const supportedStages = Object.freeze(['ask-nova', 'settings', 'agent-settings', 'embedded', 'detached-app', 'mode-round-trip']);
 const selectedStages = new Set((process.env.VCPCHAT_STRESS_STAGES || supportedStages.join(','))
     .split(',')
@@ -631,6 +632,32 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
             `${label}: Agent TTS voice select contract changed unexpectedly: ${JSON.stringify(state)}`);
         assert.equal(state.typedAgentSelects, 2,
             `${label}: Agent TTS voice selects must use the typed Select projection: ${JSON.stringify(state)}`);
+        let agentSelectInteractionEvidence = null;
+        if (agentSelectInteraction) {
+            const interaction = await page.evaluate(() => {
+                const trigger = document.querySelector('#agentTtsVoicePrimary + .vcp-harness-select-trigger');
+                if (!(trigger instanceof HTMLElement)) return { opened: false, reason: 'trigger-missing' };
+                trigger.click();
+                const menu = document.querySelector('body > .vcp-harness-menu-list');
+                return {
+                    opened: trigger.getAttribute('aria-expanded') === 'true' && menu?.hidden === false,
+                    menuOwner: menu?.parentElement === document.body,
+                    role: menu?.getAttribute('role') || null,
+                };
+            });
+            assert.deepEqual(interaction, { opened: true, menuOwner: true, role: 'menu' },
+                `${label}: voice Select interaction open contract drifted: ${JSON.stringify(interaction)}`);
+            agentSelectInteractionEvidence = { ...interaction, closed: false, focusRestored: false };
+            await page.keyboard.press('Escape');
+            await page.waitForFunction(() => {
+                const trigger = document.querySelector('#agentTtsVoicePrimary + .vcp-harness-select-trigger');
+                return trigger?.getAttribute('aria-expanded') === 'false'
+                    && document.activeElement === trigger
+                && !document.querySelector('body > .vcp-harness-menu-list');
+            }, { timeout: timeoutMs });
+            agentSelectInteractionEvidence.closed = true;
+            agentSelectInteractionEvidence.focusRestored = true;
+        }
         if (captureAgentSettings) {
             const evidence = await page.evaluate(() => {
                 const rect = node => {
@@ -655,7 +682,16 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
                 const form = document.getElementById('agentSettingsForm');
                 const panel = document.getElementById('tabContentSettings');
                 const pick = selector => [...document.querySelectorAll(selector)].map(node => ({
-                    tag: node.tagName.toLowerCase(), class: node.className, rect: rect(node), style: style(node),
+                    tag: node.tagName.toLowerCase(),
+                    id: node.id || null,
+                    controlId: node.id || node.querySelector?.('input,select,button')?.id || null,
+                    name: node.getAttribute('name'),
+                    class: node.className,
+                    ariaLabel: node.getAttribute('aria-label'),
+                    ariaExpanded: node.getAttribute('aria-expanded'),
+                    disabled: Boolean(node.disabled),
+                    rect: rect(node),
+                    style: style(node),
                 }));
                 return {
                     source: 'VCP production Agent Settings Electron Surface',
@@ -665,10 +701,16 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
                     inputs: pick('#agentSettingsForm .vcp-uiux-input-wrap'),
                     inputNodes: pick('#agentSettingsForm .vcp-uiux-input-wrap input'),
                     choice: pick('#agentSettingsForm .vcp-uiux-choice'),
+                    choiceOptions: pick('#agentSettingsForm .vcp-uiux-choice .vcp-uiux-choice-option'),
                     toggles: pick('#agentSettingsForm .vcp-uiux-toggle'),
                     streamRadios: pick('#agentSettingsForm input[name="streamOutput"]'),
+                    ranges: pick('#agentSettingsForm .vcp-uiux-range'),
+                    rangeInputs: pick('#agentSettingsForm .vcp-uiux-range input[type="range"]'),
+                    selects: pick('#agentSettingsForm .vcp-harness-select'),
+                    selectNodes: pick('#agentSettingsForm select.vcp-harness-select-native'),
                 };
             });
+            evidence.agentSelectInteraction = agentSelectInteractionEvidence;
             await fs.mkdir(path.join(root, 'reports'), { recursive: true });
             await fs.writeFile(path.join(root, 'reports', 'vcp-agent-settings-production.json'), `${JSON.stringify(evidence, null, 2)}\n`);
             await page.screenshot({ path: path.join(root, 'reports', 'vcp-agent-settings-production.png') });
