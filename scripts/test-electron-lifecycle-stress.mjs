@@ -748,6 +748,7 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
                     panel: panel ? { rect: rect(panel), style: style(panel) } : null,
                     inputs: pick('#agentSettingsForm .vcp-uiux-input-wrap'),
                     inputNodes: pick('#agentSettingsForm .vcp-uiux-input-wrap input'),
+                    regexInputs: pick('#agentSettingsForm .vcp-uiux-input-wrap input#agentTtsRegexPrimary, #agentSettingsForm .vcp-uiux-input-wrap input#agentTtsRegexSecondary'),
                     choice: pick('#agentSettingsForm .vcp-uiux-choice'),
                     choiceOptions: pick('#agentSettingsForm .vcp-uiux-choice .vcp-uiux-choice-option'),
                     toggles: pick('#agentSettingsForm .vcp-uiux-toggle'),

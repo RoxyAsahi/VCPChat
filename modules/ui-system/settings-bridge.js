@@ -521,6 +521,7 @@ function enhanceForm(form) {
     mountTypedAgentModelInput(form);
     mountTypedAgentTemperatureInput(form);
     mountTypedAgentNumericInputs(form);
+    mountTypedAgentRegexInputs(form);
     mountTypedAgentStreamChoice(form);
     mountTypedAgentTtsSpeedRange(form);
     mountTypedAgentColorPairs(form);
@@ -531,7 +532,7 @@ function enhanceForm(form) {
         enhance('SettingsSection', section);
     });
     form.querySelectorAll('input:is(:not([type]), [type="text"], [type="url"], [type="password"], [type="number"], [type="email"], [type="search"], [type="tel"])').forEach(input => {
-        if (['agentNameInput', 'agentModel', 'agentTemperature', 'agentContextTokenLimit', 'agentMaxOutputTokens', 'agentTopP', 'agentTopK'].includes(input.id)) return;
+        if (['agentNameInput', 'agentModel', 'agentTemperature', 'agentContextTokenLimit', 'agentMaxOutputTokens', 'agentTopP', 'agentTopK', 'agentTtsRegexPrimary', 'agentTtsRegexSecondary'].includes(input.id)) return;
         enhance('Input', input);
     });
     form.querySelectorAll('textarea').forEach(textarea => enhance('Textarea', textarea));
@@ -551,6 +552,21 @@ function enhanceForm(form) {
     });
     form.querySelectorAll(':scope > .form-actions').forEach(actionBar => {
         enhance('SettingsActionBar', actionBar, { form });
+    });
+}
+
+function mountTypedAgentRegexInputs(form) {
+    const api = window.VCPUIUX;
+    if (!api?.mountInput) return;
+    const scope = ensurePresentationScope();
+    if (!scope) return;
+    ['agentTtsRegexPrimary', 'agentTtsRegexSecondary'].forEach(id => {
+        const input = form?.querySelector?.(`#${id}`);
+        if (!input || input.dataset.vcpTypedPrimitiveMounted === 'true') return;
+        const release = api.mountInput(input, {}, scope);
+        input.dataset.vcpTypedPrimitiveMounted = 'true';
+        scope.own(() => { delete input.dataset.vcpTypedPrimitiveMounted; }, `typed-${id}-marker`, 'ui-primitive');
+        if (release) scope.own(release, `typed-${id}-input`, 'ui-primitive');
     });
 }
 
