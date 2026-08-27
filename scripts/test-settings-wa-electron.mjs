@@ -529,6 +529,13 @@ try {
     assert.equal(await page.$$eval('#networkNotesPathsContainer input[name="networkNotesPath"]', nodes => nodes.length), 3, 'typed network path consumer owns Add row creation');
     await page.$$eval('#networkNotesPathsContainer .network-path-input-group:last-child button', buttons => buttons[0]?.click());
     assert.equal(await page.$$eval('#networkNotesPathsContainer input[name="networkNotesPath"]', nodes => nodes.length), 2, 'typed network path consumer owns Remove row teardown');
+    // The silent removal now schedules a typed save; wait for it to settle so
+    // later snapshot probes cannot interleave with its debounced commit.
+    await page.waitForFunction(() => {
+        const form = document.getElementById('globalSettingsForm');
+        return form?.dataset.vcpSettingsDirty !== 'true'
+            && document.querySelector('.vcp-settings-autosave-status')?.dataset.state !== 'saving';
+    }, { timeout: timeoutMs });
     assert.equal(await page.$eval('#continueWritingPrompt', node => node.value), 'typed-external-prompt', 'clean form consumes typed Settings snapshot');
     assert.equal(await page.$eval('#vcpServerUrl', node => node.value), 'http://typed-external:6005', 'clean text control consumes typed Settings snapshot');
     assert.equal(await page.$eval('#vcpApiKey', node => node.value), 'typed-api-key', 'clean API key control consumes typed Settings snapshot');
@@ -957,6 +964,77 @@ try {
     assert.equal(String(flushedFonts.chatDiaryFontPreset), fontDirtyAtClose.onScreen.chatDiaryFontPreset, `close flush committed the font preset draft (${JSON.stringify({ flushedFonts, onScreen: fontDirtyAtClose.onScreen })})`);
     assert.equal(flushedFonts.chatToolFontCustom, fontDirtyAtClose.onScreen.chatToolFontCustom, `close flush committed the font custom draft (${JSON.stringify({ flushedFonts, onScreen: fontDirtyAtClose.onScreen })})`);
     console.log('  [PASS] 6d. chat typography preset/custom close flush through the single typed owner');
+
+    // ---- 6e. Dynamic network-notes path rows are a single typed-owner list:
+    // edit an existing row, add one, remove one, then close before the
+    // debounce; the flush must commit exactly the on-screen list while the
+    // legacy whole-form chain stays silent.
+    await page.evaluate(() => window.uiHelperFunctions.openModal('globalSettingsModal'));
+    await page.waitForFunction(() => document.getElementById('globalSettingsForm'), { timeout: timeoutMs });
+    await page.waitForFunction(() => Boolean(document.querySelector('#networkNotesPathsContainer input[name="networkNotesPath"]')), { timeout: timeoutMs });
+    const pathValues = {
+        edited: `edited-path-${Date.now()}`,
+        added: `added-path-${Date.now()}`,
+    };
+    await page.evaluate(values => {
+        const container = document.getElementById('networkNotesPathsContainer');
+        const first = container.querySelector('input[name="networkNotesPath"]');
+        first.value = values.edited;
+        first.dispatchEvent(new Event('input', { bubbles: true }));
+    }, pathValues);
+    const pathMidState = await page.evaluate(() => ({
+        dirty: document.getElementById('globalSettingsForm').dataset.vcpSettingsDirty === 'true',
+        rows: [...document.querySelectorAll('#networkNotesPathsContainer input[name="networkNotesPath"]')].map(input => input.value),
+        legacySubmitCount: window.__legacyPathSubmitCount || 0,
+    }));
+    assert.equal(pathMidState.dirty && pathMidState.rows[0] === pathValues.edited, true, `editing a path row marks the typed owner dirty (${JSON.stringify(pathMidState)})`);
+    // Removing a row is silent at the input level; it must still mark dirty.
+    await page.evaluate(() => {
+        document.querySelectorAll('#networkNotesPathsContainer .network-path-input-group')[0]?.querySelector('.danger-button')?.click();
+    });
+    const afterRemoval = await page.evaluate(() => ({
+        dirty: document.getElementById('globalSettingsForm').dataset.vcpSettingsDirty === 'true',
+        rows: [...document.querySelectorAll('#networkNotesPathsContainer input[name="networkNotesPath"]')].map(input => input.value),
+    }));
+    assert.equal(afterRemoval.dirty, true, `row removal re-marks the typed owner dirty (${JSON.stringify(afterRemoval)})`);
+    // Add a fresh row through the production add-button seam and fill it.
+    await page.evaluate(() => {
+        document.getElementById('addNetworkPathBtn')?.click();
+    });
+    await page.waitForFunction(countBaseline => document.querySelectorAll('#networkNotesPathsContainer input[name="networkNotesPath"]').length > countBaseline, {}, afterRemoval.rows.length);
+    const pathDirtyAtClose = await page.evaluate(values => {
+        const rowInputs = [...document.querySelectorAll('#networkNotesPathsContainer input[name="networkNotesPath"]')];
+        const target = rowInputs[rowInputs.length - 1];
+        target.value = values.added;
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+        return {
+            dirty: document.getElementById('globalSettingsForm').dataset.vcpSettingsDirty === 'true',
+            rowOwnerMarkers: rowInputs.map(input => input.dataset.vcpTypedFieldOwner || null),
+            onScreen: rowInputs.map(input => input.value.trim()).filter(Boolean),
+        };
+    }, pathValues);
+    assert.equal(pathDirtyAtClose.dirty && pathDirtyAtClose.rowOwnerMarkers.every(marker => marker === 'true'), true, `path rows carry the typed owner marker and mark dirty (${JSON.stringify(pathDirtyAtClose)})`);
+    await page.evaluate(() => {
+        window.__pathAttributionProbe = [];
+        document.getElementById('globalSettingsForm').addEventListener('vcp-settings-save-result', event => {
+            window.__pathAttributionProbe.push(event.detail?.owner || 'unknown');
+        });
+    });
+    await page.evaluate(() => window.uiHelperFunctions.closeModal('globalSettingsModal'));
+    await page.waitForFunction(() => !document.getElementById('globalSettingsModal')?.classList.contains('active'), { timeout: timeoutMs });
+    let flushedPaths = null;
+    const pathFlushDeadline = Date.now() + timeoutMs;
+    while (Date.now() < pathFlushDeadline) {
+        flushedPaths = await page.evaluate(onScreen => ({
+            committed: window.VCPUISettingsBridge.getTypedService().state.get().networkNotesPaths,
+            attributions: window.__pathAttributionProbe,
+        }), pathDirtyAtClose.onScreen);
+        if (JSON.stringify(flushedPaths.committed) === JSON.stringify(pathDirtyAtClose.onScreen)) break;
+        await sleep(250);
+    }
+    assert.equal(JSON.stringify(flushedPaths.committed), JSON.stringify(pathDirtyAtClose.onScreen), `close flush committed the exact on-screen path list (${JSON.stringify({ flushedPaths, onScreen: pathDirtyAtClose.onScreen })})`);
+    assert.equal(flushedPaths.attributions.includes('typed-settings-field-owner'), true, `list save attributed to the typed field owner (${JSON.stringify(flushedPaths.attributions)})`);
+    console.log(`  [PASS] 6e. network notes path rows commit as a single typed list on close (${flushedPaths.committed.length} paths)`);
     // Reopen after a full reload: the form must be re-populated from settings.json.
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout: timeoutMs });

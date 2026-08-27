@@ -320,3 +320,14 @@ roadmap checkpoint 追加于 `38ec8bb8`。
 3. 先决工序建议：`networkNotesPaths` 动态行本身仍是双轨序列化（typed consumer 写行 + legacy manager 收集），可先做「动态列表字段的单一 owner 化」（TYPED_FIELD_DEFINITIONS 引入 list kind 或等价机制）作为独立批次，再在其上挂接目录选择交互。
 
 **门禁**：本批为纯审计+文档，代码零改动；不重跑运行时门禁（最近一次批次 11 全绿证据仍然有效，HEAD 仅前进文档提交）。
+
+### 2026-08-27 批次 13：networkNotesPaths 动态列表字段单一 owner 收口
+
+状态：`stable`。
+
+- 机制决策（评估结论）：动态路径行无法塞进「一控件一 id」的 `TYPED_FIELD_DEFINITIONS` 表驱动，选择**等价的容器级 owner 通道**而非为此泛化 list kind——`#networkNotesPathsContainer` 成为 owned unit，事件委托天然覆盖 helper 之后追加的行，避免为单字段扩张通用表结构的复杂度。若未来出现第二个列表型字段，再考虑抽 formal kind。
+- 实现：input/change 委托 → 重收集整行列表（trim + 过滤空值，与 legacy collect 语义一致）→ 进入 pendingPatch → 同一 debounce/关闭 flush/run 链提交；`addTypedNetworkPathInput` 在 owner 已挂载时为新行预置抑制标记；删除按钮的静默移除现在显式宣告并重收集（旧实现下删行不产生任何 dirty 与保存）。行投影从通用 consumer apply() 迁入 typed project()（单一 writer）；presentationOwner 兜底与 legacy manager 的 DOM 收集保留于 Classic 面。
+- 回归调查与方法论：新 journey 曾在既有 toggle 快照探针失败，表现为「服务状态已是 false 而 DOM 未更新」。插桩链（投影计数、checked setter 栈拦截、发射流水 emitLog、外部事件日志、影子还原对照实验）最终证明：HEAD 基线同样运行时其失败点不同，真实原因是本批使 journey 的增/删行断言会触发一次 debounced typed save，与探针的发射交错产生竞态假象——产品逻辑无缺陷。修复：journey 在增删行断言后等待 dirty 结算与 status 离开 saving，再进入后续快照消费段。
+- journey 新增 6e：编辑首行 → 删除行 → 经生产 add 按钮加行 → 填入唯一值 → 关闭模态绕过防抖 → 断言 typed service 快照 networkNotesPaths 与屏幕列表逐项相等、全部行携带 owner 抑制标记、save-result 归属 typed-settings-field-owner。全轮 17 PASS。
+- 门禁全绿：check:uiux、test:uiux（44/44）、check:uiux:artifacts（66 文件）、test:uiux:artifacts、Electron journey（17 PASS）、lifecycle stress、guard:classic-retirement、source-equivalence。
+- 台账：§2 新增 `networkNotesPaths` 行（typed-owner-active，close-flush 证据 journey 6e），§7 增补批次段落。批次 12 审计中登记的「先决工序：动态列表字段单一 owner 化」就此闭合；directory-browser production consumer 接入仅剩线程 A primitive 成熟度与目录列举能力两项外部前置。

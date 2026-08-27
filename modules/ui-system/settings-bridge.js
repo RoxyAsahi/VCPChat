@@ -58,6 +58,12 @@ function addTypedNetworkPathInput(root, path = '') {
     input.name = 'networkNotesPath';
     input.placeholder = '例如 \\NAS\\Shared\\Notes';
     input.value = path;
+    // Rows created after the typed field owner mounted belong to it; mark
+    // them immediately so an input between the helper call and the next
+    // delegation pass can never fall back onto the legacy chain.
+    if (document.getElementById('globalSettingsForm')?.dataset.vcpTypedFieldOwnerMounted === 'true') {
+        input.dataset.vcpTypedFieldOwner = 'true';
+    }
     const inputWrap = document.createElement('span');
     inputWrap.className = 'vcp-harness-input-wrap';
     inputWrap.dataset.settingPrimitive = 'input-wrap';
@@ -65,7 +71,12 @@ function addTypedNetworkPathInput(root, path = '') {
     removeBtn.type = 'button';
     removeBtn.textContent = '删除';
     removeBtn.className = 'sidebar-button small-button danger-button';
-    removeBtn.addEventListener('click', () => inputGroup.remove(), { once: true });
+    // A silent row removal previously skipped every dirty chain; announce it
+    // so the owning owner recomputes the serialized list.
+    removeBtn.addEventListener('click', () => {
+        inputGroup.remove();
+        container.dispatchEvent(new Event('change', { bubbles: true }));
+    }, { once: true });
     inputWrap.appendChild(input);
     inputGroup.append(inputWrap, removeBtn);
     container.appendChild(inputGroup);
@@ -236,21 +247,6 @@ function mountTypedSettingsConsumer(root) {
         if (bubbleWidthSettings) bubbleWidthSettings.hidden = mode !== 'bubble';
         const bubbleMetaSettings = form.querySelector('#userChatBubbleMetaSettings');
         if (bubbleMetaSettings) bubbleMetaSettings.style.display = settings.enableUserChatBubbleUi === true ? 'flex' : 'none';
-        const paths = Array.isArray(settings.networkNotesPaths)
-            ? settings.networkNotesPaths.map(path => String(path || '')).filter(Boolean)
-            : [];
-        const pathsContainer = form.querySelector('#networkNotesPathsContainer');
-        if (pathsContainer) {
-            const current = [...pathsContainer.querySelectorAll('input[name="networkNotesPath"]')].map(input => input.value);
-            if (current.join('\u0000') !== paths.join('\u0000')) {
-                pathsContainer.replaceChildren();
-                const addPath = path => addTypedNetworkPathInput(root, path)
-                    || window.uiHelperFunctions?.addNetworkPathInput?.(path);
-                if (typeof addPath === 'function') {
-                    (paths.length ? paths : ['']).forEach(path => addPath(path));
-                }
-            }
-        }
     };
     const release = service.state.subscribe(apply);
     ensurePresentationScope()?.own(() => {
@@ -989,6 +985,13 @@ function mountTypedFieldOwner(root, form) {
         .filter(Boolean);
     if (!controls.length) return;
     const state = { root, form, timer: null, pendingPatch: null, inFlight: null, disposed: false, cleanups: [], run: null };
+    // Dynamic path rows cannot be expressed as one control per definition id:
+    // every row shares the networkNotesPaths key.  The container becomes the
+    // owned unit and delegation covers rows added after mount.
+    const pathsContainer = form.querySelector('#networkNotesPathsContainer');
+    const collectNetworkNotesPaths = () => [...pathsContainer.querySelectorAll('input[name="networkNotesPath"]')]
+        .map(input => input.value.trim())
+        .filter(Boolean);
     const project = snapshot => {
         if (state.disposed || form.dataset.vcpSettingsDirty === 'true' || form.dataset.globalSettingsSaving === 'true') return;
         const settings = snapshot?.value || {};
@@ -1032,6 +1035,23 @@ function mountTypedFieldOwner(root, form) {
             const row = form.querySelector(`#${rowId}`);
             if (select && row) row.style.display = select.value === 'custom' ? 'block' : 'none';
         });
+        // Network notes rows: the typed field owner is their single writer;
+        // the generic consumer projection no longer rebuilds them.
+        if (pathsContainer) {
+            const paths = Array.isArray(settings.networkNotesPaths)
+                ? settings.networkNotesPaths.map(path => String(path || '')).filter(Boolean)
+                : [];
+            const current = collectNetworkNotesPaths();
+            if (current.join('\u0000') !== paths.join('\u0000')) {
+                pathsContainer.replaceChildren();
+                const addPath = path => addTypedNetworkPathInput(root, path)
+                    || window.uiHelperFunctions?.addNetworkPathInput?.(path);
+                if (typeof addPath === 'function') {
+                    (paths.length ? paths : ['']).forEach(path => addPath(path));
+                    pathsContainer.querySelectorAll('input[name="networkNotesPath"]').forEach(input => { input.dataset.vcpTypedFieldOwner = 'true'; });
+                }
+            }
+        }
     };
     const status = () => root.querySelector('.vcp-settings-autosave-status');
     const publish = (success, error = '') => {
@@ -1077,6 +1097,11 @@ function mountTypedFieldOwner(root, form) {
         state.timer = setTimeout(run, 400);
     };
     state.run = run;
+    const markDirty = () => {
+        form.dataset.vcpSettingsDirty = 'true';
+        status()?.setAttribute('data-state', 'dirty');
+        if (status()) status().textContent = '未保存';
+    };
     const onInput = event => {
         const control = event.target;
         if (!TYPED_FIELD_DEFINITIONS[control?.id]) return;
@@ -1092,9 +1117,7 @@ function mountTypedFieldOwner(root, form) {
         } else {
             state.pendingPatch = { ...(state.pendingPatch || {}), ...patch };
         }
-        form.dataset.vcpSettingsDirty = 'true';
-        status()?.setAttribute('data-state', 'dirty');
-        if (status()) status().textContent = '未保存';
+        markDirty();
         schedule();
     };
     controls.forEach(control => {
@@ -1107,6 +1130,23 @@ function mountTypedFieldOwner(root, form) {
             delete control.dataset.vcpTypedFieldOwner;
         });
     });
+    if (pathsContainer) {
+        const onRowsDirty = () => {
+            // Row removal, row addition and typing all reduce to "recollect
+            // the current list"; empty rows drop out like the legacy save.
+            state.pendingPatch = { ...(state.pendingPatch || {}), networkNotesPaths: collectNetworkNotesPaths() };
+            markDirty();
+            schedule();
+        };
+        pathsContainer.addEventListener('input', onRowsDirty);
+        pathsContainer.addEventListener('change', onRowsDirty);
+        pathsContainer.querySelectorAll('input[name="networkNotesPath"]').forEach(input => { input.dataset.vcpTypedFieldOwner = 'true'; });
+        state.cleanups.push(() => {
+            pathsContainer.removeEventListener('input', onRowsDirty);
+            pathsContainer.removeEventListener('change', onRowsDirty);
+            pathsContainer.querySelectorAll('input[name="networkNotesPath"]').forEach(input => { delete input.dataset.vcpTypedFieldOwner; });
+        });
+    }
     const release = service.state.subscribe((_value, snapshot) => project(snapshot));
     state.cleanups.push(() => release?.());
     state.cleanups.push(() => {
