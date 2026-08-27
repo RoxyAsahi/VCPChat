@@ -5,12 +5,14 @@ import sharp from 'sharp';
 const root = process.cwd();
 const harnessPath = process.env.HARNESS_MODEL_PICKER_SCREENSHOT || path.join(root, 'reports/harness-agent-model-picker.png');
 const vcpPath = process.env.VCP_MODEL_PICKER_SCREENSHOT || path.join(root, 'reports/vcp-agent-model-picker-candidate.png');
+const harnessReportPath = process.env.HARNESS_MODEL_PICKER_REPORT || path.join(root, 'reports/harness-agent-model-picker.json');
 const outputPath = path.join(root, 'reports/harness-vcp-model-picker-pixel-diff.json');
 const policy = JSON.parse(fs.readFileSync(path.join(root, 'docs/reference/deepseek-harness-primitives/pixel-policy.json'), 'utf8'));
 const report = { generatedAt: new Date().toISOString(), harness: harnessPath, vcp: vcpPath, policy, pass: false, missingEvidence: [] };
 
 try {
     if (!fs.existsSync(harnessPath)) report.missingEvidence.push('Harness ModelSelect screenshot');
+    else if (!fs.existsSync(harnessReportPath)) report.missingEvidence.push('Harness ModelSelect capture report paired with screenshot');
     if (!fs.existsSync(vcpPath)) report.missingEvidence.push('VCP ModelSelect Candidate screenshot');
     if (report.missingEvidence.length) {
         report.status = 'pending-screenshot-capture';
