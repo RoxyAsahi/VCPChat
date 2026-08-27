@@ -78,6 +78,8 @@
     "test:electron-uiux-theme": "node scripts/test-electron-uiux-theme.mjs",
   "test:electron-uiux:artifacts": "node scripts/test-electron-uiux-theme.mjs",
     "test:electron-agent-settings-interaction": "VCPCHAT_STRESS_SKIP_PREFLIGHT=1 VCPCHAT_STRESS_STAGES=agent-settings VCPCHAT_STRESS_CYCLES=1 VCPCHAT_STRESS_WARMUP_CYCLES=0 VCPCHAT_STRESS_AGENT_SELECT_INTERACTION=1 VCPCHAT_STRESS_CAPTURE_AGENT_SETTINGS=1 node scripts/test-electron-lifecycle-stress.mjs",
+    "capture:vcp-agent-model-picker-candidate": "node scripts/capture-vcp-agent-model-picker-candidate.mjs",
+    "check:vcp-agent-model-picker-candidate-evidence": "node scripts/check-vcp-agent-model-picker-candidate-evidence.mjs",
     "guard:design-subtraction": "node scripts/check-design-system-boundary.mjs",
     "guard:classic-parity": "node scripts/check-classic-parity.mjs",
     "guard:classic-retirement": "node scripts/check-classic-retirement-boundary.mjs",

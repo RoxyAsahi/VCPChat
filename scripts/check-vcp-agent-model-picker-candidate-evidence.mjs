@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+
+const root = process.cwd();
+const reportPath = path.join(root, 'reports', 'vcp-agent-model-picker-candidate.json');
+const screenshotPath = path.join(root, 'reports', 'vcp-agent-model-picker-candidate.png');
+assert.ok(fs.existsSync(reportPath), `Agent Model Picker Candidate report is missing: ${reportPath}`);
+assert.ok(fs.existsSync(screenshotPath), `Agent Model Picker Candidate screenshot is missing: ${screenshotPath}`);
+assert.ok(fs.statSync(screenshotPath).size > 1_000, 'Agent Model Picker Candidate screenshot is unexpectedly small');
+const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+assert.equal(report.source, 'VCP generated AgentModelPicker Candidate Electron capture');
+assert.equal(report.provenance, 'deepseek-harness/packages/client/ui-model-selection/src/client/ModelSelect.tsx');
+assert.deepEqual(report.viewport, { width: 800, height: 600, deviceScaleFactor: 1 });
+assert.equal(report.productionConsumer, false, 'Candidate evidence must not claim a production consumer');
+assert.equal(report.status, 'candidate-interaction-active');
+assert.equal(report.rootPane.triggerHeight, '28px');
+assert.equal(report.rootPane.cardPresent, true);
+assert.equal(report.modelPane.searchVisible, true);
+assert.equal(report.modelPane.optionCount, 3);
+assert.equal(report.effortPane.optionCount, 2);
+assert.equal(report.disposed, true);
+console.log(JSON.stringify({ source: report.source, viewport: report.viewport, modelOptions: report.modelPane.optionCount, effortOptions: report.effortPane.optionCount, disposed: report.disposed, status: report.status }, null, 2));

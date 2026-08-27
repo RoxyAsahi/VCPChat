@@ -1,0 +1,131 @@
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import fs from 'node:fs/promises';
+import http from 'node:http';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import puppeteer from 'puppeteer';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const electron = process.platform === 'darwin'
+    ? path.join(root, 'node_modules', 'electron', 'dist', 'Electron.app', 'Contents', 'MacOS', 'Electron')
+    : path.join(root, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron');
+const timeout = 45_000;
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const request = url => new Promise((resolve, reject) => {
+    http.get(url, response => { response.resume(); response.once('end', resolve); }).once('error', reject);
+});
+
+const appData = await fs.mkdtemp(path.join(os.tmpdir(), 'vcpchat-agent-model-picker-'));
+await fs.mkdir(path.join(appData, 'Agents', 'PickerProbe'), { recursive: true });
+await fs.writeFile(path.join(appData, 'Agents', 'PickerProbe', 'config.json'), JSON.stringify({
+    name: 'Picker Probe', model: 'picker-probe', promptMode: 'original',
+    originalSystemPrompt: 'Picker probe', systemPrompt: 'Picker probe', stripRegexes: [],
+}), 'utf8');
+await fs.writeFile(path.join(appData, 'settings.json'), JSON.stringify({
+    uiMode: 'next', assistantAgent: 'PickerProbe', currentThemeMode: 'light',
+    vcpServerUrl: 'http://127.0.0.1:1', vcpApiKey: 'picker-probe',
+}), 'utf8');
+
+let port = 0;
+const probe = http.createServer();
+await new Promise(resolve => probe.listen(0, '127.0.0.1', () => { port = probe.address().port; probe.close(resolve); }));
+const child = spawn(electron, ['.', '--allow-multiple-instances', `--user-data-dir=${path.join(appData, 'ElectronProfile')}`, `--remote-debugging-port=${port}`], {
+    cwd: root,
+    env: { ...process.env, VCPCHAT_APP_DATA_DIR: appData, VCPCHAT_E2E_TEST: '1' },
+    stdio: ['ignore', 'ignore', 'pipe'],
+});
+let stderr = '';
+child.stderr.on('data', chunk => { stderr = `${stderr}${chunk}`.slice(-8_000); });
+let browser;
+try {
+    const deadline = Date.now() + timeout;
+    while (Date.now() < deadline) {
+        try { await request(`http://127.0.0.1:${port}/json/version`); break; } catch { await sleep(100); }
+    }
+    browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${port}` });
+    const page = (await browser.pages()).find(candidate => candidate.url().includes('main.html'));
+    assert.ok(page, `Agent Model Picker renderer missing: ${stderr}`);
+    await page.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout });
+    const evidence = await page.evaluate(async () => {
+        const host = document.createElement('div');
+        host.dataset.vcpCandidateAgentModelPicker = 'true';
+        host.style.cssText = 'position:fixed;left:80px;top:120px;width:280px;height:220px;padding:16px;background:#fff;color:#0f1115;border:1px solid rgba(0,0,0,.08);border-radius:12px';
+        document.body.append(host);
+        const scope = new window.VCPLifecycle.LifecycleScope('test:candidate-agent-model-picker');
+        const selected = [];
+        const efforts = [];
+        const picker = window.VCPUIUX.mountAgentModelPicker(host, {
+            label: 'Agent model', selectedId: 'gpt-4o', selectedEffort: 'balanced',
+            efforts: [
+                { id: 'balanced', label: 'Balanced', description: 'Provider default' },
+                { id: 'deep', label: 'Deep reasoning', description: 'More reasoning effort' },
+            ],
+            options: async signal => {
+                if (signal.aborted) return [];
+                return [
+                    { id: 'gpt-4o', label: 'GPT-4o', provider: 'OpenAI', favorite: true },
+                    { id: 'claude-3-7', label: 'Claude 3.7 Sonnet', provider: 'Anthropic' },
+                    { id: 'local-llama', label: 'Llama 3.3', provider: 'Local', disabled: true },
+                ];
+            },
+            onSelect: option => selected.push(option.id),
+            onEffortSelect: option => efforts.push(option.id),
+        }, scope);
+        picker.open();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const rootPane = {
+            expanded: picker.trigger.getAttribute('aria-expanded'),
+            triggerHeight: getComputedStyle(picker.trigger).height,
+            cardPresent: Boolean(host.querySelector('.vcp-harness-popup-select-card')),
+            modelRowVisible: host.querySelector('.vcp-harness-agent-model-picker-cell')?.hidden === false,
+            effortRowVisible: host.querySelectorAll('.vcp-harness-agent-model-picker-cell')[1]?.hidden === false,
+        };
+        const modelRow = host.querySelector('.vcp-harness-agent-model-picker-cell');
+        modelRow?.click();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const modelPane = {
+            searchVisible: host.querySelector('.vcp-harness-popup-select-search')?.hidden === false,
+            optionCount: host.querySelectorAll('[role="option"]').length,
+            selectedOption: host.querySelector('[role="option"][aria-selected="true"]')?.textContent?.trim() || null,
+        };
+        picker.setPane('effort');
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const effortPane = {
+            optionCount: host.querySelectorAll('.vcp-harness-agent-model-picker-option').length,
+            selected: host.querySelector('.vcp-harness-agent-model-picker-option[aria-checked="true"]')?.textContent?.trim() || null,
+        };
+        const screenshot = {
+            source: 'VCP generated AgentModelPicker Candidate Electron capture',
+            provenance: 'deepseek-harness/packages/client/ui-model-selection/src/client/ModelSelect.tsx',
+            viewport: { width: innerWidth, height: innerHeight, deviceScaleFactor: devicePixelRatio },
+            rootPane, modelPane, effortPane,
+            selected, efforts,
+            productionConsumer: false,
+            status: 'candidate-interaction-active',
+        };
+        await picker.dispose();
+        await scope.dispose('candidate-agent-model-picker-complete');
+        screenshot.disposed = host.querySelector('.vcp-harness-agent-model-picker') === null;
+        host.remove();
+        return screenshot;
+    });
+    assert.deepEqual(evidence.viewport, { width: 800, height: 600, deviceScaleFactor: 1 });
+    assert.equal(evidence.rootPane.expanded, 'true');
+    assert.equal(evidence.rootPane.cardPresent, true);
+    assert.equal(evidence.rootPane.modelRowVisible, true);
+    assert.equal(evidence.rootPane.effortRowVisible, true);
+    assert.equal(evidence.modelPane.searchVisible, true);
+    assert.equal(evidence.modelPane.optionCount, 3);
+    assert.equal(evidence.effortPane.optionCount, 2);
+    assert.equal(evidence.disposed, true);
+    await fs.mkdir(path.join(root, 'reports'), { recursive: true });
+    await page.screenshot({ path: path.join(root, 'reports', 'vcp-agent-model-picker-candidate.png') });
+    await fs.writeFile(path.join(root, 'reports', 'vcp-agent-model-picker-candidate.json'), `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
+    console.log(JSON.stringify(evidence, null, 2));
+} finally {
+    await browser?.close().catch(() => {});
+    child.kill('SIGTERM');
+    await sleep(100);
+}
