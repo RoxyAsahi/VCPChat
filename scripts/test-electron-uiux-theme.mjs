@@ -161,7 +161,10 @@ try {
         const layout = [...(atomMenu?.querySelectorAll('[role="menuitem"]') || [])].find(item => item.textContent === 'Layout');
         let submenuOpen = false;
         for (let attempt = 0; attempt < 5 && !submenuOpen; attempt += 1) {
-            layout?.focus();
+            // Exercise the owner event rather than relying on an Electron focus
+            // side effect: the submenu contract is attached to the item wrap's
+            // pointer entry (keyboard focus remains covered by focused tests).
+            layout?.closest('.vcp-harness-menu-item-wrap')?.dispatchEvent(new MouseEvent('mouseenter'));
             await new Promise(resolve => setTimeout(resolve, 10));
             submenuOpen = Boolean(atomMenu?.querySelector('.vcp-harness-submenu[role="menu"]'));
         }
@@ -291,7 +294,7 @@ try {
     });
     assert.deepEqual(candidateLabBoundary, {
         maturity: 'candidate',
-        buttons: 14,
+        buttons: 15,
         input: true,
         field: true,
         select: true,
@@ -1015,6 +1018,83 @@ try {
         delete window.__harnessCandidateAgentPresetRowScope;
         document.querySelector('[data-electron-candidate-agent-preset-row]')?.remove();
     });
+    const popupSelectGeometry = await page.evaluate(async () => {
+        const host = document.createElement('div');
+        host.dataset.electronCandidatePopupSelect = 'true';
+        host.style.cssText = 'position:fixed;left:80px;top:420px;width:360px;min-height:44px;padding:16px;background:#fff;color:#0f1115;border:1px solid rgba(0,0,0,.08);border-radius:12px';
+        document.body.append(host);
+        const focusTarget = document.createElement('button');
+        focusTarget.type = 'button';
+        focusTarget.textContent = 'Lab focus owner';
+        host.append(focusTarget);
+        const scope = new window.VCPLifecycle.LifecycleScope('test:harness-candidate-popup-select');
+        const selected = [];
+        const consumed = [];
+        let focused = 0;
+        const popup = window.VCPUIUX.createPopupSelectController({
+            options: async () => [
+                { id: 'balanced', label: 'Balanced', detail: 'General purpose model', active: true },
+                { id: 'careful', label: 'Careful', detail: 'Requires acknowledgement', confirmation: { title: 'Confirm model', description: 'Electron Candidate fixture only.', acknowledgeLabel: 'I understand', cancelLabel: 'Cancel', confirmLabel: 'Apply' } },
+            ],
+            onSelect: async option => { selected.push(option.id); },
+        }, {
+            consume: segment => { consumed.push(segment); return true; },
+            focusComposer: () => { focused += 1; focusTarget.focus(); },
+        });
+        const view = window.VCPUIUX.mountPopupSelectView(host, { popup, overlayAria: '/{command} options' }, scope);
+        popup.open('model', { fixture: true }, { via: 'enter', token: '/model' });
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const cardStyle = getComputedStyle(view.card);
+        const rows = [...view.card.querySelectorAll('[role="option"]')].map(row => ({ label: row.querySelector('.vcp-harness-popup-select-label')?.textContent ?? '', selected: row.getAttribute('aria-selected') }));
+        window.__harnessCandidatePopupSelect = { host, scope, popup, view, focusTarget, selected, consumed, get focused() { return focused; } };
+        return {
+            viewport: { width: innerWidth, height: innerHeight, deviceScaleFactor: devicePixelRatio },
+            source: 'generated-artifact-electron',
+            state: 'open-ready-highlight',
+            card: { parentIsHost: view.card.parentElement === host, ariaLabel: view.card.getAttribute('aria-label'), bottom: cardStyle.bottom, padding: cardStyle.padding, borderRadius: cardStyle.borderRadius, minWidth: cardStyle.minWidth, zIndex: cardStyle.zIndex },
+            focusIsSearch: document.activeElement === view.search,
+            rows,
+        };
+    });
+    assert.deepEqual(popupSelectGeometry.viewport, { width: 800, height: 600, deviceScaleFactor: 1 });
+    assert.deepEqual(popupSelectGeometry.card, {
+        parentIsHost: true,
+        ariaLabel: '/model options',
+        // Computed from the fixed fixture host's 76px content box plus the
+        // Harness 4px `calc(100% + 4px)` separation.
+        bottom: '80px',
+        padding: '4px',
+        borderRadius: '12px',
+        minWidth: 'min(220px, 100%)',
+        zIndex: '100',
+    });
+    assert.equal(popupSelectGeometry.focusIsSearch, true);
+    assert.deepEqual(popupSelectGeometry.rows, [{ label: 'Balanced', selected: 'true' }, { label: 'Careful', selected: 'false' }]);
+    const popupSelectScreenshot = path.join(root, 'reports', 'vcp-harness-popup-select-candidate.png');
+    await page.screenshot({ path: popupSelectScreenshot });
+    assert.ok((await fs.stat(popupSelectScreenshot)).size > 1024, 'PopupSelect Candidate screenshot is unexpectedly empty');
+    const popupSelectLifecycle = await page.evaluate(async () => {
+        const fixture = window.__harnessCandidatePopupSelect;
+        fixture.popup.setSearch('care');
+        await fixture.popup.select(0);
+        const riskVisible = document.querySelector('[role="dialog"]') !== null && fixture.view.card.style.display === 'none';
+        fixture.popup.acknowledge(true);
+        await fixture.popup.confirm();
+        const result = {
+            riskVisible,
+            selected: fixture.selected,
+            consumed: fixture.consumed,
+            focused: fixture.focused,
+            closed: fixture.popup.getSnapshot().open === false && fixture.view.card.isConnected === false && document.activeElement === fixture.focusTarget,
+        };
+        await fixture.view.dispose();
+        await fixture.scope.dispose('candidate-popup-select-visual-complete');
+        fixture.host.remove();
+        delete window.__harnessCandidatePopupSelect;
+        return result;
+    });
+    assert.deepEqual(popupSelectLifecycle, { riskVisible: true, selected: ['careful'], consumed: [{ via: 'enter', token: '/model' }], focused: 1, closed: true });
+    await fs.writeFile(path.join(root, 'reports', 'vcp-harness-popup-select-candidate.json'), `${JSON.stringify({ ...popupSelectGeometry, lifecycle: popupSelectLifecycle }, null, 2)}\n`, 'utf8');
     await page.screenshot({ path: primitiveScreenshot });
     const screenshotStat = await fs.stat(primitiveScreenshot);
     assert.ok(screenshotStat.size > 1024, `primitive screenshot is unexpectedly empty: ${screenshotStat.size} bytes`);

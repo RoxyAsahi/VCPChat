@@ -14,6 +14,7 @@ import { mountToast } from '../primitives/toast.js';
 import { mountRiskConfirmation } from '../primitives/risk-confirmation.js';
 import { mountSemanticIcon, type HarnessSemanticIconName } from '../primitives/semantic-icon.js';
 import { mountSelect } from '../primitives/select.js';
+import { createPopupSelectController, mountPopupSelectView } from '../primitives/popup-select.js';
 
 const STYLE_ID = 'vcp-harness-primitive-lab';
 
@@ -212,6 +213,32 @@ export function mountPrimitiveLab(root: HTMLElement, scope: UiScope): UiDisposer
         presetRowHasError = !presetRowHasError;
         presetRow.setError(presetRowHasError ? 'Could not load presets. Try again.' : null);
     });
+
+    // Harness provenance: ui-commands PopupSelectView is normally owned by the
+    // conversation.input.overlay slot. That slot and the composer are frozen
+    // in VCP, so this is a standalone Lab-only host: its deps are local DOM
+    // callbacks, not an input-machine, IPC, command or token-consumption path.
+    const popupRow = group(lab, 'Command PopupSelect', 'deepseek-harness/packages/client/ui-commands/src/client/PopupSelectView.tsx; Candidate Lab only, no VCP Composer or command wiring');
+    const popupHost = document.createElement('div');
+    popupHost.className = 'vcp-harness-lab-popup-host';
+    const popupTrigger = document.createElement('button');
+    popupTrigger.type = 'button';
+    popupTrigger.textContent = 'Open model command';
+    popupHost.append(popupTrigger);
+    popupRow.append(popupHost);
+    mountButton(popupTrigger, { variant: 'outline', size: 'sm' }, labScope);
+    const popup = createPopupSelectController({
+        options: async () => [
+            { id: 'balanced', label: 'Balanced', detail: 'General-purpose model', active: true },
+            { id: 'careful', label: 'Careful', detail: 'Requires acknowledgement', confirmation: { title: 'Switch model?', description: 'This Lab action has no product side effect.', acknowledgeLabel: 'I understand.', cancelLabel: 'Cancel', confirmLabel: 'Switch' } },
+        ],
+        onSelect: option => { popupTrigger.dataset.selected = option.id; },
+    }, {
+        consume: () => true,
+        focusComposer: () => popupTrigger.focus(),
+    });
+    mountPopupSelectView(popupHost, { popup }, labScope);
+    labScope.listen(popupTrigger, 'click', () => popup.open('model', {}, { via: 'enter', token: '/model' }));
 
     const modalRow = group(lab, 'Modal', 'deepseek-harness/packages/client/ui-primitives/src/Modal.tsx + Workspace/Settings production consumers');
     const modalTrigger = document.createElement('button');

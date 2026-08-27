@@ -257,3 +257,12 @@ roadmap checkpoint 追加于 `38ec8bb8`。
 - 方法论记录：typed service 经 UI-service registry 解析，`getTypedService()` 可能返回与 owner 闭包不同的实例——monkey-patch 拦截不可靠；owner 归属证据应监听表单节点上的 `vcp-settings-save-result`（该事件无 `bubbles:true`，不能 document 冒泡监听）。
 - roadmap checkpoint：线程 A 正在并发编辑 roadmap.md，按 §8 冲突规则本轮不写入，checkpoint 下轮文件空闲时补记。
 - 待补证据不变：packaged-artifact / 非 darwin 平台运行证据仍为 evidence-pending。
+
+### 2026-08-27 批次 8：Settings-only lifecycle stress 复跑（批次 7 后监听面）
+
+状态：`stable`（证据闭合）。
+
+- `VCPCHAT_STRESS_STAGES=settings VCPCHAT_STRESS_PROTOCOL_TIMEOUT_MS=300000 node scripts/test-electron-lifecycle-stress.mjs` 通过（3 warmup + 20 measured cycles）。
+- 分层指标：listeners `643` 五个 checkpoint 全部恒定；lifecycle activeResources `366`（listener 158 / ui-registration 110 / ui-primitive 60 等）恒定；detachedRoots/Icons/Options 均 0；nodes 8475 恒定；heap 9.9→10.5 MiB（正常波动）。包含批次 6（readTypedFieldPatch 草稿基底修复 + journey 6b）与批次 7（wide-layout 两控件入 typed owner + journey 6c）后的树。
+- 验收矩阵「混合 listener 增长归因」随之从未完成改为已闭合。
+- 同轮门禁归因：线程 A 新投递未跟踪 `directory-browser.ts` 且 generated 工件集处于其迭代中，`check:uiux:artifacts` 的唯一差异为 `primitives/directory-browser.*` 一对文件（影子拷贝验证 B 范围不含其它差异）；按 §3/§8 规则 B 不代生成，不阻断本批。

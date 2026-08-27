@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const root = process.cwd();
 const dir = path.join(root, 'docs/reference/deepseek-harness-primitives');
-const primitives = ['settings-root', 'field', 'select', 'menu', 'modal', 'tooltip', 'hover-card', 'disclosure-row', 'state-dot', 'toast', 'risk-confirmation', 'semantic-icon', 'input', 'range', 'toggle', 'color-pair', 'agent-preset-seat', 'agent-preset-row'];
+const primitives = ['settings-root', 'field', 'select', 'menu', 'modal', 'tooltip', 'hover-card', 'disclosure-row', 'state-dot', 'toast', 'risk-confirmation', 'semantic-icon', 'input', 'range', 'toggle', 'color-pair', 'agent-preset-seat', 'agent-preset-row', 'popup-select'];
 const required = [
   'reference.css',
   'fixture-matrix.json',
@@ -29,7 +29,7 @@ for (const name of primitives) {
   if (!Object.keys(dom).length) fail(`${name}.dom.json is empty`);
   if (!Object.keys(geometry).length) fail(`${name}.geometry.json is empty`);
 }
-for (const name of ['toast', 'risk-confirmation', 'semantic-icon', 'agent-preset-seat', 'agent-preset-row']) {
+for (const name of ['toast', 'risk-confirmation', 'semantic-icon', 'agent-preset-seat', 'agent-preset-row', 'popup-select']) {
   const evidence = readJson(`${name}.geometry.json`).vcpCandidateEvidence;
   for (const file of [evidence?.screenshot, evidence?.report]) {
     if (!file || !fs.existsSync(path.join(dir, file))) fail(`${name} evidence file missing: ${file}`);

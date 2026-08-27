@@ -63,11 +63,11 @@
 | dirty draft 不被 snapshot 覆盖 | Settings Electron dirty/reopen journey | 已有 focused evidence |
 | failure/retry 保留输入 | Settings WA/Electron failure journey | 已通过 |
 | timeout late result 无复活 | `tests/uiux-settings-adapter.test.mjs` | 已通过 |
-| close flush 或明确失败 | Electron close path | 需按字段批次补证据 |
+| close flush 或明确失败 | Electron close path | 已按批次闭合（journey 6b/6c：typed 字段 + 论坛凭据 + 宽屏布局，绕过防抖提交） |
 | reload durable restore | Settings Electron reload | 已通过 |
 | teardown quiescence | 60-cycle + explicit teardown | 已通过 Settings-only |
-| legacy projection 删除 | source-equivalence + diff | 待 R2-02C 代码切片 |
-| 混合 listener 增长归因 | lifecycle stress 分层对照 | 未完成 |
+| legacy projection 删除 | source-equivalence + diff | 外观/工作区批次与 enableWideChatLayout 已删除；其余按字段推进 |
+| 混合 listener 增长归因 | lifecycle stress 分层对照 | 已闭合（2026-08-27，R2-02E 批次 8）：Settings-only stress 3 warmup + 20 cycles，listener 643 / lifecycle 资源 366 五 checkpoint 恒定、detached=0，树含批次 6/7 变更 |
 
 ## 5. 下一步
 
