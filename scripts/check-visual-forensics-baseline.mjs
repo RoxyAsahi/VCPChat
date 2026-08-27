@@ -10,7 +10,7 @@ const targets = dirs.length ? dirs : [
   path.join(root, 'reports/visual-forensics-qa/dark'),
 ];
 const viewports = [[800, 600], [1280, 800], [1680, 1000]];
-const suffixes = ['initial', 'settings', 'states', 'scrolled', 'narrow', 'restored', 'hover', 'focus'];
+const suffixes = ['initial', 'reopen', 'settings', 'states', 'scrolled', 'narrow', 'restored', 'hover', 'focus'];
 const failures = [];
 
 const baseline = JSON.parse(await fs.readFile(path.join(root, 'docs/visual-qa/fixtures/visual-forensics-pixel-baseline.json'), 'utf8'));
@@ -65,6 +65,7 @@ for (const dir of targets) {
         assert.ok(deltaRatio(images.initial, images[suffix]) >= baseline.minInteractionDeltaRatio, `${name}-${suffix}: no measurable pixel delta from initial`);
       }
       assert.ok(deltaRatio(images.initial, images.states) >= baseline.minStateDeltaRatio, `${name}-states: no measurable pixel delta from initial`);
+      assert.ok(deltaRatio(images.initial, images.reopen) >= baseline.minInteractionDeltaRatio, `${name}-reopen: no measurable pixel delta from initial`);
       const finiteRect = rect => rect && [rect.x, rect.y, rect.width, rect.height].every(value => Number.isFinite(value)) && rect.width > 0 && rect.height > 0;
       assert.ok(observation.initial?.controls?.some(control => finiteRect(control.rect)), `${name}: no finite initial control geometry`);
       assert.ok(finiteRect(observation.initial?.stateTargets?.disabled?.rect), `${name}: no finite disabled state geometry`);

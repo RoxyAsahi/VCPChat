@@ -12,6 +12,12 @@
       "selectors": [".vcp-ui-showcase-root", ".vcp-harness-primitive-lab"]
     },
     {
+      "id": "showcase-reopen",
+      "trigger": "closeView('app:ui-component-library'); openInternalApp('ui-component-library')",
+      "screenshotSuffix": "reopen",
+      "selectors": [".vcp-ui-showcase-root"]
+    },
+    {
       "id": "showcase-settings-user-identity",
       "trigger": "openModal('globalSettingsModal')",
       "screenshotSuffix": "settings",
