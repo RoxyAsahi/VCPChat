@@ -1,4 +1,13 @@
 import { createPopupSelectController, mountPopupSelectView } from './popup-select.js';
+const STYLE_ID = 'vcp-harness-uiux-agent-model-picker';
+function ensureStyles() {
+    if (typeof document === 'undefined' || document.getElementById(STYLE_ID))
+        return;
+    const style = document.createElement('style');
+    style.id = STYLE_ID;
+    style.textContent = `.vcp-harness-agent-model-picker{position:relative;min-width:0;display:inline-flex}.vcp-harness-agent-model-picker-trigger{display:flex;align-items:center;gap:4px;min-width:0;max-width:220px;height:28px;padding:0 8px;border:0;border-radius:24px;background:transparent;color:var(--dsw-alias-label-secondary,var(--vcp-color-text,#737780));font:500 13px/20px inherit;cursor:pointer}.vcp-harness-agent-model-picker-trigger:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06))}.vcp-harness-agent-model-picker-trigger:focus-visible{outline:none;box-shadow:0 0 0 2px var(--dsw-alias-border-l3,var(--vcp-color-brand,#1677ff))}.vcp-harness-agent-model-picker-trigger:disabled{color:var(--dsw-alias-label-dimmed,#a0a5ad);cursor:default}.vcp-harness-agent-model-picker .vcp-harness-popup-select-card{right:0;left:auto;bottom:calc(100% + 8px);width:min(240px,calc(100vw - 32px));max-height:min(360px,calc(100vh - 96px));border-radius:12px}.vcp-harness-agent-model-picker .vcp-harness-popup-select-row{min-height:38px;padding:6px 8px;border-radius:10px}.vcp-harness-agent-model-picker .vcp-harness-popup-select-row-disabled{color:var(--dsw-alias-label-dimmed,#a0a5ad);cursor:default}.vcp-harness-agent-model-picker .vcp-harness-popup-select-row-disabled:hover{background:transparent}`;
+    (document.head || document.documentElement).append(style);
+}
 /**
  * Candidate-only Agent model picker. It mirrors Harness model-selection
  * interaction while keeping model discovery and persistence injected.
@@ -7,13 +16,14 @@ import { createPopupSelectController, mountPopupSelectView } from './popup-selec
 export function mountAgentModelPicker(host, props, scope) {
     if (!host || !props?.options || !props?.onSelect || !scope)
         throw new TypeError('AgentModelPicker requires host, options, onSelect and scope.');
+    ensureStyles();
     const pickerScope = scope.child('harness-agent-model-picker');
     const root = document.createElement('span');
     root.className = 'vcp-harness-agent-model-picker';
     const trigger = document.createElement('button');
     trigger.type = 'button';
     trigger.className = 'vcp-harness-agent-model-picker-trigger';
-    trigger.setAttribute('aria-haspopup', 'dialog');
+    trigger.setAttribute('aria-haspopup', 'menu');
     trigger.setAttribute('aria-expanded', 'false');
     trigger.setAttribute('aria-label', props.label ?? 'Select model');
     root.append(trigger);
