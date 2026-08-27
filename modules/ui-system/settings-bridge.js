@@ -514,6 +514,7 @@ function enhanceForm(form) {
     mountTypedAgentNumericInputs(form);
     mountTypedAgentStreamChoice(form);
     mountTypedAgentTtsSpeedRange(form);
+    mountHarnessSelects(form);
     form.querySelectorAll('.agent-settings-section, .group-settings-section').forEach(section => {
         enhance('SettingsSection', section);
     });
@@ -522,7 +523,9 @@ function enhanceForm(form) {
         enhance('Input', input);
     });
     form.querySelectorAll('textarea').forEach(textarea => enhance('Textarea', textarea));
-    form.querySelectorAll('select').forEach(select => enhance('Select', select, { kernel: 'native' }));
+    form.querySelectorAll('select').forEach(select => {
+        if (!select.closest('.vcp-harness-select')) enhance('Select', select, { kernel: 'native' });
+    });
     form.querySelectorAll('input[type="range"]').forEach(range => {
         if (!range.closest('.vcp-uiux-range')) enhance('Range', range);
     });

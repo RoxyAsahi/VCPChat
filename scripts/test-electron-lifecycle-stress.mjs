@@ -602,6 +602,8 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
         typedAgentChoiceOptions: document.querySelectorAll('#agentSettingsForm .vcp-uiux-choice .vcp-uiux-choice-option').length,
         typedAgentToggles: document.querySelectorAll('#agentSettingsForm .vcp-uiux-toggle input').length,
         nativeAgentStreamRadios: document.querySelectorAll('#agentSettingsForm input[name="streamOutput"][type="radio"]').length,
+        typedAgentSelects: [...document.querySelectorAll('#agentSettingsForm select')]
+            .filter(select => Boolean(select.closest('.vcp-harness-select'))).length,
     }));
     assert.ok(state.promptNodes > 0, `${label}: agent settings prompt editor disappeared: ${JSON.stringify(state)}`);
     if (expectEnhanced) {
@@ -625,6 +627,10 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
             `${label}: Agent appearance toggles were not projected by the typed Toggle primitive: ${JSON.stringify(state)}`);
         assert.equal(state.nativeAgentStreamRadios, 2,
             `${label}: native Agent stream radios must remain the canonical business nodes: ${JSON.stringify(state)}`);
+        assert.equal(state.settingsSelects, 2,
+            `${label}: Agent TTS voice select contract changed unexpectedly: ${JSON.stringify(state)}`);
+        assert.equal(state.typedAgentSelects, 2,
+            `${label}: Agent TTS voice selects must use the typed Select projection: ${JSON.stringify(state)}`);
         if (captureAgentSettings) {
             const evidence = await page.evaluate(() => {
                 const rect = node => {
