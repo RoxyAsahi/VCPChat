@@ -24,6 +24,8 @@ assert.equal(report.trigger.borderRadius, '24px');
 assert.equal(report.menu?.tag, 'div');
 assert.equal(report.menu?.cssContract?.borderRadius, '12px');
 assert.equal(typeof report.menu?.borderRadius, 'string');
+assert.ok(report.menu?.rect?.width > 0 && report.menu?.rect?.height > 0,
+    'visible model picker menu must have measurable geometry');
 assert.equal(report.modelPane.searchVisible, true);
 assert.equal(report.modelPane.optionCount, 3);
 assert.equal(report.effortPane.optionCount, 2);

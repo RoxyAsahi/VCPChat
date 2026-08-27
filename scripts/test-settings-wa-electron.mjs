@@ -128,8 +128,23 @@ try {
     await page.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout: timeoutMs });
     await page.waitForFunction(() => document.documentElement.dataset.uiMode === 'next', { timeout: timeoutMs });
 
-    // ---- 1. SettingsShell layout ----
+    // ---- 1p (retirement evidence E2). The typed owner mounts within the
+    // same open cycle that first exposes the form: at the earliest
+    // observable moment the settings revision is already revision-ready, so
+    // any presentationOwner fallback fill during the cold-start mount window
+    // is immediately superseded by the typed projection (outcome parity is
+    // asserted by 1q below).  Deleting the fallback cannot change what the
+    // user can observe at first open. ----
     await page.evaluate(() => window.uiHelperFunctions.openModal('globalSettingsModal'));
+    await page.waitForFunction(() => {
+        const revision = document.getElementById('globalSettingsModal')?.dataset?.vcpSettingsRevision;
+        return Boolean(document.getElementById('globalSettingsForm')
+            && window.VCPUISettingsBridge?.getTypedService?.()
+            && Number.isInteger(Number(revision)));
+    }, { timeout: timeoutMs });
+    console.log('  [PASS] 1p. typed settings revision is ready in the same open cycle that exposes the form');
+
+    // ---- 1. SettingsShell layout ----
     await page.waitForFunction(() => document.getElementById('globalSettingsForm'), { timeout: timeoutMs });
     await page.waitForFunction(() => document.querySelector('#globalSettingsModal .vcp-harness-settings-panel'), { timeout: timeoutMs });
     const shellState = await page.evaluate(() => {
@@ -194,6 +209,92 @@ try {
     assert.equal(shellState.unwrappedBusinessRows, 0, 'every business row is owned by a canonical wrapper');
     assert.ok(Number.isInteger(Number(shellState.typedSettingsRevision)), `typed settings snapshot missing: ${JSON.stringify(shellState)}`);
     assert.ok(shellState.typedSettingsSource, `typed settings source missing: ${JSON.stringify(shellState)}`);
+
+    // ---- 1q (retirement evidence E2). First-open parity: every control the
+    // presentationOwner startup fallback would fill mirrors the typed
+    // snapshot with the same defaulting, so deleting the fallback cannot
+    // change the first-open outcome.  Mirrors the projection contracts in
+    // settings-bridge (typed field owner defaults) and
+    // mainChatSettingsPresentationOwner (fallback defaults) exactly.
+    // vcpServerUrl is asserted against the raw snapshot deliberately: the
+    // typed projection projects the stored URL verbatim (the fallback's
+    // completeVcpUrl completion is a documented owner divergence, see
+    // handoff E4 inventory).  userUseThemeColorsInChat has no control in
+    // #globalSettingsForm and is excluded on both sides. ----
+    const fallbackParity = await page.evaluate(() => {
+        const s = window.VCPUISettingsBridge.getTypedService().state.get() || {};
+        const val = (id) => { const el = document.getElementById(id); return el ? String(el.value) : null; };
+        const chk = (id) => { const el = document.getElementById(id); return el ? el.checked : null; };
+        const clampWidth = (value, fallback) => {
+            const parsed = Number.parseInt(value, 10);
+            return Number.isFinite(parsed) ? Math.min(98, Math.max(50, parsed)) : fallback;
+        };
+        const modes = ['bubble', 'panel', 'immersive'];
+        const mode = modes.includes(s.chatPresentationMode) ? s.chatPresentationMode : 'bubble';
+        const presentationId = `chatPresentationMode${mode[0].toUpperCase()}${mode.slice(1)}`;
+        const wide = s.enableWideChatLayout === true;
+        const expected = {
+            userName: s.userName || '用户',
+            userAvatarBorderColor: s.userAvatarBorderColor || '#3d5a80',
+            userAvatarBorderColorText: s.userAvatarBorderColor || '#3d5a80',
+            userNameTextColor: s.userNameTextColor || '#ffffff',
+            userNameTextColorText: s.userNameTextColor || '#ffffff',
+            vcpServerUrl: String(s.vcpServerUrl ?? ''),
+            vcpApiKey: s.vcpApiKey || '',
+            fileKey: s.fileKey || '',
+            vcpLogUrl: s.vcpLogUrl || '',
+            vcpLogKey: s.vcpLogKey || '',
+            topicSummaryModel: s.topicSummaryModel || '',
+            continueWritingPrompt: s.continueWritingPrompt || '请继续',
+            flowlockContinueDelay: s.flowlockContinueDelay ?? 5,
+            speechRecognizerBrowserPath: s.speechRecognizerBrowserPath || '',
+            // Owner-divergence note (handoff E4): these two display defaults
+            // live in the renderer default-settings universe (renderer.js)
+            // and reach the screen through the startup fallback fill; the
+            // typed state stores raw persisted data where the keys may be
+            // unset.  The oracle mirrors the actual first-open outcome.
+            speechRecognizerPagePath: s.speechRecognizerPagePath || 'Voicechatmodules/recognizer.html',
+            voiceLocalSovitsUrl: s.voiceLocalSettings?.sovitsUrl || '',
+            voiceLocalSovitsKey: s.voiceLocalSettings?.sovitsKey || '',
+            voiceNetworkProviderUrl: s.voiceNetworkSettings?.providerUrl || 'https://api.siliconflow.cn',
+            voiceNetworkProviderKey: s.voiceNetworkSettings?.providerKey || '',
+            enableSmoothStreaming: s.enableSmoothStreaming === true,
+            voiceModeLocal: (s.voiceMode || 'local') !== 'network',
+            voiceModeNetwork: (s.voiceMode || 'local') === 'network',
+            [presentationId]: true,
+            chatLayoutModeWide: wide,
+            chatLayoutModeNormal: !wide,
+            enableUserChatBubbleUi: s.enableUserChatBubbleUi !== false,
+            showUserMetaInChatBubbleUi: s.showUserMetaInChatBubbleUi !== false,
+            chatBubbleMaxWidthWideDefault: clampWidth(s.chatBubbleMaxWidthWideDefault, 92),
+            chatBubbleMaxWidthWideNotifications: clampWidth(s.chatBubbleMaxWidthWideNotifications, 96),
+            chatBubbleMaxWidthWideNarrow: clampWidth(s.chatBubbleMaxWidthWideNarrow, clampWidth(s.chatBubbleMaxWidthWideDefault, 92)),
+            minChunkBufferSize: s.minChunkBufferSize ?? 16,
+            smoothStreamIntervalMs: s.smoothStreamIntervalMs ?? 100,
+            chatFontPreset: s.chatFontPreset || 'system',
+            chatFontCustom: s.chatFontCustom || '',
+            chatCodeFontPreset: s.chatCodeFontPreset || 'consolas',
+            chatCodeFontCustom: s.chatCodeFontCustom || '',
+            chatDiaryFontPreset: s.chatDiaryFontPreset || 'serif',
+            chatDiaryFontCustom: s.chatDiaryFontCustom || '',
+            chatToolFontPreset: s.chatToolFontPreset || 'system',
+            chatToolFontCustom: s.chatToolFontCustom || '',
+        };
+        const mismatches = [];
+        for (const [id, want] of Object.entries(expected)) {
+            const got = typeof want === 'boolean' ? chk(id) : val(id);
+            if (got === null) { mismatches.push({ id, want: String(want), got: null }); continue; }
+            if (String(got) !== String(want)) mismatches.push({ id, want: String(want), got: String(got) });
+        }
+        const paths = [...document.querySelectorAll('#networkNotesPathsContainer input[name="networkNotesPath"]')]
+            .map(node => node.value.trim()).filter(Boolean);
+        const wantPaths = Array.isArray(s.networkNotesPaths) ? s.networkNotesPaths.map(String) : [];
+        if (JSON.stringify(paths) !== JSON.stringify(wantPaths)) mismatches.push({ id: 'networkNotesPaths', want: wantPaths, got: paths });
+        return { mismatches, checkedControls: Object.keys(expected).length };
+    });
+    assert.deepEqual(fallbackParity.mismatches, [], `first-open fill of every fallback-owned control mirrors the typed snapshot (${JSON.stringify(fallbackParity)})`);
+    console.log(`  [PASS] 1q. first-open fill mirrors the typed snapshot across ${fallbackParity.checkedControls} fallback-owned controls + path rows`);
+
     console.log(`  [INFO] nav geometry ${JSON.stringify(shellState.navGeometry)}`);
     console.log(`  [INFO] computed geometry ${JSON.stringify(shellState.computedGeometry)}`);
     await fs.writeFile(path.join(screenshotsDir, 'settings-computed-geometry.json'), `${JSON.stringify({ viewport: await page.evaluate(() => ({ width: innerWidth, height: innerHeight })), ...shellState }, null, 2)}\n`, 'utf8');
@@ -649,6 +750,15 @@ try {
                     customRadius: 14,
                 },
                 enableSmoothStreaming: false,
+                // Retirement evidence E5: these keys were previously only
+                // covered by the presentationOwner fallback; exercise the
+                // typed snapshot path for every remaining fallback id too.
+                topicSummaryModel: 'typed-topic-model',
+                chatFontCustom: 'typed-chat-font',
+                chatCodeFontPreset: 'cascadia',
+                chatCodeFontCustom: 'typed-code-font',
+                chatDiaryFontCustom: 'typed-diary-font',
+                chatToolFontPreset: 'ubuntu',
             }, source: 'external-test' }
         }));
     });
@@ -710,6 +820,13 @@ try {
     assert.equal(await page.$eval('#minChunkBufferSize', node => node.value), '24', 'clean chunk buffer consumes typed Settings snapshot');
     assert.equal(await page.$eval('#smoothStreamIntervalMs', node => node.value), '140', 'clean stream interval consumes typed Settings snapshot');
     assert.equal(await page.$eval('#chatFontPreset', node => node.value), 'serif', 'clean select control consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#topicSummaryModel', node => node.value), 'typed-topic-model', 'clean topic summary model consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#chatFontCustom', node => node.value), 'typed-chat-font', 'clean chat font custom consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#chatCodeFontPreset', node => node.value), 'cascadia', 'clean code font preset consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#chatCodeFontCustom', node => node.value), 'typed-code-font', 'clean code font custom consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#chatDiaryFontCustom', node => node.value), 'typed-diary-font', 'clean diary font custom consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#chatToolFontPreset', node => node.value), 'ubuntu', 'clean tool font preset consumes typed Settings snapshot');
+    assert.equal(await page.$eval('#chatLayoutModeNormal', node => node.checked), false, 'clean normal-layout radio consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceDensity', node => node.value), 'compact', 'clean appearance density consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceRadius', node => node.value), 'round', 'clean appearance radius consumes typed Settings snapshot');
     assert.equal(await page.$eval('#appearanceSidebarRadiusChoice-round', node => node.checked), true, 'clean sidebar radius Choice consumes typed Settings snapshot');
@@ -1180,11 +1297,100 @@ try {
         prompt: document.getElementById('continueWritingPrompt')?.value,
         userName: document.getElementById('userName')?.value,
         active: document.querySelector('#globalSettingsModal .settings-section.active')?.id,
+        // ---- retirement evidence E5: the durable-restore assertion set
+        // covers every id the presentationOwner fallback used to fill, so
+        // deleting the fallback cannot change the reload-restore outcome. ----
+        topicSummaryModel: document.getElementById('topicSummaryModel')?.value,
+        chatFontPreset: document.getElementById('chatFontPreset')?.value,
+        chatFontCustom: document.getElementById('chatFontCustom')?.value,
+        chatCodeFontPreset: document.getElementById('chatCodeFontPreset')?.value,
+        chatCodeFontCustom: document.getElementById('chatCodeFontCustom')?.value,
+        chatDiaryFontPreset: document.getElementById('chatDiaryFontPreset')?.value,
+        chatDiaryFontCustom: document.getElementById('chatDiaryFontCustom')?.value,
+        chatToolFontPreset: document.getElementById('chatToolFontPreset')?.value,
+        chatToolFontCustom: document.getElementById('chatToolFontCustom')?.value,
+        avatarBorder: document.getElementById('userAvatarBorderColor')?.value,
+        avatarBorderText: document.getElementById('userAvatarBorderColorText')?.value,
+        nameColor: document.getElementById('userNameTextColor')?.value,
+        nameColorText: document.getElementById('userNameTextColorText')?.value,
+        vcpServerUrl: document.getElementById('vcpServerUrl')?.value,
+        vcpApiKey: document.getElementById('vcpApiKey')?.value,
+        fileKey: document.getElementById('fileKey')?.value,
+        vcpLogUrl: document.getElementById('vcpLogUrl')?.value,
+        vcpLogKey: document.getElementById('vcpLogKey')?.value,
+        flowlockContinueDelay: document.getElementById('flowlockContinueDelay')?.value,
+        enableSmoothStreaming: document.getElementById('enableSmoothStreaming')?.checked,
+        voiceModeLocal: document.getElementById('voiceModeLocal')?.checked,
+        voiceModeNetwork: document.getElementById('voiceModeNetwork')?.checked,
+        speechRecognizerBrowserPath: document.getElementById('speechRecognizerBrowserPath')?.value,
+        speechRecognizerPagePath: document.getElementById('speechRecognizerPagePath')?.value,
+        voiceLocalSovitsUrl: document.getElementById('voiceLocalSovitsUrl')?.value,
+        voiceLocalSovitsKey: document.getElementById('voiceLocalSovitsKey')?.value,
+        voiceNetworkProviderUrl: document.getElementById('voiceNetworkProviderUrl')?.value,
+        voiceNetworkProviderKey: document.getElementById('voiceNetworkProviderKey')?.value,
+        chatPresentationModePanel: document.getElementById('chatPresentationModePanel')?.checked,
+        chatLayoutModeWide: document.getElementById('chatLayoutModeWide')?.checked,
+        chatLayoutModeNormal: document.getElementById('chatLayoutModeNormal')?.checked,
+        enableUserChatBubbleUi: document.getElementById('enableUserChatBubbleUi')?.checked,
+        showUserMetaInChatBubbleUi: document.getElementById('showUserMetaInChatBubbleUi')?.checked,
+        bubbleWideDefault: document.getElementById('chatBubbleMaxWidthWideDefault')?.value,
+        bubbleWideNotifications: document.getElementById('chatBubbleMaxWidthWideNotifications')?.value,
+        bubbleWideNarrow: document.getElementById('chatBubbleMaxWidthWideNarrow')?.value,
+        minChunkBufferSize: document.getElementById('minChunkBufferSize')?.value,
+        smoothStreamIntervalMs: document.getElementById('smoothStreamIntervalMs')?.value,
+        networkPaths: [...document.querySelectorAll('#networkNotesPathsContainer input[name="networkNotesPath"]')]
+            .map(node => node.value.trim()).filter(Boolean),
     }));
     assert.equal(restored.prompt, uniquePrompt, 'reopened form restored the persisted continueWritingPrompt');
     assert.equal(restored.userName, savedUserName, 'reopened form restored the persisted userName from disk');
     assert.equal(restored.active, 'section-user-identity', 'reopened modal starts on the first category');
-    console.log('  [PASS] 7. reopen after reload restores persisted values from settings.json');
+    assert.equal(restored.topicSummaryModel, 'typed-topic-model', 'restore covers the topic summary model fallback id');
+    assert.equal(restored.chatFontPreset, 'serif', 'restore covers the chat font preset fallback id');
+    assert.equal(restored.chatFontCustom, 'typed-chat-font', 'restore covers the chat font custom fallback id');
+    assert.equal(restored.chatCodeFontPreset, 'cascadia', 'restore covers the code font preset fallback id');
+    assert.equal(restored.chatCodeFontCustom, 'typed-code-font', 'restore covers the code font custom fallback id');
+    // 6d's preset edit can land as an empty-string draft (the diary select
+    // has no 'monospace' option, so the pre-existing section assigns '');
+    // the reload path then re-applies the projection default, which is the
+    // exact contract the fallback used to own.
+    assert.equal(restored.chatDiaryFontPreset, String(flushedFonts.chatDiaryFontPreset || 'serif'), 'restore covers the diary font preset fallback id');
+    assert.equal(restored.chatDiaryFontCustom, 'typed-diary-font', 'restore covers the diary font custom fallback id');
+    assert.equal(restored.chatToolFontPreset, 'ubuntu', 'restore covers the tool font preset fallback id');
+    assert.equal(restored.chatToolFontCustom, flushedFonts.chatToolFontCustom, 'restore covers the tool font custom fallback id');
+    assert.equal(restored.avatarBorder, '#123456', 'restore covers the avatar border color fallback id');
+    assert.equal(restored.avatarBorderText, '#123456', 'restore covers the avatar border color text mirror fallback id');
+    assert.equal(restored.nameColor, '#abcdef', 'restore covers the name color fallback id');
+    assert.equal(restored.nameColorText, '#abcdef', 'restore covers the name color text mirror fallback id');
+    // The save path normalizes the URL through completeVcpUrl before
+    // persisting (legacy collect contract); reload projects the stored
+    // value verbatim.
+    assert.equal(restored.vcpServerUrl, 'http://typed-external:6005/v1/chat/completions', 'restore covers the vcp server url fallback id (save-time completeVcpUrl normalization included)');
+    assert.equal(restored.vcpApiKey, 'typed-api-key', 'restore covers the api key fallback id');
+    assert.equal(restored.fileKey, 'typed-file-key', 'restore covers the file key fallback id');
+    assert.equal(restored.vcpLogUrl, 'ws://typed-log:6006', 'restore covers the log url fallback id');
+    assert.equal(restored.vcpLogKey, 'typed-log-key', 'restore covers the log key fallback id');
+    assert.equal(restored.flowlockContinueDelay, '12', 'restore covers the flowlock delay fallback id');
+    assert.equal(restored.enableSmoothStreaming, false, 'restore covers the smooth streaming fallback id');
+    assert.equal(restored.voiceModeNetwork, true, 'restore covers the network voice radio fallback id');
+    assert.equal(restored.voiceModeLocal, false, 'restore covers the local voice radio fallback id');
+    assert.equal(restored.speechRecognizerBrowserPath, '/typed/chrome', 'restore covers the STT browser path fallback id');
+    assert.equal(restored.speechRecognizerPagePath, '/typed/recognizer.html', 'restore covers the STT page path fallback id');
+    assert.equal(restored.voiceLocalSovitsUrl, 'http://typed-local:9880', 'restore covers the local sovits url fallback id');
+    assert.equal(restored.voiceLocalSovitsKey, 'typed-local-key', 'restore covers the local sovits key fallback id');
+    assert.equal(restored.voiceNetworkProviderUrl, 'https://typed-voice.example/api', 'restore covers the network provider url fallback id');
+    assert.equal(restored.voiceNetworkProviderKey, 'typed-network-key', 'restore covers the network provider key fallback id');
+    assert.equal(restored.chatPresentationModePanel, true, 'restore covers the presentation mode radio fallback id');
+    assert.equal(restored.chatLayoutModeWide, flushedWideLayout, 'restore covers the wide layout radio fallback id');
+    assert.equal(restored.chatLayoutModeNormal, !flushedWideLayout, 'restore covers the normal layout radio fallback id');
+    assert.equal(restored.enableUserChatBubbleUi, true, 'restore covers the user bubble toggle fallback id');
+    assert.equal(restored.showUserMetaInChatBubbleUi, false, 'restore covers the bubble meta toggle fallback id');
+    assert.equal(restored.bubbleWideDefault, '88', 'restore covers the wide default width fallback id');
+    assert.equal(restored.bubbleWideNotifications, '94', 'restore covers the notification width fallback id');
+    assert.equal(restored.bubbleWideNarrow, '90', 'restore covers the narrow width fallback id');
+    assert.equal(restored.minChunkBufferSize, '24', 'restore covers the chunk buffer fallback id');
+    assert.equal(restored.smoothStreamIntervalMs, '140', 'restore covers the stream interval fallback id');
+    assert.equal(JSON.stringify(restored.networkPaths), JSON.stringify(flushedPaths.committed), 'restore covers the network notes path list fallback owner');
+    console.log('  [PASS] 7. reopen after reload restores persisted values from settings.json (full fallback-id coverage)');
 
     // ---- 8. Canonical next layout survives reload ----
     assert.equal(await page.evaluate(() => document.documentElement.dataset.uiMode), 'next');
