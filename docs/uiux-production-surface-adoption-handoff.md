@@ -370,3 +370,7 @@ roadmap checkpoint 追加于 `38ec8bb8`。
 ### 2026-08-27 补记（用户实机反馈修复）：input-wrap 内部 margin 泄漏
 
 用户运行真实实例报告：非 appearance 各 tab 的文本输入框提示文字/hover 面整体上浮约 7px 与外框错位。隔离探针逐 tab 取证定位：`globalSettingsModal` 的 modal-content 容器存在 row-stacking legacy 规则 `.modal-content input { margin-bottom: 15px }`，harness 契约覆盖了 padding/border/height 但漏掉了 margin；15px 下边距参与 wrap 的 flex 居中计算后内容被顶高 7.5px。修复为在 `.vcp-harness-input-wrap > :is(input, textarea)` 归零 `margin: 0`（settings.css）。探针复测：29/29 包裹输入框对齐；Electron journey 18 PASS、source-equivalence 通过。同轮发现 assistantAgent 在无 agent 配置时仅剩占位 option → 裸 select 无 primitive 包装的退化态，与用户「部分 select 点不开」观感相关，留待批次 13 一并处理。
+
+### 2026-08-27 补记二（用户实机反馈修复）：focus 双环
+
+用户报告：focus/hover 时外壳边框变蓝之外，内层还浮一圈浅蓝高光（组件库展示页无此问题）。CDP matched-styles 取证：settings.css 内 `#globalSettingsForm :is(input…):focus` 先声明 `outline: none`，但其后的 `#globalSettingsForm :is(input, select, textarea, button):focus-visible { outline: 2px; outline-offset: 2px }` 以 ID 级优先级 + 靠后顺序胜出，内层输入框自己画环叠在外壳边框上形成双环。修复：后者选择器排除 `.vcp-harness-input-wrap/-select-wrap/-choice-wrap` 直接子控件（键盘 a11y 环仅保留给裸控件），壳子元素契约补 `outline: none` 兜底。探针复测 focus 态 outline 0px/none、外壳 focus-within 变蓝保留；journey 18 PASS、test:uiux 46/46、source-equivalence 通过。中间一次 journey 失败为 `typedSettingsRevision null` 时序 flake（原样复跑即绿），与 CSS 改动无关。
