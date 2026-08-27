@@ -1,0 +1,18 @@
+{
+  "primitive": "ReadBlock",
+  "provenance": {
+    "sources": [
+      "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/ReadBlock.tsx"
+    ],
+    "style": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/ReadBlock.module.css"
+  },
+  "root": { "tag": "div", "class": "block", "data": "read" },
+  "banner": { "tree": "div.banner > div.label + div.action", "optional": ["span.count", "span.lang", "button.copyButton"] },
+  "body": { "class": "body", "rows": "div.line > span.gutter[aria-hidden] + span.content", "cap": "16 lines default with head/tail retention" },
+  "window": { "count": "shown N / total M when lines.length < totalLines", "lineNumbers": "source file numbers are preserved" },
+  "copy": { "action": "copies raw joined source lines without gutter/chrome", "feedback": "复制成功 for 1000ms" },
+  "states": ["empty-window", "plain-unknown-language", "highlighted-language", "windowed-count", "capped-collapsed", "expanded", "copy-success", "dispose"],
+  "interaction": ["expand toggle reveals capped middle", "copy is absent for empty input", "lazy grammar load refreshes highlighted rows"],
+  "aria": ["gutter is aria-hidden", "expand button exposes aria-expanded and localized label", "copy is native button"],
+  "vcpDeviation": "ReadBlock is a frozen tool-detail reference; this contract is source-only and must not alter VCP chat or tool rendering."
+}
