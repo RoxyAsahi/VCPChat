@@ -12,6 +12,7 @@ import { mountInput } from './primitives/input.js';
 import { mountMenu } from './primitives/menu.js';
 import { mountAgentPresetSeat } from './primitives/agent-preset-seat.js';
 import { mountAgentPresetRow } from './primitives/agent-preset-row.js';
+import { mountLanguageRow } from './primitives/language-row.js';
 import { mountModal } from './primitives/modal.js';
 import { mountTooltip } from './primitives/tooltip.js';
 import { mountHoverCard } from './primitives/hover-card.js';
@@ -27,6 +28,7 @@ import { mountColorPair } from './primitives/color-pair.js';
 import { createPopupSelectController, mountPopupSelectView } from './primitives/popup-select.js';
 import { mountDirectoryBrowser } from './primitives/directory-browser.js';
 import { mountOnboardingSurface } from './primitives/onboarding-surface.js';
+import { mountDiffBlock } from './primitives/diff-block.js';
 interface LegacyScopeLike {
     readonly label: string;
     readonly active: boolean;
@@ -57,6 +59,7 @@ declare const api: {
     mountMenu: typeof mountMenu;
     mountAgentPresetSeat: typeof mountAgentPresetSeat;
     mountAgentPresetRow: typeof mountAgentPresetRow;
+    mountLanguageRow: typeof mountLanguageRow;
     mountModal: typeof mountModal;
     mountTooltip: typeof mountTooltip;
     mountHoverCard: typeof mountHoverCard;
@@ -73,6 +76,7 @@ declare const api: {
     mountPopupSelectView: typeof mountPopupSelectView;
     mountDirectoryBrowser: typeof mountDirectoryBrowser;
     mountOnboardingSurface: typeof mountOnboardingSurface;
+    mountDiffBlock: typeof mountDiffBlock;
     mountPrimitiveLabFromScope(root: HTMLElement, legacyScope: LegacyScopeLike): UiDisposer;
 };
 export { api as uiuxBrowserApi };

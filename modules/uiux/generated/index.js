@@ -9,6 +9,7 @@ export { mountInput } from './primitives/input.js';
 export { mountMenu } from './primitives/menu.js';
 export { AGENT_PRESET_SEAT_DEFAULT_HINT, AGENT_PRESET_SEAT_NO_DESCRIPTION, mountAgentPresetSeat } from './primitives/agent-preset-seat.js';
 export { AGENT_PRESET_ROW_DEFAULT_DESCRIPTION, AGENT_PRESET_ROW_DEFAULT_TITLE, AGENT_PRESET_ROW_LOADING_LABEL, AGENT_PRESET_ROW_USER_TRUST_LABEL, mountAgentPresetRow } from './primitives/agent-preset-row.js';
+export { mountLanguageRow } from './primitives/language-row.js';
 export { mountModal } from './primitives/modal.js';
 export { mountTooltip } from './primitives/tooltip.js';
 export { mountHoverCard } from './primitives/hover-card.js';
@@ -22,6 +23,8 @@ export { mountRange } from './primitives/range.js';
 export { mountToggle } from './primitives/toggle.js';
 export { mountColorPair } from './primitives/color-pair.js';
 export { mountOnboardingSurface } from './primitives/onboarding-surface.js';
+/** Candidate-only frozen-domain diff fixture; no VCP tool/chat consumer. */
+export { mountDiffBlock } from './primitives/diff-block.js';
 /** Candidate-only Harness command-popup contract; not a stable VCP business API. */
 export { createPopupSelectController, filterOptions, mountPopupSelectView } from './primitives/popup-select.js';
 /** Candidate-only in-app directory browser; its filesystem capabilities are injected by the caller. */

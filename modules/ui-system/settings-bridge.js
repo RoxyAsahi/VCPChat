@@ -15,17 +15,16 @@ const controllerReleases = new Map();
 // WeakMap cannot be iterated, so built roots are tracked separately.
 const shellState = new WeakMap();
 const shellRoots = new Set();
-// Long enumerations use a scoped Harness-style presentation layer while the
-// native select remains the sole form/business node.
-const customSelectStates = new Set();
-const customChoiceStates = new Set();
+// Every non-typed select is projected by the real library Select primitive
+// (window.VCPUIUX.mountSelect): the native select stays the sole business node
+// while the primitive owns trigger/menu presentation.  Keyed by select so a
+// dynamic option-list change can dispose and remount exactly one projection.
+const primitiveSelectStates = new Map();
 const autosaveStates = new Set();
 const typedFieldStates = new Set();
 const typedForumFieldStates = new Set();
 const disclosureStates = new Set();
 const selectObserverStates = new Map();
-let harnessSelectOwnerMounted = false;
-let harnessSelectOpenCount = 0;
 // Replaced inline SVGs inside the global form, keyed by container, so teardown
 // restores the original upstream paths during teardown.
 const iconReplacements = new Set();
@@ -396,33 +395,71 @@ function ensurePresentationScope() {
     return presentationScope;
 }
 
-function mountHarnessSelectOwner() {
-    if (harnessSelectOwnerMounted) return;
-    const onPointerDown = event => customSelectStates.forEach(state => {
-        if (state.open && !state.wrap.contains(event.target) && !state.popover.contains(event.target)) state.close?.();
+// The generated Select primitive owns open/close/selection and outside/Escape
+// dismissal, but does not implement roving keyboard focus inside the open
+// menu (thread A contract gap, reported upstream).  The bridge adds the
+// keyboard projection on its own listeners so the production surface keeps
+// the a11y parity of the retired local projection without patching the
+// primitive.  Cleanups are per-projection and run on remount/teardown.
+function mountSelectKeyboardGlue(select, cleanups) {
+    const trigger = select.parentElement?.querySelector(':scope > .vcp-harness-select-trigger');
+    if (!trigger) return;
+    const openMenuItems = () => {
+        const menuId = trigger.getAttribute('aria-controls');
+        const menu = menuId ? document.getElementById(menuId) : null;
+        if (!menu || menu.hidden) return null;
+        return [...menu.querySelectorAll('.vcp-harness-menu-item:not(:disabled)')];
+    };
+    const focusSelectedItem = () => {
+        const items = openMenuItems();
+        if (!items?.length) return;
+        const selected = items.find(item => item.dataset.selected === 'true') || items[0];
+        selected.focus();
+    };
+    const moveFocus = (items, current, next) => {
+        const count = items.length;
+        if (!count) return;
+        items[((next % count) + count) % count].focus();
+    };
+    const onTriggerKey = event => {
+        if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+        event.preventDefault();
+        if (trigger.getAttribute('aria-expanded') !== 'true') {
+            trigger.click();
+            requestAnimationFrame(focusSelectedItem);
+            return;
+        }
+        const items = openMenuItems();
+        if (!items?.length) return;
+        const current = Math.max(0, items.findIndex(item => item.dataset.selected === 'true'));
+        moveFocus(items, current, event.key === 'ArrowDown' ? current + 1 : current - 1);
+    };
+    const onDocumentKey = event => {
+        if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+        const target = event.target;
+        if (!(target instanceof Element) || !target.classList.contains('vcp-harness-menu-item')) return;
+        const items = openMenuItems();
+        if (!items?.length) return;
+        const current = items.indexOf(target);
+        let next = current;
+        if (event.key === 'ArrowDown') next = current + 1;
+        else if (event.key === 'ArrowUp') next = current - 1;
+        else if (event.key === 'Home') next = 0;
+        else next = items.length - 1;
+        event.preventDefault();
+        moveFocus(items, current, next);
+    };
+    // Programmatic business writes elsewhere publish global-settings-updated;
+    // the primitive only re-syncs on change/vcp-uiux-sync, so mirror the event.
+    const onGlobalUpdate = () => select.dispatchEvent(new Event('vcp-uiux-sync'));
+    trigger.addEventListener('keydown', onTriggerKey);
+    document.addEventListener('keydown', onDocumentKey, true);
+    window.addEventListener('global-settings-updated', onGlobalUpdate);
+    cleanups.push(() => {
+        trigger.removeEventListener('keydown', onTriggerKey);
+        document.removeEventListener('keydown', onDocumentKey, true);
+        window.removeEventListener('global-settings-updated', onGlobalUpdate);
     });
-    const onEscape = event => {
-        if (event.key !== 'Escape') return;
-        customSelectStates.forEach(state => { if (state.open) { event.preventDefault(); state.close?.(); } });
-    };
-    const onReposition = () => customSelectStates.forEach(state => { if (state.open) state.position?.(); });
-    document.addEventListener('pointerdown', onPointerDown, true);
-    window.addEventListener('keydown', onEscape, true);
-    window.addEventListener('resize', onReposition);
-    document.addEventListener('scroll', onReposition, true);
-    window.__vcpHarnessSelectOwnerCleanup = () => {
-        document.removeEventListener('pointerdown', onPointerDown, true);
-        window.removeEventListener('keydown', onEscape, true);
-        window.removeEventListener('resize', onReposition);
-        document.removeEventListener('scroll', onReposition, true);
-        harnessSelectOwnerMounted = false;
-        delete window.__vcpHarnessSelectOwnerCleanup;
-    };
-    harnessSelectOwnerMounted = true;
-}
-
-function releaseHarnessSelectOwner() {
-    if (harnessSelectOpenCount === 0) window.__vcpHarnessSelectOwnerCleanup?.();
 }
 
 function shouldEnhanceSidebarSettings() {
@@ -462,10 +499,12 @@ function enhance(name, element, options = {}) {
 }
 
 function enhanceForm(form) {
+    mountTypedAgentIdentityInput(form);
     form.querySelectorAll('.agent-settings-section, .group-settings-section').forEach(section => {
         enhance('SettingsSection', section);
     });
     form.querySelectorAll('input:is(:not([type]), [type="text"], [type="url"], [type="password"], [type="number"], [type="email"], [type="search"], [type="tel"])').forEach(input => {
+        if (input.id === 'agentNameInput') return;
         enhance('Input', input);
     });
     form.querySelectorAll('textarea').forEach(textarea => enhance('Textarea', textarea));
@@ -482,6 +521,29 @@ function enhanceForm(form) {
     form.querySelectorAll(':scope > .form-actions').forEach(actionBar => {
         enhance('SettingsActionBar', actionBar, { form });
     });
+}
+
+// The agent editor keeps the native input as its canonical form/business node;
+// only the visual wrapper is owned by the typed Harness candidate. This is a
+// narrow migration slice and deliberately excludes chat-side assistant
+// switching and the remaining agent fields.
+function mountTypedAgentIdentityInput(form) {
+    const input = form?.querySelector?.('#agentNameInput');
+    const api = window.VCPUIUX;
+    const scope = ensurePresentationScope();
+    if (!input || !api?.mountInput || !scope || input.dataset.vcpTypedAgentIdentity === 'true') return;
+    const originalClass = input.className;
+    const originalPlaceholder = input.getAttribute('placeholder');
+    try {
+        api.mountInput(input, { placeholder: originalPlaceholder || undefined }, scope);
+        input.dataset.vcpTypedAgentIdentity = 'true';
+        scope.own(() => {
+            delete input.dataset.vcpTypedAgentIdentity;
+            if (input.isConnected && input.className !== originalClass) input.className = originalClass;
+        }, 'agent-name-input-marker', 'ui-presentation');
+    } catch (error) {
+        console.warn('[VCPUI SettingsBridge] Could not mount typed Agent name Input:', error);
+    }
 }
 
 // Lucide icon names for the global settings categories. Icons are always
@@ -826,7 +888,7 @@ function mountCanonicalSettingsRows(form) {
 function composeCanonicalRowSlots(row) {
     if (!row || row.matches('label, fieldset') || row.querySelector(':scope > .vcp-harness-row-copy')) return;
     const children = [...row.children];
-    const controls = children.filter(node => node.matches('input, select, textarea, button, .switch, .model-input-container, .vcp-harness-select-wrap, .vcp-harness-choice-wrap'));
+    const controls = children.filter(node => node.matches('input, select, textarea, button, .switch, .model-input-container, .vcp-harness-select, .vcp-harness-input-wrap'));
     const titles = children.filter(node => node.matches('label, span, strong, h4, h5'));
     const helpers = children.filter(node => node.matches('small, p'));
     if (!controls.length || !titles.length) return;
@@ -1250,26 +1312,13 @@ function mountHarnessSelects(form) {
         previousObserver.disconnect();
         selectObserverStates.delete(form);
     }
-    // A refresh can arrive after an async options update.  Reclassify the
-    // existing projection before the per-select guard sees its wrapper;
-    // otherwise a Choice that became a long Select (or vice versa) would be
-    // treated as already mounted forever.
-    const requiresReclassification = [...form.querySelectorAll('select')].some(select => {
-        if (select.dataset.vcpTypedPrimitiveMounted === 'true') return false;
-        const isChoice = Boolean(select.closest('.vcp-harness-choice-wrap'));
-        const isSelect = Boolean(select.closest('.vcp-harness-select-wrap'));
-        const shouldChoice = !select.multiple && !select.disabled && select.options.length > 1 && select.options.length <= 4;
-        return (isChoice && !shouldChoice) || (isSelect && shouldChoice);
-    });
-    if (requiresReclassification) teardownHarnessSelects();
-    let ordinal = 0;
+    const api = window.VCPUIUX;
+    const scope = ensurePresentationScope();
     form.querySelectorAll('select').forEach(select => {
-        ordinal += 1;
         // Typed primitives mount first and mark their native business node.
-        // Legacy presentation may only decorate controls with no typed owner.
         if (select.dataset.vcpTypedPrimitiveMounted === 'true') return;
-        if (select.multiple || select.disabled || select.closest('.vcp-harness-select-wrap, .vcp-harness-choice-wrap')) return;
-        if (select.options.length > 1 && select.options.length <= 4) { select.classList.remove('vcp-settings-bare-select'); mountHarnessChoice(select); return; }
+        if (select.multiple || select.disabled) return;
+        if (select.closest('.vcp-harness-select')) return;
         if (select.options.length <= 1) {
             // A select with no real choices yet (e.g. #assistantAgent before
             // the agent list populates) stays a bare native control; tag it
@@ -1277,165 +1326,25 @@ function mountHarnessSelects(form) {
             select.classList.add('vcp-settings-bare-select');
             return;
         }
-        const controlId = select.id || `vcp-select-${ordinal}`;
-        select.classList.remove('vcp-settings-bare-select');
-        const originalTabIndex = select.getAttribute('tabindex');
-        const originalAriaHidden = select.getAttribute('aria-hidden');
-        const wrap = document.createElement('div');
-        wrap.className = 'vcp-harness-select-wrap';
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'vcp-harness-select-trigger';
-        // The presentation projection owns a Harness Menu primitive; the
-        // native select remains the sole business/serialization source.
-        button.setAttribute('aria-haspopup', 'menu');
-        button.id = `${controlId}-trigger`;
-        const label = document.createElement('span');
-        label.className = 'vcp-harness-select-label';
-        const arrow = document.createElement('span');
-        arrow.className = 'vcp-harness-select-arrow';
-        arrow.setAttribute('aria-hidden', 'true');
-        arrow.textContent = '';
-        button.append(label, arrow);
-        const popover = document.createElement('div');
-        popover.className = 'vcp-harness-menu-list vcp-harness-select-popover vcp-harness-menu-portal';
-        // Harness Menu is a menu primitive; the native select remains the
-        // serialization source while this portal owns menu semantics.
-        popover.setAttribute('role', 'menu');
-        popover.id = `${controlId}-menu`;
-        popover.hidden = true;
-        const state = { select, wrap, button, label, popover, open: false, portal: false, activeIndex: 0, cleanups: [], rebuildOptions: null };
-        button.setAttribute('aria-controls', popover.id);
         const fieldLabel = select.id ? [...document.querySelectorAll('label[for]')].find(label => label.htmlFor === select.id) : null;
-        const originalLabelId = fieldLabel?.id || null;
-        if (fieldLabel) {
-            if (!fieldLabel.id) fieldLabel.id = `${controlId}-label`;
-            button.setAttribute('aria-labelledby', fieldLabel.id);
-        }
-        const sync = () => {
-            const selected = select.options[select.selectedIndex];
-            label.textContent = selected?.textContent?.trim() || '';
-            button.setAttribute('aria-label', select.getAttribute('aria-label') || selected?.textContent?.trim() || '选择');
-            state.activeIndex = Math.max(0, select.selectedIndex);
-            [...popover.querySelectorAll('[role="menuitem"]')].forEach((option, index) => {
-                const active = option.dataset.value === select.value;
-                option.classList.toggle('is-selected', active);
-                option.tabIndex = index === state.activeIndex ? 0 : -1;
-            });
-            button.setAttribute('aria-activedescendant', `${controlId}-option-${state.activeIndex}`);
+        const labelText = fieldLabel?.textContent?.replace(/\s+/g, ' ').trim() || undefined;
+        const release = api?.mountSelect && scope
+            ? api.mountSelect(select, { label: labelText, portal: true }, scope)
+            : null;
+        if (!release) return; // No primitive runtime: leave the native select in place.
+        select.classList.remove('vcp-settings-bare-select');
+        select.dataset.vcpTypedPrimitiveMounted = 'true';
+        scope.own(() => { delete select.dataset.vcpTypedPrimitiveMounted; }, 'select-primitive-marker', 'ui-primitive');
+        const cleanups = [];
+        mountSelectKeyboardGlue(select, cleanups);
+        const stateRelease = () => {
+            cleanups.splice(0).forEach(cleanup => cleanup());
+            release();
+            delete select.dataset.vcpTypedPrimitiveMounted;
+            primitiveSelectStates.delete(select);
         };
-        const position = () => {
-            if (!state.open) return;
-            const rect = button.getBoundingClientRect();
-            popover.style.position = 'fixed'; popover.style.left = `${rect.left}px`; popover.style.top = `${rect.bottom + 6}px`; popover.style.width = `${rect.width}px`;
-        };
-        const close = () => {
-            const wasOpen = state.open;
-            state.open = false;
-            popover.hidden = true;
-            button.setAttribute('aria-expanded', 'false');
-            wrap.classList.remove('is-open');
-            if (state.portal) { wrap.append(popover); state.portal = false; }
-            popover.style.position = ''; popover.style.left = ''; popover.style.top = ''; popover.style.width = ''; popover.style.visibility = '';
-            if (wasOpen) { harnessSelectOpenCount = Math.max(0, harnessSelectOpenCount - 1); releaseHarnessSelectOwner(); }
-        };
-        const open = () => {
-            if (select.disabled) return;
-            state.open = true;
-            harnessSelectOpenCount += 1;
-            mountHarnessSelectOwner();
-            if (!state.portal) { document.body.append(popover); state.portal = true; }
-            popover.hidden = false;
-            popover.style.visibility = 'hidden';
-            button.setAttribute('aria-expanded', 'true');
-            wrap.classList.add('is-open');
-            position();
-            requestAnimationFrame(() => {
-                if (!state.open) return;
-                position();
-                popover.style.visibility = 'visible';
-                viewport.querySelector(`[role="menuitem"][data-index="${state.activeIndex}"]`)?.focus();
-            });
-        };
-        select.parentNode.insertBefore(wrap, select);
-        wrap.append(select, button, popover);
-        select.classList.add('vcp-harness-select-native');
-        select.tabIndex = -1;
-        select.setAttribute('aria-hidden', 'true');
-        button.setAttribute('aria-expanded', 'false');
-        const viewport = document.createElement('div');
-        viewport.className = 'vcp-harness-menu-viewport';
-        popover.append(viewport);
-        const rebuildOptions = () => {
-            // Rebuild the projection atomically from the native select.  The
-            // native node remains the sole business source; projection
-            // buttons are disposable presentation artifacts.
-            viewport.replaceChildren();
-            const optionCleanups = [];
-            [...select.options].forEach((option, optionIndex) => {
-            const itemWrap = document.createElement('div');
-            itemWrap.className = 'vcp-harness-menu-item-wrap';
-            const item = document.createElement('button');
-            item.type = 'button'; item.className = 'vcp-harness-menu-item vcp-harness-select-option'; item.dataset.value = option.value;
-            item.id = `${controlId}-option-${optionIndex}`;
-            item.dataset.index = String(optionIndex);
-            item.setAttribute('role', 'menuitem');
-            item.disabled = option.disabled;
-            if (option.disabled) item.setAttribute('aria-disabled', 'true');
-            const text = document.createElement('span'); text.className = 'vcp-harness-menu-item-label'; text.textContent = option.textContent.trim();
-            const check = document.createElement('span'); check.className = 'vcp-harness-menu-check vcp-harness-select-check vcp-ui-icon'; check.textContent = 'check'; check.setAttribute('aria-hidden', 'true');
-            item.append(text, check); itemWrap.append(item); viewport.append(itemWrap);
-            const onClick = () => {
-                if (option.disabled) return;
-                select.value = option.value;
-                select.dispatchEvent(new Event('change', { bubbles: true }));
-                sync();
-                close();
-                button.focus();
-            };
-            item.addEventListener('click', onClick); optionCleanups.push(() => item.removeEventListener('click', onClick));
-            });
-            // Rebuilding the disposable projection must retract listeners from
-            // detached option buttons before dropping their cleanup handles.
-            // Filtering alone leaves the old buttons/listeners retained until
-            // the whole Select owner is torn down.
-            state.cleanups.filter(cleanup => cleanup.__vcpOptionCleanup).forEach(cleanup => cleanup());
-            state.cleanups = state.cleanups.filter(cleanup => !cleanup.__vcpOptionCleanup);
-            optionCleanups.forEach(cleanup => { cleanup.__vcpOptionCleanup = true; state.cleanups.push(cleanup); });
-            sync();
-        };
-        state.rebuildOptions = rebuildOptions;
-        rebuildOptions();
-        const onButton = () => state.open ? close() : open();
-        const onKey = event => {
-            if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onButton(); return; }
-            if (event.key === 'Escape' && state.open) { event.preventDefault(); close(); return; }
-        };
-        const onMenuKey = event => {
-            if (!state.open) return;
-            const items = [...viewport.querySelectorAll('[role="menuitem"]')].filter(item => !item.disabled);
-            if (!items.length) return;
-            const current = Math.max(0, items.findIndex(item => Number(item.dataset.index) === state.activeIndex));
-            let next = current;
-            if (event.key === 'ArrowDown') next = (current + 1) % items.length;
-            else if (event.key === 'ArrowUp') next = (current - 1 + items.length) % items.length;
-            else if (event.key === 'Home') next = 0;
-            else if (event.key === 'End') next = items.length - 1;
-            else if (event.key === 'Escape') { event.preventDefault(); close(); button.focus(); return; }
-            else if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault(); items[current]?.click(); return;
-            } else return;
-            event.preventDefault();
-            state.activeIndex = Number(items[next].dataset.index);
-            items[next].focus();
-            button.setAttribute('aria-activedescendant', items[next].id);
-        };
-        const onChange = sync;
-        state.close = close;
-        state.position = position;
-        button.addEventListener('click', onButton); button.addEventListener('keydown', onKey); popover.addEventListener('keydown', onMenuKey); select.addEventListener('change', onChange); window.addEventListener('global-settings-updated', onChange);
-        state.cleanups.push(() => { close(); button.removeEventListener('click', onButton); button.removeEventListener('keydown', onKey); popover.removeEventListener('keydown', onMenuKey); select.removeEventListener('change', onChange); window.removeEventListener('global-settings-updated', onChange); if (originalAriaHidden === null) select.removeAttribute('aria-hidden'); else select.setAttribute('aria-hidden', originalAriaHidden); if (originalTabIndex === null) select.removeAttribute('tabindex'); else select.setAttribute('tabindex', originalTabIndex); if (fieldLabel && originalLabelId === null) fieldLabel.removeAttribute('id'); });
-        sync(); customSelectStates.add(state);
+        scope.own(stateRelease, 'select-primitive', 'ui-primitive');
+        primitiveSelectStates.set(select, { release: stateRelease });
     });
     if (window.MutationObserver && !selectObserverStates.has(form)) {
         const observer = new window.MutationObserver(mutations => {
@@ -1452,96 +1361,35 @@ function mountHarnessSelects(form) {
             if (form.dataset.vcpSelectRebuilding === 'true') return;
             clearTimeout(form.__vcpSelectRebuildTimer);
             form.__vcpSelectRebuildTimer = setTimeout(() => {
+                // The rebuild's own DOM churn (dispose restores the business
+                // node, the primitive re-inserts its wrap) is delivered back to
+                // this observer as a microtask; keep the guard raised until
+                // after that delivery so the projection cannot rebuild itself
+                // in a loop.
                 form.dataset.vcpSelectRebuilding = 'true';
-                // Same classification: refresh only the affected projection.
-                // If option count crosses the compact-choice threshold, do a
-                // full transaction so no stale instance or portal survives.
-                const changedSelects = [...form.querySelectorAll('select')];
-                const requiresReclassification = changedSelects.some(select => {
-                    if (select.dataset.vcpTypedPrimitiveMounted === 'true') return false;
-                    const isChoice = Boolean(select.closest('.vcp-harness-choice-wrap'));
-                    const shouldChoice = !select.multiple && !select.disabled && select.options.length > 1 && select.options.length <= 4;
-                    return isChoice !== shouldChoice;
-                });
-                if (requiresReclassification) {
+                // The generated primitive builds its menu once at mount and has
+                // no rebuild API (thread A contract): option-list changes must
+                // dispose and remount the projection.  Attribute-only changes
+                // (programmatic value/selected writes) re-sync the live
+                // projection through the primitive's vcp-uiux-sync hook.
+                if (mutations.some(record => record.type === 'childList')) {
                     teardownHarnessSelects();
-                    mountHarnessSelects(form);
+                    // LifecycleScope releases settle their dispose in a
+                    // microtask: the old projection must have fully restored
+                    // the business DOM before the remount runs, otherwise the
+                    // deferred disposer strips the freshly inserted wraps.
+                    setTimeout(() => mountHarnessSelects(form), 0);
                 } else {
-                    customSelectStates.forEach(state => {
-                        if (state.select.form === form) state.rebuildOptions?.();
-                    });
-                    customChoiceStates.forEach(state => {
-                        if (state.select.form === form) state.rebuildOptions?.();
+                    form.querySelectorAll('select[data-vcp-typed-primitive-mounted="true"]').forEach(select => {
+                        select.dispatchEvent(new Event('vcp-uiux-sync'));
                     });
                 }
-                form.dataset.vcpSelectRebuilding = 'false';
+                setTimeout(() => { delete form.dataset.vcpSelectRebuilding; }, 0);
             }, 0);
         });
         observer.observe(form, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'value', 'selected'] });
         selectObserverStates.set(form, observer);
     }
-}
-
-function mountHarnessChoice(select) {
-    const wrap = document.createElement('div'); wrap.className = 'vcp-harness-choice-wrap';
-    const track = document.createElement('div'); track.className = 'vcp-harness-choice-track'; track.setAttribute('role', 'radiogroup');
-    const originalTabIndex = select.getAttribute('tabindex');
-    const originalAriaHidden = select.getAttribute('aria-hidden');
-    const state = { select, wrap, track, cleanups: [], rebuildOptions: null };
-    const fieldLabel = select.id ? [...document.querySelectorAll('label[for]')].find(label => label.htmlFor === select.id) : null;
-    const originalLabelId = fieldLabel?.id || null;
-    if (fieldLabel) {
-        if (!fieldLabel.id) fieldLabel.id = `${select.id}-label`;
-        track.setAttribute('aria-labelledby', fieldLabel.id);
-    }
-    const sync = () => [...track.children].forEach(item => {
-        const active = item.dataset.value === select.value;
-        item.classList.toggle('is-selected', active); item.setAttribute('aria-checked', String(active));
-        item.tabIndex = active ? 0 : -1;
-    });
-    select.parentNode.insertBefore(wrap, select); wrap.append(select, track); select.classList.add('vcp-harness-choice-native'); select.tabIndex = -1; select.setAttribute('aria-hidden', 'true');
-    const rebuildOptions = () => {
-        const focusedValue = track.querySelector(':focus')?.dataset.value;
-        track.replaceChildren();
-        const optionCleanups = [];
-        [...select.options].forEach(option => {
-        const item = document.createElement('button'); item.type = 'button'; item.className = 'vcp-harness-choice-option'; item.dataset.value = option.value;
-        item.setAttribute('role', 'radio'); item.textContent = option.textContent.trim();
-        item.disabled = option.disabled; if (option.disabled) item.setAttribute('aria-disabled', 'true');
-        const onClick = () => { select.value = option.value; select.dispatchEvent(new Event('change', { bubbles: true })); sync(); item.focus(); };
-        item.addEventListener('click', onClick); optionCleanups.push(() => item.removeEventListener('click', onClick)); track.append(item);
-        });
-        // Retract listeners from detached choice buttons before replacing the
-        // cleanup handles; filtering without invoking them leaks each option
-        // projection across SettingsRoot refreshes.
-        state.cleanups.filter(cleanup => cleanup.__vcpOptionCleanup).forEach(cleanup => cleanup());
-        state.cleanups = state.cleanups.filter(cleanup => !cleanup.__vcpOptionCleanup);
-        optionCleanups.forEach(cleanup => { cleanup.__vcpOptionCleanup = true; state.cleanups.push(cleanup); });
-        sync();
-        if (focusedValue) [...track.children].find(item => item.dataset.value === focusedValue)?.focus();
-    };
-    state.rebuildOptions = rebuildOptions;
-    rebuildOptions();
-    const onKey = event => {
-        if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
-        event.preventDefault();
-        const available = [...select.options].map((option, index) => ({ option, index })).filter(({ option }) => !option.disabled);
-        if (!available.length) return;
-        const current = Math.max(0, available.findIndex(({ index }) => index === select.selectedIndex));
-        let next = current;
-        if (event.key === 'Home') next = 0;
-        else if (event.key === 'End') next = available.length - 1;
-        else {
-            const delta = ['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : -1;
-            next = (current + delta + available.length) % available.length;
-        }
-        next = available[next].index;
-        select.selectedIndex = next; select.dispatchEvent(new Event('change', { bubbles: true })); sync();
-        [...track.children].find(item => item.dataset.value === select.value)?.focus();
-    };
-    const onChange = sync; select.addEventListener('change', onChange); window.addEventListener('global-settings-updated', onChange); track.addEventListener('keydown', onKey);
-    state.cleanups.push(() => { select.removeEventListener('change', onChange); window.removeEventListener('global-settings-updated', onChange); track.removeEventListener('keydown', onKey); if (originalAriaHidden === null) select.removeAttribute('aria-hidden'); else select.setAttribute('aria-hidden', originalAriaHidden); if (originalTabIndex === null) select.removeAttribute('tabindex'); else select.setAttribute('tabindex', originalTabIndex); if (fieldLabel && originalLabelId === null) fieldLabel.removeAttribute('id'); });
-    sync(); customChoiceStates.add(state);
 }
 
 function teardownHarnessSelects() {
@@ -1551,20 +1399,12 @@ function teardownHarnessSelects() {
         delete form.__vcpSelectRebuildTimer;
     });
     selectObserverStates.clear();
-    window.__vcpHarnessSelectOwnerCleanup?.();
-    harnessSelectOpenCount = 0;
-    [...customSelectStates].forEach(state => {
-        state.cleanups.forEach(cleanup => cleanup());
-        state.select.classList.remove('vcp-harness-select-native');
-        if (state.wrap.parentNode) state.wrap.parentNode.insertBefore(state.select, state.wrap);
-        state.wrap.remove();
-        customSelectStates.delete(state);
-    });
-    [...customChoiceStates].forEach(state => {
-        state.cleanups.forEach(cleanup => cleanup());
-        state.select.classList.remove('vcp-harness-choice-native');
-        if (state.wrap.parentNode) state.wrap.parentNode.insertBefore(state.select, state.wrap);
-        state.wrap.remove(); customChoiceStates.delete(state);
+    [...primitiveSelectStates.keys()].forEach(select => {
+        // stateRelease retracts the keyboard glue, runs the primitive disposer
+        // (which restores the original business DOM) and clears the marker.
+        // The LifecycleScope release is idempotent and unregisters itself, so
+        // a later presentation-scope disposal will not double-dispose.
+        primitiveSelectStates.get(select)?.release?.();
     });
 }
 
