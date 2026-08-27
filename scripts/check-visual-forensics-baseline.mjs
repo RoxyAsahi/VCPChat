@@ -68,6 +68,8 @@ for (const dir of targets) {
       const finiteRect = rect => rect && [rect.x, rect.y, rect.width, rect.height].every(value => Number.isFinite(value) && value >= -baseline.geometryTolerancePx);
       assert.ok(observation.initial?.controls?.some(control => finiteRect(control.rect)), `${name}: no finite initial control geometry`);
       assert.ok(observation.settingsViewport?.visible?.some(control => finiteRect(control.rect)), `${name}: no finite settings geometry`);
+      assert.equal(observation.settingsViewport?.sections?.length, 8, `${name}: incomplete settings section geometry`);
+      assert.ok(observation.settingsViewport.sections.every(section => finiteRect(section.rect) && section.visibleControls > 0), `${name}: invalid settings section geometry`);
       assert.ok(finiteRect(observation.restored && { x: 0, y: 0, width: observation.restored.width, height: observation.restored.height }), `${name}: invalid restored geometry`);
       console.log(`Visual forensics pixel/geometry baseline passed: ${dir} ${name}`);
     }

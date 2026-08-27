@@ -47,6 +47,8 @@ for (const dir of targets) {
       assert.ok(['div', 'section'].includes(observation?.initial?.dom?.rootTree?.tag));
       assert.equal(observation?.settingsViewport?.active, true);
       assert.ok(observation?.settingsViewport?.visible?.length > 0);
+      assert.equal(observation?.settingsViewport?.sections?.length, 8);
+      assert.ok(observation.settingsViewport.sections.every(section => section.activeId && section.visibleControls > 0));
       assert.equal(observation?.stateTransitions?.loading?.visible, true);
       assert.equal(observation?.stateTransitions?.loading?.cleared, true);
       assert.ok(observation?.stateTransitions?.loading?.position);

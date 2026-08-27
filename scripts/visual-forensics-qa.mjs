@@ -191,7 +191,17 @@ try {
           const r = node.getBoundingClientRect(); const s = getComputedStyle(node);
           return { tag: node.tagName.toLowerCase(), id: node.id, className: node.className, parentClass: node.parentElement?.className || '', text: (node.textContent || node.getAttribute('aria-label') || '').trim().slice(0, 80), rect: { x: r.x, y: r.y, width: r.width, height: r.height }, color: s.color, backgroundColor: s.backgroundColor, borderRadius: s.borderRadius, padding: s.padding, fontSize: s.fontSize, lineHeight: s.lineHeight, disabled: node.disabled === true || node.getAttribute('aria-disabled') === 'true', invalid: node.getAttribute('aria-invalid') === 'true' || node.classList.contains('is-error'), busy: node.getAttribute('aria-busy') === 'true' || node.classList.contains('is-loading'), selected: node.getAttribute('aria-selected') === 'true' || node.classList.contains('is-selected') };
         });
-      return { active: Boolean(modal?.classList.contains('active') || modal), visible, activeSection: modal?.querySelector('.settings-section.active')?.id || '' };
+      const sectionIds = ['user-identity', 'server-connection', 'appearance-settings', 'render-settings', 'selection-assistant', 'voice-settings', 'advanced-features', 'quick-actions'];
+      const sections = sectionIds.map(sectionId => {
+        const tab = modal?.querySelector(`#vcpSettingsTab-${sectionId}`);
+        tab?.click();
+        const active = modal?.querySelector('.settings-section.active');
+        const controls = [...(active?.querySelectorAll('input, select, textarea, button, wa-input, wa-select') || [])].filter(node => node.getClientRects().length);
+        const r = active?.getBoundingClientRect();
+        return { sectionId, activeId: active?.id || '', visibleControls: controls.length, rect: r ? { x: r.x, y: r.y, width: r.width, height: r.height } : null };
+      });
+      modal?.querySelector('#vcpSettingsTab-user-identity')?.click();
+      return { active: Boolean(modal?.classList.contains('active') || modal), visible, activeSection: modal?.querySelector('.settings-section.active')?.id || '', sections };
     }).catch(error => ({ error: error.message }));
     await page.evaluate(() => window.uiHelperFunctions?.closeModal?.('globalSettingsModal')).catch(() => {});
     await sleep(80);
