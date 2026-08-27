@@ -24,7 +24,7 @@ test('Harness parity evidence audit preserves provenance and explicit gaps', () 
 test('Model picker diff reports pending or compares when a Harness capture exists', () => {
     execFileSync(process.execPath, ['scripts/diff-harness-vcp-model-picker.mjs'], { cwd: root, stdio: 'pipe' });
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-model-picker-diff.json'), 'utf8'));
-    assert.ok(['pending-harness-capture', 'harness-capture-available-pixel-pending'].includes(report.status));
+    assert.ok(['pending-harness-capture', 'pending-harness-interaction-evidence', 'harness-capture-available-pixel-pending'].includes(report.status));
     assert.equal(report.dom.ariaContractPass, true);
     assert.equal(report.dom.deviations[0].declared, true);
     if (report.status === 'pending-harness-capture') {
@@ -33,6 +33,10 @@ test('Model picker diff reports pending or compares when a Harness capture exist
         assert.ok(report.missingEvidence.includes('Candidate DOM/ARIA structural contract'));
         assert.ok(report.missingEvidence.includes('Harness ModelSelect browser capture (DOM + computed style)'));
         assert.ok(report.missingEvidence.includes('Candidate computed-style contract'));
+    } else if (report.status === 'pending-harness-interaction-evidence') {
+        assert.equal(report.pass, false);
+        assert.equal(report.harnessCapture.interaction.pass, false);
+        assert.ok(report.missingEvidence.includes('Harness ModelSelect keyboard/focus interaction evidence'));
     } else {
         assert.equal(report.pass, true, 'source and computed-style comparison should pass before pixel evidence');
         assert.equal(report.dom.structuralPass, true);
