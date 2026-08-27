@@ -127,6 +127,8 @@ if (report.agentModelPickerInteraction !== null && report.agentModelPickerIntera
         reopened: true,
         escaped: true,
         focusRestored: true,
+        cardConnected: false,
+        rowsAfterEscape: 0,
     }, 'Agent model picker interaction evidence is incomplete');
 }
 if (report.agentPromptInteraction !== null && report.agentPromptInteraction !== undefined) {
