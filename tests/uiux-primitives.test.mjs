@@ -9,6 +9,26 @@ const { createUiScope } = await import('../modules/uiux/runtime/scope.ts');
 const { mountField } = await import('../modules/uiux/primitives/field.ts');
 const { mountButton } = await import('../modules/uiux/primitives/button.ts');
 const { mountPill } = await import('../modules/uiux/primitives/pill.ts');
+const { mountConnectionBanner } = await import('../modules/uiux/primitives/connection-banner.ts');
+
+test('Harness ConnectionBanner owns reconnecting projection and restores host on dispose', async () => {
+    const dom = new JSDOM('<!doctype html><main><div id="host"><span>original</span></div></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('connection-banner-test'));
+        const host = document.getElementById('host');
+        const controller = mountConnectionBanner(host, { reconnecting: true, label: 'Retrying' }, scope);
+        assert.equal(host.querySelector('[role=status]')?.textContent, 'Retrying');
+        controller.setLabel('Reconnecting');
+        assert.equal(host.querySelector('[role=status]')?.textContent, 'Reconnecting');
+        controller.setReconnecting(false);
+        assert.equal(host.querySelector('[role=status]'), null);
+        controller.setReconnecting(true);
+        await scope.dispose('connection-banner-complete');
+        assert.equal(host.textContent, 'original');
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
 const { mountSelect } = await import('../modules/uiux/primitives/select.ts');
 const { mountInput } = await import('../modules/uiux/primitives/input.ts');
 const { mountMenu } = await import('../modules/uiux/primitives/menu.ts');

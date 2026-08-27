@@ -22,6 +22,7 @@
   "interactionCases": [
     { "case": "select/keyboard-open-focus", "status": "pass", "evidence": "same semantic fixture; Harness and VCP retain trigger focus" },
     { "case": "pill/static-interactive-active-dispose", "status": "candidate-interaction-active", "evidence": "focused source test covers static span, native button, active styling, click ownership and exact class/type restoration" },
+    { "case": "connection-banner/reconnecting-hidden-label-dispose", "status": "candidate-interaction-active", "evidence": "focused source test covers reconnecting visibility, localized label update and exact host restoration" },
     { "case": "select/busy-trigger-disabled", "status": "blocked-vcp-consumer", "evidence": "Harness production capture passes; no in-scope VCP AgentPreset consumer" },
     { "case": "menu/candidate-composite-states", "status": "candidate-interaction-active", "evidence": "generated Electron fixture covers label/separator/footer/selected/disabled/danger/submenu, portal placement, outside-dismiss, Escape and dispose; same-semantic Harness pixel fixture pending" },
     { "case": "modal/close-reopen-dispose", "status": "candidate-interaction-active", "evidence": "generated Electron fixture covers standard/headless portals, mask/Escape/close-button, reopen, close icon, exact owned-node restoration and dispose; same-semantic Harness pixel fixture pending" },

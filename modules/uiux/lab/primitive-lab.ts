@@ -17,6 +17,7 @@ import { mountSelect } from '../primitives/select.js';
 import { createPopupSelectController, mountPopupSelectView } from '../primitives/popup-select.js';
 import { mountDirectoryBrowser } from '../primitives/directory-browser.js';
 import { mountPill } from '../primitives/pill.js';
+import { mountConnectionBanner } from '../primitives/connection-banner.js';
 
 const STYLE_ID = 'vcp-harness-primitive-lab';
 
@@ -77,6 +78,9 @@ export function mountPrimitiveLab(root: HTMLElement, scope: UiScope): UiDisposer
         pillRow.append(pill);
         mountPill(pill, { active, interactive: label === 'Interactive', onClick: label === 'Interactive' ? () => { pill.dataset.clicked = 'true'; } : undefined }, labScope);
     }
+    const connectionRow = group(lab, 'ConnectionBanner', 'deepseek-harness/packages/client/ui-primitives/src/ConnectionBanner.tsx');
+    const connectionHost = document.createElement('div'); connectionRow.append(connectionHost);
+    mountConnectionBanner(connectionHost, { reconnecting: true }, labScope);
 
     const inputRow = group(lab, 'Input', 'deepseek-harness/packages/client/ui-primitives/src/Input.tsx');
     const inputHost = document.createElement('span');

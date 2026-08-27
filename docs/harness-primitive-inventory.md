@@ -35,7 +35,8 @@
 | Terminal/Read/Diff/Search/Web Block | matching `ui-primitives/src/*Block.tsx`；Tool details/rows | inventoried | B2 |
 | MarkdownText / MessageText / CodeBlock / JsonBlock | `ui-primitives/src/markdown/`；Chat、Tool、Deliverables、Trajectory | inventoried；VCP production integration frozen | B4 |
 | BrandWordmark / FishLogo / icons | `ui-primitives/src/` and `src/icons/`；app-wide assets | inventoried | B1 |
-| ConnectionBanner / OnboardingSurface / Pill | matching source；当前未确认 production consumer | inventoried-source-only | B3 |
+| ConnectionBanner | `ui-primitives/src/ConnectionBanner.tsx`；连接重试提示 | candidate-interaction-active；reconnecting/hidden、aria-live、owner teardown 已建立，Harness pixel fixture与 VCP production consumer pending | B3 |
+| OnboardingSurface | `ui-primitives/src/OnboardingSurface.tsx`；首运行 takeover | inventoried-source-only | B3 |
 
 ## Interaction patterns and composites
 
