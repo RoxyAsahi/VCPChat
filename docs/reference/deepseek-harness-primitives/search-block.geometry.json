@@ -1,0 +1,17 @@
+{
+  "primitive": "SearchBlock",
+  "styleSource": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/SearchBlock.module.css",
+  "selectors": {
+    ".block": { "position": "relative", "margin": "16px 0", "borderRadius": "var(--dsl-search-radius)" },
+    ".header": { "display": "flex", "alignItems": "center", "gap": "12px", "padding": "9px 14px" },
+    ".summary": { "flex": "1", "minWidth": "0", "overflow": "hidden", "textOverflow": "ellipsis", "whiteSpace": "nowrap" },
+    ".body": { "padding": "8px 14px 12px 0", "overflowX": "auto", "overflowY": "hidden" },
+    ".line": { "minHeight": "var(--dsl-search-line-height)", "paddingLeft": "14px", "whiteSpace": "pre" },
+    ".fileHeader": { "display": "flex", "alignItems": "baseline", "gap": "8px", "width": "100%", "minHeight": "var(--dsl-search-line-height)", "padding": "0 14px" },
+    ".expand": { "display": "block", "width": "100%", "padding": "0 14px", "textAlign": "left" },
+    ".empty": { "padding": "12px 14px" }
+  },
+  "tokens": ["--dsw-alias-label-primary", "--dsw-alias-label-secondary", "--dsw-alias-label-tertiary", "--dsw-alias-markdown-code-block", "--dsw-alias-markdown-code-block-banner", "--dsw-font-xs-13", "--dsw-font-markdown-code-block"],
+  "geometryInvariants": ["result lines remain preformatted and horizontally scrollable", "summary can shrink while copy stays intrinsic", "file headers consume one 22px row", "collapsed body uses the shared 16-row cap"],
+  "candidateStatus": "source-only frozen tool detail; no VCP consumer or paired visual capture"
+}
