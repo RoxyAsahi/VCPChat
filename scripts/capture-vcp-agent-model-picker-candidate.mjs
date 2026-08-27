@@ -103,6 +103,7 @@ try {
         const menuRule = [...document.styleSheets].flatMap(sheet => {
             try { return [...sheet.cssRules]; } catch { return []; }
         }).find(rule => rule.selectorText?.includes('.vcp-harness-popup-select-card'));
+        const menuRect = menu?.getBoundingClientRect();
         const card = host.querySelector('.vcp-harness-popup-select-card');
         card?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         await new Promise(resolve => setTimeout(resolve, 0));
@@ -148,6 +149,9 @@ try {
                 borderRadius: menuStyle.borderRadius,
                 padding: menuStyle.padding,
                 minWidth: menuStyle.minWidth,
+                rect: menuRect ? {
+                    x: menuRect.x, y: menuRect.y, width: menuRect.width, height: menuRect.height,
+                } : null,
                 cssContract: {
                     borderRadius: menuRule?.style?.borderRadius || null,
                     padding: menuRule?.style?.padding || null,
