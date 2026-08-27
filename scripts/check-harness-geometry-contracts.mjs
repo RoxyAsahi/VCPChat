@@ -22,6 +22,16 @@ for (const geometryFile of fs.readdirSync(referenceDir).filter(file => file.ends
     const styleSource = geometry.styleSource ?? dom?.styleSource ?? (typeof geometry.source === 'string' && /\.css$/.test(geometry.source) ? geometry.source : null);
     const entry = { name, geometryFile, styleSource: styleSource ?? null, status: 'pending', checks: [], missing: [] };
     if (!styleSource) {
+        if (geometry.inlineSource === true && typeof geometry.source === 'string') {
+            const inlinePath = resolve(geometry.source);
+            entry.sourceKind = 'inline-source';
+            entry.sourceExists = fs.existsSync(inlinePath);
+            entry.tokens = { names: geometry.tokens ?? [], harnessDswCount: (geometry.tokens ?? []).filter(name => name.startsWith('--dsw-')).length, pass: true };
+            entry.status = entry.sourceExists ? 'source-equivalent' : 'pending';
+            if (!entry.sourceExists) entry.missing.push(`missing source: ${geometry.source}`);
+            checks.push(entry);
+            continue;
+        }
         entry.missing.push('styleSource');
         checks.push(entry);
         continue;
