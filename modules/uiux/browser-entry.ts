@@ -14,6 +14,7 @@ import { mountButton } from './primitives/button.js';
 import { mountSelect } from './primitives/select.js';
 import { mountInput } from './primitives/input.js';
 import { mountMenu } from './primitives/menu.js';
+import { mountAgentPresetSeat } from './primitives/agent-preset-seat.js';
 import { mountModal } from './primitives/modal.js';
 import { mountTooltip } from './primitives/tooltip.js';
 import { mountHoverCard } from './primitives/hover-card.js';
@@ -66,6 +67,7 @@ const api = {
     mountSelect,
     mountInput,
     mountMenu,
+    mountAgentPresetSeat,
     mountModal,
     mountTooltip,
     mountHoverCard,

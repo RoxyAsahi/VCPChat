@@ -3,6 +3,7 @@ import { mountButton, type ButtonProps } from '../primitives/button.js';
 import { mountField } from '../primitives/field.js';
 import { mountInput } from '../primitives/input.js';
 import { mountMenu } from '../primitives/menu.js';
+import { mountAgentPresetSeat, type AgentPresetSeatController } from '../primitives/agent-preset-seat.js';
 import { mountModal } from '../primitives/modal.js';
 import { mountTooltip } from '../primitives/tooltip.js';
 import { mountHoverCard } from '../primitives/hover-card.js';
@@ -125,6 +126,55 @@ export function mountPrimitiveLab(root: HTMLElement, scope: UiScope): UiDisposer
         },
     }, labScope);
     labScope.listen(menuTrigger, 'click', () => menu.setOpen(!menu.open));
+
+    // Harness provenance: ui-agent-preset/src/client/AgentPresetSeat.tsx renders
+    // the hero chip on the new-session screen (chat-side seat consumer). VCP has
+    // no legal production consumer for it yet (assistantAgent is legacy-owned;
+    // chat assistant switching is frozen), so this composite stays a Candidate
+    // fixture, not a Stable or public business API. The disabled-seat color
+    // token `--dsw-alias-label-quaternary` is undefined upstream in Harness
+    // ui-theme; the primitive keeps that variable name so a future harness-side
+    // definition applies verbatim.
+    const seatRow = group(lab, 'Agent Preset seat', 'deepseek-harness/packages/client/ui-agent-preset/src/client/AgentPresetSeat.tsx + chat new-session hero consumer; Candidate only, no VCP production consumer');
+    const seatTrigger = document.createElement('button');
+    seatTrigger.type = 'button';
+    seatRow.append(seatTrigger);
+    let seat: AgentPresetSeatController;
+    const seatOptions = [
+        { id: 'standard', name: 'Standard mode', description: 'Full coding agent with file editing, shell and search.' },
+        { id: 'code', name: 'Code mode', description: 'Standard capabilities through the Code Mode SDK.' },
+        { id: 'minimal', name: 'Minimal mode', description: 'Two-tool coding agent.' },
+    ];
+    seat = mountAgentPresetSeat(seatTrigger, {
+        options: seatOptions,
+        selectedId: 'standard',
+        onSelect: id => {
+            seat.setSelected(id);
+            seat.setBusy(true);
+            setTimeout(() => seat.setBusy(false), 600);
+        },
+        onClose: () => { seatTrigger.dataset.closed = 'true'; },
+    }, labScope);
+    // Harness chip owns its own click toggle (AgentPresetSeat.tsx); the lab
+    // reproduces it through the controller because the Candidate does not bind
+    // onClick by itself.
+    labScope.listen(seatTrigger, 'click', () => seat.setOpen(!seat.open));
+    const busyToggle = document.createElement('button');
+    busyToggle.type = 'button';
+    busyToggle.textContent = 'Toggle busy';
+    seatRow.append(busyToggle);
+    mountButton(busyToggle, { variant: 'ghost', size: 'sm' }, labScope);
+    labScope.listen(busyToggle, 'click', () => seat.setBusy(!seat.button.disabled));
+    const errorToggle = document.createElement('button');
+    errorToggle.type = 'button';
+    errorToggle.textContent = 'Set error';
+    seatRow.append(errorToggle);
+    mountButton(errorToggle, { variant: 'ghost', size: 'sm' }, labScope);
+    let seatHasError = false;
+    labScope.listen(errorToggle, 'click', () => {
+        seatHasError = !seatHasError;
+        seat.setError(seatHasError ? 'Could not stage the preset. Try again.' : null);
+    });
 
     const modalRow = group(lab, 'Modal', 'deepseek-harness/packages/client/ui-primitives/src/Modal.tsx + Workspace/Settings production consumers');
     const modalTrigger = document.createElement('button');

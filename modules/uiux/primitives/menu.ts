@@ -14,7 +14,7 @@ function ensureStyles() {
 
 export interface MenuItem {
     readonly id: string;
-    readonly label: string;
+    readonly label: string | Node;
     readonly disabled?: boolean;
     readonly icon?: Node;
     readonly danger?: boolean;
@@ -144,7 +144,8 @@ export function mountMenu(anchor: HTMLElement, props: MenuProps, scope: UiScope)
         }
         const label = document.createElement('span');
         label.className = 'vcp-harness-menu-item-label';
-        label.textContent = entry.label;
+        if (typeof entry.label === 'string') label.textContent = entry.label;
+        else label.append(entry.label.cloneNode ? entry.label.cloneNode(true) : entry.label);
         button.append(label);
         if (!nested) selectedNodes.set(entry.id, button);
         const hasSubmenu = Boolean(entry.submenu?.length);

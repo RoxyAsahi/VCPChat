@@ -27,6 +27,8 @@ export { mountSelect } from './primitives/select.js';
 export { mountInput } from './primitives/input.js';
 export { mountMenu } from './primitives/menu.js';
 export type { MenuController, MenuEntry, MenuItem, MenuLabel, MenuProps, MenuSeparator } from './primitives/menu.js';
+export { AGENT_PRESET_SEAT_DEFAULT_HINT, AGENT_PRESET_SEAT_NO_DESCRIPTION, mountAgentPresetSeat } from './primitives/agent-preset-seat.js';
+export type { AgentPresetSeatController, AgentPresetSeatOption, AgentPresetSeatProps } from './primitives/agent-preset-seat.js';
 export { mountModal } from './primitives/modal.js';
 export type { ModalController, ModalProps } from './primitives/modal.js';
 export { mountTooltip } from './primitives/tooltip.js';

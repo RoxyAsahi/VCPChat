@@ -1,0 +1,47 @@
+{
+  "viewport": {
+    "width": 800,
+    "height": 600,
+    "deviceScaleFactor": 1
+  },
+  "source": "generated-artifact-electron",
+  "state": "open-selected-busy-error-closed",
+  "closed": {
+    "minHeight": "28px",
+    "padding": "0px 8px",
+    "borderRadius": "16px",
+    "fontSize": "13px",
+    "fontWeight": "500",
+    "ariaExpanded": "false",
+    "hasPopup": "menu",
+    "title": null,
+    "titleTooltipBridge": "Agent preset for the session you are about to start",
+    "titleAriaLabel": "Agent preset for the session you are about to start",
+    "disabled": false,
+    "label": "Standard mode"
+  },
+  "open": {
+    "ariaExpanded": "true",
+    "itemCount": 3,
+    "items": [
+      {
+        "name": "Standard mode",
+        "description": "Full coding agent with file editing, shell and search."
+      },
+      {
+        "name": "Minimal mode",
+        "description": "Two-tool coding agent."
+      },
+      {
+        "name": "Code mode",
+        "description": "Standard capabilities through the Code Mode SDK."
+      }
+    ],
+    "selectedName": "Standard mode",
+    "minMenuWidth": "218px",
+    "menuRadius": "12px"
+  },
+  "busyDisabled": true,
+  "errorTitle": "Could not stage the preset. Try again.",
+  "picks": []
+}

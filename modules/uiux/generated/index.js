@@ -7,6 +7,7 @@ export { mountButton } from './primitives/button.js';
 export { mountSelect } from './primitives/select.js';
 export { mountInput } from './primitives/input.js';
 export { mountMenu } from './primitives/menu.js';
+export { AGENT_PRESET_SEAT_DEFAULT_HINT, AGENT_PRESET_SEAT_NO_DESCRIPTION, mountAgentPresetSeat } from './primitives/agent-preset-seat.js';
 export { mountModal } from './primitives/modal.js';
 export { mountTooltip } from './primitives/tooltip.js';
 export { mountHoverCard } from './primitives/hover-card.js';

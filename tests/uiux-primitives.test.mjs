@@ -20,6 +20,7 @@ const { mountToast, TOAST_HOLD_MS, TOAST_FADE_MS } = await import('../modules/ui
 // RiskConfirmation is the first composed primitive; source-plane Node cannot
 // resolve its emitted .js sibling imports, so exercise its checked-in artifact.
 const { mountRiskConfirmation } = await import('../modules/uiux/generated/primitives/risk-confirmation.js');
+const { mountAgentPresetSeat } = await import('../modules/uiux/generated/primitives/agent-preset-seat.js');
 const { mountSemanticIcon } = await import('../modules/uiux/primitives/semantic-icon.ts');
 const { mountChoice } = await import('../modules/uiux/primitives/choice.ts');
 const { mountRange } = await import('../modules/uiux/primitives/range.ts');
@@ -393,6 +394,84 @@ test('Harness RiskConfirmation gates confirm behind a controlled acknowledgement
     } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
 });
 
+test('Harness AgentPresetSeat stages picks over a portal menu and retracts cleanly', async () => {
+    const dom = new JSDOM('<!doctype html><main><button id="seat" class="legacy-seat">Legacy</button></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('agent-preset-seat-test'));
+        const seatButton = document.getElementById('seat');
+        const events = [];
+        const options = [
+            { id: 'standard', name: 'Standard mode', description: 'Full coding agent.' },
+            { id: 'minimal', name: 'Minimal mode', description: 'Two-tool agent.' },
+            { id: 'bare', description: undefined },
+        ];
+        const seat = mountAgentPresetSeat(seatButton, {
+            options,
+            selectedId: 'standard',
+            // Owner-controlled: the staged choice lives with the caller, so the
+            // callback projects it back (no second durable state inside).
+            onSelect: id => { events.push(id); seat.setSelected(id); },
+            onClose: () => events.push('close'),
+        }, scope);
+        // Closed chip geometry contract (AgentPresetSeat.module.css): 28px pill,
+        // 16px icon, 14px chevron, aria-haspopup/expanded, staged preset label.
+        assert.equal(seatButton.className.includes('vcp-agent-preset-seat'), true);
+        assert.equal(seatButton.getAttribute('aria-haspopup'), 'menu');
+        assert.equal(seatButton.getAttribute('aria-expanded'), 'false');
+        assert.equal(seatButton.getAttribute('title'), 'Agent preset for the session you are about to start');
+        assert.equal(seatButton.textContent.includes('Standard mode'), true);
+        assert.equal(seat.button.querySelector('.vcp-agent-preset-seat-icon')?.getAttribute('aria-hidden'), 'true');
+        assert.equal(seat.button.querySelector('.vcp-agent-preset-seat-chevron')?.getAttribute('aria-hidden'), 'true');
+        assert.equal(seat.menu?.open, false);
+
+        seat.setOpen(true);
+        assert.equal(seat.open, true);
+        assert.equal(seatButton.getAttribute('aria-expanded'), 'true');
+        const portalList = document.body.querySelector('.vcp-harness-menu-list[role="menu"]');
+        assert.ok(portalList, 'expected body-portal menu');
+        const labels = [...portalList.querySelectorAll('.vcp-harness-menu-item-label')];
+        assert.equal(labels.length, 3);
+        assert.ok(labels[0].querySelector('.vcp-agent-preset-seat-item-name')?.textContent === 'Standard mode');
+        assert.ok(labels[0].querySelector('.vcp-agent-preset-seat-item-desc')?.textContent === 'Full coding agent.');
+        // Harness renders `noDescription` copy when a preset publishes none; the
+        // bare option still falls back to its id for the name.
+        assert.ok(labels[2].querySelector('.vcp-agent-preset-seat-item-name')?.textContent === 'bare');
+        assert.ok(labels[2].querySelector('.vcp-agent-preset-seat-item-desc')?.textContent === 'No description');
+        assert.equal(portalList.querySelector('[data-selected="true"] .vcp-agent-preset-seat-item-name')?.textContent, 'Standard mode');
+
+        // Picking reports the pick; Menu.onClose only fires for outside/Escape,
+        // so no 'close' event lands here (Harness contract).
+        portalList.querySelectorAll('[role="menuitem"]')[1].click();
+        assert.deepEqual(events, ['minimal']);
+        assert.equal(seat.selectedLabel(), 'Minimal mode');
+
+        // Busy disables the trigger without touching the staged choice.
+        seat.setBusy(true);
+        assert.equal(seatButton.disabled, true);
+        seat.setBusy(false);
+        assert.equal(seatButton.disabled, false);
+
+        // Error surfaces through the title (Harness: title={state.error ?? t('seatHint')}).
+        seat.setError('Could not stage the preset. Try again.');
+        assert.equal(seatButton.getAttribute('title'), 'Could not stage the preset. Try again.');
+
+        // Roster swap keeps the menu contract and drops a removed selection.
+        await seat.setOptions([{ id: 'code', name: 'Code mode' }]);
+        assert.equal(seat.selectedLabel(), '');
+        seat.setSelected('code');
+        assert.equal(seat.selectedLabel(), 'Code mode');
+
+        await seat.dispose();
+        assert.equal(seatButton.className, 'legacy-seat');
+        assert.equal(seatButton.textContent, 'Legacy');
+        assert.equal(seatButton.hasAttribute('title'), false);
+        assert.equal(document.body.querySelector('.vcp-harness-menu-list'), null);
+        await scope.dispose('agent-preset-seat-complete');
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
+
 test('Harness semantic icon slots preserve one VCP icon owner and retract cleanly', async () => {
     const dom = new JSDOM('<!doctype html><main><span id="host" class="legacy"><em id="legacy">legacy</em></span></main>');
     const previousDocument = globalThis.document; const previousWindow = globalThis.window; const previousIcons = globalThis.VCPIcons;
@@ -483,6 +562,40 @@ test('Harness Menu owns open effects, composite entries, portal placement and te
         assert.equal(trigger.getAttribute('aria-haspopup'), null);
         assert.equal(trigger.getAttribute('aria-expanded'), 'legacy');
         await scope.dispose('menu-complete');
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
+
+test('Harness Menu accepts Node labels matching the ReactNode source contract', async () => {
+    const dom = new JSDOM('<!doctype html><main><button id="trigger">Preset</button></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('menu-node-label-test'));
+        const trigger = document.getElementById('trigger');
+        const picked = [];
+        // Harness AgentPresetSeat renders `label` as a span with name over
+        // description; the Menu atom contract is ReactNode, not string-only.
+        const seatItem = document.createElement('span');
+        seatItem.className = 'vcp-agent-preset-seat-item';
+        const name = document.createElement('span'); name.className = 'vcp-agent-preset-seat-item-name'; name.textContent = 'Standard mode';
+        const desc = document.createElement('span'); desc.className = 'vcp-agent-preset-seat-item-desc'; desc.textContent = 'Full toolset';
+        seatItem.append(name, desc);
+        const menu = mountMenu(trigger, {
+            items: [
+                { id: 'standard', label: seatItem },
+                { id: 'minimal', label: 'Minimal mode' },
+            ],
+            selectedId: 'standard',
+            onSelect: id => picked.push(id),
+        }, scope);
+        menu.setOpen(true);
+        const labelNode = menu.list.querySelector('.vcp-harness-menu-item-label');
+        assert.ok(labelNode?.querySelector('.vcp-agent-preset-seat-item .vcp-agent-preset-seat-item-name'));
+        assert.equal(labelNode.textContent, 'Standard modeFull toolset');
+        menu.list.querySelectorAll('[role="menuitem"]')[1].click();
+        assert.deepEqual(picked, ['minimal']);
+        await menu.dispose();
+        await scope.dispose('menu-node-label-complete');
     } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
 });
 
