@@ -33,6 +33,8 @@ for (const geometryFile of fs.readdirSync(referenceDir).filter(file => file.ends
         continue;
     }
     const css = fs.readFileSync(sourcePath, 'utf8');
+    const tokenNames = [...new Set([...css.matchAll(/var\((--[A-Za-z0-9_-]+)/g)].map(match => match[1]))];
+    entry.tokens = { names: tokenNames, harnessDswCount: tokenNames.filter(name => name.startsWith('--dsw-')).length, pass: tokenNames.some(name => name.startsWith('--dsw-')) };
     const ast = csstree.parse(css);
     const declarations = new Map();
     csstree.walk(ast, {
@@ -57,6 +59,7 @@ for (const geometryFile of fs.readdirSync(referenceDir).filter(file => file.ends
         }
     }
     entry.status = entry.checks.length && entry.checks.every(item => item.pass) ? 'source-equivalent' : 'source-mismatch';
+    if (!entry.tokens.pass) entry.missing.push('Harness --dsw-* token usage');
     entry.missing = entry.checks.filter(item => !item.pass).map(item => `${item.selector} ${item.property}`);
     checks.push(entry);
 }

@@ -53,6 +53,7 @@ test('Harness geometry audit reports source equivalence without hiding gaps', ()
     assert.ok(['geometry-evidence-gaps-present', 'source-equivalent'].includes(report.status));
     assert.ok(report.counts.contracts >= 20);
     assert.ok(report.checks.some(item => item.name === 'model-picker' && item.status === 'source-equivalent'));
+    assert.ok(report.checks.find(item => item.name === 'model-picker')?.tokens.pass);
     assert.ok(report.checks.some(item => item.status !== 'source-equivalent'));
 });
 
