@@ -189,3 +189,12 @@ test('MessageImage reference audit preserves DOM and geometry provenance', () =>
     assert.equal(report.candidateStatus, 'source-only frozen chat attachment; no VCP consumer or paired visual capture');
     assert.ok(report.evidenceGaps.includes('no VCP chat attachment consumer'));
 });
+
+test('ImageGallery reference audit preserves aggregation and alignment provenance', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-image-gallery-reference.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-image-gallery-reference.json'), 'utf8'));
+    assert.equal(report.domContract, true);
+    assert.equal(report.cssGeometry, '12/12');
+    assert.equal(report.candidateStatus, 'source-only frozen chat attachment; no VCP consumer or paired visual capture');
+    assert.ok(report.evidenceGaps.includes('no VCP chat attachment consumer'));
+});

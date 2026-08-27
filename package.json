@@ -44,6 +44,7 @@
     "check:harness-job-list-action-reference": "node scripts/check-harness-job-list-action-reference.mjs",
     "check:harness-produced-files-reference": "node scripts/check-harness-produced-files-reference.mjs",
     "check:harness-message-image-reference": "node scripts/check-harness-message-image-reference.mjs",
+    "check:harness-image-gallery-reference": "node scripts/check-harness-image-gallery-reference.mjs",
     "check:harness-fixture-readiness": "node scripts/check-harness-fixture-readiness.mjs",
     "capture:vcp-dom-fixtures": "node scripts/capture-vcp-dom-fixtures.mjs",
     "diff:harness-vcp-dom": "node scripts/diff-harness-vcp-dom.mjs",
