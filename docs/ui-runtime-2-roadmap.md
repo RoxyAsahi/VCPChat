@@ -11,6 +11,7 @@
 > **2026-08-27 Agent model-picker Candidate：** 新增 `mountAgentModelPicker`，将 provider/favorite/current 元数据映射到 owner-bound PopupSelect，覆盖搜索、异步加载、刷新、选择、关闭、焦点恢复和 dispose；仅通过注入的 `options/onSelect` 能力工作。它目前是 `candidate-interaction-active / source-equivalence-pending`，没有接入现有 `modelSelectModal`、IPC 或持久化，不构成生产等价。
 > **2026-08-27 ModelSelect reference pack：** 新增 Harness `ui-model-selection/ModelSelect.tsx` 的 DOM/CSS reference 与 fixture matrix 条目，明确 root/model/effort 三层 pane、trigger/menu ARIA、loading/error-retry/selecting/locked 状态。当前仅完成源码 provenance 与候选状态登记；VCP Candidate 与 Harness 的同引擎 DOM/computed-style/geometry/pixel 对照仍 pending。
 > **2026-08-27 ModelSelect Candidate contract：** `AgentModelPicker` 已补齐 Harness 风格 trigger/menu 几何、28px trigger、240px menu、38px option、provider/favorite metadata、disabled 行和 `aria-haspopup="menu"` 语义；源码与 generated artifact focused tests 通过。该修正仍只提升 Candidate fidelity，不改变生产 `modelSelectModal`，跨引擎截图/pixel 对照和真实 consumer 接入继续 pending。
+> **2026-08-27 ModelSelect pane contract：** Candidate 现在具备 Harness `root → model` 两层 pane：root 显示 Model/current value，进入 model pane 后显示搜索与选项；Escape 先退回 root，再关闭 picker。Effort pane 尚未实现，仍标记为后续扩展；现有 IPC、持久化和生产 modal 完全不变。
 
 > 状态：施工中（目标模式已启动）  
 > 建立日期：2026-08-24  

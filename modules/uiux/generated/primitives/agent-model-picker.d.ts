@@ -23,6 +23,7 @@ export interface AgentModelPickerController {
     close(): void;
     refresh(): void;
     setSelected(id: string | undefined): void;
+    setPane(pane: 'root' | 'model'): void;
     dispose(): UiDisposer | Promise<void>;
 }
 /**

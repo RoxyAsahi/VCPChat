@@ -123,6 +123,10 @@ test('Harness AgentModelPicker maps provider metadata and retracts its popup own
         await new Promise(resolve => setTimeout(resolve, 0));
         assert.equal(loads, 1);
         assert.equal(controller.popup.getSnapshot().open, true);
+        assert.equal(controller.root.querySelector('.vcp-harness-agent-model-picker-cell')?.hidden, false);
+        controller.setPane('model');
+        assert.equal(controller.root.querySelector('.vcp-harness-agent-model-picker-cell')?.hidden, true);
+        assert.equal(controller.root.querySelector('.vcp-harness-popup-select-search')?.hidden, false);
         assert.match(controller.popup.getSnapshot().options[0].detail, /OpenAI/);
         assert.match(controller.popup.getSnapshot().options[0].detail, /Favorite/);
         assert.equal(controller.popup.getSnapshot().options[2].disabled, true);
