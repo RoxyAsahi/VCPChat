@@ -49,6 +49,7 @@
     "capture:vcp-select-trigger-browser-fixture": "node scripts/capture-vcp-select-trigger-browser-fixture.mjs",
     "capture:vcp-button-fixture": "node scripts/capture-vcp-button-fixture.mjs",
     "capture:vcp-button-welcome-fixture": "VCP_BUTTON_FIXTURE=welcome node scripts/capture-vcp-button-fixture.mjs",
+    "capture:vcp-button-welcome-projection": "VCP_BUTTON_FIXTURE=welcome-projection node scripts/capture-vcp-button-fixture.mjs",
     "diff:harness-vcp-button-welcome": "node scripts/diff-harness-vcp-button-welcome.mjs",
     "diff:harness-vcp-select-trigger": "node scripts/diff-harness-vcp-select-trigger.mjs",
     "capture:harness-field-browser-fixture": "pnpm --dir /Users/asahi/Documents/Codex/deepseek-harness exec vitest run --config /Users/asahi/Documents/Codex/VCPChat-newarchitecture/scripts/harness-field-fixture.vitest.config.ts",

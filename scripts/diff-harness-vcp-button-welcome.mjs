@@ -4,8 +4,13 @@ import sharp from 'sharp';
 
 const root = process.cwd();
 const read = name => fs.readFile(path.join(root, 'reports', name), 'utf8').then(JSON.parse);
-const [harness, vcp] = await Promise.all([read('harness-button-welcome-production.json'), read('vcp-button-welcome-production.json')]);
+const [harness, vcp] = await Promise.all([read('harness-button-welcome-production.json'), read('vcp-button-welcome-projection.json')]);
 const actual = vcp.cases?.[0];
+const policy = JSON.parse(await fs.readFile(path.join(root, 'docs/reference/deepseek-harness-primitives/pixel-policy.json'), 'utf8'));
+const styleKeys = ['display', 'alignItems', 'gap', 'padding', 'borderWidth', 'borderRadius', 'backgroundColor', 'color', 'fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'boxShadow', 'cursor', 'opacity'];
+const normalizeStyle = (key, value) => key === 'fontFamily' && typeof value === 'string'
+  ? value.replace(/"(system-ui)"/g, '$1')
+  : value;
 const checks = [
   ['semanticFixture', harness.semanticFixture, vcp.semanticFixture, harness.semanticFixture === vcp.semanticFixture],
   ['text', harness.text, actual?.dom?.match(/>([^<]*)<\/button>/)?.[1] ?? null, harness.text === actual?.dom?.match(/>([^<]*)<\/button>/)?.[1]],
@@ -13,10 +18,15 @@ const checks = [
   ['borderRadius', harness.style?.borderRadius, actual?.style?.borderRadius, harness.style?.borderRadius === actual?.style?.borderRadius],
   ['padding', harness.style?.padding, actual?.style?.padding, harness.style?.padding === actual?.style?.padding],
   ['width', harness.rect?.width, actual?.rect?.width, Math.abs((harness.rect?.width ?? 0) - (actual?.rect?.width ?? 0)) <= 0.5],
+  ...styleKeys.map(key => {
+    const expected = harness.style?.[key] ?? null;
+    const actualValue = actual?.style?.[key] ?? null;
+    return [`style.${key}`, expected, actualValue, normalizeStyle(key, expected) === normalizeStyle(key, actualValue)];
+  }),
 ];
 const [left, right] = await Promise.all([
   sharp(path.join(root, 'reports/harness-button-welcome-production.png')).ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
-  sharp(path.join(root, 'reports/vcp-button-welcome-production.png')).ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
+  sharp(path.join(root, 'reports/vcp-button-welcome-projection.png')).ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
 ]);
 const comparable = left.info.width === right.info.width && left.info.height === right.info.height;
 let differentPixels = 0;
@@ -36,14 +46,16 @@ if (comparable) {
 const report = {
   generatedAt: new Date().toISOString(),
   semanticFixture: harness.semanticFixture,
-  comparison: 'Button element ROI only; WelcomeNotice min-width is consumer CSS and is not normalized into the primitive contract',
+  comparison: 'Button element ROI only; VCP fixture reproduces documented WelcomeNotice consumer min-width and primary token, but remains Candidate Lab only',
   harness: { rect: harness.rect, style: harness.style, screenshot: { width: left.info.width, height: left.info.height } },
   vcp: { rect: actual?.rect, style: actual?.style, screenshot: { width: right.info.width, height: right.info.height } },
   checks: checks.map(([property, expected, actualValue, pass]) => ({ property, expected, actual: actualValue, pass })),
   pixels: { comparable, differentPixels, totalPixels: comparable ? left.info.width * left.info.height : 0, differingRatio: comparable ? differentPixels / (left.info.width * left.info.height) : null, meanChannelDelta, diffImage: pixelDiffPath },
-  pass: false,
-  status: !comparable ? 'pending-button-roi-dimension-mismatch' : 'cross-page-button-pixel-mismatch',
-  missingEvidence: ['consumer-specific width alignment or normalized comparison target', 'VCP production consumer', 'legacy presentation deletion'],
+  policy,
+  pass: comparable && checks.every(([, , , pass]) => pass) && differentPixels / (left.info.width * left.info.height) <= policy.maxDifferingRatio && meanChannelDelta <= policy.maxMeanChannelDelta,
+  status: !comparable ? 'pending-button-roi-dimension-mismatch' : null,
+  missingEvidence: ['VCP production consumer', 'legacy presentation deletion'],
 };
+report.status ??= report.pass ? 'candidate-button-roi-pixel-policy-pass' : 'cross-page-button-pixel-mismatch';
 await fs.writeFile(path.join(root, 'reports/harness-vcp-button-welcome-diff.json'), `${JSON.stringify(report, null, 2)}\n`);
 console.log(`Harness↔VCP Welcome Button diff: ${report.status}; pass=${report.pass}.`);
