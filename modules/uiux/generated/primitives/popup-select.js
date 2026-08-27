@@ -236,6 +236,7 @@ export function mountPopupSelectView(host, props, scope) {
     card.remove(); // Closed renders null until the first open snapshot lands.
     let lastOpen = false;
     let riskScope = null;
+    let rowsScope = null;
     viewScope.listen(card, 'keydown', event => {
         const s = popup.getSnapshot();
         switch (event.key) {
@@ -269,11 +270,15 @@ export function mountPopupSelectView(host, props, scope) {
         const target = event.target;
         if (!(target instanceof Node))
             return;
-        if (card.contains(target))
+        if (card.contains(target) || props.anchor?.contains(target))
             return;
         popup.dismiss();
     }, { capture: true });
     const renderRows = (s) => {
+        const previousRowsScope = rowsScope;
+        const nextRowsScope = viewScope.child('harness-popup-select-rows');
+        rowsScope = nextRowsScope;
+        void previousRowsScope?.dispose('harness-popup-select-rows-rebuilt');
         listbox.replaceChildren();
         if (s.status !== 'ready')
             return;
@@ -304,12 +309,12 @@ export function mountPopupSelectView(host, props, scope) {
                 const check = document.createElement('span');
                 check.className = 'vcp-harness-popup-select-check';
                 check.setAttribute('aria-hidden', 'true');
-                mountSemanticIcon(check, { name: 'check', size: 16 }, viewScope.child('harness-popup-select-check'));
+                mountSemanticIcon(check, { name: 'check', size: 16 }, nextRowsScope.child('harness-popup-select-check'));
                 row.append(check);
             }
-            viewScope.listen(row, 'click', () => { if (option.disabled !== true)
+            nextRowsScope.listen(row, 'click', () => { if (option.disabled !== true)
                 void popup.select(index); });
-            viewScope.listen(row, 'mouseenter', () => { if (option.disabled !== true)
+            nextRowsScope.listen(row, 'mouseenter', () => { if (option.disabled !== true)
                 popup.highlight(index); });
             listbox.append(row);
         });
@@ -319,8 +324,12 @@ export function mountPopupSelectView(host, props, scope) {
     };
     const sync = () => {
         const s = popup.getSnapshot();
-        if (!s.open && lastOpen)
+        if (!s.open && lastOpen) {
             card.remove(); // Dismiss renders null; the anchor stays mounted.
+            void rowsScope?.dispose('harness-popup-select-rows-closed');
+            rowsScope = null;
+            listbox.replaceChildren();
+        }
         if (!s.open) {
             lastOpen = false;
             return;
@@ -396,6 +405,7 @@ export function mountPopupSelectView(host, props, scope) {
     const dispose = viewScope.own(async () => {
         unsubscribe();
         await riskScope?.dispose('harness-popup-select-risk-unmounted');
+        await rowsScope?.dispose('harness-popup-select-rows-unmounted');
         popup.dispose();
         card.remove();
     }, 'harness-popup-select-view', 'ui-primitive');

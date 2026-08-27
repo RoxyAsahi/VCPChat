@@ -15,6 +15,8 @@ export interface AgentModelEffortOption {
 }
 export interface AgentModelPickerProps {
     readonly label?: string;
+    /** Reuse an existing surface trigger while keeping its identity intact. */
+    readonly trigger?: HTMLButtonElement;
     readonly options: (signal: AbortSignal) => Promise<readonly AgentModelOption[]>;
     readonly onSelect: (option: AgentModelOption) => void | Promise<void>;
     readonly efforts?: readonly AgentModelEffortOption[];
