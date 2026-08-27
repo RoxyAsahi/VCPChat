@@ -10,6 +10,7 @@ export default {
       '/Users/asahi/Documents/Codex/VCPChat-newarchitecture/scripts/capture-harness-select-trigger-fixture.e2e.ts',
       '/Users/asahi/Documents/Codex/VCPChat-newarchitecture/scripts/capture-harness-select-menu-fixture.e2e.ts',
       '/Users/asahi/Documents/Codex/VCPChat-newarchitecture/scripts/capture-harness-button-welcome-fixture.e2e.ts',
+      '/Users/asahi/Documents/Codex/VCPChat-newarchitecture/scripts/capture-harness-button-settings-document-fixture.e2e.ts',
     ],
     testTimeout: 180_000,
     hookTimeout: 120_000,
