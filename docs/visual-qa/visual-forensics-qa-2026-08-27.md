@@ -54,6 +54,7 @@ On 2026-08-27 in the current dirty worktree:
 - The overlay screenshot pass is included in the pixel baseline contract: `menu`, `modal`, and `tooltip` captures must have the expected viewport dimensions, non-blank coverage, and a measurable pixel delta from the initial surface in both themes.
 - Each overlay screenshot is now bound to a same-viewport runtime record: the manifest captures open state, rect, position, z-index, portal parent/mask, and tooltip side for Menu, Modal, and Tooltip before dismissing it.
 - Tooltip capture scrolls the actual showcase owner to the hovered anchor before taking the screenshot. Fresh evidence records fixed positioning and visible viewport placement at every size, with side selection changing from `top` at 800px to `bottom` at 1280px and 1680px.
+- Every viewport manifest now includes a computed theme-token snapshot for accent, hover accent, surface, input background, primary/secondary text, and body colors. The evidence checker compares the formal light and dark manifests and rejects indistinguishable token sets; current runs show distinct light/dark values across all three sizes.
 - Resize restoration evidence from `/tmp/vqa-restored-light/` passed: after each narrow resize, the real renderer returned to exactly `800x600`, `1280x800`, and `1680x1000` with no horizontal overflow, and each case now emits a `*-restored.png` screenshot. The evidence checker requires this restored state.
 
 ## Scope and frozen boundaries

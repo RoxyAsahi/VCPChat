@@ -49,6 +49,13 @@ for (const dir of targets) {
       assert.equal(observation?.reopen?.reopened, true);
       assert.equal(observation?.reopen?.newRootIdentity, true);
       assert.equal(observation?.reopen?.bodyAfterClose?.bodyInlineStyle, '');
+      assert.equal(observation?.overlayViewport?.menu?.open, true);
+      assert.ok(observation?.overlayViewport?.menu?.rect);
+      assert.equal(observation?.overlayViewport?.modal?.open, true);
+      assert.ok(observation?.overlayViewport?.modal?.rect);
+      assert.equal(observation?.overlayViewport?.modal?.mask, true);
+      assert.equal(observation?.overlayViewport?.tooltip?.open, true);
+      assert.ok(observation?.overlayViewport?.tooltip?.rect);
       assert.ok(observation?.scrolled?.ownerY > 0 || observation?.scrolled?.ownerScrollHeight <= observation?.scrolled?.ownerViewport, `scroll owner did not move for ${name}`);
       assert.ok(observation?.initial?.cdpCascade?.length > 0);
       assert.ok(observation?.initial?.interactionStates?.hover);
@@ -56,6 +63,7 @@ for (const dir of targets) {
       assert.ok(observation?.initial?.stateCounts && Object.values(observation.initial.stateCounts).every(value => Number.isInteger(value)));
       assert.ok(observation?.initial?.stateTargets?.disabled?.rect);
       assert.ok(observation?.initial?.stateTargets?.selected?.rect);
+      assert.ok(observation?.initial?.themeTokens && Object.values(observation.initial.themeTokens).some(value => typeof value === 'string' && value.trim()));
       assert.ok(['div', 'section'].includes(observation?.initial?.dom?.rootTree?.tag));
       assert.equal(observation?.settingsViewport?.active, true);
       assert.ok(observation?.settingsViewport?.visible?.length > 0);
@@ -78,6 +86,19 @@ for (const dir of targets) {
     console.log(`Visual forensics evidence passed: ${dir}`);
   } catch (error) {
     failures.push(`${dir}: ${error.message}`);
+  }
+}
+if (!dirs.length) {
+  try {
+    const light = JSON.parse(await fs.readFile(path.join(root, 'reports/visual-forensics-qa/light/manifest.json'), 'utf8'));
+    const dark = JSON.parse(await fs.readFile(path.join(root, 'reports/visual-forensics-qa/dark/manifest.json'), 'utf8'));
+    const lightTokens = light.observations?.[0]?.initial?.themeTokens || {};
+    const darkTokens = dark.observations?.[0]?.initial?.themeTokens || {};
+    const comparable = ['accent', 'surface', 'inputBackground', 'textPrimary', 'bodyBackground', 'bodyColor'];
+    assert.ok(comparable.some(key => lightTokens[key] && darkTokens[key] && lightTokens[key] !== darkTokens[key]), 'light/dark computed tokens are indistinguishable');
+    console.log('Visual forensics light/dark token contrast passed');
+  } catch (error) {
+    failures.push(`theme token contrast: ${error.message}`);
   }
 }
 if (failures.length) {

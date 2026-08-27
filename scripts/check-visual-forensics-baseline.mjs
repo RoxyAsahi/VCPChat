@@ -69,8 +69,12 @@ for (const dir of targets) {
       for (const suffix of ['menu', 'modal', 'tooltip']) assert.ok(deltaRatio(images.initial, images[suffix]) >= baseline.minInteractionDeltaRatio, `${name}-${suffix}: no measurable pixel delta from initial`);
       const finiteRect = rect => rect && [rect.x, rect.y, rect.width, rect.height].every(value => Number.isFinite(value)) && rect.width > 0 && rect.height > 0;
       assert.ok(observation.initial?.controls?.some(control => finiteRect(control.rect)), `${name}: no finite initial control geometry`);
+      assert.ok(observation.initial?.themeTokens && ['accent', 'surface', 'inputBackground', 'textPrimary'].every(key => typeof observation.initial.themeTokens[key] === 'string' && observation.initial.themeTokens[key].trim()), `${name}: incomplete computed theme token snapshot`);
       assert.ok(finiteRect(observation.initial?.stateTargets?.disabled?.rect), `${name}: no finite disabled state geometry`);
       assert.ok(finiteRect(observation.initial?.stateTargets?.selected?.rect), `${name}: no finite selected state geometry`);
+      assert.ok(finiteRect(observation.overlayViewport?.menu?.rect), `${name}: no finite menu overlay geometry`);
+      assert.ok(finiteRect(observation.overlayViewport?.modal?.rect), `${name}: no finite modal overlay geometry`);
+      assert.ok(finiteRect(observation.overlayViewport?.tooltip?.rect), `${name}: no finite tooltip overlay geometry`);
       assert.ok(observation.settingsViewport?.visible?.some(control => finiteRect(control.rect)), `${name}: no finite settings geometry`);
       assert.equal(observation.settingsViewport?.sections?.length, 8, `${name}: incomplete settings section geometry`);
       assert.ok(observation.settingsViewport.sections.every(section => finiteRect(section.rect) && section.visibleControls > 0), `${name}: invalid settings section geometry`);
