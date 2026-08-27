@@ -484,3 +484,14 @@ directory-browser 接入前置达成。typed field owner 本就以 `#networkNote
 - 边界说明：该台账为线程 A/B 共享文档，线程 B 批次 15/16 已有随批改判先例；本次仅改「当前」状态列与历史注记，不动 §3 冻结清单与 §5 施工条件定义。
 - 门禁：docs-only 不重跑代码门禁（与批次 14/16 惯例一致）。
 - 台账：§7 追加批次 22 段落；roadmap 追加 R2-02E checkpoint。下一批候选：unlock 复查 directory-browser；或评估 §5 Forum `adminUsername`/`adminPassword` 候选的前置证据清单落盘。
+
+### 2026-08-27 批次 23：Forum 凭据接缝审计 + reload-restore 补证 + seam 负向守护
+
+状态：journey 补断言 + 门禁扩容 + docs；生产代码零变更。
+
+- unlock 复查：DirectoryBrowser 各 checkpoint 保持 `foundation-electron-active`，unlock 条件不满足。按归属台账 §5 评估下一候选 Forum `adminUsername`/`adminPassword`，先做接缝现状审计。
+- **接缝现状审计结论（远好于台账 §5 行文暗示）**：§5 要求的施工清单大半已经闭合——(1) 字段级 dirty/autosave owner 已收口（批次 2/3：`mountTypedForumFieldOwner` 防抖 + `ForumConfigUiService.save.execute` + `vcp-settings-save-result` 归属，legacy 整表 submit 不再被论坛字段触发）；(2) snapshot clean projection 已收口（forum service subscribe → applyForum，仅 clean form 投影，bridge L322-335；presentationOwner 镜像已删）；(3) 真 mountInput primitive 已挂（`mountTypedForumInputs`）；(4) 既有证据：journey 论坛消费投影 parity + legacy-submit 抑制 + typed save（L877-927）、关闭 flush（6b）、teardown 迟到命令拒绝（section 9）、jsdom 失败→重试 UI 传播（tests/global-settings-save.test.mjs forum-denied）。
+- **残余缺口盘点**：(G1) journey section 7 reload-restore 缺论坛凭据断言（本批闭合）；(G2) Harness Input reference 对照 / production-consumer gate（`check-harness-input-production-consumer.mjs`、`diff-harness-vcp-field-geometry.mjs`）未覆盖两个论坛输入——属线程 A fixture 域，evidence-pending 上报。
+- **本批施工**：(1) section 7 `restored` 补 `adminUsername`/`adminPassword` 两断言——6b flush 的唯一值经 reload 后由 typed forum consumer 重投影（`flushValues.forumUser/forumPassword` 相等），日志行更新为「full fallback-id coverage + forum credentials」；(2) source-equivalence 新增论坛凭据 seam 负向守护——`adminUsername`/`adminPassword` 的 `getElementById` 写入方集合必须 deepEqual 等于 `global-settings-manager.js` 单元素（Classic 兜底）、bridge 必须经 `querySelector('#id')` 持有投影、save 路由必须经 forum config service、manager 的 `forumFieldOwnerMounted` 门禁必须存在——新第二写入方即门禁失败（E6 范式复用）。排障记录：初版期望把 bridge 误列入 `getElementById` 写入方（实际用 querySelector）、把 `forumFieldOwnerMounted` 门禁 regex 指向 bridge（实际在 manager），各改一处后通过。
+- 门禁：node --check + 四快全绿；Electron journey 全轮 PASS（含新 6b/7 论坛断言）。
+- 台账：§7 追加批次 23 段落；roadmap 追加 R2-02E checkpoint；归属台账 §5/L113 现状注记随批更新。下一批候选：unlock 复查；或视线程 A Input reference fixture 进展把 G2 证据补齐后，按 §5 条件评估论坛凭据行升级 `single-owner-active`。
