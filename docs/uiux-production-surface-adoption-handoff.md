@@ -474,3 +474,13 @@ directory-browser 接入前置达成。typed field owner 本就以 `#networkNote
 - 其余保留职责经扫描确认全部存活引用：`safeSet`(17)/`safeCheck`(3)（rust chatAPI 回退路径）、`syncChatFontControls`(5)（字体 preset change 监听回调，实时预览职责）。
 - 门禁：node --check + 四快（source-equivalence / unified-surface / test-ui-system / test-settings-wa jsdom 8/8）+ Electron journey 全轮 PASS（1p/1q 反转契约维持）。
 - 台账：§7 追加批次 21 段落；roadmap 追加 R2-02E checkpoint。下一批候选：unlock 复查 directory-browser，或按 handoff §10 审计下一族 primitive 接缝。
+
+### 2026-08-27 批次 22：归属矩阵台账与退役现实对账（docs-only）
+
+状态：纯 docs；代码面自批次 21 提交 `a5f1b0aa` 起零变更。
+
+- unlock 复查：线程 A 本窗口推进 harness button 几何修复 / agent action button 证据等提交，DirectoryBrowser 各 checkpoint 仍为 `foundation-electron-active`，unlock 条件不满足。
+- **`docs/settings-uiux-field-ownership-2026-08-25.md` 六处 stale 对账**：批次 20/21 删除启动兜底后，该台账多处「当前」状态已过时。随批改判——§2 userName 行的「presentationOwner 启动兜底保持惰性分支」→ 已删除（4e259486）；§4 矩阵行 62「单一 projection owner」从「部分通过（批次 15 收敛）」改判为「通过」（唯一写入方 = settings-bridge typed 投影，§3 冻结 40 行为协议允许责任保留）；矩阵行 73「legacy projection 删除」补记启动兜底已删；§6 三处（home visual 扩展、appearance select 扩展、「仍未 complete」段）的 fallback 未删表述全部改为已退役并指回 E1-E6 证据（handoff 补记九至十一）。文档尾部追加批次 20/21 记录段。
+- 边界说明：该台账为线程 A/B 共享文档，线程 B 批次 15/16 已有随批改判先例；本次仅改「当前」状态列与历史注记，不动 §3 冻结清单与 §5 施工条件定义。
+- 门禁：docs-only 不重跑代码门禁（与批次 14/16 惯例一致）。
+- 台账：§7 追加批次 22 段落；roadmap 追加 R2-02E checkpoint。下一批候选：unlock 复查 directory-browser；或评估 §5 Forum `adminUsername`/`adminPassword` 候选的前置证据清单落盘。
