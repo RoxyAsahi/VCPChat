@@ -148,9 +148,12 @@ try {
                 ariaExpanded: picker.trigger.getAttribute('aria-expanded'),
                 ariaControls: picker.trigger.getAttribute('aria-controls'),
                 height: triggerStyle.height,
+                maxWidth: triggerStyle.maxWidth,
                 borderRadius: triggerStyle.borderRadius,
                 padding: triggerStyle.padding,
                 gap: triggerStyle.gap,
+                fontSize: triggerStyle.fontSize,
+                lineHeight: triggerStyle.lineHeight,
             },
             menu: menuStyle ? {
                 tag: menu.tagName.toLowerCase(),
@@ -160,6 +163,8 @@ try {
                 ariaBusy: menu.getAttribute('aria-busy'),
                 borderRadius: menuStyle.borderRadius,
                 padding: menuStyle.padding,
+                width: menuStyle.width,
+                maxHeight: menuStyle.maxHeight,
                 minWidth: menuStyle.minWidth,
                 rect: menuRect ? {
                     x: menuRect.x, y: menuRect.y, width: menuRect.width, height: menuRect.height,
@@ -167,6 +172,8 @@ try {
                 cssContract: {
                     borderRadius: declaration('border-radius'),
                     padding: declaration('padding'),
+                    width: declaration('width'),
+                    maxHeight: declaration('max-height'),
                     minWidth: declaration('min-width'),
                 },
             } : null,

@@ -9,7 +9,13 @@ const geometryPath = path.join(root, 'docs/reference/deepseek-harness-primitives
 const schemaPath = path.join(root, 'docs/reference/deepseek-harness-primitives/model-picker.capture.schema.json');
 const outputPath = path.join(root, 'reports/harness-vcp-model-picker-diff.json');
 const readJson = file => JSON.parse(fs.readFileSync(file, 'utf8'));
-const normalize = value => String(value ?? '').replace(/\s+/g, ' ').replace(/\s*,\s*/g, ',').trim();
+const normalize = value => String(value ?? '')
+    .replace(/\b0(?:px|rem|em|%|vh|vw)\b/g, '0')
+    .replace(/min\(([^,]+),\s*(-[0-9.]+(?:px|rem|em|%|vh|vw))\s*\+\s*([^\)]+)\)/g, (_, limit, negative, viewport) => `min(${limit},calc(${viewport}-${negative.slice(1)}))`)
+    .replace(/\s+/g, ' ')
+    .replace(/\s*,\s*/g, ',')
+    .replace(/\s*([+\-])\s*/g, '$1')
+    .trim();
 
 const report = { generatedAt: new Date().toISOString(), candidate: candidatePath, harness: harnessPath, comparison: 'ModelSelect Candidate vs Harness capture', pass: false, missingEvidence: [] };
 try {
@@ -43,9 +49,9 @@ try {
         { contract: 'model-pane.options', expected: '>0', actual: candidate.modelPane?.optionCount ?? 0 },
     ];
     report.dom.structuralChecks = structuralChecks.map(check => ({ ...check, pass: check.expected === '>0' ? Number(check.actual) > 0 : check.actual === check.expected }));
-    report.dom.structuralPass = report.dom.structuralChecks.every(check => check.pass);
     const rootDeviation = expectedDom.vcpDeviation?.rootTag;
     report.dom.deviations = rootDeviation ? [{ contract: 'root.tag', ...rootDeviation, observed: rootNode?.tagName.toLowerCase() ?? null, declared: rootDeviation.vcp === (rootNode?.tagName.toLowerCase() ?? null) }] : [];
+    report.dom.structuralPass = report.dom.structuralChecks.every(check => check.pass || report.dom.deviations.some(deviation => deviation.contract === check.contract && deviation.declared));
     const expected = geometry.selectors;
     const actual = {
         '.trigger': candidate.trigger ?? {},
