@@ -395,6 +395,11 @@ try {
         const menu = document.querySelector('.vcp-harness-menu-list.vcp-harness-menu-portal');
         const layout = [...(menu?.querySelectorAll('[role="menuitem"]') || [])].find(item => item.textContent === 'Layout');
         layout?.focus();
+        // Submenus are owned by the item wrapper's pointer-entry contract.
+        // Electron's synthetic focus can be delivered before the listener is
+        // observable in this geometry probe, so replay the semantic pointer
+        // entry explicitly and sample the resulting DOM in the same task.
+        layout?.closest('.vcp-harness-menu-item-wrap')?.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
         const menuStyle = menu ? getComputedStyle(menu) : null;
         const item = menu?.querySelector('[role="menuitem"]');
         const itemStyle = item ? getComputedStyle(item) : null;
