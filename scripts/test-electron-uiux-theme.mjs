@@ -223,6 +223,13 @@ try {
         const ongoingDot = host.querySelector('.vcp-harness-state-matrix[data-state="ongoing"]');
         result.stateDotOngoingCells = ongoingDot?.querySelectorAll('rect').length || 0;
         result.stateDotAriaHidden = [...host.querySelectorAll('.vcp-harness-state-dot,.vcp-harness-state-matrix')].every(dot => dot.getAttribute('aria-hidden') === 'true');
+        const toastTrigger = [...host.querySelectorAll('button')].find(button => button.textContent === 'Show toast');
+        toastTrigger?.click();
+        const toast = document.querySelector('.vcp-harness-toast[role="alert"]');
+        result.toastOpen = toast?.parentElement === document.body;
+        result.toastText = toast?.querySelector('.vcp-harness-toast-text')?.textContent || '';
+        result.toastIcon = Boolean(toast?.querySelector('.vcp-harness-toast-icon[aria-hidden="true"] .vcp-ui-icon'));
+        result.toastAnchorLeft = toast?.style.left || '';
         await release();
         result.restored = host.childNodes.length === 0;
         result.scopeActive = scope.active;
@@ -231,7 +238,7 @@ try {
     });
     assert.deepEqual(candidateLabBoundary, {
         maturity: 'candidate',
-        buttons: 9,
+        buttons: 10,
         input: true,
         field: true,
         select: true,
@@ -267,6 +274,10 @@ try {
         stateDotStates: ['done', 'warning', 'ongoing', 'error'],
         stateDotOngoingCells: 8,
         stateDotAriaHidden: true,
+        toastOpen: true,
+        toastText: 'The selected model is temporarily unavailable.',
+        toastIcon: true,
+        toastAnchorLeft: candidateLabBoundary.toastAnchorLeft,
         restored: true,
         scopeActive: true,
     }, `generated Harness Candidate Lab mismatch: ${JSON.stringify(candidateLabBoundary)}`);
@@ -607,6 +618,49 @@ try {
         delete window.__harnessCandidateStateDotControllers;
         delete window.__harnessCandidateStateDotScope;
         document.querySelector('[data-electron-candidate-state-dot]')?.remove();
+    });
+    const toastCandidateGeometry = await page.evaluate(() => {
+        const host = document.createElement('section');
+        host.dataset.electronCandidateToast = 'true';
+        host.style.cssText = 'position:fixed;left:240px;top:300px;width:200px;height:40px';
+        const anchor = document.createElement('button');
+        anchor.textContent = 'Anchor';
+        anchor.style.cssText = 'position:absolute;left:20px;top:0;width:160px;height:40px';
+        host.append(anchor);
+        document.body.append(host);
+        const scope = new window.VCPLifecycle.LifecycleScope('test:harness-candidate-toast-visual');
+        const icon = document.createElement('span');
+        icon.className = 'vcp-ui-icon';
+        icon.dataset.vcpIcon = 'info';
+        const controller = window.VCPUIUX.mountToast({ text: 'The selected model is temporarily unavailable.', icon, anchor, onDone: () => {} }, scope);
+        window.__harnessCandidateToastController = controller;
+        window.__harnessCandidateToastScope = scope;
+        controller.root.style.animation = 'none';
+        const style = getComputedStyle(controller.root);
+        const rect = controller.root.getBoundingClientRect();
+        return {
+            viewport: { width: innerWidth, height: innerHeight, deviceScaleFactor: devicePixelRatio }, settled: true,
+            source: 'generated-artifact-electron', state: 'anchor-centered-icon-alert',
+            rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+            style: { position: style.position, top: style.top, left: style.left, zIndex: style.zIndex, pointerEvents: style.pointerEvents, gap: style.gap, padding: style.padding, borderRadius: style.borderRadius, fontSize: style.fontSize, lineHeight: style.lineHeight },
+            role: controller.root.getAttribute('role'), iconAriaHidden: controller.root.querySelector('.vcp-harness-toast-icon')?.getAttribute('aria-hidden'),
+            anchorCenter: anchor.getBoundingClientRect().left + anchor.getBoundingClientRect().width / 2,
+        };
+    });
+    assert.deepEqual(toastCandidateGeometry.viewport, { width: 800, height: 600, deviceScaleFactor: 1 });
+    assert.deepEqual(toastCandidateGeometry.style, { position: 'fixed', top: '120px', left: '340px', zIndex: '1100', pointerEvents: 'none', gap: '10px', padding: '12px 16px', borderRadius: '14px', fontSize: '14px', lineHeight: '22px' });
+    assert.equal(toastCandidateGeometry.role, 'alert');
+    assert.equal(toastCandidateGeometry.iconAriaHidden, 'true');
+    assert.equal(toastCandidateGeometry.rect.x, toastCandidateGeometry.anchorCenter - toastCandidateGeometry.rect.width / 2);
+    const toastCandidateScreenshot = path.join(root, 'reports', 'vcp-harness-toast-candidate.png');
+    await page.screenshot({ path: toastCandidateScreenshot });
+    assert.ok((await fs.stat(toastCandidateScreenshot)).size > 1024, 'Toast Candidate screenshot is unexpectedly empty');
+    await fs.writeFile(path.join(root, 'reports', 'vcp-harness-toast-candidate.json'), `${JSON.stringify(toastCandidateGeometry, null, 2)}\n`, 'utf8');
+    await page.evaluate(async () => {
+        await window.__harnessCandidateToastController?.dispose?.();
+        await window.__harnessCandidateToastScope?.dispose?.('candidate-toast-visual-complete');
+        document.querySelector('[data-electron-candidate-toast]')?.remove();
+        document.querySelector('.vcp-harness-toast')?.remove();
     });
     await page.screenshot({ path: primitiveScreenshot });
     const screenshotStat = await fs.stat(primitiveScreenshot);

@@ -8,6 +8,7 @@ import { mountTooltip } from '../primitives/tooltip.js';
 import { mountHoverCard } from '../primitives/hover-card.js';
 import { mountDisclosureRow, type DisclosureRowController } from '../primitives/disclosure-row.js';
 import { mountStateDot, type StateDotState } from '../primitives/state-dot.js';
+import { mountToast } from '../primitives/toast.js';
 import { mountSelect } from '../primitives/select.js';
 
 const STYLE_ID = 'vcp-harness-primitive-lab';
@@ -229,6 +230,35 @@ export function mountPrimitiveLab(root: HTMLElement, scope: UiScope): UiDisposer
         fixture.append(dotHost, label);
         stateDotRow.append(fixture);
         mountStateDot(dotHost, { state }, labScope);
+    });
+
+    const toastRow = group(lab, 'Toast', 'deepseek-harness/packages/client/ui-primitives/src/Toast.tsx + InputBar/ModelSelect production consumers');
+    const toastAnchor = document.createElement('div');
+    toastAnchor.className = 'vcp-harness-lab-toast-anchor';
+    const toastTrigger = document.createElement('button');
+    toastTrigger.type = 'button';
+    toastTrigger.textContent = 'Show toast';
+    toastAnchor.append(toastTrigger);
+    toastRow.append(toastAnchor);
+    mountButton(toastTrigger, { variant: 'outline', size: 'sm' }, labScope);
+    let activeToast: ReturnType<typeof mountToast> | null = null;
+    labScope.listen(toastTrigger, 'click', () => {
+        void activeToast?.dispose();
+        const icon = document.createElement('span');
+        icon.className = 'vcp-ui-icon';
+        icon.textContent = 'warning';
+        let toast: ReturnType<typeof mountToast>;
+        toast = mountToast({
+            text: 'The selected model is temporarily unavailable.',
+            icon,
+            anchor: toastAnchor,
+            onDone: () => {
+                if (activeToast !== toast) return;
+                void toast.dispose();
+                activeToast = null;
+            },
+        }, labScope);
+        activeToast = toast;
     });
 
     return scope.own(async () => {

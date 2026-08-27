@@ -72,6 +72,8 @@
 
 2026-08-27 StateDot checkpoint：新增独立 `modules/uiux/primitives/state-dot.ts`，精确复刻 done/warning/error 的 10px halo + 6px core，以及 ongoing 的 8×2px crisp-edge pixel chase；覆盖四态闭集、任意正尺寸、8 个负相位 delay、`aria-hidden`、状态/尺寸更新和 host 精确恢复。Jobs、Workflow、Workspace、Subagent、Tool 是 Harness production provenance；VCP chat consumer 仍受冻结边界约束。源码 focused test 16/16、全量 UIUX 36/36、52 generated artifact consistency、artifact smoke 和 Electron generated journey 通过；固定 800×600@1x 四态 geometry/screenshot 已登记到 `fixtures/vcp/state-dot.candidate.*`。当前为 `candidate-interaction-active`；同语义 Harness pixel diff与真实 VCP consumer仍 pending。
 
+2026-08-27 Toast checkpoint：新增独立 `modules/uiux/primitives/toast.ts`，复刻单个 body-portal transient alert，而非新增 notification queue。合同覆盖 `role=alert`、optional aria-hidden icon、viewport/anchor 水平居中、resize remeasure、3000ms hold + 1000ms fade、`onDone` 一次通知、pointer-events none 和 scope dispose timer cancellation。InputBar 是冻结的 Harness provenance，不接入 VCP Composer；ModelSelect 可作为未来非冻结 consumer。当前为 `candidate-interaction-active`；完成 Lab/generated/Electron geometry/screenshot 后仍需同语义 Harness pixel diff与真实 VCP consumer才能晋级。
+
 本批次不解冻聊天内核、消息渲染、Composer 内部、协议、IPC、持久化、Plugin Loader、chat manifest 或动态壁纸。Harness conversation/tool/markdown 控件可以在实验室复刻，但不得借实验室接入改变这些冻结边界。
 
 ## 0.3 上位规范到执行批次的映射

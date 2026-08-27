@@ -27,7 +27,7 @@
 | Tooltip / HoverCard | matching `ui-primitives/src/*.tsx`；Message actions、Goal、Sidebar、Workspace | candidate-interaction-active；同语义 Harness pixel diff 与 VCP production adoption pending | B1 |
 | DisclosureRow | `ui-primitives/src/DisclosureRow.tsx`；Reasoning、Context、Tool、Workflow | candidate-interaction-active；VCP chat integration frozen，同语义 Harness pixel diff pending | B1 |
 | StateDot | `ui-primitives/src/StateDot.tsx`；Chat、Tool、Skill、Job、Subagent、Workspace | candidate-interaction-active；四态 geometry/animation evidence active，pixel diff pending | B1 |
-| Toast | `ui-primitives/src/Toast.tsx`；Composer、Model selection | inventoried | B1 |
+| Toast | `ui-primitives/src/Toast.tsx`；Composer、Model selection | candidate-interaction-active；Composer integration frozen，ModelSelect adoption/pixel diff pending | B1 |
 | RiskConfirmation | `ui-primitives/src/RiskConfirmation.tsx`；Permission、Command selection | inventoried | B1 |
 | JsonTree | `ui-primitives/src/JsonTree.tsx`；Trajectory | inventoried | B2 |
 | Terminal/Read/Diff/Search/Web Block | matching `ui-primitives/src/*Block.tsx`；Tool details/rows | inventoried | B2 |

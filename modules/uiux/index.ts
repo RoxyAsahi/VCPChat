@@ -37,6 +37,8 @@ export { mountDisclosureRow } from './primitives/disclosure-row.js';
 export type { DisclosureRowController, DisclosureRowProps } from './primitives/disclosure-row.js';
 export { mountStateDot } from './primitives/state-dot.js';
 export type { StateDotController, StateDotProps, StateDotState } from './primitives/state-dot.js';
+export { mountToast, TOAST_FADE_MS, TOAST_HOLD_MS } from './primitives/toast.js';
+export type { ToastController, ToastProps } from './primitives/toast.js';
 export { mountChoice } from './primitives/choice.js';
 export { mountRange } from './primitives/range.js';
 export { mountToggle } from './primitives/toggle.js';

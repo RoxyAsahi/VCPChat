@@ -12,6 +12,7 @@ export { mountTooltip } from './primitives/tooltip.js';
 export { mountHoverCard } from './primitives/hover-card.js';
 export { mountDisclosureRow } from './primitives/disclosure-row.js';
 export { mountStateDot } from './primitives/state-dot.js';
+export { mountToast, TOAST_FADE_MS, TOAST_HOLD_MS } from './primitives/toast.js';
 export { mountChoice } from './primitives/choice.js';
 export { mountRange } from './primitives/range.js';
 export { mountToggle } from './primitives/toggle.js';

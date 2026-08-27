@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const root = process.cwd();
 const dir = path.join(root, 'docs/reference/deepseek-harness-primitives');
-const primitives = ['settings-root', 'field', 'select', 'menu', 'modal', 'tooltip', 'hover-card', 'disclosure-row', 'state-dot', 'input', 'range', 'toggle', 'color-pair'];
+const primitives = ['settings-root', 'field', 'select', 'menu', 'modal', 'tooltip', 'hover-card', 'disclosure-row', 'state-dot', 'toast', 'input', 'range', 'toggle', 'color-pair'];
 const required = [
   'reference.css',
   'fixture-matrix.json',
@@ -28,6 +28,12 @@ for (const name of primitives) {
   if (!geometry || typeof geometry !== 'object' || Array.isArray(geometry)) fail(`${name}.geometry.json must be an object`);
   if (!Object.keys(dom).length) fail(`${name}.dom.json is empty`);
   if (!Object.keys(geometry).length) fail(`${name}.geometry.json is empty`);
+}
+for (const name of ['toast']) {
+  const evidence = readJson(`${name}.geometry.json`).vcpCandidateEvidence;
+  for (const file of [evidence?.screenshot, evidence?.report]) {
+    if (!file || !fs.existsSync(path.join(dir, file))) fail(`${name} evidence file missing: ${file}`);
+  }
 }
 
 const css = fs.readFileSync(path.join(dir, 'reference.css'), 'utf8');

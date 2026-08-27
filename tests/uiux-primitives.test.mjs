@@ -16,12 +16,52 @@ const { mountTooltip } = await import('../modules/uiux/primitives/tooltip.ts');
 const { mountHoverCard } = await import('../modules/uiux/primitives/hover-card.ts');
 const { mountDisclosureRow } = await import('../modules/uiux/primitives/disclosure-row.ts');
 const { mountStateDot } = await import('../modules/uiux/primitives/state-dot.ts');
+const { mountToast, TOAST_HOLD_MS, TOAST_FADE_MS } = await import('../modules/uiux/primitives/toast.ts');
 const { mountChoice } = await import('../modules/uiux/primitives/choice.ts');
 const { mountRange } = await import('../modules/uiux/primitives/range.ts');
 const { mountToggle } = await import('../modules/uiux/primitives/toggle.ts');
 const { mountColorPair } = await import('../modules/uiux/primitives/color-pair.ts');
 
 const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+
+test('Harness Toast owns body portal, anchor placement, lifetime and timer cancellation', async () => {
+    const dom = new JSDOM('<!doctype html><main><div id="anchor"></div></main>');
+    const previousDocument = globalThis.document; const previousWindow = globalThis.window;
+    globalThis.document = dom.window.document; globalThis.window = dom.window;
+    try {
+        const scope = createUiScope(new LifecycleScope('toast-test'));
+        const anchor = document.getElementById('anchor');
+        let rect = { left: 100, width: 400 };
+        anchor.getBoundingClientRect = () => ({ ...rect, right: rect.left + rect.width, top: 0, bottom: 0, height: 0, x: rect.left, y: 0, toJSON() {} });
+        const icon = document.createElement('svg');
+        icon.dataset.testid = 'warning';
+        let done = 0;
+        const toast = mountToast({ text: 'Model unavailable', icon, anchor, onDone: () => { done += 1; } }, scope);
+        assert.equal(toast.root.parentElement, document.body);
+        assert.equal(toast.root.getAttribute('role'), 'alert');
+        assert.equal(toast.root.textContent, 'Model unavailable');
+        assert.equal(toast.root.querySelector('.vcp-harness-toast-icon')?.getAttribute('aria-hidden'), 'true');
+        assert.equal(toast.root.style.left, '300px');
+        rect = { left: 200, width: 400 };
+        window.dispatchEvent(new dom.window.Event('resize'));
+        assert.equal(toast.root.style.left, '400px');
+        await delay(TOAST_HOLD_MS + TOAST_FADE_MS - 10);
+        assert.equal(done, 0);
+        await delay(20);
+        assert.equal(done, 1);
+        await toast.dispose();
+        assert.equal(document.querySelector('.vcp-harness-toast'), null);
+
+        let lateDone = 0;
+        const plain = mountToast({ text: 'Plain', onDone: () => { lateDone += 1; } }, scope);
+        assert.equal(plain.root.querySelector('[aria-hidden]'), null);
+        assert.equal(plain.root.style.left, '');
+        await plain.dispose();
+        await delay(TOAST_HOLD_MS + TOAST_FADE_MS + 10);
+        assert.equal(lateDone, 0, 'dispose must cancel the completion timer');
+        await scope.dispose('toast-complete');
+    } finally { globalThis.document = previousDocument; globalThis.window = previousWindow; dom.window.close(); }
+});
 
 test('Harness StateDot renders solid halos and the phased ongoing pixel matrix', async () => {
     const dom = new JSDOM('<!doctype html><main><span id="host"><em id="legacy">legacy</em></span></main>');
