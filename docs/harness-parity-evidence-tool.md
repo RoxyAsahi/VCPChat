@@ -5,6 +5,8 @@
 The report records, for every primitive contract:
 
 - source and stylesheet provenance, including whether the declared Harness files exist;
+- per-contract `provenancePass` plus aggregate `provenanceComplete` and
+  `provenanceGaps` counts;
 - the minimum DOM/ARIA and geometry contract shape;
 - interaction states from `fixture-matrix.json`;
 - explicit evidence gaps and the next candidate whose evidence is still pending.
@@ -38,7 +40,21 @@ dependencies or mutating the source checkout.
 
 Run `npm run scan:harness-ui-inventory` to rescan exported Harness client
 components. The report separates portable primitives, composites, and frozen
-domain surfaces, then lists source exports without a reference contract.
+domain surfaces, then lists source exports without a reference contract. It
+also emits `surfacePatterns`, a package-level summary of source files, export
+categories, contract coverage, and remaining gaps.
+
+The source-only lifecycle gates can be replayed directly when their Harness
+files are available:
+
+- `node scripts/check-harness-job-list-action-source.mjs` checks ordering,
+  open-only ticking, listener cleanup, and Escape focus restoration;
+- `node scripts/check-harness-permission-row-source.mjs` checks loading,
+  unavailable/read-only projection, menu selection, error alert, and the
+  acknowledgement gate.
+
+These checks are read-only evidence. They do not create VCP consumers, alter
+business state, or promote Candidate Lab work.
 
 Run `npm run check:harness-geometry-contracts` to compare every reference
 geometry selector/property against its declared Harness stylesheet. It is

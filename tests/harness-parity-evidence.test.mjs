@@ -14,7 +14,10 @@ test('Harness parity evidence audit preserves provenance and explicit gaps', () 
     assert.equal(report.pass, false, 'open evidence gaps must not be reported as complete');
     assert.ok(report.counts.primitives >= 20);
     assert.ok(report.counts.provenanceRecords >= report.counts.primitives);
+    assert.ok(report.counts.provenanceComplete > 0);
+    assert.ok(report.counts.provenanceGaps > 0);
     assert.ok(report.primitives.some(item => item.name === 'model-picker'));
+    assert.equal(report.primitives.find(item => item.name === 'model-picker')?.provenancePass, true);
     assert.ok(report.primitives.some(item => item.name === 'field' && item.provenance.some(source => source.declared.endsWith('ModelsSection.tsx'))));
     assert.ok(report.missingEvidence.includes('select/busy-trigger-disabled: blocked-vcp-consumer'));
     assert.ok(report.missingEvidence.includes('language-row/open-select-dismiss-focus-dispose: candidate-source-only'));
@@ -99,4 +102,26 @@ test('Harness reference pack validates fixture case shape while retaining pendin
     assert.ok(matrix.cases.every(([primitive, state]) => typeof primitive === 'string' && primitive.length > 0 && typeof state === 'string' && state.length > 0));
     assert.ok(matrix.cases.some(([primitive]) => primitive === 'language-row'));
     assert.ok(matrix.cases.some(([primitive]) => primitive === 'permission-row'));
+});
+
+test('JobListAction source audit preserves lifecycle and ordering evidence', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-job-list-action-source.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-job-list-action-source.json'), 'utf8'));
+    assert.equal(report.status, 'source-contract-pass');
+    assert.equal(report.pass, true);
+    assert.equal(report.checks.length, 10);
+    assert.ok(report.note.includes('does not create a VCP jobs consumer'));
+});
+
+test('PermissionRow source audit preserves settings capability boundaries', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-permission-row-source.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-permission-row-source.json'), 'utf8'));
+    assert.equal(report.status, 'source-contract-pass');
+    assert.equal(report.pass, true);
+    assert.equal(report.checks.length, 10);
+    assert.ok(report.note.includes('does not create a VCP permission-settings consumer'));
+});
+
+test('Harness fixture matrix guard preserves explicit Candidate boundaries', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-fixture-matrix.mjs'], { cwd: root, stdio: 'pipe' });
 });

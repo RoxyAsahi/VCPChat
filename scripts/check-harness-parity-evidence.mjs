@@ -67,6 +67,7 @@ for (const domFile of domFiles) {
     entry.contract.geometry = Boolean(geometry && geometry.status !== 'invalid' && typeof geometry === 'object' && Object.keys(geometry).length > 0);
     if (!entry.contract.domAria) invalid.push({ name, issue: 'DOM/ARIA contract is missing a structural declaration' });
     if (!entry.contract.geometry) invalid.push({ name, issue: 'geometry contract is empty' });
+    entry.provenancePass = entry.provenance.length > 0 && entry.provenance.every(item => item.exists);
     primitives.push(entry);
 }
 
@@ -94,7 +95,15 @@ const report = {
     strict,
     status: invalid.length ? 'invalid-reference-pack' : missingEvidence.length ? 'evidence-gaps-present' : 'complete',
     pass: invalid.length === 0 && missingEvidence.length === 0,
-    counts: { primitives: primitives.length, provenanceRecords: primitives.reduce((sum, item) => sum + item.provenance.length, 0), interactionCases: interactionCases.length, invalid: invalid.length, missingEvidence: missingEvidence.length },
+    counts: {
+        primitives: primitives.length,
+        provenanceRecords: primitives.reduce((sum, item) => sum + item.provenance.length, 0),
+        provenanceComplete: primitives.filter(item => item.provenancePass).length,
+        provenanceGaps: primitives.filter(item => !item.provenancePass).length,
+        interactionCases: interactionCases.length,
+        invalid: invalid.length,
+        missingEvidence: missingEvidence.length,
+    },
     primitives,
     interactionCases,
     invalid,
