@@ -197,3 +197,26 @@ draft/dirty/autosave/retry/close flush 均已绑定同一个 Settings Surface ty
 
 1. `scripts/test-appearance-studio.mjs` 在 `1a4510e0` 后断言的是 `<output>` 值，但 jsdom fixture 不挂载 primitive，导致该门禁在基线持续红；本批改为断言 canonical 输入值。
 2. 二分期间主 worktree 一度被回退到 HEAD（误操作，已重放全部编辑）；该事故同时还原了会话开始时 `docs/chat-kernel-consumer-report.json` 的未提交改动，该文件为脚本产物，已重新生成。
+
+### 2026-08-27 批次 2：Forum draft autosave seam 收口
+
+状态：`stable`（seam 缺陷修复 + Electron 证据闭合）。
+
+- 发现：论坛输入的 owner 抑制标记为 `vcpTypedForumFieldOwner`，而 legacy whole-form autosave 只识别 `vcpTypedFieldOwner`，在 `adminUsername`/`adminPassword` 打字会同时驱动 legacy 全表单 submit、两个 owner 争抢同一状态条并误发全量 settings 保存。
+- 修复：legacy input 过滤器同时识别两种标记；提交 `aa848ec4`。
+- Electron journey 新增证据：论坛打字从不触发全表单 `requestSubmit`，且保存经由 `ForumConfigUiService.save.execute`（service 层拦截计数）。
+- 连带修复 `be29ff00` 引入的 retry 点击误路由回归（提交 `c49f9263`）。
+
+### 2026-08-27 批次 3：presentationOwner 论坛 legacy 填充退役
+
+状态：`stable`。
+
+- typed ForumConfigUiService consumer 已在 Settings 装配时订阅并投影论坛快照；presentation owner 的 `loadForumConfig` + safeSet 镜像属同值重复填充与重复 IPC，已删除。journey 断言控件值等于 typed snapshot 继续通过。提交 `84fd4dbc`。
+
+#### Forum 字段 ownership table（本批后）
+
+| persisted key | 可见控件 | read source | write command | legacy path 状态 |
+| --- | --- | --- | --- | --- |
+| forum.config.json `username`/`password` | Input `#adminUsername` / `#adminPassword` | ForumConfigUiService 快照 | 论坛字段 owner → `forumService.save.execute` | presentationOwner 镜像已删除；manager 兜底仅在 typed owner 未挂载时执行（Classic 兼容保留） |
+
+roadmap checkpoint 追加于 `38ec8bb8`。
