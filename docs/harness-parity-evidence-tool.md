@@ -22,4 +22,8 @@ The expected capture shape is pinned in
 `model-picker.capture.schema.json`, including the fixed viewport, ARIA links,
 computed-style selectors, interaction states, and optional PNG ROI.
 
+Run `npm run check:harness-capture-prerequisites` before browser capture. It
+reports missing Harness package aliases or scaffold files without installing
+dependencies or mutating the source checkout.
+
 The command is intentionally report-first: Candidate Lab entries remain gaps and do not become production parity claims. Use `--strict` only when a release gate requires every provenance and interaction gap to be closed.
