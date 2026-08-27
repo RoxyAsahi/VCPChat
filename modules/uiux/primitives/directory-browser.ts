@@ -4,6 +4,7 @@ import { mountModal, type ModalController } from './modal.js';
 
 const STYLE_ID = 'vcp-harness-uiux-directory-browser';
 const SLOW_SCAN_DELAY_MS = 300;
+const PARENT_LEG_WAIT_MS = 200;
 
 function ensureStyles() {
     if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) return;
@@ -117,33 +118,25 @@ export function mountDirectoryBrowser(props: DirectoryBrowserProps, scope: UiSco
     };
     const clearSlowScan = () => { if (slowTimer !== null) clearTimeout(slowTimer); slowTimer = null; slowLoading = false; if (previewTimer !== null) clearTimeout(previewTimer); previewTimer = null; };
     const scan = async (path: string | undefined, commit: (listing: DirectoryBrowserListing) => void) => { const request = ++generation; controller?.abort(); controller = new AbortController(); clearSlowScan(); loading = true; failure = null; slowTimer = setTimeout(() => { if (request === generation && modal.open && loading) { slowTimer = null; slowLoading = true; sync(); } }, SLOW_SCAN_DELAY_MS); sync(); try { const listing = await props.listDirectory(path, controller.signal); if (request !== generation || !modal.open) return; commit(listing); } catch (reason) { if (request !== generation || !modal.open) return; failure = errorText(reason); } finally { if (request === generation && modal.open) { clearSlowScan(); loading = false; sync(); } } };
-    const navigate = (path?: string) => {
-        editingPath = false; selected = null; child = null;
-        void scan(path, listing => {
-            const parentCrumb = listing.crumbs?.at(-2);
-            if (!parentCrumb) { parent = listing; return; }
-            const target = listing;
-            void scan(parentCrumb.path, parentListing => {
-                const match = parentListing.entries.find(entry => entry.path === target.path);
-                if (!match) { parent = target; return; }
-                parent = parentListing; selected = match; child = target;
-            });
-        });
-    };
-    const preview = (path: string) => {
+    const land = (path: string | undefined, closeEditor: boolean) => {
         const request = ++generation; controller?.abort(); controller = new AbortController(); loading = true; failure = null; sync();
         void props.listDirectory(path, controller.signal).then(target => {
             if (request !== generation || !modal.open) return;
             const parentCrumb = target.crumbs?.at(-2);
-            if (!parentCrumb) { parent = target; selected = null; child = null; return; }
+            let settled = false;
+            const settleSingle = () => { if (settled || request !== generation || !modal.open) return; settled = true; parent = target; selected = null; child = null; if (closeEditor) editingPath = false; clearSlowScan(); loading = false; sync(); };
+            if (!parentCrumb) { settleSingle(); return; }
+            const timeout = setTimeout(settleSingle, PARENT_LEG_WAIT_MS);
             void props.listDirectory(parentCrumb.path, controller?.signal).then(parentListing => {
                 if (request !== generation || !modal.open) return;
                 const match = parentListing.entries.find(entry => entry.path === target.path);
-                if (!match) { parent = target; selected = null; child = null; return; }
-                parent = parentListing; selected = match; child = target;
-            }, () => { if (request === generation && modal.open) { parent = target; selected = null; child = null; } }).finally(() => { if (request === generation && modal.open) { clearSlowScan(); loading = false; sync(); } });
+                if (!match) { settleSingle(); return; }
+                clearTimeout(timeout); parent = parentListing; selected = match; child = target; if (closeEditor) editingPath = false; settled = true; clearSlowScan(); loading = false; sync();
+            }, () => settleSingle());
         }, reason => { if (request === generation && modal.open) { failure = errorText(reason); clearSlowScan(); loading = false; sync(); } });
     };
+    const navigate = (path?: string) => { land(path, true); };
+    const preview = (path: string) => { land(path, false); };
     const pick = (entry: DirectoryBrowserEntry) => { selected = entry; child = null; void scan(entry.path, listing => { child = listing; }); };
     const advance = (entry: DirectoryBrowserEntry) => { if (!child) return; parent = child; selected = null; child = null; pick(entry); };
     browserScope.listen(hidden, 'click', () => { showHidden = !showHidden; sync(); });

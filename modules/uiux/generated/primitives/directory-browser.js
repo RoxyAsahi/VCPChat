@@ -2,6 +2,7 @@ import { mountButton } from './button.js';
 import { mountModal } from './modal.js';
 const STYLE_ID = 'vcp-harness-uiux-directory-browser';
 const SLOW_SCAN_DELAY_MS = 300;
+const PARENT_LEG_WAIT_MS = 200;
 function ensureStyles() {
     if (typeof document === 'undefined' || document.getElementById(STYLE_ID))
         return;
@@ -225,30 +226,7 @@ export function mountDirectoryBrowser(props, scope) {
             sync();
         }
     } };
-    const navigate = (path) => {
-        editingPath = false;
-        selected = null;
-        child = null;
-        void scan(path, listing => {
-            const parentCrumb = listing.crumbs?.at(-2);
-            if (!parentCrumb) {
-                parent = listing;
-                return;
-            }
-            const target = listing;
-            void scan(parentCrumb.path, parentListing => {
-                const match = parentListing.entries.find(entry => entry.path === target.path);
-                if (!match) {
-                    parent = target;
-                    return;
-                }
-                parent = parentListing;
-                selected = match;
-                child = target;
-            });
-        });
-    };
-    const preview = (path) => {
+    const land = (path, closeEditor) => {
         const request = ++generation;
         controller?.abort();
         controller = new AbortController();
@@ -259,34 +237,34 @@ export function mountDirectoryBrowser(props, scope) {
             if (request !== generation || !modal.open)
                 return;
             const parentCrumb = target.crumbs?.at(-2);
+            let settled = false;
+            const settleSingle = () => { if (settled || request !== generation || !modal.open)
+                return; settled = true; parent = target; selected = null; child = null; if (closeEditor)
+                editingPath = false; clearSlowScan(); loading = false; sync(); };
             if (!parentCrumb) {
-                parent = target;
-                selected = null;
-                child = null;
+                settleSingle();
                 return;
             }
+            const timeout = setTimeout(settleSingle, PARENT_LEG_WAIT_MS);
             void props.listDirectory(parentCrumb.path, controller?.signal).then(parentListing => {
                 if (request !== generation || !modal.open)
                     return;
                 const match = parentListing.entries.find(entry => entry.path === target.path);
                 if (!match) {
-                    parent = target;
-                    selected = null;
-                    child = null;
+                    settleSingle();
                     return;
                 }
+                clearTimeout(timeout);
                 parent = parentListing;
                 selected = match;
                 child = target;
-            }, () => { if (request === generation && modal.open) {
-                parent = target;
-                selected = null;
-                child = null;
-            } }).finally(() => { if (request === generation && modal.open) {
+                if (closeEditor)
+                    editingPath = false;
+                settled = true;
                 clearSlowScan();
                 loading = false;
                 sync();
-            } });
+            }, () => settleSingle());
         }, reason => { if (request === generation && modal.open) {
             failure = errorText(reason);
             clearSlowScan();
@@ -294,6 +272,8 @@ export function mountDirectoryBrowser(props, scope) {
             sync();
         } });
     };
+    const navigate = (path) => { land(path, true); };
+    const preview = (path) => { land(path, false); };
     const pick = (entry) => { selected = entry; child = null; void scan(entry.path, listing => { child = listing; }); };
     const advance = (entry) => { if (!child)
         return; parent = child; selected = null; child = null; pick(entry); };

@@ -158,6 +158,8 @@ test('Harness DirectoryBrowser foundation aborts stale listings and retracts on 
         await delay(0);
         assert.equal(pending.length, 1, 'non-root path landing must request its parent leg');
         assert.equal(pending[0].path, '/home');
+        await delay(220);
+        assert.equal(document.querySelectorAll('.vcp-directory-browser-column').length, 1, 'a slow parent leg must settle the target single-pane first');
         pending.shift().resolve({ path: '/home', entries: [{ name: 'projects', path: '/home/projects' }] });
         await delay(0);
         assert.equal(document.querySelectorAll('.vcp-directory-browser-column').length, 2);
