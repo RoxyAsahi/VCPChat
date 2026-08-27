@@ -19,7 +19,7 @@ for (const dir of targets) {
     assert.equal(manifest.observations?.length, requiredViewports.length);
     for (const [width, height] of requiredViewports) {
       const name = `${width}x${height}`;
-      for (const suffix of ['initial', 'scrolled', 'narrow', 'hover', 'focus']) {
+      for (const suffix of ['initial', 'settings', 'scrolled', 'narrow', 'hover', 'focus']) {
         await fs.access(path.join(dir, `${name}-${suffix}.png`));
       }
       const observation = manifest.observations.find(item => item.viewport?.width === width && item.viewport?.height === height);
@@ -28,6 +28,8 @@ for (const dir of targets) {
       assert.ok(observation?.initial?.interactionStates?.hover);
       assert.ok(observation?.initial?.interactionStates?.focus);
       assert.ok(observation?.initial?.stateCounts && Object.values(observation.initial.stateCounts).every(value => Number.isInteger(value)));
+      assert.equal(observation?.settingsViewport?.active, true);
+      assert.ok(observation?.settingsViewport?.visible?.length > 0);
     }
     console.log(`Visual forensics evidence passed: ${dir}`);
   } catch (error) {

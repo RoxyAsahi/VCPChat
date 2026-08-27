@@ -142,6 +142,22 @@ try {
     await sleep(250);
     const name = `${width}x${height}`;
     await page.screenshot({ path: path.join(output, `${name}-initial.png`), fullPage: true });
+    await page.evaluate(async () => {
+      await window.uiHelperFunctions?.openModal?.('globalSettingsModal');
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }).catch(() => {});
+    await page.screenshot({ path: path.join(output, `${name}-settings.png`), fullPage: false });
+    const settingsViewport = await page.evaluate(() => {
+      const modal = document.querySelector('#globalSettingsModal');
+      const visible = [...(modal?.querySelectorAll('.vcp-settings-row, .form-group, input, select, textarea, button, wa-input, wa-select') || [])]
+        .filter(node => node.getClientRects().length).slice(0, 50).map(node => {
+          const r = node.getBoundingClientRect(); const s = getComputedStyle(node);
+          return { tag: node.tagName.toLowerCase(), id: node.id, className: node.className, parentClass: node.parentElement?.className || '', text: (node.textContent || node.getAttribute('aria-label') || '').trim().slice(0, 80), rect: { x: r.x, y: r.y, width: r.width, height: r.height }, disabled: node.disabled === true || node.getAttribute('aria-disabled') === 'true', invalid: node.getAttribute('aria-invalid') === 'true' || node.classList.contains('is-error'), busy: node.getAttribute('aria-busy') === 'true' || node.classList.contains('is-loading'), selected: node.getAttribute('aria-selected') === 'true' || node.classList.contains('is-selected') };
+        });
+      return { active: Boolean(modal?.classList.contains('active') || modal), visible, activeSection: modal?.querySelector('.settings-section.active')?.id || '' };
+    }).catch(error => ({ error: error.message }));
+    await page.evaluate(() => window.uiHelperFunctions?.closeModal?.('globalSettingsModal')).catch(() => {});
+    await sleep(80);
     const initial = await page.evaluate(() => {
       const visible = el => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); const owner = el.closest('.vcp-ui-showcase-root, .vcp-ui-page-shell, #main-content, #chat-container')?.className || 'document'; return { tag: el.tagName.toLowerCase(), id: el.id, className: el.className, owner, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, display: s.display, position: s.position, zIndex: s.zIndex, color: s.color, backgroundColor: s.backgroundColor, borderRadius: s.borderRadius }; };
       const controls = [...document.querySelectorAll('button, input, select, textarea, [role="dialog"], [role="menu"], [role="tooltip"]')].filter(el => el.getClientRects().length).slice(0, 400);
@@ -215,7 +231,7 @@ try {
     await sleep(150);
     const resized = await page.evaluate(() => ({ width: innerWidth, height: innerHeight, overflowX: document.documentElement.scrollWidth > innerWidth + 1, overflowY: document.documentElement.scrollHeight > innerHeight + 1 }));
     await page.screenshot({ path: path.join(output, `${name}-narrow.png`), fullPage: false });
-    evidence.observations.push({ viewport: { width, height }, initial, scrolled, resized });
+    evidence.observations.push({ viewport: { width, height }, initial, settingsViewport, scrolled, resized });
     if (initial.overlap) evidence.gate.failures.push(`${name}: visible control overlap`);
     if (resized.overflowX) evidence.gate.failures.push(`${name}: horizontal overflow after resize`);
   }
