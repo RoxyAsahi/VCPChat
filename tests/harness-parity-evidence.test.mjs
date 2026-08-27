@@ -90,3 +90,11 @@ test('Harness capture freshness gate reports paired artifacts without promoting 
     assert.equal(report.pass, report.checks.every(item => item.pass));
     assert.equal(report.note.includes('does not create'), true);
 });
+
+test('Harness reference pack validates fixture case shape while retaining pending candidates', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-reference-pack.mjs'], { cwd: root, stdio: 'pipe' });
+    const matrix = JSON.parse(fs.readFileSync(path.join(root, 'docs/reference/deepseek-harness-primitives/fixture-matrix.json'), 'utf8'));
+    assert.ok(matrix.cases.every(([primitive, state]) => typeof primitive === 'string' && primitive.length > 0 && typeof state === 'string' && state.length > 0));
+    assert.ok(matrix.cases.some(([primitive]) => primitive === 'language-row'));
+    assert.ok(matrix.cases.some(([primitive]) => primitive === 'permission-row'));
+});
