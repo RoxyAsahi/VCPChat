@@ -429,3 +429,13 @@ directory-browser 接入前置达成。typed field owner 本就以 `#networkNote
 - **6d 既有怪癖记录**：diary preset select 无 `monospace` 选项，6d 的预设编辑实际落地空串草稿（onScreen/flush 均为 ''、断言空洞通过，属批次前遗留）；reload 路径按 `|| 'serif'` 契约重放默认值，本批断言按该契约书写。
 - 门禁：source-equivalence、unified-surface、test-settings-wa（jsdom 8/8）、test-ui-system 四快全绿；Electron journey 全轮 PASS（新增 1p/1q、section 6 七断言、section 7 约 35 条 restore 断言）。win32/Linux packaged evidence 维持 evidence-pending。
 - 台账：§7 追加批次 17 段落；roadmap 追加 R2-02E checkpoint。下一批候选：E3（部分挂载失败契约定义）或 E1/E6，视 unlock 复查结果轮转。
+
+### 2026-08-27 批次 18：兜底退役证据 E1（入口面清单）+ E6（负向守护）
+
+状态：source-equivalence 门禁扩容 + docs；兜底代码零删除。
+
+- unlock 复查：线程 A 新增 `5faa4f68`（model picker menu geometry）等提交，DirectoryBrowser 各 checkpoint 状态保持 `foundation-electron-active`，unlock 条件不满足，按预案推进 E1/E6。
+- **E1（入口面清单 + uiMode≠next 排除证明）**：全仓 HTML 面盘点确认 `#globalSettingsForm/#globalSettingsModal` 仅存在于 main.html（静态声明 `data-ui-mode="next"`）；唯一 `uiMode:'classic'` 生产方是 embeddedAppSessionManager（独立内嵌业务页参数），其安全 allowlist 的 9 个页面（notes/notemini/translator/memo/forum/log/themes/task/plugin-manager）经门禁逐一断言零 settings 面引用。appearance-engine 等处的 `'classic'` 字样是 normalize() 消费侧默认值，非入口面。结论落源码级断言：兜底不可能是跨页面 Classic 兼容层，其职责域被锁死在 main.html 的启动/半挂载窗口。
+- **E6（负向守护）**：`check-settings-source-equivalence.mjs` 新增兜底 id 触碰清单钉死——39 个兜底 id 逐一断言四件事：(1) main.html 存在同 id 控件；(2) presentationOwner 仍持有该 id（退役提交必须同步更新本清单，守卫先行报警）；(3) settings-bridge（generic projection / typed field owner schema）覆盖该 id；(4) 两个 owner 之外的 modules/** + renderer.js 中 `getElementById('<id>')` 触碰文件集合与枚举清单 deepEqual 相等——现存量即 legacy 整表收集（global-settings-manager）、vcpServerUrl/topicSummaryModel blur 补全（settingsManager）、颜色簇 picker 写入（event-listeners）、chatLayoutModeWide（appearance-studio）、topicSummaryModel 接线（renderer.js）。任何新第二写入方出现即门禁失败。实测 BSD grep `\b` 词界失效曾致扫描假阴性，已改用纯字面模式复核。
+- 门禁：source-equivalence（含新 E1/E6 段）exit 0。批次为门禁+docs 批，journey 无改动不重跑；四快中其余三项不受影响（E6 只增不改既有断言）。win32/Linux packaged evidence 维持 evidence-pending。
+- 台账：§7 追加批次 18 段落；roadmap 追加 R2-02E checkpoint。E1-E6 现状：E1 ✅ E2 ✅ E4 ✅ E5 ✅ E6 ✅，仅剩 E3（部分挂载失败契约定义）；E3 完成后兜底退役批次即具备全部前置证据。

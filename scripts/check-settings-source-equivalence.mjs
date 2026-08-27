@@ -16,6 +16,92 @@ const html = read('main.html');
 const settingsEntry = read('styles/settings.css');
 const eventListeners = read('modules/event-listeners.js');
 const uiHelpers = read('modules/ui-helpers.js');
+const presentationOwner = read('modules/renderer/mainChatSettingsPresentationOwner.js');
+const renderer = read('renderer.js');
+
+// ---- Retirement evidence E1 (handoff ledger): main.html is the only
+// document that renders the global settings form, and it declares
+// uiMode=next statically.  The only uiMode:'classic' producer is the
+// embedded-app session manager, whose allowlist pages never contain the
+// settings modal, so the presentationOwner fallback can never be a
+// cross-surface Classic compatibility layer; its only job is the
+// startup/partial-mount window inside main.html. ----
+assert.match(html, /data-ui-mode="next"/, 'main.html must declare the canonical next uiMode statically');
+const embeddedAllowlistSource = read('modules/shared/embeddedAppAllowlist.js');
+const embeddedPages = [...embeddedAllowlistSource.matchAll(/page:\s*'([^']+)'/g)].map(match => match[1]);
+assert.ok(embeddedPages.length >= 9, `embedded allowlist must still enumerate its pages (${embeddedPages.length})`);
+for (const page of embeddedPages) {
+    const pageSource = read(page);
+    assert.doesNotMatch(pageSource, /globalSettingsForm|globalSettingsModal/, `embedded page must not render the global settings surface: ${page}`);
+}
+
+// ---- Retirement evidence E6 (negative guard): pin the control-touch
+// inventory of every id the presentationOwner startup fallback fills.
+// Allowed touchers per id are exactly the two owners (settings-bridge typed
+// projection/field owner + the fallback itself, asserted separately below)
+// plus the explicitly enumerated legacy seams (whole-form collect, blur
+// completion, color pickers, appearance studio, renderer wiring).  A new
+// second writer for any fallback id must update this inventory in the same
+// commit, so a retired id cannot silently reappear under a new owner. ----
+const FALLBACK_TOUCHERS = {
+    userName: ['modules/global-settings-manager.js'],
+    userAvatarBorderColor: ['modules/event-listeners.js', 'modules/global-settings-manager.js'],
+    userAvatarBorderColorText: ['modules/event-listeners.js'],
+    userNameTextColor: ['modules/event-listeners.js', 'modules/global-settings-manager.js'],
+    userNameTextColorText: ['modules/event-listeners.js'],
+    vcpServerUrl: ['modules/global-settings-manager.js', 'modules/settingsManager.js'],
+    vcpApiKey: ['modules/global-settings-manager.js'],
+    fileKey: ['modules/global-settings-manager.js'],
+    vcpLogUrl: ['modules/global-settings-manager.js'],
+    vcpLogKey: ['modules/global-settings-manager.js'],
+    topicSummaryModel: ['modules/global-settings-manager.js', 'modules/settingsManager.js', 'renderer.js'],
+    continueWritingPrompt: ['modules/global-settings-manager.js'],
+    flowlockContinueDelay: ['modules/global-settings-manager.js'],
+    speechRecognizerBrowserPath: ['modules/global-settings-manager.js'],
+    speechRecognizerPagePath: ['modules/global-settings-manager.js'],
+    voiceLocalSovitsUrl: ['modules/global-settings-manager.js'],
+    voiceLocalSovitsKey: ['modules/global-settings-manager.js'],
+    voiceNetworkProviderUrl: ['modules/global-settings-manager.js'],
+    voiceNetworkProviderKey: ['modules/global-settings-manager.js'],
+    enableSmoothStreaming: ['modules/global-settings-manager.js'],
+    voiceModeLocal: [],
+    voiceModeNetwork: ['modules/global-settings-manager.js'],
+    chatFontPreset: ['modules/global-settings-manager.js'],
+    chatFontCustom: ['modules/global-settings-manager.js'],
+    chatCodeFontPreset: ['modules/global-settings-manager.js'],
+    chatCodeFontCustom: ['modules/global-settings-manager.js'],
+    chatDiaryFontPreset: ['modules/global-settings-manager.js'],
+    chatDiaryFontCustom: ['modules/global-settings-manager.js'],
+    chatToolFontPreset: ['modules/global-settings-manager.js'],
+    chatToolFontCustom: ['modules/global-settings-manager.js'],
+    chatLayoutModeWide: ['modules/global-settings-manager.js', 'modules/ui-system/appearance-studio.js'],
+    chatLayoutModeNormal: [],
+    enableUserChatBubbleUi: ['modules/global-settings-manager.js'],
+    showUserMetaInChatBubbleUi: ['modules/global-settings-manager.js'],
+    chatBubbleMaxWidthWideDefault: ['modules/global-settings-manager.js'],
+    chatBubbleMaxWidthWideNotifications: ['modules/global-settings-manager.js'],
+    chatBubbleMaxWidthWideNarrow: ['modules/global-settings-manager.js'],
+    minChunkBufferSize: ['modules/global-settings-manager.js'],
+    smoothStreamIntervalMs: ['modules/global-settings-manager.js'],
+};
+const OWNER_FILES = new Set(['modules/ui-system/settings-bridge.js', 'modules/renderer/mainChatSettingsPresentationOwner.js']);
+const collectJsFiles = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+    const child = path.join(dir, entry.name);
+    if (entry.isDirectory()) return collectJsFiles(child);
+    return entry.name.endsWith('.js') ? [child] : [];
+});
+const moduleFiles = [...collectJsFiles(path.join(root, 'modules')), path.join(root, 'renderer.js')];
+for (const [id, expectedTouchers] of Object.entries(FALLBACK_TOUCHERS)) {
+    assert.match(html, new RegExp(`id="${id}"`), `fallback id must exist as a control in main.html: ${id}`);
+    assert.ok(presentationOwner.includes(`'${id}'`), `the startup fallback must still own its id inventory until retirement: ${id}`);
+    assert.ok(bridge.includes(`'${id}'`), `the typed projection/field owner must cover the fallback id: ${id}`);
+    const actualTouchers = moduleFiles
+        .filter(file => !OWNER_FILES.has(path.relative(root, file).split(path.sep).join('/')))
+        .filter(file => fs.readFileSync(file, 'utf8').includes(`getElementById('${id}')`))
+        .map(file => path.relative(root, file).split(path.sep).join('/'))
+        .sort();
+    assert.deepEqual(actualTouchers, [...expectedTouchers].sort(), `unexpected control toucher set for fallback id ${id}`);
+}
 
 // These assertions are deliberately source-level.  A screenshot can prove a
 // visual outcome but cannot prove that an old List/search owner is absent.

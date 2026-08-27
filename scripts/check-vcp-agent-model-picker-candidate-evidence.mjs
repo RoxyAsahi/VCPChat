@@ -28,9 +28,13 @@ assert.ok(report.menu?.rect?.width > 0 && report.menu?.rect?.height > 0,
     'visible model picker menu must have measurable geometry');
 assert.ok(report.menu.rect.x >= 0 && report.menu.rect.x + report.menu.rect.width <= report.viewport.width,
     'visible model picker menu must remain inside the fixed viewport');
+assert.ok(report.menu.rect.y >= 0 && report.menu.rect.y + report.menu.rect.height <= report.viewport.height,
+    'visible model picker menu must remain vertically inside the fixed viewport');
 assert.ok(report.menu.rect.width >= 240, 'visible model picker menu must preserve the 240px Harness width contract');
 assert.equal(report.modelPane.searchVisible, true);
 assert.equal(report.modelPane.optionCount, 3);
+assert.match(report.keyboardNavigation.activeOption || '', /Claude 3\.7 Sonnet/,
+    'ArrowDown must move the active model option');
 assert.equal(report.effortPane.optionCount, 2);
 assert.equal(report.disposed, true);
 console.log(JSON.stringify({ source: report.source, viewport: report.viewport, modelOptions: report.modelPane.optionCount, effortOptions: report.effortPane.optionCount, disposed: report.disposed, status: report.status }, null, 2));
