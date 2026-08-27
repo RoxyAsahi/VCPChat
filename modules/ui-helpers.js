@@ -810,21 +810,30 @@
         }
     };
 
+    // Network path rows adopt the real library Input primitive, matching the
+    // bridge's static fields; rows created before the runtime or lifecycle
+    // scope exists keep the bare native input contract.
+    let networkPathInputScope = null;
+    const ensureNetworkPathInputScope = () => {
+        if (networkPathInputScope) return networkPathInputScope;
+        const LifecycleScope = window.VCPLifecycle?.LifecycleScope;
+        if (!LifecycleScope) return null;
+        networkPathInputScope = new LifecycleScope('ui-helpers-network-path-input');
+        return networkPathInputScope;
+    };
+
     uiHelperFunctions.addNetworkPathInput = function(path = '') {
         const container = document.getElementById('networkNotesPathsContainer');
         const inputGroup = document.createElement('div');
         inputGroup.className = 'network-path-input-group vcp-settings-row';
         inputGroup.dataset.vcpSettingsRow = 'true';
-    
+
         const input = document.createElement('input');
         input.type = 'text';
         input.name = 'networkNotesPath';
         input.placeholder = '例如 \\\\NAS\\Shared\\Notes';
         input.value = path;
-        const inputWrap = document.createElement('span');
-        inputWrap.className = 'vcp-harness-input-wrap';
-        inputWrap.dataset.settingPrimitive = 'input-wrap';
-    
+
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
         removeBtn.textContent = '删除';
@@ -832,11 +841,19 @@
         removeBtn.onclick = () => {
             inputGroup.remove();
         };
-    
-        inputWrap.appendChild(input);
-        inputGroup.appendChild(inputWrap);
-        inputGroup.appendChild(removeBtn);
+
+        inputGroup.append(input, removeBtn);
         container.appendChild(inputGroup);
+        const inputApi = window.VCPUIUX;
+        const inputScope = ensureNetworkPathInputScope();
+        if (inputApi?.mountInput && inputScope) {
+            try {
+                inputApi.mountInput(input, {}, inputScope);
+                input.closest('.vcp-uiux-input-wrap')?.classList.add('vcp-harness-input-fill');
+            } catch (error) {
+                console.warn('[UI Helper] Could not mount network path Input primitive:', error);
+            }
+        }
     };
 
     uiHelperFunctions.filterAgentList = function(searchTerm) {

@@ -177,7 +177,7 @@ try {
                     pick('.vcp-harness-settings-header'),
                     pick('.vcp-harness-settings-options'),
                     pick('.vcp-harness-general-item'),
-                    pick('.vcp-harness-input-wrap'),
+                    pick('.vcp-uiux-input-wrap'),
                     pick('.vcp-harness-select-trigger'),
                 ].filter(Boolean);
             })(),
@@ -254,7 +254,7 @@ try {
         return [probe('.vcp-harness-select-trigger'), probe('.vcp-harness-menu-item')].filter(Boolean);
     });
     assert.ok(visibleGeometry.some(item => item.selector === '.vcp-harness-select-trigger' && ((item.height === '36px' && item.borderRadius === '18px') || (item.minHeight === '40px' && item.borderRadius === '10px')) && item.fontSize === '14px' && item.lineHeight === '22px'), 'visible select geometry matches Harness trigger contract');
-    assert.ok(shellState.computedGeometry.some(item => item.selector === '.vcp-harness-input-wrap' && item.borderRadius === '8px'), 'Input wrapper geometry matches Harness contract');
+    assert.ok(shellState.computedGeometry.some(item => item.selector === '.vcp-uiux-input-wrap' && item.borderRadius === '8px'), 'Input primitive wrap geometry matches Harness contract');
     console.log(`  [INFO] visible control geometry ${JSON.stringify(visibleGeometry)}`);
     const typedPrimitiveEvidence = await page.evaluate(() => {
         const select = document.getElementById('appearanceDensity');
@@ -434,6 +434,14 @@ try {
             const trigger = select.closest('.vcp-harness-select')?.querySelector('.vcp-harness-select-trigger');
             return trigger && getComputedStyle(trigger).display !== 'none';
         }).length,
+        legacyInputWraps: document.querySelectorAll('#globalSettingsModal .vcp-harness-input-wrap').length,
+        primitiveInputs: document.querySelectorAll('#globalSettingsModal .vcp-uiux-input-wrap input').length,
+        bareTextareas: [...document.querySelectorAll('#globalSettingsModal textarea')].filter(textarea => !textarea.closest('.vcp-uiux-input-wrap')).length,
+        totalTextareas: document.querySelectorAll('#globalSettingsModal textarea').length,
+        textareaMinHeight: (() => {
+            const textarea = document.getElementById('continueWritingPrompt');
+            return textarea ? getComputedStyle(textarea).minHeight : null;
+        })(),
     }));
     assert.ok(controlState.primitiveSelects.includes('chatFontPreset'), `font preset uses the library select primitive: ${controlState.primitiveSelects.join(',')}`);
     assert.ok(controlState.typedSelects.length === 6, `six typed appearance selects stay inside the typed Field owner (${controlState.typedSelects.join(',')})`);
@@ -451,6 +459,10 @@ try {
     }
     assert.equal(controlState.nativeSources, controlState.primitiveSelects.length, 'the native select remains the sole business source behind every primitive projection');
     assert.equal(controlState.visibleSelectProjections, controlState.primitiveSelects.length, 'each projected select has exactly one visible primitive trigger');
+    assert.equal(controlState.legacyInputWraps, 0, 'retired local input wrap is deleted');
+    assert.ok(controlState.primitiveInputs > 0, `single-line inputs are projected by the library Input primitive (${controlState.primitiveInputs})`);
+    assert.equal(controlState.bareTextareas, controlState.totalTextareas, 'textareas stay bare controls outside the fixed-height Input wrap');
+    assert.equal(controlState.textareaMinHeight, '64px', 'bare textareas keep their multiline geometry contract');
     await page.evaluate(() => {
         const select = document.getElementById('chatFontPreset');
         const trigger = select.closest('.vcp-harness-select')?.querySelector('.vcp-harness-select-trigger');

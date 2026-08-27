@@ -63,9 +63,6 @@ function addTypedNetworkPathInput(root, path = '') {
     if (document.getElementById('globalSettingsForm')?.dataset.vcpTypedFieldOwnerMounted === 'true') {
         input.dataset.vcpTypedFieldOwner = 'true';
     }
-    const inputWrap = document.createElement('span');
-    inputWrap.className = 'vcp-harness-input-wrap';
-    inputWrap.dataset.settingPrimitive = 'input-wrap';
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
     removeBtn.textContent = '删除';
@@ -76,9 +73,21 @@ function addTypedNetworkPathInput(root, path = '') {
         inputGroup.remove();
         container.dispatchEvent(new Event('change', { bubbles: true }));
     }, { once: true });
-    inputWrap.appendChild(input);
-    inputGroup.append(inputWrap, removeBtn);
+    inputGroup.append(input, removeBtn);
     container.appendChild(inputGroup);
+    // Dynamic rows adopt the same real Input primitive as static fields; a
+    // bare input keeps the native control contract when the runtime or the
+    // presentation scope is unavailable.
+    const inputApi = window.VCPUIUX;
+    const inputScope = ensurePresentationScope();
+    if (inputApi?.mountInput && inputScope) {
+        try {
+            inputApi.mountInput(input, {}, inputScope);
+            input.closest('.vcp-uiux-input-wrap')?.classList.add('vcp-harness-input-fill');
+        } catch (error) {
+            console.warn('[VCPUI SettingsBridge] Could not mount network path Input primitive:', error);
+        }
+    }
     return true;
 }
 
@@ -503,6 +512,7 @@ function enhanceForm(form) {
     mountTypedAgentModelInput(form);
     mountTypedAgentTemperatureInput(form);
     mountTypedAgentNumericInputs(form);
+    mountTypedAgentStreamChoice(form);
     form.querySelectorAll('.agent-settings-section, .group-settings-section').forEach(section => {
         enhance('SettingsSection', section);
     });
@@ -513,7 +523,7 @@ function enhanceForm(form) {
     form.querySelectorAll('textarea').forEach(textarea => enhance('Textarea', textarea));
     form.querySelectorAll('select').forEach(select => enhance('Select', select, { kernel: 'native' }));
     form.querySelectorAll('input[type="range"]').forEach(range => enhance('Range', range));
-    form.querySelectorAll('label.switch').forEach(control => enhance('Switch', control));
+    mountHarnessSwitches(form);
     form.querySelectorAll('.agent-style-collapsible-container').forEach(disclosure => {
         disclosure.dataset.settingPrimitive = 'disclosure';
         disclosure.querySelector('.style-collapse-header')?.classList.add('vcp-harness-disclosure-row');
@@ -618,6 +628,24 @@ function mountTypedAgentNumericInputs(form) {
     });
 }
 
+// The stream output pair is a presentation-only Choice primitive over the
+// existing native radio controls.  settingsManager remains the sole source
+// of the persisted boolean and chatManager keeps its existing consumption.
+function mountTypedAgentStreamChoice(form) {
+    const group = form?.querySelector?.('#agentStreamOutputTrue')?.closest('.form-group-inline');
+    const api = window.VCPUIUX;
+    const scope = ensurePresentationScope();
+    if (!group || !api?.mountChoice || !scope || group.dataset.vcpTypedAgentStreamChoice === 'true') return;
+    try {
+        const release = api.mountChoice(group, scope);
+        group.dataset.vcpTypedAgentStreamChoice = 'true';
+        scope.own(() => { delete group.dataset.vcpTypedAgentStreamChoice; }, 'agent-stream-choice-marker', 'ui-presentation');
+        if (release) scope.own(release, 'agent-stream-choice', 'ui-primitive');
+    } catch (error) {
+        console.warn('[VCPUI SettingsBridge] Could not mount typed Agent stream Choice:', error);
+    }
+}
+
 // Lucide icon names for the global settings categories. Icons are always
 // rendered through VCPUI (`.vcp-ui-icon` -> lucide-adapter); no inline SVG,
 // emoji or text arrows on this surface.
@@ -637,11 +665,10 @@ const GLOBAL_CATEGORY_ICONS = Object.freeze({
 function enhanceGlobalSettings(root, form) {
     mountCanonicalSettingsRows(form);
     removeLegacySubsectionHeadings(form);
-    mountHarnessInputWrappers(form);
-    form.querySelectorAll('input:is(:not([type]), [type="text"], [type="url"], [type="password"], [type="number"], [type="email"], [type="search"], [type="tel"])').forEach(input => {
-        enhance('Input', input);
-    });
-    form.querySelectorAll('textarea').forEach(textarea => enhance('Textarea', textarea));
+    mountHarnessInputs(form);
+    // The legacy VCPUI native-kernel Input/Textarea class enhancement is
+    // retired here: the real library Input primitive above owns single-line
+    // input presentation, and textareas keep the bare-control contract.
     // Short enumerations remain native/segmented controls. Long enumerations
     // get a Harness-style popover, but the native select is retained as the
     // one authoritative business node.
@@ -655,7 +682,7 @@ function enhanceGlobalSettings(root, form) {
     mountTypedForumInputs(root, form);
     mountTypedForumFieldOwner(root, form);
     form.querySelectorAll('input[type="range"]').forEach(range => { if (!['appearanceSidebarAvatarSize', 'appearanceSidebarRowHeight', 'appearanceCustomRadius'].includes(range.id)) enhance('Range', range); });
-    form.querySelectorAll('label.switch').forEach(control => { if (!control.querySelector('#showHomeVisualBrand, #showHomeVisualTagline')) enhance('Switch', control); });
+    mountHarnessSwitches(form);
     form.querySelectorAll('.agent-style-collapsible-container').forEach(disclosure => {
         disclosure.dataset.settingPrimitive = 'disclosure';
         disclosure.querySelector('.style-collapse-header')?.classList.add('vcp-harness-disclosure-row');
@@ -853,16 +880,37 @@ function mountTypedAppearanceSelects(root, form) {
     });
 }
 
-function mountHarnessInputWrappers(form) {
-    const selector = 'input:is(:not([type]), [type="text"], [type="url"], [type="password"], [type="number"], [type="email"], [type="search"], [type="tel"]), textarea';
+// Single-line text inputs are projected by the real library Input primitive
+// (window.VCPUIUX.mountInput): the native input stays the sole business node
+// while the primitive wrap owns the border/focus surface.  Textareas are
+// deliberately excluded — the primitive wrap is a fixed 32px single-line
+// frame, and the form's bare-control contract already gives textareas their
+// multiline geometry (contract gap reported to thread A).  The typed mounts
+// (home tagline, forum credentials, color pair) own their own controls.
+let settingsKeySeed = 0;
+function uniqueSettingsKey() {
+    settingsKeySeed += 1;
+    return `anon-${settingsKeySeed}`;
+}
+
+function mountHarnessInputs(form) {
+    const api = window.VCPUIUX;
+    const scope = ensurePresentationScope();
+    if (!api?.mountInput || !scope) return;
+    const selector = 'input:is(:not([type]), [type="text"], [type="url"], [type="password"], [type="number"], [type="email"], [type="search"], [type="tel"])';
     form.querySelectorAll(selector).forEach(control => {
+        if (control.dataset.vcpHarnessInputPrimitive === 'true') return;
         if (control.id === 'homeVisualTagline' || control.id === 'userAvatarBorderColorText' || control.id === 'adminUsername' || control.id === 'adminPassword') return;
-        if (control.closest('.vcp-harness-input-wrap')) return;
-        const wrap = document.createElement('span');
-        wrap.className = 'vcp-harness-input-wrap';
-        wrap.dataset.settingPrimitive = 'input-wrap';
-        control.parentNode.insertBefore(wrap, control);
-        wrap.append(control);
+        if (control.closest('.vcp-uiux-input-wrap')) return;
+        try {
+            const release = api.mountInput(control, {}, scope);
+            if (!release) return;
+            control.dataset.vcpHarnessInputPrimitive = 'true';
+            control.closest('.vcp-uiux-input-wrap')?.classList.add('vcp-harness-input-fill');
+            scope.own(() => { delete control.dataset.vcpHarnessInputPrimitive; }, `harness-input-${control.id || control.name || uniqueSettingsKey()}`, 'ui-presentation');
+        } catch (error) {
+            console.warn('[VCPUI SettingsBridge] Could not mount Harness Input primitive:', error);
+        }
     });
 }
 
@@ -960,7 +1008,7 @@ function mountCanonicalSettingsRows(form) {
 function composeCanonicalRowSlots(row) {
     if (!row || row.matches('label, fieldset') || row.querySelector(':scope > .vcp-harness-row-copy')) return;
     const children = [...row.children];
-    const controls = children.filter(node => node.matches('input, select, textarea, button, .switch, .model-input-container, .vcp-harness-select, .vcp-harness-input-wrap'));
+    const controls = children.filter(node => node.matches('input, select, textarea, button, .switch, .model-input-container, .vcp-harness-select, .vcp-uiux-input-wrap'));
     const titles = children.filter(node => node.matches('label, span, strong, h4, h5'));
     const helpers = children.filter(node => node.matches('small, p'));
     if (!controls.length || !titles.length) return;

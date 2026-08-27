@@ -300,7 +300,6 @@ export function mountPrimitiveLab(root: HTMLElement, scope: UiScope): UiDisposer
         },
         onSelect: option => { modelPicker.trigger.dataset.selected = option.id; },
     }, labScope);
-    modelPicker.trigger.textContent = 'Select model';
     mountButton(modelPicker.trigger, { variant: 'outline', size: 'sm' }, labScope);
 
     // Harness provenance: ui-directory-picker-browse DirectoryBrowser. The

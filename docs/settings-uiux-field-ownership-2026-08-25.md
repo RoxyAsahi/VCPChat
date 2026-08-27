@@ -89,6 +89,8 @@
 
 Home visual 扩展（2026-08-26）：`showHomeVisualBrand`、`showHomeVisualTagline` 与 `homeVisualTagline` 也已加入同一 typed field owner；通用 projection 不再重复写入，业务 key 与首页视觉行为保持不变。该扩展仍保留 `mainChatSettingsPresentationOwner.js` 的未接管 fallback，待独立 reload/Classic 等价证据后删除。
 
+Agent stream choice（2026-08-27）：`agentStreamOutputTrue` / `agentStreamOutputFalse` 通过 TS Light-DOM Choice 仅接管 per-agent form 的展示层。原生 radio 继续由 `settingsManager` 读取并写入既有 `streamOutput` 配置，`chatManager` 的流式消费保持冻结；当前仅为 `production-consumer-active / visual-equivalence-pending`，待 Agent form 的 Electron reload/teardown 与 Harness 同语义几何、交互和截图证据后再评估 legacy presentation 删除。
+
 Radius group 扩展（2026-08-26）：`appearanceProfile.customRadius` 与其 px output 已加入同一 typed field owner；sidebar radius choice 与 custom value 现在共享一个 `appearanceProfile` draft 合并路径，避免两个 legacy projection 分别覆盖圆角设置。
 
 Appearance select group 扩展（2026-08-26）：`appearanceProfile.density`、`radius`、`typography`、`fontScale`、`contentWidth`、`surface` 已加入同一 typed owner，通用 projection 重复写入已删除。Appearance engine 仍是规范化与视觉应用边界；`mainChatSettingsPresentationOwner.js` 的兼容启动 fallback 暂不删除。

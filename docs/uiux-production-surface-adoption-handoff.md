@@ -394,3 +394,13 @@ roadmap checkpoint 追加于 `38ec8bb8`。
 施工中发现并修复两个重挂竞态（均在 bridge observer 段）：(a) `vcpSelectRebuilding` 守卫必须保持到 setTimeout(0) 之后才复位——重挂自身的 DOM 变更（dispose 恢复业务节点、primitive 再插 wrap）会以微任务送回本 observer，同步复位会自触发无限重建；(b) LifecycleScope 的 `release()` 在微任务里才执行 dispose，同步 teardown→remount 会让旧 disposer 在新 wrap 插入后到达并把其剥掉（实测分区导航后 12 wraps 掉到 6）——remount 必须以 setTimeout(0) 等待异步 dispose 落地。
 
 探针取证：全 tab 12/12 非 typed select 均投影为真件（触发器 40px/r10、菜单 r12/菜单项 40px、z>1400、外点 pointerdown 关闭），assistantAgent 空态走 bare 退化态、agent 填充后动态重挂成功；Escape 契约 openedByArrow→closedByEscape→modal 仍活跃。上游契约缺口（报线程 A，不阻塞）：mountSelect 无方向键 roving 导航（bridge 胶水补齐）、无选项列表重建 API（bridge 以 dispose+remount 规避）。
+
+### 2026-08-27 补记六（批次②）：单行输入框全量换真 mountInput，textarea 归位裸控件契约
+
+批次②把 bridge 本地输入壳 `.vcp-harness-input-wrap` 全量退役，改挂真件 `window.VCPUIUX.mountInput`：
+
+1. **bridge**：`mountHarnessInputWrappers` 重写为 `mountHarnessInputs`——每个单行文本 input（text/url/password/number/email/search/tel）逐控件 `api.mountInput(control, {}, scope)`，typed 挂载（homeVisualTagline/adminUsername/adminPassword/userAvatarBorderColorText）与已包裹控件跳过；无 VCPUIUX/scope 时退化保持裸控件。挂载后给 wrap 加 `vcp-harness-input-fill` 桥标类，恢复本地壳的行内填满布局（width:100%/min-width:0；layered 声明与 primitive unlayered 样式表无属性重叠，不产生级联冲突）。**动态行同步接入**：`addTypedNetworkPathInput`（bridge）与遗留的 `uiHelperFunctions.addNetworkPathInput`（ui-helpers，三处调用路径：presentation owner 投影、event-listeners 加号按钮、bridge fallback）都改挂真件，ui-helpers 侧以懒创建 `LifecycleScope('ui-helpers-network-path-input')` 持有 release。顺带退役 enhanceGlobalSettings 里的 `enhance('Input')`/`enhance('Textarea')` 遗留注册（native-kernel 类增强已被真件取代）。
+2. **textarea 主动排除并修复压扁缺陷**：mountInput 的 wrap 是固定 32px 单行框（契约缺口，报线程 A：无多行形态），表单 4 个 textarea（rustWhitelistKeywords/rustBlacklistKeywords/rustScreenshotApps/continueWritingPrompt）此前被本地壳按 30px 内高压扁成单行。现保持裸控件，走既有裸控件契约；其间又排掉一个级联陷阱——裸控件通用规则的 `:not()` 链 specificity 达 (1,5,1)，压过 textarea 多行规则 (1,1,1)，按补记三 bare-select 同款两 ID 方案提升为 `.vcp-ui-scope#globalSettingsModal #globalSettingsForm textarea`（(2,2,1)，注意 `.vcp-ui-scope` 与 `#globalSettingsModal` 是同元素复合选择器，写成后代关系永不匹配——`.vcp-ui-scope` 类就挂在 modal 自身、其上再无 scope 层）并补 `height:auto`，实测 min-height 64px/上下 padding 8px 生效。
+3. **门禁**：journey 新增 legacyInputWraps===0、primitiveInputs>0、textareas 全部裸态、continueWritingPrompt min-height 64px 断言，几何 pick 改指 `.vcp-uiux-input-wrap`（r8）；source-equivalence 增 bridge/ui-helpers mountInput 契约与退场类清零断言；test-ui-system jsdom 段改断「无 primitive 运行时时 input 保持裸态」的退化契约。
+
+探针取证：全 8 tab 36 输入框中 32 个桥挂真件（r8/32px/fill）、3 个 typed 挂载（r8/32px，无 fill 属预期）、1 个 ColorPair 文本半区归 typed ColorPair；4 textarea 全部裸态 64px；`.vcp-harness-input-wrap` 全模态清零。Electron journey 23 PASS；四个快门禁全绿。
