@@ -17,11 +17,17 @@
             this.commands = options.commands || (() => this.window.MainChatCommands);
             this.filterManager = options.filterManager || this.window.filterManager;
             this.showToast = options.showToast || (() => {});
+            // Optional generated Button presentation capability. The menu
+            // controller remains the sole command/focus owner when the
+            // artifact is unavailable.
+            this.buttonApi = options.buttonApi || null;
             this.escapeDispatcher = options.escapeDispatcher || null;
             this.scope = null;
             this.abortController = null;
             this.escapeDisposer = null;
             this.filterDisposer = null;
+            this.generatedButtonScope = null;
+            this.generatedButtonsMounted = false;
             this.elements = null;
             this.mounted = false;
         }
@@ -110,7 +116,39 @@
                 this.syncFilterState();
             }
             if (scope) scope.own(() => this.dispose(), 'notification-menu-controller', 'controller');
+            this.mountGeneratedMenuButtons();
+            listen(this.window, 'vcp-uiux-ready', () => this.mountGeneratedMenuButtons());
             this.syncFilterState();
+            return true;
+        }
+
+        mountGeneratedMenuButtons() {
+            if (!this.mounted || this.generatedButtonsMounted || !this.scope) return false;
+            const api = this.buttonApi || this.window.VCPUIUX;
+            if (typeof api?.mountButton !== 'function' || typeof this.scope.child !== 'function') return false;
+            // Keep menuitemcheckbox and destructive action styling under
+            // their existing contracts; only neutral action items are
+            // eligible for the shared Harness Button geometry.
+            const buttons = [
+                this.elements?.forum,
+                this.elements?.memo,
+                this.elements?.log,
+                this.elements?.observer,
+                this.elements?.settings,
+            ].filter(button => button instanceof this.window.HTMLButtonElement);
+            if (buttons.length !== 5) return false;
+            const buttonScope = this.scope.child('next:notification-menu-buttons');
+            try {
+                for (const button of buttons) api.mountButton(button, { variant: 'ghost', size: 'md' }, buttonScope);
+            } catch (error) {
+                void buttonScope.dispose('notification-menu-button-adoption-failed').catch(releaseError => {
+                    console.warn('[NextUI] Failed to roll back notification Button presentation:', releaseError);
+                });
+                console.warn('[NextUI] Generated notification Button presentation unavailable; native menu remains active:', error);
+                return false;
+            }
+            this.generatedButtonScope = buttonScope;
+            this.generatedButtonsMounted = true;
             return true;
         }
 
@@ -190,6 +228,10 @@
             this.abortController?.abort();
             this.escapeDisposer?.();
             this.filterDisposer?.();
+            // Parent scope owns the generated child scope; avoid a second
+            // release chain when disposal is initiated by that parent.
+            this.generatedButtonScope = null;
+            this.generatedButtonsMounted = false;
             this.abortController = null;
             this.escapeDisposer = null;
             this.filterDisposer = null;

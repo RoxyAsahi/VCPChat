@@ -9,7 +9,10 @@ function fixture() {
       <div id="nextUiNotificationMenu" role="menu" hidden>
         <button id="nextUiNotificationForum" role="menuitem"></button>
         <button id="nextUiNotificationMemo" role="menuitem"></button>
+        <button id="nextUiNotificationLog" role="menuitem"></button>
+        <button id="nextUiNotificationObserver" role="menuitem"></button>
         <button id="nextUiNotificationFilterToggle" role="menuitemcheckbox" aria-checked="false"><span id="nextUiNotificationFilterState"></span></button>
+        <button id="nextUiNotificationSettings" role="menuitem"></button>
         <button id="nextUiNotificationClear" role="menuitem"></button>
       </div>
     </body>`, { pretendToBeVisual: true, url: 'file:///notification.html' });
@@ -53,6 +56,35 @@ test('notification menu owns keyboard focus, commands and Escape cleanup', async
     trigger.click();
     assert.equal(dispatcher.entry.close(), true);
     assert.equal(trigger.getAttribute('aria-expanded'), 'false');
+    controller.dispose();
+    dom.window.close();
+});
+
+test('notification menu adopts only neutral action buttons under one child scope', () => {
+    const dom = fixture();
+    const mounted = [];
+    const disposed = [];
+    const childScope = {
+        own(disposer) { disposed.push(disposer); return disposer; },
+        dispose() { for (const disposer of disposed.splice(0)) disposer(); },
+    };
+    const scope = {
+        listen(target, type, handler) { target.addEventListener(type, handler); },
+        own() {},
+        child(name) { assert.equal(name, 'next:notification-menu-buttons'); return childScope; },
+    };
+    const buttonApi = { mountButton(button, props, owner) {
+        mounted.push({ id: button.id, props, owner });
+        owner.own(() => button.classList.remove('vcp-harness-button'));
+    }};
+    const controller = new NotificationMenuController({ window: dom.window, document: dom.window.document, buttonApi });
+    assert.equal(controller.mount(scope), true);
+    assert.deepEqual(mounted.map(item => item.id), [
+        'nextUiNotificationForum', 'nextUiNotificationMemo',
+        'nextUiNotificationLog', 'nextUiNotificationObserver', 'nextUiNotificationSettings',
+    ]);
+    assert.ok(mounted.every(item => item.props.variant === 'ghost' && item.props.size === 'md' && item.owner === childScope));
+    assert.equal(controller.generatedButtonsMounted, true);
     controller.dispose();
     dom.window.close();
 });
