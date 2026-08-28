@@ -13,6 +13,7 @@ import { JSDOM } from 'jsdom';
 
 const root = process.cwd();
 const bridgeEntry = path.join(root, 'modules', 'ui-system', 'settings-bridge.js');
+const eventListeners = path.join(root, 'modules', 'event-listeners.js');
 const settingsDir = path.join(root, 'modules', 'ui-system', 'settings');
 const read = file => fs.readFileSync(file, 'utf8');
 
@@ -82,6 +83,14 @@ test('the bridge entry wires the modules and stays the sole bridge-global owner'
     assert.match(entry, /from '\.\/settings\/rust-visibility\.js'/, 'entry must import the Rust section helper');
     const globalOwners = [...entry.matchAll(/window\.VCPUISettingsBridge\s*=/g)].length;
     assert.equal(globalOwners, 1, 'exactly one window.VCPUISettingsBridge assignment');
+});
+
+test('legacy Rust visibility listeners are fallback-only when typed consumer is active', () => {
+    const source = read(eventListeners);
+    const binder = source.slice(source.indexOf('async function setupRustAssistantConfigListeners'), source.indexOf('async function loadAndPopulateRustConfig'));
+    assert.match(binder, /await loadAndPopulateRustConfig\(\);/);
+    assert.match(binder, /if \(window\.VCPUISettingsBridge\?\.getRustAssistantService\?\.\(\)\) return;/,
+        'legacy Rust binder must exit when the typed section owner is available');
 });
 
 test('typed Agent Inputs share one private owner while preserving canonical native controls', () => {
