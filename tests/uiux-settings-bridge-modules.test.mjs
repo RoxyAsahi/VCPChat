@@ -98,6 +98,17 @@ test('typed Agent Inputs share one private owner while preserving canonical nati
     }
 });
 
+test('global voice mode adopts generated Choice without extending the frozen chat radio surface', () => {
+    const entry = read(bridgeEntry);
+    const css = read(path.join(root, 'styles', 'ui-system', 'settings-overrides.css'));
+    assert.match(entry, /mountTypedGlobalChoiceGroups\(root, form\)/, 'global settings enhancement wires the Choice batch');
+    const choiceOwner = entry.match(/function mountTypedGlobalChoiceGroups\(root, form\)\s*\{([\s\S]*?)\n\}/)?.[1] || '';
+    assert.match(choiceOwner, /\['voiceModeLocal', 'voice-mode-choice'\]/, 'voice mode is the active high-frequency native radio consumer');
+    assert.match(choiceOwner, /api\.mountChoice\(group, scope\)/, 'the generated Choice mounts under the presentation owner');
+    assert.doesNotMatch(choiceOwner, /chatLayoutMode/, 'the frozen chat-layout radio group is excluded from this presentation batch');
+    assert.doesNotMatch(css, /#voiceModeLocal/, 'the retired page-local voice radio CSS no longer competes with Choice');
+});
+
 test('Select option rebuild turns are owned and retract cleanly with the presentation scope', async () => {
     const dom = new JSDOM('<!doctype html><form><select id="voice"><option value="one">One</option><option value="two">Two</option></select></form>');
     const previous = Object.fromEntries([

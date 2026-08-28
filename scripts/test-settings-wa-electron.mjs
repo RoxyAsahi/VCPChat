@@ -536,6 +536,26 @@ try {
     assert.ok(choiceEvidence.options >= 4, 'sidebar radius Choice exposes all native options');
     assert.equal(choiceEvidence.after, 'square', 'Choice click updates native selected source');
     assert.equal(choiceEvidence.optionClass, true, 'Choice options expose Harness presentation class');
+    const voiceChoiceEvidence = await page.evaluate(() => {
+        const local = document.getElementById('voiceModeLocal');
+        const network = document.getElementById('voiceModeNetwork');
+        const group = local?.closest('.vcp-settings-control-row');
+        network?.click();
+        return {
+            mounted: group?.classList.contains('vcp-uiux-choice'),
+            options: group?.querySelectorAll('.vcp-uiux-choice-option').length || 0,
+            localChecked: local?.checked,
+            networkChecked: network?.checked,
+            value: group?.dataset.value || null,
+            nativeParent: network?.closest('.vcp-settings-control-row') === group,
+        };
+    });
+    assert.equal(voiceChoiceEvidence.mounted, true, 'global voice mode is owned by the generated Choice primitive');
+    assert.equal(voiceChoiceEvidence.options, 2, 'voice Choice exposes both native radio options');
+    assert.equal(voiceChoiceEvidence.networkChecked, true, 'voice Choice writes through to the native network radio');
+    assert.equal(voiceChoiceEvidence.localChecked, false, 'voice Choice clears the native local radio');
+    assert.equal(voiceChoiceEvidence.value, 'network', 'voice Choice mirrors the selected native value for presentation diagnostics');
+    assert.equal(voiceChoiceEvidence.nativeParent, true, 'voice Choice preserves the original canonical radio group');
     await page.evaluate(() => document.querySelector('.vcp-harness-settings-nav-cell[data-section="user-identity"]')?.click());
     await page.waitForFunction(() => document.querySelector('#globalSettingsModal #section-user-identity.active'), { timeout: timeoutMs });
 
