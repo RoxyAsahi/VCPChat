@@ -1,5 +1,11 @@
 {
-  "source": "/Users/asahi/Documents/Codex/deepseek-harness/packages/client/ui-primitives/src/icons/index.tsx",
+  "source": "packages/client/ui-primitives/src/icons/index.tsx",
+  "sourceKind": "harness-icon-source-only",
+  "provenance": {
+    "sources": ["packages/client/ui-primitives/src/icons/index.tsx"],
+    "selectionRule": "Use the exported Harness SVG icon definitions; semantic accessibility remains owned by each consumer."
+  },
+  "candidateStatus": "candidate-interaction-active; VCP adapter fixture only and paired same-semantic pixel capture pending",
   "productionConsumers": [
     "packages/client/ui-primitives/src/RiskConfirmation.tsx",
     "packages/client/ui-primitives/src/Modal.tsx",
