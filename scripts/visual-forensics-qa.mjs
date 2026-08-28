@@ -20,6 +20,20 @@ const viewports = [[800, 600], [1280, 800], [1680, 1000]];
 const timeout = 90_000;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const request = url => new Promise((resolve, reject) => http.get(url, response => { response.resume(); response.once('end', resolve); }).once('error', reject));
+const waitForMainRenderer = async browser => {
+  const deadline = Date.now() + timeout;
+  let lastError = null;
+  while (Date.now() < deadline) {
+    try {
+      const page = (await browser.pages()).find(candidate => candidate.url().includes('main.html'));
+      if (page) return page;
+    } catch (error) {
+      lastError = error;
+    }
+    await sleep(100);
+  }
+  throw new Error(`main renderer missing after ${timeout}ms${lastError ? `: ${lastError.message}` : ''}`);
+};
 const port = await new Promise((resolve, reject) => { const server = http.createServer(); server.once('error', reject); server.listen(0, '127.0.0.1', () => { const p = server.address().port; server.close(() => resolve(p)); }); });
 const output = path.resolve(process.env.VCPCHAT_VISUAL_QA_OUTPUT || path.join(root, 'reports/visual-forensics-qa', new Date().toISOString().replaceAll(':', '-')));
 await fs.mkdir(output, { recursive: true });
@@ -37,8 +51,7 @@ try {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) { try { await request(`http://127.0.0.1:${port}/json/version`); break; } catch { await sleep(100); } }
   browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${port}` });
-  const page = (await browser.pages()).find(candidate => candidate.url().includes('main.html'));
-  assert.ok(page, `main renderer missing: ${stderr}`);
+  const page = await waitForMainRenderer(browser);
   await page.waitForFunction(() => document.documentElement.dataset.vcpRendererReady === 'true', { timeout });
   // Exercise the shipped showcase entry when available. If the app is booted
   // in a minimal mode the main surface remains the useful fallback evidence.
