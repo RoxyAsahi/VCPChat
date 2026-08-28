@@ -137,13 +137,39 @@ try {
       return { trigger: describe(trigger), card: describe(card), point: { x, y }, topmost: describe(topmost), topmostInsideCard: Boolean(card && topmost && card.contains(topmost)), topmostChain: chain, cardAncestors: ancestors, bodyOverflow: getComputedStyle(document.body).overflow, htmlOverflow: getComputedStyle(document.documentElement).overflow };
     });
     await page.screenshot({ path: path.join(output, `${name}-open.png`), fullPage: false });
+    await page.setViewport({ width: Math.max(320, width - 240), height, deviceScaleFactor: 1 });
+    await sleep(160);
+    const narrow = await page.evaluate(() => {
+      const card = document.querySelector('.vcp-harness-popup-select-card');
+      if (!card) return { open: false, card: null };
+      const r = card.getBoundingClientRect(); const style = getComputedStyle(card);
+      const point = { x: Math.max(0, Math.min(innerWidth - 1, r.left + r.width / 2)), y: Math.max(0, Math.min(innerHeight - 1, r.top + r.height / 2)) };
+      const topmost = document.elementFromPoint(point.x, point.y);
+      return { open: card.getClientRects().length > 0, card: { rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: style.position, zIndex: style.zIndex, parent: card.parentElement === document.body ? 'body' : card.parentElement?.className || '' }, point, topmostInsideCard: Boolean(topmost && card.contains(topmost)), inViewport: r.x >= -2 && r.y >= -2 && r.right <= innerWidth + 2 && r.bottom <= innerHeight + 2 };
+    });
+    await page.screenshot({ path: path.join(output, `${name}-narrow-open.png`), fullPage: false });
+    await page.setViewport({ width, height, deviceScaleFactor: 1 });
+    await sleep(160);
+    const restored = await page.evaluate(() => {
+      const card = document.querySelector('.vcp-harness-popup-select-card');
+      if (!card) return { open: false, card: null };
+      const r = card.getBoundingClientRect(); const style = getComputedStyle(card);
+      const point = { x: Math.max(0, Math.min(innerWidth - 1, r.left + r.width / 2)), y: Math.max(0, Math.min(innerHeight - 1, r.top + r.height / 2)) };
+      const topmost = document.elementFromPoint(point.x, point.y);
+      return { open: card.getClientRects().length > 0, card: { rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: style.position, zIndex: style.zIndex, parent: card.parentElement === document.body ? 'body' : card.parentElement?.className || '' }, point, topmostInsideCard: Boolean(topmost && card.contains(topmost)), inViewport: r.x >= -2 && r.y >= -2 && r.right <= innerWidth + 2 && r.bottom <= innerHeight + 2 };
+    });
+    await page.screenshot({ path: path.join(output, `${name}-restored-open.png`), fullPage: false });
     await page.$eval('.vcp-harness-popup-select-card', card => card.focus()).catch(() => {});
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('.vcp-harness-popup-select-card')?.getClientRects().length && document.activeElement?.id === 'openModelSelectBtn', { timeout: timeoutMs });
     const closed = await page.evaluate(() => ({ cardCount: document.querySelectorAll('.vcp-harness-popup-select-card').length, expanded: document.querySelector('#agentSettingsForm #openModelSelectBtn')?.getAttribute('aria-expanded'), active: document.activeElement?.id, bodyClass: document.body.className, bodyStyle: document.body.getAttribute('style') || '' }));
-    evidence.captures.push({ viewport: { width, height, deviceScaleFactor: 1 }, before, open, closed });
+    evidence.captures.push({ viewport: { width, height, deviceScaleFactor: 1 }, before, open, narrow, restored, closed });
     if (!open.topmostInsideCard) evidence.gate.failures.push(`${name}: menu center topmost element is outside card`);
     if (open.card?.position !== 'fixed' && open.card?.position !== 'absolute') evidence.gate.failures.push(`${name}: menu has unexpected position ${open.card?.position}`);
+    for (const [phase, snapshot] of [['narrow', narrow], ['restored', restored]]) {
+      if (!snapshot.open || !snapshot.inViewport || !snapshot.topmostInsideCard) evidence.gate.failures.push(`${name}: ${phase} menu containment/hit-test ${JSON.stringify(snapshot)}`);
+      if (snapshot.card?.position !== 'fixed' || snapshot.card?.parent !== 'body') evidence.gate.failures.push(`${name}: ${phase} menu portal ${JSON.stringify(snapshot.card)}`);
+    }
     if (closed.cardCount !== 0 || closed.expanded !== 'false' || closed.active !== 'openModelSelectBtn') evidence.gate.failures.push(`${name}: close/focus cleanup ${JSON.stringify(closed)}`);
   }
   await fs.mkdir(output, { recursive: true });
@@ -162,7 +188,22 @@ try {
   process.exitCode = 2;
 } finally {
   try { browser?.disconnect(); } catch {}
-  try { process.kill(-child.pid, 'SIGTERM'); } catch { try { child.kill('SIGTERM'); } catch {} }
+  if (child.exitCode === null && child.signalCode === null) {
+    const exited = new Promise(resolve => child.once('exit', resolve));
+    try { process.kill(-child.pid, 'SIGTERM'); } catch { try { child.kill('SIGTERM'); } catch {} }
+    await Promise.race([exited, sleep(2_000)]);
+  }
   await new Promise(resolve => modelServer.close(resolve));
-  await fs.rm(appData, { recursive: true, force: true });
+  // Electron descendants can retain a profile file for a short interval after
+  // the detached process group receives SIGTERM.  Do not turn a completed
+  // visual gate into a false failure because of that OS-level teardown race.
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      await fs.rm(appData, { recursive: true, force: true, maxRetries: 0 });
+      break;
+    } catch (error) {
+      if (attempt === 4 || error?.code !== 'ENOTEMPTY') throw error;
+      await sleep(250);
+    }
+  }
 }
