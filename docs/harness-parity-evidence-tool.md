@@ -326,3 +326,8 @@ geometry selector/property against its declared Harness stylesheet. It is
 report-only and preserves mismatches as evidence gaps.
 
 The command is intentionally report-first: Candidate Lab entries remain gaps and do not become production parity claims. Use `--strict` only when a release gate requires every provenance and interaction gap to be closed.
+
+The focused guard check `node --test tests/harness-candidate-provenance.test.mjs`
+replays the Seat, Row, and PopupSelect provenance scripts together and asserts
+that their source anchors remain present while each report stays explicitly
+non-promoting with open evidence gaps.
