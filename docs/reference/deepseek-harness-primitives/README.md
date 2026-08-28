@@ -12,7 +12,7 @@ not add a runtime dependency and must not be imported by the Electron app.
 | VCP primitive | Harness source | Reference |
 | --- | --- | --- |
 | settings shell | `packages/client/ui-settings-general/src/client/SettingsRoot.module.css` | `settings-shell.css` |
-| text/input/select field | `packages/client/ui-settings-models/src/client/ModelsSection.module.css` | `field-select.css` |
+| text/input/select field | `packages/client/ui-settings-plugins/src/client/fields.tsx`, `fields.module.css` | `field.dom.json`, `field.geometry.json`, `field-select.css` |
 | menu/dropdown | `packages/client/ui-primitives/src/Menu.module.css` | `menu.css` |
 | popup select | `packages/client/ui-commands/src/client/PopupSelectView.module.css` | `popup-select.css` |
 | agent model picker | `packages/client/ui-model-selection/src/client/ModelSelect.tsx` | `model-picker.css`, `model-picker.dom.json` |
