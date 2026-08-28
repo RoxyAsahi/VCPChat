@@ -6,7 +6,7 @@ function ensureStyles() {
         return;
     const style = document.createElement('style');
     style.id = STYLE_ID;
-    style.textContent = `.vcp-harness-toast{position:fixed;top:120px;left:50%;z-index:1100;pointer-events:none;display:flex;align-items:center;gap:10px;max-width:min(560px,calc(100vw - 48px));padding:12px 16px;border-radius:14px;background:var(--dsw-alias-toast-bg);color:var(--dsw-alias-label-primary-inverted);font-family:var(--dsw-font-family);font-size:14px;line-height:22px;box-shadow:var(--dsw-shadow-lv3);transform:translateX(-50%);animation:vcp-harness-toast-in 160ms ease-out,vcp-harness-toast-fade 1000ms ease 3000ms forwards}.vcp-harness-toast-icon{display:grid;place-items:center;flex:none;color:var(--dsw-alias-state-warn-label)}.vcp-harness-toast-text{min-width:0}@keyframes vcp-harness-toast-in{from{opacity:0;transform:translate(-50%,-6px)}to{opacity:1;transform:translate(-50%,0)}}@keyframes vcp-harness-toast-fade{to{opacity:0}}@media(prefers-reduced-motion:reduce){.vcp-harness-toast{animation:vcp-harness-toast-fade 1000ms ease 3000ms forwards}}`;
+    style.textContent = `.vcp-harness-toast{position:fixed;top:120px;left:50%;z-index:1100;pointer-events:none;display:flex;align-items:center;gap:10px;max-width:min(560px,calc(100vw - 48px));padding:12px 16px;border-radius:14px;background:var(--dsw-alias-toast-bg);color:var(--dsw-alias-label-primary-inverted);font-family:var(--dsw-font-family);font-size:14px;line-height:22px;box-shadow:var(--dsw-shadow-lv3);transform:translateX(-50%);animation:vcp-harness-toast-in var(--vcp-motion-duration-standard,160ms) var(--vcp-motion-ease-emphasized,ease-out),vcp-harness-toast-fade var(--vcp-motion-toast-fade,1000ms) var(--vcp-motion-ease-standard,ease) var(--vcp-motion-toast-hold,3000ms) forwards}.vcp-harness-toast-icon{display:grid;place-items:center;flex:none;color:var(--dsw-alias-state-warn-label)}.vcp-harness-toast-text{min-width:0}@keyframes vcp-harness-toast-in{from{opacity:0;transform:translate(-50%,-6px)}to{opacity:1;transform:translate(-50%,0)}}@keyframes vcp-harness-toast-fade{to{opacity:0}}@media(prefers-reduced-motion:reduce){.vcp-harness-toast{animation:vcp-harness-toast-fade var(--vcp-motion-toast-fade,1000ms) var(--vcp-motion-ease-standard,ease) var(--vcp-motion-toast-hold,3000ms) forwards}}`;
     (document.head || document.documentElement).append(style);
 }
 /** One owner-controlled Harness transient banner rendered through a body portal. */
@@ -17,6 +17,7 @@ export function mountToast(props, scope) {
     const toastScope = scope.child('harness-toast');
     const root = document.createElement('div');
     root.className = 'vcp-harness-toast';
+    root.dataset.motion = 'enter';
     root.setAttribute('role', 'alert');
     if (props.icon) {
         const icon = document.createElement('span');

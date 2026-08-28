@@ -5,7 +5,7 @@ function ensureStyles() {
         return;
     const style = document.createElement('style');
     style.id = STYLE_ID;
-    style.textContent = `.vcp-harness-tooltip-bubble{position:fixed;z-index:100;width:max-content;max-width:50vw;padding:3px 7px;border-radius:8px;background:var(--dsw-alias-tooltip-bg,#2c2c2e);color:var(--dsw-static-neutral-bluish-00,#fff);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;line-height:20px;white-space:pre-line;overflow-wrap:break-word;pointer-events:none;animation:vcp-harness-tooltip-in 150ms ease-in-out}.vcp-harness-tooltip-bubble[data-side=right]{transform:translateY(-50%)}.vcp-harness-tooltip-bubble[data-side=bottom]{transform:translateX(-50%)}.vcp-harness-tooltip-bubble[data-side=top]{transform:translate(-50%,-100%)}@keyframes vcp-harness-tooltip-in{from{opacity:0}}@media(prefers-reduced-motion:reduce){.vcp-harness-tooltip-bubble{animation:none}}`;
+    style.textContent = `.vcp-harness-tooltip-bubble{position:fixed;z-index:100;width:max-content;max-width:50vw;padding:3px 7px;border-radius:8px;background:var(--dsw-alias-tooltip-bg,#2c2c2e);color:var(--dsw-static-neutral-bluish-00,#fff);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;line-height:20px;white-space:pre-line;overflow-wrap:break-word;pointer-events:none;animation:vcp-harness-tooltip-in var(--vcp-motion-duration-standard,150ms) var(--vcp-motion-ease-standard,ease-in-out)}.vcp-harness-tooltip-bubble[data-side=right]{transform:translateY(-50%)}.vcp-harness-tooltip-bubble[data-side=bottom]{transform:translateX(-50%)}.vcp-harness-tooltip-bubble[data-side=top]{transform:translate(-50%,-100%)}@keyframes vcp-harness-tooltip-in{from{opacity:0}}@media(prefers-reduced-motion:reduce){.vcp-harness-tooltip-bubble{animation:none}}`;
     (document.head || document.documentElement).append(style);
 }
 /** Harness Tooltip attaches to the existing anchor without adding a wrapper. */
@@ -81,6 +81,7 @@ export function mountTooltip(anchor, props, scope) {
             return;
         bubble = document.createElement('span');
         bubble.className = 'vcp-harness-tooltip-bubble';
+        bubble.dataset.motion = 'enter';
         bubble.setAttribute('role', 'tooltip');
         bubble.textContent = typeof props.label === 'function' ? props.label() : props.label;
         if (props.maxWidth !== undefined)
@@ -102,20 +103,39 @@ export function mountTooltip(anchor, props, scope) {
         }
         showTimer = setTimeout(() => { showTimer = null; show(); }, delayMs);
     };
-    tooltipScope.listen(anchor, 'mouseenter', () => {
+    const enter = () => {
         triggers.hover = true;
         showAfterDelay();
-    });
-    tooltipScope.listen(anchor, 'mouseleave', () => {
+    };
+    const leave = () => {
         triggers.hover = false;
         hide();
-    });
+    };
+    tooltipScope.listen(anchor, 'mouseenter', enter);
+    tooltipScope.listen(anchor, 'mouseleave', leave);
+    // The Electron evidence runner dispatches PointerEvent directly; Chromium
+    // does not synthesize mouseenter from that programmatic event.
+    tooltipScope.listen(anchor, 'pointerenter', enter);
+    tooltipScope.listen(anchor, 'pointerleave', leave);
     tooltipScope.listen(anchor, 'focus', () => {
         triggers.focus = true;
         cancelShow();
         show();
     });
+    // Electron can deliver focusin without a subsequent focus event when a
+    // native control is enhanced during the same task. Keep the owner state
+    // deterministic across both DOM focus paths.
+    tooltipScope.listen(anchor, 'focusin', () => {
+        triggers.focus = true;
+        cancelShow();
+        show();
+    });
     tooltipScope.listen(anchor, 'blur', () => {
+        triggers.focus = false;
+        if (!triggers.hover && !triggers.focus)
+            hide();
+    });
+    tooltipScope.listen(anchor, 'focusout', () => {
         triggers.focus = false;
         if (!triggers.hover && !triggers.focus)
             hide();

@@ -20,6 +20,7 @@ export function mountModal(props, scope) {
     const modalScope = scope.child('harness-modal');
     const root = document.createElement('div');
     root.className = 'vcp-harness-modal-root vcp-ui-scope';
+    root.dataset.motion = 'enter';
     root.setAttribute('role', 'presentation');
     const mask = document.createElement('div');
     mask.className = 'vcp-harness-modal-mask';
