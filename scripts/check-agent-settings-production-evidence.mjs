@@ -103,12 +103,17 @@ for (const button of report.promptButtons) {
 for (const action of report.actions) {
     if (action.controlId === 'openModelSelectBtn') continue;
     assert.match(action.class, /vcp-harness-button/, `Agent action ${action.controlId} must retain Harness Button presentation`);
-    assert.ok(Array.isArray(action.style?.displayRules), `Agent action ${action.controlId} must report authored display rules`);
-    assert.ok(action.style.displayRules.some(rule => rule.selector === '.vcp-harness-button.button' && rule.display === 'inline-flex'),
+    assert.ok(Array.isArray(action.style?.authored?.matchedRules), `Agent action ${action.controlId} must report authored CSS rules`);
+    assert.ok(action.style.authored.matchedRules.some(rule => rule.selector === '.vcp-harness-button.button' && rule.declarations?.display === 'inline-flex'),
         `Agent action ${action.controlId} must retain the Harness inline-flex rule`);
-    assert.equal(action.style.displayRules.some(rule => rule.display === 'flex'
+    assert.equal(action.style.authored.matchedRules.some(rule => rule.declarations?.display === 'flex'
         && rule.selector !== '.vcp-harness-agent-model-picker-trigger'), false,
         `Agent action ${action.controlId} has a conflicting authored display:flex rule`);
+}
+for (const button of report.promptButtons) {
+    assert.ok(Array.isArray(button.style?.authored?.matchedRules), 'prompt mode Button must report authored CSS rules');
+    assert.ok(button.style.authored.matchedRules.some(rule => rule.selector === '.vcp-harness-button.button' && rule.declarations?.display === 'inline-flex'),
+        'prompt mode Button must retain the Harness inline-flex authored rule');
 }
 if (report.agentSelectInteraction !== null && report.agentSelectInteraction !== undefined) {
     assert.deepEqual(report.agentSelectInteraction, {
@@ -116,13 +121,18 @@ if (report.agentSelectInteraction !== null && report.agentSelectInteraction !== 
     }, 'voice Select interaction evidence must prove portal open, Escape close, and focus restore');
 }
 if (report.agentModelPickerInteraction !== null && report.agentModelPickerInteraction !== undefined) {
-    assert.deepEqual(report.agentModelPickerInteraction, {
+    const { refreshRows, ...interaction } = report.agentModelPickerInteraction;
+    assert.deepEqual(interaction, {
         available: true,
         opened: true,
         rootPane: true,
         modelPane: true,
+        refreshAvailable: true,
+        refreshBusy: true,
+        refreshSettled: true,
+        refreshPreservedInput: true,
         filteredCount: 1,
-        selectedBefore: report.agentModelPickerInteraction.selectedBefore,
+        selectedBefore: interaction.selectedBefore,
         selected: true,
         afterSelectClosed: true,
         reopened: true,
@@ -131,11 +141,31 @@ if (report.agentModelPickerInteraction !== null && report.agentModelPickerIntera
         cardConnected: false,
         rowsAfterEscape: 0,
     }, 'Agent model picker interaction evidence is incomplete');
+    // The actual model catalog comes from the fixture HTTP server, while
+    // upstream hot/favorite metadata is intentionally retained in its own
+    // AppData store. A row may thus occur in one or more legacy-ordered
+    // sections; require the refreshed source set rather than a false claim
+    // that the global metadata is test-profile isolated.
+    assert.ok(Array.isArray(refreshRows) && refreshRows.includes('probe-model') && refreshRows.includes('probe-secondary'),
+        'Agent model picker refresh evidence is missing the real model service response');
+    assert.ok(refreshRows.every(id => id === 'probe-model' || id === 'probe-secondary'),
+        'Agent model picker refresh evidence includes a row outside the real model service response');
 }
 if (report.agentPromptInteraction !== null && report.agentPromptInteraction !== undefined) {
     assert.deepEqual(report.agentPromptInteraction, { available: true, switched: true, restored: true },
         'prompt mode Button interaction evidence must prove modular switch and original restoration');
 }
+assert.deepEqual(report.agentDisclosureInteraction, {
+    available: true,
+    count: 6,
+    before: report.agentDisclosureInteraction?.before,
+    opened: report.agentDisclosureInteraction?.opened,
+    closed: report.agentDisclosureInteraction?.closed,
+}, 'Agent disclosure interaction evidence is incomplete');
+assert.equal(report.agentDisclosureInteraction.opened.expanded, 'true');
+assert.equal(report.agentDisclosureInteraction.opened.collapsed, false);
+assert.equal(report.agentDisclosureInteraction.closed.expanded, 'false');
+assert.equal(report.agentDisclosureInteraction.closed.collapsed, true);
 
 console.log(JSON.stringify({
     source: report.source,

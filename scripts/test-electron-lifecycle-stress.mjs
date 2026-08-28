@@ -689,6 +689,28 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
                     await new Promise(resolve => setTimeout(resolve, 30));
                     const search = card.querySelector('.vcp-harness-popup-select-search');
                     if (!(search instanceof HTMLInputElement)) return { available: true, opened, rootPane: true, modelPane: false };
+                    // Exercise the production bridge's injected `refreshModels`
+                    // capability through the visible directory action. This must
+                    // remain an IPC-backed journey: do not replace chatAPI or
+                    // remount the primitive with a test capability here.
+                    const refresh = card.querySelector('.vcp-harness-agent-model-picker-directory-refresh');
+                    if (!(refresh instanceof HTMLButtonElement)) {
+                        return { available: true, opened, rootPane: true, modelPane: true, refreshAvailable: false };
+                    }
+                    const inputBeforeRefresh = input.value;
+                    refresh.click();
+                    await Promise.resolve();
+                    const refreshBusy = card.dataset.directoryBusy === 'true'
+                        && refresh.disabled === true
+                        && refresh.textContent?.trim() === 'Refreshing…';
+                    await new Promise(resolve => setTimeout(resolve, 180));
+                    const refreshSettled = card.dataset.directoryBusy === 'false'
+                        && refresh.disabled === false
+                        && refresh.textContent?.trim() === 'Refresh models';
+                    const refreshRows = [...card.querySelectorAll('.vcp-harness-popup-select-row')]
+                        .map(row => row.dataset.optionId)
+                        .filter(Boolean);
+                    const refreshPreservedInput = input.value === inputBeforeRefresh;
                     search.value = 'secondary';
                     search.dispatchEvent(new Event('input', { bubbles: true }));
                     await new Promise(resolve => setTimeout(resolve, 10));
@@ -706,18 +728,26 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
                     await new Promise(resolve => setTimeout(resolve, 10));
                     const escaped = trigger.getAttribute('aria-expanded') === 'false';
                     const focusRestored = document.activeElement === trigger;
+                    const cardConnected = card.isConnected;
+                    const rowsAfterEscape = card.querySelectorAll('.vcp-harness-popup-select-row').length;
                     return {
                         available: true, opened, rootPane: true, modelPane: true,
+                        refreshAvailable: true, refreshBusy, refreshSettled, refreshRows, refreshPreservedInput,
                         filteredCount: filtered.length, selectedBefore, selected,
-                        afterSelectClosed, reopened, escaped, focusRestored,
+                        afterSelectClosed, reopened, escaped, focusRestored, cardConnected, rowsAfterEscape,
                     };
                 }
             });
-            assert.deepEqual(interaction, {
+            const { refreshRows, ...interactionContract } = interaction;
+            assert.deepEqual(interactionContract, {
                 available: true,
                 opened: true,
                 rootPane: true,
                 modelPane: true,
+                refreshAvailable: true,
+                refreshBusy: true,
+                refreshSettled: true,
+                refreshPreservedInput: true,
                 filteredCount: 1,
                 selectedBefore: interaction.selectedBefore,
                 selected: true,
@@ -725,7 +755,19 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
                 reopened: true,
                 escaped: true,
                 focusRestored: true,
+                cardConnected: false,
+                rowsAfterEscape: 0,
             }, `${label}: Agent model picker interaction contract drifted: ${JSON.stringify(interaction)}`);
+            // `modelUsageTracker` is an upstream global AppData store rather
+            // than this stress runner's temporary Electron profile. Hot and
+            // favorite sections may therefore duplicate either real response
+            // row; that is intentional legacy behavior. This default-bridge
+            // probe verifies the real refreshed catalog was projected without
+            // pretending the external usage/favorite order is isolated.
+            assert.ok(refreshRows.includes('probe-model') && refreshRows.includes('probe-secondary'),
+                `${label}: refresh did not project the real model service response: ${JSON.stringify(interaction)}`);
+            assert.ok(refreshRows.every(id => id === 'probe-model' || id === 'probe-secondary'),
+                `${label}: refresh projected rows outside the real model service response: ${JSON.stringify(interaction)}`);
             agentModelPickerInteractionEvidence = interaction;
             // Popup row scopes dispose asynchronously; sample lifecycle only
             // after the owner has had a chance to reach quiescence.
@@ -761,26 +803,59 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
             assert.deepEqual(agentPromptInteractionEvidence, { available: true, switched: true, restored: true },
                 `${label}: prompt mode Button interaction contract drifted: ${JSON.stringify(agentPromptInteractionEvidence)}`);
         }
+        const agentDisclosureInteractionEvidence = await page.evaluate(async () => {
+            const headers = [...document.querySelectorAll('#agentSettingsForm .agent-settings-section-header[data-vcp-typed-agent-disclosure="true"]')];
+            const target = headers.find(header => header.closest('[data-section-key]')?.dataset.sectionKey === 'identity');
+            const container = target?.closest('.agent-settings-section');
+            const content = container?.querySelector('.agent-settings-section-content');
+            if (!(target instanceof HTMLElement) || !(container instanceof HTMLElement) || !(content instanceof HTMLElement)) return { available: false };
+            const before = { expanded: target.getAttribute('aria-expanded'), collapsed: container.classList.contains('collapsed'), contentHeight: content.getBoundingClientRect().height };
+            target.click();
+            await new Promise(resolve => setTimeout(resolve, 0));
+            const opened = { expanded: target.getAttribute('aria-expanded'), collapsed: container.classList.contains('collapsed'), contentHeight: content.getBoundingClientRect().height };
+            target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+            await new Promise(resolve => setTimeout(resolve, 0));
+            const closed = { expanded: target.getAttribute('aria-expanded'), collapsed: container.classList.contains('collapsed'), contentHeight: content.getBoundingClientRect().height };
+            return { available: true, count: headers.length, before, opened, closed };
+        });
+        assert.equal(agentDisclosureInteractionEvidence.available, true, `${label}: Agent disclosure production owner is missing`);
+        assert.equal(agentDisclosureInteractionEvidence.count, 6, `${label}: Agent disclosure owner count drifted`);
+        assert.equal(agentDisclosureInteractionEvidence.opened.expanded, 'true', `${label}: disclosure click did not open canonical section`);
+        assert.equal(agentDisclosureInteractionEvidence.opened.collapsed, false, `${label}: disclosure click did not clear canonical collapsed state`);
+        assert.equal(agentDisclosureInteractionEvidence.closed.expanded, 'false', `${label}: disclosure keyboard Enter did not close canonical section`);
+        assert.equal(agentDisclosureInteractionEvidence.closed.collapsed, true, `${label}: disclosure keyboard Enter did not restore canonical collapsed state`);
         if (captureAgentSettings) {
             const evidence = await page.evaluate(() => {
                 const rect = node => {
                     const value = node.getBoundingClientRect();
                     return { x: value.x, y: value.y, width: value.width, height: value.height };
                 };
-                const displayRules = node => {
+                const authoredRules = node => {
                     const matches = [];
+                    const properties = ['display', 'align-items', 'justify-content', 'gap', 'padding', 'height', 'border', 'border-radius', 'font-size', 'line-height'];
                     const visit = rules => {
                         for (const rule of rules || []) {
                             if (rule.cssRules) visit(rule.cssRules);
-                            if (rule.selectorText && rule.style?.display && node.matches(rule.selectorText)) {
-                                matches.push({ selector: rule.selectorText, display: rule.style.display, important: rule.style.getPropertyPriority('display') });
+                            if (rule.selectorText && node.matches(rule.selectorText)) {
+                                const declarations = Object.fromEntries(properties
+                                    .map(property => [property, rule.style?.getPropertyValue(property) || ''])
+                                    .filter(([, value]) => value));
+                                if (Object.keys(declarations).length) {
+                                    matches.push({ selector: rule.selectorText, declarations,
+                                        important: Object.fromEntries(properties
+                                            .map(property => [property, rule.style?.getPropertyPriority(property) || ''])
+                                            .filter(([, value]) => value)) });
+                                }
                             }
                         }
                     };
                     for (const sheet of document.styleSheets) {
                         try { visit(sheet.cssRules); } catch { /* cross-origin sheets are outside this report */ }
                     }
-                    return matches;
+                    const inline = Object.fromEntries(properties
+                        .map(property => [property, node.style?.getPropertyValue(property) || ''])
+                        .filter(([, value]) => value));
+                    return { inline, matchedRules: matches };
                 };
                 const style = node => {
                     const value = getComputedStyle(node);
@@ -795,7 +870,12 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
                         color: value.color,
                         backgroundColor: value.backgroundColor,
                         borderColor: value.borderColor,
-                        displayRules: displayRules(node),
+                        border: value.border,
+                        borderWidth: value.borderWidth,
+                        borderStyle: value.borderStyle,
+                        boxSizing: value.boxSizing,
+                        appearance: value.appearance,
+                        authored: authoredRules(node),
                     };
                 };
                 const form = document.getElementById('agentSettingsForm');
@@ -841,6 +921,7 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
             evidence.agentSelectInteraction = agentSelectInteractionEvidence;
             evidence.agentModelPickerInteraction = agentModelPickerInteractionEvidence;
             evidence.agentPromptInteraction = agentPromptInteractionEvidence;
+            evidence.agentDisclosureInteraction = agentDisclosureInteractionEvidence;
             await fs.mkdir(path.join(root, 'reports'), { recursive: true });
             await fs.writeFile(path.join(root, 'reports', 'vcp-agent-settings-production.json'), `${JSON.stringify(evidence, null, 2)}\n`);
             await page.screenshot({ path: path.join(root, 'reports', 'vcp-agent-settings-production.png') });
@@ -848,10 +929,7 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
     } else {
         assert.equal(state.enhanced, 0, `${label}: Next settings adapters leaked into Classic: ${JSON.stringify(state)}`);
     }
-    // Keep the Agent Settings surface mounted for the model-picker focused
-    // stress probe so the baseline includes its one-time Light-DOM projection.
-    // The general lifecycle suite still closes the settings surface here.
-    if (!agentModelPickerInteraction) await page.evaluate(() => window.uiManager.switchToTab('agents'));
+    await page.evaluate(() => window.uiManager.switchToTab('agents'));
     assert.equal(page.isClosed(), false, `${label}: agent settings transition closed the main renderer`);
 }
 
