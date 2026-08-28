@@ -29,6 +29,15 @@ const candidates = [
     sourceAnchors: ['createPortal(card, document.body)', 'usePointerGrace(close)', "role={copyable ? 'button'", 'copyEpochRef.current += 1', 'onPointerDownCapture'],
     styleAnchors: ['position: fixed', 'z-index: 100', 'width: 244px', 'padding: 12px 16px'],
   },
+  {
+    name: 'state-dot',
+    source: 'packages/client/ui-primitives/src/StateDot.tsx',
+    style: 'packages/client/ui-primitives/src/StateDot.module.css',
+    capture: 'reports/vcp-state-dot-candidate.json',
+    semanticFixture: 'state-dot/four-state-ongoing-phase-resize-dispose',
+    sourceAnchors: ["state === 'ongoing'", "shapeRendering=\"crispEdges\"", "aria-hidden=\"true\"", 'MATRIX_CELLS.map', 'animationDelay: `${(index - MATRIX_CELLS.length) * 125}ms`'],
+    styleAnchors: ['opacity: 0.1', 'inset: 20%', 'animation: dsh-state-dot-chase 1s infinite', 'fill: currentColor'],
+  },
 ];
 
 const entries = candidates.map(candidate => {

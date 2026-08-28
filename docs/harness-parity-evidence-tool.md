@@ -66,6 +66,10 @@ dispose semantics) against the reference contract and replayable Candidate
 capture. A pass is provenance evidence only, not a visual or consumer parity
 promotion.
 
+StateDot is covered by the same source-drift guard, including its aria-hidden
+four-state branch, crisp-edge SVG matrix, eight phase delays, halo/core CSS,
+and replayable Candidate fixture.
+
 `capture-harness-tooltip-source-fixture.mjs` executes the real Harness
 `Tooltip.tsx` through a temporary Vite module in Chromium. Its paired diff with
 the VCP Candidate deliberately reports a structural mismatch: Harness keeps

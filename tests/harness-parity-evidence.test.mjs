@@ -188,7 +188,7 @@ test('Tooltip and HoverCard Candidate baselines remain anchored to real Harness 
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-candidate-source-provenance.json'), 'utf8'));
     assert.equal(report.status, 'candidate-source-provenance-complete');
     assert.equal(report.pass, true);
-    assert.deepEqual(report.entries.map(item => item.name), ['tooltip', 'hover-card']);
+    assert.deepEqual(report.entries.map(item => item.name), ['tooltip', 'hover-card', 'state-dot']);
     assert.equal(report.entries.every(item => item.referencePass && item.capturePass && item.pass), true);
     assert.equal(report.entries.every(item => item.source.sha256 && item.style.sha256), true);
 });
