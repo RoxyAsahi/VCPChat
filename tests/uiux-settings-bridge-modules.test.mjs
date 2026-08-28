@@ -130,6 +130,23 @@ test('Agent section disclosures use one generated presentation owner and preserv
         'Agent sections must not be bulk-enhanced alongside a typed owner');
 });
 
+test('Agent TTS Range has one presentation output owner and no manager-side listener', () => {
+    const entry = read(bridgeEntry);
+    const manager = read(path.join(root, 'modules', 'settingsManager.js'));
+    const rangeOwner = entry.match(/function mountTypedAgentTtsSpeedRange\(form\)\s*\{([\s\S]*?)\n\}/)?.[1] || '';
+    const controlsCss = read(path.join(root, 'styles', 'setting', 'settings-form-controls.css'));
+    assert.match(rangeOwner, /api\.mountRange\(input, \{ output, format: value => Number\.parseFloat\(value\)\.toFixed\(1\) \}, scope\)/,
+        'generated Range must preserve the existing one-decimal TTS speed presentation');
+    assert.doesNotMatch(manager, /function syncRangeProgress\(/,
+        'the retired manager-only range progress projection must not remain after the typed Range owns presentation');
+    assert.doesNotMatch(manager, /agentTtsSpeedSlider\.addEventListener\('input'/,
+        'SettingsManager must not retain a second TTS output listener beside the generated Range');
+    assert.doesNotMatch(manager, /ttsSpeedValueSpan/,
+        'SettingsManager must not retain a display-node reference after the generated Range owns output projection');
+    assert.doesNotMatch(controlsCss, /#agentTtsSpeed\s*\{/,
+        'the typed Range wrapper, not an Agent-id selector, must own flexible row geometry');
+});
+
 test('global voice mode adopts generated Choice without extending the frozen chat radio surface', () => {
     const entry = read(bridgeEntry);
     const css = read(path.join(root, 'styles', 'ui-system', 'settings-overrides.css'));

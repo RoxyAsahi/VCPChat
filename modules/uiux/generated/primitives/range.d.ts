@@ -1,6 +1,6 @@
 import type { UiDisposer, UiScope } from '../contracts.js';
 export interface RangeProps {
-    readonly output?: HTMLOutputElement | null;
+    readonly output?: HTMLElement | null;
     readonly format?: (value: string) => string;
 }
 /** Harness range contract over a native range and optional output. */

@@ -25,7 +25,11 @@ const electron = process.platform === 'darwin'
 const timeoutMs = 90_000;
 const protocolTimeout = positiveInteger(process.env.VCPCHAT_STRESS_PROTOCOL_TIMEOUT_MS, 120_000);
 const cycles = positiveInteger(process.env.VCPCHAT_STRESS_CYCLES, 20);
-const warmupCycles = positiveInteger(process.env.VCPCHAT_STRESS_WARMUP, 3);
+// Keep the documented/package-script spelling while accepting the original
+// short form used by older local invocations.  At least one warmup is needed
+// before comparing lifecycle totals: the first Agent Settings open mounts its
+// canonical form and must not be mistaken for a retained-owner regression.
+const warmupCycles = positiveInteger(process.env.VCPCHAT_STRESS_WARMUP_CYCLES ?? process.env.VCPCHAT_STRESS_WARMUP, 3);
 const checkpointEvery = Math.max(2, positiveInteger(process.env.VCPCHAT_STRESS_CHECKPOINT_EVERY, 5));
 const debugDetached = ['1', 'verbose'].includes(process.env.VCPCHAT_STRESS_DEBUG_DETACHED);
 const verboseDetached = process.env.VCPCHAT_STRESS_DEBUG_DETACHED === 'verbose';
@@ -35,6 +39,7 @@ const captureAgentSettings = process.env.VCPCHAT_STRESS_CAPTURE_AGENT_SETTINGS =
 const agentSelectInteraction = process.env.VCPCHAT_STRESS_AGENT_SELECT_INTERACTION === '1';
 const agentModelPickerInteraction = process.env.VCPCHAT_STRESS_AGENT_MODEL_PICKER_INTERACTION === '1';
 const agentPromptInteraction = process.env.VCPCHAT_STRESS_AGENT_PROMPT_INTERACTION === '1';
+const agentRangeInteraction = process.env.VCPCHAT_STRESS_AGENT_RANGE_INTERACTION === '1';
 const supportedStages = Object.freeze(['ask-nova', 'settings', 'agent-settings', 'embedded', 'detached-app', 'mode-round-trip']);
 const selectedStages = new Set((process.env.VCPCHAT_STRESS_STAGES || supportedStages.join(','))
     .split(',')
@@ -660,6 +665,41 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
             agentSelectInteractionEvidence.closed = true;
             agentSelectInteractionEvidence.focusRestored = true;
         }
+        let agentRangeInteractionEvidence = null;
+        if (agentRangeInteraction) {
+            agentRangeInteractionEvidence = await page.evaluate(() => {
+                const input = document.querySelector('#agentSettingsForm #agentTtsSpeed');
+                const output = document.querySelector('#agentSettingsForm #ttsSpeedValue');
+                const wrapper = input?.closest('.vcp-uiux-range');
+                if (!(input instanceof HTMLInputElement) || !(output instanceof HTMLElement) || !(wrapper instanceof HTMLElement)) {
+                    return { available: false };
+                }
+                const before = { value: input.value, output: output.textContent };
+                input.value = '1.4';
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                const projected = { value: input.value, output: output.textContent };
+                input.value = before.value;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                return {
+                    available: true,
+                    native: input.type === 'range',
+                    wrapperOwnsInput: wrapper.querySelector('input') === input,
+                    wrapperOwnsOutput: wrapper.querySelector('#ttsSpeedValue') === output,
+                    before,
+                    projected,
+                    restored: { value: input.value, output: output.textContent },
+                };
+            });
+            assert.deepEqual(agentRangeInteractionEvidence, {
+                available: true,
+                native: true,
+                wrapperOwnsInput: true,
+                wrapperOwnsOutput: true,
+                before: agentRangeInteractionEvidence.before,
+                projected: { value: '1.4', output: '1.4' },
+                restored: agentRangeInteractionEvidence.before,
+            }, `${label}: Agent TTS Range must project native input through one generated owner: ${JSON.stringify(agentRangeInteractionEvidence)}`);
+        }
         let agentModelPickerInteractionEvidence = null;
         if (agentModelPickerInteraction) {
             const interaction = await page.evaluate(async () => {
@@ -974,6 +1014,7 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
                 };
             });
             evidence.agentSelectInteraction = agentSelectInteractionEvidence;
+            evidence.agentRangeInteraction = agentRangeInteractionEvidence;
             evidence.agentModelPickerInteraction = agentModelPickerInteractionEvidence;
             evidence.agentPromptInteraction = agentPromptInteractionEvidence;
             evidence.agentDisclosureInteraction = agentDisclosureInteractionEvidence;

@@ -4,7 +4,10 @@ function ensureStyles() {
         return;
     const style = document.createElement('style');
     style.id = STYLE_ID;
-    style.textContent = `.vcp-uiux-range{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px}.vcp-uiux-range input[type=range]{width:100%;height:20px;margin:0;accent-color:var(--vcp-color-brand,#1677ff)}.vcp-uiux-range output{min-width:3.5em;color:var(--vcp-color-muted,#68707d);font-size:12px;line-height:18px;text-align:right}`;
+    // The wrapper is the presentation owner.  It keeps the legacy
+    // `.slider-container` row flexible without retaining an Agent-id-specific
+    // width rule, so the canonical native range can move independently.
+    style.textContent = `.vcp-uiux-range{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;flex:1 1 auto;min-width:0}.vcp-uiux-range input[type=range]{width:100%;height:20px;margin:0;accent-color:var(--vcp-color-brand,#1677ff)}.vcp-uiux-range output{min-width:3.5em;color:var(--vcp-color-muted,#68707d);font-size:12px;line-height:18px;text-align:right}`;
     (document.head || document.documentElement).append(style);
 }
 /** Harness range contract over a native range and optional output. */
