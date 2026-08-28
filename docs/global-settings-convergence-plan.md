@@ -105,6 +105,11 @@ settings-bridge-entry
 每个 section controller 只提供 `mount(section) / sync(snapshot) / dispose()`，不拥有第二份 durable state。拆分必须以真实调用方为依据，不为了形式制造公共 API。
 模块化时必须同步更新 source-equivalence 门禁；字段 ownership 不能因 `spread`、动态注册或间接常量而变得不可静态审计。若门禁无法证明单一 owner，则保持当前显式映射，不合并拆分。
 
+首个 G4 内部切片已完成：高级区条件显隐抽为
+`modules/ui-system/settings/advanced-visibility.js`，bridge 仅负责注入
+owner 生命周期与事件绑定；字段字面量仍保留在 helper 中，source-equivalence
+可继续静态追踪。该模块不建立 durable state，也不改变 Settings/IPC 协议。
+
 ### G5：旧债净删除
 
 按 section 删除：
