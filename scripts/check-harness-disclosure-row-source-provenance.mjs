@@ -49,6 +49,8 @@ const geometry = JSON.parse(read(path.join(referenceRoot, 'disclosure-row.geomet
 const candidate = JSON.parse(read(path.join(root, 'reports/vcp-harness-disclosure-row-candidate.json')));
 const sourceCapturePath = path.join(root, 'reports/harness-disclosure-row-source.json');
 const sourceCapture = fs.existsSync(sourceCapturePath) ? JSON.parse(read(sourceCapturePath)) : null;
+const diffPath = path.join(root, 'reports/harness-vcp-disclosure-row-diff.json');
+const diff = fs.existsSync(diffPath) ? JSON.parse(read(diffPath)) : null;
 const referencePass = dom.sourceKind === 'harness-primitive-source-only'
   && dom.provenance?.sources?.length === 2
   && geometry.styleSource === 'packages/client/ui-primitives/src/DisclosureRow.module.css';
@@ -76,16 +78,22 @@ const sourceCapturePass = sourceCapture?.sourcePath === 'packages/client/ui-prim
   && sourceCapture?.forcedOpen?.bodyVisible === true
   && sourceCapture?.unmounted?.rootEmpty === true
   && sourceCapture?.unmounted?.rows === 0;
+const diffPass = diff?.semanticFixture?.alignedState === 'rowOpen ↔ candidate'
+  && diff?.semanticFixture?.pass === true
+  && diff?.dom?.structuralPass === true
+  && diff?.computedStyle?.pass === true
+  && diff?.pixel?.status === 'not-comparable-geometry'
+  && diff?.pass === false;
 const report = {
   generatedAt: new Date().toISOString(), harnessRoot, sourceKind: dom.sourceKind,
   source: dom.provenance.sources, files: entries,
   reference: { dom: referencePass, geometry: referencePass },
   sourceCapture: { capture: 'reports/harness-disclosure-row-source.json', present: Boolean(sourceCapture), shape: sourceCapturePass, status: sourceCapture?.status ?? 'missing' },
   candidate: { capture: 'reports/vcp-harness-disclosure-row-candidate.json', present: true, shape: candidatePass, status: dom.candidateStatus },
+  diff: { report: 'reports/harness-vcp-disclosure-row-diff.json', present: Boolean(diff), shape: diffPass, pixelStatus: diff?.pixel?.status ?? 'missing' },
   contract: dom.contract, pass: false,
   missingEvidence: [
-    'same-semantic Harness/VCP DOM/ARIA and computed-style diff',
-    'same-semantic Harness/VCP pixel diff',
+    'same screenshot geometry/ROI capture scope for strict pixel comparison',
     'authorized non-chat/non-message VCP production consumer evidence',
   ],
   note: 'Source provenance and Candidate shape evidence only. The chat/message integration boundary remains frozen; this report does not claim parity or authorize consumer wiring.',
