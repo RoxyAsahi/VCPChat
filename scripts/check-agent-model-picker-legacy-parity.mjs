@@ -32,6 +32,8 @@ assert.match(manager, /topicSummaryModel/, 'topic summary model must retain an a
 assert.match(bridge, /function\s+mountTypedAgentModelPicker\s*\(/, 'typed AgentModelPicker production owner is missing');
 assert.match(bridge, /api\.mountAgentModelPicker\(host,/, 'typed AgentModelPicker must be mounted by the Settings bridge');
 assert.match(bridge, /createAgentModelPickerDirectory/, 'typed picker must receive the isolated directory capability');
+assert.doesNotMatch(bridge, /getCachedModels|getHotModels|getFavoriteModels|toggleFavoriteModel/,
+    'Settings bridge must not re-embed the model directory capability after extraction');
 assert.match(directory, /getCachedModels/, 'typed picker must consume cached model capability');
 assert.match(directory, /refreshModels/, 'typed picker must retain refresh capability while parity is incomplete');
 assert.match(directory, /getHotModels/, 'typed picker must retain hot-model metadata capability while parity is incomplete');
