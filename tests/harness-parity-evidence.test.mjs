@@ -214,6 +214,8 @@ test('Tooltip source and Candidate fixed ROIs have an explicit strict pixel resu
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-tooltip-roi-pixel-diff.json'), 'utf8'));
     assert.equal(typeof report.exactPixelPass, 'boolean');
     assert.equal(report.pass, report.exactPixelPass);
+    assert.equal(report.comparable, true);
+    assert.equal(typeof report.differentPixels, 'number');
     assert.ok(report.harness.bytes > 0 && report.vcp.bytes > 0);
 });
 
