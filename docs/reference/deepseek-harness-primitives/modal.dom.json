@@ -9,7 +9,7 @@
     ],
     "selectionRule": "Use the standard and headless Modal branches from the Harness source; VCP evidence remains Candidate Lab only."
   },
-  "candidateStatus": "candidate-interaction-active; standard same-engine source/Candidate DOM/ARIA, tree, close/reopen/dispose evidence recorded; Harness headless branch is source-captured but Candidate headless replay remains pending",
+  "candidateStatus": "candidate-interaction-active; same-engine source/Candidate DOM/ARIA, standard/headless tree, close/reopen/dispose evidence recorded; strict standard ROI remains non-passing and no VCP production consumer exists",
   "productionConsumers": [
     "packages/client/ui-workspace/src/client/WorkspacePicker.tsx",
     "packages/client/ui-workspace/src/client/WorkspaceBrowser.tsx",

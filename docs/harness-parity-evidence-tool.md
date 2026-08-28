@@ -142,8 +142,10 @@ claim a strict ROI pixel result.
 
 Modal now has a real Harness source capture for standard and headless branches,
 body portal/dialog ARIA, Escape and mask closing, reopen, and root unmount.
-This source-side evidence does not yet pair a VCP Candidate capture, DOM/style
-diff, or strict ROI pixel comparison.
+This source-side evidence is paired with a VCP Candidate replay for both
+standard and headless branches. Standard DOM/style/lifecycle fields align, its
+strict ROI is measurable but non-passing, and the headless tree plus close/
+reopen/dispose sequence now also align; no production consumer is implied.
 
 Modal's standard branch now also has a paired Candidate capture. Portal/dialog
 ARIA, standard chrome, measured 382×221 geometry, close/reopen/dispose, and

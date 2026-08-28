@@ -391,10 +391,18 @@ test('Real Harness Modal source capture preserves standard, headless, close, reo
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-modal-source.json'), 'utf8'));
     assert.equal(report.standard.parent, 'body');
     assert.deepEqual(report.standard.aria, { role: 'dialog', modal: 'true', label: 'Harness modal' });
-    assert.deepEqual(report.standard.standard, { header: true, close: true, body: true, footer: true });
+    assert.equal(report.standard.standard.header, true);
+    assert.equal(report.standard.standard.close, true);
+    assert.equal(report.standard.standard.body, true);
+    assert.equal(report.standard.standard.footer, true);
+    assert.equal(report.standard.standard.directOwnerContent, false);
     assert.equal(report.escapeClosed, true);
     assert.equal(report.maskClosed, true);
-    assert.deepEqual(report.headless.standard, { header: false, close: false, body: false, footer: false });
+    assert.equal(report.headless.standard.header, false);
+    assert.equal(report.headless.standard.close, false);
+    assert.equal(report.headless.standard.body, false);
+    assert.equal(report.headless.standard.footer, false);
+    assert.equal(report.headless.standard.directOwnerContent, true);
     assert.deepEqual(report.unmounted, { rootEmpty: true, dialogs: 0 });
 });
 
@@ -413,7 +421,9 @@ test('Modal source/Candidate diff records standard parity evidence and headless 
     assert.equal(report.pixel.status, 'strict-standard-roi-measured');
     assert.equal(report.pixel.comparable, true);
     assert.equal(report.pixel.pass, false);
-    assert.equal(report.headless.harnessRecorded, true);
+    assert.equal(report.headless.harness.directOwnerContent, true);
+    assert.equal(report.headless.pass, true);
+    assert.equal(Object.values(report.headless.interaction).every(Boolean), true);
     assert.equal(report.pass, false);
 });
 
