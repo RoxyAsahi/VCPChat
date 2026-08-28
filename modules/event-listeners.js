@@ -549,15 +549,6 @@ export function setupEventListeners(deps) {
             resetBtn.dataset.globalSettingsBound = 'true';
         }
 
-        const styleHeader = modal.querySelector('#userStyleCollapseHeader');
-        if (styleHeader && !styleHeader.dataset.globalSettingsBound) {
-            styleHeader.addEventListener('click', () => {
-                const container = styleHeader.closest('.agent-style-collapsible-container');
-                if (container) container.classList.toggle('collapsed');
-            });
-            styleHeader.dataset.globalSettingsBound = 'true';
-        }
-
         if (!modal.dataset.globalSettingsControlsBound) {
             // Generated ColorPair owns the production mirror listeners. Keep
             // the legacy binder only for bootstrap environments without the
