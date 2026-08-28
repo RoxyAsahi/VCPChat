@@ -122,6 +122,8 @@ test('Agent section disclosures use one generated presentation owner and preserv
         'legacy manager header listeners must be retired once the typed owner owns activation');
     assert.match(owner, /const mounted = new Set\(\)/,
         'the typed owner must report exactly which canonical sections it adopted');
+    assert.match(owner, /try \{[\s\S]*?api\.mountDisclosureRowController[\s\S]*?\} catch \(error\) \{/,
+        'one failed generated adoption must leave the remaining form eligible for legacy fallback');
     assert.match(entry, /if \(!typedAgentSectionOwners\.has\(section\)\) enhance\('SettingsSection', section\)/,
         'a section without the generated artifact must retain the legacy fallback owner');
     assert.doesNotMatch(entry, /form\.querySelectorAll\('\.agent-settings-section, \.group-settings-section'\)/,
