@@ -252,3 +252,14 @@ test('WebBlock reference audit preserves retrieval-shape and geometry provenance
     assert.equal(report.candidateStatus, 'source-only frozen tool detail; no VCP consumer or paired visual capture');
     assert.ok(report.evidenceGaps.includes('no VCP tool-detail consumer'));
 });
+
+test('Unified contract provenance gate reports every reference boundary', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-contract-provenance.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-contract-provenance.json'), 'utf8'));
+    assert.equal(report.counts.contracts, 49);
+    assert.equal(report.status, 'provenance-gaps-present');
+    assert.equal(report.pass, false);
+    assert.ok(report.counts.gaps > 0);
+    assert.ok(report.gaps.some(item => item.includes('missing candidateStatus boundary')));
+    assert.ok(report.entries.some(item => item.pass === true));
+});
