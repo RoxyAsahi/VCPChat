@@ -14,6 +14,12 @@ import { mountCanonicalSettingsRows, removeLegacySubsectionHeadings } from './se
 import { syncAdvancedSettingsVisibility } from './settings/advanced-visibility.js';
 import { syncRustAssistantVisibility } from './settings/rust-visibility.js';
 import { syncRenderSettingsVisibility } from './settings/render-visibility.js';
+import { mountAppearanceSelects } from './settings/appearance-controls.js';
+import { mountAppearanceRanges } from './settings/appearance-ranges.js';
+import { mountAppearanceToggles } from './settings/appearance-toggles.js';
+import { mountHomeTaglineInput } from './settings/home-controls.js';
+import { mountIdentityColorPairs } from './settings/identity-controls.js';
+import { mountChoiceControls } from './settings/choice-controls.js';
 
 const controllers = new Set();
 const controllerReleases = new Map();
@@ -1049,14 +1055,13 @@ function enhanceGlobalSettings(root, form) {
     // Short enumerations remain native/segmented controls. Long enumerations
     // get a Harness-style popover, but the native select is retained as the
     // one authoritative business node.
-    mountTypedAppearanceSelects(root, form);
+    mountAppearanceSelects(form, window.VCPUIUX, ensurePresentationScope());
     selectProjection.mount(form);
-    mountTypedHomeTaglineInput(root, form);
-    mountTypedRadiusChoice(root, form);
-    mountTypedGlobalChoiceGroups(root, form);
-    mountTypedAppearanceRanges(root, form);
-    mountTypedHomeVisualToggles(root, form);
-    mountTypedAvatarColorPair(root, form);
+    mountHomeTaglineInput(form, window.VCPUIUX, ensurePresentationScope());
+    mountChoiceControls(form, window.VCPUIUX, ensurePresentationScope());
+    mountAppearanceRanges(form, window.VCPUIUX, ensurePresentationScope());
+    mountAppearanceToggles(form, window.VCPUIUX, ensurePresentationScope());
+    mountIdentityColorPairs(form, window.VCPUIUX, ensurePresentationScope(), (message, kind) => window.uiHelperFunctions?.showToastNotification?.(message, kind));
     mountTypedForumInputs(root, form);
     mountTypedForumFieldOwner(root, form);
     form.querySelectorAll('input[type="range"]').forEach(range => { if (!['appearanceSidebarAvatarSize', 'appearanceSidebarRowHeight', 'appearanceCustomRadius'].includes(range.id)) enhance('Range', range); });
@@ -1075,112 +1080,10 @@ function enhanceGlobalSettings(root, form) {
     normalizeFormIcons(root);
 }
 
-function mountTypedRadiusChoice(root, form) {
-    const group = form?.querySelector?.('.appearance-radius-choice-grid');
-    const api = window.VCPUIUX;
-    if (!group || !api?.mountChoice || group.dataset.vcpTypedPrimitiveMounted === 'true') return;
-    const scope = ensurePresentationScope();
-    if (!scope) return;
-    // Generated primitives register their own release with `scope`.  The
-    // bridge owns only its marker; re-owning the returned release creates a
-    // second record which can only invoke the same disposer a second time.
-    api.mountChoice(group, scope);
-    group.dataset.vcpTypedPrimitiveMounted = 'true';
-    scope.own(() => { delete group.dataset.vcpTypedPrimitiveMounted; }, 'typed-radius-choice-marker', 'ui-primitive');
-}
 
-// Global Settings still has a native radio group that is routinely used but
-// was previously styled exclusively by a page-local CSS segment. Keep the
-// radios as the canonical form/business nodes and let the generated
-// Choice primitive own only the visible segmented-control contract.  Chat
-// presentation controls deliberately do not enter this batch: their visual
-// surface is frozen while the chat kernel work is protected.
-function mountTypedGlobalChoiceGroups(root, form) {
-    const api = window.VCPUIUX;
-    const scope = ensurePresentationScope();
-    if (!api?.mountChoice || !scope) return;
-    const groups = [
-        ['voiceModeLocal', 'voice-mode-choice'],
-    ];
-    groups.forEach(([inputId, ownerKey]) => {
-        const group = form?.querySelector?.(`#${inputId}`)?.closest('.vcp-settings-control-row');
-        if (!group || group.dataset.vcpTypedPrimitiveMounted === 'true') return;
-        try {
-            api.mountChoice(group, scope);
-            group.dataset.vcpTypedPrimitiveMounted = 'true';
-            scope.own(() => { delete group.dataset.vcpTypedPrimitiveMounted; }, `typed-${ownerKey}-marker`, 'ui-primitive');
-        } catch (error) {
-            // The native radio group remains fully usable if the optional
-            // presentation artifact is unavailable.
-            console.warn(`[VCPUI SettingsBridge] Could not mount typed ${ownerKey} Choice:`, error);
-        }
-    });
-}
 
-function mountTypedAppearanceRanges(root, form) {
-    const api = window.VCPUIUX;
-    if (!api?.mountRange) return;
-    const scope = ensurePresentationScope(); if (!scope) return;
-    [['appearanceSidebarAvatarSize', 'appearanceSidebarAvatarSizeValue'], ['appearanceSidebarRowHeight', 'appearanceSidebarRowHeightValue'], ['appearanceCustomRadius', 'appearanceCustomRadiusValue']].forEach(([id, outputId]) => {
-        const input = form?.querySelector?.(`#${id}`); const output = form?.querySelector?.(`#${outputId}`);
-        if (!input || input.dataset.vcpTypedPrimitiveMounted === 'true') return;
-        api.mountRange(input, { output, format: value => `${value}px` }, scope);
-        input.dataset.vcpTypedPrimitiveMounted = 'true';
-        scope.own(() => { delete input.dataset.vcpTypedPrimitiveMounted; }, `typed-${id}-marker`, 'ui-primitive');
-    });
-}
 
-function mountTypedHomeVisualToggles(root, form) {
-    const api = window.VCPUIUX; if (!api?.mountToggle) return;
-    const scope = ensurePresentationScope(); if (!scope) return;
-    ['showHomeVisualBrand', 'showHomeVisualTagline'].forEach(id => {
-        const input = form?.querySelector?.(`#${id}`);
-        if (!input || input.dataset.vcpTypedPrimitiveMounted === 'true') return;
-        api.mountToggle(input, scope);
-        input.dataset.vcpTypedPrimitiveMounted = 'true';
-        scope.own(() => { delete input.dataset.vcpTypedPrimitiveMounted; }, `typed-${id}-marker`, 'ui-primitive');
-    });
-}
 
-function mountTypedAvatarColorPair(root, form) {
-    const api = window.VCPUIUX; if (!api?.mountColorPair) return;
-    const scope = ensurePresentationScope(); if (!scope) return;
-    // The Agent form mounts the same two pairs; the global form must keep
-    // parity so its hex text boxes and pickers stay two-way synced.
-    [['#userAvatarBorderColor', '#userAvatarBorderColorText', 'avatar-border'],
-     ['#userNameTextColor', '#userNameTextColorText', 'user-name-text']].forEach(([colorId, textId, name]) => {
-        const color = form?.querySelector?.(colorId);
-        const text = form?.querySelector?.(textId);
-        if (!color || !text || color.dataset.vcpTypedPrimitiveMounted === 'true') return;
-        try {
-            api.mountColorPair(color, text, scope, {
-                onValueChange: value => {
-                    if (name === 'avatar-border') {
-                        form.querySelector('#userAvatarPreview')?.style.setProperty('border-color', value);
-                    }
-                },
-                onInvalid: () => window.uiHelperFunctions?.showToastNotification?.('颜色格式无效，请使用 #RRGGBB 格式', 'warning'),
-            });
-            color.dataset.vcpTypedPrimitiveMounted = 'true';
-            scope.own(() => { delete color.dataset.vcpTypedPrimitiveMounted; }, `typed-${name}-color-marker`, 'ui-primitive');
-        } catch (error) {
-            // A pairing contract violation (e.g. a wrap moved one input) must
-            // not break the whole enhancement chain; the pair stays native.
-            console.warn('[VCPUI SettingsBridge] Could not mount color pair primitive:', error);
-        }
-    });
-}
-
-function mountTypedHomeTaglineInput(root, form) {
-    const input = form?.querySelector?.('#homeVisualTagline');
-    const api = window.VCPUIUX;
-    if (!input || !api?.mountInput || input.dataset.vcpTypedPrimitiveMounted === 'true') return;
-    const scope = ensurePresentationScope();
-    if (!scope) return;
-    api.mountInput(input, {}, scope);
-    input.dataset.vcpTypedPrimitiveMounted = 'true';
-    scope.own(() => { delete input.dataset.vcpTypedPrimitiveMounted; }, 'typed-home-tagline-marker', 'ui-primitive');
-}
 
 // Forum credentials are presentation-only in this phase.  The existing
 // ForumConfigUiService/global submit path remains the command owner until its
@@ -1276,29 +1179,6 @@ function mountTypedForumFieldOwner(root, form) {
     }, 'typed-forum-field-owner', 'ui-presentation');
 }
 
-function mountTypedAppearanceSelects(root, form) {
-    const api = window.VCPUIUX;
-    const scope = ensurePresentationScope();
-    if (!scope || !api?.mountSelect) return;
-    const fields = [
-        ['appearanceDensity', '界面密度'],
-        ['appearanceRadius', '圆角风格'],
-        ['appearanceTypography', '界面字体'],
-        ['appearanceFontScale', '界面字号'],
-        ['appearanceContentWidth', '内容宽度'],
-        ['appearanceSurface', '页面材质'],
-    ];
-    fields.forEach(([id, label]) => {
-        const select = form?.querySelector?.(`#${id}`);
-        if (!select || select.dataset.vcpTypedPrimitiveMounted === 'true') return;
-        if (api.mountField && select.parentElement) {
-            api.mountField(select.parentElement, { label, control: select }, scope);
-        }
-        api.mountSelect(select, { label, portal: true }, scope);
-        select.dataset.vcpTypedPrimitiveMounted = 'true';
-        scope.own(() => { delete select.dataset.vcpTypedPrimitiveMounted; }, `typed-${id}-marker`, 'ui-primitive');
-    });
-}
 
 // Single-line text inputs are projected by the real library Input primitive
 // (window.VCPUIUX.mountInput): the native input stays the sole business node

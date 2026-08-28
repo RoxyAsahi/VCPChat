@@ -44,6 +44,16 @@ test('single-concern modules import cleanly and expose their contract', async ()
     assert.equal(typeof render.syncRenderSettingsVisibility, 'function');
     const appearance = await import(pathToFileURL(path.join(settingsDir, 'appearance-controls.js')).href);
     assert.equal(typeof appearance.mountAppearanceSelects, 'function');
+    const ranges = await import(pathToFileURL(path.join(settingsDir, 'appearance-ranges.js')).href);
+    assert.equal(typeof ranges.mountAppearanceRanges, 'function');
+    const toggles = await import(pathToFileURL(path.join(settingsDir, 'appearance-toggles.js')).href);
+    assert.equal(typeof toggles.mountAppearanceToggles, 'function');
+    const home = await import(pathToFileURL(path.join(settingsDir, 'home-controls.js')).href);
+    assert.equal(typeof home.mountHomeTaglineInput, 'function');
+    const identity = await import(pathToFileURL(path.join(settingsDir, 'identity-controls.js')).href);
+    assert.equal(typeof identity.mountIdentityColorPairs, 'function');
+    const choices = await import(pathToFileURL(path.join(settingsDir, 'choice-controls.js')).href);
+    assert.equal(typeof choices.mountChoiceControls, 'function');
 });
 
 test('each extracted function has exactly one home (entry or module, never both)', () => {
@@ -245,13 +255,9 @@ test('Agent TTS Voice Select keeps business option loading while one typed proje
         'the refresh command remains on the native TTS model path');
     assert.doesNotMatch(manager, /agentTtsVoice(?:Primary|Secondary)Select\.addEventListener\(/,
         'SettingsManager must not register a competing TTS Select presentation listener');
-    for (const selector of [
-        '#agentSettingsContainer select:not(.vcp-harness-select-native)',
-        'body.light-theme #agentSettingsContainer select:not(.vcp-harness-select-native)',
-        'body:not(.light-theme) #agentSettingsContainer select:not(.vcp-harness-select-native)',
-    ]) {
-        assert.ok(agentCss.includes(selector), `legacy Select CSS must exclude the typed native node: ${selector}`);
-    }
+    assert.ok(agentCss.includes('#agentSettingsContainer select:not(.vcp-harness-select-native)'), 'legacy Select CSS must exclude the typed native node');
+    assert.ok(/body(?:\.light-theme|\[data-vcp-theme="light"\]) #agentSettingsContainer select:not\(\.vcp-harness-select-native\)/.test(agentCss), 'light Select CSS must exclude the typed native node');
+    assert.ok(/body(?::not\(\.light-theme\)|\[data-vcp-theme="dark"\]) #agentSettingsContainer select:not\(\.vcp-harness-select-native\)/.test(agentCss), 'dark Select CSS must exclude the typed native node');
 });
 
 test('Agent shell CSS leaves typed primitive inner controls to their own presentation owner', () => {
@@ -302,10 +308,10 @@ test('Agent ColorPairs have one generated synchronization owner and preserve can
 test('global voice mode adopts generated Choice without extending the frozen chat radio surface', () => {
     const entry = read(bridgeEntry);
     const css = read(path.join(root, 'styles', 'ui-system', 'settings-overrides.css'));
-    assert.match(entry, /mountTypedGlobalChoiceGroups\(root, form\)/, 'global settings enhancement wires the Choice batch');
-    const choiceOwner = entry.match(/function mountTypedGlobalChoiceGroups\(root, form\)\s*\{([\s\S]*?)\n\}/)?.[1] || '';
-    assert.match(choiceOwner, /\['voiceModeLocal', 'voice-mode-choice'\]/, 'voice mode is the active high-frequency native radio consumer');
-    assert.match(choiceOwner, /api\.mountChoice\(group, scope\)/, 'the generated Choice mounts under the presentation owner');
+    assert.match(entry, /mountChoiceControls\(form, window\.VCPUIUX, ensurePresentationScope\(\)\)/, 'global settings enhancement wires the Choice batch');
+    const choiceOwner = read(path.join(settingsDir, 'choice-controls.js'));
+    assert.match(choiceOwner, /#voiceModeLocal/, 'voice mode is the active high-frequency native radio consumer');
+    assert.match(choiceOwner, /api\.mountChoice\(voice, scope\)/, 'the generated Choice mounts under the presentation owner');
     assert.doesNotMatch(choiceOwner, /chatLayoutMode/, 'the frozen chat-layout radio group is excluded from this presentation batch');
     assert.doesNotMatch(css, /#voiceModeLocal/, 'the retired page-local voice radio CSS no longer competes with Choice');
 });
@@ -313,10 +319,15 @@ test('global voice mode adopts generated Choice without extending the frozen cha
 test('global typed primitive mounts keep one lifecycle registration per primitive', () => {
     const entry = read(bridgeEntry);
     const appearance = read(path.join(settingsDir, 'appearance-controls.js'));
+    const ranges = read(path.join(settingsDir, 'appearance-ranges.js'));
+    const toggles = read(path.join(settingsDir, 'appearance-toggles.js'));
+    const home = read(path.join(settingsDir, 'home-controls.js'));
+    const identity = read(path.join(settingsDir, 'identity-controls.js'));
+    const choices = read(path.join(settingsDir, 'choice-controls.js'));
     const globalTypedOwners = entry.slice(
         entry.indexOf('function mountTypedRadiusChoice'),
         entry.indexOf('// Single-line text inputs are projected'),
-    ) + '\n' + appearance;
+    ) + '\n' + appearance + '\n' + ranges + '\n' + toggles + '\n' + home + '\n' + identity + '\n' + choices;
     // Each generated primitive calls scope.own() internally.  The bridge can
     // own its DOM marker, but must not register the returned release again:
     // that adds a second resource to every Settings-open cycle and asks the
