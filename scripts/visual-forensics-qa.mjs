@@ -548,6 +548,34 @@ try {
       await page.screenshot({ path: path.join(output, `${name}-narrow-tooltip.png`), fullPage: false });
       await page.mouse.move(2, 2).catch(() => {});
     } else resized.tooltip = { open: false, rect: null };
+    resized.menu = await page.evaluate(async () => {
+      const button = [...document.querySelectorAll('.vcp-harness-primitive-lab button')].find(node => node.textContent.trim() === 'View options');
+      button?.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+      button?.click();
+      await new Promise(resolve => setTimeout(resolve, 60));
+      const node = document.querySelector('.vcp-harness-menu-list[role="menu"]');
+      if (!node) return { open: false, rect: null };
+      const r = node.getBoundingClientRect(); const s = getComputedStyle(node);
+      const point = { x: Math.max(0, Math.min(innerWidth - 1, r.x + r.width / 2)), y: Math.max(0, Math.min(innerHeight - 1, r.y + r.height / 2)) };
+      const topmost = document.elementFromPoint(point.x, point.y);
+      return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: s.position, parent: node.parentElement === document.body ? 'body' : node.parentElement?.className || '', inViewport: r.x >= -2 && r.y >= -2 && r.right <= innerWidth + 2 && r.bottom <= innerHeight + 2, topmostInside: Boolean(topmost && node.contains(topmost)) };
+    }).catch(() => ({ open: false, rect: null }));
+    await page.screenshot({ path: path.join(output, `${name}-narrow-menu.png`), fullPage: false });
+    await page.evaluate(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))).catch(() => {});
+    resized.modal = await page.evaluate(async () => {
+      const button = [...document.querySelectorAll('.vcp-harness-primitive-lab button')].find(node => node.textContent.trim() === 'Open modal');
+      button?.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+      button?.click();
+      await new Promise(resolve => setTimeout(resolve, 60));
+      const node = document.querySelector('.vcp-harness-modal-root [role="dialog"]');
+      if (!node) return { open: false, rect: null };
+      const r = node.getBoundingClientRect(); const s = getComputedStyle(node);
+      const point = { x: Math.max(0, Math.min(innerWidth - 1, r.x + r.width / 2)), y: Math.max(0, Math.min(innerHeight - 1, r.y + r.height / 2)) };
+      const topmost = document.elementFromPoint(point.x, point.y);
+      return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: s.position, parent: node.parentElement === document.body ? 'body' : node.parentElement?.className || '', inViewport: r.x >= -2 && r.y >= -2 && r.right <= innerWidth + 2 && r.bottom <= innerHeight + 2, topmostInside: Boolean(topmost && node.contains(topmost)) };
+    }).catch(() => ({ open: false, rect: null }));
+    await page.screenshot({ path: path.join(output, `${name}-narrow-modal.png`), fullPage: false });
+    await page.evaluate(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))).catch(() => {});
     await page.screenshot({ path: path.join(output, `${name}-narrow.png`), fullPage: false });
     await page.setViewport({ width, height, deviceScaleFactor: 1 });
     await sleep(150);

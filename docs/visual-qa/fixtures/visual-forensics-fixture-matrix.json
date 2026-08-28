@@ -116,6 +116,18 @@
       "selectors": [".vcp-harness-tooltip-bubble", "[role=tooltip]"]
     },
     {
+      "id": "showcase-narrow-menu-overlay",
+      "trigger": "resize(width - 240); scroll trigger into viewport; click('View options')",
+      "screenshotSuffix": "narrow-menu",
+      "selectors": [".vcp-harness-menu-list[role=menu]"]
+    },
+    {
+      "id": "showcase-narrow-modal-overlay",
+      "trigger": "resize(width - 240); scroll trigger into viewport; click('Open modal')",
+      "screenshotSuffix": "narrow-modal",
+      "selectors": [".vcp-harness-modal-root [role=dialog]"]
+    },
+    {
       "id": "showcase-hover",
       "trigger": "hover(real element handle); capture viewport-visible :hover state",
       "screenshotSuffix": "hover",

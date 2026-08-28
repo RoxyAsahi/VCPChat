@@ -45,7 +45,7 @@ for (const dir of targets) {
     assert.equal(manifest.observations?.length, requiredViewports.length);
     for (const [width, height] of requiredViewports) {
       const name = `${width}x${height}`;
-      for (const suffix of ['initial', 'reopen', 'menu', 'modal', 'tooltip', 'settings', 'states', 'loading', 'error', 'async-loading', 'disabled', 'selected', 'scrolled', 'narrow', 'narrow-tooltip', 'restored', 'hover', 'focus']) {
+      for (const suffix of ['initial', 'reopen', 'menu', 'modal', 'tooltip', 'settings', 'states', 'loading', 'error', 'async-loading', 'disabled', 'selected', 'scrolled', 'narrow', 'narrow-menu', 'narrow-modal', 'narrow-tooltip', 'restored', 'hover', 'focus']) {
         const screenshotPath = path.join(dir, `${name}-${suffix}.png`);
         await fs.access(screenshotPath);
         const stat = await fs.stat(screenshotPath);
@@ -125,6 +125,11 @@ for (const dir of targets) {
       assert.equal(observation?.resized?.tooltip?.position, 'fixed', `${name}: narrow tooltip is not fixed`);
       assert.equal(observation?.resized?.tooltip?.parent, 'body', `${name}: narrow tooltip is not body-portalized`);
       assert.equal(observation?.resized?.tooltip?.inViewport, true, `${name}: narrow tooltip is outside the viewport`);
+      for (const type of ['menu', 'modal']) {
+        assert.equal(observation?.resized?.[type]?.open, true, `${name}: ${type} did not open after narrow resize`);
+        assert.equal(observation?.resized?.[type]?.inViewport, true, `${name}: narrow ${type} is outside the viewport`);
+        assert.equal(observation?.resized?.[type]?.topmostInside, true, `${name}: narrow ${type} center is occluded`);
+      }
     }
     console.log(`Visual forensics evidence passed: ${dir}`);
   } catch (error) {
