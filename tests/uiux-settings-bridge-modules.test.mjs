@@ -390,6 +390,13 @@ test('settings shell navigation binds through the presentation scope', () => {
     assert.match(shell, /shellScope\.listen\(row, 'keydown', onKeydown\)/);
 });
 
+test('typed settings external updates use the bridge scope', () => {
+    const entry = read(bridgeEntry);
+    const owner = entry.slice(entry.indexOf('function ensureTypedSettingsService'), entry.indexOf('function mountTypedSettingsConsumer'));
+    assert.match(owner, /bridgeScope\.listen\(window, 'global-settings-updated'/);
+    assert.match(owner, /else window\.addEventListener\('global-settings-updated'/);
+});
+
 test('legacy disclosure fast teardown is explicitly idempotent', () => {
     const entry = read(bridgeEntry);
     const helper = entry.slice(entry.indexOf('function mountHarnessDisclosures'), entry.indexOf('// R2-02C:'));

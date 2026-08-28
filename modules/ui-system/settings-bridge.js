@@ -121,9 +121,10 @@ function ensureTypedSettingsService() {
         externalListeners.forEach(listener => listener(typedSettingsState));
     };
     const onExternalSettings = event => publishExternal(event.detail?.settings);
-    window.addEventListener('global-settings-updated', onExternalSettings);
+    if (bridgeScope) bridgeScope.listen(window, 'global-settings-updated', onExternalSettings, undefined, 'typed-settings-external-update');
+    else window.addEventListener('global-settings-updated', onExternalSettings);
     typedSettingsExternalRelease = () => {
-        window.removeEventListener('global-settings-updated', onExternalSettings);
+        if (!bridgeScope) window.removeEventListener('global-settings-updated', onExternalSettings);
         externalListeners.clear();
         typedSettingsExternalRelease = null;
     };
