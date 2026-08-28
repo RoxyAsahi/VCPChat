@@ -17,7 +17,7 @@ import { mountAgentModelPicker } from './primitives/agent-model-picker.js';
 import { mountModal } from './primitives/modal.js';
 import { mountTooltip } from './primitives/tooltip.js';
 import { mountHoverCard } from './primitives/hover-card.js';
-import { mountDisclosureRow } from './primitives/disclosure-row.js';
+import { mountDisclosureRow, mountDisclosureRowController } from './primitives/disclosure-row.js';
 import { mountStateDot } from './primitives/state-dot.js';
 import { mountToast } from './primitives/toast.js';
 import { mountRiskConfirmation } from './primitives/risk-confirmation.js';
@@ -66,6 +66,7 @@ declare const api: {
     mountTooltip: typeof mountTooltip;
     mountHoverCard: typeof mountHoverCard;
     mountDisclosureRow: typeof mountDisclosureRow;
+    mountDisclosureRowController: typeof mountDisclosureRowController;
     mountStateDot: typeof mountStateDot;
     mountToast: typeof mountToast;
     mountRiskConfirmation: typeof mountRiskConfirmation;

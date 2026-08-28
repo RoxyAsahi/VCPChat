@@ -21,7 +21,7 @@ import { mountAgentModelPicker } from './primitives/agent-model-picker.js';
 import { mountModal } from './primitives/modal.js';
 import { mountTooltip } from './primitives/tooltip.js';
 import { mountHoverCard } from './primitives/hover-card.js';
-import { mountDisclosureRow } from './primitives/disclosure-row.js';
+import { mountDisclosureRow, mountDisclosureRowController } from './primitives/disclosure-row.js';
 import { mountStateDot } from './primitives/state-dot.js';
 import { mountToast } from './primitives/toast.js';
 import { mountRiskConfirmation } from './primitives/risk-confirmation.js';
@@ -82,6 +82,7 @@ const api = {
     mountTooltip,
     mountHoverCard,
     mountDisclosureRow,
+    mountDisclosureRowController,
     mountStateDot,
     mountToast,
     mountRiskConfirmation,
