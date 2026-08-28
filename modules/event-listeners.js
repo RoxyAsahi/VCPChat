@@ -23,7 +23,6 @@ export function setupEventListeners(deps) {
         notificationsSidebar, agentSearchInput, addNetworkPathBtn,
         openTranslatorBtn, openNotesBtn, openMusicBtn, openCanvasBtn, toggleAssistantBtn, toggleSidebarModeBtn,
         leftSidebar, toggleSidebarBtn,
-        enableContextSanitizerCheckbox, contextSanitizerDepthContainer,
 
         // State variables (passed via refs)
         refs,
