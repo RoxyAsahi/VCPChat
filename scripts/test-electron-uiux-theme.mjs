@@ -117,7 +117,9 @@ try {
         colorText.value = '#112233';
         colorText.dispatchEvent(new Event('change', { bubbles: true }));
         colorText.value = 'invalid';
-        colorText.dispatchEvent(new Event('change', { bubbles: true }));
+        // ColorPair deliberately keeps intermediate invalid text while editing;
+        // its canonical rollback contract is committed on blur.
+        colorText.dispatchEvent(new Event('blur', { bubbles: true }));
         range.value = '40';
         range.dispatchEvent(new Event('input', { bubbles: true }));
         const trigger = host.querySelector('.vcp-harness-select-trigger');
