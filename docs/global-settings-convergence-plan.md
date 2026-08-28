@@ -169,6 +169,19 @@ Agent section disclosure/model picker、service 装配和全局 shell 生命周�
 section controller 的 mount/sync/dispose 边界，并以真实 consumer 与 Electron
 回归作为拆分依据。
 
+### Agent ModelPicker capability 收口（2026-08-28）
+
+模型目录适配已抽为
+`modules/ui-system/settings/agent-model-picker-directory.js`。该模块只负责把
+现有 `chatAPI` 的缓存、热门/收藏元数据、刷新、收藏切换和更新订阅转换为
+ModelPicker 的短生命周期 capability；不写入 `#agentModel`，不复制 durable 模型
+状态，也不触碰 legacy modal。`settings-bridge.js` 现在只负责 capability 注入、
+canonical input/change 事件和 primitive owner 生命周期。
+
+本切片的 focused contract 覆盖：三分区顺序及重复策略、active 投影、收藏调用、
+更新订阅释放。它仍不授权删除 `modelSelectModal`；删除前必须继续取得真实生产
+Electron 的选择、刷新/失败、close-race、reopen/reload 和 focus 恢复证据。
+
 Visual QA 记录：2026-08-28 的 1280×800 light 运行中，Select 采样出现
 `focused=true` 但 `:hover=false`，导致门禁失败；同一脚本的其他 viewport 与
 历史 light/dark manifest 通过。该问题暂归类为“hover/focus 分阶段采样缺失”，

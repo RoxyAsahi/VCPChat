@@ -56,6 +56,39 @@ test('single-concern modules import cleanly and expose their contract', async ()
     assert.equal(typeof choices.mountChoiceControls, 'function');
     const forum = await import(pathToFileURL(path.join(settingsDir, 'forum-controls.js')).href);
     assert.equal(typeof forum.mountForumCredentialInputs, 'function');
+    const modelDirectory = await import(pathToFileURL(path.join(settingsDir, 'agent-model-picker-directory.js')).href);
+    assert.equal(typeof modelDirectory.normalizeAgentModels, 'function');
+    assert.equal(typeof modelDirectory.createAgentModelPickerDirectory, 'function');
+});
+
+test('Agent ModelPicker directory stays an injected short-lived capability', async () => {
+    const { normalizeAgentModels, createAgentModelPickerDirectory } = await import(
+        pathToFileURL(path.join(settingsDir, 'agent-model-picker-directory.js')).href,
+    );
+    assert.deepEqual(normalizeAgentModels({ models: [{ id: 'a' }] }), [{ id: 'a' }]);
+    const calls = [];
+    let updated;
+    const input = { value: 'fav' };
+    const api = {
+        async getCachedModels() { calls.push('cache'); return [{ id: 'hot', name: 'Hot', provider: 'p' }, 'fav']; },
+        async getHotModels() { calls.push('hot'); return ['hot']; },
+        async getFavoriteModels() { calls.push('favorite'); return ['fav']; },
+        async refreshModels() { calls.push('refresh'); },
+        async toggleFavoriteModel(id) { calls.push(`toggle:${id}`); },
+        onModelsUpdated(listener) { updated = listener; return () => { updated = undefined; }; },
+    };
+    const directory = createAgentModelPickerDirectory({ electronAPI: api, input });
+    const options = await directory.options(new AbortController().signal);
+    assert.deepEqual(options.map(option => [option.group, option.id]), [
+        ['热门模型', 'hot'], ['收藏模型', 'fav'], ['全部模型', 'hot'], ['全部模型', 'fav'],
+    ]);
+    assert.equal(options.find(option => option.id === 'fav').active, true);
+    await directory.toggleFavorite('hot', new AbortController().signal);
+    assert.ok(calls.includes('toggle:hot'));
+    const release = directory.subscribeUpdated(() => {});
+    assert.equal(typeof release, 'function');
+    release();
+    assert.equal(updated, undefined);
 });
 
 test('each extracted function has exactly one home (entry or module, never both)', () => {

@@ -22,6 +22,7 @@ import { mountIdentityColorPairs } from './settings/identity-controls.js';
 import { mountChoiceControls } from './settings/choice-controls.js';
 import { mountForumCredentialInputs } from './settings/forum-controls.js';
 import { mountAgentSectionDisclosures } from './settings/agent-disclosures.js';
+import { createAgentModelPickerDirectory } from './settings/agent-model-picker-directory.js';
 
 const controllers = new Set();
 const controllerReleases = new Map();
@@ -686,88 +687,9 @@ function mountTypedAgentModelPicker(form) {
         });
     }
 
-    const normalizeModels = payload => {
-        if (Array.isArray(payload)) return payload;
-        if (Array.isArray(payload?.data)) return payload.data;
-        if (Array.isArray(payload?.models)) return payload.models;
-        if (typeof payload?.id === 'string') return [payload];
-        return [];
-    };
-    const modelOptions = async signal => {
-        let models = await electronAPI?.getCachedModels?.();
-        if (signal.aborted) return [];
-        if (normalizeModels(models).length === 0 && electronAPI?.refreshModels) {
-            await electronAPI.refreshModels();
-            if (signal.aborted) return [];
-            models = await electronAPI.getCachedModels?.();
-        }
-        if (signal.aborted) return [];
-        let hotModelIds = [];
-        let favoriteModelIds = [];
-        try {
-            [hotModelIds, favoriteModelIds] = await Promise.all([
-                electronAPI?.getHotModels?.() ?? [],
-                electronAPI?.getFavoriteModels?.() ?? [],
-            ]);
-        } catch {
-            // Metadata is presentation-only; model selection remains usable.
-        }
-        if (signal.aborted) return [];
-        const hotIds = Array.isArray(hotModelIds) ? hotModelIds.map(String) : [];
-        const favoriteIds = Array.isArray(favoriteModelIds) ? favoriteModelIds.map(String) : [];
-        const hotSet = new Set(hotIds);
-        const favoriteSet = new Set(favoriteIds);
-        const normalized = normalizeModels(models).map(model => {
-            const rawId = typeof model === 'string' ? model : model?.id;
-            if (!rawId) return null;
-            const id = String(rawId);
-            const provider = typeof model === 'object' ? (model.provider || model.owned_by) : undefined;
-            const label = typeof model === 'object' ? (model.name || id) : id;
-            const metadata = [provider, hotSet.has(id) ? '热门' : undefined, favoriteSet.has(id) ? '收藏' : undefined]
-                .filter(Boolean).join(' · ');
-            return {
-                id: String(id),
-                label: String(label),
-                provider: metadata || undefined,
-                favorite: favoriteSet.has(id),
-                active: String(id) === String(input.value || ''),
-            };
-        }).filter(Boolean);
-        const byId = new Map(normalized.map(option => [option.id, option]));
-        const inOrder = (ids, group) => ids
-            .map(id => byId.get(id))
-            .filter(Boolean)
-            .map(option => ({ ...option, group }));
-        const all = normalized.map(option => ({ ...option, group: '全部模型' }));
-        // Keep the legacy directory order and duplicate policy: a model may
-        // appear in Hot/Favorites and again in All.  The picker owns only this
-        // short-lived projection; canonical #agentModel remains unchanged.
-        return [
-            ...inOrder(hotIds, '热门模型'),
-            ...inOrder(favoriteIds, '收藏模型'),
-            ...all,
-        ];
-    };
-    // The directory remains a short-lived UI capability: this bridge is the
-    // sole chatAPI boundary, while AgentModelPicker owns only the current
-    // popup projection. Neither refresh nor a favorite mutation writes a
-    // second model store or changes the canonical #agentModel input.
-    const modelDirectory = {
-        async refresh(signal) {
-            if (!electronAPI?.refreshModels) throw new Error('当前环境不支持刷新模型列表');
-            await electronAPI.refreshModels();
-            if (signal.aborted) return;
-        },
-        async toggleFavorite(modelId, signal) {
-            if (!electronAPI?.toggleFavoriteModel) throw new Error('当前环境不支持收藏模型');
-            await electronAPI.toggleFavoriteModel(modelId);
-            if (signal.aborted) return;
-        },
-        subscribeUpdated(listener) {
-            if (!electronAPI?.onModelsUpdated) return undefined;
-            return electronAPI.onModelsUpdated(() => listener());
-        },
-    };
+    // The directory is an injected, short-lived capability. The primitive
+    // owns popup/focus lifecycle; this adapter owns only the chatAPI boundary.
+    const modelDirectory = createAgentModelPickerDirectory({ electronAPI, input });
 
     const originalTriggerInline = {};
     ['position', 'right', 'top', 'transform', 'width', 'min-width', 'max-width', 'height', 'padding',
@@ -781,7 +703,7 @@ function mountTypedAgentModelPicker(form) {
             trigger,
             label: '选择模型',
             selectedId: input.value || undefined,
-            options: modelOptions,
+            options: modelDirectory.options,
             directory: modelDirectory,
             grouped: true,
             onSelect: option => {
