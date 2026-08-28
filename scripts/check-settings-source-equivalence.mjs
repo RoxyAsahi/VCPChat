@@ -317,8 +317,8 @@ const agentParamsCss = read('styles/setting/settings-agent-params.css');
 for (const selector of [
     '.params-content input[type="number"]:not(.input)',
     '.params-content input[type="number"]:not(.input):focus',
-    'body.light-theme .params-content input[type="number"]:not(.input):hover',
-    'body:not(.light-theme) .params-content input[type="number"]:not(.input):focus-visible',
+    'body[data-vcp-theme="light"] .params-content input[type="number"]:not(.input):hover',
+    'body[data-vcp-theme="dark"] .params-content input[type="number"]:not(.input):focus-visible',
 ]) {
     assert.ok(agentParamsCss.includes(selector),
         `typed Agent numeric Input fallback must exclude the generated owner: ${selector}`);
