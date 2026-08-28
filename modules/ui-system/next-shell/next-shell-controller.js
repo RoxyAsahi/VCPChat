@@ -811,6 +811,7 @@
             commands: () => window.MainChatCommands,
             filterManager: window.filterManager,
             showToast: (message, variant) => window.uiHelperFunctions?.showToastNotification?.(message, variant),
+            buttonApi: window.VCPUIUX,
             escapeDispatcher,
         });
         notificationMenuController.mount(mountScope);

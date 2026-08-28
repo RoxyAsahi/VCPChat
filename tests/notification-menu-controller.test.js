@@ -75,6 +75,7 @@ test('notification menu adopts only neutral action buttons under one child scope
     };
     const buttonApi = { mountButton(button, props, owner) {
         mounted.push({ id: button.id, props, owner });
+        button.classList.add('vcp-harness-button');
         owner.own(() => button.classList.remove('vcp-harness-button'));
     }};
     const controller = new NotificationMenuController({ window: dom.window, document: dom.window.document, buttonApi });
@@ -84,7 +85,11 @@ test('notification menu adopts only neutral action buttons under one child scope
         'nextUiNotificationLog', 'nextUiNotificationObserver', 'nextUiNotificationSettings',
     ]);
     assert.ok(mounted.every(item => item.props.variant === 'ghost' && item.props.size === 'md' && item.owner === childScope));
+    assert.equal(dom.window.document.getElementById('nextUiNotificationFilterToggle').classList.contains('vcp-harness-button'), false);
+    assert.equal(dom.window.document.getElementById('nextUiNotificationClear').classList.contains('vcp-harness-button'), false);
     assert.equal(controller.generatedButtonsMounted, true);
     controller.dispose();
+    childScope.dispose();
+    assert.ok(mounted.every(item => !dom.window.document.getElementById(item.id).classList.contains('vcp-harness-button')));
     dom.window.close();
 });
