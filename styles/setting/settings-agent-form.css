@@ -41,13 +41,13 @@
     font-size: 0.9em;
 }
 
-#agentSettingsForm input[type="text"],
-#agentSettingsForm input[type="url"],
-#agentSettingsForm input[type="password"],
-#agentSettingsForm input[type="number"],
-#agentSettingsForm input[type="file"],
+#agentSettingsForm :not(.vcp-uiux-color-pair) > input[type="text"]:not(.input),
+#agentSettingsForm :not(.vcp-uiux-color-pair) > input[type="url"]:not(.input),
+#agentSettingsForm :not(.vcp-uiux-color-pair) > input[type="password"]:not(.input),
+#agentSettingsForm :not(.vcp-uiux-color-pair) > input[type="number"]:not(.input),
+#agentSettingsForm :not(.vcp-uiux-color-pair) > input[type="file"],
 #agentSettingsForm textarea,
-#agentSettingsForm select {
+#agentSettingsForm select:not(.vcp-harness-select-native) {
     width: 100%;
     box-sizing: border-box;
     padding: 9px 10px;

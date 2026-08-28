@@ -235,7 +235,10 @@
     align-items: center;
 }
 
-.color-input-group input[type="color"] {
+/* Legacy color controls are direct children. Once the typed ColorPair owns a
+   pair it wraps both inputs, so these historic 37px/pill rules must no longer
+   leak through and override the primitive's 32px/8px contract. */
+.color-input-group > input[type="color"] {
     width: 37px;
     height: 37px;
     min-width: 37px;
@@ -252,33 +255,33 @@
         transform 0.2s ease;
 }
 
-.color-input-group input[type="color"]::-webkit-color-swatch-wrapper {
+.color-input-group > input[type="color"]::-webkit-color-swatch-wrapper {
     padding: 0;
     border-radius: 999px;
 }
 
-.color-input-group input[type="color"]::-webkit-color-swatch {
+.color-input-group > input[type="color"]::-webkit-color-swatch {
     border: none;
     border-radius: 999px;
 }
 
-.color-input-group input[type="color"]::-moz-color-swatch {
+.color-input-group > input[type="color"]::-moz-color-swatch {
     border: none;
     border-radius: 999px;
 }
 
-.color-input-group input[type="color"]:hover {
+.color-input-group > input[type="color"]:hover {
     border-color: var(--highlight-text);
 }
 
-.color-input-group input[type="color"]:focus,
-.color-input-group input[type="color"]:focus-visible {
+.color-input-group > input[type="color"]:focus,
+.color-input-group > input[type="color"]:focus-visible {
     outline: none;
     border-color: var(--highlight-text);
     box-shadow: none;
 }
 
-.color-input-group input[type="text"] {
+.color-input-group > input[type="text"] {
     flex-grow: 1;
     height: 37px;
     padding: 0 12px;
@@ -291,8 +294,8 @@
     box-sizing: border-box;
 }
 
-body.light-theme .color-input-group input[type="color"],
-body.light-theme .color-input-group input[type="text"] {
+body.light-theme .color-input-group > input[type="color"],
+body.light-theme .color-input-group > input[type="text"] {
     background: linear-gradient(
         180deg,
         rgba(255, 255, 255, 0.82),
@@ -307,14 +310,14 @@ body.light-theme .color-input-group input[type="text"] {
         inset 0 0 1px rgba(0, 0, 0, 0.08);
 }
 
-body.light-theme .color-input-group input[type="text"]:hover,
-body.light-theme .color-input-group input[type="text"]:focus,
-body.light-theme .color-input-group input[type="text"]:focus-visible {
+body.light-theme .color-input-group > input[type="text"]:hover,
+body.light-theme .color-input-group > input[type="text"]:focus,
+body.light-theme .color-input-group > input[type="text"]:focus-visible {
     border-color: var(--highlight-text);
 }
 
-body:not(.light-theme) .color-input-group input[type="color"],
-body:not(.light-theme) .color-input-group input[type="text"] {
+body:not(.light-theme) .color-input-group > input[type="color"],
+body:not(.light-theme) .color-input-group > input[type="text"] {
     background: linear-gradient(
         180deg,
         rgba(255, 255, 255, 0.08),
@@ -329,9 +332,9 @@ body:not(.light-theme) .color-input-group input[type="text"] {
         inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
-body:not(.light-theme) .color-input-group input[type="text"]:hover,
-body:not(.light-theme) .color-input-group input[type="text"]:focus,
-body:not(.light-theme) .color-input-group input[type="text"]:focus-visible {
+body:not(.light-theme) .color-input-group > input[type="text"]:hover,
+body:not(.light-theme) .color-input-group > input[type="text"]:focus,
+body:not(.light-theme) .color-input-group > input[type="text"]:focus-visible {
     border-color: var(--highlight-text);
 }
 
