@@ -155,17 +155,19 @@ if (report.agentPromptInteraction !== null && report.agentPromptInteraction !== 
     assert.deepEqual(report.agentPromptInteraction, { available: true, switched: true, restored: true },
         'prompt mode Button interaction evidence must prove modular switch and original restoration');
 }
-assert.deepEqual(report.agentDisclosureInteraction, {
-    available: true,
-    count: 6,
-    before: report.agentDisclosureInteraction?.before,
-    opened: report.agentDisclosureInteraction?.opened,
-    closed: report.agentDisclosureInteraction?.closed,
-}, 'Agent disclosure interaction evidence is incomplete');
-assert.equal(report.agentDisclosureInteraction.opened.expanded, 'true');
-assert.equal(report.agentDisclosureInteraction.opened.collapsed, false);
-assert.equal(report.agentDisclosureInteraction.closed.expanded, 'false');
-assert.equal(report.agentDisclosureInteraction.closed.collapsed, true);
+assert.equal(report.agentDisclosureInteraction?.available, true, 'Agent disclosure interaction evidence is incomplete');
+assert.equal(report.agentDisclosureInteraction.count, 6, 'Agent disclosure owner count drifted');
+assert.equal(report.agentDisclosureInteraction.openedByHeader.expanded, 'true');
+assert.equal(report.agentDisclosureInteraction.openedByHeader.collapsed, false);
+assert.equal(report.agentDisclosureInteraction.closedByToggle.expanded, 'false');
+assert.equal(report.agentDisclosureInteraction.closedByToggle.collapsed, true);
+assert.equal(report.agentDisclosureInteraction.openedByKeyboard.expanded, 'true');
+assert.equal(report.agentDisclosureInteraction.openedByKeyboard.collapsed, false);
+for (const state of ['openedByHeader', 'closedByToggle', 'openedByKeyboard']) {
+    assert.equal(report.agentDisclosureInteraction[state].headerRole, null, `Disclosure header has invalid role during ${state}`);
+    assert.equal(report.agentDisclosureInteraction[state].headerTabIndex, null, `Disclosure header has invalid tabindex during ${state}`);
+    assert.equal(report.agentDisclosureInteraction[state].headerExpanded, null, `Disclosure header has invalid aria-expanded during ${state}`);
+}
 
 console.log(JSON.stringify({
     source: report.source,
