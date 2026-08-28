@@ -24,6 +24,12 @@ not add a runtime dependency and must not be imported by the Electron app.
 
 ## Comparison rules
 
+`npm run check:harness-contract-provenance` validates every `*.dom.json` and
+`*.geometry.json` boundary against the local Harness checkout, including source
+and style provenance, candidate status, and geometry token presence. A passing
+provenance gate is reference evidence only; it does not imply a VCP consumer,
+computed-style match, screenshot match, or pixel equivalence.
+
 - Keep the source geometry (height, padding, radius, gap, typography and
   hover/focus behavior) unchanged when porting a primitive.
 - Only map `--dsw-*` color/elevation aliases to VCP theme variables.
