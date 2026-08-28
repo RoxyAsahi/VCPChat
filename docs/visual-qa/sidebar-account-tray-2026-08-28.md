@@ -61,3 +61,12 @@ npm run check:agent-settings-production-evidence
 The broad `npm run check:ui-system` gate remains blocked in the current dirty
 worktree by the existing design-subtraction baseline and unrelated parallel
 changes. That failure is not attributed to this QA fixture.
+
+## Current-turn verification
+
+- `node scripts/test-electron-uiux-app-tray.mjs`: passed open/reopen/Escape,
+  focus restoration and teardown.
+- `node scripts/visual-qa-next-sidebar-account-tray.mjs`: light-theme real
+  Electron capture passed.
+- Parallel commits `75370082` and `8c3a3097` are present for tooltip scope
+  teardown and notification resize restoration.
