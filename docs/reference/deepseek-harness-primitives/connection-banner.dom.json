@@ -6,7 +6,7 @@
     "sources": ["packages/client/ui-primitives/src/ConnectionBanner.tsx", "packages/client/ui-primitives/tests/atoms.client.spec.tsx"],
     "selectionRule": "Use the pure reconnecting projection and upstream atom test as the Harness source; VCP fixture remains Candidate-only with caller-owned connection state."
   },
-  "candidateStatus": "candidate-interaction-active; source and lifecycle fixture covered, no VCP connection consumer or paired visual capture",
+  "candidateStatus": "candidate-interaction-active; fixed 800x600 VCP generated-artifact capture covers hidden/reconnecting/label-update/owner restore, no VCP connection consumer or paired Harness visual capture",
   "root": { "tag": "div", "class": "banner", "role": "status", "ariaLive": "polite" },
   "states": ["connected-hidden", "reconnecting-visible", "label-update", "dispose"],
   "owner": "caller owns reconnecting state; scope owns host restoration",
