@@ -1,0 +1,26 @@
+# Harness Equivalence Checkpoint (2026-08-28)
+
+## Verified This Round
+
+- UIUX TypeScript compilation and generated-artifact consistency pass.
+- UIUX focused tests pass (63/63 in the current tree).
+- Agent Model Picker Electron journey passes after resolving the owned portal card through the trigger `aria-controls` contract.
+- Agent Settings lifecycle stress remains stable at 474 listeners and 312 lifecycle resources, with zero detached roots/options.
+- Harness and VCP Select open-menu fixtures use the same semantic route, Chromium engine, viewport, and ROI. The current pixel report passes with 74 differing pixels / 123,580 pixels (0.05988%) and mean channel delta 0.00308 under the active 1% / 2-channel policy.
+- Visual Forensics baseline passes for light and dark themes at 800x600, 1280x800, and 1680x1000.
+- Chat-kernel consumer guard passes.
+
+## Status Boundaries
+
+The Select result proves only the open, selected, hover menu ROI. It does not prove closed-trigger, focus, disabled, reload, or full Surface equivalence. The Model Picker remains `production-consumer-active / visual-equivalence-pending`; its legacy hot/favorite/refresh behavior has not been retired.
+
+The Candidate Lab remains distinct from Stable production primitives. A primitive may advance only after a real VCP production consumer, complete interaction/lifecycle evidence, same-engine visual evidence for the relevant states, and deletion evidence for its legacy presentation path.
+
+No chat rendering, streaming, protocol, persistence, Plugin Loader, chat manifest, or composer-internal layout was changed in this checkpoint.
+
+## Next Evidence-Driven Work
+
+1. Complete Model Picker semantic DOM/group parity before attempting to retire its legacy modal.
+2. Resolve the remaining Button computed-style sampling discrepancy without guessing at legacy CSS.
+3. Continue field-level Settings single-owner migration only when the corresponding Harness DOM, geometry, interaction, reload, teardown, and legacy-deletion evidence is available.
+4. Keep Theme legacy reads and artifact-only Electron smoke as explicit open gates.
