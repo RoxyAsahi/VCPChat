@@ -212,6 +212,13 @@ Theme Electron journey 已通过：initial=`light/1`、dark=`dark/2`、reload=`l
 subscribers=`2`。主题阻断已解除；Settings 专项视觉 gate 仍需单独跑完后才能宣称
 全局最终验收完成。
 
+最新 `test-settings-wa-electron` 结果：SettingsRoot geometry、typed Field/Select
+DOM、portal stacking、category switching 保留未保存值、无重复 search layer、dark
+screenshot 与 control geometry 全部通过；window resize 因 CDP 能力缺失被跳过。最终
+仍失败于 light/dark modal background 相同（均为 `rgb(255, 255, 255)`）及一个
+`ERR_FILE_NOT_FOUND` 资源错误。该失败继续归属于并行主题/资源改动，本线程不覆盖其
+文件；Settings owner 与组件接入证据不受影响。
+
 ### G5：旧债净删除
 
 按 section 删除：
