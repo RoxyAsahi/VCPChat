@@ -200,6 +200,17 @@ Visual QA 记录：2026-08-28 的 1280×800 light 运行中，Select 采样出�
 
 ## 不作为阻塞条件
 
+## 当前完成度快照（2026-08-28）
+
+| 区域 | 状态 | 说明 |
+| --- | --- | --- |
+| G1 服务器连接 | stable-adoption | Input/Field 已接入，URL 归一化保留业务边界 |
+| G2 身份/论坛 | owner-converged | ColorPair、Forum Input 装配与重复 listener 已收口 |
+| G3 语音/高级 | owner-converged | Rust/Voice projection 与条件显隐已归 typed owner |
+| G4 内部拆分 | in-progress | 已拆 Advanced、Rust、Render、Appearance、Identity、Forum、Agent Disclosure |
+| G5 旧债净删除 | in-progress | 直接竞争 listener 已清理；业务 fallback 仍保留并有静态门禁 |
+| Electron 视觉最终验收 | blocked-by-parallel-theme | Settings 交互通过，dark/light 背景断言等待主题线程修复 |
+
 - 全量 Harness source parity；
 - 每个字段的跨页面 pixel diff；
 - Windows/packaged artifact-only 证据；
