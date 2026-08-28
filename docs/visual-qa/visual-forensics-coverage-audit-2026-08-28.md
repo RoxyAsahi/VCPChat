@@ -19,11 +19,29 @@ they do not upgrade a missing renderer capture to passing evidence.
 | Settings context deformation and cleanup | The scanner captures showcase-vs-Settings ancestry/geometry, all eight Settings sections, settings cascade, overlay containment, and post-close body style. | Passed |
 | Agent Settings DisclosureRow transition semantics | Fresh real Electron production capture `reports/vcp-agent-settings-production.json` records six mounted section owners. Header click opens the canonical section, native toggle click closes it, and Enter on the native toggle reopens it; each state records `.collapsed`, toggle `aria-expanded`, content geometry, and confirms the header carries no invalid nested-button role/tabindex/aria-expanded. `npm run check:agent-settings-production-evidence` passes. | Passed |
 | Next sidebar Account menu and App Tray | Fresh real Electron pair `reports/visual-forensics-qa/sidebar-account-tray/run-dirty/{light,dark}` covers `800x600`, `1280x800`, and `1680x1000`: account menu open/hover/focus/Escape/reopen, tray open/hover/focus/Tooltip portal/Escape/reopen, min-height and topmost hit tests, and authored cascade contracts. Both theme manifests report `gate.pass:true`. | Passed |
+| Next notification quick-actions menu | Fresh real Electron pair `reports/visual-forensics-qa/notification-menu/run-0912/{light,dark}` covers `800x600`, `1280x800`, and `1680x1000`: all seven role-backed items, generated neutral Button geometry, hover/focus, filter selected state, Escape/reopen, fixed compact-window placement, topmost hit tests, and empty body inline style after close. Both theme manifests report `gate.pass:true`. | Passed |
 | Production Agent Settings ModelPicker | Fresh isolated pair `reports/visual-forensics-qa/agent-model-picker/run-safe-top-retry/{light,dark}` passes its independent verifier at all three viewports after the portal safe-area fix. | Passed |
 | Production ModelPicker hover / resize / Escape | Each `run-safe-top-retry` capture records an enabled `role=option` with visible `:hover`, finite viewport rect, card-contained hit test, fixed/body portal after narrow and restoration, and Escape focus/body cleanup. | Passed |
 | Same-engine static Harness source-reference pixel ROI | `reports/harness-vcp-model-picker-same-engine-pixel-diff.json`: `150/35500` pixels (`0.4225%`), mean delta `0.0326`, within 1%/2 policy. | Passed for static source reference only |
 | Production-consumer-to-production pixel equivalence | No paired Harness production consumer capture exists. The static reference is explicitly `productionConsumer:false`. | Open — do not claim Stable or legacy-modal retirement |
 | Freshness after dirty worktree UI changes | Current dirty snapshot was captured in isolated pair `reports/visual-forensics-qa/run-ETzhLD/{light,dark}` after the current Showcase, component-manifest, and `main.html` worktree changes. Both manifests have three observations and `gate.pass:true`; exact-pair evidence, token contrast, and all six pixel/geometry baseline checks pass. | Passed for this snapshot; rerun after subsequent UI edits settle |
+
+## Notification menu compact-viewport regression
+
+The first real Electron capture of the newly adopted notification actions
+found a P1 compact-window defect: at light `800x600`, the open menu measured
+`x=754.9`, `width=196`, while the viewport width was only `800`; its centre
+hit-test therefore fell outside the menu. The defect was caused by the
+absolute menu resolving against a right-hand rail containing block after that
+rail had moved beyond the compact viewport. The presentation-only correction
+in `styles/ui-system/notifications.css` uses a fixed, viewport-safe placement
+under `960px`, preserving the production controller and its business actions.
+
+The post-fix pair is `notification-menu/run-0912/{light,dark}`. In both
+themes, the `800x600` record has a fixed menu at `x=596`, `width=196`,
+`right=8px`, in-viewport and topmost. It also records the filter transition to
+`aria-checked=true`, visible hover/focus, Escape focus return to
+`#nextUiNotificationMenuBtn`, reopen, and no body inline-style residue.
 
 ## Commands for exact evidence pairs
 
