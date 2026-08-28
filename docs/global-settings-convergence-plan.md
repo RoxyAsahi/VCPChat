@@ -110,6 +110,11 @@ settings-bridge-entry
 owner 生命周期与事件绑定；字段字面量仍保留在 helper 中，source-equivalence
 可继续静态追踪。该模块不建立 durable state，也不改变 Settings/IPC 协议。
 
+随后 Rust Assistant 区也完成同样的收口：
+`modules/ui-system/settings/rust-visibility.js` 负责面板显隐，typed Rust
+consumer 绑定并销毁即时响应监听；旧 `event-listeners.js` 监听仅在 typed
+service 不可用的 Classic/早期 bootstrap 路径启用，避免生产 Settings 双写。
+
 ### G5：旧债净删除
 
 按 section 删除：
