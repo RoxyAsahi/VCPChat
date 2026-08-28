@@ -7,7 +7,9 @@ const uiManager = (() => {
     // --- Private Variables ---
     let globalSettingsRef = { get: () => ({}) }; // Reference to global settings
     let electronAPI = null;
-    const themeChannel = window.VCPStateChannels?.create('theme', Object.freeze({ ready: false, effective: 'light' })) || null;
+    const themeChannel = window.VCPStateChannels?.create('theme', Object.freeze({ ready: false, preference: 'system', effective: 'light' })) || null;
+    const themeRuntime = window.VCPThemeRuntime ? new window.VCPThemeRuntime() : null;
+    let themePreference = 'system';
 
     // DOM Elements (will be initialized in init)
     let leftSidebar, rightNotificationsSidebar, resizerLeft, resizerRight;
@@ -98,9 +100,9 @@ const uiManager = (() => {
      * Applies the specified theme (light/dark) to the document body and updates the toggle button.
      * @param {string} theme - The theme to apply ('light' or 'dark').
      */
-    function applyTheme(theme) {
+    function applyTheme(theme, options = {}) {
         if (disposed) return false;
-        if (!theme || (theme !== 'light' && theme !== 'dark')) {
+        if (!theme || (theme !== 'light' && theme !== 'dark' && theme !== 'system')) {
             console.warn(`[UIManager] Invalid theme specified: ${theme}. Defaulting to system or light.`);
             // As a fallback, we'll default to light, but the initial theme should come from the main process.
             theme = 'light';
@@ -109,12 +111,21 @@ const uiManager = (() => {
         const body = document.body;
         if (!body) return false;
 
+        const preference = options.preference === 'dark' || options.preference === 'light' || options.preference === 'system'
+            ? options.preference : (theme === 'system' ? 'system' : theme);
+        if (themeRuntime) {
+            const runtimeSnapshot = themeRuntime.setPreference(preference, options.source || 'ui-manager');
+            theme = runtimeSnapshot.value.effective;
+        }
+        if (theme === 'system') {
+            theme = window.matchMedia?.('(prefers-color-scheme: dark)')?.matches ? 'dark' : 'light';
+        }
         const shouldUseLight = theme === 'light';
-        const domAlreadyApplied = body.classList.contains('light-theme') === shouldUseLight
-            && body.classList.contains('dark-theme') !== shouldUseLight;
+        const domAlreadyApplied = body.dataset.vcpTheme === theme;
         const channelState = themeChannel?.get();
         const channelAlreadyApplied = channelState?.ready === true
-            && channelState.effective === theme;
+            && channelState.effective === theme
+            && channelState.preference === preference;
 
         // setThemeMode() performs an optimistic renderer-side update and the main
         // process broadcasts the persisted value afterwards. Keep this operation
@@ -126,13 +137,13 @@ const uiManager = (() => {
         // Express the final state directly. Removing both classes before adding the
         // target class creates an avoidable unthemed intermediate style state.
         if (!domAlreadyApplied) {
-            body.classList.toggle('light-theme', shouldUseLight);
-            body.classList.toggle('dark-theme', !shouldUseLight);
+            body.dataset.vcpTheme = theme;
         }
 
         if (!channelAlreadyApplied) {
+            themePreference = preference;
             themeChannel?.publish(
-                Object.freeze({ ready: true, effective: theme }),
+                Object.freeze({ ready: true, preference, effective: theme }),
                 { source: 'ui-manager' }
             );
         }
@@ -151,8 +162,9 @@ const uiManager = (() => {
             themeDisposer = electronAPI.onThemeUpdated((theme) => {
                 if (!isCurrent(token)) return;
                 const themeName = typeof theme === 'object' && theme !== null ? theme.theme : theme;
+                const preference = typeof theme === 'object' && theme !== null ? theme.preference : undefined;
                 if (themeName) {
-                    applyTheme(themeName);
+                    applyTheme(themeName, { preference });
                 }
             });
         }
@@ -165,6 +177,8 @@ const uiManager = (() => {
             // We tell the main process to set the theme. The onThemeUpdated listener
             // above will then catch the broadcast and call applyTheme(), ensuring a single
             // consistent flow for all theme changes.
+            const preference = ['light', 'dark', 'system'].includes(settings.currentThemeMode) ? settings.currentThemeMode : 'system';
+            themePreference = preference;
             electronAPI.setTheme(settings.currentThemeMode);
         } else {
             // Fallback if the setting is not present for some reason.
@@ -555,10 +569,10 @@ const uiManager = (() => {
             console.log('uiManager initialized.');
         },
         applyTheme: applyTheme, // Expose applyTheme if needed externally
-        getThemeState: () => themeChannel?.get() || Object.freeze({ ready: true, effective: document.body.classList.contains('dark-theme') ? 'dark' : 'light' }),
+        getThemeState: () => themeChannel?.get() || Object.freeze({ ready: true, preference: themePreference, effective: document.body.dataset.vcpTheme || 'light' }),
         getThemeSnapshot: () => themeChannel?.getSnapshot?.() || Object.freeze({
             name: 'theme',
-            value: Object.freeze({ ready: true, effective: document.body.classList.contains('dark-theme') ? 'dark' : 'light' }),
+            value: Object.freeze({ ready: true, preference: themePreference, effective: document.body.dataset.vcpTheme || 'light' }),
             revision: 0,
             source: 'dom-fallback',
         }),
@@ -586,3 +600,4 @@ const uiManager = (() => {
 
 // Expose to window
 window.uiManager = uiManager;
+window.dispatchEvent?.(new Event('vcp-ui-manager-ready'));

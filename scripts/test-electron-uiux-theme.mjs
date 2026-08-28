@@ -203,11 +203,12 @@ try {
         const tooltipAnchor = [...host.querySelectorAll('button')].find(button => button.textContent === 'Hover for details');
         tooltipAnchor?.dispatchEvent(new MouseEvent('mouseenter'));
         await new Promise(resolve => setTimeout(resolve, 140));
-        const tooltipBubble = host.querySelector('.vcp-harness-tooltip-bubble[role="tooltip"]');
+        // Tooltip is a body-owned portal; the anchor remains in the lab host.
+        const tooltipBubble = document.querySelector('.vcp-harness-tooltip-bubble[role="tooltip"]');
         result.tooltipOpen = tooltipBubble?.textContent === 'Open workspace details';
         result.tooltipSide = tooltipBubble?.getAttribute('data-side') || '';
         tooltipAnchor?.dispatchEvent(new MouseEvent('mouseleave'));
-        result.tooltipClosed = !host.querySelector('.vcp-harness-tooltip-bubble');
+        result.tooltipClosed = !document.querySelector('.vcp-harness-tooltip-bubble');
         const hoverRoot = [...host.querySelectorAll('.vcp-harness-hover-card-root')].find(node => node.textContent?.includes('Workspace path'));
         hoverRoot?.dispatchEvent(new PointerEvent('pointerenter'));
         await new Promise(resolve => setTimeout(resolve, 140));
@@ -288,6 +289,18 @@ try {
         errorToggleBtn?.click();
         result.agentPresetSeatErrorTitle = seatButton?.getAttribute('title') || '';
         errorToggleBtn?.click();
+        const languageTrigger = host.querySelector('.vcp-harness-language-row-selector');
+        result.languageRowMounted = Boolean(languageTrigger)
+            && languageTrigger?.getAttribute('aria-haspopup') === 'menu'
+            && languageTrigger?.textContent?.includes('English') === true;
+        languageTrigger?.click();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const languageMenu = document.querySelector('.vcp-harness-menu-list.vcp-harness-menu-portal');
+        result.languageRowOpen = languageTrigger?.getAttribute('aria-expanded') === 'true'
+            && Boolean(languageMenu?.querySelector('[role="menuitem"]'));
+        [...(languageMenu?.querySelectorAll('[role="menuitem"]') || [])]
+            .find(item => item.textContent === 'Simplified Chinese')?.click();
+        result.languageRowSelected = languageTrigger?.textContent?.includes('Simplified Chinese') === true;
         await release();
         result.restored = host.childNodes.length === 0;
         result.scopeActive = scope.active;
@@ -296,7 +309,7 @@ try {
     });
     assert.deepEqual(candidateLabBoundary, {
         maturity: 'candidate',
-        buttons: 16,
+        buttons: 17,
         input: true,
         field: true,
         select: true,
@@ -358,6 +371,9 @@ try {
         agentPresetSeatClosedAfterPick: true,
         agentPresetSeatBusyDisabled: true,
         agentPresetSeatErrorTitle: 'Could not stage the preset. Try again.',
+        languageRowMounted: true,
+        languageRowOpen: true,
+        languageRowSelected: true,
         restored: true,
         scopeActive: true,
     }, `generated Harness Candidate Lab mismatch: ${JSON.stringify(candidateLabBoundary)}`);
@@ -1059,7 +1075,15 @@ try {
         popup.open('model', { fixture: true }, { via: 'enter', token: '/model' });
         await new Promise(resolve => setTimeout(resolve, 0));
         const cardStyle = getComputedStyle(view.card);
-        const rows = [...view.card.querySelectorAll('[role="option"]')].map(row => ({ label: row.querySelector('.vcp-harness-popup-select-label')?.textContent ?? '', selected: row.getAttribute('aria-selected') }));
+        const rows = [...view.card.querySelectorAll('[role="option"]')].map(row => ({
+            // The non-grouped row keeps detail text beside the label in the
+            // same copy span; assert the semantic label node, not its full
+            // rendered copy.
+            label: row.querySelector('.vcp-harness-popup-select-label')?.firstElementChild?.textContent
+                ?? row.querySelector('.vcp-harness-popup-select-label')?.textContent
+                ?? '',
+            selected: row.getAttribute('aria-selected'),
+        }));
         window.__harnessCandidatePopupSelect = { host, scope, popup, view, focusTarget, selected, consumed, get focused() { return focused; } };
         return {
             viewport: { width: innerWidth, height: innerHeight, deviceScaleFactor: devicePixelRatio },
@@ -1211,11 +1235,26 @@ try {
             subscribers: theme?.subscribers ?? null,
         };
     });
+    try {
+        await page.waitForFunction(() => /^(light|dark)$/.test(document.querySelector('.next-ui-account-dock')?.dataset.themeEffective || ''), { timeout });
+    } catch (error) {
+        const diagnostic = await page.evaluate(() => ({
+            dock: Boolean(document.querySelector('.next-ui-account-dock')),
+            bodyTheme: document.body?.dataset.vcpTheme || null,
+            manager: Boolean(window.uiManager),
+            managerSnapshot: window.uiManager?.getThemeSnapshot?.() || null,
+            presenterFlag: Boolean(window.__vcpDocumentThemePresenterMounted),
+            subscribers: window.VCPStateChannels?.diagnostics?.().find(item => item.name === 'theme')?.subscribers ?? null,
+        }));
+        throw new Error(`Theme presenter did not reach projection: ${JSON.stringify(diagnostic)}; ${error.message}`);
+    }
     const initial = await readBoundary();
     assert.deepEqual(initial.provider, true);
     assert.ok(['light', 'dark'].includes(initial.projection), `typed theme projection missing: ${JSON.stringify(initial)}`);
     assert.equal(initial.ready, 'true');
     assert.ok(Number.isInteger(Number(initial.revision)), `typed theme revision missing: ${JSON.stringify(initial)}`);
+    // The document-level presenter is the sole global DOM owner; only the
+    // Web Awesome adapter remains as a separate token consumer.
     assert.equal(initial.subscribers, 2, `unexpected theme subscriber ledger: ${JSON.stringify(initial)}`);
 
     await page.evaluate(() => window.uiManager.applyTheme('dark'));
