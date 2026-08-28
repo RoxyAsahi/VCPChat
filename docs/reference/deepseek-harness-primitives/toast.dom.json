@@ -9,7 +9,7 @@
     ],
     "selectionRule": "Use the Harness body-portal alert and timed animation contract; production consumers remain outside this Candidate slice."
   },
-  "candidateStatus": "candidate-interaction-active; paired same-semantic Harness/VCP pixel capture pending",
+  "candidateStatus": "candidate-interaction-active; fixed 800x600 same-engine source/Candidate DOM/ARIA, anchor-resize, teardown and strict same-semantic ROI evidence recorded; no VCP production consumer",
   "productionConsumers": [
     "packages/client/ui-conversation/src/client/skeleton/InputBar.tsx",
     "packages/client/ui-model-selection/src/client/ModelSelect.tsx"

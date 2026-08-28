@@ -330,6 +330,22 @@ test('ConnectionBanner Candidate capture records DOM, geometry, states, and tear
     assert.equal(report.ownerRegistrations, 1);
 });
 
+test('Real Harness Toast source capture records portal, resize, teardown, and strict ROI evidence', () => {
+    execFileSync(process.execPath, ['scripts/capture-harness-toast-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/capture-vcp-toast-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-toast-roi-pixels.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-toast-source.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-toast-source-diff.json'), 'utf8'));
+    assert.equal(report.semanticFixture.pass, true);
+    assert.equal(Object.values(report.domAria).every(item => item.pass), true);
+    assert.equal(report.computedStyle.pass, true);
+    assert.equal(Object.values(report.interaction).every(item => item.pass), true);
+    assert.equal(report.pixel.status, 'strict-roi-measured');
+    assert.equal(report.pixel.comparable, true);
+    assert.equal(report.pixel.pass, true);
+    assert.equal(report.pass, false, 'Candidate evidence does not create a production consumer');
+});
+
 test('Real Harness ConnectionBanner source capture records projection, style, and ARIA boundaries', () => {
     execFileSync(process.execPath, ['scripts/capture-harness-connection-banner-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
     execFileSync(process.execPath, ['scripts/capture-vcp-connection-banner-candidate.mjs'], { cwd: root, stdio: 'pipe' });

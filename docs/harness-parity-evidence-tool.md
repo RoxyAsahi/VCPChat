@@ -121,6 +121,12 @@ Candidate, while native-tag and display-style differences remain explicit. A
 strict decoded-RGB fixture comparison is now recorded separately; it cannot
 erase those DOM/style boundaries or the lack of a production consumer.
 
+Toast now has a fixed same-engine source/Candidate capture for the body portal,
+`role=alert`, hidden icon, anchor-center placement, resize remeasurement, and
+unmount/dispose boundary. Its computed-style fields and strict decoded-RGB ROI
+currently match exactly; that component-scoped result does not promote the
+Candidate Lab primitive to production because no VCP Toast consumer is wired.
+
 ConnectionBanner now has a real-source capture for hidden, reconnecting, label
 update, and unmount. The fixed-layout computed styles align with the Candidate,
 while its Candidate-only `role=status` and `aria-live=polite` addition is kept
