@@ -673,7 +673,11 @@ async function cycleAgentSettings(page, label, { expectEnhanced = true } = {}) {
                     trigger.focus();
                     trigger.click();
                     await new Promise(resolve => setTimeout(resolve, 30));
-                    const card = root.querySelector('.vcp-harness-popup-select-card');
+                    // ModelPicker cards may be portaled to document.body. Resolve
+                    // the owned card through the trigger's explicit aria-controls
+                    // contract instead of assuming it remains under the form.
+                    const cardId = trigger.getAttribute('aria-controls');
+                    const card = cardId ? document.getElementById(cardId) : null;
                     const modelCell = [...(card?.querySelectorAll('.vcp-harness-agent-model-picker-cell') || [])]
                         .find(node => node.textContent?.includes('Model'));
                     const opened = trigger.getAttribute('aria-expanded') === 'true'
