@@ -148,6 +148,39 @@ unreachable local model endpoint, and unavailable Rust sidecar. The scan still
 rendered the target surfaces and every visual gate passed; these environment
 messages are not classified as visual failures.
 
+## Fresh isolated production ModelPicker run
+
+The production Agent Settings probe also completed a separate paired Electron
+run at:
+
+```text
+reports/visual-forensics-qa/agent-model-picker/run-PVaBFj/light
+reports/visual-forensics-qa/agent-model-picker/run-PVaBFj/dark
+```
+
+Its light manifest was generated at `2026-08-28T03:44:21.973Z`; dark was
+generated at `2026-08-28T03:52:35.413Z`. Both contain all three fixed
+viewports and `gate.pass:true`. Running
+
+```sh
+node scripts/check-visual-qa-agent-model-picker.mjs \
+  reports/visual-forensics-qa/agent-model-picker/run-PVaBFj/light \
+  reports/visual-forensics-qa/agent-model-picker/run-PVaBFj/dark
+```
+
+passed. For every one of the six captures, the ModelPicker card is fixed and
+body-portalized after narrow resize and restoration, fully in viewport and
+topmost at its center. An enabled production `role="option"` has visible
+`:hover`, finite in-viewport geometry, and a card-contained hit test; light
+records `rgba(0,0,0,.04)` while dark records `rgba(255,255,255,.08)`. Escape
+removes the card, resets `aria-expanded`, restores focus to
+`#openModelSelectBtn`, and leaves no body inline style.
+
+This run encountered a transient CDP setup stall during its dark leg. It
+eventually completed successfully, and `28aa16c2` now bounds CDP connect/page
+enumeration so a future recurrence produces a terminal QA manifest and cleanup
+rather than an unbounded runner.
+
 ## Required Next Probe
 
 Before any Stable or pixel-equivalent claim:

@@ -56,6 +56,8 @@ Each listed Candidate capture is now checked against its matching reference
 contract and its indispensable interaction/teardown fields. A missing or
 truncated report makes the ledger `paired-evidence-incomplete`; passing that
 schema only proves the isolated Candidate baseline, never a Harness/VCP pair.
+StateDot's four-state, phase, resize, and disposal capture participates in the
+same guard; it cannot be silently dropped from the Candidate inventory.
 
 `node scripts/check-harness-candidate-source-provenance.mjs` is a source-drift
 guard for Tooltip and HoverCard. It records the current Harness source/style
@@ -63,6 +65,30 @@ SHA-256 values and verifies critical source anchors (portal, trigger, copy and
 dispose semantics) against the reference contract and replayable Candidate
 capture. A pass is provenance evidence only, not a visual or consumer parity
 promotion.
+
+StateDot is covered by the same source-drift guard, including its aria-hidden
+four-state branch, crisp-edge SVG matrix, eight phase delays, halo/core CSS,
+and replayable Candidate fixture.
+
+`capture-harness-tooltip-source-fixture.mjs` executes the real Harness
+`Tooltip.tsx` through a temporary Vite module in Chromium. Its paired diff with
+the VCP Candidate deliberately reports a structural mismatch: Harness keeps
+the bubble in the anchor parent's React fragment while VCP appends it to
+`body`. The matching semantic role/side and computed-style fields do not erase
+that mismatch; pixel comparison remains pending.
+
+The HoverCard source fixture executes its real Harness component with the same
+delayed/copy semantic fixture. Its DOM/ARIA and captured style fields match the
+Candidate, while anchor-root geometry does not (`Harness` source root is sized
+by its inline anchor; the Candidate fixture exposes a distinct wrapper basis).
+The report keeps geometry and ROI pixel evidence pending rather than inferring
+visual equivalence from the matching card box styles.
+
+StateDot now has the same real-source capture lane. Its four states, ARIA,
+10px geometry, semantic colors, and eight ongoing animation phases are
+compared; the report records the observed `block` (Harness fixture) versus
+`inline-block` (Candidate) display difference and retains pixel evidence as
+pending.
 
 The Tooltip Candidate capture replays the source-contract state matrix in a
 standalone Electron Chromium page: delayed hover, immediate focus, bottom-to-top

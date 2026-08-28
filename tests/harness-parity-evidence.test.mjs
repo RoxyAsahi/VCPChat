@@ -142,9 +142,9 @@ test('Paired evidence ledger keeps Candidate captures and blocked boundaries exp
     assert.equal(report.status, 'paired-evidence-scoped');
     assert.equal(report.pass, false);
     assert.equal(report.counts.pairedRoiPasses, 1);
-    assert.equal(report.counts.vcpCandidateCaptures, 6);
+    assert.equal(report.counts.vcpCandidateCaptures, 7);
     assert.equal(report.counts.candidateCaptureMissing, 0);
-    assert.equal(report.counts.candidateContractPasses, 6);
+    assert.equal(report.counts.candidateContractPasses, 7);
     assert.equal(report.counts.candidateContractMissing, 0);
     assert.equal(report.pairedSelect.state, 'paired-roi-pass');
     assert.ok(report.pairedSelect.missingEvidence.includes('closed trigger'));
@@ -188,9 +188,48 @@ test('Tooltip and HoverCard Candidate baselines remain anchored to real Harness 
     const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-candidate-source-provenance.json'), 'utf8'));
     assert.equal(report.status, 'candidate-source-provenance-complete');
     assert.equal(report.pass, true);
-    assert.deepEqual(report.entries.map(item => item.name), ['tooltip', 'hover-card']);
+    assert.deepEqual(report.entries.map(item => item.name), ['tooltip', 'hover-card', 'state-dot']);
     assert.equal(report.entries.every(item => item.referencePass && item.capturePass && item.pass), true);
     assert.equal(report.entries.every(item => item.source.sha256 && item.style.sha256), true);
+});
+
+test('Real Harness Tooltip source capture exposes the VCP Candidate portal structural mismatch', () => {
+    execFileSync(process.execPath, ['scripts/capture-harness-tooltip-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/capture-vcp-tooltip-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-tooltip-source.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-tooltip-source-diff.json'), 'utf8'));
+    assert.equal(report.semanticFixture.pass, true);
+    assert.equal(report.dom.role.pass, true);
+    assert.equal(report.dom.side.pass, true);
+    assert.equal(report.computedStyle.pass, true);
+    assert.equal(report.structuralPass, false);
+    assert.equal(report.pass, false);
+    assert.equal(report.pixel.status, 'pending-roi-diff');
+});
+
+test('Real Harness HoverCard source capture retains the Candidate geometry and pixel boundaries', () => {
+    execFileSync(process.execPath, ['scripts/capture-harness-hover-card-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/capture-vcp-hover-card-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-hover-card-source.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-hover-card-source-diff.json'), 'utf8'));
+    assert.equal(report.semanticFixture.pass, true);
+    assert.equal(report.structuralPass, true);
+    assert.equal(report.computedStyle.pass, true);
+    assert.equal(report.geometry.pass, false);
+    assert.equal(report.pass, false);
+    assert.equal(report.pixel.status, 'pending-roi-diff');
+});
+
+test('Real Harness StateDot source capture retains the Candidate display and pixel boundaries', () => {
+    execFileSync(process.execPath, ['scripts/capture-harness-state-dot-source-fixture.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/capture-vcp-state-dot-candidate.mjs'], { cwd: root, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/diff-harness-vcp-state-dot-source.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-vcp-state-dot-source-diff.json'), 'utf8'));
+    assert.equal(report.semanticFixture.pass, true);
+    assert.equal(report.domAriaPass, true);
+    assert.equal(report.colorPass, true);
+    assert.equal(report.computedStylePass, false);
+    assert.equal(report.pixel.status, 'pending-roi-diff');
 });
 
 test('Harness capture prerequisites follow the real pnpm workspace resolver', () => {
