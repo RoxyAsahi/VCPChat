@@ -559,7 +559,10 @@ export function setupEventListeners(deps) {
         }
 
         if (!modal.dataset.globalSettingsControlsBound) {
-            setupColorSyncListeners();
+            // Generated ColorPair owns the production mirror listeners. Keep
+            // the legacy binder only for bootstrap environments without the
+            // UIUX artifact, avoiding duplicate writes in the real surface.
+            if (!window.VCPUIUX?.mountColorPair) setupColorSyncListeners();
             setupRustAssistantConfigListeners();
             modal.dataset.globalSettingsControlsBound = 'true';
         }
