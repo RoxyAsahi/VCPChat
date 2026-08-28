@@ -21,6 +21,7 @@ const output = path.resolve(process.env.VCPCHAT_SIDEBAR_ACCOUNT_TRAY_QA_OUTPUT
   || path.join(root, 'reports/visual-forensics-qa/sidebar-account-tray', theme));
 const viewports = [[800, 600], [1280, 800], [1680, 1000]];
 const timeout = 60_000;
+const resizeProbe = process.env.VCPCHAT_ACCOUNT_MENU_RESIZE_PROBE === '1';
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const styleFile = new URL('../styles/ui-system/sidebar.css', import.meta.url);
 const request = url => new Promise((resolve, reject) => http.get(url, response => {
@@ -89,6 +90,18 @@ try {
     assert.ok(account.items.every(item => item.harnessButton), `${name}: Account actions lost generated Harness Button presentation: ${JSON.stringify(account.items)}`);
     assert.ok(account.menu?.inViewport && account.topmostFirstItem, `${name}: account menu is clipped or occluded: ${JSON.stringify(account.menu)}`);
     assert.ok(account.items.every(item => Number.parseFloat(item.minHeight) >= 36), `${name}: sidebar CSS reduced a menu item below 36px: ${JSON.stringify(account.items)}`);
+    let accountResizeProbe = null;
+    if (resizeProbe && width === 800) {
+      await page.setViewport({ width: 680, height, deviceScaleFactor: 1 }); await sleep(100);
+      accountResizeProbe = await page.$eval('#nextUiAccountMenu', node => {
+        const r = node.getBoundingClientRect();
+        const ancestors = []; let current = node.parentElement;
+        while (current && ancestors.length < 6) { const s = getComputedStyle(current); ancestors.push({ id: current.id, className: current.className, position: s.position, transform: s.transform, rect: (() => { const b = current.getBoundingClientRect(); return { x: b.x, y: b.y, width: b.width, height: b.height }; })() }); current = current.parentElement; }
+        return { viewport: { width: innerWidth, height: innerHeight }, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, clippedLeft: r.left < 0, clippedRight: r.right > innerWidth, ancestors };
+      });
+      await page.screenshot({ path: path.join(output, '800x600-account-resize-680.png'), fullPage: false });
+      await page.setViewport({ width, height, deviceScaleFactor: 1 }); await sleep(100);
+    }
     await page.hover('#nextUiAccountAppearanceStudioBtn'); await sleep(40);
     const accountHover = await page.$eval('#nextUiAccountAppearanceStudioBtn', node => ({ hovered: node.matches(':hover'), backgroundColor: getComputedStyle(node).backgroundColor, color: getComputedStyle(node).color }));
     await page.$eval('#nextUiAccountAppearanceStudioBtn', node => node.focus());
@@ -142,7 +155,7 @@ try {
     await page.waitForFunction(() => document.getElementById('appTrayDrawer')?.classList.contains('active'), { timeout });
     const trayReopen = await page.evaluate(() => ({ active: document.getElementById('appTrayDrawer')?.classList.contains('active') || false, itemCount: document.querySelectorAll('#appTrayDrawerGrid .app-tray-drawer-item').length }));
     await page.keyboard.press('Escape');
-    evidence.captures.push({ viewport: { width, height }, account: { open: account, hover: accountHover, focus: accountFocus, closed: accountClosed, reopen: accountReopen }, tray: { open: tray, hover: trayHover, tooltip, closed: trayClosed, reopen: trayReopen } });
+    evidence.captures.push({ viewport: { width, height }, account: { open: account, resizeProbe: accountResizeProbe, hover: accountHover, focus: accountFocus, closed: accountClosed, reopen: accountReopen }, tray: { open: tray, hover: trayHover, tooltip, closed: trayClosed, reopen: trayReopen } });
   }
 } catch (error) {
   evidence.gate.pass = false; evidence.gate.failures.push(error?.stack || String(error)); process.exitCode = 2;
