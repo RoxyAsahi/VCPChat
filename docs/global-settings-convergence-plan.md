@@ -73,6 +73,16 @@ tests、artifact consistency 和 `test-settings-wa-electron.mjs` 全部通过。
 - 保留能力发现、失败状态和条件显示；
 - `topicSummaryModel` 和复杂模型 picker 暂不收口。
 
+### G3 审计结果（2026-08-28）
+
+语音模式已由 generated Choice 接管，浏览器路径、识别页路径、本地/网络
+URL 与 Key 已由 generic generated Input 接管；现有测试覆盖 snapshot 投影、
+条件显示和 reload 恢复。未发现第二套语音 listener 或可安全删除的独立
+projection，因此本批不做空转改动，保留现有业务 capability 与默认值语义。
+
+G2 身份颜色镜像的 6 个 ambient listener 已在提交 `2a69fb01` 删除；该结果
+作为后续 section ownership 拆分的参考实现。
+
 ### G4：section controller 拆分
 
 将过宽的 `settings-bridge.js` 逐步拆为内部模块：
