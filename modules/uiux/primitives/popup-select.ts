@@ -435,13 +435,16 @@ export function mountPopupSelectView(host: HTMLElement, props: PopupSelectViewPr
                 copy.append(detail);
             }
             row.append(copy);
-            if (option.active === true) {
+            // Harness ModelSelect keeps the trailing `.check` slot on every
+            // menuitemradio. The selected row fills it with IconCheckOutline16;
+            // unselected rows retain the same 18px flex reservation.
+            if (option.active === true || (grouped && optionRole === 'menuitemradio')) {
                 const check = document.createElement('span');
                 check.className = optionRole === 'menuitemradio' ? 'vcp-harness-popup-select-option-check' : 'vcp-harness-popup-select-check';
                 check.setAttribute('aria-hidden', 'true');
-                if (grouped && optionRole === 'menuitemradio') {
+                if (option.active === true && grouped && optionRole === 'menuitemradio') {
                     mountHarnessModelSelectCheck(check);
-                } else {
+                } else if (option.active === true) {
                     mountSemanticIcon(check, { name: 'check', size: 16 }, nextRowsScope.child('harness-popup-select-check'));
                 }
                 row.append(check);
