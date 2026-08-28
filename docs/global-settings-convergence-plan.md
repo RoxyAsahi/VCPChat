@@ -83,6 +83,13 @@ projection，因此本批不做空转改动，保留现有业务 capability 与�
 G2 身份颜色镜像的 6 个 ambient listener 已在提交 `2a69fb01` 删除；该结果
 作为后续 section ownership 拆分的参考实现。
 
+本轮补充收口高级区的条件显示：context sanitizer、middle-click quick action、
+advanced action 与 regenerate confirmation 的即时显隐现在由同一个 typed
+field owner 统一处理，并随 Settings presentation scope 销毁；
+`event-listeners.js` 中对应的 5 个重复绑定已删除。`middleClickAdvancedDelay`
+的 1000ms 归一化仍保留在兼容监听中，因为 message/renderer 业务读取依赖该
+边界，待后续把校验迁入字段 owner 后再退役。
+
 ### G4：section controller 拆分
 
 将过宽的 `settings-bridge.js` 逐步拆为内部模块：
@@ -107,6 +114,9 @@ settings-bridge-entry
 - 重复 listener、observer、timer 和 disposer；
 - 无调用方 helper 与死 projection；
 - 只为旧 bridge 保留的 fallback。
+
+2026-08-28 增量：高级区条件显示的旧 ambient listeners 已净删除；延迟值校验
+明确记录为业务边界债务，暂不为视觉收口而改动。
 
 ## 不作为阻塞条件
 

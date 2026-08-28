@@ -1132,41 +1132,6 @@ export function setupEventListeners(deps) {
 
     {
         const enableMiddleClickCheckbox = document.getElementById('enableMiddleClickQuickAction');
-        const middleClickContainer = document.getElementById('middleClickQuickActionContainer');
-        const middleClickAdvancedContainer = document.getElementById('middleClickAdvancedContainer');
-
-        if (enableMiddleClickCheckbox && middleClickContainer && middleClickAdvancedContainer) {
-            enableMiddleClickCheckbox.addEventListener('change', () => {
-                const isEnabled = enableMiddleClickCheckbox.checked;
-                middleClickContainer.style.display = isEnabled ? 'block' : 'none';
-                middleClickAdvancedContainer.style.display = isEnabled ? 'block' : 'none';
-            });
-        }
-
-        const enableMiddleClickAdvancedCheckbox = document.getElementById('enableMiddleClickAdvanced');
-        const middleClickAdvancedSettings = document.getElementById('middleClickAdvancedSettings');
-
-        if (enableMiddleClickAdvancedCheckbox && middleClickAdvancedSettings) {
-            enableMiddleClickAdvancedCheckbox.addEventListener('change', () => {
-                middleClickAdvancedSettings.style.display = enableMiddleClickAdvancedCheckbox.checked ? 'block' : 'none';
-            });
-        }
-
-        const middleClickQuickActionSelect = document.getElementById('middleClickQuickAction');
-        const regenerateConfirmationContainer = document.getElementById('regenerateConfirmationContainer');
-
-        if (enableMiddleClickCheckbox && middleClickQuickActionSelect && regenerateConfirmationContainer) {
-            const updateRegenerateConfirmationVisibility = () => {
-                const isMiddleClickEnabled = enableMiddleClickCheckbox.checked;
-                const selectedAction = middleClickQuickActionSelect.value;
-                const shouldShowConfirmation = isMiddleClickEnabled && selectedAction === 'regenerate';
-                regenerateConfirmationContainer.style.display = shouldShowConfirmation ? 'block' : 'none';
-            };
-            updateRegenerateConfirmationVisibility();
-            enableMiddleClickCheckbox.addEventListener('change', updateRegenerateConfirmationVisibility);
-            middleClickQuickActionSelect.addEventListener('change', updateRegenerateConfirmationVisibility);
-        }
-
         const middleClickAdvancedDelayInput = document.getElementById('middleClickAdvancedDelay');
         if (middleClickAdvancedDelayInput) {
             middleClickAdvancedDelayInput.addEventListener('input', (e) => {
@@ -1472,12 +1437,6 @@ export function setupEventListeners(deps) {
     if (agentSearchInput) {
         agentSearchInput.addEventListener('input', (e) => {
             filterAgentList(e.target.value);
-        });
-    }
-
-    if (enableContextSanitizerCheckbox && contextSanitizerDepthContainer) {
-        enableContextSanitizerCheckbox.addEventListener('change', () => {
-            contextSanitizerDepthContainer.style.display = enableContextSanitizerCheckbox.checked ? 'block' : 'none';
         });
     }
 

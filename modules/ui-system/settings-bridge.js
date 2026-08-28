@@ -1559,6 +1559,31 @@ function mountTypedFieldOwner(root, form) {
             }
         }
     };
+    // Conditional rows are presentation-owned. Keep their immediate response
+    // local to this Settings owner so the ambient event-listeners module does
+    // not compete with snapshot projection or survive modal teardown.
+    const syncConditionalRows = () => {
+        const sanitizerToggle = form.querySelector('#enableContextSanitizer');
+        const sanitizerContainer = form.querySelector('#contextSanitizerDepthContainer');
+        if (sanitizerContainer) sanitizerContainer.style.display = sanitizerToggle?.checked ? 'block' : 'none';
+        const middleClickToggle = form.querySelector('#enableMiddleClickQuickAction');
+        const middleClickContainer = form.querySelector('#middleClickQuickActionContainer');
+        const middleClickAdvancedContainer = form.querySelector('#middleClickAdvancedContainer');
+        const advancedToggle = form.querySelector('#enableMiddleClickAdvanced');
+        const advancedSettings = form.querySelector('#middleClickAdvancedSettings');
+        if (middleClickContainer) middleClickContainer.style.display = middleClickToggle?.checked ? 'block' : 'none';
+        if (middleClickAdvancedContainer) middleClickAdvancedContainer.style.display = middleClickToggle?.checked ? 'block' : 'none';
+        if (advancedSettings) advancedSettings.style.display = advancedToggle?.checked ? 'block' : 'none';
+        const quickAction = form.querySelector('#middleClickQuickAction');
+        const regenerateConfirmation = form.querySelector('#regenerateConfirmationContainer');
+        if (regenerateConfirmation) regenerateConfirmation.style.display = middleClickToggle?.checked && quickAction?.value === 'regenerate' ? 'block' : 'none';
+    };
+    syncConditionalRows();
+    ['change', 'input'].forEach(type => {
+        const onChange = () => syncConditionalRows();
+        form.addEventListener(type, onChange);
+        state.cleanups.push(() => form.removeEventListener(type, onChange));
+    });
     const status = () => root.querySelector('.vcp-settings-autosave-status');
     const publish = (success, error = '') => {
         form.dispatchEvent(new CustomEvent('vcp-settings-save-result', { detail: { success, error: error || undefined, owner: 'typed-settings-field-owner' } }));
