@@ -207,3 +207,12 @@ test('PlanChip reference audit preserves projection and geometry provenance', ()
     assert.equal(report.candidateStatus, 'source-only frozen Composer plan slot; no VCP consumer or paired visual capture');
     assert.ok(report.evidenceGaps.includes('no VCP Composer consumer'));
 });
+
+test('JsonTree reference audit preserves tree semantics and geometry provenance', () => {
+    execFileSync(process.execPath, ['scripts/check-harness-json-tree-reference.mjs'], { cwd: root, stdio: 'pipe' });
+    const report = JSON.parse(fs.readFileSync(path.join(root, 'reports/harness-json-tree-reference.json'), 'utf8'));
+    assert.equal(report.domContract, true);
+    assert.equal(report.cssGeometry, '33/33');
+    assert.equal(report.candidateStatus, 'source-only frozen trajectory/tool inspection; no VCP structured-message consumer or paired visual capture');
+    assert.ok(report.evidenceGaps.includes('no VCP structured-message consumer'));
+});
