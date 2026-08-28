@@ -281,6 +281,8 @@ try {
         const node = document.querySelector('.vcp-harness-tooltip-bubble') || document.querySelector('[role="tooltip"]');
         if (!node) return { open: false, rect: null };
         const r = node.getBoundingClientRect(); const s = getComputedStyle(node);
+        const point = { x: Math.max(0, Math.min(innerWidth - 1, r.x + r.width / 2)), y: Math.max(0, Math.min(innerHeight - 1, r.y + r.height / 2)) };
+        const topmost = document.elementFromPoint(point.x, point.y);
         const anchor = [...document.querySelectorAll('.vcp-harness-primitive-lab button')].find(button => button.textContent.trim() === 'Hover for details');
         const ar = anchor?.getBoundingClientRect();
         const ancestors = [];
@@ -293,7 +295,11 @@ try {
         }
         const bodyStyle = getComputedStyle(document.body);
         const htmlStyle = getComputedStyle(document.documentElement);
-        return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: s.position, zIndex: s.zIndex, parent: node.parentElement?.className || '', side: node.getAttribute('data-side') || '', inline: { left: node.style.left, top: node.style.top, transform: node.style.transform }, anchor: ar ? { x: ar.x, y: ar.y, width: ar.width, height: ar.height } : null, scrollAncestors: ancestors, body: { transform: bodyStyle.transform, position: bodyStyle.position, top: bodyStyle.top, overflow: bodyStyle.overflow }, html: { transform: htmlStyle.transform, position: htmlStyle.position, overflow: htmlStyle.overflow } };
+        const topmostAncestry = [];
+        for (let current = topmost; current && topmostAncestry.length < 8; current = current.parentElement) {
+          topmostAncestry.push({ tag: current.tagName?.toLowerCase() || '', id: current.id || '', className: typeof current.className === 'string' ? current.className : '' });
+        }
+        return { open: node.getClientRects().length > 0, rect: { x: r.x, y: r.y, width: r.width, height: r.height }, position: s.position, zIndex: s.zIndex, pointerEvents: s.pointerEvents, parent: node.parentElement?.className || '', side: node.getAttribute('data-side') || '', inline: { left: node.style.left, top: node.style.top, transform: node.style.transform }, point, topmost: topmost ? { tag: topmost.tagName?.toLowerCase() || '', id: topmost.id || '', className: typeof topmost.className === 'string' ? topmost.className : '' } : null, topmostAncestry, topmostInside: Boolean(topmost && node.contains(topmost)), anchor: ar ? { x: ar.x, y: ar.y, width: ar.width, height: ar.height } : null, scrollAncestors: ancestors, body: { transform: bodyStyle.transform, position: bodyStyle.position, top: bodyStyle.top, overflow: bodyStyle.overflow }, html: { transform: htmlStyle.transform, position: htmlStyle.position, overflow: htmlStyle.overflow } };
       }).catch(() => ({ open: false, rect: null }));
       await page.mouse.move(2, 2).catch(() => {});
     } else tooltipViewport = { open: false, rect: null };
@@ -381,10 +387,14 @@ try {
         loading: document.querySelectorAll('.is-loading, [aria-busy="true"], [data-loading="true"]').length,
       };
       const stateTarget = selector => {
-        const element = [...document.querySelectorAll(selector)].find(candidate => candidate.getClientRects().length);
+        const candidates = [...document.querySelectorAll(selector)].filter(candidate => candidate.getClientRects().length);
+        const element = candidates.find(candidate => {
+          const r = candidate.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight;
+        }) || candidates[0];
         if (!element) return null;
         const r = element.getBoundingClientRect(); const s = getComputedStyle(element);
-        return { tag: element.tagName.toLowerCase(), id: element.id || '', className: typeof element.className === 'string' ? element.className : '', rect: { x: r.x, y: r.y, width: r.width, height: r.height }, display: s.display, position: s.position, color: s.color, backgroundColor: s.backgroundColor, borderRadius: s.borderRadius, padding: s.padding, outline: s.outline, boxShadow: s.boxShadow };
+        return { tag: element.tagName.toLowerCase(), id: element.id || '', className: typeof element.className === 'string' ? element.className : '', rect: { x: r.x, y: r.y, width: r.width, height: r.height }, inViewport: r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight, display: s.display, position: s.position, color: s.color, backgroundColor: s.backgroundColor, borderRadius: s.borderRadius, padding: s.padding, outline: s.outline, boxShadow: s.boxShadow };
       };
       const stateTargets = {
         disabled: stateTarget(':disabled, .is-disabled, [aria-disabled="true"]'),
@@ -416,6 +426,34 @@ try {
       return { url: location.href, surface: document.querySelector('.vcp-ui-showcase-root') ? 'component-showcase' : 'main', uiMode: document.documentElement.dataset.uiMode || '', theme: document.documentElement.dataset.theme || document.documentElement.dataset.themeMode || '', bodyClass: document.body.className, themeTokens, scroll: { x: document.documentElement.scrollWidth, y: document.documentElement.scrollHeight, clientWidth: document.documentElement.clientWidth, clientHeight: document.documentElement.clientHeight }, controls: rects, portals, stateCounts, stateTargets, focused, cascade: cascade(focusTarget), dom: { bodyLength: document.body.innerHTML.length, classes: [...document.body.classList], inlineStyle: document.body.getAttribute('style') || '', rootTree: tree(document.querySelector('.vcp-ui-showcase-root')) }, overlap, overlapPairs };
     });
     initial.cdpCascade = await captureMatchedRules('#toggleSidebarModeBtn');
+    const captureViewportState = async (state, selector) => {
+      const selected = await page.evaluate(({ selector }) => {
+        const candidates = [...document.querySelectorAll(selector)].filter(candidate => candidate.getClientRects().length);
+        const element = candidates.find(candidate => {
+          const r = candidate.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight;
+        }) || candidates[0];
+        if (!element) return false;
+        element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+        return true;
+      }, { selector }).catch(() => false);
+      if (!selected) return null;
+      await sleep(80);
+      const evidence = await page.evaluate(({ selector }) => {
+        const element = [...document.querySelectorAll(selector)].find(candidate => {
+          if (!candidate.getClientRects().length) return false;
+          const r = candidate.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight;
+        });
+        if (!element) return null;
+        const r = element.getBoundingClientRect(); const s = getComputedStyle(element);
+        return { tag: element.tagName.toLowerCase(), id: element.id || '', className: typeof element.className === 'string' ? element.className : '', rect: { x: r.x, y: r.y, width: r.width, height: r.height }, inViewport: true, display: s.display, position: s.position, color: s.color, backgroundColor: s.backgroundColor, borderRadius: s.borderRadius, padding: s.padding, outline: s.outline, boxShadow: s.boxShadow };
+      }, { selector }).catch(() => null);
+      await page.screenshot({ path: path.join(output, `${name}-${state}.png`), fullPage: false });
+      return evidence;
+    };
+    initial.stateTargets.disabled = await captureViewportState('disabled', ':disabled, .is-disabled, [aria-disabled="true"]');
+    initial.stateTargets.selected = await captureViewportState('selected', '.is-selected, [aria-selected="true"], [data-selected="true"], [aria-checked="true"]');
     const stateTarget = await page.$('.vcp-harness-primitive-lab button:not([disabled])');
     if (stateTarget) {
       await stateTarget.hover().catch(() => {});

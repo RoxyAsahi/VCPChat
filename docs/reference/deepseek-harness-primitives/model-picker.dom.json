@@ -1,5 +1,15 @@
 {
   "source": "packages/client/ui-model-selection/src/client/ModelSelect.tsx",
+  "sourceKind": "harness-composite-source-only",
+  "provenance": {
+    "sources": [
+      "packages/client/ui-model-selection/src/client/ModelSelect.tsx",
+      "packages/client/ui-model-selection/src/client/ModelSelect.module.css",
+      "packages/client/ui-model-selection/tests/model-select.client.spec.tsx"
+    ],
+    "selectionRule": "Use ModelSelect view, CSS, and client interaction tests as the Harness source; Candidate captures may compare injected model/effort state but must not claim chat consumer migration."
+  },
+  "candidateStatus": "candidate-interaction-active; Harness/VCP DOM and computed-style evidence exists, pixel evidence remains pending or mismatch-scoped, chat model consumer boundary preserved",
   "root": { "tag": "div", "class": "root", "positioning": "relative" },
   "trigger": {
     "tag": "button",
@@ -22,8 +32,8 @@
   "rootPaneItem": { "tag": "button", "role": "menuitem", "class": "cell", "children": ["span.cellLabel", "span.cellValue", "IconChevronRightOutline14"] },
   "modelPaneItem": { "tag": "button", "role": "menuitem", "class": "option", "children": ["span.optionCopy > span.modelName", "span.description?", "span.check?"] },
   "states": ["available", "locked", "loading", "load-error-retry", "selecting", "selection-error-toast", "empty", "outside-dismiss", "escape-pane-back", "escape-close"],
-  "escapeContract": "owner intercepts Escape in model/effort panes; root pane delegates to popup dismiss and restores trigger focus"
-  , "vcpDeviation": {
+  "escapeContract": "owner intercepts Escape in model/effort panes; root pane delegates to popup dismiss and restores trigger focus",
+  "vcpDeviation": {
     "rootTag": { "harness": "div", "vcp": "span", "reason": "Candidate mount preserves the injected host as a Light-DOM inline seat wrapper; no business node is replaced." }
   }
 }

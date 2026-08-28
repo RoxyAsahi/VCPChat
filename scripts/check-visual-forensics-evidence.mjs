@@ -45,7 +45,7 @@ for (const dir of targets) {
     assert.equal(manifest.observations?.length, requiredViewports.length);
     for (const [width, height] of requiredViewports) {
       const name = `${width}x${height}`;
-      for (const suffix of ['initial', 'reopen', 'menu', 'modal', 'tooltip', 'settings', 'states', 'scrolled', 'narrow', 'restored', 'hover', 'focus']) {
+      for (const suffix of ['initial', 'reopen', 'menu', 'modal', 'tooltip', 'settings', 'states', 'disabled', 'selected', 'scrolled', 'narrow', 'restored', 'hover', 'focus']) {
         const screenshotPath = path.join(dir, `${name}-${suffix}.png`);
         await fs.access(screenshotPath);
         const stat = await fs.stat(screenshotPath);
@@ -73,6 +73,9 @@ for (const dir of targets) {
       assert.ok(observation?.overlayViewport?.tooltip?.rect);
       assert.ok(observation?.overlayViewport?.tooltip?.parent);
       assert.ok(observation.overlayViewport.tooltip.rect.y >= -2 && observation.overlayViewport.tooltip.rect.y + observation.overlayViewport.tooltip.rect.height <= height + 2, `${name}: tooltip is outside the viewport`);
+      if (observation.overlayViewport.tooltip.pointerEvents !== 'none') {
+        assert.equal(observation.overlayViewport.tooltip.topmostInside, true, `${name}: tooltip center is occluded`);
+      }
       assert.ok(observation?.scrolled?.ownerY > 0 || observation?.scrolled?.ownerScrollHeight <= observation?.scrolled?.ownerViewport, `scroll owner did not move for ${name}`);
       assert.ok(observation?.initial?.cdpCascade?.length > 0);
       assert.ok(observation.initial.cdpCascade.every(rule => Array.isArray(rule.specificity) && Number.isInteger(rule.cascadeOrder)));
@@ -81,6 +84,8 @@ for (const dir of targets) {
       assert.ok(observation?.initial?.stateCounts && Object.values(observation.initial.stateCounts).every(value => Number.isInteger(value)));
       assert.ok(observation?.initial?.stateTargets?.disabled?.rect);
       assert.ok(observation?.initial?.stateTargets?.selected?.rect);
+      assert.equal(observation.initial.stateTargets.disabled.inViewport, true, `${name}: disabled-state visual target is outside the viewport`);
+      assert.equal(observation.initial.stateTargets.selected.inViewport, true, `${name}: selected-state visual target is outside the viewport`);
       assert.ok(observation?.initial?.themeTokens && Object.values(observation.initial.themeTokens).some(value => typeof value === 'string' && value.trim()));
       assert.ok(['div', 'section'].includes(observation?.initial?.dom?.rootTree?.tag));
       assert.equal(observation?.settingsViewport?.active, true);
